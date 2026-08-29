@@ -21,10 +21,6 @@ export const routerToken: ServiceToken<Hono> = createServiceToken<Hono>(
   '@nocobase/app/router',
 );
 
-export const apiRouterToken: ServiceToken<Hono> = createServiceToken<Hono>(
-  '@nocobase/app/api-router',
-);
-
 export interface RouterProviderApplication {
   readonly container: ServiceContainer;
 }
@@ -36,6 +32,5 @@ export class RouterProvider<
 
   public override register(): void {
     this.app.container.instance(routerToken, new Hono());
-    this.app.container.instance(apiRouterToken, new Hono());
   }
 }

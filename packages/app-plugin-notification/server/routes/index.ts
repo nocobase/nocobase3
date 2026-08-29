@@ -5,21 +5,22 @@ import {
   authorizationToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
-import type { ServiceContainer } from '@nocobase/service-provider';
-import { notificationServiceToken } from '../token.js';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import {
+  defineApiRoutes,
+  type AppApiRouteContribution,
+} from '@nocobase/app-server-kit/router';
+import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
+import { notificationServiceToken } from '../tokens.js';
 
-export interface NotificationRoutesApplication {
-  readonly container: ServiceContainer;
-}
-
-export default function registerNotificationRoutes(
-  app: NotificationRoutesApplication,
-  router: Hono,
-): void {
-  if (!app.container.has(notificationServiceToken)) return;
-  const notification = app.container.resolve(notificationServiceToken);
-  const auth = app.container.resolve(authenticationToken);
-  const authorization = app.container.resolve(authorizationToken);
+export const apiRoutes: AppApiRouteContribution<
+  AppPluginApplication<NotificationProviderApplicationConfig>
+> = defineApiRoutes(({ container }) => {
+  const router = new Hono();
+  if (!container.has(notificationServiceToken)) return router;
+  const notification = container.resolve(notificationServiceToken);
+  const auth = container.resolve(authenticationToken);
+  const authorization = container.resolve(authorizationToken);
 
   const routes = new Hono<AuthorizationEnv>();
   routes.use('/logs/:id?', auth.required(), authorization.middleware());
@@ -38,4 +39,11 @@ export default function registerNotificationRoutes(
   });
   routes.route('/', notification.router);
   router.route('/notifications', routes);
-}
+  return router;
+});
+
+const routes: readonly AppApiRouteContribution<
+  AppPluginApplication<NotificationProviderApplicationConfig>
+>[] = [apiRoutes];
+
+export default routes;

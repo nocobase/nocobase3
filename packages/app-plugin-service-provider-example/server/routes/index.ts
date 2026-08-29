@@ -1,26 +1,30 @@
-import type { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
+import {
+  defineApiRoutes,
+  type AppApiRouteContribution,
+} from '@nocobase/app-server-kit/router';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 
-import { heartbeatServiceToken } from '../token.js';
+import { heartbeatServiceToken } from '../tokens.js';
 
-export interface ServiceProviderExampleRoutesApplication {
-  readonly container: ServiceContainer;
-}
+export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
+  defineApiRoutes(({ container }) => {
+    const router = new Hono();
 
-export default function registerServiceProviderExampleRoutes(
-  { container }: ServiceProviderExampleRoutesApplication,
-  router: Hono,
-): void {
-  const routes = new Hono();
+    router.get('/service-provider-example/status', (context) => {
+      const heartbeat = container.resolve(heartbeatServiceToken);
 
-  routes.get('/status', (context) => {
-    const heartbeat = container.resolve(heartbeatServiceToken);
-
-    return context.json({
-      service: '@nocobase/app-plugin-service-provider-example',
-      ...heartbeat.getState(),
+      return context.json({
+        service: '@nocobase/app-plugin-service-provider-example',
+        ...heartbeat.getState(),
+      });
     });
+
+    return router;
   });
 
-  router.route('/service-provider-example', routes);
-}
+const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
+  apiRoutes,
+];
+
+export default routes;

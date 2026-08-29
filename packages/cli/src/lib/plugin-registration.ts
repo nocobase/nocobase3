@@ -1,9 +1,9 @@
 // Registers and unregisters a plugin in an application.
 //
-// The same three edits happen wherever an application lives: the manifest gains a dependency, `nocobase.plugins` gains
-// a registration, and `client/plugins.ts` gains an import and an entry. Only two things differ between this repository
-// and a generated application — where the plugin package is found, and what dependency range to record — so those are
-// parameters and everything else is shared.
+// The same explicit edits happen wherever an application lives: the manifest gains a dependency and
+// `nocobase.plugins` registration, while the client and server composition roots gain imports and entries for the
+// surfaces the package exports. Only plugin lookup and the recorded dependency range differ between this repository
+// and a generated application, so those are parameters and everything else is shared.
 //
 // The plan/apply split exists so `--dry-run` reports exactly what a real run would write, and so a caller that has to
 // roll back knows which files to snapshot before writing.
@@ -20,6 +20,15 @@ import {
   writeClientPlugins,
 } from './client-plugins.ts';
 import type { ManualClientPluginEdit } from './client-plugins.ts';
+import {
+  createServerPluginsEditor,
+  describeServerPluginEdit,
+  formatServerPlugins,
+  readServerPlugins,
+  serverPluginsPath,
+  writeServerPlugins,
+  type ManualServerPluginEdit,
+} from './server-plugins.ts';
 import {
   SKILLS_DIRECTORY,
   isOwnedSkillName,
@@ -47,10 +56,19 @@ export interface PluginRegistrationPlan {
    * registration still stands; these are the lines left for a person or an agent to add.
    */
   readonly manualClientEdit?: ManualClientPluginEdit;
+  /** Manual fallback when TypeScript is unavailable for the server composition root. */
+  readonly manualServerEdit?: ManualServerPluginEdit;
   readonly packageName: string;
   /** Why the client entry was skipped, for commands that report it. */
   readonly skippedClientEntry?:
     'disabled' | 'no-client-entry' | 'no-typescript';
+  readonly serverPluginsChanged: boolean;
+  readonly serverPluginsPath: string;
+  /** The updated `server/plugins.ts`, absent when that file needs no change. */
+  readonly serverPluginsText?: string;
+  /** Why the server entry was skipped, for commands that report it. */
+  readonly skippedServerEntry?:
+    'disabled' | 'no-server-entry' | 'no-typescript';
 }
 
 export interface PluginUnregistrationPlan {
@@ -63,9 +81,13 @@ export interface PluginUnregistrationPlan {
   readonly manifestText?: string;
   /** Set when client/plugins.ts still holds the entry because the app has no TypeScript to edit it with. */
   readonly manualClientEdit?: ManualClientPluginEdit;
+  readonly manualServerEdit?: ManualServerPluginEdit;
   readonly packageName: string;
   /** Which parts of the application the plugin was removed from, for reporting. */
   readonly removedFrom: readonly string[];
+  readonly serverPluginsChanged: boolean;
+  readonly serverPluginsPath: string;
+  readonly serverPluginsText?: string;
 }
 
 /**
@@ -116,8 +138,9 @@ export function pluginShortName(packageName: string): string {
  * from. Requiring the entry that actually gets written keeps such a plugin out of client/plugins.ts instead of
  * wiring an import the app cannot resolve.
  */
-export async function hasClientPluginEntry(
+async function hasPluginExport(
   pluginDirectory: string,
+  exportName: './client' | './server/plugin',
 ): Promise<boolean> {
   let manifest: Record<string, unknown>;
   try {
@@ -131,7 +154,19 @@ export async function hasClientPluginEntry(
   if (!isRecord(exports)) {
     return false;
   }
-  return exports['./client'] !== undefined;
+  return exports[exportName] !== undefined;
+}
+
+export async function hasClientPluginEntry(
+  pluginDirectory: string,
+): Promise<boolean> {
+  return hasPluginExport(pluginDirectory, './client');
+}
+
+export async function hasServerPluginEntry(
+  pluginDirectory: string,
+): Promise<boolean> {
+  return hasPluginExport(pluginDirectory, './server/plugin');
 }
 
 /**
@@ -180,15 +215,29 @@ export async function planPluginRegistration({
       ? await planClientAddition(appRoot, packageName)
       : { changed: false, filePath: clientPluginsPath(appRoot) };
 
+  const shipsServerEntry = await hasServerPluginEntry(pluginDirectory);
+  const skippedServerEntry = !enabled
+    ? 'disabled'
+    : shipsServerEntry
+      ? undefined
+      : 'no-server-entry';
+  const server =
+    skippedServerEntry === undefined
+      ? await planServerAddition(appRoot, packageName)
+      : { changed: false, filePath: serverPluginsPath(appRoot) };
+
   // Losing the whole registration because the app cannot format one file would throw away a working install and a
   // correct manifest. The dependency, the registration and the skills need no compiler, so only this one edit
   // degrades, and it degrades into instructions precise enough to apply by hand.
   const resolvedSkip = client.missingTypeScript
     ? 'no-typescript'
     : skippedClientEntry;
+  const resolvedServerSkip = server.missingTypeScript
+    ? 'no-typescript'
+    : skippedServerEntry;
 
   return {
-    changed: manifestChanged || client.changed,
+    changed: manifestChanged || client.changed || server.changed,
     clientPluginsChanged: client.changed,
     clientPluginsPath: client.filePath,
     ...(client.sourceText === undefined
@@ -198,6 +247,9 @@ export async function planPluginRegistration({
     ...(client.missingTypeScript
       ? { manualClientEdit: describeClientPluginEdit(appRoot, packageName) }
       : {}),
+    ...(server.missingTypeScript
+      ? { manualServerEdit: describeServerPluginEdit(appRoot, packageName) }
+      : {}),
     manifestChanged,
     manifestPath,
     ...(manifestChanged
@@ -205,6 +257,14 @@ export async function planPluginRegistration({
       : {}),
     packageName,
     ...(resolvedSkip === undefined ? {} : { skippedClientEntry: resolvedSkip }),
+    serverPluginsChanged: server.changed,
+    serverPluginsPath: server.filePath,
+    ...(server.sourceText === undefined
+      ? {}
+      : { serverPluginsText: server.sourceText }),
+    ...(resolvedServerSkip === undefined
+      ? {}
+      : { skippedServerEntry: resolvedServerSkip }),
   };
 }
 
@@ -225,6 +285,13 @@ export async function planPluginUnregistration({
   if (client.changed) {
     removedFrom.push('client/plugins.ts');
   }
+  const server = await planServerRemoval(appRoot, packageName);
+  if (server.changed) {
+    removedFrom.push('server/plugins.ts');
+  }
+  const manifestChanged = removedFrom.some(
+    (entry) => entry !== 'client/plugins.ts' && entry !== 'server/plugins.ts',
+  );
 
   return {
     changed: removedFrom.length > 0,
@@ -233,16 +300,24 @@ export async function planPluginUnregistration({
     ...(client.sourceText === undefined
       ? {}
       : { clientPluginsText: client.sourceText }),
-    manifestChanged: removedFrom.some((entry) => entry !== 'client/plugins.ts'),
+    manifestChanged,
     manifestPath,
-    ...(removedFrom.some((entry) => entry !== 'client/plugins.ts')
+    ...(manifestChanged
       ? { manifestText: `${JSON.stringify(manifest, null, 2)}\n` }
       : {}),
     ...(client.missingTypeScript
       ? { manualClientEdit: describeClientPluginEdit(appRoot, packageName) }
       : {}),
+    ...(server.missingTypeScript
+      ? { manualServerEdit: describeServerPluginEdit(appRoot, packageName) }
+      : {}),
     packageName,
     removedFrom,
+    serverPluginsChanged: server.changed,
+    serverPluginsPath: server.filePath,
+    ...(server.sourceText === undefined
+      ? {}
+      : { serverPluginsText: server.sourceText }),
   };
 }
 
@@ -256,6 +331,9 @@ export async function applyPluginRegistration(
   }
   if (plan.clientPluginsText !== undefined) {
     await writeClientPlugins(appRoot, plan.clientPluginsText);
+  }
+  if (plan.serverPluginsText !== undefined) {
+    await writeServerPlugins(appRoot, plan.serverPluginsText);
   }
 }
 
@@ -350,6 +428,63 @@ async function planClientRemoval(
     changed: true,
     filePath,
     sourceText: await formatClientPlugins(
+      appRoot,
+      removed.sourceText,
+      filePath,
+    ),
+  };
+}
+
+async function planServerAddition(
+  appRoot: string,
+  packageName: string,
+): Promise<ClientEditPlan> {
+  const { filePath, sourceText } = await readServerPlugins(appRoot);
+  let editor;
+  try {
+    editor = await createServerPluginsEditor(appRoot);
+  } catch (error) {
+    if (error instanceof MissingTypeScriptError) {
+      return { changed: false, filePath, missingTypeScript: true };
+    }
+    throw error;
+  }
+  const added = editor.add(sourceText, packageName);
+  if (!added.changed) {
+    return { changed: false, filePath };
+  }
+  return {
+    changed: true,
+    filePath,
+    sourceText: await formatServerPlugins(appRoot, added.sourceText, filePath),
+  };
+}
+
+async function planServerRemoval(
+  appRoot: string,
+  packageName: string,
+): Promise<ClientEditPlan> {
+  const { exists, filePath, sourceText } = await readServerPlugins(appRoot);
+  if (!exists) {
+    return { changed: false, filePath };
+  }
+  let editor;
+  try {
+    editor = await createServerPluginsEditor(appRoot);
+  } catch (error) {
+    if (error instanceof MissingTypeScriptError) {
+      return { changed: false, filePath, missingTypeScript: true };
+    }
+    throw error;
+  }
+  const removed = editor.remove(sourceText, packageName);
+  if (!removed.changed) {
+    return { changed: false, filePath };
+  }
+  return {
+    changed: true,
+    filePath,
+    sourceText: await formatServerPlugins(
       appRoot,
       removed.sourceText,
       filePath,

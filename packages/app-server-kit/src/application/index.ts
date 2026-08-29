@@ -2,10 +2,8 @@ import type { ExecutionContext, Hono } from 'hono';
 
 import type { ConfigPaths } from '../config/index.js';
 import {
-  apiRouterToken,
-  type AppApiRoutes,
   type AppHttpMiddleware,
-  type AppRootRoutes,
+  type AppRouteContribution,
   RouterProvider,
   routerToken,
 } from '../router/index.js';
@@ -62,8 +60,7 @@ export interface ApplicationRuntimeContributions<
 > {
   readonly plugins: ResolvedAppServerPlugins<TConfig>;
   readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
-  readonly apiRoutes: readonly AppApiRoutes<Application<TConfig>>[];
-  readonly rootRoutes: readonly AppRootRoutes<Application<TConfig>>[];
+  readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
 }
 
 /**
@@ -95,10 +92,9 @@ export class Application<
   private readonly usesDefaultWebSocket: boolean;
   private providersRegistered = false;
   private routesRegistered = false;
-  private readonly apiRoutes: AppApiRoutes<Application<TConfig>>[] = [];
   private readonly httpMiddleware: AppHttpMiddleware<Application<TConfig>>[] =
     [];
-  private readonly rootRoutes: AppRootRoutes<Application<TConfig>>[] = [];
+  private readonly routes: AppRouteContribution<Application<TConfig>>[] = [];
   private startPromise: Promise<void> | undefined;
   private websocketHandler: AppWebSocketHandler | undefined;
 
@@ -130,10 +126,6 @@ export class Application<
     return this.container.resolve(routerToken);
   }
 
-  public get apiRouter(): Hono {
-    return this.container.resolve(apiRouterToken);
-  }
-
   public addProvider<TArguments extends readonly unknown[]>(
     Provider: ApplicationServiceProviderConstructor<TConfig, TArguments>,
     ...args: TArguments
@@ -156,11 +148,8 @@ export class Application<
       for (const Provider of plugin.definition.providers) {
         this.addProvider(Provider);
       }
-      for (const routes of plugin.definition.apiRoutes) {
-        this.addApiRoutes(routes);
-      }
-      for (const routes of plugin.definition.rootRoutes) {
-        this.addRootRoutes(routes);
+      for (const routes of plugin.definition.routes) {
+        this.addRoutes(routes);
       }
     }
   }
@@ -170,17 +159,14 @@ export class Application<
   ): void {
     this.addServerPlugins(runtime.plugins);
     this.addProviders(runtime.providers);
-    for (const routes of runtime.apiRoutes) {
-      this.addApiRoutes(routes);
-    }
-    for (const routes of runtime.rootRoutes) {
-      this.addRootRoutes(routes);
+    for (const routes of runtime.routes) {
+      this.addRoutes(routes);
     }
   }
 
-  public addApiRoutes(routes: AppApiRoutes<Application<TConfig>>): void {
+  public addRoutes(routes: AppRouteContribution<Application<TConfig>>): void {
     this.assertRoutesMutable();
-    this.apiRoutes.push(routes);
+    this.routes.push(routes);
   }
 
   public addHttpMiddleware(
@@ -188,11 +174,6 @@ export class Application<
   ): void {
     this.assertRoutesMutable();
     this.httpMiddleware.push(middleware);
-  }
-
-  public addRootRoutes(routes: AppRootRoutes<Application<TConfig>>): void {
-    this.assertRoutesMutable();
-    this.rootRoutes.push(routes);
   }
 
   public registerProviders(): void {
@@ -236,12 +217,9 @@ export class Application<
     for (const middleware of this.httpMiddleware) {
       await middleware.register(this.router, this);
     }
-    for (const routes of this.apiRoutes) {
-      await routes.register(this.apiRouter, this);
-    }
-    this.router.route('/api', this.apiRouter);
-    for (const routes of this.rootRoutes) {
-      await routes.register(this.router, this);
+    for (const routes of this.routes) {
+      const router = await routes.createRouter(this);
+      this.router.route(routes.scope === 'api' ? '/api' : '/', router);
     }
     this.routesRegistered = true;
   }

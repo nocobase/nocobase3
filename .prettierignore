@@ -10,6 +10,7 @@ packages/app-host/fixtures/app-dist/**/dist/
 packages/app-host/fixtures/app-dist/main/
 packages/app-template-default/client-old/
 packages/app-template-default/registry/
+packages/create-plugin/template/
 
 # changeset 文件由 changesets 生成和消费，格式由它自己决定。
 # 项目的 singleQuote 会把 `"@nocobase/core": minor` 改成单引号，

@@ -20,19 +20,33 @@ packages/app-plugin-audit-log/
 │   └── seeds/
 ├── server/
 │   ├── plugin.ts
-│   ├── provider.ts
-│   └── routes/index.ts
+│   ├── providers/
+│   │   ├── audit-log.ts
+│   │   └── index.ts
+│   ├── routes/
+│   │   └── index.ts
+│   ├── services/
+│   │   └── audit-log.ts
+│   └── tokens.ts
 ├── client/
-│   ├── plugin.ts
 │   ├── bootstrap.ts
+│   ├── components/
+│   │   └── provider.tsx
+│   ├── pages/
+│   │   ├── index.tsx
+│   │   └── settings.tsx
+│   ├── contexts.ts
+│   ├── index.ts
+│   ├── plugin.ts
+│   ├── providers.ts
 │   ├── routes.ts
-│   └── providers.ts
+│   └── settings.ts
 ├── tests/
 ├── package.json
 └── tsconfig.json
 ```
 
-脚手架不生成 `src/`。`client/plugin.ts` 定义注册面，并由 `client/index.ts` 作为 default 重新导出——App 注册这个插件时 import 的是 `<包名>/client`。另外三个入口默认都是空贡献，注册插件后不会自动增加页面或 Provider。可以在创建时指定展示名称和描述：
+脚手架不生成 `src/`。`client/plugin.ts` 定义注册面，并由 `client/index.ts` 作为 default 重新导出——App 注册这个插件时 import 的是 `<包名>/client`。默认 Client 示例包含一个 Refine resource、普通页面、设置页和 React Context Provider，注册插件后可直接作为前后端联通示例使用。不需要的贡献可以删除。可以在创建时指定展示名称和描述：
 
 ```bash
 pnpm plugin:create audit-log \
@@ -48,7 +62,7 @@ pnpm plugin:create audit-log \
 pnpm plugin:register audit-log --app app-template-default
 ```
 
-`--app` 可以使用 workspace 目录名或完整包名；省略时默认为 `app-template-default`。注册命令会改动目标 App 的三个地方。
+`--app` 可以使用 workspace 目录名或完整包名；省略时默认为 `app-template-default`。注册命令会改动目标 App 的四个地方。
 
 第一处是 `package.json`，加入依赖和插件登记：
 
@@ -84,9 +98,23 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
 
 数组里出现即启用，数组顺序就是 bootstrap 顺序。命令按包短名转 camelCase 生成本地变量名，追加到数组末尾而不排序，然后用 App 的 prettier 配置格式化。文件里其余内容（注释、手写格式、你调整过的顺序）逐字保留，所以这个文件平时可以放心手改——手改的场景通常是调整顺序，或者给某个插件传配置。
 
-第三处是 `.agents/skills/`，命令会把插件 `.agents/skills/` 下的技能目录同步过来。技能目录名以 `nocobase-<插件包名去掉 scope>` 为前缀，同步时按这个前缀认领：属于已注册插件的目录整个替换，插件上游已删除的目录一并清掉，不以 `nocobase-` 开头的目录一律不碰。上游是唯一真相，所以不要在同步下来的目录里改内容，改了下次同步就没了。要写 App 自己的技能，建一个不以 `nocobase-` 开头的目录。
+第三处是 `server/plugins.ts`。插件声明 `exports["./server/plugin"]` 时，命令会插入 Server import 和数组项：
 
-需要先装依赖但暂不接入客户端时，使用 `--disabled`。它把 `enabled` 记为 `false`，并且不写 `client/plugins.ts`：
+```ts
+import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+
+const serverPlugins: AppServerPlugins<AppConfig> =
+  defineServerPlugins<AppConfig>([
+    // ……已有的插件
+    auditLog,
+  ]);
+```
+
+Server 数组里放的是插件定义本身，不调用它。命令同样按现有顺序追加，并保留文件中的泛型、注释和其他手写内容。
+
+第四处是 `.agents/skills/`，命令会把插件 `.agents/skills/` 下的技能目录同步过来。技能目录名以 `nocobase-<插件包名去掉 scope>` 为前缀，同步时按这个前缀认领：属于已注册插件的目录整个替换，插件上游已删除的目录一并清掉，不以 `nocobase-` 开头的目录一律不碰。上游是唯一真相，所以不要在同步下来的目录里改内容，改了下次同步就没了。要写 App 自己的技能，建一个不以 `nocobase-` 开头的目录。
+
+需要先装依赖但暂不启用时，使用 `--disabled`。它把 `enabled` 记为 `false`，并且不写 `client/plugins.ts` 和 `server/plugins.ts`：
 
 ```bash
 pnpm plugin:register audit-log --app app-template-default --disabled
@@ -116,7 +144,7 @@ pnpm plugin:register audit-log --app app-template-default
 
 ### 在独立 App 里注册
 
-上面这些是仓库内的命令，靠 workspace 找插件。用户从 npm 拉下模板生成自己的 App 之后，用的是同名的 App 侧命令，插件从 registry 装：
+上面这些仓库内命令同样由 `nb3 app plugin *` 执行；根 `package.json` 只额外传入 `--workspace-root .`，让 `--app` 可以按 workspace 目录名或完整包名选择目标 App，并让依赖范围默认使用 `workspace:^`。用户从 npm 拉下模板生成自己的 App 之后，仍使用同名命令，插件从 registry 安装：
 
 ```bash
 cd my-crm
@@ -124,11 +152,13 @@ pnpm plugin:register audit-log
 pnpm plugin:unregister audit-log
 ```
 
-改动的三处地方完全一样，因为实现是同一份（在 `@nocobase/nb3-cli` 里）。差别只有两点：插件从 `node_modules` 而不是 `packages/` 解析，依赖记的是 registry 上的实际版本而不是 `workspace:^`。没有 `--app` 参数——命令就在这个 App 目录里跑。
+改动的四处地方完全一样，因为实现只有 `@nocobase/nb3-cli` 这一份。独立 App 不传 `--workspace-root`，所以没有 workspace 选择过程：命令就在当前 App 目录里运行，插件从 `node_modules` 解析，依赖记录 registry 上安装的实际版本而不是 `workspace:^`。
 
 参数和完整说明见 [docs/cli](./cli/README.md)。
 
 **纯服务端插件不会写进 `client/plugins.ts`。** 两边都按插件的 `exports["./client"]` 判断：没有这个导出就跳过客户端注册，因为写进去的 import 在构建时解析不到。
+
+反过来，纯客户端插件不会写进 `server/plugins.ts`。判据是 `exports["./server/plugin"]`；Client 和 Server 注册面分别判断，互不推测。
 
 ## 3. 开发插件
 
@@ -155,10 +185,12 @@ pnpm --filter @nocobase/app-template-default seed
 ### Server
 
 - `server/plugin.ts`：唯一的服务端注册入口，显式声明 Providers、API Routes、Root Routes、database 和 queue 贡献；
-- `server/provider.ts`：只负责服务注册与生命周期；
-- `server/routes/*.ts`：只负责 HTTP 边界，通过 `app.container` 解析服务。
+- `server/providers/index.ts`：组合并导出 Provider 集合；具体 Provider 放在同一目录的领域文件中；
+- `server/services/*.ts`：放置领域服务的默认实现；
+- `server/tokens.ts`：定义稳定的服务接口和 ServiceToken，供 Provider、Route 和其他消费者共享；
+- `server/routes/index.ts`：定义并组合默认的 route contributions，通过 `app.container` 和 ServiceToken 解析服务；其他路由模块放在同一目录。
 
-普通业务接口使用 `apiRoutes`，由 Application 统一挂载到 `/api`；安装入口、协议回调和 HTML 页面等特殊入口使用 `rootRoutes`。不要提供含义模糊的通用 `routes`，也不要在 Provider 的 `boot()` 中注册 HTTP 路由。
+普通业务接口使用 `defineApiRoutes()`，由 Application 统一挂载到 `/api`；安装入口、协议回调和 HTML 页面等特殊入口使用 `defineRootRoutes()`。两者都放入同一个 `routes` 数组，不要在 Provider 的 `boot()` 中注册 HTTP 路由。
 
 Service Provider 的概念、五阶段生命周期、Token/Container 用法和完整插件示例参见 [Service Provider](./service-provider.md)。仓库内可运行的实现位于 [`@nocobase/app-plugin-service-provider-example`](../packages/app-plugin-service-provider-example/README.md)。
 
@@ -189,7 +221,8 @@ import {
 } from '@nocobase/app-client/plugins';
 
 export interface AuditLogClientOptions {
-  readonly placeholder?: never;
+  /** Label used for the resource registered by the bootstrap entry. */
+  readonly resourceLabel?: string;
 }
 
 const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
@@ -204,7 +237,16 @@ const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
 export default auditLog;
 ```
 
-四个入口都是可选的，插件没有的能力删掉对应字段即可，不必留空数组。`AuditLogClientOptions` 是配置项的落点，默认的 `placeholder?: never` 表示暂时不接受配置，实际要用时替换成自己的字段。
+四个入口都是可选的，插件没有的能力删掉对应字段和文件即可，不必保留空数组。`AuditLogClientOptions` 是配置项的落点；默认的 `resourceLabel` 会覆盖 bootstrap 注册的 Refine resource 标题，例如 App 可以写 `auditLog({ resourceLabel: '审计日志' })`。
+
+默认示例展示了四个入口如何配合：
+
+- `bootstrap.ts` 注册名为 `audit-log` 的 Refine resource，并读取 `resourceLabel`；
+- `routes.ts` 注册按需加载的 `/audit-log` 页面，该页面请求同一插件的 `GET /api/audit-log` 服务端接口；
+- `settings.ts` 注册按需加载的 `/settings/audit-log` 设置页；
+- `providers.ts` 注册 Context Provider，普通页面通过自定义 Hook 读取其中的值。
+
+这些是可运行的最小示例，不是插件必须保留的固定结构。比如纯设置插件可以删除普通页面、对应 route 和 Refine resource；不需要共享客户端状态时可以删除 Provider、Context 和对应 Hook。
 
 配置项有两条通路。命令式的配置走 bootstrap：App 传进来的值会出现在 bootstrap context 的 `options` 上，把 bootstrap 的类型参数指定为自己的 options 接口就能读到。notification-provider 插件用这条通路让 App 定制撤销按钮的文案：
 
@@ -332,7 +374,7 @@ pnpm plugin:unregister audit-log --app app-template-default
 pnpm plugin:remove audit-log
 ```
 
-`plugin:unregister` 是注册的逆操作：移除依赖和 `nocobase.plugins` 登记，删掉 `client/plugins.ts` 里的 import 和数组项，并清理 `.agents/skills/` 下属于该插件的目录。它不删除插件源码。仍被 workspace App 引用的插件不能被 `plugin:remove` 删除，这个引用检查同时看依赖字段、`nocobase.plugins` 和各 App 的 `client/plugins.ts`。
+`plugin:unregister` 是注册的逆操作：移除依赖和 `nocobase.plugins` 登记，删掉 `client/plugins.ts` 与 `server/plugins.ts` 里的 import 和数组项，并清理 `.agents/skills/` 下属于该插件的目录。它不删除插件源码。仍被 workspace App 引用的插件不能被 `plugin:remove` 删除，这个引用检查同时看依赖字段、`nocobase.plugins` 和各 App 的两个显式插件入口。
 
 创建、注册、解除注册和删除都可以先使用 `--dry-run` 预览；完整参数使用 `--help` 查看。
 

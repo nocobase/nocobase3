@@ -9,12 +9,14 @@ import {
   installedPluginVersion,
 } from '../../../lib/plugin-install.ts';
 import type { ManualClientPluginEdit } from '../../../lib/client-plugins.ts';
+import type { ManualServerPluginEdit } from '../../../lib/server-plugins.ts';
 import {
   applyPluginRegistration,
   planPluginRegistration,
   pluginPackageName,
 } from '../../../lib/plugin-registration.ts';
 import { runAttached } from '../../../lib/run-command.ts';
+import { resolveAppRoot } from '../../../lib/workspace-app.ts';
 import {
   applySkillsSync,
   formatSkillsSyncSummary,
@@ -24,13 +26,14 @@ import {
 export default class AppPluginRegister extends Command {
   static override summary = 'Install a plugin and wire it into this app.';
   static override description =
-    'Adds the plugin package as a dependency, registers it under nocobase.plugins, imports it in client/plugins.ts, and copies the skills it ships into .agents/skills. A plugin that ships no ./client/plugin export is server-only, so the client entry is skipped rather than written as an import that cannot resolve.';
+    'Adds the plugin package as a dependency, registers it under nocobase.plugins, wires its exported client and server entries into the explicit application composition roots, and copies the skills it ships into .agents/skills.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> audit-log',
     '<%= config.bin %> <%= command.id %> @nocobase/app-plugin-audit-log',
     '<%= config.bin %> <%= command.id %> audit-log --version 1.2.0',
     '<%= config.bin %> <%= command.id %> audit-log --dry-run',
+    '<%= config.bin %> <%= command.id %> audit-log --workspace-root . --app app-template-default',
   ];
 
   static override args = {
@@ -45,14 +48,22 @@ export default class AppPluginRegister extends Command {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
     }),
+    app: Flags.string({
+      description:
+        'Workspace app directory or package name. Requires --workspace-root.',
+    }),
+    'workspace-root': Flags.string({
+      description:
+        'Monorepo root. Selects app-template-default unless --app is provided.',
+    }),
     version: Flags.string({
       description:
-        'Version range to install. Defaults to the latest published version.',
+        'Version range to install. Defaults to workspace:^ in workspace mode and the latest published version otherwise.',
     }),
     disabled: Flags.boolean({
       default: false,
       description:
-        'Register the plugin with enabled set to false, leaving the client entry unwired.',
+        'Register the plugin with enabled set to false, leaving its client and server entries unwired.',
     }),
     'no-install': Flags.boolean({
       default: false,
@@ -71,7 +82,11 @@ export default class AppPluginRegister extends Command {
 
   public async run(): Promise<void> {
     const { args, flags } = await this.parse(AppPluginRegister);
-    const appRoot = path.resolve(flags.dir ?? process.cwd());
+    const appRoot = await resolveAppRoot({
+      app: flags.app,
+      dir: flags.dir,
+      workspaceRoot: flags['workspace-root'],
+    });
     const dryRun = flags['dry-run'];
     const packageName = pluginPackageName(args.name);
 
@@ -80,7 +95,9 @@ export default class AppPluginRegister extends Command {
       dryRun,
       packageName,
       skipInstall: flags['no-install'],
-      version: flags.version,
+      version:
+        flags.version ??
+        (flags['workspace-root'] === undefined ? undefined : 'workspace:^'),
     });
     if (installed === undefined) {
       return;
@@ -227,6 +244,11 @@ export default class AppPluginRegister extends Command {
         `  ${path.relative(appRoot, plan.clientPluginsPath)}: import and registration`,
       );
     }
+    if (plan.serverPluginsChanged) {
+      lines.push(
+        `  ${path.relative(appRoot, plan.serverPluginsPath)}: import and registration`,
+      );
+    }
     if (plan.skippedClientEntry === 'no-client-entry') {
       lines.push(
         '  client/plugins.ts: skipped, this plugin ships no client entry',
@@ -235,9 +257,22 @@ export default class AppPluginRegister extends Command {
     if (plan.skippedClientEntry === 'disabled') {
       lines.push('  client/plugins.ts: skipped, the plugin is disabled');
     }
+    if (plan.skippedServerEntry === 'no-server-entry') {
+      lines.push(
+        '  server/plugins.ts: skipped, this plugin ships no server entry',
+      );
+    }
+    if (plan.skippedServerEntry === 'disabled') {
+      lines.push('  server/plugins.ts: skipped, the plugin is disabled');
+    }
     if (plan.manualClientEdit) {
       lines.push(
         ...manualEditInstructions(plan.manualClientEdit, appRoot, dryRun),
+      );
+    }
+    if (plan.manualServerEdit) {
+      lines.push(
+        ...manualEditInstructions(plan.manualServerEdit, appRoot, dryRun),
       );
     }
     return lines.join('\n');
@@ -250,11 +285,14 @@ export default class AppPluginRegister extends Command {
  * entry" is not something it can act on.
  */
 function manualEditInstructions(
-  edit: ManualClientPluginEdit,
+  edit: ManualClientPluginEdit | ManualServerPluginEdit,
   appRoot: string,
   dryRun: boolean,
 ): string[] {
   const relativePath = path.relative(appRoot, edit.filePath);
+  const registerCallName = relativePath.startsWith(`server${path.sep}`)
+    ? 'defineServerPlugins'
+    : 'defineClientPlugins';
   return [
     `  ${relativePath}: not edited, TypeScript is not installed in this app`,
     '',
@@ -262,7 +300,7 @@ function manualEditInstructions(
       ? `Everything else would be done. ${relativePath} would need two lines added by hand:`
       : `Everything else is done. Add these two lines to ${relativePath} by hand:`,
     `  1. after the existing imports:  ${edit.importStatement}`,
-    `  2. inside defineClientPlugins([...]):  ${edit.entry}`,
+    `  2. inside ${registerCallName}([...]):  ${edit.entry}`,
     '',
     'Or install TypeScript and re-run this command to have it written for you:',
     '  pnpm add -D typescript',

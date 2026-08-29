@@ -3,12 +3,14 @@
 This server-only plugin demonstrates the v3 ServiceProvider pattern with a
 small `HeartbeatService`:
 
-- `server/service.ts` contains the service implementation.
-- `server/token.ts` defines the typed service token.
-- `server/provider.ts` registers the service through `this.app.container` and
-  manages its lifecycle.
-- `server/routes/index.ts` resolves the service through `app.container`.
-- `server/plugin.ts` explicitly declares the Provider and API routes.
+- `server/services/heartbeat.ts` contains the domain implementation.
+- `server/tokens.ts` defines the stable service contract and typed token.
+- `server/providers/index.ts` composes the Provider collection, while
+  `server/providers/service-provider-example.ts` registers the service through
+  `this.app.container` and manages its lifecycle.
+- `server/routes/index.ts` creates a dedicated API Router and resolves the service
+  through `app.container`.
+- `server/plugin.ts` explicitly declares the Provider and Route collections.
 
 After enabling the plugin, request `GET /api/service-provider-example/status` to
 inspect the service lifecycle state. A fully started application returns a

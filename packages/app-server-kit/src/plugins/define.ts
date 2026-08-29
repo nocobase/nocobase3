@@ -15,8 +15,7 @@ export function defineServerPlugin<
   return Object.freeze({
     packageName,
     providers: Object.freeze([...(definition.providers ?? [])]),
-    apiRoutes: Object.freeze([...(definition.apiRoutes ?? [])]),
-    rootRoutes: Object.freeze([...(definition.rootRoutes ?? [])]),
+    routes: Object.freeze([...(definition.routes ?? [])]),
     database: definition.database
       ? Object.freeze({ ...definition.database })
       : undefined,

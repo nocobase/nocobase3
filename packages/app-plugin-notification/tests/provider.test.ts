@@ -7,8 +7,8 @@ import { queueManagerToken, type NocoBaseQueueManager } from '@nocobase/queue';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
-import NotificationProvider from '../server/provider.js';
-import { notificationServiceToken } from '../server/token.js';
+import { NotificationProvider } from '../server/providers/notification.js';
+import { notificationServiceToken } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-notification provider', () => {
   it('registers, activates, and closes the core manager', async () => {

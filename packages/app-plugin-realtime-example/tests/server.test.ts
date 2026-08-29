@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { realtimeServiceToken } from '@nocobase/app-server-kit/realtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 
-import RealtimeExampleProvider from '../server/provider.js';
+import { RealtimeExampleProvider } from '../server/providers/realtime-example.js';
 import { CLOCK_TOPIC } from '../server/publishers/clock.js';
 
 describe('realtime example plugin provider', () => {

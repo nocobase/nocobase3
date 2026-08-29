@@ -13,6 +13,7 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Hono } from 'hono';
 import { CachingProvider, createDefaultCachingConfig } from '@nocobase/caching';
 import {
   createConfigPaths,
@@ -195,14 +196,15 @@ describe('app server', () => {
       plugins: [
         defineServerPlugin<AppConfig>({
           packageName: '@nocobase/app-plugin-test',
-          apiRoutes: [
+          routes: [
             {
               scope: 'api',
-              name: '@nocobase/app-plugin-test/api',
-              register(router, application): void {
+              createRouter(application): Hono {
+                const router = new Hono();
                 router.get('/plugin-test', (context) =>
                   context.json({ appName: application.appName }),
                 );
+                return router;
               },
             },
           ],
@@ -1215,7 +1217,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   app.addProvider(QueueProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
-  app.addApiRoutes(healthCheckApiRoutes);
+  app.addRoutes(healthCheckApiRoutes);
   app.addServerPlugins(
     createResolvedTestServerPlugins([
       authenticationServerPlugin,
@@ -1223,7 +1225,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       ...(options.plugins ?? []),
     ]),
   );
-  app.addRootRoutes(spaRootRoutes);
+  app.addRoutes(spaRootRoutes);
   app.registerProviders();
 
   return trackCloseable(

@@ -8,8 +8,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { INSTALL_MODE_AUTH_SECRET_PREFIX } from '../server/install-mode.js';
-import { createInstallRoutes } from '../server/routes/index.js';
-import registerInstallRoutes from '../server/routes/index.js';
+import { createInstallRoutes, rootRoutes } from '../server/routes/index.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -21,19 +20,14 @@ afterEach(() => {
 
 describe('@nocobase/app-plugin-install routes', () => {
   it('only registers the status route after installation', async () => {
-    const router = new Hono();
-    registerInstallRoutes(
-      {
-        appName: 'main',
-        publicBasePath: '/main',
-        config: createPluginConfig('configured-secret'),
-        paths: createConfigPaths({ rootDir: '/missing' }),
-        router,
-        apiRouter: new Hono(),
-        container: new ServiceContainer(),
-      },
-      router,
-    );
+    const router = await rootRoutes.createRouter({
+      appName: 'main',
+      publicBasePath: '/main',
+      config: createPluginConfig('configured-secret'),
+      paths: createConfigPaths({ rootDir: '/missing' }),
+      router: new Hono(),
+      container: new ServiceContainer(),
+    });
     router.get('*', (context) => context.text('application'));
 
     const loginResponse = await router.request('/login', {
@@ -54,21 +48,16 @@ describe('@nocobase/app-plugin-install routes', () => {
   });
 
   it('registers the redirect middleware and install routes in install mode', async () => {
-    const router = new Hono();
-    registerInstallRoutes(
-      {
-        appName: 'main',
-        publicBasePath: '/main',
-        config: createPluginConfig(
-          `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
-        ),
-        paths: createConfigPaths({ rootDir: '/missing' }),
-        router,
-        apiRouter: new Hono(),
-        container: new ServiceContainer(),
-      },
-      router,
-    );
+    const router = await rootRoutes.createRouter({
+      appName: 'main',
+      publicBasePath: '/main',
+      config: createPluginConfig(
+        `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
+      ),
+      paths: createConfigPaths({ rootDir: '/missing' }),
+      router: new Hono(),
+      container: new ServiceContainer(),
+    });
     router.get('*', (context) => context.text('application'));
 
     const pageResponse = await router.request('/login', {

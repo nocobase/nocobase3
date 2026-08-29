@@ -1,13 +1,20 @@
+import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import registerRoutes from '../server/routes/index.js';
+import { apiRoutes } from '../server/routes/index.js';
 
 describe('routes example plugin', () => {
   it('registers a route without application dependencies or services', async () => {
-    const router = new Hono();
-
-    registerRoutes(router);
+    const router = await apiRoutes.createRouter({
+      appName: 'main',
+      publicBasePath: '',
+      config: { app: { name: 'main', publicBasePath: '' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
+      router: new Hono(),
+      container: new ServiceContainer(),
+    });
 
     const response = await router.request('/routes-example');
 

@@ -13,9 +13,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { clientPluginsPath } from '../src/lib/client-plugins.ts';
+import { serverPluginsPath } from '../src/lib/server-plugins.ts';
 import {
   applyPluginRegistration,
   hasClientPluginEntry,
+  hasServerPluginEntry,
   planPluginRegistration,
   planPluginUnregistration,
   pluginPackageName,
@@ -68,7 +70,7 @@ async function createApp(
 async function createPlugin(
   appRoot: string,
   packageName: string,
-  { client = true }: { client?: boolean } = {},
+  { client = true, server = true }: { client?: boolean; server?: boolean } = {},
 ): Promise<string> {
   const pluginDirectory = path.join(
     appRoot,
@@ -81,7 +83,10 @@ async function createPlugin(
     JSON.stringify({
       name: packageName,
       version: '1.0.0',
-      ...(client ? { exports: { './client': './client/index.js' } } : {}),
+      exports: {
+        ...(client ? { './client': './client/index.js' } : {}),
+        ...(server ? { './server/plugin': './server/plugin.js' } : {}),
+      },
     }),
   );
   return pluginDirectory;
@@ -230,6 +235,30 @@ describe('hasClientPluginEntry', () => {
   });
 });
 
+describe('hasServerPluginEntry', () => {
+  it('recognizes the explicit server plugin export', async () => {
+    const appRoot = await createApp();
+
+    expect(
+      await hasServerPluginEntry(
+        await createPlugin(appRoot, '@nocobase/app-plugin-audit-log'),
+      ),
+    ).toBe(true);
+  });
+
+  it('is false for a client-only package', async () => {
+    const appRoot = await createApp();
+
+    expect(
+      await hasServerPluginEntry(
+        await createPlugin(appRoot, '@nocobase/app-plugin-client-only', {
+          server: false,
+        }),
+      ),
+    ).toBe(false);
+  });
+});
+
 describe('planPluginRegistration', () => {
   it('records the dependency, the registration, and the client entry', async () => {
     const appRoot = await createApp();
@@ -248,6 +277,7 @@ describe('planPluginRegistration', () => {
     expect(plan.changed).toBe(true);
     expect(plan.manifestChanged).toBe(true);
     expect(plan.clientPluginsChanged).toBe(true);
+    expect(plan.serverPluginsChanged).toBe(true);
     expect(plan.skippedClientEntry).toBeUndefined();
     expect(plan.clientPluginsPath).toBe(clientPluginsPath(appRoot));
 
@@ -260,6 +290,9 @@ describe('planPluginRegistration', () => {
     });
     expect(plan.clientPluginsText).toContain(
       '@nocobase/app-plugin-audit-log/client',
+    );
+    expect(plan.serverPluginsText).toContain(
+      '@nocobase/app-plugin-audit-log/server/plugin',
     );
   });
 
@@ -301,6 +334,7 @@ describe('planPluginRegistration', () => {
 
     expect(await readManifest(appRoot)).toEqual({ name: 'demo-app' });
     expect(existsSync(clientPluginsPath(appRoot))).toBe(false);
+    expect(existsSync(serverPluginsPath(appRoot))).toBe(false);
   });
 
   it('skips the client entry for a server-only plugin', async () => {
@@ -322,6 +356,7 @@ describe('planPluginRegistration', () => {
     // registered on the server side alone.
     expect(plan.skippedClientEntry).toBe('no-client-entry');
     expect(plan.clientPluginsChanged).toBe(false);
+    expect(plan.serverPluginsChanged).toBe(true);
     expect(plan.clientPluginsText).toBeUndefined();
     expect(plan.changed).toBe(true);
     expect(plan.manifestChanged).toBe(true);
@@ -345,6 +380,8 @@ describe('planPluginRegistration', () => {
     expect(plan.skippedClientEntry).toBe('disabled');
     expect(plan.enabled).toBe(false);
     expect(plan.clientPluginsChanged).toBe(false);
+    expect(plan.serverPluginsChanged).toBe(false);
+    expect(plan.skippedServerEntry).toBe('disabled');
     const manifest = plannedManifest(plan.manifestText);
     expect(manifest.nocobase?.plugins).toEqual({
       '@nocobase/app-plugin-audit-log': { enabled: false },
@@ -377,6 +414,7 @@ describe('planPluginRegistration', () => {
     expect(plan.changed).toBe(false);
     expect(plan.manifestChanged).toBe(false);
     expect(plan.clientPluginsChanged).toBe(false);
+    expect(plan.serverPluginsChanged).toBe(false);
     expect(plan.manifestText).toBeUndefined();
     expect(plan.clientPluginsText).toBeUndefined();
   });
@@ -487,6 +525,9 @@ describe('applyPluginRegistration', () => {
     expect(await readFile(clientPluginsPath(appRoot), 'utf8')).toBe(
       plan.clientPluginsText,
     );
+    expect(await readFile(serverPluginsPath(appRoot), 'utf8')).toBe(
+      plan.serverPluginsText,
+    );
   });
 
   it('writes nothing when the plan changes nothing', async () => {
@@ -575,6 +616,7 @@ describe('planPluginUnregistration', () => {
       'devDependencies',
       'nocobase.plugins',
       'client/plugins.ts',
+      'server/plugins.ts',
     ]);
     const manifest = await readManifest(appRoot);
     expect(manifest.devDependencies).toEqual({
