@@ -49,6 +49,7 @@ export const createPortalViteConfig: (
     const env: Record<string, string> = envDirectory
       ? loadEnv(configEnvironment.mode, envDirectory, '')
       : {};
+    const devHost = env.APP_VITE_DEV_HOST?.trim();
     const devPort = positiveInteger(env.APP_VITE_DEV_PORT) ?? 5173;
     const sharedConfig: UserConfig = {
       root,
@@ -60,6 +61,7 @@ export const createPortalViteConfig: (
         configEnvironment.command === 'serve'
           ? {
               hmr: {
+                ...(devHost && devHost !== '0.0.0.0' ? { host: devHost } : {}),
                 clientPort: devPort,
               },
             }
