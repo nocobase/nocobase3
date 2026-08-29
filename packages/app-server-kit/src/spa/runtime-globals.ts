@@ -1,5 +1,27 @@
 import type { SpaRuntimeGlobalValue, SpaRuntimeGlobals } from './types.js';
 
+export interface NocoBaseSpaRuntimeConfig {
+  readonly appBasePath: string;
+  readonly apiUrl: string;
+  readonly storagePrefix?: string;
+  readonly storageType?: string;
+  readonly shareToken?: boolean;
+}
+
+export function createNocoBaseSpaRuntimeGlobals(
+  config: NocoBaseSpaRuntimeConfig,
+): SpaRuntimeGlobals {
+  return {
+    NOCOBASE_PORTAL_BASE: toBrowserBasePath(config.appBasePath),
+    NOCOBASE_API_URL: config.apiUrl,
+    __nocobase_api_client_storage_prefix__:
+      config.storagePrefix?.trim() || 'NOCOBASE_',
+    __nocobase_api_client_storage_type__:
+      config.storageType?.trim() || 'localStorage',
+    __nocobase_api_client_share_token__: config.shareToken ?? false,
+  };
+}
+
 const runtimeGlobalsStartMarker = '<!-- nocobase-spa-runtime:start -->';
 const runtimeGlobalsEndMarker = '<!-- nocobase-spa-runtime:end -->';
 
@@ -80,4 +102,8 @@ function escapeScriptJson(value: string): string {
     .replace(/&/g, '\\u0026')
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
+}
+
+function toBrowserBasePath(value: string): string {
+  return value ? `${value.replace(/\/+$/, '')}/` : '/';
 }

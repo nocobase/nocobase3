@@ -50,8 +50,9 @@ await builder.createCollection('profileAvatars', (table) => {
 ```
 
 The unique owner constraint is the durable one-to-one guarantee. The Route may
-also set `maxFiles: 1` for an earlier best-effort business rejection, but it is
-not a concurrency guarantee. Relation names (`avatar`, `profile`) are logical
+also set `maxFiles: 1` for an earlier rejection and single-process,
+single-Route serialization, but the UNIQUE constraint remains authoritative
+across application instances. Relation names (`avatar`, `profile`) are logical
 metadata; `profileId` is the explicit physical foreign-key field.
 
 ## One-to-many
@@ -78,9 +79,11 @@ await builder.createCollection('orderAttachments', (table) => {
 });
 ```
 
-Multiple rows may point to one order. The Route's `maxFiles` is a best-effort
-business limit under concurrent multi-node uploads; the database index makes
-scoped list/find/delete queries predictable.
+Multiple rows may point to one order. The Route serializes `maxFiles` checks
+for the same owner within one process and Route instance. Concurrent
+multi-node uploads still need a database constraint or distributed mechanism
+when the limit must be durable; the database index makes scoped
+list/find/delete queries predictable.
 
 In real migrations, write each standard field explicitly rather than relying
 on an untracked helper. The snippets use `addStandardFileFields(table)` only
@@ -102,7 +105,7 @@ reads only a validated server Route parameter:
 
 ```ts
 const route = createFileRoute({
-  database: deps.database,
+  database: app.container.resolve(databaseManagerToken),
   table: 'orderAttachments',
   scope: (context) => {
     const raw = context.req.param('orderId');

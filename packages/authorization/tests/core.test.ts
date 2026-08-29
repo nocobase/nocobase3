@@ -272,9 +272,9 @@ describe('Authorization Core', () => {
     const authorization = createAuthorization({
       plugins: [rolesPlugin, plugin('orders'), identityPlugin],
     });
-    const app = new Hono<AuthorizationEnv>();
-    app.use('*', authorization.middleware());
-    app.get('/', async (context) => {
+    const router = new Hono<AuthorizationEnv>();
+    router.use('*', authorization.middleware());
+    router.get('/', async (context) => {
       const authz = context.get('authz');
       return context.json({
         allowed: await authz.can({
@@ -286,7 +286,7 @@ describe('Authorization Core', () => {
       });
     });
 
-    await expect((await app.request('/')).json()).resolves.toEqual({
+    await expect((await router.request('/')).json()).resolves.toEqual({
       allowed: true,
       principal: 'alice',
       subjects: [{ type: 'role', id: 'editor' }],
@@ -326,15 +326,15 @@ describe('Authorization Core', () => {
     const authorization = createAuthorization({
       plugins: [identityPlugin, postsPlugin],
     });
-    const app = new Hono<AuthorizationEnv>();
-    app.onError((error, context) =>
+    const router = new Hono<AuthorizationEnv>();
+    router.onError((error, context) =>
       context.json(
         { message: error.message },
         error instanceof AuthorizationDeniedError ? 403 : 500,
       ),
     );
-    app.use('*', authorization.middleware());
-    app.put(
+    router.use('*', authorization.middleware());
+    router.put(
       '/posts/:owner',
       authorization.guard<{ ownerId: string }>((context) => ({
         resource: { type: 'post', id: 'post-1' },
@@ -347,10 +347,10 @@ describe('Authorization Core', () => {
       },
     );
 
-    expect((await app.request('/posts/alice', { method: 'PUT' })).status).toBe(
-      200,
-    );
-    expect((await app.request('/posts/bob', { method: 'PUT' })).status).toBe(
+    expect(
+      (await router.request('/posts/alice', { method: 'PUT' })).status,
+    ).toBe(200);
+    expect((await router.request('/posts/bob', { method: 'PUT' })).status).toBe(
       403,
     );
     expect(handled).toBe(1);
@@ -358,11 +358,11 @@ describe('Authorization Core', () => {
 
   it('fails clearly when a route guard runs before authorization middleware', async () => {
     const authorization = createAuthorization({ plugins: [] });
-    const app = new Hono<AuthorizationEnv>();
-    app.onError((error, context) =>
+    const router = new Hono<AuthorizationEnv>();
+    router.onError((error, context) =>
       context.json({ message: error.message }, 500),
     );
-    app.get(
+    router.get(
       '/',
       authorization.guard(() => ({
         resource: { type: 'post', id: 'post-1' },
@@ -371,7 +371,7 @@ describe('Authorization Core', () => {
       (context) => context.text('unexpected'),
     );
 
-    await expect((await app.request('/')).json()).resolves.toEqual({
+    await expect((await router.request('/')).json()).resolves.toEqual({
       message:
         'Authorization guard requires authorization.middleware() to run first',
     });
@@ -379,14 +379,14 @@ describe('Authorization Core', () => {
 
   it('fails when authorization middleware does not resolve a principal', async () => {
     const authorization = createAuthorization({ plugins: [] });
-    const app = new Hono<AuthorizationEnv>();
-    app.onError((error, context) =>
+    const router = new Hono<AuthorizationEnv>();
+    router.onError((error, context) =>
       context.json({ message: error.message }, 500),
     );
-    app.use('*', authorization.middleware());
-    app.get('/', (context) => context.text('ok'));
+    router.use('*', authorization.middleware());
+    router.get('/', (context) => context.text('ok'));
 
-    const response = await app.request('/');
+    const response = await router.request('/');
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
       message: 'Authorization principal was not resolved',

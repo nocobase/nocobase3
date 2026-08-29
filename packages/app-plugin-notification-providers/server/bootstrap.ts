@@ -1,7 +1,5 @@
-import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
 import type {
   NotificationConfig,
-  NotificationPluginServices,
   NotificationService,
 } from '@nocobase/app-plugin-notification';
 
@@ -22,21 +20,12 @@ export interface NotificationProviderTestConfig {
 }
 
 export interface NotificationProvidersPluginConfig {
+  readonly app: {
+    readonly publicBasePath: string;
+  };
   readonly notification: NotificationConfig & {
     readonly test?: NotificationProviderTestConfig;
   };
-}
-
-export type NotificationProvidersPluginServerContext = AppPluginServerContext<
-  unknown,
-  NotificationPluginServices,
-  NotificationProvidersPluginConfig
->;
-
-export default function bootstrapNotificationProviders({
-  services,
-}: NotificationProvidersPluginServerContext): void {
-  registerBuiltInNotificationProviders(services.notification);
 }
 
 export function registerBuiltInNotificationProviders(

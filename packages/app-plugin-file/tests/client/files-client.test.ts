@@ -145,13 +145,18 @@ describe('createFilesClient', () => {
     const client = createFilesClient({ endpoint: '/api/files' });
     const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
 
-    await client.upload(file, { public: true });
+    const controller = new AbortController();
+    await client.upload(file, { public: true, signal: controller.signal });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       'http://localhost:3000/nocobase/api/files',
     );
     const init = fetchMock.mock.calls[0]?.[1];
-    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(init).toMatchObject({
+      method: 'POST',
+      credentials: 'include',
+      signal: controller.signal,
+    });
     expect(init?.body).toBeInstanceOf(FormData);
     const body = init?.body as FormData;
     const uploadedFile = body.get('file');
@@ -171,6 +176,26 @@ describe('createFilesClient', () => {
       method: 'POST',
       body: expect.any(FormData),
     });
+  });
+
+  it('preserves AbortError for cancelled uploads', async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createFilesClient({ endpoint: '/api/files' });
+    const controller = new AbortController();
+    const upload = client.upload(new File(['x'], 'x.txt'), {
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    await expect(upload).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('normalizes Token URLs and accepts the Route 204 delete response', async () => {

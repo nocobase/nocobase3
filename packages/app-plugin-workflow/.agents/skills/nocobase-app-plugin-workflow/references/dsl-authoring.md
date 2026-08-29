@@ -217,7 +217,7 @@ From `packages/app-template-default` (or the corresponding initialized applicati
 5. Start the application/runtime and invoke by the DSL package directory key after obtaining the bound runtime. Do not assume Artifact build itself writes database definitions.
 6. If the Artifact has no synchronized id, first-enable with its deployed hash: `enable(hash)` or `POST /api/workflows/<hash>/enable`. Synchronized definitions use their database id.
 7. Read/update administrator input overrides only if needed, and read them back.
-8. Invoke business events by obtaining the bound runtime with `getRuntimeWorkflow(appRuntime)` and calling `workflowRuntime.trigger(key, input, options?)`, explicitly handling both `accepted` and `skipped`. Use the authenticated management `run` route only for an authorized manual run of an explicitly selected definition revision; it may be historical or disabled without changing enablement.
+8. Invoke business events by resolving `workflowServiceToken` from `app.container` and calling `workflowRuntime.trigger(key, input, options?)`, explicitly handling both `accepted` and `skipped`. Use the authenticated management `run` route only for an authorized manual run of an explicitly selected definition revision; it may be historical or disabled without changing enablement.
 9. For an accepted trigger, wait for asynchronous persistence, then inspect the run, all relevant node attempts, and selected redacted payload/log records.
 
 Keep those stages separate: source check does not prove run-entry buildability; Artifact build does not enable a definition; enablement does not invoke it.

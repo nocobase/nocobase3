@@ -1,4 +1,14 @@
 import type { NotificationService } from '@nocobase/app-plugin-notification';
+import { notificationServiceToken } from '@nocobase/app-plugin-notification';
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -325,16 +335,24 @@ function createApp(options: CreateAppOptions = {}): {
     logs: { get: vi.fn() },
   } as unknown as NotificationService;
 
-  registerNotificationProviderRoutes({
-    app,
-    config: options.config ?? createConfig('recipient@example.com'),
-    deps: {
-      auth: { required, getSession },
-      authz: { middleware: authzMiddleware },
+  const container = new ServiceContainer();
+  container.instance(authenticationToken, {
+    required,
+    getSession,
+  } as unknown as Auth);
+  container.instance(authorizationToken, {
+    middleware: authzMiddleware,
+  } as unknown as AppAuthorization);
+  container.instance(notificationServiceToken, notification);
+  const apiRouter = new Hono();
+  registerNotificationProviderRoutes(
+    {
+      config: options.config ?? createConfig('recipient@example.com'),
+      container,
     },
-    services: { notification },
-    paths: {} as never,
-  });
+    apiRouter,
+  );
+  app.route('/api', apiRouter);
 
   return { app, can, required };
 }
@@ -344,6 +362,7 @@ function createConfig(
   enabled = true,
 ): NotificationProvidersPluginConfig {
   return {
+    app: { publicBasePath: '' },
     notification: {
       channels: [
         {

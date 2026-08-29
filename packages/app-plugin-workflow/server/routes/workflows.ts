@@ -8,7 +8,7 @@ import {
   readPage,
   toPageResponse,
 } from './helpers.js';
-import type { WorkflowRepository } from '../services/workflow-repository.js';
+import type { WorkflowRepository } from '../repositories/workflow-repository.js';
 
 export function createWorkflowDefinitionRoutes(
   workflows: Pick<

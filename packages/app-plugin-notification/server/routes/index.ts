@@ -1,45 +1,28 @@
-import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
+import type { ServiceContainer } from '@nocobase/service-provider';
+import { notificationServiceToken } from '../token.js';
 
-import type { NotificationPluginServices } from '../bootstrap.js';
-
-export interface NotificationPluginRoutesDeps {
-  readonly auth: {
-    required(): MiddlewareHandler;
-  };
-  readonly authz: {
-    middleware(): MiddlewareHandler<NotificationAuthorizationEnv>;
-  };
+export interface NotificationRoutesApplication {
+  readonly container: ServiceContainer;
 }
 
-interface NotificationAuthorizationEnv {
-  Variables: {
-    authz: {
-      can(input: {
-        resource: { type: string; id: string };
-        action: string;
-      }): Promise<boolean>;
-    };
-  };
-}
+export default function registerNotificationRoutes(
+  app: NotificationRoutesApplication,
+  router: Hono,
+): void {
+  if (!app.container.has(notificationServiceToken)) return;
+  const notification = app.container.resolve(notificationServiceToken);
+  const auth = app.container.resolve(authenticationToken);
+  const authorization = app.container.resolve(authorizationToken);
 
-export type NotificationPluginRoutesContext = AppPluginRoutesContext<
-  NotificationPluginRoutesDeps,
-  NotificationPluginServices
->;
-
-export default function registerNotificationRoutes({
-  app,
-  deps,
-  services,
-}: NotificationPluginRoutesContext): void {
-  if (!services.notification) return;
-
-  const routes = new Hono<NotificationAuthorizationEnv>();
-  const authRequired = deps.auth.required();
-  routes.use('/logs/:id?', authRequired, deps.authz.middleware());
+  const routes = new Hono<AuthorizationEnv>();
+  routes.use('/logs/:id?', auth.required(), authorization.middleware());
   routes.use('/logs/:id?', async (context, next) => {
     const allowed = await context.get('authz').can({
       resource: { type: 'page', id: 'notification.logs' },
@@ -53,6 +36,6 @@ export default function registerNotificationRoutes({
     }
     await next();
   });
-  routes.route('/', services.notification.router);
-  app.route('/api/notifications', routes);
+  routes.route('/', notification.router);
+  router.route('/notifications', routes);
 }

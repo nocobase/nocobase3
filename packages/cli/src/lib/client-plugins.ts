@@ -370,6 +370,16 @@ export async function formatClientPlugins(
   sourceText: string,
   filePath: string,
 ): Promise<string> {
+  const localPrettierManifest = path.join(
+    appRoot,
+    'node_modules',
+    'prettier',
+    'package.json',
+  );
+  if (!existsSync(localPrettierManifest)) {
+    return sourceText;
+  }
+
   const require = createRequire(path.join(appRoot, 'package.json'));
   let prettier: typeof import('prettier');
   try {

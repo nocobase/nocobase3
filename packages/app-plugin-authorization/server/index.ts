@@ -14,3 +14,5 @@ export type {
   AuthorizationEnv,
   AuthorizationScope,
 } from '@nocobase/authorization/core';
+export { authorizationToken } from './token.js';
+export { default as AuthorizationProvider } from './provider.js';

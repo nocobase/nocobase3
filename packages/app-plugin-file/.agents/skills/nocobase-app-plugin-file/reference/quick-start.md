@@ -7,22 +7,19 @@ rules.
 
 ## 1. Confirm the host context
 
-Enable `@nocobase/app-plugin-file` in the application. In the server plugin
-context, confirm the existing `deps.database`, `deps.driveManager`, `deps.auth`,
-and `deps.authz` dependencies are available. The plugin context must also
-provide `config.app.publicBasePath`, `config.drive.default`, and
-`config.session.secret`.
+Enable `@nocobase/app-plugin-file` in the application. Its ServiceProvider
+resolves the existing database, Drive, authentication, and authorization
+services from the Application's shared container. The Application config must
+provide `app.publicBasePath`, `drive.default`, and `session.secret`.
 
 Import the public Route factory:
 
 ```ts
 import { createFileRoute } from '@nocobase/app-plugin-file/server';
 
-export default function registerPurchaseOrderFiles({
-  app,
-  config,
-  deps,
-}: PurchaseOrderPluginRoutesContext): void {
+export default function registerPurchaseOrderFiles(
+  app: PurchaseOrderApplication,
+): void {
   // Continue with the migration and Route below.
 }
 ```
@@ -30,8 +27,8 @@ export default function registerPurchaseOrderFiles({
 `PurchaseOrderPluginRoutesContext` is the business module's existing typed
 plugin context. Do not widen it or expose DatabaseManager to browser code.
 
-Do not add `AppServices.files`, another dependency injection mechanism, or a
-second DatabaseManager/Drive manager. Registry installation does not install
+Do not add another file service, dependency injection mechanism, or a second
+DatabaseManager/Drive manager. Registry installation does not install
 this server code or a migration.
 
 ## 2. Create the migration
@@ -77,7 +74,7 @@ parameter. Validate the parameter before returning a scope:
 app.route(
   '/api/purchase-orders/:orderId/attachments',
   createFileRoute({
-    database: deps.database,
+    database: app.container.resolve(databaseManagerToken),
     table: 'purchaseOrderAttachments',
     scope: (context) => {
       const raw = context.req.param('orderId');
@@ -87,12 +84,12 @@ app.route(
       }
       return { orderId };
     },
-    drive: deps.driveManager,
+    drive: app.container.resolve(driveManagerToken),
     defaultDisk: config.drive.default,
     publicBasePath: config.app.publicBasePath,
     tokenSecret: config.session.secret,
     audience: 'purchase-order-attachments',
-    auth: deps.auth.required(),
+    auth: app.container.resolve(authenticationToken).required(),
     authorize: authorizePurchaseOrderFile,
     visibility: { default: 'private', allowClientOverride: false },
     limits: { maxSize: 50 * 1024 * 1024, maxFiles: 10 },
@@ -100,9 +97,11 @@ app.route(
 );
 ```
 
-`maxFiles` is a best-effort business check performed before the object write.
-Concurrent requests on multiple application nodes can exceed it. Use a
-database UNIQUE owner constraint when the relation must be one-to-one.
+`maxFiles` serializes checks for the same owner within one Route instance and
+process. Concurrent requests on multiple application nodes can still exceed
+it without a database constraint or distributed mechanism. Use a database
+UNIQUE owner constraint when the relation must be one-to-one. When `maxSize`
+is omitted, the Route defaults to 50 MiB per file.
 
 `authorizePurchaseOrderFile` must call the existing authorization system for
 the purchase order and action. It must not introduce a second file ACL. The
@@ -125,12 +124,23 @@ const client = createFilesClient({
   multiple
   accept={['application/pdf']}
   maxFiles={10}
+  onStatusChange={setAttachmentUploadStatus}
 />;
 ```
 
 The business form submits the relation and owner ID. The client handles the
 plugin endpoint, same-origin base path, multipart upload, authentication, and
-content URL flow. The runtime Demo works without Registry; install
+content URL flow. Each upload can be cancelled and pending requests are
+aborted when the field unmounts. Treat `uploading` and `error` status as form
+submission blockers. File UI accepts only relative or HTTP(S) content and
+access URLs; unsafe schemes such as `javascript:` and external `data:` are not
+rendered or fetched. Use `FilePreviewField` for compact read-only thumbnails,
+optionally with `showFilenames`, and `FilePreviewDialog` with `files` plus
+`initialIndex` for multi-file preview and keyboard navigation. Markdown uses
+safe GFM rendering without raw HTML. Office and OpenDocument files use Office
+Online only for internet-accessible absolute HTTP(S) Public URLs or freshly
+issued Private access URLs; relative, localhost, blob, and failed embeds fall
+back to download. The runtime Demo works without Registry; install
 `component-ui` only when the application needs editable UI source. Install
 `page-ui` when the application should own and customize the Demo page. The two
 Registry items are independently installable; `page-ui` composes the plugin's

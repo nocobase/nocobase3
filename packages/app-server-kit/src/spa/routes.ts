@@ -7,15 +7,15 @@ import { serveSpaAsset } from './static-assets.js';
 import type { RegisterSpaRoutesOptions } from './types.js';
 
 export function registerSpaRoutes(
-  app: Hono,
+  router: Hono,
   options: RegisterSpaRoutesOptions,
 ): void {
   const basePath = normalizeBasePath(options.basePath);
   const handler = options.handler;
 
   if (handler) {
-    app.all(basePath || '/', (context) => handler(context.req.raw));
-    app.all(`${basePath}/*`, (context) => handler(context.req.raw));
+    router.all(basePath || '/', (context) => handler(context.req.raw));
+    router.all(`${basePath}/*`, (context) => handler(context.req.raw));
     return;
   }
 
@@ -25,22 +25,22 @@ export function registerSpaRoutes(
     options.assetsPath ?? '/assets',
   );
 
-  app.all(assetsRoutePath, (context) =>
+  router.all(assetsRoutePath, (context) =>
     serveSpaAsset(context.req.raw, {
       rootDir,
       basePath,
     }),
   );
-  app.all(`${assetsRoutePath}/*`, (context) =>
+  router.all(`${assetsRoutePath}/*`, (context) =>
     serveSpaAsset(context.req.raw, {
       rootDir,
       basePath,
     }),
   );
-  app.get(basePath || '/', () =>
+  router.get(basePath || '/', () =>
     serveSpaIndex(options.indexPath, options.runtimeGlobals),
   );
-  app.get(`${basePath}/*`, () =>
+  router.get(`${basePath}/*`, () =>
     serveSpaIndex(options.indexPath, options.runtimeGlobals),
   );
 }

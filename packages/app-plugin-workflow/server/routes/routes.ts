@@ -1,26 +1,26 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
-import { Hono } from 'hono';
-
 import {
-  getWorkflowService,
-  type WorkflowService,
-} from '../runtime/runtime.js';
-import { AppServiceError } from '../services/errors.js';
-import { WorkflowRepository } from '../services/workflow-repository.js';
-import { WorkflowRunRepository } from '../services/workflow-run-repository.js';
+  databaseManagerToken,
+  type DatabaseManager,
+} from '@nocobase/app-database';
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import { Hono } from 'hono';
+import type { ServiceContainer } from '@nocobase/service-provider';
+
+import type { WorkflowService } from '../runtime/runtime.js';
+import { AppServiceError } from '../errors.js';
+import { WorkflowRepository } from '../repositories/workflow-repository.js';
+import { WorkflowRunRepository } from '../repositories/workflow-run-repository.js';
+import { workflowServiceToken } from '../token.js';
 import { createNodeRunRoutes } from './node-runs.js';
 import { createWorkflowRunRoutes } from './workflow-runs.js';
 import { createWorkflowDefinitionRoutes } from './workflows.js';
-import type {
-  WorkflowPluginRouteDeps,
-  WorkflowPluginRoutesContext,
-  WorkflowPluginRouteServices,
-} from './types.js';
+
+export interface WorkflowPluginRoutesApplication {
+  readonly container: ServiceContainer;
+}
 
 export function createWorkflowRoutes(
-  database: NonNullable<
-    WorkflowPluginRoutesContext['deps']['runtime']['database']
-  >,
+  database: DatabaseManager,
   service: WorkflowService,
 ): Hono {
   const workflows = new WorkflowRepository(database, service);
@@ -32,10 +32,10 @@ export function createWorkflowRoutes(
   return routes;
 }
 
-export default function registerWorkflowRoutes({
-  app,
-  deps,
-}: WorkflowPluginRoutesContext): void {
+export default function registerWorkflowRoutes(
+  { container }: WorkflowPluginRoutesApplication,
+  router: Hono,
+): void {
   const protectedRoutes = new Hono();
   protectedRoutes.onError((error, context) => {
     if (error instanceof AppServiceError) {
@@ -43,23 +43,22 @@ export default function registerWorkflowRoutes({
     }
     return context.json({ error: 'Internal server error.' }, 500);
   });
-  protectedRoutes.use('*', deps.auth.required());
-  const workflowService = getWorkflowService(deps.runtime);
-  if (deps.runtime.database && workflowService) {
+  protectedRoutes.use('*', container.resolve(authenticationToken).required());
+  if (
+    container.has(databaseManagerToken) &&
+    container.has(workflowServiceToken)
+  ) {
     protectedRoutes.route(
       '/',
-      createWorkflowRoutes(deps.runtime.database, workflowService),
+      createWorkflowRoutes(
+        container.resolve(databaseManagerToken),
+        container.resolve(workflowServiceToken),
+      ),
     );
   } else {
     protectedRoutes.all('*', (context) =>
       context.json({ error: 'Workflow service is not configured.' }, 503),
     );
   }
-  app.route('/api', protectedRoutes);
+  router.route('/', protectedRoutes);
 }
-
-export type {
-  AppPluginRoutesContext,
-  WorkflowPluginRouteDeps,
-  WorkflowPluginRouteServices,
-};

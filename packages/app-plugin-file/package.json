@@ -18,6 +18,10 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./client": {
       "types": "./client/index.ts",
       "import": "./client/index.ts"
@@ -58,6 +62,10 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
+      },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
       },
       "./client": {
         "types": "./dist/client/index.d.ts",
@@ -102,15 +110,6 @@
     "public/r"
   ],
   "nocobase": {
-    "plugin": {
-      "client": {
-        "routes": "./client/routes"
-      },
-      "database": {
-        "migrations": "./database/migrations",
-        "seeds": "./database/seeds"
-      }
-    },
     "registry": {
       "items": {
         "component-ui": "./registry/component-ui",
@@ -136,14 +135,19 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "catalog:",
     "lucide-react": "^0.487.0",
+    "react-markdown": "catalog:",
+    "remark-gfm": "catalog:",
     "tailwind-merge": "^3.2.0"
   },
   "peerDependencies": {

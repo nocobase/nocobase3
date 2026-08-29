@@ -366,7 +366,7 @@ plugin schema 和 migration 应保持一致。增加字段时，两处需要一�
 
 ```ts
 const auth = createAuthentication({
-  connection: runtime.database?.connection(),
+  connection: services.resolve(databaseManagerToken).connection(),
   secret: config.auth.secret,
   plugins: [
     ticketAuthPlugin({

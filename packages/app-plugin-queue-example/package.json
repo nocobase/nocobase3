@@ -9,11 +9,19 @@
     "node": ">=24.0.0"
   },
   "exports": {
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
     "exports": {
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -34,6 +42,7 @@
   "dependencies": {
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

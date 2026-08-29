@@ -1,7 +1,17 @@
-export { default as bootstrapWorkflowPlugin } from './bootstrap.js';
+export { default as WorkflowProvider } from './provider.js';
+export type {
+  WorkflowProviderApplication,
+  WorkflowProviderConfig,
+} from './provider.js';
+export { workflowServiceToken } from './token.js';
+export {
+  resolveWorkflowRuntimeConfig,
+  type ResolveWorkflowRuntimeConfigOptions,
+  type WorkflowRuntimeConfig,
+} from './config.js';
 export { createWorkflowRoutes } from './routes/routes.js';
 export { default as registerWorkflowRoutes } from './routes/routes.js';
-export type { WorkflowPluginRoutesContext } from './routes/types.js';
+export type { WorkflowPluginRoutesApplication } from './routes/routes.js';
 export type {
   JsonObject,
   WorkflowEventOptions,
@@ -11,12 +21,8 @@ export {
   AppServiceError,
   BadRequestError,
   ServiceUnavailableError,
-} from './services/errors.js';
-export {
-  bindWorkflowService,
-  getWorkflowService,
-  WorkflowService,
-} from './runtime/runtime.js';
+} from './errors.js';
+export { WorkflowService } from './runtime/runtime.js';
 export type {
   WorkflowServiceApi,
   WorkflowServiceOptions,

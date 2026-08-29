@@ -43,6 +43,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/service-provider": "workspace:^",
     "knex": "catalog:"
   },
   "devDependencies": {

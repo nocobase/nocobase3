@@ -208,13 +208,11 @@ const appBasePath = String(
 const appUrl = appBasePath
   ? `${appServerUrl}/${appBasePath}/`
   : `${appServerUrl}/`;
-const proxyApiPath =
-  nextEnv.NOCOBASE_API_URL ||
-  `/${[appBasePath, 'v2/api'].filter(Boolean).join('/')}`;
+const appApiPath = `/${[appBasePath, 'api'].filter(Boolean).join('/')}`;
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
-console.log(`  Proxy API: ${appServerUrl}${proxyApiPath}\n`);
+console.log(`  App API:   ${appServerUrl}${appApiPath}\n`);
 
 spawnDevProcess(
   'client',

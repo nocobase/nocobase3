@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@cacheable/memory": "catalog:",
+    "@nocobase/service-provider": "workspace:^",
     "bloom-filters": "catalog:",
     "keyv": "catalog:"
   },

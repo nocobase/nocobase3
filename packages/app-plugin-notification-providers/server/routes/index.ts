@@ -1,42 +1,24 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
-import type {
-  NotificationPluginServices,
-  NotificationRecipient,
-} from '@nocobase/app-plugin-notification';
-import type { Context, MiddlewareHandler } from 'hono';
+import type { NotificationRecipient } from '@nocobase/app-plugin-notification';
+import { notificationServiceToken } from '@nocobase/app-plugin-notification';
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
+import type { ServiceContainer } from '@nocobase/service-provider';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 
 import type { NotificationProvidersPluginConfig } from '../bootstrap.js';
 import { TEST_PAGE_HTML } from './test-page.js';
 
-export interface NotificationProvidersPluginRoutesDeps {
-  readonly auth: {
-    required(): MiddlewareHandler;
-    getSession(headers: Headers): Promise<{
-      readonly user: { readonly id: string };
-    } | null>;
-  };
-  readonly authz: {
-    middleware(): MiddlewareHandler<NotificationProviderAuthorizationEnv>;
-  };
+export interface NotificationProviderRoutesApplication {
+  readonly config: NotificationProvidersPluginConfig;
+  readonly container: ServiceContainer;
 }
-
-interface NotificationProviderAuthorizationEnv {
-  Variables: {
-    authz: {
-      can(input: {
-        resource: { type: string; id: string };
-        action: string;
-      }): Promise<boolean>;
-    };
-  };
-}
-
-export type NotificationProvidersPluginRoutesContext = AppPluginRoutesContext<
-  NotificationProvidersPluginRoutesDeps,
-  NotificationPluginServices,
-  NotificationProvidersPluginConfig
->;
 
 interface TestRequest {
   readonly channel?: unknown;
@@ -47,14 +29,15 @@ interface TestRequest {
   readonly body?: unknown;
 }
 
-export default function registerNotificationProviderRoutes({
-  app,
-  config,
-  deps,
-  services,
-}: NotificationProvidersPluginRoutesContext): void {
-  const routes = new Hono<NotificationProviderAuthorizationEnv>();
-  routes.use('*', deps.auth.required(), deps.authz.middleware());
+export default function registerNotificationProviderRoutes(
+  app: NotificationProviderRoutesApplication,
+  router: Hono,
+): void {
+  const { config, container } = app;
+  const auth = container.resolve(authenticationToken);
+  const authorization = container.resolve(authorizationToken);
+  const routes = new Hono<AuthorizationEnv>();
+  routes.use('*', auth.required(), authorization.middleware());
   routes.use('*', async (context, next) => {
     const allowed = await context.get('authz').can({
       resource: { type: 'page', id: 'notification.logs' },
@@ -89,12 +72,12 @@ export default function registerNotificationProviderRoutes({
       return context.json({ error: 'Missing provider test header.' }, 403);
     }
 
-    const notification = services.notification;
-    if (!notification)
+    if (!container.has(notificationServiceToken))
       return context.json(
         { error: 'Notification service is unavailable.' },
         503,
       );
+    const notification = container.resolve(notificationServiceToken);
 
     const input = await readRequest(context);
     if (!input)
@@ -188,7 +171,7 @@ export default function registerNotificationProviderRoutes({
       userId: channel === 'in-app' ? requestedRecipient : undefined,
       provider,
       context,
-      deps,
+      auth,
     });
     if (!recipient) {
       return context.json(
@@ -239,19 +222,19 @@ export default function registerNotificationProviderRoutes({
   routes.get('/test/status/:id', async (context) => {
     if (!isTestPageEnabled(config))
       return context.json({ error: 'Not found.' }, 404);
-    const notification = services.notification;
-    if (!notification)
+    if (!container.has(notificationServiceToken))
       return context.json(
         { error: 'Notification service is unavailable.' },
         503,
       );
+    const notification = container.resolve(notificationServiceToken);
     const details = await notification.logs.get(context.req.param('id'));
     return details
       ? context.json({ data: details })
       : context.json({ error: 'Notification log not found.' }, 404);
   });
 
-  app.route('/api/notification-providers', routes);
+  router.route('/notification-providers', routes);
 }
 
 function isTestPageEnabled(config: NotificationProvidersPluginConfig): boolean {
@@ -295,16 +278,14 @@ async function testRecipient(input: {
   readonly userId?: string;
   readonly provider: NotificationProvidersPluginConfig['notification']['channels'][number]['providers'][number];
   readonly context: Context;
-  readonly deps: NotificationProvidersPluginRoutesDeps;
+  readonly auth: Pick<Auth, 'getSession'>;
 }): Promise<NotificationRecipient | undefined> {
   if (input.channel === 'email' && input.emailRecipient) {
     return { type: 'email', address: input.emailRecipient };
   }
   if (input.channel === 'in-app') {
     if (input.userId) return { type: 'user', id: input.userId };
-    const session = await input.deps.auth.getSession(
-      input.context.req.raw.headers,
-    );
+    const session = await input.auth.getSession(input.context.req.raw.headers);
     return session ? { type: 'user', id: session.user.id } : undefined;
   }
   return { type: 'target', id: providerTarget(input.provider) };

@@ -1,80 +1,195 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
-
+import {
+  RealtimeProvider,
+  realtimeServiceToken,
+} from '@nocobase/app-server-kit/realtime';
+import {
+  ServiceContainer,
+  ServiceProviderRegistry,
+} from '@nocobase/service-provider';
+import {
+  CachingProvider,
+  cachingToken,
+  createDefaultCachingConfig,
+} from '@nocobase/caching';
+import { DriveProvider, driveManagerToken } from '@nocobase/drive';
+import { IdGeneratorProvider, idGeneratorToken } from '@nocobase/id-generator';
+import { LoggingProvider, loggingToken } from '@nocobase/logging';
+import { QueueProvider, queueManagerToken } from '@nocobase/queue';
+import {
+  createNullSessionConfig,
+  SessionProvider,
+  sessionManagerToken,
+} from '@nocobase/session';
+import {
+  databaseManagerToken,
+  type DatabaseManager,
+} from '@nocobase/app-database';
 import type { AppConfig } from '../../server/config/index.ts';
 
-const calls: string[] = [];
-const prepareAppDatabaseStorageMock = vi.hoisted(() =>
-  vi.fn(async () => {
-    calls.push('prepare-database');
-  }),
-);
-const prepareDriveStorageMock = vi.hoisted(() =>
-  vi.fn(async () => {
-    calls.push('prepare-drive');
-  }),
-);
-const runConfiguredAppMigrationsMock = vi.hoisted(() =>
-  vi.fn(async () => {
-    calls.push('migrate');
-  }),
-);
-const runConfiguredAppSeedsMock = vi.hoisted(() =>
-  vi.fn(async () => {
-    calls.push('seed');
-  }),
-);
+describe('app service providers', () => {
+  it('registers core services and shuts them down in reverse order', async () => {
+    const services = new ServiceContainer();
+    const registry = new ServiceProviderRegistry();
+    const app = createProviderApplication(
+      {
+        caching: createDefaultCachingConfig(),
+        logging: {
+          enabled: false,
+          level: 'silent',
+        },
+        session: createNullSessionConfig(),
+        snowflake: {
+          workerId: 0,
+        },
+      } as AppConfig,
+      services,
+    );
+    registry.add(new LoggingProvider(app));
+    registry.add(new CachingProvider(app));
+    registry.add(new IdGeneratorProvider(app));
+    registry.add(new SessionProvider(app));
+    registry.add(new DriveProvider(app));
+    registry.add(new QueueProvider(app));
+    registry.add(new RealtimeProvider(app));
 
-vi.mock('@nocobase/app-server-kit/database', () => ({
-  prepareAppDatabaseStorage: prepareAppDatabaseStorageMock,
-}));
+    registry.registerAll();
+    const logging = services.resolve(loggingToken);
+    const caching = services.resolve(cachingToken);
+    const idGenerator = services.resolve(idGeneratorToken);
+    const sessionManager = services.resolve(sessionManagerToken);
+    const queueManager = services.resolve(queueManagerToken);
+    const realtime = services.resolve(realtimeServiceToken);
+    const flush = vi.spyOn(logging, 'flush');
+    const dispose = vi.spyOn(caching, 'dispose');
+    const disposeSession = vi.spyOn(sessionManager, 'dispose');
+    const closeQueue = vi.spyOn(queueManager, 'close');
+    const closeRealtime = vi.spyOn(realtime, 'close');
 
-vi.mock('@nocobase/app-server-kit/runtime', () => ({
-  runConfiguredAppMigrations: runConfiguredAppMigrationsMock,
-  runConfiguredAppSeeds: runConfiguredAppSeedsMock,
-}));
+    await registry.shutdown();
 
-vi.mock('@nocobase/drive', () => ({
-  prepareDriveStorage: prepareDriveStorageMock,
-}));
-
-import { prepareAppRuntime } from '../../server/runtime/lifecycle.ts';
-
-beforeEach(() => {
-  calls.length = 0;
-  prepareAppDatabaseStorageMock.mockClear();
-  prepareDriveStorageMock.mockClear();
-  runConfiguredAppMigrationsMock.mockClear();
-  runConfiguredAppSeedsMock.mockClear();
-});
-
-describe('app runtime preparation', () => {
-  it('runs migrations before seeds', async () => {
-    await prepareAppRuntime(createRuntime());
-
-    expect(calls).toEqual([
-      'prepare-database',
-      'prepare-drive',
-      'migrate',
-      'seed',
-    ]);
+    expect(services.resolve(idGeneratorToken)).toBe(idGenerator);
+    expect(services.has(driveManagerToken)).toBe(false);
+    expect(closeRealtime).toHaveBeenCalledOnce();
+    expect(closeQueue).toHaveBeenCalledOnce();
+    expect(disposeSession).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(flush).toHaveBeenCalledOnce();
+    expect(disposeSession.mock.invocationCallOrder[0]).toBeLessThan(
+      dispose.mock.invocationCallOrder[0],
+    );
+    expect(closeQueue.mock.invocationCallOrder[0]).toBeLessThan(
+      disposeSession.mock.invocationCallOrder[0],
+    );
+    expect(closeRealtime.mock.invocationCallOrder[0]).toBeLessThan(
+      closeQueue.mock.invocationCallOrder[0],
+    );
+    expect(dispose.mock.invocationCallOrder[0]).toBeLessThan(
+      flush.mock.invocationCallOrder[0],
+    );
   });
 
-  it('does not run seeds when migrations fail', async () => {
-    const error = new Error('migration failed');
-    runConfiguredAppMigrationsMock.mockRejectedValueOnce(error);
+  it('registers and prepares drive only when configuration is available', async () => {
+    const services = new ServiceContainer();
+    const registry = new ServiceProviderRegistry();
+    registry.add(
+      new DriveProvider({
+        config: {
+          drive: {
+            default: 'public',
+            disks: {
+              public: {
+                driver: 'fs',
+                location: process.cwd(),
+                visibility: 'public',
+              },
+            },
+            links: {},
+          },
+        } as AppConfig,
+        container: services,
+      }),
+    );
 
-    await expect(prepareAppRuntime(createRuntime())).rejects.toBe(error);
-    expect(runConfiguredAppSeedsMock).not.toHaveBeenCalled();
+    registry.registerAll();
+    await registry.bootAll();
+
+    expect(services.has(driveManagerToken)).toBe(true);
+    expect(services.resolve(driveManagerToken)).toBeDefined();
+  });
+
+  it('resolves authentication, authorization, and queue provider dependencies', async () => {
+    const services = new ServiceContainer();
+    const registry = new ServiceProviderRegistry();
+    const connection = { kind: 'connection' };
+    const database = {
+      connection: vi.fn(() => connection),
+      destroy: vi.fn(() => Promise.resolve()),
+    } as unknown as DatabaseManager;
+    const queueConfig = {
+      default: 'test',
+      connections: {
+        test: { driver: 'fake' as const },
+      },
+    };
+    const app = createProviderApplication(
+      {
+        database: createDatabaseConfig(),
+        app: {
+          name: 'provider-test',
+          publicOrigin: 'https://example.com',
+          publicBasePath: '/provider-test',
+        },
+        auth: {
+          secret: 'test-auth-secret-at-least-32-characters',
+        },
+        caching: createDefaultCachingConfig(),
+        logging: {
+          enabled: false,
+          level: 'silent',
+        },
+        queue: queueConfig,
+        snowflake: {
+          workerId: 0,
+        },
+      } as AppConfig,
+      services,
+    );
+    services.instance(databaseManagerToken, database);
+    registry.add(new LoggingProvider(app));
+    registry.add(new CachingProvider(app));
+    registry.add(new IdGeneratorProvider(app));
+    registry.add(new QueueProvider(app));
+
+    registry.registerAll();
+    services.resolve(queueManagerToken);
+
+    expect(services.resolve(databaseManagerToken)).toBe(database);
+    await registry.shutdown();
   });
 });
 
-function createRuntime(): AppRuntime<AppConfig> {
+function createProviderApplication(
+  config: AppConfig,
+  container: ServiceContainer,
+): {
+  config: AppConfig;
+  container: ServiceContainer;
+} {
   return {
-    config: {
-      database: {},
-      drive: {},
+    config,
+    container,
+  };
+}
+
+function createDatabaseConfig(): AppConfig['database'] {
+  return {
+    default: 'main',
+    connections: {},
+    migrations: {
+      directory: '',
+      autoRun: false,
     },
-  } as AppRuntime<AppConfig>;
+  };
 }

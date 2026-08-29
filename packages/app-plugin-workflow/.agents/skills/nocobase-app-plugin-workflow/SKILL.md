@@ -9,7 +9,7 @@ last-reviewed: 2026-08-27
 risk-level: medium
 metadata:
   domain-owner: '@nocobase/app-plugin-workflow'
-  current-scope: 'applications that install the workflow package and bootstrap its server runtime'
+  current-scope: 'applications that install the workflow package and register its ServiceProvider'
 ---
 
 # Goal

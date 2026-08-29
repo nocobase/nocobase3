@@ -1,40 +1,27 @@
-import { createAppRuntime } from '@nocobase/app-server-kit/runtime';
-
-import type { AppServer } from './app.js';
+import type { Application } from '@nocobase/app-server-kit/application';
 import {
-  createAppFromRuntime,
-  createRuntimeConfigPaths,
-  loadAppConfig,
-  onceAsync,
-  prepareAppRuntime,
-  resolveEmbeddedRuntimeOptions,
+  resolveAppRuntime,
+  startApplicationInScope,
+  type AppDisposer,
   type AppScope,
-} from './runtime/index.js';
+} from '@nocobase/app-server-kit/runtime';
 
-export type { AppDisposer, AppScope } from './runtime/index.js';
+import { createApp } from './app.js';
+import type { AppConfig } from './config/index.js';
+import type { DefaultAppScopeConfig } from './config/types.js';
+import appRuntime from './runtime.js';
 
-export type EmbeddedServer = AppServer;
+export type { AppDisposer, AppScope };
+
+export type EmbeddedServer = Application<AppConfig>;
 
 export async function createServer(
-  scope: AppScope,
-  moduleUrl: string = import.meta.url,
+  scope: AppScope<DefaultAppScopeConfig>,
 ): Promise<EmbeddedServer> {
-  const options = resolveEmbeddedRuntimeOptions(scope, moduleUrl);
-  const runtime = createAppRuntime(loadAppConfig(options), {
-    paths: createRuntimeConfigPaths(options.paths),
-  });
+  const runtime = resolveAppRuntime(appRuntime, scope);
+  const app = createApp(runtime);
 
-  scope.registerDisposer(
-    'runtime',
-    onceAsync(() => runtime.dispose()),
-  );
-  await prepareAppRuntime(runtime);
-
-  const app = await createAppFromRuntime(runtime, {
-    viteDevUrl: false,
-    lifecycle: scope,
-  });
-  return app;
+  return startApplicationInScope(scope, app);
 }
 
 export default createServer;

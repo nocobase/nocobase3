@@ -1,5 +1,6 @@
 export { FileList } from './components/file-list';
 export { FilePreviewDialog } from './components/file-preview-dialog';
+export { FilePreviewField } from './components/file-preview-field';
 export { FileThumbnail } from './components/file-thumbnail';
 export { FileUploadField } from './components/file-upload-field';
 export {
@@ -11,6 +12,7 @@ export type {
   FileAccessUrl,
   FileListProps,
   FilePreviewDialogProps,
+  FilePreviewFieldProps,
   FileRecord,
   FilesClient,
   FileThumbnailProps,

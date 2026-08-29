@@ -26,6 +26,10 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -39,6 +43,10 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -46,11 +54,6 @@
     "registry": {
       "items": {
         "in-app-ui": "./registry/in-app-ui"
-      }
-    },
-    "plugin": {
-      "database": {
-        "migrations": "./database/migrations"
       }
     }
   },
@@ -73,6 +76,7 @@
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
     "hono": "catalog:"
   },

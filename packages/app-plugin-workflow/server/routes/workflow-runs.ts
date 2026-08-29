@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 
 import { parseStatus, readInput, readPage, toPageResponse } from './helpers.js';
-import type { WorkflowRunRepository } from '../services/workflow-run-repository.js';
+import type { WorkflowRunRepository } from '../repositories/workflow-run-repository.js';
 
 export function createWorkflowRunRoutes(
   workflowRuns: Pick<

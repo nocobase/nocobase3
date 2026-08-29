@@ -6,7 +6,7 @@ keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP,Resend,飞�
 
 # 手动接入通知
 
-如果宿主没有使用 NocoBase 的插件 bootstrap 约定，你需要在自己的应用代码中完成 migrations、配置、Channel 与 Provider 注册、路由挂载和生命周期管理。默认模板已经通过插件 bootstrap 创建 `NotificationManager`，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量。
+通知包通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建 `NotificationManager`，并负责启动与关闭。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
@@ -46,7 +46,7 @@ pnpm add @nocobase/app-plugin-notification \
 pnpm migrate
 ```
 
-使用默认模板时，插件声明还会加载包内的 `server/bootstrap.ts` 和 `server/routes/index.ts`。Provider 插件会自动注册内置 definitions，并提供受登录保护的测试页面。如果你的宿主只读取 database manifest，那么继续按下面的步骤手动创建运行时和挂载路由。
+插件声明同时用于发现 migrations、Service Provider 和 routes。默认模板启用插件后会自动注册内置 definitions，并提供受登录和权限保护的测试页面；自定义宿主可继续按下面的步骤手动创建运行时和挂载路由。
 
 ## 第二步：创建配置
 

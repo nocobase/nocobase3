@@ -10,6 +10,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./application": {
+      "types": "./src/application/index.ts",
+      "import": "./src/application/index.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
@@ -22,9 +26,21 @@
       "types": "./src/database/index.ts",
       "import": "./src/database/index.ts"
     },
+    "./node": {
+      "types": "./src/node/index.ts",
+      "import": "./src/node/index.ts"
+    },
     "./plugins": {
       "types": "./src/plugins/index.ts",
       "import": "./src/plugins/index.ts"
+    },
+    "./realtime": {
+      "types": "./src/realtime/index.ts",
+      "import": "./src/realtime/index.ts"
+    },
+    "./router": {
+      "types": "./src/router/index.ts",
+      "import": "./src/router/index.ts"
     },
     "./runtime": {
       "types": "./src/runtime/index.ts",
@@ -52,6 +68,10 @@
   ],
   "publishConfig": {
     "exports": {
+      "./application": {
+        "types": "./dist/application/index.d.ts",
+        "import": "./dist/application/index.js"
+      },
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
@@ -64,9 +84,21 @@
         "types": "./dist/database/index.d.ts",
         "import": "./dist/database/index.js"
       },
+      "./node": {
+        "types": "./dist/node/index.d.ts",
+        "import": "./dist/node/index.js"
+      },
       "./plugins": {
         "types": "./dist/plugins/index.d.ts",
         "import": "./dist/plugins/index.js"
+      },
+      "./realtime": {
+        "types": "./dist/realtime/index.d.ts",
+        "import": "./dist/realtime/index.js"
+      },
+      "./router": {
+        "types": "./dist/router/index.d.ts",
+        "import": "./dist/router/index.js"
       },
       "./runtime": {
         "types": "./dist/runtime/index.d.ts",
@@ -92,7 +124,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -103,7 +136,9 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@hono/node-server": "catalog:",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

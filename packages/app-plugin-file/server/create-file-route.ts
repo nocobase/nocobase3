@@ -54,6 +54,7 @@ interface FileErrorBody {
 
 const MIN_MULTIPART_OVERHEAD = 64 * 1024;
 const MAX_MULTIPART_OVERHEAD = 1024 * 1024;
+const DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 class FileRouteError extends Error {
   readonly code: string;
@@ -72,6 +73,8 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
   assertMaxFiles(options.limits?.maxFiles);
   const routes = new Hono();
   const visibility = options.visibility ?? DEFAULT_FILE_ROUTE_VISIBILITY;
+  const maxFileSize = options.limits?.maxSize ?? DEFAULT_MAX_FILE_SIZE;
+  const uploadQueue = new Map<string, Promise<void>>();
 
   routes.onError((error, context) => mapKnownError(error, context));
 
@@ -91,20 +94,23 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     const denied = await authorize(options, context, 'upload');
     if (denied) return denied;
 
-    const form = await parseUploadForm(context, options.limits?.maxSize);
+    const form = await parseUploadForm(context, maxFileSize);
     const file = resolveUploadFile(form);
     const isPublic = resolveVisibility(form, visibility);
     const mimeType = file.type.trim() || 'application/octet-stream';
-    validateUpload(file, mimeType, options);
-    await enforceFileLimit(context, store, options.limits?.maxFiles);
-    const record = await persistUpload(
-      context,
-      options,
-      store,
-      file,
-      mimeType,
-      isPublic,
-    );
+    validateUpload(file, mimeType, options, maxFileSize);
+    const persist = async (): Promise<FileRecord> => {
+      await enforceFileLimit(context, store, options.limits?.maxFiles);
+      return persistUpload(context, options, store, file, mimeType, isPublic);
+    };
+    const record =
+      options.limits?.maxFiles === undefined
+        ? await persist()
+        : await runSerialized(
+            uploadQueue,
+            uploadQueueKey(context, options),
+            persist,
+          );
 
     return context.json(
       { data: toClientRecord(record, rootContentPath(context, record.id)) },
@@ -179,6 +185,7 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     if (token) {
       headers.set('Cache-Control', 'private, no-store, max-age=0');
       headers.set('Pragma', 'no-cache');
+      headers.set('Referrer-Policy', 'no-referrer');
     }
     return new Response(stream, { headers });
   });
@@ -193,7 +200,14 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
 
     const removed = await store.remove(record.id, context);
     if (!removed) return context.body(null, 204);
-    await removeFileObject(options.drive, removed);
+    try {
+      await removeFileObject(options.drive, removed);
+    } catch (error) {
+      console.error(
+        'File object cleanup failed after its database record was deleted.',
+        error,
+      );
+    }
     return context.body(null, 204);
   });
 
@@ -253,6 +267,50 @@ function assertMaxFiles(maxFiles: number | undefined): void {
   }
 }
 
+async function runSerialized<Result>(
+  queue: Map<string, Promise<void>>,
+  key: string,
+  task: () => Promise<Result>,
+): Promise<Result> {
+  const previous = queue.get(key) ?? Promise.resolve();
+  let release: () => void = () => undefined;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  queue.set(key, current);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+    if (queue.get(key) === current) queue.delete(key);
+  }
+}
+
+function uploadQueueKey(
+  context: Context,
+  options: CreateFileRouteOptions,
+): string {
+  if (!options.store) {
+    const scope = options.scope?.(context) ?? {};
+    return JSON.stringify(
+      Object.entries(scope).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    );
+  }
+  const path = context.req.path
+    .replace(/\/+$/u, '')
+    .split('/')
+    .map((segment) => {
+      if (!/^\d+$/u.test(segment)) return segment;
+      const value = Number(segment);
+      return Number.isSafeInteger(value) ? String(value) : segment;
+    })
+    .join('/');
+  return path || '/';
+}
+
 async function enforceFileLimit(
   context: Context,
   store: FileStore,
@@ -280,7 +338,7 @@ async function authorize(
 
 async function parseUploadForm(
   context: Context,
-  maxFileSize: number | undefined,
+  maxFileSize: number,
 ): Promise<FormData> {
   const contentType = context.req.header('content-type') ?? '';
   if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
@@ -291,10 +349,10 @@ async function parseUploadForm(
     );
   }
   try {
-    const request =
-      maxFileSize === undefined
-        ? context.req.raw
-        : await readBoundedMultipartRequest(context.req.raw, maxFileSize);
+    const request = await readBoundedMultipartRequest(
+      context.req.raw,
+      maxFileSize,
+    );
     return await request.formData();
   } catch (error) {
     if (error instanceof FileRouteError) throw error;
@@ -392,7 +450,7 @@ function resolveUploadFile(form: FormData): File {
   return file;
 }
 
-function isFileCompatible(value: FormDataEntryValue): value is File {
+function isFileCompatible(value: string | File): value is File {
   return (
     typeof value !== 'string' &&
     typeof value.name === 'string' &&
@@ -429,9 +487,9 @@ function validateUpload(
   file: File,
   mimeType: string,
   options: CreateFileRouteOptions,
+  maxFileSize: number,
 ): void {
-  const maxSize = options.limits?.maxSize;
-  if (maxSize !== undefined && file.size > maxSize) {
+  if (file.size > maxFileSize) {
     throw fileTooLarge();
   }
   const mimeTypes = options.limits?.mimeTypes;
