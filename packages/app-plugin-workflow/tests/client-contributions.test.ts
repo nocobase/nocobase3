@@ -6,6 +6,8 @@ import bootstrap from '../client/bootstrap.js';
 import { WORKFLOW_ROUTE_IDS } from '../client/route-contracts.js';
 import routes from '../client/routes.js';
 
+const NS = '@nocobase/app-plugin-workflow';
+
 describe('workflow client contributions', () => {
   it('owns stable workflow management routes', () => {
     expect(routes.map(({ name, path }) => ({ name, path }))).toEqual([
@@ -58,17 +60,19 @@ describe('workflow client contributions', () => {
     });
 
     expect(addResources).toHaveBeenCalledOnce();
+    // Resources register before a language is known, so a label is a translation key plus the namespace to read it
+    // from; the navigation resolves it as it renders.
     expect(addResources.mock.calls[0]?.[0]).toEqual([
-      { name: 'workflow', meta: { label: 'Workflow' } },
+      { name: 'workflow', meta: { label: 'nav.workflow', i18nNs: NS } },
       {
         name: 'workflow.workflows',
         list: '/workflow/workflows',
-        meta: { label: 'Workflows', parent: 'workflow' },
+        meta: { label: 'nav.workflows', i18nNs: NS, parent: 'workflow' },
       },
       {
         name: 'workflow.runs',
         list: '/workflow/runs',
-        meta: { label: 'Execution records', parent: 'workflow' },
+        meta: { label: 'nav.runs', i18nNs: NS, parent: 'workflow' },
       },
     ]);
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getLocaleDirection,
+  getLocaleLabel,
   parseAcceptLanguage,
   resolveSupportedLocale,
 } from '../src/core/locales.js';
@@ -69,5 +70,23 @@ describe('parseAcceptLanguage', () => {
   it('returns nothing for a missing or empty header', () => {
     expect(parseAcceptLanguage(undefined)).toEqual([]);
     expect(parseAcceptLanguage('')).toEqual([]);
+  });
+});
+
+describe('getLocaleLabel', () => {
+  it('names a locale in its own language, without the region', () => {
+    expect(getLocaleLabel('zh-CN', ['en-US', 'zh-CN'])).toBe('中文');
+    expect(getLocaleLabel('en-US', ['en-US', 'zh-CN'])).toBe('English');
+  });
+
+  it('keeps the region when another locale shares the language', () => {
+    // 'zh-CN' and 'zh-TW' are both "中文"; the region is what tells them apart.
+    const locales = ['zh-CN', 'zh-TW'];
+    expect(getLocaleLabel('zh-CN', locales)).toContain('中国');
+    expect(getLocaleLabel('zh-TW', locales)).toContain('台');
+  });
+
+  it('shortens when asked about a locale on its own', () => {
+    expect(getLocaleLabel('ja-JP')).toBe('日本語');
   });
 });

@@ -2,6 +2,7 @@ import type { WorkflowResource } from './en-US.js';
 
 const zhCN: WorkflowResource = {
   nav: {
+    workflow: '工作流',
     workflows: '工作流',
     runs: '执行记录',
   },

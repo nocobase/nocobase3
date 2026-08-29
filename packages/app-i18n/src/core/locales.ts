@@ -9,11 +9,28 @@ export function getLocaleDirection(locale: Locale): LocaleDirection {
 /**
  * The locale's name in its own language, so a switcher reads "简体中文" rather than "Chinese" to someone looking for it.
  */
-export function getLocaleLabel(locale: Locale): string {
+/**
+ * The locale's name in its own language, as short as stays unambiguous.
+ *
+ * A language picker reads better as "中文" than "中文（中国）", so the region is dropped — unless another enabled locale
+ * shares the same language, where "中文" would name both and the region is what tells them apart.
+ */
+export function getLocaleLabel(
+  locale: Locale,
+  siblings: readonly Locale[] = [],
+): string {
+  const language = locale.split('-')[0];
+  const sharesLanguage = siblings.some(
+    (candidate) => candidate !== locale && candidate.split('-')[0] === language,
+  );
+
   try {
-    return (
-      new Intl.DisplayNames([locale], { type: 'language' }).of(locale) ?? locale
-    );
+    const names = new Intl.DisplayNames([locale], { type: 'language' });
+    if (!sharesLanguage) {
+      const short = names.of(language);
+      if (short && short !== language) return short;
+    }
+    return names.of(locale) ?? locale;
   } catch {
     return locale;
   }
@@ -22,10 +39,11 @@ export function getLocaleLabel(locale: Locale): string {
 export function describeLocale(
   locale: Locale,
   label?: string,
+  siblings: readonly Locale[] = [],
 ): LocaleDefinition {
   return Object.freeze({
     locale,
-    label: label ?? getLocaleLabel(locale),
+    label: label ?? getLocaleLabel(locale, siblings),
     direction: getLocaleDirection(locale),
   });
 }

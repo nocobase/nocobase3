@@ -88,18 +88,12 @@
     "@nocobase/app-server-kit": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
-    "@testing-library/jest-dom": "catalog:",
-    "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "@vitejs/plugin-react": "catalog:",
     "eslint": "catalog:",
     "hono": "catalog:",
-    "jsdom": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

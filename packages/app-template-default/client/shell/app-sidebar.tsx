@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/app-i18n/client';
 import { useCan, useMenu, type TreeMenuItem } from '@refinedev/core';
 import { ChevronRight, Home, List, ShieldCheck, X } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
@@ -20,20 +21,25 @@ export function AppSidebar({
   onCloseMobile,
 }: AppSidebarProps): ReactElement {
   const { menuItems, selectedKey } = useMenu();
+  const { t } = useTranslation();
   const { data: homeAccess } = useCan({ resource: 'home', action: 'access' });
 
   return (
     <>
       {mobileOpen ? (
         <button
-          aria-label='Close navigation'
+          aria-label={t('navigation.close', {
+            defaultValue: 'Close navigation',
+          })}
           className='fixed inset-0 z-40 bg-black/30 md:hidden'
           onClick={onCloseMobile}
           type='button'
         />
       ) : null}
       <aside
-        aria-label='Application navigation'
+        aria-label={t('navigation.label', {
+          defaultValue: 'Application navigation',
+        })}
         className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card text-card-foreground transition-[width,transform] duration-200 md:static md:z-auto md:flex md:translate-x-0 ${desktopCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div
@@ -46,7 +52,9 @@ export function AppSidebar({
             <AppBrand compact={desktopCollapsed} />
           </div>
           <Button
-            aria-label='Close navigation'
+            aria-label={t('navigation.close', {
+              defaultValue: 'Close navigation',
+            })}
             className='md:hidden'
             onClick={onCloseMobile}
             size='icon'
@@ -56,7 +64,9 @@ export function AppSidebar({
           </Button>
         </div>
         <nav
-          aria-label='Application navigation'
+          aria-label={t('navigation.label', {
+            defaultValue: 'Application navigation',
+          })}
           className={`flex-1 space-y-1 overflow-x-hidden overflow-y-auto py-3 ${desktopCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
         >
           {homeAccess?.can === true ? (
@@ -66,7 +76,7 @@ export function AppSidebar({
               isSelected={
                 selectedKey === HOME_NAVIGATION_ITEM.key || selectedKey === '/'
               }
-              label={HOME_NAVIGATION_ITEM.label}
+              label={t('navigation.home', { defaultValue: 'Home' })}
               onNavigate={onCloseMobile}
               route={HOME_NAVIGATION_ITEM.route}
             />
@@ -94,13 +104,27 @@ interface NavigationTreeProps {
   readonly selectedKey: string;
 }
 
+/**
+ * The label a menu entry shows.
+ *
+ * A resource registers its label at bootstrap, before any language is known, so a plugin passes a translation key and
+ * its namespace instead of a finished string. An entry without a namespace is already literal text.
+ */
+function useMenuLabel(item: TreeMenuItem): string {
+  const { t } = useTranslation();
+  const meta = item.meta as { label?: string; i18nNs?: string } | undefined;
+  const label = item.label ?? meta?.label ?? item.name;
+
+  return meta?.i18nNs ? t(label, { ns: meta.i18nNs }) : label;
+}
+
 function NavigationTree({
   collapsed,
   item,
   onNavigate,
   selectedKey,
 }: NavigationTreeProps): ReactElement | null {
-  const label = item.label ?? item.meta?.label ?? item.name;
+  const label = useMenuLabel(item);
   const isSelected = item.key === selectedKey;
   const children = item.children ?? [];
   const icon = item.meta?.icon ?? item.icon ?? <List />;

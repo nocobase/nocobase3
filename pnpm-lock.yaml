@@ -768,42 +768,24 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../service-provider
-      '@testing-library/jest-dom':
-        specifier: 'catalog:'
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
-      '@testing-library/react':
-        specifier: 'catalog:'
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
-      '@types/react-dom':
-        specifier: 'catalog:'
-        version: 19.2.4(@types/react@19.2.18)
-      '@vitejs/plugin-react':
-        specifier: 'catalog:'
-        version: 4.7.0(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
       hono:
         specifier: 'catalog:'
         version: 4.13.2
-      jsdom:
-        specifier: 'catalog:'
-        version: 30.0.1(@noble/hashes@2.3.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
       react:
         specifier: 'catalog:'
         version: 19.1.0
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.1.0(react@19.1.0)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

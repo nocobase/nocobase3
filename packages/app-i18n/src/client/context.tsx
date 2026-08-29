@@ -8,7 +8,10 @@ import {
   type PropsWithChildren,
   type ReactElement,
 } from 'react';
-import { I18nextProvider, useTranslation } from 'react-i18next';
+import {
+  I18nextProvider,
+  useTranslation as useI18nextTranslation,
+} from 'react-i18next';
 import type { UseTranslationResponse } from 'react-i18next';
 
 import type { I18nRuntime, Namespace } from '../core/index.js';
@@ -123,4 +126,16 @@ export function withNamespace<TProps extends object>(
 }
 
 export type { UseTranslationResponse };
-export { useTranslation };
+
+/**
+ * Translates within the namespace in scope, or the one named.
+ *
+ * Works without a runtime mounted — a focused test, or a host that has not set i18n up — where it returns each key's
+ * declared default instead of warning. Callers therefore have to pass `defaultValue` for a string that must stay
+ * readable in that case; `t('a.b')` on its own would render as its key.
+ */
+export function useTranslation(
+  ns?: Namespace | readonly Namespace[],
+): UseTranslationResponse<never, undefined> {
+  return useI18nextTranslation(ns as never);
+}

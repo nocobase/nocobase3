@@ -12,6 +12,21 @@ export interface AppResource {
     readonly save: string;
     readonly cancel: string;
     readonly confirm: string;
+    readonly language: string;
+  };
+  readonly account: {
+    readonly openMenu: string;
+    readonly fallback: string;
+    readonly signOut: string;
+    readonly signingOut: string;
+  };
+  readonly navigation: {
+    readonly home: string;
+    readonly open: string;
+    readonly close: string;
+    readonly expand: string;
+    readonly collapse: string;
+    readonly label: string;
   };
 }
 
@@ -23,6 +38,21 @@ const enUS: AppResource = {
     save: 'Save',
     cancel: 'Cancel',
     confirm: 'Confirm',
+    language: 'Language',
+  },
+  account: {
+    openMenu: 'Open account menu',
+    fallback: 'Account',
+    signOut: 'Sign out',
+    signingOut: 'Signing out…',
+  },
+  navigation: {
+    home: 'Home',
+    open: 'Open navigation',
+    close: 'Close navigation',
+    expand: 'Expand navigation',
+    collapse: 'Collapse navigation',
+    label: 'Application navigation',
   },
 };
 

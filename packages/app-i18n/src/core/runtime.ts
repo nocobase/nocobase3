@@ -69,7 +69,10 @@ export class I18nRuntime {
   }
 
   public getLocaleDefinitions(): readonly LocaleDefinition[] {
-    return this.locales.map((locale) => describeLocale(locale));
+    // The full set is passed so each label can be shortened only where it stays unambiguous.
+    return this.locales.map((locale) =>
+      describeLocale(locale, undefined, this.locales),
+    );
   }
 
   /** Resolves a requested locale to a supported one, falling back to the default when nothing matches. */

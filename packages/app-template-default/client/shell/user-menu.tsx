@@ -1,7 +1,17 @@
-import { LanguageSwitcher } from '@nocobase/app-plugin-i18n/client';
+import { useTranslation } from '@nocobase/app-i18n/client';
 import { useGetIdentity, useLogout } from '@refinedev/core';
 import { LogOut, UserRound } from 'lucide-react';
 import type { ReactElement } from 'react';
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+import { LanguageSwitcher } from './language-switcher.js';
 
 interface AppIdentity {
   readonly avatar?: string;
@@ -13,15 +23,21 @@ interface AppIdentity {
 export function UserMenu(): ReactElement {
   const { data: identity, isLoading } = useGetIdentity<AppIdentity>();
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
+  const { t } = useTranslation();
 
-  const name = identity?.fullName || identity?.email || 'Account';
+  const name =
+    identity?.fullName ||
+    identity?.email ||
+    t('account.fallback', { defaultValue: 'Account' });
   const initials = getInitials(name);
 
   return (
-    <details className='relative'>
-      <summary
-        aria-label='Open account menu'
-        className='flex size-10 cursor-pointer list-none items-center justify-center rounded-full border border-border/70 bg-background/60 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden'
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={t('account.openMenu', {
+          defaultValue: 'Open account menu',
+        })}
+        className='flex size-10 cursor-pointer items-center justify-center rounded-full border border-border/70 bg-background/60 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
         title={name}
       >
         {identity?.avatar ? (
@@ -35,9 +51,9 @@ export function UserMenu(): ReactElement {
             {isLoading ? <UserRound className='size-4' /> : initials}
           </span>
         )}
-      </summary>
-      <div className='absolute top-full right-0 z-50 mt-2 w-64 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg'>
-        <div className='border-b border-border px-2 py-2'>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='end' className='w-64'>
+        <div className='px-2 py-1.5'>
           <p className='truncate text-sm font-medium'>{name}</p>
           {identity?.email ? (
             <p className='truncate text-xs text-muted-foreground'>
@@ -45,20 +61,24 @@ export function UserMenu(): ReactElement {
             </p>
           ) : null}
         </div>
-        <div className='mt-2 px-2'>
-          <LanguageSwitcher className='w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm' />
+        <DropdownMenuSeparator />
+        {/* Outside the item list: this is a control to operate, not a command that closes the menu when chosen. */}
+        <div className='px-1 py-1'>
+          <LanguageSwitcher />
         </div>
-        <button
-          type='button'
-          className='mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
           disabled={isLoggingOut}
           onClick={() => logout()}
+          className='gap-2'
         >
           <LogOut className='size-4' />
-          {isLoggingOut ? 'Signing out…' : 'Sign out'}
-        </button>
-      </div>
-    </details>
+          {isLoggingOut
+            ? t('account.signingOut', { defaultValue: 'Signing out…' })
+            : t('account.signOut', { defaultValue: 'Sign out' })}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

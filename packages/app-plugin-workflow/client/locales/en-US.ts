@@ -4,6 +4,7 @@
  */
 export interface WorkflowResource {
   readonly nav: {
+    readonly workflow: string;
     readonly workflows: string;
     readonly runs: string;
   };
@@ -20,6 +21,7 @@ export interface WorkflowResource {
 
 const enUS: WorkflowResource = {
   nav: {
+    workflow: 'Workflow',
     workflows: 'Workflows',
     runs: 'Execution records',
   },
