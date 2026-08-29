@@ -13,7 +13,7 @@ import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { NotificationProvidersPluginConfig } from '../server/bootstrap.js';
-import registerNotificationProviderRoutes from '../server/routes/index.js';
+import { registerNotificationProviderRoutes } from '../server/routes/index.js';
 
 describe('@nocobase/app-plugin-notification-providers routes', () => {
   it('serves an authenticated test page without exposing credentials', async () => {

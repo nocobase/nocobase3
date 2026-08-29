@@ -8,6 +8,11 @@ import {
   authorizationToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import {
+  defineApiRoutes,
+  type AppApiRouteContribution,
+} from '@nocobase/app-server-kit/router';
 import type { ServiceContainer } from '@nocobase/service-provider';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
@@ -29,7 +34,7 @@ interface TestRequest {
   readonly body?: unknown;
 }
 
-export default function registerNotificationProviderRoutes(
+export function registerNotificationProviderRoutes(
   app: NotificationProviderRoutesApplication,
   router: Hono,
 ): void {
@@ -236,6 +241,20 @@ export default function registerNotificationProviderRoutes(
 
   router.route('/notification-providers', routes);
 }
+
+export const apiRoutes: AppApiRouteContribution<
+  AppPluginApplication<NotificationProvidersPluginConfig>
+> = defineApiRoutes((app) => {
+  const router = new Hono();
+  registerNotificationProviderRoutes(app, router);
+  return router;
+});
+
+const routes: readonly AppApiRouteContribution<
+  AppPluginApplication<NotificationProvidersPluginConfig>
+>[] = [apiRoutes];
+
+export default routes;
 
 function isTestPageEnabled(config: NotificationProvidersPluginConfig): boolean {
   return config.notification.test?.enabled ?? false;
