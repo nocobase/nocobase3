@@ -22,7 +22,7 @@ describe('bundled template', () => {
         'client/components/provider.tsx',
         'client/contexts.ts',
         'client/index.ts',
-        'client/pages/index.tsx',
+        'client/pages/__NOCOBASE_SHORT_NAME__-page.tsx',
         'client/pages/settings.tsx',
         'client/plugin.ts',
         'client/providers.ts',

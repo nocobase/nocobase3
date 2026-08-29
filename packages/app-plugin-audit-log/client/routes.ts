@@ -8,7 +8,7 @@ const appRoutes = defineAppRoutes([
   {
     name: 'index',
     path: '/audit-log',
-    componentLoader: () => import('./pages/index.js'),
+    componentLoader: () => import('./pages/audit-log-page.js'),
   },
 ]);
 

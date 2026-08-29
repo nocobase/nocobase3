@@ -231,7 +231,7 @@ export default function AuditLogPage(): ReactElement {
                 </span>
                 <span>
                   Replace this dashboard in{' '}
-                  <CodeValue>client/pages/index.tsx</CodeValue>
+                  <CodeValue>client/pages/audit-log-page.tsx</CodeValue>
                 </span>
               </li>
               <li className='flex gap-3'>

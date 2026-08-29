@@ -178,7 +178,7 @@ describe('createPlugin', () => {
     );
     expect(clientRoutes).toContain("path: '/audit-log'");
     expect(clientRoutes).toContain(
-      "componentLoader: () => import('./pages/index.js')",
+      "componentLoader: () => import('./pages/audit-log-page.js')",
     );
 
     expect(clientRoutes).toContain('defineAppRoutes([');
@@ -196,7 +196,7 @@ describe('createPlugin', () => {
     expect(clientProviders).toContain('component: AuditLogProvider');
 
     const clientPage = await readFile(
-      path.join(result.targetDirectory, 'client/pages/index.tsx'),
+      path.join(result.targetDirectory, 'client/pages/audit-log-page.tsx'),
       'utf8',
     );
     expect(clientPage).toContain('const appClient = createAppClient();');
@@ -206,7 +206,7 @@ describe('createPlugin', () => {
       expect.arrayContaining([
         'client/components/provider.tsx',
         'client/contexts.ts',
-        'client/pages/index.tsx',
+        'client/pages/audit-log-page.tsx',
         'client/pages/settings.tsx',
       ]),
     );

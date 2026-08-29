@@ -8,7 +8,8 @@ const appRoutes = defineAppRoutes([
   {
     name: 'index',
     path: __NOCOBASE_ROUTE_PATH_LITERAL__,
-    componentLoader: () => import('./pages/index.js'),
+    componentLoader: () =>
+      import('./pages/__NOCOBASE_SHORT_NAME__-page.js'),
   },
 ]);
 
