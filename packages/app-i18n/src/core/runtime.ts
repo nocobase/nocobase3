@@ -173,6 +173,11 @@ export class I18nRuntime {
       // `t()` is usable the moment `init` resolves.
       initAsync: false,
       interpolation: { escapeValue: false },
+      react: {
+        // Without this react-i18next keeps only the first namespace of the list it is given, which would drop the
+        // fallback chain that `NamespaceScope` passes down and leave a plugin unable to reuse application wording.
+        nsMode: 'fallback',
+      },
       ...this.options.initOptions,
     });
 
@@ -201,10 +206,7 @@ export class I18nRuntime {
   public getFixedT(namespace: Namespace, locale?: Locale): Translator {
     // The chain is passed as an ordered namespace list rather than through `fallbackNS`, which i18next only reads from
     // instance options — a single instance serves every namespace here, and each one needs its own chain.
-    const chain = [
-      namespace,
-      ...this.registry.getFallbackNamespaces(namespace),
-    ];
+    const chain = this.namespaceChain(namespace);
     // i18next types `t` against namespaces known at compile time, while every namespace here is a package name
     // resolved at runtime. This is the one place that gap is bridged, and it is narrowed to the real contract —
     // a key plus options in, a string out — rather than widened away.
@@ -216,12 +218,20 @@ export class I18nRuntime {
     return (key, options) => {
       // An explicit `ns` overrides the binding, and still falls back through the chain behind it.
       const namespaces = options?.ns
-        ? [options.ns, ...this.registry.getFallbackNamespaces(options.ns)]
+        ? this.namespaceChain(options.ns)
         : undefined;
       return translate(key, {
         ...options,
         ...(namespaces ? { ns: namespaces } : {}),
       });
     };
+  }
+
+  /** A namespace followed by its fallbacks, with `APP_NS` resolved to the application's package name. */
+  private namespaceChain(namespace: Namespace): Namespace[] {
+    return [
+      this.registry.resolveNamespace(namespace),
+      ...this.registry.getFallbackNamespaces(namespace),
+    ];
   }
 }

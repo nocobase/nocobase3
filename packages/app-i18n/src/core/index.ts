@@ -6,6 +6,7 @@ export {
   resolveSupportedLocale,
 } from './locales.js';
 export {
+  APP_NS,
   BASE_NAMESPACE,
   I18nRegistry,
   type LoadLocaleResult,

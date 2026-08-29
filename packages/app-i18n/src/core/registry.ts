@@ -13,6 +13,14 @@ import type {
 /** The namespace holding the terms the base package ships: save, cancel, confirm, and the like. */
 export const BASE_NAMESPACE: Namespace = '@nocobase/app-i18n';
 
+/**
+ * Stands for whichever namespace belongs to the application, resolved when a translation runs.
+ *
+ * A plugin cannot name the application's namespace directly: it is the user's own package name, chosen long after the
+ * plugin was published. Writing `t('save', { ns: APP_NS })` asks for the application's wording without knowing it.
+ */
+export const APP_NS: Namespace = '@nocobase/app-i18n/application';
+
 interface RegisteredNamespace {
   readonly namespace: Namespace;
   readonly loaders: LocaleLoaders;
@@ -136,14 +144,26 @@ export class I18nRegistry {
    * falls through to the built-in term when the application has not defined one.
    */
   public getFallbackNamespaces(namespace: Namespace): readonly Namespace[] {
+    const resolved = this.resolveNamespace(namespace);
     const chain: Namespace[] = [];
-    if (this.applicationNamespace && this.applicationNamespace !== namespace) {
+    if (this.applicationNamespace && this.applicationNamespace !== resolved) {
       chain.push(this.applicationNamespace);
     }
-    if (namespace !== BASE_NAMESPACE) {
+    if (resolved !== BASE_NAMESPACE) {
       chain.push(BASE_NAMESPACE);
     }
     return chain;
+  }
+
+  /**
+   * Turns `APP_NS` into the application's actual package name, and leaves any other namespace as it is.
+   *
+   * With no application registered the sentinel has nothing to stand for, so it resolves to the base namespace and the
+   * lookup still finds the built-in terms instead of failing.
+   */
+  public resolveNamespace(namespace: Namespace): Namespace {
+    if (namespace !== APP_NS) return namespace;
+    return this.applicationNamespace ?? BASE_NAMESPACE;
   }
 
   /** Every locale any registered namespace can produce. */

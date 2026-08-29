@@ -53,6 +53,7 @@
     "react-router": "^7.0.0"
   },
   "devDependencies": {
+    "@nocobase/app-i18n": "workspace:*",
     "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@refinedev/core": "catalog:",
@@ -69,5 +70,8 @@
     "react-router": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@nocobase/app-i18n": "workspace:^"
   }
 }

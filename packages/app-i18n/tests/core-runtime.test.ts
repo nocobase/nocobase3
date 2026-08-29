@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { APP_NS, BASE_NAMESPACE } from '../src/core/registry.js';
 import { I18nRuntime } from '../src/core/runtime.js';
 
 const APP_NS = '@acme/app';
@@ -224,5 +225,27 @@ describe('I18nRuntime', () => {
       );
       expect(runtime.getLocale()).toBe('en-US');
     });
+  });
+});
+
+describe('APP_NS', () => {
+  it('resolves to the application namespace without naming it', async () => {
+    const runtime = createRuntime();
+    await runtime.init('en-US');
+
+    // A plugin cannot know the application's package name, so it asks for it through the sentinel.
+    expect(runtime.getFixedT(PLUGIN_NS)('welcome', { ns: APP_NS })).toBe(
+      'Welcome',
+    );
+  });
+
+  it('still finds the base terms when no application is registered', async () => {
+    const runtime = new I18nRuntime({ defaultLocale: 'en-US' });
+    runtime.registerNamespace(BASE_NAMESPACE, {
+      'en-US': () => Promise.resolve({ default: { save: 'Save' } }),
+    });
+    await runtime.init('en-US');
+
+    expect(runtime.getFixedT(PLUGIN_NS)('save', { ns: APP_NS })).toBe('Save');
   });
 });

@@ -1,3 +1,4 @@
+import type { LocalesModule } from '@nocobase/app-i18n';
 import type { AppClient } from '@nocobase/app-sdk';
 import type { ComponentType } from 'react';
 
@@ -218,12 +219,16 @@ export type AppClientSettingsLoader = () => Promise<AppClientSettingsModule>;
 
 export type AppClientProvidersLoader = () => Promise<AppClientProvidersModule>;
 
+/** Loads a package's `locales/index.ts`, whose default export maps each locale to a lazy import of its resources. */
+export type AppClientLocalesLoader = () => Promise<LocalesModule>;
+
 export interface AppClientContributionLoader {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
   readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
+  readonly locales?: AppClientLocalesLoader;
   /** Options forwarded to the bootstrap context and contribution factories. */
   readonly options?: unknown;
 }
@@ -261,6 +266,7 @@ export interface AppClientPluginDefinition<TOptions> {
   readonly routes?: AppClientRoutesLoader;
   readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
+  readonly locales?: AppClientLocalesLoader;
   /** Maps options to route component overrides. Return an empty array for none. */
   readonly routeComponentOverrides?: (
     options: TOptions,
@@ -273,6 +279,7 @@ export interface AppClientPluginRegistration {
   readonly routes?: AppClientRoutesLoader;
   readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
+  readonly locales?: AppClientLocalesLoader;
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
   readonly options: unknown;
 }
@@ -310,6 +317,7 @@ export function defineClientPlugin<TOptions = void>(
       routes: definition.routes,
       settings: definition.settings,
       providers: definition.providers,
+      locales: definition.locales,
       routeComponentOverrides: defineClientRouteComponentOverrides(overrides),
       options: resolvedOptions,
     });
@@ -343,6 +351,7 @@ export function defineClientPlugins(
         routes: plugin.routes,
         settings: plugin.settings,
         providers: plugin.providers,
+        locales: plugin.locales,
         options: plugin.options,
         source: 'plugin',
       }),
