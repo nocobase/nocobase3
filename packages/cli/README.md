@@ -1,78 +1,101 @@
 # @nocobase/nb3-cli
 
-NocoBase 3 内部开发命令行工具，命令名为 `nb3`。
+NocoBase 3 internal command-line tools. This package is distributed as a development dependency of generated apps; it
+is not intended for global installation.
 
-这不是给最终用户全局安装的 CLI。它作为 devDependency 随 App 分发，由 App 的 `package.json` scripts 调用，例如 `pnpm plugin:update` 实际执行 `nb3 app plugin update`。
+It exposes two executable surfaces:
 
-命令文档见 [docs/cli](../../docs/cli/README.md)。
+- `nb3` provides the internal app, plugin, and Hub command tree.
+- `nocobase-app` backs the application-management scripts in generated apps.
 
-## 当前状态
+Application developers normally use the project-local `pnpm` scripts described below instead of invoking either
+executable directly.
 
-已实现：
+## Application-management scripts
 
-| 命令                         | 说明                                                   |
-| ---------------------------- | ------------------------------------------------------ |
-| `nb3 app create`             | 从 npm 下载模板包并生成本地 App 项目                   |
-| `nb3 app dev`                | 用项目自身的包管理器运行其 `dev` 脚本                  |
-| `nb3 app info`               | 显示 App 名称、目录、模板来源、依赖是否已安装          |
-| `nb3 app config`             | 读写 `.nb3/config.json`                                |
-| `nb3 app plugin register`    | 安装插件并写入 manifest、Client 与 Server 显式入口     |
-| `nb3 app plugin unregister`  | 上述的逆操作，并卸载插件包                             |
-| `nb3 app plugin update`      | 升级插件包并同步其 skills                              |
-| `nb3 app plugin skills sync` | 同步插件 skills，不升级                                |
-| `nb3 app destroy`            | 删除本地 App 目录，带确认和路径防护                    |
-| `nb3 hub create`             | 下载模板包并生成 Hub 项目                              |
-| `nb3 hub start`              | 后台启动 Hub 并记录进程，`--foreground` 可留在当前终端 |
-| `nb3 hub dev`                | 开发模式启动，停留在当前终端                           |
-| `nb3 hub restart`            | 停止后重新启动                                         |
-| `nb3 hub status`             | 显示运行状态、进程号、地址、已部署 App 数              |
-| `nb3 hub stop`               | 停止 Hub，先 SIGTERM 再 SIGKILL，并清理陈旧记录        |
-| `nb3 hub logs`               | 查看日志，支持 `--tail` 和 `--follow`                  |
-| `nb3 hub open`               | 打开 App Console                                       |
-
-`nb3 app deploy`、`nb3 app pull`、`nb3 app list` 需要 Hub 提供 App 管理 API，而 v3 的 Hub 目前只有健康检查和一个 API 代理，因此这三条命令以退出码 3 明确报错，不打印占位输出——脚本里 deploy 返回成功却什么都没做，比直接失败危险得多。
-
-`nb3 hub` 的 8 条命令全部可用。
-
-插件注册的实现在 `src/lib/` 下的 `client-plugins.ts`、`server-plugins.ts`、`plugin-registration.ts` 和 `skills-sync.ts`。仓库根命令也直接调用 `nb3 app plugin * --workspace-root .`，不再维护第二套 register、unregister 或 skills sync 脚本。`--workspace-root` 模式从 workspace 选择 App，并默认写入 `workspace:^`；普通 App 模式则从当前 App 的 `node_modules` 解析插件。两个显式入口编辑器都从目标 App 解析 TypeScript 和 Prettier，所以 App 用自己的版本和配置格式化自己的源码，两者缺失也不会让注册失败。
-
-停止 Hub 时终止的是整个进程组而不是单个进程：start 脚本通常是包管理器的包装进程，真正监听端口的服务是它的孙进程，只杀记录的 pid 会留下占着端口的孤儿。
-
-`nb3 hub create` 的默认模板源是 `@nocobase/hub@beta`。
-
-退出码约定：`0` 成功或 stub，`1` 运行错误，`2` 参数错误，`3` 尚未实现。
-
-默认模板源是 `@nocobase/app-template-default@beta`，从自建 registry `https://npm.nocobase.ai` 下载。
-
-`@beta` 是因为目前只有预览版发布到了这条渠道；第一个稳定版发出后，把 `src/lib/template.ts` 里的 `DEFAULT_TEMPLATE` 和 `DEFAULT_HUB_TEMPLATE` 改成稳定范围即可。
-
-两个默认值都能覆盖：
+| Script       | Purpose                                                                               |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `release`    | Build locally and upload an immutable Release without deploying it                    |
+| `deploy`     | Run the full first-deploy flow, or deploy, roll back, or redeploy an existing Release |
+| `status`     | Show application, Release, Deployment, and Runtime status                             |
+| `hub:login`  | Authorize this device and save an Agent credential                                    |
+| `hub:logout` | Revoke and remove the saved credential                                                |
 
 ```bash
-nb3 app create crm --template @nocobase/app-template-default@0.0.1
-nb3 app create crm --registry https://registry.npmjs.org
+pnpm run release --bump patch --non-interactive
+pnpm run deploy --hub https://hub.example.com/hub
+pnpm run status --json
+pnpm run hub:login --hub https://hub.example.com/hub
+pnpm run hub:logout --hub https://hub.example.com/hub
 ```
 
-开发模板本身时直接指向本地目录：
+Every script accepts `--help`. Agent-facing operations support non-interactive and JSON output where applicable.
+Release and deployment operations also support dry-run validation and operation IDs for safe retries.
+
+Application source stays on the developer machine. Hub stores build artifacts and manages Releases, Deployments, and
+Runtime state; it does not store, download, or edit source. A generated app stores its Hub association in
+`.nocobase/config.json`, while credentials and operation journals live under `~/.nocobase` by default.
+
+A new Hub starts with an empty application list. On the first deployment, omit `--app` to create an application from
+the local project name, or pass `--app <slug>` to bind an application that was created in Hub explicitly:
 
 ```bash
-nb3 app create crm --template ./packages/app-template-default
+pnpm run deploy --hub https://hub.example.com/hub
+pnpm run deploy --hub https://hub.example.com/hub --app sales
 ```
 
-## 开发
+After a successful association, `pnpm run deploy` reuses the saved Hub and application identity. Use
+`pnpm run deploy --release`, `--rollback`, or `--redeploy` to operate on existing Releases. Use `pnpm run release` to
+create a Release without deploying it.
 
-命令源码在 `src/commands/` 下，目录结构即命令结构：`src/commands/app/create.ts` 对应 `nb3 app create`。
+## Plugin scripts
+
+Generated apps also expose project-local scripts for plugin registration and skill synchronization:
+
+| Script                    | Internal command             | Purpose                                                        |
+| ------------------------- | ---------------------------- | -------------------------------------------------------------- |
+| `pnpm plugin:register`    | `nb3 app plugin register`    | Install and register a plugin                                  |
+| `pnpm plugin:unregister`  | `nb3 app plugin unregister`  | Remove the plugin registration and package                     |
+| `pnpm plugin:update`      | `nb3 app plugin update`      | Upgrade registered plugins and synchronize their Agent skills  |
+| `pnpm plugin:skills:sync` | `nb3 app plugin skills sync` | Synchronize Agent skills without upgrading plugin packages     |
+| `pnpm client:inspect`     | App-local inspector          | Inspect the final client plugin, route, and settings ownership |
+
+Plugin registration updates the package dependency, `nocobase.plugins`, and the explicit Client and Server composition
+roots for the exports a plugin provides. The same implementation is shared with repository-level plugin scripts through
+workspace mode. Full usage and flags are documented in [docs/cli](../../docs/cli/README.md).
+
+## `nb3` command surface
+
+The existing executable remains part of the published package:
 
 ```bash
-node ./bin/run.js app create crm     # 直接跑源码，Node 24 原生擦除类型，无需 loader
-pnpm --filter @nocobase/nb3-cli build   # 编译到 dist
-pnpm --filter @nocobase/nb3-cli check   # lint + format + typecheck + test + build
+nb3 --help
+nb3 app --help
+nb3 app plugin --help
+nb3 hub --help
 ```
 
-入口 `bin/run.js` 会自动判断运行模式：源码目录存在 `src/commands` 时加载 `src/`，发布安装后加载 `dist/`。发布产物必须走 `dist`，因为 Node 拒绝对 `node_modules` 内的 `.ts` 做类型擦除。设置 `NB3_CLI_USE_DIST=1` 可以在源码目录中强制使用 `dist` 验证发布形态。
+The command source lives under `src/commands/`; the directory structure is the command structure. The generated-app
+surface lives under `src/app-scripts/` and reuses the same focused implementations from `src/commands/` and `src/lib/`.
+`bin/run.js` loads the `nb3` surface, while `bin/app.js` loads the application-script surface.
 
-## 约定
+## Development
 
-- 全局目录 `~/.nb3/`，可通过 `NB3_CLI_ROOT` 覆盖。
-- 项目局部目录 `.nb3/`，App 和 Hub 一致。
-- 环境变量前缀 `NB3_`。
+```bash
+node ./bin/app.js release --help
+node ./bin/run.js --help
+pnpm --filter @nocobase/nb3-cli lint
+pnpm --filter @nocobase/nb3-cli typecheck
+pnpm --filter @nocobase/nb3-cli test
+pnpm --filter @nocobase/nb3-cli build
+```
+
+Set `NB3_CLI_USE_DIST=1` to exercise compiled command files from the source checkout.
+
+## Local state
+
+- User credentials and operation journals live outside app source under `~/.nocobase`.
+- App-local Hub identity lives in `.nocobase/config.json` and is written atomically after a successful association.
+- `NOCOBASE_CLI_ROOT` overrides the user-state root; `NB3_CLI_ROOT` remains accepted for compatibility.
+- Hub workflow exit codes are `2` for local input or artifact errors, `3` for authentication, `4` for authorization,
+  `5` for Hub state conflicts, `6` for network or server failures, and `7` for app build failures.

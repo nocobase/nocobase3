@@ -44,12 +44,12 @@ export default class AppDestroy extends Command {
     const project = await findAppProject(target);
 
     // Refuse anything that is not an app, and anything that merely sits inside one: resolving to a different directory
-    // than the one asked for means the target itself has no `.nb3/`, and deleting it would take out part of an app.
+    // than the one asked for means the target itself has no `.nocobase/`, and deleting it would take out part of an app.
     if (!project || project.directory !== target) {
       this.error(
         [
           `"${target}" is not an app directory.`,
-          'An app directory contains a .nb3/config.json file. Pass the app root itself.',
+          'An app directory contains a .nocobase/config.json file. Pass the app root itself.',
         ].join('\n'),
       );
     }

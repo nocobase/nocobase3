@@ -9,6 +9,7 @@ import {
   writeHubConfig,
 } from '../../lib/hub-project.ts';
 import { detectPackageManager } from '../../lib/package-manager.ts';
+import { createHubRuntimeEnvironment } from '../../lib/hub-runtime.ts';
 import {
   readProcessRecord,
   writeProcessRecord,
@@ -92,16 +93,7 @@ export default class HubStart extends Command {
       project.directory,
       manifest.packageManager,
     );
-    // Which variable a start script reads is up to the template: the NocoBase hub server reads APP_SERVER_*, while
-    // Vite-based templates read PORT and HOST. Both are set so the address is honoured either way, and a template
-    // that reads neither will simply use its own default.
-    const environment = {
-      ...process.env,
-      APP_SERVER_HOST: config.host,
-      APP_SERVER_PORT: String(config.port),
-      HOST: config.host,
-      PORT: String(config.port),
-    };
+    const environment = createHubRuntimeEnvironment(config, project.directory);
 
     if (flags.foreground) {
       const { runAttached } = await import('../../lib/run-command.ts');

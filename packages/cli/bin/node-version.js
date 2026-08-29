@@ -18,13 +18,14 @@ export function isSupportedNodeVersion(
 
 export function formatUnsupportedNodeVersionMessage(
   version = process.version,
+  label = 'nb3',
   minimum = MINIMUM_NODE_MAJOR_VERSION,
 ) {
   const current = String(version ?? '').trim() || 'unknown';
 
   return [
-    `[nb3]: Node.js ${minimum} or later is required.`,
-    `[nb3]: Current version is ${current}. Install Node.js ${minimum}+ and try again.`,
+    `[${label}]: Node.js ${minimum} or later is required.`,
+    `[${label}]: Current version is ${current}. Install Node.js ${minimum}+ and try again.`,
   ].join('\n');
 }
 

@@ -42,7 +42,10 @@ async function createApp({
   created.push(appRoot);
   await writeFile(
     path.join(appRoot, 'package.json'),
-    JSON.stringify({ name: 'demo-app' }),
+    JSON.stringify({
+      name: 'demo-app',
+      ...(prettier ? { devDependencies: { prettier: '*' } } : {}),
+    }),
   );
   await mkdir(path.join(appRoot, 'node_modules'), { recursive: true });
   await symlink(

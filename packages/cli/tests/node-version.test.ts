@@ -39,8 +39,19 @@ describe('formatUnsupportedNodeVersionMessage', () => {
   it('names the required version and the one in use', () => {
     const message = formatUnsupportedNodeVersionMessage('v20.0.0');
 
+    expect(message).toContain('[nb3]');
     expect(message).toContain('24');
     expect(message).toContain('v20.0.0');
+  });
+
+  it('accepts an explicit label for the app package-script executable', () => {
+    const message = formatUnsupportedNodeVersionMessage(
+      'v20.0.0',
+      'nocobase-app',
+    );
+
+    expect(message).toContain('[nocobase-app]');
+    expect(message).not.toContain('[nb3]');
   });
 
   it('says the version is unknown instead of printing an empty gap', () => {

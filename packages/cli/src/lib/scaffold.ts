@@ -9,14 +9,18 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
-/** Local state for a generated app lives here, mirroring the `.nb3/` a hub keeps. */
-export const APP_STATE_DIR = '.nb3';
+/** Local state for a generated app lives here, mirroring the `.nocobase/` a hub keeps. */
+export const APP_STATE_DIR = '.nocobase';
 
 export interface AppConfig {
   name: string;
-  template: string;
-  templateVersion: string;
+  /** Hub application identity associated with this local project. */
+  applicationId?: string;
   hub?: string;
+  slug?: string;
+  /** Template provenance for the locally scaffolded source project. */
+  template?: string;
+  templateVersion?: string;
 }
 
 async function isEmptyDirectory(directory: string): Promise<boolean> {

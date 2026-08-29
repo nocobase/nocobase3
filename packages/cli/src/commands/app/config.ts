@@ -3,17 +3,17 @@ import { requireAppProject, writeAppConfig } from '../../lib/app-project.ts';
 import type { AppConfig as StoredAppConfig } from '../../lib/scaffold.ts';
 
 /** Keys a user may set. The rest of the config records where the app came from and is not meant to be edited. */
-const WRITABLE_KEYS = new Set(['hub', 'name']);
+const WRITABLE_KEYS = new Set(['name']);
 
 export default class AppConfig extends Command {
   static override summary = 'Show or change app configuration.';
   static override description =
-    'Reads and writes the app configuration stored in .nb3/. Prints all values when no key is given, prints one value when a key is given, and sets it when a value follows.';
+    'Reads and writes the app configuration stored in .nocobase/. Prints all values when no key is given, prints one value when a key is given, and sets it when a value follows.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> hub',
-    '<%= config.bin %> <%= command.id %> hub http://localhost:3000',
+    '<%= config.bin %> <%= command.id %> name "Sales CRM"',
   ];
 
   static override args = {

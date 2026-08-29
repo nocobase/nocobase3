@@ -3,14 +3,15 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loadTestConfig, runCommand } from './helpers.ts';
+import {
+  loadTestConfig,
+  runCommand,
+  runCommandAllowFailure,
+} from './helpers.ts';
 
 /**
  * The command surface this package is expected to expose. The tests assert it exactly, so adding or renaming a command
  * is a deliberate edit here rather than something that drifts in unnoticed.
- *
- * The plugin commands are documented in docs/cli. The app and hub commands are not: their behaviour is still being
- * settled, and documenting a moving target is worse than pointing at `--help`.
  */
 const APP_COMMANDS = [
   'config',
@@ -24,12 +25,15 @@ const APP_COMMANDS = [
   'plugin:skills:sync',
   'plugin:unregister',
   'plugin:update',
-  'pull',
+  'publish',
+  'status',
 ];
 const HUB_COMMANDS = [
   'create',
   'dev',
+  'login',
   'logs',
+  'logout',
   'open',
   'restart',
   'start',
@@ -99,14 +103,47 @@ describe('command tree', () => {
 
 describe('documented argument contract', () => {
   it.each([
-    ['app:create', ['name'], ['dir', 'template', 'registry']],
-    ['app:pull', ['name', 'dir'], ['hub']],
-    ['app:deploy', [], ['dir', 'hub']],
+    ['app:create', ['name'], ['dir', 'template', 'registry', 'json']],
+    [
+      'app:publish',
+      [],
+      [
+        'dir',
+        'hub',
+        'app',
+        'version',
+        'bump',
+        'deploy',
+        'non-interactive',
+        'dry-run',
+        'json',
+        'operation-id',
+      ],
+    ],
+    [
+      'app:deploy',
+      [],
+      [
+        'dir',
+        'app',
+        'release',
+        'hub',
+        'rollback',
+        'redeploy',
+        'non-interactive',
+        'yes',
+        'dry-run',
+        'json',
+        'operation-id',
+      ],
+    ],
+    ['app:status', [], ['dir', 'app', 'hub', 'json']],
     ['app:config', ['key', 'value'], ['dir', 'json']],
-    ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['hub:create', ['name'], ['dir', 'template', 'registry', 'port', 'host']],
     ['hub:dev', [], ['hub-dir', 'port', 'host', 'portals-dir']],
+    ['hub:login', [], ['hub', 'scope', 'non-interactive', 'json']],
+    ['hub:logout', [], ['hub', 'json']],
     ['hub:logs', [], ['dir', 'follow', 'tail']],
     ['hub:status', [], ['dir', 'json']],
     ['hub:open', [], ['dir', 'print']],
@@ -137,53 +174,6 @@ describe('documented argument contract', () => {
   });
 });
 
-/**
- * These commands are blocked on work outside the CLI. They must fail rather than print a placeholder and succeed: a
- * script that deploys, sees exit 0, and carries on would be badly misled. Exit 3 marks "not built yet" specifically,
- * so it can be told apart from a runtime error (1) or a bad argument (2).
- */
-describe('unimplemented commands', () => {
-  // `app deploy` and `hub start` resolve their project before reporting, so they need one to reach that point.
-  let workspace: string;
-
-  beforeAll(async () => {
-    workspace = await mkdtemp(path.join(os.tmpdir(), 'nb3-unimplemented-'));
-
-    await mkdir(path.join(workspace, '.nb3'), { recursive: true });
-    await writeFile(
-      path.join(workspace, '.nb3', 'config.json'),
-      JSON.stringify({
-        hub: 'http://localhost:3000',
-        name: 'demo',
-        template: 't',
-        templateVersion: '1.0.0',
-      }),
-      'utf8',
-    );
-    await writeFile(
-      path.join(workspace, '.nb3', 'hub.json'),
-      JSON.stringify({ host: '127.0.0.1', name: 'demo', port: 3000 }),
-      'utf8',
-    );
-  });
-
-  afterAll(async () => {
-    await rm(workspace, { force: true, recursive: true });
-  });
-
-  it.each([
-    ['app:deploy', ['--dir']],
-    ['app:list', []],
-    ['app:pull', ['crm']],
-  ])('%s fails with exit 3', async (id, argv) => {
-    const withWorkspace = argv.at(-1) === '--dir' ? [...argv, workspace] : argv;
-
-    await expect(runCommand(config, id, withWorkspace)).rejects.toMatchObject({
-      oclif: { exit: 3 },
-    });
-  });
-});
-
 describe('argument errors', () => {
   it('rejects a missing required argument', async () => {
     await expect(runCommand(config, 'app:create', [])).rejects.toMatchObject({
@@ -203,5 +193,89 @@ describe('argument errors', () => {
     await expect(
       runCommand(config, 'hub:logs', ['--tail', 'abc']),
     ).rejects.toBeTruthy();
+  });
+
+  it('does not allow changing a Hub association through app config', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'nb3-config-test-'));
+    try {
+      const directory = path.join(root, 'config-app');
+      await mkdir(path.join(directory, '.nocobase'), { recursive: true });
+      await writeFile(
+        path.join(directory, '.nocobase/config.json'),
+        JSON.stringify({ name: 'config-app' }),
+      );
+
+      const failed = await runCommandAllowFailure(config, 'app:config', [
+        'hub',
+        'https://hub.example.com/hub',
+        '--dir',
+        directory,
+      ]);
+
+      expect((failed.error as Error).message).toContain('cannot be changed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('JSON output', () => {
+  let workspace: string;
+
+  beforeAll(async () => {
+    workspace = await mkdtemp(path.join(os.tmpdir(), 'nb3-create-json-'));
+    const template = path.join(workspace, 'template');
+    await mkdir(template);
+    await writeFile(
+      path.join(template, 'package.json'),
+      `${JSON.stringify({ name: '@test/app-template', version: '1.2.3', files: ['index.js'] })}\n`,
+    );
+    await writeFile(path.join(template, 'index.js'), 'export {};\n');
+  });
+
+  afterAll(async () => {
+    await rm(workspace, { recursive: true, force: true });
+  });
+
+  it('prints exactly one JSON result for local app creation', async () => {
+    const directory = path.join(workspace, 'sales');
+    const result = await runCommand(config, 'app:create', [
+      'sales',
+      '--dir',
+      directory,
+      '--template',
+      path.join(workspace, 'template'),
+      '--json',
+    ]);
+
+    expect(result.lines).toHaveLength(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      directory,
+      name: 'sales',
+      template: { name: '@test/app-template', version: '1.2.3' },
+    });
+  });
+
+  it('prints exactly one JSON error for a local create failure', async () => {
+    const directory = path.join(workspace, 'occupied');
+    await mkdir(directory);
+    await writeFile(path.join(directory, 'keep.txt'), 'user data');
+
+    const result = await runCommandAllowFailure(config, 'app:create', [
+      'occupied',
+      '--dir',
+      directory,
+      '--template',
+      path.join(workspace, 'template'),
+      '--json',
+    ]);
+
+    expect(result.error).toMatchObject({ oclif: { exit: 2 } });
+    expect(result.lines).toHaveLength(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      error: { code: 'LOCAL_ERROR' },
+    });
   });
 });

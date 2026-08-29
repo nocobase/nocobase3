@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { Args, Command, Flags } from '@oclif/core';
+import { failHubCommand } from '../../lib/hub-command.ts';
 import {
   assertTargetIsUsable,
   removeDirectory,
   scaffoldApp,
 } from '../../lib/scaffold.ts';
+import { formatShellCommand } from '../../lib/shell.ts';
 import {
   DEFAULT_REGISTRY,
   DEFAULT_TEMPLATE,
@@ -42,40 +44,62 @@ export default class AppCreate extends Command {
       description: 'npm registry to download the template from.',
       default: DEFAULT_REGISTRY,
     }),
+    json: Flags.boolean({
+      default: false,
+      description: 'Print one JSON result to stdout.',
+    }),
   };
 
   public async run(): Promise<void> {
     const { args, flags } = await this.parse(AppCreate);
     const targetDirectory = path.resolve(flags.dir ?? args.name);
 
-    await assertTargetIsUsable(targetDirectory);
-
-    this.log(`Downloading template ${flags.template}...`);
-    const template = await downloadTemplate({
-      registry: flags.registry,
-      source: flags.template,
-    });
-
     try {
-      await scaffoldApp({
-        name: args.name,
-        targetDirectory,
-        templateDirectory: template.directory,
-        templateName: template.name,
-        templateVersion: template.version,
+      await assertTargetIsUsable(targetDirectory);
+
+      if (!flags.json) this.log(`Downloading template ${flags.template}...`);
+      const template = await downloadTemplate({
+        registry: flags.registry,
+        source: flags.template,
       });
-    } finally {
-      await removeDirectory(template.directory);
+
+      try {
+        await scaffoldApp({
+          name: args.name,
+          targetDirectory,
+          templateDirectory: template.directory,
+          templateName: template.name,
+          templateVersion: template.version,
+        });
+      } finally {
+        await removeDirectory(template.directory);
+      }
+
+      const relativeTarget =
+        path.relative(process.cwd(), targetDirectory) || '.';
+
+      if (flags.json) {
+        this.log(
+          JSON.stringify({
+            ok: true,
+            name: args.name,
+            directory: targetDirectory,
+            template: { name: template.name, version: template.version },
+          }),
+        );
+        return;
+      }
+
+      this.log(
+        `\nCreated ${args.name} from ${template.name}@${template.version}.\n`,
+      );
+      this.log('Next steps:');
+      this.log(`  ${formatShellCommand(['cd', relativeTarget])}`);
+      this.log('  pnpm install');
+      this.log(`  ${this.config.bin} app dev`);
+    } catch (error) {
+      if (flags.json) failHubCommand(this, error, true);
+      throw error;
     }
-
-    const relativeTarget = path.relative(process.cwd(), targetDirectory) || '.';
-
-    this.log(
-      `\nCreated ${args.name} from ${template.name}@${template.version}.\n`,
-    );
-    this.log('Next steps:');
-    this.log(`  cd ${relativeTarget}`);
-    this.log('  pnpm install');
-    this.log(`  ${this.config.bin} app dev`);
   }
 }

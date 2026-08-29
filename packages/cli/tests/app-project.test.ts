@@ -99,6 +99,30 @@ describe('writeAppConfig', () => {
     expect(raw).toContain('\n');
     expect(raw.endsWith('\n')).toBe(true);
   });
+
+  it('drops obsolete source-management fields from stored config', async () => {
+    const directory = await createApp();
+    await writeFile(
+      path.join(directory, APP_STATE_DIR, 'config.json'),
+      JSON.stringify({
+        name: 'crm',
+        repositoryMode: 'snapshot',
+        sourceCommit: 'abc123',
+      }),
+    );
+    const project = await requireAppProject(directory);
+
+    expect(project.config).toEqual({ name: 'crm' });
+    await writeAppConfig(project, project.config);
+    expect(
+      JSON.parse(
+        await readFile(
+          path.join(directory, APP_STATE_DIR, 'config.json'),
+          'utf8',
+        ),
+      ),
+    ).toEqual({ name: 'crm' });
+  });
 });
 
 /**

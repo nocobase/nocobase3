@@ -429,16 +429,12 @@ export async function formatPluginsFile(
   sourceText: string,
   filePath: string,
 ): Promise<string> {
-  const localPrettierManifest = path.join(
-    appRoot,
-    'node_modules',
-    'prettier',
-    'package.json',
-  );
-  if (!existsSync(localPrettierManifest)) {
+  if (!(await hasDeclaredDependency(appRoot, 'prettier'))) {
     return sourceText;
   }
-
+  if (!existsSync(path.join(appRoot, 'node_modules/prettier/package.json'))) {
+    return sourceText;
+  }
   const require = createRequire(path.join(appRoot, 'package.json'));
   let prettier: typeof import('prettier');
   try {
@@ -455,6 +451,31 @@ export async function formatPluginsFile(
     filepath: filePath,
     parser: 'typescript',
   });
+}
+
+/** A transitive or NODE_PATH package is not the application's own formatter. */
+async function hasDeclaredDependency(
+  appRoot: string,
+  packageName: string,
+): Promise<boolean> {
+  try {
+    const manifest = JSON.parse(
+      await readFile(path.join(appRoot, 'package.json'), 'utf8'),
+    ) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+    return [
+      manifest.dependencies,
+      manifest.devDependencies,
+      manifest.optionalDependencies,
+      manifest.peerDependencies,
+    ].some((dependencies) => dependencies?.[packageName] !== undefined);
+  } catch {
+    return false;
+  }
 }
 
 export function listClientPlugins(
