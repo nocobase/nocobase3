@@ -1376,8 +1376,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@gchust/agent-annotations':
-        specifier: 0.1.5
-        version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+        specifier: 0.1.7
+        version: 0.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.8.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)
@@ -1929,7 +1929,7 @@ importers:
         version: 5.3.0
       '@gchust/agent-annotations':
         specifier: 0.1.x
-        version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+        version: 0.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.1(hono@4.13.2)
@@ -3346,8 +3346,8 @@ packages:
   '@fontsource-variable/geist@5.3.0':
     resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
 
-  '@gchust/agent-annotations@0.1.5':
-    resolution: {integrity: sha512-5eNMyczCPEPsWl0d1z5vJnKJBu8w9TVtuWhHCX7g3AEYpFHn7CkbHMg6uYsCivTD2WFJxpedHYFVVC4tkyUs/g==}
+  '@gchust/agent-annotations@0.1.7':
+    resolution: {integrity: sha512-OY6ZWptMUiIZMkheN9Q9AUJKCn+tDFBRezPuSPeWUamZ0IE078fubmxc8GCW6dG1bCjJH5wdc0uq6DjT/TALFg==}
     engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
@@ -10146,7 +10146,7 @@ snapshots:
 
   '@fontsource-variable/geist@5.3.0': {}
 
-  '@gchust/agent-annotations@0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))':
+  '@gchust/agent-annotations@0.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))':
     dependencies:
       magic-string: 0.30.21
       react: 19.1.0
