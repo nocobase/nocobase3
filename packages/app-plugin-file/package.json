@@ -104,7 +104,7 @@
     "CHANGELOG.md",
     "components.json",
     "database",
-    ".agents",
+    "skills",
     "registry",
     "registry.config.json",
     "public/r"

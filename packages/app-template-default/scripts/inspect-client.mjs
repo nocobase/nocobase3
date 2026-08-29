@@ -129,6 +129,7 @@ export async function inspectAppClient({
     routes: routes.map((route) => {
       const override = overrides.find((entry) => entry.routeId === route.id);
       return {
+        parent: 'app',
         auth: route.auth,
         id: route.id,
         name: route.name,
@@ -145,12 +146,13 @@ export async function inspectAppClient({
       };
     }),
     settings: resolved.settings.map((setting) => ({
+      parent: 'settings',
       id: setting.id,
       title: setting.title,
       packageName: setting.packageName,
       path: setting.path,
       source: setting.source,
-      entry: entryOf(setting.packageName, 'settings'),
+      entry: entryOf(setting.packageName, 'routes'),
       ...(setting.groupId ? { groupId: setting.groupId } : {}),
       ...(setting.access ? { access: setting.access } : {}),
     })),
@@ -249,14 +251,12 @@ async function loadContribution(loader, source) {
       packageName: '',
       source,
       routes: undefined,
-      settings: undefined,
       providers: undefined,
     };
   }
 
-  const [routes, settings, providers] = await Promise.all([
+  const [routes, providers] = await Promise.all([
     loadContributionEntry(loader, 'routes'),
-    loadContributionEntry(loader, 'settings'),
     loadContributionEntry(loader, 'providers'),
   ]);
 
@@ -264,7 +264,6 @@ async function loadContribution(loader, source) {
     packageName: loader.packageName,
     source,
     routes,
-    settings,
     providers,
   };
 }
@@ -282,12 +281,29 @@ async function loadContributionEntry(loader, contribution) {
       typeof exported === 'function'
         ? exported(loader.options ?? {})
         : exported;
-    if (!Array.isArray(definitions)) {
+    if (contribution === 'routes') {
+      const normalized = Array.isArray(definitions)
+        ? definitions
+        : [definitions];
+      if (
+        normalized.every(
+          (item) =>
+            typeof item === 'object' &&
+            item !== null &&
+            (item.parent === 'app' || item.parent === 'settings') &&
+            Array.isArray(item.routes),
+        )
+      ) {
+        return normalized;
+      }
+    } else if (Array.isArray(definitions)) {
+      return definitions;
+    }
+    {
       throw new Error(
-        `the ${contribution} entry must default-export a definition array, or a function returning one`,
+        `the ${contribution} entry must default-export a valid contribution, or a function returning one`,
       );
     }
-    return definitions;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
@@ -429,6 +445,7 @@ function formatRoutes(routes) {
     .map((route) =>
       [
         `  ${route.path}`,
+        `    parent: ${route.parent}`,
         `    id: ${route.id}`,
         `    auth: ${route.auth}`,
         `    route source: ${route.routeSource}`,
@@ -450,6 +467,7 @@ function formatSettings(settings) {
     .map((setting) =>
       [
         `  ${setting.path}`,
+        `    parent: ${setting.parent}`,
         `    id: ${setting.id}`,
         `    title: ${setting.title}`,
         ...(setting.groupId ? [`    group: ${setting.groupId}`] : []),

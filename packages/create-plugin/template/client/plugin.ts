@@ -13,7 +13,6 @@ const __NOCOBASE_MODULE_NAME__: AppClientPluginFactory<__NOCOBASE_SYMBOL_NAME__C
     packageName: __NOCOBASE_PACKAGE_NAME_LITERAL__,
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
-    settings: () => import('./settings.js'),
     providers: () => import('./providers.js'),
   });
 

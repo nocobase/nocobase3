@@ -66,7 +66,7 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 ## Hub 设置页
 
-启用插件的客户端贡献后，通知日志通过 `client/settings.ts` 自动注册到 Hub Settings Center：
+启用插件的客户端贡献后，通知日志通过 `client/routes.ts` 中的 Settings Route Contribution 自动注册到 Hub Settings Center：
 
 - 页面路径：`/hub/settings/notifications/logs`
 - 权限资源：`page:notification.logs`

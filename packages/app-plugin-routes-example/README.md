@@ -5,7 +5,7 @@ plugin:
 
 - `server/routes/index.ts` registers `GET /api/routes-example`;
 - `client/routes.ts` declares the authenticated `/routes-example` page with
-  `defineClientRoutes`;
+  `defineAppRoutes`;
 - `client/providers.ts` contributes a synchronous application Provider with
   `defineClientProviders`;
 - `client/components/` contains Provider component implementations;

@@ -220,7 +220,9 @@ export default function __NOCOBASE_SYMBOL_NAME__Page(): ReactElement {
                 <span className='grid size-6 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary'>1</span>
                 <span>
                   Replace this dashboard in{' '}
-                  <CodeValue>client/pages/index.tsx</CodeValue>
+                  <CodeValue>
+                    client/pages/__NOCOBASE_SHORT_NAME__-page.tsx
+                  </CodeValue>
                 </span>
               </li>
               <li className='flex gap-3'>

@@ -108,7 +108,7 @@ remains session-independent.
 
 For a database collection decision that returns conditional field or record
 constraints, apply those conditions in the business query path as described
-by the [authorization development Skill](../../../../../../authorization/skills/authorization-development/SKILL.md).
+by the [authorization development Skill](../../../../../authorization/skills/authorization-development/SKILL.md).
 The file callback remains a hook into that existing system; it is not a new
 file permission model.
 

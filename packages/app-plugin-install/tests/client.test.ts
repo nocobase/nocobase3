@@ -6,10 +6,11 @@ import { resolveInstalledDestination } from '../client/pages/install-navigation.
 
 describe('@nocobase/app-plugin-install client', () => {
   it('contributes the installation route', async () => {
-    expect(routes).toMatchObject([
+    expect(routes.parent).toBe('app');
+    expect(routes.routes).toMatchObject([
       { auth: 'guest', name: 'install', path: '/install' },
     ]);
-    await expect(routes[0]?.componentLoader()).resolves.toMatchObject({
+    await expect(routes.routes[0]?.componentLoader()).resolves.toMatchObject({
       default: expect.any(Function),
     });
     expect(providers).toEqual([]);

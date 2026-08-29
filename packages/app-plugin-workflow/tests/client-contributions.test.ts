@@ -8,7 +8,8 @@ import routes from '../client/routes.js';
 
 describe('workflow client contributions', () => {
   it('owns stable workflow management routes', () => {
-    expect(routes.map(({ name, path }) => ({ name, path }))).toEqual([
+    expect(routes.parent).toBe('app');
+    expect(routes.routes.map(({ name, path }) => ({ name, path }))).toEqual([
       { name: 'workflow-list', path: '/workflow/workflows' },
       {
         name: 'workflow-detail',

@@ -34,10 +34,6 @@
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
     },
-    "./client/settings": {
-      "types": "./client/settings.ts",
-      "import": "./client/settings.ts"
-    },
     "./client/providers": {
       "types": "./client/providers.ts",
       "import": "./client/providers.ts"
@@ -46,8 +42,11 @@
   },
   "files": [
     "dist",
-    ".agents",
     "README.md",
+    "CHANGELOG.md",
+    "components.json",
+    "database",
+    "skills",
     "registry",
     "registry.config.json",
     "public/r"
@@ -85,10 +84,6 @@
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
-      },
-      "./client/settings": {
-        "types": "./dist/client/settings.d.ts",
-        "import": "./dist/client/settings.js"
       },
       "./client/providers": {
         "types": "./dist/client/providers.d.ts",

@@ -44,6 +44,9 @@ describe('createPlugin', () => {
     expect(result.files).toContain('.prettierignore');
     expect(result.files).not.toContain('.prettierignore.template');
     expect(result.files).toContain('CHANGELOG.md');
+    expect(result.files).toContain(
+      'skills/nocobase-app-plugin-audit-log/SKILL.md',
+    );
     expect(result.files).toContain('components.json');
     expect(result.files).toContain('registry.config.json');
     expect(result.files).toContain(
@@ -66,6 +69,10 @@ describe('createPlugin', () => {
         'tw-animate-css': '^1.2.5',
       },
       files: expect.arrayContaining([
+        'CHANGELOG.md',
+        'components.json',
+        'database',
+        'skills',
         'registry',
         'registry.config.json',
         'public/r',
@@ -174,17 +181,15 @@ describe('createPlugin', () => {
     );
     expect(clientRoutes).toContain("path: '/audit-log'");
     expect(clientRoutes).toContain(
-      "componentLoader: () => import('./pages/index.js')",
+      "componentLoader: () => import('./pages/audit-log-page.js')",
     );
 
-    const clientSettings = await readFile(
-      path.join(result.targetDirectory, 'client/settings.ts'),
-      'utf8',
-    );
-    expect(clientSettings).toContain("id: 'audit-log'");
-    expect(clientSettings).toContain("title: 'Audit Log App Plugin'");
-    expect(clientSettings).toContain(
-      "pageLoader: () => import('./pages/settings.js')",
+    expect(clientRoutes).toContain('defineAppRoutes([');
+    expect(clientRoutes).toContain('defineSettingsRoutes([');
+    expect(clientRoutes).toContain("name: 'audit-log'");
+    expect(clientRoutes).toContain("title: 'Audit Log App Plugin'");
+    expect(clientRoutes).toContain(
+      "componentLoader: () => import('./pages/settings.js')",
     );
 
     const clientProviders = await readFile(
@@ -194,7 +199,7 @@ describe('createPlugin', () => {
     expect(clientProviders).toContain('component: AuditLogProvider');
 
     const clientPage = await readFile(
-      path.join(result.targetDirectory, 'client/pages/index.tsx'),
+      path.join(result.targetDirectory, 'client/pages/audit-log-page.tsx'),
       'utf8',
     );
     expect(clientPage).toContain('const appClient = createAppClient();');
@@ -204,7 +209,7 @@ describe('createPlugin', () => {
       expect.arrayContaining([
         'client/components/provider.tsx',
         'client/contexts.ts',
-        'client/pages/index.tsx',
+        'client/pages/audit-log-page.tsx',
         'client/pages/settings.tsx',
       ]),
     );
@@ -265,6 +270,19 @@ describe('createPlugin', () => {
     );
     expect(readme).toContain('# @nocobase/app-plugin-audit-log');
     expect(readme).toContain('Audit Log App Plugin.');
+
+    const skill = await readFile(
+      path.join(
+        result.targetDirectory,
+        'skills/nocobase-app-plugin-audit-log/SKILL.md',
+      ),
+      'utf8',
+    );
+    expect(skill).toContain('name: nocobase-app-plugin-audit-log');
+    expect(skill).toContain(
+      'description: Use Audit Log App Plugin in a NocoBase application.',
+    );
+    expect(skill).toContain('GET /api/audit-log');
 
     const changelog = await readFile(
       path.join(result.targetDirectory, 'CHANGELOG.md'),
