@@ -1,5 +1,8 @@
-import type { Hono } from 'hono';
-import { defineRootRoutes, type AppRootRoutes } from '../router/index.js';
+import { Hono } from 'hono';
+import {
+  defineRootRoutes,
+  type AppRootRouteContribution,
+} from '../router/index.js';
 
 import { registerSpaRoutes } from './routes.js';
 import type { SpaHandler, SpaRuntimeGlobals } from './types.js';
@@ -19,15 +22,15 @@ export interface SpaRoutesApplication {
   readonly config: SpaProviderConfig;
 }
 
-export const spaRootRoutes: AppRootRoutes<SpaRoutesApplication> =
-  defineRootRoutes({
-    name: '@nocobase/app/spa',
-    register(router: Hono, app: SpaRoutesApplication): void {
-      registerSpaRoutes(router, {
-        basePath: app.config.app.internalBasePath,
-        handler: app.config.spa.handler,
-        indexPath: app.config.spa.indexPath,
-        runtimeGlobals: app.config.spa.runtimeGlobals,
-      });
-    },
+export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
+  defineRootRoutes((app: SpaRoutesApplication): Hono => {
+    const router = new Hono();
+
+    registerSpaRoutes(router, {
+      basePath: app.config.app.internalBasePath,
+      handler: app.config.spa.handler,
+      indexPath: app.config.spa.indexPath,
+      runtimeGlobals: app.config.spa.runtimeGlobals,
+    });
+    return router;
   });

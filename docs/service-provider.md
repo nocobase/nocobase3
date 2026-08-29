@@ -58,7 +58,17 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { HeartbeatService } from './service.js';
+export interface HeartbeatState {
+  readonly status: 'stopped' | 'running' | 'ready';
+  readonly startedAt: string | undefined;
+}
+
+export interface HeartbeatService {
+  start(): void;
+  ready(): void;
+  stop(): void;
+  getState(): HeartbeatState;
+}
 
 export const heartbeatServiceToken: ServiceToken<HeartbeatService> =
   createServiceToken<HeartbeatService>(
@@ -151,7 +161,7 @@ Provider 使用 `this.app.container`，不使用 `this.context.serviceContainer`
 - `deps.database` 等宿主能力改为通过所属包导出的 Token 从 `this.app.container` 解析；
 - `services.notification = value` 等赋值改为在 `register()` 中注册插件自己的 `ServiceToken`；
 - 异步初始化、启动和释放分别放入 `boot()`、`start()` 和 `shutdown()`；
-- Provider 不再注册路由；使用 `apiRoutes` 或 `rootRoutes` 声明 HTTP 边界，通过 `app.container` 解析服务；
+- Provider 不再注册路由；使用 `defineApiRoutes()` 或 `defineRootRoutes()` 创建独立 Hono Router，并放入统一的 `routes` 数组，通过 `app.container` 解析服务；
 - 删除旧的 bootstrap context、`AppDeps`、`AppServices` 和 WeakMap 服务传递层，不为旧协议增加兼容 Token。
 
 迁移后，配置仍由 Provider 从 `this.app.config` 读取；它不是一个额外的 `config` 构造参数对象。
@@ -219,16 +229,20 @@ app.addProvider(CustomProvider, instanceSpecificArgument);
 
 ## 插件的 Service Provider
 
-插件约定使用一个 `server/plugin.ts` 作为服务端注册入口。一个插件定义可以声明多个 Provider、API Route、Root Route，以及可选的 database 与 queue 贡献：
+插件约定使用一个 `server/plugin.ts` 作为服务端注册入口。一个插件定义可以声明多个 Provider、统一的 routes 数组，以及可选的 database 与 queue 贡献：
 
 ```text
 packages/app-plugin-audit-log/
 ├── server/
-│   ├── provider.ts       插件唯一的 Provider 入口
 │   ├── plugin.ts         插件唯一的服务端注册入口
-│   ├── service.ts        服务实现
-│   ├── token.ts          稳定公开的服务标识
-│   └── routes/index.ts   HTTP 边界，只解析服务
+│   ├── providers/        Provider 集合目录
+│   │   ├── index.ts      组合 Provider 列表
+│   │   └── heartbeat.ts  领域 Provider
+│   ├── routes/           Route 集合目录
+│   │   └── index.ts      HTTP 边界，只解析服务
+│   ├── services/         领域实现目录
+│   │   └── heartbeat.ts  默认服务实现
+│   └── tokens.ts         稳定公开的契约和服务标识
 ├── tests/
 │   ├── provider.test.ts
 │   └── routes.test.ts
@@ -240,14 +254,13 @@ packages/app-plugin-audit-log/
 服务只包含自己的行为和状态，不需要继承 Provider：
 
 ```ts
-export type HeartbeatStatus = 'stopped' | 'running' | 'ready';
+import type {
+  HeartbeatService,
+  HeartbeatState,
+  HeartbeatStatus,
+} from '../tokens.js';
 
-export interface HeartbeatState {
-  readonly status: HeartbeatStatus;
-  readonly startedAt: string | undefined;
-}
-
-export class HeartbeatService {
+export class DefaultHeartbeatService implements HeartbeatService {
   private status: HeartbeatStatus = 'stopped';
   private startedAt: string | undefined;
 
@@ -284,7 +297,19 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { HeartbeatService } from './service.js';
+export type HeartbeatStatus = 'stopped' | 'running' | 'ready';
+
+export interface HeartbeatState {
+  readonly status: HeartbeatStatus;
+  readonly startedAt: string | undefined;
+}
+
+export interface HeartbeatService {
+  start(): void;
+  ready(): void;
+  stop(): void;
+  getState(): HeartbeatState;
+}
 
 export const heartbeatServiceToken: ServiceToken<HeartbeatService> =
   createServiceToken<HeartbeatService>(
@@ -297,35 +322,23 @@ export const heartbeatServiceToken: ServiceToken<HeartbeatService> =
 下面是仓库内 `@nocobase/app-plugin-service-provider-example` 的核心 Provider：
 
 ```ts
-import {
-  ServiceProvider,
-  type ServiceContainer,
-} from '@nocobase/service-provider';
-import type { Hono } from 'hono';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceProvider } from '@nocobase/service-provider';
 
-import { HeartbeatService } from './service.js';
-import registerRoutes from './routes/index.js';
-import { heartbeatServiceToken } from './token.js';
+import { DefaultHeartbeatService } from '../services/heartbeat.js';
+import { heartbeatServiceToken } from '../tokens.js';
 
-export interface ServiceProviderExampleApplication {
-  readonly container: ServiceContainer;
-  readonly router: Hono;
-}
+export type ServiceProviderExampleApplication = AppPluginApplication;
 
-export default class ServiceProviderExampleProvider extends ServiceProvider<ServiceProviderExampleApplication> {
+export class ServiceProviderExampleProvider extends ServiceProvider<ServiceProviderExampleApplication> {
   public readonly name: string =
     '@nocobase/app-plugin-service-provider-example';
 
   public override register(): void {
     this.app.container.singleton(
       heartbeatServiceToken,
-      () => new HeartbeatService(),
+      () => new DefaultHeartbeatService(),
     );
-  }
-
-  public override boot(): Promise<void> {
-    registerRoutes(this.app);
-    return Promise.resolve();
   }
 
   public override start(): Promise<void> {
@@ -350,21 +363,19 @@ Provider 完成 `boot()` 后统一注册，因此可以安全依赖已经准备�
 
 ### 4. 在 Route 中消费服务
 
-Route 是独立的 HTTP 贡献，通过注册函数接收目标 Router 和 Application：
+Route 是独立的 HTTP 贡献，通过 factory 接收 Application 并返回自己的 Hono Router：
 
 ```ts
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { defineApiRoutes } from '@nocobase/app-server-kit/router';
 import { Hono } from 'hono';
 
-import { heartbeatServiceToken } from '../token.js';
+import { heartbeatServiceToken } from '../tokens.js';
 
-export default function registerServiceProviderExampleRoutes(
-  { container }: AppPluginApplication,
-  router: Hono,
-): void {
-  const routes = new Hono();
+export default defineApiRoutes(({ container }: AppPluginApplication) => {
+  const router = new Hono();
 
-  routes.get('/status', (context) => {
+  router.get('/service-provider-example/status', (context) => {
     const heartbeat = container.resolve(heartbeatServiceToken);
 
     return context.json({
@@ -373,8 +384,8 @@ export default function registerServiceProviderExampleRoutes(
     });
   });
 
-  router.route('/service-provider-example', routes);
-}
+  return router;
+});
 ```
 
 不要在 Route 内 `new HeartbeatService()`。否则 Route 使用的是容器之外的第二个实例，也无法共享 Provider 生命周期。
@@ -406,8 +417,8 @@ export default function registerServiceProviderExampleRoutes(
 }
 ```
 
-`server/plugin.ts` 使用 `defineServerPlugin()` 分别声明 `providers`、
-`apiRoutes` 和 `rootRoutes`。目标 App 在自己的 `server/plugins.ts` 中显式
+`server/plugin.ts` 使用 `defineServerPlugin()` 声明 `providers` 和统一的
+`routes` 数组。目标 App 在自己的 `server/plugins.ts` 中显式
 import，并通过 `defineServerPlugins([...])` 选择和排序插件。
 
 在目标 App 中注册并启用插件：
@@ -416,7 +427,7 @@ import，并通过 `defineServerPlugins([...])` 选择和排序插件。
 pnpm plugin:register service-provider-example --app app-template-default
 ```
 
-Application 根据插件定义实例化 Provider，并在独立阶段注册 Routes。插件代码不需要自行创建 Application、Provider 或 Router 实例。
+Application 根据插件定义实例化 Provider，并在独立阶段挂载每个 Route factory 返回的 Router。插件代码不需要自行创建 Application 或 Provider 实例；Router 由 Route factory 自己创建。
 
 ## 测试 Provider
 
@@ -424,17 +435,15 @@ Provider 测试应直接验证 Token 注册和生命周期结果：
 
 ```ts
 import { ServiceContainer } from '@nocobase/service-provider';
-import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import ServiceProviderExampleProvider from '../server/provider.js';
-import { heartbeatServiceToken } from '../server/token.js';
+import { ServiceProviderExampleProvider } from '../server/providers/service-provider-example.js';
+import { heartbeatServiceToken } from '../server/tokens.js';
 
 it('registers and starts the heartbeat service', async () => {
   const container = new ServiceContainer();
   const provider = new ServiceProviderExampleProvider({
     container,
-    router: new Hono(),
   });
 
   provider.register();

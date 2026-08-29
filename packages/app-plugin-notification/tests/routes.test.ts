@@ -7,13 +7,13 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import registerNotificationRoutes from '../server/routes/index.js';
-import { notificationServiceToken } from '../server/token.js';
+import { apiRoutes } from '../server/routes/index.js';
+import { notificationServiceToken } from '../server/tokens.js';
 import type { NotificationService } from '../server/types.js';
 
 describe('@nocobase/app-plugin-notification routes', () => {
   it('mounts its own protected log routes', async () => {
-    const router = new Hono();
+    const hostRouter = new Hono();
     const container = new ServiceContainer();
     const middleware = vi.fn(async (_context, next) => next());
     const required = vi.fn(() => middleware);
@@ -24,7 +24,9 @@ describe('@nocobase/app-plugin-notification routes', () => {
       router: notificationRouter,
     } as unknown as NotificationService);
 
-    registerNotificationRoutes(createApp(router, container), router);
+    const router = await apiRoutes.createRouter(
+      createApp(hostRouter, container),
+    );
     router.get('/outside', (context) => context.text('outside'));
 
     const response = await router.request('/notifications/logs');
@@ -37,7 +39,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
   });
 
   it('does not apply core authentication to an in-app route', async () => {
-    const router = new Hono();
+    const hostRouter = new Hono();
     const container = new ServiceContainer();
     const middleware = vi.fn(async (_context, next) => next());
     const required = vi.fn(() => middleware);
@@ -46,7 +48,9 @@ describe('@nocobase/app-plugin-notification routes', () => {
       router: new Hono(),
     } as unknown as NotificationService);
 
-    registerNotificationRoutes(createApp(router, container), router);
+    const router = await apiRoutes.createRouter(
+      createApp(hostRouter, container),
+    );
     router.get('/notifications/in-app', (context) => context.text('in-app'));
 
     const response = await router.request('/notifications/in-app');
@@ -67,7 +71,6 @@ function createApp(
     config: { app: { name: 'test', publicBasePath: '' } },
     paths: {} as never,
     router,
-    apiRouter: router,
     container,
   };
 }

@@ -113,6 +113,37 @@ test('refuses a directory whose package name does not match', async (t) => {
   await access(targetDirectory);
 });
 
+test('refuses removal while server/plugins.ts imports the plugin', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
+  const appDirectory = path.join(repoRoot, 'packages/app');
+  await mkdir(path.join(appDirectory, 'server'), { recursive: true });
+  await writeJson(path.join(appDirectory, 'package.json'), {
+    name: '@nocobase/app',
+  });
+  await writeFile(
+    path.join(appDirectory, 'server/plugins.ts'),
+    `import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+import { defineServerPlugins } from '@nocobase/app-server-kit/plugins';
+
+export default defineServerPlugins([auditLog]);
+`,
+  );
+
+  await assert.rejects(
+    removePlugin({ install: false, name: 'audit-log', repoRoot }),
+    (error) => {
+      assert.match(error.message, /server\/plugins\.ts/u);
+      assert.match(
+        error.message,
+        /pnpm plugin:unregister audit-log --app app/u,
+      );
+      return true;
+    },
+  );
+  await access(targetDirectory);
+});
+
 test('restores the plugin and lockfile when synchronization fails', async (t) => {
   const repoRoot = await createTestRepo(t);
   const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');

@@ -1,28 +1,15 @@
 import {
   defineServerPlugin,
-  type AppPluginApplication,
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
-import {
-  defineApiRoutes,
-  type AppApiRoutes,
-} from '@nocobase/app-server-kit/router';
 
-import InAppNotificationProvider from './provider.js';
-import registerInAppNotificationRoutes from './routes/index.js';
-
-const inAppNotificationApiRoutes: AppApiRoutes<AppPluginApplication> =
-  defineApiRoutes({
-    name: '@nocobase/app-plugin-notification-in-app/api',
-    register(router, app): void {
-      registerInAppNotificationRoutes(app, router);
-    },
-  });
+import providers from './providers/index.js';
+import routes from './routes/index.js';
 
 const inAppNotificationPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-notification-in-app',
-  providers: [InAppNotificationProvider],
-  apiRoutes: [inAppNotificationApiRoutes],
+  providers,
+  routes,
   database: {
     migrations: './database/migrations',
   },

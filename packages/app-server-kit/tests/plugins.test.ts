@@ -7,6 +7,7 @@ import {
   defineServerPlugins,
 } from '../src/plugins/index.js';
 import { defineApiRoutes, defineRootRoutes } from '../src/router/index.js';
+import { Hono } from 'hono';
 
 describe('server plugin definitions', () => {
   it('normalizes optional contributions and freezes the result', () => {
@@ -17,8 +18,7 @@ describe('server plugin definitions', () => {
     expect(plugin).toEqual({
       packageName: '@nocobase/app-plugin-example',
       providers: [],
-      apiRoutes: [],
-      rootRoutes: [],
+      routes: [],
       database: undefined,
       queue: undefined,
     });
@@ -43,18 +43,32 @@ describe('server plugin definitions', () => {
   });
 
   it('keeps API and root route definitions distinct', () => {
-    const apiRoutes = defineApiRoutes({
-      name: 'example-api',
-      register(): void {},
+    const apiRoutes = defineApiRoutes(() => {
+      return new Hono();
     });
-    const rootRoutes = defineRootRoutes({
-      name: 'example-root',
-      register(): void {},
+    const rootRoutes = defineRootRoutes(() => {
+      return new Hono();
     });
 
     expect(apiRoutes.scope).toBe('api');
     expect(rootRoutes.scope).toBe('root');
+    expect(apiRoutes.createRouter).toBeTypeOf('function');
+    expect(rootRoutes.createRouter).toBeTypeOf('function');
     expect(Object.isFrozen(apiRoutes)).toBe(true);
     expect(Object.isFrozen(rootRoutes)).toBe(true);
+  });
+
+  it('copies and freezes the unified routes array', () => {
+    const route = defineApiRoutes(() => new Hono());
+    const routes = [route];
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-example',
+      routes,
+    });
+
+    routes.length = 0;
+
+    expect(plugin.routes).toEqual([route]);
+    expect(Object.isFrozen(plugin.routes)).toBe(true);
   });
 });
