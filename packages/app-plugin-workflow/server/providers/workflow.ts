@@ -5,8 +5,8 @@ import { queueManagerToken } from '@nocobase/queue';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
-import { WorkflowService } from './runtime/runtime.js';
-import { workflowServiceToken } from './token.js';
+import { WorkflowService } from '../runtime/runtime.js';
+import { workflowServiceToken } from '../tokens.js';
 
 export interface WorkflowProviderConfig {
   readonly app: {
@@ -25,7 +25,7 @@ export interface WorkflowProviderConfig {
 export type WorkflowProviderApplication =
   AppPluginApplication<WorkflowProviderConfig>;
 
-export default class WorkflowProvider<
+export class WorkflowProvider<
   TApplication extends WorkflowProviderApplication =
     WorkflowProviderApplication,
 > extends ServiceProvider<TApplication> {

@@ -3,16 +3,16 @@ import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { loggingToken } from '@nocobase/logging';
 import { ServiceProvider } from '@nocobase/service-provider';
 
-import { FILE_DEMO_FIXTURES } from './demo/fixtures.js';
-import { FileUnavailableError } from './errors.js';
+import { FILE_DEMO_FIXTURES } from '../demo/fixtures.js';
+import { FileUnavailableError } from '../errors.js';
 import {
   isFilePluginRuntimeUnavailable,
   resolveFilePluginRuntime,
   type FilePluginConfig,
   type FilePluginRuntime,
-} from './plugin-runtime.js';
-import { filePluginRuntimeToken } from './runtime-token.js';
-import { ensureFileObject } from './file-storage.js';
+} from '../plugin-runtime.js';
+import { filePluginRuntimeToken } from '../runtime-token.js';
+import { ensureFileObject } from '../file-storage.js';
 
 type FileDemoRuntime = {
   readonly database: FilePluginRuntime['database'];
@@ -27,7 +27,7 @@ const readinessByDatabase = new WeakMap<
 
 export type FileProviderApplication = AppPluginApplication<FilePluginConfig>;
 
-export default class FileProvider<
+export class FileProvider<
   TApplication extends FileProviderApplication = FileProviderApplication,
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-file';

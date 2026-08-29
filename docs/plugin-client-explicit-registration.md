@@ -517,7 +517,7 @@ componentSource: routeComponentOverrides.some((o) => o.routeId === route.id)
 
 本期只摘掉第一个。删除 `nocobase.plugins` 需要先完成 server 侧的等价改造，该改造有一处额外成本：
 
-**插件的 server 入口目前由 manifest 与 Provider 文件约定共同解析**：`@nocobase/app-server-kit/plugins` 优先读取 `nocobase.plugin.server`，未声明时只探测 `server/provider.ts` 或构建后的等价文件。Route 文件是 Provider 的内部实现，不是第二个插件入口。改成 App 源码显式 import 后，每个插件仍需要提供稳定的 server 注册 export，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/plugins.ts` 解析包名。
+**插件的 server 入口目前由 manifest 与插件定义共同解析**：`@nocobase/app-server-kit/plugins` 读取 `nocobase.plugin.server` 指向的 `server/plugin.ts`。Provider 集合位于 `server/providers/index.ts`，Route 集合位于 `server/routes/index.ts`；它们都是 `server/plugin.ts` 的内部贡献，不是独立的插件入口。改成 App 源码显式 import 后，每个插件仍需要提供稳定的 server 注册 export，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/plugins.ts` 解析包名。
 
 顺序：**client 显式注册（本期）→ server 显式注册 → 删除 `nocobase.plugins`**。
 

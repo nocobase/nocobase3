@@ -1,19 +1,19 @@
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
-import { HeartbeatService } from './service.js';
-import { heartbeatServiceToken } from './token.js';
+import { DefaultHeartbeatService } from '../services/heartbeat.js';
+import { heartbeatServiceToken } from '../tokens.js';
 
 export type ServiceProviderExampleApplication = AppPluginApplication;
 
-export default class ServiceProviderExampleProvider extends ServiceProvider<ServiceProviderExampleApplication> {
+export class ServiceProviderExampleProvider extends ServiceProvider<ServiceProviderExampleApplication> {
   public readonly name: string =
     '@nocobase/app-plugin-service-provider-example';
 
   public override register(): void {
     this.app.container.singleton(
       heartbeatServiceToken,
-      () => new HeartbeatService(),
+      () => new DefaultHeartbeatService(),
     );
   }
 

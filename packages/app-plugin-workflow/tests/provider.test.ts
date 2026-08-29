@@ -15,8 +15,8 @@ import {
 import { ServiceContainer } from '@nocobase/service-provider';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import WorkflowProvider from '../server/provider.js';
-import { workflowServiceToken } from '../server/token.js';
+import { WorkflowProvider } from '../server/providers/workflow.js';
+import { workflowServiceToken } from '../server/tokens.js';
 
 const providers: WorkflowProvider[] = [];
 const databases: ReturnType<typeof createDatabaseManager>[] = [];

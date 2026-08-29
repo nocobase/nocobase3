@@ -58,10 +58,6 @@ function replacementEntries(
   context: PluginTemplateContext,
 ): readonly (readonly [string, string])[] {
   return [
-    [
-      '__NOCOBASE_API_ROUTES_NAME_LITERAL__',
-      literal(`${context.packageName}/api`),
-    ],
     ['__NOCOBASE_COLLECTION_NAME_LITERAL__', literal(context.collectionName)],
     ['__NOCOBASE_DESCRIPTION__', context.description],
     ['__NOCOBASE_DISPLAY_NAME__', jsonStringContent(context.displayName)],

@@ -3,9 +3,9 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { __NOCOBASE_SYMBOL_NAME__Service } from './service.js';
-
-export type { __NOCOBASE_SYMBOL_NAME__Service } from './service.js';
+export interface __NOCOBASE_SYMBOL_NAME__Service {
+  getMessage(): string;
+}
 
 export const __NOCOBASE_MODULE_NAME__ServiceToken: ServiceToken<__NOCOBASE_SYMBOL_NAME__Service> =
   createServiceToken<__NOCOBASE_SYMBOL_NAME__Service>(

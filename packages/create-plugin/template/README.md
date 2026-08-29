@@ -13,21 +13,26 @@ The server structure is intentionally small:
 ```text
 server/
 ├── plugin.ts
-├── provider.ts
-├── routes.ts
-├── service.ts
-└── token.ts
+├── providers/
+│   ├── __NOCOBASE_SHORT_NAME__.ts
+│   └── index.ts
+├── routes/
+│   └── index.ts
+├── services/
+│   └── __NOCOBASE_SHORT_NAME__.ts
+└── tokens.ts
 ```
 
 - `server/plugin.ts` is the server registration entry and composes the
   Provider and route contributions.
-- `server/provider.ts` registers the service as a lazy singleton and owns its
-  lifecycle work.
-- `server/service.ts` defines the service contract and its default
+- `server/providers/index.ts` composes the Provider collection; the domain
+  Provider registers the service as a lazy singleton and owns lifecycle work.
+- `server/services/__NOCOBASE_SHORT_NAME__.ts` contains the default domain
   implementation.
-- `server/token.ts` exports the stable token used to resolve or replace the
-  service.
-- `server/routes.ts` directly defines the API route contribution and resolves
+- `server/tokens.ts` defines the stable service contract and token used to
+  resolve or replace the service.
+- `server/routes/index.ts` uses `defineApiRoutes()` to create and return its own Hono
+  router, declares paths relative to the automatic `/api` mount, and resolves
   the service through that token.
 
 Register the package with the target application's plugin command. It detects

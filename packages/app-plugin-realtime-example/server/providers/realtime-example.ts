@@ -5,11 +5,11 @@ import { ServiceProvider } from '@nocobase/service-provider';
 import {
   startClockPublisher,
   type ClockPublisherRealtime,
-} from './publishers/clock.js';
+} from '../publishers/clock.js';
 
 export type RealtimeExampleProviderApplication = AppPluginApplication;
 
-export default class RealtimeExampleProvider extends ServiceProvider<RealtimeExampleProviderApplication> {
+export class RealtimeExampleProvider extends ServiceProvider<RealtimeExampleProviderApplication> {
   public readonly name: string = '@nocobase/app-plugin-realtime-example';
 
   private stopClockPublisher: (() => void) | undefined;

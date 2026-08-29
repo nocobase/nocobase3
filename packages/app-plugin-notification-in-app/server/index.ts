@@ -1,6 +1,6 @@
-export { default as InAppNotificationProvider } from './provider.js';
+export { InAppNotificationProvider } from './providers/in-app-notification.js';
 export * from './definition.js';
 export * from './router.js';
 export * from './store.js';
-export * from './token.js';
+export * from './tokens.js';
 export * from './types.js';

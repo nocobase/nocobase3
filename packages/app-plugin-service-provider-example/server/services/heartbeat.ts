@@ -1,11 +1,10 @@
-export type HeartbeatStatus = 'stopped' | 'running' | 'ready';
+import type {
+  HeartbeatService,
+  HeartbeatState,
+  HeartbeatStatus,
+} from '../tokens.js';
 
-export interface HeartbeatState {
-  readonly status: HeartbeatStatus;
-  readonly startedAt: string | undefined;
-}
-
-export class HeartbeatService {
+export class DefaultHeartbeatService implements HeartbeatService {
   private status: HeartbeatStatus = 'stopped';
   private startedAt: string | undefined;
 

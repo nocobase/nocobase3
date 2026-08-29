@@ -12,7 +12,7 @@ import {
   issueFileToken,
   MAX_FILE_TOKEN_TTL_SECONDS,
   verifyFileToken,
-} from '../server/token.js';
+} from '../server/tokens.js';
 
 const SECRET = 'unit-test-file-token-secret';
 

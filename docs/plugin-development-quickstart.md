@@ -20,10 +20,14 @@ packages/app-plugin-audit-log/
 │   └── seeds/
 ├── server/
 │   ├── plugin.ts
-│   ├── provider.ts
-│   ├── routes.ts
-│   ├── service.ts
-│   └── token.ts
+│   ├── providers/
+│   │   ├── audit-log.ts
+│   │   └── index.ts
+│   ├── routes/
+│   │   └── index.ts
+│   ├── services/
+│   │   └── audit-log.ts
+│   └── tokens.ts
 ├── client/
 │   ├── bootstrap.ts
 │   ├── components/
@@ -181,12 +185,12 @@ pnpm --filter @nocobase/app-template-default seed
 ### Server
 
 - `server/plugin.ts`：唯一的服务端注册入口，显式声明 Providers、API Routes、Root Routes、database 和 queue 贡献；
-- `server/provider.ts`：通过稳定的 ServiceToken 注册服务，并负责服务生命周期；
-- `server/service.ts`：定义服务契约和默认实现；
-- `server/token.ts`：导出服务所有者创建的稳定 ServiceToken，供 Route 和其他消费者解析同一项能力；
-- `server/routes.ts`：直接定义默认的 API route contribution，并通过 `app.container` 和 ServiceToken 解析服务；路由增多后可再拆分目录。
+- `server/providers/index.ts`：组合并导出 Provider 集合；具体 Provider 放在同一目录的领域文件中；
+- `server/services/*.ts`：放置领域服务的默认实现；
+- `server/tokens.ts`：定义稳定的服务接口和 ServiceToken，供 Provider、Route 和其他消费者共享；
+- `server/routes/index.ts`：定义并组合默认的 route contributions，通过 `app.container` 和 ServiceToken 解析服务；其他路由模块放在同一目录。
 
-普通业务接口使用 `apiRoutes`，由 Application 统一挂载到 `/api`；安装入口、协议回调和 HTML 页面等特殊入口使用 `rootRoutes`。不要提供含义模糊的通用 `routes`，也不要在 Provider 的 `boot()` 中注册 HTTP 路由。
+普通业务接口使用 `defineApiRoutes()`，由 Application 统一挂载到 `/api`；安装入口、协议回调和 HTML 页面等特殊入口使用 `defineRootRoutes()`。两者都放入同一个 `routes` 数组，不要在 Provider 的 `boot()` 中注册 HTTP 路由。
 
 Service Provider 的概念、五阶段生命周期、Token/Container 用法和完整插件示例参见 [Service Provider](./service-provider.md)。仓库内可运行的实现位于 [`@nocobase/app-plugin-service-provider-example`](../packages/app-plugin-service-provider-example/README.md)。
 

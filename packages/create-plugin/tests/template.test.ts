@@ -37,10 +37,11 @@ describe('bundled template', () => {
         'registry/component-ui/index.ts',
         'registry/component-ui/plugin-feature-card.tsx',
         'server/plugin.ts',
-        'server/provider.ts',
-        'server/routes.ts',
-        'server/service.ts',
-        'server/token.ts',
+        'server/providers/__NOCOBASE_SHORT_NAME__.ts',
+        'server/providers/index.ts',
+        'server/routes/index.ts',
+        'server/services/__NOCOBASE_SHORT_NAME__.ts',
+        'server/tokens.ts',
         'tests/plugin.test.ts',
         'tests/client.test.ts',
         'tsconfig.json',
@@ -89,17 +90,17 @@ describe('bundled template', () => {
       types: './server/plugin.ts',
       import: './server/plugin.ts',
     });
-    expect(manifest.exports?.['./server/token']).toEqual({
-      types: './server/token.ts',
-      import: './server/token.ts',
+    expect(manifest.exports?.['./server/tokens']).toEqual({
+      types: './server/tokens.ts',
+      import: './server/tokens.ts',
     });
     expect(manifest.publishConfig?.exports?.['./server/plugin']).toEqual({
       types: './dist/server/plugin.d.ts',
       import: './dist/server/plugin.js',
     });
-    expect(manifest.publishConfig?.exports?.['./server/token']).toEqual({
-      types: './dist/server/token.d.ts',
-      import: './dist/server/token.js',
+    expect(manifest.publishConfig?.exports?.['./server/tokens']).toEqual({
+      types: './dist/server/tokens.d.ts',
+      import: './dist/server/tokens.js',
     });
   });
 });

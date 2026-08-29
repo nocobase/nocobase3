@@ -14,9 +14,9 @@
       "types": "./server/plugin.ts",
       "import": "./server/plugin.ts"
     },
-    "./server/token": {
-      "types": "./server/token.ts",
-      "import": "./server/token.ts"
+    "./server/tokens": {
+      "types": "./server/tokens.ts",
+      "import": "./server/tokens.ts"
     },
     "./client": {
       "types": "./client/index.ts",
@@ -66,9 +66,9 @@
         "types": "./dist/server/plugin.d.ts",
         "import": "./dist/server/plugin.js"
       },
-      "./server/token": {
-        "types": "./dist/server/token.d.ts",
-        "import": "./dist/server/token.js"
+      "./server/tokens": {
+        "types": "./dist/server/tokens.d.ts",
+        "import": "./dist/server/tokens.js"
       },
       "./client": {
         "types": "./dist/client/index.d.ts",

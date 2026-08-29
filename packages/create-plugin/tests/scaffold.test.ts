@@ -217,24 +217,29 @@ describe('createPlugin', () => {
     expect(serverPlugin).toContain(
       "packageName: '@nocobase/app-plugin-audit-log'",
     );
-    expect(serverPlugin).toContain('providers: [AuditLogProvider]');
-    expect(serverPlugin).toContain('apiRoutes: [auditLogApiRoutes]');
+    expect(serverPlugin).toContain(
+      "import providers from './providers/index.js'",
+    );
+    expect(serverPlugin).toContain('providers,');
+    expect(serverPlugin).toContain('routes,');
 
     const serverRoutes = await readFile(
-      path.join(result.targetDirectory, 'server/routes.ts'),
+      path.join(result.targetDirectory, 'server/routes/index.ts'),
       'utf8',
     );
-    expect(serverRoutes).toContain('const auditLogApiRoutes:');
-    expect(serverRoutes).toContain('defineApiRoutes({');
-    expect(serverRoutes).toContain(
-      "name: '@nocobase/app-plugin-audit-log/api'",
-    );
+    expect(serverRoutes).toContain('export const apiRoutes:');
+    expect(serverRoutes).toContain('const routes: readonly');
+    expect(serverRoutes).toContain('apiRoutes,');
+    expect(serverRoutes).toContain('defineApiRoutes(');
+    expect(serverRoutes).toContain('({ container }) => {');
+    expect(serverRoutes).toContain('const router = new Hono();');
     expect(serverRoutes).toContain('container.resolve(');
     expect(serverRoutes).toContain('auditLogServiceToken');
+    expect(serverRoutes).toContain('return router;');
     expect(serverRoutes).not.toContain('AppPluginRoutesApplication');
 
     const serverProvider = await readFile(
-      path.join(result.targetDirectory, 'server/provider.ts'),
+      path.join(result.targetDirectory, 'server/providers/audit-log.ts'),
       'utf8',
     );
     expect(serverProvider).toContain('public override register(): void');
@@ -242,7 +247,7 @@ describe('createPlugin', () => {
     expect(serverProvider).toContain('auditLogServiceToken');
 
     const serverToken = await readFile(
-      path.join(result.targetDirectory, 'server/token.ts'),
+      path.join(result.targetDirectory, 'server/tokens.ts'),
       'utf8',
     );
     expect(serverToken).toContain(
@@ -270,7 +275,7 @@ describe('createPlugin', () => {
       repoRoot,
     });
     const service = await readFile(
-      path.join(result.targetDirectory, 'server/service.ts'),
+      path.join(result.targetDirectory, 'server/services/audit-log.ts'),
       'utf8',
     );
     const registryConfig = JSON.parse(

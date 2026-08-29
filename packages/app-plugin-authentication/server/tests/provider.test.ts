@@ -20,13 +20,14 @@ vi.mock('../auth.js', async (importOriginal) => {
   return { ...actual, createAuthentication };
 });
 
-import AuthenticationProvider, {
+import {
+  AuthenticationProvider,
   createCookiePrefix,
   resolvePublicPath,
   toPublicRequest,
   type AuthenticationProviderConfig,
-} from '../provider.js';
-import { authenticationToken } from '../token.js';
+} from '../providers/authentication.js';
+import { authenticationToken } from '../tokens.js';
 
 describe('authentication provider', () => {
   it('registers authentication with the application runtime and dependencies', async () => {

@@ -15,9 +15,9 @@ import {
   createAuthentication,
   type Auth,
   type CreateAuthenticationOptions,
-} from './auth.js';
-import { createAuthStorage } from './auth-storage.js';
-import { authenticationToken } from './token.js';
+} from '../auth.js';
+import { createAuthStorage } from '../auth-storage.js';
+import { authenticationToken } from '../tokens.js';
 
 interface RequestInitWithDuplex extends RequestInit {
   duplex?: 'half';
@@ -39,7 +39,7 @@ export type AuthenticationProviderApplication<
   TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,
 > = AppPluginApplication<TConfig>;
 
-export default class AuthenticationProvider<
+export class AuthenticationProvider<
   TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,
   TApplication extends AuthenticationProviderApplication<TConfig> =
     AuthenticationProviderApplication<TConfig>,

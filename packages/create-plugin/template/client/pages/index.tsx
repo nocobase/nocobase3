@@ -226,7 +226,8 @@ export default function __NOCOBASE_SYMBOL_NAME__Page(): ReactElement {
               <li className='flex gap-3'>
                 <span className='grid size-6 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary'>2</span>
                 <span>
-                  Implement the API in <CodeValue>server/routes.ts</CodeValue>
+                  Implement the API in{' '}
+                  <CodeValue>server/routes/index.ts</CodeValue>
                 </span>
               </li>
               <li className='flex gap-3'>

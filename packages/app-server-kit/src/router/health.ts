@@ -1,24 +1,24 @@
-import type { Hono } from 'hono';
-import { defineApiRoutes, type AppApiRoutes } from './routes.js';
+import { Hono } from 'hono';
+import { defineApiRoutes, type AppApiRouteContribution } from './routes.js';
 
 export interface HealthCheckRoutesApplication {
   readonly appName: string;
   readonly publicBasePath: string;
 }
 
-export const healthCheckApiRoutes: AppApiRoutes<HealthCheckRoutesApplication> =
-  defineApiRoutes({
-    name: '@nocobase/app/health-check',
-    register(router: Hono, app: HealthCheckRoutesApplication): void {
-      router.get('/healthz', (context) =>
-        context.json({
-          ok: true,
-          app: {
-            name: app.appName,
-            basePath: app.publicBasePath,
-          },
+export const healthCheckApiRoutes: AppApiRouteContribution<HealthCheckRoutesApplication> =
+  defineApiRoutes((app: HealthCheckRoutesApplication): Hono => {
+    const router = new Hono();
+
+    router.get('/healthz', (context) =>
+      context.json({
+        ok: true,
+        app: {
+          name: app.appName,
           basePath: app.publicBasePath,
-        }),
-      );
-    },
+        },
+        basePath: app.publicBasePath,
+      }),
+    );
+    return router;
   });

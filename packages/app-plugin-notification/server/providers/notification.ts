@@ -4,9 +4,9 @@ import { queueManagerToken } from '@nocobase/queue';
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 
-import { createNotificationManager } from './manager.js';
-import { notificationServiceToken } from './token.js';
-import type { NotificationChannelMap, NotificationConfig } from './types.js';
+import { createNotificationManager } from '../manager.js';
+import { notificationServiceToken } from '../tokens.js';
+import type { NotificationChannelMap, NotificationConfig } from '../types.js';
 
 export interface NotificationProviderApplicationConfig {
   readonly app: {
@@ -18,7 +18,7 @@ export interface NotificationProviderApplicationConfig {
 export type NotificationProviderApplication =
   AppPluginApplication<NotificationProviderApplicationConfig>;
 
-export default class NotificationProvider<
+export class NotificationProvider<
   TApplication extends NotificationProviderApplication =
     NotificationProviderApplication,
 > extends ServiceProvider<TApplication> {

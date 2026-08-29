@@ -6,13 +6,13 @@ import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import {
   createDatabaseProviderDefinition,
   createInAppChannelDefinition,
-} from './definition.js';
-import { createInAppStore } from './store.js';
-import { inAppNotificationStoreToken } from './token.js';
+} from '../definition.js';
+import { createInAppStore } from '../store.js';
+import { inAppNotificationStoreToken } from '../tokens.js';
 
 export type InAppNotificationProviderApplication = AppPluginApplication;
 
-export default class InAppNotificationProvider<
+export class InAppNotificationProvider<
   TApplication extends InAppNotificationProviderApplication =
     InAppNotificationProviderApplication,
 > extends ServiceProvider<TApplication> {
