@@ -12,16 +12,18 @@ import {
   removePluginSkills,
 } from '../../../lib/plugin-registration.ts';
 import { runAttached } from '../../../lib/run-command.ts';
+import { resolveAppRoot } from '../../../lib/workspace-app.ts';
 
 export default class AppPluginUnregister extends Command {
   static override summary = 'Remove a plugin from this app.';
   static override description =
-    'Undoes what register did: drops the import and entry from client/plugins.ts, removes the nocobase.plugins registration and the dependency, deletes the skills the plugin installed, and uninstalls the package. The skill directories are deleted here because synchronization only ever writes the prefixes of registered plugins and so never cleans up after a removal.';
+    'Undoes what register did: drops the imports and entries from the client and server composition roots, removes the nocobase.plugins registration and dependency, deletes installed skills, and uninstalls the package.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> audit-log',
     '<%= config.bin %> <%= command.id %> @nocobase/app-plugin-audit-log',
     '<%= config.bin %> <%= command.id %> audit-log --dry-run',
+    '<%= config.bin %> <%= command.id %> audit-log --workspace-root . --app app-template-default',
   ];
 
   static override args = {
@@ -36,6 +38,14 @@ export default class AppPluginUnregister extends Command {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
     }),
+    app: Flags.string({
+      description:
+        'Workspace app directory or package name. Requires --workspace-root.',
+    }),
+    'workspace-root': Flags.string({
+      description:
+        'Monorepo root. Selects app-template-default unless --app is provided.',
+    }),
     'no-install': Flags.boolean({
       default: false,
       description:
@@ -49,7 +59,11 @@ export default class AppPluginUnregister extends Command {
 
   public async run(): Promise<void> {
     const { args, flags } = await this.parse(AppPluginUnregister);
-    const appRoot = path.resolve(flags.dir ?? process.cwd());
+    const appRoot = await resolveAppRoot({
+      app: flags.app,
+      dir: flags.dir,
+      workspaceRoot: flags['workspace-root'],
+    });
     const dryRun = flags['dry-run'];
     const packageName = pluginPackageName(args.name);
 
@@ -106,6 +120,14 @@ export default class AppPluginUnregister extends Command {
       this.log('Remove these two lines by hand:');
       this.log(`  1. ${finalPlan.manualClientEdit.importStatement}`);
       this.log(`  2. ${finalPlan.manualClientEdit.entry}`);
+    }
+    if (finalPlan.manualServerEdit) {
+      this.log(
+        `\n${path.relative(appRoot, finalPlan.manualServerEdit.filePath)} still imports this plugin and could not be edited: TypeScript is not installed in this app.`,
+      );
+      this.log('Remove these two lines by hand:');
+      this.log(`  1. ${finalPlan.manualServerEdit.importStatement}`);
+      this.log(`  2. ${finalPlan.manualServerEdit.entry}`);
     }
   }
 }

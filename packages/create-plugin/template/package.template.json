@@ -1,0 +1,140 @@
+{
+  "name": "@nocobase/app-plugin-template",
+  "displayName": "Template App Plugin",
+  "description": "NocoBase application plugin template.",
+  "version": "0.0.1",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "sideEffects": false,
+  "exports": {
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
+    "./server/token": {
+      "types": "./server/token.ts",
+      "import": "./server/token.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/settings": {
+      "types": "./client/settings.ts",
+      "import": "./client/settings.ts"
+    },
+    "./client/providers": {
+      "types": "./client/providers.ts",
+      "import": "./client/providers.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    ".agents",
+    "README.md",
+    "registry",
+    "registry.config.json",
+    "public/r"
+  ],
+  "nocobase": {
+    "registry": {
+      "items": {
+        "component-ui": "./registry/component-ui"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
+      "./server/token": {
+        "types": "./dist/server/token.d.ts",
+        "import": "./dist/server/token.js"
+      },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/settings": {
+        "types": "./dist/client/settings.d.ts",
+        "import": "./dist/client/settings.js"
+      },
+      "./client/providers": {
+        "types": "./dist/client/providers.d.ts",
+        "import": "./dist/client/providers.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "registry:build": "node ../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
+    "prepack": "pnpm registry:build",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
+    "hono": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "shadcn": "^4.13.1",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "^1.2.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
