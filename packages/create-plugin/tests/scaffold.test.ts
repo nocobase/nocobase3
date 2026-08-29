@@ -222,6 +222,9 @@ describe('createPlugin', () => {
     );
     expect(serverPlugin).toContain('providers,');
     expect(serverPlugin).toContain('routes,');
+    expect(serverPlugin).toContain("migrations: './database/migrations'");
+    expect(serverPlugin).toContain("seeds: './database/seeds'");
+    expect(serverPlugin).toContain("jobs: ['./server/jobs']");
 
     const serverRoutes = await readFile(
       path.join(result.targetDirectory, 'server/routes/index.ts'),

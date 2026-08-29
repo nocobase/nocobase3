@@ -64,13 +64,27 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 日志响应不会返回消息正文、接收人快照、`leaseToken` 或 `leaseExpiresAt`。Provider 名称、状态、时间和错误信息会保留，用于排查投递问题。
 
-## 可选客户端页面
+## Hub 设置页
 
-`@nocobase/app-plugin-notification` 发布的 `logs-ui` Registry item 提供 `NotificationLogsPage`，用于展示 Delivery 和 Attempt。canonical source 位于 `packages/app-plugin-notification/registry/logs-ui`。该 item 只提供客户端页面，不会自动创建服务端 runtime、挂载服务端路由或注册客户端路由。
+启用插件的客户端贡献后，通知日志通过 `client/settings.ts` 自动注册到 Hub Settings Center：
+
+- 页面路径：`/hub/settings/notifications/logs`
+- 权限资源：`page:notification.logs`
+- 权限动作：`access`
+
+Settings Contribution 与 `GET /api/notifications/logs` 使用同一个权限资源。Settings Center 会在页面加载前检查权限，服务端也会拒绝没有访问权限的请求。
+
+页面右上角的 **Send test notification** 会列出当前启用的 Channel 和 Provider。选择站内信时需要填写接收用户 ID，选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **Send** 后，页面调用 Notification Provider 插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
+
+测试能力受服务端 `notification.test.enabled` 控制。默认应用模板通过 `NOTIFICATION_PROVIDER_TEST_ENABLED` 配置该开关；`TEST_EMAIL_RECIPIENT` 仍可作为未显式传入接收邮箱时的兼容兜底。生产环境默认关闭。未启用时，测试弹窗会提示该应用没有开启 Provider 测试。
+
+## 可选的应用自有页面
+
+`@nocobase/app-plugin-notification` 发布的 `logs-ui` Registry item 仍提供可复制的 `NotificationLogsPage`，用于应用需要完全自行维护页面样式的场景。canonical source 位于 `packages/app-plugin-notification/registry/logs-ui`。默认 Hub 日志页由插件的 Settings Contribution 直接提供，不需要安装该 Registry item。
 
 ## 相关链接
 
 - [通知概览](./overview.md)——了解 Notification、Delivery 和 Attempt
 - [手动接入通知](./integration.md)——挂载受认证的日志 API
-- [配置通知](./configuration.md)——配置 Channel 和 Provider
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——配置 Email 和 IM Channel 的 Provider
 - [发送通知](./sending.md)——从服务端业务代码发送消息

@@ -16,8 +16,9 @@ __NOCOBASE_SEED_NAME__.ts
 The exported `name` must match the filename without the executable extension.
 If you rename an enabled `.ts` file, update its `name` as well.
 
-Then declare only the enabled directories in `server/plugin.ts`. For example,
-when both examples are enabled, add:
+The generated `server/plugin.ts` already declares both directories. Empty
+directories and files ending in `.ts.example` contribute nothing, so the
+default configuration is safe to keep:
 
 ```ts
 database: {
@@ -26,5 +27,6 @@ database: {
 },
 ```
 
-The default server plugin does not declare these directories because disabled
-`.ts.example` files are not emitted into the published package.
+The server plugin resolver ignores a configured directory when it is absent
+(for example, when a published plugin has no enabled migrations), so no extra
+configuration change is required when a directory has no executable files.

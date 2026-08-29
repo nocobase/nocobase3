@@ -168,6 +168,9 @@ pnpm plugin:unregister audit-log
 
 `database/migrations/` 和 `database/seeds/` 中的示例以 `.ts.example` 结尾，默认不会执行。需要启用时，删除最后的 `.example`，并确保文件导出的 `name` 与 `.ts` 文件名一致。
 
+脚手架生成的 `server/plugin.ts` 已默认声明这两个目录。目录不存在或只有
+`.ts.example` 文件时不会产生任何数据库贡献，因此启用示例时不需要再修改插件入口。
+
 ```text
 202608220001_audit_log_create_records.ts.example
 202608220001_audit_log_create_records.ts
@@ -189,6 +192,8 @@ pnpm --filter @nocobase/app-template-default seed
 - `server/services/*.ts`：放置领域服务的默认实现；
 - `server/tokens.ts`：定义稳定的服务接口和 ServiceToken，供 Provider、Route 和其他消费者共享；
 - `server/routes/index.ts`：定义并组合默认的 route contributions，通过 `app.container` 和 ServiceToken 解析服务；其他路由模块放在同一目录。
+
+`server/plugin.ts` 还会默认声明 `queue.jobs: ['./server/jobs']`。未创建该目录时不会加载任何 Job；需要队列任务时直接添加 `server/jobs/*.ts` 即可，不需要再次修改插件入口。
 
 普通业务接口使用 `defineApiRoutes()`，由 Application 统一挂载到 `/api`；安装入口、协议回调和 HTML 页面等特殊入口使用 `defineRootRoutes()`。两者都放入同一个 `routes` 数组，不要在 Provider 的 `boot()` 中注册 HTTP 路由。
 

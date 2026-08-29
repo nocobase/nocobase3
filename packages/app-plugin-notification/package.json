@@ -24,12 +24,33 @@
       "types": "./server/plugin.ts",
       "import": "./server/plugin.ts"
     },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    },
+    "./client/settings": {
+      "types": "./client/settings.ts",
+      "import": "./client/settings.ts"
+    },
     "./package.json": "./package.json"
   },
   "nocobase": {
     "registry": {
       "items": {
         "logs-ui": "./registry/logs-ui"
+      }
+    },
+    "plugin": {
+      "database": {
+        "migrations": "./database/migrations"
       }
     }
   },
@@ -48,6 +69,22 @@
         "types": "./dist/server/plugin.d.ts",
         "import": "./dist/server/plugin.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      },
+      "./client/settings": {
+        "types": "./dist/client/settings.d.ts",
+        "import": "./dist/client/settings.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -64,7 +101,7 @@
     "test": "vitest run",
     "registry:build": "node ../../scripts/registry.mjs build --package .",
     "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
-    "prepack": "pnpm registry:build",
+    "prepack": "pnpm registry:build && pnpm build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
@@ -75,17 +112,33 @@
   "dependencies": {
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "lucide-react": "^0.487.0"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

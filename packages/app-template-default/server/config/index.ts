@@ -5,6 +5,7 @@ import database from './database.js';
 import drive from './drive.js';
 import i18n from './i18n.js';
 import logging from './logging.js';
+import notification from './notification.js';
 import queue from './queue.js';
 import session from './session.js';
 import server from './server.js';
@@ -23,6 +24,7 @@ const config: AppRuntimeConfigFactories<AppConfig, DefaultAppScopeConfig> = {
   drive: drive,
   i18n: i18n,
   logging: logging,
+  notification: notification,
   queue: queue,
   session: session,
   workflow: workflow,

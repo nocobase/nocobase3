@@ -34,6 +34,10 @@ server/
 - `server/routes/index.ts` uses `defineApiRoutes()` to create and return its own Hono
   router, declares paths relative to the automatic `/api` mount, and resolves
   the service through that token.
+- `server/plugin.ts` declares database migrations, seeds, and queue jobs by
+  default. Missing directories and disabled `.ts.example` files contribute
+  nothing, so these declarations can remain until the corresponding feature is
+  added.
 
 Register the package with the target application's plugin command. It detects
 the `./server/plugin` export and adds it to `server/plugins.ts` alongside the

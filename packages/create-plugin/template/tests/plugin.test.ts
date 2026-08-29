@@ -12,7 +12,12 @@ describe(__NOCOBASE_PACKAGE_NAME_LITERAL__, () => {
       providers,
       routes,
     });
-    expect(__NOCOBASE_MODULE_NAME__Plugin.database).toBeUndefined();
-    expect(__NOCOBASE_MODULE_NAME__Plugin.queue).toBeUndefined();
+    expect(__NOCOBASE_MODULE_NAME__Plugin.database).toEqual({
+      migrations: './database/migrations',
+      seeds: './database/seeds',
+    });
+    expect(__NOCOBASE_MODULE_NAME__Plugin.queue).toEqual({
+      jobs: ['./server/jobs'],
+    });
   });
 });
