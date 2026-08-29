@@ -104,12 +104,16 @@ describe('NotificationLogsPage', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Send test notification' }),
     );
+    const providerSelect = await screen.findByRole('combobox', {
+      name: 'Channel and Provider',
+    });
+    expect(providerSelect).toHaveDisplayValue('Select a Channel and Provider');
     expect(
-      await screen.findByRole('button', { name: 'Select in-app / primary' }),
-    ).toBeInTheDocument();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Select email / smtp' }),
-    );
+      screen.getByLabelText('Title').compareDocumentPosition(providerSelect),
+    ).toBe(Node.DOCUMENT_POSITION_PRECEDING);
+    expect(screen.getByRole('group', { name: 'Email' })).toBeInTheDocument();
+    fireEvent.change(providerSelect, { target: { value: 'email:smtp:smtp' } });
+    expect(providerSelect).toHaveDisplayValue('smtp (smtp)');
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox', { name: 'Recipient' }), {
       target: { value: 'recipient@example.com' },

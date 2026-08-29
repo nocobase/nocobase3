@@ -172,6 +172,11 @@ function TestNotificationDialog({
     };
   }, []);
 
+  const channels = useMemo(
+    () => [...new Set(providers.map((item) => item.channel))],
+    [providers],
+  );
+
   const send = (): void => {
     if (!selected) return;
     setSending(true);
@@ -230,69 +235,49 @@ function TestNotificationDialog({
         </div>
 
         <div className='space-y-4 px-5 py-5'>
-          <label className='grid gap-1.5 text-sm font-medium'>
-            Title
-            <input
-              className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
-              disabled={sending}
-              maxLength={200}
-              onChange={(event) => setTitle(event.target.value)}
-              value={title}
-            />
-          </label>
-          <label className='grid gap-1.5 text-sm font-medium'>
-            Message
-            <textarea
-              className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
-              disabled={sending}
-              maxLength={2000}
-              onChange={(event) => setBody(event.target.value)}
-              value={body}
-            />
-          </label>
-
-          <div>
-            <p className='text-sm font-medium'>Channel and Provider</p>
-            {loading ? (
-              <p className='mt-2 text-sm text-muted-foreground'>
-                Loading configured Providers…
-              </p>
-            ) : providers.length === 0 && !error ? (
-              <p className='mt-2 rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground'>
-                No enabled Providers are configured.
-              </p>
-            ) : (
-              <div className='mt-2 grid gap-2 sm:grid-cols-2'>
-                {providers.map((item) => {
-                  const key = providerKey(item);
-                  return (
-                    <button
-                      aria-label={`Select ${item.channel} / ${item.provider.name}`}
-                      aria-pressed={selected === item}
-                      className={`rounded-lg border p-3 text-left text-sm hover:border-primary hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-50 ${selected === item ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'bg-background'}`}
-                      disabled={sending}
-                      key={key}
-                      onClick={() => {
-                        setSelected(item);
-                        setRecipient('');
-                      }}
-                      type='button'
-                    >
-                      <span className='block font-medium capitalize'>
-                        {item.channel}
-                      </span>
-                      <span className='text-xs text-muted-foreground'>
-                        {item.provider.name} · {item.provider.type}
-                      </span>
-                      <span className='mt-2 block text-xs font-medium text-primary'>
-                        {selected === item ? 'Selected' : 'Select'}
-                      </span>
-                    </button>
+          {loading ? (
+            <span className='text-sm text-muted-foreground'>
+              Loading configured Providers…
+            </span>
+          ) : providers.length === 0 && !error ? (
+            <span className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>
+              No enabled Providers are configured.
+            </span>
+          ) : (
+            <label className='grid gap-1.5 text-sm font-medium'>
+              Channel and Provider
+              <select
+                aria-label='Channel and Provider'
+                className='h-9 w-full rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
+                disabled={sending}
+                onChange={(event) => {
+                  setSelected(
+                    providers.find(
+                      (item) => providerKey(item) === event.target.value,
+                    ),
                   );
-                })}
-              </div>
-            )}
-          </div>
+                  setRecipient('');
+                }}
+                value={selected ? providerKey(selected) : ''}
+              >
+                <option value=''>Select a Channel and Provider</option>
+                {channels.map((channel) => (
+                  <optgroup key={channel} label={channelLabel(channel)}>
+                    {providers
+                      .filter((item) => item.channel === channel)
+                      .map((item) => (
+                        <option
+                          key={providerKey(item)}
+                          value={providerKey(item)}
+                        >
+                          {providerLabel(item)}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          )}
 
           {selected && selected.channel !== 'im' ? (
             <label className='grid gap-1.5 text-sm font-medium'>
@@ -316,6 +301,27 @@ function TestNotificationDialog({
               </span>
             </label>
           ) : null}
+
+          <label className='grid gap-1.5 text-sm font-medium'>
+            Title
+            <input
+              className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
+              disabled={sending}
+              maxLength={200}
+              onChange={(event) => setTitle(event.target.value)}
+              value={title}
+            />
+          </label>
+          <label className='grid gap-1.5 text-sm font-medium'>
+            Message
+            <textarea
+              className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
+              disabled={sending}
+              maxLength={2000}
+              onChange={(event) => setBody(event.target.value)}
+              value={body}
+            />
+          </label>
 
           {error ? (
             <div className='rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
@@ -359,6 +365,17 @@ function TestNotificationDialog({
 
 function providerKey(item: NotificationTestProvider): string {
   return `${item.channel}:${item.provider.name}:${item.provider.type}`;
+}
+
+function providerLabel(item: NotificationTestProvider): string {
+  return `${item.provider.name} (${item.provider.type})`;
+}
+
+function channelLabel(channel: string): string {
+  return channel
+    .split('-')
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
 }
 
 function testRecipientIsValid(channel: string, recipient: string): boolean {

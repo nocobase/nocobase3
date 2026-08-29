@@ -11,23 +11,34 @@ import NotificationProvider from '../server/provider.js';
 import { notificationServiceToken } from '../server/token.js';
 
 describe('@nocobase/app-plugin-notification provider', () => {
-  it('registers, starts, and closes the core manager', async () => {
+  it('registers, activates, and closes the core manager', async () => {
     const container = createContainer(true);
     const provider = new NotificationProvider({
-      config: { notification: { channels: [] } },
+      config: {
+        notification: {
+          channels: [{ type: 'email', enabled: true, providers: [] }],
+        },
+      },
       container,
     });
 
     provider.register();
     expect(container.has(notificationServiceToken)).toBe(true);
     const notification = container.resolve(notificationServiceToken);
+    const activate = vi.spyOn(notification, 'activate');
     const start = vi.spyOn(notification, 'start');
     const close = vi.spyOn(notification, 'close');
+    const registerJob = vi.spyOn(
+      container.resolve(queueManagerToken),
+      'registerJob',
+    );
 
     await provider.start();
     await provider.shutdown();
 
-    expect(start).toHaveBeenCalledOnce();
+    expect(activate).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+    expect(registerJob).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
   });
 
@@ -51,6 +62,8 @@ function createContainer(withDatabase: boolean): ServiceContainer {
   container.instance(loggingToken, {
     getLogger: () => createLogger({ level: 'silent' }),
   } as Logging);
-  container.instance(queueManagerToken, {} as NocoBaseQueueManager);
+  container.instance(queueManagerToken, {
+    registerJob: vi.fn(),
+  } as unknown as NocoBaseQueueManager);
   return container;
 }

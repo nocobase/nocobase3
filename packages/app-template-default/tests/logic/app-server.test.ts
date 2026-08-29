@@ -1278,6 +1278,7 @@ function createEmbeddedTestScope(
         path.join(rootDir, '.env'),
         path.join(rootDir, '.env.local'),
       ]),
+      DB_DIALECT: 'sqlite',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },
@@ -1315,6 +1316,7 @@ async function createIsolatedStandaloneServer(
   return createStandaloneServer({
     ...options,
     env: {
+      DB_DIALECT: 'sqlite',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },

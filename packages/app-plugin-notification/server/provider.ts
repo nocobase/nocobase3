@@ -40,7 +40,8 @@ export default class NotificationProvider<
 
   public override async start(): Promise<void> {
     if (!this.app.container.has(notificationServiceToken)) return;
-    await this.app.container.resolve(notificationServiceToken).start();
+    // Install mode starts providers before notification tables are migrated.
+    this.app.container.resolve(notificationServiceToken).activate();
   }
 
   public override async shutdown(): Promise<void> {
