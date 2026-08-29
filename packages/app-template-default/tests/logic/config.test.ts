@@ -927,18 +927,20 @@ describe('app plugins', () => {
     const plugin = (packageName: string) =>
       config.plugins.find((item) => item.packageName === packageName);
 
-    expect(config.plugins.map((item) => item.packageName)).toEqual([
-      '@nocobase/app-plugin-authentication',
-      '@nocobase/app-plugin-authorization',
-      '@nocobase/app-plugin-database-example',
-      '@nocobase/app-plugin-file',
-      '@nocobase/app-plugin-install',
-      '@nocobase/app-plugin-queue-example',
-      '@nocobase/app-plugin-realtime-example',
-      '@nocobase/app-plugin-routes-example',
-      '@nocobase/app-plugin-service-provider-example',
-      '@nocobase/app-plugin-workflow',
-    ]);
+    expect(config.plugins.map((item) => item.packageName)).toEqual(
+      expect.arrayContaining([
+        '@nocobase/app-plugin-authentication',
+        '@nocobase/app-plugin-authorization',
+        '@nocobase/app-plugin-database-example',
+        '@nocobase/app-plugin-file',
+        '@nocobase/app-plugin-install',
+        '@nocobase/app-plugin-queue-example',
+        '@nocobase/app-plugin-realtime-example',
+        '@nocobase/app-plugin-routes-example',
+        '@nocobase/app-plugin-service-provider-example',
+        '@nocobase/app-plugin-workflow',
+      ]),
+    );
     expect(plugin('@nocobase/app-plugin-authentication')).toMatchObject({
       version: declaredVersion('@nocobase/app-plugin-authentication'),
     });

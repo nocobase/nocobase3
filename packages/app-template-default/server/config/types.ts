@@ -6,6 +6,7 @@ import type { SnowflakeIdGeneratorConfig } from '@nocobase/id-generator';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 import type { AppAuthConfig } from './auth.js';
+import type { AppNotificationConfig } from './notification.js';
 import type { WorkflowRuntimeConfig } from '@nocobase/app-plugin-workflow/server/config';
 import type { ResolvedAppPlugin } from '@nocobase/app-server-kit/plugins';
 import type {
@@ -58,6 +59,7 @@ export interface AppConfig {
   database: AppDatabaseConfig;
   drive: AppDriveConfig;
   logging: LoggingConfig;
+  notification: AppNotificationConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
   workflow: AppWorkflowConfig;

@@ -150,6 +150,60 @@ Materialization refuses an existing target so it cannot silently overwrite
 application edits. Updating an installed Registry item must use an explicit
 three-way merge.
 
+## Notification Providers
+
+The server registers the built-in Email and IM definitions from
+`@nocobase/app-plugin-notification-providers`. External delivery stays disabled
+until its credentials are configured in `.env.local`:
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_FROM=NocoBase <notifications@example.com>
+# RESEND_API_KEY=re_xxxxxxxxx
+# RESEND_FROM=NocoBase <notifications@example.com>
+```
+
+SMTP and Resend are enabled independently and can be configured together.
+
+Configure `FEISHU_WEBHOOK_URL` and/or `DINGTALK_WEBHOOK_URL` to enable one or
+both IM Providers. No IM selector variable is required. The matching variables
+are documented in [`.env.example`](.env.example). You can inspect the resolved
+Provider names and types without printing secrets:
+
+```bash
+pnpm server:config
+```
+
+After signing in, open
+`/main/api/notification-providers/test` (replace `/main` when
+`APP_BASE_PATH` differs). The page sends a real message through the durable
+Notification Manager and shows the resulting delivery status. Email tests use
+`TEST_EMAIL_RECIPIENT`; IM tests use the configured group Webhook. The page is
+enabled by default outside production and disabled by default when
+`NODE_ENV=production`; set `NOTIFICATION_PROVIDER_TEST_ENABLED` explicitly to
+override that behavior.
+
+Application code sends durable notifications through the injected
+`services.notification` manager:
+
+```ts
+await services.notification?.send({
+  to: { type: 'email', address: 'alice@example.com' },
+  channels: ['email'],
+  content: {
+    title: 'NocoBase notification',
+    body: 'The notification runtime is ready.',
+  },
+});
+```
+
+Use `{ type: 'target', id: 'default' }` as the logical IM target. Provider
+routing defaults to `single`; select one configured Provider with
+`routing.im.providers.provider: 'feishu'`. Use `strategy: 'all'` only when the
+message should fan out to every enabled Provider. The full
+configuration and integration guide lives in
+[`@nocobase/app-plugin-notification-providers` documentation](../app-plugin-notification-providers/docs/zh-CN/configuration.md).
+
 ## Workflow Management UI
 
 `@nocobase/app-plugin-workflow` owns the Workflow runtime, management API,
