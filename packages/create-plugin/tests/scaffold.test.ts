@@ -69,6 +69,9 @@ describe('createPlugin', () => {
         'tw-animate-css': '^1.2.5',
       },
       files: expect.arrayContaining([
+        'CHANGELOG.md',
+        'components.json',
+        'database',
         'skills',
         'registry',
         'registry.config.json',

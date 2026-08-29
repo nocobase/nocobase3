@@ -42,8 +42,11 @@
   },
   "files": [
     "dist",
-    "skills",
     "README.md",
+    "CHANGELOG.md",
+    "components.json",
+    "database",
+    "skills",
     "registry",
     "registry.config.json",
     "public/r"

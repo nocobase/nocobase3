@@ -76,6 +76,9 @@ describe('bundled template', () => {
     });
     expect(manifest.files).toEqual(
       expect.arrayContaining([
+        'CHANGELOG.md',
+        'components.json',
+        'database',
         'skills',
         'registry',
         'registry.config.json',

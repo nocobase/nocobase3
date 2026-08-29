@@ -6,7 +6,7 @@ This scaffold includes disabled database migration and seed examples, an
 explicit server plugin entry, a ServiceProvider, an API route at
 `/api/audit-log`, a `client/plugin.ts` registration entry
 re-exported as the default from `client/index.ts`, and working client examples
-for bootstrap, routes, settings, and providers.
+for bootstrap, unified application and settings routes, and providers.
 
 The server structure is intentionally small:
 
