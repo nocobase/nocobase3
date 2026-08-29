@@ -51,7 +51,7 @@ async function installPlugin(
     JSON.stringify({ name: packageName, version: '1.0.0' }),
   );
   for (const [skillName, body] of Object.entries(skills)) {
-    const skillRoot = path.join(pluginRoot, '.agents', 'skills', skillName);
+    const skillRoot = path.join(pluginRoot, 'skills', skillName);
     await mkdir(skillRoot, { recursive: true });
     await writeFile(path.join(skillRoot, 'SKILL.md'), body);
   }

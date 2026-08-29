@@ -1,0 +1,22 @@
+import {
+  defineMigration,
+  type MigrationDefinition,
+} from '@nocobase/app-database';
+
+const migration: MigrationDefinition = defineMigration({
+  name: '202608290001_audit_log_create_records',
+
+  async up({ builder }) {
+    await builder.createCollection('appPluginAuditLogRecords', (collection) => {
+      collection.increments('id');
+      collection.string('name', { length: 255, nullable: false });
+      collection.datetime('createdAt', { nullable: false });
+    });
+  },
+
+  async down({ builder }) {
+    await builder.dropCollection('appPluginAuditLogRecords');
+  },
+});
+
+export default migration;

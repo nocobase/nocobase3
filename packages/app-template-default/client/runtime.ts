@@ -6,12 +6,11 @@ import {
   type AppClientContributionSource,
   type AppClientPluginLoader,
   type AppClientProviderDefinition,
+  type AppClientRouteContribution,
   type AppClientRegisteredProvider,
   type AppClientRegisteredRoute,
   type AppClientRegisteredSetting,
   type AppClientRegisteredSettingGroup,
-  type AppClientRouteDefinition,
-  type AppClientSettingDefinition,
   type AppClientRouteComponentOverrideDefinition,
   type AppClientSourceExtension,
 } from '@nocobase/app-client/plugins';
@@ -48,8 +47,7 @@ interface LoadedClientContribution {
   readonly source: AppClientContributionSource;
   readonly bootstrap?: AppClientBootstrap<unknown>;
   readonly providers?: readonly AppClientProviderDefinition[];
-  readonly routes?: readonly AppClientRouteDefinition[];
-  readonly settings?: readonly AppClientSettingDefinition[];
+  readonly routes?: readonly AppClientRouteContribution[];
   readonly options: unknown;
 }
 
@@ -156,10 +154,9 @@ async function loadClientContribution(
     | AppClientApplicationLoader
     | (AppClientPluginLoader & { readonly source: 'plugin' }),
 ): Promise<LoadedClientContribution> {
-  const [bootstrap, routes, settings, providers] = await Promise.all([
+  const [bootstrap, routes, providers] = await Promise.all([
     loadBootstrap(contribution),
     loadRoutes(contribution),
-    loadSettings(contribution),
     loadProviders(contribution),
   ]);
 
@@ -168,7 +165,6 @@ async function loadClientContribution(
     source: contribution.source,
     bootstrap,
     routes,
-    settings,
     providers,
     options: contribution.options ?? {},
   });
@@ -200,7 +196,7 @@ async function loadRoutes(
   contribution:
     | AppClientApplicationLoader
     | (AppClientPluginLoader & { readonly source: 'plugin' }),
-): Promise<readonly AppClientRouteDefinition[] | undefined> {
+): Promise<readonly AppClientRouteContribution[] | undefined> {
   if (!contribution.routes) {
     return undefined;
   }
@@ -212,51 +208,22 @@ async function loadRoutes(
         ? (
             exported as (
               options: unknown,
-            ) => readonly AppClientRouteDefinition[]
+            ) =>
+              AppClientRouteContribution | readonly AppClientRouteContribution[]
           )(contribution.options ?? {})
         : exported;
-    if (!isRouteDefinitions(definitions)) {
+    const normalized: unknown = Array.isArray(definitions)
+      ? definitions
+      : [definitions];
+    if (!isRouteContributions(normalized)) {
       throw new Error(
-        'The client routes entry must default-export a route definition array, or a function returning one.',
+        'The client routes entry must default-export a Route contribution, a Route contribution array, or a function returning either.',
       );
     }
-    return definitions;
+    return normalized;
   } catch (error) {
     throw new Error(
       `Failed to load client routes for ${contribution.source} "${contribution.packageName}".`,
-      { cause: error },
-    );
-  }
-}
-
-async function loadSettings(
-  contribution:
-    | AppClientApplicationLoader
-    | (AppClientPluginLoader & { readonly source: 'plugin' }),
-): Promise<readonly AppClientSettingDefinition[] | undefined> {
-  if (!contribution.settings) {
-    return undefined;
-  }
-  try {
-    const module = await contribution.settings();
-    const exported: unknown = module.default;
-    const definitions: unknown =
-      typeof exported === 'function'
-        ? (
-            exported as (
-              options: unknown,
-            ) => readonly AppClientSettingDefinition[]
-          )(contribution.options ?? {})
-        : exported;
-    if (!isSettingDefinitions(definitions)) {
-      throw new Error(
-        'The client settings entry must default-export a setting definition array, or a function returning one.',
-      );
-    }
-    return definitions;
-  } catch (error) {
-    throw new Error(
-      `Failed to load client settings for ${contribution.source} "${contribution.packageName}".`,
       { cause: error },
     );
   }
@@ -295,16 +262,20 @@ async function loadProviders(
   }
 }
 
-function isRouteDefinitions(
+function isRouteContributions(
   value: unknown,
-): value is readonly AppClientRouteDefinition[] {
-  return Array.isArray(value);
-}
-
-function isSettingDefinitions(
-  value: unknown,
-): value is readonly AppClientSettingDefinition[] {
-  return Array.isArray(value);
+): value is readonly AppClientRouteContribution[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        ((item as { readonly parent?: unknown }).parent === 'app' ||
+          (item as { readonly parent?: unknown }).parent === 'settings') &&
+        Array.isArray((item as { readonly routes?: unknown }).routes),
+    )
+  );
 }
 
 function isProviderDefinitions(

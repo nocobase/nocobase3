@@ -2,6 +2,8 @@ export const PACKAGE_PREFIX = '@nocobase/app-plugin-';
 export const DIRECTORY_PREFIX = 'app-plugin-';
 
 const pluginNamePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+const MAX_SKILL_NAME_LENGTH = 64;
+const SKILL_NAME_PREFIX = 'nocobase-app-plugin-';
 
 export interface PluginNames {
   readonly collectionName: string;
@@ -27,6 +29,11 @@ export function normalizePluginName(value: string | undefined): string {
   if (!pluginNamePattern.test(shortName)) {
     throw new Error(
       'Plugin name must start with a lowercase letter and contain only lowercase letters, numbers, and single hyphens.',
+    );
+  }
+  if (`${SKILL_NAME_PREFIX}${shortName}`.length > MAX_SKILL_NAME_LENGTH) {
+    throw new Error(
+      `Plugin name is too long: the generated Agent Skill name must not exceed ${MAX_SKILL_NAME_LENGTH} characters.`,
     );
   }
 

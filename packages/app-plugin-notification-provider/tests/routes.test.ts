@@ -1,13 +1,13 @@
-import type { AppClientRouteDefinition } from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
 import routes from '../client/routes.js';
 
 describe('client routes', () => {
   it('defines a lazy notification provider demo route', async () => {
-    const route = routes[0] as AppClientRouteDefinition;
+    const [route] = routes.routes;
 
-    expect(routes).toHaveLength(1);
+    expect(routes.parent).toBe('app');
+    expect(routes.routes).toHaveLength(1);
     expect(route).toMatchObject({
       componentLoader: expect.any(Function),
       name: 'demo',
@@ -17,5 +17,6 @@ describe('client routes', () => {
       default: expect.any(Function),
     });
     expect(Object.isFrozen(routes)).toBe(true);
+    expect(Object.isFrozen(routes.routes)).toBe(true);
   });
 });

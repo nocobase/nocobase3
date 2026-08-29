@@ -33,10 +33,7 @@ describe('workflow skill prompt fixtures', () => {
     expect(manifest.files).toContain('.agents');
     await expect(
       fs.readFile(
-        path.join(
-          packageRoot,
-          '.agents/skills/nocobase-app-plugin-workflow/SKILL.md',
-        ),
+        path.join(packageRoot, 'skills/nocobase-app-plugin-workflow/SKILL.md'),
         'utf8',
       ),
     ).resolves.toContain('name: nocobase-app-plugin-workflow');

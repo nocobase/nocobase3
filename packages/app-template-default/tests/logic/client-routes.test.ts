@@ -58,7 +58,7 @@ describe('app client routes', () => {
   });
 
   it('declares the application home route as a lazy required route', async () => {
-    expect(applicationRoutes).toMatchObject([
+    expect(applicationRoutes.routes).toMatchObject([
       {
         auth: 'required',
         name: 'home',
@@ -66,10 +66,10 @@ describe('app client routes', () => {
       },
     ]);
     expect(Object.isFrozen(applicationRoutes)).toBe(true);
-    await expect(applicationRoutes[0].componentLoader()).resolves.toMatchObject(
-      {
-        default: expect.any(Function),
-      },
-    );
+    await expect(
+      applicationRoutes.routes[0].componentLoader(),
+    ).resolves.toMatchObject({
+      default: expect.any(Function),
+    });
   });
 });

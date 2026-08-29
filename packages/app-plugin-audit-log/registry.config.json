@@ -1,0 +1,24 @@
+{
+  "name": "nocobase-audit-log",
+  "homepage": "https://www.nocobase.com",
+  "items": [
+    {
+      "name": "component-ui",
+      "type": "registry:component",
+      "title": "Audit Log App Plugin Component",
+      "description": "Application-owned component recipe published by @nocobase/app-plugin-audit-log.",
+      "dependencies": [],
+      "registryDependencies": ["button"],
+      "docs": "Import the installed component through its index.ts. The installed source is application-owned; review upstream changes with a three-way merge instead of overwriting local edits.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge"
+      },
+      "source": {
+        "root": "registry/component-ui",
+        "target": "client/extensions/nocobase-audit-log-component-ui",
+        "include": ["."]
+      }
+    }
+  ]
+}

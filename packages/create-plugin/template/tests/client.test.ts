@@ -3,23 +3,23 @@ import { describe, expect, it } from 'vitest';
 import bootstrap from '../client/bootstrap.js';
 import providers from '../client/providers.js';
 import routes from '../client/routes.js';
-import settings from '../client/settings.js';
 
 describe(__NOCOBASE_PACKAGE_NAME_LITERAL__, () => {
   it('declares its client contributions', async () => {
     expect(bootstrap).toBeTypeOf('function');
     expect(routes).toMatchObject([
       {
-        name: 'index',
-        path: __NOCOBASE_ROUTE_PATH_LITERAL__,
-        componentLoader: expect.any(Function),
+        parent: 'app',
+        routes: [{ name: 'index', path: __NOCOBASE_ROUTE_PATH_LITERAL__ }],
       },
-    ]);
-    expect(settings).toMatchObject([
       {
-        id: __NOCOBASE_SHORT_NAME_LITERAL__,
-        title: __NOCOBASE_DISPLAY_NAME_LITERAL__,
-        pageLoader: expect.any(Function),
+        parent: 'settings',
+        routes: [
+          {
+            name: __NOCOBASE_SHORT_NAME_LITERAL__,
+            path: __NOCOBASE_ROUTE_PATH_LITERAL__,
+          },
+        ],
       },
     ]);
     expect(providers).toMatchObject([
@@ -29,14 +29,14 @@ describe(__NOCOBASE_PACKAGE_NAME_LITERAL__, () => {
       },
     ]);
 
-    await expect(routes[0]?.componentLoader()).resolves.toMatchObject({
+    await expect(routes[0]?.routes[0]?.componentLoader()).resolves.toMatchObject({
       default: expect.any(Function),
     });
-    const setting = settings[0];
+    const setting = routes[1]?.routes[0];
     if (!setting || 'children' in setting) {
       throw new Error('Expected a single settings page.');
     }
-    await expect(setting.pageLoader()).resolves.toMatchObject({
+    await expect(setting.componentLoader()).resolves.toMatchObject({
       default: expect.any(Function),
     });
   });
