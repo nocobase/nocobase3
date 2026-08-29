@@ -28,9 +28,9 @@ export function createApp(
   app.addProvider(QueueProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
-  app.addApiRoutes(healthCheckApiRoutes);
+  app.addRoutes(healthCheckApiRoutes);
   app.addRuntimeContributions(runtime);
-  app.addRootRoutes(spaRootRoutes);
+  app.addRoutes(spaRootRoutes);
 
   return app;
 }

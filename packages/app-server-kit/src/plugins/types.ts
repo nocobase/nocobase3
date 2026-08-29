@@ -6,7 +6,7 @@ import type { Hono } from 'hono';
 
 import type { ApplicationConfig } from '../application/index.js';
 import type { ConfigPaths } from '../config/index.js';
-import type { AppApiRoutes, AppRootRoutes } from '../router/index.js';
+import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<
   TConfig extends ApplicationConfig = ApplicationConfig,
@@ -16,7 +16,6 @@ export interface AppPluginApplication<
   readonly config: TConfig;
   readonly paths: ConfigPaths;
   readonly router: Hono;
-  readonly apiRouter: Hono;
   readonly container: ServiceContainer;
 }
 
@@ -38,8 +37,9 @@ export interface AppServerPluginDefinition<
 > {
   readonly packageName: string;
   readonly providers?: readonly AppPluginProviderConstructor<TConfig>[];
-  readonly apiRoutes?: readonly AppApiRoutes<AppPluginApplication<TConfig>>[];
-  readonly rootRoutes?: readonly AppRootRoutes<AppPluginApplication<TConfig>>[];
+  readonly routes?: readonly AppRouteContribution<
+    AppPluginApplication<TConfig>
+  >[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
 }
@@ -49,8 +49,9 @@ export interface AppServerPlugin<
 > {
   readonly packageName: string;
   readonly providers: readonly AppPluginProviderConstructor<TConfig>[];
-  readonly apiRoutes: readonly AppApiRoutes<AppPluginApplication<TConfig>>[];
-  readonly rootRoutes: readonly AppRootRoutes<AppPluginApplication<TConfig>>[];
+  readonly routes: readonly AppRouteContribution<
+    AppPluginApplication<TConfig>
+  >[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
 }

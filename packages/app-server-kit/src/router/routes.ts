@@ -1,34 +1,40 @@
 import type { Hono } from 'hono';
 
-export type AppRoutesRegister<TApplication> = (
+export type AppRouterFactory<TApplication> = (
+  app: TApplication,
+) => Hono | Promise<Hono>;
+
+export type AppHttpMiddlewareRegister<TApplication> = (
   router: Hono,
   app: TApplication,
 ) => void | Promise<void>;
 
 export interface AppHttpMiddleware<TApplication> {
   readonly name: string;
-  readonly register: AppRoutesRegister<TApplication>;
+  readonly register: AppHttpMiddlewareRegister<TApplication>;
 }
 
-export interface AppApiRoutes<TApplication> {
+export interface AppApiRouteContribution<TApplication> {
   readonly scope: 'api';
-  readonly name: string;
-  readonly register: AppRoutesRegister<TApplication>;
+  readonly createRouter: AppRouterFactory<TApplication>;
 }
 
-export interface AppRootRoutes<TApplication> {
+export interface AppRootRouteContribution<TApplication> {
   readonly scope: 'root';
-  readonly name: string;
-  readonly register: AppRoutesRegister<TApplication>;
+  readonly createRouter: AppRouterFactory<TApplication>;
 }
 
-export interface DefineAppRoutesOptions<TApplication> {
+export type AppRouteContribution<TApplication> =
+  | AppApiRouteContribution<TApplication>
+  | AppRootRouteContribution<TApplication>;
+
+export interface DefineHttpMiddlewareOptions<TApplication> {
   readonly name: string;
-  readonly register: AppRoutesRegister<TApplication>;
+  readonly register: AppHttpMiddlewareRegister<TApplication>;
 }
 
 export function defineHttpMiddleware<TApplication>(
-  options: DefineAppRoutesOptions<TApplication>,
+  options: DefineHttpMiddlewareOptions<TApplication>,
 ): AppHttpMiddleware<TApplication> {
   return Object.freeze({
     name: options.name,
@@ -37,21 +43,19 @@ export function defineHttpMiddleware<TApplication>(
 }
 
 export function defineApiRoutes<TApplication>(
-  options: DefineAppRoutesOptions<TApplication>,
-): AppApiRoutes<TApplication> {
+  createRouter: AppRouterFactory<TApplication>,
+): AppApiRouteContribution<TApplication> {
   return Object.freeze({
     scope: 'api',
-    name: options.name,
-    register: options.register,
+    createRouter,
   });
 }
 
 export function defineRootRoutes<TApplication>(
-  options: DefineAppRoutesOptions<TApplication>,
-): AppRootRoutes<TApplication> {
+  createRouter: AppRouterFactory<TApplication>,
+): AppRootRouteContribution<TApplication> {
   return Object.freeze({
     scope: 'root',
-    name: options.name,
-    register: options.register,
+    createRouter,
   });
 }

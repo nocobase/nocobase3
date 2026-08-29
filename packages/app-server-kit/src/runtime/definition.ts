@@ -17,7 +17,7 @@ import {
   type ResolvedAppPlugin,
   type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
-import type { AppApiRoutes, AppRootRoutes } from '../router/index.js';
+import type { AppRouteContribution } from '../router/index.js';
 import {
   createAppConfigPaths,
   resolveAppScopeRuntime,
@@ -84,8 +84,7 @@ export interface AppRuntimeDefinition<
   readonly config: AppRuntimeConfigFactories<TConfig, TScopeConfig>;
   readonly plugins: AppServerPlugins<TConfig>;
   readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
-  readonly apiRoutes: readonly AppApiRoutes<Application<TConfig>>[];
-  readonly rootRoutes: readonly AppRootRoutes<Application<TConfig>>[];
+  readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
 }
 
 export interface ResolvedAppRuntime<
@@ -96,8 +95,7 @@ export interface ResolvedAppRuntime<
   readonly configPaths: ConfigPaths;
   readonly plugins: ResolvedAppServerPlugins<TConfig>;
   readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
-  readonly apiRoutes: readonly AppApiRoutes<Application<TConfig>>[];
-  readonly rootRoutes: readonly AppRootRoutes<Application<TConfig>>[];
+  readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
   readonly config: ResolvedAppRuntimeConfig<TConfig>;
 }
 
@@ -118,7 +116,11 @@ export function defineAppRuntime<
 >(
   definition: AppRuntimeDefinition<TConfig, TScopeConfig>,
 ): AppRuntimeDefinition<TConfig, TScopeConfig> {
-  return definition;
+  return Object.freeze({
+    ...definition,
+    providers: Object.freeze([...definition.providers]),
+    routes: Object.freeze([...definition.routes]),
+  });
 }
 
 export function resolveAppRuntime<
@@ -141,8 +143,7 @@ export function resolveAppRuntime<
     configPaths: context.paths,
     plugins: context.plugins,
     providers: definition.providers,
-    apiRoutes: definition.apiRoutes,
-    rootRoutes: definition.rootRoutes,
+    routes: definition.routes,
     config,
   };
 }

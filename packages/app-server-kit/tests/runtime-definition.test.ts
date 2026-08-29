@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
 
 import { resolveStandaloneAppRuntime } from '../src/node/index.js';
 import { defineServerPlugins } from '../src/plugins/index.js';
@@ -62,8 +63,7 @@ describe('application runtime definition', () => {
     expect(runtime.configPaths.root()).toBe(rootDir);
     expect(runtime.plugins.appPackageName).toBe('@example/customer-app');
     expect(runtime.providers).toEqual([]);
-    expect(runtime.apiRoutes).toEqual([]);
-    expect(runtime.rootRoutes).toEqual([]);
+    expect(runtime.routes).toEqual([]);
   });
 
   it('creates and resolves standalone scopes from core defaults', () => {
@@ -98,6 +98,24 @@ describe('application runtime definition', () => {
     expect(expensive).not.toHaveBeenCalled();
     expect(resolved.plugins.plugins).toEqual([]);
   });
+
+  it('copies and freezes runtime contributions without creating routers', () => {
+    const rootDir = createAppRoot();
+    const createRouter = vi.fn(() => new Hono());
+    const definition = createDefinition();
+    const routes = [{ scope: 'api' as const, createRouter }];
+    const runtimeDefinition = defineAppRuntime({
+      ...definition,
+      routes,
+    });
+
+    routes.length = 0;
+    const runtime = resolveAppRuntime(runtimeDefinition, createScope(rootDir));
+
+    expect(runtime.routes).toHaveLength(1);
+    expect(Object.isFrozen(runtimeDefinition.routes)).toBe(true);
+    expect(createRouter).not.toHaveBeenCalled();
+  });
 });
 
 function createDefinition(
@@ -116,8 +134,7 @@ function createDefinition(
     },
     plugins: defineServerPlugins<TestConfig>([]),
     providers: [],
-    apiRoutes: [],
-    rootRoutes: [],
+    routes: [],
   });
 }
 

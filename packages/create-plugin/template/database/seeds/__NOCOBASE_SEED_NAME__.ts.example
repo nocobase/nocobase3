@@ -1,0 +1,17 @@
+import { defineSeed, type SeedDefinition } from '@nocobase/app-database';
+
+const seed: SeedDefinition = defineSeed({
+  name: __NOCOBASE_SEED_NAME_LITERAL__,
+
+  async run({ query }) {
+    await query
+      .insertInto(__NOCOBASE_COLLECTION_NAME_LITERAL__)
+      .values({
+        name: __NOCOBASE_WELCOME_MESSAGE_LITERAL__,
+        createdAt: new Date(),
+      })
+      .execute();
+  },
+});
+
+export default seed;

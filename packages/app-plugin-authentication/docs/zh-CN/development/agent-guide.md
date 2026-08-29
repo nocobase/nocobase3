@@ -114,7 +114,7 @@ secret 只保留在服务端配置里，不通过 Vite 环境变量传给浏览�
 
 ### 2. 注册 provider 或 plugin
 
-Authentication 插件在 `server/provider.ts` 的 `AuthenticationProvider` 中调用
+Authentication 插件在 `server/providers/authentication.ts` 的 `AuthenticationProvider` 中调用
 `createAuthentication()`，配置来自应用的 `runtime.config.auth`。可以把新的 provider
 或 plugin 配置传进去：
 
