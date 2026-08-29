@@ -18,8 +18,8 @@ import { FileThumbnail } from './file-thumbnail';
 type UploadItem = {
   readonly key: string;
   readonly file: File;
-  readonly status: 'pending' | 'uploading' | 'done' | 'error';
-  readonly record?: FileRecord;
+  readonly status: 'pending' | 'uploading' | 'error';
+  readonly controller?: AbortController;
   readonly error?: Error;
 };
 
@@ -28,6 +28,7 @@ function accepts(file: File, rules: readonly string[]): boolean {
   const name = file.name.toLowerCase();
   return rules.some((rule) => {
     const value = rule.trim().toLowerCase();
+    if (value === '*' || value === '*/*') return true;
     return value.endsWith('/*')
       ? file.type.toLowerCase().startsWith(value.slice(0, -1))
       : value.startsWith('.')
@@ -41,6 +42,7 @@ export function FileUploadField({
   value,
   onChange,
   onError,
+  onStatusChange,
   multiple = false,
   accept = [],
   maxSize,
@@ -54,35 +56,93 @@ export function FileUploadField({
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef(value);
+  const completedRecordsRef = useRef<FileRecord[]>([]);
+  const commitScheduledRef = useRef(false);
+  const statusChangeRef = useRef(onStatusChange);
+  const controllersRef = useRef(new Map<string, AbortController>());
+  const mountedRef = useRef(true);
   const maximum = multiple ? (maxFiles ?? Infinity) : 1;
   const chooseLabel =
     labels?.choose ?? (multiple ? 'Choose files' : 'Choose file');
+  const removeLabel = labels?.remove ?? 'Remove';
+  const retryLabel = labels?.retry ?? 'Retry';
 
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
+  useEffect(() => {
+    statusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+  useEffect(() => {
+    onStatusChange?.(
+      items.some((item) => item.status === 'error')
+        ? 'error'
+        : items.length
+          ? 'uploading'
+          : 'idle',
+    );
+  }, [items, onStatusChange]);
+  useEffect(() => {
+    mountedRef.current = true;
+    const controllers = controllersRef.current;
+    return () => {
+      mountedRef.current = false;
+      for (const controller of controllers.values()) controller.abort();
+      statusChangeRef.current?.('idle');
+    };
+  }, []);
+
+  const commitCompletedRecord = (record: FileRecord): void => {
+    completedRecordsRef.current.push(record);
+    if (commitScheduledRef.current) return;
+    commitScheduledRef.current = true;
+    queueMicrotask(() => {
+      commitScheduledRef.current = false;
+      const completed = completedRecordsRef.current.splice(0);
+      if (!mountedRef.current || !completed.length) return;
+      onChange(
+        multiple
+          ? [...valueRef.current, ...completed]
+          : [completed.at(-1) as FileRecord],
+      );
+    });
+  };
 
   const upload = async (item: UploadItem): Promise<void> => {
+    const controller = new AbortController();
+    controllersRef.current.set(item.key, controller);
     setItems((current) =>
       current.map((candidate) =>
         candidate.key === item.key
-          ? { ...candidate, status: 'uploading' }
+          ? { ...candidate, status: 'uploading', controller, error: undefined }
           : candidate,
       ),
     );
     try {
-      const record = await client.upload(item.file, { public: isPublic });
+      const record = await client.upload(item.file, {
+        public: isPublic,
+        signal: controller.signal,
+      });
+      controllersRef.current.delete(item.key);
+      if (!mountedRef.current || controller.signal.aborted) return;
       setItems((current) =>
-        current.map((candidate) =>
-          candidate.key === item.key
-            ? { ...candidate, record, status: 'done' }
-            : candidate,
-        ),
+        current.filter((candidate) => candidate.key !== item.key),
       );
-      const next = multiple ? [...valueRef.current, record] : [record];
-      valueRef.current = next;
-      onChange(next);
+      commitCompletedRecord(record);
     } catch (error) {
+      controllersRef.current.delete(item.key);
+      if (
+        controller.signal.aborted ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        if (mountedRef.current) {
+          setItems((current) =>
+            current.filter((candidate) => candidate.key !== item.key),
+          );
+        }
+        return;
+      }
+      if (!mountedRef.current) return;
       const uploadError =
         error instanceof Error ? error : new Error('File upload failed.');
       setItems((current) =>
@@ -98,8 +158,7 @@ export function FileUploadField({
 
   const addFiles = (files: readonly File[]): void => {
     if (disabled) return;
-    const pending = items.filter((item) => !item.record).length;
-    if (files.length + value.length + pending > maximum) {
+    if (files.length + (multiple ? value.length : 0) + items.length > maximum) {
       onError?.(new Error('The maximum number of files has been reached.'));
       return;
     }
@@ -123,20 +182,29 @@ export function FileUploadField({
     nextItems.forEach((item) => void upload(item));
   };
 
-  const remove = async (item: UploadItem): Promise<void> => {
-    if (item.record && removeOnDelete) await client.remove(item.record.id);
+  const removeRecord = async (record: FileRecord): Promise<void> => {
+    if (removeOnDelete) {
+      try {
+        await client.remove(record.id);
+      } catch (error) {
+        onError?.(
+          error instanceof Error ? error : new Error('File removal failed.'),
+        );
+        return;
+      }
+    }
+    const next = valueRef.current.filter(
+      (candidate) => candidate.id !== record.id,
+    );
+    onChange(next);
+  };
+  const cancel = (item: UploadItem): void => {
+    controllersRef.current.get(item.key)?.abort();
+    controllersRef.current.delete(item.key);
     setItems((current) =>
       current.filter((candidate) => candidate.key !== item.key),
     );
-    if (item.record) {
-      const next = valueRef.current.filter(
-        (record) => record.id !== item.record?.id,
-      );
-      valueRef.current = next;
-      onChange(next);
-    }
   };
-
   const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {
     addFiles(Array.from(event.currentTarget.files ?? []));
     event.currentTarget.value = '';
@@ -146,18 +214,6 @@ export function FileUploadField({
     setDragging(false);
     addFiles(Array.from(event.dataTransfer.files));
   };
-  const displayed = [
-    ...value.map((record): UploadItem => ({
-      key: `record:${record.id}`,
-      file: new File([], record.filename, { type: record.mimeType }),
-      record,
-      status: 'done',
-    })),
-    ...items.filter(
-      (item) =>
-        !item.record || !value.some((record) => record.id === item.record?.id),
-    ),
-  ];
 
   return (
     <div
@@ -174,13 +230,32 @@ export function FileUploadField({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
       >
-        {displayed.map((item) => (
+        {value.map((record) => (
+          <div key={record.id} className='w-36 rounded-md border p-2'>
+            <div className='flex h-20 items-center justify-center overflow-hidden rounded-sm bg-muted/30'>
+              <FileThumbnail file={record} />
+            </div>
+            <div className='mt-2 truncate text-sm' title={record.filename}>
+              {record.filename}
+            </div>
+            <div className='text-xs text-muted-foreground'>Done</div>
+            <Button
+              type='button'
+              size='icon'
+              variant='ghost'
+              aria-label={`${removeLabel}: ${record.filename}`}
+              onClick={() => void removeRecord(record)}
+              disabled={disabled}
+            >
+              <Trash2 aria-hidden='true' />
+            </Button>
+          </div>
+        ))}
+        {items.map((item) => (
           <div key={item.key} className='w-36 rounded-md border p-2'>
             <div className='flex h-20 items-center justify-center overflow-hidden rounded-sm bg-muted/30'>
               {item.status === 'uploading' ? (
                 <LoaderCircle className='animate-spin' aria-label='Uploading' />
-              ) : item.record ? (
-                <FileThumbnail file={item.record} />
               ) : (
                 <UploadCloud aria-hidden='true' />
               )}
@@ -193,9 +268,7 @@ export function FileUploadField({
                 ? (item.error?.message ?? 'Failed')
                 : item.status === 'uploading'
                   ? 'Uploading'
-                  : item.status === 'pending'
-                    ? 'Pending'
-                    : 'Done'}
+                  : 'Pending'}
             </div>
             <div className='mt-2 flex gap-1'>
               {item.status === 'error' ? (
@@ -203,28 +276,23 @@ export function FileUploadField({
                   type='button'
                   size='icon'
                   variant='ghost'
-                  aria-label={`Retry ${item.file.name}`}
+                  aria-label={`${retryLabel}: ${item.file.name}`}
                   onClick={() => void upload(item)}
+                  disabled={disabled}
                 >
                   <RotateCcw aria-hidden='true' />
                 </Button>
               ) : null}
-              {item.status !== 'uploading' ? (
-                <Button
-                  type='button'
-                  size='icon'
-                  variant='ghost'
-                  aria-label={`${item.record ? 'Remove' : 'Cancel'} ${item.file.name}`}
-                  onClick={() => void remove(item)}
-                  disabled={disabled}
-                >
-                  {item.record ? (
-                    <Trash2 aria-hidden='true' />
-                  ) : (
-                    <X aria-hidden='true' />
-                  )}
-                </Button>
-              ) : null}
+              <Button
+                type='button'
+                size='icon'
+                variant='ghost'
+                aria-label={`Cancel ${item.file.name}`}
+                onClick={() => cancel(item)}
+                disabled={disabled}
+              >
+                <X aria-hidden='true' />
+              </Button>
             </div>
           </div>
         ))}
@@ -235,8 +303,9 @@ export function FileUploadField({
           onClick={() => inputRef.current?.click()}
           disabled={
             disabled ||
-            value.length + items.filter((item) => !item.record).length >=
-              maximum
+            (multiple
+              ? value.length + items.length >= maximum
+              : items.length >= 1)
           }
         >
           <UploadCloud aria-hidden='true' />
@@ -252,6 +321,12 @@ export function FileUploadField({
           aria-label={chooseLabel}
           disabled={disabled}
         />
+      </div>
+      <div className='sr-only' aria-live='polite'>
+        {[
+          ...value.map((record) => `${record.filename}: done`),
+          ...items.map((item) => `${item.file.name}: ${item.status}`),
+        ].join('. ')}
       </div>
     </div>
   );

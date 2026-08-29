@@ -19,7 +19,8 @@ packages/app-plugin-audit-log/
 │   ├── migrations/
 │   └── seeds/
 ├── server/
-│   ├── bootstrap.ts
+│   ├── plugin.ts
+│   ├── provider.ts
 │   └── routes/index.ts
 ├── client/
 │   ├── plugin.ts
@@ -66,7 +67,9 @@ pnpm plugin:register audit-log --app app-template-default
 }
 ```
 
-`nocobase.plugins` 现在只服务服务端：server 的 bootstrap 和路由、migration / seed / job 的来源、dev 的插件监听范围，以及构建时按哪些包过滤。客户端不再读它。
+客户端和服务端分别由 `client/plugins.ts` 与 `server/plugins.ts` 显式注册。过渡期内
+`nocobase.plugins` 仍供 CLI、构建过滤、开发监听和 skills 同步使用，但服务端运行时
+不再从中发现 Provider、Route、migration、seed 或 job。
 
 第二处是 `client/plugins.ts`，命令会插入一条 import 和一个数组项：
 
@@ -151,13 +154,18 @@ pnpm --filter @nocobase/app-template-default seed
 
 ### Server
 
-- `server/bootstrap.ts`：注册服务端能力和生命周期清理逻辑；
-- `server/routes/index.ts`：注册 HTTP API。
+- `server/plugin.ts`：唯一的服务端注册入口，显式声明 Providers、API Routes、Root Routes、database 和 queue 贡献；
+- `server/provider.ts`：只负责服务注册与生命周期；
+- `server/routes/*.ts`：只负责 HTTP 边界，通过 `app.container` 解析服务。
+
+普通业务接口使用 `apiRoutes`，由 Application 统一挂载到 `/api`；安装入口、协议回调和 HTML 页面等特殊入口使用 `rootRoutes`。不要提供含义模糊的通用 `routes`，也不要在 Provider 的 `boot()` 中注册 HTTP 路由。
+
+Service Provider 的概念、五阶段生命周期、Token/Container 用法和完整插件示例参见 [Service Provider](./service-provider.md)。仓库内可运行的实现位于 [`@nocobase/app-plugin-service-provider-example`](../packages/app-plugin-service-provider-example/README.md)。
 
 脚手架默认提供：
 
 ```text
-GET /audit-log
+GET /api/audit-log
 ```
 
 启动 App 后即可访问，实际主机、端口和 App base path 以 `pnpm app:dev` 的输出为准。

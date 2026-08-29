@@ -29,4 +29,6 @@
 
 ## 0.0.1
 
-- Scaffold the File app plugin and freeze its public server and client contracts.
+- Add scoped file routes, secure Public and Private access, controlled upload
+  and preview components, safe Markdown and Office Online previews, Registry
+  source, and the built-in File Demo.

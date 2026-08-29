@@ -1,33 +1,34 @@
-import { prepareAppDatabaseStorage } from '@nocobase/app-server-kit/database';
+import path from 'node:path';
 
-import { createStandaloneDatabaseTaskRuntime } from '../server/database-task.js';
+import { runAppMigrations } from '@nocobase/app-server-kit/database';
+import { resolveStandaloneAppRuntimeConfigSection } from '@nocobase/app-server-kit/node';
+
+import appRuntime from '../server/runtime.js';
 
 await migrate();
 
 async function migrate(): Promise<void> {
-  const runtime = createStandaloneDatabaseTaskRuntime();
+  const { config: database } = resolveStandaloneAppRuntimeConfigSection(
+    appRuntime,
+    { rootDir: path.resolve(import.meta.dirname, '..') },
+    'database',
+  );
+  const result = await runAppMigrations(database);
 
-  try {
-    await prepareAppDatabaseStorage(runtime.config.database);
-    const result = await runtime.runMigrations();
-
-    if (!result) {
-      console.log('No database migrator is configured.');
-      return;
-    }
-
-    if (result.status === 'skipped') {
-      console.log(`Database migrations skipped: ${result.reason}.`);
-      return;
-    }
-
-    console.log('Database migrations completed.');
-    console.log(`Batch: ${result.batch ?? 0}`);
-    logMigrationNames('Executed', result.executed ?? []);
-    logMigrationNames('Skipped', result.skipped ?? []);
-  } finally {
-    await runtime.dispose();
+  if (!result) {
+    console.log('No database migrator is configured.');
+    return;
   }
+
+  if (result.status === 'skipped') {
+    console.log(`Database migrations skipped: ${result.reason}.`);
+    return;
+  }
+
+  console.log('Database migrations completed.');
+  console.log(`Batch: ${result.batch ?? 0}`);
+  logMigrationNames('Executed', result.executed ?? []);
+  logMigrationNames('Skipped', result.skipped ?? []);
 }
 
 function logMigrationNames(label: string, names: readonly string[]): void {

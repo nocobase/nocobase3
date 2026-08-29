@@ -1,42 +1,11 @@
-import type { DatabaseManager } from '@nocobase/app-database';
-import type { NocoBaseDriveManager } from '@nocobase/drive';
-import type { Logging } from '@nocobase/logging';
-import type { MiddlewareHandler } from 'hono';
+import {
+  databaseManagerToken,
+  type DatabaseManager,
+} from '@nocobase/app-database';
+import { driveManagerToken, type NocoBaseDriveManager } from '@nocobase/drive';
+import type { ServiceResolver } from '@nocobase/service-provider';
 
 import { FileUnavailableError } from './errors.js';
-
-export interface FilePluginDeps {
-  readonly database?: DatabaseManager;
-  readonly driveManager?: NocoBaseDriveManager;
-  readonly auth: {
-    required(): MiddlewareHandler;
-  };
-  readonly authz: {
-    middleware(): MiddlewareHandler<{
-      Variables: {
-        authz: {
-          readonly identity: {
-            readonly principal: { readonly type: string; readonly id: string };
-            readonly subjects?: readonly {
-              readonly type: string;
-              readonly id: string;
-            }[];
-          };
-        };
-      };
-    }>;
-    readonly permissionSets: {
-      getEffective(input: {
-        readonly principal: { readonly type: string; readonly id: string };
-        readonly subjects?: readonly {
-          readonly type: string;
-          readonly id: string;
-        }[];
-      }): Promise<readonly { readonly key: string }[]>;
-    };
-  };
-  readonly logging: Pick<Logging, 'getLogger'>;
-}
 
 export interface FilePluginConfig {
   readonly app: {
@@ -51,11 +20,6 @@ export interface FilePluginConfig {
   };
 }
 
-export interface FilePluginRuntimeContext {
-  readonly deps: FilePluginDeps;
-  readonly config: FilePluginConfig;
-}
-
 export interface UnavailableFilePluginRuntime {
   readonly unavailable: true;
   readonly error: FileUnavailableError;
@@ -66,7 +30,6 @@ export interface FilePluginRuntime {
   readonly database: DatabaseManager;
   readonly drive: NocoBaseDriveManager;
   readonly defaultDisk: string;
-  readonly diskNames: readonly string[];
   readonly publicBasePath: string;
   readonly tokenSecret: string;
 }
@@ -74,14 +37,18 @@ export interface FilePluginRuntime {
 export type FilePluginRuntimeResult =
   FilePluginRuntime | UnavailableFilePluginRuntime;
 
-export function resolveFilePluginRuntime({
-  deps,
-  config,
-}: FilePluginRuntimeContext): FilePluginRuntimeResult {
-  const database = deps.database;
-  if (!database) return unavailable('File database storage is not configured.');
-  const drive = deps.driveManager;
-  if (!drive) return unavailable('File storage is not configured.');
+export function resolveFilePluginRuntime(
+  container: ServiceResolver,
+  config: FilePluginConfig,
+): FilePluginRuntimeResult {
+  if (!container.has(databaseManagerToken)) {
+    return unavailable('File database storage is not configured.');
+  }
+  if (!container.has(driveManagerToken)) {
+    return unavailable('File storage is not configured.');
+  }
+  const database = container.resolve(databaseManagerToken);
+  const drive = container.resolve(driveManagerToken);
   const tokenSecret = config.session?.secret;
   if (!tokenSecret) {
     return unavailable('File access token signing is not configured.');
@@ -90,7 +57,6 @@ export function resolveFilePluginRuntime({
     database,
     drive,
     defaultDisk: config.drive?.default ?? 'local',
-    diskNames: Object.keys(config.drive?.disks ?? {}),
     publicBasePath: config.app.publicBasePath,
     tokenSecret,
   });

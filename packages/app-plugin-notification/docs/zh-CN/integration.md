@@ -6,7 +6,7 @@ keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP'
 
 # 手动接入通知
 
-通知包不会修改应用宿主，也不会在安装后自动创建 `NotificationManager`。你需要在自己的应用代码中完成 migrations、配置、Channel 与 Provider 注册、路由挂载和生命周期管理。
+通知包通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建 `NotificationManager`，并负责启动与关闭。自定义宿主仍可按本文后半部分手动组合这些能力。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
@@ -43,7 +43,7 @@ pnpm add @nocobase/app-plugin-notification \
 pnpm migrate
 ```
 
-这里的插件声明只用于发现 notification 和 in-app migrations，不会自动创建运行时。
+插件声明同时用于发现 migrations、Provider 和 routes；启用插件后会自动创建对应运行时。
 
 ## 第二步：创建配置
 

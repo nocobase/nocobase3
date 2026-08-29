@@ -1,8 +1,11 @@
 import type { ConfigContext, ConfigFactories } from './types.js';
 
-export function loadConfig<TConfigMap extends Record<string, unknown>>(
-  factories: ConfigFactories<TConfigMap>,
-  context: ConfigContext,
+export function loadConfig<
+  TConfigMap extends object,
+  TContext extends ConfigContext = ConfigContext,
+>(
+  factories: ConfigFactories<TConfigMap, TContext>,
+  context: TContext,
 ): TConfigMap {
   const config = {} as TConfigMap;
 

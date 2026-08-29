@@ -18,8 +18,8 @@ import {
   writeWorkflowArtifact,
 } from '../server/loader/artifact-builder.js';
 import { WorkflowService } from '../server/runtime/runtime.js';
-import { WorkflowRepository } from '../server/services/workflow-repository.js';
-import { WorkflowRunRepository } from '../server/services/workflow-run-repository.js';
+import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
+import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
 import {
   WORKFLOW_COLLECTIONS,
   workflowCollectionSchemas,

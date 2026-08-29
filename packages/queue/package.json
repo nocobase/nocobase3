@@ -41,6 +41,8 @@
   "dependencies": {
     "@boringnode/queue": "^0.7.1",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/logging": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "ioredis": "catalog:",
     "knex": "catalog:"
   },

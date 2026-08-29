@@ -18,6 +18,10 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./client": {
       "types": "./client/index.ts",
       "import": "./client/index.ts"
@@ -55,6 +59,10 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
       "./client": {
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
@@ -78,14 +86,6 @@
       "./package.json": "./package.json"
     }
   },
-  "nocobase": {
-    "plugin": {
-      "database": {
-        "migrations": "./database/migrations",
-        "seeds": "./database/seeds"
-      }
-    }
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -100,10 +100,12 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/authorization": "workspace:^",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "lucide-react": "^0.487.0"
   },

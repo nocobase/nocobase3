@@ -373,6 +373,9 @@ export async function formatClientPlugins(
   if (!(await hasDeclaredDependency(appRoot, 'prettier'))) {
     return sourceText;
   }
+  if (!existsSync(path.join(appRoot, 'node_modules/prettier/package.json'))) {
+    return sourceText;
+  }
   const require = createRequire(path.join(appRoot, 'package.json'));
   let prettier: typeof import('prettier');
   try {

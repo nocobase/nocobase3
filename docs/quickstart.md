@@ -46,34 +46,33 @@ pnpm start
 
 ## 4. 发布或部署 APP
 
-Hub 会预创建一个名为 `default` 的空 APP。它没有 Release，也不会自动运行。回到 APP 目录，首次将本地源码构建并部署到本地 Hub 的默认 APP：
+新 Hub 的应用列表为空。可以先在 Hub 中创建一个空 APP，例如标识为
+`crm`，然后回到 APP 目录，将本地源码构建并部署到这个 APP：
 
 ```bash
 cd ../crm
-pnpm run deploy --hub http://127.0.0.1:13000/hub --app default
+pnpm run deploy --hub http://127.0.0.1:13000/hub --app crm
 ```
 
-部署到远端 Hub 的默认 APP：
+部署到远端 Hub 中已有的 APP：
 
 ```bash
-pnpm run deploy --hub https://hub.example.com/hub --app default
+pnpm run deploy --hub https://hub.example.com/hub --app crm
 ```
 
-不带 Release 参数的 `deploy` 会在本地构建、上传产物、创建下一个 patch Release，并部署这个 Release。显式指定 `--app default` 后，第一个 Release 和 Deployment 都属于预创建的默认 APP。后续已经记录 Hub 地址和 APP 关联时，可以直接执行：
+不带 Release 参数的 `deploy` 会在本地构建、上传产物、创建下一个 patch
+Release，并部署这个 Release。后续已经记录 Hub 地址和 APP 关联时，可以直接执行：
 
 ```bash
 pnpm run deploy
 ```
 
-如果要绑定 Hub 中其他已有 APP，首次发布或部署时也用 `--app` 明确指定：
+首次部署时也可以省略 `--app`，让脚本按照本地项目名称在 Hub 中创建
+APP，再完成发布和部署：
 
 ```bash
-pnpm run deploy \
-  --hub https://hub.example.com/hub \
-  --app sales
+pnpm run deploy --hub https://hub.example.com/hub
 ```
-
-首次部署时省略 `--app`，script 会在 Hub 中创建另一个 APP，不会自动绑定到默认 APP。
 
 绑定信息保存在本地 `.nocobase/config.json`。Hub 不保存源码，因此需要在持有真实源码的本地目录中执行这个命令。
 
@@ -105,6 +104,7 @@ pnpm run release --bump patch
 ## 架构介绍
 
 - [应用服务分层架构](./architecture.md)
+- [Service Provider 与服务容器](./service-provider.md)
 
 ## 插件开发
 

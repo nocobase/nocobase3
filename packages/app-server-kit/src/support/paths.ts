@@ -13,22 +13,6 @@ export function resolveAppNameFromBasePath(
   return resolveAppName(segments.at(-1) ?? fallback);
 }
 
-export function resolveApiProxyPath(
-  value: string | undefined,
-  basePath: string,
-): string {
-  if (!value) {
-    return joinBasePath(basePath, '/v2/api');
-  }
-
-  try {
-    const url = new URL(value);
-    return normalizeBasePath(url.pathname);
-  } catch {
-    return normalizeBasePath(value);
-  }
-}
-
 export function normalizeBasePath(value: string): string {
   const normalized = value.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `/${normalized}` : '';

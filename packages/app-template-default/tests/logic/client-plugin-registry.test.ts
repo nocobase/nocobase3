@@ -1,9 +1,10 @@
 // @vitest-environment node
 
 // Client extensions are registered in client/plugins.ts, while nocobase.plugins
-// still drives the server bootstrap, database task sources, dev watch paths and
-// the build filter. Nothing at runtime reconciles the two, so a plugin can end
-// up loading on one side and not the other. These tests are that reconciliation.
+// still drives server providers and routes, database task sources, dev watch
+// paths and the build filter. Nothing at runtime reconciles the two, so a plugin
+// can end up loading on one side and not the other. These tests are that
+// reconciliation.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

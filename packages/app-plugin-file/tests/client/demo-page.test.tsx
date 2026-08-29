@@ -10,6 +10,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FileRecord, FilesClient } from '../../client/types.js';
+import {
+  FILE_DEMO_AVATAR_MIME_TYPES,
+  FILE_DEMO_ORDER_MIME_TYPES,
+} from '../../shared/file-demo.js';
 
 const mocks = vi.hoisted(() => ({
   createFilesClient: vi.fn(),
@@ -225,7 +229,14 @@ describe('FileDemoPage', () => {
       id: 'public-1',
       filename: 'public.png',
     });
-    configureClients({ avatarFiles: [avatar], orderFiles: [publicOrder] });
+    const secondOrder = fileRecord({
+      id: 'public-2',
+      filename: 'second.png',
+    });
+    configureClients({
+      avatarFiles: [avatar],
+      orderFiles: [publicOrder, secondOrder],
+    });
 
     await renderReady();
 
@@ -233,15 +244,33 @@ describe('FileDemoPage', () => {
     expect(screen.getByLabelText('Upload order attachments')).toBeVisible();
     expect(screen.getByLabelText('Upload profile avatar')).toHaveAttribute(
       'accept',
-      'image/gif,image/jpeg,image/png,image/webp',
+      FILE_DEMO_AVATAR_MIME_TYPES.join(','),
     );
     expect(screen.getByLabelText('Upload order attachments')).toHaveAttribute(
       'accept',
-      'image/gif,image/jpeg,image/png,image/webp,application/json,application/pdf,audio/mpeg,audio/ogg,audio/wav,text/plain,video/mp4,video/webm',
+      FILE_DEMO_ORDER_MIME_TYPES.join(','),
     );
+    const previewFields = document.querySelectorAll(
+      '[data-slot="file-preview-field"]',
+    );
+    expect(previewFields).toHaveLength(2);
     expect(
-      screen.getByRole('button', { name: 'Preview: avatar.png' }),
+      within(previewFields[0] as HTMLElement).getByTitle('avatar.png'),
     ).toBeVisible();
+    expect(
+      within(previewFields[1] as HTMLElement).getByTitle('public.png'),
+    ).toBeVisible();
+    fireEvent.click(
+      within(previewFields[1] as HTMLElement).getByRole('button', {
+        name: 'Preview: second.png',
+      }),
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent('second.png');
+    expect(screen.getByRole('button', { name: 'Previous file' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(
+      screen.getAllByRole('button', { name: 'Preview: avatar.png' }),
+    ).not.toHaveLength(0);
     expect(
       screen.getByRole('button', { name: 'Download: public.png' }),
     ).toBeVisible();
@@ -249,7 +278,7 @@ describe('FileDemoPage', () => {
       screen.getAllByRole('button', { name: 'Remove: public.png' }),
     ).not.toHaveLength(0);
     expect(
-      screen.getByText('1 of 10 files used for order PO-DEMO-001.'),
+      screen.getByText('2 of 10 files used for order PO-DEMO-001.'),
     ).toBeVisible();
   });
 
@@ -279,6 +308,7 @@ describe('FileDemoPage', () => {
     await waitFor(() =>
       expect(avatarClient.upload).toHaveBeenCalledWith(avatarFile, {
         public: undefined,
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(await screen.findAllByText('new-avatar.png')).not.toHaveLength(0);
@@ -293,6 +323,7 @@ describe('FileDemoPage', () => {
     await waitFor(() =>
       expect(orderClient.upload).toHaveBeenCalledWith(orderFile, {
         public: true,
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(await screen.findAllByText('invoice.pdf')).not.toHaveLength(0);
@@ -314,7 +345,9 @@ describe('FileDemoPage', () => {
     await renderReady();
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Preview: private.png' }),
+      screen.getAllByRole('button', {
+        name: 'Preview: private.png',
+      })[0] as HTMLButtonElement,
     );
     await waitFor(() =>
       expect(orderClient.createAccessUrl).toHaveBeenCalledWith('private-1'),
@@ -323,7 +356,9 @@ describe('FileDemoPage', () => {
 
     vi.mocked(orderClient.createAccessUrl).mockClear();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Preview: public.png' }),
+      screen.getAllByRole('button', {
+        name: 'Preview: public.png',
+      })[0] as HTMLButtonElement,
     );
     expect(
       within(screen.getByRole('dialog')).getByRole('img', {
@@ -331,6 +366,46 @@ describe('FileDemoPage', () => {
       }),
     ).toHaveAttribute('src', publicOrder.contentUrl);
     expect(orderClient.createAccessUrl).not.toHaveBeenCalled();
+  });
+
+  it('renders seeded-style Private Markdown from the read-only preview field', async () => {
+    const markdown = fileRecord({
+      id: 'private-markdown',
+      filename: 'private-order-note.md',
+      mimeType: 'text/markdown',
+      public: false,
+    });
+    const publicOrder = fileRecord({
+      id: 'public-1',
+      filename: 'public-note.txt',
+      mimeType: 'text/plain',
+    });
+    configureClients({ orderFiles: [publicOrder, markdown] });
+    mocks.fetch
+      .mockResolvedValueOnce(jsonResponse({ data: examples }))
+      .mockResolvedValueOnce(
+        new Response('# Private order note\n\n~~draft~~', { status: 200 }),
+      );
+
+    await renderReady();
+    const previewFields = document.querySelectorAll(
+      '[data-slot="file-preview-field"]',
+    );
+    fireEvent.click(
+      within(previewFields[0] as HTMLElement).getByRole('button', {
+        name: 'Preview: private-order-note.md',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(orderClient.createAccessUrl).toHaveBeenCalledWith(
+        'private-markdown',
+      ),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Private order note' }),
+    ).toBeVisible();
+    expect(screen.getByText('draft').closest('del')).not.toBeNull();
   });
 
   it('refetches the Order list after delete', async () => {

@@ -1,11 +1,18 @@
-import {
-  defineConfig,
-  type ConfigFactory,
-} from '@nocobase/app-server-kit/config';
+import { defineConfig } from '@nocobase/app-server-kit/config';
+import type { AppRuntimeConfigFactory } from '@nocobase/app-server-kit/runtime';
 import type { AppDriveConfig, DriveVisibility } from '@nocobase/drive';
+import type {
+  AppConfig,
+  DefaultAppConfigContext,
+  DefaultAppScopeConfig,
+} from './types.js';
 
-const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
-  ({ env, paths }): AppDriveConfig => {
+const driveConfig: AppRuntimeConfigFactory<
+  AppDriveConfig,
+  AppConfig,
+  DefaultAppScopeConfig
+> = defineConfig<AppDriveConfig, DefaultAppConfigContext>(
+  ({ env, paths, mode }): AppDriveConfig => {
     const disks: AppDriveConfig['disks'] = {
       local: {
         driver: 'fs',
@@ -43,9 +50,12 @@ const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
     return {
       default: env.string('DRIVE_DISK', 'local'),
       disks,
-      links: {
-        [paths.root('public/storage')]: paths.storage('app/public'),
-      },
+      links:
+        mode === 'embedded'
+          ? {}
+          : {
+              [paths.root('public/storage')]: paths.storage('app/public'),
+            },
     };
   },
 );

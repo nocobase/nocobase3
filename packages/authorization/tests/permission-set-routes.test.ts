@@ -30,8 +30,8 @@ describe('Permission Set handler', () => {
       subject: { type: 'user', id: 'admin' },
     });
 
-    const app = new Hono();
-    app.on(
+    const router = new Hono();
+    router.on(
       ['GET', 'POST', 'PUT', 'DELETE'],
       ['/authz/permission-sets', '/authz/permission-sets/*'],
       (context) =>
@@ -47,9 +47,9 @@ describe('Permission Set handler', () => {
         }),
     );
 
-    expect((await app.request('/authz/permission-sets')).status).toBe(403);
+    expect((await router.request('/authz/permission-sets')).status).toBe(403);
 
-    const missingAssignment = await app.request(
+    const missingAssignment = await router.request(
       '/authz/permission-sets/missing/assignments',
       {
         method: 'POST',
@@ -62,7 +62,7 @@ describe('Permission Set handler', () => {
     );
     expect(missingAssignment.status).toBe(404);
 
-    const invalid = await app.request('/authz/permission-sets', {
+    const invalid = await router.request('/authz/permission-sets', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -72,7 +72,7 @@ describe('Permission Set handler', () => {
     });
     expect(invalid.status).toBe(400);
 
-    const created = await app.request('/authz/permission-sets', {
+    const created = await router.request('/authz/permission-sets', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -116,7 +116,7 @@ describe('Permission Set handler', () => {
       },
     });
 
-    const assigned = await app.request(
+    const assigned = await router.request(
       '/authz/permission-sets/reader/assignments',
       {
         method: 'POST',
@@ -129,7 +129,7 @@ describe('Permission Set handler', () => {
     );
     expect(assigned.status).toBe(201);
 
-    const effective = await app.request(
+    const effective = await router.request(
       '/authz/permission-sets/effective/user/alice',
       { headers: { 'x-test-user': 'admin' } },
     );

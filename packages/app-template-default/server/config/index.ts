@@ -7,23 +7,14 @@ import logging from './logging.js';
 import queue from './queue.js';
 import session from './session.js';
 import server from './server.js';
+import snowflake from './snowflake.js';
 import spa from './spa.js';
 import workflow from './workflow.js';
 import type { AppConfig } from './types.js';
+import type { AppRuntimeConfigFactories } from '@nocobase/app-server-kit/runtime';
+import type { DefaultAppScopeConfig } from './types.js';
 
-const config: {
-  app: typeof app;
-  auth: typeof auth;
-  caching: typeof caching;
-  database: typeof database;
-  drive: typeof drive;
-  logging: typeof logging;
-  queue: typeof queue;
-  session: typeof session;
-  workflow: typeof workflow;
-  server: typeof server;
-  spa: typeof spa;
-} = {
+const config: AppRuntimeConfigFactories<AppConfig, DefaultAppScopeConfig> = {
   app: app,
   auth: auth,
   caching: caching,
@@ -34,6 +25,7 @@ const config: {
   session: session,
   workflow: workflow,
   server: server,
+  snowflake: snowflake,
   spa: spa,
 };
 

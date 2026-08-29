@@ -57,7 +57,7 @@ describe('Authentication', () => {
       },
     },
   });
-  const app = new Hono<AuthEnv>();
+  const router = new Hono<AuthEnv>();
   let cookie = '';
 
   beforeAll(async () => {
@@ -75,13 +75,13 @@ describe('Authentication', () => {
       },
     });
 
-    app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+    router.on(['GET', 'POST'], '/api/auth/*', (context) =>
       auth.handler(context.req.raw),
     );
-    app.get('/api/private', auth.required(), (context) =>
+    router.get('/api/private', auth.required(), (context) =>
       context.json({ ok: true, auth: context.get('auth') }),
     );
-    app.get('/api/optional', auth.optional(), (context) =>
+    router.get('/api/optional', auth.optional(), (context) =>
       context.json({ auth: context.get('auth') }),
     );
   });
@@ -97,7 +97,7 @@ describe('Authentication', () => {
   });
 
   it('signs up and resolves the Better Auth session', async () => {
-    const signedUp = await app.request('/api/auth/sign-up/email', {
+    const signedUp = await router.request('/api/auth/sign-up/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -120,7 +120,7 @@ describe('Authentication', () => {
     expect(cookie).toContain('nocobase3.session_token');
     expect(cookie).toContain('Path=/test-app');
 
-    const session = await app.request('/api/auth/get-session', {
+    const session = await router.request('/api/auth/get-session', {
       headers: { cookie },
     });
     expect(session.status).toBe(200);
@@ -130,7 +130,7 @@ describe('Authentication', () => {
   });
 
   it('signs in with a normalized username without a display username field', async () => {
-    const response = await app.request('/api/auth/sign-in/username', {
+    const response = await router.request('/api/auth/sign-in/username', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -159,7 +159,9 @@ describe('Authentication', () => {
   });
 
   it('exposes the Better Auth session to protected routes', async () => {
-    const response = await app.request('/api/private', { headers: { cookie } });
+    const response = await router.request('/api/private', {
+      headers: { cookie },
+    });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       ok: true,
@@ -171,11 +173,11 @@ describe('Authentication', () => {
   });
 
   it('supports optional sessions', async () => {
-    const anonymous = await app.request('/api/optional');
+    const anonymous = await router.request('/api/optional');
     expect(anonymous.status).toBe(200);
     expect(await anonymous.json()).toEqual({ auth: null });
 
-    const authenticated = await app.request('/api/optional', {
+    const authenticated = await router.request('/api/optional', {
       headers: { cookie },
     });
     expect(authenticated.status).toBe(200);
@@ -188,7 +190,7 @@ describe('Authentication', () => {
   });
 
   it('matches email credentials case-insensitively', async () => {
-    const response = await app.request('/api/auth/sign-in/email', {
+    const response = await router.request('/api/auth/sign-in/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -214,7 +216,7 @@ describe('Authentication', () => {
   });
 
   it('rejects invalid credentials', async () => {
-    const response = await app.request('/api/auth/sign-in/email', {
+    const response = await router.request('/api/auth/sign-in/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -229,7 +231,7 @@ describe('Authentication', () => {
   });
 
   it('requires a session on protected routes', async () => {
-    const response = await app.request('/api/private');
+    const response = await router.request('/api/private');
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
       code: 'UNAUTHORIZED',
@@ -259,12 +261,12 @@ describe('Authentication naming strategy', () => {
         baseURL: 'http://localhost/api/auth',
         secret: 'development-secret-at-least-32-characters',
       });
-      const app = new Hono();
-      app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+      const router = new Hono();
+      router.on(['GET', 'POST'], '/api/auth/*', (context) =>
         auth.handler(context.req.raw),
       );
 
-      const response = await app.request('/api/auth/sign-up/email', {
+      const response = await router.request('/api/auth/sign-up/email', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -910,12 +912,12 @@ describe('Authentication seed', () => {
         baseURL: 'http://localhost/api/auth',
         secret: 'development-secret-at-least-32-characters',
       });
-      const app = new Hono();
-      app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+      const router = new Hono();
+      router.on(['GET', 'POST'], '/api/auth/*', (context) =>
         auth.handler(context.req.raw),
       );
 
-      const response = await app.request('/api/auth/sign-in/username', {
+      const response = await router.request('/api/auth/sign-in/username', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

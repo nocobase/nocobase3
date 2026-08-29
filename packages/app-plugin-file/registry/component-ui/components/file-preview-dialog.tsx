@@ -1,207 +1,251 @@
-import { Download, X } from 'lucide-react';
-import { useEffect, useState, type ReactElement } from 'react';
+import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 
 import type {
   FilePreviewDialogProps,
   FileRecord,
+  FilesClient,
+  FileUiLabels,
 } from '@nocobase/app-plugin-file/client/types';
+import {
+  resolveFilePreviewKind,
+  type FilePreviewKind,
+} from '@nocobase/app-plugin-file/client';
 import { Button } from '@/components/ui/button';
-import { FileThumbnail } from './file-thumbnail';
-
-function extension(filename: string): string {
-  const dot = filename.lastIndexOf('.');
-  return dot < 0 ? '' : filename.slice(dot).toLowerCase();
-}
-
-function isText(file: FileRecord): boolean {
-  return (
-    file.mimeType.startsWith('text/') ||
-    file.mimeType === 'application/json' ||
-    extension(file.filename) === '.json'
-  );
-}
-
-function isActive(file: FileRecord): boolean {
-  const mimeType = file.mimeType.split(';', 1)[0]?.trim().toLowerCase();
-  return (
-    (mimeType !== undefined &&
-      ([
-        'text/html',
-        'application/xhtml+xml',
-        'image/svg+xml',
-        'application/xml',
-        'text/xml',
-      ].includes(mimeType) ||
-        mimeType.endsWith('+xml'))) ||
-    ['.html', '.htm', '.svg', '.xml', '.xhtml'].includes(
-      extension(file.filename),
-    )
-  );
-}
-
-function triggerDownload(url: string, filename: string): void {
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.rel = 'noopener';
-  link.click();
-}
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import {
+  fileUrlCredentials,
+  publicDownloadUrl,
+  resolveSafeFileUrl,
+} from '../lib/file-url';
+import { FilePreviewContent } from './previewers/file-preview-content';
 
 export function FilePreviewDialog({
   client,
-  file,
+  files,
+  initialIndex = 0,
   open,
   onOpenChange,
   download: allowDownload = true,
   labels,
+  onError,
 }: FilePreviewDialogProps): ReactElement | null {
-  const [url, setUrl] = useState<string | null>(null);
-  const [text, setText] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open || !file) return;
-    let active = true;
-    setUrl(null);
-    setText(null);
-    setError(null);
-    const access = file.public
-      ? Promise.resolve({ url: file.contentUrl })
-      : client.createAccessUrl(file.id);
-    void access
-      .then((result) => {
-        if (!active) return;
-        setUrl(result.url);
-        if (!isText(file) || isActive(file)) return;
-        return fetch(result.url, { credentials: 'include' })
-          .then((response) => {
-            if (!response.ok)
-              throw new Error(`Preview request failed (${response.status}).`);
-            return response.text();
-          })
-          .then((value) => {
-            if (active) setText(value);
-          });
-      })
-      .catch((previewError: unknown) => {
-        if (active)
-          setError(
-            previewError instanceof Error
-              ? previewError.message
-              : 'Unable to load the preview.',
-          );
-      });
-    return () => {
-      active = false;
-    };
-  }, [client, file, open]);
-
-  if (!open || !file) return null;
-  const previewLabel = labels?.preview ?? 'Preview';
-  const downloadLabel = labels?.download ?? 'Download';
-  const kind = isActive(file)
-    ? 'unsupported'
-    : file.mimeType.startsWith('image/')
-      ? 'image'
-      : file.mimeType === 'application/pdf'
-        ? 'pdf'
-        : file.mimeType.startsWith('audio/')
-          ? 'audio'
-          : file.mimeType.startsWith('video/')
-            ? 'video'
-            : isText(file)
-              ? 'text'
-              : 'unsupported';
-  const downloadFile = async (): Promise<void> => {
-    triggerDownload(
-      file.public
-        ? file.contentUrl
-        : (await client.createAccessUrl(file.id)).url,
-      file.filename,
-    );
-  };
-
+  if (!open || !files.length) return null;
+  const normalizedIndex = Math.max(0, Math.min(initialIndex, files.length - 1));
   return (
-    <div
-      role='dialog'
-      aria-modal='true'
-      aria-label={`${previewLabel}: ${file.filename}`}
-      className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'
-      onClick={() => onOpenChange(false)}
-    >
-      <div
-        className='flex max-h-full w-full max-w-4xl flex-col gap-3 overflow-auto rounded-md bg-background p-4'
-        onClick={(event) => event.stopPropagation()}
+    <OpenFilePreviewDialog
+      key={`${normalizedIndex}:${files.map((file) => file.id).join(':')}`}
+      client={client}
+      files={files}
+      initialIndex={normalizedIndex}
+      onOpenChange={onOpenChange}
+      download={allowDownload}
+      labels={labels}
+      onError={onError}
+    />
+  );
+}
+
+interface OpenFilePreviewDialogProps {
+  readonly client: FilesClient;
+  readonly files: readonly FileRecord[];
+  readonly initialIndex: number;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly download: boolean;
+  readonly labels?: FileUiLabels;
+  readonly onError?: (error: Error) => void;
+}
+
+function OpenFilePreviewDialog({
+  client,
+  files,
+  initialIndex,
+  onOpenChange,
+  download: allowDownload,
+  labels,
+  onError,
+}: OpenFilePreviewDialogProps): ReactElement {
+  const [index, setIndex] = useState(initialIndex);
+  const file = files[index];
+  if (!file) throw new Error('A preview file is required.');
+  const downloadLabel = labels?.download ?? 'Download';
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent
+        className='flex max-h-[calc(100vh-2rem)] max-w-4xl flex-col overflow-auto'
+        showCloseButton
       >
-        <div className='flex items-center justify-between gap-3'>
+        <div className='flex items-center justify-between gap-3 pr-10'>
           <div className='min-w-0'>
-            <h2 className='truncate text-lg font-semibold'>{file.filename}</h2>
+            <DialogTitle className='truncate'>{file.filename}</DialogTitle>
             <p className='text-sm text-muted-foreground'>
               {file.public ? 'Public' : 'Private'} · {file.mimeType}
             </p>
           </div>
           <div className='flex gap-1'>
+            {files.length > 1 ? (
+              <>
+                <Button
+                  type='button'
+                  size='icon'
+                  variant='ghost'
+                  aria-label='Previous file'
+                  onClick={() =>
+                    setIndex(
+                      (value) => (value - 1 + files.length) % files.length,
+                    )
+                  }
+                >
+                  <ChevronLeft aria-hidden='true' />
+                </Button>
+                <Button
+                  type='button'
+                  size='icon'
+                  variant='ghost'
+                  aria-label='Next file'
+                  onClick={() =>
+                    setIndex((value) => (value + 1) % files.length)
+                  }
+                >
+                  <ChevronRight aria-hidden='true' />
+                </Button>
+              </>
+            ) : null}
             {allowDownload ? (
               <Button
                 type='button'
                 size='icon'
                 variant='ghost'
                 aria-label={`${downloadLabel}: ${file.filename}`}
-                title={downloadLabel}
-                onClick={() => void downloadFile()}
+                onClick={() =>
+                  void downloadFile(client, file).catch((error: unknown) =>
+                    reportDownloadError(onError, error),
+                  )
+                }
               >
                 <Download aria-hidden='true' />
               </Button>
             ) : null}
-            <Button
-              type='button'
-              size='icon'
-              variant='ghost'
-              aria-label='Close'
-              title='Close'
-              onClick={() => onOpenChange(false)}
-            >
-              <X aria-hidden='true' />
-            </Button>
           </div>
         </div>
-        {error ? <div role='alert'>{error}</div> : null}
-        {!error && !url ? <div role='status'>Loading preview...</div> : null}
-        {!error && url && kind === 'image' ? (
-          <img
-            src={url}
-            alt={file.filename}
-            className='max-h-[70vh] max-w-full object-contain'
-          />
-        ) : null}
-        {!error && url && kind === 'pdf' ? (
-          <iframe title={file.filename} src={url} className='h-[70vh] w-full' />
-        ) : null}
-        {!error && url && kind === 'audio' ? (
-          <audio controls src={url} className='w-full' />
-        ) : null}
-        {!error && url && kind === 'video' ? (
-          <video controls src={url} className='max-h-[70vh] max-w-full' />
-        ) : null}
-        {!error && kind === 'text' ? (
-          <pre className='max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-sm'>
-            {text ?? 'Loading preview...'}
-          </pre>
-        ) : null}
-        {!error && kind === 'unsupported' ? (
-          <div className='flex flex-col items-center gap-3 py-8'>
-            <div className='h-24 w-24'>
-              <FileThumbnail file={file} />
-            </div>
-            <p>Preview is unavailable for this file type.</p>
-            {allowDownload ? (
-              <Button type='button' onClick={() => void downloadFile()}>
-                {downloadLabel}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </div>
+        <PreviewBody
+          key={`${file.id}:${file.updatedAt}:${file.contentUrl}:${file.public}`}
+          client={client}
+          file={file}
+          onDownload={
+            allowDownload
+              ? () =>
+                  void downloadFile(client, file).catch((error: unknown) =>
+                    reportDownloadError(onError, error),
+                  )
+              : undefined
+          }
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+async function downloadFile(
+  client: FilePreviewDialogProps['client'],
+  file: FileRecord,
+): Promise<void> {
+  const raw = file.public
+    ? publicDownloadUrl(file.contentUrl)
+    : (await client.createAccessUrl(file.id)).url;
+  const url = raw ? resolveSafeFileUrl(raw) : undefined;
+  if (!url) throw new Error('File URL is not allowed.');
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.filename;
+  link.rel = 'noopener';
+  link.click();
+}
+
+function reportDownloadError(
+  onError: ((error: Error) => void) | undefined,
+  error: unknown,
+): void {
+  onError?.(
+    error instanceof Error ? error : new Error('File download failed.'),
+  );
+}
+
+function PreviewBody({
+  client,
+  file,
+  onDownload,
+}: {
+  client: FilePreviewDialogProps['client'];
+  file: FileRecord;
+  onDownload?: () => void;
+}): ReactElement {
+  const initialUrl = file.public
+    ? resolveSafeFileUrl(file.contentUrl)
+    : undefined;
+  const [url, setUrl] = useState<string | undefined>(() => initialUrl);
+  const [text, setText] = useState<string>();
+  const [error, setError] = useState<string | undefined>(() =>
+    file.public && !initialUrl ? 'File URL is not allowed.' : undefined,
+  );
+  const kind: FilePreviewKind = useMemo(
+    () => resolveFilePreviewKind(file),
+    [file],
+  );
+  useEffect(() => {
+    if (file.public) return undefined;
+    let active = true;
+    void client
+      .createAccessUrl(file.id)
+      .then((access) => {
+        if (!active) return;
+        const accessUrl = resolveSafeFileUrl(access.url);
+        if (accessUrl) setUrl(accessUrl);
+        else setError('File URL is not allowed.');
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'Unable to create a file access URL.',
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, file]);
+  useEffect(() => {
+    if (!url || !['text', 'markdown'].includes(kind)) return undefined;
+    const controller = new AbortController();
+    void fetch(url, {
+      credentials: fileUrlCredentials(url),
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok)
+          throw new Error(`Preview request failed (${response.status}).`);
+        return response.text();
+      })
+      .then(setText)
+      .catch((cause: unknown) => {
+        if (!(cause instanceof DOMException && cause.name === 'AbortError'))
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'Unable to load the file preview.',
+          );
+      });
+    return () => controller.abort();
+  }, [file, kind, url]);
+  return (
+    <FilePreviewContent
+      file={file}
+      kind={kind}
+      url={url}
+      text={text}
+      error={error}
+      onDownload={onDownload}
+    />
   );
 }

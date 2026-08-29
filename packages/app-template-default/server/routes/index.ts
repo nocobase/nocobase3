@@ -1,34 +1,39 @@
-import type { Hono } from 'hono';
+import type { Application } from '@nocobase/app-server-kit/application';
+import {
+  defineRootRoutes,
+  type AppRootRoutes,
+} from '@nocobase/app-server-kit/router';
 
-import { createSessionMiddleware } from '@nocobase/session';
+import type { AppConfig } from '../config/index.js';
+import { appExampleServiceToken } from '../providers/index.js';
 
-import type { AppDeps } from '../runtime/deps.js';
-import type { AppServices } from '../services/index.js';
-import { createApiRoutes } from './api/index.js';
-import { createHelloPageHandler } from './hello.js';
+const exampleRootRoutes: AppRootRoutes<Application<AppConfig>> =
+  defineRootRoutes({
+    name: '@nocobase/app-template-default/root/example',
+    register(router, app): void {
+      router.get('/example', (context) => {
+        const exampleService = app.container.resolve(appExampleServiceToken);
 
-export interface RegisterAppRoutesOptions {
-  appName: string;
-  publicBasePath: string;
-  deps: AppDeps;
-  services: AppServices;
-}
+        return context.html(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Application Route Example</title>
+  </head>
+  <body>
+    <main>
+      <h1>Application Route Example</h1>
+      <p>${exampleService.getMessage()}</p>
+    </main>
+  </body>
+</html>`);
+      });
+    },
+  });
 
-export function registerAppRoutes(
-  app: Hono,
-  options: RegisterAppRoutesOptions,
-): void {
-  app.use('*', createSessionMiddleware(options.deps.sessionManager));
+const rootRoutes: readonly AppRootRoutes<Application<AppConfig>>[] = [
+  exampleRootRoutes,
+];
 
-  app.get('/hello', createHelloPageHandler());
-
-  app.route(
-    '/api',
-    createApiRoutes({
-      appName: options.appName,
-      publicBasePath: options.publicBasePath,
-      deps: options.deps,
-      services: options.services,
-    }),
-  );
-}
+export default rootRoutes;

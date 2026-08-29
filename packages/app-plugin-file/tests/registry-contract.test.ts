@@ -98,18 +98,23 @@ describe('file plugin Registry contract', () => {
     const item = config.items.find(({ name }) => name === 'component-ui');
     expect(item).toMatchObject({
       type: 'registry:component',
-      registryDependencies: ['button'],
+      registryDependencies: ['button', 'dialog'],
       source: {
         root: 'registry/component-ui',
         target: 'client/extensions/nocobase-file-component-ui',
       },
     });
     expect(item?.dependencies).toContain('@nocobase/app-plugin-file@^0.0.1');
+    expect(item?.dependencies).toContain('react-markdown@^10.1.0');
+    expect(item?.dependencies).toContain('remark-gfm@^4.0.1');
     expect(item?.meta.nocobase?.requiresPlugins).toEqual({
       '@nocobase/app-plugin-file': '>=0.0.1 <0.1.0',
     });
     expect(read('registry/component-ui/index.ts')).toContain(
       "'./components/file-upload-field'",
+    );
+    expect(read('registry/component-ui/index.ts')).toContain(
+      "'./components/file-preview-field'",
     );
     expect(read('registry/component-ui/index.ts')).toContain(
       "'@nocobase/app-plugin-file/client'",
@@ -119,6 +124,45 @@ describe('file plugin Registry contract', () => {
         path.join(packageRoot, 'registry/component-ui/files-client.ts'),
       ),
     ).toBe(false);
+    const upload = read(
+      'registry/component-ui/components/file-upload-field.tsx',
+    );
+    const preview = read(
+      'registry/component-ui/components/file-preview-dialog.tsx',
+    );
+    const previewContent = read(
+      'registry/component-ui/components/previewers/file-preview-content.tsx',
+    );
+    const urls = read('registry/component-ui/lib/file-url.ts');
+    expect(upload).toContain('onStatusChange');
+    expect(upload).toContain("statusChangeRef.current?.('idle')");
+    expect(upload).toContain('AbortController');
+    expect(upload).toContain('completedRecordsRef');
+    expect(upload).toContain('labels?.remove');
+    expect(upload).toContain('labels?.retry');
+    expect(upload).toMatch(/Retry[\s\S]+disabled=\{disabled\}/u);
+    expect(upload).toContain('File removal failed.');
+    expect(upload).toContain('onError?.');
+    expect(upload).toMatch(/value\.map\(\(record\)/u);
+    expect(upload).toContain("value === '*' || value === '*/*'");
+    expect(preview).toContain("'@/components/ui/dialog'");
+    expect(preview).toMatch(/files[\s\S]+initialIndex/u);
+    expect(preview).toContain('signal: controller.signal');
+    expect(preview).toContain('fileUrlCredentials(url)');
+    expect(preview).toContain('reportDownloadError(onError, error)');
+    expect(previewContent).toMatch(/onDownload\s*\?/u);
+    expect(preview).toContain('resolveFilePreviewKind(file)');
+    expect(previewContent).toContain('ReactMarkdown');
+    expect(previewContent).toContain('remarkGfm');
+    expect(previewContent).toContain('resolveOfficeEmbedUrl');
+    expect(previewContent).toContain('OFFICE_PREVIEW_TIMEOUT_MS');
+    expect(previewContent).toContain("target='_blank'");
+    expect(previewContent).toContain("rel='noreferrer'");
+    expect(urls).toContain("resolved.protocol === 'http:'");
+    expect(urls).toContain("resolved.protocol === 'https:'");
+    expect(
+      read('registry/component-ui/components/file-thumbnail.tsx'),
+    ).toContain('isSafeImagePreview');
     expect(
       fs.existsSync(
         path.join(packageRoot, 'registry/component-ui/extension.ts'),
@@ -152,18 +196,32 @@ describe('file plugin Registry contract', () => {
     expect(page).toContain('nocobaseClient.getHeaders');
     expect(page).toContain('filesEndpoint');
     expect(page).toContain("'@nocobase/app-plugin-file/client'");
-    expect(page).toContain("'image/gif'");
-    expect(page).toContain("'audio/mpeg'");
-    expect(page).toContain("'audio/ogg'");
-    expect(page).toContain("'audio/wav'");
-    expect(page).toContain("'text/plain'");
-    expect(page).toContain("'video/mp4'");
-    expect(page).toContain("'video/webm'");
+    expect(page).toContain('FilePreviewField');
+    expect(page).toContain('showFilenames');
+    expect(page).toContain('FILE_DEMO_AVATAR_MIME_TYPES');
+    expect(page).toContain('FILE_DEMO_ORDER_MIME_TYPES');
+    expect(page).toContain('Markdown uses GFM');
+    expect(page).toContain('local URLs fall back');
+    const demoTypes = read('shared/file-demo.ts');
+    for (const mimeType of [
+      'text/markdown',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.oasis.opendocument.text',
+      'application/vnd.oasis.opendocument.spreadsheet',
+      'application/vnd.oasis.opendocument.presentation',
+      'application/vnd.oasis.opendocument.text-template',
+    ]) {
+      expect(demoTypes).toContain(`'${mimeType}'`);
+    }
     expect(page).not.toContain("'image/*'");
     expect(page).not.toContain("'text/*'");
     expect(page).not.toContain("'audio/*'");
     expect(page).not.toContain("'video/*'");
-    expect(page).not.toContain("'text/markdown'");
     expect(page).not.toContain('@/extensions/nocobase-file-component-ui');
     expect(page).not.toMatch(/path\s*:\s*['"]\/file-demo['"]/u);
   });

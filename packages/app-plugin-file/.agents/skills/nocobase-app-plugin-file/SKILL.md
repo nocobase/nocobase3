@@ -13,9 +13,9 @@ mounting, form submission, and authorization.
 
 ## Core rules
 
-- Reuse the host's existing database, Drive manager, authentication,
-  authorization, base path, and token secret. Do not create a second connection
-  or a file-specific service registry.
+- Resolve the host's existing database, Drive manager, authentication,
+  authorization, base path, and token secret from the Application's shared
+  ServiceContainer. Do not create a second connection or container.
 - Store stable metadata only. Never persist final URLs or access tokens.
 - Keep table names and scope fields in server code. Derive scope from validated
   route parameters, and apply it to every list, read, create, and delete query.
@@ -26,6 +26,21 @@ mounting, form submission, and authorization.
   configured visibility contract.
 - Keep Registry source limited to application-owned UI. It must not contain
   database, Drive, token, or authorization logic.
+- Prefer the one-call `database + table + scope` Route configuration. The
+  database Store factory is internal; `FileStore` remains the advanced public
+  extension point.
+- File components accept relative and HTTP(S) content/access URLs only. Use
+  upload status to block form submission and preserve cancellation on unmount.
+  Lists and dialogs expose `onError` for failed Private download URL requests;
+  set `download={false}` when download actions must be hidden, including
+  unsupported-preview fallbacks.
+- Use `FilePreviewField` for compact read-only thumbnail sets; enable
+  `showFilenames` when labels are needed. `FilePreviewDialog` accepts `files`
+  plus `initialIndex` and provides previous/next navigation.
+- Markdown previews support GFM without raw HTML execution. Office and
+  OpenDocument previews use Office Online only for internet-accessible absolute
+  HTTP(S) Public URLs or freshly issued Private access URLs; relative,
+  localhost, blob, and failed embeds fall back to download.
 
 ## References
 

@@ -1,5 +1,10 @@
 export { createAppDatabaseManager } from './manager.js';
 export {
+  DatabaseProvider,
+  type DatabaseProviderApplication,
+  type DatabaseProviderApplicationConfig,
+} from './provider.js';
+export {
   createAppMigrator,
   type AppMigrationRollbackResult,
   type AppMigrationRunResult,
@@ -14,6 +19,7 @@ export {
   type CreateAppSeederOptions,
 } from './seeder.js';
 export { prepareAppDatabaseStorage } from './storage.js';
+export { runAppMigrations, runAppSeeds } from './tasks.js';
 export type {
   AppDatabaseConfig,
   AppDatabaseMigrationConfig,

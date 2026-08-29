@@ -555,7 +555,7 @@ it('serves the packaged app-dist fixture', async () => {
   expect(
     host.registry.listDefinitions().map((definition) => definition.id),
   ).toEqual(
-    expect.arrayContaining(['demo', 'lifecycle', 'service', 'ws-demo']),
+    expect.arrayContaining(['demo', 'koa', 'lifecycle', 'service', 'ws-demo']),
   );
 
   const address = host.server.address();
@@ -587,6 +587,52 @@ it('serves the packaged app-dist fixture', async () => {
     id: 'service',
     requestPath: '/healthz',
   });
+
+  const koaInfo = await fetch(
+    `http://127.0.0.1:${address.port}/koa/api/info?source=fixture`,
+  );
+  expect(koaInfo.headers.get('x-koa-middleware')).toBe('active');
+  expect(koaInfo.headers.getSetCookie()).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining('koa-session=fixture'),
+      expect.stringContaining('koa-adapter=loopback'),
+    ]),
+  );
+  await expect(koaInfo.json()).resolves.toMatchObject({
+    framework: 'koa',
+    id: 'koa',
+    basePath: '/koa',
+    requestPath: '/api/info',
+    query: {
+      source: 'fixture',
+    },
+  });
+
+  const koaEcho = await fetch(`http://127.0.0.1:${address.port}/koa/api/echo`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'text/plain; charset=utf-8',
+    },
+    body: 'hello from app-host',
+  });
+  expect(koaEcho.status).toBe(201);
+  await expect(koaEcho.json()).resolves.toMatchObject({
+    body: 'hello from app-host',
+    contentType: 'text/plain; charset=utf-8',
+    requestPath: '/api/echo',
+  });
+
+  const koaRedirect = await fetch(
+    `http://127.0.0.1:${address.port}/koa/redirect`,
+    {
+      redirect: 'manual',
+    },
+  );
+  expect(koaRedirect.status).toBe(302);
+  expect(koaRedirect.headers.get('location')).toBe('/koa/api/info');
+
+  const koaStream = await fetch(`http://127.0.0.1:${address.port}/koa/stream`);
+  await expect(koaStream.text()).resolves.toBe('Koa stream response');
 
   const lifecyclePage = await fetch(
     `http://127.0.0.1:${address.port}/lifecycle/`,

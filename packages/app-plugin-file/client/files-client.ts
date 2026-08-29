@@ -183,6 +183,7 @@ export function createFilesClient(
       method: 'GET' | 'POST' | 'DELETE';
       body?: unknown;
       allowNoContent?: boolean;
+      signal?: AbortSignal;
     },
   ): Promise<T> {
     try {
@@ -200,6 +201,7 @@ export function createFilesClient(
             : requestOptions.body instanceof FormData
               ? requestOptions.body
               : JSON.stringify(requestOptions.body),
+        signal: requestOptions.signal,
       });
       const renewedToken = response.headers.get('x-new-token');
       if (renewedToken) nocobaseClient.setToken(renewedToken);
@@ -253,6 +255,7 @@ export function createFilesClient(
       }
       return (payload as { data: T }).data;
     } catch (error) {
+      if (isAbortError(error)) throw error;
       throw toClientError(error);
     }
   }
@@ -279,6 +282,7 @@ export function createFilesClient(
       const record = await request<FileRecord>(joinEndpoint(endpoint), {
         method: 'POST',
         body,
+        signal: uploadOptions?.signal,
       });
       return resolveFileRecord(record);
     },
@@ -312,4 +316,13 @@ export function createFilesClient(
       });
     },
   };
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'AbortError'
+  );
 }

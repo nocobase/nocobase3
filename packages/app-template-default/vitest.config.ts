@@ -12,12 +12,6 @@ export default createReactVitestConfig({
         replacement: fileURLToPath(new URL('./server/jobs', import.meta.url)),
       },
       {
-        find: '@/services',
-        replacement: fileURLToPath(
-          new URL('./server/services', import.meta.url),
-        ),
-      },
-      {
         find: '@',
         replacement: fileURLToPath(new URL('./client', import.meta.url)),
       },
@@ -46,9 +40,7 @@ export default createReactVitestConfig({
       'tests/logic/lifecycle.test.ts',
       'tests/logic/package-scripts.test.ts',
       'tests/logic/plugin-commands.test.ts',
-      'tests/logic/plugins.test.ts',
       'tests/logic/tailwind-sources.test.ts',
-      'tests/logic/public-request.test.ts',
       'tests/logic/workflow-management.test.ts',
     ],
     coverage: {

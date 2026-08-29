@@ -1,8 +1,25 @@
 import { readFile } from 'node:fs/promises';
 
-import type { DatabaseManager } from '@nocobase/app-database';
-import type { NocoBaseDriveManager } from '@nocobase/drive';
-import { createLogger, type Logger } from '@nocobase/logging';
+import {
+  databaseManagerToken,
+  type DatabaseManager,
+} from '@nocobase/app-database';
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
+import { driveManagerToken, type NocoBaseDriveManager } from '@nocobase/drive';
+import {
+  createLogger,
+  loggingToken,
+  type Logger,
+  type Logging,
+} from '@nocobase/logging';
+import { ServiceContainer } from '@nocobase/service-provider';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +30,10 @@ import type {
   DatabaseFileStoreOptions,
   FileStore,
 } from '../server/types.js';
+import {
+  FILE_DEMO_AVATAR_MIME_TYPES,
+  FILE_DEMO_ORDER_MIME_TYPES,
+} from '../shared/file-demo.js';
 
 const { createFileRouteMock, ensureFileObjectMock, removeFileObjectMock } =
   vi.hoisted(() => ({
@@ -29,13 +50,13 @@ vi.mock('../server/file-storage.js', () => ({
   removeFileObject: removeFileObjectMock,
 }));
 
-import bootstrapFilePlugin from '../server/bootstrap.js';
+import FileProvider from '../server/provider.js';
 import {
   isFilePluginRuntimeUnavailable,
   resolveFilePluginRuntime,
   type FilePluginConfig,
-  type FilePluginDeps,
 } from '../server/plugin-runtime.js';
+import { filePluginRuntimeToken } from '../server/runtime-token.js';
 import registerRoutes, {
   createFileDemoRoutes,
 } from '../server/routes/index.js';
@@ -46,7 +67,7 @@ describe('file plugin route factory and registrar', () => {
   let required: ReturnType<typeof vi.fn<() => MiddlewareHandler>>;
   let logger: Logger;
   let config: FilePluginConfig;
-  let deps: FilePluginDeps;
+  let deps: HostServices;
 
   beforeEach(() => {
     database = createBootstrapDatabase();
@@ -71,7 +92,10 @@ describe('file plugin route factory and registrar', () => {
   });
 
   it('resolves the narrow runtime from existing host dependencies', () => {
-    const runtime = resolveFilePluginRuntime({ config, deps });
+    const runtime = resolveFilePluginRuntime(
+      createContainer(config, deps),
+      config,
+    );
 
     expect(isFilePluginRuntimeUnavailable(runtime)).toBe(false);
     expect(runtime).toMatchObject({
@@ -88,12 +112,14 @@ describe('file plugin route factory and registrar', () => {
     const error = vi.spyOn(logger, 'error');
     ensureFileObjectMock.mockRejectedValueOnce(failure);
 
-    bootstrapFilePlugin({
+    const container = createContainer(config, deps, false);
+    const provider = new FileProvider({
       config,
-      deps,
-      services: {},
-      lifecycle: { registerDisposer: vi.fn() },
+      container,
+      router: new Hono(),
     });
+    provider.register();
+    await provider.boot();
 
     await vi.waitFor(() =>
       expect(ensureFileObjectMock).toHaveBeenCalledTimes(3),
@@ -178,26 +204,35 @@ describe('file plugin route factory and registrar', () => {
     await expect(responsePromise).resolves.toMatchObject({ status: 200 });
   });
 
-  it('returns the same observable error after fixture initialization fails', async () => {
-    ensureFileObjectMock.mockRejectedValue(new Error('fixture write failed'));
+  it('retries fixture initialization on the next request after a failure', async () => {
+    ensureFileObjectMock.mockRejectedValueOnce(
+      new Error('fixture write failed'),
+    );
     const app = createFactoryApp(config, deps);
 
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await app.request('/api/attachments/examples', {
-        headers: { 'x-demo-auth': 'allowed' },
-      });
-      expect(response.status).toBe(503);
-      await expect(response.json()).resolves.toMatchObject({
-        error: {
-          code: 'FILE_UNAVAILABLE',
-          message: 'File Demo fixture initialization failed.',
-        },
-      });
-    }
+    const failed = await app.request('/api/attachments/examples', {
+      headers: { 'x-demo-auth': 'allowed' },
+    });
+    expect(failed.status).toBe(503);
+    await expect(failed.json()).resolves.toMatchObject({
+      error: {
+        code: 'FILE_UNAVAILABLE',
+        message: 'File Demo fixture initialization failed.',
+      },
+    });
+
+    const recovered = await app.request('/api/attachments/examples', {
+      headers: { 'x-demo-auth': 'allowed' },
+    });
+    expect(recovered.status).toBe(200);
+    expect(ensureFileObjectMock).toHaveBeenCalledTimes(6);
   });
 
   it('configures both Demo resources through the public route factory', () => {
-    createFileDemoRoutes({ config, deps });
+    createFileDemoRoutes({
+      config,
+      container: createContainer(config, deps),
+    });
 
     expect(createFileRouteMock).toHaveBeenCalledTimes(2);
     const avatar = createFileRouteMock.mock.calls[0]?.[0] as
@@ -222,7 +257,7 @@ describe('file plugin route factory and registrar', () => {
       limits: {
         maxSize: 5 * 1024 * 1024,
         maxFiles: 1,
-        mimeTypes: ['image/gif', 'image/jpeg', 'image/png', 'image/webp'],
+        mimeTypes: FILE_DEMO_AVATAR_MIME_TYPES,
       },
     });
     expect(order).toMatchObject({
@@ -234,14 +269,7 @@ describe('file plugin route factory and registrar', () => {
       limits: {
         maxSize: 50 * 1024 * 1024,
         maxFiles: 10,
-        mimeTypes: expect.arrayContaining([
-          'application/json',
-          'application/pdf',
-          'audio/mpeg',
-          'image/png',
-          'text/plain',
-          'video/mp4',
-        ]),
+        mimeTypes: FILE_DEMO_ORDER_MIME_TYPES,
       },
     });
     expect(avatar?.auth).toBe(order?.auth);
@@ -291,10 +319,10 @@ describe('file plugin route factory and registrar', () => {
     async (_name, depsOverride, configOverride = {}) => {
       const unavailableDeps = { ...deps, ...depsOverride };
       const unavailableConfig = { ...config, ...configOverride };
-      const runtime = resolveFilePluginRuntime({
-        config: unavailableConfig,
-        deps: unavailableDeps,
-      });
+      const runtime = resolveFilePluginRuntime(
+        createContainer(unavailableConfig, unavailableDeps),
+        unavailableConfig,
+      );
       expect(isFilePluginRuntimeUnavailable(runtime)).toBe(true);
 
       const app = createFactoryApp(unavailableConfig, unavailableDeps);
@@ -317,7 +345,7 @@ describe('file plugin route factory and registrar', () => {
     const sources = await Promise.all(
       [
         '../server/plugin-runtime.ts',
-        '../server/bootstrap.ts',
+        '../server/provider.ts',
         '../server/routes/index.ts',
       ].map(async (path) => readFile(new URL(path, import.meta.url), 'utf8')),
     );
@@ -325,32 +353,38 @@ describe('file plugin route factory and registrar', () => {
 
     expect(source).not.toMatch(/app-template-default/);
     expect(source).not.toMatch(/AppServices\.files/);
-    expect(source).not.toMatch(/ServiceRegistry|ServiceContainer/);
+    expect(source).not.toMatch(/new ServiceContainer/);
   });
 
   it('mounts the Demo Router at the plugin convention path', async () => {
     const app = new Hono();
-    registerRoutes({
+    const container = createContainer(config, deps);
+    registerRoutes(
+      {
+        appName: 'test',
+        publicBasePath: config.app.publicBasePath,
+        router: app,
+        apiRouter: app,
+        config,
+        container,
+        paths: {} as never,
+      },
       app,
-      config,
-      deps,
-      services: {},
-      paths: {} as never,
-    });
+    );
 
-    const response = await app.request('/api/attachments/examples', {
+    const response = await app.request('/attachments/examples', {
       headers: { 'x-demo-auth': 'allowed' },
     });
     expect(response.status).toBe(200);
   });
 });
 
-function createFactoryApp(
-  config: FilePluginConfig,
-  deps: FilePluginDeps,
-): Hono {
+function createFactoryApp(config: FilePluginConfig, deps: HostServices): Hono {
   const app = new Hono();
-  app.route('/api/attachments', createFileDemoRoutes({ config, deps }));
+  app.route(
+    '/api/attachments',
+    createFileDemoRoutes({ config, container: createContainer(config, deps) }),
+  );
   return app;
 }
 
@@ -363,9 +397,7 @@ function authenticatedOnly(): MiddlewareHandler {
   };
 }
 
-function createAuthorization(
-  role: 'admin' | 'member',
-): FilePluginDeps['authz'] {
+function createAuthorization(role: 'admin' | 'member'): HostAuthorization {
   return {
     middleware: () => async (context, next) => {
       context.set('authz', {
@@ -378,6 +410,42 @@ function createAuthorization(
         role === 'admin' ? [{ key: 'system-administrator' }] : [],
     },
   };
+}
+
+type HostAuthorization = Pick<
+  AppAuthorization,
+  'middleware' | 'permissionSets'
+>;
+
+interface HostServices {
+  readonly database?: DatabaseManager;
+  readonly driveManager?: NocoBaseDriveManager;
+  readonly auth: Pick<Auth, 'required'>;
+  readonly authz: HostAuthorization;
+  readonly logging: Pick<Logging, 'getLogger'>;
+}
+
+function createContainer(
+  config: FilePluginConfig,
+  services: HostServices,
+  includeRuntime: boolean = true,
+): ServiceContainer {
+  const container = new ServiceContainer();
+  if (services.database) {
+    container.instance(databaseManagerToken, services.database);
+  }
+  if (services.driveManager) {
+    container.instance(driveManagerToken, services.driveManager);
+  }
+  container.instance(authenticationToken, services.auth as Auth);
+  container.instance(authorizationToken, services.authz as AppAuthorization);
+  container.instance(loggingToken, services.logging as Logging);
+  if (includeRuntime) {
+    container.singleton(filePluginRuntimeToken, (resolver) =>
+      resolveFilePluginRuntime(resolver, config),
+    );
+  }
+  return container;
 }
 
 function createBootstrapDatabase(): DatabaseManager {
