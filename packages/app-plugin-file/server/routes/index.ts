@@ -22,7 +22,6 @@ import {
 } from '../demo/constants.js';
 import {
   isFilePluginRuntimeUnavailable,
-  type FilePluginConfig,
   type FilePluginRuntime,
   type UnavailableFilePluginRuntime,
 } from '../plugin-runtime.js';
@@ -55,12 +54,10 @@ type FileAuthorizationScope = AuthorizationEnv['Variables']['authz'];
 type ReadinessProvider = () => Promise<void> | undefined;
 
 export interface CreateFileDemoRoutesOptions {
-  readonly config: FilePluginConfig;
   readonly container: ServiceResolver;
 }
 
 export function createFileDemoRoutes({
-  config,
   container,
 }: CreateFileDemoRoutesOptions): Hono<FileAuthorizationEnv> {
   const runtime = container.resolve(filePluginRuntimeToken);
@@ -73,6 +70,9 @@ export function createFileDemoRoutes({
     drive = runtime.drive;
     readiness = () => prepareFileDemoFixtures(runtime);
   }
+  const routeConfig = isFilePluginRuntimeUnavailable(runtime)
+    ? { defaultDisk: 'local', publicBasePath: '', tokenSecret: undefined }
+    : runtime;
   const auth = createManagementAuth(
     container.resolve(authenticationToken),
     container.resolve(authorizationToken),
@@ -116,14 +116,14 @@ export function createFileDemoRoutes({
             profile: {
               ...FILE_DEMO_PROFILE,
               filesEndpoint: publicEndpoint(
-                config.app.publicBasePath,
+                routeConfig.publicBasePath,
                 `${ATTACHMENTS_PATH}/profiles/${FILE_DEMO_PROFILE.id}/avatar`,
               ),
             },
             order: {
               ...FILE_DEMO_ORDER,
               filesEndpoint: publicEndpoint(
-                config.app.publicBasePath,
+                routeConfig.publicBasePath,
                 `${ATTACHMENTS_PATH}/orders/${FILE_DEMO_ORDER.id}/files`,
               ),
             },
@@ -136,9 +136,9 @@ export function createFileDemoRoutes({
     createFileRoute({
       ...avatarSource,
       drive,
-      defaultDisk: config.drive?.default ?? 'local',
-      publicBasePath: config.app.publicBasePath,
-      tokenSecret: config.session?.secret,
+      defaultDisk: routeConfig.defaultDisk,
+      publicBasePath: routeConfig.publicBasePath,
+      tokenSecret: routeConfig.tokenSecret,
       audience: PROFILE_AVATAR_AUDIENCE,
       auth,
       visibility: {
@@ -157,9 +157,9 @@ export function createFileDemoRoutes({
     createFileRoute({
       ...orderSource,
       drive,
-      defaultDisk: config.drive?.default ?? 'local',
-      publicBasePath: config.app.publicBasePath,
-      tokenSecret: config.session?.secret,
+      defaultDisk: routeConfig.defaultDisk,
+      publicBasePath: routeConfig.publicBasePath,
+      tokenSecret: routeConfig.tokenSecret,
       audience: ORDER_ATTACHMENTS_AUDIENCE,
       auth,
       visibility: {
@@ -276,7 +276,7 @@ export default function registerRoutes(
 ): void {
   router.route(
     '/attachments',
-    createFileDemoRoutes({ config: app.config, container: app.container }),
+    createFileDemoRoutes({ container: app.container }),
   );
 }
 

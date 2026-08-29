@@ -2,23 +2,16 @@ import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import { driveManagerToken, type NocoBaseDriveManager } from '@nocobase/drive';
+import type { NocoBaseDriveManager } from '@nocobase/drive';
+import { driveConfig, driveManagerToken } from '@nocobase/app-server-kit/drive';
+import { sessionConfig } from '@nocobase/app-server-kit/session';
+import {
+  appConfig,
+  type AppConfigAccessor,
+} from '@nocobase/app-server-kit/config';
 import type { ServiceResolver } from '@nocobase/service-provider';
 
 import { FileUnavailableError } from './errors.js';
-
-export interface FilePluginConfig {
-  readonly app: {
-    readonly publicBasePath: string;
-  };
-  readonly drive?: {
-    readonly default: string;
-    readonly disks?: Readonly<Record<string, unknown>>;
-  };
-  readonly session?: {
-    readonly secret?: string;
-  };
-}
 
 export interface UnavailableFilePluginRuntime {
   readonly unavailable: true;
@@ -39,7 +32,7 @@ export type FilePluginRuntimeResult =
 
 export function resolveFilePluginRuntime(
   container: ServiceResolver,
-  config: FilePluginConfig,
+  config: AppConfigAccessor,
 ): FilePluginRuntimeResult {
   if (!container.has(databaseManagerToken)) {
     return unavailable('File database storage is not configured.');
@@ -49,15 +42,18 @@ export function resolveFilePluginRuntime(
   }
   const database = container.resolve(databaseManagerToken);
   const drive = container.resolve(driveManagerToken);
-  const tokenSecret = config.session?.secret;
+  const session = config.get(sessionConfig);
+  const driveConfigValue = config.get(driveConfig);
+  const app = config.get(appConfig);
+  const tokenSecret = session.secret;
   if (!tokenSecret) {
     return unavailable('File access token signing is not configured.');
   }
   return Object.freeze({
     database,
     drive,
-    defaultDisk: config.drive?.default ?? 'local',
-    publicBasePath: config.app.publicBasePath,
+    defaultDisk: driveConfigValue.default,
+    publicBasePath: app.publicBasePath,
     tokenSecret,
   });
 }

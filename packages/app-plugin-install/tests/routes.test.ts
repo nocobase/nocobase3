@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import { AppConfig, createConfigPaths } from '@nocobase/app-server-kit/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -92,10 +92,6 @@ describe('@nocobase/app-plugin-install routes', () => {
 
   it('configures an application without returning its secret', async () => {
     const rootDir = createTemporaryRoot();
-    writeFileSync(
-      path.join(rootDir, '.env.example'),
-      'APP_BASE_PATH=/main\nDB_MIGRATIONS_AUTO_RUN=true\n',
-    );
     const router = new Hono();
     router.route(
       '/install',
@@ -130,7 +126,6 @@ describe('@nocobase/app-plugin-install routes', () => {
 
   it('rejects malformed configuration requests', async () => {
     const rootDir = createTemporaryRoot();
-    writeFileSync(path.join(rootDir, '.env.example'), 'APP_BASE_PATH=/main\n');
     const router = new Hono();
     router.route(
       '/install',
@@ -166,12 +161,8 @@ function createTemporaryRoot(): string {
   return directory;
 }
 
-function createPluginConfig(secret: string): {
-  app: { name: string; publicBasePath: string };
-  auth: { secret: string };
-} {
-  return {
-    app: { name: 'main', publicBasePath: '/main' },
-    auth: { secret },
-  };
+function createPluginConfig(secret: string): AppConfig {
+  const config = new AppConfig();
+  config.get = <TValue>(): TValue => ({ secret }) as TValue;
+  return config;
 }

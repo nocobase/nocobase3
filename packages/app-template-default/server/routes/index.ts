@@ -4,17 +4,15 @@ import {
   type AppRootRoutes,
 } from '@nocobase/app-server-kit/router';
 
-import type { AppConfig } from '../config/index.js';
 import { appExampleServiceToken } from '../providers/index.js';
 
-const exampleRootRoutes: AppRootRoutes<Application<AppConfig>> =
-  defineRootRoutes({
-    name: '@nocobase/app-template-default/root/example',
-    register(router, app): void {
-      router.get('/example', (context) => {
-        const exampleService = app.container.resolve(appExampleServiceToken);
+const exampleRootRoutes: AppRootRoutes<Application> = defineRootRoutes({
+  name: '@nocobase/app-template-default/root/example',
+  register(router, app): void {
+    router.get('/example', (context) => {
+      const exampleService = app.container.resolve(appExampleServiceToken);
 
-        return context.html(`<!doctype html>
+      return context.html(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -28,12 +26,10 @@ const exampleRootRoutes: AppRootRoutes<Application<AppConfig>> =
     </main>
   </body>
 </html>`);
-      });
-    },
-  });
+    });
+  },
+});
 
-const rootRoutes: readonly AppRootRoutes<Application<AppConfig>>[] = [
-  exampleRootRoutes,
-];
+const rootRoutes: readonly AppRootRoutes<Application>[] = [exampleRootRoutes];
 
 export default rootRoutes;

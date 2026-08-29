@@ -50,9 +50,9 @@ Node-only server entrypoints use `defineStandaloneServer()` from
 Definition, and shared `createServer(scope)` factory. The resulting create and
 start operations own standalone Scope creation, Vite overrides, public-path
 mounting, Node listen configuration, and lifecycle cleanup. Config-only
-entrypoints use `resolveStandaloneAppRuntime()`, while database tasks use
-`resolveStandaloneAppRuntimeConfigSection()` so they do not evaluate unrelated
-config factories. Use `createStandaloneRuntimeScope()` only when direct Scope
+entrypoints and database tasks use `resolveStandaloneAppRuntime()`, initialize
+the runtime `appConfig`, and read the required typed config token. Use
+`createStandaloneRuntimeScope()` only when direct Scope
 lifecycle access is required. Do not add template-local Scope or config-loading
 facades around these APIs.
 

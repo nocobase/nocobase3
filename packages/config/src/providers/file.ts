@@ -5,6 +5,7 @@ import type { ConfigProvider, ConfigProviderResult } from '../types.js';
 
 export interface FileProviderOptions {
   readonly name?: string;
+  readonly optional?: boolean;
 }
 
 export function fileProvider(
@@ -16,10 +17,22 @@ export function fileProvider(
   return {
     name: options.name ?? `file:${normalizedPath}`,
     async read(context): Promise<ConfigProviderResult> {
-      const [value, attributes] = await Promise.all([
-        readFile(normalizedPath, { signal: context.signal }),
-        stat(normalizedPath),
-      ]);
+      let value: Uint8Array;
+      let attributes;
+      try {
+        [value, attributes] = await Promise.all([
+          readFile(normalizedPath, { signal: context.signal }),
+          stat(normalizedPath),
+        ]);
+      } catch (error) {
+        if (options.optional && isMissingFileError(error)) {
+          return {
+            kind: 'bytes',
+            value: new TextEncoder().encode('{}'),
+          };
+        }
+        throw error;
+      }
       return {
         kind: 'bytes',
         value,
@@ -30,4 +43,8 @@ export function fileProvider(
       };
     },
   };
+}
+
+function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }

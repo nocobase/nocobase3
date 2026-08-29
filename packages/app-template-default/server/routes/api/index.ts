@@ -4,10 +4,9 @@ import {
   type AppApiRoutes,
 } from '@nocobase/app-server-kit/router';
 
-import type { AppConfig } from '../../config/index.js';
 import { appExampleServiceToken } from '../../providers/index.js';
 
-const exampleApiRoutes: AppApiRoutes<Application<AppConfig>> = defineApiRoutes({
+const exampleApiRoutes: AppApiRoutes<Application> = defineApiRoutes({
   name: '@nocobase/app-template-default/api/example',
   register(router, app): void {
     router.get('/example', (context) => {
@@ -21,8 +20,6 @@ const exampleApiRoutes: AppApiRoutes<Application<AppConfig>> = defineApiRoutes({
   },
 });
 
-const apiRoutes: readonly AppApiRoutes<Application<AppConfig>>[] = [
-  exampleApiRoutes,
-];
+const apiRoutes: readonly AppApiRoutes<Application>[] = [exampleApiRoutes];
 
 export default apiRoutes;

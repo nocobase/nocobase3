@@ -10,12 +10,12 @@ From the repository root:
 
 ```bash
 pnpm install
-cp packages/app-template-default/.env.example \
-  packages/app-template-default/.env.local
+cp packages/app-template-default/config.example.yml \
+  packages/app-template-default/config.yml
 pnpm app:dev
 ```
 
-The example environment mounts the application at `/main`. Use the URL printed
+The example config mounts the application at `/main`. Use the URL printed
 by the development command as the source of truth for host and port.
 
 The key settings are:

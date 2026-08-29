@@ -134,6 +134,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@sinclair/typebox": "catalog:",
     "@base-ui/react": "^1.6.0",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",

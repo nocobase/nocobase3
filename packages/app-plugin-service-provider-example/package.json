@@ -43,6 +43,7 @@
   "dependencies": {
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@sinclair/typebox": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {

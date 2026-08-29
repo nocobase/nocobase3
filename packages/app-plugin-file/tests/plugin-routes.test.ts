@@ -12,13 +12,14 @@ import {
   authorizationToken,
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
-import { driveManagerToken, type NocoBaseDriveManager } from '@nocobase/drive';
+import type { NocoBaseDriveManager } from '@nocobase/drive';
+import { driveManagerToken } from '@nocobase/app-server-kit/drive';
 import {
-  createLogger,
-  loggingToken,
-  type Logger,
-  type Logging,
-} from '@nocobase/logging';
+  type AppConfigAccessor,
+  type AppConfigToken,
+} from '@nocobase/app-server-kit/config';
+import { createLogger, type Logger, type Logging } from '@nocobase/logging';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
 import { ServiceContainer } from '@nocobase/service-provider';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
@@ -54,7 +55,6 @@ import FileProvider from '../server/provider.js';
 import {
   isFilePluginRuntimeUnavailable,
   resolveFilePluginRuntime,
-  type FilePluginConfig,
 } from '../server/plugin-runtime.js';
 import { filePluginRuntimeToken } from '../server/runtime-token.js';
 import registerRoutes, {
@@ -66,7 +66,7 @@ describe('file plugin route factory and registrar', () => {
   let driveManager: NocoBaseDriveManager;
   let required: ReturnType<typeof vi.fn<() => MiddlewareHandler>>;
   let logger: Logger;
-  let config: FilePluginConfig;
+  let config: TestFileConfig;
   let deps: HostServices;
 
   beforeEach(() => {
@@ -94,7 +94,7 @@ describe('file plugin route factory and registrar', () => {
   it('resolves the narrow runtime from existing host dependencies', () => {
     const runtime = resolveFilePluginRuntime(
       createContainer(config, deps),
-      config,
+      createConfigAccessor(config),
     );
 
     expect(isFilePluginRuntimeUnavailable(runtime)).toBe(false);
@@ -114,7 +114,7 @@ describe('file plugin route factory and registrar', () => {
 
     const container = createContainer(config, deps, false);
     const provider = new FileProvider({
-      config,
+      config: createConfigAccessor(config),
       container,
       router: new Hono(),
     });
@@ -321,7 +321,7 @@ describe('file plugin route factory and registrar', () => {
       const unavailableConfig = { ...config, ...configOverride };
       const runtime = resolveFilePluginRuntime(
         createContainer(unavailableConfig, unavailableDeps),
-        unavailableConfig,
+        createConfigAccessor(unavailableConfig),
       );
       expect(isFilePluginRuntimeUnavailable(runtime)).toBe(true);
 
@@ -365,7 +365,7 @@ describe('file plugin route factory and registrar', () => {
         publicBasePath: config.app.publicBasePath,
         router: app,
         apiRouter: app,
-        config,
+        config: createConfigAccessor(config),
         container,
         paths: {} as never,
       },
@@ -379,11 +379,11 @@ describe('file plugin route factory and registrar', () => {
   });
 });
 
-function createFactoryApp(config: FilePluginConfig, deps: HostServices): Hono {
+function createFactoryApp(config: TestFileConfig, deps: HostServices): Hono {
   const app = new Hono();
   app.route(
     '/api/attachments',
-    createFileDemoRoutes({ config, container: createContainer(config, deps) }),
+    createFileDemoRoutes({ container: createContainer(config, deps) }),
   );
   return app;
 }
@@ -426,7 +426,7 @@ interface HostServices {
 }
 
 function createContainer(
-  config: FilePluginConfig,
+  config: TestFileConfig,
   services: HostServices,
   includeRuntime: boolean = true,
 ): ServiceContainer {
@@ -442,10 +442,32 @@ function createContainer(
   container.instance(loggingToken, services.logging as Logging);
   if (includeRuntime) {
     container.singleton(filePluginRuntimeToken, (resolver) =>
-      resolveFilePluginRuntime(resolver, config),
+      resolveFilePluginRuntime(resolver, createConfigAccessor(config)),
     );
   }
   return container;
+}
+
+interface TestFileConfig {
+  readonly app: { readonly publicBasePath: string };
+  readonly drive?: { readonly default: string };
+  readonly session?: { readonly secret?: string };
+}
+
+function createConfigAccessor(config: TestFileConfig): AppConfigAccessor {
+  return {
+    get<TValue>(token: AppConfigToken<TValue>): TValue {
+      const values: Record<string, unknown> = {
+        app: config.app,
+        drive: { default: config.drive?.default ?? 'local', disks: {} },
+        session: config.session ?? {},
+      };
+      return values[token.namespace] as TValue;
+    },
+    raw: () => ({}),
+    reload: async () => ({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  };
 }
 
 function createBootstrapDatabase(): DatabaseManager {

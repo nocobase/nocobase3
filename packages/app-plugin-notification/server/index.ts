@@ -1,4 +1,5 @@
 export * from './channel-manager.js';
+export * from './config.js';
 export { default as NotificationProvider } from './provider.js';
 export * from './token.js';
 export * from './logs.js';

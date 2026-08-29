@@ -8,26 +8,25 @@ import {
   type AppApiRoutes,
 } from '@nocobase/app-server-kit/router';
 
-import WorkflowProvider, { type WorkflowProviderConfig } from './provider.js';
+import WorkflowProvider from './provider.js';
+import { workflowConfig } from './config.js';
 import registerWorkflowRoutes from './routes/routes.js';
 
-const workflowApiRoutes: AppApiRoutes<
-  AppPluginApplication<WorkflowProviderConfig>
-> = defineApiRoutes({
+const workflowApiRoutes: AppApiRoutes<AppPluginApplication> = defineApiRoutes({
   name: '@nocobase/app-plugin-workflow/api',
   register(router, app): void {
     registerWorkflowRoutes(app, router);
   },
 });
 
-const workflowPlugin: AppServerPlugin<WorkflowProviderConfig> =
-  defineServerPlugin({
-    packageName: '@nocobase/app-plugin-workflow',
-    providers: [WorkflowProvider],
-    apiRoutes: [workflowApiRoutes],
-    database: {
-      migrations: './database/migrations',
-    },
-  });
+const workflowPlugin: AppServerPlugin = defineServerPlugin({
+  packageName: '@nocobase/app-plugin-workflow',
+  config: workflowConfig,
+  providers: [WorkflowProvider],
+  apiRoutes: [workflowApiRoutes],
+  database: {
+    migrations: './database/migrations',
+  },
+});
 
 export default workflowPlugin;

@@ -3,13 +3,14 @@ import {
   normalizeBasePath,
 } from '@nocobase/app-server-kit/support';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { appConfig } from '@nocobase/app-server-kit/config';
+import { cachingToken } from '@nocobase/app-server-kit/caching';
+import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
 import {
   ServiceProvider,
   type ServiceResolver,
 } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/app-database';
-import { cachingToken } from '@nocobase/caching';
-import { idGeneratorToken } from '@nocobase/id-generator';
 
 import {
   createAuthentication,
@@ -18,6 +19,7 @@ import {
 } from './auth.js';
 import { createAuthStorage } from './auth-storage.js';
 import { authenticationToken } from './token.js';
+import { authenticationConfig, resolveAuthSecret } from './config.js';
 
 interface RequestInitWithDuplex extends RequestInit {
   duplex?: 'half';
@@ -35,15 +37,9 @@ export interface AuthenticationProviderConfig {
   >;
 }
 
-export type AuthenticationProviderApplication<
-  TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,
-> = AppPluginApplication<TConfig>;
+export type AuthenticationProviderApplication = AppPluginApplication;
 
-export default class AuthenticationProvider<
-  TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,
-  TApplication extends AuthenticationProviderApplication<TConfig> =
-    AuthenticationProviderApplication<TConfig>,
-> extends ServiceProvider<TApplication> {
+export default class AuthenticationProvider extends ServiceProvider<AuthenticationProviderApplication> {
   public readonly name: string = '@nocobase/app-plugin-authentication';
 
   public override register(): void {
@@ -53,7 +49,15 @@ export default class AuthenticationProvider<
   }
 
   private createAuthentication(container: ServiceResolver): Auth {
-    const { config } = this.app;
+    const app = this.app.config.get(appConfig);
+    const configured = this.app.config.get(authenticationConfig);
+    const config = {
+      ...configured,
+      secret: resolveAuthSecret(
+        configured.secret,
+        this.app.paths?.root() ?? process.cwd(),
+      ),
+    };
     const caching = container.resolve(cachingToken);
     const idGenerator = container.resolve(idGeneratorToken);
     const database = container.has(databaseManagerToken)
@@ -62,30 +66,47 @@ export default class AuthenticationProvider<
     const auth = createAuthentication({
       connection: database?.connection(),
       secondaryStorage: createAuthStorage(caching),
-      appName: config.app.name,
-      ...config.auth,
-      baseURL: config.app.publicOrigin,
-      basePath: resolvePublicPath('/api/auth', config.app.publicBasePath),
+      appName: app.name,
+      ...config,
+      baseURL: resolvePublicOrigin(app.publicOrigin),
+      basePath: resolvePublicPath('/api/auth', app.publicBasePath),
       advanced: {
-        cookiePrefix: createCookiePrefix(config.app.name),
-        ...config.auth.advanced,
+        cookiePrefix: createCookiePrefix(app.name),
+        ...config.advanced,
         database: {
-          ...config.auth.advanced?.database,
+          ...config.advanced?.database,
           generateId:
-            config.auth.advanced?.database?.generateId ??
+            config.advanced?.database?.generateId ??
             (() => idGenerator.generateString()),
         },
         defaultCookieAttributes: {
-          path: config.app.publicBasePath || '/',
-          ...config.auth.advanced?.defaultCookieAttributes,
+          path: app.publicBasePath || '/',
+          ...config.advanced?.defaultCookieAttributes,
         },
       },
     });
     const originalAuthHandler = auth.handler.bind(auth);
     auth.handler = (request: Request): Promise<Response> =>
-      originalAuthHandler(toPublicRequest(request, config.app.publicBasePath));
+      originalAuthHandler(toPublicRequest(request, app.publicBasePath));
     return auth;
   }
+}
+
+function resolvePublicOrigin(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  const url = new URL(normalized);
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error('APP_PUBLIC_ORIGIN must contain only an HTTP(S) origin.');
+  }
+  return url.origin;
 }
 
 export function createCookiePrefix(appName: string): string {

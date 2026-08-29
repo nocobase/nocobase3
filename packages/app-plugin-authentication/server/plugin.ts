@@ -3,20 +3,19 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 
-import AuthenticationProvider, {
-  type AuthenticationProviderConfig,
-} from './provider.js';
+import AuthenticationProvider from './provider.js';
+import { authenticationConfig } from './config.js';
 import { authenticationApiRoutes } from './routes.js';
 
-const authenticationPlugin: AppServerPlugin<AuthenticationProviderConfig> =
-  defineServerPlugin({
-    packageName: '@nocobase/app-plugin-authentication',
-    providers: [AuthenticationProvider],
-    apiRoutes: [authenticationApiRoutes],
-    database: {
-      migrations: './database/migrations',
-      seeds: './database/seeds',
-    },
-  });
+const authenticationPlugin: AppServerPlugin = defineServerPlugin({
+  packageName: '@nocobase/app-plugin-authentication',
+  config: authenticationConfig,
+  providers: [AuthenticationProvider],
+  apiRoutes: [authenticationApiRoutes],
+  database: {
+    migrations: './database/migrations',
+    seeds: './database/seeds',
+  },
+});
 
 export default authenticationPlugin;

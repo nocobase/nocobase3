@@ -9,6 +9,7 @@ import {
 } from '@nocobase/app-server-kit/router';
 
 import ServiceProviderExampleProvider from './provider.js';
+import { heartbeatConfig } from './config.js';
 import registerServiceProviderExampleRoutes from './routes/index.js';
 
 const serviceProviderExampleApiRoutes: AppApiRoutes<AppPluginApplication> =
@@ -21,6 +22,7 @@ const serviceProviderExampleApiRoutes: AppApiRoutes<AppPluginApplication> =
 
 const serviceProviderExamplePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-service-provider-example',
+  config: heartbeatConfig,
   providers: [ServiceProviderExampleProvider],
   apiRoutes: [serviceProviderExampleApiRoutes],
 });

@@ -33,6 +33,9 @@ catalogs:
     '@refinedev/core':
       specifier: ^5.0.8
       version: 5.0.12
+    '@sinclair/typebox':
+      specifier: ^0.34.52
+      version: 0.34.52
     '@tailwindcss/postcss':
       specifier: ^4.1.4
       version: 4.3.3
@@ -93,6 +96,9 @@ catalogs:
     '@vitest/eslint-plugin':
       specifier: ^1.6.27
       version: 1.6.27
+    ajv:
+      specifier: ^8.20.0
+      version: 8.20.0
     better-auth:
       specifier: ^1.7.1
       version: 1.7.1
@@ -379,6 +385,9 @@ importers:
       '@refinedev/core':
         specifier: ^5.0.0
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.1.0))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vitest@4.1.10)
@@ -605,6 +614,9 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider
+      '@nocobase/session':
+        specifier: workspace:^
+        version: link:../session
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -690,6 +702,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:^
+        version: link:../app-plugin-authentication
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit
@@ -772,6 +787,9 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -1152,6 +1170,9 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -1198,6 +1219,9 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
       esbuild:
         specifier: ^0.25.12
         version: 0.25.12
@@ -1338,9 +1362,36 @@ importers:
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
+      '@nocobase/caching':
+        specifier: workspace:^
+        version: link:../caching
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../config
+      '@nocobase/drive':
+        specifier: workspace:^
+        version: link:../drive
+      '@nocobase/id-generator':
+        specifier: workspace:^
+        version: link:../id-generator
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../logging
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../queue
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider
+      '@nocobase/session':
+        specifier: workspace:^
+        version: link:../session
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
+      ajv:
+        specifier: 'catalog:'
+        version: 8.20.0
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -1383,7 +1434,7 @@ importers:
         version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       '@hookform/resolvers':
         specifier: ^5.0.1
-        version: 5.8.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)
+        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
@@ -1441,6 +1492,9 @@ importers:
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../caching
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../config
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config
@@ -1721,9 +1775,6 @@ importers:
       '@cacheable/memory':
         specifier: 'catalog:'
         version: 2.2.0
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../service-provider
       bloom-filters:
         specifier: 'catalog:'
         version: 3.0.4
@@ -1915,9 +1966,6 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.577.0
         version: 3.1111.0
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../service-provider
       flydrive:
         specifier: ^2.1.0
         version: 2.1.0(@aws-sdk/client-s3@3.1111.0)(@aws-sdk/s3-request-presigner@3.1111.0)
@@ -1963,7 +2011,7 @@ importers:
         version: 2.1.1(hono@4.13.2)
       '@hookform/resolvers':
         specifier: ^5.0.1
-        version: 5.8.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)
+        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
@@ -2185,10 +2233,6 @@ importers:
         version: 3.25.76
 
   packages/id-generator:
-    dependencies:
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../service-provider
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -2208,15 +2252,6 @@ importers:
 
   packages/logging:
     dependencies:
-      '@nocobase/app-server-kit':
-        specifier: workspace:^
-        version: link:../app-server-kit
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../service-provider
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       pino:
         specifier: 'catalog:'
         version: 10.3.1
@@ -2257,9 +2292,6 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../service-provider
       ioredis:
         specifier: 'catalog:'
         version: 5.11.1
@@ -2309,12 +2341,6 @@ importers:
 
   packages/session:
     dependencies:
-      '@nocobase/app-server-kit':
-        specifier: workspace:^
-        version: link:../app-server-kit
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../service-provider
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -4089,6 +4115,9 @@ packages:
         optional: true
       react:
         optional: true
+
+  '@sinclair/typebox@0.34.52':
+    resolution: {integrity: sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw==}
 
   '@sindresorhus/is@4.6.0':
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
@@ -10187,11 +10216,12 @@ snapshots:
     dependencies:
       hono: 4.13.2
 
-  '@hookform/resolvers@5.8.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)':
+  '@hookform/resolvers@5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)':
     dependencies:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.85.0(react@19.1.0)
     optionalDependencies:
+      '@sinclair/typebox': 0.34.52
       '@standard-schema/spec': 1.1.0
       ajv: 8.20.0
       ajv-formats: 2.1.1(ajv@8.20.0)
@@ -10841,6 +10871,8 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.18
       react: 19.1.0
+
+  '@sinclair/typebox@0.34.52': {}
 
   '@sindresorhus/is@4.6.0': {}
 

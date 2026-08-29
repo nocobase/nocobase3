@@ -97,6 +97,16 @@ describe('providers and parsers', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it('allows an optional file to be absent', async () => {
+    const provider = fileProvider('/missing/optional-config.yml', {
+      optional: true,
+    });
+    const config = new Config();
+
+    await expect(config.load(provider, jsonParser())).resolves.toBeUndefined();
+    expect(config.raw()).toEqual({});
+  });
 });
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

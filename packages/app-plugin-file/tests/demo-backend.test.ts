@@ -17,12 +17,10 @@ import {
   authorizationToken,
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
-import {
-  createDriveManager,
-  driveManagerToken,
-  type NocoBaseDriveManager,
-} from '@nocobase/drive';
-import { createLogger, loggingToken, type Logging } from '@nocobase/logging';
+import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
+import { driveManagerToken } from '@nocobase/app-server-kit/drive';
+import { createLogger, type Logging } from '@nocobase/logging';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

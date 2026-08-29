@@ -1,4 +1,5 @@
 import type { ExecutionContext, Hono } from 'hono';
+import type { AppConfigAccessor } from '../config/index.js';
 
 import type { ConfigPaths } from '../config/index.js';
 import {
@@ -34,36 +35,26 @@ export type ApplicationWebSocketFactory = (
   container: ServiceResolver,
 ) => AppWebSocketHandler;
 
-export interface ApplicationConfig {
-  readonly app: {
-    readonly name?: string;
-    readonly publicBasePath: string;
-  };
-}
+export type ApplicationConfig = object;
 
-export interface ApplicationOptions<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
-  readonly config: TConfig;
+export interface ApplicationOptions {
+  readonly config: AppConfigAccessor;
+  readonly mode?: 'standalone' | 'embedded';
+  readonly appName: string;
+  readonly publicBasePath: string;
   readonly paths: ConfigPaths;
   readonly websocket?: ApplicationWebSocketFactory;
 }
 
 export type ApplicationServiceProviderConstructor<
-  TConfig extends ApplicationConfig = ApplicationConfig,
   TArguments extends readonly unknown[] = [],
-> = new (
-  app: Application<TConfig>,
-  ...args: TArguments
-) => ServiceProviderLifecycle;
+> = new (app: Application, ...args: TArguments) => ServiceProviderLifecycle;
 
-export interface ApplicationRuntimeContributions<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
-  readonly plugins: ResolvedAppServerPlugins<TConfig>;
-  readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
-  readonly apiRoutes: readonly AppApiRoutes<Application<TConfig>>[];
-  readonly rootRoutes: readonly AppRootRoutes<Application<TConfig>>[];
+export interface ApplicationRuntimeContributions {
+  readonly plugins: ResolvedAppServerPlugins;
+  readonly providers: readonly ApplicationServiceProviderConstructor[];
+  readonly apiRoutes: readonly AppApiRoutes<Application>[];
+  readonly rootRoutes: readonly AppRootRoutes<Application>[];
 }
 
 /**
@@ -73,10 +64,9 @@ export interface ApplicationRuntimeContributions<
  * Application owns its resolved config, paths, service container and provider lifecycle,
  * while fetch and websocket form its framework-neutral host boundary.
  */
-export class Application<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
-  public readonly config: TConfig;
+export class Application {
+  public readonly config: AppConfigAccessor;
+  public readonly mode: 'standalone' | 'embedded';
   public readonly paths: ConfigPaths;
   public readonly container: ServiceContainer;
   public readonly fetch: ApplicationFetchHandler = async (
@@ -91,19 +81,23 @@ export class Application<
 
   private readonly providerRegistry: ServiceProviderRegistry =
     new ServiceProviderRegistry();
+  private readonly appNameValue: string;
+  private readonly publicBasePathValue: string;
   private readonly websocketFactory: ApplicationWebSocketFactory;
   private readonly usesDefaultWebSocket: boolean;
   private providersRegistered = false;
   private routesRegistered = false;
-  private readonly apiRoutes: AppApiRoutes<Application<TConfig>>[] = [];
-  private readonly httpMiddleware: AppHttpMiddleware<Application<TConfig>>[] =
-    [];
-  private readonly rootRoutes: AppRootRoutes<Application<TConfig>>[] = [];
+  private readonly apiRoutes: AppApiRoutes<Application>[] = [];
+  private readonly httpMiddleware: AppHttpMiddleware<Application>[] = [];
+  private readonly rootRoutes: AppRootRoutes<Application>[] = [];
   private startPromise: Promise<void> | undefined;
   private websocketHandler: AppWebSocketHandler | undefined;
 
-  public constructor(options: ApplicationOptions<TConfig>) {
+  public constructor(options: ApplicationOptions) {
     this.config = options.config;
+    this.mode = options.mode ?? 'embedded';
+    this.appNameValue = resolveAppName(options.appName);
+    this.publicBasePathValue = normalizeBasePath(options.publicBasePath);
     this.paths = options.paths;
     this.container = new ServiceContainer();
     this.usesDefaultWebSocket = options.websocket === undefined;
@@ -119,11 +113,11 @@ export class Application<
   }
 
   public get appName(): string {
-    return resolveAppName(this.config.app.name);
+    return this.appNameValue;
   }
 
   public get publicBasePath(): string {
-    return normalizeBasePath(this.config.app.publicBasePath);
+    return this.publicBasePathValue;
   }
 
   public get router(): Hono {
@@ -135,23 +129,21 @@ export class Application<
   }
 
   public addProvider<TArguments extends readonly unknown[]>(
-    Provider: ApplicationServiceProviderConstructor<TConfig, TArguments>,
+    Provider: ApplicationServiceProviderConstructor<TArguments>,
     ...args: TArguments
   ): void {
     this.providerRegistry.add(new Provider(this, ...args));
   }
 
   public addProviders(
-    Providers: readonly ApplicationServiceProviderConstructor<TConfig>[],
+    Providers: readonly ApplicationServiceProviderConstructor[],
   ): void {
     for (const Provider of Providers) {
       this.addProvider(Provider);
     }
   }
 
-  public addServerPlugins(
-    serverPlugins: ResolvedAppServerPlugins<TConfig>,
-  ): void {
+  public addServerPlugins(serverPlugins: ResolvedAppServerPlugins): void {
     for (const plugin of serverPlugins.plugins) {
       for (const Provider of plugin.definition.providers) {
         this.addProvider(Provider);
@@ -166,7 +158,7 @@ export class Application<
   }
 
   public addRuntimeContributions(
-    runtime: ApplicationRuntimeContributions<TConfig>,
+    runtime: ApplicationRuntimeContributions,
   ): void {
     this.addServerPlugins(runtime.plugins);
     this.addProviders(runtime.providers);
@@ -178,19 +170,17 @@ export class Application<
     }
   }
 
-  public addApiRoutes(routes: AppApiRoutes<Application<TConfig>>): void {
+  public addApiRoutes(routes: AppApiRoutes<Application>): void {
     this.assertRoutesMutable();
     this.apiRoutes.push(routes);
   }
 
-  public addHttpMiddleware(
-    middleware: AppHttpMiddleware<Application<TConfig>>,
-  ): void {
+  public addHttpMiddleware(middleware: AppHttpMiddleware<Application>): void {
     this.assertRoutesMutable();
     this.httpMiddleware.push(middleware);
   }
 
-  public addRootRoutes(routes: AppRootRoutes<Application<TConfig>>): void {
+  public addRootRoutes(routes: AppRootRoutes<Application>): void {
     this.assertRoutesMutable();
     this.rootRoutes.push(routes);
   }

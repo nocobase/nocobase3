@@ -9,7 +9,12 @@ export class HeartbeatService {
   private status: HeartbeatStatus = 'stopped';
   private startedAt: string | undefined;
 
+  public constructor(private readonly enabled: boolean = true) {}
+
   public start(): void {
+    if (!this.enabled) {
+      return;
+    }
     this.status = 'running';
     this.startedAt = new Date().toISOString();
   }

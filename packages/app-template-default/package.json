@@ -58,6 +58,7 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/config": "workspace:^",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
@@ -176,7 +177,7 @@
     "tsconfig.server.json",
     "Dockerfile",
     "ecosystem.config.js",
-    ".env.example",
+    "config.example.yml",
     "README.MD",
     "MIGRATION.md",
     "AGENTS.md"

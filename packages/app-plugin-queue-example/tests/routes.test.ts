@@ -1,10 +1,7 @@
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import { ServiceContainer } from '@nocobase/service-provider';
-import {
-  createQueueManager,
-  createSyncQueueConfig,
-  queueManagerToken,
-} from '@nocobase/queue';
+import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 

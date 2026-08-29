@@ -8,28 +8,26 @@ import {
   type AppApiRoutes,
 } from '@nocobase/app-server-kit/router';
 
-import NotificationProvider, {
-  type NotificationProviderApplicationConfig,
-} from './provider.js';
+import { notificationConfig } from './config.js';
+import NotificationProvider from './provider.js';
 import registerNotificationRoutes from './routes/index.js';
 
-const notificationApiRoutes: AppApiRoutes<
-  AppPluginApplication<NotificationProviderApplicationConfig>
-> = defineApiRoutes({
-  name: '@nocobase/app-plugin-notification/api',
-  register(router, app): void {
-    registerNotificationRoutes(app, router);
-  },
-});
-
-const notificationPlugin: AppServerPlugin<NotificationProviderApplicationConfig> =
-  defineServerPlugin({
-    packageName: '@nocobase/app-plugin-notification',
-    providers: [NotificationProvider],
-    apiRoutes: [notificationApiRoutes],
-    database: {
-      migrations: './database/migrations',
+const notificationApiRoutes: AppApiRoutes<AppPluginApplication> =
+  defineApiRoutes({
+    name: '@nocobase/app-plugin-notification/api',
+    register(router, app): void {
+      registerNotificationRoutes(app, router);
     },
   });
+
+const notificationPlugin: AppServerPlugin = defineServerPlugin({
+  packageName: '@nocobase/app-plugin-notification',
+  config: notificationConfig,
+  providers: [NotificationProvider],
+  apiRoutes: [notificationApiRoutes],
+  database: {
+    migrations: './database/migrations',
+  },
+});
 
 export default notificationPlugin;

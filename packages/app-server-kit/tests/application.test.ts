@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AppConfig, defineAppConfig } from '../src/config/index.js';
+import { Type } from '@sinclair/typebox';
 
 import {
   Application,
   type ApplicationOptions,
-  type ApplicationConfig,
 } from '../src/application/index.js';
 import { createConfigPaths } from '../src/config/index.js';
 import {
@@ -72,6 +73,32 @@ describe('application', () => {
     ]);
   });
 
+  it('initializes plugin-owned config before registering providers', async () => {
+    const featureConfig = defineAppConfig({
+      namespace: 'feature',
+      schema: Type.Object({ enabled: Type.Boolean() }),
+      defaults: { enabled: true },
+    });
+    const appConfig = new AppConfig([featureConfig], { context: {} });
+    await appConfig.loadAll();
+    const options = createTestApplicationOptions();
+    const app = new Application({ ...options, config: appConfig });
+    const enabledValues: boolean[] = [];
+
+    class ConfigProvider extends ServiceProvider<Application> {
+      public readonly name: string = 'config-provider';
+
+      public override register(): void {
+        enabledValues.push(this.app.config.get(featureConfig).enabled);
+      }
+    }
+
+    app.addProvider(ConfigProvider);
+    await app.start();
+
+    expect(enabledValues).toEqual([true]);
+  });
+
   it('registers API and root routes between provider boot and start', async () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
@@ -118,7 +145,7 @@ describe('application', () => {
   it('registers providers and routes from resolved runtime plugins', async () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
-    const plugin = defineServerPlugin<TestApplicationConfig>({
+    const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-test',
       providers: [RuntimePluginProvider],
       apiRoutes: [
@@ -174,9 +201,7 @@ describe('application', () => {
     const pluginServiceToken = createServiceToken<string>(
       'runtime-plugin-service',
     );
-    class PluginProvider extends ServiceProvider<
-      Application<TestApplicationConfig>
-    > {
+    class PluginProvider extends ServiceProvider<Application> {
       public readonly name: string = 'runtime-plugin-provider';
 
       public override register(): void {
@@ -184,16 +209,14 @@ describe('application', () => {
         this.app.container.instance(pluginServiceToken, 'plugin-service');
       }
     }
-    class ApplicationProvider extends ServiceProvider<
-      Application<TestApplicationConfig>
-    > {
+    class ApplicationProvider extends ServiceProvider<Application> {
       public readonly name: string = 'runtime-application-provider';
 
       public override register(): void {
         calls.push(this.app.container.resolve(pluginServiceToken));
       }
     }
-    const plugin = defineServerPlugin<TestApplicationConfig>({
+    const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-runtime-order-test',
       providers: [PluginProvider],
       apiRoutes: [
@@ -359,13 +382,11 @@ describe('application', () => {
   });
 });
 
-type TestApplicationConfig = ApplicationConfig;
-
-class TestProvider extends ServiceProvider<Application<TestApplicationConfig>> {
+class TestProvider extends ServiceProvider<Application> {
   public readonly name: string;
 
   public constructor(
-    app: Application<TestApplicationConfig>,
+    app: Application,
     name: string,
     private readonly calls: string[],
   ) {
@@ -394,9 +415,7 @@ class TestProvider extends ServiceProvider<Application<TestApplicationConfig>> {
   }
 }
 
-class RuntimePluginProvider extends ServiceProvider<
-  Application<TestApplicationConfig>
-> {
+class RuntimePluginProvider extends ServiceProvider<Application> {
   public readonly name: string = '@nocobase/app-plugin-test';
   public static calls: string[] = [];
 
@@ -405,22 +424,11 @@ class RuntimePluginProvider extends ServiceProvider<
   }
 }
 
-function createTestApplicationOptions(): ApplicationOptions<TestApplicationConfig> {
+function createTestApplicationOptions(): ApplicationOptions {
   return {
-    config: {
-      app: {
-        name: '/main/',
-        publicBasePath: '//main//',
-      },
-      database: {
-        client: 'pg',
-        connection: 'postgres://localhost/test',
-        migrations: {
-          autoRun: false,
-          directory: '/missing',
-        },
-      },
-    },
+    config: new AppConfig(),
+    appName: '/main/',
+    publicBasePath: '//main//',
     paths: createConfigPaths({ rootDir: '/test/app' }),
   };
 }

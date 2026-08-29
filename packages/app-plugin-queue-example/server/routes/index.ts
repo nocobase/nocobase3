@@ -1,5 +1,5 @@
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import { queueManagerToken } from '@nocobase/queue';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import { Hono } from 'hono';
 
 import QueueExampleJob, {

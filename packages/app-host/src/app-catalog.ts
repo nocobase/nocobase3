@@ -40,6 +40,7 @@ interface AppPackageJson {
     version?: string;
     healthPath?: string;
     resourcePolicy?: AppResourcePolicy;
+    configPath?: string;
     config?: unknown;
   };
 }
@@ -209,6 +210,7 @@ export class DirectoryAppCatalog {
       desiredVersion: codeVersion,
       rootDir,
       dataDir: path.join(rootDir, 'data'),
+      configPath: packageJson?.app?.configPath,
       client,
       server,
       code: {
@@ -219,7 +221,6 @@ export class DirectoryAppCatalog {
       healthPath:
         server.healthPath ?? packageJson?.app?.healthPath ?? '/healthz',
       resourcePolicy: packageJson?.app?.resourcePolicy,
-      config: packageJson?.app?.config,
     };
   }
 }
@@ -406,6 +407,7 @@ function definitionToOptions(
     desiredVersion: definition.desiredVersion,
     rootDir: definition.rootDir,
     dataDir: definition.dataDir,
+    configPath: definition.configPath,
     client: definition.client,
     server: definition.server,
     api: definition.api,
@@ -413,7 +415,6 @@ function definitionToOptions(
     release: definition.release,
     healthPath: definition.healthPath,
     resourcePolicy: definition.resourcePolicy,
-    config: definition.config,
   };
 }
 

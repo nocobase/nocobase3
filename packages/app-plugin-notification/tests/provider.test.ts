@@ -2,19 +2,28 @@ import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import { createLogger, loggingToken, type Logging } from '@nocobase/logging';
-import { queueManagerToken, type NocoBaseQueueManager } from '@nocobase/queue';
+import { createLogger, type Logging } from '@nocobase/logging';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
+import type { NocoBaseQueueManager } from '@nocobase/queue';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import { ServiceContainer } from '@nocobase/service-provider';
+import { AppConfig } from '@nocobase/app-server-kit/config';
 import { describe, expect, it, vi } from 'vitest';
 
+import { notificationConfig } from '../server/config.js';
 import NotificationProvider from '../server/provider.js';
 import { notificationServiceToken } from '../server/token.js';
 
 describe('@nocobase/app-plugin-notification provider', () => {
   it('registers, starts, and closes the core manager', async () => {
     const container = createContainer(true);
+    const config = new AppConfig(
+      [{ ...notificationConfig, defaults: { channels: [] } }],
+      { context: {} },
+    );
+    await config.loadAll();
     const provider = new NotificationProvider({
-      config: { notification: { channels: [] } },
+      config,
       container,
     });
 
@@ -33,7 +42,10 @@ describe('@nocobase/app-plugin-notification provider', () => {
 
   it('does not register the service without a database', async () => {
     const container = createContainer(false);
-    const provider = new NotificationProvider({ config: {}, container });
+    const provider = new NotificationProvider({
+      config: new AppConfig(),
+      container,
+    });
 
     provider.register();
     await provider.start();

@@ -94,7 +94,7 @@ function readEnvironment(
       setConfigValue(
         output,
         splitConfigPath(mapping.path, pathDelimiter),
-        mapping.parse?.(value) ?? value,
+        mapping.parse ? mapping.parse(value) : value,
       );
     }
     return output;

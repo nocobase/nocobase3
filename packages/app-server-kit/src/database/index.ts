@@ -2,7 +2,6 @@ export { createAppDatabaseManager } from './manager.js';
 export {
   DatabaseProvider,
   type DatabaseProviderApplication,
-  type DatabaseProviderApplicationConfig,
 } from './provider.js';
 export {
   createAppMigrator,
@@ -25,3 +24,4 @@ export type {
   AppDatabaseMigrationConfig,
   AppDatabaseSeedConfig,
 } from './types.js';
+export * from './config.js';

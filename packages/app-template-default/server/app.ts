@@ -1,22 +1,27 @@
 import { Application } from '@nocobase/app-server-kit/application';
 import { DatabaseProvider } from '@nocobase/app-server-kit/database';
+import { CachingProvider } from '@nocobase/app-server-kit/caching';
+import { DriveProvider } from '@nocobase/app-server-kit/drive';
+import { IdGeneratorProvider } from '@nocobase/app-server-kit/id-generator';
+import {
+  LoggingProvider,
+  requestLoggingMiddleware,
+} from '@nocobase/app-server-kit/logging';
+import { QueueProvider } from '@nocobase/app-server-kit/queue';
+import {
+  SessionProvider,
+  sessionHttpMiddleware,
+} from '@nocobase/app-server-kit/session';
 import { healthCheckApiRoutes } from '@nocobase/app-server-kit/router';
 import type { ResolvedAppRuntime } from '@nocobase/app-server-kit/runtime';
-import { CachingProvider } from '@nocobase/caching';
-import { DriveProvider } from '@nocobase/drive';
-import { IdGeneratorProvider } from '@nocobase/id-generator';
-import { LoggingProvider, requestLoggingMiddleware } from '@nocobase/logging';
-import { QueueProvider } from '@nocobase/queue';
-import { sessionHttpMiddleware, SessionProvider } from '@nocobase/session';
 import { spaRootRoutes } from '@nocobase/app-server-kit/spa';
-import type { AppConfig } from './config/index.js';
-import type { DefaultAppScopeConfig } from './config/types.js';
 
-export function createApp(
-  runtime: ResolvedAppRuntime<AppConfig, DefaultAppScopeConfig>,
-): Application<AppConfig> {
+export function createApp(runtime: ResolvedAppRuntime): Application {
   const app = new Application({
-    config: runtime.config,
+    config: runtime.appConfig,
+    mode: runtime.mode,
+    appName: runtime.routing.name,
+    publicBasePath: runtime.routing.publicBasePath,
     paths: runtime.configPaths,
   });
   app.addProvider(DatabaseProvider);

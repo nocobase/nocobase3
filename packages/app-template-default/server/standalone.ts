@@ -6,21 +6,20 @@ import {
   type StandaloneServerOptions as CoreStandaloneServerOptions,
 } from '@nocobase/app-server-kit/node';
 
-import type { AppConfig } from './config/index.js';
-import type { DefaultAppScopeConfig } from './config/types.js';
 import { createServer } from './embedded.js';
 import appRuntime from './runtime.js';
+import { nodeServerConfig as serverConfig } from '@nocobase/app-server-kit/node';
 
 const standalone = defineStandaloneServer({
   rootDir: path.resolve(import.meta.dirname, '..'),
   appRuntime,
+  serverConfig,
   createServer,
 });
 
-export type StandaloneServer = CoreStandaloneServer<AppConfig>;
+export type StandaloneServer = CoreStandaloneServer;
 
-export type StandaloneServerOptions =
-  CoreStandaloneServerOptions<DefaultAppScopeConfig>;
+export type StandaloneServerOptions = CoreStandaloneServerOptions;
 
 export const createStandaloneServer: (
   options?: StandaloneServerOptions,

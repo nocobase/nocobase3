@@ -2,6 +2,18 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server-kit/node';
+import { appConfig } from '@nocobase/app-server-kit/config';
+import { databaseConfig } from '@nocobase/app-server-kit/database';
+import { nodeServerConfig } from '@nocobase/app-server-kit/node';
+import { spaConfig } from '@nocobase/app-server-kit/spa';
+import {
+  cachingConfig,
+  driveConfig,
+  loggingConfig,
+  queueConfig,
+  sessionConfig,
+  snowflakeConfig,
+} from '@nocobase/app-server-kit';
 import appRuntime from '../server/runtime.ts';
 
 type JsonValue =
@@ -10,65 +22,74 @@ type JsonValue =
 type ObjectValue = Record<string, unknown>;
 
 const rootDir = path.resolve(import.meta.dirname, '..');
-const envFiles = [path.join(rootDir, '.env'), path.join(rootDir, '.env.local')];
-const config = resolveStandaloneAppRuntime(appRuntime, { rootDir }).config;
+const configFiles = [path.join(rootDir, 'config.yml')];
+const runtime = await resolveStandaloneAppRuntime(appRuntime, { rootDir });
+const app = runtime.appConfig.get(appConfig);
+const server = runtime.appConfig.get(nodeServerConfig);
+const spa = runtime.appConfig.get(spaConfig);
+const logging = runtime.appConfig.get(loggingConfig);
+const caching = runtime.appConfig.get(cachingConfig);
+const snowflake = runtime.appConfig.get(snowflakeConfig);
+const database = runtime.appConfig.get(databaseConfig);
+const drive = runtime.appConfig.get(driveConfig);
+const queue = runtime.appConfig.get(queueConfig);
+const session = runtime.appConfig.get(sessionConfig);
 
-const activeLoggerName = config.logging.default;
+const activeLoggerName = logging.default;
 const configuredLogger = activeLoggerName
-  ? config.logging.loggers?.[activeLoggerName]
+  ? logging.loggers?.[activeLoggerName]
   : undefined;
 const activeLogger = {
-  ...config.logging,
+  ...logging,
   ...configuredLogger,
-  base: mergeObject(config.logging.base, configuredLogger?.base),
+  base: mergeObject(logging.base, configuredLogger?.base),
 };
-const activeCachingProviderName = config.caching.default;
-const cachingProviders: Record<string, unknown> = config.caching.providers;
+const activeCachingProviderName = caching.default;
+const cachingProviders: Record<string, unknown> = caching.providers;
 const activeCachingProvider = activeCachingProviderName
   ? cachingProviders[activeCachingProviderName]
   : undefined;
-const activeDatabaseName = config.database.default;
-const databaseConnections: Record<string, unknown> =
-  config.database.connections;
+const activeDatabaseName = database.default;
+const databaseConnections: Record<string, unknown> = database.connections;
 const activeDatabase = activeDatabaseName
   ? databaseConnections[activeDatabaseName]
   : undefined;
-const activeDriveName = config.drive.default;
-const driveDisks: Record<string, unknown> = config.drive.disks;
+const activeDriveName = drive.default;
+const driveDisks: Record<string, unknown> = drive.disks;
 const activeDrive = activeDriveName ? driveDisks[activeDriveName] : undefined;
-const activeQueueName = config.queue.default;
-const queueConnections: Record<string, unknown> = config.queue.connections;
+const activeQueueName = queue.default;
+const queueConnections: Record<string, unknown> = queue.connections;
 const activeQueue = activeQueueName
   ? queueConnections[activeQueueName]
   : undefined;
-const activeSessionName = config.session.default;
-const sessionStores: Record<string, unknown> = config.session.stores;
+const activeSessionName = session.default;
+const sessionStores: Record<string, unknown> = session.stores;
 const activeSession = activeSessionName
   ? sessionStores[activeSessionName]
   : undefined;
 const report = {
   mode: 'standalone',
-  envFiles: envFiles.map((file) => ({
+  configFiles: configFiles.map((file) => ({
     path: file,
     exists: existsSync(file),
   })),
   app: {
-    name: config.app.name,
-    publicOrigin: config.app.publicOrigin ?? '(request-derived)',
-    publicBasePath: config.app.publicBasePath || '/',
-    internalBasePath: config.app.internalBasePath,
-    publicApiUrl: config.app.publicApiUrl,
+    name: app.name,
+    publicOrigin: app.publicOrigin ?? '(request-derived)',
+    publicBasePath: app.publicBasePath || '/',
+    internalBasePath: app.internalBasePath,
+    publicApiUrl: app.publicApiUrl,
   },
   server: {
-    host: config.server.host,
-    port: config.server.port,
-    startLog: config.server.startLog,
-    viteDevUrl: formatOptionalUrl(config.server.viteDevUrl),
+    host: server.host,
+    port: server.port,
+    startLog: server.startLog,
+    viteDevUrl: formatOptionalUrl(server.viteDevUrl),
   },
   spa: {
-    indexPath: config.spa.indexPath,
-    indexExists: existsSync(config.spa.indexPath),
-    runtime: config.spa.runtime,
+    indexPath: spa.indexPath,
+    indexExists: existsSync(spa.indexPath),
+    runtime: spa.runtime,
   },
   logging: {
     default: activeLoggerName || '(none)',
@@ -79,30 +100,30 @@ const report = {
     active: summarizeCachingProvider(activeCachingProvider),
   },
   snowflake: {
-    workerId: config.snowflake.workerId,
-    epoch: config.snowflake.epoch,
+    workerId: snowflake.workerId,
+    epoch: snowflake.epoch,
   },
   database: {
     default: activeDatabaseName || '(none)',
     active: summarizeDatabaseConnection(activeDatabase),
     migrations: {
-      directory: config.database.migrations.directory,
-      directoryExists: existsSync(config.database.migrations.directory),
-      autoRun: config.database.migrations.autoRun,
-      tableName: config.database.migrations.tableName ?? '(default)',
-      lockTableName: config.database.migrations.lockTableName ?? '(default)',
+      directory: database.migrations.directory,
+      directoryExists: existsSync(database.migrations.directory),
+      autoRun: database.migrations.autoRun,
+      tableName: database.migrations.tableName ?? '(default)',
+      lockTableName: database.migrations.lockTableName ?? '(default)',
     },
     seeds: {
-      directory: config.database.seeds?.directory ?? '(not configured)',
-      directoryExists: config.database.seeds
-        ? existsSync(config.database.seeds.directory)
+      directory: database.seeds?.directory ?? '(not configured)',
+      directoryExists: database.seeds
+        ? existsSync(database.seeds.directory)
         : false,
-      autoRun: config.database.seeds?.autoRun ?? false,
-      tableName: config.database.seeds?.tableName ?? '(default)',
-      lockTableName: config.database.seeds?.lockTableName ?? '(default)',
+      autoRun: database.seeds?.autoRun ?? false,
+      tableName: database.seeds?.tableName ?? '(default)',
+      lockTableName: database.seeds?.lockTableName ?? '(default)',
     },
   },
-  plugins: config.plugins.map((plugin) => ({
+  plugins: runtime.plugins.plugins.map(({ metadata: plugin }) => ({
     packageName: plugin.packageName,
     version: plugin.version,
     migrationsDirectory: plugin.migrationsDirectory ?? '(none)',
@@ -111,53 +132,51 @@ const report = {
   drive: {
     default: activeDriveName || '(none)',
     active: summarizeDriveDisk(activeDrive),
-    links: config.drive.links,
+    links: drive.links,
   },
   queue: {
     default: activeQueueName || '(none)',
     active: summarizeQueueConnection(activeQueue),
     worker: {
-      connection: config.queue.worker?.connection ?? '(default)',
-      queues: config.queue.worker?.queues ?? [],
-      concurrency: config.queue.worker?.concurrency ?? 1,
-      idleDelay: String(config.queue.worker?.idleDelay ?? '2s'),
-      timeout: config.queue.worker?.timeout
-        ? String(config.queue.worker.timeout)
-        : '(none)',
+      connection: queue.worker?.connection ?? '(default)',
+      queues: queue.worker?.queues ?? [],
+      concurrency: queue.worker?.concurrency ?? 1,
+      idleDelay: String(queue.worker?.idleDelay ?? '2s'),
+      timeout: queue.worker?.timeout ? String(queue.worker.timeout) : '(none)',
     },
     jobs: {
-      locations: config.queue.jobs?.locations ?? [],
-      autoLoad: config.queue.jobs?.autoLoad ?? true,
-      hotReload: config.queue.jobs?.hotReload ?? false,
+      locations: queue.jobs?.locations ?? [],
+      autoLoad: queue.jobs?.autoLoad ?? true,
+      hotReload: queue.jobs?.hotReload ?? false,
     },
   },
   workflow: {
-    queueName: `workflow:${config.app.name}`,
+    queueName: `workflow:${app.name}`,
   },
   session: {
-    enabled: config.session.enabled ?? true,
+    enabled: session.enabled ?? true,
     default: activeSessionName || '(none)',
     active: summarizeSessionStore(activeSession),
     cookie: {
-      name: config.session.cookie.name,
-      path: config.session.cookie.path ?? '/',
-      domain: config.session.cookie.domain ?? '(current host)',
-      secure: config.session.cookie.secure ?? false,
-      httpOnly: config.session.cookie.httpOnly ?? true,
-      sameSite: config.session.cookie.sameSite ?? 'lax',
-      partitioned: config.session.cookie.partitioned ?? false,
-      expireOnClose: config.session.cookie.expireOnClose ?? false,
+      name: session.cookie.name,
+      path: session.cookie.path ?? '/',
+      domain: session.cookie.domain ?? '(current host)',
+      secure: session.cookie.secure ?? false,
+      httpOnly: session.cookie.httpOnly ?? true,
+      sameSite: session.cookie.sameSite ?? 'lax',
+      partitioned: session.cookie.partitioned ?? false,
+      expireOnClose: session.cookie.expireOnClose ?? false,
     },
     lifetime: {
-      absolute: String(config.session.lifetime.absolute),
-      inactivity: config.session.lifetime.inactivity
-        ? String(config.session.lifetime.inactivity)
+      absolute: String(session.lifetime.absolute),
+      inactivity: session.lifetime.inactivity
+        ? String(session.lifetime.inactivity)
         : '(none)',
-      rolling: config.session.lifetime.rolling ?? true,
+      rolling: session.lifetime.rolling ?? true,
     },
-    secret: config.session.secret ? '<configured>' : '(missing)',
-    previousSecrets: config.session.previousSecrets?.length ?? 0,
-    gcLottery: config.session.gcLottery ?? [2, 100],
+    secret: session.secret ? '<configured>' : '(missing)',
+    previousSecrets: session.previousSecrets?.length ?? 0,
+    gcLottery: session.gcLottery ?? [2, 100],
   },
 };
 
@@ -404,8 +423,8 @@ function printReport(value: typeof report): void {
   printSection('Server mode');
   printPair('Mode', value.mode);
   printPair(
-    'Env files',
-    value.envFiles
+    'Config files',
+    value.configFiles
       .map(
         (file) =>
           `${path.relative(rootDir, file.path)}:${file.exists ? 'found' : 'missing'}`,

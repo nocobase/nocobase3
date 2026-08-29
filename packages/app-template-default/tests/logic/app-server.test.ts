@@ -13,10 +13,24 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CachingProvider, createDefaultCachingConfig } from '@nocobase/caching';
+import { createDefaultCachingConfig } from '@nocobase/caching';
+import { CachingProvider } from '@nocobase/app-server-kit/caching';
+import { DriveProvider } from '@nocobase/app-server-kit/drive';
+import { IdGeneratorProvider } from '@nocobase/app-server-kit/id-generator';
 import {
-  createConfigPaths,
-  readEnvFiles,
+  LoggingProvider,
+  requestLoggingMiddleware,
+} from '@nocobase/app-server-kit/logging';
+import { QueueProvider } from '@nocobase/app-server-kit/queue';
+import {
+  SessionProvider,
+  sessionHttpMiddleware,
+} from '@nocobase/app-server-kit/session';
+import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import {
+  appConfig,
+  type AppConfigAccessor,
+  type AppConfigToken,
 } from '@nocobase/app-server-kit/config';
 import { startNodeAppServer } from '@nocobase/app-server-kit/node';
 import {
@@ -40,27 +54,13 @@ import {
   type DatabaseManager,
   type QueryAdapter,
 } from '@nocobase/app-database';
-import { DriveProvider } from '@nocobase/drive';
-import { IdGeneratorProvider } from '@nocobase/id-generator';
-import {
-  createSilentLoggingConfig,
-  LoggingProvider,
-  requestLoggingMiddleware,
-} from '@nocobase/logging';
-import {
-  createSyncQueueConfig,
-  QueueProvider,
-  type AppQueueConfig,
-} from '@nocobase/queue';
+import { createSilentLoggingConfig } from '@nocobase/logging';
+import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
   createNocoBaseSpaRuntimeGlobals,
   spaRootRoutes,
 } from '@nocobase/app-server-kit/spa';
-import {
-  createNullSessionConfig,
-  sessionHttpMiddleware,
-  SessionProvider,
-} from '@nocobase/session';
+import { createNullSessionConfig } from '@nocobase/session';
 import {
   joinBasePath,
   normalizeBasePath,
@@ -92,7 +92,7 @@ import {
   type StandaloneServer,
   type StandaloneServerOptions,
 } from '../../server/standalone.ts';
-import type { AppConfig } from '../../server/config/index.ts';
+type AppConfig = object;
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
@@ -163,7 +163,9 @@ describe('app server', () => {
     expect(app.container).toBeDefined();
     expect(app.appName).toBe('app-template-default');
     expect(app.publicBasePath).toBe('/app-template-default');
-    expect(app.config.app.publicBasePath).toBe('/app-template-default');
+    expect(app.config.get(appConfig).publicBasePath).toBe(
+      '/app-template-default',
+    );
   });
 
   it('passes the application to plugin providers', () => {
@@ -317,7 +319,7 @@ describe('app server', () => {
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
     });
-    const resolvedRuntime = resolveAppRuntime(
+    const resolvedRuntime = await resolveAppRuntime(
       {
         ...appRuntime,
         plugins: defineServerPlugins<AppConfig>([]),
@@ -358,6 +360,35 @@ describe('app server', () => {
     const rootHtml = await rootResponse.text();
     expect(rootHtml).toContain('<h1>Application Route Example</h1>');
     expect(rootHtml).toContain('Hello from the application provider');
+  });
+
+  it('loads and explicitly reloads plugin config from the selected YAML file', async () => {
+    const configDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-config-'),
+    );
+    tempDirs.push(configDir);
+    const configPath = path.join(configDir, 'config.yaml');
+    writeFileSync(configPath, 'heartbeat:\n  enabled: false\n');
+    const runtime = await resolveAppRuntime(
+      appRuntime,
+      createEmbeddedTestScope({
+        id: 'app-template-default',
+        basePath: '/embedded-app-template-default',
+        configPath,
+      }),
+    );
+
+    expect(runtime.appConfig.raw()).toMatchObject({
+      heartbeat: { enabled: false },
+    });
+
+    writeFileSync(configPath, 'heartbeat:\n  enabled: true\n');
+    await expect(runtime.appConfig.reload()).resolves.toMatchObject({
+      changedNamespaces: ['heartbeat'],
+    });
+    expect(runtime.appConfig.raw()).toMatchObject({
+      heartbeat: { enabled: true },
+    });
   });
 
   it('registers plugin API routes before application-owned API routes', async () => {
@@ -518,7 +549,6 @@ describe('app server', () => {
       createEmbeddedTestScope({
         id: 'app-template-default',
         basePath: '/app-template-default',
-        config: { authSecret: 'test-auth-secret-at-least-32-characters' },
         clientDir: root,
       }),
     );
@@ -544,11 +574,15 @@ describe('app server', () => {
     mkdirSync(clientDir, { recursive: true });
     createEmbeddedPluginFixture(appRoot);
     writeFileSync(
-      path.join(appRoot, '.env'),
+      path.join(appRoot, 'config.yml'),
       [
-        'API_CLIENT_STORAGE_PREFIX=EMBEDDED_',
-        'API_CLIENT_STORAGE_TYPE=sessionStorage',
-        'API_CLIENT_SHARE_TOKEN=true',
+        'auth:',
+        '  secret: test-auth-secret-at-least-32-characters',
+        'spa:',
+        '  runtime:',
+        '    storagePrefix: EMBEDDED_',
+        '    storageType: sessionStorage',
+        '    shareToken: true',
       ].join('\n'),
     );
     writeFileSync(
@@ -560,7 +594,6 @@ describe('app server', () => {
       createEmbeddedTestScope({
         id: 'app-template-default',
         basePath: '/app-template-default',
-        config: { authSecret: 'test-auth-secret-at-least-32-characters' },
         rootDir: appRoot,
         clientDir,
       }),
@@ -1121,7 +1154,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   const publicBasePath = normalizeBasePath(
     options.publicBasePath ?? '/app-template-default',
   );
-  const config = {
+  const configValues = {
     app: {
       name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
       publicOrigin: options.publicOrigin,
@@ -1148,7 +1181,17 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         autoRun: false,
       },
     },
-    drive: undefined,
+    drive: {
+      default: 'local',
+      disks: {
+        local: {
+          driver: 'fs' as const,
+          location: path.join(tmpdir(), 'nocobase-app-server-test-drive'),
+          visibility: 'private' as const,
+        },
+      },
+      links: {},
+    },
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: createNullSessionConfig(),
@@ -1184,7 +1227,8 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         shareToken: options.spa?.runtime?.shareToken ?? false,
       }),
     },
-  } as AppConfig;
+  };
+  const config = createTestConfig(configValues);
   const paths = createConfigPaths({ rootDir: '/test/app-template-default' });
   const database =
     options.database === false
@@ -1203,7 +1247,12 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       await database?.destroy();
     }
   }
-  const app = new Application({ config, paths });
+  const app = new Application({
+    config,
+    appName: configValues.app.name,
+    publicBasePath: configValues.app.publicBasePath,
+    paths,
+  });
   if (database) {
     app.addProvider(TestDatabaseProvider);
   }
@@ -1252,13 +1301,24 @@ function createResolvedTestServerPlugins(
   };
 }
 
+function createTestConfig(
+  values: Readonly<Record<string, unknown>>,
+): AppConfigAccessor {
+  return {
+    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
+      values[definition.namespace] as TValue,
+    raw: () => values,
+    reload: () => Promise.resolve({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  };
+}
+
 function createEmbeddedTestScope(
   options: Omit<AppScope, 'registerDisposer'>,
   registeredDisposers: RegisteredTestDisposer[] = [],
 ): AppScope {
   const lifecycle = createAppDisposerRegistry();
   const sourceRoot = path.resolve(import.meta.dirname, '../..');
-  const rootDir = options.paths?.rootDir ?? options.rootDir ?? sourceRoot;
   const databaseDir = mkdtempSync(
     path.join(tmpdir(), 'nocobase-app-template-default-database-'),
   );
@@ -1270,10 +1330,6 @@ function createEmbeddedTestScope(
   return {
     ...options,
     env: {
-      ...readEnvFiles([
-        path.join(rootDir, '.env'),
-        path.join(rootDir, '.env.local'),
-      ]),
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },
@@ -1289,9 +1345,6 @@ function createEmbeddedTestScope(
               options.clientDir ?? path.join(sourceRoot, 'dist/client'),
             storageDir: options.dataDir ?? path.join(sourceRoot, 'storage'),
           }),
-    config: options.config ?? {
-      authSecret: 'test-auth-secret-at-least-32-characters',
-    },
     registerDisposer(name, dispose) {
       registeredDisposers.push({ name, dispose });
       lifecycle.registerDisposer(name, dispose);

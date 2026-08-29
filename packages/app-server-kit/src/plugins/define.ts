@@ -1,4 +1,4 @@
-import type { ApplicationConfig } from '../application/index.js';
+import type { AppConfigDefinition } from '../config/index.js';
 import type {
   AppServerPlugin,
   AppServerPluginDefinition,
@@ -7,13 +7,14 @@ import type {
 
 const PACKAGE_NAME_PATTERN = /^@[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
 
-export function defineServerPlugin<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(definition: AppServerPluginDefinition<TConfig>): AppServerPlugin<TConfig> {
+export function defineServerPlugin(
+  definition: AppServerPluginDefinition,
+): AppServerPlugin {
   const packageName = normalizePackageName(definition.packageName);
 
   return Object.freeze({
     packageName,
+    config: Object.freeze(normalizeConfigDefinitions(definition.config)),
     providers: Object.freeze([...(definition.providers ?? [])]),
     apiRoutes: Object.freeze([...(definition.apiRoutes ?? [])]),
     rootRoutes: Object.freeze([...(definition.rootRoutes ?? [])]),
@@ -31,9 +32,9 @@ export function defineServerPlugin<
   });
 }
 
-export function defineServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(plugins: readonly AppServerPlugin<TConfig>[]): AppServerPlugins<TConfig> {
+export function defineServerPlugins(
+  plugins: readonly AppServerPlugin[],
+): AppServerPlugins {
   const seen = new Set<string>();
   for (const plugin of plugins) {
     if (seen.has(plugin.packageName)) {
@@ -45,6 +46,24 @@ export function defineServerPlugins<
   }
 
   return Object.freeze({ plugins: Object.freeze([...plugins]) });
+}
+
+function normalizeConfigDefinitions(
+  value:
+    | AppConfigDefinition<unknown, never>
+    | readonly AppConfigDefinition<unknown, never>[]
+    | undefined,
+): readonly AppConfigDefinition<unknown, never>[] {
+  if (value === undefined) return [];
+  return isConfigDefinitionArray(value) ? [...value] : [value];
+}
+
+function isConfigDefinitionArray(
+  value:
+    | AppConfigDefinition<unknown, never>
+    | readonly AppConfigDefinition<unknown, never>[],
+): value is readonly AppConfigDefinition<unknown, never>[] {
+  return Array.isArray(value);
 }
 
 function normalizePackageName(packageName: string): string {

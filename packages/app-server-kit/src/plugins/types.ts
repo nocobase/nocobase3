@@ -3,26 +3,27 @@ import type {
   ServiceProviderLifecycle,
 } from '@nocobase/service-provider';
 import type { Hono } from 'hono';
+import type {
+  AppConfigAccessor,
+  AppConfigDefinition,
+} from '../config/index.js';
 
-import type { ApplicationConfig } from '../application/index.js';
 import type { ConfigPaths } from '../config/index.js';
 import type { AppApiRoutes, AppRootRoutes } from '../router/index.js';
 
-export interface AppPluginApplication<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface AppPluginApplication {
   readonly appName: string;
   readonly publicBasePath: string;
-  readonly config: TConfig;
+  readonly config: AppConfigAccessor;
   readonly paths: ConfigPaths;
   readonly router: Hono;
   readonly apiRouter: Hono;
   readonly container: ServiceContainer;
 }
 
-export type AppPluginProviderConstructor<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> = new (app: AppPluginApplication<TConfig>) => ServiceProviderLifecycle;
+export type AppPluginProviderConstructor = new (
+  app: AppPluginApplication,
+) => ServiceProviderLifecycle;
 
 export interface AppServerPluginDatabaseContribution {
   readonly migrations?: string;
@@ -33,32 +34,30 @@ export interface AppServerPluginQueueContribution {
   readonly jobs?: readonly string[];
 }
 
-export interface AppServerPluginDefinition<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface AppServerPluginDefinition {
   readonly packageName: string;
-  readonly providers?: readonly AppPluginProviderConstructor<TConfig>[];
-  readonly apiRoutes?: readonly AppApiRoutes<AppPluginApplication<TConfig>>[];
-  readonly rootRoutes?: readonly AppRootRoutes<AppPluginApplication<TConfig>>[];
+  readonly config?:
+    | AppConfigDefinition<unknown, never>
+    | readonly AppConfigDefinition<unknown, never>[];
+  readonly providers?: readonly AppPluginProviderConstructor[];
+  readonly apiRoutes?: readonly AppApiRoutes<AppPluginApplication>[];
+  readonly rootRoutes?: readonly AppRootRoutes<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
 }
 
-export interface AppServerPlugin<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface AppServerPlugin {
   readonly packageName: string;
-  readonly providers: readonly AppPluginProviderConstructor<TConfig>[];
-  readonly apiRoutes: readonly AppApiRoutes<AppPluginApplication<TConfig>>[];
-  readonly rootRoutes: readonly AppRootRoutes<AppPluginApplication<TConfig>>[];
+  readonly config: readonly AppConfigDefinition<unknown, never>[];
+  readonly providers: readonly AppPluginProviderConstructor[];
+  readonly apiRoutes: readonly AppApiRoutes<AppPluginApplication>[];
+  readonly rootRoutes: readonly AppRootRoutes<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
 }
 
-export interface AppServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
-  readonly plugins: readonly AppServerPlugin<TConfig>[];
+export interface AppServerPlugins {
+  readonly plugins: readonly AppServerPlugin[];
 }
 
 export interface ResolvedAppPlugin {
@@ -70,16 +69,12 @@ export interface ResolvedAppPlugin {
   readonly jobLocations: readonly string[];
 }
 
-export interface ResolvedAppServerPlugin<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
-  readonly definition: AppServerPlugin<TConfig>;
+export interface ResolvedAppServerPlugin {
+  readonly definition: AppServerPlugin;
   readonly metadata: ResolvedAppPlugin;
 }
 
-export interface ResolvedAppServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface ResolvedAppServerPlugins {
   readonly appPackageName: string;
-  readonly plugins: readonly ResolvedAppServerPlugin<TConfig>[];
+  readonly plugins: readonly ResolvedAppServerPlugin[];
 }

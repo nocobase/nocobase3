@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -20,20 +20,9 @@ afterEach(() => {
 });
 
 describe('standalone app environment', () => {
-  it('merges env files, the process environment, and explicit overrides', () => {
-    const rootDir = createTempDirectory();
-    writeFileSync(
-      path.join(rootDir, '.env'),
-      'FILE_ONLY=base\nSHARED_VALUE=base\n',
-    );
-    writeFileSync(
-      path.join(rootDir, '.env.local'),
-      'LOCAL_ONLY=yes\nSHARED_VALUE=local\n',
-    );
-
+  it('merges the process environment and explicit overrides', () => {
     expect(
       loadStandaloneAppEnv({
-        rootDir,
         baseEnv: {
           PROCESS_ONLY: 'yes',
           SHARED_VALUE: 'process',
@@ -44,8 +33,6 @@ describe('standalone app environment', () => {
         },
       }),
     ).toEqual({
-      FILE_ONLY: 'base',
-      LOCAL_ONLY: 'yes',
       PROCESS_ONLY: 'yes',
       OVERRIDE_ONLY: 'yes',
       SHARED_VALUE: 'override',
@@ -127,20 +114,18 @@ describe('standalone app scope', () => {
     expect(fromOptions.basePath).toBe('/operations');
   });
 
-  it('owns identity, environment, paths, config, and lifecycle', async () => {
+  it('owns identity, environment, paths, and lifecycle', async () => {
     const paths = {
       rootDir: '/srv/apps/main',
       serverDir: '/srv/apps/main/server',
       clientDir: '/srv/apps/main/client',
       storageDir: '/data/apps/main',
     };
-    const config = { feature: true };
     const scope = new StandaloneAppScope({
       appName: 'main',
       basePath: '/main',
       paths,
       env: { APP_NAME: 'main' },
-      config,
     });
 
     expect(scope).toMatchObject({
@@ -153,7 +138,6 @@ describe('standalone app scope', () => {
       dataDir: '/data/apps/main',
       clientDir: '/srv/apps/main/client',
       env: { APP_NAME: 'main' },
-      config,
     });
     expect(scope.signal.aborted).toBe(false);
 

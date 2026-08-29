@@ -1,10 +1,10 @@
-import { access, readFile, writeFile } from 'node:fs/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   configureInstallation,
@@ -13,15 +13,6 @@ import {
 } from '../server/configure.js';
 
 const temporaryDirectories: string[] = [];
-const exampleEnvironment = [
-  'APP_BASE_PATH=/main',
-  '# Keep this comment.',
-  'DB_MIGRATIONS_AUTO_RUN=true',
-  'DB_SEEDS_AUTO_RUN=true',
-  'DB_DIALECT=obsolete',
-  'AUTH_SECRET=obsolete',
-  '',
-].join('\n');
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -30,9 +21,8 @@ afterEach(() => {
 });
 
 describe('installation configuration', () => {
-  it('creates a SQLite environment from the example', async () => {
-    const rootDir = await createTemporaryRoot();
-
+  it('creates a SQLite config file', async () => {
+    const rootDir = createTemporaryRoot();
     await expect(
       configureInstallation(
         { dialect: 'sqlite', database: 'storage/app.sqlite', debug: true },
@@ -43,23 +33,16 @@ describe('installation configuration', () => {
       ),
     ).resolves.toEqual({ configured: true, restartRequired: true });
 
-    const environment = await readFile(path.join(rootDir, '.env'), 'utf8');
-    expect(environment).toContain('APP_BASE_PATH=/main');
-    expect(environment).toContain('# Keep this comment.');
-    expect(environment).toContain('DB_MIGRATIONS_AUTO_RUN=true');
-    expect(environment).toContain('DB_SEEDS_AUTO_RUN=true');
-    expect(environment).toContain('DB_DIALECT=sqlite');
-    expect(environment).toContain('DB_DATABASE=storage/app.sqlite');
-    expect(environment).toContain('DB_DEBUG=true');
-    expect(environment).toContain('AUTH_SECRET=test-secret');
-    expect(environment).not.toContain('DB_DIALECT=obsolete');
-    expect(environment).not.toContain('AUTH_SECRET=obsolete');
-    expect(environment).not.toContain('DB_HOST=');
+    const config = await readFile(path.join(rootDir, 'config.yml'), 'utf8');
+    expect(config).toContain('secret: "test-secret"');
+    expect(config).toContain('dialect: sqlite');
+    expect(config).toContain('database: "storage/app.sqlite"');
+    expect(config).toContain('debug: true');
+    expect(config).not.toContain('host:');
   });
 
-  it('creates a PostgreSQL environment with escaped values', async () => {
-    const rootDir = await createTemporaryRoot();
-
+  it('creates a PostgreSQL config file', async () => {
+    const rootDir = createTemporaryRoot();
     await configureInstallation(
       {
         dialect: 'postgres',
@@ -68,31 +51,25 @@ describe('installation configuration', () => {
         database: 'nocobase',
         username: 'app',
         password: 'space and # symbol',
-        schema: 'public,tenant',
+        schema: 'public',
         ssl: true,
-        debug: false,
       },
       {
         paths: createConfigPaths({ rootDir }),
-        generateSecret: () => 'postgres-secret',
+        generateSecret: () => 'secret',
       },
     );
 
-    const environment = await readFile(path.join(rootDir, '.env'), 'utf8');
-    expect(environment).toContain('DB_DIALECT=postgres');
-    expect(environment).toContain('DB_HOST=database.internal');
-    expect(environment).toContain('DB_PORT=5432');
-    expect(environment).toContain('DB_DATABASE=nocobase');
-    expect(environment).toContain('DB_USERNAME=app');
-    expect(environment).toContain('DB_PASSWORD="space and # symbol"');
-    expect(environment).toContain('DB_SSL=true');
-    expect(environment).toContain('DB_SCHEMA=public,tenant');
-    expect(environment).not.toContain('DB_CHARSET=');
+    const config = await readFile(path.join(rootDir, 'config.yml'), 'utf8');
+    expect(config).toContain('dialect: postgres');
+    expect(config).toContain('password: "space and # symbol"');
+    expect(config).toContain('schema: ["public"]');
+    expect(config).toContain('ssl: true');
+    expect(config).not.toContain('charset:');
   });
 
-  it('creates a MySQL environment without PostgreSQL-only values', async () => {
-    const rootDir = await createTemporaryRoot();
-
+  it('creates a MySQL config file', async () => {
+    const rootDir = createTemporaryRoot();
     await configureInstallation(
       {
         dialect: 'mysql',
@@ -105,30 +82,24 @@ describe('installation configuration', () => {
       },
       {
         paths: createConfigPaths({ rootDir }),
-        generateSecret: () => 'mysql-secret',
+        generateSecret: () => 'secret',
       },
     );
 
-    const environment = await readFile(path.join(rootDir, '.env'), 'utf8');
-    expect(environment).toContain('DB_DIALECT=mysql');
-    expect(environment).toContain('DB_PORT=3306');
-    expect(environment).toContain('DB_PASSWORD=\n');
-    expect(environment).toContain('DB_CHARSET=utf8mb4');
-    expect(environment).not.toContain('DB_SSL=');
-    expect(environment).not.toContain('DB_SCHEMA=');
+    const config = await readFile(path.join(rootDir, 'config.yml'), 'utf8');
+    expect(config).toContain('password: ""');
+    expect(config).toContain('charset: "utf8mb4"');
+    expect(config).not.toContain('schema:');
   });
 
   it('generates a strong authentication secret by default', async () => {
-    const rootDir = await createTemporaryRoot();
-
+    const rootDir = createTemporaryRoot();
     await configureInstallation(
       { dialect: 'sqlite', database: 'database.sqlite' },
       { paths: createConfigPaths({ rootDir }) },
     );
-
-    const environment = await readFile(path.join(rootDir, '.env'), 'utf8');
-    const secret = /^AUTH_SECRET=(.+)$/mu.exec(environment)?.[1];
-    expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    const config = await readFile(path.join(rootDir, 'config.yml'), 'utf8');
+    expect(/secret: "([A-Za-z0-9_-]{43})"/u.exec(config)?.[1]).toBeTruthy();
   });
 
   it('validates dialect-specific values', () => {
@@ -148,16 +119,15 @@ describe('installation configuration', () => {
     expect(() =>
       parseInstallDatabaseConfig({
         dialect: 'sqlite',
-        database: 'database.sqlite\nAUTH_SECRET=unsafe',
+        database: 'database.sqlite\nunsafe',
       }),
     ).toThrow('must not contain line breaks or null bytes');
   });
 
-  it('never overwrites an existing environment file', async () => {
-    const rootDir = await createTemporaryRoot();
-    const environmentPath = path.join(rootDir, '.env');
-    await writeFile(environmentPath, 'ORIGINAL=true\n', 'utf8');
-
+  it('never overwrites an existing config file', async () => {
+    const rootDir = createTemporaryRoot();
+    const configPath = path.join(rootDir, 'config.yml');
+    await writeFile(configPath, 'original: true\n', 'utf8');
     await expect(
       configureInstallation(
         { dialect: 'sqlite', database: 'database.sqlite' },
@@ -166,48 +136,40 @@ describe('installation configuration', () => {
     ).rejects.toMatchObject<Partial<InstallConfigurationError>>({
       status: 409,
     });
-    await expect(readFile(environmentPath, 'utf8')).resolves.toBe(
-      'ORIGINAL=true\n',
+    await expect(readFile(configPath, 'utf8')).resolves.toBe(
+      'original: true\n',
     );
   });
 
   it('allows only one concurrent configuration write', async () => {
-    const rootDir = await createTemporaryRoot();
+    const rootDir = createTemporaryRoot();
+    const options = { paths: createConfigPaths({ rootDir }) };
     const results = await Promise.allSettled([
       configureInstallation(
         { dialect: 'sqlite', database: 'first.sqlite' },
-        {
-          paths: createConfigPaths({ rootDir }),
-          generateSecret: () => 'first-secret',
-        },
+        options,
       ),
       configureInstallation(
         { dialect: 'sqlite', database: 'second.sqlite' },
-        {
-          paths: createConfigPaths({ rootDir }),
-          generateSecret: () => 'second-secret',
-        },
+        options,
       ),
     ]);
-
     expect(
       results.filter((result) => result.status === 'fulfilled'),
     ).toHaveLength(1);
-    const rejected = results.find((result) => result.status === 'rejected');
-    expect(rejected).toMatchObject({ reason: { status: 409 } });
-    await expect(access(path.join(rootDir, '.env'))).resolves.toBeUndefined();
+    expect(
+      results.find((result) => result.status === 'rejected'),
+    ).toMatchObject({ reason: { status: 409 } });
+    await expect(
+      access(path.join(rootDir, 'config.yml')),
+    ).resolves.toBeUndefined();
   });
 });
 
-async function createTemporaryRoot(): Promise<string> {
+function createTemporaryRoot(): string {
   const directory = mkdtempSync(
-    path.join(tmpdir(), 'nocobase-app-plugin-install-configure-'),
+    path.join(tmpdir(), 'nocobase-install-config-'),
   );
   temporaryDirectories.push(directory);
-  await writeFile(
-    path.join(directory, '.env.example'),
-    exampleEnvironment,
-    'utf8',
-  );
   return directory;
 }

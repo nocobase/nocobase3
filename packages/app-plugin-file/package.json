@@ -141,6 +141,7 @@
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
+    "@nocobase/session": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

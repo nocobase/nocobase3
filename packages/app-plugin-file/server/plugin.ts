@@ -1,6 +1,5 @@
 import {
   defineServerPlugin,
-  type AppPluginApplication,
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 import {
@@ -18,19 +17,14 @@ const fileApiRoutes: AppApiRoutes<FileProviderApplication> = defineApiRoutes({
   },
 });
 
-const filePlugin: AppServerPlugin<FileProviderApplication['config']> =
-  defineServerPlugin({
-    packageName: '@nocobase/app-plugin-file',
-    providers: [FileProvider],
-    apiRoutes: [
-      fileApiRoutes as AppApiRoutes<
-        AppPluginApplication<FileProviderApplication['config']>
-      >,
-    ],
-    database: {
-      migrations: './database/migrations',
-      seeds: './database/seeds',
-    },
-  });
+const filePlugin: AppServerPlugin = defineServerPlugin({
+  packageName: '@nocobase/app-plugin-file',
+  providers: [FileProvider],
+  apiRoutes: [fileApiRoutes],
+  database: {
+    migrations: './database/migrations',
+    seeds: './database/seeds',
+  },
+});
 
 export default filePlugin;

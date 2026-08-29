@@ -1,0 +1,31 @@
+# Copy this file to config.yml before starting the application.
+
+app:
+  # Public origin used for callbacks and redirects in production.
+  # publicOrigin: https://apps.example.com
+
+auth:
+  # Generate a unique secret, for example with: openssl rand -hex 32
+  # secret: replace-with-a-unique-secret
+  emailAndPassword:
+    enabled: true
+    autoSignIn: false
+  session:
+    storeSessionInDatabase: true
+
+database:
+  default: main
+  connections:
+    main:
+      dialect: sqlite
+      database: database.sqlite
+      debug: false
+  migrations:
+    autoRun: true
+  seeds:
+    autoRun: true
+
+snowflake:
+  # Assign a unique worker ID to each concurrently running instance.
+  workerId: 0
+  epoch: 1605024000

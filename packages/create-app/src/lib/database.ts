@@ -120,7 +120,7 @@ export const POSTGRES_DEFAULT_SCHEMA = 'public';
 export const MYSQL_DEFAULT_CHARSET = 'utf8mb4';
 
 /**
- * The connection settings written into `.env.local` for a dialect.
+ * The connection settings written into `config.yml` for a dialect.
  *
  * Only the dialect is ever asked for, so everything else takes the same default the template's own
  * `server/config/database.ts` falls back to. That makes SQLite runnable immediately, and leaves the server-backed
@@ -165,7 +165,7 @@ export function driverNeedsBuild(driver: string): boolean {
   return DRIVERS_NEEDING_BUILD.includes(driver);
 }
 
-/** Whether the dialect needs connection details the generated `.env.local` cannot fill in correctly on its own. */
+/** Whether the dialect needs connection details the generated `config.yml` cannot fill in correctly on its own. */
 export function needsConnectionDetails(dialect: DatabaseDialect): boolean {
   return dialect !== 'sqlite';
 }
