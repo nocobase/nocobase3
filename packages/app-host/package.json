@@ -12,24 +12,24 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./supervisor": {
-      "types": "./dist/supervisor.d.ts",
-      "import": "./dist/supervisor.js"
+      "types": "./src/supervisor.ts",
+      "import": "./src/supervisor.ts"
     },
     "./catalog": {
-      "types": "./dist/app-catalog.d.ts",
-      "import": "./dist/app-catalog.js"
+      "types": "./src/app-catalog.ts",
+      "import": "./src/app-catalog.ts"
     },
     "./registry": {
-      "types": "./dist/app-registry.d.ts",
-      "import": "./dist/app-registry.js"
+      "types": "./src/app-registry.ts",
+      "import": "./src/app-registry.ts"
     },
     "./types": {
-      "types": "./dist/app-types.d.ts",
-      "import": "./dist/app-types.js"
+      "types": "./src/app-types.ts",
+      "import": "./src/app-types.ts"
     }
   },
   "bin": {
@@ -70,6 +70,28 @@
     "vitest": "catalog:"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./supervisor": {
+        "types": "./dist/supervisor.d.ts",
+        "import": "./dist/supervisor.js"
+      },
+      "./catalog": {
+        "types": "./dist/app-catalog.d.ts",
+        "import": "./dist/app-catalog.js"
+      },
+      "./registry": {
+        "types": "./dist/app-registry.d.ts",
+        "import": "./dist/app-registry.js"
+      },
+      "./types": {
+        "types": "./dist/app-types.d.ts",
+        "import": "./dist/app-types.js"
+      }
+    }
   }
 }

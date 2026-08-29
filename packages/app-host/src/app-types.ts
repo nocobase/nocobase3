@@ -89,6 +89,7 @@ export interface AppServerReference {
 export type AppApiReference = AppServerReference;
 
 export interface AppReleaseReference extends AppCodeReference {
+  releaseId: string;
   releaseDir: string;
   manifestPath?: string;
 }
@@ -173,6 +174,7 @@ export interface AppSnapshot {
   id: string;
   appName?: string;
   version: number;
+  releaseId: string | null;
   basePath: string;
   backend: AppBackendKind;
   configVersion: string;
@@ -215,6 +217,7 @@ export interface AppActivationRequest {
   definition: AppDefinition;
   version: number;
   createApp: AppFactory;
+  runtimeConfig?: Readonly<Record<string, unknown>>;
 }
 
 export interface AppActivationBackend {
@@ -222,20 +225,44 @@ export interface AppActivationBackend {
   activate(request: AppActivationRequest): Promise<ActiveAppHandle>;
 }
 
+export interface AppReadinessPolicy {
+  timeoutMs?: number;
+  intervalMs?: number;
+  successThreshold?: number;
+  expect?: AppReadinessResponseExpectation;
+}
+
+export interface AppReadinessResponseExpectation {
+  contentType?: string;
+  json?: Readonly<Record<string, string | number | boolean>>;
+}
+
+export interface ConfigureInactiveAppOptions {
+  target: AppDefinition;
+  runtimeConfig: Readonly<Record<string, unknown>> | null;
+}
+
+export interface DeactivateAppOptions extends AppDestroyOptions {
+  target: AppDefinition;
+  runtimeConfig?: Readonly<Record<string, unknown>> | null;
+}
+
 export interface DeployAppOptions {
-  version?: string;
+  target: AppDefinition;
+  operationId: string;
+  expectedCurrentReleaseId: string | null;
+  /** Private runtime-only configuration that is not exposed through AppDefinition. */
+  runtimeConfig?: Readonly<Record<string, unknown>>;
+  readiness?: AppReadinessPolicy;
   reason?: string;
-  strategy?: 'restart' | 'blue-green';
-  destroyTimeoutMs?: number;
-  waitForReady?: boolean;
+  drainTimeoutMs?: number;
 }
 
 export interface AppDeploymentResult {
   id: string;
-  strategy: 'restart' | 'blue-green';
-  previousVersion: string | null;
-  desiredVersion: string;
-  activeVersion: string;
+  operationId: string;
+  previousReleaseId: string | null;
+  activeReleaseId: string | null;
   changed: boolean;
   app: AppSnapshot;
 }

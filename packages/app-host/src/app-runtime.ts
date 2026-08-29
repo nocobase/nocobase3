@@ -33,6 +33,7 @@ export interface AppRuntimeOptions {
   definition: AppDefinition;
   createApp: AppFactory;
   globalEvents: AppEventBus;
+  runtimeConfig?: Readonly<Record<string, unknown>>;
 }
 
 interface RegisteredDisposer {
@@ -61,6 +62,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   app!: FetchApp;
 
   private readonly globalEvents: AppEventBus;
+  private readonly releaseId: string | null;
   private readonly abortController = new AbortController();
   private readonly disposers: RegisteredDisposer[] = [];
   private readonly beforeDestroyHandlers: AppDisposer[] = [];
@@ -78,13 +80,17 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.id = options.definition.id;
     this.appName = options.definition.appName;
     this.version = options.version;
+    this.releaseId = options.definition.release?.releaseId ?? null;
     this.basePath = options.definition.basePath;
     this.assetsBasePath = `${this.basePath}/assets`;
     this.clientDir = options.definition.client?.rootDir;
     this.apiBasePath = `${this.basePath}/api`;
     this.rootDir = options.definition.rootDir;
     this.dataDir = options.definition.dataDir;
-    this.config = options.definition.config;
+    this.config = mergeAppConfig(
+      options.definition.config,
+      options.runtimeConfig,
+    );
     this.backend = options.definition.backend;
     this.configVersion = options.definition.configVersion;
     this.desiredVersion = options.definition.desiredVersion;
@@ -155,6 +161,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       id: this.id,
       appName: this.appName,
       version: this.version,
+      releaseId: this.releaseId,
       basePath: this.basePath,
       backend: this.backend,
       configVersion: this.configVersion,
@@ -460,4 +467,22 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       ...overrides,
     };
   }
+}
+
+function mergeAppConfig(
+  definitionConfig: unknown,
+  runtimeConfig: Readonly<Record<string, unknown>> | undefined,
+): unknown {
+  if (!runtimeConfig) return definitionConfig;
+  if (definitionConfig === undefined) return { ...runtimeConfig };
+  if (
+    typeof definitionConfig !== 'object' ||
+    definitionConfig === null ||
+    Array.isArray(definitionConfig)
+  ) {
+    throw new TypeError(
+      'App runtime config can only extend an object-valued definition config.',
+    );
+  }
+  return { ...definitionConfig, ...runtimeConfig };
 }
