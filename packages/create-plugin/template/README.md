@@ -1,6 +1,6 @@
-# **NOCOBASE_PACKAGE_NAME**
+# __NOCOBASE_PACKAGE_NAME__
 
-**NOCOBASE_DESCRIPTION**
+__NOCOBASE_DESCRIPTION__
 
 This scaffold includes disabled database migration and seed examples, an
 explicit server plugin entry, a ServiceProvider, an API route at

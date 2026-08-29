@@ -256,12 +256,25 @@ describe('createPlugin', () => {
     expect(serverToken).toContain('createServiceToken<AuditLogService>(');
     expect(serverToken).toContain("'@nocobase/app-plugin-audit-log/service'");
 
+    const readme = await readFile(
+      path.join(result.targetDirectory, 'README.md'),
+      'utf8',
+    );
+    expect(readme).toContain('# @nocobase/app-plugin-audit-log');
+    expect(readme).toContain('Audit Log App Plugin.');
+
+    const changelog = await readFile(
+      path.join(result.targetDirectory, 'CHANGELOG.md'),
+      'utf8',
+    );
+    expect(changelog).toContain('# @nocobase/app-plugin-audit-log');
+
     for (const file of result.files) {
       const contents = await readFile(
         path.join(result.targetDirectory, file),
         'utf8',
       );
-      expect(contents).not.toMatch(/__NOCOBASE_[A-Z0-9_]+__/u);
+      expect(contents).not.toMatch(/NOCOBASE_[A-Z0-9_]+/u);
     }
   });
 
