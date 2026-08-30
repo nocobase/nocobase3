@@ -1,3 +1,3 @@
-import { defineClientRoutes } from '@nocobase/app-client/plugins';
+import { defineAppRoutes } from '@nocobase/app-client/plugins';
 
-export default defineClientRoutes([]);
+export default defineAppRoutes([]);

@@ -1,5 +1,4 @@
-import { defineClientRoutes } from '@nocobase/app-client/plugins';
+import { defineSettingsRoutes } from '@nocobase/app-client/plugins';
+import { createAISettings } from './ai-settings.js';
 
-const routes = defineClientRoutes([]);
-
-export default routes;
+export default defineSettingsRoutes([createAISettings()]);

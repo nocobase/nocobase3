@@ -1,6 +1,6 @@
 import type {
   AppClientRouteComponentLoader,
-  AppClientSettingDefinition,
+  AppClientSettingsRoutePageDefinition,
 } from '@nocobase/app-client/plugins';
 import { Bot } from 'lucide-react';
 
@@ -37,13 +37,11 @@ export function getAISettingsTabs(): readonly AISettingsTabDefinition[] {
   return cachedTabs;
 }
 
-export function createAISettings(): readonly AppClientSettingDefinition[] {
-  return [
-    {
-      id: 'ai',
-      title: 'AI Employee',
-      icon: Bot,
-      pageLoader: () => import('./pages/settings-page.js'),
-    },
-  ];
+export function createAISettings(): AppClientSettingsRoutePageDefinition {
+  return {
+    name: 'ai',
+    path: '/ai',
+    navigation: { title: 'AI Employee', icon: Bot },
+    componentLoader: () => import('./pages/settings-page.js'),
+  };
 }

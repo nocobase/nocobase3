@@ -6,7 +6,10 @@ import settings from '@nocobase/app-plugin-ai-employee/client/settings';
 test('contributes internally routed tabs to the single AI settings page', async () => {
   aiKnowledgeBase();
 
-  expect(settings()).toMatchObject([{ id: 'ai' }]);
+  expect(settings).toMatchObject({
+    parent: 'settings',
+    routes: [{ name: 'ai', path: '/ai' }],
+  });
   const tabs = getAISettingsTabs();
   expect(tabs.map((tab) => tab.key)).toEqual([
     'ai-employee',
