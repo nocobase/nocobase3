@@ -76,6 +76,7 @@ async function createLoopFixture(
   for (const dependency of [
     '@nocobase/app-client',
     '@nocobase/app-server-kit',
+    '@nocobase/dev-config',
     '@nocobase/service-provider',
   ]) {
     const packageDirectory = path.resolve(
