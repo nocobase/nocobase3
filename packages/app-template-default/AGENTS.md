@@ -44,9 +44,11 @@ pnpm plugin:unregister <name>
 
 The editing itself is one implementation in `@nocobase/nb3-cli`, shared by both. See [docs/cli](../../docs/cli/README.md).
 
-Directories under `.agents/skills/` whose names start with `nocobase-` are
-synchronized output, replaced wholesale on the next sync. Application-owned
-skills belong in a directory that does not start with that prefix.
+The entire `.agents/` directory is ignored local synchronization output and
+must not be committed or used as a source of truth. Directories under
+`.agents/skills/` whose names start with `nocobase-` are replaced wholesale on
+the next sync. Commit plugin-owned Skill sources under the plugin's `skills/`
+directory and commit App integrations to the App's normal source directories.
 
 ## Keep extension ownership explicit
 

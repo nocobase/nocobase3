@@ -55,4 +55,14 @@ describe('documented plugin commands', () => {
     // A generated app only receives what `files` lists, so an unlisted script is present here and missing there.
     expect(appPackage.files).toContain('scripts');
   });
+
+  it('keeps synchronized Agent state out of source control and publication', () => {
+    expect(readFileSync(path.join(appRoot, '.gitignore'), 'utf8')).toContain(
+      '/.agents/',
+    );
+    expect(readFileSync(path.join(appRoot, '.npmignore'), 'utf8')).toContain(
+      '.agents/',
+    );
+    expect(appPackage.files).not.toContain('.agents');
+  });
 });

@@ -90,7 +90,9 @@ for the current task:
   aligned.
 - Plugin-owned App integration knowledge belongs in the plugin's top-level
   `skills/` and is synchronized to the App's `.agents/skills/` for the App
-  Agent. It is not runtime code and is not plugin-source development guidance.
+  Agent. The App's entire `.agents/` directory is ignored local output: never
+  commit it or use it as a source of truth. It is not runtime code and is not
+  plugin-source development guidance.
 - Use `packages/app-plugin-skills-example` as the minimal normative Plugin
   Skill reference. A public Client component subpath export does not require a
   `./client` runtime entry or Client plugin registration. Verify Skill claims

@@ -18,13 +18,13 @@ description: 在 source workspace 或独立 App 中安装、显式注册、禁�
 
 ## 注册状态面
 
-| 状态面        | 位置                                | 作用                                      |
-| ------------- | ----------------------------------- | ----------------------------------------- |
-| 包已安装      | `dependencies` 或 `devDependencies` | 模块可以被解析                            |
-| 插件已登记    | `package.json#nocobase.plugins`     | CLI、构建、监听和 Skills 管理 metadata    |
-| Client 已启用 | `client/plugins.ts`                 | Browser runtime 加载 Client contributions |
-| Server 已启用 | `server/plugins.ts`                 | Server runtime 加载 Server contributions  |
-| Skills 已同步 | `.agents/skills/`                   | App Agent 可发现插件能力和集成指南        |
+| 状态面        | 位置                                  | 作用                                      |
+| ------------- | ------------------------------------- | ----------------------------------------- |
+| 包已安装      | `dependencies` 或 `devDependencies`   | 模块可以被解析                            |
+| 插件已登记    | `package.json#nocobase.plugins`       | CLI、构建、监听和 Skills 管理 metadata    |
+| Client 已启用 | `client/plugins.ts`                   | Browser runtime 加载 Client contributions |
+| Server 已启用 | `server/plugins.ts`                   | Server runtime 加载 Server contributions  |
+| Skills 已同步 | `.agents/skills/`（本地生成，不提交） | App Agent 可发现插件能力和集成指南        |
 
 完整注册流程：
 
@@ -161,6 +161,10 @@ packages/app-template-default/
 
 插件源是唯一真相。App Agent 读取同步后的副本；不要直接编辑该副本。
 
+App 必须在 `.gitignore` 中排除整个 `/.agents/`。该目录由注册和同步命令按需重建，不属于
+App 模板或业务源码，也不能作为任何 Skill 的版本控制源。需要提交的是插件的 `skills/`
+源文件，以及 Agent 按照 Skill 写入 App 正式目录的集成代码。
+
 ## 安装但不启用
 
 需要先安装依赖和记录插件，但暂不加入 Client/Server runtime 时：
@@ -234,6 +238,7 @@ pnpm plugin:skills:sync --plugin audit-log
 - 插件上游已经删除的 Skill 会从 App 清理；
 - 不以插件认领前缀命名的 App 自有 Skill 不受影响；
 - 同名 Skill 被两个插件提供时同步失败并报告双方包名。
+- `.agents/` 是本地生成目录，即使 `plugin:inspect` 读取它，也不应加入 Git 或发布包。
 
 ## 升级独立 App 中的插件
 

@@ -2,8 +2,9 @@
 //
 // Upstream is the single source of truth: every synchronized directory is
 // replaced wholesale, and a directory whose name does not start with
-// `nocobase-` is never touched, so an application can keep its own skills
-// alongside the synchronized ones.
+// `nocobase-` is never touched, so an application can keep local skills
+// alongside the synchronized ones. The entire app-side `.agents/` tree is
+// ignored generated state, not a version-controlled source of truth.
 //
 // Where the plugins live differs by caller. Inside this repository they sit
 // under `packages/`; in a generated application they are installed into

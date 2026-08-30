@@ -39,7 +39,7 @@ function moduleDirectory(packageName: string): string {
 
 async function createLoopFixture(
   capabilities: readonly PluginCapability[],
-): Promise<{ appRoot: string }> {
+): Promise<{ appRoot: string; pluginRoot: string }> {
   const workspaceRoot = await mkdtemp(
     path.join(os.tmpdir(), 'nb3-plugin-development-loop-'),
   );
@@ -73,7 +73,7 @@ async function createLoopFixture(
     path.join(appRoot, 'node_modules', '@nocobase', 'app-plugin-agent-loop'),
     'dir',
   );
-  return { appRoot };
+  return { appRoot, pluginRoot: generated.targetDirectory };
 }
 
 describe('Agent plugin development loop', () => {
@@ -108,11 +108,29 @@ describe('Agent plugin development loop', () => {
       expectsServer,
       expectsSkill,
     ) => {
-      const { appRoot } = await createLoopFixture(capabilities);
+      const { appRoot, pluginRoot } = await createLoopFixture(capabilities);
       const manifestBefore = await readFile(
         path.join(appRoot, 'package.json'),
         'utf8',
       );
+
+      if (expectsSkill) {
+        const sourceSkill = path.join(
+          pluginRoot,
+          'skills',
+          'nocobase-app-plugin-agent-loop',
+          'SKILL.md',
+        );
+        const draft = await readFile(sourceSkill, 'utf8');
+        expect(draft).toContain('## Public surfaces');
+        expect(draft).toContain('## Permissions and constraints');
+        expect(draft).toContain('Development draft');
+        expect(draft).not.toContain('/api/example');
+        await writeFile(
+          sourceSkill,
+          `---\nname: nocobase-app-plugin-agent-loop\ndescription: Integrate the implemented Agent Loop plugin capability into an App.\n---\n\n# Agent Loop\n\nUse the plugin's implemented public surfaces and verify the result in the App.\n`,
+        );
+      }
 
       const preview = await runCommand(config, 'app:plugin:register', [
         'agent-loop',
@@ -213,6 +231,62 @@ describe('Agent plugin development loop', () => {
         operation: 'plugin:register',
         status: 'success-noop',
       });
+
+      if (expectsSkill) {
+        const sourceSkill = path.join(
+          pluginRoot,
+          'skills',
+          'nocobase-app-plugin-agent-loop',
+          'SKILL.md',
+        );
+        const synchronizedSkill = path.join(
+          appRoot,
+          '.agents',
+          'skills',
+          'nocobase-app-plugin-agent-loop',
+          'SKILL.md',
+        );
+        const updatedSkill = `${await readFile(sourceSkill, 'utf8')}\nUpdated after registration.\n`;
+        await writeFile(sourceSkill, updatedSkill);
+
+        const stale = await runCommand(config, 'app:plugin:inspect', [
+          'agent-loop',
+          '--dir',
+          appRoot,
+          '--json',
+        ]);
+        expect(JSON.parse(stale.stdout)).toMatchObject({
+          result: {
+            consistent: false,
+            issues: [{ code: 'SKILLS_OUT_OF_DATE' }],
+          },
+        });
+
+        await runCommand(config, 'app:plugin:skills:sync', [
+          '--dir',
+          appRoot,
+          '--plugin',
+          'agent-loop',
+        ]);
+        expect(await readFile(synchronizedSkill, 'utf8')).toBe(updatedSkill);
+      }
+
+      await runCommand(config, 'app:plugin:unregister', [
+        'agent-loop',
+        '--dir',
+        appRoot,
+        '--no-install',
+      ]);
+      expect(
+        existsSync(
+          path.join(
+            appRoot,
+            '.agents',
+            'skills',
+            'nocobase-app-plugin-agent-loop',
+          ),
+        ),
+      ).toBe(false);
     },
   );
 });

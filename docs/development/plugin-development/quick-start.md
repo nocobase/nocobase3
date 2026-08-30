@@ -140,7 +140,9 @@ pnpm plugin:inspect system-info --app app-template-default --json
 
 读取 `result.consistent` 和 `result.issues`，不要只根据 `ok` 判断插件接线正确。该检查不运行插件代码，也不验证 Route 权限、测试或构建。
 
-注册命令根据真实 exports 独立判断 Client 和 Server entry，并同步插件顶层 `skills/` 到 App 的 `.agents/skills/`。不要直接编辑同步副本。
+注册命令根据真实 exports 独立判断 Client 和 Server entry，并同步插件顶层 `skills/` 到 App
+本地的 `.agents/skills/`。整个 `.agents/` 是被 Git 忽略的生成产物；不要编辑或提交同步
+副本。提交插件的 `skills/` 源文件，以及 Agent 按 Skill 完成的 App 正式源码。
 
 涉及 Client 时检查最终 contributions：
 

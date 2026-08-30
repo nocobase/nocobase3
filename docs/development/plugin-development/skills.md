@@ -21,7 +21,7 @@ description: 在插件顶层 skills 目录描述插件向 App 提供的公共能
 ```text
 <plugin>/skills/       插件拥有的源文件
         ↓ synchronize
-<app>/.agents/skills/  App Agent 读取的副本
+<app>/.agents/skills/  App Agent 读取的本地生成副本（不进入 Git）
 ```
 
 Skill 不参与 Client 或 Server runtime enablement，也不是补充 README。只有插件提供了 App Agent 需要发现的公共能力或集成知识时才需要；纯内部插件可以不提供 Skill。
@@ -114,6 +114,11 @@ pnpm plugin:skills:sync --app <target-app> --plugin <plugin-name>
 ```
 
 每个目录整体替换，源文件删除的 Skill 会从 App 清理，名称冲突会失败。`--disabled` 默认仍同步 Skills；只有显式 `--no-skills` 才跳过。不要编辑 App 中的同步副本。
+
+目标 App 的整个 `.agents/` 是本地同步产物，必须被 `.gitignore` 排除，也不进入 App
+模板的发布包。应提交插件拥有的 `<plugin>/skills/` 源文件，以及 App Agent 根据 Skill
+修改的正式 Client、Server、Database 或 Registry 源码；不要提交同步后的副本，也不要把
+App 自己需要长期维护的 Skill 源文件直接放进这个生成目录。
 
 ## 插件能力变化时保持一致
 

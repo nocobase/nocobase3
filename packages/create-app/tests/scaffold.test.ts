@@ -355,6 +355,7 @@ describe('gitignore handling', () => {
 
     expect(contents).toContain('node_modules');
     expect(contents).toContain('.env.local');
+    expect(contents).toContain('/.agents/');
   });
 
   it('prefers the template gitignore over the fallback', async () => {
@@ -377,5 +378,6 @@ describe('gitignore handling', () => {
 
     expect(contents).toContain('custom-output/');
     expect(contents).not.toContain('# Local application state.');
+    expect(contents).toContain('/.agents/');
   });
 });
