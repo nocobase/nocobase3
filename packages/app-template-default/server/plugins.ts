@@ -15,6 +15,7 @@ import {
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server-kit/plugins';
+import systemInfo from '@nocobase/app-plugin-system-info/server/plugin';
 
 import type { AppConfig } from './config/index.js';
 
@@ -33,6 +34,7 @@ const serverPlugins: AppServerPlugins<AppConfig> =
     routesExample,
     serviceProviderExample,
     workflow,
+    systemInfo,
   ]);
 
 export default serverPlugins;

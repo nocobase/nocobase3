@@ -3,6 +3,11 @@ import { access, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { WorkspaceSynchronizer } from './install.ts';
+import {
+  normalizePluginCapabilities,
+  type PluginCapability,
+  type PluginCapabilities,
+} from './capabilities.ts';
 import { synchronizeWorkspace } from './install.ts';
 import { createPluginNames, toTitleCase } from './names.ts';
 import {
@@ -13,6 +18,7 @@ import {
 } from './template.ts';
 
 export interface CreatePluginOptions {
+  readonly capabilities?: readonly PluginCapability[];
   readonly description?: string;
   readonly displayName?: string;
   readonly dryRun?: boolean;
@@ -22,9 +28,11 @@ export interface CreatePluginOptions {
   readonly repoRoot?: string;
   readonly synchronize?: WorkspaceSynchronizer;
   readonly templateDirectory?: string;
+  readonly empty?: boolean;
 }
 
 export interface CreatePluginResult {
+  readonly capabilities: PluginCapabilities;
   readonly directoryName: string;
   readonly files: readonly string[];
   readonly packageName: string;
@@ -68,6 +76,16 @@ async function pathExists(target: string): Promise<boolean> {
 export async function createPlugin(
   options: CreatePluginOptions,
 ): Promise<CreatePluginResult> {
+  const requestedCapabilities = options.capabilities ?? [];
+  if (!options.empty && requestedCapabilities.length === 0) {
+    throw new Error(
+      'No plugin capabilities were selected. Add --with <capability> or use --empty.',
+    );
+  }
+  if (options.empty && requestedCapabilities.length > 0) {
+    throw new Error('--empty cannot be combined with --with.');
+  }
+  const capabilities = normalizePluginCapabilities(requestedCapabilities);
   const names = createPluginNames(options.name);
   const resolvedRepoRoot = path.resolve(options.repoRoot ?? process.cwd());
   const packagesDirectory = path.join(resolvedRepoRoot, 'packages');
@@ -98,8 +116,13 @@ export async function createPlugin(
     throw new Error(`Target already exists: ${targetDirectory}`);
   }
 
-  const files = await listTemplateFiles(templateDirectory, context);
+  const files = await listTemplateFiles(
+    templateDirectory,
+    context,
+    capabilities,
+  );
   const result: CreatePluginResult = {
+    capabilities,
     directoryName: names.directoryName,
     files,
     packageName: names.packageName,
@@ -114,7 +137,12 @@ export async function createPlugin(
   try {
     await mkdir(targetDirectory);
     targetCreated = true;
-    await renderTemplate({ context, targetDirectory, templateDirectory });
+    await renderTemplate({
+      capabilities,
+      context,
+      targetDirectory,
+      templateDirectory,
+    });
   } catch (error) {
     if (targetCreated) {
       await rm(targetDirectory, { force: true, recursive: true });

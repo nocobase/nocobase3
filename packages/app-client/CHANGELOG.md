@@ -2,6 +2,12 @@
 
 ## 1.0.0-beta.3
 
+### Patch Changes
+
+- Allow `AppClientPluginFactory` to omit its generic argument when a plugin
+  does not accept Client options, matching the existing
+  `defineClientPlugin<TOptions = void>` default.
+
 ### Minor Changes
 
 - 062f5b1: Add `settings` to `defineClientPlugin`, a fourth contribution type alongside `bootstrap`, `routes`, and `providers`. A plugin points it at a module that default-exports an array of setting definitions, or a function of the plugin options returning one, and each entry becomes a page in the application's settings centre.

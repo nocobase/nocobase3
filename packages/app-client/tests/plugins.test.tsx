@@ -12,6 +12,7 @@ import {
   defineSettingsRoutes,
   defineClientSourceExtension,
   resolveAppClientContributions,
+  type AppClientPluginFactory,
   type AppClientSettingsRoutePageDefinition,
 } from '../src/plugins.js';
 
@@ -24,6 +25,17 @@ function SecondProvider({ children }: PropsWithChildren): ReactElement {
 }
 
 describe('client plugin definitions', () => {
+  it('uses void options when AppClientPluginFactory omits its type argument', () => {
+    const plugin: AppClientPluginFactory = defineClientPlugin({
+      packageName: '@nocobase/app-plugin-no-options',
+    });
+
+    expect(plugin()).toMatchObject({
+      packageName: '@nocobase/app-plugin-no-options',
+      options: {},
+    });
+  });
+
   it('freezes source extension route overrides', () => {
     const extension = defineClientSourceExtension({
       name: 'authentication-ui',

@@ -11,6 +11,7 @@ import routesExample from '@nocobase/app-plugin-routes-example/client';
 import file from '@nocobase/app-plugin-file/client';
 import workflow from '@nocobase/app-plugin-workflow/client';
 import notification from '@nocobase/app-plugin-notification/client';
+import systemInfo from '@nocobase/app-plugin-system-info/client';
 
 // Array order is bootstrap order. A plugin is enabled by appearing in this
 // list; removing its entry and its import disables it.
@@ -24,6 +25,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   file(),
   workflow(),
   notification(),
+  systemInfo(),
 ]);
 
 export default clientPlugins;

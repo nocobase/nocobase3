@@ -294,7 +294,7 @@ export interface AppClientPluginRegistration {
   readonly options: unknown;
 }
 
-export type AppClientPluginFactory<TOptions> = (
+export type AppClientPluginFactory<TOptions = void> = (
   options?: TOptions,
 ) => AppClientPluginRegistration;
 

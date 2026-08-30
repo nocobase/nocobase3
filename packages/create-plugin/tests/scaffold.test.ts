@@ -1,8 +1,9 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { PluginCapability } from '../src/lib/capabilities.ts';
 import { createPlugin } from '../src/lib/scaffold.ts';
 
 const createdDirectories: string[] = [];
@@ -24,319 +25,147 @@ async function createTestRepo(): Promise<string> {
   return repoRoot;
 }
 
-describe('createPlugin', () => {
-  it('renders the bundled plugin template', async () => {
-    const repoRoot = await createTestRepo();
-    const synchronize = vi.fn();
-    const result = await createPlugin({
-      name: 'audit-log',
-      now: new Date(2026, 7, 22),
-      repoRoot,
-      synchronize,
-    });
-    const manifest = JSON.parse(
-      await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
-    ) as Record<string, unknown>;
-
-    expect(result.packageName).toBe('@nocobase/app-plugin-audit-log');
-    expect(result.files).toContain('.gitignore');
-    expect(result.files).not.toContain('.gitignore.template');
-    expect(result.files).toContain('.prettierignore');
-    expect(result.files).not.toContain('.prettierignore.template');
-    expect(result.files).toContain('CHANGELOG.md');
-    expect(result.files).toContain(
-      'skills/nocobase-app-plugin-audit-log/SKILL.md',
-    );
-    expect(result.files).toContain('components.json');
-    expect(result.files).toContain('registry.config.json');
-    expect(result.files).toContain(
-      'registry/component-ui/plugin-feature-card.tsx',
-    );
-    expect(result.files).toContain('eslint.config.js');
-    expect(result.files).not.toContain('eslint.config.template.js');
-    expect(result.files).toContain(
-      'database/migrations/202608220001_audit_log_create_records.ts.example',
-    );
-    expect(manifest).toMatchObject({
-      name: '@nocobase/app-plugin-audit-log',
-      displayName: 'Audit Log App Plugin',
-      description: 'Audit Log App Plugin.',
-      version: '0.0.1',
-      prettier: '@nocobase/dev-config/prettier',
-      devDependencies: {
-        shadcn: '^4.13.1',
-        tailwindcss: 'catalog:',
-        'tw-animate-css': '^1.2.5',
-      },
-      files: expect.arrayContaining([
-        'CHANGELOG.md',
-        'components.json',
-        'database',
-        'skills',
-        'registry',
-        'registry.config.json',
-        'public/r',
-      ]),
-      nocobase: {
-        registry: {
-          items: {
-            'component-ui': './registry/component-ui',
-          },
-        },
-      },
-      scripts: {
-        'registry:build': 'node ../../scripts/registry.mjs build --package .',
-        'registry:materialize':
-          'node ../../scripts/registry.mjs materialize --package .',
-        prepack: 'pnpm registry:build',
-      },
-    });
-    expect(synchronize).toHaveBeenCalledWith(repoRoot, result.targetDirectory);
-
-    const clientPlugin = await readFile(
-      path.join(result.targetDirectory, 'client/plugin.ts'),
-      'utf8',
-    );
-    expect(clientPlugin).toContain('interface AuditLogClientOptions');
-    expect(clientPlugin).toContain('readonly resourceLabel?: string;');
-    expect(clientPlugin).toContain(
-      "packageName: '@nocobase/app-plugin-audit-log'",
-    );
-
-    const components = JSON.parse(
-      await readFile(
-        path.join(result.targetDirectory, 'components.json'),
-        'utf8',
-      ),
-    ) as {
-      aliases?: Record<string, string>;
-      tailwind?: { css?: string };
-    };
-    expect(components.tailwind?.css).toBe('client/styles.css');
-    expect(components.aliases?.ui).toBe('@/components/ui');
-
-    const tsconfig = JSON.parse(
-      await readFile(
-        path.join(result.targetDirectory, 'tsconfig.json'),
-        'utf8',
-      ),
-    ) as {
-      compilerOptions?: { paths?: Record<string, string[]> };
-    };
-    expect(tsconfig.compilerOptions?.paths?.['@/*']).toEqual(['./client/*']);
-
-    const registryConfig = JSON.parse(
-      await readFile(
-        path.join(result.targetDirectory, 'registry.config.json'),
-        'utf8',
-      ),
-    ) as {
-      name?: string;
-      items?: Array<{
-        name?: string;
-        registryDependencies?: string[];
-        source?: { root?: string; target?: string };
-      }>;
-    };
-    expect(registryConfig).toMatchObject({
-      name: 'nocobase-audit-log',
-      items: [
-        {
-          name: 'component-ui',
-          registryDependencies: ['button'],
-          source: {
-            root: 'registry/component-ui',
-            target: 'client/extensions/nocobase-audit-log-component-ui',
-          },
-        },
-      ],
-    });
-
-    const registryComponent = await readFile(
-      path.join(
-        result.targetDirectory,
-        'registry/component-ui/plugin-feature-card.tsx',
-      ),
-      'utf8',
-    );
-    expect(registryComponent).toContain(
-      "import { Button } from '@/components/ui/button';",
-    );
-    expect(registryComponent).toContain("eyebrow = 'Audit Log App Plugin'");
-
-    const clientBootstrap = await readFile(
-      path.join(result.targetDirectory, 'client/bootstrap.ts'),
-      'utf8',
-    );
-    expect(clientBootstrap).toContain('refine.addResources([');
-    expect(clientBootstrap).toContain("name: 'audit-log'");
-    expect(clientBootstrap).toContain("list: '/audit-log'");
-    expect(clientBootstrap).toContain(
-      "label: options.resourceLabel ?? 'Audit Log App Plugin'",
-    );
-
-    const clientRoutes = await readFile(
-      path.join(result.targetDirectory, 'client/routes.ts'),
-      'utf8',
-    );
-    expect(clientRoutes).toContain("path: '/audit-log'");
-    expect(clientRoutes).toContain(
-      "componentLoader: () => import('./pages/audit-log-page.js')",
-    );
-
-    expect(clientRoutes).toContain('defineAppRoutes([');
-    expect(clientRoutes).toContain('defineSettingsRoutes([');
-    expect(clientRoutes).toContain("name: 'audit-log'");
-    expect(clientRoutes).toContain("title: 'Audit Log App Plugin'");
-    expect(clientRoutes).toContain(
-      "componentLoader: () => import('./pages/settings.js')",
-    );
-
-    const clientProviders = await readFile(
-      path.join(result.targetDirectory, 'client/providers.ts'),
-      'utf8',
-    );
-    expect(clientProviders).toContain('component: AuditLogProvider');
-
-    const clientPage = await readFile(
-      path.join(result.targetDirectory, 'client/pages/audit-log-page.tsx'),
-      'utf8',
-    );
-    expect(clientPage).toContain('const appClient = createAppClient();');
-    expect(clientPage).toContain("'audit-log'");
-
-    expect(result.files).toEqual(
-      expect.arrayContaining([
-        'client/components/provider.tsx',
-        'client/contexts.ts',
-        'client/pages/audit-log-page.tsx',
-        'client/pages/settings.tsx',
-      ]),
-    );
-
-    const serverPlugin = await readFile(
-      path.join(result.targetDirectory, 'server/plugin.ts'),
-      'utf8',
-    );
-    expect(serverPlugin).toContain('const auditLogPlugin: AppServerPlugin');
-    expect(serverPlugin).toContain(
-      "packageName: '@nocobase/app-plugin-audit-log'",
-    );
-    expect(serverPlugin).toContain(
-      "import providers from './providers/index.js'",
-    );
-    expect(serverPlugin).toContain('providers,');
-    expect(serverPlugin).toContain('routes,');
-    expect(serverPlugin).toContain("migrations: './database/migrations'");
-    expect(serverPlugin).toContain("seeds: './database/seeds'");
-    expect(serverPlugin).toContain("jobs: ['./server/jobs']");
-
-    const serverRoutes = await readFile(
-      path.join(result.targetDirectory, 'server/routes/index.ts'),
-      'utf8',
-    );
-    expect(serverRoutes).toContain('export const apiRoutes:');
-    expect(serverRoutes).toContain('const routes: readonly');
-    expect(serverRoutes).toContain('apiRoutes,');
-    expect(serverRoutes).toContain('defineApiRoutes(');
-    expect(serverRoutes).toContain('({ container }) => {');
-    expect(serverRoutes).toContain('const router = new Hono();');
-    expect(serverRoutes).toContain('container.resolve(');
-    expect(serverRoutes).toContain('auditLogServiceToken');
-    expect(serverRoutes).toContain('return router;');
-    expect(serverRoutes).not.toContain('AppPluginRoutesApplication');
-
-    const serverProvider = await readFile(
-      path.join(result.targetDirectory, 'server/providers/audit-log.ts'),
-      'utf8',
-    );
-    expect(serverProvider).toContain('public override register(): void');
-    expect(serverProvider).toContain('this.app.container.singleton(');
-    expect(serverProvider).toContain('auditLogServiceToken');
-
-    const serverToken = await readFile(
-      path.join(result.targetDirectory, 'server/tokens.ts'),
-      'utf8',
-    );
-    expect(serverToken).toContain(
-      'export const auditLogServiceToken: ServiceToken<AuditLogService>',
-    );
-    expect(serverToken).toContain('createServiceToken<AuditLogService>(');
-    expect(serverToken).toContain("'@nocobase/app-plugin-audit-log/service'");
-
-    const readme = await readFile(
-      path.join(result.targetDirectory, 'README.md'),
-      'utf8',
-    );
-    expect(readme).toContain('# @nocobase/app-plugin-audit-log');
-    expect(readme).toContain('Audit Log App Plugin.');
-
-    const skill = await readFile(
-      path.join(
-        result.targetDirectory,
-        'skills/nocobase-app-plugin-audit-log/SKILL.md',
-      ),
-      'utf8',
-    );
-    expect(skill).toContain('name: nocobase-app-plugin-audit-log');
-    expect(skill).toContain(
-      'description: Use Audit Log App Plugin in a NocoBase application.',
-    );
-    expect(skill).toContain('GET /api/audit-log');
-
-    const changelog = await readFile(
-      path.join(result.targetDirectory, 'CHANGELOG.md'),
-      'utf8',
-    );
-    expect(changelog).toContain('# @nocobase/app-plugin-audit-log');
-
-    for (const file of result.files) {
-      const contents = await readFile(
-        path.join(result.targetDirectory, file),
-        'utf8',
-      );
-      expect(contents).not.toMatch(/NOCOBASE_[A-Z0-9_]+/u);
-    }
+async function createWith(
+  capabilities: readonly PluginCapability[],
+): ReturnType<typeof createPlugin> {
+  const repoRoot = await createTestRepo();
+  return createPlugin({
+    capabilities,
+    install: false,
+    name: 'audit-log',
+    now: new Date(2026, 7, 22),
+    repoRoot,
   });
+}
 
-  it('escapes user-facing text before inserting it into TypeScript', async () => {
+describe('createPlugin', () => {
+  it('creates only a package foundation when --empty is explicit', async () => {
     const repoRoot = await createTestRepo();
     const result = await createPlugin({
-      description: 'Tracks quoted values.',
-      displayName: "Audit's \\ Log\tSuite",
+      empty: true,
       install: false,
       name: 'audit-log',
       repoRoot,
     });
-    const service = await readFile(
-      path.join(result.targetDirectory, 'server/services/audit-log.ts'),
-      'utf8',
-    );
-    const registryConfig = JSON.parse(
-      await readFile(
-        path.join(result.targetDirectory, 'registry.config.json'),
-        'utf8',
-      ),
-    ) as { items?: Array<{ title?: string }> };
-
-    expect(service).toContain('return "Hello from Audit\'s \\\\ Log\\tSuite";');
-    expect(registryConfig.items?.[0]?.title).toBe(
-      "Audit's \\ Log\tSuite Component",
-    );
+    const manifest = JSON.parse(
+      await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
+    ) as {
+      dependencies?: unknown;
+      exports?: Record<string, unknown>;
+      files?: string[];
+    };
+    expect(result.files).toEqual([
+      '.gitignore',
+      '.prettierignore',
+      'CHANGELOG.md',
+      'eslint.config.js',
+      'package.json',
+      'package.ts',
+      'README.md',
+      'tsconfig.json',
+    ]);
+    expect(manifest.dependencies).toBeUndefined();
+    expect(manifest.exports).toEqual({ './package.json': './package.json' });
+    expect(manifest.files).toEqual(['dist', 'README.md', 'CHANGELOG.md']);
   });
 
-  it('does not write files during a dry run', async () => {
+  it('keeps Server routes independent from providers and database', async () => {
+    const result = await createWith(['server.routes']);
+    const manifest = JSON.parse(
+      await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
+    ) as {
+      dependencies?: Record<string, string>;
+      exports?: Record<string, unknown>;
+    };
+    const plugin = await readFile(
+      path.join(result.targetDirectory, 'server/plugin.ts'),
+      'utf8',
+    );
+    expect(result.files).toContain('server/routes/index.ts');
+    expect(result.files).not.toContain('server/tokens.ts');
+    expect(result.files).not.toContain('database/README.md');
+    expect(plugin).toContain('routes,');
+    expect(plugin).not.toContain('providers,');
+    expect(plugin).not.toContain('database:');
+    expect(manifest.dependencies).toEqual({
+      '@nocobase/app-server-kit': 'workspace:^',
+      hono: 'catalog:',
+    });
+    expect(manifest.exports).toHaveProperty('./server/plugin');
+    expect(manifest.exports).not.toHaveProperty('./server/tokens');
+  });
+
+  it('maps selected Client entries without inventing routes or providers', async () => {
+    const result = await createWith(['client.bootstrap', 'client.components']);
+    const plugin = await readFile(
+      path.join(result.targetDirectory, 'client/plugin.ts'),
+      'utf8',
+    );
+    expect(result.files).toContain('client/bootstrap.ts');
+    expect(result.files).toContain('client/components/plugin-component.tsx');
+    expect(result.files).not.toContain('client/routes.ts');
+    expect(result.files).not.toContain('client/providers.ts');
+    expect(plugin).toContain("bootstrap: () => import('./bootstrap.js')");
+    expect(plugin).not.toContain('routes:');
+    expect(plugin).not.toContain('providers:');
+  });
+
+  it('generates metadata for all explicitly selected capabilities', async () => {
+    const result = await createWith([
+      'database',
+      'server.providers',
+      'server.routes',
+      'server.jobs',
+      'client.routes',
+      'client.components',
+      'client.providers',
+      'client.bootstrap',
+      'registry',
+      'skills',
+    ]);
+    const manifest = JSON.parse(
+      await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
+    ) as {
+      dependencies?: Record<string, string>;
+      files?: string[];
+      scripts?: Record<string, string>;
+    };
+    expect(result.files).toContain(
+      'database/migrations/202608220001_audit_log_create_records.ts.example',
+    );
+    expect(result.files).toContain('server/jobs/audit-log.ts');
+    expect(result.files).toContain(
+      'skills/nocobase-app-plugin-audit-log/SKILL.md',
+    );
+    expect(result.files).toContain('registry.config.json');
+    expect(manifest.dependencies).toMatchObject({
+      '@nocobase/app-database': 'workspace:^',
+      '@nocobase/app-server-kit': 'workspace:^',
+      '@nocobase/queue': 'workspace:^',
+      '@nocobase/service-provider': 'workspace:^',
+      hono: 'catalog:',
+    });
+    expect(manifest.files).toEqual(
+      expect.arrayContaining(['database', 'skills', 'registry', 'public/r']),
+    );
+    expect(manifest.scripts?.prepack).toBe('pnpm registry:build');
+  });
+
+  it('does not write or synchronize during a dry run', async () => {
     const repoRoot = await createTestRepo();
+    const synchronize = vi.fn();
     const result = await createPlugin({
+      capabilities: ['client.routes'],
       dryRun: true,
       name: 'audit-log',
       repoRoot,
+      synchronize,
     });
-
-    expect(result.files).toContain('client/plugin.ts');
+    expect(result.files).toContain('client/routes.ts');
     await expect(
       readFile(result.targetDirectory, 'utf8'),
     ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(synchronize).not.toHaveBeenCalled();
   });
 
   it('does not overwrite an existing plugin', async () => {
@@ -344,37 +173,16 @@ describe('createPlugin', () => {
     const target = path.join(repoRoot, 'packages/app-plugin-audit-log');
     await mkdir(target);
     await writeFile(path.join(target, 'marker.txt'), 'keep\n');
-
     await expect(
-      createPlugin({ install: false, name: 'audit-log', repoRoot }),
+      createPlugin({
+        empty: true,
+        install: false,
+        name: 'audit-log',
+        repoRoot,
+      }),
     ).rejects.toThrow('Target already exists');
     await expect(
       readFile(path.join(target, 'marker.txt'), 'utf8'),
     ).resolves.toBe('keep\n');
-  });
-
-  it('removes a partial target when template rendering fails', async () => {
-    const repoRoot = await createTestRepo();
-    const templateDirectory = await mkdtemp(
-      path.join(os.tmpdir(), 'nocobase-plugin-template-'),
-    );
-    createdDirectories.push(templateDirectory);
-    await writeFile(
-      path.join(templateDirectory, 'broken.ts'),
-      'const value = __NOCOBASE_UNKNOWN__;\n',
-    );
-    const target = path.join(repoRoot, 'packages/app-plugin-audit-log');
-
-    await expect(
-      createPlugin({
-        install: false,
-        name: 'audit-log',
-        repoRoot,
-        templateDirectory,
-      }),
-    ).rejects.toThrow('Unknown template placeholder');
-    await expect(readFile(target, 'utf8')).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
   });
 });

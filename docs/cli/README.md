@@ -125,15 +125,17 @@ pnpm plugin:skills:sync --dry-run
 
 在本仓库根目录开发插件时仍使用这些 `pnpm` scripts。除创建和删除源码外，注册、卸载和 skills 同步都直接调用同一个 `nb3 app plugin *` 实现：
 
-| 命令                            | 作用                                                    |
-| ------------------------------- | ------------------------------------------------------- |
-| `pnpm plugin:create <name>`     | 生成 `packages/app-plugin-<name>/` 脚手架               |
-| `pnpm plugin:register <name>`   | 写依赖、manifest、Client/Server 显式入口，并复制 skills |
-| `pnpm plugin:unregister <name>` | 上述四项的逆操作                                        |
-| `pnpm plugin:remove <name>`     | 删除插件源码；仍被引用时会拒绝并提示先 unregister       |
-| `pnpm plugin:skills:sync`       | 只同步 skills（从 `packages/` 解析插件）                |
+| 命令                                            | 作用                                                    |
+| ----------------------------------------------- | ------------------------------------------------------- |
+| `pnpm plugin:create <name> --with <capability>` | 按显式 capability 生成 `packages/app-plugin-<name>/`    |
+| `pnpm plugin:register <name>`                   | 写依赖、manifest、Client/Server 显式入口，并复制 skills |
+| `pnpm plugin:unregister <name>`                 | 上述四项的逆操作                                        |
+| `pnpm plugin:remove <name>`                     | 删除插件源码；仍被引用时会拒绝并提示先 unregister       |
+| `pnpm plugin:skills:sync`                       | 只同步 skills（从 `packages/` 解析插件）                |
 
-完整参数用 `--help` 查看。插件开发流程见 [plugin-development-quickstart.md](../plugin-development-quickstart.md)。
+完整参数用 `--help` 查看。插件开发流程见[插件开发](../development/plugin-development.md)。
+
+`plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.providers`、`server.routes`、`server.jobs`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
 
 ### 仓库命令和 App 命令的关系
 

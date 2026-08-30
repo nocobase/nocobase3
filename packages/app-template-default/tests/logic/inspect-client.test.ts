@@ -118,6 +118,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/workflow/runs/:runId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-system-info:index',
+        path: '/system-info',
+      },
     ]);
     expect(
       inspection.providers.map(({ id, order }) => ({ id, order })),
