@@ -21,6 +21,7 @@ describe('server plugin definitions', () => {
 
     expect(plugin).toEqual({
       packageName: '@nocobase/app-plugin-example',
+      config: [],
       providers: [],
       routes: [],
       database: undefined,

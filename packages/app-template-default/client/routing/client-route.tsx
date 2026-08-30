@@ -2,6 +2,7 @@ import type {
   AppClientRegisteredRoute,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
+import { NamespaceScope } from '@nocobase/app-i18n/client';
 import { useCan } from '@refinedev/core';
 import { type ReactElement, useEffect, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -76,7 +77,10 @@ export function ClientPage({ page }: ClientPageProps): ReactElement {
 
   return (
     <ErrorBoundary fallback={<ClientPageError page={page} />}>
-      <Component />
+      {/* The owning package is the page's namespace, so a plugin page translates with a bare useTranslation(). */}
+      <NamespaceScope ns={page.packageName}>
+        <Component />
+      </NamespaceScope>
     </ErrorBoundary>
   );
 }

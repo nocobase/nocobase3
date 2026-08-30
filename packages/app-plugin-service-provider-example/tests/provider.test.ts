@@ -9,6 +9,9 @@ describe('@nocobase/app-plugin-service-provider-example provider', () => {
     const container = new ServiceContainer();
     const provider = new ServiceProviderExampleProvider({
       container,
+      config: {
+        get: () => ({ enabled: true }),
+      },
     });
 
     expect(provider.name).toBe('@nocobase/app-plugin-service-provider-example');
@@ -43,6 +46,9 @@ describe('@nocobase/app-plugin-service-provider-example provider', () => {
     const container = new ServiceContainer();
     const provider = new ServiceProviderExampleProvider({
       container,
+      config: {
+        get: () => ({ enabled: true }),
+      },
     });
 
     provider.register();

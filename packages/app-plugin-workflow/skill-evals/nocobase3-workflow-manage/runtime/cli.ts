@@ -36,7 +36,7 @@ try {
     }),
     refreshSourceResolvers: async (): Promise<void> => undefined,
     discoverArtifacts: async () => [],
-    publishArtifact: async (): Promise<void> => undefined,
+    ensureArtifactMaterialized: async () => undefined,
   };
   const workflows = new WorkflowRepository(fixture.database, runtime);
   const workflowRuns = new WorkflowRunRepository(fixture.database, runtime);

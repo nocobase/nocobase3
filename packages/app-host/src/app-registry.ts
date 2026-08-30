@@ -642,6 +642,7 @@ export class AppRuntimeRegistry {
         'v1',
       rootDir: options.rootDir,
       dataDir: options.dataDir,
+      configPath: options.configPath,
       client: options.client,
       server,
       api: options.api,
@@ -649,7 +650,6 @@ export class AppRuntimeRegistry {
       release: options.release,
       healthPath: server?.healthPath ?? options.healthPath,
       resourcePolicy: options.resourcePolicy,
-      config: options.config,
     };
   }
 

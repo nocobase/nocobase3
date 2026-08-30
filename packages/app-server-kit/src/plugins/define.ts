@@ -1,4 +1,4 @@
-import type { ApplicationConfig } from '../application/index.js';
+import type { AppConfigContribution } from '../config/index.js';
 import type {
   AppServerPlugin,
   AppServerPluginDefinition,
@@ -7,13 +7,14 @@ import type {
 
 const PACKAGE_NAME_PATTERN = /^@[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
 
-export function defineServerPlugin<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(definition: AppServerPluginDefinition<TConfig>): AppServerPlugin<TConfig> {
+export function defineServerPlugin<TConfig = object>(
+  definition: AppServerPluginDefinition<TConfig>,
+): AppServerPlugin<TConfig> {
   const packageName = normalizePackageName(definition.packageName);
 
   return Object.freeze({
     packageName,
+    config: Object.freeze(normalizeConfigDefinitions(definition.config)),
     providers: Object.freeze([...(definition.providers ?? [])]),
     routes: Object.freeze([...(definition.routes ?? [])]),
     database: definition.database
@@ -27,12 +28,13 @@ export function defineServerPlugin<
             : undefined,
         })
       : undefined,
+    locales: definition.locales,
   });
 }
 
-export function defineServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(plugins: readonly AppServerPlugin<TConfig>[]): AppServerPlugins<TConfig> {
+export function defineServerPlugins(
+  plugins: readonly AppServerPlugin[],
+): AppServerPlugins {
   const seen = new Set<string>();
   for (const plugin of plugins) {
     if (seen.has(plugin.packageName)) {
@@ -44,6 +46,22 @@ export function defineServerPlugins<
   }
 
   return Object.freeze({ plugins: Object.freeze([...plugins]) });
+}
+
+function normalizeConfigDefinitions(
+  value:
+    | AppConfigContribution<never>
+    | readonly AppConfigContribution<never>[]
+    | undefined,
+): readonly AppConfigContribution<never>[] {
+  if (value === undefined) return [];
+  return isConfigDefinitionArray(value) ? [...value] : [value];
+}
+
+function isConfigDefinitionArray(
+  value: AppConfigContribution<never> | readonly AppConfigContribution<never>[],
+): value is readonly AppConfigContribution<never>[] {
+  return Array.isArray(value);
 }
 
 function normalizePackageName(packageName: string): string {

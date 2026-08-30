@@ -1,6 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { readEnvFiles, type EnvMap } from '../config/index.js';
+import { dotenvParser } from '@nocobase/config/parsers/dotenv';
+
+import { type EnvMap } from '../config/index.js';
 import {
   normalizeBasePath,
   resolveAppNameFromBasePath,
@@ -23,31 +26,30 @@ export function loadStandaloneAppEnv(
     path.join(options.rootDir, '.env'),
     path.join(options.rootDir, '.env.local'),
   ];
-
   return {
-    ...readEnvFiles([...files], baseEnv),
+    ...readDotenvFiles(files, baseEnv),
     ...baseEnv,
     ...options.overrides,
   };
 }
 
-export interface StandaloneAppScopeOptions<TConfig = unknown> {
+export interface StandaloneAppScopeOptions {
   readonly id?: string;
   readonly appName: string;
   readonly basePath: string;
   readonly paths: AppPathOptions;
+  readonly configPath?: string;
   readonly env: EnvMap;
-  readonly config?: TConfig;
   readonly abortReason?: unknown;
 }
 
-export interface CreateStandaloneScopeOptions<TConfig = unknown> {
+export interface CreateStandaloneScopeOptions {
   readonly rootDir?: string;
   readonly paths?: AppPathOptions;
   readonly appName?: string;
   readonly basePath?: string;
-  readonly config?: TConfig;
-  /** Final environment overrides applied after env files and process.env. */
+  readonly configPath?: string;
+  /** Final environment overrides applied after dotenv files and process.env. */
   readonly env?: EnvMap;
   readonly abortReason?: unknown;
 }
@@ -57,10 +59,7 @@ export interface ResolveStandaloneAppPathsOptions {
   readonly paths?: AppPathOptions;
 }
 
-export class StandaloneAppScope<TConfig = unknown>
-  extends AppScopeLifecycle
-  implements AppScope<TConfig>
-{
+export class StandaloneAppScope extends AppScopeLifecycle implements AppScope {
   public readonly mode = 'standalone' as const;
   public readonly id: string;
   public readonly appName: string;
@@ -69,10 +68,10 @@ export class StandaloneAppScope<TConfig = unknown>
   public readonly rootDir: string;
   public readonly dataDir: string | undefined;
   public readonly clientDir: string | undefined;
+  public readonly configPath: string | undefined;
   public readonly env: EnvMap;
-  public readonly config: TConfig | undefined;
 
-  public constructor(options: StandaloneAppScopeOptions<TConfig>) {
+  public constructor(options: StandaloneAppScopeOptions) {
     super({ abortReason: options.abortReason });
     this.id = options.id ?? options.appName;
     this.appName = options.appName;
@@ -81,14 +80,14 @@ export class StandaloneAppScope<TConfig = unknown>
     this.rootDir = options.paths.rootDir;
     this.dataDir = options.paths.storageDir;
     this.clientDir = options.paths.clientDir;
+    this.configPath = options.configPath;
     this.env = options.env;
-    this.config = options.config;
   }
 }
 
-export function createStandaloneScope<TConfig = unknown>(
-  options: CreateStandaloneScopeOptions<TConfig>,
-): StandaloneAppScope<TConfig> {
+export function createStandaloneScope(
+  options: CreateStandaloneScopeOptions,
+): StandaloneAppScope {
   const paths = resolveStandaloneAppPaths(options);
   const env = loadStandaloneAppEnv({
     rootDir: paths.rootDir,
@@ -106,11 +105,45 @@ export function createStandaloneScope<TConfig = unknown>(
     appName,
     basePath,
     paths,
+    configPath: options.configPath,
     env,
-    config: options.config,
     abortReason:
       options.abortReason ?? new Error('Standalone application closed.'),
   });
+}
+
+function readDotenvFiles(
+  files: readonly string[],
+  baseEnv: EnvMap,
+): Record<string, string> {
+  const parser = dotenvParser();
+  const environment: Record<string, string> = {};
+
+  for (const filePath of files) {
+    if (!existsSync(filePath)) continue;
+    const parsed = parser.parse(readFileSync(filePath));
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string') environment[key] = value;
+    }
+  }
+
+  const expansionEnvironment = { ...baseEnv, ...environment };
+  for (const [key, value] of Object.entries(environment)) {
+    environment[key] = expandEnvironmentValue(value, expansionEnvironment);
+    expansionEnvironment[key] = environment[key];
+  }
+
+  return environment;
+}
+
+function expandEnvironmentValue(value: string, env: EnvMap): string {
+  return value.replace(
+    /\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g,
+    (match, key: string): string => {
+      if (match.startsWith('\\')) return match.slice(1);
+      return env[key] ?? '';
+    },
+  );
 }
 
 export function resolveStandaloneAppPaths(

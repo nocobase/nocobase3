@@ -36,6 +36,7 @@ describe('bundled template', () => {
         'registry/component-ui/README.md',
         'registry/component-ui/index.ts',
         'registry/component-ui/plugin-feature-card.tsx',
+        'server/index.ts',
         'server/plugin.ts',
         'server/providers/__NOCOBASE_SHORT_NAME__.ts',
         'server/providers/index.ts',
@@ -94,17 +95,17 @@ describe('bundled template', () => {
         'node ../../scripts/registry.mjs materialize --package .',
       prepack: 'pnpm registry:build',
     });
-    expect(manifest.exports?.['./server/plugin']).toEqual({
-      types: './server/plugin.ts',
-      import: './server/plugin.ts',
+    expect(manifest.exports?.['./server']).toEqual({
+      types: './server/index.ts',
+      import: './server/index.ts',
     });
     expect(manifest.exports?.['./server/tokens']).toEqual({
       types: './server/tokens.ts',
       import: './server/tokens.ts',
     });
-    expect(manifest.publishConfig?.exports?.['./server/plugin']).toEqual({
-      types: './dist/server/plugin.d.ts',
-      import: './dist/server/plugin.js',
+    expect(manifest.publishConfig?.exports?.['./server']).toEqual({
+      types: './dist/server/index.d.ts',
+      import: './dist/server/index.js',
     });
     expect(manifest.publishConfig?.exports?.['./server/tokens']).toEqual({
       types: './dist/server/tokens.d.ts',

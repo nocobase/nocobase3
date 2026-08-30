@@ -96,6 +96,7 @@ pnpm deploy
 ## 架构介绍
 
 - [应用服务分层架构](./architecture.md)
+- [应用配置](./app-config.md)
 - [Service Provider 与服务容器](./service-provider.md)
 
 ## 插件开发

@@ -1,14 +1,11 @@
 import type { Row } from '@nocobase/app-database';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import { loggingToken } from '@nocobase/logging';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { FILE_DEMO_FIXTURES } from '../demo/fixtures.js';
 import { FileUnavailableError } from '../errors.js';
 import {
-  isFilePluginRuntimeUnavailable,
   resolveFilePluginRuntime,
-  type FilePluginConfig,
   type FilePluginRuntime,
 } from '../plugin-runtime.js';
 import { filePluginRuntimeToken } from '../runtime-token.js';
@@ -25,7 +22,7 @@ const readinessByDatabase = new WeakMap<
   Map<string, Promise<void>>
 >();
 
-export type FileProviderApplication = AppPluginApplication<FilePluginConfig>;
+export type FileProviderApplication = AppPluginApplication;
 
 export class FileProvider<
   TApplication extends FileProviderApplication = FileProviderApplication,
@@ -36,17 +33,6 @@ export class FileProvider<
     this.app.container.singleton(filePluginRuntimeToken, (container) =>
       resolveFilePluginRuntime(container, this.app.config),
     );
-  }
-
-  public override async boot(): Promise<void> {
-    const runtime = this.app.container.resolve(filePluginRuntimeToken);
-    if (isFilePluginRuntimeUnavailable(runtime)) return;
-    const logger = this.app.container.resolve(loggingToken).getLogger().child({
-      module: 'app-plugin-file',
-    });
-    void prepareFileDemoFixtures(runtime).catch((error: unknown) => {
-      logger.error({ err: error }, 'File Demo fixture initialization failed');
-    });
   }
 }
 

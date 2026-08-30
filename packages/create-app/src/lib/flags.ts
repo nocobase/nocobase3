@@ -105,7 +105,7 @@ export function formatHelp(binary: string): string {
     '  The template is downloaded from https://npm.nocobase.ai by default.',
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
-    '  Database connection settings are written to .env.local with defaults.',
+    '  Database connection settings are written to config.yml with defaults.',
     '  For postgres and mysql, edit that file before starting the app.',
   ].join('\n');
 }

@@ -1,12 +1,13 @@
 import { databaseManagerToken } from '@nocobase/app-database';
-import { loggingToken } from '@nocobase/logging';
-import { queueManagerToken } from '@nocobase/queue';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 
 import { createNotificationManager } from '../manager.js';
 import { notificationServiceToken } from '../tokens.js';
 import type { NotificationChannelMap, NotificationConfig } from '../types.js';
+import { notificationConfig } from '../config.js';
 
 export interface NotificationProviderApplicationConfig {
   readonly app: {
@@ -33,7 +34,7 @@ export class NotificationProvider<
         logger: container.resolve(loggingToken).getLogger().child({
           module: 'notification',
         }),
-        config: this.app.config.notification ?? { channels: [] },
+        config: this.app.config.get(notificationConfig),
       }),
     );
   }

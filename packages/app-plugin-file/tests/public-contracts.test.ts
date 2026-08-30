@@ -83,6 +83,7 @@ describe('file plugin public contracts', () => {
     expect(Object.keys(serverApi).sort()).toEqual([
       'DEFAULT_FILE_ROUTE_VISIBILITY',
       'createFileRoute',
+      'default',
     ]);
     expect(serverApi).not.toHaveProperty('resolveFilePluginRuntime');
     expect(serverApi).not.toHaveProperty('bootstrapFilePlugin');
@@ -123,8 +124,8 @@ describe('file plugin public contracts', () => {
     expect(packageJson.exports).toHaveProperty('./client/plugin');
     expect(packageJson.publishConfig.exports).toHaveProperty('./client');
     expect(packageJson.publishConfig.exports).toHaveProperty('./client/plugin');
-    expect(packageJson.exports).toHaveProperty('./server/plugin');
-    expect(packageJson.publishConfig.exports).toHaveProperty('./server/plugin');
+    expect(packageJson.exports).toHaveProperty('./server');
+    expect(packageJson.publishConfig.exports).toHaveProperty('./server');
     expect(existsSync(skillPath)).toBe(true);
     expect(readFileSync(skillPath, 'utf8')).toContain(
       'name: nocobase-app-plugin-file',

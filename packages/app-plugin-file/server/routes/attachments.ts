@@ -137,7 +137,9 @@ export function createFileDemoRoutes({
       drive,
       defaultDisk: config.drive?.default ?? 'local',
       publicBasePath: config.app.publicBasePath,
-      tokenSecret: config.session?.secret,
+      tokenSecret: isFilePluginRuntimeUnavailable(runtime)
+        ? undefined
+        : runtime.tokenSecret,
       audience: PROFILE_AVATAR_AUDIENCE,
       auth,
       visibility: {
@@ -158,7 +160,9 @@ export function createFileDemoRoutes({
       drive,
       defaultDisk: config.drive?.default ?? 'local',
       publicBasePath: config.app.publicBasePath,
-      tokenSecret: config.session?.secret,
+      tokenSecret: isFilePluginRuntimeUnavailable(runtime)
+        ? undefined
+        : runtime.tokenSecret,
       audience: ORDER_ATTACHMENTS_AUDIENCE,
       auth,
       visibility: {

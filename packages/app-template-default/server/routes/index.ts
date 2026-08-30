@@ -8,11 +8,10 @@ import {
 } from '@nocobase/app-server-kit/router';
 import { Hono } from 'hono';
 
-import type { AppConfig } from '../config/index.js';
 import { appExampleServiceToken } from '../providers/index.js';
 
-export const apiRoutes: AppApiRouteContribution<Application<AppConfig>> =
-  defineApiRoutes((app) => {
+export const apiRoutes: AppApiRouteContribution<Application> = defineApiRoutes(
+  (app) => {
     const router = new Hono();
 
     router.get('/example', (context) => {
@@ -25,9 +24,10 @@ export const apiRoutes: AppApiRouteContribution<Application<AppConfig>> =
     });
 
     return router;
-  });
+  },
+);
 
-export const rootRoutes: AppRootRouteContribution<Application<AppConfig>> =
+export const rootRoutes: AppRootRouteContribution<Application> =
   defineRootRoutes((app) => {
     const router = new Hono();
 
@@ -53,7 +53,7 @@ export const rootRoutes: AppRootRouteContribution<Application<AppConfig>> =
     return router;
   });
 
-const routes: readonly AppRouteContribution<Application<AppConfig>>[] = [
+const routes: readonly AppRouteContribution<Application>[] = [
   apiRoutes,
   rootRoutes,
 ];

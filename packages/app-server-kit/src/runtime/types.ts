@@ -28,7 +28,7 @@ export interface AppPathOptions {
  * this shared contract. Optional members let embedded and standalone hosts
  * provide the information available in their respective runtime modes.
  */
-export interface AppScope<TConfig = unknown> extends AppLifecycle {
+export interface AppScope extends AppLifecycle {
   readonly mode?: 'embedded' | 'standalone';
   readonly id: string;
   readonly appName?: string;
@@ -42,7 +42,8 @@ export interface AppScope<TConfig = unknown> extends AppLifecycle {
   readonly apiBasePath?: string;
   readonly rootDir?: string;
   readonly dataDir?: string;
-  readonly config?: TConfig;
+  /** Optional configuration file path supplied by the host. */
+  readonly configPath?: string;
   /** Fully resolved environment supplied by the host when available. */
   readonly env?: EnvMap;
   /** Fully resolved application paths supplied by the host when available. */

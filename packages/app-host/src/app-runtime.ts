@@ -50,7 +50,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   readonly apiBasePath: string;
   readonly rootDir?: string;
   readonly dataDir?: string;
-  readonly config?: unknown;
+  readonly configPath?: string;
   readonly backend: AppDefinition['backend'];
   readonly configVersion: string;
   readonly desiredVersion: string;
@@ -84,7 +84,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.apiBasePath = `${this.basePath}/api`;
     this.rootDir = options.definition.rootDir;
     this.dataDir = options.definition.dataDir;
-    this.config = options.definition.config;
+    this.configPath = options.definition.configPath;
     this.backend = options.definition.backend;
     this.configVersion = options.definition.configVersion;
     this.desiredVersion = options.definition.desiredVersion;

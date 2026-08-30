@@ -5,9 +5,10 @@ import {
 
 import routes, { type InstallPluginConfig } from './routes/index.js';
 
-const installPlugin: AppServerPlugin<InstallPluginConfig> = defineServerPlugin({
-  packageName: '@nocobase/app-plugin-install',
-  routes,
-});
+const installPlugin: AppServerPlugin<InstallPluginConfig> =
+  defineServerPlugin<InstallPluginConfig>({
+    packageName: '@nocobase/app-plugin-install',
+    routes,
+  });
 
 export default installPlugin;

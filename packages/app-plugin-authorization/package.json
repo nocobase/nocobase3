@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authorization",
   "displayName": "Authorization App Plugin",
   "description": "Authorization integration and permission management UI for NocoBase applications.",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.2",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -17,10 +17,6 @@
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
-    },
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
     },
     "./client": {
       "types": "./client/index.ts",
@@ -58,10 +54,6 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
-      },
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
       },
       "./client": {
         "types": "./dist/client/index.d.ts",
