@@ -1,7 +1,9 @@
 export const PLUGIN_JSON_SCHEMA_VERSION = 1;
 
-export type PluginCommandStatus =
+export type PluginCommandSuccessStatus =
   'success' | 'success-noop' | 'partial-success' | 'requires-installation';
+
+export type PluginCommandStatus = PluginCommandSuccessStatus | 'failure';
 
 export interface PluginJsonError {
   readonly code: string;
@@ -9,11 +11,33 @@ export interface PluginJsonError {
   readonly suggestions: readonly string[];
 }
 
-export function pluginJsonSuccess(
+export interface PluginJsonSuccess<
+  TResult extends Record<string, unknown> = Record<string, unknown>,
+> {
+  readonly schemaVersion: typeof PLUGIN_JSON_SCHEMA_VERSION;
+  readonly ok: true;
+  readonly operation: string;
+  readonly status: PluginCommandSuccessStatus;
+  readonly result: TResult;
+}
+
+export interface PluginJsonFailure {
+  readonly schemaVersion: typeof PLUGIN_JSON_SCHEMA_VERSION;
+  readonly ok: false;
+  readonly operation: string;
+  readonly status: 'failure';
+  readonly error: PluginJsonError;
+}
+
+export type PluginJsonEnvelope<
+  TResult extends Record<string, unknown> = Record<string, unknown>,
+> = PluginJsonSuccess<TResult> | PluginJsonFailure;
+
+export function pluginJsonSuccess<TResult extends Record<string, unknown>>(
   operation: string,
-  status: PluginCommandStatus,
-  result: Record<string, unknown>,
-): Record<string, unknown> {
+  status: PluginCommandSuccessStatus,
+  result: TResult,
+): PluginJsonSuccess<TResult> {
   return {
     schemaVersion: PLUGIN_JSON_SCHEMA_VERSION,
     ok: true,
@@ -26,7 +50,7 @@ export function pluginJsonSuccess(
 export function pluginJsonFailure(
   operation: string,
   error: PluginJsonError,
-): Record<string, unknown> {
+): PluginJsonFailure {
   return {
     schemaVersion: PLUGIN_JSON_SCHEMA_VERSION,
     ok: false,

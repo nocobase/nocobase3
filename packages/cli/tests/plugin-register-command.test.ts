@@ -649,6 +649,7 @@ describe('app plugin register command', () => {
       schemaVersion: number;
       ok: boolean;
       operation: string;
+      status: string;
       result: {
         dryRun: boolean;
         copies: Array<{ skillName: string }>;
@@ -658,6 +659,7 @@ describe('app plugin register command', () => {
       schemaVersion: 1,
       ok: true,
       operation: 'plugin:skills:sync',
+      status: 'success',
     });
     expect(response.result.dryRun).toBe(true);
     expect(response.result.copies).toEqual([
@@ -710,12 +712,14 @@ describe('app plugin register command', () => {
       schemaVersion: number;
       ok: boolean;
       operation: string;
+      status: string;
       error: { code: string; message: string; suggestions: string[] };
     };
     expect(response).toMatchObject({
       schemaVersion: 1,
       ok: false,
       operation: 'plugin:skills:sync',
+      status: 'failure',
       error: {
         code: 'PLUGIN_NOT_INSTALLED',
         message: expect.any(String),

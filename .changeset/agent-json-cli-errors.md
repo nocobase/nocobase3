@@ -4,6 +4,7 @@
 ---
 
 Return a single versioned JSON envelope for both successful and failed Create
-Plugin and Plugin Skills synchronization commands. JSON failures keep a
-non-zero exit code and now expose stable error codes, readable messages, and
-actionable suggestions without appending non-JSON usage output.
+Plugin and Plugin Skills synchronization commands. Plugin Skills
+synchronization now includes consistent success and failure statuses. JSON
+failures keep a non-zero exit code and expose stable error codes, readable
+messages, and actionable suggestions without appending non-JSON usage output.

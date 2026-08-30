@@ -197,6 +197,10 @@ function replacementEntries(
       '__NOCOBASE_HELLO_MESSAGE_LITERAL__',
       literal(`Hello from ${context.displayName}`),
     ],
+    [
+      '__NOCOBASE_JOB_NAME_LITERAL__',
+      literal(`${context.packageName}/${context.shortName}`),
+    ],
     ['__NOCOBASE_MIGRATION_NAME_LITERAL__', literal(context.migrationName)],
     ['__NOCOBASE_MIGRATION_NAME__', context.migrationName],
     ['__NOCOBASE_MODULE_NAME__', context.moduleName],

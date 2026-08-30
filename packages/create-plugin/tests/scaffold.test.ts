@@ -410,6 +410,22 @@ describe('createPlugin', () => {
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
   });
 
+  it('generates a stable package-scoped Queue Job identity', async () => {
+    const result = await createWith(['server.jobs']);
+    const job = await readFile(
+      path.join(result.targetDirectory, 'server/jobs/audit-log.ts'),
+      'utf8',
+    );
+    const test = await readFile(
+      path.join(result.targetDirectory, 'tests/jobs.test.ts'),
+      'utf8',
+    );
+
+    expect(job).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
+    expect(job).not.toContain('AuditLogJob.name');
+    expect(test).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
+  });
+
   it('maps selected Client entries without inventing routes or providers', async () => {
     const result = await createWith(['client.bootstrap', 'client.components']);
     const plugin = await readFile(

@@ -6,6 +6,11 @@ import {
   planSkillsSync,
   resolveInstalledPlugins,
 } from '../../../../lib/skills-sync.ts';
+import {
+  classifyPluginError,
+  pluginJsonFailure,
+  pluginJsonSuccess,
+} from '../../../../lib/plugin-json.ts';
 import { resolveAppRoot } from '../../../../lib/workspace-app.ts';
 
 export default class AppSkillsSync extends Command {
@@ -54,31 +59,21 @@ export default class AppSkillsSync extends Command {
       if (!json) {
         throw error;
       }
-      const message = error instanceof Error ? error.message : String(error);
-      const code = message.includes('is not installed')
-        ? 'PLUGIN_NOT_INSTALLED'
-        : message.includes('Invalid skill directory')
-          ? 'INVALID_SKILL_DIRECTORY'
-          : message.includes('Skill name collision')
-            ? 'SKILL_NAME_COLLISION'
-            : 'SKILLS_SYNC_FAILED';
+      const classified = classifyPluginError(error);
+      const errorResult =
+        classified.code === 'PLUGIN_NOT_INSTALLED'
+          ? {
+              ...classified,
+              suggestions: [
+                'Run the App package manager install, then retry the sync.',
+              ],
+            }
+          : classified.code === 'PLUGIN_COMMAND_FAILED'
+            ? { ...classified, code: 'SKILLS_SYNC_FAILED' }
+            : classified;
       this.logToStderr(
         JSON.stringify(
-          {
-            schemaVersion: 1,
-            ok: false,
-            operation: 'plugin:skills:sync',
-            error: {
-              code,
-              message,
-              suggestions:
-                code === 'PLUGIN_NOT_INSTALLED'
-                  ? [
-                      'Run the App package manager install, then retry the sync.',
-                    ]
-                  : ['Run the command with --help and correct the request.'],
-            },
-          },
+          pluginJsonFailure('plugin:skills:sync', errorResult),
           null,
           2,
         ),
@@ -105,12 +100,7 @@ export default class AppSkillsSync extends Command {
     const result = { ...plan, dryRun };
 
     if (flags.json) {
-      this.logJson({
-        schemaVersion: 1,
-        ok: true,
-        operation: 'plugin:skills:sync',
-        result,
-      });
+      this.logJson(pluginJsonSuccess('plugin:skills:sync', 'success', result));
       return;
     }
     this.log(formatSkillsSyncSummary(result));

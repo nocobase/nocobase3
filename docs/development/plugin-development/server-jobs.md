@@ -19,7 +19,7 @@ export interface RebuildIndexPayload {
 
 export default class RebuildIndexJob extends Job<RebuildIndexPayload> {
   public static options: JobOptions = {
-    name: 'AuditLogRebuildIndex',
+    name: '@nocobase/app-plugin-audit-log/rebuild-index',
     queue: 'default',
   };
 

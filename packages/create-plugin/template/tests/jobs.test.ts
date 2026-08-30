@@ -4,7 +4,8 @@ import __NOCOBASE_SYMBOL_NAME__Job from '../server/jobs/__NOCOBASE_SHORT_NAME__.
 
 describe(__NOCOBASE_PACKAGE_NAME_LITERAL__, () => {
   it('declares its queue job', () => {
-    expect(__NOCOBASE_SYMBOL_NAME__Job.options).toMatchObject({
+    expect(__NOCOBASE_SYMBOL_NAME__Job.options).toEqual({
+      name: __NOCOBASE_JOB_NAME_LITERAL__,
       queue: 'default',
     });
   });
