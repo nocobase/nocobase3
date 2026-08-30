@@ -144,6 +144,68 @@ export default defineServerPlugins([auditLog]);
   await access(targetDirectory);
 });
 
+test('refuses removal while client/plugins.ts imports the plugin', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
+  const appDirectory = path.join(repoRoot, 'packages/app');
+  await mkdir(path.join(appDirectory, 'client'), { recursive: true });
+  await writeJson(path.join(appDirectory, 'package.json'), {
+    name: '@nocobase/app',
+  });
+  await writeFile(
+    path.join(appDirectory, 'client/plugins.ts'),
+    `import auditLog from '@nocobase/app-plugin-audit-log/client';
+import { defineClientPlugins } from '@nocobase/app-client/plugins';
+
+export default defineClientPlugins([auditLog()]);
+`,
+  );
+
+  await assert.rejects(
+    removePlugin({ install: false, name: 'audit-log', repoRoot }),
+    (error) => {
+      assert.match(error.message, /client\/plugins\.ts/u);
+      assert.match(
+        error.message,
+        /pnpm plugin:unregister audit-log --app app/u,
+      );
+      return true;
+    },
+  );
+  await access(targetDirectory);
+});
+
+test('removes a plugin after every application reference is gone', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
+  const appDirectory = path.join(repoRoot, 'packages/app');
+  await mkdir(path.join(appDirectory, 'client'), { recursive: true });
+  await mkdir(path.join(appDirectory, 'server'), { recursive: true });
+  await writeJson(path.join(appDirectory, 'package.json'), {
+    name: '@nocobase/app',
+    devDependencies: {},
+    nocobase: { plugins: {} },
+  });
+  await writeFile(
+    path.join(appDirectory, 'client/plugins.ts'),
+    `import { defineClientPlugins } from '@nocobase/app-client/plugins';
+
+export default defineClientPlugins([]);
+`,
+  );
+  await writeFile(
+    path.join(appDirectory, 'server/plugins.ts'),
+    `import { defineServerPlugins } from '@nocobase/app-server-kit/plugins';
+
+export default defineServerPlugins([]);
+`,
+  );
+
+  await removePlugin({ install: false, name: 'audit-log', repoRoot });
+
+  await assert.rejects(access(targetDirectory), { code: 'ENOENT' });
+});
+
 test('restores the plugin and lockfile when synchronization fails', async (t) => {
   const repoRoot = await createTestRepo(t);
   const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
