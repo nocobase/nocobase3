@@ -252,10 +252,6 @@ export interface AppClientContributionLoader {
   readonly options?: unknown;
 }
 
-export interface AppClientApplicationLoader extends AppClientContributionLoader {
-  readonly source: 'application';
-}
-
 export interface AppClientPluginLoader extends AppClientContributionLoader {
   readonly source?: 'plugin';
 }
@@ -301,7 +297,7 @@ export interface AppClientPluginRegistration {
   readonly options: unknown;
 }
 
-export type AppClientPluginFactory<TOptions> = (
+export type AppClientPluginFactory<TOptions = void> = (
   options?: TOptions,
 ) => AppClientPluginRegistration;
 
@@ -378,12 +374,6 @@ export function defineClientPlugins(
     plugins: Object.freeze(plugins),
     routeComponentOverrides: Object.freeze(routeComponentOverrides),
   });
-}
-
-export function defineClientApplication(
-  application: AppClientContributionLoader,
-): AppClientApplicationLoader {
-  return Object.freeze({ ...application, source: 'application' });
 }
 
 export function defineAppRoutes(

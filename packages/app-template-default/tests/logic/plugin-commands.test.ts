@@ -26,10 +26,12 @@ const scripts = appPackage.scripts ?? {};
 /** The command surface documented in docs/cli/README.md, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:register': 'nb3 app plugin register',
+  'plugin:inspect': 'nb3 app plugin inspect',
   'plugin:unregister': 'nb3 app plugin unregister',
   'plugin:update': 'nb3 app plugin update',
   'plugin:skills:sync': 'nb3 app plugin skills sync',
   'client:inspect': 'tsx ./scripts/inspect-client.mjs',
+  'server:inspect': 'tsx ./scripts/inspect-server.mjs',
 };
 
 describe('documented plugin commands', () => {
@@ -52,5 +54,15 @@ describe('documented plugin commands', () => {
     expect(existsSync(entry)).toBe(true);
     // A generated app only receives what `files` lists, so an unlisted script is present here and missing there.
     expect(appPackage.files).toContain('scripts');
+  });
+
+  it('keeps synchronized Agent state out of source control and publication', () => {
+    expect(readFileSync(path.join(appRoot, '.gitignore'), 'utf8')).toContain(
+      '/.agents/',
+    );
+    expect(readFileSync(path.join(appRoot, '.npmignore'), 'utf8')).toContain(
+      '.agents/',
+    );
+    expect(appPackage.files).not.toContain('.agents');
   });
 });

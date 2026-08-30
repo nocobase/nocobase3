@@ -8,7 +8,7 @@ import { DefaultHeartbeatService } from '../server/services/heartbeat.js';
 import { heartbeatServiceToken } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-service-provider-example routes', () => {
-  it('registers its HTTP route', async () => {
+  it('serves its intentionally public lifecycle status Route', async () => {
     const container = new ServiceContainer();
     const heartbeat = new DefaultHeartbeatService();
     heartbeat.start();

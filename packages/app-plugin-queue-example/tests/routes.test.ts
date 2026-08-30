@@ -1,7 +1,19 @@
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import { ServiceContainer } from '@nocobase/service-provider';
-import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import {
+  createConfigPaths,
+  type AppConfigAccessor,
+} from '@nocobase/app-server-kit/config';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+import {
+  createQueueManager,
+  createSyncQueueConfig,
+  type NocoBaseQueueManager,
+} from '@nocobase/queue';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -9,7 +21,7 @@ import { queueExampleExecutions } from '../server/jobs/queue-example.js';
 import { apiRoutes } from '../server/routes/index.js';
 
 describe('queue example plugin routes', () => {
-  const managers: Array<ReturnType<typeof createQueueManager>> = [];
+  const managers: NocoBaseQueueManager[] = [];
 
   afterEach(async () => {
     queueExampleExecutions.length = 0;
@@ -26,18 +38,12 @@ describe('queue example plugin routes', () => {
         }),
     });
     managers.push(queueManager);
-    const hostRouter = new Hono();
-    const container = new ServiceContainer();
-    container.instance(queueManagerToken, queueManager);
-
-    const router = await apiRoutes.createRouter({
-      appName: 'main',
-      publicBasePath: '/main',
-      config: { app: { name: 'main', publicBasePath: '/main' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
-      router: hostRouter,
-      container,
-    });
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        { required: () => async (_context, next) => next() } as unknown as Auth,
+        queueManager,
+      ),
+    );
 
     const response = await router.request('/queue-example');
 
@@ -56,4 +62,75 @@ describe('queue example plugin routes', () => {
       },
     ]);
   });
+
+  it('rejects anonymous dispatch requests', async () => {
+    const queueManager = createQueueManager(createSyncQueueConfig());
+    managers.push(queueManager);
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        {
+          required: () => (context) =>
+            context.json({ code: 'UNAUTHORIZED' }, 401),
+        } as unknown as Auth,
+        queueManager,
+      ),
+    );
+
+    const response = await router.request('/queue-example');
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ code: 'UNAUTHORIZED' });
+  });
+
+  it('does not apply authentication to later Route contributions', async () => {
+    const queueManager = createQueueManager(createSyncQueueConfig());
+    managers.push(queueManager);
+    const application = new Hono();
+    const pluginRouter = await apiRoutes.createRouter(
+      createApplication(
+        {
+          required: () => (context) =>
+            context.json({ code: 'UNAUTHORIZED' }, 401),
+        } as unknown as Auth,
+        queueManager,
+      ),
+    );
+    application.route('/api', pluginRouter);
+    application.get('/api/later-plugin', (context) => context.text('later'));
+
+    expect((await application.request('/api/queue-example')).status).toBe(401);
+    await expect(
+      (await application.request('/api/later-plugin')).text(),
+    ).resolves.toBe('later');
+  });
+
+  it('declares an API Route contribution', () => {
+    expect(apiRoutes).toMatchObject({ scope: 'api' });
+  });
 });
+
+function createApplication(
+  authentication: Auth,
+  queueManager: NocoBaseQueueManager,
+): AppPluginApplication {
+  const container = new ServiceContainer();
+  container.instance(authenticationToken, authentication);
+  container.instance(queueManagerToken, queueManager);
+  return {
+    appName: 'main',
+    publicBasePath: '',
+    config: createEmptyConfigAccessor(),
+    paths: createConfigPaths({ rootDir: '/missing' }),
+    router: new Hono(),
+    container,
+  };
+}
+
+function createEmptyConfigAccessor(): AppConfigAccessor {
+  return {
+    get: () => undefined,
+    raw: () => ({}),
+    reload: async () => ({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  } as AppConfigAccessor;
+}

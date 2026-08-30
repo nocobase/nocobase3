@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Add explicit `client.locales` and `server.locales` capabilities, and stop generating locale resources implicitly for unrelated Client capabilities.
 - b049266: Scaffold a plugin with locale files and a declared `locales` entry, so a new plugin starts out translatable rather than needing i18n retrofitted.
 - 7cdffbd: Replace separate API and root route arrays with one ordered `routes` contribution array. Route factories now receive the Application, create and return their own Hono router, and are mounted automatically at `/api` or the application root according to their definition.
 
@@ -24,4 +25,8 @@
 ### Patch Changes
 
 - Add a template-based generator for NocoBase 3 application plugins.
-- Document that the registration command automatically connects the generated `./server/plugin` export to the target application's explicit server composition root.
+- Document that the registration command automatically connects the generated `./server` export to the target application's explicit server composition root.
+- Replace the complete default scaffold with explicit, composable plugin
+  capabilities and a shared generation plan. Add structured JSON dry runs and
+  require callers to select capabilities or explicitly request an empty
+  package foundation.

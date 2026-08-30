@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Keep plugin inspection actionable when a plugin is not installed by marking Skills as unchecked, suppressing the false stale-Skills issue, and deduplicating recovery suggestions.
 - 7cdffbd: Replace separate API and root route arrays with one ordered `routes` contribution array. Route factories now receive the Application, create and return their own Hono router, and are mounted automatically at `/api` or the application root according to their definition.
 
   Standardize plugin server modules around `providers/index.ts` and `routes/index.ts` collection entries, `services/` domain implementations, and a stable `tokens.ts` public contract.

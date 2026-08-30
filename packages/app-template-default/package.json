@@ -56,6 +56,12 @@
       "@nocobase/app-plugin-service-provider-example": {
         "enabled": true
       },
+      "@nocobase/app-plugin-skills-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-system-info": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-workflow": {
         "enabled": true
       }
@@ -88,6 +94,8 @@
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
     "@nocobase/app-plugin-service-provider-example": "workspace:^",
+    "@nocobase/app-plugin-skills-example": "workspace:^",
+    "@nocobase/app-plugin-system-info": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
@@ -219,10 +227,12 @@
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "plugin:register": "nb3 app plugin register",
+    "plugin:inspect": "nb3 app plugin inspect",
     "plugin:unregister": "nb3 app plugin unregister",
     "plugin:update": "nb3 app plugin update",
     "plugin:skills:sync": "nb3 app plugin skills sync",
     "client:inspect": "tsx ./scripts/inspect-client.mjs",
+    "server:inspect": "tsx ./scripts/inspect-server.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

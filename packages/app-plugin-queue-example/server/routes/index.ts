@@ -1,4 +1,5 @@
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
@@ -12,9 +13,11 @@ import QueueExampleJob, {
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
-    const queueManager = container.resolve(queueManagerToken);
     const router = new Hono();
+    const authentication = container.resolve(authenticationToken);
+    const queueManager = container.resolve(queueManagerToken);
 
+    router.use('/queue-example', authentication.required());
     router.get('/queue-example', async (context) => {
       const result = await queueManager.dispatch(QueueExampleJob, {
         message: 'Hello from the Queue example plugin',

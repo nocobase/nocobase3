@@ -12,6 +12,8 @@
 '@nocobase/app-plugin-realtime-example': minor
 '@nocobase/app-plugin-routes-example': minor
 '@nocobase/app-plugin-service-provider-example': minor
+'@nocobase/app-plugin-skills-example': minor
+'@nocobase/app-plugin-system-info': minor
 '@nocobase/app-plugin-workflow': minor
 '@nocobase/app-template-default': minor
 '@nocobase/nb3-cli': minor

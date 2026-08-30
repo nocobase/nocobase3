@@ -13,6 +13,13 @@ import type { WorkflowProviderConfig } from '../providers/workflow.js';
 import { workflowServiceToken } from '../tokens.js';
 import { createWorkflowRoutes } from './workflow.js';
 
+const workflowRoutePaths = [
+  '/workflows',
+  '/workflows/*',
+  '/workflow-runs',
+  '/workflow-runs/*',
+] as const;
+
 export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<WorkflowProviderConfig>
 > = defineApiRoutes(({ container }) => {
@@ -25,7 +32,10 @@ export const apiRoutes: AppApiRouteContribution<
       return context.json({ message: error.message, code: error.code }, 400);
     return context.json({ message: 'Internal server error.' }, 500);
   });
-  router.use('*', container.resolve(authenticationToken).required());
+  const authentication = container.resolve(authenticationToken);
+  for (const path of workflowRoutePaths) {
+    router.use(path, authentication.required());
+  }
   if (
     container.has(databaseManagerToken) &&
     container.has(workflowServiceToken)
@@ -38,9 +48,11 @@ export const apiRoutes: AppApiRouteContribution<
       ),
     );
   } else {
-    router.all('*', (context) =>
-      context.json({ message: 'Workflow service is not configured.' }, 503),
-    );
+    for (const path of workflowRoutePaths) {
+      router.all(path, (context) =>
+        context.json({ message: 'Workflow service is not configured.' }, 503),
+      );
+    }
   }
   return router;
 });

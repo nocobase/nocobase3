@@ -7,6 +7,7 @@ import { useRoutesExample } from '../contexts/routes-example-context.js';
 interface RoutesExampleResponse {
   message: string;
   plugin: string;
+  scope: 'api';
 }
 
 const appClient = createAppClient();
@@ -91,6 +92,10 @@ export default function RoutesExamplePage(): ReactElement {
             <div>
               <dt className='text-sm text-muted-foreground'>Plugin</dt>
               <dd className='font-medium'>{result?.plugin}</dd>
+            </div>
+            <div>
+              <dt className='text-sm text-muted-foreground'>Scope</dt>
+              <dd className='font-medium'>{result?.scope}</dd>
             </div>
             <div>
               <dt className='text-sm text-muted-foreground'>Message</dt>

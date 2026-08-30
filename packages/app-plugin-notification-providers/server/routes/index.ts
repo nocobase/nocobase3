@@ -15,15 +15,14 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server-kit/router';
 import type { ServiceContainer } from '@nocobase/service-provider';
-import type { AppConfigAccessor } from '@nocobase/app-server-kit/config';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 
 import type { NotificationProvidersPluginConfig } from '../bootstrap.js';
 import { TEST_PAGE_HTML } from './test-page.js';
 
-export interface NotificationProviderRoutesApplication {
-  readonly config: AppConfigAccessor;
+export interface CreateNotificationProviderRoutesOptions {
+  readonly config: NotificationProvidersPluginConfig;
   readonly container: ServiceContainer;
 }
 
@@ -36,14 +35,10 @@ interface TestRequest {
   readonly body?: unknown;
 }
 
-export function registerNotificationProviderRoutes(
-  app: NotificationProviderRoutesApplication,
-  router: Hono,
-): void {
-  const { container } = app;
-  const config: NotificationProvidersPluginConfig = {
-    notification: app.config.get(notificationConfig),
-  };
+export function createNotificationProviderRoutes(
+  options: CreateNotificationProviderRoutesOptions,
+): Hono<AuthorizationEnv> {
+  const { config, container } = options;
   const auth = container.resolve(authenticationToken);
   const authorization = container.resolve(authorizationToken);
   const routes = new Hono<AuthorizationEnv>();
@@ -244,13 +239,19 @@ export function registerNotificationProviderRoutes(
       : context.json({ error: 'Notification log not found.' }, 404);
   });
 
-  router.route('/notification-providers', routes);
+  return routes;
 }
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes((app) => {
     const router = new Hono();
-    registerNotificationProviderRoutes(app, router);
+    router.route(
+      '/notification-providers',
+      createNotificationProviderRoutes({
+        config: { notification: app.config.get(notificationConfig) },
+        container: app.container,
+      }),
+    );
     return router;
   });
 

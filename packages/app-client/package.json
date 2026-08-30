@@ -15,6 +15,10 @@
     "./plugins": {
       "types": "./src/plugins.ts",
       "import": "./src/plugins.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.ts",
+      "import": "./src/runtime/index.ts"
     }
   },
   "publishConfig": {
@@ -26,6 +30,10 @@
       "./plugins": {
         "types": "./dist/plugins.d.ts",
         "import": "./dist/plugins.js"
+      },
+      "./runtime": {
+        "types": "./dist/runtime/index.d.ts",
+        "import": "./dist/runtime/index.js"
       }
     },
     "access": "public"

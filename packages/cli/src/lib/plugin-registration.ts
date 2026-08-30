@@ -345,6 +345,22 @@ export async function removePluginSkills(
   appRoot: string,
   packageName: string,
 ): Promise<string[]> {
+  const removed = await planPluginSkillRemovals(appRoot, packageName);
+  const skillsRoot = path.join(appRoot, APP_SKILLS_DIRECTORY);
+  for (const skillName of removed) {
+    await rm(path.join(skillsRoot, skillName), {
+      force: true,
+      recursive: true,
+    });
+  }
+  return removed;
+}
+
+/** Lists synchronized Skill directories an unregistration would remove. */
+export async function planPluginSkillRemovals(
+  appRoot: string,
+  packageName: string,
+): Promise<string[]> {
   const skillsRoot = path.join(appRoot, APP_SKILLS_DIRECTORY);
   const prefix = pluginSkillPrefix(packageName);
   let entries;
@@ -362,10 +378,6 @@ export async function removePluginSkills(
     if (!entry.isDirectory() || !isOwnedSkillName(prefix, entry.name)) {
       continue;
     }
-    await rm(path.join(skillsRoot, entry.name), {
-      force: true,
-      recursive: true,
-    });
     removed.push(entry.name);
   }
   return removed.sort();

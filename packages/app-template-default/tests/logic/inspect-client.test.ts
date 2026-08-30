@@ -1,15 +1,42 @@
 // @vitest-environment node
 
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ClientInspectionError,
+  createAppClientInspectionFailure,
+  createAppClientInspectionSuccess,
   formatAppClientInspection,
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
 } from '../../scripts/inspect-client.mjs';
 
-function settingFor(id: string, title: string) {
+async function createInspectionApp(pluginsSource?: string): Promise<string> {
+  const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
+  await mkdir(path.join(appRoot, 'client'));
+  await writeFile(
+    path.join(appRoot, 'package.json'),
+    JSON.stringify({ name: '@example/inspect-app', type: 'module' }),
+  );
+  await writeFile(
+    path.join(appRoot, 'client/runtime.ts'),
+    `export default { packageName: '@example/inspect-app', plugins: [] };`,
+  );
+  await writeFile(
+    path.join(appRoot, 'client/locales.ts'),
+    `throw new Error('client:inspect must not load application locales');`,
+  );
+  if (pluginsSource !== undefined) {
+    await writeFile(path.join(appRoot, 'client/plugins.ts'), pluginsSource);
+  }
+  return appRoot;
+}
+
+function settingFor(id: string, title: string, order: number) {
   return {
     access: {
       action: 'read',
@@ -18,6 +45,7 @@ function settingFor(id: string, title: string) {
     entry: '@nocobase/app-plugin-authorization/client/routes',
     groupId: 'authorization',
     id,
+    order,
     packageName: '@nocobase/app-plugin-authorization',
     parent: 'settings',
     path: `/settings/authorization/${id}`,
@@ -41,15 +69,22 @@ describe('client inspection', () => {
     expect(parseInspectAppClientArgs(['--type', 'settings']).type).toBe(
       'settings',
     );
+    expect(parseInspectAppClientArgs(['--type', 'locales']).type).toBe(
+      'locales',
+    );
     expect(() => parseInspectAppClientArgs(['--type', 'setting'])).toThrow(
-      '--type must be all, bootstrap, routes, settings, or providers.',
+      '--type must be all, bootstrap, routes, settings, providers, or locales.',
     );
   });
 
   it('inspects configured client routes and providers', async () => {
     const inspection = await inspectAppClient();
 
-    expect(inspection.app).toBe('@nocobase/app-template-default');
+    expect(inspection.app).toMatchObject({
+      packageName: '@nocobase/app-template-default',
+    });
+    expect(inspection.consistent).toBe(true);
+    expect(inspection.issues).toEqual([]);
     expect(
       inspection.routes.map(({ auth, id, path }) => ({ auth, id, path })),
     ).toEqual([
@@ -107,6 +142,11 @@ describe('client inspection', () => {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/settings/automation/workflow-runs/:runId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-system-info:index',
+        path: '/system-info',
       },
     ]);
     expect(
@@ -171,14 +211,41 @@ describe('client inspection', () => {
       packageName: '@nocobase/app-plugin-notification',
       source: 'plugin',
     });
+    expect(inspection.locales).toEqual(
+      expect.arrayContaining([
+        {
+          order: 1,
+          packageName: '@nocobase/app-template-default',
+          source: 'application',
+        },
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-workflow',
+          source: 'plugin',
+        }),
+      ]),
+    );
 
     // Administration pages are settings contributions; record detail pages may remain routes nested below them.
     expect(inspection.settings.slice(0, 4)).toEqual([
-      settingFor('permission-sets', 'Permission Sets'),
-      settingFor('default-access', 'Default Access'),
-      settingFor('sharing-rules', 'Sharing Rules'),
-      settingFor('restriction-rules', 'Restriction Rules'),
+      settingFor('permission-sets', 'Permission Sets', 1),
+      settingFor('default-access', 'Default Access', 2),
+      settingFor('sharing-rules', 'Sharing Rules', 3),
+      settingFor('restriction-rules', 'Restriction Rules', 4),
     ]);
+    expect(inspection.settings).toContainEqual({
+      access: {
+        action: 'read',
+        resource: 'routes-example.settings',
+      },
+      entry: '@nocobase/app-plugin-routes-example/client/routes',
+      id: 'routes-example',
+      order: 5,
+      packageName: '@nocobase/app-plugin-routes-example',
+      parent: 'settings',
+      path: '/settings/routes-example',
+      source: 'plugin',
+      title: 'Routes example',
+    });
     expect(inspection.settings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -202,11 +269,11 @@ describe('client inspection', () => {
     expect(output).toMatch(/Settings/u);
     expect(output).toMatch(/group: authorization/u);
     expect(formatAppClientInspection(inspection, 'settings')).not.toMatch(
-      /Routes/u,
+      /\nRoutes\n/u,
     );
     expect(
       Object.keys(selectAppClientInspection(inspection, 'settings')),
-    ).toEqual(['app', 'settings']);
+    ).toEqual(['app', 'settings', 'consistent', 'issues', 'suggestions']);
     expect(output).toMatch(/Routes/u);
     expect(output).toMatch(/auth: guest/u);
     expect(output).toMatch(/route source: plugin/u);
@@ -215,7 +282,10 @@ describe('client inspection', () => {
       /client\/extensions\/nocobase-auth-ui\/pages\/login-page/u,
     );
     expect(output).toMatch(/Providers \(outer -> inner\)/u);
+    expect(output).toMatch(/Locale declarations/u);
     expect(output).toMatch(/layer: root/u);
+    expect(output).toMatch(/Issues: none/u);
+    expect(output).toMatch(/Route components.*not inspected/su);
 
     // `entry` used to duplicate `routeEntry`, and `componentEntry` was emitted as
     // an explicit undefined. Both are gone: the key is present only when set.
@@ -223,6 +293,7 @@ describe('client inspection', () => {
       auth: 'required',
       id: '@nocobase/app-template-default:home',
       name: 'home',
+      order: 1,
       packageName: '@nocobase/app-template-default',
       parent: 'app',
       path: '/',
@@ -279,12 +350,193 @@ describe('client inspection', () => {
     );
 
     expect(selectAppClientInspection(inspection, 'routes')).toEqual({
-      app: '@nocobase/app-template-default',
+      app: inspection.app,
       routes: inspection.routes,
+      consistent: true,
+      issues: [],
+      suggestions: [],
     });
     expect(selectAppClientInspection(inspection, 'bootstrap')).toEqual({
-      app: '@nocobase/app-template-default',
+      app: inspection.app,
       bootstraps: inspection.bootstraps,
+      consistent: true,
+      issues: [],
+      suggestions: [],
+    });
+    expect(selectAppClientInspection(inspection, 'locales')).toEqual({
+      app: inspection.app,
+      locales: inspection.locales,
+      consistent: true,
+      issues: [],
+      suggestions: [],
+    });
+
+    expect(createAppClientInspectionSuccess(inspection, 'settings')).toEqual({
+      schemaVersion: 1,
+      ok: true,
+      operation: 'client:inspect',
+      status: 'success',
+      result: selectAppClientInspection(inspection, 'settings'),
+    });
+  });
+
+  it('reports missing Settings access without loading pages or running bootstrap', async () => {
+    const appRoot = await createInspectionApp(`
+      globalThis.__clientInspectCalls = { bootstrap: 0, locales: 0, page: 0, routes: 0 };
+      const plugin = {
+        packageName: '@example/client-plugin',
+        bootstrap: async () => ({
+          default: () => { globalThis.__clientInspectCalls.bootstrap += 1; },
+        }),
+        locales: async () => {
+          globalThis.__clientInspectCalls.locales += 1;
+          return { default: {} };
+        },
+        routes: async () => {
+          globalThis.__clientInspectCalls.routes += 1;
+          return {
+            default: [{
+              parent: 'settings',
+              routes: [{
+                name: 'example',
+                path: '/example',
+                navigation: { title: 'Example' },
+                componentLoader: async () => {
+                  globalThis.__clientInspectCalls.page += 1;
+                  return { default: () => null };
+                },
+              }],
+            }],
+          };
+        },
+        providers: undefined,
+        options: undefined,
+      };
+      export default { plugins: [plugin], routeComponentOverrides: [] };
+    `);
+
+    const inspection = await inspectAppClient({ appRoot });
+
+    expect(globalThis.__clientInspectCalls).toEqual({
+      bootstrap: 0,
+      locales: 0,
+      page: 0,
+      routes: 1,
+    });
+    expect(inspection.consistent).toBe(false);
+    expect(inspection.locales).toEqual([
+      {
+        order: 1,
+        packageName: '@example/inspect-app',
+        source: 'application',
+      },
+      {
+        order: 2,
+        packageName: '@example/client-plugin',
+        source: 'plugin',
+      },
+    ]);
+    expect(inspection.issues).toEqual([
+      expect.objectContaining({
+        code: 'CLIENT_SETTINGS_ACCESS_MISSING',
+        packageName: '@example/client-plugin',
+        routeId: 'example',
+      }),
+    ]);
+  });
+
+  it('inspects only locale declarations without executing unrelated factories', async () => {
+    const appRoot = await createInspectionApp(`
+      globalThis.__clientLocalesOnlyCalls = { locales: 0, providers: 0, routes: 0 };
+      const plugin = {
+        packageName: '@example/client-locales-only-inspection',
+        locales: async () => {
+          globalThis.__clientLocalesOnlyCalls.locales += 1;
+          return { default: {} };
+        },
+        routes: async () => {
+          globalThis.__clientLocalesOnlyCalls.routes += 1;
+          throw new Error('routes must not run during locales-only inspection');
+        },
+        providers: async () => {
+          globalThis.__clientLocalesOnlyCalls.providers += 1;
+          throw new Error('providers must not run during locales-only inspection');
+        },
+      };
+      export default { plugins: [plugin], routeComponentOverrides: [] };
+    `);
+
+    const inspection = await inspectAppClient({ appRoot, type: 'locales' });
+
+    expect(globalThis.__clientLocalesOnlyCalls).toEqual({
+      locales: 0,
+      providers: 0,
+      routes: 0,
+    });
+    expect(inspection).toEqual({
+      app: {
+        packageName: '@example/inspect-app',
+        appRoot,
+      },
+      locales: [
+        {
+          order: 1,
+          packageName: '@example/inspect-app',
+          source: 'application',
+        },
+        {
+          order: 2,
+          packageName: '@example/client-locales-only-inspection',
+          source: 'plugin',
+        },
+      ],
+      consistent: true,
+      issues: [],
+      suggestions: [],
+    });
+  });
+
+  it('uses stable errors for missing and invalid Client composition', async () => {
+    const missingRoot = await createInspectionApp();
+    await expect(
+      inspectAppClient({ appRoot: missingRoot }),
+    ).rejects.toMatchObject({
+      code: 'CLIENT_COMPOSITION_NOT_FOUND',
+    });
+
+    const invalidRoot = await createInspectionApp('export default {};');
+    await expect(
+      inspectAppClient({ appRoot: invalidRoot }),
+    ).rejects.toMatchObject({
+      code: 'CLIENT_COMPOSITION_INVALID',
+    });
+  });
+
+  it('formats stable JSON failures', () => {
+    expect(
+      createAppClientInspectionFailure(
+        new ClientInspectionError(
+          'CLIENT_ROUTES_LOAD_FAILED',
+          'Unable to load Routes.',
+        ),
+      ),
+    ).toEqual({
+      schemaVersion: 1,
+      ok: false,
+      operation: 'client:inspect',
+      status: 'failure',
+      error: {
+        code: 'CLIENT_ROUTES_LOAD_FAILED',
+        message: 'Unable to load Routes.',
+        suggestions: [
+          'Check client/plugins.ts and registered Client declaration modules, then rerun client:inspect.',
+        ],
+      },
     });
   });
 });
+
+declare global {
+  var __clientInspectCalls:
+    { bootstrap: number; page: number; routes: number } | undefined;
+}

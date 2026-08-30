@@ -97,8 +97,8 @@ pnpm deploy
 
 - [应用服务分层架构](./architecture.md)
 - [应用配置](./app-config.md)
-- [Service Provider 与服务容器](./service-provider.md)
+- [Services、Tokens 与 ServiceProviders](./development/plugin-development/server-services-and-providers.md)
 
 ## 插件开发
 
-- [插件开发快速开始](./plugin-development-quickstart.md)
+- [插件开发快速开始](./development/plugin-development/quick-start.md)

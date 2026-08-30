@@ -6,8 +6,8 @@ import {
   AppI18nError,
   createI18nMiddleware,
   getRequestLocale,
+  getRequestTranslator,
   serializeI18nError,
-  type Translator,
 } from '../../src/server/index.js';
 
 const APP = '@acme/app';
@@ -49,7 +49,7 @@ function createApp(runtime: I18nRuntime, session?: Record<string, unknown>) {
   }
   app.use('*', createI18nMiddleware(runtime));
   app.get('/', (context) => {
-    const translate = context.get('t') as Translator;
+    const translate = getRequestTranslator(context);
     return context.json({
       locale: getRequestLocale(context),
       greeting: translate('greeting'),
@@ -122,6 +122,42 @@ describe('createI18nMiddleware', () => {
     });
 
     await expect(response.json()).resolves.toMatchObject({ greeting: '你好' });
+  });
+
+  it('binds a request translator to the requested namespace', async () => {
+    const runtime = await createRuntime();
+    const app = new Hono();
+    app.use('*', createI18nMiddleware(runtime));
+    app.get('/', (context) => {
+      const translate = getRequestTranslator(context, PLUGIN);
+      return context.json({
+        plugin: translate('errors.invalid', { field: 'name' }),
+        application: translate('greeting', { ns: APP }),
+      });
+    });
+
+    const response = await app.request('/');
+
+    await expect(response.json()).resolves.toEqual({
+      plugin: 'Invalid name',
+      application: 'Hello',
+    });
+  });
+
+  it('reports when the request i18n middleware has not run', async () => {
+    const app = new Hono();
+    app.onError((error, context) => context.text(error.message, 500));
+    app.get('/', (context) => {
+      getRequestTranslator(context);
+      return context.text('unreachable');
+    });
+
+    const response = await app.request('/');
+
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.toContain(
+      'i18n HTTP middleware is mounted before the route',
+    );
   });
 });
 

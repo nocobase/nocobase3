@@ -1,9 +1,10 @@
 import {
   defineAppRoutes,
-  type AppClientAppRoutesContribution,
+  defineSettingsRoutes,
+  type AppClientRouteContribution,
 } from '@nocobase/app-client/plugins';
 
-const routes: AppClientAppRoutesContribution = defineAppRoutes([
+const appRoutes: AppClientRouteContribution = defineAppRoutes([
   {
     auth: 'required',
     componentLoader: () => import('./pages/home.js'),
@@ -11,5 +12,12 @@ const routes: AppClientAppRoutesContribution = defineAppRoutes([
     path: '/',
   },
 ]);
+
+const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([]);
+
+const routes: readonly AppClientRouteContribution[] = [
+  appRoutes,
+  settingsRoutes,
+];
 
 export default routes;

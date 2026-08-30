@@ -51,7 +51,7 @@ pnpm plugin:unregister audit-log --app app-template-default
 pnpm plugin:remove audit-log
 ```
 
-See [Plugin development quick start](../../docs/plugin-development-quickstart.md)
+See [Plugin development quick start](../../docs/development/plugin-development/quick-start.md)
 for the server, database, client bootstrap, routes, and providers protocols.
 
 ## Current client architecture
@@ -72,8 +72,7 @@ client/
 ├── theme/                   app-wide theme and selector
 ├── app.ts                   final AppClient composition
 ├── index.tsx                async startup entry
-├── refine-runtime.ts        plugin Refine contribution collector
-└── runtime.ts               plugin loading and runtime validation
+└── runtime.ts               Client Runtime definition
 ```
 
 `client-old/` is a temporary, untracked migration archive. It is not current
@@ -88,7 +87,7 @@ Enabled client plugins contribute independently:
 - `client/providers`: synchronous React providers with explicit ordering.
 
 The Default App contributes through the same three protocols, wired by
-`client/application.ts`. Its bootstrap runs before plugin bootstraps. Its `/`
+`client/runtime.ts`. Its bootstrap runs before plugin bootstraps. Its `/`
 home route is declared in `client/routes.ts`, while `client/routing/` only
 renders the resolved routes.
 

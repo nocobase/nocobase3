@@ -4,6 +4,12 @@ import path from 'node:path';
 import { planPluginUpdate } from '../../../lib/plugin-update.ts';
 import { runAttached } from '../../../lib/run-command.ts';
 import {
+  classifyPluginError,
+  pluginJsonFailure,
+  pluginJsonSuccess,
+} from '../../../lib/plugin-json.ts';
+import { runCommand } from '../../../lib/run-command.ts';
+import {
   applySkillsSync,
   formatSkillsSyncSummary,
   planSkillsSync,
@@ -35,30 +41,83 @@ export default class AppPluginUpdate extends Command {
       default: false,
       description: 'Print what would run without upgrading anything.',
     }),
+    json: Flags.boolean({
+      default: false,
+      description: 'Print one machine-readable JSON result.',
+    }),
   };
 
   public async run(): Promise<void> {
+    try {
+      await this.runUnsafe();
+    } catch (error) {
+      if (!this.argv.includes('--json')) throw error;
+      this.logToStderr(
+        JSON.stringify(
+          pluginJsonFailure('plugin:update', classifyPluginError(error)),
+          null,
+          2,
+        ),
+      );
+      process.exitCode = 1;
+    }
+  }
+
+  private async runUnsafe(): Promise<void> {
     const { flags } = await this.parse(AppPluginUpdate);
     const appRoot = path.resolve(flags.dir ?? process.cwd());
     const dryRun = flags['dry-run'];
 
     const plan = await planPluginUpdate({ appRoot, plugins: flags.plugin });
     if (plan.packageNames.length === 0) {
-      this.log('No plugins are registered in this app.');
+      if (flags.json) {
+        this.logJson(
+          pluginJsonSuccess('plugin:update', 'success-noop', {
+            appRoot,
+            packageNames: [],
+            commands: [],
+          }),
+        );
+      } else {
+        this.log('No plugins are registered in this app.');
+      }
       return;
     }
 
     if (dryRun) {
-      this.log(
-        `Would run: ${plan.packageManager} ${plan.args.join(' ')}\nThen synchronize the skills of: ${plan.packageNames.join(', ')}`,
-      );
+      if (flags.json) {
+        this.logJson(
+          pluginJsonSuccess('plugin:update', 'success', {
+            mode: 'dry-run',
+            appRoot,
+            ...plan,
+            commands: [
+              {
+                command: plan.packageManager,
+                args: plan.args,
+                cwd: appRoot,
+              },
+            ],
+            synchronizeSkills: plan.packageNames,
+          }),
+        );
+      } else {
+        this.log(
+          `Would run: ${plan.packageManager} ${plan.args.join(' ')}\nThen synchronize the skills of: ${plan.packageNames.join(', ')}`,
+        );
+      }
       return;
     }
 
-    this.log(`${plan.packageManager} ${plan.args.join(' ')}`);
-    const exitCode = await runAttached(plan.packageManager, [...plan.args], {
-      cwd: appRoot,
-    });
+    if (!flags.json) this.log(`${plan.packageManager} ${plan.args.join(' ')}`);
+    let exitCode = 0;
+    if (flags.json) {
+      await runCommand(plan.packageManager, [...plan.args], { cwd: appRoot });
+    } else {
+      exitCode = await runAttached(plan.packageManager, [...plan.args], {
+        cwd: appRoot,
+      });
+    }
     if (exitCode !== 0) {
       this.error(
         `${plan.packageManager} exited with code ${exitCode}. The skills were left untouched.`,
@@ -75,12 +134,34 @@ export default class AppPluginUpdate extends Command {
       const synced = await applySkillsSync(
         await planSkillsSync({ appPackageName, appRoot, plugins }),
       );
-      this.log(formatSkillsSyncSummary(synced));
+      if (flags.json) {
+        this.logJson(
+          pluginJsonSuccess('plugin:update', 'success', {
+            mode: 'update',
+            appRoot,
+            ...plan,
+            skills: synced,
+          }),
+        );
+      } else {
+        this.log(formatSkillsSyncSummary(synced));
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      this.warn(
-        `Plugins were upgraded, but their skills were not synchronized: ${reason}`,
-      );
+      if (flags.json) {
+        this.logJson(
+          pluginJsonSuccess('plugin:update', 'partial-success', {
+            mode: 'update',
+            appRoot,
+            ...plan,
+            issues: [classifyPluginError(error)],
+          }),
+        );
+      } else {
+        this.warn(
+          `Plugins were upgraded, but their skills were not synchronized: ${reason}`,
+        );
+      }
     }
   }
 }

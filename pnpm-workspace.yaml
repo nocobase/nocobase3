@@ -4,6 +4,11 @@ packages:
   - examples/*/apps/*
   - examples/*/packages/*
 
+# Commands with --dry-run must not trigger an implicit install before their
+# own code can enforce read-only behavior. Dependency changes are synchronized
+# explicitly with CI=true pnpm install --no-frozen-lockfile.
+verifyDepsBeforeRun: false
+
 catalog:
   '@sinclair/typebox': ^0.34.52
   '@arethetypeswrong/cli': ^0.18.5

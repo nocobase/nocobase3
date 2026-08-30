@@ -21,6 +21,7 @@ const APP_COMMANDS = [
   'info',
   'list',
   'plugin:register',
+  'plugin:inspect',
   'plugin:skills:sync',
   'plugin:unregister',
   'plugin:update',

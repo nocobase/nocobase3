@@ -359,6 +359,7 @@ describe('gitignore handling', () => {
     expect(contents).toContain('/config.yml');
     expect(contents).toContain('/.nocobase/');
     expect(contents).toContain('/.nb3/');
+    expect(contents).toContain('/.agents/');
   });
 
   it('prefers the template gitignore over the fallback', async () => {
@@ -381,5 +382,6 @@ describe('gitignore handling', () => {
 
     expect(contents).toContain('custom-output/');
     expect(contents).not.toContain('# Local application state.');
+    expect(contents).toContain('/.agents/');
   });
 });

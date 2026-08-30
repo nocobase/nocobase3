@@ -1,11 +1,15 @@
 # @nocobase/app-plugin-routes-example
 
-This full-stack routes example demonstrates both sides of an application
-plugin:
+This full-stack Routes example is the normative reference for the four Route
+types contributed by an application plugin:
 
-- `server/routes/index.ts` registers `GET /api/routes-example`;
-- `client/routes.ts` declares the authenticated `/routes-example` page with
-  `defineAppRoutes`;
+- `server/routes/root.ts` contributes authenticated
+  `GET /routes-example/root` with `defineRootRoutes()`;
+- `server/routes/api.ts` contributes authenticated
+  `GET /api/routes-example` with `defineApiRoutes()`;
+- `client/routes.ts` contributes the authenticated `/routes-example` page with
+  `defineAppRoutes()` and `/settings/routes-example` with
+  `defineSettingsRoutes()`;
 - `client/providers.ts` contributes a synchronous application Provider with
   `defineClientProviders`;
 - `client/components/` contains Provider component implementations;
@@ -29,9 +33,18 @@ The plugin manifest exposes the client contributions independently:
 }
 ```
 
-The page and API are both authenticated. The App's shared `/api/*` middleware
-remains authoritative for the server route; the client route guard is only the
-browser navigation boundary.
+The Root Route and API Route each resolve the public Authentication Token and
+install `auth.required()` on their own router. Neither depends on App
+middleware, the other Route, or Server contribution order. The App Route guard
+and Settings access independently protect browser navigation; Client checks do
+not replace Server authentication or authorization.
+
+The two small Server Routes are declared directly inside their production
+contribution factories, and their tests execute the real `createRouter()`
+functions with a test container. Complex domains may instead extract a focused
+factory that returns its own `Hono`; do not add a helper that mutates a caller's
+router only to make tests easier. See the Server and Client Route best-practice
+pages under `docs/development/plugin-development/` for the complete patterns.
 
 Enable the plugin in an App package with:
 

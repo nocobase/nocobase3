@@ -75,6 +75,10 @@ responsible for stripping and restoring that path.
 4. Keep long-lived start/stop behavior in `start()` and `shutdown()`.
 5. Add tests under the package root `tests/` directory.
 
+Every plugin Route owns a path-scoped authentication and authorization
+boundary. Do not use a wildcard middleware that leaks into later mounted
+contributions, and do not depend on earlier App or plugin middleware.
+
 Application config stays explicit under `config/*`. Package-owned config
 normalizers and composition helpers should be reused rather than copied into
 the template. Do not read `process.env` in providers or routes.
@@ -93,3 +97,7 @@ pnpm build
 
 Use `pnpm server:config` to inspect resolved standalone values when debugging
 paths, proxy targets, database sources, or SPA behavior.
+Use `pnpm server:inspect --json` for the imported Server plugin declaration
+snapshot and resolved contribution locations. Keep declaration modules free of
+runtime startup side effects, check `issues`, and verify runtime behavior with
+behavior tests.

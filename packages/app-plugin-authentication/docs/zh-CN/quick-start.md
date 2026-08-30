@@ -12,9 +12,10 @@
 - `account`
 - `verification`
 
-插件在 `package.json` 中声明自己的 `database/migrations`，应用启用插件后会将
-该目录纳入统一的 migration 管理。自定义应用也应通过 migration source 加载这个
-目录，不需要手工导入 migration definition。
+插件在 `server/plugin.ts` 的 Server plugin definition 中声明自己的
+`database/migrations`，应用显式注册该 definition 后会将目录纳入统一的 migration
+管理。自定义应用也应通过 Server plugin composition 加载这个 migration source，
+不需要手工导入 migration definition。
 
 详细说明见[数据库与 Migration](./server/database-and-migration.md)。
 

@@ -53,11 +53,14 @@ const FALLBACK_GITIGNORE = [
   '',
   '# Local application state.',
   '/storage/',
+  '/.agents/',
   '/.nocobase/',
   '/.nb3/',
   '*.log',
   '',
 ].join('\n');
+
+const REQUIRED_GITIGNORE_ENTRIES = ['/.agents/'] as const;
 
 /**
  * Ensures the generated project has a `.gitignore`.
@@ -69,24 +72,41 @@ const FALLBACK_GITIGNORE = [
  */
 async function restoreGitignore(directory: string): Promise<void> {
   const target = path.join(directory, '.gitignore');
+  let restored = false;
 
   for (const candidate of ['gitignore', '.npmignore']) {
     try {
       await rename(path.join(directory, candidate), target);
-      return;
+      restored = true;
+      break;
     } catch {
       // Try the next candidate.
     }
   }
 
-  // `wx` leaves an existing file alone, so a template that ships a real `.gitignore` keeps it.
-  try {
-    await writeFile(target, FALLBACK_GITIGNORE, {
-      encoding: 'utf8',
-      flag: 'wx',
-    });
-  } catch {
-    // The file already exists, which is the outcome this function is for.
+  if (!restored) {
+    // `wx` leaves an existing file alone, so a template that ships a real `.gitignore` keeps it.
+    try {
+      await writeFile(target, FALLBACK_GITIGNORE, {
+        encoding: 'utf8',
+        flag: 'wx',
+      });
+    } catch {
+      // The file already exists, which is the outcome this function is for.
+    }
+  }
+
+  const contents = await readFile(target, 'utf8');
+  const missing = REQUIRED_GITIGNORE_ENTRIES.filter(
+    (entry) => !contents.split(/\r?\n/u).includes(entry),
+  );
+  if (missing.length > 0) {
+    const separator = contents === '' || contents.endsWith('\n') ? '' : '\n';
+    await writeFile(
+      target,
+      `${contents}${separator}\n# Agent synchronization output.\n${missing.join('\n')}\n`,
+      'utf8',
+    );
   }
 }
 

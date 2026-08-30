@@ -4,6 +4,8 @@
 
 ### Minor Changes
 
+- Add the shared Client Runtime definition and resolution API for composing application and plugin contributions before rendering.
+
 - 7cdffbd: Replace separate API and root route arrays with one ordered `routes` contribution array. Route factories now receive the Application, create and return their own Hono router, and are mounted automatically at `/api` or the application root according to their definition.
 
   Standardize plugin server modules around `providers/index.ts` and `routes/index.ts` collection entries, `services/` domain implementations, and a stable `tokens.ts` public contract.
@@ -23,6 +25,12 @@
   - @nocobase/app-sdk@0.0.1-beta.0
 
 ## 1.0.0-beta.3
+
+### Patch Changes
+
+- Allow `AppClientPluginFactory` to omit its generic argument when a plugin
+  does not accept Client options, matching the existing
+  `defineClientPlugin<TOptions = void>` default.
 
 ### Minor Changes
 

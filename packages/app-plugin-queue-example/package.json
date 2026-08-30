@@ -40,6 +40,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",

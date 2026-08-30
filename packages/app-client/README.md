@@ -18,17 +18,18 @@ stay in the application package until those boundaries are shared by more than
 one application.
 
 Applications use the same contribution contracts as plugins without
-pretending to be plugins. An application loader explicitly identifies the
+pretending to be plugins. The Runtime Definition explicitly identifies the
 application-owned bootstrap, routes, and providers:
 
 ```ts
-import { defineClientApplication } from '@nocobase/app-client/plugins';
+import { defineAppRuntime } from '@nocobase/app-client/runtime';
 
-export default defineClientApplication({
+export default defineAppRuntime({
   packageName: '@nocobase/app-template-default',
   bootstrap: () => import('./bootstrap.js'),
   routes: () => import('./routes.js'),
   providers: () => import('./providers.js'),
+  plugins: [],
 });
 ```
 

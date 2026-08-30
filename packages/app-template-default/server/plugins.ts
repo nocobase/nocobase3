@@ -16,6 +16,8 @@ import {
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server-kit/plugins';
+import systemInfo from '@nocobase/app-plugin-system-info/server';
+import skillsExample from '@nocobase/app-plugin-skills-example/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -32,6 +34,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   routesExample,
   serviceProviderExample,
   workflow,
+  systemInfo,
+  skillsExample,
 ]);
 
 export default serverPlugins;

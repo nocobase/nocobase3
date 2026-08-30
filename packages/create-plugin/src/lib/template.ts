@@ -7,6 +7,7 @@ import prettierConfig from '@nocobase/dev-config/prettier';
 import { format } from 'prettier';
 
 import type { PluginNames } from './names.ts';
+import type { PluginCapabilities } from './capabilities.ts';
 
 export const DEFAULT_TEMPLATE_DIRECTORY = fileURLToPath(
   new URL('../../template/', import.meta.url),
@@ -25,6 +26,136 @@ export interface PluginTemplateContext extends PluginNames {
 interface TemplateFile {
   readonly sourcePath: string;
   readonly outputPath: string;
+}
+
+const BASE_TEMPLATE_FILES = new Set([
+  '.gitignore.template',
+  '.prettierignore.template',
+  'CHANGELOG.md',
+  'README.md',
+  'eslint.config.template.js',
+  'package.template.json',
+  'package.ts',
+  'tsconfig.json',
+]);
+
+function hasClientPlugin(capabilities: PluginCapabilities): boolean {
+  return (
+    capabilities.client.bootstrap ||
+    capabilities.client.locales ||
+    capabilities.client.providers ||
+    capabilities.client.routes
+  );
+}
+
+function hasServerPlugin(capabilities: PluginCapabilities): boolean {
+  return (
+    capabilities.database ||
+    capabilities.server.jobs ||
+    capabilities.server.locales ||
+    capabilities.server.providers ||
+    capabilities.server.routes
+  );
+}
+
+function hasBrowserCode(capabilities: PluginCapabilities): boolean {
+  return (
+    capabilities.client.bootstrap ||
+    capabilities.client.components ||
+    capabilities.client.locales ||
+    capabilities.client.providers ||
+    capabilities.client.routes ||
+    capabilities.registry
+  );
+}
+
+function includeTemplateFile(
+  relativePath: string,
+  capabilities: PluginCapabilities,
+): boolean {
+  if (BASE_TEMPLATE_FILES.has(relativePath)) return true;
+  if (
+    relativePath === 'client/index.ts' ||
+    relativePath === 'client/plugin.ts'
+  ) {
+    return hasClientPlugin(capabilities);
+  }
+  if (relativePath.startsWith('client/locales/')) {
+    return capabilities.client.locales;
+  }
+  if (
+    relativePath === 'client/bootstrap.ts' ||
+    relativePath === 'tests/bootstrap.test.ts'
+  ) {
+    return capabilities.client.bootstrap;
+  }
+  if (
+    relativePath === 'client/routes.ts' ||
+    relativePath === 'tests/client.test.ts'
+  ) {
+    return capabilities.client.routes;
+  }
+  if (
+    relativePath === 'client/providers.ts' ||
+    relativePath === 'client/contexts.ts' ||
+    relativePath === 'client/components/provider.tsx' ||
+    relativePath === 'tests/client-provider.test.tsx'
+  ) {
+    return capabilities.client.providers;
+  }
+  if (
+    relativePath === 'client/components/plugin-component.tsx' ||
+    relativePath === 'tests/component.test.tsx'
+  ) {
+    return capabilities.client.components;
+  }
+  if (relativePath.startsWith('client/pages/')) return false;
+  if (
+    relativePath === 'server/index.ts' ||
+    relativePath === 'server/plugin.ts' ||
+    relativePath === 'tests/plugin.test.ts'
+  ) {
+    return hasServerPlugin(capabilities);
+  }
+  if (relativePath.startsWith('server/locales/')) {
+    return capabilities.server.locales;
+  }
+  if (
+    relativePath.startsWith('server/providers/') ||
+    relativePath.startsWith('server/services/') ||
+    relativePath === 'server/tokens.ts' ||
+    relativePath === 'tests/server-provider.test.ts'
+  ) {
+    return capabilities.server.providers;
+  }
+  if (
+    relativePath === 'server/routes/index.ts' ||
+    relativePath === 'tests/routes.test.ts'
+  ) {
+    return capabilities.server.routes;
+  }
+  if (
+    relativePath.startsWith('server/jobs/') ||
+    relativePath === 'tests/jobs.test.ts'
+  ) {
+    return capabilities.server.jobs;
+  }
+  if (
+    relativePath.startsWith('database/') ||
+    relativePath === 'tests/database.test.ts'
+  ) {
+    return capabilities.database;
+  }
+  if (
+    relativePath === 'components.json' ||
+    relativePath === 'client/styles.css' ||
+    relativePath === 'registry.config.json' ||
+    relativePath.startsWith('registry/')
+  ) {
+    return capabilities.registry;
+  }
+  if (relativePath.startsWith('skills/')) return capabilities.skills;
+  return true;
 }
 
 function outputPathForTemplateFile(relativePath: string): string {
@@ -66,6 +197,10 @@ function replacementEntries(
       '__NOCOBASE_HELLO_MESSAGE_LITERAL__',
       literal(`Hello from ${context.displayName}`),
     ],
+    [
+      '__NOCOBASE_JOB_NAME_LITERAL__',
+      literal(`${context.packageName}/${context.shortName}`),
+    ],
     ['__NOCOBASE_MIGRATION_NAME_LITERAL__', literal(context.migrationName)],
     ['__NOCOBASE_MIGRATION_NAME__', context.migrationName],
     ['__NOCOBASE_MODULE_NAME__', context.moduleName],
@@ -105,6 +240,7 @@ export function renderTemplateValue(
 
 async function collectTemplateFiles(
   templateDirectory: string,
+  capabilities?: PluginCapabilities,
   directory = templateDirectory,
 ): Promise<TemplateFile[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -121,7 +257,11 @@ async function collectTemplateFiles(
     }
     if (entry.isDirectory()) {
       files.push(
-        ...(await collectTemplateFiles(templateDirectory, sourcePath)),
+        ...(await collectTemplateFiles(
+          templateDirectory,
+          capabilities,
+          sourcePath,
+        )),
       );
       continue;
     }
@@ -129,11 +269,13 @@ async function collectTemplateFiles(
       throw new Error(`Unsupported template entry: ${sourcePath}`);
     }
 
+    const relativePath = path.relative(templateDirectory, sourcePath);
+    if (capabilities && !includeTemplateFile(relativePath, capabilities)) {
+      continue;
+    }
     files.push({
       sourcePath,
-      outputPath: outputPathForTemplateFile(
-        path.relative(templateDirectory, sourcePath),
-      ),
+      outputPath: outputPathForTemplateFile(relativePath),
     });
   }
 
@@ -143,9 +285,10 @@ async function collectTemplateFiles(
 export async function listTemplateFiles(
   templateDirectory: string = DEFAULT_TEMPLATE_DIRECTORY,
   context?: PluginTemplateContext,
+  capabilities?: PluginCapabilities,
 ): Promise<string[]> {
   await access(templateDirectory, constants.R_OK);
-  const files = await collectTemplateFiles(templateDirectory);
+  const files = await collectTemplateFiles(templateDirectory, capabilities);
 
   return files.map((file) =>
     context ? renderTemplateValue(file.outputPath, context) : file.outputPath,
@@ -153,19 +296,342 @@ export async function listTemplateFiles(
 }
 
 async function renderManifest(
-  sourcePath: string,
   context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
 ): Promise<string> {
-  const manifest = JSON.parse(await readFile(sourcePath, 'utf8')) as Record<
-    string,
-    unknown
-  >;
+  const clientPlugin = hasClientPlugin(capabilities);
+  const serverPlugin = hasServerPlugin(capabilities);
+  const browserCode = hasBrowserCode(capabilities);
+  const react =
+    capabilities.client.components ||
+    capabilities.client.providers ||
+    capabilities.registry;
+  const exports: Record<string, unknown> = {};
+  const publishExports: Record<string, unknown> = {};
+  const addExport = (name: string, source: string, compiled: string): void => {
+    exports[name] = { types: source, import: source };
+    publishExports[name] = {
+      types: compiled.replace(/\.js$/u, '.d.ts'),
+      import: compiled,
+    };
+  };
+  if (serverPlugin)
+    addExport('./server', './server/index.ts', './dist/server/index.js');
+  if (capabilities.server.providers)
+    addExport(
+      './server/tokens',
+      './server/tokens.ts',
+      './dist/server/tokens.js',
+    );
+  if (clientPlugin) {
+    addExport('./client', './client/index.ts', './dist/client/index.js');
+    addExport(
+      './client/plugin',
+      './client/plugin.ts',
+      './dist/client/plugin.js',
+    );
+  }
+  if (capabilities.client.bootstrap)
+    addExport(
+      './client/bootstrap',
+      './client/bootstrap.ts',
+      './dist/client/bootstrap.js',
+    );
+  if (capabilities.client.routes)
+    addExport(
+      './client/routes',
+      './client/routes.ts',
+      './dist/client/routes.js',
+    );
+  if (capabilities.client.providers)
+    addExport(
+      './client/providers',
+      './client/providers.ts',
+      './dist/client/providers.js',
+    );
+  if (capabilities.client.components)
+    addExport(
+      './client/components/plugin-component',
+      './client/components/plugin-component.tsx',
+      './dist/client/components/plugin-component.js',
+    );
+  exports['./package.json'] = './package.json';
+  publishExports['./package.json'] = './package.json';
 
-  manifest.name = context.packageName;
-  manifest.displayName = context.displayName;
-  manifest.description = context.description;
+  const scripts: Record<string, string> = {
+    build: 'tsc -p tsconfig.json',
+    typecheck: 'tsc -p tsconfig.json --noEmit',
+    test: 'vitest run --passWithNoTests',
+    lint: 'eslint . --max-warnings 0',
+    'lint:fix': 'eslint . --fix --max-warnings 0',
+    format: 'prettier . --write',
+    'format:check': 'prettier . --check',
+    check:
+      'pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build',
+    fix: 'pnpm lint:fix && pnpm format',
+  };
+  if (capabilities.registry) {
+    scripts['registry:build'] =
+      'node ../../scripts/registry.mjs build --package .';
+    scripts['registry:materialize'] =
+      'node ../../scripts/registry.mjs materialize --package .';
+    scripts.prepack = 'pnpm registry:build';
+    scripts.check =
+      'pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build';
+  }
 
+  const dependencies: Record<string, string> = {};
+  if (capabilities.client.locales || capabilities.server.locales)
+    dependencies['@nocobase/app-i18n'] = 'workspace:^';
+  if (serverPlugin) dependencies['@nocobase/app-server-kit'] = 'workspace:^';
+  if (capabilities.database)
+    dependencies['@nocobase/app-database'] = 'workspace:^';
+  if (capabilities.server.providers)
+    dependencies['@nocobase/service-provider'] = 'workspace:^';
+  if (capabilities.server.routes) dependencies.hono = 'catalog:';
+  if (capabilities.server.jobs) dependencies['@nocobase/queue'] = 'workspace:^';
+
+  const peerDependencies: Record<string, string> = {};
+  if (clientPlugin) peerDependencies['@nocobase/app-client'] = 'workspace:^';
+  if (react) peerDependencies.react = '^19.0.0';
+
+  const devDependencies: Record<string, string> = {
+    '@nocobase/dev-config': 'workspace:*',
+    eslint: 'catalog:',
+    prettier: 'catalog:',
+    typescript: 'catalog:',
+    vitest: 'catalog:',
+  };
+  if (serverPlugin || !browserCode) devDependencies['@types/node'] = 'catalog:';
+  if (clientPlugin) devDependencies['@nocobase/app-client'] = 'workspace:*';
+  if (react) {
+    devDependencies['@types/react'] = 'catalog:';
+    devDependencies.react = 'catalog:';
+  }
+  if (capabilities.registry) {
+    devDependencies.shadcn = '^4.13.1';
+    devDependencies.tailwindcss = 'catalog:';
+    devDependencies['tw-animate-css'] = '^1.2.5';
+  }
+
+  const files = ['dist', 'README.md', 'CHANGELOG.md'];
+  if (capabilities.database) files.push('database');
+  if (capabilities.skills) files.push('skills');
+  if (capabilities.registry)
+    files.push(
+      'components.json',
+      'registry',
+      'registry.config.json',
+      'public/r',
+    );
+
+  const manifest = {
+    name: context.packageName,
+    displayName: context.displayName,
+    description: context.description,
+    version: '0.0.1',
+    type: 'module',
+    prettier: '@nocobase/dev-config/prettier',
+    ...(serverPlugin ? { engines: { node: '>=24.0.0' } } : {}),
+    sideEffects: false,
+    exports,
+    files,
+    ...(capabilities.registry
+      ? {
+          nocobase: {
+            registry: { items: { 'component-ui': './registry/component-ui' } },
+          },
+        }
+      : {}),
+    publishConfig: { access: 'public', exports: publishExports },
+    scripts,
+    ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
+    ...(Object.keys(peerDependencies).length > 0 ? { peerDependencies } : {}),
+    devDependencies,
+  };
   return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+function renderEslintConfig(capabilities: PluginCapabilities): string {
+  const factory = hasBrowserCode(capabilities)
+    ? 'createClientLibraryConfig'
+    : 'createNodeLibraryConfig';
+  return `import { ${factory} } from '@nocobase/dev-config/eslint';
+
+export default ${factory}({
+  tsconfigRootDir: import.meta.dirname,
+  // Registry source is compiled after installation by the consuming app.
+  ignores: ['registry/**'],
+});
+`;
+}
+
+function renderTsconfig(capabilities: PluginCapabilities): string {
+  const serverPlugin = hasServerPlugin(capabilities);
+  const browserCode = hasBrowserCode(capabilities);
+  const compilerOptions: Record<string, unknown> = {
+    ...(browserCode && serverPlugin
+      ? {
+          jsx: 'react-jsx',
+          lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+        }
+      : {}),
+    ...(browserCode ? { paths: { '@/*': ['./client/*'] } } : {}),
+    rootDir: '.',
+    outDir: 'dist',
+  };
+  const include = [
+    'package.ts',
+    ...(capabilities.database ? ['database/**/*.ts'] : []),
+    ...(serverPlugin ? ['server/**/*.ts'] : []),
+    ...(browserCode ? ['client/**/*.ts', 'client/**/*.tsx'] : []),
+  ];
+  return `${JSON.stringify(
+    {
+      extends:
+        browserCode && !serverPlugin
+          ? '@nocobase/dev-config/tsconfig/client-library.json'
+          : '@nocobase/dev-config/tsconfig/server-library.json',
+      compilerOptions,
+      include,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function renderClientPlugin(
+  context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
+): string {
+  const entries = [
+    capabilities.client.locales
+      ? "  locales: () => import('./locales/index.js'),"
+      : undefined,
+    capabilities.client.bootstrap
+      ? "  bootstrap: () => import('./bootstrap.js'),"
+      : undefined,
+    capabilities.client.routes
+      ? "  routes: () => import('./routes.js'),"
+      : undefined,
+    capabilities.client.providers
+      ? "  providers: () => import('./providers.js'),"
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `import { defineClientPlugin, type AppClientPluginFactory } from '@nocobase/app-client/plugins';\n\nconst ${context.moduleName}: AppClientPluginFactory = defineClientPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName};\n`;
+}
+
+function renderServerPlugin(
+  context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
+): string {
+  const imports = [
+    capabilities.server.providers
+      ? "import providers from './providers/index.js';"
+      : undefined,
+    capabilities.server.routes
+      ? "import routes from './routes/index.js';"
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const entries = [
+    capabilities.server.locales
+      ? "  locales: () => import('./locales/index.js'),"
+      : undefined,
+    capabilities.server.providers ? '  providers,' : undefined,
+    capabilities.server.routes ? '  routes,' : undefined,
+    capabilities.database
+      ? "  database: {\n    migrations: './database/migrations',\n    seeds: './database/seeds',\n  },"
+      : undefined,
+    capabilities.server.jobs
+      ? "  queue: { jobs: ['./server/jobs'] },"
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `import { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server-kit/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
+}
+
+function renderPluginTest(
+  context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
+): string {
+  const checks = [
+    capabilities.server.locales
+      ? '      locales: expect.any(Function),'
+      : undefined,
+    capabilities.server.providers
+      ? '      providers: expect.any(Array),'
+      : undefined,
+    capabilities.server.routes ? '      routes: expect.any(Array),' : undefined,
+    capabilities.database
+      ? "      database: { migrations: './database/migrations', seeds: './database/seeds' },"
+      : undefined,
+    capabilities.server.jobs
+      ? "      queue: { jobs: ['./server/jobs'] },"
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `import { describe, expect, it } from 'vitest';\n\nimport plugin from '../server/index.js';\n\ndescribe(${literal(context.packageName)}, () => {\n  it('declares only its selected Server capabilities', () => {\n    expect(plugin).toMatchObject({\n      packageName: ${literal(context.packageName)},\n${checks}\n    });\n  });\n});\n`;
+}
+
+function renderReadme(
+  context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
+): string {
+  const selected = [
+    capabilities.database && 'database',
+    capabilities.server.providers && 'server.providers',
+    capabilities.server.routes && 'server.routes',
+    capabilities.server.jobs && 'server.jobs',
+    capabilities.server.locales && 'server.locales',
+    capabilities.client.routes && 'client.routes',
+    capabilities.client.components && 'client.components',
+    capabilities.client.providers && 'client.providers',
+    capabilities.client.bootstrap && 'client.bootstrap',
+    capabilities.client.locales && 'client.locales',
+    capabilities.registry && 'registry',
+    capabilities.skills && 'skills',
+  ].filter(Boolean);
+  const list =
+    selected.length > 0
+      ? selected.map((value) => `- \`${value}\``).join('\n')
+      : '- Package foundation only';
+  return `# ${context.packageName}\n\n${context.description}\n\n## Generated capabilities\n\n${list}\n\nImplement only the public behavior this plugin owns. Keep declarations, exports, dependencies, tests, README, and Plugin Skills aligned when capabilities change. Every concrete Server Route must own and test its authentication and authorization boundary.\n\n## Verification\n\n\`\`\`bash\npnpm --filter ${context.packageName} lint\npnpm --filter ${context.packageName} typecheck\npnpm --filter ${context.packageName} test\npnpm --filter ${context.packageName} build\n\`\`\`\n`;
+}
+
+function renderSkill(
+  context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
+): string {
+  const capabilityPrompts = [
+    capabilities.client.components &&
+      '- Client components: document each public package export, required props, and where the App should place it. Do not imply that a direct component import requires Client plugin registration.',
+    capabilities.client.routes &&
+      '- Client routes: document the implemented App or Settings path, navigation entry, and access conditions.',
+    capabilities.client.providers &&
+      '- Client providers: document the context or behavior exposed to the App and any required composition order.',
+    capabilities.client.bootstrap &&
+      '- Client bootstrap: document the App-visible side effects and how an Agent can verify them.',
+    capabilities.server.providers &&
+      '- Server providers: document any public `ServiceToken` export and the supported Server-to-Server workflow.',
+    capabilities.server.routes &&
+      '- Server routes: document every implemented method and path, plus its authentication and authorization boundary.',
+    capabilities.server.jobs &&
+      '- Server jobs: document how each job is triggered, required payloads, retry behavior, and observable results.',
+    capabilities.database &&
+      '- Database: document only App-visible schema prerequisites and lifecycle constraints; do not copy migration implementation details.',
+    capabilities.registry &&
+      '- Registry: document which files the App materializes, who owns the resulting code, and how updates are applied.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return `---\nname: nocobase-app-plugin-${context.shortName}\ndescription: Development draft for the App-facing capabilities of ${context.displayName}; replace this description with concrete Agent trigger conditions before synchronization.\n---\n\n# ${context.displayName}\n\n> Development draft: replace every instruction below with verified, implemented behavior before registering this plugin with an App. Do not synchronize placeholder claims.\n\n## Use this Skill when\n\nDescribe the App-level user outcome that should trigger this Skill. State when the Agent should not use it.\n\n## Public surfaces\n\nList only stable package exports, routes, services, jobs, schema requirements, or registry assets that actually exist.\n\n${capabilityPrompts || '- This plugin selected no runtime capability alongside `skills`. Document any real App-facing contract added during implementation.'}\n\n## Prerequisites\n\nList required plugin registration, authentication, permissions, configuration, and data.\n\n## App workflow\n\nGive the shortest ordered workflow an App Agent can execute. Identify which files or UI surfaces belong to the App and which belong to the plugin.\n\n## Ownership\n\nState what the plugin owns, what the App may customize, and whether generated or materialized files may be edited.\n\n## Permissions and constraints\n\nState authentication and authorization requirements separately. Document important unsupported behavior and failure modes.\n\n## Verification\n\nList observable checks that prove the integration works. Verify behavioral claims in the target App; Skill synchronization alone proves only that the files match.\n`;
 }
 
 async function formatRenderedSource(
@@ -191,13 +657,17 @@ async function formatRenderedSource(
 }
 
 export async function renderTemplate(options: {
+  readonly capabilities: PluginCapabilities;
   readonly context: PluginTemplateContext;
   readonly targetDirectory: string;
   readonly templateDirectory?: string;
 }): Promise<string[]> {
   const templateDirectory =
     options.templateDirectory ?? DEFAULT_TEMPLATE_DIRECTORY;
-  const files = await collectTemplateFiles(templateDirectory);
+  const files = await collectTemplateFiles(
+    templateDirectory,
+    options.capabilities,
+  );
   const outputFiles: string[] = [];
 
   for (const file of files) {
@@ -213,11 +683,25 @@ export async function renderTemplate(options: {
 
     const renderedContents =
       file.outputPath === 'package.json'
-        ? await renderManifest(file.sourcePath, options.context)
-        : renderTemplateValue(
-            await readFile(file.sourcePath, 'utf8'),
-            options.context,
-          );
+        ? await renderManifest(options.context, options.capabilities)
+        : file.outputPath === 'eslint.config.js'
+          ? renderEslintConfig(options.capabilities)
+          : file.outputPath === 'tsconfig.json'
+            ? renderTsconfig(options.capabilities)
+            : file.outputPath === 'README.md'
+              ? renderReadme(options.context, options.capabilities)
+              : file.outputPath === 'client/plugin.ts'
+                ? renderClientPlugin(options.context, options.capabilities)
+                : file.outputPath === 'server/plugin.ts'
+                  ? renderServerPlugin(options.context, options.capabilities)
+                  : file.outputPath === 'tests/plugin.test.ts'
+                    ? renderPluginTest(options.context, options.capabilities)
+                    : file.outputPath.startsWith('skills/')
+                      ? renderSkill(options.context, options.capabilities)
+                      : renderTemplateValue(
+                          await readFile(file.sourcePath, 'utf8'),
+                          options.context,
+                        );
     const contents = await formatRenderedSource(renderedContents, outputPath);
 
     await mkdir(path.dirname(targetPath), { recursive: true });

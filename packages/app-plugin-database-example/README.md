@@ -2,4 +2,4 @@
 
 Database app plugin example. When enabled, it contributes one migration and
 one seed to `@nocobase/app-template-default` through the database directories
-declared in `package.json`.
+declared by `server/plugin.ts`.

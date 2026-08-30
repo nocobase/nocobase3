@@ -46,7 +46,10 @@ pnpm add @nocobase/app-plugin-notification \
 pnpm migrate
 ```
 
-插件声明同时用于发现 migrations、Service Provider 和 routes。默认模板启用插件后会自动注册内置 definitions，并提供受登录和权限保护的测试页面；自定义宿主可继续按下面的步骤手动创建运行时和挂载路由。
+`nocobase.plugins` 是管理 metadata，不承担运行时发现。默认模板还会在
+`server/plugins.ts` 中显式组合各插件导出的 Server definition，由 definition 声明
+migrations、Service Providers 和 Routes；测试页面拥有独立的登录和权限边界。
+自定义宿主可继续按下面的步骤手动创建运行时和挂载路由。
 
 ## 第二步：创建配置
 
@@ -200,14 +203,13 @@ import { Hono, type MiddlewareHandler } from 'hono';
 
 import type { AppNotificationRuntime } from './notification-runtime.js';
 
-export function registerNotificationRoutes(options: {
-  readonly app: Hono;
+export function createNotificationRoutes(options: {
   readonly authRequired: MiddlewareHandler;
   readonly notification: AppNotificationRuntime;
   readonly resolveRequestUserId: (
     request: Request,
   ) => Promise<string | undefined>;
-}): void {
+}): Hono {
   const routes = new Hono();
   routes.use('*', options.authRequired);
   routes.route('/', options.notification.manager.router);
@@ -218,8 +220,17 @@ export function registerNotificationRoutes(options: {
     }),
   );
 
-  options.app.route('/api/notifications', routes);
+  return routes;
 }
+
+app.route(
+  '/api/notifications',
+  createNotificationRoutes({
+    authRequired,
+    notification,
+    resolveRequestUserId,
+  }),
+);
 ```
 
 `resolveRequestUserId` 必须从当前请求中得到登录用户 ID。不要接受客户端直接提交的用户 ID 作为当前用户身份。
