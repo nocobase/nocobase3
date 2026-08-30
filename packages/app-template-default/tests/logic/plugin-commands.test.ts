@@ -26,6 +26,7 @@ const scripts = appPackage.scripts ?? {};
 /** The command surface documented in docs/cli/README.md, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:register': 'nb3 app plugin register',
+  'plugin:inspect': 'nb3 app plugin inspect',
   'plugin:unregister': 'nb3 app plugin unregister',
   'plugin:update': 'nb3 app plugin update',
   'plugin:skills:sync': 'nb3 app plugin skills sync',

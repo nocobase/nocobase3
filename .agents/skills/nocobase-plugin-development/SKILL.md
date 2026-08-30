@@ -64,6 +64,12 @@ for the current task:
   current Server composition order for protection.
 - Register Client and Server definitions explicitly in the target App's
   `client/plugins.ts` and `server/plugins.ts`.
+- Prefer lifecycle commands with `--json`. Branch on `ok` and `status`; treat
+  `success-noop`, `partial-success`, and `requires-installation` as distinct
+  outcomes, and use `error.code` plus the non-zero exit code for failures.
+- Run `plugin:inspect <name> --json` after registration changes. It is
+  read-only and checks only static package, metadata, composition, and Skill
+  state; it does not prove Route security, runtime behavior, tests, or builds.
 - `package.json#nocobase.plugins` is management metadata for install, CLI,
   build/watch, and Skills synchronization. It is not runtime discovery.
 - `exports["./client"]` and `exports["./server/plugin"]` are the Client and
@@ -93,7 +99,8 @@ for the current task:
    Plugin Skills.
 5. Keep declarations, source/publish exports, dependencies, `files`, tests,
    README, and Skills consistent when a contribution changes.
-6. Register the plugin explicitly with the target App. The plugin's
+6. Preview registration with `--dry-run --json`, apply it, then run the
+   read-only `plugin:inspect <name> --json`. The plugin's
    `<plugin>/skills/` is the source of truth; do not edit the App's synchronized
    `.agents/skills/` copy.
 7. Run the plugin's lint, typecheck, test, and build. Run target-App

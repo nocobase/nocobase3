@@ -24,10 +24,11 @@ Both places are written by the repository commands; do not edit either by hand:
 
 ```bash
 pnpm plugin:register <name> --app app-template-default
+pnpm plugin:inspect <name> --app app-template-default --json
 pnpm plugin:unregister <name> --app app-template-default
 ```
 
-`plugin:register` adds the `devDependencies` entry and the `nocobase.plugins` entry, appends imports and array items to the Client and Server composition roots for the exports the package ships, and copies the plugin's skills into `.agents/skills/`. `--disabled` records `enabled: false` and leaves both composition roots alone; `--no-skills` skips the skills copy. `plugin:unregister` reverses all of it. Run `pnpm plugin:skills:sync` on its own after a plugin upgrade changes its skills.
+`plugin:register` adds the `devDependencies` entry and the `nocobase.plugins` entry, appends imports and array items to the Client and Server composition roots for the exports the package ships, and copies the plugin's skills into `.agents/skills/`. `--disabled` records `enabled: false` and leaves both composition roots alone; `--no-skills` skips the skills copy. `plugin:unregister` reverses all of it. Run `pnpm plugin:skills:sync` on its own after a plugin upgrade changes its skills. `plugin:inspect --json` is read-only and verifies the static registration surfaces; it does not replace route-security, runtime, test, or build checks.
 
 Only a plugin that ships a `./client` export reaches `client/plugins.ts`. A server-only plugin is registered in `package.json` and skipped there, because an import of an export it does not have fails to resolve at build time. The check looks for `./client` because that is the specifier registration writes; a plugin carrying only `./client/plugin` predates the barrel and is skipped for the same reason.
 
@@ -37,6 +38,7 @@ Those commands run in this repository and find plugins in `packages/`. An applic
 
 ```bash
 pnpm plugin:register <name>
+pnpm plugin:inspect <name> --json
 pnpm plugin:unregister <name>
 ```
 

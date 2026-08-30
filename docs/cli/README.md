@@ -11,6 +11,7 @@
 | 脚本                      | 实际执行                     | 作用                        |
 | ------------------------- | ---------------------------- | --------------------------- |
 | `pnpm plugin:register`    | `nb3 app plugin register`    | 安装插件包，并写入显式注册  |
+| `pnpm plugin:inspect`     | `nb3 app plugin inspect`     | 只读检查注册状态和 Skills   |
 | `pnpm plugin:unregister`  | `nb3 app plugin unregister`  | 上述的逆操作，并卸载插件包  |
 | `pnpm plugin:update`      | `nb3 app plugin update`      | 升级插件包，并同步其 skills |
 | `pnpm plugin:skills:sync` | `nb3 app plugin skills sync` | 只同步 skills，不升级       |
@@ -23,6 +24,7 @@ pnpm plugin:register audit-log --version 1.2.0  # 指定版本
 pnpm plugin:register audit-log --disabled       # 装上但不启用
 pnpm plugin:register audit-log --no-install     # 包已经装好了，只写注册
 pnpm plugin:register audit-log --dry-run
+pnpm plugin:register audit-log --dry-run --json
 ```
 
 一条命令完成安装和显式接线：装包，写 `package.json` 的依赖与 `nocobase.plugins`，根据包导出分别更新 `client/plugins.ts` 和 `server/plugins.ts`，最后把插件带的 skills 复制进 `.agents/skills/`。
@@ -58,6 +60,7 @@ Or install TypeScript and re-run this command to have it written for you:
 pnpm plugin:unregister audit-log
 pnpm plugin:unregister audit-log --no-install   # 只解除注册，不卸包
 pnpm plugin:unregister audit-log --dry-run
+pnpm plugin:unregister audit-log --dry-run --json
 ```
 
 `register` 的逆操作，顺序是固定的：
@@ -78,6 +81,7 @@ pnpm plugin:update                                     # 升级全部已注册�
 pnpm plugin:update --plugin audit-log                  # 只升级一个
 pnpm plugin:update --plugin audit-log --plugin workflow
 pnpm plugin:update --dry-run                           # 只打印不执行
+pnpm plugin:update --dry-run --json
 ```
 
 插件名可以用短名（`audit-log`）或完整包名（`@nocobase/app-plugin-audit-log`）。`--plugin` 可以重复；不传时升级 App 注册的全部插件。传了未注册的插件会被拒绝，并列出当前已注册的插件。
@@ -92,19 +96,30 @@ pnpm plugin:update --dry-run                           # 只打印不执行
 pnpm plugin:skills:sync
 pnpm plugin:skills:sync --plugin audit-log
 pnpm plugin:skills:sync --dry-run
+pnpm plugin:skills:sync --dry-run --json
 ```
+
+### 检查插件状态（只读）
+
+```bash
+pnpm plugin:inspect audit-log --json
+```
+
+`plugin:inspect` 不写入任何文件，只检查已安装包、依赖、`nocobase.plugins`、Client/Server 显式注册项和插件 Skills 与 App 副本是否一致。它不判断 Route 的授权边界、运行时行为、测试结果或 App 构建结果；这些仍需单独验证。
+
+所有插件生命周期命令的 JSON 输出都使用同一 envelope：`schemaVersion`、`ok`、`operation`、`status`，成功结果在 `result`，失败结果在 `error`。成功状态包括 `success`、`success-noop`、`partial-success` 和 `requires-installation`；失败为 `ok: false`、`status: failure`，并带有稳定的 `error.code`、`message`、`suggestions`。成功写 stdout，失败写 stderr，Agent 应同时检查退出码。
 
 上游是唯一真相：每个同步过来的目录都会被整体替换，本地改动会丢失。要写自己的 skills，用一个不以 `nocobase-` 开头的目录名，同步不会碰它。
 
 ### `nb3 app plugin *` 通用参数
 
-| 参数              | 适用                     | 说明                           |
-| ----------------- | ------------------------ | ------------------------------ |
-| `--dir <path>`    | 全部                     | App 目录，默认当前目录         |
-| `--dry-run`       | 全部                     | 只打印将要发生的变更，不写文件 |
-| `--plugin <name>` | `update`、`skills sync`  | 指定插件；省略时作用于全部     |
-| `--no-install`    | `register`、`unregister` | 不调包管理器，只改注册         |
-| `--json`          | 仅 `skills sync`         | 机器可读输出                   |
+| 参数              | 适用                                               | 说明                           |
+| ----------------- | -------------------------------------------------- | ------------------------------ |
+| `--dir <path>`    | 全部                                               | App 目录，默认当前目录         |
+| `--dry-run`       | 全部                                               | 只打印将要发生的变更，不写文件 |
+| `--plugin <name>` | `update`、`skills sync`                            | 指定插件；省略时作用于全部     |
+| `--no-install`    | `register`、`unregister`                           | 不调包管理器，只改注册         |
+| `--json`          | register、unregister、update、skills sync、inspect | 机器可读输出                   |
 
 仓库维护模式还提供以下两个参数，根 `package.json` 已经自动传入前者：
 
@@ -130,10 +145,13 @@ pnpm plugin:skills:sync --dry-run
 | `pnpm plugin:create <name> --with <capability>` | 按显式 capability 生成 `packages/app-plugin-<name>/`    |
 | `pnpm plugin:register <name>`                   | 写依赖、manifest、Client/Server 显式入口，并复制 skills |
 | `pnpm plugin:unregister <name>`                 | 上述四项的逆操作                                        |
+| `pnpm plugin:inspect <name>`                    | 只读检查多面注册状态和 Skills                           |
 | `pnpm plugin:remove <name>`                     | 删除插件源码；仍被引用时会拒绝并提示先 unregister       |
 | `pnpm plugin:skills:sync`                       | 只同步 skills（从 `packages/` 解析插件）                |
 
 完整参数用 `--help` 查看。插件开发流程见[插件开发](../development/plugin-development.md)。
+
+仓库专属的 `plugin:remove` 也支持 `--dry-run --json`。仍有 workspace 引用时，它以非零退出码返回 `PLUGIN_STILL_REFERENCED`，并在 `error.details.references` 和结构化 `error.suggestions` 中列出阻塞引用及解除注册命令。
 
 `plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.providers`、`server.routes`、`server.jobs`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
 

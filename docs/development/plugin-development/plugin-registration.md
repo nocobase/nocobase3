@@ -307,7 +307,37 @@ pnpm plugin:remove audit-log
 
 ## 注册状态检查
 
-当前没有统一的 `plugin:doctor`。Agent 应按以下顺序检查状态：
+推荐先运行只读检查：
+
+```bash
+pnpm plugin:inspect audit-log --app app-template-default --json
+```
+
+该命令只读取静态状态，不会自动修复，也不替代 `client:inspect`、测试或构建。
+
+JSON 结果中的 `result.consistent` 表示本次检查的静态状态面是否一致，`issues` 提供稳定问题代码，`suggestions` 提供结构化后续命令。即使发现不一致，检查本身成功执行时仍为 `ok: true`；Agent 应读取 `consistent`，不能只看退出码。
+
+生命周期命令统一使用以下 JSON envelope：
+
+```json
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "operation": "plugin:inspect",
+  "status": "success",
+  "result": {}
+}
+```
+
+- `success`：请求完成；
+- `success-noop`：目标已经处于请求状态，没有写入；
+- `partial-success`：主要操作完成，但有明确的剩余问题或手工步骤；
+- `requires-installation`：dry run 需要先安装包，才能计算后续注册计划；
+- `failure`：`ok: false`，错误写入 stderr，并保留非零退出码。
+
+Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 和 `error.suggestions`。不要从人类可读文案推断状态。
+
+当前不提供会扩大范围或自动修复的 `plugin:doctor`。Agent 应按以下顺序检查状态：
 
 ```text
 1. package is installed/resolvable

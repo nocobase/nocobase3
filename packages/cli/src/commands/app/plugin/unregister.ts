@@ -8,10 +8,18 @@ import {
 import {
   applyPluginRegistration,
   planPluginUnregistration,
+  planPluginSkillRemovals,
   pluginPackageName,
   removePluginSkills,
 } from '../../../lib/plugin-registration.ts';
 import { runAttached } from '../../../lib/run-command.ts';
+import {
+  classifyPluginError,
+  pluginJsonFailure,
+  pluginPlanForJson,
+  pluginJsonSuccess,
+} from '../../../lib/plugin-json.ts';
+import { runCommand } from '../../../lib/run-command.ts';
 import { resolveAppRoot } from '../../../lib/workspace-app.ts';
 
 export default class AppPluginUnregister extends Command {
@@ -55,9 +63,29 @@ export default class AppPluginUnregister extends Command {
       default: false,
       description: 'Print what would change without writing anything.',
     }),
+    json: Flags.boolean({
+      default: false,
+      description: 'Print one machine-readable JSON result.',
+    }),
   };
 
   public async run(): Promise<void> {
+    try {
+      await this.runUnsafe();
+    } catch (error) {
+      if (!this.argv.includes('--json')) throw error;
+      this.logToStderr(
+        JSON.stringify(
+          pluginJsonFailure('plugin:unregister', classifyPluginError(error)),
+          null,
+          2,
+        ),
+      );
+      process.exitCode = 1;
+    }
+  }
+
+  private async runUnsafe(): Promise<void> {
     const { args, flags } = await this.parse(AppPluginUnregister);
     const appRoot = await resolveAppRoot({
       app: flags.app,
@@ -68,14 +96,60 @@ export default class AppPluginUnregister extends Command {
     const packageName = pluginPackageName(args.name);
 
     const plan = await planPluginUnregistration({ appRoot, packageName });
-    if (!plan.changed) {
-      this.log(`${packageName} is not registered in this app.`);
+    const skillRemovals = await planPluginSkillRemovals(appRoot, packageName);
+    if (!plan.changed && skillRemovals.length === 0) {
+      if (flags.json) {
+        this.logJson(
+          pluginJsonSuccess('plugin:unregister', 'success-noop', {
+            appRoot,
+            packageName,
+            removedFrom: [],
+            skillRemovals,
+          }),
+        );
+      } else {
+        this.log(`${packageName} is not registered in this app.`);
+      }
       return;
     }
     if (dryRun) {
-      this.log(
-        `Would unregister ${packageName} (${plan.removedFrom.join(', ')})`,
-      );
+      if (flags.json) {
+        const packageManager = flags['no-install']
+          ? undefined
+          : await appPackageManager(appRoot);
+        this.logJson(
+          pluginJsonSuccess(
+            'plugin:unregister',
+            plan.manualClientEdit || plan.manualServerEdit
+              ? 'partial-success'
+              : 'success',
+            {
+              mode: 'dry-run',
+              appRoot,
+              packageName,
+              plan: pluginPlanForJson(plan),
+              skillRemovals,
+              commands:
+                flags['no-install'] || !plan.changed
+                  ? []
+                  : [
+                      {
+                        command: packageManager!,
+                        args: removeDependencyCommand(
+                          packageManager!,
+                          packageName,
+                        ).args,
+                        cwd: appRoot,
+                      },
+                    ],
+            },
+          ),
+        );
+      } else {
+        this.log(
+          `Would unregister ${packageName} (${plan.removedFrom.join(', ')})`,
+        );
+      }
       return;
     }
 
@@ -84,19 +158,31 @@ export default class AppPluginUnregister extends Command {
     // `pnpm remove` fails outright on a package it cannot find.
     const removedSkills = await removePluginSkills(appRoot, packageName);
 
-    if (!flags['no-install']) {
+    let packageManagerFailed = false;
+    if (!flags['no-install'] && plan.changed) {
       const { args: commandArgs, packageManager } = removeDependencyCommand(
         await appPackageManager(appRoot),
         packageName,
       );
-      this.log(`${packageManager} ${commandArgs.join(' ')}`);
-      const exitCode = await runAttached(packageManager, [...commandArgs], {
-        cwd: appRoot,
-      });
+      if (!flags.json) this.log(`${packageManager} ${commandArgs.join(' ')}`);
+      let exitCode = 0;
+      if (flags.json) {
+        try {
+          await runCommand(packageManager, [...commandArgs], { cwd: appRoot });
+        } catch {
+          exitCode = 1;
+          packageManagerFailed = true;
+        }
+      } else {
+        exitCode = await runAttached(packageManager, [...commandArgs], {
+          cwd: appRoot,
+        });
+      }
       if (exitCode !== 0) {
-        this.warn(
-          `${packageManager} exited with code ${exitCode}; the package may still be installed. Continuing to unregister it.`,
-        );
+        if (!flags.json)
+          this.warn(
+            `${packageManager} exited with code ${exitCode}; the package may still be installed. Continuing to unregister it.`,
+          );
       }
     }
 
@@ -109,6 +195,41 @@ export default class AppPluginUnregister extends Command {
       finalPlan.removedFrom.length > 0
         ? finalPlan.removedFrom
         : plan.removedFrom;
+    if (flags.json) {
+      this.logJson(
+        pluginJsonSuccess(
+          'plugin:unregister',
+          packageManagerFailed ||
+            finalPlan.manualClientEdit ||
+            finalPlan.manualServerEdit
+            ? 'partial-success'
+            : 'success',
+          {
+            mode: 'unregister',
+            appRoot,
+            packageName,
+            removedFrom,
+            removedSkills,
+            plan: pluginPlanForJson(finalPlan),
+            ...(packageManagerFailed
+              ? {
+                  issues: [
+                    {
+                      code: 'PACKAGE_MANAGER_FAILED',
+                      message:
+                        'The plugin was unregistered, but the package manager did not remove the installed dependency.',
+                      suggestions: [
+                        'Remove the package dependency manually and reinstall dependencies.',
+                      ],
+                    },
+                  ],
+                }
+              : {}),
+          },
+        ),
+      );
+      return;
+    }
     this.log(`Unregistered ${packageName} (${removedFrom.join(', ')})`);
     for (const skill of removedSkills) {
       this.log(`  removed skill ${skill}`);

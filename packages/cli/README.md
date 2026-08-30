@@ -17,6 +17,7 @@ NocoBase 3 内部开发命令行工具，命令名为 `nb3`。
 | `nb3 app info`               | 显示 App 名称、目录、模板来源、依赖是否已安装          |
 | `nb3 app config`             | 读写 `.nb3/config.json`                                |
 | `nb3 app plugin register`    | 安装插件并写入 manifest、Client 与 Server 显式入口     |
+| `nb3 app plugin inspect`     | 只读检查插件的静态注册状态和同步 Skills                |
 | `nb3 app plugin unregister`  | 上述的逆操作，并卸载插件包                             |
 | `nb3 app plugin update`      | 升级插件包并同步其 skills                              |
 | `nb3 app plugin skills sync` | 同步插件 skills，不升级                                |
@@ -39,6 +40,8 @@ NocoBase 3 内部开发命令行工具，命令名为 `nb3`。
 停止 Hub 时终止的是整个进程组而不是单个进程：start 脚本通常是包管理器的包装进程，真正监听端口的服务是它的孙进程，只杀记录的 pid 会留下占着端口的孤儿。
 
 `nb3 hub create` 的默认模板源是 `@nocobase/hub@beta`。
+
+插件生命周期命令的 `--json` 模式输出一个 JSON document：成功写 stdout，失败写 stderr 并保留非零退出码。`plugin inspect` 只检查静态注册面，不代替运行时、权限、测试或构建验证。
 
 退出码约定：`0` 成功或 stub，`1` 运行错误，`2` 参数错误，`3` 尚未实现。
 

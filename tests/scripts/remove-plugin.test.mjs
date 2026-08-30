@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import {
   access,
@@ -11,12 +12,19 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import test from 'node:test';
 
 import {
   parseRemovePluginArgs,
   removePlugin,
 } from '../../scripts/remove-plugin.mjs';
+
+const run = promisify(execFile);
+const removeScriptUrl = new URL(
+  '../../scripts/remove-plugin.mjs',
+  import.meta.url,
+).href;
 
 test('parses removal options', () => {
   assert.deepEqual(
@@ -29,7 +37,74 @@ test('parses removal options', () => {
       dryRun: true,
       help: false,
       install: false,
+      json: false,
       name: '@nocobase/app-plugin-audit-log',
+    },
+  );
+});
+
+test('parses JSON removal output mode', () => {
+  assert.deepEqual(parseRemovePluginArgs(['audit-log', '--json']), {
+    dryRun: false,
+    help: false,
+    install: true,
+    json: true,
+    name: 'audit-log',
+  });
+});
+
+test('prints one JSON success document to stdout for a dry run', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  await createPluginPackage(repoRoot, 'audit-log');
+  const source = `import { main } from ${JSON.stringify(removeScriptUrl)}; await main(['audit-log', '--dry-run', '--json'], ${JSON.stringify(repoRoot)});`;
+
+  const result = await run(process.execPath, [
+    '--input-type=module',
+    '--eval',
+    source,
+  ]);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(JSON.parse(result.stdout), {
+    schemaVersion: 1,
+    ok: true,
+    operation: 'plugin:remove',
+    status: 'success',
+    result: {
+      mode: 'dry-run',
+      directoryName: 'app-plugin-audit-log',
+      packageName: '@nocobase/app-plugin-audit-log',
+      shortName: 'audit-log',
+      targetDirectory: path.join(repoRoot, 'packages/app-plugin-audit-log'),
+      commands: ['CI=true pnpm install --no-frozen-lockfile'],
+    },
+  });
+});
+
+test('prints one structured reference error to stderr and exits non-zero', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  await createPluginPackage(repoRoot, 'audit-log');
+  const appDirectory = path.join(repoRoot, 'packages/app');
+  await mkdir(appDirectory);
+  await writeJson(path.join(appDirectory, 'package.json'), {
+    name: '@nocobase/app',
+    dependencies: { '@nocobase/app-plugin-audit-log': 'workspace:^' },
+  });
+  const source = `import { main } from ${JSON.stringify(removeScriptUrl)}; await main(['audit-log', '--dry-run', '--json'], ${JSON.stringify(repoRoot)});`;
+
+  await assert.rejects(
+    run(process.execPath, ['--input-type=module', '--eval', source]),
+    (error) => {
+      assert.equal(error.stdout, '');
+      const response = JSON.parse(error.stderr);
+      assert.equal(response.error.code, 'PLUGIN_STILL_REFERENCED');
+      assert.equal(response.error.details.references.length, 1);
+      assert.deepEqual(response.error.suggestions, [
+        {
+          command: 'pnpm',
+          args: ['plugin:unregister', 'audit-log', '--app', 'app'],
+        },
+      ]);
+      return true;
     },
   );
 });

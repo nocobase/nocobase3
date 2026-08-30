@@ -126,6 +126,14 @@ pnpm --filter @nocobase/app-plugin-system-info build
 pnpm plugin:register system-info --app app-template-default
 ```
 
+随后用只读命令确认 dependency、metadata、Client/Server composition root 和 Skills 副本一致：
+
+```bash
+pnpm plugin:inspect system-info --app app-template-default --json
+```
+
+读取 `result.consistent` 和 `result.issues`，不要只根据 `ok` 判断插件接线正确。该检查不运行插件代码，也不验证 Route 权限、测试或构建。
+
 注册命令根据真实 exports 独立判断 Client 和 Server entry，并同步插件顶层 `skills/` 到 App 的 `.agents/skills/`。不要直接编辑同步副本。
 
 涉及 Client 时检查最终 contributions：
