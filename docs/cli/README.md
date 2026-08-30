@@ -96,7 +96,7 @@ pnpm plugin:skills:sync --dry-run
 
 上游是唯一真相：每个同步过来的目录都会被整体替换，本地改动会丢失。要写自己的 skills，用一个不以 `nocobase-` 开头的目录名，同步不会碰它。
 
-### 通用参数
+### `nb3 app plugin *` 通用参数
 
 | 参数              | 适用                     | 说明                           |
 | ----------------- | ------------------------ | ------------------------------ |
@@ -136,6 +136,18 @@ pnpm plugin:skills:sync --dry-run
 完整参数用 `--help` 查看。插件开发流程见[插件开发](../development/plugin-development.md)。
 
 `plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.providers`、`server.routes`、`server.jobs`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
+
+Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数表：
+
+```text
+--with <capability>             可重复；选择要生成的 capability
+--empty                         只生成 package foundation
+--display-name <name>
+--description <description>
+--no-install
+--dry-run
+--json
+```
 
 ### 仓库命令和 App 命令的关系
 

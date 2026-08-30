@@ -5,6 +5,10 @@ description: 在插件顶层 skills 目录描述插件向 App 提供的公共能
 
 # 描述插件提供给 App 的能力
 
+只有创建插件时显式选择 `--with skills` 才会生成 `skills/`。生成的 `SKILL.md`
+是 development draft，不代表插件已经提供其中描述的页面、API 或 Service。注册插件
+前必须把 draft 替换为真实的 App-facing 能力、集成流程、权限、约束和验证步骤。
+
 本指南由开发插件的 Agent 阅读，用来编写供 App Agent 使用的 Plugin Skills。插件开发文档回答“如何修改插件源码”；Plugin Skills 回答“插件向 App 提供了什么，以及 App 如何集成和使用”。
 
 ## Plugin Skills 的职责和读者

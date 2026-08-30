@@ -1,15 +1,17 @@
 ---
 title: 插件结构和文件所有权
-description: 识别 NocoBase 插件中 Client、Server、Database、Queue、Skills、Registry、测试和发布文件的职责，并区分必需契约与可删除的脚手架示例。
+description: 识别 capability-driven NocoBase 插件中 Client、Server、Database、Queue、Skills、Registry、测试和发布文件的职责与生成条件。
 ---
 
 # 插件结构和文件所有权
 
 Create Plugin 生成一个可发布的 workspace package。Agent 不应根据目录名猜测运行时能力，而应结合 `package.json` exports、Client/Server 插件声明和目标 App composition roots 判断真实状态。
 
-## 标准目录
+## Capability 目录并集
 
-完整脚手架的主要结构如下：
+下面是所有 capability 的目录并集，不是每次创建都会出现的固定结构。
+`plugin:create` 只生成通过 `--with` 显式选择的能力及其必要的 Client/Server
+composition entry；只创建 package foundation 时使用 `--empty`。
 
 ```text
 packages/app-plugin-audit-log/
@@ -47,7 +49,11 @@ packages/app-plugin-audit-log/
 └── tsconfig.json
 ```
 
-`server/jobs/` 只有在插件真正添加 Queue Jobs 时才需要存在。Migration 和 Seed 示例以 `.ts.example` 结尾，默认不执行。
+`server/jobs/`、`registry/`、`database/`、`skills/` 和各个 Client/Server 文件都由
+对应 capability 决定是否生成。选择 `server.routes` 不会顺带生成 Providers、
+Database、Client 或 Skills；选择 `client.routes` 不会顺带生成页面、Settings 页面、
+Provider 或 bootstrap。选择 `database` 时 migrations 和 seeds 作为一个 capability
+一起生成，其中 `.ts.example` 文件默认不执行。
 
 ## 顶层能力和所有权
 
@@ -213,7 +219,7 @@ exports["./server/plugin"]
 
 删除整个 Client 或 Server 能力时，必须同时更新 source exports 和 `publishConfig.exports`，不能只删除源码目录。
 
-## 必需契约与生成示例
+## 必需契约与 capability 骨架
 
 ### 必需契约
 
@@ -227,18 +233,17 @@ exports["./server/plugin"]
 - `CHANGELOG.md`；
 - 对修改包执行 lint、typecheck、test 和 build。
 
-### 可删除的默认示例
+生成器不再创建需要事后批量裁剪的完整业务示例。各 capability 提供最小、可检查的
+结构骨架：
 
-- 示例 Refine resource；
-- 示例普通页面和 Settings 页面；
-- 示例 React Provider 和 Context；
-- 示例 Service、Token、Provider 和 API Route；
-- `.ts.example` Migration 和 Seed；
-- Queue jobs 的空目录约定；
-- Registry example；
-- Starter App Skill 中的示例能力。
+- `client.routes` 和 `server.routes` 从空 contributions 开始，由 Agent 添加真实 Route；
+- `server.providers` 提供 ServiceProvider、Service 和 Token 结构；
+- `database` 提供 disabled Migration/Seed examples；
+- `server.jobs` 提供最小 Job 结构和测试；
+- `registry` 提供 Registry 构建、发布和所有权链路；
+- `skills` 提供 development draft，注册前必须改成真实 App-facing 契约。
 
-删除示例时不要留下失效声明。检查：
+实现业务或移除已选择的 capability 时，不要留下失效声明。检查：
 
 ```text
 source file

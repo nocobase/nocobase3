@@ -370,7 +370,13 @@ packages/app-plugin-registry-example/registry/
 
 `prepack` 很重要，因为 `public/r/` 是生成目录并被 `.gitignore` 忽略。npm 打包前必须重新生成，否则 tarball 中可能没有 Registry JSON 或带着过期产物。
 
-当前 `plugin:create` 脚手架会同时生成两类相互独立的示例：
+只有显式选择下面的 capability 时，`plugin:create` 才会生成 Registry 结构：
+
+```bash
+pnpm plugin:create feature-card --with registry
+```
+
+`registry` capability 会生成两类相互独立的基础结构：
 
 - 插件运行时 UI 使用的 `components.json`、`client/styles.css` 和 `@/*`
   TypeScript alias，因此可以直接在插件目录运行
@@ -379,10 +385,10 @@ packages/app-plugin-registry-example/registry/
   `registry.config.json`、`nocobase.registry.items` 声明以及 Registry build、
   materialize 和 prepack scripts。
 
-脚手架只预置一个不会自动改变应用行为的组件类 item，用来展示完整的源码所有权、
+生成器只预置一个不会自动改变应用行为的组件类 item，用来建立完整的源码所有权、
 shadcn 依赖、构建和发布链路。需要页面覆盖、Provider 或多个 item 时，再根据插件实际
-交付边界扩展配置；完全不发布可编辑源码的插件则可以删除 `registry/`、
-`registry.config.json`、对应 package 字段和 scripts。
+交付边界扩展配置。不需要可编辑源码时不要选择 `registry`，生成结果也不会包含
+`registry/`、`registry.config.json`、对应 package 字段、依赖和 scripts。
 
 ## 6. 构建 Registry 发布产物
 

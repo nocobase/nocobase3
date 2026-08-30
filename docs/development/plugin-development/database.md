@@ -19,9 +19,11 @@ Migration 是不可变的 schema 历史，Seed 是一次性的初始数据操作
 
 修改已有 Migration 前，先检查 `git log -- <file>` 和引入它的分支状态。只有引入 feature branch 尚未合并时才可直接修正；一旦合并，已有 Migration 永不修改，后续修复必须新增 Migration。不得硬编码旧 checksum 来伪造兼容。
 
-## 启用脚手架示例
+## 生成 Database capability
 
-生成文件以 `.ts.example` 结尾，不会加载。启用时仅删除最后的 `.example`：
+创建插件时显式选择 `--with database`，生成 migrations、seeds、Server database
+declaration 和对应测试。生成文件以 `.ts.example` 结尾，不会加载。Agent 实现真实
+schema 时再删除最后的 `.example`，并按本页规则替换示例内容：
 
 ```text
 202608300001-create-audit-logs.ts.example

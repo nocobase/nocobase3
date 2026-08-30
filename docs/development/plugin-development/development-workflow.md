@@ -30,7 +30,9 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 | App Agent 需要组合插件能力  | Plugin Skills  | `skills/`               |
 | 安装可编辑 UI 源码          | Registry       | `registry/`（范围待定） |
 
-只保留实际需要的能力；生成模板中的其他示例必须裁剪。
+创建新插件时，把这些判断直接映射为一个或多个 `plugin:create --with <capability>`。
+先运行 `--dry-run --json` 检查文件、依赖和派生的 Client/Server entry。生成器只创建
+显式选择的能力，不要先生成完整模板再依靠事后删除确定插件结构。
 
 ## 3. 先定义公共契约
 
