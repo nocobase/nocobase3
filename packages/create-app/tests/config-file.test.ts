@@ -13,7 +13,8 @@ describe('buildConfigFile', () => {
       },
     });
 
-    expect(config).toContain('secret: "test-secret"');
+    expect(config.match(/secret: "test-secret"/gu)).toHaveLength(2);
+    expect(config).toContain('session:\n  secret: "test-secret"');
     expect(config).toContain('dialect: sqlite');
     expect(config).toContain('database: "storage/app.sqlite"');
     expect(config).not.toContain('host:');

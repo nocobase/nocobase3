@@ -57,7 +57,7 @@ export function resolveFilePluginRuntime(
   const session = config.get(sessionConfig);
   const driveConfigValue = config.get(driveConfig);
   const app = config.get(appConfig);
-  const tokenSecret = session.secret;
+  const tokenSecret = session?.secret;
   if (!tokenSecret) {
     return unavailable('File access token signing is not configured.');
   }

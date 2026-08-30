@@ -82,6 +82,7 @@ describe('authentication provider', () => {
         advanced: expect.objectContaining({
           cookiePrefix: 'main-app',
           defaultCookieAttributes: { path: '/main' },
+          useSecureCookies: true,
         }),
       }),
     );
@@ -142,6 +143,7 @@ async function createConfig(): Promise<AppConfig> {
         emailAndPassword: { enabled: true, autoSignIn: false },
         session: { storeSessionInDatabase: true },
         secret: 'test-auth-secret-at-least-32-characters',
+        advanced: { useSecureCookies: true },
       },
     },
   ]);

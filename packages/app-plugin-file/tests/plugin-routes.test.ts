@@ -12,19 +12,17 @@ import {
   authorizationToken,
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
-import { driveManagerToken, type NocoBaseDriveManager } from '@nocobase/drive';
-import {
-  createLogger,
-  loggingToken,
-  type Logger,
-  type Logging,
-} from '@nocobase/logging';
+import type { NocoBaseDriveManager } from '@nocobase/drive';
+import { driveManagerToken } from '@nocobase/app-server-kit/drive';
+import { createLogger, type Logger, type Logging } from '@nocobase/logging';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
 import { ServiceContainer } from '@nocobase/service-provider';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FileUnavailableError } from '../server/errors.js';
+import type { AppConfigAccessor } from '@nocobase/app-server-kit/config';
 import type {
   CreateFileRouteOptions,
   DatabaseFileStoreOptions,
@@ -92,7 +90,7 @@ describe('file plugin route factory and registrar', () => {
   it('resolves the narrow runtime from existing host dependencies', () => {
     const runtime = resolveFilePluginRuntime(
       createContainer(config, deps),
-      config,
+      createConfigAccessor(config),
     );
 
     expect(isFilePluginRuntimeUnavailable(runtime)).toBe(false);
@@ -105,74 +103,29 @@ describe('file plugin route factory and registrar', () => {
     });
   });
 
-  it('initializes deterministic fixtures and logs failures', async () => {
-    const failure = new Error('fixture write failed');
-    const error = vi.spyOn(logger, 'error');
-    ensureFileObjectMock.mockRejectedValueOnce(failure);
-
+  it('does not initialize demo fixtures during provider boot', async () => {
     const container = createContainer(config, deps, false);
     const provider = new FileProvider({
-      config,
+      config: createConfigAccessor(config),
       container,
       router: new Hono(),
     });
     provider.register();
     await provider.boot();
-
-    await vi.waitFor(() =>
-      expect(ensureFileObjectMock).toHaveBeenCalledTimes(3),
-    );
-    await vi.waitFor(() =>
-      expect(error).toHaveBeenCalledWith(
-        {
-          err: expect.objectContaining({
-            name: 'FileUnavailableError',
-            cause: expect.objectContaining({
-              name: 'AggregateError',
-              errors: expect.arrayContaining([failure]),
-            }),
-          }),
-        },
-        'File Demo fixture initialization failed',
-      ),
-    );
-    expect(ensureFileObjectMock).toHaveBeenCalledWith(
-      { drive: driveManager, defaultDisk: 'local' },
-      expect.objectContaining({ key: expect.any(String) }),
-    );
+    expect(ensureFileObjectMock).not.toHaveBeenCalled();
   });
 
-  it('waits for fixture initialization before shutting down', async () => {
-    let release: () => void = () => undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    ensureFileObjectMock.mockImplementation(() => gate);
-
+  it('does not perform fixture work during shutdown', async () => {
     const container = createContainer(config, deps, false);
     const provider = new FileProvider({
-      config,
+      config: createConfigAccessor(config),
       container,
       router: new Hono(),
     });
     provider.register();
     await provider.boot();
-    await vi.waitFor(() =>
-      expect(ensureFileObjectMock).toHaveBeenCalledTimes(3),
-    );
-
-    let shutdownSettled = false;
-    const shutdown = provider.shutdown().then(() => {
-      shutdownSettled = true;
-    });
-    await Promise.resolve();
-    const settledBeforeRelease = shutdownSettled;
-
-    release();
-    await shutdown;
-
-    expect(settledBeforeRelease).toBe(false);
-    expect(shutdownSettled).toBe(true);
+    await provider.shutdown();
+    expect(ensureFileObjectMock).not.toHaveBeenCalled();
   });
 
   it('allows only system administrators to query examples', async () => {
@@ -352,7 +305,7 @@ describe('file plugin route factory and registrar', () => {
       const unavailableConfig = { ...config, ...configOverride };
       const runtime = resolveFilePluginRuntime(
         createContainer(unavailableConfig, unavailableDeps),
-        unavailableConfig,
+        createConfigAccessor(unavailableConfig),
       );
       expect(isFilePluginRuntimeUnavailable(runtime)).toBe(true);
 
@@ -394,7 +347,7 @@ describe('file plugin route factory and registrar', () => {
       appName: 'test',
       publicBasePath: config.app.publicBasePath,
       router: app,
-      config,
+      config: createConfigAccessor(config),
       container,
       paths: {} as never,
     });
@@ -469,10 +422,30 @@ function createContainer(
   container.instance(loggingToken, services.logging as Logging);
   if (includeRuntime) {
     container.singleton(filePluginRuntimeToken, (resolver) =>
-      resolveFilePluginRuntime(resolver, config),
+      resolveFilePluginRuntime(resolver, createConfigAccessor(config)),
     );
   }
   return container;
+}
+
+function createConfigAccessor(config: FilePluginConfig): AppConfigAccessor {
+  const values: Record<string, unknown> = {
+    app: config.app,
+    drive: config.drive ?? { default: 'local' },
+    session: config.session,
+  };
+  const get = ((definitionOrKey: string | { namespace: string }): unknown =>
+    values[
+      typeof definitionOrKey === 'string'
+        ? definitionOrKey
+        : definitionOrKey.namespace
+    ]) as AppConfigAccessor['get'];
+  return {
+    get,
+    raw: () => ({}),
+    reload: async () => ({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  };
 }
 
 function createBootstrapDatabase(): DatabaseManager {

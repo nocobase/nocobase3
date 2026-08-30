@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
+import { resolveConfigWatch } from './dev-config-watch.mjs';
 import { findAvailablePort } from './dev-ports.mjs';
 import { waitForHttpReady } from './dev-readiness.mjs';
 
@@ -229,9 +230,12 @@ if (serverChild.stdin) {
   process.stdin.pipe(serverChild.stdin);
 }
 
-envWatcher = fs.watch(rootDir, (_eventType, filename) => {
+const configuredConfigPath = serverEnv.APP_CONFIG_FILE;
+const configWatch = resolveConfigWatch(rootDir, configuredConfigPath);
+
+envWatcher = fs.watch(configWatch.directory, (_eventType, filename) => {
   const changedFile = filename?.toString();
-  if (changedFile !== 'config.yml') return;
+  if (!changedFile || !configWatch.filenames.has(changedFile)) return;
 
   if (envRestartTimer) clearTimeout(envRestartTimer);
   envRestartTimer = setTimeout(() => {

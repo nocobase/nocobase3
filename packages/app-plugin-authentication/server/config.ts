@@ -45,7 +45,9 @@ export const authenticationConfig: AppConfigDefinition<
       ),
       trustedOrigins: Type.Optional(Type.Array(Type.String())),
     },
-    { additionalProperties: false },
+    // Better Auth exposes a broad, extensible option surface. Keep the core
+    // fields structured while allowing options whose schemas live upstream.
+    { additionalProperties: true },
   ),
   defaults: {
     emailAndPassword: { enabled: true, autoSignIn: false },

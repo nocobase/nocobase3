@@ -1,12 +1,10 @@
 import type { Row } from '@nocobase/app-database';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import { loggingToken } from '@nocobase/app-server-kit/logging';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { FILE_DEMO_FIXTURES } from '../demo/fixtures.js';
 import { FileUnavailableError } from '../errors.js';
 import {
-  isFilePluginRuntimeUnavailable,
   resolveFilePluginRuntime,
   type FilePluginRuntime,
 } from '../plugin-runtime.js';
@@ -31,29 +29,10 @@ export class FileProvider<
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-file';
 
-  private fixtureInitialization: Promise<void> | undefined;
-
   public override register(): void {
     this.app.container.singleton(filePluginRuntimeToken, (container) =>
       resolveFilePluginRuntime(container, this.app.config),
     );
-  }
-
-  public override async boot(): Promise<void> {
-    const runtime = this.app.container.resolve(filePluginRuntimeToken);
-    if (isFilePluginRuntimeUnavailable(runtime)) return;
-    const logger = this.app.container.resolve(loggingToken).getLogger().child({
-      module: 'app-plugin-file',
-    });
-    this.fixtureInitialization = prepareFileDemoFixtures(runtime).catch(
-      (error: unknown) => {
-        logger.error({ err: error }, 'File Demo fixture initialization failed');
-      },
-    );
-  }
-
-  public override async shutdown(): Promise<void> {
-    await this.fixtureInitialization;
   }
 }
 

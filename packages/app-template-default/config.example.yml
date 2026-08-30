@@ -13,6 +13,10 @@ auth:
   session:
     storeSessionInDatabase: true
 
+# session:
+#   # Use the same generated value as auth.secret, or another unique secret.
+#   secret: replace-with-a-unique-secret
+
 database:
   default: main
   connections:

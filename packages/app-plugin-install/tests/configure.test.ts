@@ -34,7 +34,8 @@ describe('installation configuration', () => {
     ).resolves.toEqual({ configured: true, restartRequired: true });
 
     const config = await readFile(path.join(rootDir, 'config.yml'), 'utf8');
-    expect(config).toContain('secret: "test-secret"');
+    expect(config.match(/secret: "test-secret"/gu)).toHaveLength(2);
+    expect(config).toContain('session:\n  secret: "test-secret"');
     expect(config).toContain('dialect: sqlite');
     expect(config).toContain('database: "storage/app.sqlite"');
     expect(config).toContain('debug: true');

@@ -123,7 +123,7 @@ test('refuses removal while server/plugins.ts imports the plugin', async (t) => 
   });
   await writeFile(
     path.join(appDirectory, 'server/plugins.ts'),
-    `import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+    `import auditLog from '@nocobase/app-plugin-audit-log/server';
 import { defineServerPlugins } from '@nocobase/app-server-kit/plugins';
 
 export default defineServerPlugins([auditLog]);
