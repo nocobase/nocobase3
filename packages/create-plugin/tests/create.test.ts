@@ -79,5 +79,48 @@ describe('runCreatePluginCli', () => {
         'utf8',
       ),
     ).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const createRepoRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'create-plugin-cli-'),
+    );
+    created.push(createRepoRoot);
+    await mkdir(path.join(createRepoRoot, 'packages'));
+    output.length = 0;
+
+    await expect(
+      runCreatePluginCli({
+        argv: [
+          'audit-log',
+          '--with',
+          'server.routes',
+          '--with',
+          'skills',
+          '--no-install',
+          '--json',
+        ],
+        binary: 'pnpm plugin:create',
+        repoRoot: createRepoRoot,
+        version: '0.0.1',
+      }),
+    ).resolves.toBe(0);
+
+    const createResult = JSON.parse(output.join('')) as {
+      mode: string;
+      requestedCapabilities: string[];
+      capabilities: unknown;
+      derivedStructure: unknown;
+      files: Array<{ path: string; reason: string }>;
+      writes: string[];
+      commands: string[];
+    };
+    expect(createResult).toMatchObject({
+      mode: 'create',
+      requestedCapabilities: result.requestedCapabilities,
+      capabilities: result.capabilities,
+      derivedStructure: result.derivedStructure,
+      files: result.files,
+      writes: result.files.map((file) => file.path),
+      commands: [],
+    });
   });
 });

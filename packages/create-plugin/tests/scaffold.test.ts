@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +45,154 @@ async function createWith(
   });
 }
 
+async function listFiles(
+  directory: string,
+  relativeDirectory = '',
+): Promise<string[]> {
+  const entries = await readdir(path.join(directory, relativeDirectory), {
+    withFileTypes: true,
+  });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const relativePath = path.join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listFiles(directory, relativePath)));
+    } else {
+      files.push(relativePath);
+    }
+  }
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
 describe('createPlugin', () => {
+  it.each([
+    ['database', 'database/README.md', 'client/'],
+    ['server.providers', 'server/providers/index.ts', 'server/routes/'],
+    ['server.routes', 'server/routes/index.ts', 'server/providers/'],
+    ['server.jobs', 'server/jobs/audit-log.ts', 'client/'],
+    ['client.routes', 'client/routes.ts', 'server/'],
+    ['client.components', 'client/components/plugin-component.tsx', 'server/'],
+    ['client.providers', 'client/providers.ts', 'server/'],
+    ['client.bootstrap', 'client/bootstrap.ts', 'server/'],
+    ['registry', 'registry.config.json', 'database/'],
+    ['skills', 'skills/nocobase-app-plugin-audit-log/SKILL.md', 'client/'],
+  ] as const)(
+    '%s creates only its owned file surface',
+    async (capability, ownedFile, unrelatedPrefix) => {
+      const result = await createWith([capability]);
+
+      expect(result.files).toContain(ownedFile);
+      expect(
+        result.files.some((file) => file.startsWith(unrelatedPrefix)),
+      ).toBe(false);
+    },
+  );
+
+  it.each([
+    [
+      'database',
+      ['./package.json', './server/plugin'],
+      ['@nocobase/app-database', '@nocobase/app-server-kit'],
+      [],
+    ],
+    [
+      'server.providers',
+      ['./package.json', './server/plugin', './server/tokens'],
+      ['@nocobase/app-server-kit', '@nocobase/service-provider'],
+      [],
+    ],
+    [
+      'server.routes',
+      ['./package.json', './server/plugin'],
+      ['@nocobase/app-server-kit', 'hono'],
+      [],
+    ],
+    [
+      'server.jobs',
+      ['./package.json', './server/plugin'],
+      ['@nocobase/app-server-kit', '@nocobase/queue'],
+      [],
+    ],
+    [
+      'client.routes',
+      ['./client', './client/plugin', './client/routes', './package.json'],
+      [],
+      ['@nocobase/app-client'],
+    ],
+    [
+      'client.components',
+      ['./client/components/plugin-component', './package.json'],
+      [],
+      ['react'],
+    ],
+    [
+      'client.providers',
+      ['./client', './client/plugin', './client/providers', './package.json'],
+      [],
+      ['@nocobase/app-client', 'react'],
+    ],
+    [
+      'client.bootstrap',
+      ['./client', './client/bootstrap', './client/plugin', './package.json'],
+      [],
+      ['@nocobase/app-client'],
+    ],
+    ['registry', ['./package.json'], [], ['react']],
+    ['skills', ['./package.json'], [], []],
+  ] as const)(
+    '%s derives exact runtime dependencies and aligned exports',
+    async (capability, exportNames, dependencyNames, peerDependencyNames) => {
+      const result = await createWith([capability]);
+      const manifest = JSON.parse(
+        await readFile(
+          path.join(result.targetDirectory, 'package.json'),
+          'utf8',
+        ),
+      ) as {
+        dependencies?: Record<string, string>;
+        exports: Record<string, unknown>;
+        peerDependencies?: Record<string, string>;
+        publishConfig: { exports: Record<string, unknown> };
+      };
+
+      expect(Object.keys(manifest.exports).sort()).toEqual(exportNames);
+      expect(Object.keys(manifest.publishConfig.exports).sort()).toEqual(
+        exportNames,
+      );
+      expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual(
+        dependencyNames,
+      );
+      expect(Object.keys(manifest.peerDependencies ?? {}).sort()).toEqual(
+        peerDependencyNames,
+      );
+    },
+  );
+
+  it('uses the same file plan for dry-run and real creation', async () => {
+    const dryRunRepo = await createTestRepo();
+    const dryRun = await createPlugin({
+      capabilities: ['database', 'client.routes', 'skills'],
+      dryRun: true,
+      install: false,
+      name: 'plan-check',
+      now: new Date(2026, 7, 22),
+      repoRoot: dryRunRepo,
+    });
+
+    const realRepo = await createTestRepo();
+    const real = await createPlugin({
+      capabilities: ['database', 'client.routes', 'skills'],
+      install: false,
+      name: 'plan-check',
+      now: new Date(2026, 7, 22),
+      repoRoot: realRepo,
+    });
+
+    expect(real.files).toEqual(dryRun.files);
+    expect(real.capabilities).toEqual(dryRun.capabilities);
+    await expect(listFiles(real.targetDirectory)).resolves.toEqual(real.files);
+  });
+
   it('creates only a package foundation when --empty is explicit', async () => {
     const repoRoot = await createTestRepo();
     const result = await createPlugin({
