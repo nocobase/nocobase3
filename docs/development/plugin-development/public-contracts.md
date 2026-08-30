@@ -81,7 +81,10 @@ Never bypass   私有模块、内部表、同步后的 .agents/skills 副本
 ## 相关内容
 
 - [插件声明](./plugin-declaration.md)
-- [Server 插件开发](./server.md)
-- [Client 插件开发](./client.md)
+- [Server 模块选择](./server.md)
+- [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md)
+- [Client 模块选择](./client.md)
+- [Client Components](./client-components.md)
+- [Plugin Registry](./registry.md)
 - [描述插件提供给 App 的能力](./skills.md)
 - [测试和验证插件](./testing.md)

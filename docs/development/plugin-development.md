@@ -31,32 +31,33 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 
 ## 按任务选择章节
 
-| 用户目标                             | 能力类型           | 主要修改位置                             | 阅读                                                             |
-| ------------------------------------ | ------------------ | ---------------------------------------- | ---------------------------------------------------------------- |
-| 创建新插件并接入 App                 | Plugin lifecycle   | `packages/app-plugin-<name>/`            | [快速开始](./plugin-development/quick-start.md)                  |
-| 判断生成文件是否需要保留             | Package structure  | 插件根目录                               | [插件结构](./plugin-development/plugin-structure.md)             |
-| 声明 Client 或 Server 能力           | Plugin declaration | `client/plugin.ts`、`server/plugin.ts`   | [插件声明](./plugin-development/plugin-declaration.md)           |
-| 安装、启用、配置或移除插件           | Registration       | App manifest 和 composition roots        | [插件注册](./plugin-development/plugin-registration.md)          |
-| 添加 HTTP 接口或浏览器页面           | Route              | `client/routes.ts`、`server/routes/`     | [Route 插件开发](./plugin-development/routes.md)                 |
-| 添加业务服务                         | Server             | `server/`                                | [Server 插件开发](./plugin-development/server.md)                |
-| 创建数据库结构或初始数据             | Database           | `database/`                              | [数据库迁移和初始数据](./plugin-development/database.md)         |
-| 添加页面、Settings 或 React Provider | Client             | `client/`                                | [Client 插件开发](./plugin-development/client.md)                |
-| 添加后台任务                         | Queue Job          | `server/jobs/`                           | [Server 插件开发](./plugin-development/server.md)                |
-| 描述插件向 App 提供的能力和集成方式  | Skills             | `<plugin>/skills/`                       | [描述插件提供给 App 的能力](./plugin-development/skills.md)      |
-| 向 App 安装可编辑 UI 源码            | Registry           | `<plugin>/registry/`                     | Registry（能力范围待定）                                         |
-| 验证或发布插件                       | Quality/Publishing | `tests/`、`package.json`、`CHANGELOG.md` | [测试和验证插件](./plugin-development/testing.md)                |
-| 编排真实业务插件开发                 | Workflow           | 插件全部能力和目标 App                   | [开发一个完整插件](./plugin-development/development-workflow.md) |
-| 设计跨插件或 App 公共入口            | Public contract    | `exports`、Token、API、options、Skills   | [设计插件公共契约](./plugin-development/public-contracts.md)     |
+| 用户目标                            | 能力类型           | 主要修改位置                             | 阅读                                                             |
+| ----------------------------------- | ------------------ | ---------------------------------------- | ---------------------------------------------------------------- |
+| 创建新插件并接入 App                | Plugin lifecycle   | `packages/app-plugin-<name>/`            | [快速开始](./plugin-development/quick-start.md)                  |
+| 判断生成文件是否需要保留            | Package structure  | 插件根目录                               | [插件结构](./plugin-development/plugin-structure.md)             |
+| 声明 Client 或 Server 能力          | Plugin declaration | `client/plugin.ts`、`server/plugin.ts`   | [插件声明](./plugin-development/plugin-declaration.md)           |
+| 安装、启用、配置或移除插件          | Registration       | App manifest 和 composition roots        | [插件注册](./plugin-development/plugin-registration.md)          |
+| 添加 HTTP 接口或浏览器页面          | Route              | `client/routes.ts`、`server/routes/`     | [Route 插件开发](./plugin-development/routes.md)                 |
+| 添加业务服务                        | Server             | `server/`                                | [Server 模块选择](./plugin-development/server.md)                |
+| 创建数据库结构或初始数据            | Database           | `database/`                              | [Database 模块选择](./plugin-development/database.md)            |
+| 添加页面、组件或 React Provider     | Client             | `client/`                                | [Client 模块选择](./plugin-development/client.md)                |
+| 添加后台任务                        | Queue Job          | `server/jobs/`                           | [Server Jobs](./plugin-development/server-jobs.md)               |
+| 描述插件向 App 提供的能力和集成方式 | Skills             | `<plugin>/skills/`                       | [描述插件提供给 App 的能力](./plugin-development/skills.md)      |
+| 向 App 安装可编辑 Client 源码       | Registry           | `<plugin>/registry/`                     | [Plugin Registry](./plugin-development/registry.md)              |
+| 验证或发布插件                      | Quality/Publishing | `tests/`、`package.json`、`CHANGELOG.md` | [测试和验证插件](./plugin-development/testing.md)                |
+| 编排真实业务插件开发                | Workflow           | 插件全部能力和目标 App                   | [开发一个完整插件](./plugin-development/development-workflow.md) |
+| 设计跨插件或 App 公共入口           | Public contract    | `exports`、Token、API、options、Skills   | [设计插件公共契约](./plugin-development/public-contracts.md)     |
 
 ## 能力选择
 
 ```text
 需求运行在哪里？
 ├── Browser
-│   ├── Refine 初始化         → client/bootstrap.ts
+│   ├── UI 构件或公共组件     → client/components/
 │   ├── 普通页面              → client/routes.ts → defineAppRoutes()
 │   ├── Settings 页面         → client/routes.ts → defineSettingsRoutes()
-│   └── React Context         → client/providers.ts
+│   ├── React Context         → client/providers.ts
+│   └── 命令式初始化          → client/bootstrap.ts
 │
 ├── Server
 │   ├── 业务逻辑              → Service
@@ -83,7 +84,7 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 - `exports["./client"]` 是 Client 注册判据；`exports["./server/plugin"]` 是 Server 注册判据。
 - Database migrations、seeds 和 Queue jobs 都由 Server 插件声明。
 - Plugin Skills 是插件拥有的 App 能力与集成指南：描述公共能力、集成流程、边界和验证方式；源文件位于顶层 `skills/`，并同步到 App 的 `.agents/skills/` 供 App Agent 使用。
-- Registry 是可选扩展能力，不属于第一版快速开始的运行闭环。
+- Registry 发布可 materialize 的 Client 源码配方，不属于 Client runtime contribution；安装副本由 App 拥有。
 
 ## 信息来源优先级
 
@@ -117,13 +118,21 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 - [插件结构和文件所有权](./plugin-development/plugin-structure.md)
 - [声明 Client 和 Server 插件](./plugin-development/plugin-declaration.md)
 - [安装和注册插件](./plugin-development/plugin-registration.md)
-- [Server 插件开发](./plugin-development/server.md)
+- [Database 模块选择](./plugin-development/database.md)
+- [编写插件 Migration](./plugin-development/database-migrations.md)
+- [编写插件 Seed](./plugin-development/database-seeds.md)
+- [Server 模块选择](./plugin-development/server.md)
+- [Services、Tokens 与 ServiceProviders](./plugin-development/server-services-and-providers.md)
 - [Server 插件 Agent 友好性审计](./plugin-development/server-agent-audit.md)
 - [Route 插件开发](./plugin-development/routes.md)
 - [Server Route 最佳实践示例](./plugin-development/server-routes-examples.md)
+- [Server Jobs](./plugin-development/server-jobs.md)
+- [Client 模块选择](./plugin-development/client.md)
+- [Client Components](./plugin-development/client-components.md)
 - [Client Route 最佳实践示例](./plugin-development/client-routes-examples.md)
-- [Client 插件开发](./plugin-development/client.md)
-- [数据库迁移和初始数据](./plugin-development/database.md)
+- [Client Providers](./plugin-development/client-providers.md)
+- [Client Bootstrap](./plugin-development/client-bootstrap.md)
+- [Plugin Registry](./plugin-development/registry.md)
 - [描述插件提供给 App 的能力](./plugin-development/skills.md)
 - [测试和验证插件](./plugin-development/testing.md)
 - [开发一个完整插件](./plugin-development/development-workflow.md)

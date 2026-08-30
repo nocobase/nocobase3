@@ -15,7 +15,7 @@ NocoBase v3 的 Server Route 是由插件直接贡献给应用的 Hono router：
 
 下面的示例只展示 Server Route。完整的跨 Client/Server 选择规则见
 [Route 插件开发](./routes.md)，Service、Provider 和 Server 插件组合规则见
-[Server 插件开发](./server.md)。
+[Server 模块选择](./server.md)。
 
 ## 先选择 Root Route 还是 API Route
 

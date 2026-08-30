@@ -1,118 +1,100 @@
 ---
-title: Client 插件开发
-description: 在 NocoBase 插件中使用 bootstrap、defineAppRoutes、defineSettingsRoutes 和 defineClientProviders 添加客户端能力，并通过 Client options 和 route component overrides 支持 App 配置。
+title: Client 模块选择
+description: 面向 AI Agent 的 NocoBase v3 Client 插件模块导航，帮助在 Components、Routes、Providers、Bootstrap、options 和 Registry 之间选择正确所有权。
 ---
 
-# Client 插件开发
+# Client 模块选择
 
-Client 插件只公开 `bootstrap`、`routes`、`providers` 三类可选入口。四类 Route API 和前后端组合见[Route 插件开发](./routes.md)，App/Settings 的完整实现与测试模式见[Client Route 最佳实践示例](./client-routes-examples.md)；本页重点说明 Client contribution wiring、bootstrap、providers 和 options。Settings 属于 routes；Registry 是另一套源码 materialization 能力，不是 Client runtime contribution。
+Client 插件的 runtime contributions 只有 `routes`、`providers` 和 `bootstrap`，全部可选且通过 loader 惰性导入。Components 是 UI 源码或公共导出能力，不是第四种 runtime contribution；Settings 属于 Routes；Registry 是 App-owned 源码 materialization。
 
-## 选择 contribution
+## 按需求选模块
 
-| 任务                                | Entry       | 实现                      |
-| ----------------------------------- | ----------- | ------------------------- |
-| 注册 Refine resource 或命令式初始化 | `bootstrap` | `client/bootstrap.ts`     |
-| 添加普通页面                        | `routes`    | `defineAppRoutes()`       |
-| 添加 Settings 页面                  | `routes`    | `defineSettingsRoutes()`  |
-| 提供 React Context                  | `providers` | `defineClientProviders()` |
+| 需求                                    | 使用                      | 继续阅读                                     |
+| --------------------------------------- | ------------------------- | -------------------------------------------- |
+| React UI 构件或公共组件                 | Components                | [Client Components](./client-components.md)  |
+| 普通可导航页面                          | `defineAppRoutes()`       | [Client Routes](./client-routes-examples.md) |
+| Settings 页面                           | `defineSettingsRoutes()`  | [Client Routes](./client-routes-examples.md) |
+| 替换插件已有页面 UI                     | Route component override  | [Client Routes](./client-routes-examples.md) |
+| 多个 Client surfaces 共享 React Context | `defineClientProviders()` | [Client Providers](./client-providers.md)    |
+| App 初始化时执行命令式配置              | Client Bootstrap          | [Client Bootstrap](./client-bootstrap.md)    |
+| 不同 App 传入不同稳定配置               | Client plugin options     | 本页“共享 typed options”                     |
+| 安装后让 App 直接编辑源码               | Registry                  | [Plugin Registry](./registry.md)             |
 
-检查顺序：
+优先使用最局部的所有权：单页面状态留在页面，普通组件不创建 Provider，可以惰性完成的工作不放 Bootstrap，只替换 UI 时不重复声明 Route。
+
+## 理解装配关系
 
 ```text
-package.json → client/index.ts → client/plugin.ts
-→ bootstrap.ts / routes.ts / providers.ts → pages and components
-→ tests/ → target App/client/plugins.ts
+Components
+  ├── componentLoader() → App / Settings Route
+  ├── Provider component → Client Provider
+  ├── package export → App or another plugin
+  └── Registry recipe → App-owned source
+
+Bootstrap → imperative Client initialization
 ```
 
-## Bootstrap 和 Refine
+Client Route 的 `auth/access` 只保护浏览器导航和组件加载，不能代替 Server authentication/authorization。
 
-Bootstrap 接收 `refine` 和解析后的 typed options，适合注册 resources 或 access/data providers。它是命令式初始化入口，不用于渲染 React UI。
+## 声明 Client 插件
+
+`client/plugin.ts` 只组合轻量 loaders：
 
 ```ts
-const bootstrap: AppClientPluginBootstrap<AuditLogOptions> = ({
-  refine,
-  options,
-}) => {
-  refine.addResources([
-    {
-      name: 'audit-log',
-      list: '/audit-log',
-      meta: { label: options.label ?? 'Audit log' },
-    },
-  ]);
-};
+import {
+  defineClientPlugin,
+  type AppClientPluginFactory,
+} from '@nocobase/app-client/plugins';
+
+export interface AuditLogClientOptions {
+  readonly resourceLabel?: string;
+}
+
+const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
+  defineClientPlugin({
+    packageName: '@nocobase/app-plugin-audit-log',
+    bootstrap: () => import('./bootstrap.js'),
+    routes: () => import('./routes.js'),
+    providers: () => import('./providers.js'),
+  });
+
+export default auditLog;
 ```
 
-## App Routes
+只保留真实存在的 entries。`client/index.ts` default-export registration factory，`package.json#exports["./client"]` 指向 source/build 对应入口，目标 App 在 `client/plugins.ts` 显式调用 factory。
 
-以下仅展示 contribution 形状；`auth` 选择、Settings groups、组件覆盖和分层测试见
-[Client Route 最佳实践示例](./client-routes-examples.md)。
+## 共享 typed options
+
+目标 App 调用：
 
 ```ts
-const appRoutes = defineAppRoutes([
-  {
-    name: 'audit-log',
-    path: '/audit-log',
-    auth: 'required',
-    componentLoader: () => import('./pages/audit-log.js'),
-  },
-]);
+auditLog({ resourceLabel: 'Audit logs' });
 ```
 
-页面使用 `componentLoader` 延迟加载。路径相对于 App 内置父 Route，不重复 App public base path。
-
-## Settings Routes
-
-```ts
-const settingsRoutes = defineSettingsRoutes([
-  {
-    name: 'audit-log',
-    path: '/audit-log',
-    navigation: { title: 'Audit log' },
-    access: { resource: 'audit-log.settings', action: 'read' },
-    componentLoader: () => import('./pages/settings.js'),
-  },
-]);
-```
-
-最终路径是 `/settings/audit-log`。`navigation` 决定设置中心导航；`access` 被拒绝时，页面不会进入导航也不会加载。不要添加独立 `settings` entry，也不要在子路径重复 `/settings`。
-
-## Provider 和 Context
-
-用 `defineClientProviders()` 声明有稳定名称的 Provider。Provider 顺序应显式、可测试；只有多个页面需要共享状态时才引入 Context，不要用全局变量替代。
-
-## Client options 和组件覆盖
-
-在 `client/plugin.ts` 为 App 需要配置的稳定行为定义 options。options 可传入 bootstrap、routes/providers factory 和 `routeComponentOverrides(options)`。组件覆盖用于替换宿主公开的 route component slot；不要复制宿主 Route 或修改同步文件。
-
-```ts
-export default defineClientPlugin({
-  packageName: '@nocobase/app-plugin-audit-log',
-  bootstrap: () => import('./bootstrap.js'),
-  routes: () => import('./routes.js'),
-  providers: () => import('./providers.js'),
-  routeComponentOverrides: (options) => options.overrides ?? [],
-});
-```
-
-App 在 `client/plugins.ts` 调用 factory：`auditLog({ label: 'Audit logs' })`。
+同一 resolved options 会传给 Bootstrap context、Routes factory 和 Providers factory，也可用于 `routeComponentOverrides(options)`。无配置插件使用默认 `TOptions = void`，不创建虚假的空 options interface。Options 是公共 App 集成契约；不要包含无法安全序列化或需要输出到 inspect 的 secret。
 
 ## Lazy loading 和副作用
 
-`client/plugin.ts` 会被 App 静态 import，应只静态依赖轻量注册 API 和类型。页面及重实现通过 loader 加载。`sideEffects: false` 只适用于所有模块都没有 import-time 副作用的包；若 CSS 或模块初始化必须保留，应精确声明 side effects 或改为显式导入。
+目标 App会静态 import `client/plugin.ts`，因此它只能 value-import 轻量 registration API。页面和实现 entries 留在 dynamic import 后面。Routes/Providers factory 在 composition 时执行，Bootstrap 在初始化时执行，页面 `componentLoader()` 在真正导航时执行，Provider component 在 React render 时执行。
 
-## 测试和检查最终结果
+声明模块顶层不得发请求、操作 DOM、启动定时器或修改全局状态。只有所有发布模块都没有 import-time 副作用时才设置 `sideEffects: false`；CSS 等必要副作用应精确声明。
 
-测试 descriptor、App/Settings Route、component loader、Provider、bootstrap options 和组件覆盖。再检查 App 合并后的结果：
+## 测试和最终装配确认
+
+先测试模块自身契约和行为，再运行插件 lint、typecheck、test、build。注册发生变化时，最后运行：
 
 ```bash
+pnpm plugin:inspect <name> --app <app> --json
 pnpm --filter <target-app> client:inspect --json
-pnpm --filter <plugin-package> lint
-pnpm --filter <plugin-package> typecheck
-pnpm --filter <plugin-package> test
-pnpm --filter <plugin-package> build
 ```
 
-常见错误包括第四类 `settings` loader、同步 import 重页面、Settings 路径重复、无 access 的敏感设置页、删除 entry 后遗留 export、把 Registry 副本当 runtime UI。
+Inspector 只确认插件登记和最终 Client composition，不执行 Bootstrap、不加载页面、不渲染 Provider，也不验证 UI 行为。目标 App 测试和浏览器/full-stack 验证仍然负责真实结果。
 
-完成时 Client factory、exports、App composition root、inspect 结果和行为测试一致；App-facing options、入口或权限变化已更新 Plugin Skills。
+## Agent 自检
+
+- 没有创造第四个 `settings` 或 `components` runtime loader；
+- Components、Routes、Providers、Bootstrap 的职责没有混用；
+- entries、exports、目标 App registration 与真实实现一致；
+- 页面保持 lazy，declaration 顶层没有启动副作用；
+- options 是最小、稳定、typed 的 App 契约；
+- App-facing UI、入口、权限或集成方式变化已更新 Plugin Skill。

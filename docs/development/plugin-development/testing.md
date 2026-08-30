@@ -13,22 +13,25 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、Skil
 | ------------------------- | ------------------------------------------------------- |
 | Client descriptor/options | factory 解析后的 entries 和 options                     |
 | App/Settings Routes       | parent、path、navigation、access、component loader      |
-| Provider/bootstrap        | Context 行为、顺序、Refine 注册和 cleanup               |
+| Client Component          | props、交互、公共 export 和目标 App 渲染                |
+| Client Provider           | descriptor、Context 行为、顺序和 cleanup                |
+| Client Bootstrap          | Refine 注册、options、异步失败和 import-time 副作用     |
 | Service/Provider          | Token、惰性单例、生命周期、错误清理                     |
 | API/Root Route            | 真实 router 请求、状态码、响应、权限、base path         |
 | Server plugin             | providers/routes/database/queue composition             |
 | Migration/Seed            | 真实数据库的 schema、metadata、up/down、数据结果        |
-| Queue Job                 | handler、payload、重试/失败和可观察结果                 |
+| Queue Job                 | handler、payload、Service、重试/幂等和可观察结果        |
+| Registry                  | config、build、materialize、App typecheck/build         |
 | Plugin Skills             | 结构、同步和语义检查                                    |
 | exports/publish           | source export、dist export、tarball 内容和 declarations |
 
 ## Client 测试
 
-不要只断言模块存在。测试 `defineAppRoutes()` 和 `defineSettingsRoutes()` 生成的 descriptor，实际调用 component loaders；验证 Settings access/navigation。对 bootstrap 使用最小 Refine stub 验证资源和 options；对 Provider 使用 jsdom/Testing Library 验证 Context 的可见行为。
+不要只断言模块存在。Components 测试 props、交互和正式 public export；Routes 测试 descriptor 并实际调用 component loaders；Provider 分别测试 declaration 和 React Context；Bootstrap 使用最小 context 验证 Refine、options 和错误传播。详细边界见 [Client 模块选择](./client.md)。
 
 ## Server 测试
 
-用独立 `ServiceContainer` 验证 Provider 注册、惰性实例和生命周期。简单 Route 直接用
+用独立 `ServiceContainer` 验证原始 Token、Provider 注册、惰性单例和完整生命周期。简单 Route 直接用
 production contribution 的 `createRouter()` 创建 router，注入测试 Token 后发出真实
 请求；不要为了测试导出 `registerXxxRoutes(router, ...): void`。复杂业务域可以分别测试
 返回 `Hono` 的 `createXxxRoutes(options)` 子 router，以及 production contribution 的
@@ -48,6 +51,10 @@ Plugin test 验证 App/Settings descriptor、auth/access/navigation 和实际
 ## Database 和 Queue 测试
 
 Migration 使用真实测试数据库验证物理 schema 和 metadata，执行 `up`，可逆时执行 `down`。Seed 验证已有数据和重复执行策略。Queue 测试不要只断言 job 文件被发现；应执行 handler，验证 payload、服务调用、重试/失败和持久结果。
+
+## Registry 测试
+
+验证 `registry.config.json`、item roots、入口和公开 imports，再运行 Registry build。将 item materialize 到临时或目标 App，验证文件、source extension、typecheck、test 和 build。App-owned 副本不是插件测试的 canonical source，升级策略也不能只靠快照证明。
 
 ## Plugin Skills 检查
 
@@ -81,11 +88,17 @@ pnpm --filter <plugin-package> test
 pnpm --filter <plugin-package> build
 ```
 
+注册或 composition 发生变化时，运行对应的最终装配确认：
+
+```bash
+pnpm plugin:inspect <name> --app <target-app> --json
+pnpm --filter <target-app> client:inspect --json # Client changes only
+pnpm --filter <target-app> server:inspect --json # Server changes only
+```
+
 再运行目标 App：
 
 ```bash
-pnpm --filter <target-app> client:inspect --json
-pnpm --filter <target-app> server:inspect --json
 pnpm --filter <target-app> typecheck
 pnpm --filter <target-app> test
 pnpm --filter <target-app> build
@@ -93,13 +106,7 @@ pnpm --filter <target-app> build
 
 最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job 和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
 
-Client-only 插件可以跳过 `server:inspect`，Server-only 插件可以跳过
-`client:inspect`。两个 Inspector 的 JSON 都使用 `schemaVersion`、`ok`、`operation`、
-`status` 和 `result`。Client inspection 会 import declaration 并执行 routes/providers
-factory，但不会运行 bootstrap、页面 component loader 或 Provider；Server inspection
-不执行 Route factory。不要把 issues 为空解释为运行时行为已验证；Route
-authentication/authorization、Provider lifecycle、Database 和 Job 行为必须继续通过
-真实请求、数据库或 handler 测试验证。四类 Route 的测试矩阵见[Route 插件开发](./routes.md)。
+Inspector 只回答插件是否登记、最终组合了哪些 contributions，以及是否存在确定性的装配问题。Client inspection 不运行 Bootstrap、不加载页面、不渲染 Provider；Server inspection 不执行 Provider、Route factory、Job 或数据库操作。Agent 通过源码、类型、模块测试和目标 App 行为理解实现，不根据 inspect 推断业务正确性。
 
 ## 完成条件
 

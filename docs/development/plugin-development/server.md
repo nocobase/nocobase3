@@ -1,143 +1,94 @@
 ---
-title: Server 插件开发
-description: 在 NocoBase 插件中使用 Service、ServiceToken、ServiceProvider、API Routes、Root Routes 和 Queue Jobs 实现服务端能力，并将 contributions 组合到 server/plugin.ts。
+title: Server 模块选择
+description: 面向 AI Agent 的 NocoBase v3 Server 插件模块导航，帮助在 Services、Tokens、ServiceProviders、Routes、Jobs、Migrations 和 Seeds 之间选择正确所有权。
 ---
 
-# Server 插件开发
+# Server 模块选择
 
-Route 入口（`defineRootRoutes()`、`defineApiRoutes()`）统一见[Route 插件开发](./routes.md)，具体实现、安全边界和测试模式见[Server Route 最佳实践示例](./server-routes-examples.md)。本页重点说明 Service、Provider、Job 和 Server composition。
+Server 插件把可复用领域逻辑放入 Service，用 Token 表达稳定能力 identity，用 ServiceProvider 注册实现和生命周期，用 Route 处理 HTTP，用 Job 编排异步执行，用 Migration/Seed 管理数据库历史和初始数据。
 
-本页面向实现服务端能力的 Agent。先阅读 [插件结构](./plugin-structure.md) 和 [插件声明](./plugin-declaration.md)，再按需求选择 Service、Route、Provider、Job 或 Database。
+## 按需求选模块
 
-## 先选择哪种能力
-
-| 需求                     | 实现                 | 入口                   |
-| ------------------------ | -------------------- | ---------------------- |
-| 可复用业务逻辑           | Service              | `server/services/`     |
-| 跨模块稳定契约           | ServiceToken         | `server/tokens.ts`     |
-| 注册服务、生命周期       | ServiceProvider      | `server/providers/`    |
-| App 内 `/api` 接口       | `defineApiRoutes()`  | `server/routes/`       |
-| 不挂载 `/api` 的顶层入口 | `defineRootRoutes()` | `server/routes/`       |
-| 异步后台处理             | Queue Job            | `server/jobs/`         |
-| schema 历史              | Migration            | `database/migrations/` |
-| 必要初始数据             | Seed                 | `database/seeds/`      |
-
-## 检查顺序
+| 需求                           | 使用                 | 继续阅读                                                                   |
+| ------------------------------ | -------------------- | -------------------------------------------------------------------------- |
+| 可复用领域逻辑                 | Service              | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
+| 跨模块/插件的稳定能力 identity | ServiceToken         | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
+| 注册实现和管理生命周期         | ServiceProvider      | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
+| App 内 `/api` 接口             | `defineApiRoutes()`  | [Server Routes](./server-routes-examples.md)                               |
+| callback、webhook 或顶层入口   | `defineRootRoutes()` | [Server Routes](./server-routes-examples.md)                               |
+| 异步、延迟、批量或可重试工作   | Queue Job            | [Server Jobs](./server-jobs.md)                                            |
+| 表、字段、索引、约束、metadata | Migration            | [Database Migrations](./database-migrations.md)                            |
+| 插件必需的初始记录             | Seed                 | [Database Seeds](./database-seeds.md)                                      |
 
 ```text
-package.json → server/plugin.ts → providers/index.ts → tokens.ts
-→ routes/index.ts → jobs/ → database/ → tests/ → target App/server/plugins.ts
+Route   → HTTP input/output and security policy
+Job     → asynchronous orchestration and retry boundary
+Service → reusable domain behavior
+Provider → registration and lifecycle
+Token   → stable capability identity
 ```
 
-## Service、Token 和 Provider
+## 声明 Server 插件
 
-Service 只包含领域行为；需要被其他模块依赖时，在 `tokens.ts` 导出接口和 `ServiceToken`，由 Provider 在 `register()` 中注册惰性单例。Provider 负责生命周期，不把 HTTP 逻辑塞进服务。
-
-```ts
-export const auditLogToken = createServiceToken<AuditLogService>(
-  '@nocobase/app-plugin-audit-log/audit-log',
-);
-
-export class AuditLogProvider extends ServiceProvider<AuditLogProviderApplication> {
-  public override register(): void {
-    this.app.container.singleton(
-      auditLogToken,
-      () => new DefaultAuditLogService(),
-    );
-  }
-}
-```
-
-遵循 `register → boot → start → ready → shutdown` 生命周期；关闭时用 `resolveIfCreated()`，避免为了清理而创建未使用的服务。完整生命周期说明见 [Service Provider](../../service-provider.md)。
-
-## API 和 Root Routes
-
-每个 Route contribution 必须拥有并测试自己的 authentication 和
-authorization 边界。不要依赖另一个插件较早注册的 middleware，也不要依赖当前
-Server composition 顺序偶然提供身份或权限保护；插件顺序变化后，Route
-的安全语义必须保持不变。
-
-认证 middleware 还必须只覆盖本 Route 实际拥有的路径。插件 router 上过宽的
-`router.use('*', ...)` 可能在 Hono 挂载后影响更晚注册的 contribution；使用本插件的
-明确路径或子 router，并测试后续插件路径不受影响。
-
-需要登录时，在本插件的 Route factory 中显式解析 Authentication Token
-并注册认证 middleware；需要业务权限时，再显式解析 Authorization Token
-并检查稳定的 resource/action。测试至少覆盖未登录、无权限和允许访问的结果。
-
-Route factory 直接作为 contribution 返回 Hono router，并从 `container` 解析公开 Token：
+Server contributions 在 `server/plugin.ts` 直接组合：
 
 ```ts
-import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import {
+  defineServerPlugin,
+  type AppServerPlugin,
+} from '@nocobase/app-server-kit/plugins';
 
-export const apiRoutes = defineApiRoutes(({ container }) => {
-  const router = new Hono();
-  const authentication = container.resolve(authenticationToken);
+import providers from './providers/index.js';
+import routes from './routes/index.js';
 
-  router.use('/audit-log', authentication.required());
-  router.get('/audit-log', (c) =>
-    c.json(container.resolve(auditLogToken).list()),
-  );
-  return router;
-});
-```
-
-`defineApiRoutes()` 的路径挂在 App 的 `/api` 下；`defineRootRoutes()` 用于不应带 `/api` 的顶层入口。路径写 package 自己的相对子路径，不重复宿主的 `/api`、public base path 或 app name；测试时同时覆盖配置了 base path 的 App。
-
-Routes 是直接 contributions，不使用 `routes: () => import(...)` loader。统一在 `server/routes/index.ts` 导出数组，再由 `server/plugin.ts` 组合。
-
-简单 Route 直接写在 contribution factory 中；复杂业务域才抽取返回自己 `Hono` 的
-`createXxxRoutes(options)`。不要为了测试增加修改外部 router 的 `registerXxxRoutes()`；
-直接测试真实 contribution 的 `createRouter()`。完整示例见
-[Server Route 最佳实践示例](./server-routes-examples.md)。
-
-## Queue Jobs
-
-Job 放在 `server/jobs/`，在 `server/plugin.ts` 以 package-relative 路径声明：
-
-```ts
-queue: {
-  jobs: ['./server/jobs'];
-}
-```
-
-Job 通过 `this.context` 访问 queue 执行信息，并通过构造依赖使用 App 服务；把可重试业务封装在 Service，Job 只编排触发、重试和结果记录。没有 Job 时不要保留无效目录声明。
-
-## 组合 Server 插件
-
-```ts
-export default defineServerPlugin({
+const plugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-audit-log',
   providers,
   routes,
-  database: { migrations: './database/migrations', seeds: './database/seeds' },
   queue: { jobs: ['./server/jobs'] },
+  database: {
+    migrations: './database/migrations',
+    seeds: './database/seeds',
+  },
 });
+
+export default plugin;
 ```
 
-App 必须在 `server/plugins.ts` 显式注册 definition；不要依赖 `nocobase.plugins` 自动发现。
+只声明真实能力。Routes 和 Provider constructors 是直接 contributions；Jobs、Migrations 和 Seeds 使用 package-relative locations。目标 App 通过 `server/plugins.ts` 显式注册 `exports["./server/plugin"]`。
 
-## 测试和验证
+## 所有权边界
 
-在插件根目录 `tests/` 测试 Provider 注册和生命周期、Route 状态码/响应/权限、Plugin declaration、Job 行为及真实 Migration。运行：
+- Service 不读取 Hono Context、不返回 HTTP status，也不决定 Queue retry；
+- Route 处理 HTTP、输入输出和自己的安全策略，然后调用 Service；
+- Job 校验可序列化 payload、处理重试/幂等边界，并调用可复用领域操作；默认 Job factory 不注入 ServiceContainer；
+- Provider 注册依赖和管理资源生命周期，不承载 Route handler；
+- Token 由能力所有者创建和公开，消费者不得重建同名 Token；
+- Migration 是不可变 schema 历史，Seed 不创建结构。
+
+每个 Server Route 都拥有显式安全策略。登录接口自己安装 authentication/authorization；公开 webhook/callback 记录原因并验证签名、state、时间戳、重放或幂等要求。任何 Route 都不能依赖另一个 contribution 或当前 composition order 获得保护。
+
+## 声明模块保持轻量
+
+`server:inspect` 和 App composition 会 import `server/plugin.ts` 及其 declaration modules。顶层只创建 definitions，不连接数据库、不启动 worker、不执行 Route factory，也不实例化 Provider。真正启动和清理由 Provider lifecycle、Route request 或 Queue runtime 管理。
+
+## 测试和最终装配确认
+
+分别测试 Container/Provider、Route、Job、Migration/Seed 的真实行为。注册变化后运行：
 
 ```bash
-pnpm --filter <plugin-package> lint
-pnpm --filter <plugin-package> typecheck
-pnpm --filter <plugin-package> test
-pnpm --filter <plugin-package> build
+pnpm plugin:inspect <name> --app <app> --json
 pnpm --filter <target-app> server:inspect --json
 ```
 
-`server:inspect` 会导入 App 和插件的 Server plugin 声明模块，因此
-`server/plugin.ts` 及其直接声明依赖的顶层代码不得启动服务、连接数据库或执行任务。
-Inspector 不会构造 Provider、执行 lifecycle、调用 Route factory、连接数据库、启动
-Worker 或加载 Job module。检查 `issues`；输出只表示 declaration composition 和
-resolved contribution locations。Provider constructor name 只是用于定位源码的 best-effort
-调试标签，Route 权限及其他运行时行为仍需行为测试。
+Inspector 只确认最终 Server composition、Route scopes 和配置 locations；它不执行 Provider、Route factory、Job、Migration 或 Seed。继续运行插件和目标 App 的 lint、typecheck、test、build 以及必要的 runtime/full-stack 验证。
 
-## 常见错误与完成条件
+## Agent 自检
 
-避免：在 Route 中复制领域逻辑；重建别的插件的 Token；把 API 路径写成 `/api/api/...`；把 Server routes 写成 loader；只改源码不改 exports 或 composition root。
-
-完成时应能从 `server/plugin.ts` 追踪到所有实际 contributions，测试覆盖行为，目标 App 显式注册正确，且 App-facing 能力变化已更新 `skills/`。
+- 领域、HTTP、异步调度和生命周期职责分离；
+- 所有消费者 import 能力所有者的原始 Token；
+- Route 安全不依赖 composition order；
+- Jobs 使用稳定 identity 和可序列化 payload；
+- Migration/Seed 路径、历史和测试正确；
+- declarations、exports、App registration 和行为测试一致；
+- App-facing 服务、接口、Job 或数据前置条件变化已更新 Plugin Skill。

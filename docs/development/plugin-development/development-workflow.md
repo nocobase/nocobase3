@@ -17,18 +17,20 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 
 ## 2. 把需求映射到能力
 
-| 需求信息                    | 判断           | 主要位置                |
-| --------------------------- | -------------- | ----------------------- |
-| 插件保存自己的持久数据      | Migration      | `database/migrations/`  |
-| App 必须创建业务 collection | App 前置条件   | Plugin Skills           |
-| 多模块调用稳定服务          | ServiceToken   | `server/tokens.ts`      |
-| Browser 调用服务端          | API Route      | `server/routes/`        |
-| 用户需要独立页面            | App Route      | `client/routes.ts`      |
-| 管理员配置插件              | Settings Route | `client/routes.ts`      |
-| 页面共享状态                | Provider       | `client/providers.ts`   |
-| 操作异步执行                | Queue Job      | `server/jobs/`          |
-| App Agent 需要组合插件能力  | Plugin Skills  | `skills/`               |
-| 安装可编辑 UI 源码          | Registry       | `registry/`（范围待定） |
+| 需求信息                    | 判断           | 主要位置               |
+| --------------------------- | -------------- | ---------------------- |
+| 插件保存自己的持久数据      | Migration      | `database/migrations/` |
+| App 必须创建业务 collection | App 前置条件   | Plugin Skills          |
+| 多模块调用稳定服务          | ServiceToken   | `server/tokens.ts`     |
+| Browser 调用服务端          | API Route      | `server/routes/`       |
+| 用户需要独立页面            | App Route      | `client/routes.ts`     |
+| 管理员配置插件              | Settings Route | `client/routes.ts`     |
+| 可复用 UI 构件              | Component      | `client/components/`   |
+| 页面共享状态                | Provider       | `client/providers.ts`  |
+| 命令式 Client 初始化        | Bootstrap      | `client/bootstrap.ts`  |
+| 操作异步执行                | Queue Job      | `server/jobs/`         |
+| App Agent 需要组合插件能力  | Plugin Skills  | `skills/`              |
+| 安装可编辑 Client 源码      | Registry       | `registry/`            |
 
 创建新插件时，把这些判断直接映射为一个或多个 `plugin:create --with <capability>`。
 先运行 `--dry-run --json` 检查文件、依赖和派生的 Client/Server entry。生成器只创建
@@ -52,15 +54,16 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 推荐顺序：
 
 ```text
-数据模型和 Migration
-→ Service / Token / Provider
-→ API 或 Queue 边界
-→ Client bootstrap / routes / providers
+数据模型和 Migration / Seed
+→ Service contract / Token / implementation / Provider
+→ API Route / Root Route / Queue Job
+→ Client components / routes / providers / bootstrap
+→ Registry（只有 App 需要拥有可编辑源码时）
 → App-facing Plugin Skills
 → App 注册和集成
 ```
 
-这样每一层都能依赖已经定义的稳定契约。Service 保持领域逻辑，Route 只处理 HTTP 边界，Job 只编排异步执行；Settings 页面不能代替服务端授权。
+这样每一层都能依赖已经定义的稳定契约。Service 保持领域逻辑，Route 只处理 HTTP 边界，Job 只编排异步执行；默认 Job factory 不注入 ServiceContainer，需要共享领域能力时使用明确依赖或插件拥有的 adapter。Settings 页面不能代替服务端授权。
 
 ## 5. 同步更新声明和包契约
 
@@ -72,7 +75,7 @@ Skill 面向使用插件的 App Agent，描述真实公共能力、前置数据�
 
 ## 7. 测试和分层验证
 
-在插件根目录 `tests/` 添加行为级测试：Service/Provider、Routes、Client contributions、Migration/Seed、Queue Job 和 Skill 机械检查。四类 Route 的选择、前后端边界和验证见[Route 插件开发](./routes.md)。随后运行插件的 lint、typecheck、test、build；根据插件能力运行目标 App 的 `client:inspect --json` 和 `server:inspect --json`，再运行 App 的 typecheck、test、build，并按风险启动 App 验证真实闭环。Inspector 只报告 declaration 和 composition；Route 权限与其他运行时行为仍必须用行为测试验证。
+在插件根目录 `tests/` 添加行为级测试：Service/Provider、Routes、Jobs、Client modules、Migration/Seed、Registry 和 Skill 机械检查。随后运行插件的 lint、typecheck、test、build，再运行目标 App 的 typecheck、test、build，并按风险启动 App 验证真实闭环。只有注册或 composition 变化时才运行对应 Inspector；它只提供最终装配确认，不替代任何模块行为测试。
 
 验证顺序用于定位失败层级：
 
@@ -98,8 +101,9 @@ unit behavior
 ## 相关专题
 
 - [创建并接入插件](./quick-start.md)
-- [Server 插件开发](./server.md)
-- [Client 插件开发](./client.md)
-- [数据库迁移和初始数据](./database.md)
+- [Database 模块选择](./database.md)
+- [Server 模块选择](./server.md)
+- [Client 模块选择](./client.md)
+- [Plugin Registry](./registry.md)
 - [描述插件提供给 App 的能力](./skills.md)
 - [测试和验证插件](./testing.md)

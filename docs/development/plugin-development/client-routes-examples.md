@@ -14,7 +14,7 @@ NocoBase v3 插件只通过一个 `client/routes.ts` entry 提供 Client Routes�
 - Client `auth` 和 `access` 保护导航与页面加载，不能替代 Server 安全边界。
 
 完整的四类 Route 选择见[Route 插件开发](./routes.md)。Client bootstrap、Provider、
-options 和 wiring 见[Client 插件开发](./client.md)。
+options 和 wiring 见[Client 模块选择](./client.md)。
 
 ## 先选择 App Route 还是 Settings Route
 

@@ -28,23 +28,32 @@ Always read the repository `AGENTS.md` first, then read
 `docs/development/plugin-development.md`. Read only the relevant topic page
 for the current task:
 
-| Task                                     | Read                                       |
-| ---------------------------------------- | ------------------------------------------ |
-| Create and register a plugin             | `quick-start.md`, `plugin-registration.md` |
-| Implement a complete business plugin     | `development-workflow.md`                  |
-| Choose an App or cross-plugin entry      | `public-contracts.md`                      |
-| Client UI, routes, providers, options    | `client.md`                                |
-| Server services, routes, providers, jobs | `server.md`                                |
-| Migrations and seeds                     | `database.md`                              |
-| Write Plugin Skills for an App Agent     | `skills.md`                                |
-| Test, build, and verify                  | `testing.md`                               |
+| Task                                 | Read                                       |
+| ------------------------------------ | ------------------------------------------ |
+| Create and register a plugin         | `quick-start.md`, `plugin-registration.md` |
+| Implement a complete business plugin | `development-workflow.md`                  |
+| Choose an App or cross-plugin entry  | `public-contracts.md`                      |
+| Choose a Client module               | `client.md`                                |
+| Build public or internal Client UI   | `client-components.md`                     |
+| Share React Context                  | `client-providers.md`                      |
+| Add imperative Client initialization | `client-bootstrap.md`                      |
+| Choose a Server module               | `server.md`                                |
+| Build a Service/Token/Provider       | `server-services-and-providers.md`         |
+| Add asynchronous work                | `server-jobs.md`                           |
+| Choose a database operation          | `database.md`                              |
+| Change schema                        | `database-migrations.md`                   |
+| Add required initial records         | `database-seeds.md`                        |
+| Deliver App-owned editable source    | `registry.md`                              |
+| Write Plugin Skills for an App Agent | `skills.md`                                |
+| Test, build, and verify              | `testing.md`                               |
 
 For every HTTP or browser Route task, read `routes.md` first. It covers all four
 Route APIs as one cross-runtime topic. For `defineRootRoutes()` or
 `defineApiRoutes()`, also read `server-routes-examples.md`. For
 `defineAppRoutes()` or `defineSettingsRoutes()`, also read
-`client-routes-examples.md`. Read `client.md` or `server.md` only when the task
-also changes bootstrap, Providers, options, Services, Jobs, or composition.
+`client-routes-examples.md`. Read `client.md` or `server.md` to choose an
+adjacent module, then read only that module's page rather than loading every
+Client or Server guide.
 Inspect only the matching files in `packages/app-plugin-routes-example` when a
 runnable reference is needed.
 
@@ -69,12 +78,18 @@ runnable reference is needed.
   library preset. Do not copy a complete config from another package.
 - Client entries are only `bootstrap`, `routes`, and `providers`; all are
   optional and lazy-loaded.
+- Client Components are source or public exports, not a fourth runtime
+  contribution. Use Routes for pages, Providers for shared React Context, and
+  Bootstrap only for imperative Client initialization.
 - Settings pages are routes declared with `defineSettingsRoutes()`; there is no
   fourth `settings` loader or `client/settings.ts` runtime contract.
 - Keep Client page components behind lazy `componentLoader()` functions. Use a
   Route component override to replace a plugin page; do not redeclare its Route.
 - Server Routes are direct contributions passed to `defineServerPlugin()`; do
   not write a Server route loader.
+- Define a Service contract and owner-created Token before a public or shared
+  implementation. Consumers import the original Token; Providers register and
+  manage lifecycle, Routes own HTTP, and Jobs own asynchronous orchestration.
 - Write a small Server Route directly in its contribution factory. Extract a
   `createXxxRoutes(options): Hono` only for a coherent, complex child router;
   do not export a `registerXxxRoutes(router, ...)` helper merely for testing.
@@ -116,6 +131,11 @@ runnable reference is needed.
 - Tests belong under the plugin-root `tests/` directory.
 - Migrations are immutable historical records: make them explicit,
   deterministic, self-contained, and never import live runtime schemas.
+- Seeds insert required initial records into schema established by Migrations;
+  they are not schema operations, user data, demo records, or test fixtures.
+- Registry items materialize Client source into an App. The plugin owns the
+  canonical recipe; the App owns the installed copy and merges upgrades. A
+  Registry item is not a runtime contribution and does not enable the plugin.
 - Follow repository and package `AGENTS.md` rules, including shared dev config,
   dependency protocols, and validation requirements.
 
@@ -134,14 +154,15 @@ runnable reference is needed.
    Plugin Skills.
 5. Keep declarations, source/publish exports, dependencies, `files`, tests,
    README, and Skills consistent when a contribution changes.
-6. Preview registration with `--dry-run --json`, apply it, then run the
-   read-only `plugin:inspect <name> --json`. The plugin's
+6. Preview registration with `--dry-run --json`, apply it, then use the
+   read-only `plugin:inspect <name> --json` only to confirm registration and
+   composition. The plugin's
    `<plugin>/skills/` is the source of truth; do not edit the App's synchronized
    `.agents/skills/` copy.
-7. Run the plugin's lint, typecheck, test, and build. Run target-App
-   `client:inspect --json` when Client contributions are involved and
-   `server:inspect --json` when Server contributions are involved, then the
-   relevant App typecheck, test, build, and runtime checks.
+7. Run the plugin's lint, typecheck, test, and build. After composition changes,
+   use the matching Client or Server Inspector as a final assembly check, then
+   run the relevant App typecheck, test, build, and runtime checks. Inspectors
+   do not explain implementation or replace module behavior tests.
 
 Do not run scaffold, registration, enablement, migration, or other stateful
 commands merely because this Skill applies. Perform those actions only when
