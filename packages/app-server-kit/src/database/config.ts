@@ -15,44 +15,46 @@ import type { AppDatabaseConfig } from './types.js';
 export const databaseConfig: AppConfigDefinition<
   AppDatabaseConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<AppDatabaseConfig>()({
+> = defineAppConfig({
   namespace: 'database',
   schema: Type.Object({
     default: Type.Optional(Type.String()),
-    connections: Type.Record(
-      Type.String(),
-      Type.Object(
-        {
-          dialect: Type.Union([
-            Type.Literal('sqlite'),
-            Type.Literal('postgres'),
-            Type.Literal('mysql'),
-          ]),
-          filename: Type.Optional(Type.String()),
-          host: Type.Optional(Type.String()),
-          port: Type.Optional(Type.Number()),
-          socketPath: Type.Optional(Type.String()),
-          database: Type.Optional(Type.String()),
-          username: Type.Optional(Type.String()),
-          password: Type.Optional(Type.String()),
-          charset: Type.Optional(Type.String()),
-          timezone: Type.Optional(Type.String()),
-          schema: Type.Optional(
-            Type.Union([Type.String(), Type.Array(Type.String())]),
-          ),
-          ssl: Type.Optional(
-            Type.Union([
-              Type.Boolean(),
-              Type.Record(Type.String(), Type.Unknown()),
+    connections: Type.Unsafe<AppDatabaseConfig['connections']>(
+      Type.Record(
+        Type.String(),
+        Type.Object(
+          {
+            dialect: Type.Union([
+              Type.Literal('sqlite'),
+              Type.Literal('postgres'),
+              Type.Literal('mysql'),
             ]),
-          ),
-          managed: Type.Optional(Type.Boolean()),
-          debug: Type.Optional(Type.Boolean()),
-          driverOptions: Type.Optional(
-            Type.Record(Type.String(), Type.Unknown()),
-          ),
-        },
-        { additionalProperties: true },
+            filename: Type.Optional(Type.String()),
+            host: Type.Optional(Type.String()),
+            port: Type.Optional(Type.Number()),
+            socketPath: Type.Optional(Type.String()),
+            database: Type.Optional(Type.String()),
+            username: Type.Optional(Type.String()),
+            password: Type.Optional(Type.String()),
+            charset: Type.Optional(Type.String()),
+            timezone: Type.Optional(Type.String()),
+            schema: Type.Optional(
+              Type.Union([Type.String(), Type.Array(Type.String())]),
+            ),
+            ssl: Type.Optional(
+              Type.Union([
+                Type.Boolean(),
+                Type.Record(Type.String(), Type.Unknown()),
+              ]),
+            ),
+            managed: Type.Optional(Type.Boolean()),
+            debug: Type.Optional(Type.Boolean()),
+            driverOptions: Type.Optional(
+              Type.Record(Type.String(), Type.Unknown()),
+            ),
+          },
+          { additionalProperties: true },
+        ),
       ),
     ),
     migrations: Type.Object(

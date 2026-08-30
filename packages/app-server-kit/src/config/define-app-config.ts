@@ -4,8 +4,9 @@ import { envString } from '@nocobase/config/providers/env';
 import type {
   AppConfigDefinition,
   AppConfigDefinitionOptions,
+  AppConfigVariantDefinition,
+  AppConfigVariantDefinitionOptions,
   AppConfigSchemaValue,
-  DefineTypedAppConfig,
 } from './app-config-types.js';
 import type { ResolvedAppRuntimeConfigContext } from '../runtime/definition.js';
 import {
@@ -17,21 +18,23 @@ import {
 export function defineAppConfig<
   TSchemaType extends TSchema,
   TContext = unknown,
-  TValue = AppConfigSchemaValue<TSchemaType>,
 >(
   definition: AppConfigDefinitionOptions<TSchemaType, TContext>,
-): AppConfigDefinition<TValue, TContext, TSchemaType>;
-export function defineAppConfig<TValue>(): DefineTypedAppConfig<TValue>;
-export function defineAppConfig(
-  definition?: AppConfigDefinitionOptions<TSchema, unknown>,
-):
-  | AppConfigDefinition<unknown, unknown, TSchema>
-  | DefineTypedAppConfig<unknown> {
-  if (definition) return Object.freeze({ ...definition });
-  return <TSchemaType extends TSchema, TContext>(
-    typedDefinition: AppConfigDefinitionOptions<TSchemaType, TContext>,
-  ): AppConfigDefinition<unknown, TContext, TSchemaType> =>
-    Object.freeze({ ...typedDefinition });
+): AppConfigDefinition<
+  AppConfigSchemaValue<TSchemaType>,
+  TContext,
+  TSchemaType
+> {
+  return Object.freeze({ kind: 'config', ...definition });
+}
+
+export function defineAppConfigVariant<
+  TSchemaType extends TSchema,
+  TValue = AppConfigSchemaValue<TSchemaType>,
+>(
+  definition: AppConfigVariantDefinitionOptions<TSchemaType>,
+): AppConfigVariantDefinition<TValue, TSchemaType> {
+  return Object.freeze({ kind: 'variant', ...definition });
 }
 
 export interface AppIdentityConfig {
@@ -45,7 +48,7 @@ export interface AppIdentityConfig {
 export const appConfig: AppConfigDefinition<
   AppIdentityConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<AppIdentityConfig>()({
+> = defineAppConfig({
   namespace: 'app',
   schema: Type.Object(
     {

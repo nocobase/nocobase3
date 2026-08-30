@@ -256,9 +256,80 @@ export default defineServerPlugin({
 });
 ```
 
-runtime 收集已注册插件的 definitions，放入 `context.configs`。应用不需要在 `server/config/index.ts` 中硬编码每个插件。
+runtime 收集已注册插件的配置贡献，放入 `context.configs`。应用不需要在 `server/config/index.ts` 中硬编码每个插件。
 
-插件只定义自己的 namespace。不要让一个插件修改另一个插件的 defaults 或 schema；应用级覆盖应放在配置 provider 中。
+通常插件定义自己的 namespace。应用级配置值覆盖应放在配置 provider 中，不应通过插件修改其他 definition 的 defaults。
+
+### 为动态配置集合贡献 Variant
+
+当一个模块允许插件扩展动态实现时，基础 definition 只声明公共结构。例如 caching 的每个 provider 都有 `driver`，但 Redis 参数不属于 caching 核心包：
+
+```ts
+export const cachingConfig = defineAppConfig({
+  namespace: 'caching',
+  schema: Type.Object({
+    default: Type.String(),
+    providers: Type.Record(
+      Type.String(),
+      Type.Object({ driver: Type.String() }, { additionalProperties: true }),
+    ),
+  }),
+});
+```
+
+Redis 插件使用 `defineAppConfigVariant()` 为集合中的 Redis 条目贡献详细 schema：
+
+```ts
+export const redisCachingConfig = defineAppConfigVariant({
+  target: 'caching.providers',
+  discriminator: 'driver',
+  value: 'redis',
+  schema: Type.Object(
+    {
+      driver: Type.Literal('redis'),
+      url: Type.String({ format: 'uri' }),
+      database: Type.Optional(Type.Integer({ minimum: 0 })),
+    },
+    { additionalProperties: false },
+  ),
+});
+
+export default defineServerPlugin({
+  packageName: '@nocobase/app-plugin-caching-redis',
+  config: redisCachingConfig,
+  providers: [RedisCachingProvider],
+});
+```
+
+Variant 是纯配置贡献，不修改 `cachingConfig`，也不创建运行时实现：
+
+- `target` 是动态集合的完整配置路径，第一段必须是已注册的 namespace；
+- `discriminator` 指定用于选择 variant 的字段；
+- `value` 是当前 variant 匹配的字段值；
+- `schema` 校验匹配到的完整集合条目。
+
+例如下面的 `primary` 会由 Redis variant 校验：
+
+```yaml
+caching:
+  default: primary
+  providers:
+    primary:
+      driver: redis
+      url: redis://localhost:6379
+      database: 0
+```
+
+普通 definition 先校验公共结构，随后 `AppConfig` 遍历 `caching.providers`，根据 `driver` 选择 variant。没有注册对应 variant、同一 variant 重复注册或详细 schema 校验失败都会阻止配置提交。reload 时只要 target namespace 变化，也会重新执行相应 variant 校验。
+
+Variant 不代表独立配置值，因此不支持 `app.config.get(redisCachingConfig)`。可以读取完整模块配置或直接按路径读取：
+
+```ts
+const caching = app.config.get(cachingConfig);
+const primary = app.config.get('caching.providers.primary');
+```
+
+插件的 Service Provider 仍按正常生命周期找到 caching service 并注册 Redis 运行时实现；这条运行时链路与 variant 的配置校验链路相互独立。
 
 ## 读取配置
 

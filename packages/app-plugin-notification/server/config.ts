@@ -7,7 +7,7 @@ import { Type } from '@sinclair/typebox';
 import type { NotificationConfig } from './types.js';
 
 export const notificationConfig: AppConfigDefinition<NotificationConfig> =
-  defineAppConfig<NotificationConfig>()({
+  defineAppConfig({
     namespace: 'notification',
     schema: Type.Object({
       channels: Type.Array(

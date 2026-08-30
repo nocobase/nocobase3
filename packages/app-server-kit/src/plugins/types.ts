@@ -5,7 +5,7 @@ import type {
 import type { Hono } from 'hono';
 import type {
   AppConfigAccessor,
-  AppConfigDefinition,
+  AppConfigContribution,
 } from '../config/index.js';
 import type { LocalesModule } from '@nocobase/app-i18n';
 
@@ -40,8 +40,7 @@ export type AppServerPluginLocalesLoader = () => Promise<LocalesModule>;
 export interface AppServerPluginDefinition<TConfig = object> {
   readonly packageName: string;
   readonly config?:
-    | AppConfigDefinition<unknown, never>
-    | readonly AppConfigDefinition<unknown, never>[];
+    AppConfigContribution<never> | readonly AppConfigContribution<never>[];
   readonly providers?: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
@@ -51,7 +50,7 @@ export interface AppServerPluginDefinition<TConfig = object> {
 
 export interface AppServerPlugin<TConfig = object> {
   readonly packageName: string;
-  readonly config: readonly AppConfigDefinition<unknown, never>[];
+  readonly config: readonly AppConfigContribution<never>[];
   readonly providers: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;

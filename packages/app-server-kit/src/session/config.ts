@@ -13,7 +13,7 @@ import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 export const sessionConfig: AppConfigDefinition<
   AppSessionConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<AppSessionConfig>()({
+> = defineAppConfig({
   namespace: 'session',
   schema: Type.Object({
     enabled: Type.Optional(Type.Boolean()),
@@ -44,23 +44,25 @@ export const sessionConfig: AppConfigDefinition<
     gcLottery: Type.Optional(
       Type.Tuple([Type.Number({ minimum: 0 }), Type.Number({ minimum: 1 })]),
     ),
-    stores: Type.Record(
-      Type.String(),
-      Type.Object(
-        {
-          driver: Type.String(),
-          base: Type.Optional(Type.String()),
-          url: Type.Optional(Type.String()),
-          host: Type.Optional(Type.String()),
-          port: Type.Optional(Type.Number()),
-          username: Type.Optional(Type.String()),
-          password: Type.Optional(Type.String()),
-          db: Type.Optional(Type.Number()),
-          keyPrefix: Type.Optional(Type.String()),
-          ttl: Type.Optional(Type.Number()),
-          tls: Type.Optional(Type.Boolean()),
-        },
-        { additionalProperties: true },
+    stores: Type.Unsafe<AppSessionConfig['stores']>(
+      Type.Record(
+        Type.String(),
+        Type.Object(
+          {
+            driver: Type.String(),
+            base: Type.Optional(Type.String()),
+            url: Type.Optional(Type.String()),
+            host: Type.Optional(Type.String()),
+            port: Type.Optional(Type.Number()),
+            username: Type.Optional(Type.String()),
+            password: Type.Optional(Type.String()),
+            db: Type.Optional(Type.Number()),
+            keyPrefix: Type.Optional(Type.String()),
+            ttl: Type.Optional(Type.Number()),
+            tls: Type.Optional(Type.Boolean()),
+          },
+          { additionalProperties: true },
+        ),
       ),
     ),
   }),

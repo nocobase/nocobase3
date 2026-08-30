@@ -1,4 +1,4 @@
-import { AppConfig, type AppConfigDefinition } from '../config/index.js';
+import { AppConfig, type AppConfigContribution } from '../config/index.js';
 
 import type {
   Application,
@@ -40,10 +40,7 @@ export interface ResolvedAppRuntimeConfigContext extends AppRuntimeConfigContext
   readonly plugins: ResolvedAppServerPlugins;
   readonly appPackageName: string;
   readonly configPath: string | undefined;
-  readonly configs: readonly AppConfigDefinition<
-    unknown,
-    ResolvedAppRuntimeConfigContext
-  >[];
+  readonly configs: readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[];
 }
 
 export interface AppRuntimeDefinition {
@@ -106,10 +103,7 @@ function createAppRuntimeConfigContext(
   );
   const configs = plugins.plugins.flatMap(
     (plugin) => plugin.definition.config,
-  ) as unknown as readonly AppConfigDefinition<
-    unknown,
-    ResolvedAppRuntimeConfigContext
-  >[];
+  ) as unknown as readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[];
 
   return {
     ...createConfigContext({ env: runtime.env, paths: configPaths }),

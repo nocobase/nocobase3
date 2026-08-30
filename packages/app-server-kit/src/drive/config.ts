@@ -8,38 +8,40 @@ import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 export const driveConfig: AppConfigDefinition<
   AppDriveConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<AppDriveConfig>()({
+> = defineAppConfig({
   namespace: 'drive',
   schema: Type.Object({
     default: Type.String(),
-    disks: Type.Record(
-      Type.String(),
-      Type.Object(
-        {
-          driver: Type.String(),
-          location: Type.Optional(Type.String()),
-          visibility: Type.Optional(
-            Type.Union([Type.Literal('public'), Type.Literal('private')]),
-          ),
-          url: Type.Optional(Type.String()),
-          bucket: Type.Optional(Type.String()),
-          region: Type.Optional(Type.String()),
-          endpoint: Type.Optional(Type.String()),
-          cdnUrl: Type.Optional(Type.String()),
-          forcePathStyle: Type.Optional(Type.Boolean()),
-          supportsACL: Type.Optional(Type.Boolean()),
-          encryption: Type.Optional(Type.String()),
-          credentials: Type.Optional(
-            Type.Object(
-              {
-                accessKeyId: Type.Optional(Type.String()),
-                secretAccessKey: Type.Optional(Type.String()),
-              },
-              { additionalProperties: false },
+    disks: Type.Unsafe<AppDriveConfig['disks']>(
+      Type.Record(
+        Type.String(),
+        Type.Object(
+          {
+            driver: Type.String(),
+            location: Type.Optional(Type.String()),
+            visibility: Type.Optional(
+              Type.Union([Type.Literal('public'), Type.Literal('private')]),
             ),
-          ),
-        },
-        { additionalProperties: true },
+            url: Type.Optional(Type.String()),
+            bucket: Type.Optional(Type.String()),
+            region: Type.Optional(Type.String()),
+            endpoint: Type.Optional(Type.String()),
+            cdnUrl: Type.Optional(Type.String()),
+            forcePathStyle: Type.Optional(Type.Boolean()),
+            supportsACL: Type.Optional(Type.Boolean()),
+            encryption: Type.Optional(Type.String()),
+            credentials: Type.Optional(
+              Type.Object(
+                {
+                  accessKeyId: Type.Optional(Type.String()),
+                  secretAccessKey: Type.Optional(Type.String()),
+                },
+                { additionalProperties: false },
+              ),
+            ),
+          },
+          { additionalProperties: true },
+        ),
       ),
     ),
     links: Type.Record(Type.String(), Type.String()),

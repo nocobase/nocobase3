@@ -9,6 +9,7 @@ export {
 export {
   appConfig,
   defineAppConfig,
+  defineAppConfigVariant,
   type AppIdentityConfig,
 } from './define-app-config.js';
 export type * from './app-config-types.js';

@@ -6,13 +6,18 @@ import {
   envString,
 } from '@nocobase/config/providers/env';
 
-import { defineAppConfig, type AppConfigDefinition } from '../config/index.js';
+import {
+  defineAppConfig,
+  defineAppConfigVariant,
+  type AppConfigDefinition,
+  type AppConfigVariantDefinition,
+} from '../config/index.js';
 import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 
 export const cachingConfig: AppConfigDefinition<
   CachingConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<CachingConfig>()({
+> = defineAppConfig({
   namespace: 'caching',
   schema: Type.Object({
     default: Type.String(),
@@ -21,17 +26,6 @@ export const cachingConfig: AppConfigDefinition<
       Type.Object(
         {
           driver: Type.String(),
-          maxSize: Type.Optional(Type.Number({ minimum: 1 })),
-          defaultTtl: Type.Optional(
-            Type.Union([Type.Number({ minimum: 0 }), Type.String()]),
-          ),
-          maxTtl: Type.Optional(
-            Type.Union([Type.Number({ minimum: 0 }), Type.String()]),
-          ),
-          checkInterval: Type.Optional(
-            Type.Union([Type.Number({ minimum: 0 }), Type.String()]),
-          ),
-          useClone: Type.Optional(Type.Boolean()),
         },
         { additionalProperties: true },
       ),
@@ -57,3 +51,27 @@ export const cachingConfig: AppConfigDefinition<
     CACHING_MEMORY_USE_CLONE: envBoolean('providers.memory.useClone'),
   },
 });
+
+export const memoryCachingConfigVariant: AppConfigVariantDefinition =
+  defineAppConfigVariant({
+    target: 'caching.providers',
+    discriminator: 'driver',
+    value: 'memory',
+    schema: Type.Object(
+      {
+        driver: Type.Literal('memory'),
+        maxSize: Type.Optional(Type.Number({ minimum: 1 })),
+        defaultTtl: Type.Optional(
+          Type.Union([Type.Number({ minimum: 0 }), Type.String()]),
+        ),
+        maxTtl: Type.Optional(
+          Type.Union([Type.Number({ minimum: 0 }), Type.String()]),
+        ),
+        checkInterval: Type.Optional(
+          Type.Union([Type.Number({ minimum: 0 }), Type.String()]),
+        ),
+        useClone: Type.Optional(Type.Boolean()),
+      },
+      { additionalProperties: false },
+    ),
+  });

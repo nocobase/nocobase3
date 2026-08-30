@@ -11,7 +11,7 @@ import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 export const snowflakeConfig: AppConfigDefinition<
   SnowflakeIdGeneratorConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<SnowflakeIdGeneratorConfig>()({
+> = defineAppConfig({
   namespace: 'snowflake',
   schema: Type.Object({
     workerId: Type.Number({ minimum: 0 }),

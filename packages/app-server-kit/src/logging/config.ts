@@ -31,38 +31,40 @@ export interface AppLoggingConfig extends LoggingConfig {
 }
 
 export const loggingConfig: AppConfigDefinition<AppLoggingConfig> =
-  defineAppConfig<AppLoggingConfig>()({
+  defineAppConfig({
     namespace: 'logging',
-    schema: Type.Object(
-      {
-        default: Type.Optional(Type.String()),
-        name: Type.Optional(Type.String()),
-        level: Type.Optional(
-          Type.Union([
-            Type.Literal('fatal'),
-            Type.Literal('error'),
-            Type.Literal('warn'),
-            Type.Literal('info'),
-            Type.Literal('debug'),
-            Type.Literal('trace'),
-            Type.Literal('silent'),
-          ]),
-        ),
-        redact: Type.Optional(
-          Type.Union([Type.Literal(false), Type.Array(Type.String())]),
-        ),
-        base: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-        transport: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-        loggers: Type.Optional(
-          Type.Record(
-            Type.String(),
-            Type.Record(Type.String(), Type.Unknown()),
+    schema: Type.Unsafe<AppLoggingConfig>(
+      Type.Object(
+        {
+          default: Type.Optional(Type.String()),
+          name: Type.Optional(Type.String()),
+          level: Type.Optional(
+            Type.Union([
+              Type.Literal('fatal'),
+              Type.Literal('error'),
+              Type.Literal('warn'),
+              Type.Literal('info'),
+              Type.Literal('debug'),
+              Type.Literal('trace'),
+              Type.Literal('silent'),
+            ]),
           ),
-        ),
-        pretty: Type.Optional(Type.Boolean()),
-        nodeEnv: Type.Optional(Type.String()),
-      },
-      { additionalProperties: true },
+          redact: Type.Optional(
+            Type.Union([Type.Literal(false), Type.Array(Type.String())]),
+          ),
+          base: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+          transport: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+          loggers: Type.Optional(
+            Type.Record(
+              Type.String(),
+              Type.Record(Type.String(), Type.Unknown()),
+            ),
+          ),
+          pretty: Type.Optional(Type.Boolean()),
+          nodeEnv: Type.Optional(Type.String()),
+        },
+        { additionalProperties: true },
+      ),
     ),
     defaults: {
       default: 'system',

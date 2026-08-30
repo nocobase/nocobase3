@@ -20,7 +20,7 @@ export interface NodeServerConfig {
 export const nodeServerConfig: AppConfigDefinition<
   NodeServerConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<NodeServerConfig>()({
+> = defineAppConfig({
   namespace: 'server',
   schema: Type.Object(
     {

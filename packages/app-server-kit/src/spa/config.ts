@@ -24,7 +24,7 @@ export interface SpaConfig {
 export const spaConfig: AppConfigDefinition<
   SpaConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<SpaConfig>()({
+> = defineAppConfig({
   namespace: 'spa',
   schema: Type.Object({
     indexPath: Type.String(),

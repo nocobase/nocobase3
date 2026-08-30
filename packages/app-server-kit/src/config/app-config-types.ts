@@ -24,10 +24,13 @@ export interface AppConfigDefinitionOptions<
   readonly envMappings?: Readonly<Record<string, EnvironmentMapping>>;
 }
 
-export interface DefineTypedAppConfig<TValue> {
-  <TSchemaType extends TSchema, TContext = unknown>(
-    definition: AppConfigDefinitionOptions<TSchemaType, TContext>,
-  ): AppConfigDefinition<TValue, TContext, TSchemaType>;
+export interface AppConfigVariantDefinitionOptions<
+  TSchemaType extends TSchema,
+> {
+  readonly target: string;
+  readonly discriminator: string;
+  readonly value: string;
+  readonly schema: TSchemaType;
 }
 
 export interface AppConfigDefinition<
@@ -35,6 +38,7 @@ export interface AppConfigDefinition<
   TContext = unknown,
   TSchemaType extends TSchema = TSchema,
 > {
+  readonly kind: 'config';
   readonly namespace: string;
   readonly schema: TSchemaType;
   readonly defaults?: object | AppConfigLayerFactory<TContext>;
@@ -42,6 +46,22 @@ export interface AppConfigDefinition<
   readonly __value?: TValue;
   readonly __input?: Static<TSchemaType>;
 }
+
+export interface AppConfigVariantDefinition<
+  TValue = unknown,
+  TSchemaType extends TSchema = TSchema,
+> {
+  readonly kind: 'variant';
+  readonly target: string;
+  readonly discriminator: string;
+  readonly value: string;
+  readonly schema: TSchemaType;
+  readonly __value?: TValue;
+  readonly __input?: Static<TSchemaType>;
+}
+
+export type AppConfigContribution<TContext = unknown> =
+  AppConfigDefinition<unknown, TContext> | AppConfigVariantDefinition;
 
 export type AppConfigSchemaValue<TSchemaType extends TSchema> =
   Static<TSchemaType>;

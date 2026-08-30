@@ -6,12 +6,14 @@ import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 
 import type {
   AppConfigChangeListener,
+  AppConfigContribution,
   AppConfigDefinition,
   AppConfigLayerFactory,
   AppConfigReloadResult,
   AppConfigSource,
   AppConfigToken,
   AppConfigOptions,
+  AppConfigVariantDefinition,
 } from './app-config-types.js';
 
 interface ConfigState<TContext> {
@@ -19,8 +21,21 @@ interface ConfigState<TContext> {
   readonly validate: ValidateFunction;
 }
 
+interface VariantState {
+  readonly definition: AppConfigVariantDefinition;
+  readonly validate: ValidateFunction;
+}
+
+interface VariantGroup {
+  readonly target: string;
+  readonly namespace: string;
+  readonly discriminator: string;
+  readonly variants: Map<string, VariantState>;
+}
+
 export class AppConfig<TContext = unknown> {
   private readonly configs: ConfigState<TContext>[] = [];
+  private readonly variantGroups: VariantGroup[] = [];
   private readonly sources: AppConfigSource[] = [];
   private readonly ajv: Ajv;
   private readonly context: TContext | undefined;
@@ -36,7 +51,7 @@ export class AppConfig<TContext = unknown> {
   private reloadPromise: Promise<AppConfigReloadResult> | undefined;
 
   public constructor(
-    configs: readonly AppConfigDefinition<unknown, TContext>[] = [],
+    contributions: readonly AppConfigContribution<TContext>[] = [],
     options: AppConfigOptions<TContext> = {},
   ) {
     this.context = options.context;
@@ -55,7 +70,9 @@ export class AppConfig<TContext = unknown> {
       strictSchema: false,
       useDefaults: false,
     });
-    for (const config of configs) {
+    for (const contribution of contributions) {
+      if (contribution.kind === 'variant') continue;
+      const config = contribution;
       if (
         this.configs.some(
           ({ config: current }) => current.namespace === config.namespace,
@@ -66,6 +83,10 @@ export class AppConfig<TContext = unknown> {
         );
       }
       this.configs.push({ config, validate: this.ajv.compile(config.schema) });
+    }
+    for (const contribution of contributions) {
+      if (contribution.kind === 'config') continue;
+      this.registerVariant(contribution);
     }
     this.environmentProvider = this.createEnvironmentProvider();
   }
@@ -217,6 +238,74 @@ export class AppConfig<TContext = unknown> {
         throw validationError(definition.namespace, validate.errors ?? []);
       }
     }
+    for (const group of this.variantGroups) {
+      if (namespaces && !namespaces.has(group.namespace)) continue;
+      this.validateVariantGroup(config, group);
+    }
+  }
+
+  private registerVariant(definition: AppConfigVariantDefinition): void {
+    const { target, namespace } = parseVariantTarget(definition.target);
+    if (!this.configs.some(({ config }) => config.namespace === namespace)) {
+      throw new Error(
+        `Application config variant target namespace "${namespace}" is not registered.`,
+      );
+    }
+    const discriminator = normalizeVariantDiscriminator(
+      definition.discriminator,
+    );
+    let group = this.variantGroups.find((current) => current.target === target);
+    if (group && group.discriminator !== discriminator) {
+      throw new Error(
+        `Application config variants for "${target}" must use discriminator "${group.discriminator}".`,
+      );
+    }
+    if (!group) {
+      group = { target, namespace, discriminator, variants: new Map() };
+      this.variantGroups.push(group);
+    }
+    if (group.variants.has(definition.value)) {
+      throw new Error(
+        `Application config variant "${target}" ${discriminator} "${definition.value}" is registered more than once.`,
+      );
+    }
+    group.variants.set(definition.value, {
+      definition,
+      validate: this.ajv.compile(definition.schema),
+    });
+  }
+
+  private validateVariantGroup(config: Config, group: VariantGroup): void {
+    const entries = config.get(group.target);
+    if (entries === undefined) return;
+    if (!isRecord(entries)) {
+      throw new Error(
+        `Invalid application config: ${group.target}: must be an object`,
+      );
+    }
+    for (const [name, value] of Object.entries(entries)) {
+      const entryPath = `${group.target}.${name}`;
+      if (!isRecord(value)) {
+        throw new Error(
+          `Invalid application config: ${entryPath}: must be an object`,
+        );
+      }
+      const discriminatorValue = value[group.discriminator];
+      if (typeof discriminatorValue !== 'string') {
+        throw new Error(
+          `Invalid application config: ${entryPath}.${group.discriminator}: must be a string`,
+        );
+      }
+      const variant = group.variants.get(discriminatorValue);
+      if (!variant) {
+        throw new Error(
+          `Invalid application config: ${entryPath}.${group.discriminator}: no variant is registered for "${discriminatorValue}"`,
+        );
+      }
+      if (!variant.validate(value)) {
+        throw validationError(entryPath, variant.validate.errors ?? []);
+      }
+    }
   }
 
   private requireCurrent(): Config {
@@ -225,6 +314,43 @@ export class AppConfig<TContext = unknown> {
     }
     return this.current;
   }
+}
+
+function parseVariantTarget(target: string): {
+  target: string;
+  namespace: string;
+} {
+  const normalized = target.trim();
+  const segments = normalized.split('.');
+  if (
+    segments.length < 2 ||
+    segments.some(
+      (segment) => segment.length === 0 || segment !== segment.trim(),
+    )
+  ) {
+    throw new Error(
+      'Application config variant target must be a full config path such as "caching.providers".',
+    );
+  }
+  const [namespace] = segments;
+  return {
+    target: normalized,
+    namespace,
+  };
+}
+
+function normalizeVariantDiscriminator(discriminator: string): string {
+  const normalized = discriminator.trim();
+  if (!normalized || normalized.includes('.')) {
+    throw new Error(
+      'Application config variant discriminator must be a property name.',
+    );
+  }
+  return normalized;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isUri(value: string): boolean {

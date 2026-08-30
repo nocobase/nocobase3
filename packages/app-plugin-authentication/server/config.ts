@@ -20,7 +20,7 @@ export type AuthenticationConfig = Omit<
 export const authenticationConfig: AppConfigDefinition<
   AuthenticationConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<AuthenticationConfig>()({
+> = defineAppConfig({
   namespace: 'auth',
   schema: Type.Object(
     {

@@ -5,7 +5,11 @@ import path from 'node:path';
 import { Type } from '@sinclair/typebox';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AppConfig, defineAppConfig } from '../src/config/index.js';
+import {
+  AppConfig,
+  defineAppConfig,
+  defineAppConfigVariant,
+} from '../src/config/index.js';
 import { resolveStandaloneAppRuntime } from '../src/node/index.js';
 import {
   defineServerPlugin,
@@ -98,6 +102,53 @@ describe('application runtime definition', () => {
     await runtime.appConfig.reload();
     expect(runtime.appConfig.get(pluginConfig)).toEqual({ label: 'reloaded' });
   });
+
+  it('collects plugin-owned config variants before loading', async () => {
+    const providersConfig = defineAppConfig({
+      namespace: 'providers',
+      schema: Type.Object({
+        entries: Type.Record(
+          Type.String(),
+          Type.Object(
+            { driver: Type.String() },
+            { additionalProperties: true },
+          ),
+        ),
+      }),
+      defaults: {
+        entries: {
+          primary: { driver: 'redis', url: 'redis://localhost:6379' },
+        },
+      },
+    });
+    const redisVariant = defineAppConfigVariant({
+      target: 'providers.entries',
+      discriminator: 'driver',
+      value: 'redis',
+      schema: Type.Object({
+        driver: Type.Literal('redis'),
+        url: Type.String(),
+      }),
+    });
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-service-provider-example',
+      config: redisVariant,
+    });
+    const runtime = await resolveAppRuntime(
+      {
+        ...createDefinition(),
+        plugins: defineServerPlugins([plugin]),
+        config: async (context) =>
+          new AppConfig([providersConfig, ...context.configs], { context }),
+      },
+      createScope(createAppRoot()),
+    );
+
+    expect(runtime.appConfig.get('providers.entries.primary')).toEqual({
+      driver: 'redis',
+      url: 'redis://localhost:6379',
+    });
+  });
 });
 
 function createDefinition(): AppRuntimeDefinition {
@@ -110,8 +161,7 @@ function createDefinition(): AppRuntimeDefinition {
     },
     plugins: defineServerPlugins([]),
     providers: [],
-    apiRoutes: [],
-    rootRoutes: [],
+    routes: [],
   });
 }
 

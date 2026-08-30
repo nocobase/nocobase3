@@ -1,5 +1,5 @@
-import { cachingConfig } from './caching/index.js';
-import { appConfig, type AppConfigDefinition } from './config/index.js';
+import { cachingConfig, memoryCachingConfigVariant } from './caching/index.js';
+import { appConfig, type AppConfigContribution } from './config/index.js';
 import { databaseConfig } from './database/index.js';
 import { driveConfig } from './drive/index.js';
 import { snowflakeConfig } from './id-generator/index.js';
@@ -11,19 +11,18 @@ import { sessionConfig } from './session/index.js';
 import { spaConfig } from './spa/index.js';
 import { i18nConfig } from './i18n/index.js';
 
-export const coreConfigs: readonly AppConfigDefinition<
-  unknown,
-  ResolvedAppRuntimeConfigContext
->[] = [
-  appConfig,
-  i18nConfig,
-  cachingConfig,
-  databaseConfig,
-  driveConfig,
-  loggingConfig,
-  queueConfig,
-  sessionConfig,
-  nodeServerConfig,
-  snowflakeConfig,
-  spaConfig,
-];
+export const coreConfigs: readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[] =
+  [
+    appConfig,
+    i18nConfig,
+    cachingConfig,
+    memoryCachingConfigVariant,
+    databaseConfig,
+    driveConfig,
+    loggingConfig,
+    queueConfig,
+    sessionConfig,
+    nodeServerConfig,
+    snowflakeConfig,
+    spaConfig,
+  ];

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AppConfig,
   defineAppConfig,
+  defineAppConfigVariant,
   envBoolean,
   envInteger,
 } from '../src/config/index.js';
@@ -41,6 +42,129 @@ describe('AppConfig', () => {
       () =>
         new AppConfig([featureConfig, { ...featureConfig }], { context: {} }),
     ).toThrow(/registered more than once/);
+  });
+
+  it('validates record entries with contributed config variants', async () => {
+    const cachingConfig = defineAppConfig({
+      namespace: 'caching',
+      schema: Type.Object({
+        providers: Type.Record(
+          Type.String(),
+          Type.Object(
+            { driver: Type.String() },
+            { additionalProperties: true },
+          ),
+        ),
+      }),
+      defaults: { providers: {} },
+    });
+    const redisConfig = defineAppConfigVariant({
+      target: 'caching.providers',
+      discriminator: 'driver',
+      value: 'redis',
+      schema: Type.Object(
+        {
+          driver: Type.Literal('redis'),
+          url: Type.String({ format: 'uri' }),
+          database: Type.Optional(Type.Integer({ minimum: 0 })),
+        },
+        { additionalProperties: false },
+      ),
+    });
+    const config = new AppConfig([cachingConfig, redisConfig], {
+      context: {},
+    });
+    config.load(
+      objectProvider({
+        caching: {
+          providers: {
+            primary: {
+              driver: 'redis',
+              url: 'redis://localhost:6379',
+              database: 1,
+            },
+          },
+        },
+      }),
+    );
+
+    await config.loadAll();
+
+    expect(config.get('caching.providers.primary')).toEqual({
+      driver: 'redis',
+      url: 'redis://localhost:6379',
+      database: 1,
+    });
+  });
+
+  it('rejects missing, unknown, duplicate, and invalid config variants', async () => {
+    const cachingConfig = defineAppConfig({
+      namespace: 'caching',
+      schema: Type.Object({
+        providers: Type.Record(
+          Type.String(),
+          Type.Object(
+            { driver: Type.String() },
+            { additionalProperties: true },
+          ),
+        ),
+      }),
+      defaults: { providers: {} },
+    });
+    const redisConfig = defineAppConfigVariant({
+      target: 'caching.providers',
+      discriminator: 'driver',
+      value: 'redis',
+      schema: Type.Object(
+        { driver: Type.Literal('redis'), url: Type.String() },
+        { additionalProperties: false },
+      ),
+    });
+
+    expect(
+      () =>
+        new AppConfig(
+          [
+            cachingConfig,
+            defineAppConfigVariant({ ...redisConfig, target: 'caching' }),
+          ],
+          { context: {} },
+        ),
+    ).toThrow(/must be a full config path/);
+
+    expect(() => new AppConfig([redisConfig], { context: {} })).toThrow(
+      /target namespace "caching" is not registered/,
+    );
+    expect(
+      () =>
+        new AppConfig([cachingConfig, redisConfig, redisConfig], {
+          context: {},
+        }),
+    ).toThrow(/registered more than once/);
+
+    const unknown = new AppConfig([cachingConfig, redisConfig], {
+      context: {},
+    });
+    unknown.load(
+      objectProvider({
+        caching: { providers: { primary: { driver: 'memcached' } } },
+      }),
+    );
+    await expect(unknown.loadAll()).rejects.toThrow(
+      /no variant is registered for "memcached"/,
+    );
+
+    const invalid = new AppConfig([cachingConfig, redisConfig], {
+      context: {},
+    });
+    invalid.load(
+      objectProvider({
+        caching: { providers: { primary: { driver: 'redis' } } },
+      }),
+    );
+    await expect(invalid.loadAll()).rejects.toThrow(
+      /caching\.providers\.primary.*required property 'url'/,
+    );
   });
 
   it('loads each new provider once and replays all providers on reload', async () => {

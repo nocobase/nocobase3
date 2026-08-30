@@ -1,4 +1,4 @@
-import type { AppConfigDefinition } from '../config/index.js';
+import type { AppConfigContribution } from '../config/index.js';
 import type {
   AppServerPlugin,
   AppServerPluginDefinition,
@@ -50,19 +50,17 @@ export function defineServerPlugins(
 
 function normalizeConfigDefinitions(
   value:
-    | AppConfigDefinition<unknown, never>
-    | readonly AppConfigDefinition<unknown, never>[]
+    | AppConfigContribution<never>
+    | readonly AppConfigContribution<never>[]
     | undefined,
-): readonly AppConfigDefinition<unknown, never>[] {
+): readonly AppConfigContribution<never>[] {
   if (value === undefined) return [];
   return isConfigDefinitionArray(value) ? [...value] : [value];
 }
 
 function isConfigDefinitionArray(
-  value:
-    | AppConfigDefinition<unknown, never>
-    | readonly AppConfigDefinition<unknown, never>[],
-): value is readonly AppConfigDefinition<unknown, never>[] {
+  value: AppConfigContribution<never> | readonly AppConfigContribution<never>[],
+): value is readonly AppConfigContribution<never>[] {
   return Array.isArray(value);
 }
 

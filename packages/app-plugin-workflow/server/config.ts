@@ -24,7 +24,7 @@ export interface ResolveWorkflowRuntimeConfigOptions {
 export const workflowConfig: AppConfigDefinition<
   WorkflowRuntimeConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<WorkflowRuntimeConfig>()({
+> = defineAppConfig({
   namespace: 'workflow',
   schema: Type.Object({
     sourceRoot: Type.String(),

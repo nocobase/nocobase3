@@ -16,27 +16,29 @@ import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 export const queueConfig: AppConfigDefinition<
   AppQueueConfig,
   ResolvedAppRuntimeConfigContext
-> = defineAppConfig<AppQueueConfig>()({
+> = defineAppConfig({
   namespace: 'queue',
   schema: Type.Object({
     default: Type.String(),
-    connections: Type.Record(
-      Type.String(),
-      Type.Object(
-        {
-          driver: Type.String(),
-          host: Type.Optional(Type.String()),
-          port: Type.Optional(Type.Number()),
-          username: Type.Optional(Type.String()),
-          password: Type.Optional(Type.String()),
-          db: Type.Optional(Type.Number()),
-          keyPrefix: Type.Optional(Type.String()),
-          tls: Type.Optional(Type.Boolean()),
-          connection: Type.Optional(Type.String()),
-          table: Type.Optional(Type.String()),
-          schedulesTable: Type.Optional(Type.String()),
-        },
-        { additionalProperties: true },
+    connections: Type.Unsafe<AppQueueConfig['connections']>(
+      Type.Record(
+        Type.String(),
+        Type.Object(
+          {
+            driver: Type.String(),
+            host: Type.Optional(Type.String()),
+            port: Type.Optional(Type.Number()),
+            username: Type.Optional(Type.String()),
+            password: Type.Optional(Type.String()),
+            db: Type.Optional(Type.Number()),
+            keyPrefix: Type.Optional(Type.String()),
+            tls: Type.Optional(Type.Boolean()),
+            connection: Type.Optional(Type.String()),
+            table: Type.Optional(Type.String()),
+            schedulesTable: Type.Optional(Type.String()),
+          },
+          { additionalProperties: true },
+        ),
       ),
     ),
     retry: Type.Optional(Type.Record(Type.String(), Type.Unknown())),

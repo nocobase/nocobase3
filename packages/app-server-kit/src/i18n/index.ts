@@ -32,26 +32,25 @@ export interface AppI18nConfig {
   readonly locales: readonly Locale[];
 }
 
-export const i18nConfig: AppConfigDefinition<AppI18nConfig> =
-  defineAppConfig<AppI18nConfig>()({
-    namespace: 'i18n',
-    schema: Type.Object({
-      defaultLocale: Type.String(),
-      locales: Type.Array(Type.String()),
-    }),
-    defaults: { defaultLocale: 'en-US', locales: ['en-US', 'zh-CN'] },
-    envMappings: {
-      APP_DEFAULT_LOCALE: envString('defaultLocale'),
-      APP_LOCALES: {
-        path: 'locales',
-        parse: (value: string): string[] =>
-          value
-            .split(',')
-            .map((locale) => locale.trim())
-            .filter(Boolean),
-      },
+export const i18nConfig: AppConfigDefinition<AppI18nConfig> = defineAppConfig({
+  namespace: 'i18n',
+  schema: Type.Object({
+    defaultLocale: Type.String(),
+    locales: Type.Array(Type.String()),
+  }),
+  defaults: { defaultLocale: 'en-US', locales: ['en-US', 'zh-CN'] },
+  envMappings: {
+    APP_DEFAULT_LOCALE: envString('defaultLocale'),
+    APP_LOCALES: {
+      path: 'locales',
+      parse: (value: string): string[] =>
+        value
+          .split(',')
+          .map((locale) => locale.trim())
+          .filter(Boolean),
     },
-  });
+  },
+});
 
 export interface I18nProviderApplication {
   readonly container: ServiceContainer;
