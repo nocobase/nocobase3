@@ -115,6 +115,23 @@ describe('@nocobase/app-plugin-workflow routes', () => {
     expect(response.status).toBe(200);
     expect(workflow.workflows.enable).toHaveBeenCalledWith('artifact-hash');
   });
+
+  it('returns validation errors using the standard error contract', async () => {
+    const app = new Hono();
+    const workflow = createWorkflowRepositories();
+    registerTestRoutes(app, workflow);
+
+    const response = await app.request('/api/workflows/definition-1/status', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: 'yes' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      message: 'enabled must be a boolean',
+    });
+  });
 });
 
 interface TestRepositories {

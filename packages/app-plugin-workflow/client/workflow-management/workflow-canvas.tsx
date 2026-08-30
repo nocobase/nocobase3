@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   Background,
   Controls,
@@ -18,8 +18,8 @@ import {
   createLayoutInput,
   projectWorkflowGraph,
 } from '@nocobase/app-plugin-workflow/client';
-import { layoutWithElk } from './graph/elk-layout';
-import type { WorkflowCanvasProps, WorkflowNodeRunRecord } from './types';
+import { layoutWithElk } from './graph/elk-layout.js';
+import type { WorkflowCanvasProps, WorkflowNodeRunRecord } from './types.js';
 import './workflow-canvas.css';
 
 interface CanvasNodeData extends Record<string, unknown> {
@@ -98,7 +98,7 @@ export function WorkflowCanvas({
   onSelectNode,
   onViewNodeRun,
   onViewStartInput,
-}: WorkflowCanvasProps) {
+}: WorkflowCanvasProps): ReactElement {
   const graph = useMemo(() => projectWorkflowGraph(definition), [definition]);
   const [layout, setLayout] = useState<{
     graph: typeof graph;
@@ -235,7 +235,7 @@ export function WorkflowCanvas({
     <div
       className='workflow-canvas'
       aria-label={
-        interactive ? 'Workflow execution canvas' : 'Read-only workflow canvas'
+        interactive ? 'Workflow run canvas' : 'Read-only workflow canvas'
       }
     >
       {ready ? (

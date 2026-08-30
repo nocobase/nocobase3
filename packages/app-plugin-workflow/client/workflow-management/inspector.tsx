@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { workflowApi } from './data';
-import type { WorkflowNodeRunPayload, WorkflowNodeRunRecord } from './types';
+import { useEffect, useState, type ReactElement } from 'react';
+import { workflowApi } from './data.js';
+import type { WorkflowNodeRunPayload, WorkflowNodeRunRecord } from './types.js';
+import { Badge } from './ui/badge.js';
 
 export interface WorkflowInspectorProps {
   nodeKey: string | null;
@@ -13,7 +14,7 @@ export function WorkflowInspector({
   attempts,
   selectedAttempt,
   onSelectAttempt,
-}: WorkflowInspectorProps) {
+}: WorkflowInspectorProps): ReactElement {
   if (!nodeKey)
     return (
       <aside aria-label='Workflow inspector'>
@@ -84,6 +85,23 @@ function runStatusLabel(status: number): string {
           ? 'Error'
           : 'Aborted';
 }
+function runStatusTone(status: number): string {
+  return status === 1
+    ? 'resolved'
+    : status === 0
+      ? 'running'
+      : status === -1
+        ? 'failed'
+        : status === -2
+          ? 'error'
+          : 'aborted';
+}
+function formatRunDuration(run: WorkflowNodeRunRecord): string {
+  const start = new Date(run.startedAt).getTime();
+  const end = run.finishedAt ? new Date(run.finishedAt).getTime() : Date.now();
+  const elapsed = Math.max(0, end - start);
+  return elapsed < 1000 ? `${elapsed} ms` : `${(elapsed / 1000).toFixed(1)} s`;
+}
 function useAnimatedDialogClose(onClose: () => void): {
   closing: boolean;
   close: () => void;
@@ -111,7 +129,7 @@ export function WorkflowRunResultDialog({
   nodeRun,
   nodeTitle,
   onClose,
-}: WorkflowRunResultDialogProps) {
+}: WorkflowRunResultDialogProps): ReactElement {
   return (
     <WorkflowRunResultDialogContent
       key={`${runId}:${nodeRun.id}`}
@@ -192,7 +210,7 @@ function WorkflowRunResultDialogContent({
       onMouseDown={animatedClose.close}
     >
       <section
-        className='workflow-result-dialog'
+        className='workflow-result-dialog workflow-node-result-dialog'
         role='dialog'
         aria-modal='true'
         aria-labelledby='workflow-result-title'
@@ -201,11 +219,14 @@ function WorkflowRunResultDialogContent({
         <header>
           <div>
             <h2 id='workflow-result-title'>{nodeTitle ?? current.nodeKey}</h2>
-            <p>
-              {runStatusLabel(current.status)} ·{' '}
-              {formatClientTime(current.startedAt)} →{' '}
-              {formatClientTime(current.finishedAt)}
-            </p>
+            <div className='workflow-node-result-meta'>
+              <Badge
+                className={`workflow-run-status-tag ${runStatusTone(current.status)}`}
+              >
+                {runStatusLabel(current.status)}
+              </Badge>
+              <span>Duration {formatRunDuration(current)}</span>
+            </div>
           </div>
           <button
             type='button'
@@ -271,7 +292,7 @@ export interface WorkflowInputDialogProps {
 export function WorkflowInputDialog({
   input,
   onClose,
-}: WorkflowInputDialogProps) {
+}: WorkflowInputDialogProps): ReactElement {
   const animatedClose = useAnimatedDialogClose(onClose);
   return (
     <div

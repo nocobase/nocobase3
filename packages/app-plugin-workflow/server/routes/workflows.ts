@@ -54,7 +54,7 @@ export function createWorkflowDefinitionRoutes(
   routes.patch('/workflows/:id/status', async (c) => {
     const enabled = readEnabled(await readBody(c.req.raw));
     if (enabled === undefined)
-      return c.json({ error: 'enabled must be a boolean' }, 400);
+      return c.json({ message: 'enabled must be a boolean' }, 400);
     const data = await workflows.setStatus(c.req.param('id'), enabled);
     return c.json({ data });
   });

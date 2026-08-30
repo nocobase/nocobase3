@@ -16,3 +16,5 @@ playwright-report/
 packages/app-host/fixtures/app-dist/main/
 packages/app-host/fixtures/app-dist/hub/dist/
 packages/app-host/fixtures/app-dist/hub/dist/**
+
+packages/app-template-default/server/workflows
