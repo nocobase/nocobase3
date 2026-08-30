@@ -117,11 +117,12 @@ pnpm --filter <plugin-package> build
 pnpm --filter <target-app> server:inspect --json
 ```
 
-`server:inspect` 是无副作用的静态 composition snapshot：它不会构造 Provider、运行
-lifecycle、创建 Route router、连接数据库或加载 Job module。检查 `result.consistent`、
-`issues` 和 `limitations`；当前可以证明 plugin/order、Provider constructor、Route scope、
-Database source 和 Job location，不能证明 Provider Token、Route method/path/security 或
-Job name/queue。后者仍需行为测试。
+`server:inspect` 会导入 App 和插件的 Server plugin 声明模块，因此
+`server/plugin.ts` 及其直接声明依赖的顶层代码不得启动服务、连接数据库或执行任务。
+Inspector 不会构造 Provider、执行 lifecycle、调用 Route factory、连接数据库、启动
+Worker 或加载 Job module。检查 `issues`；输出只表示 declaration composition 和
+resolved contribution locations。Provider constructor name 只是用于定位源码的 best-effort
+调试标签，Route 权限及其他运行时行为仍需行为测试。
 
 ## 常见错误与完成条件
 

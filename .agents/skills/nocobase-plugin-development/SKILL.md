@@ -71,10 +71,13 @@ for the current task:
   read-only and checks only static package, metadata, composition, and Skill
   state; it does not prove Route security, runtime behavior, tests, or builds.
 - Run the target App's `server:inspect --json` when Server contributions are
-  involved. Read both `issues` and `limitations`: the current snapshot can
-  prove plugin order, Provider constructors, Route scopes, Database sources,
-  and Job locations, but not Provider tokens, Route methods/security, or Job
-  class metadata.
+  involved. Check `issues`: the command imports declaration modules and reports
+  plugin order, best-effort Provider constructor names, Route scopes, Database
+  sources, and Job locations. It does not inspect runtime Provider, Route,
+  database, or Job behavior.
+- Keep `server/plugin.ts` and the declaration modules it imports free of runtime
+  startup side effects. Inspection imports these modules even though it does
+  not instantiate Providers, execute Route factories, or load Job modules.
 - `package.json#nocobase.plugins` is management metadata for install, CLI,
   build/watch, and Skills synchronization. It is not runtime discovery.
 - `exports["./client"]` and `exports["./server/plugin"]` are the Client and

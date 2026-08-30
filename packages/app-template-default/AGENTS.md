@@ -103,10 +103,11 @@ Run the static Server inspector after changing Server plugin composition:
 pnpm server:inspect --json
 ```
 
-It does not construct Providers, run lifecycle code, create Route routers,
-connect to the database, or load Queue Job modules. Treat `limitations` as
-explicitly unverified behavior and cover Route security and Job behavior with
-integration tests.
+The command imports `server/plugins.ts`, so that module and its declaration
+imports must not start runtime services. It does not construct Providers, run
+lifecycle code, execute Route factories, connect to the database, start
+workers, or load Queue Job modules. Check `issues`, then cover runtime Route,
+Provider, database, and Job behavior with integration tests.
 
 ## Dependencies and tests
 

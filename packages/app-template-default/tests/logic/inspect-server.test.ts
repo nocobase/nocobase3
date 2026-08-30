@@ -43,15 +43,27 @@ describe('Server inspection', () => {
         ({ packageName }) => packageName === '@nocobase/app-plugin-system-info',
       ),
     ).toMatchObject({ constructorName: 'SystemInfoProvider' });
+    expect(inspection.routes.map(({ order }) => order)).toEqual(
+      inspection.routes.map((_route, index) => index + 1),
+    );
     expect(
-      inspection.routes.api.some(
-        ({ packageName }) =>
-          packageName === '@nocobase/app-plugin-routes-example',
+      inspection.routes.some(
+        ({ packageName, scope }) =>
+          packageName === '@nocobase/app-plugin-routes-example' &&
+          scope === 'api',
       ),
     ).toBe(true);
-    expect(inspection.limitations).toHaveLength(3);
+    expect(
+      inspection.routes.some(
+        ({ packageName, scope }) =>
+          packageName === '@nocobase/app-plugin-install' && scope === 'root',
+      ),
+    ).toBe(true);
+    expect(inspection).not.toHaveProperty('limitations');
+    expect(inspection).not.toHaveProperty('consistent');
+    expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
     expect(formatAppServerInspection(inspection)).toContain(
-      'SERVER_ROUTE_METADATA_UNAVAILABLE',
+      'Runtime Provider, Route, database, and Job behavior is not inspected.',
     );
   });
 });

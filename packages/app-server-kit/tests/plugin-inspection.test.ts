@@ -11,8 +11,12 @@ import { defineApiRoutes, defineRootRoutes } from '../src/router/index.js';
 import type { ApplicationConfig } from '../src/application/index.js';
 import { Hono } from 'hono';
 
+let providerConstructorCalls = 0;
+
 class FirstProvider {
-  public constructor(_app: unknown) {}
+  public constructor(_app: unknown) {
+    providerConstructorCalls += 1;
+  }
   public readonly name: string = 'first';
   public register(): void {}
   public async boot(): Promise<void> {}
@@ -23,6 +27,7 @@ class FirstProvider {
 
 describe('Server plugin inspection', () => {
   it('snapshots composition without constructing Providers or Route routers', () => {
+    providerConstructorCalls = 0;
     let routeFactoryCalls = 0;
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-example',
@@ -62,6 +67,7 @@ describe('Server plugin inspection', () => {
 
     const inspection = inspectResolvedAppServerPlugins(resolved);
 
+    expect(providerConstructorCalls).toBe(0);
     expect(routeFactoryCalls).toBe(0);
     expect(inspection.plugins).toEqual([
       expect.objectContaining({
@@ -82,18 +88,12 @@ describe('Server plugin inspection', () => {
         constructorName: 'FirstProvider',
       }),
     ]);
-    expect(inspection.routes.api).toEqual([
+    expect(inspection.routes).toEqual([
       expect.objectContaining({ scope: 'api', order: 1 }),
-    ]);
-    expect(inspection.routes.root).toEqual([
       expect.objectContaining({ scope: 'root', order: 2 }),
     ]);
     expect(inspection.issues).toEqual([]);
-    expect(inspection.limitations.map(({ code }) => code)).toEqual([
-      'SERVER_PROVIDER_TOKEN_METADATA_UNAVAILABLE',
-      'SERVER_ROUTE_METADATA_UNAVAILABLE',
-      'SERVER_JOB_METADATA_UNAVAILABLE',
-    ]);
+    expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
   });
 
   it('reports configured contribution locations that did not resolve', () => {

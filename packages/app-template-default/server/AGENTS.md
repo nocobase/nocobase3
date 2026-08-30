@@ -97,5 +97,7 @@ pnpm build
 
 Use `pnpm server:config` to inspect resolved standalone values when debugging
 paths, proxy targets, database sources, or SPA behavior.
-Use `pnpm server:inspect --json` for a side-effect-free Server plugin
-composition snapshot, then verify the reported limitations with behavior tests.
+Use `pnpm server:inspect --json` for the imported Server plugin declaration
+snapshot and resolved contribution locations. Keep declaration modules free of
+runtime startup side effects, check `issues`, and verify runtime behavior with
+behavior tests.

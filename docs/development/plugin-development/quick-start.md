@@ -144,7 +144,7 @@ pnpm --filter @nocobase/app-template-default server:inspect --json
 ```
 
 Client-only 插件可以跳过 Server inspection；Server-only 插件可以跳过 Client inspection。
-读取 `server:inspect` 的 `issues` 和 `limitations`，并继续用行为测试验证 Route 权限和 Job。
+检查 `server:inspect` 的 `issues`，并继续用行为测试验证 Provider、Route 权限、Database 和 Job 的运行时行为。
 
 最后运行目标 App 的相关 typecheck、test、build 和按风险选择的运行时验证。
 

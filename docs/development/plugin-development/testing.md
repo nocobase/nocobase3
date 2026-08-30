@@ -74,9 +74,9 @@ pnpm --filter <target-app> build
 最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job 和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
 
 Client-only 插件可以跳过 `server:inspect`，Server-only 插件可以跳过
-`client:inspect`。`server:inspect` 的 `limitations` 是未被静态证明的边界，不是成功后可以
-忽略的提示；Route authentication/authorization 和 Job 行为必须继续通过真实请求或 handler
-测试验证。
+`client:inspect`。检查 `server:inspect` 的 `issues`，但不要把 issues 为空解释为运行时
+行为已验证；Route authentication/authorization、Provider lifecycle、Database 和 Job
+行为必须继续通过真实请求、数据库或 handler 测试验证。
 
 ## 完成条件
 

@@ -5,8 +5,8 @@ description: NocoBase v3 Server 插件可观察性、Route 安全边界、Provid
 
 # Server 插件 Agent 友好性审计
 
-本文记录对当前 v3 Server 插件底层实现的只读审计，以及基于审计落地的第一版
-`server:inspect` 边界。目标是区分当前可以可靠检查的事实、只能通过运行时或测试确认的事实，以及后续值得改进的底层 contract。
+本文记录对当前 v3 Server 插件底层实现的只读审计，以及基于审计落地的
+`server:inspect` 边界。目标是区分当前可以可靠报告的声明事实，以及只能通过运行时或测试确认的行为。
 
 审计范围：
 
@@ -69,9 +69,8 @@ description: NocoBase v3 Server 插件可观察性、Route 安全边界、Provid
 - 不能在不执行 `register()` 的情况下推断它绑定了哪些 token；
 - 即使执行 `register()`，也会产生副作用，并且 token binding 可能依赖配置、环境或其他 Provider。
 
-下一批若要提高 Agent 可观察性，应增加可选的声明式 metadata，例如 Provider 公开的
-`provides` token names 和 `requires` token names。该 metadata 只能作为静态 contract，
-不能替代实际 container/lifecycle 测试。
+这些边界不是 Inspector 应自动补齐的 metadata。只有真实插件开发反复出现 Token owner
+或依赖无法定位的问题时，才单独评估是否需要新的运行时 contract。
 
 ### Routes 和安全边界
 
@@ -101,9 +100,9 @@ App 的共享 `/api/*` middleware。当前 `app-template-default/server/app.ts` 
 session middleware，并没有全局认证 middleware。因此该 example 暴露了一个 P0 文档/实现
 不一致：Route 不能依赖宿主或 contribution order 提供安全边界。
 
-后续底层设计应允许 Route 显式声明安全意图，例如 `security: { authentication:
- 'required', authorization: ... }`，并在运行时由 Route 自己安装对应 middleware。静态
-inspection 只能检查“声明存在”，不能检查授权策略是否正确。
+当前不为了 Inspector 增加独立的 Route security metadata。若真实开发反复出现路径、
+middleware 或权限样板错误，应优先评估改进 Route authoring contract，让可检查性成为
+真实运行时声明的结果，而不是另维护一份仅供 Inspector 使用的信息。
 
 ### Queue Jobs
 
@@ -122,14 +121,15 @@ Queue provider 将这些 locations 放入 queue config。Job class 被扫描加�
 - name 冲突属于全局 Locator 运行时行为，当前没有 owner-aware 错误；
 - queue 名称来自 Job static options 或 dispatch options，不能从 location 推断。
 
-后续可让 Job manifest 明确声明 `name`、`queue` 和 owner，再由运行时检查 class 的
-`options` 是否匹配；在此之前，Agent 必须用实际 handler 测试覆盖名称、payload、queue、
-重试和失败结果。
+当前不为了 Inspector 加载 Job module 或新增 Job manifest。Agent 必须用实际 handler
+测试覆盖名称、payload、queue、重试和失败结果；只有当真实 Job 开发反复出现
+owner 或冲突问题时，才单独评估新的运行时 contract。
 
 ## `server:inspect --json` 已实现边界
 
-第一版保持只读、静态、诚实，不启动数据库、不启动 worker、不执行 Provider lifecycle、
-不执行 Route factory 来猜测安全性。
+命令会导入 App 的 `server/plugins.ts` 和其声明依赖，因此这些模块的顶层代码必须
+保持无运行时启动副作用。Inspector 不构造 Provider、不执行 lifecycle 或 Route factory、
+不连接数据库、不启动 worker、不加载 Job module。
 
 当前 envelope：
 
@@ -143,10 +143,10 @@ Queue provider 将这些 locations 放入 queue config。Job class 被扫描加�
     "app": {},
     "plugins": [],
     "providers": [],
-    "routes": { "api": [], "root": [] },
+    "routes": [],
+    "database": [],
     "jobs": [],
-    "issues": [],
-    "limitations": []
+    "issues": []
   }
 }
 ```
@@ -154,13 +154,13 @@ Queue provider 将这些 locations 放入 queue config。Job class 被扫描加�
 第一版可靠字段：
 
 - plugin package name、composition order、definition 是否存在；
-- Provider constructor 的可读 name（若能在无副作用方式得到）；
+- Provider constructor 的 best-effort 可读 name，仅用于调试定位；
 - Route contribution 的 scope、插件 owner 和 contribution order；
 - migration/seed 路径是否存在；
 - Job location、解析后的 glob、目录缺失；
-- 重复 package、重复 Provider name、缺失 contribution 路径。
+- Route 单数组中的真实 contribution registration order。
 
-第一版必须明确列为 limitation、不能伪造的字段：
+文档必须明确说明、Inspector 不能伪造的信息：
 
 - ServiceToken provides/requires；
 - Route method/path（除非显式执行 factory）；
@@ -168,30 +168,20 @@ Queue provider 将这些 locations 放入 queue config。Job class 被扫描加�
 - Job class name、queue、payload 和 runtime Locator 状态；
 - migration schema correctness、数据库连接和运行时副作用。
 
-建议问题代码：
+当前只报告可靠的路径问题：
 
 ```text
-SERVER_PLUGIN_DUPLICATE
-SERVER_PROVIDER_NAME_DUPLICATE
-SERVER_CONTRIBUTION_PATH_MISSING
-SERVER_ROUTE_SECURITY_UNDECLARED
-SERVER_ROUTE_METADATA_UNAVAILABLE
-SERVER_JOB_METADATA_UNAVAILABLE
+SERVER_MIGRATIONS_DIRECTORY_MISSING
+SERVER_SEEDS_DIRECTORY_MISSING
 SERVER_JOB_LOCATION_MISSING
 ```
 
-其中 `SERVER_ROUTE_SECURITY_UNDECLARED` 只有在未来 Route contract 增加显式 security
-metadata 后才适合变成 error；在当前协议下应放进 `limitations`，不能把“没找到 middleware”
-当成可靠的静态证明。
+`defineServerPlugins()` 已直接拒绝重复 package，Provider constructor name 不是稳定身份，
+所以 Inspector 不重复报告这两类问题。当前也不扫描 factory 源码、不推断权限、
+不加载 Job module、不自动修复或重排 contribution。
 
-## 后续底层改进顺序
+## 后续改进原则
 
-第一版 snapshot、Inspector、limitations 和 Routes example 的独立认证边界已经落地。后续按以下顺序继续：
-
-1. 单独设计 Route security metadata，不从 factory 源码猜权限；
-2. 设计 Provider provides/requires Token metadata；
-3. 设计 owner-aware Job manifest 和冲突报告；
-4. 再扩展 Inspector 输出这些显式 contract；
-5. 继续用真实 App integration tests 验证认证、授权、Route order、Job execution 和 failure behavior。
-
-在第 5 步之前，不建议实现自动修复、Route 重排、权限推断或 `plugin:doctor`。
+Inspector 保持 declaration snapshot 职责。只有当真实插件开发反复出现无法解决的
+Route authoring、Token ownership 或 Job collision 问题时，才单独设计服务于运行时正确性的新
+contract。不为了扩展 Inspector 输出而增加另一套 metadata。

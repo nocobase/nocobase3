@@ -72,7 +72,7 @@ Skill 面向使用插件的 App Agent，描述真实公共能力、前置数据�
 
 ## 7. 测试和分层验证
 
-在插件根目录 `tests/` 添加行为级测试：Service/Provider、Routes、Client contributions、Migration/Seed、Queue Job 和 Skill 机械检查。随后运行插件的 lint、typecheck、test、build；根据插件能力运行目标 App 的 `client:inspect --json` 和 `server:inspect --json`，再运行 App 的 typecheck、test、build，并按风险启动 App 验证真实闭环。`server:inspect` 的 `limitations` 表示尚未被静态证明的边界；Route 权限和 Job 行为仍必须用行为测试验证。
+在插件根目录 `tests/` 添加行为级测试：Service/Provider、Routes、Client contributions、Migration/Seed、Queue Job 和 Skill 机械检查。随后运行插件的 lint、typecheck、test、build；根据插件能力运行目标 App 的 `client:inspect --json` 和 `server:inspect --json`，再运行 App 的 typecheck、test、build，并按风险启动 App 验证真实闭环。`server:inspect` 只报告声明 composition、resolved contribution locations 和可靠的路径 issues；Route 权限与其他运行时行为仍必须用行为测试验证。
 
 验证顺序用于定位失败层级：
 

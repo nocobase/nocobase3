@@ -4,4 +4,4 @@
 '@nocobase/app-plugin-routes-example': patch
 ---
 
-Add side-effect-free Server plugin composition inspection and make the Routes example own a path-scoped authentication boundary.
+Add declaration-level Server plugin inspection with real Route contribution order, and make the Routes example own a path-scoped authentication boundary.

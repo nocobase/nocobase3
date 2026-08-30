@@ -2,10 +2,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const help = `Inspect this App's static Server plugin composition.
+const help = `Inspect this App's imported Server plugin declarations.
 
-The command does not construct Providers, run lifecycle code, create Route
-routers, connect to a database, or load Queue Job modules.
+Importing server/plugins.ts executes module initialization, so declaration
+modules must not start runtime services. The command does not construct
+Providers, run lifecycle code, execute Route factories, connect to a database,
+start workers, or load Queue Job modules.
 
 Usage:
   pnpm server:inspect [options]
@@ -60,22 +62,47 @@ export async function inspectAppServer({
 }
 
 export function formatAppServerInspection(inspection) {
-  const lines = [`Server plugins for ${inspection.app.packageName}`];
+  const lines = [
+    `Server plugin declarations for ${inspection.app.packageName}`,
+    '',
+  ];
   for (const plugin of inspection.plugins) {
-    lines.push(
-      `${plugin.order}. ${plugin.packageName}@${plugin.version} ` +
-        `(providers: ${plugin.contributions.providers}, routes: ${plugin.contributions.routes}, ` +
-        `jobs: ${plugin.contributions.jobLocations})`,
+    const routeScopes = inspection.routes
+      .filter(({ packageName }) => packageName === plugin.packageName)
+      .map(({ scope }) => scope);
+    const database = inspection.database.find(
+      ({ packageName }) => packageName === plugin.packageName,
     );
+    const databaseContributions = [
+      database?.migrations ? 'migrations' : undefined,
+      database?.seeds ? 'seeds' : undefined,
+    ].filter(Boolean);
+    lines.push(
+      `${plugin.order}. ${plugin.packageName}@${plugin.version}`,
+      `   providers: ${plugin.contributions.providers}`,
+      `   routes: ${routeScopes.length > 0 ? routeScopes.join(', ') : 'none'}`,
+    );
+    if (databaseContributions.length > 0) {
+      lines.push(`   database: ${databaseContributions.join(', ')}`);
+    }
+    if (plugin.contributions.jobLocations > 0) {
+      lines.push(`   jobs: ${plugin.contributions.jobLocations}`);
+    }
+    lines.push('');
   }
-  lines.push('', `Issues: ${inspection.issues.length}`);
-  for (const issue of inspection.issues) {
-    lines.push(`- ${issue.code}: ${issue.message}`);
+  if (inspection.issues.length === 0) {
+    lines.push('Issues: none');
+  } else {
+    lines.push(`Issues: ${inspection.issues.length}`);
+    for (const issue of inspection.issues) {
+      lines.push(`- ${issue.code}: ${issue.message}`);
+    }
   }
-  lines.push('', 'Limitations:');
-  for (const limitation of inspection.limitations) {
-    lines.push(`- ${limitation.code}: ${limitation.message}`);
-  }
+  lines.push(
+    '',
+    'Inspection scope: declarations and resolved contribution locations only.',
+    'Runtime Provider, Route, database, and Job behavior is not inspected.',
+  );
   return lines.join('\n');
 }
 
@@ -96,7 +123,7 @@ async function main() {
             ok: true,
             operation: 'server:inspect',
             status: 'success',
-            result: { ...result, consistent: result.issues.length === 0 },
+            result,
           },
           null,
           2,

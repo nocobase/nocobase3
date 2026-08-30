@@ -3,7 +3,6 @@ export {
   inspectResolvedAppServerPlugins,
   type AppServerDatabaseSnapshot,
   type AppServerInspectionIssue,
-  type AppServerInspectionLimitation,
   type AppServerInspectionSnapshot,
   type AppServerJobsSnapshot,
   type AppServerPluginSnapshot,
