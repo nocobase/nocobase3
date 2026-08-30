@@ -277,7 +277,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     expect(missingRecipient.status).toBe(409);
     await expect(missingRecipient.json()).resolves.toEqual({
       error:
-        'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
+        'recipient is required when notification.test.emailRecipient is not configured.',
     });
     expect(send).not.toHaveBeenCalled();
   });

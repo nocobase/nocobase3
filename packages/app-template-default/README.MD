@@ -154,21 +154,27 @@ three-way merge.
 
 The server registers the built-in Email and IM definitions from
 `@nocobase/app-plugin-notification-providers`. External delivery stays disabled
-until its credentials are configured in `.env.local`:
+until its channels and credentials are configured in `config.yml`. Start from
+the commented examples in [`config.example.yml`](config.example.yml):
 
-```env
-SMTP_HOST=smtp.example.com
-SMTP_FROM=NocoBase <notifications@example.com>
-# RESEND_API_KEY=re_xxxxxxxxx
-# RESEND_FROM=NocoBase <notifications@example.com>
+```yaml
+notification:
+  channels:
+    - type: email
+      enabled: true
+      providers:
+        - type: smtp
+          name: smtp
+          host: smtp.example.com
+          port: 587
+          from: NocoBase <notifications@example.com>
 ```
 
 SMTP and Resend are enabled independently and can be configured together.
 
-Configure `FEISHU_WEBHOOK_URL` and/or `DINGTALK_WEBHOOK_URL` to enable one or
-both IM Providers. No IM selector variable is required. The matching variables
-are documented in [`.env.example`](.env.example). You can inspect the resolved
-Provider names and types without printing secrets:
+Add `feishu-webhook` and/or `dingtalk-webhook` providers to an enabled `im`
+channel to enable IM delivery. You can inspect the resolved Provider names and
+types without printing secrets:
 
 ```bash
 pnpm server:config
@@ -178,10 +184,9 @@ After signing in, open
 `/main/api/notification-providers/test` (replace `/main` when
 `APP_BASE_PATH` differs). The page sends a real message through the durable
 Notification Manager and shows the resulting delivery status. Email tests use
-`TEST_EMAIL_RECIPIENT`; IM tests use the configured group Webhook. The page is
-enabled by default outside production and disabled by default when
-`NODE_ENV=production`; set `NOTIFICATION_PROVIDER_TEST_ENABLED` explicitly to
-override that behavior.
+the address entered on the page, or `notification.test.emailRecipient` when it
+is configured; IM tests use the configured group Webhook. The page is disabled
+unless `notification.test.enabled` is explicitly set to `true` in `config.yml`.
 
 Application code sends durable notifications through the injected
 `services.notification` manager:

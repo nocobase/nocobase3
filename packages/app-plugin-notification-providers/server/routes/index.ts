@@ -170,7 +170,7 @@ export function registerNotificationProviderRoutes(
       return context.json(
         {
           error:
-            'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
+            'recipient is required when notification.test.emailRecipient is not configured.',
         },
         409,
       );
