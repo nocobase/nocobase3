@@ -20,7 +20,11 @@ import {
   registerRealtimeWebSocketRoutes,
 } from '../realtime/websocket.js';
 import { RealtimeProvider } from '../realtime/provider.js';
-import type { ResolvedAppServerPlugins } from '../plugins/index.js';
+import type {
+  AppServerPluginLocalesLoader,
+  ResolvedAppServerPlugins,
+} from '../plugins/index.js';
+import { i18nToken, registerAppLocales } from '../i18n/index.js';
 
 export type ApplicationFetchHandler = (
   request: Request,
@@ -97,6 +101,11 @@ export class Application<
   private readonly routes: AppRouteContribution<Application<TConfig>>[] = [];
   private startPromise: Promise<void> | undefined;
   private websocketHandler: AppWebSocketHandler | undefined;
+  private appPackageName: string | undefined;
+  private readonly localeContributions: {
+    packageName: string;
+    load: AppServerPluginLocalesLoader;
+  }[] = [];
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.config = options.config;
@@ -144,12 +153,19 @@ export class Application<
   public addServerPlugins(
     serverPlugins: ResolvedAppServerPlugins<TConfig>,
   ): void {
+    this.appPackageName = serverPlugins.appPackageName;
     for (const plugin of serverPlugins.plugins) {
       for (const Provider of plugin.definition.providers) {
         this.addProvider(Provider);
       }
       for (const routes of plugin.definition.routes) {
         this.addRoutes(routes);
+      }
+      if (plugin.definition.locales) {
+        this.localeContributions.push({
+          packageName: plugin.definition.packageName,
+          load: plugin.definition.locales,
+        });
       }
     }
   }
@@ -203,10 +219,31 @@ export class Application<
 
   private async startProviders(): Promise<void> {
     this.registerProviders();
+    await this.registerLocales();
     await this.providerRegistry.bootAll();
     await this.registerRoutes();
     await this.providerRegistry.startAll();
     await this.providerRegistry.readyAll();
+  }
+
+  /**
+   * Registers each plugin's locale loaders against its package name and brings the runtime up.
+   *
+   * Only the default language is read here; another one is imported the first time a request asks for it.
+   */
+  private async registerLocales(): Promise<void> {
+    if (!this.container.has(i18nToken)) {
+      return;
+    }
+
+    const runtime = this.container.resolve(i18nToken);
+    const contributions = await Promise.all(
+      this.localeContributions.map(async (contribution) => ({
+        packageName: contribution.packageName,
+        locales: await contribution.load(),
+      })),
+    );
+    await registerAppLocales(runtime, this.appPackageName ?? '', contributions);
   }
 
   private async registerRoutes(): Promise<void> {

@@ -12,6 +12,8 @@ describe(__NOCOBASE_PACKAGE_NAME_LITERAL__, () => {
       providers,
       routes,
     });
+    // Named explicitly, so removing the provider from the list fails here rather than passing against an empty array.
+    expect(providers).toContain(__NOCOBASE_SYMBOL_NAME__Provider);
     expect(__NOCOBASE_MODULE_NAME__Plugin.database).toEqual({
       migrations: './database/migrations',
       seeds: './database/seeds',

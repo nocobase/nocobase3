@@ -1,5 +1,9 @@
 import { Application } from '@nocobase/app-server-kit/application';
 import { DatabaseProvider } from '@nocobase/app-server-kit/database';
+import {
+  I18nProvider,
+  i18nHttpMiddleware,
+} from '@nocobase/app-server-kit/i18n';
 import { healthCheckApiRoutes } from '@nocobase/app-server-kit/router';
 import type { ResolvedAppRuntime } from '@nocobase/app-server-kit/runtime';
 import { CachingProvider } from '@nocobase/caching';
@@ -20,6 +24,7 @@ export function createApp(
     paths: runtime.configPaths,
   });
   app.addProvider(DatabaseProvider);
+  app.addProvider(I18nProvider);
   app.addProvider(LoggingProvider);
   app.addProvider(CachingProvider);
   app.addProvider(IdGeneratorProvider);
@@ -28,6 +33,8 @@ export function createApp(
   app.addProvider(QueueProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
+  // After the session, whose stored language outranks the request's Accept-Language header.
+  app.addHttpMiddleware(i18nHttpMiddleware);
   app.addRoutes(healthCheckApiRoutes);
   app.addRuntimeContributions(runtime);
   app.addRoutes(spaRootRoutes);

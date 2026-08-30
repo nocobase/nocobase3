@@ -109,6 +109,7 @@
   "dependencies": {
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
