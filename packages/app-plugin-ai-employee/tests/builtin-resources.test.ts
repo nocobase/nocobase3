@@ -8,15 +8,7 @@ import { SkillsLoader } from '@nocobase/ai-employee';
 import { ToolsLoader } from '@nocobase/ai-employee';
 import { createMockServer } from './mock-server.js';
 
-const GOLDEN_EMPLOYEES = [
-  'atlas',
-  'dex',
-  'ellis',
-  'form_assistant',
-  'lexi',
-  'vera',
-  'viz',
-];
+const GOLDEN_EMPLOYEES = ['atlas', 'dex', 'ellis', 'lexi', 'vera', 'viz'];
 
 const resourcePatterns = {
   tools: ['tools/chartGenerator.ts'],

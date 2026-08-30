@@ -120,7 +120,7 @@ export default defineAIEmployee({
 });
 ```
 
-Use a unique stable username. Employee-local tools/skills are discovered and merged. Built-ins such as Atlas, Avery, Dex, Ellis, Lexi, Vera, and Viz are selected by username; never import or copy their definitions.
+Use a unique stable username. Employee-local tools/skills are discovered and merged. Built-ins such as Atlas, Dex, Ellis, Lexi, Vera, and Viz are selected by username; never import or copy their definitions.
 
 ## Backend tool
 

@@ -11,15 +11,7 @@ const DIST_EMPLOYEES_DIR = path.resolve(
   'ai',
   'employees',
 );
-const BUILTIN_EMPLOYEES = [
-  'atlas',
-  'dex',
-  'ellis',
-  'form_assistant',
-  'lexi',
-  'vera',
-  'viz',
-];
+const BUILTIN_EMPLOYEES = ['atlas', 'dex', 'ellis', 'lexi', 'vera', 'viz'];
 
 describe('built-in and application AI employees', () => {
   it('keeps an application-owned employee fixture under the app resource tree', () => {
