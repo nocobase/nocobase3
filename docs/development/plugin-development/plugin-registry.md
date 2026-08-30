@@ -1,4 +1,9 @@
-# Plugin Registry
+---
+title: Plugin Registry 完整开发与发布
+description: 说明 NocoBase v3 插件如何构建、发布、安装和升级 App-owned 的可编辑 Client Registry 源码。
+---
+
+# Plugin Registry 完整开发与发布
 
 Plugin Registry 是插件发布“可复制、可编辑源码配方”的通用机制。它可以交付页面和组件，也可以交付 Provider、Context、hooks、类型、适配器、工具函数、配置或其他客户端源码。其中，包含页面、组件、表单、布局或交互的 item 属于 UI 类型的 Registry item。
 
@@ -738,7 +743,7 @@ pnpm registry materialize \
 pnpm --filter @nocobase/app-plugin-registry-example registry:build
 ```
 
-包内 [README](../packages/app-plugin-registry-example/README.md) 记录了 build、materialize、远程 `shadcn add` 和升级合并流程。
+包内 [README](../../../packages/app-plugin-registry-example/README.md) 记录了 build、materialize、远程 `shadcn add` 和升级合并流程。
 
 ## 14. 当前能力和缺口
 

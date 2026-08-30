@@ -51,7 +51,7 @@ pnpm plugin:unregister audit-log --app app-template-default
 pnpm plugin:remove audit-log
 ```
 
-See [Plugin development quick start](../../docs/plugin-development-quickstart.md)
+See [Plugin development quick start](../../docs/development/plugin-development/quick-start.md)
 for the server, database, client bootstrap, routes, and providers protocols.
 
 ## Current client architecture

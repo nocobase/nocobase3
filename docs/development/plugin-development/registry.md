@@ -82,6 +82,6 @@ pnpm registry materialize \
 - 自动 extension 要验证真实 route override/Provider composition；
 - Plugin Skill 明确 item、安装目标、所有权、前置插件和升级方式。
 
-不要把 `<app>/.agents/skills` 或 materialized App 源码当作插件 canonical source。更完整的工具和发布参考见 [Plugin Registry](../../plugin-registry.md)。
+不要把 `<app>/.agents/skills` 或 materialized App 源码当作插件 canonical source。更完整的工具、发布、安装和升级参考见 [Plugin Registry 完整开发与发布](./plugin-registry.md)。
 
-返回[插件开发](../plugin-development.md)，或继续编写[Plugin Skills](./skills.md)。
+返回[插件开发目录](./README.md)，或继续编写[Plugin Skills](./skills.md)。

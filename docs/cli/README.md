@@ -149,7 +149,7 @@ pnpm plugin:inspect audit-log --json
 | `pnpm plugin:remove <name>`                     | 删除插件源码；仍被引用时会拒绝并提示先 unregister       |
 | `pnpm plugin:skills:sync`                       | 只同步 skills（从 `packages/` 解析插件）                |
 
-完整参数用 `--help` 查看。插件开发流程见[插件开发](../development/plugin-development.md)。
+完整参数用 `--help` 查看。插件开发流程见[插件开发](../development/plugin-development/README.md)。
 
 仓库专属的 `plugin:remove` 也支持 `--dry-run --json`。仍有 workspace 引用时，它以非零退出码返回 `PLUGIN_STILL_REFERENCED`，并在 `error.details.references` 和结构化 `error.suggestions` 中列出阻塞引用及解除注册命令。
 

@@ -25,7 +25,7 @@ If the project instead uses `packages/plugins/`, `src/client-v2/`,
 That is a different plugin protocol.
 
 Always read the repository `AGENTS.md` first, then read
-`docs/development/plugin-development.md`. Read only the relevant topic page
+`docs/development/plugin-development/README.md`. Read only the relevant topic page
 for the current task:
 
 | Task                                 | Read                                       |
@@ -38,13 +38,16 @@ for the current task:
 | Share React Context                  | `client-providers.md`                      |
 | Add imperative Client initialization | `client-bootstrap.md`                      |
 | Choose a Server module               | `server.md`                                |
-| Build a Service/Token/Provider       | `server-services-and-providers.md`         |
+| Choose a Service/Token/Provider      | `server-services-and-providers.md`         |
+| Implement Provider lifecycle         | `service-provider.md`                      |
+| Apply Token/Container patterns       | `service-token-examples.md`                |
 | Add asynchronous work                | `server-jobs.md`                           |
 | Choose a database operation          | `database.md`                              |
 | Change schema                        | `database-migrations.md`                   |
 | Add required initial records         | `database-seeds.md`                        |
 | Add Client or Server translations    | `i18n.md`                                  |
-| Deliver App-owned editable source    | `registry.md`                              |
+| Choose an App-owned Registry item    | `registry.md`                              |
+| Build, publish, or upgrade Registry  | `plugin-registry.md`                       |
 | Write Plugin Skills for an App Agent | `skills.md`                                |
 | Test, build, and verify              | `testing.md`                               |
 

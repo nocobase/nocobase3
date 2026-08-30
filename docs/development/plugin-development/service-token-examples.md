@@ -1,11 +1,13 @@
 ---
-title: ServiceToken Examples
-description: NocoBase V3 中使用 ServiceToken 注册和解析 class 实例、普通对象、函数、惰性单例、普通值和同类型多角色服务的简易示例
+title: ServiceToken 与 ServiceContainer 示例
+description: 展示 NocoBase v3 插件如何使用 ServiceToken 和 ServiceContainer 注册、解析和测试服务。
 ---
 
-# ServiceToken 简易示例
+# ServiceToken 与 ServiceContainer 示例
 
-`ServiceToken<T>` 标识一项可由容器注册和解析的能力。服务既可以是 class 实例，也可以是普通对象、函数或其他类型的值。
+本页是容器 API 的小型示例集。插件开发应先阅读 [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) 选择是否需要容器服务，再按需使用这些模式。
+
+`ServiceToken<T>` 是一项容器能力的运行时 identity，`T` 是调用方依赖的 TypeScript contract。服务既可以是 class 实例，也可以是普通对象、函数或其他类型的值。
 
 下面的示例共用一个容器：
 
@@ -31,7 +33,9 @@ class HeartbeatService {
 }
 
 const heartbeatServiceToken: ServiceToken<HeartbeatService> =
-  createServiceToken<HeartbeatService>('@nocobase/example-runtime/heartbeat');
+  createServiceToken<HeartbeatService>(
+    '@nocobase/app-plugin-example/heartbeat',
+  );
 
 container.instance(heartbeatServiceToken, new HeartbeatService());
 
@@ -51,7 +55,7 @@ interface Clock {
 }
 
 const clockToken: ServiceToken<Clock> = createServiceToken<Clock>(
-  '@nocobase/example-runtime/clock',
+  '@nocobase/app-plugin-example/clock',
 );
 
 container.instance(clockToken, {
@@ -72,7 +76,7 @@ const currentTime = clock.now();
 type GenerateId = () => string;
 
 const generateIdToken: ServiceToken<GenerateId> =
-  createServiceToken<GenerateId>('@nocobase/example-runtime/generate-id');
+  createServiceToken<GenerateId>('@nocobase/app-plugin-example/generate-id');
 
 container.instance(generateIdToken, (): string => crypto.randomUUID());
 
@@ -92,7 +96,9 @@ interface FeatureFlags {
 }
 
 const featureFlagsToken: ServiceToken<FeatureFlags> =
-  createServiceToken<FeatureFlags>('@nocobase/example-runtime/feature-flags');
+  createServiceToken<FeatureFlags>(
+    '@nocobase/app-plugin-example/feature-flags',
+  );
 
 container.singleton(featureFlagsToken, () => ({
   isEnabled(name: string): boolean {
@@ -116,7 +122,7 @@ interface GreetingService {
 }
 
 const greetingServiceToken: ServiceToken<GreetingService> =
-  createServiceToken<GreetingService>('@nocobase/example-runtime/greeting');
+  createServiceToken<GreetingService>('@nocobase/app-plugin-example/greeting');
 
 container.singleton(greetingServiceToken, (resolver) => {
   const clock = resolver.resolve(clockToken);
@@ -140,7 +146,7 @@ greeting.greet('Alice');
 
 ```ts
 const deploymentIdToken: ServiceToken<string> = createServiceToken<string>(
-  '@nocobase/example-runtime/deployment-id',
+  '@nocobase/app-plugin-example/deployment-id',
 );
 
 container.instance(deploymentIdToken, 'deployment-001');
@@ -161,11 +167,11 @@ interface FileStorage {
 
 const publicFileStorageToken: ServiceToken<FileStorage> =
   createServiceToken<FileStorage>(
-    '@nocobase/example-runtime/public-file-storage',
+    '@nocobase/app-plugin-example/public-file-storage',
   );
 const privateFileStorageToken: ServiceToken<FileStorage> =
   createServiceToken<FileStorage>(
-    '@nocobase/example-runtime/private-file-storage',
+    '@nocobase/app-plugin-example/private-file-storage',
   );
 
 const publicContents = new Map<string, Uint8Array>();
@@ -203,7 +209,7 @@ interface RuntimeProviderApplication {
 }
 
 export default class RuntimeProvider extends ServiceProvider<RuntimeProviderApplication> {
-  public readonly name: string = '@nocobase/example-runtime';
+  public readonly name: string = '@nocobase/app-plugin-example/runtime';
 
   public override register(): void {
     this.app.container.instance(clockToken, {
@@ -248,7 +254,7 @@ Token 使用对象引用作为身份。消费方必须导入能力所有者导�
 
 ```ts
 // Correct: import the token owned by the service package.
-import { clockToken } from '@nocobase/example-runtime';
+import { clockToken } from '@nocobase/app-plugin-example/server/tokens';
 
 const clock = container.resolve(clockToken);
 ```
@@ -258,7 +264,7 @@ const clock = container.resolve(clockToken);
 ```ts
 // Incorrect: this is a different token object.
 const anotherClockToken: ServiceToken<Clock> = createServiceToken<Clock>(
-  '@nocobase/example-runtime/clock',
+  '@nocobase/app-plugin-example/clock',
 );
 
 container.resolve(anotherClockToken);
@@ -273,4 +279,6 @@ container.resolve(anotherClockToken);
 | 解析已注册的服务             | `container.resolve()`          |
 | 关闭时避免创建未使用的单例   | `container.resolveIfCreated()` |
 
-无论服务采用哪种实现形式，都应由能力所有者定义并导出一个稳定的 `ServiceToken<T>`，消费方导入并解析同一个 Token。
+无论服务采用哪种实现形式，都应由能力所有者定义并通过稳定的 source/publish subpath 导出 `ServiceToken<T>`，消费方导入并解析同一个 Token。仅存在 `server/tokens.ts` 文件不构成公共 API。
+
+容器当前只提供 instance 和 lazy singleton 两种 binding；不要假设存在 transient/scoped binding、字符串查找、自动 class 注入或按名称覆盖。Singleton factory 创建失败后会保留失败状态，后续解析继续抛出同一个错误，而不会反复执行 factory。

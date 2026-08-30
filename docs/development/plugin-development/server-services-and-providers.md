@@ -72,7 +72,7 @@ this.app.container.singleton(
 );
 ```
 
-`resolve()` 对未注册服务、重复注册和循环依赖给出明确错误；`has()` 只判断 binding 是否存在；`resolveIfCreated()` 只返回已经创建的 singleton，不触发实例化。
+`instance()` 或 `singleton()` 会拒绝重复 Token；`resolve()` 对未注册服务和循环依赖给出明确错误；`has()` 只判断 binding 是否存在；`resolveIfCreated()` 只返回已经创建的 binding，不触发 singleton 实例化。
 
 ## 用 ServiceProvider 注册生命周期
 
@@ -106,9 +106,9 @@ export class AuditLogProvider extends ServiceProvider<AuditLogProviderApplicatio
 }
 ```
 
-Provider 只声明自己真正需要的最小 Application 结构；只依赖 container 时不要扩大为整个 `AppPluginApplication`。Provider 使用 `this.app.container`，不创造 `services` 全局对象，也不把 App 配置逐项变成额外 constructor 参数。
+Provider 只声明并访问自己真正需要的 Application 结构。直接作为插件 contribution 时可以使用 `AppPluginApplication`；需要更精确地表达和测试依赖时，也可以使用与它结构兼容的窄 interface。Provider 使用 `this.app.container`，不创造 `services` 全局对象，也不把 App 配置逐项变成额外 constructor 参数。
 
-生命周期依次是 `register → boot → start → ready → shutdown`。所有 Provider 先完成同一阶段，再进入下一阶段；shutdown 按反向顺序执行。`singleton()` 在第一次 `resolve()` 时才创建实例。清理时用 `resolveIfCreated()`，避免为了关闭而创建从未使用的服务。
+生命周期依次是 `register → boot → start → ready → shutdown`。所有 Provider 先完成同一阶段，再进入下一阶段；shutdown 按反向顺序执行。Route factories 在所有 Provider 完成 `boot()` 后、`start()` 前创建。`singleton()` 在第一次 `resolve()` 时才创建实例。清理时用 `resolveIfCreated()`，避免为了关闭而创建从未使用的服务。
 
 各阶段的职责：
 
@@ -122,7 +122,7 @@ Provider 只声明自己真正需要的最小 Application 结构；只依赖 con
 
 `ready` 只表示 Application 内部服务可用，不表示 Node/Koa/Fastify Host 已监听端口。Provider 名称必须稳定且唯一。不要在构造器或声明模块顶层启动服务；`server:inspect` 会导入声明，但不会实例化 Provider。
 
-`boot`、`start` 或 `ready` 失败时，Registry 会尝试逆序 shutdown 已进入生命周期的 Providers；启动错误和清理错误都不会被吞掉。Provider 的 shutdown 应可安全重复，并处理 Service 从未解析的情况。
+`boot`、`start` 或 `ready` 失败时，Registry 会尝试逆序 shutdown 已进入生命周期的 Providers；启动错误和清理错误都不会被吞掉。Registry 的 shutdown 是幂等的；Provider 的清理逻辑仍应安全处理部分启动和 Service 从未解析的情况。
 
 ## 在消费者中解析
 
@@ -144,6 +144,6 @@ Route 负责 HTTP 和安全边界，Provider 或明确的 Job adapter 负责把 
 - 重复 Token、Provider 名称和循环依赖明确失败；
 - 公共 Server export 能被真实消费方解析。
 
-`server:inspect` 只确认 Provider 的最终装配顺序和来源，不能证明 binding、生命周期或 Service 行为。通用容器与生命周期细节见 [Service Provider](../../service-provider.md)，不同 Token value/role 的小型示例见 [ServiceToken Examples](../../service-token-examples.md)；本页只规定这些能力在插件中的选择和组合方式。
+`server:inspect` 只提供 Provider 的 owner、constructor name 和 composition order 的只读快照，不能证明 binding、生命周期或 Service 行为。容器与生命周期细节见 [ServiceProvider 生命周期与装配](./service-provider.md)，不同 Token value/role 的小型示例见 [ServiceToken 与 ServiceContainer 示例](./service-token-examples.md)；本页只规定这些能力在插件中的选择和组合方式。
 
 返回[Server 模块选择](./server.md)，或继续开发 [Server Routes](./server-routes-examples.md) 和 [Jobs](./server-jobs.md)。
