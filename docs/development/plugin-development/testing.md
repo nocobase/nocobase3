@@ -44,7 +44,8 @@ Token 解析、安全 wiring 和挂载。目标 App integration test 再验证 `
 ## Client Route 测试
 
 Plugin test 验证 App/Settings descriptor、auth/access/navigation 和实际
-`componentLoader()`；`client:inspect --json` 验证目标 App 的最终 composition；目标 App
+`componentLoader()`；需要确认注册或 composition 时，再用 `client:inspect --json` 查看目标 App 的
+composition 快照；目标 App
 测试验证导航、access、override、Provider 和页面行为。页面调用 Server API 时，还要
 完成真实页面到 API 的 full-stack 闭环。完整示例见
 [Client Route 最佳实践示例](./client-routes-examples.md)。
@@ -95,13 +96,26 @@ pnpm --filter <plugin-package> test
 pnpm --filter <plugin-package> build
 ```
 
-注册或 composition 发生变化时，运行对应的最终装配确认：
+Inspector 是可选的只读装配诊断，不是固定验证阶段。只有注册或 composition 发生变化，或者正在排查声明为什么没有进入目标 App 时，才运行对应命令查看装配快照：
 
 ```bash
 pnpm plugin:inspect <name> --app <target-app> --json
 pnpm --filter <target-app> client:inspect --json # Client changes only
 pnpm --filter <target-app> server:inspect --json # Server changes only
 ```
+
+不要默认把三个 Inspector 全部运行一遍。按变化选择主要验证方式：
+
+| 变化                                        | 主要验证方式                                                      | Inspector 的作用                                |
+| ------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+| Service、组件、Route handler 或 Job 行为    | 对应模块行为测试                                                  | 通常不需要                                      |
+| Route 权限或公开协议边界                    | 匿名、已认证、已授权和拒绝路径的请求测试                          | 不能验证安全性                                  |
+| Migration 或 Seed                           | 真实测试数据库上的 schema、metadata、`up`、`down` 和重复执行测试  | 只能在已声明时报告 location                     |
+| 翻译文本、fallback 或语言切换               | `i18n:check`、渲染、请求和非默认收件人语言测试                    | 不能验证内容或运行时选择                        |
+| 新增、删除或重排 Client/Server contribution | declaration test、目标 App typecheck/test/build，按风险运行时验证 | 可查看声明是否进入 composition 及其顺序         |
+| 修改插件登记或 Skills 同步                  | 注册命令结果、源文件和目标 App 状态                               | `plugin:inspect` 可辅助定位静态登记或同步不一致 |
+
+使用 Inspector 时，JSON 先读取 `ok` 和 `status`，进入 `result` 后再读取 `consistent`、`issues` 和 `suggestions`。`consistent: true` 只表示该命令观察到的装配事实没有冲突，不表示插件、业务行为或安全边界正确。
 
 再运行目标 App：
 
@@ -113,7 +127,7 @@ pnpm --filter <target-app> build
 
 最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job、语言切换和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
 
-Inspector 只回答插件是否登记、最终组合了哪些 contributions，以及是否存在确定性的装配问题。Client inspection 不运行 Bootstrap、不加载页面、不渲染 Provider；Server inspection 不执行 Provider、Route factory、Job 或数据库操作。Agent 通过源码、类型、模块测试和目标 App 行为理解实现，不根据 inspect 推断业务正确性。
+Inspector 只提供静态登记和 composition 的局部快照，并报告其检查范围内确定的装配问题。Client inspection 不运行 Bootstrap、不加载页面、不渲染 Provider；Server inspection 不执行 Provider、Route factory、Job 或数据库操作。Agent 通过模块文档、源码、类型、行为测试和目标 App 运行结果理解实现，不根据 Inspector 推断业务正确性，也不把 `consistent: true` 作为完成条件。
 
 ## 完成条件
 

@@ -81,16 +81,16 @@ auditLog({ resourceLabel: 'Audit logs' });
 
 声明模块顶层不得发请求、操作 DOM、启动定时器或修改全局状态。只有所有发布模块都没有 import-time 副作用时才设置 `sideEffects: false`；CSS 等必要副作用应精确声明。
 
-## 测试和最终装配确认
+## 测试和按需装配诊断
 
-先测试模块自身契约和行为，再运行插件 lint、typecheck、test、build。注册发生变化时，最后运行：
+先测试模块自身契约和行为，再运行插件 lint、typecheck、test、build。注册或 Client composition 变化，或者需要排查声明是否进入目标 App 时，再运行：
 
 ```bash
 pnpm plugin:inspect <name> --app <app> --json
 pnpm --filter <target-app> client:inspect --json
 ```
 
-Inspector 只确认插件登记和最终 Client composition，不执行 Bootstrap、不加载页面、不渲染 Provider，也不验证 UI 行为。目标 App 测试和浏览器/full-stack 验证仍然负责真实结果。
+Inspector 只提供插件登记和 Client composition 的只读快照，不执行 Bootstrap、不加载页面、不渲染 Provider，也不验证 UI 行为。命令成功不表示 Client 功能正确；目标 App 测试和浏览器/full-stack 验证仍然负责真实结果。
 
 ## Agent 自检
 

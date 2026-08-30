@@ -76,7 +76,9 @@ Client 普通页面使用 `defineAppRoutes()`，Settings 页面使用
 
 App 的 public base path 由宿主恢复。插件 Route 只写 App 内部路径：不要把 `/main` 或其他部署前缀写进 Route path。
 
-## Inspect 和验证
+## 按需装配诊断和行为验证
+
+新增、删除或重排 Route contribution，或者排查 Route 为什么没有进入目标 App 时，可以按变化范围运行对应 Inspector。只修改 handler、权限逻辑或页面行为时，不需要为了完成流程固定运行这些命令：
 
 ```bash
 pnpm plugin:inspect <name> --app <app> --json
@@ -88,12 +90,12 @@ pnpm --filter <app> client:inspect --json
 - `server:inspect` 检查 Server contribution 的 `scope`、顺序和来源，不执行 Route factory；
 - `client:inspect` 解析 Client Route/Provider factory，可以执行 routes/providers factory，但不执行 bootstrap、不加载页面 `componentLoader`、不渲染 Provider，也不验证 Server 安全。
 
-Inspector 成功只证明 declaration 和 composition 可解析。继续用行为测试验证匿名/已认证请求、authorization、页面 loader、Settings access 和真实页面到 API 的闭环。
+Inspector 只提供 declaration/composition 的只读快照；命令成功或 `consistent: true` 都不能证明 Route 正确或安全。使用行为测试验证匿名/已认证请求、authorization、页面 loader、Settings access 和真实页面到 API 的闭环。
 
-验证分三层：Inspector 检查 declaration/composition；contribution test 执行真实
-factory、Token、middleware 和 handler；目标 App integration test 验证最终 URL、public
-base path、多个 contributions、真实登录和权限。复杂 Server Route 可以单独测试领域子
-router，但仍要测试 production contribution 的 wiring。
+主要验证分两层：contribution test 执行真实 factory、Token、middleware 和 handler；目标
+App integration test 验证最终 URL、public base path、多个 contributions、真实登录和权限。
+Inspector 仅在需要时辅助观察装配，不构成第三层行为验证。复杂 Server Route 可以单独测试
+领域子 router，但仍要测试 production contribution 的 wiring。
 
 ## 推荐参考
 
@@ -120,5 +122,5 @@ router，但仍要测试 production contribution 的 wiring。
 - App/Settings Route 的 auth/access 明确；
 - Client 页面保持 lazy loading；
 - Server/Client declaration、exports 和 App composition 一致；
-- `server:inspect`、`client:inspect` 和行为测试均通过；
+- 相关行为测试通过；发生 composition 变化时，按需查看的 Inspector 快照没有相关装配问题；
 - 需要页面和接口时完成真实前后端闭环验证。

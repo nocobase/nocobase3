@@ -28,6 +28,8 @@ describe('Server inspection', () => {
 
     expect(inspection.app.packageName).toBe('@nocobase/app-template-default');
     expect(inspection.issues).toEqual([]);
+    expect(inspection.consistent).toBe(true);
+    expect(inspection.suggestions).toEqual([]);
     expect(inspection.plugins[0]).toMatchObject({
       order: 1,
       packageName: '@nocobase/app-plugin-authentication',
@@ -61,7 +63,6 @@ describe('Server inspection', () => {
       ),
     ).toBe(true);
     expect(inspection).not.toHaveProperty('limitations');
-    expect(inspection).not.toHaveProperty('consistent');
     expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
     expect(Array.isArray(inspection.locales)).toBe(true);
     expect(formatAppServerInspection(inspection)).toContain(

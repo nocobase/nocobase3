@@ -72,7 +72,9 @@ export interface AppServerInspectionSnapshot {
   readonly locales: readonly AppServerLocalesSnapshot[];
   readonly database: readonly AppServerDatabaseSnapshot[];
   readonly jobs: readonly AppServerJobsSnapshot[];
+  readonly consistent: boolean;
   readonly issues: readonly AppServerInspectionIssue[];
+  readonly suggestions: readonly string[];
 }
 
 /**
@@ -205,6 +207,29 @@ export function inspectResolvedAppServerPlugins<
     locales,
     database,
     jobs,
+    consistent: issues.length === 0,
     issues,
+    suggestions: suggestionsForIssues(issues),
   };
+}
+
+function suggestionsForIssues(
+  issues: readonly AppServerInspectionIssue[],
+): string[] {
+  const suggestions = new Set<string>();
+  for (const issue of issues) {
+    if (
+      issue.code === 'SERVER_MIGRATIONS_DIRECTORY_MISSING' ||
+      issue.code === 'SERVER_SEEDS_DIRECTORY_MISSING'
+    ) {
+      suggestions.add(
+        'Check the plugin database declaration, package files, and resolved installation contents.',
+      );
+    } else if (issue.code === 'SERVER_JOB_LOCATION_MISSING') {
+      suggestions.add(
+        'Check the plugin Queue Job declaration, package files, and resolved installation contents.',
+      );
+    }
+  }
+  return [...suggestions];
 }

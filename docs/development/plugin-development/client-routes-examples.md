@@ -218,13 +218,13 @@ Plugin test 应验证 declaration，而不是只断言文件存在：
 - 使用 options 时，factory 解析后的 Route；
 - 使用 override 时，最终 component loader 和唯一所有权。
 
-随后运行：
+Client Route composition 发生变化，或者需要排查 Route 是否进入目标 App 时，可以运行：
 
 ```bash
 pnpm --filter <target-app> client:inspect --json
 ```
 
-它验证最终 Client composition，但不运行 bootstrap、页面 loader 或 Provider。目标 App
+它提供最终 Client composition 的只读快照，但不运行 bootstrap、页面 loader 或 Provider，也不验证 Route 行为。目标 App
 测试继续验证真实导航、access、override、Provider 和页面行为；有 Server API 时完成
 页面到真实 API 的 full-stack 闭环。
 

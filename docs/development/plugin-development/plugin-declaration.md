@@ -346,12 +346,11 @@ pnpm --filter <plugin-package> build
 目标 App：
 
 ```bash
-pnpm --filter <target-app> client:inspect --json
 pnpm --filter <target-app> typecheck
 pnpm --filter <target-app> build
 ```
 
-纯 Server 插件没有 Client contributions 时，不要求 Client inspect 中出现该插件。
+Client/Server composition 发生变化，或者需要诊断声明是否进入目标 App 时，再运行匹配的 Inspector 查看只读装配快照。纯 Server 插件不应出现在 Client composition 中；Inspector 不是 declaration 正确性的完成证明。
 
 ## 相关内容
 

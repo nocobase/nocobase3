@@ -5,6 +5,8 @@
 ### Patch Changes
 
 - Show Client and Server locale declarations in application inspection without executing locale loaders.
+- Make locale-only Client inspection skip unrelated Route and Provider factories.
+- Include explicit Client Route and Settings order in inspection snapshots.
 
 - Simplify Client startup into Runtime definition, application creation, and rendering stages by using the shared `@nocobase/app-client/runtime` API.
 

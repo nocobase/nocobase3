@@ -310,9 +310,9 @@ pnpm plugin:remove audit-log
 - 包没有其他 workspace consumer；
 - 删除目标解析为明确的单个插件目录。
 
-## 注册状态检查
+## 按需检查注册状态
 
-推荐先运行只读检查：
+注册结果与预期不一致，或者需要机器可读的静态登记快照时，可以运行：
 
 ```bash
 pnpm plugin:inspect audit-log --app app-template-default --json
@@ -342,7 +342,7 @@ JSON 结果中的 `result.consistent` 表示本次检查的静态状态面是否
 
 Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 和 `error.suggestions`。不要从人类可读文案推断状态。
 
-当前不提供会扩大范围或自动修复的 `plugin:doctor`。Agent 应按以下顺序检查状态：
+当前不提供会扩大范围或自动修复的 `plugin:doctor`。诊断注册问题时，Agent 可按以下顺序检查状态：
 
 ```text
 1. package is installed/resolvable
@@ -351,7 +351,7 @@ Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 
 4. package exports ./client and/or ./server/plugin as expected
 5. client/plugins.ts matches Client export and enabled state
 6. server/plugins.ts matches Server export and enabled state
-7. Client contributions resolve through client:inspect
+7. when relevant, Client declarations appear in a client:inspect snapshot
 8. plugin Skills source exists and App copy is synchronized
 9. plugin package checks pass
 10. target App checks pass
@@ -363,7 +363,7 @@ Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 
 pnpm --filter <target-app> client:inspect --json
 ```
 
-检查最终 bootstrap 顺序、Routes、Settings、Providers 和 component overrides，而不只是源码声明。
+该命令可查看最终 bootstrap 顺序、Routes、Settings、Providers 和 component overrides，但不验证这些能力的运行行为。只有 Client composition 变化或需要诊断时才运行。
 
 ## 常见不一致
 
@@ -386,7 +386,7 @@ pnpm --filter <target-app> client:inspect --json
 - Client/Server composition roots 与包 exports 和 enabled 状态一致；
 - 没有重复注册；
 - Skills 已按预期同步，源文件与 App 副本一致；或命令明确使用了 `--no-skills`；
-- Client 变化通过 `client:inspect`；
+- Client/Server composition 变化时，声明已按预期进入目标 App；Inspector 可用于观察或诊断这一静态事实，但不是注册完成的独立门槛；
 - 目标 App 的 typecheck 和 build 通过；
 - Agent 报告自动完成、跳过和需要手工处理的各部分。
 

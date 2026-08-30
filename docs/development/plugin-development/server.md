@@ -74,16 +74,16 @@ export default plugin;
 
 `server:inspect` 和 App composition 会 import `server/plugin.ts` 及其 declaration modules。顶层只创建 definitions，不连接数据库、不启动 worker、不执行 Route factory，也不实例化 Provider。真正启动和清理由 Provider lifecycle、Route request 或 Queue runtime 管理。
 
-## 测试和最终装配确认
+## 测试和按需装配诊断
 
-分别测试 Container/Provider、Route、Job、Migration/Seed 的真实行为。注册变化后运行：
+分别测试 Container/Provider、Route、Job、Migration/Seed 的真实行为。注册或 Server composition 变化，或者需要排查声明是否进入目标 App 时，再运行：
 
 ```bash
 pnpm plugin:inspect <name> --app <app> --json
 pnpm --filter <target-app> server:inspect --json
 ```
 
-Inspector 只确认最终 Server composition、Route scopes 和配置 locations；它不执行 Provider、Route factory、Job、Migration 或 Seed。继续运行插件和目标 App 的 lint、typecheck、test、build 以及必要的 runtime/full-stack 验证。
+Inspector 只提供 Server composition、Route scopes 和配置 locations 的只读快照；它不执行 Provider、Route factory、Job、Migration 或 Seed，也不是 Server 行为或安全性的证明。继续运行插件和目标 App 的 lint、typecheck、test、build 以及必要的 runtime/full-stack 验证。
 
 ## Agent 自检
 

@@ -107,6 +107,8 @@ describe('Server plugin inspection', () => {
       },
     ]);
     expect(inspection.issues).toEqual([]);
+    expect(inspection.consistent).toBe(true);
+    expect(inspection.suggestions).toEqual([]);
     expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
   });
 
@@ -176,6 +178,11 @@ describe('Server plugin inspection', () => {
       'SERVER_MIGRATIONS_DIRECTORY_MISSING',
       'SERVER_SEEDS_DIRECTORY_MISSING',
       'SERVER_JOB_LOCATION_MISSING',
+    ]);
+    expect(inspection.consistent).toBe(false);
+    expect(inspection.suggestions).toEqual([
+      'Check the plugin database declaration, package files, and resolved installation contents.',
+      'Check the plugin Queue Job declaration, package files, and resolved installation contents.',
     ]);
   });
 });

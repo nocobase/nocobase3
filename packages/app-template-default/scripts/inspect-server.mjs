@@ -99,6 +99,12 @@ export function formatAppServerInspection(inspection) {
       lines.push(`- ${issue.code}: ${issue.message}`);
     }
   }
+  if (inspection.suggestions.length > 0) {
+    lines.push('', 'Suggestions:');
+    for (const suggestion of inspection.suggestions) {
+      lines.push(`- ${suggestion}`);
+    }
+  }
   lines.push(
     '',
     'Inspection scope: declarations and resolved contribution locations only.',

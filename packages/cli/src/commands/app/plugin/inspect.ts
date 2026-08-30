@@ -31,6 +31,11 @@ interface InspectIssue {
   readonly severity: 'error' | 'warning';
 }
 
+interface InspectSuggestion {
+  readonly command: string;
+  readonly args: readonly string[];
+}
+
 export default class AppPluginInspect extends Command {
   static override summary = "Inspect a plugin's static registration state.";
   static override description =
@@ -168,6 +173,8 @@ async function inspectPlugin(
   const skills = pluginDirectory
     ? await inspectSkills(appRoot, packageName, pluginDirectory)
     : {
+        checked: false,
+        reason: 'plugin-not-installed',
         source: [],
         synchronized: [],
         missing: [],
@@ -175,9 +182,10 @@ async function inspectPlugin(
         contentMatches: false,
       };
   if (
-    skills.missing.length > 0 ||
-    skills.stale.length > 0 ||
-    !skills.contentMatches
+    skills.checked &&
+    (skills.missing.length > 0 ||
+      skills.stale.length > 0 ||
+      !skills.contentMatches)
   )
     issues.push({
       code: 'SKILLS_OUT_OF_DATE',
@@ -202,7 +210,7 @@ async function inspectPlugin(
     skills,
     consistent: issues.length === 0,
     issues,
-    suggestions: issues.map((issue) => suggestionFor(issue.code, packageName)),
+    suggestions: suggestionsFor(issues, packageName),
   };
 }
 
@@ -233,6 +241,7 @@ async function inspectSkills(
   pluginDirectory: string,
 ): Promise<
   Record<string, unknown> & {
+    checked: true;
     missing: string[];
     stale: string[];
     contentMatches: boolean;
@@ -260,6 +269,7 @@ async function inspectSkills(
     }
   }
   return {
+    checked: true,
     source: sourceNames,
     synchronized: owned,
     missing,
@@ -301,11 +311,13 @@ async function hashDirectory(directory: string): Promise<string> {
   return hash.digest('hex');
 }
 
-function suggestionFor(
-  code: string,
-  packageName: string,
-): Record<string, unknown> {
+function suggestionFor(code: string, packageName: string): InspectSuggestion {
   const shortName = packageName.replace('@nocobase/app-plugin-', '');
+  if (code === 'PLUGIN_NOT_INSTALLED')
+    return {
+      command: 'pnpm',
+      args: ['plugin:register', shortName],
+    };
   if (code === 'SKILLS_OUT_OF_DATE')
     return {
       command: 'pnpm',
@@ -315,4 +327,29 @@ function suggestionFor(
     command: 'pnpm',
     args: ['plugin:register', shortName, '--no-install'],
   };
+}
+
+function suggestionsFor(
+  issues: readonly InspectIssue[],
+  packageName: string,
+): InspectSuggestion[] {
+  const notInstalled = issues.find(
+    ({ code }) => code === 'PLUGIN_NOT_INSTALLED',
+  );
+  const actionableIssues = notInstalled ? [notInstalled] : issues;
+  return uniqueSuggestions(
+    actionableIssues.map((issue) => suggestionFor(issue.code, packageName)),
+  );
+}
+
+function uniqueSuggestions(
+  suggestions: readonly InspectSuggestion[],
+): InspectSuggestion[] {
+  const seen = new Set<string>();
+  return suggestions.filter((suggestion) => {
+    const key = JSON.stringify([suggestion.command, suggestion.args]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

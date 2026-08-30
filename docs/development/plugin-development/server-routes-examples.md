@@ -403,8 +403,8 @@ describe('root routes', () => {
 - 简单 Route 直接声明，复杂业务域才抽取返回 `Hono` 的 router factory；
 - 测试覆盖匿名、无权限、允许访问、错误输入和 middleware 不泄漏；
 - `server/routes/index.ts` 导出直接 contributions，`server/plugin.ts` 不使用 loader；
-- 运行插件的 `lint`、`typecheck`、`test` 和 `build`，并运行目标 App 的
-  `server:inspect --json` 和相关集成测试。
+- 运行插件的 `lint`、`typecheck`、`test` 和 `build` 以及目标 App 的相关集成测试；
+  Server composition 变化或需要诊断时，可用 `server:inspect --json` 查看只读装配快照。
 
 返回[Route 插件开发](./routes.md)，或继续阅读[测试和验证插件](./testing.md)和
 `packages/app-plugin-routes-example` 的可运行四 Route 示例。

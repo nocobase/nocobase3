@@ -134,28 +134,26 @@ pnpm --filter @nocobase/app-plugin-system-info build
 pnpm plugin:register system-info --app app-template-default
 ```
 
-随后用只读命令确认 dependency、metadata、Client/Server composition root 和 Skills 副本一致：
+如果需要机器可读的注册快照，或注册结果与预期不一致，可用只读命令查看 dependency、metadata、Client/Server composition root 和 Skills 副本状态：
 
 ```bash
 pnpm plugin:inspect system-info --app app-template-default --json
 ```
 
-读取 `result.consistent` 和 `result.issues`，不要只根据 `ok` 判断插件接线正确。该检查不运行插件代码，也不验证 Route 权限、测试或构建。
+读取 `result.consistent` 和 `result.issues`，不要只根据 `ok` 判断命令结果。该检查不运行插件代码，也不验证插件接线之外的实现、Route 权限、测试或构建；它不是快速开始的完成门槛。
 
 注册命令根据真实 exports 独立判断 Client 和 Server entry，并同步插件顶层 `skills/` 到 App
 本地的 `.agents/skills/`。整个 `.agents/` 是被 Git 忽略的生成产物；不要编辑或提交同步
 副本。提交插件的 `skills/` 源文件，以及 Agent 按 Skill 完成的 App 正式源码。
 
-涉及 Client 时检查最终 contributions。JSON 模式先读取 `ok` 和 `status`，再读取
-`result.consistent`、`result.issues`；不要把 inspection 成功解释为 bootstrap、页面、
-Provider 或浏览器行为已经验证：
+Client 或 Server composition 发生变化，或者需要排查 contribution 为什么不可用时，可以按变化范围查看对应的只读快照。不要默认把两个命令都运行一遍。JSON 模式先读取 `ok` 和 `status`，再读取 `result.consistent`、`result.issues`；不要把 inspection 成功解释为 bootstrap、页面、Provider、Route 或浏览器行为已经验证：
 
 ```bash
 pnpm --filter @nocobase/app-template-default client:inspect --json
 pnpm --filter @nocobase/app-template-default server:inspect --json
 ```
 
-Client-only 插件可以跳过 Server inspection；Server-only 插件可以跳过 Client inspection。
+只运行与变化或诊断目标匹配的 Inspector；没有 composition 变化时可以全部跳过。
 `client:inspect` 和 `server:inspect` 会显示 locales 声明是否进入最终 composition，但不会执行 locale loader，也不会读取语言列表、key 或翻译内容。检查 `server:inspect` 的 `issues`，并继续用 `i18n:check --strict` 与行为测试验证翻译、Provider、Route 权限、Database 和 Job 的运行时行为。
 
 最后运行目标 App 的相关 typecheck、test、build 和按风险选择的运行时验证。

@@ -16,6 +16,8 @@ Usage:
 Options:
   --type <type>      all, bootstrap, routes, settings, providers, or locales
                      (default: all)
+                     locales inspects declarations without executing Route or
+                     Provider factories
   --json             Print machine-readable JSON
   -h, --help         Show this help
 
@@ -98,6 +100,7 @@ export function parseInspectAppClientArgs(args) {
 
 export async function inspectAppClient({
   appRoot = path.resolve(import.meta.dirname, '..'),
+  type = 'all',
 } = {}) {
   const packageJsonPath = path.join(appRoot, 'package.json');
   const appPackageName = JSON.parse(readFileSync(packageJsonPath, 'utf8')).name;
@@ -109,6 +112,23 @@ export async function inspectAppClient({
     appRoot,
     appPackageName,
   );
+  const locales = localeSnapshots(
+    appPackageName,
+    applicationLoader,
+    clientPlugins.plugins,
+  );
+  if (type === 'locales') {
+    return {
+      app: {
+        packageName: appPackageName,
+        appRoot,
+      },
+      locales,
+      consistent: true,
+      issues: [],
+      suggestions: [],
+    };
+  }
   const contributions = [
     ...(applicationLoader
       ? [await loadContribution(applicationLoader, 'application')]
@@ -188,27 +208,11 @@ export async function inspectAppClient({
             : {}),
         })),
     ],
-    locales: [
-      ...(applicationLoader?.locales
-        ? [
-            {
-              order: 1,
-              packageName: appPackageName,
-              source: 'application',
-            },
-          ]
-        : []),
-      ...clientPlugins.plugins
-        .filter((plugin) => plugin.locales)
-        .map((plugin, index) => ({
-          order: index + (applicationLoader?.locales ? 2 : 1),
-          packageName: plugin.packageName,
-          source: 'plugin',
-        })),
-    ],
-    routes: routes.map((route) => {
+    locales,
+    routes: routes.map((route, index) => {
       const override = overrides.find((entry) => entry.routeId === route.id);
       return {
+        order: index + 1,
         parent: 'app',
         auth: route.auth,
         id: route.id,
@@ -225,7 +229,8 @@ export async function inspectAppClient({
           : {}),
       };
     }),
-    settings: resolved.settings.map((setting) => ({
+    settings: resolved.settings.map((setting, index) => ({
+      order: index + 1,
       parent: 'settings',
       id: setting.id,
       title: setting.title,
@@ -269,6 +274,27 @@ export async function inspectAppClient({
             'Declare resource and action access on every Settings Route, then rerun client:inspect.',
           ],
   };
+}
+
+function localeSnapshots(appPackageName, applicationLoader, plugins) {
+  return [
+    ...(applicationLoader?.locales
+      ? [
+          {
+            order: 1,
+            packageName: appPackageName,
+            source: 'application',
+          },
+        ]
+      : []),
+    ...plugins
+      .filter((plugin) => plugin.locales)
+      .map((plugin, index) => ({
+        order: index + (applicationLoader?.locales ? 2 : 1),
+        packageName: plugin.packageName,
+        source: 'plugin',
+      })),
+  ];
 }
 
 function describeOverrideOrigin(origin) {
@@ -621,7 +647,7 @@ function formatRoutes(routes) {
   return `Routes\n${routes
     .map((route) =>
       [
-        `  ${route.path}`,
+        `  ${route.order}. ${route.path}`,
         `    parent: ${route.parent}`,
         `    id: ${route.id}`,
         `    auth: ${route.auth}`,
@@ -643,7 +669,7 @@ function formatSettings(settings) {
   return `Settings\n${settings
     .map((setting) =>
       [
-        `  ${setting.path}`,
+        `  ${setting.order}. ${setting.path}`,
         `    parent: ${setting.parent}`,
         `    id: ${setting.id}`,
         `    title: ${setting.title}`,
@@ -706,7 +732,7 @@ async function main() {
       return;
     }
 
-    const inspection = await inspectAppClient();
+    const inspection = await inspectAppClient({ type: options.type });
     console.log(
       options.json
         ? JSON.stringify(

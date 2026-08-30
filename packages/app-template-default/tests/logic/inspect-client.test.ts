@@ -36,7 +36,7 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
   return appRoot;
 }
 
-function settingFor(id: string, title: string) {
+function settingFor(id: string, title: string, order: number) {
   return {
     access: {
       action: 'read',
@@ -45,6 +45,7 @@ function settingFor(id: string, title: string) {
     entry: '@nocobase/app-plugin-authorization/client/routes',
     groupId: 'authorization',
     id,
+    order,
     packageName: '@nocobase/app-plugin-authorization',
     parent: 'settings',
     path: `/settings/authorization/${id}`,
@@ -226,10 +227,10 @@ describe('client inspection', () => {
 
     // Administration pages are settings contributions; record detail pages may remain routes nested below them.
     expect(inspection.settings.slice(0, 4)).toEqual([
-      settingFor('permission-sets', 'Permission Sets'),
-      settingFor('default-access', 'Default Access'),
-      settingFor('sharing-rules', 'Sharing Rules'),
-      settingFor('restriction-rules', 'Restriction Rules'),
+      settingFor('permission-sets', 'Permission Sets', 1),
+      settingFor('default-access', 'Default Access', 2),
+      settingFor('sharing-rules', 'Sharing Rules', 3),
+      settingFor('restriction-rules', 'Restriction Rules', 4),
     ]);
     expect(inspection.settings).toContainEqual({
       access: {
@@ -238,6 +239,7 @@ describe('client inspection', () => {
       },
       entry: '@nocobase/app-plugin-routes-example/client/routes',
       id: 'routes-example',
+      order: 5,
       packageName: '@nocobase/app-plugin-routes-example',
       parent: 'settings',
       path: '/settings/routes-example',
@@ -291,6 +293,7 @@ describe('client inspection', () => {
       auth: 'required',
       id: '@nocobase/app-template-default:home',
       name: 'home',
+      order: 1,
       packageName: '@nocobase/app-template-default',
       parent: 'app',
       path: '/',
@@ -440,6 +443,57 @@ describe('client inspection', () => {
         routeId: 'example',
       }),
     ]);
+  });
+
+  it('inspects only locale declarations without executing unrelated factories', async () => {
+    const appRoot = await createInspectionApp(`
+      globalThis.__clientLocalesOnlyCalls = { locales: 0, providers: 0, routes: 0 };
+      const plugin = {
+        packageName: '@example/client-locales-only-inspection',
+        locales: async () => {
+          globalThis.__clientLocalesOnlyCalls.locales += 1;
+          return { default: {} };
+        },
+        routes: async () => {
+          globalThis.__clientLocalesOnlyCalls.routes += 1;
+          throw new Error('routes must not run during locales-only inspection');
+        },
+        providers: async () => {
+          globalThis.__clientLocalesOnlyCalls.providers += 1;
+          throw new Error('providers must not run during locales-only inspection');
+        },
+      };
+      export default { plugins: [plugin], routeComponentOverrides: [] };
+    `);
+
+    const inspection = await inspectAppClient({ appRoot, type: 'locales' });
+
+    expect(globalThis.__clientLocalesOnlyCalls).toEqual({
+      locales: 0,
+      providers: 0,
+      routes: 0,
+    });
+    expect(inspection).toEqual({
+      app: {
+        packageName: '@example/inspect-app',
+        appRoot,
+      },
+      locales: [
+        {
+          order: 1,
+          packageName: '@example/inspect-app',
+          source: 'application',
+        },
+        {
+          order: 2,
+          packageName: '@example/client-locales-only-inspection',
+          source: 'plugin',
+        },
+      ],
+      consistent: true,
+      issues: [],
+      suggestions: [],
+    });
   });
 
   it('uses stable errors for missing and invalid Client composition', async () => {

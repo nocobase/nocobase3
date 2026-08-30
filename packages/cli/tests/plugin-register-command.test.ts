@@ -411,6 +411,40 @@ describe('app plugin register command', () => {
     expect(await readFile(manifestPath, 'utf8')).toBe(before);
   });
 
+  it('does not report stale Skills when an uninstalled plugin cannot be inspected', async () => {
+    const appRoot = await createAppWithInstalledPlugin();
+
+    const inspected = await runCommand(config, 'app:plugin:inspect', [
+      'not-installed',
+      '--dir',
+      appRoot,
+      '--json',
+    ]);
+    const response = JSON.parse(inspected.stdout) as {
+      result: {
+        issues: Array<{ code: string }>;
+        skills: { checked: boolean; reason?: string };
+        suggestions: Array<{ command: string; args: string[] }>;
+      };
+    };
+
+    expect(response.result.skills).toMatchObject({
+      checked: false,
+      reason: 'plugin-not-installed',
+    });
+    expect(response.result.issues.map(({ code }) => code)).toEqual([
+      'PLUGIN_NOT_INSTALLED',
+      'DEPENDENCY_MISSING',
+      'PLUGIN_METADATA_MISSING',
+    ]);
+    expect(response.result.suggestions).toEqual([
+      {
+        command: 'pnpm',
+        args: ['plugin:register', 'not-installed'],
+      },
+    ]);
+  });
+
   it.each([
     ['client-only', { client: true, server: false }, true, false],
     ['server-only', { client: false, server: true }, false, true],

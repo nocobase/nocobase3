@@ -79,7 +79,7 @@ Client 的 `auth/access` 只保护浏览器导航，不能替代 Server 安全�
 - 只读取当前任务所需页面和匹配的可运行示例，避免复制整个示例插件；
 - Plugin Skills 面向使用插件的 App Agent，不是插件源码开发手册；
 - Registry materialized copy 归 App 所有，插件的 `registry/` 才是 canonical source；
-- Inspector 只确认登记与最终 composition，不替代源码阅读、类型检查、行为测试和 runtime/full-stack 验证；
+- Inspector 只提供登记与 composition 的只读快照，用于按需诊断，不替代源码阅读、类型检查、行为测试和 runtime/full-stack 验证；
 - 完成实现后按照[测试与验证](./testing.md)检查插件包和目标 App。
 
 上一级总览见[插件开发](../plugin-development.md)。

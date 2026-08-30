@@ -79,6 +79,8 @@ authorization”；如果响应改为私有或用户相关数据，必须重新�
 
 明确调用身份、resource/action、必要 scopes、数据边界、幂等性、重试、容量或生命周期限制。验证应指出可观察结果，例如响应、页面状态、记录、队列状态或日志；不要只写“运行测试”。
 
+不要把 `plugin:inspect`、`client:inspect` 或 `server:inspect` 写成 App Agent 使用插件的主流程或能力正确性的证明。正常工作流先调用插件的公共入口，再验证用户可观察的页面、响应、数据或任务结果。只有插件能力意外不可用、需要排查登记或 composition 时，才在 diagnostics 中把 Inspector 作为只读辅助工具；即使结果为 `consistent: true`，也不能代替真实行为验证。
+
 ## 主 `SKILL.md` 与 references
 
 主文件保持任务路由和最短工作流，细节放入 `references/`：

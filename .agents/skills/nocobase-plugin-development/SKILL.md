@@ -117,17 +117,19 @@ runnable reference is needed.
 - Prefer lifecycle commands with `--json`. Branch on `ok` and `status`; treat
   `success-noop`, `partial-success`, and `requires-installation` as distinct
   outcomes, and use `error.code` plus the non-zero exit code for failures.
-- Run `plugin:inspect <name> --json` after registration changes. It is
-  read-only and checks only static package, metadata, composition, and Skill
-  state; it does not prove Route security, runtime behavior, tests, or builds.
-- Run the target App's `server:inspect --json` when Server contributions are
-  involved. Check `issues`: the command imports declaration modules and reports
-  plugin order, best-effort Provider constructor names, Route scopes, Database
-  sources, locale declarations, and Job locations. It does not execute locale
-  loaders or inspect runtime Provider, Route, locale, database, or Job behavior.
-- Use `client:inspect --type locales --json` to confirm Client locale declarations
-  entered composition. It does not execute locale loaders or inspect locale
-  names, keys, translations, fallback, or language switching.
+- Inspectors are optional, read-only composition diagnostics. Use
+  `plugin:inspect <name> --json` after registration changes, and use the
+  matching Client or Server Inspector only when composition changed or when
+  diagnosing why a declaration is unavailable. Do not run every Inspector by
+  default. A clean result means only that the structural facts observed by that
+  command were readable and consistent; it does not verify implementation,
+  runtime behavior, Route security, locale content, tests, or builds.
+- When an Inspector is useful, read `ok` and `status`, then `consistent`,
+  `issues`, and `suggestions`. `server:inspect --json` reports declaration and
+  resolved-location facts without executing Provider, Route, locale, database,
+  or Job behavior. `client:inspect --type locales --json` imports Client plugin
+  declarations without executing Route, Provider, or locale factories and does
+  not inspect locale names, keys, translations, fallback, or language switching.
 - Keep `server/plugin.ts` and the declaration modules it imports free of runtime
   startup side effects. Inspection imports these modules even though it does
   not instantiate Providers, execute Route factories, or load Job modules.
@@ -171,15 +173,15 @@ runnable reference is needed.
    Plugin Skills.
 5. Keep declarations, source/publish exports, dependencies, `files`, tests,
    README, and Skills consistent when a contribution changes.
-6. Preview registration with `--dry-run --json`, apply it, then use the
-   read-only `plugin:inspect <name> --json` only to confirm registration and
-   composition. The plugin's
+6. Preview registration with `--dry-run --json` and apply it. When registration
+   state is unclear, use `plugin:inspect <name> --json` as a read-only snapshot
+   of the static registration and composition facts. The plugin's
    `<plugin>/skills/` is the source of truth; do not edit the App's synchronized
    `.agents/skills/` copy.
-7. Run the plugin's lint, typecheck, test, and build. After composition changes,
-   use the matching Client or Server Inspector as a final assembly check, then
-   run the relevant App typecheck, test, build, and runtime checks. Inspectors
-   do not explain implementation or replace module behavior tests.
+7. Run the plugin's lint, typecheck, test, and build, then the relevant App
+   typecheck, test, build, and runtime checks. After a composition change, the
+   matching Client or Server Inspector may provide a read-only composition
+   snapshot; it is not a completion gate and does not explain or test behavior.
 
 Do not run scaffold, registration, enablement, migration, or other stateful
 commands merely because this Skill applies. Perform those actions only when
