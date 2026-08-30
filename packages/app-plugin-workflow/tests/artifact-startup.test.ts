@@ -83,12 +83,18 @@ async function emit(distRoot: string, title: string): Promise<string> {
   const flatIr = {
     title,
     inputSchema: { type: 'object' as const },
+    parameters: { label: { type: 'string' as const } },
     start: 'run',
     nodes: [node],
   };
   const built = buildWorkflowArtifact({
     scanned: { key: 'sample', root: '/ci/source', entries: [] },
-    definition: { title, inputSchema: flatIr.inputSchema, nodes: [] },
+    definition: {
+      title,
+      inputSchema: flatIr.inputSchema,
+      parameters: flatIr.parameters,
+      nodes: [],
+    },
     flatIr,
     serverEntries: {
       one: {
@@ -120,7 +126,39 @@ function createService(f: Awaited<ReturnType<typeof fixture>>) {
   });
 }
 describe('application workflow Artifact lazy synchronization', () => {
-  it('discovers without writes, materializes on enable, and publishes a new deployed revision on trigger', async () => {
+  it('materializes parameter settings as the first disabled current revision', async () => {
+    const f = await fixture();
+    const hash = await emit(f.distRoot, 'parameters');
+    const service = createService(f);
+    const repository = new WorkflowRepository(f.database, service);
+
+    await expect(
+      repository.updateParameters(hash, { label: 'configured' }),
+    ).resolves.toMatchObject({ values: { label: 'configured' } });
+
+    const revision = await f.database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .selectAll()
+      .where('key', '=', 'sample')
+      .executeTakeFirstOrThrow<Row>();
+    expect(revision).toMatchObject({
+      hash,
+      version: 'version-1',
+      current: 1,
+      enabled: 0,
+    });
+    expect(JSON.parse(String(revision.parameterValues))).toEqual({
+      label: 'configured',
+    });
+    await expect(repository.get(hash)).resolves.toMatchObject({
+      id: String(revision.id),
+      parameterValues: { label: 'configured' },
+    });
+    await service.dispose();
+  });
+
+  it('materializes revisions on demand without changing the current revision', async () => {
     const f = await fixture();
     const v1 = await emit(f.distRoot, 'v1');
     const firstService = createService(f);
@@ -152,6 +190,16 @@ describe('application workflow Artifact lazy synchronization', () => {
     expect(
       await fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
     ).toEqual(expect.arrayContaining(['workflow.json', 'server']));
+    await fs.rm(path.join(f.storeRoot, 'workflows/sample', v1), {
+      recursive: true,
+    });
+    const firstRuns = new WorkflowRunRepository(f.database, firstService);
+    await expect(
+      firstRuns.run(first.id as string, {}, { eventKey: 'recovered-run' }),
+    ).resolves.toMatchObject({ eventKey: 'recovered-run' });
+    await expect(
+      fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
+    ).resolves.toEqual(expect.arrayContaining(['workflow.json', 'server']));
     await firstRepository.setStatus(first.id as string, false);
     await expect(
       firstRepository.enable(first.id as string),
@@ -180,6 +228,29 @@ describe('application workflow Artifact lazy synchronization', () => {
       upgradeService,
     );
     await upgradeService.trigger('sample', {}, { eventKey: 'artifact-v2' });
+    const automatic = await f.database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.runs)
+      .selectAll()
+      .where('eventKey', '=', 'artifact-v2')
+      .executeTakeFirstOrThrow<Row>();
+    expect(automatic.hash).toBe(v1);
+    expect(
+      await f.database
+        .query()
+        .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+        .selectAll()
+        .where('key', '=', 'sample')
+        .execute(),
+    ).toHaveLength(1);
+
+    const manual = await upgradeRepository.run(
+      v2,
+      {},
+      {
+        eventKey: 'manual-v2',
+      },
+    );
     const revisions = await f.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
@@ -189,33 +260,24 @@ describe('application workflow Artifact lazy synchronization', () => {
       .execute<Row>();
     expect(revisions).toHaveLength(2);
     expect(revisions[0].hash).toBe(v1);
-    expect(Boolean(revisions[0].enabled)).toBe(false);
-    expect(Boolean(revisions[0].current)).toBe(false);
+    expect(Boolean(revisions[0].enabled)).toBe(true);
+    expect(Boolean(revisions[0].current)).toBe(true);
     expect(revisions[1].hash).toBe(v2);
-    expect(Boolean(revisions[1].enabled)).toBe(true);
-    expect(Boolean(revisions[1].current)).toBe(true);
-    expect(run.hash).toBe(v1);
-
-    const manual = await upgradeRepository.run(
-      revisions[0].id as string,
-      {},
-      {
-        eventKey: 'manual-v1',
-      },
-    );
+    expect(Boolean(revisions[1].enabled)).toBe(false);
+    expect(Boolean(revisions[1].current)).toBe(false);
     expect(manual).toMatchObject({
-      workflowId: String(revisions[0].id),
-      workflowVersion: 'version-1',
-      eventKey: 'manual-v1',
+      workflowId: String(revisions[1].id),
+      workflowVersion: 'version-2',
+      eventKey: 'manual-v2',
     });
     const manualRow = await f.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.runs)
       .selectAll()
-      .where('eventKey', '=', 'manual-v1')
+      .where('eventKey', '=', 'manual-v2')
       .executeTakeFirstOrThrow<Row>();
     expect(Boolean(manualRow.manually)).toBe(true);
-    expect(manualRow.hash).toBe(v1);
+    expect(manualRow.hash).toBe(v2);
     await upgradeService.dispose();
   });
   it('does not inspect deployment for an unknown trigger and validates deployment only on discovery', async () => {

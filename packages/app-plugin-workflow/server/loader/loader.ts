@@ -1,4 +1,5 @@
 import type { DatabaseManager } from '@nocobase/app-database';
+import type { WorkflowId } from '../engine/index.js';
 
 import type { WorkflowArtifactStore } from './artifact-store.js';
 import {
@@ -31,51 +32,52 @@ export class WorkflowLoader {
     return this.discovered;
   }
 
-  async sync(key: string, reason: 'enable' | 'trigger'): Promise<void> {
-    await this.withKeyLock(key, async () => {
-      const current = await this.options.database
-        .query()
-        .selectFrom('workflows')
-        .select(['id', 'enabled', 'current'])
-        .where('key', '=', key)
-        .where('current', '=', true)
-        .executeTakeFirst<Record<string, unknown>>();
-      if (reason === 'trigger' && !current?.enabled) return;
-      const artifact = (await this.discover()).find((item) => item.key === key);
-      if (!artifact) return;
-      const registered = await this.options.database
+  async ensureMaterialized(digest: string): Promise<WorkflowId | undefined> {
+    const artifact = (await this.discover()).find(
+      (item) => item.digest === digest,
+    );
+    if (!artifact) return undefined;
+    return this.withKeyLock(artifact.key, async () => {
+      let registered = await this.options.database
         .query()
         .selectFrom('workflows')
         .select('id')
-        .where('key', '=', key)
+        .where('key', '=', artifact.key)
         .where('hash', '=', artifact.digest)
-        .executeTakeFirst();
-      if (registered) return;
-      await this.options.artifactStore.commit(
-        key,
+        .executeTakeFirst<{ id: WorkflowId }>();
+      let created = false;
+      const stored = await this.options.artifactStore.has(
+        artifact.key,
         artifact.digest,
-        artifact.directory,
       );
-      const result = await this.publisher.registerArtifact(artifact);
-      await this.publisher.activate(result.workflowId);
-      if (reason === 'enable') {
-        await this.options.database
-          .query()
-          .updateTable('workflows')
-          .set({ enabled: true, current: true })
-          .where('key', '=', key)
-          .where('current', '=', true)
-          .where('id', '=', result.workflowId)
-          .execute();
+      if (!stored)
+        await this.options.artifactStore.commit(
+          artifact.key,
+          artifact.digest,
+          artifact.directory,
+        );
+      if (!registered) {
+        const result = await this.publisher.registerArtifact(artifact);
+        registered = { id: result.workflowId };
+        created = result.action !== 'unchanged';
       }
-      await this.options.refreshEngine();
+      const current = await this.options.database
+        .query()
+        .selectFrom('workflows')
+        .select('id')
+        .where('key', '=', artifact.key)
+        .where('current', '=', true)
+        .executeTakeFirst();
+      if (!current) await this.publisher.activate(registered.id);
+      if (created || !stored || !current) await this.options.refreshEngine();
+      return registered.id;
     });
   }
 
-  private async withKeyLock(
+  private async withKeyLock<T>(
     key: string,
-    task: () => Promise<void>,
-  ): Promise<void> {
+    task: () => Promise<T>,
+  ): Promise<T> {
     const previous = this.locks.get(key) ?? Promise.resolve();
     let release!: () => void;
     const current = new Promise<void>((resolve) => {
@@ -84,7 +86,7 @@ export class WorkflowLoader {
     this.locks.set(key, current);
     await previous;
     try {
-      await task();
+      return await task();
     } finally {
       release();
       if (this.locks.get(key) === current) this.locks.delete(key);

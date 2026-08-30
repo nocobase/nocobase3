@@ -1,10 +1,19 @@
-import ELK from 'elkjs/lib/elk.bundled.js';
+import * as ElkModule from 'elkjs/lib/elk.bundled.js';
+import type { ELK, ELKConstructorArguments } from 'elkjs/lib/elk-api.js';
 import type {
   WorkflowLayoutInput,
   WorkflowLayoutResult,
 } from '@nocobase/app-plugin-workflow/client';
 
-const elk = new ELK();
+type ElkConstructor = new (args?: ELKConstructorArguments) => ELK;
+
+function normalizeElkConstructor(
+  imported: ElkConstructor | { default: ElkConstructor },
+): ElkConstructor {
+  return typeof imported === 'function' ? imported : imported.default;
+}
+
+const elk = new (normalizeElkConstructor(ElkModule.default))();
 export async function layoutWithElk(
   input: WorkflowLayoutInput,
 ): Promise<WorkflowLayoutResult> {

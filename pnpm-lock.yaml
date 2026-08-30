@@ -1335,6 +1335,9 @@ importers:
 
   packages/app-plugin-workflow:
     dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
@@ -1344,6 +1347,9 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../app-plugin-authentication
+      '@nocobase/app-sdk':
+        specifier: workspace:^
+        version: link:../app-sdk
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit
@@ -1359,12 +1365,21 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider
+      '@xyflow/react':
+        specifier: ^12.11.3
+        version: 12.11.5(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      elkjs:
+        specifier: ^0.10.2
+        version: 0.10.2
       esbuild:
         specifier: ^0.25.12
         version: 0.25.12
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.1.0)
     devDependencies:
       '@boringnode/queue':
         specifier: ^0.7.1
@@ -1372,12 +1387,12 @@ importers:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../app-client
-      '@nocobase/app-sdk':
-        specifier: workspace:*
-        version: link:../app-sdk
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config
+      '@refinedev/core':
+        specifier: 'catalog:'
+        version: 5.0.12(@tanstack/react-query@5.101.4(react@19.1.0))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
