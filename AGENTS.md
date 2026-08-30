@@ -54,7 +54,11 @@ Test files stay out of the build. Keep `include` in the package `tsconfig.json` 
 
 ### Validation
 
-At minimum, run `lint`, `typecheck`, `test`, and `build` for every package you modify. Root `pnpm check` also performs incremental formatting and publish-ready tarball checks. The Husky + lint-staged pre-commit hook fixes staged files automatically, but it does not replace CI.
+Run `lint`, `typecheck`, `test`, and `build` for the packages you modified, and for the packages that consume what you changed. Scope the run to those with `pnpm --filter <package>`; a workspace-wide `pnpm -r test` takes minutes and is CI's job, not a routine step after an edit.
+
+Widening the scope is worth it when a change reaches further than the package it lives in: an exported type or signature, a shared configuration preset, or anything a generated application depends on. Judge that from the change itself rather than running everything by reflex.
+
+Root `pnpm check` also performs incremental formatting and publish-ready tarball checks. The Husky + lint-staged pre-commit hook fixes staged files automatically, but it does not replace CI.
 
 The executable source of `@nocobase/dev-config` is TypeScript, while its npm
 exports resolve to compiled ESM JavaScript and declarations in `dist`. When

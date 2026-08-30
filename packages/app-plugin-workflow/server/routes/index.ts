@@ -8,6 +8,7 @@ import {
 import { Hono } from 'hono';
 
 import { AppServiceError } from '../errors.js';
+import { WorkflowInvocationError } from '../engine/index.js';
 import type { WorkflowProviderConfig } from '../providers/workflow.js';
 import { workflowServiceToken } from '../tokens.js';
 import { createWorkflowRoutes } from './workflow.js';
@@ -25,9 +26,11 @@ export const apiRoutes: AppApiRouteContribution<
   const router = new Hono();
   router.onError((error, context) => {
     if (error instanceof AppServiceError) {
-      return context.json({ error: error.message }, error.status);
+      return context.json({ message: error.message }, error.status);
     }
-    return context.json({ error: 'Internal server error.' }, 500);
+    if (error instanceof WorkflowInvocationError)
+      return context.json({ message: error.message, code: error.code }, 400);
+    return context.json({ message: 'Internal server error.' }, 500);
   });
   const authentication = container.resolve(authenticationToken);
   for (const path of workflowRoutePaths) {
@@ -47,7 +50,7 @@ export const apiRoutes: AppApiRouteContribution<
   } else {
     for (const path of workflowRoutePaths) {
       router.all(path, (context) =>
-        context.json({ error: 'Workflow service is not configured.' }, 503),
+        context.json({ message: 'Workflow service is not configured.' }, 503),
       );
     }
   }

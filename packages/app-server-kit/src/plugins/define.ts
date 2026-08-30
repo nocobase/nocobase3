@@ -27,6 +27,7 @@ export function defineServerPlugin<
             : undefined,
         })
       : undefined,
+    locales: definition.locales,
   });
 }
 

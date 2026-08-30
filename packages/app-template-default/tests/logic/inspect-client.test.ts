@@ -127,23 +127,13 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-workflow:workflow-list',
-        path: '/workflow/workflows',
-      },
-      {
-        auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-detail',
-        path: '/workflow/workflows/:workflowId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-workflow:workflow-run-list',
-        path: '/workflow/runs',
+        path: '/settings/automation/workflows/:workflowId',
       },
       {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
-        path: '/workflow/runs/:runId',
+        path: '/settings/automation/workflow-runs/:runId',
       },
       {
         auth: 'required',
@@ -208,8 +198,13 @@ describe('client inspection', () => {
       },
     ]);
 
-    // Authorization's administration pages are settings rather than routes, and keep the paths they were published
-    // at before the settings centre existed.
+    expect(inspection.bootstraps[6]).toMatchObject({
+      order: 7,
+      packageName: '@nocobase/app-plugin-notification',
+      source: 'plugin',
+    });
+
+    // Administration pages are settings contributions; record detail pages may remain routes nested below them.
     expect(inspection.settings.slice(0, 4)).toEqual([
       settingFor('permission-sets', 'Permission Sets'),
       settingFor('default-access', 'Default Access'),
@@ -229,9 +224,23 @@ describe('client inspection', () => {
       source: 'plugin',
       title: 'Routes example',
     });
+    expect(inspection.settings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'workflows',
+          groupId: 'automation',
+          path: '/settings/automation/workflows',
+        }),
+        expect.objectContaining({
+          id: 'workflow-runs',
+          groupId: 'automation',
+          path: '/settings/automation/workflow-runs',
+        }),
+      ]),
+    );
     expect(
-      inspection.routes.some((route) => route.path.startsWith('/settings/')),
-    ).toBe(false);
+      inspection.routes.filter((route) => route.path.startsWith('/settings/')),
+    ).toHaveLength(2);
 
     const output = formatAppClientInspection(inspection);
     expect(output).toMatch(/Bootstrap order/u);
@@ -312,25 +321,6 @@ describe('client inspection', () => {
         componentEntry,
         // The override source is now named, rather than a flat "application".
         componentSource: 'application (extension:nocobase-auth-ui)',
-        routeSource: 'plugin',
-      })),
-    );
-
-    expect(
-      inspection.routes
-        .filter(({ packageName }) =>
-          packageName.endsWith('app-plugin-workflow'),
-        )
-        .map(({ componentEntry, componentSource, routeSource }) => ({
-          componentEntry,
-          componentSource,
-          routeSource,
-        })),
-    ).toEqual(
-      Array.from({ length: 4 }, () => ({
-        componentEntry:
-          './client/extensions/nocobase-workflow-management/pages',
-        componentSource: 'application (extension:nocobase-workflow-management)',
         routeSource: 'plugin',
       })),
     );

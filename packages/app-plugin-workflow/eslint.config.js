@@ -2,10 +2,6 @@ import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';
 
 export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
-  // The canonical Registry source is validated through the materialized
-  // Default Template snapshot, where application aliases and UI dependencies
-  // are available.
-  ignores: ['registry/**'],
   overrides: [
     {
       name: 'workflow-plugin/intentional-invalid-eval-fixture',
@@ -70,7 +66,7 @@ export default createClientLibraryConfig({
       files: [
         'server/engine/invocation.ts',
         'server/instructions/{condition/instruction,condition/json-logic/validator,run/instruction}.ts',
-        'tests/workflow-source.test.ts',
+        'tests/source.test.ts',
       ],
       rules: {
         // Explicit literal annotations are required for isolated declarations.

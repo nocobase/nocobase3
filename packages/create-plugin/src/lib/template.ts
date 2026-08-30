@@ -73,7 +73,8 @@ function includeTemplateFile(
   if (BASE_TEMPLATE_FILES.has(relativePath)) return true;
   if (
     relativePath === 'client/index.ts' ||
-    relativePath === 'client/plugin.ts'
+    relativePath === 'client/plugin.ts' ||
+    relativePath.startsWith('client/locales/')
   ) {
     return hasClientPlugin(capabilities);
   }
@@ -371,6 +372,7 @@ async function renderManifest(
   }
 
   const dependencies: Record<string, string> = {};
+  if (clientPlugin) dependencies['@nocobase/app-i18n'] = 'workspace:^';
   if (serverPlugin) dependencies['@nocobase/app-server-kit'] = 'workspace:^';
   if (capabilities.database)
     dependencies['@nocobase/app-database'] = 'workspace:^';
@@ -493,6 +495,7 @@ function renderClientPlugin(
   capabilities: PluginCapabilities,
 ): string {
   const entries = [
+    "  locales: () => import('./locales/index.js'),",
     capabilities.client.bootstrap
       ? "  bootstrap: () => import('./bootstrap.js'),"
       : undefined,

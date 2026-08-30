@@ -116,7 +116,7 @@ describe('createPlugin', () => {
     [
       'client.routes',
       ['./client', './client/plugin', './client/routes', './package.json'],
-      [],
+      ['@nocobase/app-i18n'],
       ['@nocobase/app-client'],
     ],
     [
@@ -128,13 +128,13 @@ describe('createPlugin', () => {
     [
       'client.providers',
       ['./client', './client/plugin', './client/providers', './package.json'],
-      [],
+      ['@nocobase/app-i18n'],
       ['@nocobase/app-client', 'react'],
     ],
     [
       'client.bootstrap',
       ['./client', './client/bootstrap', './client/plugin', './package.json'],
-      [],
+      ['@nocobase/app-i18n'],
       ['@nocobase/app-client'],
     ],
     ['registry', ['./package.json'], [], ['react']],
@@ -407,6 +407,7 @@ describe('createPlugin', () => {
     expect(result.files).not.toContain('client/routes.ts');
     expect(result.files).not.toContain('client/providers.ts');
     expect(plugin).toContain("bootstrap: () => import('./bootstrap.js')");
+    expect(plugin).toContain("locales: () => import('./locales/index.js')");
     expect(plugin).not.toContain('routes:');
     expect(plugin).not.toContain('providers:');
   });

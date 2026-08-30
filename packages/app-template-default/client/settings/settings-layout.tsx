@@ -1,16 +1,25 @@
 import type {
+  AppClientRegisteredRoute,
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
 } from '@nocobase/app-client/plugins';
 import { ArrowLeft, ChevronRight, PanelLeft, X } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router';
+import {
+  Link,
+  matchPath,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router';
 
 import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 
 import { describeSettingPage } from '../routing/client-page.js';
-import { ClientPage } from '../routing/client-route.js';
+import { ClientPage, ClientRoute } from '../routing/client-route.js';
 import { AppBrand, HeaderActions } from '../shell/index.js';
 import {
   useSettingsAccess,
@@ -20,6 +29,8 @@ import {
 export interface SettingsLayoutProps {
   readonly settings: readonly AppClientRegisteredSetting[];
   readonly groups: readonly AppClientRegisteredSettingGroup[];
+  /** Authenticated plugin routes nested below a setting page, such as a record detail page. */
+  readonly routes?: readonly AppClientRegisteredRoute[];
 }
 
 /**
@@ -29,6 +40,7 @@ export interface SettingsLayoutProps {
  */
 export function SettingsLayout({
   groups,
+  routes = [],
   settings,
 }: SettingsLayoutProps): ReactElement {
   const location = useLocation();
@@ -39,7 +51,15 @@ export function SettingsLayout({
     settings: visible,
     loading,
   } = useSettingsAccess(settings, groups);
-  const active = visible.find((setting) => setting.path === location.pathname);
+  const activeRoute = routes.find((route) =>
+    matchPath({ path: route.path, end: true }, location.pathname),
+  );
+  const active = visible.find(
+    (setting) =>
+      setting.path === location.pathname ||
+      (activeRoute !== undefined &&
+        activeRoute.path.startsWith(`${setting.path}/`)),
+  );
 
   if (loading) {
     return <Loading className='min-h-svh' label='Loading settings' />;
@@ -154,7 +174,16 @@ export function SettingsLayout({
         </header>
         <main className='min-w-0 flex-1'>
           <SettingsMobileNav active={active} entries={navEntries} />
-          <ClientPage key={active.path} page={describeSettingPage(active)} />
+          {activeRoute ? (
+            <Routes>
+              <Route
+                element={<ClientRoute route={activeRoute} />}
+                path={activeRoute.path.replace(/^\/settings\//, '')}
+              />
+            </Routes>
+          ) : (
+            <ClientPage key={active.path} page={describeSettingPage(active)} />
+          )}
         </main>
       </div>
     </div>

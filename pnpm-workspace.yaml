@@ -51,6 +51,7 @@ catalog:
   globals: ^17.11.0
   hono: ^4.13.2
   husky: ^9.1.7
+  i18next: ^26.4.0
   ignore: ^7.0.6
   ioredis: ^5.11.1
   jsdom: ^30.0.1
@@ -65,6 +66,7 @@ catalog:
   publint: ^0.3.24
   react: ^19.1.0
   react-dom: ^19.1.0
+  react-i18next: ^17.0.12
   react-markdown: ^10.1.0
   react-router: ^7.0.2
   remark-gfm: ^4.0.1
