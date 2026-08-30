@@ -1,5 +1,5 @@
 import {
-  useI18nRuntime,
+  useOptionalI18nRuntime,
   useLocale as useRuntimeLocale,
   applyDocumentLocale,
   type Locale,
@@ -52,11 +52,11 @@ export async function notifyServerLocale(locale: Locale): Promise<void> {
  * language, tells the server, then changes the language — all namespaces at once, so no frame renders half-translated.
  */
 export function useAppLocale(): UseAppLocaleResult {
-  const runtime = useI18nRuntime();
+  const runtime = useOptionalI18nRuntime();
   const { locale, locales, setLocale, switching, error } = useRuntimeLocale();
 
   useEffect(() => {
-    applyDocumentLocale(runtime);
+    if (runtime) applyDocumentLocale(runtime);
   }, [runtime, locale]);
 
   const changeLocale = useCallback(
@@ -87,9 +87,12 @@ export function useAppLocale(): UseAppLocaleResult {
  * another tab — and this is what brings them back together.
  */
 export function useSyncServerLocale(): void {
-  const runtime = useI18nRuntime();
+  // Optional, so the shell can call this unconditionally: an application composed without i18n, which is what a
+  // focused test renders, has no language to report and simply does nothing.
+  const runtime = useOptionalI18nRuntime();
 
   useEffect(() => {
+    if (!runtime) return;
     void notifyServerLocale(runtime.getLocale()).catch(() => {
       // Nothing to do: the interface is already correct, and the next startup tries again.
     });

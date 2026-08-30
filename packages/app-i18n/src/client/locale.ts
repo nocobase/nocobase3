@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { I18nRuntime, Locale, LocaleDefinition } from '../core/index.js';
-import { useI18nRuntime } from './context.js';
+import { useOptionalI18nRuntime } from './context.js';
 
 export interface UseLocaleResult {
   readonly locale: Locale;
@@ -19,14 +19,17 @@ export interface UseLocaleResult {
  * frame is ever rendered half-translated.
  */
 export function useLocale(): UseLocaleResult {
-  const runtime = useI18nRuntime();
-  const [locale, setCurrentLocale] = useState<Locale>(() =>
-    runtime.getLocale(),
+  // Optional so a language control can be dropped into any tree, including one composed without i18n; with no runtime
+  // it reports no languages, which is what makes such a control render nothing rather than fail.
+  const runtime = useOptionalI18nRuntime();
+  const [locale, setCurrentLocale] = useState<Locale>(
+    () => runtime?.getLocale() ?? '',
   );
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<Error>();
 
   useEffect(() => {
+    if (!runtime) return;
     const handleChange = (next: string): void => setCurrentLocale(next);
     runtime.i18n.on('languageChanged', handleChange);
     // A language may have changed between the initial render and this subscription.
@@ -38,7 +41,7 @@ export function useLocale(): UseLocaleResult {
 
   const setLocale = useCallback(
     async (next: Locale): Promise<void> => {
-      if (next === runtime.getLocale()) return;
+      if (!runtime || next === runtime.getLocale()) return;
       setSwitching(true);
       setError(undefined);
       try {
@@ -55,7 +58,7 @@ export function useLocale(): UseLocaleResult {
 
   return {
     locale,
-    locales: runtime.getLocaleDefinitions(),
+    locales: runtime?.getLocaleDefinitions() ?? [],
     setLocale,
     switching,
     error,

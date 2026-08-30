@@ -342,6 +342,63 @@ barrel 里的其他导出（类型、工具函数、组件）不会因此进入�
 
 脚手架已经在 `package.json` 的 `exports` 和 `publishConfig.exports` 里各开了 `./client` 和 `./client/plugin` 两条，以及另外四个入口。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
 
+### 多语言
+
+脚手架已经生成了 `client/locales/`，`client/plugin.ts` 里也已经声明好：
+
+```ts
+export default defineClientPlugin({
+  packageName: '@nocobase/app-plugin-audit-log',
+  locales: () => import('./locales/index.js'),
+  // ……其余入口
+});
+```
+
+`en-US.ts` 是基准，导出一个描述结构的 interface；其他语言用它标注，写错 key 立刻报错，缺 key 只是回落：
+
+```ts
+// client/locales/en-US.ts
+export interface AuditLogResource {
+  readonly list: { readonly title: string };
+}
+
+const enUS: AuditLogResource = {
+  list: { title: 'Audit log' },
+};
+
+export default enUS;
+```
+
+```ts
+// client/locales/zh-CN.ts
+const zhCN: AuditLogResource = {
+  list: { title: '审计日志' },
+};
+```
+
+页面里直接翻译，不用写 namespace——App 渲染插件页面时会自动把插件包名注入为默认 ns：
+
+```tsx
+import { useTranslation } from '@nocobase/app-i18n/client';
+
+const { t } = useTranslation();
+t('list.title'); // 自己的 key
+t('save'); // 自己没有就回落到 App，再回落到基础包的通用词
+```
+
+有两处需要显式写 ns：
+
+- **插件导出给 App 复用的组件**。ns 跟着渲染树走而不是代码归属，这类组件在 App 的树里渲染时拿到的是 App 的 ns，得写 `useTranslation('@nocobase/app-plugin-audit-log')`。判断标准是它会不会在插件自己的路由之外被渲染。
+- **在 bootstrap 里注册的静态文案**，比如菜单标签。那时还不知道用户要用哪种语言，所以传 key 加 ns，由导航渲染时翻译：
+
+  ```ts
+  meta: { label: 'nav.list', i18nNs: '@nocobase/app-plugin-audit-log' }
+  ```
+
+服务端同理：`server/locales/` 的写法和前端完全一样，`defineServerPlugin` 里加 `locales` 字段，路由处理器里用 `c.get('t')`。请求之外的场景（queue job、cron）必须自己 `await i18n.ensureLocaleLoaded(locale)` 再翻译，漏了不报错但会静默回落。
+
+完整说明见 [app-i18n README](../packages/app-i18n/README.md)。
+
 ## 4. 检查和启动
 
 修改插件后，运行插件自己的完整检查：

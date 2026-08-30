@@ -80,6 +80,46 @@ The upstream recipe is published by
 `@nocobase/app-plugin-authentication/registry/auth-ui`; do not restore a second
 canonical copy under this package's `registry/` directory.
 
+## Write user-facing text through i18n
+
+`@nocobase/app-plugin-i18n` is registered by default, so any string a user reads goes through a translation key rather than a literal.
+
+The application's own copy lives in `client/locales/`. `en-US.ts` is the source of truth and exports the interface every other locale is annotated with, so a key that does not exist there is a compile error while a missing translation simply falls back:
+
+```ts
+// client/locales/en-US.ts
+export interface AppResource {
+  readonly actions: { readonly save: string };
+}
+
+const enUS: AppResource = {
+  actions: { save: 'Save' },
+};
+```
+
+```ts
+// client/locales/zh-CN.ts
+const zhCN: AppResource = {
+  actions: { save: '保存' },
+};
+```
+
+Translate in a component with no namespace — the application's own is the default here:
+
+```tsx
+import { useTranslation } from '@nocobase/app-i18n/client';
+
+const { t } = useTranslation();
+t('actions.save');
+```
+
+Two things are worth knowing:
+
+- A plugin's own strings live in that plugin, not here. To reword one, add an `overrides` block to the application's locale file keyed by the plugin's package name; do not edit the plugin.
+- A string rendered where i18n may not be mounted — a component a focused test renders on its own — should pass `defaultValue` so it stays readable: `t('actions.save', { defaultValue: 'Save' })`.
+
+`pnpm i18n:check` at the repository root reports keys a locale is missing. Full reference: [app-i18n README](../app-i18n/README.md).
+
 ## Keep the client inspectable
 
 Run the inspector before changing client ownership or contribution wiring:
