@@ -117,7 +117,7 @@ export const getKnowledgeBaseBackgroundPrompt = ({
 export type KnowledgeBaseEmployee = {
   username: string;
   enableKnowledgeBase?: boolean;
-  knowledgeBasePrompt?: string;
+  knowledgeBasePrompt?: string | null;
   knowledgeBase?: {
     knowledgeBaseKeys?: string[];
     topK?: number;

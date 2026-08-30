@@ -19,7 +19,9 @@ export const toolInteractionMiddleware = (
   toolProvider: ToolProvider,
   tools: ToolsEntity[],
 ): ReturnType<typeof createMiddleware> => {
-  const interruptOn = {};
+  const interruptOn: Parameters<
+    typeof humanInTheLoopMiddleware
+  >[0]['interruptOn'] = {};
   const identity = conversation.identity;
   for (const tool of tools) {
     interruptOn[tool.definition.name] = toolProvider.shouldInterruptToolCall(
@@ -52,11 +54,18 @@ export const toolCallStatusMiddleware = (
       let interrupted = false;
       const { runtime, toolCall } = request;
       const { messageId } = request.state;
+      if (!messageId) {
+        throw new Error('Tool call messageId is required');
+      }
+      const toolCallId = toolCall.id;
+      if (typeof toolCallId !== 'string') {
+        throw new Error('Tool call id is required');
+      }
       const currentConversation = conversation.identity;
-      const existing = await store.get(messageId, request.toolCall.id);
+      const existing = await store.get(messageId, toolCallId);
       if (!existing)
         throw new Error(
-          `Tool call result not found for messageId=${messageId}, toolCallId=${request.toolCall.id}`,
+          `Tool call result not found for messageId=${messageId}, toolCallId=${toolCallId}`,
         );
       if (existing.status === 'error') {
         runtime.writer?.({
@@ -65,13 +74,13 @@ export const toolCallStatusMiddleware = (
           currentConversation,
         });
         return new ToolMessage({
-          tool_call_id: request.toolCall.id,
+          tool_call_id: toolCallId,
           status: 'error',
           content: existing.content,
           metadata: { messageId },
         });
       }
-      await store.markPending(messageId, request.toolCall.id);
+      await store.markPending(messageId, toolCallId);
       runtime.writer?.({
         action: 'beforeToolCall',
         body: { toolCall },
@@ -99,14 +108,14 @@ export const toolCallStatusMiddleware = (
         }
         conversation.logger.error(error);
         result = { status: 'error', content: error?.message };
-        await store.markError(messageId, request.toolCall.id, error);
+        await store.markError(messageId, toolCallId, error);
         runtime.writer?.({
           action: 'afterToolCallError',
           body: { toolCall, error },
           currentConversation,
         });
         return new ToolMessage({
-          tool_call_id: request.toolCall.id,
+          tool_call_id: toolCallId,
           status: 'error',
           content: error?.message,
           metadata: { messageId },
@@ -114,11 +123,8 @@ export const toolCallStatusMiddleware = (
       } finally {
         if (!interrupted) {
           if (result?.status !== 'error')
-            await store.markDone(messageId, request.toolCall.id, result);
-          const toolCallResult = await store.get(
-            messageId,
-            request.toolCall.id,
-          );
+            await store.markDone(messageId, toolCallId, result);
+          const toolCallResult = await store.get(messageId, toolCallId);
           runtime.writer?.({
             action: 'afterToolCall',
             body: { toolCall, toolCallResult },

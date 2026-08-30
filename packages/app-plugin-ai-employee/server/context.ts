@@ -10,7 +10,7 @@ import type {
   DatabaseManager,
 } from '@nocobase/app-database';
 import type { Caching } from '@nocobase/caching';
-import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
+import type { IdGeneratorService } from '@nocobase/id-generator';
 import type { WorkContextHandler } from './agent/ai-employee/work-context/index.js';
 import type { KnowledgeBaseManager } from './agent/ai-employee/ai-knowledge-base.js';
 
@@ -56,7 +56,7 @@ export interface Context<TRepositories = any> {
   logger: any;
   caching: Caching;
   fileManager: FileManager;
-  snowflake: SnowflakeIdGenerator;
+  snowflake: IdGeneratorService;
   currentUser: CurrentUser;
   employeeService: any;
   modelService: any;

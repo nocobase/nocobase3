@@ -63,10 +63,14 @@ export const skillToolBindingMiddleware = (
       });
     },
     wrapToolCall: async (request, handler) => {
+      const toolCallId = request.toolCall.id;
+      if (typeof toolCallId !== 'string') {
+        throw new Error('Tool call id is required');
+      }
       const allowedToolNames = await getAllowedToolNames();
       if (!allowedToolNames.has(request.toolCall.name)) {
         return new ToolMessage({
-          tool_call_id: request.toolCall.id,
+          tool_call_id: toolCallId,
           name: request.toolCall.name,
           status: 'error',
           content: 'Tool unavailable.',

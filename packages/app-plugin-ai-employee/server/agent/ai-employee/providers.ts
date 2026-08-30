@@ -19,6 +19,7 @@ import type {
 } from '../types.js';
 import { NativeCollectionSaver } from '../../ai-employees/checkpoints/index.js';
 import type { AIMessageInput } from '@nocobase/ai-employee';
+import type { DatabaseConnection } from '@nocobase/app-database';
 import {
   convertAIMessage,
   convertHumanMessage,
@@ -67,13 +68,22 @@ const createState = (options: AIEmployeeOptions): AIEmployeeProviderState => ({
   responseMetadata: new Map(),
 });
 
+function getRequiredModel(
+  options: AIEmployeeOptions,
+): NonNullable<AIEmployeeOptions['model']> {
+  if (!options.model) {
+    throw new Error('AI employee model is required');
+  }
+  return options.model;
+}
+
 async function resolveAIEmployeeLLM(
   options: AIEmployeeOptions,
   state: AIEmployeeProviderState,
 ): Promise<{ provider: LLMProvider; identity: AgentLLMIdentity }> {
-  const resolved = await options.ctx.ai.llmProviderManager.getLLMService({
-    ...options.model,
-  });
+  const resolved = await options.ctx.ai.llmProviderManager.getLLMService(
+    getRequiredModel(options),
+  );
   const identity: AgentLLMIdentity = {
     providerName: resolved.service.provider,
     llmService: resolved.service.name,
@@ -97,7 +107,7 @@ export function createAIEmployeeConversationProvider(
   const cache = ctx.llmStreamCachedManager.getCached(sessionId);
   const toolCalls: ToolCallHandler = {
     initialize: async (messageId, calls) =>
-      ctx.database.transaction((transaction) =>
+      ctx.database.transaction((transaction: DatabaseConnection) =>
         runtime.initToolCall(transaction, messageId, calls),
       ),
     markInterrupted: (...args) => runtime.updateToolCallInterrupted(...args),
@@ -109,10 +119,10 @@ export function createAIEmployeeConversationProvider(
         content: (error as any)?.message ?? error,
       }),
     confirm: async (messageId, ids) =>
-      ctx.database.transaction((transaction) =>
+      ctx.database.transaction((transaction: DatabaseConnection) =>
         runtime.confirmToolCall(transaction, messageId, ids),
       ),
-    reject: async (messageId, ids, reason) => {
+    reject: async (_messageId, ids, reason) => {
       await runtime.cancelToolCall(reason);
       return ids.length;
     },
@@ -218,9 +228,10 @@ export function createAIEmployeeConversationProvider(
         });
       },
       buildInitialState: (messages) => {
-        const toolMessage = messages.findLast(
-          (message) => message.toolCalls?.length,
-        );
+        const toolMessage = messages
+          .slice()
+          .reverse()
+          .find((message) => message.toolCalls?.length);
         return {
           messageId: toolMessage?.messageId,
           lastMessageIndex: {

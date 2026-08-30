@@ -25,9 +25,11 @@ export class BuiltInManager {
       return;
     }
     const ns = this.i18nNamespace;
-    aiEmployee.nickname = ctx.t?.(aiEmployee.nickname, { ns });
-    aiEmployee.position = ctx.t?.(aiEmployee.position, { ns });
-    aiEmployee.bio = ctx.t?.(aiEmployee.bio, { ns });
-    aiEmployee.greeting = ctx.t?.(aiEmployee.greeting, { ns });
+    const translate = (value: string | undefined): string | undefined =>
+      value === undefined ? undefined : (ctx.t?.(value, { ns }) ?? value);
+    aiEmployee.nickname = translate(aiEmployee.nickname);
+    aiEmployee.position = translate(aiEmployee.position);
+    aiEmployee.bio = translate(aiEmployee.bio);
+    aiEmployee.greeting = translate(aiEmployee.greeting);
   }
 }

@@ -21,8 +21,7 @@ import {
   getSkillSettingsFromMain,
   updateMessageMetadata,
 } from '../../sub-agents/shared.js';
-// @ts-ignore
-import pkg from '../../package.json';
+import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../../namespace.js';
 
 type DispatchContext = AgentContext<
   {
@@ -49,8 +48,8 @@ export default defineTools<DispatchContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("AI employee task dispatching", { ns: "${pkg.name}" })}}`,
-    about: `{{t("Awaken and assign specific tasks to ai employees", { ns: "${pkg.name}" })}}`,
+    title: `{{t("AI employee task dispatching", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    about: `{{t("Awaken and assign specific tasks to ai employees", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
   },
   definition: {
     name: 'dispatch-sub-agent-task',

@@ -62,6 +62,20 @@ export type GetAIConversationMessagesParams = {
 
 export type ParsedMessageRow = AIMessage;
 
+type ParsedResponseMessage = {
+  key?: string;
+  createdAt?: string | Date;
+  role?: string;
+  content: {
+    from?: 'main-agent' | 'sub-agent';
+    subAgentConversations?: Array<
+      SubAgentConversationMetadata & { messages: ParsedResponseMessage[] }
+    >;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
 export type GetAIConversationMessagesResult = {
   rows: any[];
   hasMore?: boolean;
@@ -212,14 +226,14 @@ export class AIConversationsManager {
     const pageSize = 10;
     const maxLimit = 200;
     const messageRepository = this.ctx.repositories.aiMessages;
-    const filter = {
+    const filter: Record<string, unknown> = {
       sessionId,
       role: {
         $notIn: ['tool'],
       },
     };
     if (paginate && cursor) {
-      filter['messageId'] = {
+      filter.messageId = {
         $lt: cursor,
       };
     }
@@ -233,15 +247,11 @@ export class AIConversationsManager {
     const data = hasMore ? rows.slice(0, -1) : rows;
     const newCursor = data.length ? data[data.length - 1].messageId : null;
 
-    const subAgentConversations = data
-      .filter(
-        (row: ParsedMessageRow) =>
-          row.metadata?.subAgentConversations?.length ?? 0 > 0,
-      )
-      .flatMap(
-        (row: ParsedMessageRow) =>
-          row.metadata.subAgentConversations as SubAgentConversationMetadata[],
-      );
+    const subAgentConversations: SubAgentConversationMetadata[] = data.flatMap(
+      (row: ParsedMessageRow) =>
+        (row.metadata?.subAgentConversations as
+          SubAgentConversationMetadata[] | undefined) ?? [],
+    );
     const subAgentConversationSessionIds = [
       ...new Set(subAgentConversations.map((item) => item.sessionId)),
     ];
@@ -258,17 +268,18 @@ export class AIConversationsManager {
           },
         })
       : [];
-    const subAgentConversationMessageMap = new Map<string, any[]>();
-
+    const subAgentConversationMessageMap = new Map<
+      string,
+      ParsedResponseMessage[]
+    >();
     const toolCallIds = [
       ...data
-        .filter((row: ParsedMessageRow) => row?.toolCalls?.length ?? 0 > 0)
-        .flatMap((row: ParsedMessageRow) => row.toolCalls)
+        .filter((row: ParsedMessageRow) => (row?.toolCalls?.length ?? 0) > 0)
+        .flatMap((row: ParsedMessageRow) => row.toolCalls ?? [])
         .map((toolCall: AIToolCall) => toolCall.id),
       ...subAgentConversationMessages
-        .filter((row: ParsedMessageRow) => row?.toolCalls?.length ?? 0 > 0)
-        .flatMap((row: ParsedMessageRow) => row.toolCalls)
-        .map((toolCall: AIToolCall) => toolCall.id),
+        .filter((row: ParsedMessageRow) => (row.toolCalls?.length ?? 0) > 0)
+        .flatMap((row: ParsedMessageRow) => row.toolCalls ?? []),
     ];
     const toolMessages = await this.aiToolMessagesRepo.find({
       filter: {
@@ -291,8 +302,8 @@ export class AIConversationsManager {
       tools.map((tool) => [tool.definition.name, tool]),
     );
 
-    const parseMessageRow = (row: ParsedMessageRow) => {
-      if (row?.toolCalls?.length ?? 0 > 0) {
+    const parseMessageRow = (row: ParsedMessageRow): ParsedResponseMessage => {
+      if (row.toolCalls?.length) {
         for (const toolCall of row.toolCalls) {
           const tool = toolsMap.get(toolCall.name);
           const toolMessage = toolMessageMap.get(
@@ -315,11 +326,11 @@ export class AIConversationsManager {
         row.metadata?.provider,
       );
       if (!providerOptions) {
-        return parseResponseMessage(row);
+        return parseResponseMessage(row) as ParsedResponseMessage;
       }
       const Provider = providerOptions.provider;
       const provider = new Provider({});
-      return provider.parseResponseMessage(row);
+      return provider.parseResponseMessage(row) as ParsedResponseMessage;
     };
 
     for (const row of subAgentConversationMessages as ParsedMessageRow[]) {
@@ -366,7 +377,11 @@ export class AIConversationsManager {
       },
       sort: ['interruptActionOrder'],
     });
-    if (!allInterruptedToolCall.every((t) => t.invokeStatus === 'waiting')) {
+    if (
+      !allInterruptedToolCall.every(
+        (toolMessage: AIToolMessage) => toolMessage.invokeStatus === 'waiting',
+      )
+    ) {
       return;
     }
 
@@ -379,7 +394,8 @@ export class AIConversationsManager {
     return {
       interruptId,
       decisions: allInterruptedToolCall.map(
-        (item) => item.userDecision as UserDecision,
+        (toolMessage: AIToolMessage) =>
+          toolMessage.userDecision as UserDecision,
       ),
     };
   }
@@ -387,7 +403,7 @@ export class AIConversationsManager {
   async resolveSubAgentConversation(
     sessionId: string,
     toolCallId: string,
-  ): Promise<SubAgentConversationMetadata> {
+  ): Promise<SubAgentConversationMetadata | null> {
     if (!sessionId || !toolCallId) {
       return null;
     }
@@ -413,7 +429,7 @@ export class AIConversationsManager {
       return null;
     }
     const subAgentConversation = aiMessage.metadata.subAgentConversations.find(
-      (it) => it.toolCallId == toolCallId,
+      (item: SubAgentConversationMetadata) => item.toolCallId === toolCallId,
     );
     if (!subAgentConversation) {
       return null;

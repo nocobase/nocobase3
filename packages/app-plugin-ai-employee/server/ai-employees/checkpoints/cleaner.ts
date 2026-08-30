@@ -37,7 +37,12 @@ export class CheckpointCleaner {
       const hasToolCalls = Array.isArray(message.toolCalls)
         ? message.toolCalls.length > 0
         : Boolean(message.toolCalls);
-      if (updatedAt && updatedAt < expiredAt && !hasToolCalls) {
+      if (
+        conversation.sessionId &&
+        updatedAt &&
+        updatedAt < expiredAt &&
+        !hasToolCalls
+      ) {
         targets.push({
           sessionId: conversation.sessionId,
           thread: conversation.thread ?? 0,

@@ -79,7 +79,7 @@ function isAIEmployeeEnabled(
   return employee?.enabled !== false;
 }
 
-function setupSSEHeaders(ctx: Context) {
+function setupSSEHeaders(_ctx: Context) {
   // Headers are applied by the router when constructing the SSE Response.
 }
 
@@ -96,7 +96,7 @@ function streamTarget(execution: ConversationRequestExecution): StreamTarget {
 async function loginInCheck(ctx: Context) {
   const userId = String(ctx.currentUser.id);
   if (!userId) {
-    return ctx.throw(403);
+    return ctx.throw!(403);
   }
 }
 
@@ -268,15 +268,15 @@ export class AIConversationService {
       scope,
     } = input;
     if (!aiEmployee?.username) {
-      return ctx.throw(400, 'AI employee is required');
+      return ctx.throw!(400, 'AI employee is required');
     }
     const normalizedScope = typeof scope === 'string' ? scope : undefined;
     const employee = await getAIEmployee(ctx, aiEmployee.username);
     if (!employee) {
-      return ctx.throw(400, 'AI employee not found');
+      return ctx.throw!(400, 'AI employee not found');
     }
     if (!isAIEmployeeEnabled(ctx, employee)) {
-      return ctx.throw(400, 'AI employee is disabled');
+      return ctx.throw!(400, 'AI employee is disabled');
     }
 
     try {
@@ -293,7 +293,7 @@ export class AIConversationService {
       });
     } catch (error: any) {
       if (error.message === 'AI employee not found') {
-        return ctx.throw(400, error.message);
+        return ctx.throw!(400, error.message);
       }
       throw error;
     }
@@ -302,7 +302,7 @@ export class AIConversationService {
   async update(ctx: Context, sessionId: string, input: { title?: string }) {
     const userId = String(ctx.currentUser.id);
     if (typeof sessionId !== 'string' || !sessionId) {
-      return ctx.throw(400, 'invalid sessionId');
+      return ctx.throw!(400, 'invalid sessionId');
     }
     const { title } = input;
     return await ctx.aiConversationsManager.update({
@@ -319,7 +319,7 @@ export class AIConversationService {
   ) {
     const userId = String(ctx.currentUser.id);
     if (!sessionId) {
-      return ctx.throw(400, 'invalid sessionId');
+      return ctx.throw!(400, 'invalid sessionId');
     }
     const {
       systemMessage,
@@ -333,7 +333,7 @@ export class AIConversationService {
       !conversationSettings &&
       !modelSettings
     ) {
-      return ctx.throw(400, 'invalid options');
+      return ctx.throw!(400, 'invalid options');
     }
     try {
       return await ctx.aiConversationsManager.update({
@@ -348,7 +348,7 @@ export class AIConversationService {
       });
     } catch (error: any) {
       if (error.message === 'invalid sessionId') {
-        return ctx.throw(400, error.message);
+        return ctx.throw!(400, error.message);
       }
       throw error;
     }
@@ -382,7 +382,7 @@ export class AIConversationService {
     const userId = String(ctx.currentUser.id);
     const { sessionId, cursor } = options;
     if (!sessionId) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const paginate = options.paginate !== false;
     const updateRead = options.updateRead === true;
@@ -396,7 +396,7 @@ export class AIConversationService {
       });
     } catch (error: any) {
       if (error.message === 'invalid sessionId') {
-        return ctx.throw(400);
+        return ctx.throw!(400);
       }
       throw error;
     }
@@ -406,14 +406,14 @@ export class AIConversationService {
     const userId = String(ctx.currentUser.id);
     const { sessionId, messageId, tool } = input;
     if (!sessionId) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const conversation = await ctx.aiConversationsManager.getConversation({
       sessionId,
       userId,
     });
     if (!conversation) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const messageRepository = ctx.repositories.aiMessages;
     const message = await messageRepository.findOne({
@@ -541,6 +541,9 @@ export class AIConversationService {
           (chunk) =>
             ctx.llmStreamCachedManager.getCached(sessionId).append(chunk),
         );
+        if (!agent) {
+          throw new Error('AI employee agent service is required');
+        }
         const agentContext = createAgentContext(ctx);
         await adapter.consume(
           request?.messageId
@@ -552,15 +555,23 @@ export class AIConversationService {
       };
       const runInvoke = (request: any) => {
         if (aiEmployee) return aiEmployee.invoke(request);
+        if (!agent) {
+          throw new Error('AI employee agent service is required');
+        }
         const agentContext = createAgentContext(ctx);
         return request?.messageId
           ? agent.service.forkInvoke(request, agentContext)
           : agent.service.invoke(request, agentContext);
       };
-      const cancelToolCall = () =>
-        aiEmployee
-          ? aiEmployee.cancelToolCall()
-          : agent.facade.cancelToolCall();
+      const cancelToolCall = () => {
+        if (aiEmployee) {
+          return aiEmployee.cancelToolCall();
+        }
+        if (!agent) {
+          throw new Error('AI employee agent service is required');
+        }
+        return agent.facade.cancelToolCall();
+      };
       if (!editingMessageId) {
         if (await ctx.subAgentsDispatcher.isInterrupted(sessionId, ctx)) {
           const userDecisions = await ctx.subAgentsDispatcher.reject(
@@ -616,7 +627,7 @@ export class AIConversationService {
         if (!streamTarget(execution).writableEnded)
           streamTarget(execution).end();
       } else {
-        return ctx.throw(status, message);
+        return ctx.throw!(status, message);
       }
     }
   }
@@ -625,14 +636,14 @@ export class AIConversationService {
     const userId = String(ctx.currentUser.id);
     const { sessionId } = input;
     if (typeof sessionId !== 'string' || !sessionId) {
-      return ctx.throw(400, 'sessionId is required');
+      return ctx.throw!(400, 'sessionId is required');
     }
     const conversation = await ctx.aiConversationsManager.getConversation({
       sessionId,
       userId,
     });
     if (!conversation) {
-      return ctx.throw(404, 'conversation not found');
+      return ctx.throw!(404, 'conversation not found');
     }
     ctx.aiEmployeesManager.abortConversation(sessionId);
     return null;
@@ -870,7 +881,7 @@ export class AIConversationService {
         if (!streamTarget(execution).writableEnded)
           streamTarget(execution).end();
       } else {
-        return ctx.throw(status, message);
+        return ctx.throw!(status, message);
       }
     }
   }
@@ -884,20 +895,20 @@ export class AIConversationService {
     const userId = String(ctx.currentUser.id);
     const { sessionId, messageId, toolCallId, userDecision } = input;
     if (!sessionId) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const conversation = await ctx.aiConversationsManager.getConversation({
       sessionId,
       userId,
     });
     if (!conversation) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const message = await ctx.repositories.aiMessages.findOne({
       filter: { sessionId, messageId },
     });
     if (!message) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const messageConversation =
       await ctx.aiConversationsManager.getConversation({
@@ -905,17 +916,17 @@ export class AIConversationService {
         userId,
       });
     if (!messageConversation) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const toolCalls = message.toolCalls;
     if (!toolCalls?.length) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     const selectedToolCall = toolCalls.find(
       (toolCall: { id?: string }) => toolCall.id === toolCallId,
     );
     if (!selectedToolCall) {
-      return ctx.throw(400);
+      return ctx.throw!(400);
     }
     if (selectedToolCall.name === EXECUTE_FRONTEND_TOOL_NAME) {
       const toolId = isRecord(selectedToolCall.args)
@@ -926,7 +937,7 @@ export class AIConversationService {
           ? await findCurrentFrontendTool(ctx, toolId, message.sessionId)
           : undefined;
       if (!frontendTool) {
-        return ctx.throw(400, ctx.t!('Frontend tool is unavailable'));
+        return ctx.throw!(400, ctx.t!('Frontend tool is unavailable'));
       }
     }
 
@@ -951,8 +962,11 @@ export class AIConversationService {
         toolCallId: { $in: toolCallIds },
       },
     });
-    const toolMessageMap = new Map<string, AIToolMessageEntity>(
-      toolMessages.map((toolMessage) => [toolMessage.toolCallId, toolMessage]),
+    const toolMessageMap = new Map<string | undefined, AIToolMessageEntity>(
+      toolMessages.map((toolMessage: AIToolMessageEntity) => [
+        toolMessage.toolCallId,
+        toolMessage,
+      ]),
     );
 
     const toolsList = await ctx.ai.toolsManager.listTools({

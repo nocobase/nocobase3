@@ -15,11 +15,7 @@ import type { DatabaseConnection } from '@nocobase/app-database';
 import { LLMProvider } from '@nocobase/ai-employee';
 import { getSystemPrompt } from '../../ai-employees/prompts.js';
 import _ from 'lodash';
-import {
-  AIChatConversation,
-  AIMessageInput,
-  AIToolCall,
-} from '@nocobase/ai-employee';
+import { AIChatConversation, AIMessageInput } from '@nocobase/ai-employee';
 import { createAIChatConversation } from '../../ai-employees/ai-chat-conversation.js';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
@@ -29,9 +25,7 @@ import {
   normalizeKnowledgeBaseRetrievalStrategy,
 } from './ai-knowledge-base.js';
 
-import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { ToolsFilter, ToolsManager } from '@nocobase/ai-employee';
-import { AIToolMessage } from '@nocobase/ai-employee';
 import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
@@ -71,23 +65,6 @@ export interface AIEmployeeOptions {
   tools?: { name: string }[];
 }
 
-type InterruptPayload = {
-  actionRequests: { name: string; args: unknown; description: string }[];
-  reviewConfigs: { actionName: string; allowedDecisions: string[] }[];
-};
-
-type InterruptAction = {
-  order: number;
-  description: string;
-  allowedDecisions: string[];
-  toolCall?: { id: string; name: string };
-  currentConversation?: {
-    sessionId: string;
-    from: string;
-    username: string;
-  };
-};
-
 export class AIEmployeeCapabilities {
   sessionId: string;
   from = 'main-agent';
@@ -100,7 +77,6 @@ export class AIEmployeeCapabilities {
   private systemMessage?: string;
   private webSearch?: boolean;
   private model?: ModelRef;
-  private legacy?: boolean;
   private tools: { name: string }[];
 
   constructor({
@@ -111,7 +87,6 @@ export class AIEmployeeCapabilities {
     skillSettings,
     webSearch,
     model,
-    legacy,
     from = 'main-agent',
     tools = [],
   }: AIEmployeeOptions) {
@@ -125,7 +100,6 @@ export class AIEmployeeCapabilities {
     );
     this.skillSettings = skillSettings;
     this.model = model;
-    this.legacy = legacy;
     this.from = from;
     this.tools = tools;
     const builtInManager = this.ctx.builtInManager;
@@ -156,10 +130,17 @@ export class AIEmployeeCapabilities {
     return this.chatSettings.enableTools !== false;
   }
 
+  private getRequiredModel(): ModelRef {
+    if (!this.model) {
+      throw new Error('AI employee model is required');
+    }
+    return this.model;
+  }
+
   async getFormatMessages(userMessages: AIMessageInput[]) {
-    const { provider } = await this.ctx.ai.llmProviderManager.getLLMService({
-      ...this.model,
-    });
+    const { provider } = await this.ctx.ai.llmProviderManager.getLLMService(
+      this.getRequiredModel(),
+    );
     const { messages } = await this.aiChatConversation.getChatContext({
       userMessages,
       formatMessages: (messages) => this.formatMessages({ messages, provider }),
@@ -181,7 +162,7 @@ export class AIEmployeeCapabilities {
 
     const userConfig = await this.ctx.repositories.usersAiEmployees.findOne({
       filter: {
-        userId: this.ctx.auth?.user.id ?? 0,
+        userId: this.ctx.auth?.user?.id ?? 0,
         aiEmployee: this.employee.username,
       },
     });
@@ -307,31 +288,37 @@ If information is missing, clearly state it in the summary.</Important>`;
           sessionId: this.sessionId,
         })
       : [];
-    return (await this.aiToolMessagesRepo.create({
-      values: toolCalls.map((toolCall) => {
-        const toolsExisted = toolMap.has(toolCall.name);
-        const tools = toolMap.get(toolCall.name);
-        const auto =
-          toolCall.name === EXECUTE_FRONTEND_TOOL_NAME
-            ? toolsExisted &&
-              shouldAutoExecuteFrontendTool(currentFrontendTools, toolCall.args)
-            : this.isAutoCall(tools);
-        return {
-          id: this.ctx.snowflake.generate(),
-          sessionId: this.sessionId,
-          messageId: messageId,
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-          status: toolsExisted ? null : 'error',
-          content: toolsExisted ? null : `Tool ${toolCall.name} not found`,
-          invokeStatus: toolsExisted ? 'init' : 'done',
-          invokeStartTime: toolsExisted ? null : nowTime,
-          invokeEndTime: toolsExisted ? null : nowTime,
-          auto,
-          execution: tools?.execution ?? 'backend',
-        };
-      }),
-    })) as AIToolMessageEntity[];
+    return (await this.aiToolMessagesRepo.create(
+      {
+        values: toolCalls.map((toolCall) => {
+          const toolsExisted = toolMap.has(toolCall.name);
+          const tools = toolMap.get(toolCall.name);
+          const auto =
+            toolCall.name === EXECUTE_FRONTEND_TOOL_NAME
+              ? toolsExisted &&
+                shouldAutoExecuteFrontendTool(
+                  currentFrontendTools,
+                  toolCall.args,
+                )
+              : this.isAutoCall(tools);
+          return {
+            id: this.ctx.snowflake.generate(),
+            sessionId: this.sessionId,
+            messageId,
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            status: toolsExisted ? null : 'error',
+            content: toolsExisted ? null : `Tool ${toolCall.name} not found`,
+            invokeStatus: toolsExisted ? 'init' : 'done',
+            invokeStartTime: toolsExisted ? null : nowTime,
+            invokeEndTime: toolsExisted ? null : nowTime,
+            auto,
+            execution: tools?.execution ?? 'backend',
+          };
+        }),
+      },
+      { connection: transaction },
+    )) as AIToolMessageEntity[];
   }
 
   async updateToolCallInterrupted(
@@ -455,17 +442,21 @@ If information is missing, clearly state it in the summary.</Important>`;
     messageId: string,
     toolCallIds: string[],
   ): Promise<Map<string, AIToolMessageEntity>> {
-    const list: AIToolMessageEntity[] = (
-      await this.aiToolMessagesRepo.find({
-        filter: {
-          messageId,
-          toolCallId: {
-            $in: toolCallIds,
-          },
+    const list: AIToolMessageEntity[] = await this.aiToolMessagesRepo.find({
+      filter: {
+        messageId,
+        toolCallId: {
+          $in: toolCallIds,
         },
-      })
-    ).map((it) => it);
-    return new Map(list.map((it) => [it.toolCallId, it]));
+      },
+    });
+    const result = new Map<string, AIToolMessageEntity>();
+    for (const item of list) {
+      if (item.toolCallId) {
+        result.set(item.toolCallId, item);
+      }
+    }
+    return result;
   }
 
   async cancelToolCall(
@@ -481,7 +472,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     } else {
       return;
     }
-    const toolMessages: AIToolMessageEntity[] = (
+    const toolMessages: AIToolMessageEntity[] =
       await this.aiToolMessagesRepo.find({
         filter: {
           messageId,
@@ -489,16 +480,15 @@ If information is missing, clearly state it in the summary.</Important>`;
             $ne: 'confirmed',
           },
         },
-      })
-    ).map((it) => it);
+      });
     if (!toolMessages || _.isEmpty(toolMessages)) {
       return;
     }
 
     const { model, service } =
-      await this.ctx.ai.llmProviderManager.getLLMService({
-        ...this.model,
-      });
+      await this.ctx.ai.llmProviderManager.getLLMService(
+        this.getRequiredModel(),
+      );
     const toolCallMap = await this.getToolCallMap(messageId);
     const now = new Date();
     const toolMessageContent = reason;
@@ -533,7 +523,9 @@ If information is missing, clearly state it in the summary.</Important>`;
             metadata: {
               model,
               provider: service.provider,
-              toolCall: toolCallMap.get(toolMessage.toolCallId),
+              toolCall: toolMessage.toolCallId
+                ? toolCallMap.get(toolMessage.toolCallId)
+                : undefined,
               toolCallId: toolMessage.toolCallId,
               sourceMessageId: messageId,
               autoCall: toolMessage.auto,
@@ -568,11 +560,11 @@ If information is missing, clearly state it in the summary.</Important>`;
     );
   }
 
-  shouldInterruptToolCall(tools: ToolsEntity): boolean {
+  shouldInterruptToolCall(tools?: ToolsEntity): boolean {
     return tools?.execution === 'frontend' || !this.isAutoCall(tools);
   }
 
-  isAutoCall(tools: ToolsEntity): boolean {
+  isAutoCall(tools?: ToolsEntity): boolean {
     if (!tools) {
       return false;
     }
@@ -580,11 +572,12 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (tools.scope !== 'CUSTOM') {
       return isAutoCall;
     }
-    const employeeTools = this.employee.skillSettings?.tools ?? [];
+    const employeeTools: { name: string; autoCall?: boolean }[] =
+      this.employee.skillSettings?.tools ?? [];
     const presetTools = employeeTools.find(
-      (s) => s.name === tools.definition.name,
+      (setting) => setting.name === tools.definition.name,
     );
-    return presetTools ? presetTools.autoCall : isAutoCall;
+    return presetTools ? presetTools.autoCall === true : isAutoCall;
   }
 
   async normalizeMessages(
@@ -817,7 +810,9 @@ If information is missing, clearly state it in the summary.</Important>`;
         SYSTEM_TOOLS.WEB_SEARCH,
         { ctx: this.ctx },
       );
-      tools.push(subAgentWebSearch);
+      if (subAgentWebSearch) {
+        tools.push(subAgentWebSearch);
+      }
     }
     const generalToolsNameSet = new Set(tools.map((x) => x.definition.name));
     const toolMap = await this.getToolsMap();
@@ -956,24 +951,24 @@ If information is missing, clearly state it in the summary.</Important>`;
     const result = new Set<string>();
     for (const item of list) {
       const { content } = item;
-      if (
-        _.isPlainObject(content) &&
-        typeof content['skillName'] === 'string'
-      ) {
-        result.add(content['skillName']);
-        continue;
+      if (content && typeof content === 'object') {
+        const skillName = (content as Record<string, unknown>).skillName;
+        if (typeof skillName === 'string') {
+          result.add(skillName);
+          continue;
+        }
       }
       if (typeof content === 'string') {
         try {
-          const parsed = JSON.parse(content);
-          if (
-            _.isPlainObject(parsed) &&
-            typeof parsed['skillName'] === 'string'
-          ) {
-            result.add(parsed['skillName']);
+          const parsed: unknown = JSON.parse(content);
+          if (parsed && typeof parsed === 'object') {
+            const skillName = (parsed as Record<string, unknown>).skillName;
+            if (typeof skillName === 'string') {
+              result.add(skillName);
+            }
           }
-        } catch (e) {
-          // ignore unexpected plain-string content
+        } catch {
+          // Ignore unexpected plain-string content.
         }
       }
     }
@@ -1046,20 +1041,8 @@ If information is missing, clearly state it in the summary.</Important>`;
     return this.ctx.repositories.aiMessages;
   }
 
-  private get aiMessagesModel() {
-    return this.ctx.repositories.aiMessages;
-  }
-
   private get aiToolMessagesRepo() {
     return this.ctx.repositories.aiToolMessages;
-  }
-
-  private get aiToolMessagesModel() {
-    return this.ctx.repositories.aiToolMessages;
-  }
-
-  private get aiFilesModel() {
-    return this.ctx.repositories.aiFiles;
   }
 }
 
@@ -1097,32 +1080,5 @@ function getCurrentDateTimeForPrompt(
     return `${formatter.format(now)}${timezone ? ` (${timezone})` : ''}`;
   } catch (error) {
     return `${now.toISOString()}${timezone ? ` (${timezone})` : ''}`;
-  }
-}
-
-class AgentThread {
-  constructor(
-    private readonly _sessionId: string,
-    private readonly _thread: number,
-  ) {}
-
-  static newThread(sessionId: string, thread: number) {
-    return new AgentThread(sessionId, thread);
-  }
-
-  get sessionId() {
-    return this._sessionId;
-  }
-
-  get thread() {
-    return this._thread;
-  }
-
-  get threadId() {
-    return `${this._sessionId}:${this._thread}`;
-  }
-
-  fork(): AgentThread {
-    return new AgentThread(this._sessionId, this._thread + 1);
   }
 }

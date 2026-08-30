@@ -28,7 +28,9 @@ type SanitizeAdditionalKwargsResult = {
   malformedToolCalls?: unknown[];
 };
 
-const hasRawToolCalls = (additionalKwargs?: AdditionalKwargs) =>
+const hasRawToolCalls = (
+  additionalKwargs?: AdditionalKwargs,
+): additionalKwargs is AdditionalKwargs & { tool_calls: unknown[] } =>
   Array.isArray(additionalKwargs?.tool_calls) &&
   additionalKwargs.tool_calls.length > 0;
 
@@ -78,7 +80,7 @@ export const sanitizeAdditionalKwargsForToolCalls = (
     rawToolCallNames: collectRawToolCallValues(rawToolCalls, 'name'),
   });
 
-  const sanitized = { ...additionalKwargs };
+  const sanitized: AdditionalKwargs = { ...additionalKwargs };
   delete sanitized.tool_calls;
 
   return {

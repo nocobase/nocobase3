@@ -15,7 +15,6 @@ import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
 import { createAgentContext } from '../../agent/context.js';
 import type {
   SubAgentConversationMetadata,
-  UserDecision,
   AIMessageInput,
 } from '@nocobase/ai-employee';
 
@@ -171,9 +170,14 @@ export class SubAgentsDispatcher {
     const decisions = lastMessage
       ? await ctx.aiConversationsManager.getUserDecisions(lastMessage.messageId)
       : null;
-
     let context;
-    if (messages && decisions?.decisions?.some((it) => it.type === 'reject')) {
+    if (
+      messages &&
+      decisions?.decisions?.some(
+        (decision: { type: 'approve' | 'edit' | 'reject' }) =>
+          decision.type === 'reject',
+      )
+    ) {
       context = {
         appendMessage: await agent.facade.getFormatMessages(messages),
       };
@@ -238,10 +242,14 @@ export class SubAgentsDispatcher {
   }
 
   async reject(sessionId: string, ctx: Context) {
+    const userId = ctx.auth?.user?.id;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
     const conversation = await ctx.repositories.aiConversations.findOne({
       filter: {
         sessionId,
-        userId: ctx.auth?.user.id,
+        userId,
       },
     });
     if (!conversation) {

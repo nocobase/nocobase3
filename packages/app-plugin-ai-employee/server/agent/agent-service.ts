@@ -35,33 +35,62 @@ const mergeSignals = (
   return controller.signal;
 };
 
-const toInterruptActions = (interrupt: any): AgentInterruptAction[] => {
-  const actions = interrupt?.value?.actionRequests ?? [];
-  const configs = new Map(
-    (interrupt?.value?.reviewConfigs ?? []).map((item) => [
-      item.actionName,
-      item,
-    ]),
+type InterruptActionRequest = {
+  name: string;
+  description?: string;
+};
+
+type InterruptReviewConfig = {
+  actionName: string;
+  allowedDecisions?: string[];
+};
+
+type InterruptValue = {
+  actionRequests?: InterruptActionRequest[];
+  reviewConfigs?: InterruptReviewConfig[];
+};
+
+type Interrupt = {
+  value?: InterruptValue;
+};
+
+const toInterruptActions = (interrupt: Interrupt): AgentInterruptAction[] => {
+  const actions = interrupt.value?.actionRequests ?? [];
+  const configs = new Map<string, InterruptReviewConfig>(
+    (interrupt.value?.reviewConfigs ?? []).map(
+      (item: InterruptReviewConfig) => [item.actionName, item],
+    ),
   );
-  return actions.flatMap((action, order) => {
+  return actions.flatMap((action: InterruptActionRequest, order: number) => {
     try {
-      const payload = action.description ? JSON.parse(action.description) : {};
+      const payload: unknown = action.description
+        ? JSON.parse(action.description)
+        : {};
+      if (payload === null || typeof payload !== 'object') return [];
+      const value = payload as Record<string, unknown>;
+      const toolCallId = value.toolCallId;
+      const toolCallName = value.toolCallName;
+      const sessionId = value.sessionId;
       return [
         {
           order,
           description: action.description,
-          allowedDecisions: (configs.get(action.name) as any)?.allowedDecisions,
+          allowedDecisions: configs.get(action.name)?.allowedDecisions,
           toolCall:
-            payload.toolCallId && payload.toolCallName
-              ? { id: payload.toolCallId, name: payload.toolCallName }
+            typeof toolCallId === 'string' && typeof toolCallName === 'string'
+              ? { id: toolCallId, name: toolCallName }
               : undefined,
-          currentConversation: payload.sessionId
-            ? {
-                sessionId: payload.sessionId,
-                from: payload.from,
-                username: payload.username,
-              }
-            : undefined,
+          currentConversation:
+            typeof sessionId === 'string'
+              ? {
+                  sessionId,
+                  from: typeof value.from === 'string' ? value.from : undefined,
+                  username:
+                    typeof value.username === 'string'
+                      ? value.username
+                      : undefined,
+                }
+              : undefined,
         },
       ];
     } catch {
@@ -477,7 +506,10 @@ export class AgentService {
             const { messageId, messages = [] } = chunks.body ?? {};
             const results = await conversation.toolCalls.getMany(
               messageId,
-              messages.map((item) => item.metadata.toolCallId),
+              messages.map(
+                (item: { metadata: { toolCallId: string } }) =>
+                  item.metadata.toolCallId,
+              ),
             );
             for (const { metadata } of messages) {
               const result = results.get(metadata.toolCallId);

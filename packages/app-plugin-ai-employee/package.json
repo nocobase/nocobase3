@@ -55,6 +55,14 @@
     "./client/settings-pages": {
       "types": "./client/settings-pages.ts",
       "import": "./client/settings-pages.ts"
+    },
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
+    "./server/tokens": {
+      "types": "./server/tokens.ts",
+      "import": "./server/tokens.ts"
     }
   },
   "publishConfig": {
@@ -96,6 +104,14 @@
       "./client/settings-pages": {
         "types": "./dist/client/settings-pages.d.ts",
         "import": "./dist/client/settings-pages.js"
+      },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
+      "./server/tokens": {
+        "types": "./dist/server/tokens.d.ts",
+        "import": "./dist/server/tokens.js"
       }
     }
   },
@@ -141,7 +157,8 @@
     "zod": "^3",
     "langchain": "1.2.39",
     "@nocobase/app-portal-sdk": "workspace:^",
-    "lucide-react": "^0.487.0"
+    "lucide-react": "^0.487.0",
+    "@nocobase/service-provider": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

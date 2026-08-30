@@ -9,15 +9,14 @@
 
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
-// @ts-ignore
-import pkg from '../package.json';
+import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../namespace.js';
 
 export default defineTools<AgentContext<{}, {}>>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("Load specific SKILLS", { ns: "${pkg.name}" })}}`,
-    about: `{{t("Loading content of the specific SKILLS", { ns: "${pkg.name}" })}}`,
+    title: `{{t("Load specific SKILLS", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    about: `{{t("Loading content of the specific SKILLS", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
   },
   definition: {
     name: 'getSkill',

@@ -11,7 +11,7 @@ import {
 } from 'react-router';
 import { expect, test, vi } from 'vitest';
 
-vi.mock('../client/page/knowledge-bases-page.tsx', () => ({
+vi.mock('../client/page/knowledge-bases-page.js', () => ({
   default: () => <p>Knowledge base directory</p>,
 }));
 

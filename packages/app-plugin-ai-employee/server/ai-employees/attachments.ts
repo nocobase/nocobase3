@@ -114,6 +114,9 @@ async function findSourceAttachments(
   const groups = new Map<string, AttachmentLookup[]>();
   for (const lookup of lookups) {
     const groupKey = lookup.source.collectionName;
+    if (!groupKey) {
+      continue;
+    }
     groups.set(groupKey, [...(groups.get(groupKey) ?? []), lookup]);
   }
 
@@ -129,7 +132,11 @@ async function findSourceAttachments(
       },
     };
     if (collectionName === 'aiFiles') {
-      filter.createdById = ctx.auth.user.id;
+      const userId = ctx.auth?.user?.id;
+      if (userId == null) {
+        continue;
+      }
+      filter.createdById = userId;
     }
 
     const records = await ctx.repositories

@@ -31,7 +31,7 @@ export const convertAIMessage = ({
   llmService?: string;
   model: string;
   aiMessage: AIMessage;
-}): AIMessageInput => {
+}): AIMessageInput | null => {
   const message = aiMessage.content;
   const toolCalls = aiMessage.tool_calls;
   const tools = aiEmployee.skillSettings?.tools;
@@ -81,7 +81,6 @@ export const convertAIMessage = ({
       llmService,
       usage_metadata: {},
     },
-    toolCalls: null,
   };
 
   if (toolCalls?.length) {
@@ -144,7 +143,7 @@ export const convertHumanMessage = ({
   llmService?: string;
   model: string;
   humanMessage: HumanMessage;
-}): AIMessageInput => {
+}): AIMessageInput | null => {
   if (!humanMessage.additional_kwargs.userContent) {
     return null;
   }

@@ -17,7 +17,7 @@ import type { NocoBaseDriveManager } from '@nocobase/drive';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { Caching } from '@nocobase/caching';
 import type { DatabaseManager } from '@nocobase/app-database';
-import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
+import type { IdGeneratorService } from '@nocobase/id-generator';
 import type { Env, MiddlewareHandler } from 'hono';
 import type { CurrentUser } from './context.js';
 import {
@@ -50,8 +50,8 @@ import { LLMStreamCachedManager } from './ai-employees/llm-stream-manager.js';
 import { SubAgentsDispatcher } from './ai-employees/sub-agents/dispatcher.js';
 import { DocumentLoaders } from '@nocobase/ai-employee';
 import type { Logger, Logging } from '@nocobase/logging';
+import { AI_EMPLOYEE_I18N_NAMESPACE } from '../namespace.js';
 import { AI_API_BASE_PATH } from './routes/contracts.js';
-const I18N_NAMESPACE = '@nocobase/app-template-default';
 let pluginRepositories: CollectionRepositoryFactory | undefined;
 let pluginReady: Promise<void> = Promise.resolve();
 
@@ -70,7 +70,7 @@ export interface AppDeps {
   auth: Auth;
   caching: Caching;
   driveManager?: NocoBaseDriveManager;
-  idGenerator: SnowflakeIdGenerator;
+  idGenerator: IdGeneratorService;
   logging: Logging;
 }
 
@@ -204,7 +204,7 @@ export function createPluginRuntime(
     caching: options.deps.caching,
     snowflake,
     fileManager,
-    i18nNamespace: I18N_NAMESPACE,
+    i18nNamespace: AI_EMPLOYEE_I18N_NAMESPACE,
     ...createRequestFields({ id: 'system', roles: ['root'], isRoot: true }),
     employeeService: new AIEmployeeService(),
     modelService: new ModelService(),

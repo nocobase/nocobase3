@@ -20,6 +20,7 @@ import type {
   AIMessage as AIConversationMessage,
   AIToolCall,
   AIToolMessage,
+  AIMessageInput,
 } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 
@@ -101,7 +102,7 @@ export const conversationMiddleware = (
         userMessageCount ? humanMessages.slice(-userMessageCount) : []
       )
         .map((message) => convertHumanMessage(message as HumanMessage))
-        .filter(Boolean);
+        .filter((message): message is AIMessageInput => message !== null);
       await conversation.messages.saveUserMessages(
         messageId,
         userMessages,
@@ -120,7 +121,7 @@ export const conversationMiddleware = (
         .filter((message) => message.type === 'tool')
         .slice(state.lastMessageIndex.lastToolMessageIndex)
         .map((message) => convertToolMessage(message as ToolMessage))
-        .filter(Boolean);
+        .filter((message): message is AIMessageInput => message !== null);
       if (!toolMessages.length || !currentMessageId) return;
       for (const message of toolMessages)
         message.metadata.messageId = currentMessageId;
@@ -195,7 +196,7 @@ export const conversationMiddleware = (
           ...appendMessage.map((message) =>
             convertHumanMessage(message as HumanMessage),
           ),
-        ].filter(Boolean);
+        ].filter((message): message is AIMessageInput => message !== null);
         await conversation.messages.add(messages);
         request.messages.push(...appendMessage);
         delete request.runtime.context.appendMessage;

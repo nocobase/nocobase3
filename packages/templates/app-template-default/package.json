@@ -15,6 +15,12 @@
       "@nocobase/app-plugin-authentication": {
         "enabled": true
       },
+      "@nocobase/app-plugin-ai-employee": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-ai-knowledge-base": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-authorization": {
         "enabled": true
       },

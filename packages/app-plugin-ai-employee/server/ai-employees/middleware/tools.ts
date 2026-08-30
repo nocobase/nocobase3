@@ -21,7 +21,9 @@ export const toolInteractionMiddleware = (
   aiEmployee: AIEmployee,
   tools: ToolsEntity[],
 ): ReturnType<typeof createMiddleware> => {
-  const interruptOn = {};
+  const interruptOn: Parameters<
+    typeof humanInTheLoopMiddleware
+  >[0]['interruptOn'] = {};
   for (const tool of tools) {
     interruptOn[tool.definition.name] = aiEmployee.shouldInterruptToolCall(tool)
       ? {
@@ -54,20 +56,23 @@ export const toolCallStatusMiddleware = (
       let interrupted = false;
       const { runtime, toolCall } = request;
       const { messageId } = request.state;
-
+      if (!messageId) {
+        throw new Error('Tool call messageId is required');
+      }
+      const toolCallId = toolCall.id;
+      if (typeof toolCallId !== 'string') {
+        throw new Error('Tool call id is required');
+      }
       const currentConversation = {
         sessionId: aiEmployee.sessionId,
         username: aiEmployee.employee.username,
         from: aiEmployee.from,
       };
 
-      const tm = await aiEmployee.getToolCallResult(
-        messageId,
-        request.toolCall.id,
-      );
+      const tm = await aiEmployee.getToolCallResult(messageId, toolCallId);
       if (!tm) {
         throw new Error(
-          `Tool call result not found for messageId=${messageId}, toolCallId=${request.toolCall.id}`,
+          `Tool call result not found for messageId=${messageId}, toolCallId=${toolCallId}`,
         );
       }
       if (tm.status === 'error') {
@@ -77,7 +82,7 @@ export const toolCallStatusMiddleware = (
           currentConversation,
         });
         return new ToolMessage({
-          tool_call_id: request.toolCall.id,
+          tool_call_id: toolCallId,
           status: 'error',
           content: tm.content,
           metadata: {
@@ -86,7 +91,7 @@ export const toolCallStatusMiddleware = (
         });
       }
 
-      await aiEmployee.updateToolCallPending(messageId, request.toolCall.id);
+      await aiEmployee.updateToolCallPending(messageId, toolCallId);
       runtime.writer?.({
         action: 'beforeToolCall',
         body: { toolCall },
@@ -114,36 +119,33 @@ export const toolCallStatusMiddleware = (
         }
 
         return toolMessage;
-      } catch (e) {
-        if (e.name === 'GraphInterrupt') {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof Error && error.name === 'GraphInterrupt') {
           interrupted = true;
-          throw e;
+          throw error;
         }
-        aiEmployee.logger.error(e);
-        result = { status: 'error', content: e.message };
+        aiEmployee.logger.error(error);
+        result = { status: 'error', content: message };
         runtime.writer?.({
           action: 'afterToolCallError',
-          body: { toolCall, error: e },
+          body: { toolCall, error },
           currentConversation,
         });
         return new ToolMessage({
-          tool_call_id: request.toolCall.id,
+          tool_call_id: toolCallId,
           status: 'error',
-          content: e.message,
+          content: message,
           metadata: {
             messageId,
           },
         });
       } finally {
         if (!interrupted) {
-          await aiEmployee.updateToolCallDone(
-            messageId,
-            request.toolCall.id,
-            result,
-          );
+          await aiEmployee.updateToolCallDone(messageId, toolCallId, result);
           const toolCallResult = await aiEmployee.getToolCallResult(
             messageId,
-            request.toolCall.id,
+            toolCallId,
           );
           runtime.writer?.({
             action: 'afterToolCall',

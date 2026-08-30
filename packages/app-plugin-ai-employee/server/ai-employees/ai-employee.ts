@@ -1,7 +1,25 @@
 import type { Context } from '../context.js';
-import type { ToolsEntity } from '@nocobase/ai-employee';
-import type { AIEmployeeEntity } from '@nocobase/ai-employee';
-import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
+import type { DatabaseConnection } from '@nocobase/app-database';
+import {
+  AIChatContext,
+  AIChatConversation,
+  AIMessage,
+  AIMessageInput,
+  AIToolMessage,
+  buildTool,
+  LLMProvider,
+  listSystemTools,
+  SYSTEM_TOOLS,
+  UserDecision,
+} from '@nocobase/ai-employee';
+import type {
+  AIEmployeeEntity,
+  AIFileAttachment,
+  SkillsEntity,
+  ToolsEntity,
+  ToolsFilter,
+  ToolsManager,
+} from '@nocobase/ai-employee';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -11,28 +29,10 @@ import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { DatabaseConnection } from '@nocobase/app-database';
-import { LLMProvider } from '@nocobase/ai-employee';
-import { buildTool } from '@nocobase/ai-employee';
 import { sendSSEError } from '../routes/utils.js';
 import { getSystemPrompt } from './prompts.js';
 import _ from 'lodash';
-import {
-  AIChatContext,
-  AIChatConversation,
-  AIMessage,
-  AIMessageInput,
-  AIToolCall,
-  UserDecision,
-} from '@nocobase/ai-employee';
 import { createAIChatConversation } from './ai-chat-conversation.js';
-import {
-  KnowledgeBaseGroup,
-  DocumentSegmentedWithScore,
-} from '@nocobase/ai-employee';
-import { EEFeatures } from '@nocobase/ai-employee';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
-
 import {
   conversationMiddleware,
   skillToolBindingMiddleware,
@@ -40,16 +40,13 @@ import {
   toolCallStatusMiddleware,
   toolInteractionMiddleware,
 } from './middleware/index.js';
-import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
-import type { SkillsEntity } from '@nocobase/ai-employee';
-import type { ToolsFilter, ToolsManager } from '@nocobase/ai-employee';
-import { AIToolMessage } from '@nocobase/ai-employee';
 import { NativeCollectionSaver } from './checkpoints/index.js';
 import { createAgent as createLangChainAgent } from 'langchain';
 import { Command } from '@langchain/langgraph';
 import { concat } from '@langchain/core/utils/stream';
 import { convertAIMessage } from './utils.js';
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { LLMResult } from '@langchain/core/outputs';
 import type { AIToolMessageEntity } from '../repository/index.js';
 import {
@@ -84,22 +81,42 @@ export interface ModelRef {
   model: string;
 }
 
+type EmployeeToolSetting = {
+  name: string;
+  autoCall?: boolean;
+};
+
+type RuntimeSkillSettings = {
+  toolsVersion?: unknown;
+  tools?: string[];
+  skillsVersion?: unknown;
+  skills?: string[];
+};
+
 export interface AIEmployeeOptions {
   ctx: Context;
-  employee: any;
+  employee: AIEmployeeEntity;
   sessionId: string;
-  systemMessage?: any;
-  skillSettings?: any;
+  systemMessage?: unknown;
+  skillSettings?: RuntimeSkillSettings;
   webSearch?: boolean;
   model?: ModelRef;
   legacy?: boolean;
   from?: 'main-agent' | 'sub-agent';
-  tools?: any;
+  tools?: EmployeeToolSetting[];
 }
 
 type InterruptPayload = {
   actionRequests: { name: string; args: unknown; description: string }[];
   reviewConfigs: { actionName: string; allowedDecisions: string[] }[];
+};
+
+type InterruptActionPayload = {
+  toolCallId: string;
+  toolCallName: string;
+  sessionId: string;
+  from: string;
+  username: string;
 };
 
 type InterruptAction = {
@@ -117,18 +134,18 @@ type InterruptAction = {
 export class AIEmployee {
   sessionId: string;
   from = 'main-agent';
-  employee: any;
+  employee: AIEmployeeEntity;
   aiChatConversation: AIChatConversation;
-  skillSettings?: any;
+  skillSettings?: RuntimeSkillSettings;
   userMessageCount = 0;
 
   private ctx: Context;
-  private systemMessage?: any;
+  private systemMessage?: unknown;
   private protocol: ChatStreamProtocol;
   private webSearch?: boolean;
   private model?: ModelRef;
   private legacy?: boolean;
-  private tools: any;
+  private tools: EmployeeToolSetting[];
   private inWorkflow?: boolean;
   private streamCached: LLMStreamCached;
 
@@ -160,10 +177,7 @@ export class AIEmployee {
     this.streamCached = this.ctx.llmStreamCachedManager.getCached(sessionId);
 
     const builtInManager = this.ctx.builtInManager;
-    builtInManager.setupBuiltInInfo(
-      ctx,
-      this.employee as unknown as unknown as AIEmployeeType,
-    );
+    builtInManager.setupBuiltInInfo(ctx, this.employee);
     this.webSearch = webSearch;
     this.protocol = ChatStreamProtocol.fromContext(ctx, async (chunk) => {
       try {
@@ -197,10 +211,17 @@ export class AIEmployee {
     return this.chatSettings.enableTools !== false;
   }
 
+  private requireModel(): ModelRef {
+    if (!this.model) {
+      throw new Error('AI employee model is required');
+    }
+    return this.model;
+  }
+
   async getFormatMessages(userMessages: AIMessageInput[]) {
-    const { provider } = await this.ctx.ai.llmProviderManager.getLLMService({
-      ...this.model,
-    });
+    const { provider } = await this.ctx.ai.llmProviderManager.getLLMService(
+      this.requireModel(),
+    );
     const { messages } = await this.aiChatConversation.getChatContext({
       userMessages,
       formatMessages: (messages) => this.formatMessages({ messages, provider }),
@@ -221,9 +242,14 @@ export class AIEmployee {
 
   // === Chat flow ===
   private buildState(messages: AIMessage[]) {
-    const toolCallMessage = messages.findLast(
-      (message) => message.toolCalls?.length,
-    );
+    let toolCallMessage: AIMessage | undefined;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message?.toolCalls?.length) {
+        toolCallMessage = message;
+        break;
+      }
+    }
     return {
       messageId: toolCallMessage?.messageId,
       lastMessageIndex: {
@@ -243,13 +269,18 @@ export class AIEmployee {
     model,
     providerName,
     llmService,
+  }: {
+    messageId?: string;
+    provider: LLMProvider;
+    model: string;
+    providerName: string;
+    llmService?: string;
   }) {
     const { tools, baseToolNames } = await this.getAgentTools();
     const resolvedTools = provider.resolveTools(tools.map(buildTool));
     if (!messageId && this.legacy !== true) {
       return {
         historyMessages: [],
-        tools,
         resolvedTools,
         middleware: await this.getMiddleware({
           tools,
@@ -272,7 +303,6 @@ export class AIEmployee {
 
     return {
       historyMessages,
-      tools,
       resolvedTools,
       middleware: await this.getMiddleware({
         tools,
@@ -292,7 +322,6 @@ export class AIEmployee {
       state: this.buildState(historyMessages),
     };
   }
-
   private async buildChatContext({
     messageId,
     userMessages,
@@ -306,13 +335,11 @@ export class AIEmployee {
     };
   }) {
     const { provider, model, service } =
-      await this.ctx.ai.llmProviderManager.getLLMService({
-        ...this.model,
-      });
+      await this.ctx.ai.llmProviderManager.getLLMService(this.requireModel());
     this.userMessageCount = (userMessages ?? []).filter(
       (message) => message.role === 'user',
     ).length;
-    const { historyMessages, tools, resolvedTools, middleware, config, state } =
+    const { historyMessages, resolvedTools, middleware, config, state } =
       await this.initSession({
         messageId,
         provider,
@@ -375,16 +402,19 @@ export class AIEmployee {
         userDecisions,
       });
 
-      const responseMetadata = new Map<string, any>();
+      const responseMetadata = new Map<string, unknown>();
       const responseMetadataCollector = new ResponseMetadataCollector(
         provider,
         responseMetadata,
       );
-
+      const streamConfig: RunnableConfig = {
+        ...config,
+        callbacks: [responseMetadataCollector],
+      };
       const { stream, signal } = await this.prepareChatStream({
         chatContext,
         provider,
-        config: { ...config, callbacks: [responseMetadataCollector] } as any,
+        config: streamConfig,
         state,
       });
       await this.processChatStream(stream, {
@@ -399,7 +429,7 @@ export class AIEmployee {
       return true;
     } catch (err) {
       this.ctx.logger.error(err);
-      this.sendErrorResponse(err.message || 'Chat error warning');
+      this.sendErrorResponse(getErrorMessage(err, 'Chat error warning'));
       return false;
     } finally {
       await this.aiConversationsRepo.update({
@@ -473,7 +503,7 @@ export class AIEmployee {
 
       return invokeResult;
     } catch (err) {
-      if (err.name === 'GraphInterrupt') {
+      if (getErrorName(err) === 'GraphInterrupt') {
         throw err;
       }
       this.ctx.logger.error(err);
@@ -634,7 +664,7 @@ export class AIEmployee {
       model: string;
       provider: LLMProvider;
       allowEmpty?: boolean;
-      responseMetadata: Map<string, any>;
+      responseMetadata: Map<string, unknown>;
     },
   ) {
     const aiMessageIdMap = new Map<string, string>();
@@ -674,13 +704,12 @@ export class AIEmployee {
           });
           if (values) {
             values.metadata.interrupted = true;
+            await this.aiChatConversation.withTransaction(
+              async (conversation) => {
+                await conversation.addMessages(values);
+              },
+            );
           }
-
-          await this.aiChatConversation.withTransaction(
-            async (conversation, transaction) => {
-              const result: AIMessage = await conversation.addMessages(values);
-            },
-          );
         }
       } catch (e) {
         this.logger.error(
@@ -787,7 +816,7 @@ export class AIEmployee {
             );
 
             const data = responseMetadata.get(chunks.body.id);
-            if (data) {
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
               const savedMessage = await this.aiMessagesRepo.findOne({
                 filter: {
                   messageId: chunks.body.messageId,
@@ -849,13 +878,18 @@ export class AIEmployee {
             });
           } else if (chunks.action === 'beforeSendToolMessage') {
             const { messageId, messages } = chunks.body ?? {};
-            if (messages.length) {
+            if (
+              typeof messageId === 'string' &&
+              Array.isArray(messages) &&
+              messages.length
+            ) {
+              const toolMessages = messages.filter(isToolMessageStreamItem);
               const toolsMap = await this.getToolsMap();
               const toolCallResultMap = await this.getToolCallResultMap(
                 messageId,
-                messages.map((x) => x.metadata).map((x) => x.toolCallId),
+                toolMessages.map(({ metadata }) => metadata.toolCallId),
               );
-              for (const { metadata } of messages) {
+              for (const { metadata } of toolMessages) {
                 const tools = toolsMap.get(metadata.toolName);
                 const toolCallResult = toolCallResultMap.get(
                   metadata.toolCallId,
@@ -875,7 +909,6 @@ export class AIEmployee {
                 });
               }
             }
-
             await this.protocol.with(currentConversation).newMessage();
           } else if (chunks.action === 'afterSubAgentInvoke') {
             await this.protocol.with(currentConversation).subAgentCompleted();
@@ -897,8 +930,12 @@ export class AIEmployee {
     } catch (err) {
       await stopAllReasoning();
       this.ctx.logger.error(err);
-      if (err.name === 'GraphRecursionError') {
-        this.sendSpecificError({ name: err.name, message: err.message });
+      const errorName = getErrorName(err);
+      if (errorName === 'GraphRecursionError') {
+        this.sendSpecificError({
+          name: errorName,
+          message: getErrorMessage(err, 'Graph recursion error'),
+        });
       } else {
         this.sendErrorResponse(provider.parseResponseError(err));
       }
@@ -976,13 +1013,13 @@ export class AIEmployee {
 
     const userConfig = await this.ctx.repositories.usersAiEmployees.findOne({
       filter: {
-        userId: this.ctx.auth?.user.id ?? 0,
+        userId: this.ctx.auth?.user?.id ?? 0,
         aiEmployee: this.employee.username,
       },
     });
 
     let background = '';
-    if (this.systemMessage) {
+    if (typeof this.systemMessage === 'string') {
       background = this.systemMessage;
     }
 
@@ -1001,19 +1038,20 @@ export class AIEmployee {
 
     let knowledgeBase: string | undefined;
     const { knowledgeBaseManager } = this.ctx;
-    const employee: AIEmployeeType = this.employee as unknown as AIEmployeeType;
+    const employee = this.employee;
     if (
       (await knowledgeBaseManager.isEnabledKnowledgeBase(employee)) &&
       employee.knowledgeBasePrompt &&
       userMessages?.length
     ) {
       const lastUserMessage = userMessages
-        .filter((x) => x.role === 'user')
+        .filter((message) => message.role === 'user')
         .at(-1);
-      if (lastUserMessage) {
+      const query = getTextMessageContent(lastUserMessage?.content);
+      if (query) {
         knowledgeBase = await knowledgeBaseManager.retrievePrompt({
           employee,
-          query: lastUserMessage.content.content as string,
+          query,
         });
       }
     }
@@ -1023,7 +1061,7 @@ export class AIEmployee {
 
     const systemPrompt = getSystemPrompt({
       aiEmployee: {
-        nickname: this.employee.nickname,
+        nickname: this.employee.nickname ?? this.employee.username,
         about,
       },
       task: {
@@ -1259,11 +1297,20 @@ If information is missing, clearly state it in the summary.</Important>`;
         },
       },
     });
-    return new Map(
-      list.map((item) => [item.toolCallId, item as AIToolMessage]),
+    return new Map<string, AIToolMessage>(
+      list
+        .filter(
+          (
+            item: AIToolMessageEntity,
+          ): item is AIToolMessageEntity & { toolCallId: string } =>
+            typeof item.toolCallId === 'string',
+        )
+        .map((item: AIToolMessageEntity & { toolCallId: string }) => [
+          item.toolCallId,
+          item as AIToolMessage,
+        ]),
     );
   }
-
   async cancelToolCall() {
     let messageId;
     const historyMessages = await this.ctx.repositories.aiMessages.find({
@@ -1284,20 +1331,22 @@ If information is missing, clearly state it in the summary.</Important>`;
         },
       },
     });
-    if (!toolMessages || _.isEmpty(toolMessages)) {
+    if (!Array.isArray(toolMessages) || toolMessages.length === 0) {
+      return;
+    }
+    const validToolMessages = toolMessages.filter(isPersistedToolMessage);
+    if (validToolMessages.length === 0) {
       return;
     }
 
     const { model, service } =
-      await this.ctx.ai.llmProviderManager.getLLMService({
-        ...this.model,
-      });
+      await this.ctx.ai.llmProviderManager.getLLMService(this.requireModel());
     const toolCallMap = await this.getToolCallMap(messageId);
     const now = new Date();
     const toolMessageContent =
       'The user ignored the application for tools usage and will continued to ask questions';
     return await this.ctx.database.transaction(async (connection) => {
-      for (const toolMessage of toolMessages) {
+      for (const toolMessage of validToolMessages) {
         await this.aiToolMessagesRepo.update(
           {
             values: {
@@ -1317,7 +1366,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       }
       return await this.ctx.repositories.aiMessages.create(
         {
-          values: toolMessages.map((toolMessage) => ({
+          values: validToolMessages.map((toolMessage) => ({
             messageId: String(this.ctx.snowflake.generate()),
             sessionId: this.sessionId,
             role: 'tool',
@@ -1381,11 +1430,11 @@ If information is missing, clearly state it in the summary.</Important>`;
     this.ctx.aiEmployeesManager.conversationController.delete(this.sessionId);
   }
 
-  shouldInterruptToolCall(tools: ToolsEntity): boolean {
+  shouldInterruptToolCall(tools: ToolsEntity | undefined): boolean {
     return tools?.execution === 'frontend' || !this.isAutoCall(tools);
   }
 
-  isAutoCall(tools: ToolsEntity): boolean {
+  isAutoCall(tools: ToolsEntity | undefined): boolean {
     if (!tools) {
       return false;
     }
@@ -1395,9 +1444,9 @@ If information is missing, clearly state it in the summary.</Important>`;
     }
     const employeeTools = this.employee.skillSettings?.tools ?? [];
     const presetTools = employeeTools.find(
-      (s) => s.name === tools.definition.name,
+      (setting) => setting.name === tools.definition.name,
     );
-    return presetTools ? presetTools.autoCall : isAutoCall;
+    return presetTools ? presetTools.autoCall === true : isAutoCall;
   }
 
   private async normalizeMessageAttachments(
@@ -1489,7 +1538,13 @@ If information is missing, clearly state it in the summary.</Important>`;
         const contentBlocks = [];
         if (attachments?.length) {
           for (const attachment of attachments) {
-            const parsed = await provider.parseAttachment(attachment as any, {
+            if (!isAIFileAttachment(attachment)) {
+              this.logger.warn('Skip malformed AI message attachment', {
+                attachment,
+              });
+              continue;
+            }
+            const parsed = await provider.parseAttachment(attachment, {
               fileManager: this.ctx.fileManager,
               documentLoader: this.ctx.documentLoaders.cached,
               caching: this.ctx.caching,
@@ -1603,13 +1658,18 @@ If information is missing, clearly state it in the summary.</Important>`;
     );
 
     for (const [name, actionRequest] of actionRequestsMap.entries()) {
-      const payload = actionRequest.description
-        ? JSON.parse(actionRequest.description)
-        : null;
+      const payload = parseInterruptActionPayload(actionRequest.description);
+      if (!payload) {
+        this.logger.warn('Ignore malformed interrupt action description', {
+          name,
+          description: actionRequest.description,
+        });
+        continue;
+      }
       result.set(name, {
         order: order++,
         description: actionRequest.description,
-        allowedDecisions: reviewConfigsMap.get(name)?.allowedDecisions,
+        allowedDecisions: reviewConfigsMap.get(name)?.allowedDecisions ?? [],
         toolCall: {
           id: payload.toolCallId,
           name: payload.toolCallName,
@@ -1644,16 +1704,16 @@ If information is missing, clearly state it in the summary.</Important>`;
         SYSTEM_TOOLS.WEB_SEARCH,
         { ctx: this.ctx },
       );
-      tools.push(subAgentWebSearch);
+      if (subAgentWebSearch) {
+        tools.push(subAgentWebSearch);
+      }
     }
     const generalToolsNameSet = new Set(tools.map((x) => x.definition.name));
     const toolMap = await this.getToolsMap();
     const settingsTools = this.employee.skillSettings?.tools ?? [];
     const employeeTools = [...settingsTools, ...this.tools];
     if (
-      await this.ctx.knowledgeBaseManager.isEnabledKnowledgeBase(
-        this.employee as unknown as AIEmployeeType,
-      )
+      await this.ctx.knowledgeBaseManager.isEnabledKnowledgeBase(this.employee)
     ) {
       const knowledgeBaseRetrieveTool = await this.toolsManager.getTools(
         SYSTEM_TOOLS.KNOWLEDGE_BASE,
@@ -1878,7 +1938,6 @@ If information is missing, clearly state it in the summary.</Important>`;
       messageId,
       agentThread,
     } = options;
-    const inWorkflow = await this.isInWorkflow();
     return [
       skillToolBindingMiddleware(this, {
         baseToolNames: Array.from(baseToolNames.values()),
@@ -1969,6 +2028,106 @@ If information is missing, clearly state it in the summary.</Important>`;
   private get aiToolMessagesRepo() {
     return this.ctx.repositories.aiToolMessages;
   }
+}
+
+type ToolMessageStreamItem = {
+  metadata: {
+    toolCallId: string;
+    toolName: string;
+  };
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function getErrorName(error: unknown): string | undefined {
+  return error instanceof Error
+    ? error.name
+    : isRecord(error) && typeof error.name === 'string'
+      ? error.name
+      : undefined;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error
+    ? error.message || fallback
+    : isRecord(error) && typeof error.message === 'string'
+      ? error.message || fallback
+      : fallback;
+}
+
+function getTextMessageContent(content: unknown): string | undefined {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (isRecord(content) && typeof content.content === 'string') {
+    return content.content;
+  }
+  return undefined;
+}
+
+function isAIFileAttachment(value: unknown): value is AIFileAttachment {
+  return isRecord(value);
+}
+
+function isToolMessageStreamItem(
+  value: unknown,
+): value is ToolMessageStreamItem {
+  if (!isRecord(value) || !isRecord(value.metadata)) {
+    return false;
+  }
+  return (
+    typeof value.metadata.toolCallId === 'string' &&
+    typeof value.metadata.toolName === 'string'
+  );
+}
+
+function isPersistedToolMessage(
+  value: unknown,
+): value is AIToolMessageEntity & {
+  id: string | number | bigint;
+  toolCallId: string;
+} {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    (typeof value.id === 'string' ||
+      typeof value.id === 'number' ||
+      typeof value.id === 'bigint') &&
+    typeof value.toolCallId === 'string'
+  );
+}
+
+function parseInterruptActionPayload(
+  description: string,
+): InterruptActionPayload | null {
+  if (!description) {
+    return null;
+  }
+  try {
+    const payload: unknown = JSON.parse(description);
+    if (
+      isRecord(payload) &&
+      typeof payload.toolCallId === 'string' &&
+      typeof payload.toolCallName === 'string' &&
+      typeof payload.sessionId === 'string' &&
+      typeof payload.from === 'string' &&
+      typeof payload.username === 'string'
+    ) {
+      return {
+        toolCallId: payload.toolCallId,
+        toolCallName: payload.toolCallName,
+        sessionId: payload.sessionId,
+        from: payload.from,
+        username: payload.username,
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function getCurrentTimezone(ctx: Context): string | undefined {
@@ -2167,12 +2326,12 @@ class ResponseMetadataCollector extends BaseCallbackHandler {
   name = 'ResponseMetadataCollector';
   constructor(
     private readonly llmProvider: LLMProvider,
-    private readonly responseMetadata: Map<string, any>,
+    private readonly responseMetadata: Map<string, unknown>,
   ) {
     super();
   }
 
-  handleLLMEnd(output: LLMResult, runId: string) {
+  handleLLMEnd(output: LLMResult, _runId: string) {
     const [id, metadata] = this.llmProvider.parseResponseMetadata(output);
     if (id && metadata) {
       this.responseMetadata.set(id, metadata);

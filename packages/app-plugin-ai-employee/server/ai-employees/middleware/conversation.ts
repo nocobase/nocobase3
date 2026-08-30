@@ -43,7 +43,7 @@ export const conversationMiddleware = (
   const { providerName, provider, llmService, model, messageId, agentThread } =
     options;
 
-  const convertAIMessage = (aiMessage: AIMessage): AIMessageInput =>
+  const convertAIMessage = (aiMessage: AIMessage): AIMessageInput | null =>
     _convertAIMessage({
       aiEmployee,
       providerName,
@@ -53,7 +53,9 @@ export const conversationMiddleware = (
       aiMessage,
     });
 
-  const convertHumanMessage = (humanMessage: HumanMessage): AIMessageInput =>
+  const convertHumanMessage = (
+    humanMessage: HumanMessage,
+  ): AIMessageInput | null =>
     _convertHumanMessage({ providerName, llmService, model, humanMessage });
 
   const convertToolMessage = (toolMessage: ToolMessage): AIMessageInput =>
@@ -128,8 +130,8 @@ export const conversationMiddleware = (
           ? humanMessages.slice(-aiEmployee.userMessageCount)
           : []
       )
-        .map((x) => x as HumanMessage)
-        .map(convertHumanMessage);
+        .map((message) => convertHumanMessage(message as HumanMessage))
+        .filter((message): message is AIMessageInput => message !== null);
       await aiEmployee.aiChatConversation.withTransaction(
         async (conversation, transaction) => {
           if (agentThread) {
@@ -162,6 +164,9 @@ export const conversationMiddleware = (
         .map((x) => x as ToolMessage)
         .map(convertToolMessage);
       if (toolMessages.length) {
+        if (!messageId) {
+          throw new Error('Tool message messageId is required');
+        }
         for (const tm of toolMessages) {
           tm.metadata.messageId = messageId;
         }
@@ -276,8 +281,10 @@ export const conversationMiddleware = (
             );
             await conversation.addMessages(
               appendMessage
-                .map((x) => x as HumanMessage)
-                .map(convertHumanMessage),
+                .map((message) => convertHumanMessage(message as HumanMessage))
+                .filter(
+                  (message): message is AIMessageInput => message !== null,
+                ),
             );
           },
         );

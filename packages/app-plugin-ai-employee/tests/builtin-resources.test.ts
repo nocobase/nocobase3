@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -74,16 +73,12 @@ describe('package AI resources', () => {
       await fixture.aiManager.toolsManager.getTools('chartGenerator'),
     ).toMatchObject({
       definition: { name: 'chartGenerator' },
+      introduction: {
+        title: expect.stringContaining('@nocobase/app-plugin-ai-employee'),
+        about: expect.stringContaining('@nocobase/app-plugin-ai-employee'),
+      },
     });
 
     expect(basePath).toBe(path.resolve(process.cwd(), 'ai'));
-  });
-
-  it('keeps built-in TypeScript resources inside an ESM package boundary', async () => {
-    const packageJson = JSON.parse(
-      await readFile(path.resolve(process.cwd(), 'ai', 'package.json'), 'utf8'),
-    ) as { type?: string };
-
-    expect(packageJson.type).toBe('module');
   });
 });

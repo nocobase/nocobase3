@@ -5,8 +5,7 @@ import {
   isFrontendToolInvokeResult,
 } from '../../server/ai-employees/common/frontend-tools.js';
 import type { AgentFrontendToolService } from '../../server/agent/contracts.js';
-// @ts-ignore
-import pkg from '../package.json';
+import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../namespace.js';
 
 type FrontendToolContext = AgentContext<
   {},
@@ -18,8 +17,8 @@ export default defineTools<FrontendToolContext>({
   execution: 'frontend',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("Execute frontend tool", { ns: "${pkg.name}" })}}`,
-    about: `{{t("Execute a frontend tool provided by the selected block.", { ns: "${pkg.name}" })}}`,
+    title: `{{t("Execute frontend tool", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    about: `{{t("Execute a frontend tool provided by the selected block.", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
   },
   definition: {
     name: EXECUTE_FRONTEND_TOOL_NAME,

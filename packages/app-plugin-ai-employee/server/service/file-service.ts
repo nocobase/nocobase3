@@ -1,7 +1,7 @@
 import type { Context } from '../context.js';
 import { Buffer } from 'node:buffer';
 import path from 'node:path';
-import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
+import type { IdGeneratorService } from '@nocobase/id-generator';
 import type { FileManager } from '@nocobase/ai-employee';
 
 type UploadResult = {
@@ -21,7 +21,7 @@ type UploadResult = {
 export class AIFileService {
   constructor(
     private readonly fileManager: FileManager,
-    private readonly snowflake: SnowflakeIdGenerator,
+    private readonly snowflake: IdGeneratorService,
     private readonly apiBasePath: string,
   ) {}
 

@@ -14,8 +14,7 @@ import type {
 } from '../../server/repository/index.js';
 import type { AgentKnowledgeBaseService } from '../../server/agent/contracts.js';
 import { z } from 'zod';
-// @ts-ignore
-import pkg from '../package.json';
+import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../namespace.js';
 
 type KnowledgeBaseContext = AgentContext<
   {
@@ -29,8 +28,8 @@ export default defineTools<KnowledgeBaseContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("Knowledge base retrieval", { ns: "${pkg.name}" })}}`,
-    about: `{{t("Retrieve relevant content from the knowledge base.", { ns: "${pkg.name}" })}}`,
+    title: `{{t("Knowledge base retrieval", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    about: `{{t("Retrieve relevant content from the knowledge base.", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
   },
   definition: {
     name: 'knowledge-base-retrieve',

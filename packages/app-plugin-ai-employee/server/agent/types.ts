@@ -363,11 +363,11 @@ export interface ChatContextProvider {
   convertAIMessage(
     message: LangChainAIMessage,
     context: AgentMessageConversionContext,
-  ): AIMessageInput;
+  ): AIMessageInput | null;
   convertHumanMessage(
     message: HumanMessage,
     context: AgentMessageConversionContext,
-  ): AIMessageInput;
+  ): AIMessageInput | null;
   convertToolMessage(
     message: ToolMessage,
     context: AgentMessageConversionContext,

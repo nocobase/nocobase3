@@ -231,8 +231,10 @@ export function createMemoryConversationProvider(
         thread = Math.max(thread, value.thread);
       },
       buildInitialState: (history) => ({
-        messageId: history.findLast((message) => message.toolCalls?.length)
-          ?.messageId,
+        messageId: history
+          .slice()
+          .reverse()
+          .find((message) => message.toolCalls?.length)?.messageId,
         lastMessageIndex: {
           lastHumanMessageIndex: history.filter(
             (message) => message.role === 'user',

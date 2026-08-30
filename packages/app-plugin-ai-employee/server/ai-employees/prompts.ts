@@ -35,7 +35,10 @@ export function getSystemPrompt({
     position: string;
     bio: string;
     greeting: string;
-    skillSettings: any;
+    skillSettings?: {
+      skills?: string[];
+      tools?: { name: string }[];
+    };
   }[];
 }) {
   // Helper function to get database-specific identifier quoting rules

@@ -70,7 +70,11 @@ const paged = async <T extends Record<string, unknown>>(
   });
 };
 
-export default function registerRoutes({ app, deps }: RoutesContext): void {
+export default function registerRoutes(
+  context: RoutesContext,
+  mountLegacy: boolean = true,
+): Hono {
+  const { app, deps } = context;
   const service = (
     deps.ai as AIManager & { __knowledgeBaseService?: KnowledgeBaseService }
   ).__knowledgeBaseService;
@@ -602,7 +606,8 @@ export default function registerRoutes({ app, deps }: RoutesContext): void {
       );
     }),
   );
-  app.route('/v2/api', routes);
+  if (mountLegacy) app.route('/v2/api', routes);
+  return routes;
 }
 
 declare module 'hono' {

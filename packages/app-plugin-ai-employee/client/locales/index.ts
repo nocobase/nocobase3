@@ -5,12 +5,11 @@ import {
 import { useTranslate } from '@refinedev/core';
 import { useCallback } from 'react';
 
+import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../namespace.js';
 import enUS from './en-US.js';
 import zhCN from './zh-CN.js';
 
-export const NOCOBASE_AI_EMPLOYEE_I18N_NAMESPACE = 'nocobase-ai-employee';
-
-registerTranslationResources(NOCOBASE_AI_EMPLOYEE_I18N_NAMESPACE, {
+registerTranslationResources(AI_EMPLOYEE_I18N_NAMESPACE, {
   'en-US': enUS,
   'zh-CN': zhCN,
 });
@@ -23,11 +22,7 @@ export function useT(): (key: string) => string {
         ? zhCN
         : enUS;
       const fallback = resources[key as keyof typeof resources] ?? key;
-      return translate(
-        key,
-        { ns: NOCOBASE_AI_EMPLOYEE_I18N_NAMESPACE },
-        fallback,
-      );
+      return translate(key, { ns: AI_EMPLOYEE_I18N_NAMESPACE }, fallback);
     },
     [translate],
   );

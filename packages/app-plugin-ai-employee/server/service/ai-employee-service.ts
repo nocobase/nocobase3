@@ -1,7 +1,11 @@
 import type { Context } from '../context.js';
 import { EEFeatures } from '@nocobase/ai-employee';
-import type { AIEmployeeEntity } from '@nocobase/ai-employee';
+import type {
+  AIEmployeeEntity,
+  AIEmployeeToolSetting,
+} from '@nocobase/ai-employee';
 import type { AIEmployeeDto } from '../routes/contracts.js';
+import type { UserAIEmployeeEntity } from '../repository/index.js';
 import {
   asRecord,
   badRequest,
@@ -17,7 +21,7 @@ type AIEmployeeRecord = Omit<
   knowledgeBase?: unknown;
   knowledgeBasePrompt?: string | null;
   missingKnowledgeBaseKeys?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 function cloneEmployee(employee: AIEmployeeEntity): AIEmployeeRecord {
@@ -131,6 +135,35 @@ function getStringField(
   return typeof value === 'string' ? value : undefined;
 }
 
+function isAIEmployeeToolSetting(
+  value: unknown,
+): value is AIEmployeeToolSetting {
+  const record = asRecord(value);
+  return (
+    typeof record?.name === 'string' &&
+    (record.autoCall === undefined || typeof record.autoCall === 'boolean')
+  );
+}
+
+function getSkillSettings(
+  value: unknown,
+  fallback: AIEmployeeEntity['skillSettings'] | undefined,
+): AIEmployeeEntity['skillSettings'] {
+  const record = asRecord(value);
+  if (!record) {
+    return fallback ?? { skills: [], tools: [] };
+  }
+  const skills = Array.isArray(record.skills)
+    ? record.skills.filter(
+        (skill): skill is string => typeof skill === 'string',
+      )
+    : [];
+  const tools = Array.isArray(record.tools)
+    ? record.tools.filter(isAIEmployeeToolSetting)
+    : [];
+  return { skills, tools };
+}
+
 function getKnowledgeBaseKeys(employee: AIEmployeeRecord): string[] {
   const knowledgeBase = asRecord(employee.knowledgeBase);
   if (!Array.isArray(knowledgeBase?.knowledgeBaseKeys)) {
@@ -183,44 +216,45 @@ export class AIEmployeeService {
 
   async listByUser(ctx: Context): Promise<AIEmployeeDto[]> {
     const skills = await ctx.ai.skillsManager.listSkills({
-      scope: 'GENERAL' as any,
+      scope: 'GENERAL',
     });
     const tools = await ctx.ai.toolsManager.listTools({
-      scope: 'GENERAL' as any,
+      scope: 'GENERAL',
     });
     const userId = ctx.currentUser.id;
-    const where: Record<string, any> = { enabled: true };
+    const where: Record<string, unknown> = { enabled: true };
 
     const rows = await ctx.repositories.aiEmployees.find({ filter: where });
-    const userConfigs =
-      userId == null
-        ? new Map()
-        : new Map(
-            (
-              await ctx.repositories.usersAiEmployees.find({
-                filter: { userId },
-              })
-            ).map((config: any) => [config.aiEmployee, config]),
-          );
-    const sortedRows = rows.sort((a, b) => {
+    const userConfigs = new Map<string, UserAIEmployeeEntity>();
+    if (userId != null) {
+      const configs = await ctx.repositories.usersAiEmployees.find({
+        filter: { userId },
+      });
+      for (const config of configs) {
+        userConfigs.set(config.aiEmployee, config);
+      }
+    }
+    const sortedRows = rows.sort((a: AIEmployeeEntity, b: AIEmployeeEntity) => {
       const sa = userConfigs.get(a.username)?.sort ?? a.sort ?? 0;
       const sb = userConfigs.get(b.username)?.sort ?? b.sort ?? 0;
       return sa - sb;
     });
 
-    return sortedRows.map((row) => {
+    return sortedRows.map((row: AIEmployeeEntity) => {
       const serialized = serializeEmployee(ctx, row);
-      const skillSettings: any = serialized.skillSettings ?? {
-        skills: [],
-        tools: [],
-      };
+      const skillSettings: AIEmployeeEntity['skillSettings'] =
+        serialized.skillSettings ?? {
+          skills: [],
+          tools: [],
+        };
       if (!Array.isArray(skillSettings.skills)) skillSettings.skills = [];
       if (!Array.isArray(skillSettings.tools)) skillSettings.tools = [];
       for (const tool of tools) {
-        skillSettings.tools.push({
+        const toolSetting: AIEmployeeToolSetting = {
           name: tool.definition.name,
           autoCall: tool.defaultPermission === 'ALLOW',
-        });
+        };
+        skillSettings.tools.push(toolSetting);
       }
       for (const skill of skills) skillSettings.skills.push(skill.name);
       return {
@@ -249,7 +283,7 @@ export class AIEmployeeService {
     aiEmployee: string,
     prompt: string,
   ): Promise<void> {
-    if (!aiEmployee) return ctx.throw(400);
+    if (!aiEmployee) return ctx.throw!(400);
     const userId = ctx.currentUser.id;
     const repo = ctx.repositories.usersAiEmployees;
     await ctx.database.transaction(async (connection) => {
@@ -277,7 +311,7 @@ export class AIEmployeeService {
 
   async list(ctx: Context): Promise<unknown[]> {
     const employees = (await ctx.repositories.aiEmployees.find({})).map(
-      (employee) => serializeEmployee(ctx, employee),
+      (employee: AIEmployeeEntity) => serializeEmployee(ctx, employee),
     );
     await enrichMissingKnowledgeBaseKeys(ctx, employees);
     return employees;
@@ -300,7 +334,9 @@ export class AIEmployeeService {
     const current = await ctx.repositories.aiEmployees.findOne({
       filter: { username },
     });
-    const currentRecord = (current ?? {}) as AIEmployeeRecord;
+    const currentRecord: Partial<AIEmployeeRecord> = current
+      ? cloneEmployee(current)
+      : {};
     const profile = asRecord(record.profile) ?? record;
     const values: AIEmployeeEntity = {
       ...currentRecord,
@@ -338,8 +374,10 @@ export class AIEmployeeService {
         false,
       ),
       chatSettings: asRecord(record.chatSettings) ?? current?.chatSettings,
-      skillSettings:
-        (asRecord(record.skillSettings) as any) ?? current?.skillSettings,
+      skillSettings: getSkillSettings(
+        record.skillSettings,
+        current?.skillSettings,
+      ),
       modelSettings: asRecord(record.modelSettings) ?? current?.modelSettings,
       enabled:
         typeof record.enabled === 'boolean'

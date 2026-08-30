@@ -47,7 +47,11 @@
       "types": "./client/vector-databases.ts",
       "import": "./client/vector-databases.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -80,7 +84,11 @@
         "types": "./dist/client/vector-databases.d.ts",
         "import": "./dist/client/vector-databases.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      }
     }
   },
   "nocobase": {
@@ -132,7 +140,8 @@
     "pg": "^8.23.0",
     "tailwind-merge": "^3.2.0",
     "zod": "^3.25.76",
-    "yauzl": "^2.10.0"
+    "yauzl": "^2.10.0",
+    "@nocobase/service-provider": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
