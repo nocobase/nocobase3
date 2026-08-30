@@ -56,46 +56,60 @@ export type AppClientSettingIcon = ComponentType<{
 }>;
 
 /**
- * A page a plugin contributes to the application's settings centre. `id` is one URL segment; a page nested under a
- * group is reached at `/settings/<group id>/<page id>`.
+ * Navigation metadata for a child Route of the built-in Settings Route.
  */
-export interface AppClientSettingPageDefinition {
-  readonly id: string;
+export interface AppClientSettingsRouteNavigation {
   readonly title: string;
   readonly icon?: AppClientSettingIcon;
+}
+
+export interface AppClientSettingsRoutePageDefinition {
+  readonly name: string;
+  /** Path relative to the built-in Settings Route. */
+  readonly path: string;
+  readonly navigation?: AppClientSettingsRouteNavigation;
   /** Authorization checked before the page is loaded. */
   readonly access?: {
     readonly resource: string;
     readonly action: string;
   };
-  readonly pageLoader: AppClientRouteComponentLoader;
+  readonly componentLoader: AppClientRouteComponentLoader;
 }
 
 /**
  * A group of settings pages. It carries the icon and title once for the whole section, so its children do not repeat
  * them. Groups nest one level: a group's children are pages, not further groups.
  */
-export interface AppClientSettingGroupDefinition {
+export interface AppClientSettingsRouteGroupDefinition {
+  readonly name: string;
+  /** Path segment relative to the built-in Settings Route. */
+  readonly path: string;
+  readonly navigation: AppClientSettingsRouteNavigation;
+  readonly children: readonly AppClientSettingsRoutePageDefinition[];
+}
+
+/** A child Route contributed to the built-in Settings Route. */
+export type AppClientSettingsRouteDefinition =
+  AppClientSettingsRoutePageDefinition | AppClientSettingsRouteGroupDefinition;
+
+export function isAppClientSettingsRouteGroup(
+  route: AppClientSettingsRouteDefinition,
+): route is AppClientSettingsRouteGroupDefinition {
+  return Array.isArray(
+    (route as AppClientSettingsRouteGroupDefinition).children,
+  );
+}
+
+/** A resolved Settings page, flattened out of the Route tree with its full path and optional navigation group. */
+export interface AppClientRegisteredSetting {
+  /** The application path produced from the built-in Settings Route and the contributed relative path. */
+  readonly path: string;
   readonly id: string;
   readonly title: string;
+  readonly navigation: boolean;
   readonly icon?: AppClientSettingIcon;
-  readonly children: readonly AppClientSettingPageDefinition[];
-}
-
-/** An entry a plugin contributes: either a page on its own, or a group of them. */
-export type AppClientSettingDefinition =
-  AppClientSettingPageDefinition | AppClientSettingGroupDefinition;
-
-export function isAppClientSettingGroup(
-  setting: AppClientSettingDefinition,
-): setting is AppClientSettingGroupDefinition {
-  return Array.isArray((setting as AppClientSettingGroupDefinition).children);
-}
-
-/** A resolved page, flattened out of the tree with its full path and the group it belongs to. */
-export interface AppClientRegisteredSetting extends AppClientSettingPageDefinition {
-  /** The application path this setting is reachable at: `/settings/<id>` or `/settings/<group>/<id>`. */
-  readonly path: string;
+  readonly access?: { readonly resource: string; readonly action: string };
+  readonly pageLoader: AppClientRouteComponentLoader;
   readonly groupId?: string;
   readonly packageName: string;
   readonly source: AppClientContributionSource;
@@ -110,6 +124,19 @@ export interface AppClientRegisteredSettingGroup {
   readonly source: AppClientContributionSource;
   readonly settings: readonly AppClientRegisteredSetting[];
 }
+
+export interface AppClientAppRoutesContribution {
+  readonly parent: 'app';
+  readonly routes: readonly AppClientRouteDefinition[];
+}
+
+export interface AppClientSettingsRoutesContribution {
+  readonly parent: 'settings';
+  readonly routes: readonly AppClientSettingsRouteDefinition[];
+}
+
+export type AppClientRouteContribution =
+  AppClientAppRoutesContribution | AppClientSettingsRoutesContribution;
 
 export interface AppClientRouteComponentOverrideDefinition {
   readonly routeId: string;
@@ -186,12 +213,11 @@ export interface AppClientBootstrapModule {
 export type AppClientPluginBootstrapModule = AppClientBootstrapModule;
 
 export type AppClientRoutesModuleDefault =
-  | readonly AppClientRouteDefinition[]
-  | ((options: never) => readonly AppClientRouteDefinition[]);
-
-export type AppClientSettingsModuleDefault =
-  | readonly AppClientSettingDefinition[]
-  | ((options: never) => readonly AppClientSettingDefinition[]);
+  | AppClientRouteContribution
+  | readonly AppClientRouteContribution[]
+  | ((
+      options: never,
+    ) => AppClientRouteContribution | readonly AppClientRouteContribution[]);
 
 export type AppClientProvidersModuleDefault =
   | readonly AppClientProviderDefinition[]
@@ -199,10 +225,6 @@ export type AppClientProvidersModuleDefault =
 
 export interface AppClientRoutesModule {
   default: AppClientRoutesModuleDefault;
-}
-
-export interface AppClientSettingsModule {
-  default: AppClientSettingsModuleDefault;
 }
 
 export interface AppClientProvidersModule {
@@ -215,8 +237,6 @@ export type AppClientPluginBootstrapLoader = AppClientBootstrapLoader;
 
 export type AppClientRoutesLoader = () => Promise<AppClientRoutesModule>;
 
-export type AppClientSettingsLoader = () => Promise<AppClientSettingsModule>;
-
 export type AppClientProvidersLoader = () => Promise<AppClientProvidersModule>;
 
 /** Loads a package's `locales/index.ts`, whose default export maps each locale to a lazy import of its resources. */
@@ -226,7 +246,6 @@ export interface AppClientContributionLoader {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
-  readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
   readonly locales?: AppClientLocalesLoader;
   /** Options forwarded to the bootstrap context and contribution factories. */
@@ -244,8 +263,8 @@ export interface AppClientPluginLoader extends AppClientContributionLoader {
 export interface AppClientContributions {
   readonly packageName: string;
   readonly source?: AppClientContributionSource;
-  readonly routes?: readonly AppClientRouteDefinition[];
-  readonly settings?: readonly AppClientSettingDefinition[];
+  readonly routes?:
+    AppClientRouteContribution | readonly AppClientRouteContribution[];
   readonly providers?: readonly AppClientProviderDefinition[];
 }
 
@@ -264,7 +283,6 @@ export interface AppClientPluginDefinition<TOptions> {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
-  readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
   readonly locales?: AppClientLocalesLoader;
   /** Maps options to route component overrides. Return an empty array for none. */
@@ -277,7 +295,6 @@ export interface AppClientPluginRegistration {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
-  readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
   readonly locales?: AppClientLocalesLoader;
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
@@ -315,7 +332,6 @@ export function defineClientPlugin<TOptions = void>(
       packageName,
       bootstrap: definition.bootstrap,
       routes: definition.routes,
-      settings: definition.settings,
       providers: definition.providers,
       locales: definition.locales,
       routeComponentOverrides: defineClientRouteComponentOverrides(overrides),
@@ -349,7 +365,6 @@ export function defineClientPlugins(
         packageName: plugin.packageName,
         bootstrap: plugin.bootstrap,
         routes: plugin.routes,
-        settings: plugin.settings,
         providers: plugin.providers,
         locales: plugin.locales,
         options: plugin.options,
@@ -371,29 +386,52 @@ export function defineClientApplication(
   return Object.freeze({ ...application, source: 'application' });
 }
 
-export function defineClientRoutes(
+export function defineAppRoutes(
   routes: readonly AppClientRouteDefinition[],
-): readonly AppClientRouteDefinition[] {
-  return Object.freeze(routes.map((route) => Object.freeze({ ...route })));
+): AppClientAppRoutesContribution {
+  return Object.freeze({
+    parent: 'app',
+    routes: Object.freeze(routes.map((route) => Object.freeze({ ...route }))),
+  });
 }
 
-export function defineClientSettings(
-  settings: readonly AppClientSettingDefinition[],
-): readonly AppClientSettingDefinition[] {
-  return Object.freeze(
-    settings.map((setting) =>
-      Object.freeze(
-        isAppClientSettingGroup(setting)
-          ? {
-              ...setting,
-              children: Object.freeze(
-                setting.children.map((child) => Object.freeze({ ...child })),
-              ),
-            }
-          : { ...setting },
+export function defineSettingsRoutes(
+  routes: readonly AppClientSettingsRouteDefinition[],
+): AppClientSettingsRoutesContribution {
+  return Object.freeze({
+    parent: 'settings',
+    routes: Object.freeze(
+      routes.map((route) =>
+        Object.freeze(
+          isAppClientSettingsRouteGroup(route)
+            ? {
+                ...route,
+                navigation: Object.freeze({ ...route.navigation }),
+                children: Object.freeze(
+                  route.children.map((child) =>
+                    Object.freeze({
+                      ...child,
+                      ...(child.navigation === undefined
+                        ? {}
+                        : {
+                            navigation: Object.freeze({
+                              ...child.navigation,
+                            }),
+                          }),
+                    }),
+                  ),
+                ),
+              }
+            : {
+                ...route,
+                ...(route.navigation === undefined
+                  ? {}
+                  : { navigation: Object.freeze({ ...route.navigation }) }),
+              },
+        ),
       ),
     ),
-  );
+  });
 }
 
 export function defineClientRouteComponentOverrides(
@@ -472,66 +510,76 @@ export function resolveAppClientContributions(
     const packageName = normalizePackageName(contribution.packageName);
     const source = normalizeContributionSource(contribution.source);
 
-    for (const route of contribution.routes ?? []) {
-      const registeredRoute = createRegisteredRoute(packageName, source, route);
-      if (routeIds.has(registeredRoute.id)) {
-        throw new Error(
-          `Plugin "${packageName}" defined duplicate client route name "${registeredRoute.name}".`,
-        );
-      }
-
-      const pathSignature = createRoutePathSignature(registeredRoute.path);
-      const claimed = claimedPaths.get(pathSignature);
-      if (claimed) {
-        throw new Error(
-          `Client route path "${registeredRoute.path}" from plugin "${packageName}" conflicts with ${claimed.kind} "${claimed.id}" at "${claimed.path}".`,
-        );
-      }
-
-      routeIds.add(registeredRoute.id);
-      claimedPaths.set(pathSignature, {
-        kind: 'route',
-        id: registeredRoute.id,
-        path: registeredRoute.path,
-      });
-      routes.push(registeredRoute);
-    }
-
-    for (const setting of contribution.settings ?? []) {
-      if (isAppClientSettingGroup(setting)) {
-        const group = createRegisteredSettingGroup(
-          packageName,
-          source,
-          setting,
-        );
-        const duplicateGroup = settingGroupIds.get(group.id);
-        if (duplicateGroup) {
-          throw new Error(
-            `Client setting group "${group.id}" from plugin "${packageName}" is already registered by "${duplicateGroup.packageName}".`,
+    const routeContributions = normalizeRouteContributions(contribution.routes);
+    for (const routeContribution of routeContributions) {
+      if (routeContribution.parent === 'app') {
+        for (const route of routeContribution.routes) {
+          const registeredRoute = createRegisteredRoute(
+            packageName,
+            source,
+            route,
           );
-        }
-        settingGroupIds.set(group.id, group);
-        settingGroups.push(group);
+          if (routeIds.has(registeredRoute.id)) {
+            throw new Error(
+              `Plugin "${packageName}" defined duplicate client route name "${registeredRoute.name}".`,
+            );
+          }
 
-        for (const child of group.settings) {
-          claimSettingPath(child, packageName, settingPaths, claimedPaths);
-          settings.push(child);
+          const pathSignature = createRoutePathSignature(registeredRoute.path);
+          const claimed = claimedPaths.get(pathSignature);
+          if (claimed) {
+            throw new Error(
+              `Client route path "${registeredRoute.path}" from plugin "${packageName}" conflicts with ${claimed.kind} "${claimed.id}" at "${claimed.path}".`,
+            );
+          }
+
+          routeIds.add(registeredRoute.id);
+          claimedPaths.set(pathSignature, {
+            kind: 'route',
+            id: registeredRoute.id,
+            path: registeredRoute.path,
+          });
+          routes.push(registeredRoute);
         }
         continue;
       }
 
-      const registeredSetting = createRegisteredSetting(
-        packageName,
-        source,
-        setting,
-      );
-      claimSettingPath(
-        registeredSetting,
-        packageName,
-        settingPaths,
-        claimedPaths,
-      );
-      settings.push(registeredSetting);
+      for (const setting of routeContribution.routes) {
+        if (isAppClientSettingsRouteGroup(setting)) {
+          const group = createRegisteredSettingGroup(
+            packageName,
+            source,
+            setting,
+          );
+          const duplicateGroup = settingGroupIds.get(group.id);
+          if (duplicateGroup) {
+            throw new Error(
+              `Client setting group "${group.id}" from plugin "${packageName}" is already registered by "${duplicateGroup.packageName}".`,
+            );
+          }
+          settingGroupIds.set(group.id, group);
+          settingGroups.push(group);
+
+          for (const child of group.settings) {
+            claimSettingPath(child, packageName, settingPaths, claimedPaths);
+            settings.push(child);
+          }
+          continue;
+        }
+
+        const registeredSetting = createRegisteredSetting(
+          packageName,
+          source,
+          setting,
+        );
+        claimSettingPath(
+          registeredSetting,
+          packageName,
+          settingPaths,
+          claimedPaths,
+        );
+        settings.push(registeredSetting);
+      }
     }
 
     for (const provider of contribution.providers ?? []) {
@@ -557,6 +605,18 @@ export function resolveAppClientContributions(
     settingGroups: Object.freeze(settingGroups),
     providers: sortProviders(providers),
   });
+}
+
+function normalizeRouteContributions(
+  contributions:
+    | AppClientRouteContribution
+    | readonly AppClientRouteContribution[]
+    | undefined,
+): readonly AppClientRouteContribution[] {
+  if (contributions === undefined) {
+    return [];
+  }
+  return 'parent' in contributions ? [contributions] : contributions;
 }
 
 export function applyClientRouteComponentOverrides(
@@ -650,10 +710,18 @@ interface ClaimedPath {
 }
 
 /** Builds the path a setting is served at: `/settings/<id>`, or `/settings/<group>/<id>` inside a group. */
-export function clientSettingPath(id: string, groupId?: string): string {
-  return groupId === undefined
-    ? `${SETTINGS_PATH_PREFIX}/${id}`
-    : `${SETTINGS_PATH_PREFIX}/${groupId}/${id}`;
+function normalizeSettingsRoutePath(
+  path: string,
+  groupPath: string | undefined,
+  packageName: string,
+  name: string,
+): string {
+  const normalized = normalizeRoutePath(path, packageName, name);
+  const parent =
+    groupPath === undefined
+      ? ''
+      : normalizeRoutePath(groupPath, packageName, name).replace(/\/$/u, '');
+  return `${SETTINGS_PATH_PREFIX}${parent}${normalized}`;
 }
 
 /**
@@ -726,11 +794,11 @@ function normalizeSettingTitle(
 function createRegisteredSettingGroup(
   packageName: string,
   source: AppClientContributionSource,
-  group: AppClientSettingGroupDefinition,
+  group: AppClientSettingsRouteGroupDefinition,
 ): AppClientRegisteredSettingGroup {
-  const id = normalizeSettingId(group.id, packageName, 'setting group');
+  const id = normalizeSettingId(group.name, packageName, 'setting group');
   const title = normalizeSettingTitle(
-    group.title,
+    group.navigation.title,
     id,
     packageName,
     'setting group',
@@ -743,7 +811,13 @@ function createRegisteredSettingGroup(
 
   const childIds = new Set<string>();
   const children = group.children.map((child) => {
-    const registered = createRegisteredSetting(packageName, source, child, id);
+    const registered = createRegisteredSetting(
+      packageName,
+      source,
+      child,
+      id,
+      group.path,
+    );
     if (childIds.has(registered.id)) {
       throw new Error(
         `Client setting group "${id}" from plugin "${packageName}" defines duplicate child id "${registered.id}".`,
@@ -754,7 +828,9 @@ function createRegisteredSettingGroup(
   });
 
   return Object.freeze({
-    ...(group.icon === undefined ? {} : { icon: group.icon }),
+    ...(group.navigation.icon === undefined
+      ? {}
+      : { icon: group.navigation.icon }),
     id,
     packageName,
     settings: Object.freeze(children),
@@ -766,30 +842,38 @@ function createRegisteredSettingGroup(
 function createRegisteredSetting(
   packageName: string,
   source: AppClientContributionSource,
-  setting: AppClientSettingPageDefinition,
+  setting: AppClientSettingsRoutePageDefinition,
   groupId?: string,
+  groupPath?: string,
 ): AppClientRegisteredSetting {
-  const id = normalizeSettingId(setting.id, packageName, 'setting');
+  const id = normalizeSettingId(setting.name, packageName, 'setting');
   const title = normalizeSettingTitle(
-    setting.title,
+    setting.navigation?.title ?? setting.name,
     id,
     packageName,
     'setting',
   );
-  if (typeof setting.pageLoader !== 'function') {
+  if (typeof setting.componentLoader !== 'function') {
     throw new Error(
-      `Client setting "${id}" from plugin "${packageName}" must define a pageLoader function.`,
+      `Client setting "${id}" from plugin "${packageName}" must define a componentLoader function.`,
     );
   }
 
   return Object.freeze({
     ...(setting.access === undefined ? {} : { access: setting.access }),
-    ...(setting.icon === undefined ? {} : { icon: setting.icon }),
+    ...(setting.navigation?.icon === undefined
+      ? {}
+      : { icon: setting.navigation.icon }),
     ...(groupId === undefined ? {} : { groupId }),
     id,
     packageName,
-    pageLoader: wrapRouteComponentLoader(setting.pageLoader, id, 'setting'),
-    path: clientSettingPath(id, groupId),
+    navigation: setting.navigation !== undefined,
+    pageLoader: wrapRouteComponentLoader(
+      setting.componentLoader,
+      id,
+      'setting',
+    ),
+    path: normalizeSettingsRoutePath(setting.path, groupPath, packageName, id),
     source,
     title,
   });

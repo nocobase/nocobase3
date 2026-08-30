@@ -3,21 +3,19 @@ import { describe, expect, it } from 'vitest';
 
 import bootstrap from '../client/bootstrap.js';
 import providers from '../client/providers.js';
-import settings from '../client/settings.js';
+import routes from '../client/routes.js';
 import { firstActions } from '../client/components/rule-utils.js';
 
 describe('@nocobase/app-plugin-authorization client', () => {
   it('contributes its administration pages as one settings group', () => {
     expect(bootstrap).toBeTypeOf('function');
-    expect(settings).toMatchObject([
-      { id: 'authorization', title: 'Authorization' },
-    ]);
+    expect(routes).toMatchObject({ parent: 'settings' });
     expect(providers).toEqual([]);
   });
 
   it('keeps every administration page at the URL it was published at', () => {
     const resolved = resolveAppClientContributions([
-      { packageName: '@nocobase/app-plugin-authorization', settings },
+      { packageName: '@nocobase/app-plugin-authorization', routes },
     ]);
 
     expect(resolved.settings.map((setting) => setting.path)).toEqual([

@@ -14,6 +14,7 @@ describe('bundled template', () => {
     expect(files).toEqual(
       expect.arrayContaining([
         '.gitignore',
+        'skills/nocobase-app-plugin-__NOCOBASE_SHORT_NAME__/SKILL.md',
         '.prettierignore',
         'CHANGELOG.md',
         'README.md',
@@ -21,12 +22,11 @@ describe('bundled template', () => {
         'client/components/provider.tsx',
         'client/contexts.ts',
         'client/index.ts',
-        'client/pages/index.tsx',
+        'client/pages/__NOCOBASE_SHORT_NAME__-page.tsx',
         'client/pages/settings.tsx',
         'client/plugin.ts',
         'client/providers.ts',
         'client/routes.ts',
-        'client/settings.ts',
         'client/styles.css',
         'components.json',
         'database/README.md',
@@ -75,7 +75,15 @@ describe('bundled template', () => {
       'tw-animate-css': '^1.2.5',
     });
     expect(manifest.files).toEqual(
-      expect.arrayContaining(['registry', 'registry.config.json', 'public/r']),
+      expect.arrayContaining([
+        'CHANGELOG.md',
+        'components.json',
+        'database',
+        'skills',
+        'registry',
+        'registry.config.json',
+        'public/r',
+      ]),
     );
     expect(manifest.nocobase?.registry?.items).toEqual({
       'component-ui': './registry/component-ui',

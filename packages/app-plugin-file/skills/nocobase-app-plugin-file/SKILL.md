@@ -53,7 +53,7 @@ Read only the guide needed for the current task:
 - Implement multiple attachments: [one-to-many recipe](reference/recipes/one-to-many.md)
 
 For business authorization rules, also read the
-[authorization development Skill](../../../../authorization/skills/authorization-development/SKILL.md).
+[authorization development Skill](../../../authorization/skills/authorization-development/SKILL.md).
 
 Do not use the legacy `storages:*` protocol, direct storage-driver calls from
 business modules, or an upload-intent/complete flow.
