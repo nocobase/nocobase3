@@ -50,6 +50,17 @@ describe('app service providers', () => {
     const app = createProviderApplication(
       {
         caching: createDefaultCachingConfig(),
+        drive: {
+          default: 'local',
+          disks: {
+            local: {
+              driver: 'fs',
+              location: process.cwd(),
+              visibility: 'private',
+            },
+          },
+          links: {},
+        },
         logging: {
           enabled: false,
           level: 'silent',

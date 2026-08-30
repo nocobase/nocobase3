@@ -13,6 +13,7 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Hono } from 'hono';
 import { createDefaultCachingConfig } from '@nocobase/caching';
 import { CachingProvider } from '@nocobase/app-server-kit/caching';
 import { DriveProvider } from '@nocobase/app-server-kit/drive';
@@ -38,7 +39,10 @@ import {
   realtimeServiceToken,
   type RealtimeServerMessage,
 } from '@nocobase/app-server-kit/realtime';
-import { healthCheckApiRoutes } from '@nocobase/app-server-kit/router';
+import {
+  defineApiRoutes,
+  healthCheckApiRoutes,
+} from '@nocobase/app-server-kit/router';
 import {
   createServiceToken,
   ServiceContainer,
@@ -80,8 +84,8 @@ import {
   type AppServerPlugin,
   type ResolvedAppServerPlugins,
 } from '@nocobase/app-server-kit/plugins';
-import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server/plugin';
-import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server/plugin';
+import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server';
+import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server';
 
 import { createApp } from '../../server/app.ts';
 import { createServer as createEmbeddedServer } from '../../server/embedded.ts';
@@ -197,16 +201,14 @@ describe('app server', () => {
       plugins: [
         defineServerPlugin<AppConfig>({
           packageName: '@nocobase/app-plugin-test',
-          apiRoutes: [
-            {
-              scope: 'api',
-              name: '@nocobase/app-plugin-test/api',
-              register(router, application): void {
-                router.get('/plugin-test', (context) =>
-                  context.json({ appName: application.appName }),
-                );
-              },
-            },
+          routes: [
+            defineApiRoutes((application) => {
+              const router = new Hono();
+              router.get('/plugin-test', (context) =>
+                context.json({ appName: application.appName }),
+              );
+              return router;
+            }),
           ],
         }),
       ],
@@ -1264,7 +1266,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   app.addProvider(QueueProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
-  app.addApiRoutes(healthCheckApiRoutes);
+  app.addRoutes(healthCheckApiRoutes);
   app.addServerPlugins(
     createResolvedTestServerPlugins([
       authenticationServerPlugin,
@@ -1272,7 +1274,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       ...(options.plugins ?? []),
     ]),
   );
-  app.addRootRoutes(spaRootRoutes);
+  app.addRoutes(spaRootRoutes);
   app.registerProviders();
 
   return trackCloseable(

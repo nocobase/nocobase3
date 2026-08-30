@@ -69,7 +69,7 @@ async function createApp(): Promise<string> {
     JSON.stringify({
       exports: {
         './client': './client/index.js',
-        './server/plugin': './server/plugin.js',
+        './server': './server/index.js',
       },
       name: '@nocobase/app-plugin-audit-log',
       version: '1.0.0',
@@ -129,7 +129,7 @@ describe('registering without TypeScript', () => {
       entry: 'auditLog,',
       filePath: path.join(appRoot, 'server', 'plugins.ts'),
       importStatement:
-        "import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';",
+        "import auditLog from '@nocobase/app-plugin-audit-log/server';",
       localName: 'auditLog',
     });
   });

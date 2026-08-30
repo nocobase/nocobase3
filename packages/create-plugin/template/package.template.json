@@ -10,9 +10,9 @@
   },
   "sideEffects": false,
   "exports": {
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
     },
     "./server/tokens": {
       "types": "./server/tokens.ts",
@@ -61,9 +61,9 @@
   "publishConfig": {
     "access": "public",
     "exports": {
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
       },
       "./server/tokens": {
         "types": "./dist/server/tokens.d.ts",

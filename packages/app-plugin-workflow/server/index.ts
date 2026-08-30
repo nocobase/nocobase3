@@ -1,3 +1,4 @@
+export { default } from './plugin.js';
 export { WorkflowProvider } from './providers/workflow.js';
 export type {
   WorkflowProviderApplication,

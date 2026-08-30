@@ -10,9 +10,9 @@
     "node": ">=24.0.0"
   },
   "exports": {
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
     },
     "./client/routes": {
       "types": "./client/routes.ts",
@@ -35,9 +35,9 @@
   "publishConfig": {
     "access": "public",
     "exports": {
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
       },
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",

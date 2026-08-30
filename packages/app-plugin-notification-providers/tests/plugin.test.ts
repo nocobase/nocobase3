@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import notificationProvidersPlugin from '../server/plugin.js';
+import notificationProvidersPlugin from '../server/index.js';
 
 describe('@nocobase/app-plugin-notification-providers server plugin', () => {
   it('registers its routes as an API contribution', () => {
