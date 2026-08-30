@@ -5,8 +5,8 @@ description: NocoBase v3 Server 插件可观察性、Route 安全边界、Provid
 
 # Server 插件 Agent 友好性审计
 
-本文是对当前 v3 Server 插件底层实现的只读审计。它不修改运行时协议，也不引入
-`server:inspect` 命令；目标是区分当前可以可靠检查的事实、只能通过运行时或测试确认的事实，以及下一批值得改进的底层 contract。
+本文记录对当前 v3 Server 插件底层实现的只读审计，以及基于审计落地的第一版
+`server:inspect` 边界。目标是区分当前可以可靠检查的事实、只能通过运行时或测试确认的事实，以及后续值得改进的底层 contract。
 
 审计范围：
 
@@ -126,12 +126,12 @@ Queue provider 将这些 locations 放入 queue config。Job class 被扫描加�
 `options` 是否匹配；在此之前，Agent 必须用实际 handler 测试覆盖名称、payload、queue、
 重试和失败结果。
 
-## `server:inspect --json` 建议边界
+## `server:inspect --json` 已实现边界
 
-第一版应保持只读、静态、诚实，不启动数据库、不启动 worker、不执行 Provider lifecycle、
+第一版保持只读、静态、诚实，不启动数据库、不启动 worker、不执行 Provider lifecycle、
 不执行 Route factory 来猜测安全性。
 
-建议 envelope：
+当前 envelope：
 
 ```json
 {
@@ -184,13 +184,14 @@ SERVER_JOB_LOCATION_MISSING
 metadata 后才适合变成 error；在当前协议下应放进 `limitations`，不能把“没找到 middleware”
 当成可靠的静态证明。
 
-## 推荐的下一批实现顺序
+## 后续底层改进顺序
 
-1. 先修正 `app-plugin-routes-example` 的 README、Skill 和 Server Route 测试，使其不再声称依赖宿主共享认证；
-2. 在 `app-server-kit` 增加无副作用的 Server contribution snapshot API，至少暴露 plugin/order/scope/path existence；
-3. 实现 `server:inspect --json`，先覆盖 plugin、Provider name、Route scope、Database source、Job location；
-4. 为输出增加 `limitations`，避免 Agent 把静态检查误当成运行时证明；
-5. 单独设计 Route security metadata 和 Job manifest，不与 inspector 一起隐式发明；
-6. 最后再补真实 App integration tests，验证认证、授权、Route order、Job execution 和 failure behavior。
+第一版 snapshot、Inspector、limitations 和 Routes example 的独立认证边界已经落地。后续按以下顺序继续：
+
+1. 单独设计 Route security metadata，不从 factory 源码猜权限；
+2. 设计 Provider provides/requires Token metadata；
+3. 设计 owner-aware Job manifest 和冲突报告；
+4. 再扩展 Inspector 输出这些显式 contract；
+5. 继续用真实 App integration tests 验证认证、授权、Route order、Job execution 和 failure behavior。
 
 在第 5 步之前，不建议实现自动修复、Route 重排、权限推断或 `plugin:doctor`。

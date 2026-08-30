@@ -29,9 +29,10 @@ The plugin manifest exposes the client contributions independently:
 }
 ```
 
-The page and API are both authenticated. The App's shared `/api/*` middleware
-remains authoritative for the server route; the client route guard is only the
-browser navigation boundary.
+The page and API are both authenticated. The Server Route resolves the public
+Authentication Token and installs `auth.required()` on its own router; it does
+not depend on App middleware or Server contribution order. The Client route
+guard independently protects browser navigation.
 
 Enable the plugin in an App package with:
 

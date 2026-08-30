@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "^0.7.1",

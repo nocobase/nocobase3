@@ -65,12 +65,18 @@ pnpm --filter <plugin-package> build
 
 ```bash
 pnpm --filter <target-app> client:inspect --json
+pnpm --filter <target-app> server:inspect --json
 pnpm --filter <target-app> typecheck
 pnpm --filter <target-app> test
 pnpm --filter <target-app> build
 ```
 
 最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job 和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
+
+Client-only 插件可以跳过 `server:inspect`，Server-only 插件可以跳过
+`client:inspect`。`server:inspect` 的 `limitations` 是未被静态证明的边界，不是成功后可以
+忽略的提示；Route authentication/authorization 和 Job 行为必须继续通过真实请求或 handler
+测试验证。
 
 ## 完成条件
 

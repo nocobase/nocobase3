@@ -620,14 +620,29 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('loads API routes from enabled app plugin providers', async () => {
+  it('keeps a plugin API authenticated by the owning Route contribution', async () => {
     const app = trackCloseable(
       await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
-    const response = await requestApp(
+    const baseUrl = `http://localhost${app.application.publicBasePath}`;
+    const anonymous = await requestApp(app, `${baseUrl}/api/routes-example`);
+
+    expect(anonymous.status).toBe(401);
+
+    const signIn = await requestApp(
       app,
-      `http://localhost${app.application.publicBasePath}/api/routes-example`,
+      `${baseUrl}/api/auth/sign-in/username`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
+      },
     );
+    const cookie = signIn.headers.get('set-cookie');
+    expect(signIn.status).toBe(200);
+    const response = await requestApp(app, `${baseUrl}/api/routes-example`, {
+      headers: { cookie: cookie ?? '' },
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({

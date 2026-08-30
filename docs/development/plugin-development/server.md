@@ -55,6 +55,10 @@ authorization 边界。不要依赖另一个插件较早注册的 middleware，�
 Server composition 顺序偶然提供身份或权限保护；插件顺序变化后，Route
 的安全语义必须保持不变。
 
+认证 middleware 还必须只覆盖本 Route 实际拥有的路径。插件 router 上过宽的
+`router.use('*', ...)` 可能在 Hono 挂载后影响更晚注册的 contribution；使用本插件的
+明确路径或子 router，并测试后续插件路径不受影响。
+
 需要登录时，在本插件的 Route factory 中显式解析 Authentication Token
 并注册认证 middleware；需要业务权限时，再显式解析 Authorization Token
 并检查稳定的 resource/action。测试至少覆盖未登录、无权限和允许访问的结果。
@@ -110,7 +114,14 @@ pnpm --filter <plugin-package> lint
 pnpm --filter <plugin-package> typecheck
 pnpm --filter <plugin-package> test
 pnpm --filter <plugin-package> build
+pnpm --filter <target-app> server:inspect --json
 ```
+
+`server:inspect` 是无副作用的静态 composition snapshot：它不会构造 Provider、运行
+lifecycle、创建 Route router、连接数据库或加载 Job module。检查 `result.consistent`、
+`issues` 和 `limitations`；当前可以证明 plugin/order、Provider constructor、Route scope、
+Database source 和 Job location，不能证明 Provider Token、Route method/path/security 或
+Job name/queue。后者仍需行为测试。
 
 ## 常见错误与完成条件
 

@@ -70,6 +70,11 @@ for the current task:
 - Run `plugin:inspect <name> --json` after registration changes. It is
   read-only and checks only static package, metadata, composition, and Skill
   state; it does not prove Route security, runtime behavior, tests, or builds.
+- Run the target App's `server:inspect --json` when Server contributions are
+  involved. Read both `issues` and `limitations`: the current snapshot can
+  prove plugin order, Provider constructors, Route scopes, Database sources,
+  and Job locations, but not Provider tokens, Route methods/security, or Job
+  class metadata.
 - `package.json#nocobase.plugins` is management metadata for install, CLI,
   build/watch, and Skills synchronization. It is not runtime discovery.
 - `exports["./client"]` and `exports["./server/plugin"]` are the Client and
@@ -104,7 +109,8 @@ for the current task:
    `<plugin>/skills/` is the source of truth; do not edit the App's synchronized
    `.agents/skills/` copy.
 7. Run the plugin's lint, typecheck, test, and build. Run target-App
-   `client:inspect --json` when Client contributions are involved, then the
+   `client:inspect --json` when Client contributions are involved and
+   `server:inspect --json` when Server contributions are involved, then the
    relevant App typecheck, test, build, and runtime checks.
 
 Do not run scaffold, registration, enablement, migration, or other stateful

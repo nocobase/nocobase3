@@ -95,6 +95,19 @@ The output distinguishes the plugin-owned route entry from the final component
 source. When adding an application override, give it a `componentEntry` so the
 CLI and future Agents can locate the owning file.
 
+## Keep the server inspectable
+
+Run the static Server inspector after changing Server plugin composition:
+
+```bash
+pnpm server:inspect --json
+```
+
+It does not construct Providers, run lifecycle code, create Route routers,
+connect to the database, or load Queue Job modules. Treat `limitations` as
+explicitly unverified behavior and cover Route security and Job behavior with
+integration tests.
+
 ## Dependencies and tests
 
 This application ships built output, so browser build-time packages belong in

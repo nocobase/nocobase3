@@ -222,6 +222,7 @@
     "plugin:update": "nb3 app plugin update",
     "plugin:skills:sync": "nb3 app plugin skills sync",
     "client:inspect": "tsx ./scripts/inspect-client.mjs",
+    "server:inspect": "tsx ./scripts/inspect-server.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

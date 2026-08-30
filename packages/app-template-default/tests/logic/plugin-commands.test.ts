@@ -31,6 +31,7 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:update': 'nb3 app plugin update',
   'plugin:skills:sync': 'nb3 app plugin skills sync',
   'client:inspect': 'tsx ./scripts/inspect-client.mjs',
+  'server:inspect': 'tsx ./scripts/inspect-server.mjs',
 };
 
 describe('documented plugin commands', () => {
