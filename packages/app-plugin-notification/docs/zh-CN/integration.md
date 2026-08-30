@@ -205,14 +205,13 @@ import { Hono, type MiddlewareHandler } from 'hono';
 
 import type { AppNotificationRuntime } from './notification-runtime.js';
 
-export function registerNotificationRoutes(options: {
-  readonly app: Hono;
+export function createNotificationRoutes(options: {
   readonly authRequired: MiddlewareHandler;
   readonly notification: AppNotificationRuntime;
   readonly resolveRequestUserId: (
     request: Request,
   ) => Promise<string | undefined>;
-}): void {
+}): Hono {
   const routes = new Hono();
   routes.use('*', options.authRequired);
   routes.route('/', options.notification.manager.router);
@@ -223,8 +222,17 @@ export function registerNotificationRoutes(options: {
     }),
   );
 
-  options.app.route('/api/notifications', routes);
+  return routes;
 }
+
+app.route(
+  '/api/notifications',
+  createNotificationRoutes({
+    authRequired,
+    notification,
+    resolveRequestUserId,
+  }),
+);
 ```
 
 `resolveRequestUserId` 必须从当前请求中得到登录用户 ID。不要接受客户端直接提交的用户 ID 作为当前用户身份。

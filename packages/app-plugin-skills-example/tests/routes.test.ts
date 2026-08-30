@@ -1,24 +1,31 @@
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
+import { apiRoutes } from '../server/routes/index.js';
 import {
-  apiRoutes,
-  registerSkillsExampleRoutes,
-} from '../server/routes/index.js';
+  appNoticeServiceToken,
+  type AppNoticeService,
+} from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-skills-example routes', () => {
   it('returns the default notice for an authenticated request', async () => {
-    const router = new Hono();
-    registerSkillsExampleRoutes(
-      router,
-      { required: () => async (_context, next) => next() },
-      {
-        getDefaultNotice: () => ({
-          title: 'Hello',
-          description: 'World',
-          tone: 'info',
-        }),
-      },
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        { required: () => async (_context, next) => next() } as unknown as Auth,
+        {
+          getDefaultNotice: () => ({
+            title: 'Hello',
+            description: 'World',
+            tone: 'info',
+          }),
+        },
+      ),
     );
 
     const response = await router.request('/skills-example/notice');
@@ -32,18 +39,18 @@ describe('@nocobase/app-plugin-skills-example routes', () => {
   });
 
   it('rejects anonymous requests before reading the notice service', async () => {
-    const router = new Hono();
-    registerSkillsExampleRoutes(
-      router,
-      {
-        required: () => (context) =>
-          context.json({ code: 'UNAUTHORIZED' }, 401),
-      },
-      {
-        getDefaultNotice: () => {
-          throw new Error('Anonymous requests must not read the service.');
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        {
+          required: () => (context) =>
+            context.json({ code: 'UNAUTHORIZED' }, 401),
+        } as unknown as Auth,
+        {
+          getDefaultNotice: () => {
+            throw new Error('Anonymous requests must not read the service.');
+          },
         },
-      },
+      ),
     );
 
     const response = await router.request('/skills-example/notice');
@@ -56,3 +63,20 @@ describe('@nocobase/app-plugin-skills-example routes', () => {
     expect(apiRoutes).toMatchObject({ scope: 'api' });
   });
 });
+
+function createApplication(
+  authentication: Auth,
+  notice: AppNoticeService,
+): AppPluginApplication {
+  const container = new ServiceContainer();
+  container.instance(authenticationToken, authentication);
+  container.instance(appNoticeServiceToken, notice);
+  return {
+    appName: 'main',
+    publicBasePath: '',
+    config: { app: { name: 'main', publicBasePath: '' } },
+    paths: {} as never,
+    router: new Hono(),
+    container,
+  };
+}

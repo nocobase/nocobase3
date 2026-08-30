@@ -8,16 +8,17 @@ import {
   authorizationToken,
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { NotificationProvidersPluginConfig } from '../server/bootstrap.js';
-import { registerNotificationProviderRoutes } from '../server/routes/index.js';
+import { apiRoutes } from '../server/routes/index.js';
 
 describe('@nocobase/app-plugin-notification-providers routes', () => {
   it('serves an authenticated test page without exposing credentials', async () => {
-    const { app, required } = createApp();
+    const { app, required } = await createApp();
 
     const page = await app.request('/api/notification-providers/test');
     const config = await app.request('/api/notification-providers/test/config');
@@ -53,7 +54,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
       status: 'pending' as const,
       deliveries: [],
     }));
-    const { app } = createApp({ send });
+    const { app } = await createApp({ send });
 
     const response = await app.request(
       '/api/notification-providers/test/send',
@@ -100,7 +101,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
       status: 'pending' as const,
       deliveries: [],
     }));
-    const { app } = createApp({ send });
+    const { app } = await createApp({ send });
 
     const response = await app.request(
       '/api/notification-providers/test/send',
@@ -140,7 +141,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
       status: 'pending' as const,
       deliveries: [],
     }));
-    const { app } = createApp({ send });
+    const { app } = await createApp({ send });
 
     const response = await app.request(
       '/api/notification-providers/test/send',
@@ -172,7 +173,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
       status: 'pending' as const,
       deliveries: [],
     }));
-    const { app } = createApp({ send });
+    const { app } = await createApp({ send });
 
     const response = await app.request(
       '/api/notification-providers/test/send',
@@ -212,7 +213,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
       status: 'pending' as const,
       deliveries: [],
     }));
-    const { app } = createApp({
+    const { app } = await createApp({
       send,
       config: createConfig(undefined),
     });
@@ -243,7 +244,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
 
   it('rejects cross-site compatible posts and missing email recipients', async () => {
     const send = vi.fn();
-    const { app } = createApp({ send });
+    const { app } = await createApp({ send });
 
     const missingHeader = await app.request(
       '/api/notification-providers/test/send',
@@ -255,7 +256,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     );
     expect(missingHeader.status).toBe(403);
 
-    const { app: noRecipientApp } = createApp({
+    const { app: noRecipientApp } = await createApp({
       send,
       config: createConfig(undefined),
     });
@@ -280,7 +281,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
 
   it('does not expose the page when it is disabled', async () => {
     const config = createConfig('recipient@example.com', false);
-    const { app } = createApp({ config });
+    const { app } = await createApp({ config });
 
     const response = await app.request('/api/notification-providers/test');
 
@@ -288,7 +289,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
   });
 
   it('requires notification logs access for Provider tests', async () => {
-    const { app, can } = createApp({ allowed: false });
+    const { app, can } = await createApp({ allowed: false });
 
     const response = await app.request('/api/notification-providers/test');
 
@@ -309,11 +310,11 @@ interface CreateAppOptions {
   readonly send?: NotificationService['send'];
 }
 
-function createApp(options: CreateAppOptions = {}): {
+async function createApp(options: CreateAppOptions = {}): Promise<{
   readonly app: Hono;
   readonly can: ReturnType<typeof vi.fn>;
   readonly required: ReturnType<typeof vi.fn>;
-} {
+}> {
   const app = new Hono();
   const authMiddleware = vi.fn(async (_context, next) => next());
   const required = vi.fn(() => authMiddleware);
@@ -344,14 +345,15 @@ function createApp(options: CreateAppOptions = {}): {
     middleware: authzMiddleware,
   } as unknown as AppAuthorization);
   container.instance(notificationServiceToken, notification);
-  const apiRouter = new Hono();
-  registerNotificationProviderRoutes(
-    {
-      config: options.config ?? createConfig('recipient@example.com'),
-      container,
-    },
-    apiRouter,
-  );
+  const application: AppPluginApplication<NotificationProvidersPluginConfig> = {
+    appName: 'main',
+    publicBasePath: '',
+    config: options.config ?? createConfig('recipient@example.com'),
+    paths: {} as never,
+    router: app,
+    container,
+  };
+  const apiRouter = await apiRoutes.createRouter(application);
   app.route('/api', apiRouter);
 
   return { app, can, required };

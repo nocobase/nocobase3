@@ -1,19 +1,19 @@
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import {
-  apiRoutes,
-  registerRoutesExampleApiRoutes,
-} from '../server/routes/api.js';
+import { apiRoutes } from '../server/routes/api.js';
 import routes from '../server/routes/index.js';
-import {
-  registerRoutesExampleRootRoutes,
-  rootRoutes,
-} from '../server/routes/root.js';
+import { rootRoutes } from '../server/routes/root.js';
 
 const allowAuthentication = {
   required: () => async (_context, next) => next(),
-};
+} as unknown as Auth;
 
 const denyAuthentication = {
   required: () => (context) =>
@@ -21,16 +21,19 @@ const denyAuthentication = {
       { code: 'UNAUTHORIZED', message: 'Authentication required' },
       401,
     ),
-};
+} as unknown as Auth;
 
 describe('routes example plugin', () => {
   it('serves API and Root Routes after their own authentication boundaries allow the request', async () => {
-    const router = new Hono();
-    registerRoutesExampleApiRoutes(router, allowAuthentication);
-    registerRoutesExampleRootRoutes(router, allowAuthentication);
+    const apiRouter = await apiRoutes.createRouter(
+      createApplication(allowAuthentication),
+    );
+    const rootRouter = await rootRoutes.createRouter(
+      createApplication(allowAuthentication),
+    );
 
-    const apiResponse = await router.request('/routes-example');
-    const rootResponse = await router.request('/routes-example/root');
+    const apiResponse = await apiRouter.request('/routes-example');
+    const rootResponse = await rootRouter.request('/routes-example/root');
 
     expect(apiResponse.status).toBe(200);
     await expect(apiResponse.json()).resolves.toEqual({
@@ -46,49 +49,67 @@ describe('routes example plugin', () => {
     });
   });
 
-  it.each([
-    ['api', registerRoutesExampleApiRoutes, '/routes-example'],
-    ['root', registerRoutesExampleRootRoutes, '/routes-example/root'],
-  ] as const)(
-    'rejects anonymous requests at the %s Route boundary',
-    async (_scope, register, path) => {
-      const router = new Hono();
-      register(router, denyAuthentication);
+  it('rejects anonymous requests at each Route boundary', async () => {
+    const apiRouter = await apiRoutes.createRouter(
+      createApplication(denyAuthentication),
+    );
+    const rootRouter = await rootRoutes.createRouter(
+      createApplication(denyAuthentication),
+    );
 
+    for (const [router, path] of [
+      [apiRouter, '/routes-example'],
+      [rootRouter, '/routes-example/root'],
+    ] as const) {
       const response = await router.request(path);
-
       expect(response.status).toBe(401);
       await expect(response.json()).resolves.toEqual({
         code: 'UNAUTHORIZED',
         message: 'Authentication required',
       });
-    },
-  );
+    }
+  });
 
   it('declares one ordered Route array with Root and API scopes', () => {
     expect(routes).toEqual([rootRoutes, apiRoutes]);
     expect(routes.map(({ scope }) => scope)).toEqual(['root', 'api']);
   });
 
-  it.each([
-    ['api', registerRoutesExampleApiRoutes, '/api/routes-example'],
-    ['root', registerRoutesExampleRootRoutes, '/routes-example/root'],
-  ] as const)(
-    'does not leak the %s authentication boundary into a later contribution',
-    async (_scope, register, protectedPath) => {
-      const application = new Hono();
-      const pluginRouter = new Hono();
-      register(pluginRouter, denyAuthentication);
-      application.route(
-        protectedPath.startsWith('/api') ? '/api' : '/',
-        pluginRouter,
-      );
-      application.get('/later-plugin', (context) => context.text('later'));
+  it('does not leak either authentication boundary into a later contribution', async () => {
+    const application = new Hono();
+    const apiRouter = await apiRoutes.createRouter(
+      createApplication(denyAuthentication),
+    );
+    const rootRouter = await rootRoutes.createRouter(
+      createApplication(denyAuthentication),
+    );
+    application.route('/api', apiRouter);
+    application.route('/', rootRouter);
+    application.get('/api/later-plugin', (context) => context.text('api'));
+    application.get('/later-plugin', (context) => context.text('root'));
 
-      const protectedResponse = await application.request(protectedPath);
-      const laterResponse = await application.request('/later-plugin');
-      expect(protectedResponse.status).toBe(401);
-      await expect(laterResponse.text()).resolves.toBe('later');
-    },
-  );
+    expect((await application.request('/api/routes-example')).status).toBe(401);
+    expect((await application.request('/routes-example/root')).status).toBe(
+      401,
+    );
+    await expect(
+      (await application.request('/api/later-plugin')).text(),
+    ).resolves.toBe('api');
+    await expect(
+      (await application.request('/later-plugin')).text(),
+    ).resolves.toBe('root');
+  });
 });
+
+function createApplication(authentication: Auth): AppPluginApplication {
+  const container = new ServiceContainer();
+  container.instance(authenticationToken, authentication);
+  return {
+    appName: 'main',
+    publicBasePath: '',
+    config: { app: { name: 'main', publicBasePath: '' } },
+    paths: {} as never,
+    router: new Hono(),
+    container,
+  };
+}

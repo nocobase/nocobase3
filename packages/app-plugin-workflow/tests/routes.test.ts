@@ -1,17 +1,22 @@
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { WorkflowProviderConfig } from '../server/providers/workflow.js';
 import { createNodeRunRoutes } from '../server/routes/node-runs.js';
-import { registerWorkflowRouteBoundary } from '../server/routes/index.js';
+import { apiRoutes } from '../server/routes/index.js';
 import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
 import { createWorkflowDefinitionRoutes } from '../server/routes/workflows.js';
 
 describe('@nocobase/app-plugin-workflow routes', () => {
   it('registers the protected workflow API routes', async () => {
-    const app = new Hono();
     const workflow = createWorkflowRepositories();
-
-    registerTestRoutes(app, workflow);
+    const app = createTestApp(workflow);
 
     const response = await app.request('/api/workflows');
 
@@ -23,9 +28,8 @@ describe('@nocobase/app-plugin-workflow routes', () => {
   });
 
   it('passes workflow filters and pagination to the service', async () => {
-    const app = new Hono();
     const workflow = createWorkflowRepositories();
-    registerTestRoutes(app, workflow);
+    const app = createTestApp(workflow);
 
     await app.request(
       '/api/workflows?q=approval&enabled=false&page=2&pageSize=10',
@@ -40,9 +44,8 @@ describe('@nocobase/app-plugin-workflow routes', () => {
   });
 
   it('passes execution filters and pagination to the service', async () => {
-    const app = new Hono();
     const workflow = createWorkflowRepositories();
-    registerTestRoutes(app, workflow);
+    const app = createTestApp(workflow);
 
     await app.request(
       '/api/workflow-runs?workflowKey=leave&workflowTitle=Leave&status=-1&page=3&pageSize=5',
@@ -58,7 +61,6 @@ describe('@nocobase/app-plugin-workflow routes', () => {
   });
 
   it('passes the manual run event key through service options', async () => {
-    const app = new Hono();
     const workflow = createWorkflowRepositories();
     vi.mocked(workflow.workflowRuns.run).mockResolvedValue({
       id: 'run-1',
@@ -72,7 +74,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       finishedAt: null,
       createdAt: '2026-08-26T00:00:00.000Z',
     });
-    registerTestRoutes(app, workflow);
+    const app = createTestApp(workflow);
 
     const response = await app.request('/api/workflows/definition-1/run', {
       method: 'POST',
@@ -92,7 +94,6 @@ describe('@nocobase/app-plugin-workflow routes', () => {
   });
 
   it('enables a workflow by synchronized id or unsynchronized artifact hash', async () => {
-    const app = new Hono();
     const workflow = createWorkflowRepositories();
     vi.mocked(workflow.workflows.enable).mockResolvedValue({
       id: 'definition-1',
@@ -107,7 +108,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       activeRunCount: 0,
       latestRun: null,
     });
-    registerTestRoutes(app, workflow);
+    const app = createTestApp(workflow);
 
     const response = await app.request('/api/workflows/artifact-hash/enable', {
       method: 'POST',
@@ -119,9 +120,11 @@ describe('@nocobase/app-plugin-workflow routes', () => {
 
   it('does not apply its authentication boundary to later Route contributions', async () => {
     const application = new Hono();
-    const pluginRouter = new Hono();
-    registerWorkflowRouteBoundary(pluginRouter, (context) =>
-      context.json({ code: 'UNAUTHORIZED' }, 401),
+    const pluginRouter = await apiRoutes.createRouter(
+      createWorkflowApplication({
+        required: () => (context) =>
+          context.json({ code: 'UNAUTHORIZED' }, 401),
+      } as unknown as Auth),
     );
     application.route('/api', pluginRouter);
     application.get('/api/later-plugin', (context) => context.text('later'));
@@ -134,6 +137,21 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       (await application.request('/api/later-plugin')).text(),
     ).resolves.toBe('later');
   });
+
+  it('returns unavailable only after authentication succeeds', async () => {
+    const router = await apiRoutes.createRouter(
+      createWorkflowApplication({
+        required: () => async (_context, next) => next(),
+      } as unknown as Auth),
+    );
+
+    const response = await router.request('/workflows');
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Workflow service is not configured.',
+    });
+  });
 });
 
 interface TestRepositories {
@@ -142,10 +160,47 @@ interface TestRepositories {
     Parameters<typeof createNodeRunRoutes>[0];
 }
 
-function registerTestRoutes(app: Hono, repositories: TestRepositories): void {
+function createTestApp(repositories: TestRepositories): Hono {
+  const app = new Hono();
   app.route('/api', createWorkflowDefinitionRoutes(repositories.workflows));
   app.route('/api', createWorkflowRunRoutes(repositories.workflowRuns));
   app.route('/api', createNodeRunRoutes(repositories.workflowRuns));
+  return app;
+}
+
+function createWorkflowApplication(
+  authentication: Auth,
+): AppPluginApplication<WorkflowProviderConfig> {
+  const container = new ServiceContainer();
+  container.instance(authenticationToken, authentication);
+  return {
+    appName: 'main',
+    publicBasePath: '',
+    config: {
+      app: { publicBasePath: '' },
+      drive: {
+        default: 'private',
+        disks: {
+          private: {
+            driver: 'fs',
+            location: '/missing',
+            visibility: 'private',
+          },
+        },
+        links: {},
+      },
+      workflow: {
+        sourceRoot: '/missing/source',
+        distRoot: '/missing/dist',
+        artifactDisk: 'private',
+        sourceResolverDiagnostic: false,
+        production: false,
+      },
+    },
+    paths: {} as never,
+    router: new Hono(),
+    container,
+  };
 }
 
 function createWorkflowRepositories(): TestRepositories {

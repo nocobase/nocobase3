@@ -1,24 +1,32 @@
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { apiRoutes, registerSystemInfoRoutes } from '../server/routes/index.js';
+import { apiRoutes } from '../server/routes/index.js';
+import {
+  systemInfoServiceToken,
+  type SystemInfoService,
+} from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-system-info', () => {
-  it('registers its HTTP route', async () => {
-    const router = new Hono();
-    registerSystemInfoRoutes(
-      router,
-      {
-        required: () => async (_context, next) => next(),
-      },
-      {
-        getInfo: () => ({
-          packageName: '@nocobase/app-plugin-system-info',
-          version: '0.0.1-test',
-          nodeVersion: 'v24.0.0-test',
-          serverTime: '2026-08-30T00:00:00.000Z',
-        }),
-      },
+  it('serves system information for an authenticated request', async () => {
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        { required: () => async (_context, next) => next() } as unknown as Auth,
+        {
+          getInfo: () => ({
+            packageName: '@nocobase/app-plugin-system-info',
+            version: '0.0.1-test',
+            nodeVersion: 'v24.0.0-test',
+            serverTime: '2026-08-30T00:00:00.000Z',
+          }),
+        },
+      ),
     );
 
     const response = await router.request('/system-info');
@@ -33,21 +41,21 @@ describe('@nocobase/app-plugin-system-info', () => {
   });
 
   it('requires authentication before reading system information', async () => {
-    const router = new Hono();
-    registerSystemInfoRoutes(
-      router,
-      {
-        required: () => (context) =>
-          context.json(
-            { code: 'UNAUTHORIZED', message: 'Authentication required' },
-            401,
-          ),
-      },
-      {
-        getInfo: () => {
-          throw new Error('The service must not run for anonymous requests.');
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        {
+          required: () => (context) =>
+            context.json(
+              { code: 'UNAUTHORIZED', message: 'Authentication required' },
+              401,
+            ),
+        } as unknown as Auth,
+        {
+          getInfo: () => {
+            throw new Error('The service must not run for anonymous requests.');
+          },
         },
-      },
+      ),
     );
 
     const response = await router.request('/system-info');
@@ -60,26 +68,24 @@ describe('@nocobase/app-plugin-system-info', () => {
   });
 
   it('declares an API route contribution', () => {
-    expect(apiRoutes).toMatchObject({
-      scope: 'api',
-    });
+    expect(apiRoutes).toMatchObject({ scope: 'api' });
     expect(apiRoutes.createRouter).toBeTypeOf('function');
   });
 
   it('does not apply authentication to later Route contributions', async () => {
     const application = new Hono();
-    const pluginRouter = new Hono();
-    registerSystemInfoRoutes(
-      pluginRouter,
-      {
-        required: () => (context) =>
-          context.json({ code: 'UNAUTHORIZED' }, 401),
-      },
-      {
-        getInfo: () => {
-          throw new Error('Anonymous requests must not read system info.');
+    const pluginRouter = await apiRoutes.createRouter(
+      createApplication(
+        {
+          required: () => (context) =>
+            context.json({ code: 'UNAUTHORIZED' }, 401),
+        } as unknown as Auth,
+        {
+          getInfo: () => {
+            throw new Error('Anonymous requests must not read system info.');
+          },
         },
-      },
+      ),
     );
     application.route('/api', pluginRouter);
     application.get('/api/later-plugin', (context) => context.text('later'));
@@ -90,3 +96,20 @@ describe('@nocobase/app-plugin-system-info', () => {
     ).resolves.toBe('later');
   });
 });
+
+function createApplication(
+  authentication: Auth,
+  systemInfo: SystemInfoService,
+): AppPluginApplication {
+  const container = new ServiceContainer();
+  container.instance(authenticationToken, authentication);
+  container.instance(systemInfoServiceToken, systemInfo);
+  return {
+    appName: 'main',
+    publicBasePath: '',
+    config: { app: { name: 'main', publicBasePath: '' } },
+    paths: {} as never,
+    router: new Hono(),
+    container,
+  };
+}

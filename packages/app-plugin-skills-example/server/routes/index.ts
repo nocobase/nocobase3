@@ -1,7 +1,4 @@
-import {
-  authenticationToken,
-  type Auth,
-} from '@nocobase/app-plugin-authentication';
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import {
   defineApiRoutes,
@@ -9,31 +6,19 @@ import {
 } from '@nocobase/app-server-kit/router';
 import { Hono } from 'hono';
 
-import { appNoticeServiceToken, type AppNoticeService } from '../tokens.js';
-
-export interface SkillsExampleAuthentication {
-  required(): ReturnType<Auth['required']>;
-}
-
-export function registerSkillsExampleRoutes(
-  router: Hono,
-  authentication: SkillsExampleAuthentication,
-  notice: AppNoticeService,
-): void {
-  router.use('/skills-example/notice', authentication.required());
-  router.get('/skills-example/notice', (context) =>
-    context.json(notice.getDefaultNotice()),
-  );
-}
+import { appNoticeServiceToken } from '../tokens.js';
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono();
-    registerSkillsExampleRoutes(
-      router,
-      container.resolve(authenticationToken),
-      container.resolve(appNoticeServiceToken),
+    const authentication = container.resolve(authenticationToken);
+    const notice = container.resolve(appNoticeServiceToken);
+
+    router.use('/skills-example/notice', authentication.required());
+    router.get('/skills-example/notice', (context) =>
+      context.json(notice.getDefaultNotice()),
     );
+
     return router;
   });
 

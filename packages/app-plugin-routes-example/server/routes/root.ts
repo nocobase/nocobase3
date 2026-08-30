@@ -6,28 +6,19 @@ import {
 } from '@nocobase/app-server-kit/router';
 import { Hono } from 'hono';
 
-import type { RoutesExampleAuthentication } from './api.js';
-
-export function registerRoutesExampleRootRoutes(
-  router: Hono,
-  authentication: RoutesExampleAuthentication,
-): void {
-  router.use('/routes-example/root', authentication.required());
-  router.get('/routes-example/root', (context) =>
-    context.json({
-      scope: 'root',
-      plugin: '@nocobase/app-plugin-routes-example',
-      message: 'Hello from the routes example root route',
-    }),
-  );
-}
-
 export const rootRoutes: AppRootRouteContribution<AppPluginApplication> =
   defineRootRoutes(({ container }) => {
     const router = new Hono();
-    registerRoutesExampleRootRoutes(
-      router,
-      container.resolve(authenticationToken),
+    const authentication = container.resolve(authenticationToken);
+
+    router.use('/routes-example/root', authentication.required());
+    router.get('/routes-example/root', (context) =>
+      context.json({
+        scope: 'root',
+        plugin: '@nocobase/app-plugin-routes-example',
+        message: 'Hello from the routes example root route',
+      }),
     );
+
     return router;
   });
