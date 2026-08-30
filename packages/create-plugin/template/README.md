@@ -30,7 +30,9 @@ server/
 └── tokens.ts
 ```
 
-- `server/plugin.ts` is the server registration entry and composes the
+- `server/index.ts` is the public server entry, which exports the plugin
+  definition composed in `server/plugin.ts`.
+- `server/plugin.ts` composes the
   Provider and route contributions.
 - `server/providers/index.ts` composes the Provider collection; the domain
   Provider registers the service as a lazy singleton and owns lifecycle work.
@@ -47,7 +49,7 @@ server/
   added.
 
 Register the package with the target application's plugin command. It detects
-the `./server/plugin` export and adds it to `server/plugins.ts` alongside the
+the `./server` export and adds it to `server/plugins.ts` alongside the
 client registration. See [database/README.md](database/README.md) before
 enabling either database example.
 

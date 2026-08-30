@@ -5,8 +5,6 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { AppConfig } from '../config/index.js';
-
 export interface AppExampleService {
   getMessage(): string;
 }
@@ -16,9 +14,7 @@ export const appExampleServiceToken: ServiceToken<AppExampleService> =
     '@nocobase/app-template-default/example-service',
   );
 
-export default class AppExampleProvider extends ServiceProvider<
-  Application<AppConfig>
-> {
+export default class AppExampleProvider extends ServiceProvider<Application> {
   public readonly name: string =
     '@nocobase/app-template-default/example-provider';
 

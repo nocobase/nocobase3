@@ -1,4 +1,6 @@
+export { default } from './plugin.js';
 export * from './channel-manager.js';
+export { notificationConfig } from './config.js';
 export { NotificationProvider } from './providers/notification.js';
 export * from './tokens.js';
 export * from './logs.js';

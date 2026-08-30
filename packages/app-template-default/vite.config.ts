@@ -3,7 +3,6 @@ import agentAnnotations from '@gchust/agent-annotations/vite';
 import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
-import { loadEnv } from 'vite';
 
 import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
 
@@ -45,7 +44,10 @@ const numberFromEnv = (value: string | undefined): number | undefined => {
 export default createPortalViteConfig(
   portalSdkCompatibilityPlugin,
   ({ command, mode }) => {
-    const env = loadEnv(mode, process.cwd(), '');
+    // Configuration is loaded by the application runtime. Vite should only
+    // consume the environment explicitly supplied by the invoking process;
+    // reading .env here would make the client and server use different paths.
+    const env = process.env;
     const appBase = normalizeBase(env.APP_BASE_PATH ?? '/main');
     const viteBase = appBase;
     const annotationsEnabled = isAgentAnnotationsEnabled(

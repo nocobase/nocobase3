@@ -50,7 +50,7 @@ pnpm migrate
 
 ## 第二步：创建配置
 
-配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件。Resend、飞书与钉钉的字段和环境变量见[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)：
+配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件。Resend、飞书与钉钉的配置字段见[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)：
 
 ```ts
 import {
@@ -71,16 +71,14 @@ export const notificationConfig: NotificationConfig = {
       providers: [
         defineSmtpProviderConfig({
           name: 'primary-smtp',
-          host: process.env.SMTP_HOST ?? '127.0.0.1',
-          port: Number(process.env.SMTP_PORT ?? 587),
-          secure: process.env.SMTP_SECURE === 'true',
-          auth: process.env.SMTP_USER
-            ? {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD ?? '',
-              }
-            : undefined,
-          from: process.env.SMTP_FROM ?? 'notifications@example.com',
+          host: 'smtp.example.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: 'mailer@example.com',
+            pass: 'replace-with-an-app-password',
+          },
+          from: 'NocoBase <mailer@example.com>',
         }),
       ],
     }),

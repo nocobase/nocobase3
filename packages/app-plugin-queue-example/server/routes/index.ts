@@ -3,7 +3,7 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server-kit/router';
-import { queueManagerToken } from '@nocobase/queue';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import { Hono } from 'hono';
 
 import QueueExampleJob, {

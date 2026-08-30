@@ -23,9 +23,10 @@ dist-ssr
 /.pnpm-store/
 /storage/
 
-# Environment variables
-.env
-.env.local
+# Local application configuration
+/config.yml
+
+# E2E credentials
 .env.e2e
 .env.e2e.local
 

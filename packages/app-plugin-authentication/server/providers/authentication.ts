@@ -8,8 +8,9 @@ import {
   type ServiceResolver,
 } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/app-database';
-import { cachingToken } from '@nocobase/caching';
-import { idGeneratorToken } from '@nocobase/id-generator';
+import { cachingToken } from '@nocobase/app-server-kit/caching';
+import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
+import { appConfig } from '@nocobase/app-server-kit/config';
 
 import {
   createAuthentication,
@@ -18,6 +19,7 @@ import {
 } from '../auth.js';
 import { createAuthStorage } from '../auth-storage.js';
 import { authenticationToken } from '../tokens.js';
+import { authenticationConfig, resolveAuthSecret } from '../config.js';
 
 interface RequestInitWithDuplex extends RequestInit {
   duplex?: 'half';
@@ -53,7 +55,12 @@ export class AuthenticationProvider<
   }
 
   private createAuthentication(container: ServiceResolver): Auth {
-    const { config } = this.app;
+    const app = this.app.config.get(appConfig);
+    const configuredAuth = this.app.config.get(authenticationConfig);
+    const authConfig = {
+      ...configuredAuth,
+      secret: resolveAuthSecret(configuredAuth.secret, this.app.paths.root()),
+    };
     const caching = container.resolve(cachingToken);
     const idGenerator = container.resolve(idGeneratorToken);
     const database = container.has(databaseManagerToken)
@@ -62,28 +69,28 @@ export class AuthenticationProvider<
     const auth = createAuthentication({
       connection: database?.connection(),
       secondaryStorage: createAuthStorage(caching),
-      appName: config.app.name,
-      ...config.auth,
-      baseURL: config.app.publicOrigin,
-      basePath: resolvePublicPath('/api/auth', config.app.publicBasePath),
+      appName: app.name,
+      ...authConfig,
+      baseURL: app.publicOrigin,
+      basePath: resolvePublicPath('/api/auth', app.publicBasePath),
       advanced: {
-        cookiePrefix: createCookiePrefix(config.app.name),
-        ...config.auth.advanced,
+        cookiePrefix: createCookiePrefix(app.name),
+        ...authConfig.advanced,
         database: {
-          ...config.auth.advanced?.database,
+          ...authConfig.advanced?.database,
           generateId:
-            config.auth.advanced?.database?.generateId ??
+            authConfig.advanced?.database?.generateId ??
             (() => idGenerator.generateString()),
         },
         defaultCookieAttributes: {
-          path: config.app.publicBasePath || '/',
-          ...config.auth.advanced?.defaultCookieAttributes,
+          path: app.publicBasePath || '/',
+          ...authConfig.advanced?.defaultCookieAttributes,
         },
       },
     });
     const originalAuthHandler = auth.handler.bind(auth);
     auth.handler = (request: Request): Promise<Response> =>
-      originalAuthHandler(toPublicRequest(request, config.app.publicBasePath));
+      originalAuthHandler(toPublicRequest(request, app.publicBasePath));
     return auth;
   }
 }

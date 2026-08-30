@@ -1,13 +1,11 @@
 import type { Application } from '../application/index.js';
 import {
   resolveAppRuntime,
-  resolveAppRuntimeConfigSection,
-  type AppRuntimeConfig,
-  type AppRuntimeConfigSections,
   type AppRuntimeDefinition,
   type ResolvedAppRuntime,
-  type ResolvedAppRuntimeConfigSection,
 } from '../runtime/definition.js';
+import type { AppConfigToken } from '../config/index.js';
+import type { NodeServerConfig } from './config.js';
 import { createPublicBasePathAdapter } from '../runtime/mount.js';
 import type { AppScope } from '../runtime/types.js';
 import {
@@ -21,16 +19,7 @@ import {
   startNodeAppServer,
 } from './server.js';
 
-export type CreateStandaloneRuntimeScopeOptions<TConfig = unknown> =
-  CreateStandaloneScopeOptions<TConfig>;
-
-export interface NodeStandaloneAppConfig extends AppRuntimeConfig {
-  readonly server: {
-    readonly host: string;
-    readonly port: number;
-    readonly startLog: boolean;
-  };
-}
+export type CreateStandaloneRuntimeScopeOptions = CreateStandaloneScopeOptions;
 
 export interface StandaloneServerListenOptions {
   readonly hostname: string;
@@ -38,56 +27,44 @@ export interface StandaloneServerListenOptions {
   readonly startLog: boolean;
 }
 
-export interface StandaloneServer<
-  TConfig extends NodeStandaloneAppConfig,
-> extends ClosableNodeAppServer {
-  readonly application: Application<TConfig>;
+export interface StandaloneServer extends ClosableNodeAppServer {
+  readonly application: Application;
   readonly listenOptions: StandaloneServerListenOptions;
   readonly signal: AbortSignal;
 }
 
-export type StandaloneServerFactory<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
-> = (scope: AppScope<TScopeConfig>) => Promise<Application<TConfig>>;
+export type StandaloneServerFactory = (scope: AppScope) => Promise<Application>;
 
-export interface StandaloneApplicationDefinition<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
-> {
+export interface StandaloneApplicationDefinition {
   readonly rootDir: string;
-  readonly appRuntime: AppRuntimeDefinition<TConfig, TScopeConfig>;
-  readonly createServer: StandaloneServerFactory<TConfig, TScopeConfig>;
+  readonly appRuntime: AppRuntimeDefinition;
+  readonly serverConfig?: AppConfigToken<NodeServerConfig>;
+  readonly createServer: StandaloneServerFactory;
 }
 
-export type StandaloneServerOptions<TScopeConfig = unknown> =
-  CreateStandaloneRuntimeScopeOptions<TScopeConfig> & {
-    readonly viteDevUrl?: string | false;
-  };
+export type StandaloneServerOptions = CreateStandaloneRuntimeScopeOptions & {
+  readonly viteDevUrl?: string | false;
+};
 
-export type CreateStandaloneServerOptions<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
-> = StandaloneApplicationDefinition<TConfig, TScopeConfig> &
-  StandaloneServerOptions<TScopeConfig>;
+export type CreateStandaloneServerOptions = StandaloneApplicationDefinition &
+  StandaloneServerOptions;
 
-export interface DefinedStandaloneServer<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
-> {
+export interface DefinedStandaloneServer {
   readonly create: (
-    options?: StandaloneServerOptions<TScopeConfig>,
-  ) => Promise<StandaloneServer<TConfig>>;
-  readonly start: (options?: StandaloneServerOptions<TScopeConfig>) => void;
+    options?: StandaloneServerOptions,
+  ) => Promise<StandaloneServer>;
+  readonly start: (options?: StandaloneServerOptions) => void;
 }
 
-export async function createStandaloneServer<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
->(
-  options: CreateStandaloneServerOptions<TConfig, TScopeConfig>,
-): Promise<StandaloneServer<TConfig>> {
-  const { appRuntime: _appRuntime, createServer, ...serverOptions } = options;
+export async function createStandaloneServer(
+  options: CreateStandaloneServerOptions,
+): Promise<StandaloneServer> {
+  const {
+    appRuntime: _appRuntime,
+    createServer,
+    serverConfig,
+    ...serverOptions
+  } = options;
   const scope = createStandaloneRuntimeScope(
     resolveStandaloneServerScopeOptions(serverOptions),
   );
@@ -98,15 +75,24 @@ export async function createStandaloneServer<
       application,
       application.publicBasePath,
     );
-    const server: StandaloneServer<TConfig> = {
+    const serverConfigValue = serverConfig
+      ? application.config.get(serverConfig)
+      : {
+          host: '127.0.0.1',
+          port: 13000,
+          startLog: true,
+          viteDevUrl: undefined,
+        };
+    const listenOptions: StandaloneServerListenOptions = {
+      hostname: serverConfigValue.host,
+      port: serverConfigValue.port,
+      startLog: serverConfigValue.startLog,
+    };
+    const server: StandaloneServer = {
       application,
       close: (): Promise<void> => scope.destroy(),
       fetch: mounted.fetch,
-      listenOptions: {
-        hostname: application.config.server.host,
-        port: application.config.server.port,
-        startLog: application.config.server.startLog,
-      },
+      listenOptions,
       signal: scope.signal,
     };
 
@@ -120,10 +106,7 @@ export async function createStandaloneServer<
   }
 }
 
-export function startServer<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
->(options: CreateStandaloneServerOptions<TConfig, TScopeConfig>): void {
+export function startServer(options: CreateStandaloneServerOptions): void {
   const startPromise = startStandaloneServer(options);
   startPromise.catch((error) => {
     console.error(error);
@@ -131,22 +114,19 @@ export function startServer<
   });
 }
 
-export function defineStandaloneServer<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
->(
-  definition: StandaloneApplicationDefinition<TConfig, TScopeConfig>,
-): DefinedStandaloneServer<TConfig, TScopeConfig> {
+export function defineStandaloneServer(
+  definition: StandaloneApplicationDefinition,
+): DefinedStandaloneServer {
   return {
     create: (
-      options: StandaloneServerOptions<TScopeConfig> = {},
-    ): Promise<StandaloneServer<TConfig>> =>
+      options: StandaloneServerOptions = {},
+    ): Promise<StandaloneServer> =>
       createStandaloneServer({
         ...options,
         ...definition,
         rootDir: options.rootDir ?? definition.rootDir,
       }),
-    start: (options: StandaloneServerOptions<TScopeConfig> = {}): void => {
+    start: (options: StandaloneServerOptions = {}): void => {
       startServer({
         ...options,
         ...definition,
@@ -156,43 +136,21 @@ export function defineStandaloneServer<
   };
 }
 
-export function createStandaloneRuntimeScope<TScopeConfig = unknown>(
-  options: CreateStandaloneRuntimeScopeOptions<TScopeConfig>,
-): StandaloneAppScope<TScopeConfig> {
+export function createStandaloneRuntimeScope(
+  options: CreateStandaloneRuntimeScopeOptions,
+): StandaloneAppScope {
   return createStandaloneScope(options);
 }
 
-export function resolveStandaloneAppRuntime<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig = unknown,
->(
-  definition: AppRuntimeDefinition<TConfig, TScopeConfig>,
-  options: CreateStandaloneRuntimeScopeOptions<TScopeConfig>,
-): ResolvedAppRuntime<TConfig, TScopeConfig> {
+export function resolveStandaloneAppRuntime(
+  definition: AppRuntimeDefinition,
+  options: CreateStandaloneRuntimeScopeOptions,
+): Promise<ResolvedAppRuntime> {
   return resolveAppRuntime(definition, createStandaloneRuntimeScope(options));
 }
 
-export function resolveStandaloneAppRuntimeConfigSection<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig,
-  TKey extends keyof AppRuntimeConfigSections<TConfig>,
->(
-  definition: AppRuntimeDefinition<TConfig, TScopeConfig>,
-  options: CreateStandaloneRuntimeScopeOptions<TScopeConfig>,
-  key: TKey,
-): ResolvedAppRuntimeConfigSection<TConfig, TScopeConfig, TKey> {
-  return resolveAppRuntimeConfigSection(
-    definition,
-    createStandaloneRuntimeScope(options),
-    key,
-  );
-}
-
-async function startStandaloneServer<
-  TConfig extends NodeStandaloneAppConfig,
-  TScopeConfig,
->(
-  options: CreateStandaloneServerOptions<TConfig, TScopeConfig>,
+async function startStandaloneServer(
+  options: CreateStandaloneServerOptions,
 ): Promise<void> {
   const app = await createStandaloneServer(options);
 
@@ -215,9 +173,9 @@ async function startStandaloneServer<
   }
 }
 
-function resolveStandaloneServerScopeOptions<TScopeConfig>(
-  options: StandaloneServerOptions<TScopeConfig>,
-): CreateStandaloneRuntimeScopeOptions<TScopeConfig> {
+function resolveStandaloneServerScopeOptions(
+  options: StandaloneServerOptions,
+): CreateStandaloneRuntimeScopeOptions {
   const { viteDevUrl, ...scopeOptions } = options;
   if (viteDevUrl === undefined) {
     return scopeOptions;

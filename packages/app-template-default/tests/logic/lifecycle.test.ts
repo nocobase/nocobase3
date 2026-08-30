@@ -8,25 +8,40 @@ import {
   ServiceContainer,
   ServiceProviderRegistry,
 } from '@nocobase/service-provider';
+import { createDefaultCachingConfig } from '@nocobase/caching';
 import {
   CachingProvider,
   cachingToken,
-  createDefaultCachingConfig,
-} from '@nocobase/caching';
-import { DriveProvider, driveManagerToken } from '@nocobase/drive';
-import { IdGeneratorProvider, idGeneratorToken } from '@nocobase/id-generator';
-import { LoggingProvider, loggingToken } from '@nocobase/logging';
-import { QueueProvider, queueManagerToken } from '@nocobase/queue';
+} from '@nocobase/app-server-kit/caching';
+import type {
+  AppConfigAccessor,
+  AppConfigToken,
+} from '@nocobase/app-server-kit/config';
 import {
-  createNullSessionConfig,
+  DriveProvider,
+  driveManagerToken,
+} from '@nocobase/app-server-kit/drive';
+import {
+  IdGeneratorProvider,
+  idGeneratorToken,
+} from '@nocobase/app-server-kit/id-generator';
+import {
+  LoggingProvider,
+  loggingToken,
+} from '@nocobase/app-server-kit/logging';
+import {
+  QueueProvider,
+  queueManagerToken,
+} from '@nocobase/app-server-kit/queue';
+import {
   SessionProvider,
   sessionManagerToken,
-} from '@nocobase/session';
+} from '@nocobase/app-server-kit/session';
+import { createNullSessionConfig } from '@nocobase/session';
 import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import type { AppConfig } from '../../server/config/index.ts';
 
 describe('app service providers', () => {
   it('registers core services and shuts them down in reverse order', async () => {
@@ -35,15 +50,30 @@ describe('app service providers', () => {
     const app = createProviderApplication(
       {
         caching: createDefaultCachingConfig(),
+        drive: {
+          default: 'local',
+          disks: {
+            local: {
+              driver: 'fs',
+              location: process.cwd(),
+              visibility: 'private',
+            },
+          },
+          links: {},
+        },
         logging: {
           enabled: false,
           level: 'silent',
+        },
+        queue: {
+          default: 'sync',
+          connections: { sync: { driver: 'sync' } },
         },
         session: createNullSessionConfig(),
         snowflake: {
           workerId: 0,
         },
-      } as AppConfig,
+      },
       services,
     );
     registry.add(new LoggingProvider(app));
@@ -70,7 +100,7 @@ describe('app service providers', () => {
     await registry.shutdown();
 
     expect(services.resolve(idGeneratorToken)).toBe(idGenerator);
-    expect(services.has(driveManagerToken)).toBe(false);
+    expect(services.has(driveManagerToken)).toBe(true);
     expect(closeRealtime).toHaveBeenCalledOnce();
     expect(closeQueue).toHaveBeenCalledOnce();
     expect(disposeSession).toHaveBeenCalledOnce();
@@ -95,7 +125,7 @@ describe('app service providers', () => {
     const registry = new ServiceProviderRegistry();
     registry.add(
       new DriveProvider({
-        config: {
+        config: createTestConfig({
           drive: {
             default: 'public',
             disks: {
@@ -107,7 +137,7 @@ describe('app service providers', () => {
             },
             links: {},
           },
-        } as AppConfig,
+        }),
         container: services,
       }),
     );
@@ -153,7 +183,7 @@ describe('app service providers', () => {
         snowflake: {
           workerId: 0,
         },
-      } as AppConfig,
+      },
       services,
     );
     services.instance(databaseManagerToken, database);
@@ -171,19 +201,31 @@ describe('app service providers', () => {
 });
 
 function createProviderApplication(
-  config: AppConfig,
+  values: Readonly<Record<string, unknown>>,
   container: ServiceContainer,
 ): {
-  config: AppConfig;
+  config: AppConfigAccessor;
   container: ServiceContainer;
 } {
   return {
-    config,
+    config: createTestConfig(values),
     container,
   };
 }
 
-function createDatabaseConfig(): AppConfig['database'] {
+function createTestConfig(
+  values: Readonly<Record<string, unknown>>,
+): AppConfigAccessor {
+  return {
+    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
+      values[definition.namespace] as TValue,
+    raw: () => values,
+    reload: () => Promise.resolve({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  };
+}
+
+function createDatabaseConfig(): object {
   return {
     default: 'main',
     connections: {},

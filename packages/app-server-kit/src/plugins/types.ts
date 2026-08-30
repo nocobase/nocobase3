@@ -1,28 +1,30 @@
-import type { LocalesModule } from '@nocobase/app-i18n';
 import type {
   ServiceContainer,
   ServiceProviderLifecycle,
 } from '@nocobase/service-provider';
 import type { Hono } from 'hono';
+import type {
+  AppConfigAccessor,
+  AppConfigContribution,
+} from '../config/index.js';
+import type { LocalesModule } from '@nocobase/app-i18n';
 
-import type { ApplicationConfig } from '../application/index.js';
 import type { ConfigPaths } from '../config/index.js';
 import type { AppRouteContribution } from '../router/index.js';
 
-export interface AppPluginApplication<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface AppPluginApplication<TConfig = object> {
   readonly appName: string;
   readonly publicBasePath: string;
-  readonly config: TConfig;
+  readonly config: AppConfigAccessor & Partial<Record<never, TConfig>>;
   readonly paths: ConfigPaths;
   readonly router: Hono;
   readonly container: ServiceContainer;
 }
 
-export type AppPluginProviderConstructor<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> = new (app: AppPluginApplication<TConfig>) => ServiceProviderLifecycle;
+export interface AppPluginProviderConstructor<TConfig = object> {
+  new (app: AppPluginApplication): ServiceProviderLifecycle;
+  readonly __config?: TConfig;
+}
 
 export interface AppServerPluginDatabaseContribution {
   readonly migrations?: string;
@@ -33,42 +35,32 @@ export interface AppServerPluginQueueContribution {
   readonly jobs?: readonly string[];
 }
 
-/**
- * Loads a plugin's `locales/index.ts`. Declared exactly as on the client, so a plugin keeps its two locale modules in
- * the same shape.
- */
 export type AppServerPluginLocalesLoader = () => Promise<LocalesModule>;
 
-export interface AppServerPluginDefinition<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface AppServerPluginDefinition<TConfig = object> {
   readonly packageName: string;
+  readonly config?:
+    AppConfigContribution<never> | readonly AppConfigContribution<never>[];
   readonly providers?: readonly AppPluginProviderConstructor<TConfig>[];
-  readonly routes?: readonly AppRouteContribution<
-    AppPluginApplication<TConfig>
-  >[];
+  readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
   readonly locales?: AppServerPluginLocalesLoader;
 }
 
-export interface AppServerPlugin<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface AppServerPlugin<TConfig = object> {
   readonly packageName: string;
+  readonly config: readonly AppConfigContribution<never>[];
   readonly providers: readonly AppPluginProviderConstructor<TConfig>[];
-  readonly routes: readonly AppRouteContribution<
-    AppPluginApplication<TConfig>
-  >[];
+  readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
   readonly locales?: AppServerPluginLocalesLoader;
+  readonly __config?: TConfig;
 }
 
-export interface AppServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
-  readonly plugins: readonly AppServerPlugin<TConfig>[];
+export interface AppServerPlugins {
+  readonly plugins: readonly AppServerPlugin[];
 }
 
 export interface ResolvedAppPlugin {
@@ -80,16 +72,12 @@ export interface ResolvedAppPlugin {
   readonly jobLocations: readonly string[];
 }
 
-export interface ResolvedAppServerPlugin<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
-  readonly definition: AppServerPlugin<TConfig>;
+export interface ResolvedAppServerPlugin {
+  readonly definition: AppServerPlugin;
   readonly metadata: ResolvedAppPlugin;
 }
 
-export interface ResolvedAppServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
-> {
+export interface ResolvedAppServerPlugins {
   readonly appPackageName: string;
-  readonly plugins: readonly ResolvedAppServerPlugin<TConfig>[];
+  readonly plugins: readonly ResolvedAppServerPlugin[];
 }

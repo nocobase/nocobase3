@@ -229,12 +229,13 @@ app.addProvider(CustomProvider, instanceSpecificArgument);
 
 ## 插件的 Service Provider
 
-插件约定使用一个 `server/plugin.ts` 作为服务端注册入口。一个插件定义可以声明多个 Provider、统一的 routes 数组，以及可选的 database 与 queue 贡献：
+插件约定通过 `server/index.ts` 公开服务端入口，由它默认导出 `server/plugin.ts` 组合的插件定义。一个插件定义可以声明多个 Provider、统一的 routes 数组，以及可选的 database 与 queue 贡献：
 
 ```text
 packages/app-plugin-audit-log/
 ├── server/
-│   ├── plugin.ts         插件唯一的服务端注册入口
+│   ├── index.ts          公开的服务端入口
+│   ├── plugin.ts         组合插件定义
 │   ├── providers/        Provider 集合目录
 │   │   ├── index.ts      组合 Provider 列表
 │   │   └── heartbeat.ts  领域 Provider
@@ -404,22 +405,22 @@ export default defineApiRoutes(({ container }: AppPluginApplication) => {
 }
 ```
 
-插件通过稳定的 `./server/plugin` export 暴露静态定义：
+插件通过稳定的 `./server` export 暴露静态定义：
 
 ```json
 {
   "exports": {
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
     }
   }
 }
 ```
 
-`server/plugin.ts` 使用 `defineServerPlugin()` 声明 `providers` 和统一的
-`routes` 数组。目标 App 在自己的 `server/plugins.ts` 中显式
-import，并通过 `defineServerPlugins([...])` 选择和排序插件。
+`server/index.ts` 默认导出 `server/plugin.ts` 使用 `defineServerPlugin()`
+声明的插件定义。目标 App 从 `<package>/server` 显式 import，并通过
+`defineServerPlugins([...])` 选择和排序插件。
 
 在目标 App 中注册并启用插件：
 
@@ -471,7 +472,7 @@ pnpm --filter @nocobase/app-template-default build
 
 ## 设计约定
 
-- 一个插件默认使用一个 `server/plugin.ts` 注册入口；它可以声明多个 Provider 和 Route。
+- 一个插件默认通过 `server/index.ts` 公开服务端入口，并由 `server/plugin.ts` 组合多个 Provider 和 Route。
 - Provider `name` 使用插件包名或能力包名，并在 Application 内保持唯一。
 - 服务注册集中在 `register()`；资源准备、运行和释放分别放到对应生命周期。
 - 配置由 Provider 从 `this.app.config` 读取，不在 `app.ts` 重复拆分和转发。

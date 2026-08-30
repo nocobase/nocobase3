@@ -17,13 +17,14 @@ import {
   authorizationToken,
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
-import {
-  createDriveManager,
-  driveManagerToken,
-  type NocoBaseDriveManager,
-} from '@nocobase/drive';
-import { createLogger, loggingToken, type Logging } from '@nocobase/logging';
+import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
+import { driveManagerToken } from '@nocobase/app-server-kit/drive';
+import { createLogger, type Logging } from '@nocobase/logging';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
+import { sessionManagerToken } from '@nocobase/app-server-kit/session';
+import type { AppConfigAccessor } from '@nocobase/app-server-kit/config';
 import { ServiceContainer } from '@nocobase/service-provider';
+import { createSessionManager } from '@nocobase/session';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -454,7 +455,7 @@ describe('File Demo backend', () => {
       logging: deps.logging,
     });
     const provider = new FileProvider({
-      config: unavailableConfig,
+      config: createConfigAccessor(unavailableConfig),
       container,
       router: new Hono(),
     });
@@ -470,9 +471,15 @@ async function runBootstrap(
   deps: HostServices,
 ): Promise<void> {
   const container = createContainer(config, deps);
-  const provider = new FileProvider({ config, container, router: new Hono() });
+  const provider = new FileProvider({
+    config: createConfigAccessor(config),
+    container,
+    router: new Hono(),
+  });
   provider.register();
   await provider.boot();
+  const runtime = container.resolve(filePluginRuntimeToken);
+  if ('database' in runtime) await prepareFileDemoFixtures(runtime);
   await vi.waitFor(
     async () => {
       for (const fixture of FILE_DEMO_FIXTURES) {
@@ -504,7 +511,7 @@ function registerApp(config: FilePluginConfig, deps: HostServices): Hono {
   const app = new Hono();
   const container = createContainer(config, deps);
   container.singleton(filePluginRuntimeToken, (resolver) =>
-    resolveFilePluginRuntime(resolver, config),
+    resolveFilePluginRuntime(resolver, createConfigAccessor(config)),
   );
   app.route('/api/attachments', createFileDemoRoutes({ config, container }));
   return app;
@@ -556,7 +563,7 @@ interface HostServices {
 }
 
 function createContainer(
-  _config: FilePluginConfig,
+  config: FilePluginConfig,
   services: HostServices,
 ): ServiceContainer {
   const container = new ServiceContainer();
@@ -569,7 +576,40 @@ function createContainer(
   container.instance(authenticationToken, services.auth as Auth);
   container.instance(authorizationToken, services.authz as AppAuthorization);
   container.instance(loggingToken, services.logging as Logging);
+  if (config.session?.secret) {
+    container.instance(
+      sessionManagerToken,
+      createSessionManager({
+        enabled: false,
+        default: 'null',
+        stores: { null: { driver: 'null' } },
+        cookie: { name: 'session' },
+        lifetime: { absolute: '2h' },
+        secret: config.session.secret,
+      }),
+    );
+  }
   return container;
+}
+
+function createConfigAccessor(config: FilePluginConfig): AppConfigAccessor {
+  const values: Record<string, unknown> = {
+    app: config.app,
+    drive: config.drive ?? { default: 'local' },
+    session: config.session,
+  };
+  const get = ((definitionOrKey: string | { namespace: string }): unknown =>
+    values[
+      typeof definitionOrKey === 'string'
+        ? definitionOrKey
+        : definitionOrKey.namespace
+    ]) as AppConfigAccessor['get'];
+  return {
+    get,
+    raw: () => ({}),
+    reload: async () => ({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  };
 }
 
 function adminHeaders(): Readonly<Record<string, string>> {

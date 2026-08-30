@@ -68,7 +68,7 @@ describe('DEFAULT_TEMPLATE_TAG', () => {
   /**
    * changesets leaves the `beta` dist-tag on a package's first published version and tags every release since as
    * `latest`, so `beta` names the oldest template rather than the newest. Defaulting to it handed everyone a stale
-   * template — an app scaffolded from it missed settings later releases added to `.env.example`.
+   * template — an app scaffolded from it missed settings later releases added to `config.example.yml`.
    */
   it('is latest, because beta names the oldest published template', () => {
     expect(DEFAULT_TEMPLATE_TAG).toBe('latest');

@@ -33,11 +33,6 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
-    "./server/plugin": {
-      "source": "./server/plugin.ts",
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
-    },
     "./server/config": {
       "types": "./server/config.ts",
       "import": "./server/config.ts"
@@ -62,10 +57,6 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
-      },
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
       },
       "./server/config": {
         "types": "./dist/server/config.d.ts",
@@ -94,6 +85,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@sinclair/typebox": "catalog:",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-i18n": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",

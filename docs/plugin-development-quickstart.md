@@ -98,10 +98,10 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
 
 数组里出现即启用，数组顺序就是 bootstrap 顺序。命令按包短名转 camelCase 生成本地变量名，追加到数组末尾而不排序，然后用 App 的 prettier 配置格式化。文件里其余内容（注释、手写格式、你调整过的顺序）逐字保留，所以这个文件平时可以放心手改——手改的场景通常是调整顺序，或者给某个插件传配置。
 
-第三处是 `server/plugins.ts`。插件声明 `exports["./server/plugin"]` 时，命令会插入 Server import 和数组项：
+第三处是 `server/plugins.ts`。插件声明 `exports["./server"]` 时，命令会插入 Server import 和数组项：
 
 ```ts
-import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+import auditLog from '@nocobase/app-plugin-audit-log/server';
 
 const serverPlugins: AppServerPlugins<AppConfig> =
   defineServerPlugins<AppConfig>([
@@ -158,7 +158,7 @@ pnpm plugin:unregister audit-log
 
 **纯服务端插件不会写进 `client/plugins.ts`。** 两边都按插件的 `exports["./client"]` 判断：没有这个导出就跳过客户端注册，因为写进去的 import 在构建时解析不到。
 
-反过来，纯客户端插件不会写进 `server/plugins.ts`。判据是 `exports["./server/plugin"]`；Client 和 Server 注册面分别判断，互不推测。
+反过来，纯客户端插件不会写进 `server/plugins.ts`。判据是 `exports["./server"]`；Client 和 Server 注册面分别判断，互不推测。
 
 ## 3. 开发插件
 
@@ -187,7 +187,8 @@ pnpm --filter @nocobase/app-template-default seed
 
 ### Server
 
-- `server/plugin.ts`：唯一的服务端注册入口，显式声明 Providers、API Routes、Root Routes、database 和 queue 贡献；
+- `server/index.ts`：公开的服务端入口，默认导出 `server/plugin.ts` 组合的插件定义；
+- `server/plugin.ts`：显式声明 Providers、API Routes、Root Routes、database 和 queue 贡献；
 - `server/providers/index.ts`：组合并导出 Provider 集合；具体 Provider 放在同一目录的领域文件中；
 - `server/services/*.ts`：放置领域服务的默认实现；
 - `server/tokens.ts`：定义稳定的服务接口和 ServiceToken，供 Provider、Route 和其他消费者共享；

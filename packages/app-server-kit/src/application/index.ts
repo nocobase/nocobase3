@@ -1,4 +1,6 @@
 import type { ExecutionContext, Hono } from 'hono';
+import type { AppConfigAccessor } from '../config/index.js';
+import { appConfig } from '../config/index.js';
 
 import type { ConfigPaths } from '../config/index.js';
 import {
@@ -36,17 +38,13 @@ export type ApplicationWebSocketFactory = (
   container: ServiceResolver,
 ) => AppWebSocketHandler;
 
-export interface ApplicationConfig {
-  readonly app: {
-    readonly name?: string;
-    readonly publicBasePath: string;
-  };
-}
+export type ApplicationConfig = AppConfigAccessor;
 
 export interface ApplicationOptions<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly mode?: 'standalone' | 'embedded';
   readonly paths: ConfigPaths;
   readonly websocket?: ApplicationWebSocketFactory;
 }
@@ -62,7 +60,7 @@ export type ApplicationServiceProviderConstructor<
 export interface ApplicationRuntimeContributions<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
-  readonly plugins: ResolvedAppServerPlugins<TConfig>;
+  readonly plugins: ResolvedAppServerPlugins;
   readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
 }
@@ -78,6 +76,7 @@ export class Application<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
   public readonly config: TConfig;
+  public readonly mode: 'standalone' | 'embedded';
   public readonly paths: ConfigPaths;
   public readonly container: ServiceContainer;
   public readonly fetch: ApplicationFetchHandler = async (
@@ -109,6 +108,7 @@ export class Application<
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.config = options.config;
+    this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;
     this.container = new ServiceContainer();
     this.usesDefaultWebSocket = options.websocket === undefined;
@@ -124,11 +124,11 @@ export class Application<
   }
 
   public get appName(): string {
-    return resolveAppName(this.config.app.name);
+    return resolveAppName(this.config.get(appConfig).name);
   }
 
   public get publicBasePath(): string {
-    return normalizeBasePath(this.config.app.publicBasePath);
+    return normalizeBasePath(this.config.get(appConfig).publicBasePath);
   }
 
   public get router(): Hono {
@@ -150,9 +150,7 @@ export class Application<
     }
   }
 
-  public addServerPlugins(
-    serverPlugins: ResolvedAppServerPlugins<TConfig>,
-  ): void {
+  public addServerPlugins(serverPlugins: ResolvedAppServerPlugins): void {
     this.appPackageName = serverPlugins.appPackageName;
     for (const plugin of serverPlugins.plugins) {
       for (const Provider of plugin.definition.providers) {

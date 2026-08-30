@@ -3,10 +3,8 @@ import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { registerBuiltInNotificationProviders } from './bootstrap.js';
-import type { NotificationProvidersPluginConfig } from './bootstrap.js';
 
-export type NotificationProvidersApplication =
-  AppPluginApplication<NotificationProvidersPluginConfig>;
+export type NotificationProvidersApplication = AppPluginApplication;
 
 export default class NotificationProvidersProvider<
   TApplication extends NotificationProvidersApplication =

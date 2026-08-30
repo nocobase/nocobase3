@@ -39,9 +39,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server-kit": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
-    "hono": "catalog:",
     "pino": "catalog:",
     "pino-pretty": "catalog:",
     "pino-roll": "catalog:"

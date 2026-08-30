@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -69,7 +69,7 @@ describe('application scope paths', () => {
       storageDir: '/data/apps/main',
     });
 
-    expect(paths.root('.env')).toBe('/srv/apps/main/.env');
+    expect(paths.root('config.yml')).toBe('/srv/apps/main/config.yml');
     expect(paths.server('config')).toBe('/srv/releases/main/server/config');
     expect(paths.database('migrations')).toBe(
       '/srv/releases/main/database/migrations',
@@ -79,24 +79,11 @@ describe('application scope paths', () => {
 });
 
 describe('application scope environment', () => {
-  it('loads root environment files when the host does not supply an env map', () => {
-    const rootDir = createTempDirectory();
-    writeFileSync(
-      path.join(rootDir, '.env'),
-      'APP_NAME=base\nSHARED_VALUE=base\n',
-    );
-    writeFileSync(
-      path.join(rootDir, '.env.local'),
-      'SHARED_VALUE=local\nLOCAL_ONLY=yes\n',
-    );
-    const scope = createScope({ rootDir });
+  it('uses the process environment when the host does not supply an env map', () => {
+    const scope = createScope({ rootDir: createTempDirectory() });
     const paths = resolveAppScopePaths(scope);
 
-    expect(resolveAppScopeEnv(scope, paths)).toMatchObject({
-      APP_NAME: 'base',
-      SHARED_VALUE: 'local',
-      LOCAL_ONLY: 'yes',
-    });
+    expect(resolveAppScopeEnv(scope, paths)).toEqual(process.env);
   });
 
   it('prefers a host env map and applies explicit resolver overrides last', () => {

@@ -70,6 +70,7 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/config": "workspace:^",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-i18n": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
@@ -193,7 +194,7 @@
     "tsconfig.server.json",
     "Dockerfile",
     "ecosystem.config.js",
-    ".env.example",
+    "config.example.yml",
     "README.MD",
     "MIGRATION.md",
     "AGENTS.md"
@@ -206,7 +207,7 @@
     "url": "git+https://github.com/nocobase/app-template-default.git"
   },
   "scripts": {
-    "dev": "node ./scripts/dev.mjs",
+    "dev": "tsx ./scripts/dev.mjs",
     "server:config": "tsx --tsconfig tsconfig.node.json ./scripts/server-config.ts",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",

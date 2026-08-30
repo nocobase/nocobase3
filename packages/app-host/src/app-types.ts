@@ -111,7 +111,7 @@ export interface AppRuntimeEndpoint {
   workerId?: string;
 }
 
-export interface AppDefinition<TConfig = unknown> {
+export interface AppDefinition {
   id: string;
   appName?: string;
   basePath: string;
@@ -123,6 +123,7 @@ export interface AppDefinition<TConfig = unknown> {
   desiredVersion: string;
   rootDir?: string;
   dataDir?: string;
+  configPath?: string;
   client?: AppClientReference;
   server?: AppServerReference;
   /**
@@ -133,10 +134,9 @@ export interface AppDefinition<TConfig = unknown> {
   release?: AppReleaseReference;
   healthPath?: string;
   resourcePolicy?: AppResourcePolicy;
-  config?: TConfig;
 }
 
-export interface CreateAppDefinitionOptions<TConfig = unknown> {
+export interface CreateAppDefinitionOptions {
   appName?: string;
   basePath?: string;
   enabled?: boolean;
@@ -147,6 +147,7 @@ export interface CreateAppDefinitionOptions<TConfig = unknown> {
   desiredVersion?: string;
   rootDir?: string;
   dataDir?: string;
+  configPath?: string;
   /**
    * Deprecated shortcut for a server artifact entrypoint. Prefer `server.entrypoint`.
    */
@@ -161,7 +162,6 @@ export interface CreateAppDefinitionOptions<TConfig = unknown> {
   release?: AppReleaseReference;
   healthPath?: string;
   resourcePolicy?: AppResourcePolicy;
-  config?: TConfig;
 }
 
 export interface AppDestroyOptions {

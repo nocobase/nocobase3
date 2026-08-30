@@ -2,8 +2,10 @@ import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import { createLogger, loggingToken, type Logging } from '@nocobase/logging';
-import { queueManagerToken, type NocoBaseQueueManager } from '@nocobase/queue';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+import { createLogger, type Logging } from '@nocobase/logging';
+import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -15,9 +17,9 @@ describe('@nocobase/app-plugin-notification provider', () => {
     const container = createContainer(true);
     const provider = new NotificationProvider({
       config: {
-        notification: {
+        get: () => ({
           channels: [{ type: 'email', enabled: true, providers: [] }],
-        },
+        }),
       },
       container,
     });
@@ -44,7 +46,10 @@ describe('@nocobase/app-plugin-notification provider', () => {
 
   it('does not register the service without a database', async () => {
     const container = createContainer(false);
-    const provider = new NotificationProvider({ config: {}, container });
+    const provider = new NotificationProvider({
+      config: { get: () => ({ channels: [] }) },
+      container,
+    });
 
     provider.register();
     await provider.start();
