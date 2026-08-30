@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createNodeRunRoutes } from '../server/routes/node-runs.js';
+import { registerWorkflowRouteBoundary } from '../server/routes/index.js';
 import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
 import { createWorkflowDefinitionRoutes } from '../server/routes/workflows.js';
 
@@ -114,6 +115,24 @@ describe('@nocobase/app-plugin-workflow routes', () => {
 
     expect(response.status).toBe(200);
     expect(workflow.workflows.enable).toHaveBeenCalledWith('artifact-hash');
+  });
+
+  it('does not apply its authentication boundary to later Route contributions', async () => {
+    const application = new Hono();
+    const pluginRouter = new Hono();
+    registerWorkflowRouteBoundary(pluginRouter, (context) =>
+      context.json({ code: 'UNAUTHORIZED' }, 401),
+    );
+    application.route('/api', pluginRouter);
+    application.get('/api/later-plugin', (context) => context.text('later'));
+
+    expect((await application.request('/api/workflows')).status).toBe(401);
+    expect((await application.request('/api/workflow-runs/run-1')).status).toBe(
+      401,
+    );
+    await expect(
+      (await application.request('/api/later-plugin')).text(),
+    ).resolves.toBe('later');
   });
 });
 

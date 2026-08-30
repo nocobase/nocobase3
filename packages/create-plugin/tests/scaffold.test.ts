@@ -247,6 +247,95 @@ describe('createPlugin', () => {
     await expect(listFiles(real.targetDirectory)).resolves.toEqual(real.files);
   });
 
+  it.each([
+    [
+      'client-only',
+      ['client.routes', 'client.components'],
+      '@nocobase/dev-config/tsconfig/client-library.json',
+      'createClientLibraryConfig',
+      false,
+      false,
+    ],
+    [
+      'server-only',
+      ['server.providers', 'server.routes'],
+      '@nocobase/dev-config/tsconfig/server-library.json',
+      'createNodeLibraryConfig',
+      true,
+      true,
+    ],
+    [
+      'full-stack',
+      ['client.routes', 'server.providers', 'server.routes'],
+      '@nocobase/dev-config/tsconfig/server-library.json',
+      'createClientLibraryConfig',
+      true,
+      true,
+    ],
+    [
+      'registry-only',
+      ['registry'],
+      '@nocobase/dev-config/tsconfig/client-library.json',
+      'createClientLibraryConfig',
+      false,
+      false,
+    ],
+    [
+      'skills-only',
+      ['skills'],
+      '@nocobase/dev-config/tsconfig/server-library.json',
+      'createNodeLibraryConfig',
+      false,
+      true,
+    ],
+  ] as const)(
+    'selects runtime-aware development configuration for %s plugins',
+    async (
+      _name,
+      capabilities,
+      tsconfigPreset,
+      eslintFactory,
+      expectsNodeEngine,
+      expectsNodeTypes,
+    ) => {
+      const result = await createWith(capabilities);
+      const manifest = JSON.parse(
+        await readFile(
+          path.join(result.targetDirectory, 'package.json'),
+          'utf8',
+        ),
+      ) as {
+        engines?: { node?: string };
+        devDependencies: Record<string, string>;
+      };
+      const tsconfig = JSON.parse(
+        await readFile(
+          path.join(result.targetDirectory, 'tsconfig.json'),
+          'utf8',
+        ),
+      ) as {
+        extends: string;
+        compilerOptions: { lib?: string[] };
+      };
+      const eslintConfig = await readFile(
+        path.join(result.targetDirectory, 'eslint.config.js'),
+        'utf8',
+      );
+
+      expect(tsconfig.extends).toBe(tsconfigPreset);
+      expect(eslintConfig).toContain(eslintFactory);
+      expect(manifest.engines?.node !== undefined).toBe(expectsNodeEngine);
+      expect('@types/node' in manifest.devDependencies).toBe(expectsNodeTypes);
+      if (_name === 'full-stack') {
+        expect(tsconfig.compilerOptions.lib).toEqual([
+          'ES2022',
+          'DOM',
+          'DOM.Iterable',
+        ]);
+      }
+    },
+  );
+
   it('creates only a package foundation when --empty is explicit', async () => {
     const repoRoot = await createTestRepo();
     const result = await createPlugin({
@@ -259,6 +348,8 @@ describe('createPlugin', () => {
       await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
     ) as {
       dependencies?: unknown;
+      devDependencies?: Record<string, string>;
+      engines?: { node?: string };
       exports?: Record<string, unknown>;
       files?: string[];
     };
@@ -273,6 +364,8 @@ describe('createPlugin', () => {
       'tsconfig.json',
     ]);
     expect(manifest.dependencies).toBeUndefined();
+    expect(manifest.engines).toBeUndefined();
+    expect(manifest.devDependencies).toHaveProperty('@types/node', 'catalog:');
     expect(manifest.exports).toEqual({ './package.json': './package.json' });
     expect(manifest.files).toEqual(['dist', 'README.md', 'CHANGELOG.md']);
   });

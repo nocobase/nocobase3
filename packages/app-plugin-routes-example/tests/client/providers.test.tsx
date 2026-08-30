@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import providers from '../providers.js';
-import { useRoutesExample } from '../contexts/routes-example-context.js';
+import { useRoutesExample } from '../../client/contexts/routes-example-context.js';
+import providers from '../../client/providers.js';
 
 describe('client providers', () => {
   it('defines a synchronous provider component', () => {

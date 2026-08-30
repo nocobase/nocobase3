@@ -20,7 +20,7 @@ export function registerSystemInfoRoutes(
   authentication: SystemInfoRouteAuthentication,
   service: SystemInfoService,
 ): void {
-  router.use('*', authentication.required());
+  router.use('/system-info', authentication.required());
   router.get('/system-info', (context) => context.json(service.getInfo()));
 }
 

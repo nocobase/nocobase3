@@ -16,6 +16,11 @@ After enabling the plugin, request `GET /api/service-provider-example/status` to
 inspect the service lifecycle state. A fully started application returns a
 response like this:
 
+This example status endpoint is intentionally public so it can focus on the
+ServiceProvider lifecycle. That public boundary is owned by this Route; a
+business plugin should add its own authentication and authorization middleware
+when the exposed state is not explicitly public.
+
 ```json
 {
   "service": "@nocobase/app-plugin-service-provider-example",

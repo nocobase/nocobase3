@@ -53,6 +53,11 @@ for the current task:
   `client.providers`, `client.bootstrap`, `registry`, and `skills`.
 - The first Create Plugin workflow creates plugins only in a NocoBase source
   workspace. It does not create a standalone plugin project inside an App.
+- Keep the runtime-aware shared development configuration emitted by
+  `plugin:create`: Browser-only plugins use the client library preset without
+  a Node runtime declaration, Server-only plugins use the server library and
+  Node ESLint presets, and full-stack plugins add DOM/JSX locally to the server
+  library preset. Do not copy a complete config from another package.
 - Client entries are only `bootstrap`, `routes`, and `providers`; all are
   optional and lazy-loaded.
 - Settings pages are routes declared with `defineSettingsRoutes()`; there is no

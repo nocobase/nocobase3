@@ -65,4 +65,28 @@ describe('@nocobase/app-plugin-system-info', () => {
     });
     expect(apiRoutes.createRouter).toBeTypeOf('function');
   });
+
+  it('does not apply authentication to later Route contributions', async () => {
+    const application = new Hono();
+    const pluginRouter = new Hono();
+    registerSystemInfoRoutes(
+      pluginRouter,
+      {
+        required: () => (context) =>
+          context.json({ code: 'UNAUTHORIZED' }, 401),
+      },
+      {
+        getInfo: () => {
+          throw new Error('Anonymous requests must not read system info.');
+        },
+      },
+    );
+    application.route('/api', pluginRouter);
+    application.get('/api/later-plugin', (context) => context.text('later'));
+
+    expect((await application.request('/api/system-info')).status).toBe(401);
+    await expect(
+      (await application.request('/api/later-plugin')).text(),
+    ).resolves.toBe('later');
+  });
 });

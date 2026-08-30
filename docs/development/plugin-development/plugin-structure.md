@@ -207,6 +207,11 @@ server/plugin.ts
 - `dependencies`、`peerDependencies`、`devDependencies`；
 - lint、typecheck、test、build 和 check scripts。
 
+`plugin:create` 按实际 runtime capability 选择 `@nocobase/dev-config`：纯 Browser
+library 使用 `client-library`，纯 Server library 使用 `server-library`，全栈 library
+使用 `server-library` 并在本地增加 DOM/JSX。只有包含 Server runtime 的插件才声明
+Node engine；不要因为 Browser 插件的构建工具运行于 Node 就给它添加 Node runtime 要求。
+
 运行时注册只根据实际导出判断：
 
 ```text

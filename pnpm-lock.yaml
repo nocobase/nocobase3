@@ -992,6 +992,9 @@ importers:
 
   packages/app-plugin-queue-example:
     dependencies:
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:^
+        version: link:../app-plugin-authentication
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit

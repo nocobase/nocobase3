@@ -56,6 +56,16 @@ function hasServerPlugin(capabilities: PluginCapabilities): boolean {
   );
 }
 
+function hasBrowserCode(capabilities: PluginCapabilities): boolean {
+  return (
+    capabilities.client.bootstrap ||
+    capabilities.client.components ||
+    capabilities.client.providers ||
+    capabilities.client.routes ||
+    capabilities.registry
+  );
+}
+
 function includeTemplateFile(
   relativePath: string,
   capabilities: PluginCapabilities,
@@ -277,6 +287,7 @@ async function renderManifest(
 ): Promise<string> {
   const clientPlugin = hasClientPlugin(capabilities);
   const serverPlugin = hasServerPlugin(capabilities);
+  const browserCode = hasBrowserCode(capabilities);
   const react =
     capabilities.client.components ||
     capabilities.client.providers ||
@@ -374,12 +385,12 @@ async function renderManifest(
 
   const devDependencies: Record<string, string> = {
     '@nocobase/dev-config': 'workspace:*',
-    '@types/node': 'catalog:',
     eslint: 'catalog:',
     prettier: 'catalog:',
     typescript: 'catalog:',
     vitest: 'catalog:',
   };
+  if (serverPlugin || !browserCode) devDependencies['@types/node'] = 'catalog:';
   if (clientPlugin) devDependencies['@nocobase/app-client'] = 'workspace:*';
   if (react) {
     devDependencies['@types/react'] = 'catalog:';
@@ -409,7 +420,7 @@ async function renderManifest(
     version: '0.0.1',
     type: 'module',
     prettier: '@nocobase/dev-config/prettier',
-    engines: { node: '>=24.0.0' },
+    ...(serverPlugin ? { engines: { node: '>=24.0.0' } } : {}),
     sideEffects: false,
     exports,
     files,
@@ -427,6 +438,54 @@ async function renderManifest(
     devDependencies,
   };
   return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+function renderEslintConfig(capabilities: PluginCapabilities): string {
+  const factory = hasBrowserCode(capabilities)
+    ? 'createClientLibraryConfig'
+    : 'createNodeLibraryConfig';
+  return `import { ${factory} } from '@nocobase/dev-config/eslint';
+
+export default ${factory}({
+  tsconfigRootDir: import.meta.dirname,
+  // Registry source is compiled after installation by the consuming app.
+  ignores: ['registry/**'],
+});
+`;
+}
+
+function renderTsconfig(capabilities: PluginCapabilities): string {
+  const serverPlugin = hasServerPlugin(capabilities);
+  const browserCode = hasBrowserCode(capabilities);
+  const compilerOptions: Record<string, unknown> = {
+    ...(browserCode && serverPlugin
+      ? {
+          jsx: 'react-jsx',
+          lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+        }
+      : {}),
+    ...(browserCode ? { paths: { '@/*': ['./client/*'] } } : {}),
+    rootDir: '.',
+    outDir: 'dist',
+  };
+  const include = [
+    'package.ts',
+    ...(capabilities.database ? ['database/**/*.ts'] : []),
+    ...(serverPlugin ? ['server/**/*.ts'] : []),
+    ...(browserCode ? ['client/**/*.ts', 'client/**/*.tsx'] : []),
+  ];
+  return `${JSON.stringify(
+    {
+      extends:
+        browserCode && !serverPlugin
+          ? '@nocobase/dev-config/tsconfig/client-library.json'
+          : '@nocobase/dev-config/tsconfig/server-library.json',
+      compilerOptions,
+      include,
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 function renderClientPlugin(
@@ -576,20 +635,24 @@ export async function renderTemplate(options: {
     const renderedContents =
       file.outputPath === 'package.json'
         ? await renderManifest(options.context, options.capabilities)
-        : file.outputPath === 'README.md'
-          ? renderReadme(options.context, options.capabilities)
-          : file.outputPath === 'client/plugin.ts'
-            ? renderClientPlugin(options.context, options.capabilities)
-            : file.outputPath === 'server/plugin.ts'
-              ? renderServerPlugin(options.context, options.capabilities)
-              : file.outputPath === 'tests/plugin.test.ts'
-                ? renderPluginTest(options.context, options.capabilities)
-                : file.outputPath.startsWith('skills/')
-                  ? renderSkill(options.context)
-                  : renderTemplateValue(
-                      await readFile(file.sourcePath, 'utf8'),
-                      options.context,
-                    );
+        : file.outputPath === 'eslint.config.js'
+          ? renderEslintConfig(options.capabilities)
+          : file.outputPath === 'tsconfig.json'
+            ? renderTsconfig(options.capabilities)
+            : file.outputPath === 'README.md'
+              ? renderReadme(options.context, options.capabilities)
+              : file.outputPath === 'client/plugin.ts'
+                ? renderClientPlugin(options.context, options.capabilities)
+                : file.outputPath === 'server/plugin.ts'
+                  ? renderServerPlugin(options.context, options.capabilities)
+                  : file.outputPath === 'tests/plugin.test.ts'
+                    ? renderPluginTest(options.context, options.capabilities)
+                    : file.outputPath.startsWith('skills/')
+                      ? renderSkill(options.context)
+                      : renderTemplateValue(
+                          await readFile(file.sourcePath, 'utf8'),
+                          options.context,
+                        );
     const contents = await formatRenderedSource(renderedContents, outputPath);
 
     await mkdir(path.dirname(targetPath), { recursive: true });

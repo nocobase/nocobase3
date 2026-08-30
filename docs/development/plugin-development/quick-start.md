@@ -86,6 +86,12 @@ pnpm plugin:create system-info \
 
 生成结果必须只包含明确选择的 capability。生成器可以自动派生必要结构，例如任意 Server capability 会产生 `server/plugin.ts`，但不能擅自添加 `server.providers`、`server.routes` 等未选择的业务能力。
 
+生成器还会根据所选 capability 选择共享开发配置：纯 Client 插件使用
+`client-library` TypeScript preset，不声明 Node runtime；纯 Server 插件使用
+`server-library` 和 Node ESLint 配置；全栈插件使用 `server-library` 并补充 DOM/JSX，
+同时由 Client ESLint 配置为 `server/` 文件提供限定范围的 Node globals。Agent 不应在创建后
+从其他包复制整份配置来覆盖这些结果。
+
 ## 实现具体业务
 
 脚手架只建立安全、可检查的 wiring，不虚构业务页面、API、权限或数据结构。Agent 根据任务继续实现：

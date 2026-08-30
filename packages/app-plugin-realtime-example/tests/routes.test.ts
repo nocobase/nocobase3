@@ -7,7 +7,7 @@ import { CLOCK_TOPIC } from '../server/publishers/clock.js';
 import { rootRoutes } from '../server/routes/index.js';
 
 describe('realtime example plugin routes', () => {
-  it('registers the realtime page', async () => {
+  it('serves its intentionally public realtime page', async () => {
     const router = await rootRoutes.createRouter({
       appName: 'main',
       publicBasePath: '',

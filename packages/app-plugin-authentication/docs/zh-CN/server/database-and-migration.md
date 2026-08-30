@@ -25,22 +25,23 @@ session、account 和 verification 的常用查询字段带有索引。
 
 ## 使用内置 migration
 
-插件的 `package.json` 声明 migration 目录：
+插件的 `server/plugin.ts` 声明 migration 目录：
 
-```json
-{
-  "nocobase": {
-    "plugin": {
-      "database": {
-        "migrations": "./database/migrations"
-      }
-    }
-  }
-}
+```ts
+export default defineServerPlugin({
+  packageName: '@nocobase/app-plugin-authentication',
+  providers,
+  routes,
+  database: {
+    migrations: './database/migrations',
+    seeds: './database/seeds',
+  },
+});
 ```
 
-应用在插件注册表中启用 `@nocobase/app-plugin-authentication` 后，会自动把该目录
-作为插件 migration source，并用插件包名记录执行历史。
+应用在 `server/plugins.ts` 中显式组合
+`@nocobase/app-plugin-authentication/server/plugin` 后，会把该目录作为插件
+migration source，并用插件包名记录执行历史。
 
 真实 Migration 文件位于插件包内：
 

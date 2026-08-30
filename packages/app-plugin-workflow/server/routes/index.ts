@@ -5,12 +5,34 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server-kit/router';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 
 import { AppServiceError } from '../errors.js';
 import type { WorkflowProviderConfig } from '../providers/workflow.js';
 import { workflowServiceToken } from '../tokens.js';
 import { createWorkflowRoutes } from './workflow.js';
+
+const workflowRoutePaths = [
+  '/workflows',
+  '/workflows/*',
+  '/workflow-runs',
+  '/workflow-runs/*',
+] as const;
+
+export function registerWorkflowRouteBoundary(
+  router: Hono,
+  middleware: MiddlewareHandler,
+): void {
+  for (const path of workflowRoutePaths) router.use(path, middleware);
+}
+
+function registerUnavailableWorkflowRoutes(router: Hono): void {
+  for (const path of workflowRoutePaths) {
+    router.all(path, (context) =>
+      context.json({ error: 'Workflow service is not configured.' }, 503),
+    );
+  }
+}
 
 export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<WorkflowProviderConfig>
@@ -22,7 +44,10 @@ export const apiRoutes: AppApiRouteContribution<
     }
     return context.json({ error: 'Internal server error.' }, 500);
   });
-  router.use('*', container.resolve(authenticationToken).required());
+  registerWorkflowRouteBoundary(
+    router,
+    container.resolve(authenticationToken).required(),
+  );
   if (
     container.has(databaseManagerToken) &&
     container.has(workflowServiceToken)
@@ -35,9 +60,7 @@ export const apiRoutes: AppApiRouteContribution<
       ),
     );
   } else {
-    router.all('*', (context) =>
-      context.json({ error: 'Workflow service is not configured.' }, 503),
-    );
+    registerUnavailableWorkflowRoutes(router);
   }
   return router;
 });

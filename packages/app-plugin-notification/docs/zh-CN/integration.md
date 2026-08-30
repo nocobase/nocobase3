@@ -46,7 +46,10 @@ pnpm add @nocobase/app-plugin-notification \
 pnpm migrate
 ```
 
-插件声明同时用于发现 migrations、Service Provider 和 routes。默认模板启用插件后会自动注册内置 definitions，并提供受登录和权限保护的测试页面；自定义宿主可继续按下面的步骤手动创建运行时和挂载路由。
+`nocobase.plugins` 是管理 metadata，不承担运行时发现。默认模板还会在
+`server/plugins.ts` 中显式组合各插件导出的 Server definition，由 definition 声明
+migrations、Service Providers 和 Routes；测试页面拥有独立的登录和权限边界。
+自定义宿主可继续按下面的步骤手动创建运行时和挂载路由。
 
 ## 第二步：创建配置
 

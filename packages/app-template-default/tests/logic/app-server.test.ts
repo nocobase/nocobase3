@@ -368,7 +368,7 @@ describe('app server', () => {
     expect(rootHtml).toContain('Hello from the application provider');
   });
 
-  it('registers plugin API routes before application-owned API routes', async () => {
+  it('does not leak plugin authentication into application-owned API routes', async () => {
     const app = await createEmbeddedServer(
       createEmbeddedTestScope({
         id: 'app-template-default',
@@ -378,10 +378,10 @@ describe('app server', () => {
 
     const apiResponse = await requestApp(app, 'http://localhost/api/example');
 
-    expect(apiResponse.status).toBe(401);
+    expect(apiResponse.status).toBe(200);
     await expect(apiResponse.json()).resolves.toEqual({
-      code: 'UNAUTHORIZED',
-      message: 'Authentication required',
+      scope: 'api',
+      message: 'Hello from the application provider',
     });
   });
 
@@ -716,10 +716,24 @@ describe('app server', () => {
     const app = trackCloseable(
       await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
-    const response = await requestApp(
+    const baseUrl = `http://localhost${app.application.publicBasePath}`;
+    const anonymous = await requestApp(app, `${baseUrl}/api/queue-example`);
+    expect(anonymous.status).toBe(401);
+
+    const signIn = await requestApp(
       app,
-      `http://localhost${app.application.publicBasePath}/api/queue-example`,
+      `${baseUrl}/api/auth/sign-in/username`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
+      },
     );
+    const cookie = signIn.headers.get('set-cookie');
+    expect(signIn.status).toBe(200);
+    const response = await requestApp(app, `${baseUrl}/api/queue-example`, {
+      headers: { cookie: cookie ?? '' },
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({

@@ -1,15 +1,12 @@
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import { ServiceContainer } from '@nocobase/service-provider';
-import {
-  createQueueManager,
-  createSyncQueueConfig,
-  queueManagerToken,
-} from '@nocobase/queue';
+import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { queueExampleExecutions } from '../server/jobs/queue-example.js';
-import { apiRoutes } from '../server/routes/index.js';
+import {
+  apiRoutes,
+  registerQueueExampleRoutes,
+} from '../server/routes/index.js';
 
 describe('queue example plugin routes', () => {
   const managers: Array<ReturnType<typeof createQueueManager>> = [];
@@ -29,18 +26,12 @@ describe('queue example plugin routes', () => {
         }),
     });
     managers.push(queueManager);
-    const hostRouter = new Hono();
-    const container = new ServiceContainer();
-    container.instance(queueManagerToken, queueManager);
-
-    const router = await apiRoutes.createRouter({
-      appName: 'main',
-      publicBasePath: '/main',
-      config: { app: { name: 'main', publicBasePath: '/main' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
-      router: hostRouter,
-      container,
-    });
+    const router = new Hono();
+    registerQueueExampleRoutes(
+      router,
+      { required: () => async (_context, next) => next() },
+      queueManager,
+    );
 
     const response = await router.request('/queue-example');
 
@@ -58,5 +49,54 @@ describe('queue example plugin routes', () => {
         executedAt: expect.any(String),
       },
     ]);
+  });
+
+  it('rejects anonymous dispatch requests', async () => {
+    const router = new Hono();
+    registerQueueExampleRoutes(
+      router,
+      {
+        required: () => (context) =>
+          context.json({ code: 'UNAUTHORIZED' }, 401),
+      },
+      {
+        dispatch: () => {
+          throw new Error('Anonymous requests must not dispatch a job.');
+        },
+      },
+    );
+
+    const response = await router.request('/queue-example');
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ code: 'UNAUTHORIZED' });
+  });
+
+  it('does not apply authentication to later Route contributions', async () => {
+    const application = new Hono();
+    const pluginRouter = new Hono();
+    registerQueueExampleRoutes(
+      pluginRouter,
+      {
+        required: () => (context) =>
+          context.json({ code: 'UNAUTHORIZED' }, 401),
+      },
+      {
+        dispatch: () => {
+          throw new Error('Anonymous requests must not dispatch a job.');
+        },
+      },
+    );
+    application.route('/api', pluginRouter);
+    application.get('/api/later-plugin', (context) => context.text('later'));
+
+    expect((await application.request('/api/queue-example')).status).toBe(401);
+    await expect(
+      (await application.request('/api/later-plugin')).text(),
+    ).resolves.toBe('later');
+  });
+
+  it('declares an API Route contribution', () => {
+    expect(apiRoutes).toMatchObject({ scope: 'api' });
   });
 });

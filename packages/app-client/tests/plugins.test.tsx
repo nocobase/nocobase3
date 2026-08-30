@@ -910,7 +910,7 @@ describe('client settings', () => {
     );
   });
 
-  it('carries the settings loader from the plugin definition into the registration', () => {
+  it('carries the Routes loader used for Settings contributions into registration', () => {
     const settingsLoader = async () => ({ default: [] });
     const plugin = defineClientPlugin({
       packageName: '@nocobase/app-plugin-example',

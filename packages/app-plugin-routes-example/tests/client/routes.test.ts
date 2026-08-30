@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import routes from '../routes.js';
+import routes from '../../client/routes.js';
 
 describe('client routes', () => {
   it('defines a lazy authenticated route', () => {
