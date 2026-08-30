@@ -1,6 +1,11 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import { Config, type ConfigMap, type ConfigProvider } from '@nocobase/config';
+import { jsonParser } from '@nocobase/config/parsers/json';
+import { yamlParser } from '@nocobase/config/parsers/yaml';
+import { fileProvider } from '@nocobase/config/providers/file';
 import { objectProvider } from '@nocobase/config/providers/object';
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 
@@ -8,6 +13,7 @@ import type {
   AppConfigChangeListener,
   AppConfigContribution,
   AppConfigDefinition,
+  AppConfigFileOptions,
   AppConfigLayerFactory,
   AppConfigReloadResult,
   AppConfigSource,
@@ -101,6 +107,23 @@ export class AppConfig<TContext = unknown> {
     }
     this.sources.push({ provider, parser, options });
     return this;
+  }
+
+  public loadFile(filePath: string, options: AppConfigFileOptions = {}): this {
+    const resolvedPath = resolveConfigFilePath(filePath);
+    const extension = path.extname(resolvedPath).toLowerCase();
+    const parser =
+      extension === '.yml' || extension === '.yaml'
+        ? yamlParser()
+        : extension === '.json'
+          ? jsonParser()
+          : undefined;
+    if (!parser) {
+      throw new Error(
+        `Unsupported application config file extension "${extension || '(none)'}". Expected .yml, .yaml, or .json.`,
+      );
+    }
+    return this.load(fileProvider(resolvedPath, options), parser);
   }
 
   public async loadAll(): Promise<void> {
@@ -314,6 +337,14 @@ export class AppConfig<TContext = unknown> {
     }
     return this.current;
   }
+}
+
+function resolveConfigFilePath(filePath: string): string {
+  if (path.extname(filePath)) return filePath;
+  const candidates = ['.yml', '.yaml', '.json'].map(
+    (extension) => `${filePath}${extension}`,
+  );
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 function parseVariantTarget(target: string): {

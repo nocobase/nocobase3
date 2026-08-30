@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 
 import { Application } from '../src/application/index.js';
 import {
+  appConfig,
   AppConfig,
   type AppConfigAccessor,
   type ConfigPaths,
@@ -135,12 +136,7 @@ function createStandaloneDefinition(
     createServer: async (scope) => {
       onCreate(scope);
       const runtime = await resolveAppRuntime(appRuntime, scope);
-      const app = createApplication(
-        runtime.appConfig,
-        runtime.configPaths,
-        runtime.routing.name,
-        runtime.routing.publicBasePath,
-      );
+      const app = createApplication(runtime.appConfig, runtime.configPaths);
       return startApplicationInScope(scope, app);
     },
   };
@@ -151,6 +147,7 @@ function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
     config: async (context) => {
       const config = new AppConfig(
         [
+          appConfig,
           {
             ...serverConfig,
             defaults: {
@@ -173,13 +170,9 @@ function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
 function createApplication(
   config: AppConfigAccessor,
   paths: ConfigPaths,
-  appName: string,
-  publicBasePath: string,
 ): Application {
   const app = new Application({
     config,
-    appName,
-    publicBasePath,
     paths,
   });
   app.addRoutes({

@@ -8,6 +8,7 @@ import type {
   Environment,
   EnvironmentMapping,
 } from '@nocobase/config/providers/env';
+import type { FileProviderOptions } from '@nocobase/config/providers/file';
 import type { Static, TSchema } from '@sinclair/typebox';
 
 export type AppConfigLayerFactory<TContext> = (
@@ -71,6 +72,8 @@ export interface AppConfigSource {
   readonly parser?: ConfigParser;
   readonly options?: ConfigLoadOptions;
 }
+
+export type AppConfigFileOptions = FileProviderOptions;
 
 export interface AppConfigChange<TValue> {
   readonly previous: TValue;

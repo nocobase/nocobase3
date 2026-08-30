@@ -1,8 +1,6 @@
 import { AppConfig } from '@nocobase/app-server-kit/config';
 import { coreConfigs } from '@nocobase/app-server-kit';
 import type { ResolvedAppRuntimeConfigContext } from '@nocobase/app-server-kit/runtime';
-import { yamlParser } from '@nocobase/config/parsers/yaml';
-import { fileProvider } from '@nocobase/config/providers/file';
 
 export function createAppConfig(
   context: ResolvedAppRuntimeConfigContext,
@@ -16,12 +14,9 @@ export function createAppConfig(
   );
   const configuredPath =
     context.configPath ?? context.environment.APP_CONFIG_FILE;
-  const configPath = context.paths.root(configuredPath ?? 'config.yml');
+  const configPath = context.paths.root(configuredPath ?? 'config');
 
-  config.load(
-    fileProvider(configPath, { optional: configuredPath === undefined }),
-    yamlParser(),
-  );
+  config.loadFile(configPath, { optional: configuredPath === undefined });
 
   return config;
 }

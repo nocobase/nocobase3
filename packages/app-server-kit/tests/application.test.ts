@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AppConfig, defineAppConfig } from '../src/config/index.js';
+import { Hono } from 'hono';
+import {
+  appConfig as appIdentityConfig,
+  AppConfig,
+  defineAppConfig,
+} from '../src/config/index.js';
 import { Type } from '@sinclair/typebox';
 
 import {
@@ -53,12 +58,11 @@ describe('application', () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
     app.addProvider(TestProvider, 'lazy', calls);
-    app.addApiRoutes(
-      defineApiRoutes({
-        name: 'lazy-route',
-        register(router): void {
-          router.get('/lazy', (context) => context.json({ ok: true }));
-        },
+    app.addRoutes(
+      defineApiRoutes(() => {
+        const router = new Hono();
+        router.get('/lazy', (context) => context.json({ ok: true }));
+        return router;
       }),
     );
 
@@ -103,22 +107,20 @@ describe('application', () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
     app.addProvider(TestProvider, 'provider', calls);
-    app.addApiRoutes(
-      defineApiRoutes({
-        name: 'api',
-        register(router): void {
-          calls.push('api:register');
-          router.get('/example', (context) => context.text('api'));
-        },
+    app.addRoutes(
+      defineApiRoutes(() => {
+        calls.push('api:register');
+        const router = new Hono();
+        router.get('/example', (context) => context.text('api'));
+        return router;
       }),
     );
-    app.addRootRoutes(
-      defineRootRoutes({
-        name: 'root',
-        register(router): void {
-          calls.push('root:register');
-          router.get('/example', (context) => context.text('root'));
-        },
+    app.addRoutes(
+      defineRootRoutes(() => {
+        calls.push('root:register');
+        const router = new Hono();
+        router.get('/example', (context) => context.text('root'));
+        return router;
       }),
     );
 
@@ -148,20 +150,16 @@ describe('application', () => {
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-test',
       providers: [RuntimePluginProvider],
-      apiRoutes: [
-        defineApiRoutes({
-          name: 'runtime-plugin-api',
-          register(router): void {
-            router.get('/runtime-plugin', (context) => context.text('api'));
-          },
+      routes: [
+        defineApiRoutes(() => {
+          const router = new Hono();
+          router.get('/runtime-plugin', (context) => context.text('api'));
+          return router;
         }),
-      ],
-      rootRoutes: [
-        defineRootRoutes({
-          name: 'runtime-plugin-root',
-          register(router): void {
-            router.get('/runtime-plugin', (context) => context.text('root'));
-          },
+        defineRootRoutes(() => {
+          const router = new Hono();
+          router.get('/runtime-plugin', (context) => context.text('root'));
+          return router;
         }),
       ],
     });
@@ -219,22 +217,18 @@ describe('application', () => {
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-runtime-order-test',
       providers: [PluginProvider],
-      apiRoutes: [
-        defineApiRoutes({
-          name: 'runtime-plugin-api-order',
-          register(router): void {
-            calls.push('plugin:api');
-            router.get('/runtime-order', (context) => context.text('plugin'));
-          },
+      routes: [
+        defineApiRoutes(() => {
+          calls.push('plugin:api');
+          const router = new Hono();
+          router.get('/runtime-order', (context) => context.text('plugin'));
+          return router;
         }),
-      ],
-      rootRoutes: [
-        defineRootRoutes({
-          name: 'runtime-plugin-root-order',
-          register(router): void {
-            calls.push('plugin:root');
-            router.get('/runtime-order', (context) => context.text('plugin'));
-          },
+        defineRootRoutes(() => {
+          calls.push('plugin:root');
+          const router = new Hono();
+          router.get('/runtime-order', (context) => context.text('plugin'));
+          return router;
         }),
       ],
     });
@@ -256,26 +250,22 @@ describe('application', () => {
         ],
       },
       providers: [ApplicationProvider],
-      apiRoutes: [
-        defineApiRoutes({
-          name: 'runtime-application-api-order',
-          register(router): void {
-            calls.push('application:api');
-            router.get('/runtime-order', (context) =>
-              context.text('application'),
-            );
-          },
+      routes: [
+        defineApiRoutes(() => {
+          calls.push('application:api');
+          const router = new Hono();
+          router.get('/runtime-order', (context) =>
+            context.text('application'),
+          );
+          return router;
         }),
-      ],
-      rootRoutes: [
-        defineRootRoutes({
-          name: 'runtime-application-root-order',
-          register(router): void {
-            calls.push('application:root');
-            router.get('/runtime-order', (context) =>
-              context.text('application'),
-            );
-          },
+        defineRootRoutes(() => {
+          calls.push('application:root');
+          const router = new Hono();
+          router.get('/runtime-order', (context) =>
+            context.text('application'),
+          );
+          return router;
         }),
       ],
     });
@@ -285,8 +275,8 @@ describe('application', () => {
       'plugin:register',
       'plugin-service',
       'plugin:api',
-      'application:api',
       'plugin:root',
+      'application:api',
       'application:root',
     ]);
     await expect(
@@ -426,9 +416,20 @@ class RuntimePluginProvider extends ServiceProvider<Application> {
 
 function createTestApplicationOptions(): ApplicationOptions {
   return {
-    config: new AppConfig(),
-    appName: '/main/',
-    publicBasePath: '//main//',
+    config: testAppConfig,
     paths: createConfigPaths({ rootDir: '/test/app' }),
   };
 }
+
+const testAppConfig = new AppConfig([
+  {
+    ...appIdentityConfig,
+    defaults: {
+      name: '/main/',
+      publicBasePath: '//main//',
+      internalBasePath: '',
+      publicApiUrl: '/main/api',
+    },
+  },
+]);
+await testAppConfig.loadAll();

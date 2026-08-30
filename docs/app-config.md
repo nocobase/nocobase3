@@ -117,6 +117,14 @@ Provider 负责读取配置来源，parser 负责把字节内容解析成配置�
 config.load(fileProvider(configPath), yamlParser());
 ```
 
+文件配置可使用 `AppConfig` 的便利方法。它根据扩展名选择 parser，支持 `.yml`、`.yaml` 和 `.json`：
+
+```ts
+config.loadFile(configPath, { optional: true });
+```
+
+`loadFile()` 只封装 `fileProvider + parser`，不会限制应用继续使用自定义 provider。
+
 `load()` 是同步登记操作，不会立即读取 provider。runtime 在配置来源全部登记后统一执行：
 
 ```ts
@@ -132,8 +140,6 @@ Default App 在 `server/config/index.ts` 中完成配置组装：
 ```ts
 import { coreConfigs } from '@nocobase/app-server-kit';
 import { AppConfig } from '@nocobase/app-server-kit/config';
-import { yamlParser } from '@nocobase/config/parsers/yaml';
-import { fileProvider } from '@nocobase/config/providers/file';
 
 export function createAppConfig(context) {
   const config = new AppConfig([...coreConfigs, ...context.configs], {
@@ -143,12 +149,9 @@ export function createAppConfig(context) {
 
   const configuredPath =
     context.configPath ?? context.environment.APP_CONFIG_FILE;
-  const configPath = context.paths.root(configuredPath ?? 'config.yml');
+  const configPath = context.paths.root(configuredPath ?? 'config');
 
-  config.load(
-    fileProvider(configPath, { optional: configuredPath === undefined }),
-    yamlParser(),
-  );
+  config.loadFile(configPath, { optional: configuredPath === undefined });
 
   return config;
 }
@@ -212,8 +215,8 @@ Host 传入的 context.configPath
 ```
 
 - Host 托管 App 时可以通过 scope 的 `configPath` 指定路径；
-- standalone App 可以设置 `APP_CONFIG_FILE`；
-- 两者都没有时使用 App 根目录下的 `config.yml`；
+- standalone App 可以设置 `APP_CONFIG_FILE`，并通过文件扩展名选择 YAML 或 JSON；
+- 两者都没有时按 `config.yml`、`config.yaml`、`config.json` 的优先级自动查找；
 - 默认路径不存在时允许启动，只使用 defaults 和环境变量；
 - 显式指定的配置文件不存在时加载失败，避免静默使用错误配置。
 

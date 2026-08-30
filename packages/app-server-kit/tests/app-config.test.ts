@@ -21,6 +21,75 @@ const featureConfig = defineAppConfig({
 });
 
 describe('AppConfig', () => {
+  it('loads YAML and JSON files according to their extension', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-config-'));
+    try {
+      const yamlPath = path.join(directory, 'config.yaml');
+      const jsonPath = path.join(directory, 'config.json');
+      writeFileSync(yamlPath, 'feature:\n  enabled: true\n');
+      writeFileSync(jsonPath, JSON.stringify({ feature: { label: 'json' } }));
+      const config = new AppConfig([featureConfig], { context: {} });
+
+      config.loadFile(yamlPath).loadFile(jsonPath);
+      await config.loadAll();
+
+      expect(config.get(featureConfig)).toEqual({
+        enabled: true,
+        label: 'json',
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('discovers a supported config file when the path has no extension', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-config-'));
+    try {
+      writeFileSync(
+        path.join(directory, 'config.json'),
+        JSON.stringify({ feature: { enabled: true, label: 'discovered' } }),
+      );
+      const config = new AppConfig([featureConfig], { context: {} });
+
+      config.loadFile(path.join(directory, 'config'));
+      await config.loadAll();
+
+      expect(config.get(featureConfig).label).toBe('discovered');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers yml, yaml, then json for extensionless config paths', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-config-'));
+    try {
+      writeFileSync(
+        path.join(directory, 'config.yml'),
+        'feature:\n  enabled: true\n  label: yml\n',
+      );
+      writeFileSync(
+        path.join(directory, 'config.json'),
+        JSON.stringify({ feature: { enabled: true, label: 'json' } }),
+      );
+      const config = new AppConfig([featureConfig], { context: {} });
+
+      config.loadFile(path.join(directory, 'config'));
+      await config.loadAll();
+
+      expect(config.get(featureConfig).label).toBe('yml');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects unsupported config file extensions', () => {
+    const config = new AppConfig([featureConfig], { context: {} });
+
+    expect(() => config.loadFile('config.toml')).toThrow(
+      /Expected \.yml, \.yaml, or \.json/,
+    );
+  });
+
   it('merges defaults, loaded providers, and definition env layers', async () => {
     const config = new AppConfig([featureConfig], {
       context: {},
@@ -299,3 +368,6 @@ describe('AppConfig', () => {
     expect(config.get(serverConfig)).toEqual({ port: 14000, enabled: true });
   });
 });
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
