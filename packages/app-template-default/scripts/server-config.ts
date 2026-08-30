@@ -14,6 +14,7 @@ import {
   sessionConfig,
   snowflakeConfig,
 } from '@nocobase/app-server-kit';
+import { notificationConfig } from '@nocobase/app-plugin-notification/server';
 import appRuntime from '../server/runtime.ts';
 
 type JsonValue =
@@ -34,6 +35,7 @@ const database = runtime.appConfig.get(databaseConfig);
 const drive = runtime.appConfig.get(driveConfig);
 const queue = runtime.appConfig.get(queueConfig);
 const session = runtime.appConfig.get(sessionConfig);
+const notification = runtime.appConfig.get(notificationConfig);
 
 const activeLoggerName = logging.default;
 const configuredLogger = activeLoggerName
@@ -180,12 +182,12 @@ const report = {
   },
   notification: {
     test: {
-      enabled: config.notification.test.enabled,
-      emailRecipient: config.notification.test.emailRecipient
+      enabled: notification.test?.enabled ?? false,
+      emailRecipient: notification.test?.emailRecipient
         ? '<configured>'
         : '(missing)',
     },
-    channels: config.notification.channels.map((channel) => ({
+    channels: notification.channels.map((channel) => ({
       type: channel.type,
       enabled: channel.enabled,
       providers: channel.providers.map((provider) => ({
@@ -567,7 +569,7 @@ function printJson(label: string, value: JsonValue): void {
   printPair(label, JSON.stringify(value));
 }
 
-function formatOptionalUrl(value: string | URL | undefined): string {
+function formatOptionalUrl(value: string | URL | null | undefined): string {
   if (!value) {
     return '(not configured)';
   }
