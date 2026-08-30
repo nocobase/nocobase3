@@ -46,6 +46,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
+    "@nocobase/app-i18n": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "@refinedev/react-router": "^2.0.0",
@@ -70,8 +71,5 @@
     "react-router": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "dependencies": {
-    "@nocobase/app-i18n": "workspace:^"
   }
 }

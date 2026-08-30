@@ -238,11 +238,10 @@ importers:
         version: 6.0.3
 
   packages/app-client:
-    dependencies:
-      '@nocobase/app-i18n':
-        specifier: workspace:^
-        version: link:../app-i18n
     devDependencies:
+      '@nocobase/app-i18n':
+        specifier: workspace:*
+        version: link:../app-i18n
       '@nocobase/app-sdk':
         specifier: workspace:*
         version: link:../app-sdk
