@@ -69,16 +69,16 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 
 ## 参数
 
-| 参数             | 说明                                                  |
-| ---------------- | ----------------------------------------------------- |
-| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问          |
-| `--db-dialect`   | 数据库类型：`postgres`、`sqlite`、`mysql`             |
-| `--no-install`   | 生成后不自动安装依赖                                  |
-| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录    |
-| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`         |
-| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai` |
-| `-h, --help`     | 查看帮助                                              |
-| `--version`      | 查看版本                                              |
+| 参数             | 说明                                                            |
+| ---------------- | --------------------------------------------------------------- |
+| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问                    |
+| `--db-dialect`   | 数据库类型：`postgres`、`sqlite`、`mysql`。省略时进入交互式选择 |
+| `--no-install`   | 生成后不自动安装依赖                                            |
+| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录              |
+| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`                   |
+| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai`           |
+| `-h, --help`     | 查看帮助                                                        |
+| `--version`      | 查看版本                                                        |
 
 `--db-dialect` 接受常见别名，`postgresql`、`pg` 都会归一化成 `postgres`，`sqlite3` 归一化成 `sqlite`，`mysql2`、`mariadb` 归一化成 `mysql`。这三个规范名才是模板 `server/config/database.ts` 里 `DB_DIALECT` 认的值，写别的会在启动时抛错。
 
@@ -111,12 +111,6 @@ pnpm create @nocobase/app crm --template=./packages/app-template-default
 pnpm create @nocobase/app crm --db-dialect=postgres
 pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
 ```
-
-## 和 Hub 的边界
-
-`pnpm create @nocobase/app` 只负责根据模板创建本地源码，不从 Hub 获取源码，也不会自动绑定 Hub APP。
-
-Hub 当前只保存构建产物。开发已有 APP 时，需要使用之前保存的真实本地源码目录。首次发布或部署时，再通过 APP 项目内的 `release` 或 `deploy` 脚本传入 `--hub` 和 `--app` 完成绑定。
 
 ## 生成的内容
 
