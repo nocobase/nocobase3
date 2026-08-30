@@ -30,13 +30,11 @@ describe('workflow skill prompt fixtures', () => {
       await fs.readFile(path.join(packageRoot, 'package.json'), 'utf8'),
     ) as { files?: string[] };
 
-    expect(manifest.files).toContain('.agents');
+    expect(manifest.files).toContain('skills');
+    expect(manifest.files).not.toContain('.agents');
     await expect(
       fs.readFile(
-        path.join(
-          packageRoot,
-          '.agents/skills/nocobase-app-plugin-workflow/SKILL.md',
-        ),
+        path.join(packageRoot, 'skills/nocobase-app-plugin-workflow/SKILL.md'),
         'utf8',
       ),
     ).resolves.toContain('name: nocobase-app-plugin-workflow');
@@ -133,7 +131,7 @@ describe('workflow skill prompt fixtures', () => {
       }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
-      publishArtifact: async (): Promise<void> => undefined,
+      ensureArtifactMaterialized: async () => undefined,
     };
     const runs = new WorkflowRunRepository(fixture.database, runtime);
     await expect(runs.get(9001)).resolves.toMatchObject({
@@ -190,7 +188,7 @@ describe('workflow skill prompt fixtures', () => {
       }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
-      publishArtifact: async (): Promise<void> => undefined,
+      ensureArtifactMaterialized: async () => undefined,
     };
     await expect(
       new WorkflowRunRepository(firstFixture.database, runtime).get(9001),

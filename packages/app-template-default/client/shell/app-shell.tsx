@@ -1,3 +1,4 @@
+import { useSyncServerLocale } from '@nocobase/app-plugin-i18n/client';
 import { useState, type ReactElement } from 'react';
 import { Outlet } from 'react-router';
 
@@ -5,6 +6,8 @@ import { AppHeader } from './app-header.js';
 import { AppSidebar } from './app-sidebar.js';
 
 export function AppShell(): ReactElement {
+  // The browser decides what it renders; this tells the server the same language so its messages match.
+  useSyncServerLocale();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
 

@@ -37,7 +37,7 @@ not only Registry extension routes. Keep route metadata synchronous in
 renderers through `componentLoader`:
 
 ```ts
-const routes = defineClientRoutes([
+const routes = defineAppRoutes([
   {
     name: 'customers',
     path: '/customers',

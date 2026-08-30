@@ -6,16 +6,21 @@ import {
   type AppClientContributionSource,
   type AppClientPluginLoader,
   type AppClientProviderDefinition,
+  type AppClientRouteContribution,
   type AppClientRegisteredProvider,
   type AppClientRegisteredRoute,
   type AppClientRegisteredSetting,
   type AppClientRegisteredSettingGroup,
-  type AppClientRouteDefinition,
-  type AppClientSettingDefinition,
   type AppClientRouteComponentOverrideDefinition,
   type AppClientSourceExtension,
 } from '@nocobase/app-client/plugins';
+import {
+  createAppI18nRuntime,
+  type AppClientLocaleContribution,
+} from '@nocobase/app-client';
+import { createRefineI18nProvider } from '@nocobase/app-i18n/client';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
+import type { I18nRuntime, LocalesModule } from '@nocobase/app-i18n';
 import { createAppClient, type AppClient } from '@nocobase/app-sdk';
 import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 
@@ -28,6 +33,7 @@ export type AppClientRuntimeRefineConfig = Readonly<AppClientRefineConfig> & {
 
 export interface AppClientRuntime {
   readonly appClient: AppClient;
+  readonly i18n: I18nRuntime;
   readonly basename: string;
   readonly refine: AppClientRuntimeRefineConfig;
   readonly providers: readonly AppClientRegisteredProvider[];
@@ -47,9 +53,9 @@ interface LoadedClientContribution {
   readonly packageName: string;
   readonly source: AppClientContributionSource;
   readonly bootstrap?: AppClientBootstrap<unknown>;
+  readonly locales?: LocalesModule;
   readonly providers?: readonly AppClientProviderDefinition[];
-  readonly routes?: readonly AppClientRouteDefinition[];
-  readonly settings?: readonly AppClientSettingDefinition[];
+  readonly routes?: readonly AppClientRouteContribution[];
   readonly options: unknown;
 }
 
@@ -63,7 +69,26 @@ export async function createAppRuntime(
       loadClientContribution({ ...plugin, source: 'plugin' }),
     ),
   ]);
-  const refineCollector = createRefineConfigCollector({});
+  // i18n comes up before anything renders, so the first frame is already in the right language and no loading state
+  // is needed. Only the starting locale is fetched; the rest wait until someone switches.
+  const i18n = await createAppI18nRuntime({
+    contributions: loadedContributions.flatMap(
+      (contribution): AppClientLocaleContribution[] =>
+        contribution.locales
+          ? [
+              {
+                packageName: contribution.packageName,
+                source: contribution.source,
+                locales: contribution.locales,
+              },
+            ]
+          : [],
+    ),
+  });
+  // Supplied as a default rather than set outright, so a plugin that registers its own i18nProvider still wins.
+  const refineCollector = createRefineConfigCollector({
+    i18nProvider: createRefineI18nProvider(i18n),
+  });
 
   for (const contribution of loadedContributions) {
     if (!contribution.bootstrap) {
@@ -117,6 +142,7 @@ export async function createAppRuntime(
   }
   return Object.freeze({
     appClient,
+    i18n,
     basename: getPortalBase(),
     refine: Object.freeze({
       ...refine,
@@ -156,11 +182,11 @@ async function loadClientContribution(
     | AppClientApplicationLoader
     | (AppClientPluginLoader & { readonly source: 'plugin' }),
 ): Promise<LoadedClientContribution> {
-  const [bootstrap, routes, settings, providers] = await Promise.all([
+  const [bootstrap, routes, providers, locales] = await Promise.all([
     loadBootstrap(contribution),
     loadRoutes(contribution),
-    loadSettings(contribution),
     loadProviders(contribution),
+    loadLocales(contribution),
   ]);
 
   return Object.freeze({
@@ -168,10 +194,28 @@ async function loadClientContribution(
     source: contribution.source,
     bootstrap,
     routes,
-    settings,
     providers,
+    locales,
     options: contribution.options ?? {},
   });
+}
+
+async function loadLocales(
+  contribution:
+    | AppClientApplicationLoader
+    | (AppClientPluginLoader & { readonly source: 'plugin' }),
+): Promise<LocalesModule | undefined> {
+  if (!contribution.locales) {
+    return undefined;
+  }
+  try {
+    return await contribution.locales();
+  } catch (error) {
+    throw new Error(
+      `Failed to load client locales for ${contribution.source} "${contribution.packageName}".`,
+      { cause: error },
+    );
+  }
 }
 
 async function loadBootstrap(
@@ -200,7 +244,7 @@ async function loadRoutes(
   contribution:
     | AppClientApplicationLoader
     | (AppClientPluginLoader & { readonly source: 'plugin' }),
-): Promise<readonly AppClientRouteDefinition[] | undefined> {
+): Promise<readonly AppClientRouteContribution[] | undefined> {
   if (!contribution.routes) {
     return undefined;
   }
@@ -212,51 +256,22 @@ async function loadRoutes(
         ? (
             exported as (
               options: unknown,
-            ) => readonly AppClientRouteDefinition[]
+            ) =>
+              AppClientRouteContribution | readonly AppClientRouteContribution[]
           )(contribution.options ?? {})
         : exported;
-    if (!isRouteDefinitions(definitions)) {
+    const normalized: unknown = Array.isArray(definitions)
+      ? definitions
+      : [definitions];
+    if (!isRouteContributions(normalized)) {
       throw new Error(
-        'The client routes entry must default-export a route definition array, or a function returning one.',
+        'The client routes entry must default-export a Route contribution, a Route contribution array, or a function returning either.',
       );
     }
-    return definitions;
+    return normalized;
   } catch (error) {
     throw new Error(
       `Failed to load client routes for ${contribution.source} "${contribution.packageName}".`,
-      { cause: error },
-    );
-  }
-}
-
-async function loadSettings(
-  contribution:
-    | AppClientApplicationLoader
-    | (AppClientPluginLoader & { readonly source: 'plugin' }),
-): Promise<readonly AppClientSettingDefinition[] | undefined> {
-  if (!contribution.settings) {
-    return undefined;
-  }
-  try {
-    const module = await contribution.settings();
-    const exported: unknown = module.default;
-    const definitions: unknown =
-      typeof exported === 'function'
-        ? (
-            exported as (
-              options: unknown,
-            ) => readonly AppClientSettingDefinition[]
-          )(contribution.options ?? {})
-        : exported;
-    if (!isSettingDefinitions(definitions)) {
-      throw new Error(
-        'The client settings entry must default-export a setting definition array, or a function returning one.',
-      );
-    }
-    return definitions;
-  } catch (error) {
-    throw new Error(
-      `Failed to load client settings for ${contribution.source} "${contribution.packageName}".`,
       { cause: error },
     );
   }
@@ -295,16 +310,20 @@ async function loadProviders(
   }
 }
 
-function isRouteDefinitions(
+function isRouteContributions(
   value: unknown,
-): value is readonly AppClientRouteDefinition[] {
-  return Array.isArray(value);
-}
-
-function isSettingDefinitions(
-  value: unknown,
-): value is readonly AppClientSettingDefinition[] {
-  return Array.isArray(value);
+): value is readonly AppClientRouteContribution[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        ((item as { readonly parent?: unknown }).parent === 'app' ||
+          (item as { readonly parent?: unknown }).parent === 'settings') &&
+        Array.isArray((item as { readonly routes?: unknown }).routes),
+    )
+  );
 }
 
 function isProviderDefinitions(

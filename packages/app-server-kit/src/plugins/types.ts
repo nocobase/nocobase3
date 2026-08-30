@@ -1,3 +1,4 @@
+import type { LocalesModule } from '@nocobase/app-i18n';
 import type {
   ServiceContainer,
   ServiceProviderLifecycle,
@@ -32,6 +33,12 @@ export interface AppServerPluginQueueContribution {
   readonly jobs?: readonly string[];
 }
 
+/**
+ * Loads a plugin's `locales/index.ts`. Declared exactly as on the client, so a plugin keeps its two locale modules in
+ * the same shape.
+ */
+export type AppServerPluginLocalesLoader = () => Promise<LocalesModule>;
+
 export interface AppServerPluginDefinition<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
@@ -42,6 +49,7 @@ export interface AppServerPluginDefinition<
   >[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
 export interface AppServerPlugin<
@@ -54,6 +62,7 @@ export interface AppServerPlugin<
   >[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
 export interface AppServerPlugins<

@@ -1,13 +1,13 @@
-import type { AppClientRouteDefinition } from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
 import routes from '../routes.js';
 
 describe('client routes', () => {
   it('defines a lazy authenticated route', () => {
-    const route = routes[0] as AppClientRouteDefinition;
+    const [route] = routes.routes;
 
-    expect(routes).toHaveLength(1);
+    expect(routes.parent).toBe('app');
+    expect(routes.routes).toHaveLength(1);
     expect(route).toMatchObject({
       name: 'index',
       path: '/routes-example',

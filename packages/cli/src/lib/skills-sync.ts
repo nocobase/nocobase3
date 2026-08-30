@@ -15,8 +15,11 @@ import path from 'node:path';
 const PACKAGE_SCOPE = '@nocobase/';
 const KEBAB_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
-/** Directory, relative to a package root, that holds agent skills. */
-export const SKILLS_DIRECTORY: string = path.join('.agents', 'skills');
+/** Directory, relative to a plugin package root, that holds its App-facing skills. */
+export const PLUGIN_SKILLS_DIRECTORY = 'skills';
+
+/** Directory, relative to an application root, that receives synchronized skills. */
+export const APP_SKILLS_DIRECTORY: string = path.join('.agents', 'skills');
 
 /** Every synchronized skill directory starts with this prefix. */
 export const SKILL_NAME_PREFIX = 'nocobase-';
@@ -95,14 +98,14 @@ export function isOwnedSkillName(prefix: string, skillName: string): boolean {
 
 /**
  * The first-level skill directories a plugin ships, with their names validated.
- * A plugin without `.agents/skills/` yields an empty list: most plugins ship no
+ * A plugin without `skills/` yields an empty list: most plugins ship no
  * skills and must not produce warnings.
  */
 export async function collectPluginSkills({
   packageName,
   pluginDirectory,
 }: PluginLocation): Promise<PluginSkills> {
-  const skillsDirectory = path.join(pluginDirectory, SKILLS_DIRECTORY);
+  const skillsDirectory = path.join(pluginDirectory, PLUGIN_SKILLS_DIRECTORY);
   const prefix = pluginSkillPrefix(packageName);
   const entries = await readDirectoryEntries(skillsDirectory);
 
@@ -141,7 +144,7 @@ export async function planSkillsSync({
   appRoot: string;
   plugins: readonly PluginLocation[];
 }): Promise<SkillsSyncPlan> {
-  const skillsRoot = path.join(appRoot, SKILLS_DIRECTORY);
+  const skillsRoot = path.join(appRoot, APP_SKILLS_DIRECTORY);
   const sources: PluginSkills[] = [];
   for (const plugin of plugins) {
     sources.push(await collectPluginSkills(plugin));

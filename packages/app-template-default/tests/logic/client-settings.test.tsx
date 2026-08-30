@@ -1,4 +1,5 @@
 import type {
+  AppClientRegisteredRoute,
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
   AppClientSettingIcon,
@@ -10,12 +11,16 @@ import {
 } from '@refinedev/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
 import { buildNavEntries } from '../../client/settings/index.ts';
 import { AppThemeProvider } from '../../client/theme/index.ts';
+
+function WorkflowDetailTestPage(): ReactElement {
+  return <h2>Workflow detail {useParams().workflowId}</h2>;
+}
 
 describe('settings centre', () => {
   beforeEach(() => {
@@ -58,7 +63,10 @@ describe('settings centre', () => {
     expect(
       screen.getByRole('button', { name: /Switch to .* theme/ }),
     ).toBeVisible();
-    expect((await screen.findAllByText('Alice')).length).toBeGreaterThan(0);
+    // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
+    expect(
+      await screen.findByRole('button', { name: 'Open account menu' }),
+    ).toHaveAttribute('title', 'Alice');
     expect(
       screen.queryByRole('link', { name: 'Settings' }),
     ).not.toBeInTheDocument();
@@ -98,6 +106,27 @@ describe('settings centre', () => {
     const link = screen.getAllByRole('link', { name: 'Workflow General' })[0];
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link.closest('details')).toBeNull();
+  });
+
+  it('renders a nested detail route inside settings and keeps its parent selected', async () => {
+    renderSettings('/settings/workflow/item-1', undefined, SETTINGS, GROUPS, [
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-test:workflow-detail',
+        name: 'workflow-detail',
+        packageName: '@nocobase/app-plugin-test',
+        path: '/settings/workflow/:workflowId',
+        source: 'plugin',
+        componentLoader: async () => ({
+          default: WorkflowDetailTestPage,
+        }),
+      },
+    ]);
+
+    expect(await screen.findByText('Workflow detail item-1')).toBeVisible();
+    expect(
+      screen.getAllByRole('link', { name: 'Workflow General' })[0],
+    ).toHaveAttribute('aria-current', 'page');
   });
 
   it('drops a group whose every page the user is denied', async () => {
@@ -279,6 +308,7 @@ function renderSettings(
   accessControlProvider?: AccessControlProvider,
   settings: readonly AppClientRegisteredSetting[] = SETTINGS,
   groups: readonly AppClientRegisteredSettingGroup[] = GROUPS,
+  routes: readonly AppClientRegisteredRoute[] = [],
 ): void {
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
@@ -302,7 +332,7 @@ function renderSettings(
           options={{ disableTelemetry: true }}
         >
           <AppRouter
-            clientRoutes={[]}
+            clientRoutes={routes}
             clientSettingGroups={groups}
             clientSettings={settings}
           />

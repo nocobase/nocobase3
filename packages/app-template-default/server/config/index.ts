@@ -3,6 +3,7 @@ import auth from './auth.js';
 import caching from './caching.js';
 import database from './database.js';
 import drive from './drive.js';
+import i18n from './i18n.js';
 import logging from './logging.js';
 import notification from './notification.js';
 import queue from './queue.js';
@@ -21,6 +22,7 @@ const config: AppRuntimeConfigFactories<AppConfig, DefaultAppScopeConfig> = {
   caching: caching,
   database: database,
   drive: drive,
+  i18n: i18n,
   logging: logging,
   notification: notification,
   queue: queue,

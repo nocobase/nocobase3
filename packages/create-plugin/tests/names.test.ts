@@ -19,6 +19,12 @@ describe('normalizePluginName', () => {
       );
     },
   );
+
+  it('rejects names that exceed the Agent Skill name limit', () => {
+    expect(() => normalizePluginName(`a${'b'.repeat(44)}`)).toThrow(
+      'the generated Agent Skill name must not exceed 64 characters',
+    );
+  });
 });
 
 describe('createPluginNames', () => {

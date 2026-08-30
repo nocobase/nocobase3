@@ -6,7 +6,14 @@ This scaffold includes disabled database migration and seed examples, an
 explicit server plugin entry, a ServiceProvider, an API route at
 `/api/__NOCOBASE_SHORT_NAME__`, a `client/plugin.ts` registration entry
 re-exported as the default from `client/index.ts`, and working client examples
-for bootstrap, routes, settings, and providers.
+for bootstrap, App and Settings routes, and providers.
+
+The package also ships a starter Agent Skill at
+`skills/nocobase-app-plugin-__NOCOBASE_SHORT_NAME__/SKILL.md`. It describes how
+an App Agent uses the plugin's application-facing capabilities. Keep it aligned
+with the real pages, APIs, permissions, and constraints as the plugin grows;
+plugin registration synchronizes it into the target application's
+`.agents/skills/` directory.
 
 The server structure is intentionally small:
 

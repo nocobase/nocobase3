@@ -20,6 +20,7 @@ export default createReactVitestConfig({
   test: {
     root,
     include: [
+      'tests/components/language-switcher.test.tsx',
       'tests/components/loading.test.tsx',
       'tests/logic/agent-annotations.test.ts',
       'tests/logic/app-server.test.ts',

@@ -11,7 +11,7 @@ import { resolveAppRoot } from '../../../../lib/workspace-app.ts';
 export default class AppSkillsSync extends Command {
   static override summary = "Copy plugin skills into the app's .agents/skills.";
   static override description =
-    'Plugins ship skills in .agents/skills/nocobase-<package>/ and this copies them into the app. Upstream is the single source of truth: each synchronized directory is replaced wholesale, and directories whose names do not start with nocobase- are never touched, so the app can keep skills of its own. Run this after upgrading a plugin whose skills changed.';
+    "Plugins ship App-facing skills in skills/nocobase-<package>/ and this copies them into the app's .agents/skills/. Upstream is the single source of truth: each synchronized directory is replaced wholesale, and directories whose names do not start with nocobase- are never touched, so the app can keep skills of its own. Run this after upgrading a plugin whose skills changed.";
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',

@@ -40,7 +40,7 @@ in registration order. The application may own `/`; plugins may not.
 A plugin exposes its client contributions through `client/plugin.ts`, which
 default-exports the factory returned by `defineClientPlugin`. This file is the
 plugin's outward-facing registration surface: it names the package, points at
-the four optional entries, and declares the options an application may pass:
+the three optional entries, and declares the options an application may pass:
 
 ```ts
 import {
@@ -57,7 +57,6 @@ const example: AppClientPluginFactory<ExampleClientOptions> =
     packageName: '@nocobase/app-plugin-example',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
-    settings: () => import('./settings.js'),
     providers: () => import('./providers.js'),
   });
 
@@ -86,7 +85,7 @@ the package really has no module-level side effects — a bare `import './x.css'
 is one, and would be dropped along with everything else.
 
 Keep components, provider factories, and service classes inside `bootstrap`,
-`routes`, `settings`, and `providers` rather than importing them here. This is a
+`routes`, and `providers` rather than importing them here. This is a
 recommendation rather than an enforced rule; nothing validates it.
 
 A plugin that wants to let an application replace one of its route components
@@ -164,7 +163,7 @@ This mechanism covers client contributions only. Server plugin loading still
 reads `nocobase.plugins` from the application `package.json`; there is no
 server-side equivalent of `client/plugins.ts` yet.
 
-## Routes, settings, and providers
+## Routes and providers
 
 Client plugins declare authenticated routes in a dedicated entry. Route pages
 use a second dynamic import so their code is only loaded when the URL is
@@ -172,59 +171,50 @@ rendered:
 
 ```ts
 import {
-  defineClientRoutes,
-  type AppClientRouteDefinition,
+  defineAppRoutes,
+  defineSettingsRoutes,
 } from '@nocobase/app-client/plugins';
+import { KeyRound, ShieldCheck } from 'lucide-react';
 
-const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
+const appRoutes = defineAppRoutes([
   {
     name: 'index',
     path: '/example',
     componentLoader: () => import('./pages/example'),
   },
 ]);
-
-export default routes;
 ```
 
-Settings pages go in their own entry. They are lazily loaded the same way
-routes are, but the application mounts them inside its settings centre and
-builds the navigation from them, so a plugin declares only the page. An entry
-is either a page on its own or a group of pages, and a group carries the icon
-and title once for the whole section rather than repeating them per child:
+Settings pages share the same routes entry. The application mounts them under
+its built-in Settings Route and builds navigation from their metadata. A group
+carries the icon and title once for the whole section:
 
 ```ts
-import {
-  defineClientSettings,
-  type AppClientSettingDefinition,
-} from '@nocobase/app-client/plugins';
-import { KeyRound, ShieldCheck } from 'lucide-react';
-
-const settings: readonly AppClientSettingDefinition[] = defineClientSettings([
+const settingsRoutes = defineSettingsRoutes([
   {
-    id: 'example',
-    title: 'Example',
-    icon: ShieldCheck,
+    name: 'example',
+    path: '/example',
+    navigation: { title: 'Example', icon: ShieldCheck },
     children: [
       {
-        id: 'general',
-        title: 'General',
-        icon: KeyRound,
+        name: 'general',
+        path: '/general',
+        navigation: { title: 'General', icon: KeyRound },
         access: { resource: 'example.settings.general', action: 'read' },
-        pageLoader: () => import('./pages/general'),
+        componentLoader: () => import('./pages/general'),
       },
     ],
   },
 ]);
 
-export default settings;
+export default [appRoutes, settingsRoutes];
 ```
 
-Ids are single URL segments and nesting comes from the tree, so the page above
-is served at `/settings/example/general`. A plugin contributing a single page
-declares it without a group — `{ id, title, pageLoader }` — and it is served at
-`/settings/<id>` and rendered as one flat row rather than a disclosure. Groups
-nest one level: a group's children are pages, not further groups.
+Names are stable identifiers and paths are relative to the built-in Settings
+Route, so the page above is served at `/settings/example/general`. A plugin
+contributing a single page declares it without a group and it is rendered as
+one flat row rather than a disclosure. Groups nest one level: a group's
+children are pages, not further groups.
 
 `icon` is optional on both groups and pages. It is a component taking a
 `className`, which a lucide-react icon satisfies directly; the application
@@ -266,23 +256,23 @@ const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
 export default providers;
 ```
 
-A routes, settings, or providers entry may default-export a function of the
-plugin's options instead of an array. The runtime calls it with the options the
+A routes or providers entry may default-export a function of the plugin's
+options instead of a contribution. The runtime calls it with the options the
 application passed, so a plugin can add or drop contributions per application
 without a second entry:
 
 ```ts
 import {
-  defineClientRoutes,
-  type AppClientRouteDefinition,
+  defineSettingsRoutes,
+  type AppClientSettingsRoutesContribution,
 } from '@nocobase/app-client/plugins';
 
 import type { SettingsClientOptions } from './plugin.js';
 
 const routes = (
   options: SettingsClientOptions,
-): readonly AppClientRouteDefinition[] =>
-  defineClientRoutes(
+): AppClientSettingsRoutesContribution =>
+  defineSettingsRoutes(
     options.settingsPages === false ? [] : [...SETTINGS_ROUTES],
   );
 
@@ -306,8 +296,9 @@ render.
 
 The application owns route placement, authentication, loading, error UI, the
 settings centre chrome, and the final provider tree. `bootstrap` remains the
-imperative initialization entry; routes, settings, and providers remain
-inspectable declarations.
+imperative initialization entry; routes and providers remain inspectable
+declarations. Settings pages are inspected as children of the built-in Settings
+Route rather than as a separate contribution entry.
 
 ## Route component overrides
 

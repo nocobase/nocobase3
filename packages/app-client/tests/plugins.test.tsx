@@ -3,17 +3,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyClientRouteComponentOverrides,
+  defineAppRoutes,
   defineClientApplication,
   defineClientPlugin,
   defineClientPlugins,
   defineClientProviders,
   defineClientRouteComponentOverrides,
-  defineClientRoutes,
-  defineClientSettings,
+  defineSettingsRoutes,
   defineClientSourceExtension,
   resolveAppClientContributions,
-  type AppClientSettingDefinition,
-  type AppClientSettingPageDefinition,
+  type AppClientSettingsRoutePageDefinition,
 } from '../src/plugins.js';
 
 function FirstProvider({ children }: PropsWithChildren): ReactElement {
@@ -46,7 +45,7 @@ describe('client plugin definitions', () => {
     const application = defineClientApplication({
       packageName: '@nocobase/app-template-default',
     });
-    const routes = defineClientRoutes([
+    const routes = defineAppRoutes([
       {
         name: 'index',
         path: '/example',
@@ -73,7 +72,7 @@ describe('client plugin definitions', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-feature',
-        routes: defineClientRoutes([
+        routes: defineAppRoutes([
           {
             name: 'index',
             path: '/feature/',
@@ -114,7 +113,7 @@ describe('client plugin definitions', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-authentication',
-        routes: defineClientRoutes([
+        routes: defineAppRoutes([
           {
             name: 'login',
             path: '/login',
@@ -139,7 +138,7 @@ describe('client plugin definitions', () => {
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-feature',
-          routes: defineClientRoutes([
+          routes: defineAppRoutes([
             {
               name: 'login',
               path: '/login',
@@ -154,7 +153,7 @@ describe('client plugin definitions', () => {
       {
         packageName: '@nocobase/app-template-default',
         source: 'application',
-        routes: defineClientRoutes([
+        routes: defineAppRoutes([
           {
             name: 'home',
             path: '/',
@@ -176,7 +175,7 @@ describe('client plugin definitions', () => {
     const [route] = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-authentication',
-        routes: defineClientRoutes([
+        routes: defineAppRoutes([
           {
             name: 'login',
             path: '/login',
@@ -214,7 +213,7 @@ describe('client plugin definitions', () => {
     const [route] = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-example',
-        routes: defineClientRoutes([
+        routes: defineAppRoutes([
           {
             name: 'index',
             path: '/example',
@@ -417,7 +416,7 @@ describe('client modules', () => {
   const loadComponent = async () => ({ default: () => null });
   const bootstrapLoader = async () => ({ default: () => {} });
   const routesLoader = async () => ({
-    default: defineClientRoutes([
+    default: defineAppRoutes([
       { name: 'index', path: '/example', componentLoader: loadComponent },
     ]),
   });
@@ -518,11 +517,15 @@ describe('client modules', () => {
 
 describe('client settings', () => {
   const page = async () => ({ default: () => null });
-  const resolveSetting = (setting: Partial<AppClientSettingPageDefinition>) =>
+  const resolveSetting = (
+    setting: Partial<AppClientSettingsRoutePageDefinition>,
+  ) =>
     resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-example',
-        settings: [setting as AppClientSettingPageDefinition],
+        routes: defineSettingsRoutes([
+          setting as AppClientSettingsRoutePageDefinition,
+        ]),
       },
     ]);
 
@@ -530,24 +533,27 @@ describe('client settings', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-authorization',
-        settings: defineClientSettings([
+        routes: defineSettingsRoutes([
           {
-            id: 'authorization',
-            title: 'Authorization',
+            name: 'authorization',
+            path: '/authorization',
+            navigation: { title: 'Authorization' },
             children: [
               {
-                id: 'permission-sets',
-                title: 'Permission Sets',
+                name: 'permission-sets',
+                path: '/permission-sets',
+                navigation: { title: 'Permission Sets' },
                 access: {
                   resource: 'authorization.settings.permission-sets',
                   action: 'read',
                 },
-                pageLoader: page,
+                componentLoader: page,
               },
               {
-                id: 'default-access',
-                title: 'Default Access',
-                pageLoader: page,
+                name: 'default-access',
+                path: '/default-access',
+                navigation: { title: 'Default Access' },
+                componentLoader: page,
               },
             ],
           },
@@ -592,8 +598,13 @@ describe('client settings', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-example',
-        settings: defineClientSettings([
-          { id: 'general', title: 'General', pageLoader: page },
+        routes: defineSettingsRoutes([
+          {
+            name: 'general',
+            path: '/general',
+            navigation: { title: 'General' },
+            componentLoader: page,
+          },
         ]),
       },
     ]);
@@ -610,14 +621,24 @@ describe('client settings', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-example',
-        settings: defineClientSettings([
+        routes: defineSettingsRoutes([
           {
-            id: 'group',
-            title: 'Group',
-            icon: Icon,
+            name: 'group',
+            path: '/group',
+            navigation: { title: 'Group', icon: Icon },
             children: [
-              { id: 'child', title: 'Child', icon: Icon, pageLoader: page },
-              { id: 'plain', title: 'Plain', pageLoader: page },
+              {
+                name: 'child',
+                path: '/child',
+                navigation: { title: 'Child', icon: Icon },
+                componentLoader: page,
+              },
+              {
+                name: 'plain',
+                path: '/plain',
+                navigation: { title: 'Plain' },
+                componentLoader: page,
+              },
             ],
           },
         ]),
@@ -630,13 +651,23 @@ describe('client settings', () => {
   });
 
   it('accepts a settings module that is a function of the plugin options', () => {
-    const settingsFor = (options: {
-      readonly advanced: boolean;
-    }): readonly AppClientSettingDefinition[] =>
-      defineClientSettings([
-        { id: 'general', title: 'General', pageLoader: page },
+    const settingsFor = (options: { readonly advanced: boolean }) =>
+      defineSettingsRoutes([
+        {
+          name: 'general',
+          path: '/general',
+          navigation: { title: 'General' },
+          componentLoader: page,
+        },
         ...(options.advanced
-          ? [{ id: 'advanced', title: 'Advanced', pageLoader: page }]
+          ? [
+              {
+                name: 'advanced',
+                path: '/advanced',
+                navigation: { title: 'Advanced' },
+                componentLoader: page,
+              },
+            ]
           : []),
       ]);
 
@@ -644,7 +675,7 @@ describe('client settings', () => {
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-example',
-          settings: settingsFor({ advanced: false }),
+          routes: settingsFor({ advanced: false }),
         },
       ]).settings.map((setting) => setting.id),
     ).toEqual(['general']);
@@ -652,7 +683,7 @@ describe('client settings', () => {
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-example',
-          settings: settingsFor({ advanced: true }),
+          routes: settingsFor({ advanced: true }),
         },
       ]).settings.map((setting) => setting.id),
     ).toEqual(['general', 'advanced']);
@@ -663,14 +694,24 @@ describe('client settings', () => {
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-first',
-          settings: defineClientSettings([
-            { id: 'general', title: 'General', pageLoader: page },
+          routes: defineSettingsRoutes([
+            {
+              name: 'general',
+              path: '/general',
+              navigation: { title: 'General' },
+              componentLoader: page,
+            },
           ]),
         },
         {
           packageName: '@nocobase/app-plugin-second',
-          settings: defineClientSettings([
-            { id: 'general', title: 'Général', pageLoader: page },
+          routes: defineSettingsRoutes([
+            {
+              name: 'general',
+              path: '/general',
+              navigation: { title: 'Général' },
+              componentLoader: page,
+            },
           ]),
         },
       ]),
@@ -682,15 +723,17 @@ describe('client settings', () => {
   it('rejects a group id two plugins both claim', () => {
     const group = (packageName: string) => ({
       packageName,
-      settings: defineClientSettings([
+      routes: defineSettingsRoutes([
         {
-          id: 'shared',
-          title: 'Shared',
+          name: 'shared',
+          path: '/shared',
+          navigation: { title: 'Shared' },
           children: [
             {
-              id: packageName.slice(-5),
-              title: 'Child',
-              pageLoader: page,
+              name: packageName.slice(-5),
+              path: `/${packageName.slice(-5)}`,
+              navigation: { title: 'Child' },
+              componentLoader: page,
             },
           ],
         },
@@ -712,13 +755,24 @@ describe('client settings', () => {
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-example',
-          settings: defineClientSettings([
+          routes: defineSettingsRoutes([
             {
-              id: 'group',
-              title: 'Group',
+              name: 'group',
+              path: '/group',
+              navigation: { title: 'Group' },
               children: [
-                { id: 'child', title: 'First', pageLoader: page },
-                { id: 'child', title: 'Second', pageLoader: page },
+                {
+                  name: 'child',
+                  path: '/child',
+                  navigation: { title: 'First' },
+                  componentLoader: page,
+                },
+                {
+                  name: 'child',
+                  path: '/child',
+                  navigation: { title: 'Second' },
+                  componentLoader: page,
+                },
               ],
             },
           ]),
@@ -732,7 +786,14 @@ describe('client settings', () => {
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-example',
-          settings: [{ id: 'group', title: 'Group', children: [] }],
+          routes: defineSettingsRoutes([
+            {
+              name: 'group',
+              path: '/group',
+              navigation: { title: 'Group' },
+              children: [],
+            },
+          ]),
         },
       ]),
     ).toThrow('must define at least one child');
@@ -741,13 +802,18 @@ describe('client settings', () => {
   it('rejects a route that collides with a registered setting, and the reverse', () => {
     const settings = {
       packageName: '@nocobase/app-plugin-first',
-      settings: defineClientSettings([
-        { id: 'general', title: 'General', pageLoader: page },
+      routes: defineSettingsRoutes([
+        {
+          name: 'general',
+          path: '/general',
+          navigation: { title: 'General' },
+          componentLoader: page,
+        },
       ]),
     };
     const route = {
       packageName: '@nocobase/app-plugin-second',
-      routes: defineClientRoutes([
+      routes: defineAppRoutes([
         { name: 'general', path: '/settings/general', componentLoader: page },
       ]),
     };
@@ -761,35 +827,52 @@ describe('client settings', () => {
   });
 
   it.each([
-    { id: '', reason: 'must define a non-empty id' },
-    { id: '  ', reason: 'must define a non-empty id' },
+    { name: '', path: '/', reason: 'must define a non-empty id' },
+    { name: '  ', path: '/  ', reason: 'must define a non-empty id' },
     // Nesting comes from the tree now, so a slash inside an id is no longer a namespace but a malformed segment.
-    { id: 'a/b', reason: 'must be a single segment' },
-    { id: '/leading', reason: 'must be a single segment' },
-    { id: 'has space', reason: 'must be a single segment' },
-    { id: '..', reason: 'must be a single segment' },
-    { id: 'query?x=1', reason: 'must be a single segment' },
+    { name: 'a/b', path: '/a/b', reason: 'must be a single segment' },
+    { name: '/leading', path: '//leading', reason: 'must be a single segment' },
+    {
+      name: 'has space',
+      path: '/has space',
+      reason: 'must be a single segment',
+    },
+    { name: '..', path: '/..', reason: 'must be a single segment' },
+    {
+      name: 'query?x=1',
+      path: '/query?x=1',
+      reason: 'must be a single segment',
+    },
   ])(
-    'rejects setting id "$id", which would not survive as a URL',
-    ({ id, reason }) => {
+    'rejects setting name "$name", which would not survive as an id',
+    ({ name, path, reason }) => {
       expect(() =>
-        resolveSetting({ id, title: 'Title', pageLoader: page }),
+        resolveSetting({
+          name,
+          path,
+          navigation: { title: 'Title' },
+          componentLoader: page,
+        }),
       ).toThrow(reason);
     },
   );
 
   it.each([
-    { patch: { title: ' ' }, reason: 'must define a non-empty title' },
     {
-      patch: { pageLoader: undefined },
-      reason: 'must define a pageLoader function',
+      patch: { navigation: { title: ' ' } },
+      reason: 'must define a non-empty title',
+    },
+    {
+      patch: { componentLoader: undefined },
+      reason: 'must define a componentLoader function',
     },
   ])('requires $reason', ({ patch, reason }) => {
     expect(() =>
       resolveSetting({
-        id: 'general',
-        title: 'General',
-        pageLoader: page,
+        name: 'general',
+        path: '/general',
+        navigation: { title: 'General' },
+        componentLoader: page,
         ...patch,
       }),
     ).toThrow(reason);
@@ -799,11 +882,12 @@ describe('client settings', () => {
     const [setting] = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-example',
-        settings: defineClientSettings([
+        routes: defineSettingsRoutes([
           {
-            id: 'general',
-            title: 'General',
-            pageLoader: async () => ({ default: undefined as never }),
+            name: 'general',
+            path: '/general',
+            navigation: { title: 'General' },
+            componentLoader: async () => ({ default: undefined as never }),
           },
         ]),
       },
@@ -818,11 +902,11 @@ describe('client settings', () => {
     const settingsLoader = async () => ({ default: [] });
     const plugin = defineClientPlugin({
       packageName: '@nocobase/app-plugin-example',
-      settings: settingsLoader,
+      routes: settingsLoader,
     });
 
-    expect(plugin().settings).toBe(settingsLoader);
-    expect(defineClientPlugins([plugin()]).plugins[0].settings).toBe(
+    expect(plugin().routes).toBe(settingsLoader);
+    expect(defineClientPlugins([plugin()]).plugins[0].routes).toBe(
       settingsLoader,
     );
   });

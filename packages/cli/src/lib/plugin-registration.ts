@@ -30,7 +30,7 @@ import {
   type ManualServerPluginEdit,
 } from './server-plugins.ts';
 import {
-  SKILLS_DIRECTORY,
+  APP_SKILLS_DIRECTORY,
   isOwnedSkillName,
   pluginSkillPrefix,
 } from './skills-sync.ts';
@@ -345,7 +345,7 @@ export async function removePluginSkills(
   appRoot: string,
   packageName: string,
 ): Promise<string[]> {
-  const skillsRoot = path.join(appRoot, SKILLS_DIRECTORY);
+  const skillsRoot = path.join(appRoot, APP_SKILLS_DIRECTORY);
   const prefix = pluginSkillPrefix(packageName);
   let entries;
   try {

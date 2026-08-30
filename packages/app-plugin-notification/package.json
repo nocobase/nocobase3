@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification",
   "displayName": "Notification App Plugin",
   "description": "Provides the application notification runtime, storage, delivery, and logs.",
-  "version": "0.0.1",
+  "version": "0.0.2-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -36,9 +36,9 @@
       "types": "./client/bootstrap.ts",
       "import": "./client/bootstrap.ts"
     },
-    "./client/settings": {
-      "types": "./client/settings.ts",
-      "import": "./client/settings.ts"
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
     },
     "./package.json": "./package.json"
   },
@@ -81,9 +81,9 @@
         "types": "./dist/client/bootstrap.d.ts",
         "import": "./dist/client/bootstrap.js"
       },
-      "./client/settings": {
-        "types": "./dist/client/settings.d.ts",
-        "import": "./dist/client/settings.js"
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
       },
       "./package.json": "./package.json"
     }

@@ -4,7 +4,7 @@ import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 import bootstrap from '../client/bootstrap.js';
 import { NotificationClient } from '../client/notification-client.js';
 import notificationPlugin from '../client/plugin.js';
-import settings from '../client/settings.js';
+import routes from '../client/routes.js';
 
 describe('@nocobase/app-plugin-notification client', () => {
   it('contributes notification logs through the settings centre', () => {
@@ -18,10 +18,19 @@ describe('@nocobase/app-plugin-notification client', () => {
       options: {},
     });
 
-    expect(registration.routes).toBeUndefined();
-    expect(registration.settings).toBeTypeOf('function');
+    expect(registration.routes).toBeTypeOf('function');
+    expect(routes).toMatchObject({
+      parent: 'settings',
+      routes: [
+        {
+          name: 'notifications',
+          path: '/notifications',
+          children: [{ name: 'logs', path: '/logs' }],
+        },
+      ],
+    });
     const resolved = resolveAppClientContributions([
-      { packageName: registration.packageName, settings },
+      { packageName: registration.packageName, routes },
     ]);
     expect(resolved.settingGroups).toMatchObject([
       { id: 'notifications', title: 'Notifications' },

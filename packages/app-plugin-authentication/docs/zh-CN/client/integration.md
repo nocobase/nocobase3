@@ -114,7 +114,7 @@ provider 会合并并缓存并发的 session 查询。login、register、logout 
 }
 ```
 
-`bootstrap` 注册 Refine `authProvider`；`routes` 使用 `defineClientRoutes()` 声明
+`bootstrap` 注册 Refine `authProvider`；`routes` 使用 `defineAppRoutes()` 声明
 四个 `auth: 'guest'` 的认证路由。每个页面通过 `componentLoader` 独立按需加载，
 不会进入初始客户端 bundle。插件 fallback 表单持有自身按需生成的 shadcn 基础组件，
 并依赖 Refine 和语义化主题 class，因此即使未安装 Registry 也能独立工作。它们不属于

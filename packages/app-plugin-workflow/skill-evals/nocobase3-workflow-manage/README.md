@@ -80,7 +80,7 @@ pnpm eval:skill:test
 ```
 
 The evaluated skill lives in
-`packages/app-plugin-workflow/.agents/skills/nocobase-app-plugin-workflow`.
+`packages/app-plugin-workflow/skills/nocobase-app-plugin-workflow`.
 The runner resolves it from the package root. This `skill-evals` directory is
 development-only and is excluded from the workflow package's npm tarball by
 the package `files` allowlist.

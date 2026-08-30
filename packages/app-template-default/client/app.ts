@@ -1,13 +1,25 @@
 import { defineAppClient, type AppClientConfig } from '@nocobase/app-client';
-import { createElement } from 'react';
+import { I18nProvider } from '@nocobase/app-i18n/client';
+import {
+  createElement,
+  type PropsWithChildren,
+  type ReactElement,
+} from 'react';
 
 import { AppRouter } from './routing/app-router.js';
 import type { AppClientRuntime } from './runtime';
 
 export function createApp(runtime: AppClientRuntime): AppClientConfig {
+  // Outermost, so every provider and page below can translate.
+  const AppI18nProvider = ({ children }: PropsWithChildren): ReactElement =>
+    createElement(I18nProvider, { runtime: runtime.i18n }, children);
+
   return defineAppClient({
     basename: runtime.basename,
-    providers: runtime.providers.map((provider) => provider.component),
+    providers: [
+      AppI18nProvider,
+      ...runtime.providers.map((provider) => provider.component),
+    ],
     refine: runtime.refine,
     routes: createElement(AppRouter, {
       clientRoutes: runtime.routes,

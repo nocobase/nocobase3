@@ -102,11 +102,11 @@ describe('file plugin public contracts', () => {
         readonly exports: Readonly<Record<string, unknown>>;
       };
     };
-    const skillPath = '.agents/skills/nocobase-app-plugin-file/SKILL.md';
+    const skillPath = 'skills/nocobase-app-plugin-file/SKILL.md';
     const bootstrapEntry = ['./client', 'bootstrap'].join('/');
     const providersEntry = ['./client', 'providers'].join('/');
 
-    expect(packageJson.files).toContain('.agents');
+    expect(packageJson.files).toContain('skills');
     expect(packageJson.exports).not.toHaveProperty(`./${skillPath}`);
     expect(packageJson.publishConfig.exports).not.toHaveProperty(
       `./${skillPath}`,
@@ -132,10 +132,7 @@ describe('file plugin public contracts', () => {
     expect(packageJson.files).not.toContain('docs');
     expect(existsSync('docs')).toBe(false);
     expect(
-      existsSync(
-        '.agents/skills/nocobase-app-plugin-file/reference/quick-start.md',
-      ),
+      existsSync('skills/nocobase-app-plugin-file/reference/quick-start.md'),
     ).toBe(true);
-    expect(existsSync('skills')).toBe(false);
   });
 });

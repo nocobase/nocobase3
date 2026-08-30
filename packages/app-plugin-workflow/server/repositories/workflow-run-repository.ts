@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseManager, Row, SelectQuery } from '@nocobase/app-database';
 import { WORKFLOW_COLLECTIONS } from '../collections/index.js';
 import {
-  loadWorkflow,
   type JsonObject,
   type WorkflowEventOptions,
   type WorkflowId,
@@ -119,19 +118,30 @@ export class WorkflowRunRepository {
   }
 
   async get(id: WorkflowId): Promise<WorkflowRunDetail> {
-    const [row, nodeRuns] = await Promise.all([
-      this.database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .selectAll()
-        .where('id', '=', id)
-        .executeTakeFirst<Row>(),
-      this.latestNodeRuns(id),
-    ]);
+    const row = await this.database
+      .query()
+      .selectFrom(`${WORKFLOW_COLLECTIONS.runs} as run`)
+      .leftJoin(
+        `${WORKFLOW_COLLECTIONS.workflows} as workflow`,
+        'run.workflowId',
+        'workflow.id',
+      )
+      .selectAll('run')
+      .select([
+        'workflow.title as workflowTitle',
+        'workflow.version as workflowVersion',
+      ])
+      .where('run.id', '=', id)
+      .executeTakeFirst<Row>();
     if (!row)
       throw new BadRequestError(`Workflow run ${String(id)} was not found.`);
+    const nodeRuns = await this.latestNodeRuns(id);
     return {
-      ...toRunItem(row),
+      ...toRunItem(
+        row,
+        String(row.workflowTitle ?? '') || null,
+        row.workflowVersion == null ? null : String(row.workflowVersion),
+      ),
       hash: row.hash == null ? null : String(row.hash),
       input: parsePayload(row.input),
       startedAt: row.startedAt == null ? null : String(row.startedAt),
@@ -209,9 +219,7 @@ export class WorkflowRunRepository {
     input: unknown,
     options: WorkflowEventOptions = {},
   ): Promise<WorkflowRunListItem> {
-    const workflow = await loadWorkflow(this.database.query(), id);
-    if (!workflow)
-      throw new BadRequestError(`Workflow ${String(id)} was not found.`);
+    const workflow = await this.repository.resolveRevision(id);
     const eventKey = options.eventKey ?? randomUUID();
     const existing = await this.database
       .query()
@@ -220,7 +228,7 @@ export class WorkflowRunRepository {
       .where('eventKey', '=', eventKey)
       .executeTakeFirst<Row>();
     if (existing) return toRunItem(existing);
-    await this.service.triggerRevision(id, requireJsonObject(input), {
+    await this.service.triggerRevision(workflow.id, requireJsonObject(input), {
       ...options,
       eventKey,
       manually: true,

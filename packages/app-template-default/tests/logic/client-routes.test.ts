@@ -33,32 +33,12 @@ describe('app client routes', () => {
           './client/extensions/nocobase-auth-ui/pages/reset-password-page',
         routeId: '@nocobase/app-plugin-authentication:reset-password',
       },
-      {
-        componentEntry:
-          './client/extensions/nocobase-workflow-management/pages',
-        routeId: '@nocobase/app-plugin-workflow:workflow-list',
-      },
-      {
-        componentEntry:
-          './client/extensions/nocobase-workflow-management/pages',
-        routeId: '@nocobase/app-plugin-workflow:workflow-detail',
-      },
-      {
-        componentEntry:
-          './client/extensions/nocobase-workflow-management/pages',
-        routeId: '@nocobase/app-plugin-workflow:workflow-run-list',
-      },
-      {
-        componentEntry:
-          './client/extensions/nocobase-workflow-management/pages',
-        routeId: '@nocobase/app-plugin-workflow:workflow-run-detail',
-      },
     ]);
     expect(routeComponentOverrides).toEqual([]);
   });
 
   it('declares the application home route as a lazy required route', async () => {
-    expect(applicationRoutes).toMatchObject([
+    expect(applicationRoutes.routes).toMatchObject([
       {
         auth: 'required',
         name: 'home',
@@ -66,10 +46,10 @@ describe('app client routes', () => {
       },
     ]);
     expect(Object.isFrozen(applicationRoutes)).toBe(true);
-    await expect(applicationRoutes[0].componentLoader()).resolves.toMatchObject(
-      {
-        default: expect.any(Function),
-      },
-    );
+    await expect(
+      applicationRoutes.routes[0].componentLoader(),
+    ).resolves.toMatchObject({
+      default: expect.any(Function),
+    });
   });
 });
