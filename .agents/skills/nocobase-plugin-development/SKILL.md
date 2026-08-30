@@ -45,7 +45,9 @@ for the current task:
   `pnpm plugin:create`; do not use `nb scaffold plugin`.
 - `plugin:create` has no implicit plugin shape. Select one or more explicit
   capabilities with repeatable `--with`, or use `--empty` for only the package
-  foundation. Prefer `--dry-run --json` before creation.
+  foundation. Prefer `--dry-run --json` before creation. In JSON mode, branch
+  on `ok`; recover from failures by using `error.code` and
+  `error.suggestions`, while still treating the non-zero exit code as failure.
 - The public creation capabilities are `database`, `server.providers`,
   `server.routes`, `server.jobs`, `client.routes`, `client.components`,
   `client.providers`, `client.bootstrap`, `registry`, and `skills`.

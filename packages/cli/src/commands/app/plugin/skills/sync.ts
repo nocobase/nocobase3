@@ -47,6 +47,47 @@ export default class AppSkillsSync extends Command {
   };
 
   public async run(): Promise<void> {
+    try {
+      await this.runUnsafe();
+    } catch (error) {
+      const json = this.argv.includes('--json');
+      if (!json) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      const code = message.includes('is not installed')
+        ? 'PLUGIN_NOT_INSTALLED'
+        : message.includes('Invalid skill directory')
+          ? 'INVALID_SKILL_DIRECTORY'
+          : message.includes('Skill name collision')
+            ? 'SKILL_NAME_COLLISION'
+            : 'SKILLS_SYNC_FAILED';
+      this.logToStderr(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            ok: false,
+            operation: 'plugin:skills:sync',
+            error: {
+              code,
+              message,
+              suggestions:
+                code === 'PLUGIN_NOT_INSTALLED'
+                  ? [
+                      'Run the App package manager install, then retry the sync.',
+                    ]
+                  : ['Run the command with --help and correct the request.'],
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      process.exitCode = 1;
+    }
+  }
+
+  private async runUnsafe(): Promise<void> {
     const { flags } = await this.parse(AppSkillsSync);
     const appRoot = await resolveAppRoot({
       app: flags.app,
@@ -64,7 +105,12 @@ export default class AppSkillsSync extends Command {
     const result = { ...plan, dryRun };
 
     if (flags.json) {
-      this.logJson(result);
+      this.logJson({
+        schemaVersion: 1,
+        ok: true,
+        operation: 'plugin:skills:sync',
+        result,
+      });
       return;
     }
     this.log(formatSkillsSyncSummary(result));

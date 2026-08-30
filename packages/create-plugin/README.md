@@ -56,3 +56,8 @@ or rely on a complete example that must be deleted after generation.
 Use `--dry-run --json` to inspect the exact read-only generation plan before
 creating a plugin. Registering or enabling the generated plugin remains an
 explicit step.
+
+JSON mode emits one document for both success and failure. Successful results
+set `ok` to `true`; failures keep a non-zero exit code and return `ok: false`
+with a stable `error.code`, the human-readable `error.message`, and actionable
+`error.suggestions`.

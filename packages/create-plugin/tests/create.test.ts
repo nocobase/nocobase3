@@ -114,6 +114,7 @@ describe('runCreatePluginCli', () => {
       commands: string[];
     };
     expect(createResult).toMatchObject({
+      ok: true,
       mode: 'create',
       requestedCapabilities: result.requestedCapabilities,
       capabilities: result.capabilities,
@@ -123,4 +124,53 @@ describe('runCreatePluginCli', () => {
       commands: [],
     });
   });
+
+  it.each([
+    [['audit-log', '--dry-run', '--json'], 'NO_CAPABILITIES_SELECTED'],
+    [
+      ['audit-log', '--with', 'server.service', '--dry-run', '--json'],
+      'UNKNOWN_CAPABILITY',
+    ],
+  ] as const)(
+    'prints one JSON error document for %s',
+    async (argv, expectedCode) => {
+      const stdout: string[] = [];
+      const stderr: string[] = [];
+      vi.spyOn(process.stdout, 'write').mockImplementation((chunk): boolean => {
+        stdout.push(String(chunk));
+        return true;
+      });
+      vi.spyOn(process.stderr, 'write').mockImplementation((chunk): boolean => {
+        stderr.push(String(chunk));
+        return true;
+      });
+
+      await expect(
+        runCreatePluginCli({
+          argv,
+          binary: 'pnpm plugin:create',
+          version: '0.0.1',
+        }),
+      ).resolves.toBe(1);
+
+      expect(stdout).toEqual([]);
+      const result = JSON.parse(stderr.join('')) as {
+        schemaVersion: number;
+        ok: boolean;
+        operation: string;
+        error: { code: string; message: string; suggestions: string[] };
+      };
+      expect(result).toMatchObject({
+        schemaVersion: 1,
+        ok: false,
+        operation: 'plugin:create',
+        error: {
+          code: expectedCode,
+          message: expect.any(String),
+          suggestions: expect.any(Array),
+        },
+      });
+      expect(stderr).toHaveLength(1);
+    },
+  );
 });

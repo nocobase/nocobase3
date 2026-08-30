@@ -137,6 +137,11 @@ pnpm plugin:skills:sync --dry-run
 
 `plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.providers`、`server.routes`、`server.jobs`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
 
+`plugin:create --json` 和 `plugin:skills:sync --json` 在成功和失败时都输出稳定的 JSON
+envelope。失败结果包含 `ok: false`、`error.code`、`error.message` 和
+`error.suggestions`，同时保持非零退出码；Agent 不应把 JSON 模式的 stderr 当作普通
+帮助文本解析。
+
 Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数表：
 
 ```text

@@ -50,11 +50,15 @@ pnpm plugin:create system-info \
 
 Agent 应检查结构化结果中的：
 
+- `ok` 是否为 `true`；失败时从 `error.code`、`error.message` 和 `error.suggestions` 恢复；
 - `requestedCapabilities` 是否准确表达需求；
 - `capabilities` 是否与选择一致；
 - `files` 是否只包含所需结构；
 - Client 和 Server plugin entry 是否按需要派生；
 - `writes` 和 `commands` 在 dry-run 中是否都为空。
+
+使用 `--json` 时，成功和失败都输出一个 JSON document。失败仍返回非零退出码，
+但不会再混入普通 usage 文本；Agent 不应只按自然语言解析错误。
 
 只创建 package foundation 时必须显式使用：
 

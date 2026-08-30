@@ -328,12 +328,22 @@ describe('app plugin register command', () => {
       '--dry-run',
       '--json',
     ]);
-    const plan = JSON.parse(dryRun.stdout) as {
-      dryRun: boolean;
-      copies: Array<{ skillName: string }>;
+    const response = JSON.parse(dryRun.stdout) as {
+      schemaVersion: number;
+      ok: boolean;
+      operation: string;
+      result: {
+        dryRun: boolean;
+        copies: Array<{ skillName: string }>;
+      };
     };
-    expect(plan.dryRun).toBe(true);
-    expect(plan.copies).toEqual([
+    expect(response).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      operation: 'plugin:skills:sync',
+    });
+    expect(response.result.dryRun).toBe(true);
+    expect(response.result.copies).toEqual([
       expect.objectContaining({
         skillName: 'nocobase-app-plugin-audit-log',
       }),
@@ -350,5 +360,50 @@ describe('app plugin register command', () => {
       '# Updated upstream\n',
     );
     expect(await readFile(appSkill, 'utf8')).toBe('# App owned\n');
+  });
+
+  it('prints one JSON error document when Skills synchronization fails', async () => {
+    const appRoot = await createAppWithInstalledPlugin();
+    const lines: string[] = [];
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    console.error = (...args: unknown[]): void => {
+      lines.push(args.map((argument) => String(argument)).join(' '));
+    };
+
+    try {
+      await expect(
+        config.runCommand('app:plugin:skills:sync', [
+          '--dir',
+          appRoot,
+          '--plugin',
+          'missing',
+          '--dry-run',
+          '--json',
+        ]),
+      ).resolves.toBeUndefined();
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+    }
+
+    expect(lines).toHaveLength(1);
+    const response = JSON.parse(lines[0]) as {
+      schemaVersion: number;
+      ok: boolean;
+      operation: string;
+      error: { code: string; message: string; suggestions: string[] };
+    };
+    expect(response).toMatchObject({
+      schemaVersion: 1,
+      ok: false,
+      operation: 'plugin:skills:sync',
+      error: {
+        code: 'PLUGIN_NOT_INSTALLED',
+        message: expect.any(String),
+        suggestions: expect.any(Array),
+      },
+    });
   });
 });
