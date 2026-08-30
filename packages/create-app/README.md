@@ -65,7 +65,7 @@ npm view @nocobase/create-app dist-tags --registry=https://npm.nocobase.ai
 npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 ```
 
-只有数据库类型这一项需要选择，其余连接参数走默认值写进 `.env.local`。
+只有数据库类型这一项需要选择，其余连接参数走默认值写进 `config.yml`。
 
 ## 参数
 
@@ -118,8 +118,8 @@ pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
 
 - 改写 `package.json`：换成应用自己的名字和版本，置为 `private`，去掉 `publishConfig` 和 `repository`，避免误发布
 - 按数据库类型装一个驱动：sqlite 装 `better-sqlite3`，postgres 装 `pg`，mysql 装 `mysql2`。模板本身只依赖 `knex`，三个驱动一个都不带
-- 写 `.env.local`：保留模板 `.env.example` 里与数据库无关的配置，追加数据库连接段和随机生成的 `AUTH_SECRET`
-- 写 `.gitignore`：模板没带的话会生成一份兜底的，防止 `.env.local` 里的 `AUTH_SECRET` 被提交
+- 写 `config.yml`：写入数据库连接段和随机生成的认证密钥
+- 写 `.gitignore`：模板没带的话会生成一份兜底的，防止 `config.yml` 里的认证密钥被提交
 - 选 sqlite 时写 `pnpm-workspace.yaml` 的 `allowBuilds`（见下）
 - 安装依赖（`--no-install` 可跳过）
 

@@ -77,7 +77,7 @@ async function createAppWithInstalledPlugin({
         version: '1.0.0',
         exports: {
           ...(client ? { './client': './client/index.js' } : {}),
-          ...(server ? { './server/plugin': './server/plugin.js' } : {}),
+          ...(server ? { './server': './server/index.js' } : {}),
         },
       },
       null,

@@ -99,3 +99,4 @@ runtime 的直接入口有两类：`HTTP Server` 和 `CLI`。
 如果你想看更具体的 package-based 插件架构，包括 `config`、`registry`、`database/migrations`、`remove/purge` 和 App 安装后的落地路径，可以看这份设计草案：
 
 - [插件包架构](./plugin-architecture.md)
+- [应用配置](./app-config.md)

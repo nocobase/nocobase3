@@ -40,7 +40,7 @@ export default defineServerPlugin({
 ```
 
 应用在 `server/plugins.ts` 中显式组合
-`@nocobase/app-plugin-authentication/server/plugin` 后，会把该目录作为插件
+`@nocobase/app-plugin-authentication/server` 后，会把该目录作为插件
 migration source，并用插件包名记录执行历史。
 
 真实 Migration 文件位于插件包内：

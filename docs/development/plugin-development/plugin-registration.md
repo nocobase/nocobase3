@@ -41,7 +41,7 @@ Agent 必须根据任务检查相关状态面，不能只根据命令退出码�
 Client 和 Server 是否注册由包的公开 exports 分别决定：
 
 - `exports["./client"]` 存在时注册 Client factory；
-- `exports["./server/plugin"]` 存在时注册 Server definition；
+- `exports["./server"]` 存在时注册 Server definition；
 - `package.json#nocobase.plugins` 是管理 metadata，不是运行时发现机制。
 
 ## 选择任务

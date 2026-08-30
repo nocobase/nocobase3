@@ -35,7 +35,7 @@ resolve/install package
 → write dependency
 → write nocobase.plugins metadata
 → register Client if exports["./client"] exists
-→ register Server if exports["./server/plugin"] exists
+→ register Server if exports["./server"] exists
 → synchronize plugin Skills
 ```
 
@@ -128,13 +128,12 @@ Client 数组顺序是 bootstrap 顺序。注册命令把新插件追加到数�
 
 ### Server composition root
 
-插件提供 `exports["./server/plugin"]` 时：
+插件提供 `exports["./server"]` 时：
 
 ```ts
-import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+import auditLog from '@nocobase/app-plugin-audit-log/server';
 
-const serverPlugins: AppServerPlugins<AppConfig> =
-  defineServerPlugins<AppConfig>([auditLog]);
+const serverPlugins: AppServerPlugins = defineServerPlugins([auditLog]);
 ```
 
 Server 注册 definition 本身，不调用它。
@@ -350,7 +349,7 @@ Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 
 1. package is installed/resolvable
 2. App dependency exists
 3. nocobase.plugins record has expected enabled state
-4. package exports ./client and/or ./server/plugin as expected
+4. package exports ./client and/or ./server as expected
 5. client/plugins.ts matches Client export and enabled state
 6. server/plugins.ts matches Server export and enabled state
 7. when relevant, Client declarations appear in a client:inspect snapshot
@@ -372,7 +371,7 @@ pnpm --filter <target-app> client:inspect --json
 | 状态                                     | 原因                                            | 修复                                                 |
 | ---------------------------------------- | ----------------------------------------------- | ---------------------------------------------------- |
 | manifest enabled，但 Client 未加载       | 缺少 `./client` export 或 composition root 注册 | 修复 export 后重新注册                               |
-| manifest enabled，但 Server 未加载       | 缺少 `./server/plugin` export 或 Server 注册    | 修复 export 后重新注册                               |
+| manifest enabled，但 Server 未加载       | 缺少 `./server` export 或 Server 注册           | 修复 export 后重新注册                               |
 | composition root 有 import，但包无法解析 | dependency 缺失或安装失败                       | 恢复依赖并安装，或解除无效注册                       |
 | disabled 但运行时仍加载                  | composition root 中残留手工注册                 | 删除对应 Client/Server 注册项                        |
 | Skills 内容过期                          | 包已变化但未重新同步                            | 运行 `plugin:skills:sync`                            |

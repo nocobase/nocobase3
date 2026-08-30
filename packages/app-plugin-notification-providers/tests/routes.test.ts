@@ -9,6 +9,10 @@ import {
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type {
+  AppConfigAccessor,
+  AppConfigToken,
+} from '@nocobase/app-server-kit/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
@@ -274,7 +278,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     expect(missingRecipient.status).toBe(409);
     await expect(missingRecipient.json()).resolves.toEqual({
       error:
-        'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
+        'recipient is required when notification.test.emailRecipient is not configured.',
     });
     expect(send).not.toHaveBeenCalled();
   });
@@ -345,10 +349,11 @@ async function createApp(options: CreateAppOptions = {}): Promise<{
     middleware: authzMiddleware,
   } as unknown as AppAuthorization);
   container.instance(notificationServiceToken, notification);
-  const application: AppPluginApplication<NotificationProvidersPluginConfig> = {
+  const configured = options.config ?? createConfig('recipient@example.com');
+  const application: AppPluginApplication = {
     appName: 'main',
     publicBasePath: '',
-    config: options.config ?? createConfig('recipient@example.com'),
+    config: createConfigAccessor(configured),
     paths: {} as never,
     router: app,
     container,
@@ -364,7 +369,6 @@ function createConfig(
   enabled = true,
 ): NotificationProvidersPluginConfig {
   return {
-    app: { publicBasePath: '' },
     notification: {
       channels: [
         {
@@ -388,5 +392,20 @@ function createConfig(
       ],
       test: { enabled, emailRecipient },
     },
+  };
+}
+
+function createConfigAccessor(
+  config: NotificationProvidersPluginConfig,
+): AppConfigAccessor {
+  const values: Readonly<Record<string, unknown>> = {
+    notification: config.notification,
+  };
+  return {
+    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
+      values[definition.namespace] as TValue,
+    raw: () => values,
+    reload: async () => ({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
   };
 }

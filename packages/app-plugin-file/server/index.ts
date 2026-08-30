@@ -1,3 +1,4 @@
+export { default } from './plugin.js';
 export { createFileRoute } from './create-file-route.js';
 export {
   DEFAULT_FILE_ROUTE_VISIBILITY,

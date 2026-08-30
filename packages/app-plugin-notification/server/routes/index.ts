@@ -10,8 +10,8 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server-kit/router';
-import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
 import { notificationServiceToken } from '../tokens.js';
+import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
 
 export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<NotificationProviderApplicationConfig>

@@ -21,7 +21,7 @@ pnpm plugin:register audit-log
 pnpm plugin:register audit-log --version 1.2.0
 ```
 
-独立 App 记录实际 registry 版本范围，不使用 `workspace:^`。命令仍根据 `./client` 和 `./server/plugin` exports 分别处理 Client 与 Server composition root。
+独立 App 记录实际 registry 版本范围，不使用 `workspace:^`。命令仍根据 `./client` 和 `./server` exports 分别处理 Client 与 Server composition root。
 
 安装但暂不启用：
 

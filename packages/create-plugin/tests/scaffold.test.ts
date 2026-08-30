@@ -93,31 +93,31 @@ describe('createPlugin', () => {
   it.each([
     [
       'database',
-      ['./package.json', './server/plugin'],
+      ['./package.json', './server'],
       ['@nocobase/app-database', '@nocobase/app-server-kit'],
       [],
     ],
     [
       'server.providers',
-      ['./package.json', './server/plugin', './server/tokens'],
+      ['./package.json', './server', './server/tokens'],
       ['@nocobase/app-server-kit', '@nocobase/service-provider'],
       [],
     ],
     [
       'server.routes',
-      ['./package.json', './server/plugin'],
+      ['./package.json', './server'],
       ['@nocobase/app-server-kit', 'hono'],
       [],
     ],
     [
       'server.jobs',
-      ['./package.json', './server/plugin'],
+      ['./package.json', './server'],
       ['@nocobase/app-server-kit', '@nocobase/queue'],
       [],
     ],
     [
       'server.locales',
-      ['./package.json', './server/plugin'],
+      ['./package.json', './server'],
       ['@nocobase/app-i18n', '@nocobase/app-server-kit'],
       [],
     ],
@@ -406,7 +406,7 @@ describe('createPlugin', () => {
       '@nocobase/app-server-kit': 'workspace:^',
       hono: 'catalog:',
     });
-    expect(manifest.exports).toHaveProperty('./server/plugin');
+    expect(manifest.exports).toHaveProperty('./server');
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
   });
 

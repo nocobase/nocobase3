@@ -1,4 +1,5 @@
 export * from './content-types.js';
+export * from './config.js';
 export * from './routes.js';
 export * from './provider.js';
 export * from './runtime-globals.js';

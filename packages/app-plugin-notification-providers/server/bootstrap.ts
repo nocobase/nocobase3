@@ -20,9 +20,6 @@ export interface NotificationProviderTestConfig {
 }
 
 export interface NotificationProvidersPluginConfig {
-  readonly app: {
-    readonly publicBasePath: string;
-  };
   readonly notification: NotificationConfig & {
     readonly test?: NotificationProviderTestConfig;
   };

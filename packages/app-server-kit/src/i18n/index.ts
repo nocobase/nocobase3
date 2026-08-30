@@ -3,8 +3,15 @@ import {
   type Locale,
   type LocalesModule,
 } from '@nocobase/app-i18n';
+import { Type } from '@sinclair/typebox';
 import { createI18nMiddleware } from '@nocobase/app-i18n/server';
 import type { Hono } from 'hono';
+import {
+  type AppConfigAccessor,
+  defineAppConfig,
+  envString,
+  type AppConfigDefinition,
+} from '../config/index.js';
 import {
   ServiceProvider,
   createServiceToken,
@@ -25,11 +32,29 @@ export interface AppI18nConfig {
   readonly locales: readonly Locale[];
 }
 
+export const i18nConfig: AppConfigDefinition<AppI18nConfig> = defineAppConfig({
+  namespace: 'i18n',
+  schema: Type.Object({
+    defaultLocale: Type.String(),
+    locales: Type.Array(Type.String()),
+  }),
+  defaults: { defaultLocale: 'en-US', locales: ['en-US', 'zh-CN'] },
+  envMappings: {
+    APP_DEFAULT_LOCALE: envString('defaultLocale'),
+    APP_LOCALES: {
+      path: 'locales',
+      parse: (value: string): string[] =>
+        value
+          .split(',')
+          .map((locale) => locale.trim())
+          .filter(Boolean),
+    },
+  },
+});
+
 export interface I18nProviderApplication {
   readonly container: ServiceContainer;
-  readonly config: {
-    readonly i18n?: AppI18nConfig;
-  };
+  readonly config: AppConfigAccessor;
 }
 
 export interface AppI18nLocaleContribution {
@@ -49,12 +74,12 @@ export class I18nProvider<
   public readonly name: string = 'i18n';
 
   public override register(): void {
-    const config = this.app.config.i18n;
+    const config = this.app.config.get(i18nConfig);
     this.app.container.instance(
       i18nToken,
       new I18nRuntime({
-        defaultLocale: config?.defaultLocale ?? 'en-US',
-        locales: config?.locales ?? [config?.defaultLocale ?? 'en-US'],
+        defaultLocale: config.defaultLocale,
+        locales: config.locales,
       }),
     );
   }

@@ -27,7 +27,7 @@ description: 为 NocoBase 插件设计稳定的 Client exports、Server ServiceT
 ```text
 @nocobase/app-plugin-audit-log/server/tokens
 → AuditLogService + auditLogToken
-@nocobase/app-plugin-audit-log/server/plugin
+@nocobase/app-plugin-audit-log/server
 → server definition（由 App 显式注册）
 ```
 

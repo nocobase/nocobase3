@@ -17,7 +17,8 @@ exports["./client"]
 → App client/plugins.ts calls plugin(options)
 
 Server package contract
-exports["./server/plugin"]
+exports["./server"]
+→ server/index.ts
 → server/plugin.ts default AppServerPlugin
 → App server/plugins.ts registers plugin definition
 ```
@@ -140,7 +141,7 @@ export { default } from './plugin.js';
 
 ## 声明 Server 插件
 
-`server/plugin.ts` 是 Server 注册面：
+`server/plugin.ts` 组合 Server definition，`server/index.ts` 是公开注册入口：
 
 ```ts
 import {
@@ -166,6 +167,10 @@ const auditLogPlugin: AppServerPlugin = defineServerPlugin({
 });
 
 export default auditLogPlugin;
+```
+
+```ts
+export { default } from './plugin.js';
 ```
 
 Server contributions：
@@ -210,9 +215,9 @@ source workspace 的开发入口：
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
     },
     "./package.json": "./package.json"
   }
@@ -230,9 +235,9 @@ npm 发布入口应在 `publishConfig.exports` 中指向 `dist`：
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
       },
       "./package.json": "./package.json"
     }
@@ -246,8 +251,8 @@ npm 发布入口应在 `publishConfig.exports` 中指向 `dist`：
 exports["./client"] exists
 → write <package>/client to client/plugins.ts
 
-exports["./server/plugin"] exists
-→ write <package>/server/plugin to server/plugins.ts
+exports["./server"] exists
+→ write <package>/server to server/plugins.ts
 ```
 
 只有 `./client/plugin` 而没有 `./client` 不足以注册 Client，因为 App 实际 import 的是 `<package>/client`。
@@ -265,10 +270,9 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([auditLog()]);
 Server 导出 definition，所以在 App 中直接注册，不调用：
 
 ```ts
-import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+import auditLog from '@nocobase/app-plugin-audit-log/server';
 
-const serverPlugins: AppServerPlugins<AppConfig> =
-  defineServerPlugins<AppConfig>([auditLog]);
+const serverPlugins: AppServerPlugins = defineServerPlugins([auditLog]);
 ```
 
 Client 数组顺序是 bootstrap 顺序。Client 和 Server 都拒绝同一包重复注册。

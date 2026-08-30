@@ -140,7 +140,7 @@ runnable reference is needed.
   not instantiate Providers, execute Route factories, or load Job modules.
 - `package.json#nocobase.plugins` is management metadata for install, CLI,
   build/watch, and Skills synchronization. It is not runtime discovery.
-- `exports["./client"]` and `exports["./server/plugin"]` are the Client and
+- `exports["./client"]` and `exports["./server"]` are the Client and
   Server registration criteria respectively; keep source and publish exports
   aligned.
 - Plugin-owned App integration knowledge belongs in the plugin's top-level

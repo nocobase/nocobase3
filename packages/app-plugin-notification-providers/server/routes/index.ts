@@ -1,5 +1,6 @@
 import type { NotificationRecipient } from '@nocobase/app-plugin-notification';
 import { notificationServiceToken } from '@nocobase/app-plugin-notification';
+import { notificationConfig } from '@nocobase/app-plugin-notification/server';
 import {
   authenticationToken,
   type Auth,
@@ -164,7 +165,7 @@ export function createNotificationProviderRoutes(
       return context.json(
         {
           error:
-            'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
+            'recipient is required when notification.test.emailRecipient is not configured.',
         },
         409,
       );
@@ -241,20 +242,22 @@ export function createNotificationProviderRoutes(
   return routes;
 }
 
-export const apiRoutes: AppApiRouteContribution<
-  AppPluginApplication<NotificationProvidersPluginConfig>
-> = defineApiRoutes((app) => {
-  const router = new Hono();
-  router.route(
-    '/notification-providers',
-    createNotificationProviderRoutes(app),
-  );
-  return router;
-});
+export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
+  defineApiRoutes((app) => {
+    const router = new Hono();
+    router.route(
+      '/notification-providers',
+      createNotificationProviderRoutes({
+        config: { notification: app.config.get(notificationConfig) },
+        container: app.container,
+      }),
+    );
+    return router;
+  });
 
-const routes: readonly AppApiRouteContribution<
-  AppPluginApplication<NotificationProvidersPluginConfig>
->[] = [apiRoutes];
+const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
+  apiRoutes,
+];
 
 export default routes;
 

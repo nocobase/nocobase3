@@ -2,11 +2,15 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
+import {
+  createConfigPaths,
+  type AppConfigAccessor,
+} from '@nocobase/app-server-kit/config';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import {
   createQueueManager,
   createSyncQueueConfig,
-  queueManagerToken,
   type NocoBaseQueueManager,
 } from '@nocobase/queue';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -115,9 +119,18 @@ function createApplication(
   return {
     appName: 'main',
     publicBasePath: '',
-    config: { app: { name: 'main', publicBasePath: '' } },
-    paths: {} as never,
+    config: createEmptyConfigAccessor(),
+    paths: createConfigPaths({ rootDir: '/missing' }),
     router: new Hono(),
     container,
   };
+}
+
+function createEmptyConfigAccessor(): AppConfigAccessor {
+  return {
+    get: () => undefined,
+    raw: () => ({}),
+    reload: async () => ({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  } as AppConfigAccessor;
 }

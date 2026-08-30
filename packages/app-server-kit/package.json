@@ -22,6 +22,30 @@
       "types": "./src/config/index.ts",
       "import": "./src/config/index.ts"
     },
+    "./caching": {
+      "types": "./src/caching/index.ts",
+      "import": "./src/caching/index.ts"
+    },
+    "./drive": {
+      "types": "./src/drive/index.ts",
+      "import": "./src/drive/index.ts"
+    },
+    "./id-generator": {
+      "types": "./src/id-generator/index.ts",
+      "import": "./src/id-generator/index.ts"
+    },
+    "./logging": {
+      "types": "./src/logging/index.ts",
+      "import": "./src/logging/index.ts"
+    },
+    "./queue": {
+      "types": "./src/queue/index.ts",
+      "import": "./src/queue/index.ts"
+    },
+    "./session": {
+      "types": "./src/session/index.ts",
+      "import": "./src/session/index.ts"
+    },
     "./database": {
       "types": "./src/database/index.ts",
       "import": "./src/database/index.ts"
@@ -84,6 +108,30 @@
         "types": "./dist/config/index.d.ts",
         "import": "./dist/config/index.js"
       },
+      "./caching": {
+        "types": "./dist/caching/index.d.ts",
+        "import": "./dist/caching/index.js"
+      },
+      "./drive": {
+        "types": "./dist/drive/index.d.ts",
+        "import": "./dist/drive/index.js"
+      },
+      "./id-generator": {
+        "types": "./dist/id-generator/index.d.ts",
+        "import": "./dist/id-generator/index.js"
+      },
+      "./logging": {
+        "types": "./dist/logging/index.d.ts",
+        "import": "./dist/logging/index.js"
+      },
+      "./queue": {
+        "types": "./dist/queue/index.d.ts",
+        "import": "./dist/queue/index.js"
+      },
+      "./session": {
+        "types": "./dist/session/index.d.ts",
+        "import": "./dist/session/index.js"
+      },
       "./database": {
         "types": "./dist/database/index.d.ts",
         "import": "./dist/database/index.js"
@@ -143,7 +191,16 @@
     "@hono/node-server": "catalog:",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-i18n": "workspace:^",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/config": "workspace:^",
+    "@nocobase/drive": "workspace:^",
+    "@nocobase/id-generator": "workspace:^",
+    "@nocobase/logging": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/session": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@sinclair/typebox": "catalog:",
+    "ajv": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {

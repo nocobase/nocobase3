@@ -55,7 +55,7 @@ pnpm plugin:register audit-log \
 target App package dependency
 package.json#nocobase.plugins
 client/plugins.ts when ./client exists
-server/plugins.ts when ./server/plugin exists
+server/plugins.ts when ./server exists
 .agents/skills when plugin-owned Skills exist
 ```
 
@@ -70,10 +70,9 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([auditLog()]);
 Server 注册 definition 本身，不调用它：
 
 ```ts
-import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+import auditLog from '@nocobase/app-plugin-audit-log/server';
 
-const serverPlugins: AppServerPlugins<AppConfig> =
-  defineServerPlugins<AppConfig>([auditLog]);
+const serverPlugins: AppServerPlugins = defineServerPlugins([auditLog]);
 ```
 
 Client 数组顺序也是 bootstrap 顺序。命令默认把新插件追加到末尾；只有确实存在顺序要求或需要传 options 时才手工调整。

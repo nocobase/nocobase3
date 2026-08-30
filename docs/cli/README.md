@@ -33,7 +33,7 @@ pnpm plugin:register audit-log --dry-run --json
 
 判据看的是 `./client` 而不是 `./client/plugin`，因为写进去的 import 就是 `<包名>/client`。只有 `./client/plugin` 的插件（barrel 加 default 导出之前发布的版本）同样会被跳过，否则写进去的那行在 App 里解析不到。
 
-**只有服务端插件才会写 `server/plugins.ts`。** 判据是 `exports["./server/plugin"]`，注册项直接写 `auditLog`，不是 Client factory 形式的 `auditLog()`。纯客户端插件会跳过这一项。`--disabled` 会保留安装和 manifest 登记，但 Client 和 Server 两个运行时入口都不接线。
+**只有服务端插件才会写 `server/plugins.ts`。** 判据是 `exports["./server"]`，注册项直接写 `auditLog`，不是 Client factory 形式的 `auditLog()`。纯客户端插件会跳过这一项。`--disabled` 会保留安装和 manifest 登记，但 Client 和 Server 两个运行时入口都不接线。
 
 两个 `plugins.ts` 都是用 TypeScript 解析定位、再做文本拼接改的，不是整份 AST 重新打印，所以你写的注释、顺序、泛型和格式都会原样保留，diff 里只会多出 import 和注册项。
 

@@ -150,6 +150,7 @@ package.json
 
 | 文件                | 权威职责                                                    |
 | ------------------- | ----------------------------------------------------------- |
+| `server/index.ts`   | 公开导出 Server plugin definition                           |
 | `server/plugin.ts`  | 组合 Providers、Routes、Database、Queue 和 locale resources |
 | `server/locales/`   | Server namespace 的 lazy locale resources                   |
 | `server/services/`  | 不依赖 HTTP 边界的领域行为默认实现                          |
@@ -172,6 +173,7 @@ Route
 
 ```text
 package.json
+→ server/index.ts
 → server/plugin.ts
 → server/providers/index.ts
 → server/tokens.ts
@@ -195,6 +197,7 @@ package.json
 开始 Database 任务时，按顺序检查：
 
 ```text
+server/index.ts
 server/plugin.ts
 → database/README.md
 → database/migrations/
@@ -226,7 +229,7 @@ Node engine；不要因为 Browser 插件的构建工具运行于 Node 就给它
 exports["./client"]
 → 插件提供 Client 能力
 
-exports["./server/plugin"]
+exports["./server"]
 → 插件提供 Server 能力
 ```
 
@@ -272,15 +275,15 @@ source file
 
 ## 常见插件形态
 
-| 插件形态              | 保留的主要能力                        |
-| --------------------- | ------------------------------------- |
-| 纯 Client 插件        | `client/` 和 `./client` export        |
-| 纯 Server 插件        | `server/` 和 `./server/plugin` export |
-| 全栈插件              | `client/`、`server/` 和两类 exports   |
-| 数据插件              | Server + `database/`                  |
-| Queue 插件            | Server + `server/jobs/`               |
-| 带 App 集成知识的插件 | 真实能力 + 持续维护的 `skills/`       |
-| Registry 插件         | 可选的 `registry/` canonical source   |
+| 插件形态              | 保留的主要能力                      |
+| --------------------- | ----------------------------------- |
+| 纯 Client 插件        | `client/` 和 `./client` export      |
+| 纯 Server 插件        | `server/` 和 `./server` export      |
+| 全栈插件              | `client/`、`server/` 和两类 exports |
+| 数据插件              | Server + `database/`                |
+| Queue 插件            | Server + `server/jobs/`             |
+| 带 App 集成知识的插件 | 真实能力 + 持续维护的 `skills/`     |
+| Registry 插件         | 可选的 `registry/` canonical source |
 
 ## 相关内容
 

@@ -111,6 +111,7 @@ function includeTemplateFile(
   }
   if (relativePath.startsWith('client/pages/')) return false;
   if (
+    relativePath === 'server/index.ts' ||
     relativePath === 'server/plugin.ts' ||
     relativePath === 'tests/plugin.test.ts'
   ) {
@@ -311,11 +312,7 @@ async function renderManifest(
     };
   };
   if (serverPlugin)
-    addExport(
-      './server/plugin',
-      './server/plugin.ts',
-      './dist/server/plugin.js',
-    );
+    addExport('./server', './server/index.ts', './dist/server/index.js');
   if (capabilities.server.providers)
     addExport(
       './server/tokens',
@@ -575,7 +572,7 @@ function renderPluginTest(
   ]
     .filter(Boolean)
     .join('\n');
-  return `import { describe, expect, it } from 'vitest';\n\nimport plugin from '../server/plugin.js';\n\ndescribe(${literal(context.packageName)}, () => {\n  it('declares only its selected Server capabilities', () => {\n    expect(plugin).toMatchObject({\n      packageName: ${literal(context.packageName)},\n${checks}\n    });\n  });\n});\n`;
+  return `import { describe, expect, it } from 'vitest';\n\nimport plugin from '../server/index.js';\n\ndescribe(${literal(context.packageName)}, () => {\n  it('declares only its selected Server capabilities', () => {\n    expect(plugin).toMatchObject({\n      packageName: ${literal(context.packageName)},\n${checks}\n    });\n  });\n});\n`;
 }
 
 function renderReadme(

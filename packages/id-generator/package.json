@@ -34,9 +34,6 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
-  "dependencies": {
-    "@nocobase/service-provider": "workspace:^"
-  },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
     "eslint": "catalog:",

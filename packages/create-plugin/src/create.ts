@@ -114,7 +114,11 @@ function capabilityReason(file: string): string {
   if (file.startsWith('skills/')) return 'skills';
   if (file === 'client/index.ts' || file === 'client/plugin.ts')
     return 'derived-client-plugin';
-  if (file === 'server/plugin.ts' || file === 'tests/plugin.test.ts')
+  if (
+    file === 'server/index.ts' ||
+    file === 'server/plugin.ts' ||
+    file === 'tests/plugin.test.ts'
+  )
     return 'derived-server-plugin';
   return 'package-foundation';
 }

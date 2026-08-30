@@ -17,7 +17,7 @@ defineClientPlugins([i18n()]);
 
 ```ts
 // server/plugins.ts
-import i18n from '@nocobase/app-plugin-i18n/server/plugin';
+import i18n from '@nocobase/app-plugin-i18n/server';
 
 defineServerPlugins([i18n]);
 ```

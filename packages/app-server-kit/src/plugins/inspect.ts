@@ -1,4 +1,3 @@
-import type { ApplicationConfig } from '../application/index.js';
 import type { ResolvedAppServerPlugins } from './types.js';
 
 export interface AppServerInspectionIssue {
@@ -82,9 +81,9 @@ export interface AppServerInspectionSnapshot {
  * running lifecycle code, executing Route factories, loading locale resources, or loading Queue Job modules.
  * Importing the declarations remains the caller's responsibility and may execute module initialization code.
  */
-export function inspectResolvedAppServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(resolved: ResolvedAppServerPlugins<TConfig>): AppServerInspectionSnapshot {
+export function inspectResolvedAppServerPlugins(
+  resolved: ResolvedAppServerPlugins,
+): AppServerInspectionSnapshot {
   const providers: AppServerProviderSnapshot[] = [];
   const routes: AppServerRouteSnapshot[] = [];
   const locales: AppServerLocalesSnapshot[] = [];

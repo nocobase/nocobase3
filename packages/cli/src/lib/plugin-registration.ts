@@ -140,7 +140,7 @@ export function pluginShortName(packageName: string): string {
  */
 async function hasPluginExport(
   pluginDirectory: string,
-  exportName: './client' | './server/plugin',
+  exportName: './client' | './server',
 ): Promise<boolean> {
   let manifest: Record<string, unknown>;
   try {
@@ -166,7 +166,7 @@ export async function hasClientPluginEntry(
 export async function hasServerPluginEntry(
   pluginDirectory: string,
 ): Promise<boolean> {
-  return hasPluginExport(pluginDirectory, './server/plugin');
+  return hasPluginExport(pluginDirectory, './server');
 }
 
 /**

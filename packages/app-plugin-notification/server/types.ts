@@ -97,6 +97,10 @@ export interface NotificationChannelConfig {
 
 export interface NotificationConfig {
   readonly channels: readonly NotificationChannelConfig[];
+  readonly test?: {
+    readonly enabled: boolean;
+    readonly emailRecipient?: string;
+  };
 }
 
 export interface NotificationProviderSendError {

@@ -1,20 +1,17 @@
+import { AppConfig, type AppConfigContribution } from '../config/index.js';
+
 import type {
   Application,
-  ApplicationConfig,
   ApplicationServiceProviderConstructor,
 } from '../application/index.js';
 import {
   createConfigContext,
-  loadConfig,
   type ConfigContext,
-  type ConfigFactories,
-  type ConfigFactory,
   type ConfigPaths,
 } from '../config/index.js';
 import {
   resolveAppServerPlugins,
   type AppServerPlugins,
-  type ResolvedAppPlugin,
   type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
 import type { AppRouteContribution } from '../router/index.js';
@@ -25,97 +22,48 @@ import {
 } from './scope.js';
 import type { AppPathOptions, AppScope } from './types.js';
 
-export interface AppRuntimeConfig extends ApplicationConfig {
-  readonly plugins: readonly ResolvedAppPlugin[];
-}
+export type AppRuntimeConfig = object;
 
-export type AppRuntimeConfigSections<TConfig extends AppRuntimeConfig> = Omit<
-  TConfig,
-  'plugins'
->;
-
-export type ResolvedAppRuntimeConfig<TConfig extends AppRuntimeConfig> =
-  AppRuntimeConfigSections<TConfig> & {
-    readonly plugins: TConfig['plugins'];
-  };
-
-export interface AppRuntimeConfigContext<
-  TConfig extends AppRuntimeConfig = AppRuntimeConfig,
-  TScopeConfig = unknown,
-> extends ConfigContext {
+export interface AppRuntimeConfigContext extends ConfigContext {
   readonly mode?: 'standalone' | 'embedded';
-  readonly scopeConfig?: TScopeConfig;
   readonly routing?: ResolvedAppScopeRuntime['routing'];
   readonly runtimePaths?: AppPathOptions;
-  readonly plugins?: ResolvedAppServerPlugins<TConfig>;
+  readonly plugins?: ResolvedAppServerPlugins;
   readonly appPackageName?: string;
+  readonly configPath?: string;
 }
 
-export interface ResolvedAppRuntimeConfigContext<
-  TConfig extends AppRuntimeConfig = AppRuntimeConfig,
-  TScopeConfig = unknown,
-> extends AppRuntimeConfigContext<TConfig, TScopeConfig> {
+export interface ResolvedAppRuntimeConfigContext extends AppRuntimeConfigContext {
   readonly mode: 'standalone' | 'embedded';
-  readonly scopeConfig: TScopeConfig | undefined;
   readonly routing: ResolvedAppScopeRuntime['routing'];
   readonly runtimePaths: AppPathOptions;
-  readonly plugins: ResolvedAppServerPlugins<TConfig>;
+  readonly plugins: ResolvedAppServerPlugins;
   readonly appPackageName: string;
+  readonly configPath: string | undefined;
+  readonly configs: readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[];
 }
 
-export type AppRuntimeConfigFactory<
-  TSection,
-  TConfig extends AppRuntimeConfig = AppRuntimeConfig,
-  TScopeConfig = unknown,
-> = ConfigFactory<TSection, AppRuntimeConfigContext<TConfig, TScopeConfig>>;
-
-export type AppRuntimeConfigFactories<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig = unknown,
-> = ConfigFactories<
-  AppRuntimeConfigSections<TConfig>,
-  AppRuntimeConfigContext<TConfig, TScopeConfig>
->;
-
-export interface AppRuntimeDefinition<
-  TConfig extends AppRuntimeConfig = AppRuntimeConfig,
-  TScopeConfig = unknown,
-> {
-  readonly config: AppRuntimeConfigFactories<TConfig, TScopeConfig>;
-  readonly plugins: AppServerPlugins<TConfig>;
-  readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
-  readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
+export interface AppRuntimeDefinition {
+  readonly config: (
+    context: ResolvedAppRuntimeConfigContext,
+  ) => AppConfig | Promise<AppConfig>;
+  readonly plugins: AppServerPlugins;
+  readonly providers: readonly ApplicationServiceProviderConstructor[];
+  readonly routes: readonly AppRouteContribution<Application>[];
 }
 
-export interface ResolvedAppRuntime<
-  TConfig extends AppRuntimeConfig = AppRuntimeConfig,
-  TScopeConfig = unknown,
-> extends ResolvedAppScopeRuntime {
-  readonly scope: AppScope<TScopeConfig>;
+export interface ResolvedAppRuntime extends ResolvedAppScopeRuntime {
+  readonly scope: AppScope;
   readonly configPaths: ConfigPaths;
-  readonly plugins: ResolvedAppServerPlugins<TConfig>;
-  readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
-  readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
-  readonly config: ResolvedAppRuntimeConfig<TConfig>;
+  readonly plugins: ResolvedAppServerPlugins;
+  readonly providers: readonly ApplicationServiceProviderConstructor[];
+  readonly routes: readonly AppRouteContribution<Application>[];
+  readonly appConfig: AppConfig;
 }
 
-export interface ResolvedAppRuntimeConfigSection<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig,
-  TKey extends keyof AppRuntimeConfigSections<TConfig>,
-> extends ResolvedAppScopeRuntime {
-  readonly scope: AppScope<TScopeConfig>;
-  readonly configPaths: ConfigPaths;
-  readonly plugins: ResolvedAppServerPlugins<TConfig>;
-  readonly config: AppRuntimeConfigSections<TConfig>[TKey];
-}
-
-export function defineAppRuntime<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig = unknown,
->(
-  definition: AppRuntimeDefinition<TConfig, TScopeConfig>,
-): AppRuntimeDefinition<TConfig, TScopeConfig> {
+export function defineAppRuntime(
+  definition: AppRuntimeDefinition,
+): AppRuntimeDefinition {
   return Object.freeze({
     ...definition,
     providers: Object.freeze([...definition.providers]),
@@ -123,19 +71,14 @@ export function defineAppRuntime<
   });
 }
 
-export function resolveAppRuntime<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig = unknown,
->(
-  definition: AppRuntimeDefinition<TConfig, TScopeConfig>,
-  scope: AppScope<TScopeConfig>,
-): ResolvedAppRuntime<TConfig, TScopeConfig> {
+export async function resolveAppRuntime(
+  definition: AppRuntimeDefinition,
+  scope: AppScope,
+): Promise<ResolvedAppRuntime> {
   const base = resolveAppScopeRuntime(scope);
   const context = createAppRuntimeConfigContext(definition, scope, base);
-  const sections = loadConfig(definition.config, context);
-  const config: ResolvedAppRuntimeConfig<TConfig> = Object.assign(sections, {
-    plugins: context.plugins.plugins.map((plugin) => plugin.metadata),
-  });
+  const appConfig = await definition.config(context);
+  await appConfig.loadAll();
 
   return {
     ...base,
@@ -144,51 +87,32 @@ export function resolveAppRuntime<
     plugins: context.plugins,
     providers: definition.providers,
     routes: definition.routes,
-    config,
+    appConfig,
   };
 }
 
-export function resolveAppRuntimeConfigSection<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig,
-  TKey extends keyof AppRuntimeConfigSections<TConfig>,
->(
-  definition: AppRuntimeDefinition<TConfig, TScopeConfig>,
-  scope: AppScope<TScopeConfig>,
-  key: TKey,
-): ResolvedAppRuntimeConfigSection<TConfig, TScopeConfig, TKey> {
-  const base = resolveAppScopeRuntime(scope);
-  const context = createAppRuntimeConfigContext(definition, scope, base);
-  return {
-    ...base,
-    scope,
-    configPaths: context.paths,
-    plugins: context.plugins,
-    config: definition.config[key](context),
-  };
-}
-
-function createAppRuntimeConfigContext<
-  TConfig extends AppRuntimeConfig,
-  TScopeConfig,
->(
-  definition: AppRuntimeDefinition<TConfig, TScopeConfig>,
-  scope: AppScope<TScopeConfig>,
+function createAppRuntimeConfigContext(
+  definition: AppRuntimeDefinition,
+  scope: AppScope,
   runtime: ResolvedAppScopeRuntime,
-): ResolvedAppRuntimeConfigContext<TConfig, TScopeConfig> {
+): ResolvedAppRuntimeConfigContext {
   const configPaths = createAppConfigPaths(runtime.paths);
   const plugins = resolveAppServerPlugins(
     runtime.paths.rootDir,
     definition.plugins,
   );
+  const configs = plugins.plugins.flatMap(
+    (plugin) => plugin.definition.config,
+  ) as unknown as readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[];
 
   return {
     ...createConfigContext({ env: runtime.env, paths: configPaths }),
     mode: runtime.mode,
-    scopeConfig: scope.config,
     routing: runtime.routing,
     runtimePaths: runtime.paths,
     plugins,
     appPackageName: plugins.appPackageName,
+    configPath: scope.configPath,
+    configs,
   };
 }

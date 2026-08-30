@@ -57,7 +57,7 @@ const plugin: AppServerPlugin = defineServerPlugin({
 export default plugin;
 ```
 
-只声明真实能力。Routes 和 Provider constructors 是直接 contributions；Jobs、Migrations 和 Seeds 使用 package-relative locations。目标 App 通过 `server/plugins.ts` 显式注册 `exports["./server/plugin"]`。
+只声明真实能力。Routes 和 Provider constructors 是直接 contributions；Jobs、Migrations 和 Seeds 使用 package-relative locations。`server/index.ts` re-export 这个 definition，目标 App 通过 `server/plugins.ts` 显式注册 `exports["./server"]`。
 
 ## 所有权边界
 
