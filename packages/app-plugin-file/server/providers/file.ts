@@ -31,6 +31,8 @@ export class FileProvider<
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-file';
 
+  private fixtureInitialization: Promise<void> | undefined;
+
   public override register(): void {
     this.app.container.singleton(filePluginRuntimeToken, (container) =>
       resolveFilePluginRuntime(container, this.app.config),
@@ -43,9 +45,15 @@ export class FileProvider<
     const logger = this.app.container.resolve(loggingToken).getLogger().child({
       module: 'app-plugin-file',
     });
-    void prepareFileDemoFixtures(runtime).catch((error: unknown) => {
-      logger.error({ err: error }, 'File Demo fixture initialization failed');
-    });
+    this.fixtureInitialization = prepareFileDemoFixtures(runtime).catch(
+      (error: unknown) => {
+        logger.error({ err: error }, 'File Demo fixture initialization failed');
+      },
+    );
+  }
+
+  public override async shutdown(): Promise<void> {
+    await this.fixtureInitialization;
   }
 }
 

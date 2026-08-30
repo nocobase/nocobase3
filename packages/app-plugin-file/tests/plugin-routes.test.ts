@@ -142,6 +142,39 @@ describe('file plugin route factory and registrar', () => {
     );
   });
 
+  it('waits for fixture initialization before shutting down', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    ensureFileObjectMock.mockImplementation(() => gate);
+
+    const container = createContainer(config, deps, false);
+    const provider = new FileProvider({
+      config,
+      container,
+      router: new Hono(),
+    });
+    provider.register();
+    await provider.boot();
+    await vi.waitFor(() =>
+      expect(ensureFileObjectMock).toHaveBeenCalledTimes(3),
+    );
+
+    let shutdownSettled = false;
+    const shutdown = provider.shutdown().then(() => {
+      shutdownSettled = true;
+    });
+    await Promise.resolve();
+    const settledBeforeRelease = shutdownSettled;
+
+    release();
+    await shutdown;
+
+    expect(settledBeforeRelease).toBe(false);
+    expect(shutdownSettled).toBe(true);
+  });
+
   it('allows only system administrators to query examples', async () => {
     const app = createFactoryApp(config, deps);
     const denied = await app.request('/api/attachments/examples');
