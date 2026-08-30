@@ -1,4 +1,7 @@
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+
+import { dotenvParser } from '@nocobase/config/parsers/dotenv';
 
 import { type EnvMap } from '../config/index.js';
 import {
@@ -9,6 +12,8 @@ import { AppScopeLifecycle } from '../runtime/lifecycle.js';
 import type { AppPathOptions, AppScope } from '../runtime/types.js';
 
 export interface LoadStandaloneAppEnvOptions {
+  readonly rootDir: string;
+  readonly files?: readonly string[];
   readonly baseEnv?: EnvMap;
   readonly overrides?: EnvMap;
 }
@@ -17,7 +22,12 @@ export function loadStandaloneAppEnv(
   options: LoadStandaloneAppEnvOptions,
 ): EnvMap {
   const baseEnv = options.baseEnv ?? process.env;
+  const files = options.files ?? [
+    path.join(options.rootDir, '.env'),
+    path.join(options.rootDir, '.env.local'),
+  ];
   return {
+    ...readDotenvFiles(files, baseEnv),
     ...baseEnv,
     ...options.overrides,
   };
@@ -39,7 +49,7 @@ export interface CreateStandaloneScopeOptions {
   readonly appName?: string;
   readonly basePath?: string;
   readonly configPath?: string;
-  /** Final environment overrides applied after process.env. */
+  /** Final environment overrides applied after dotenv files and process.env. */
   readonly env?: EnvMap;
   readonly abortReason?: unknown;
 }
@@ -80,6 +90,7 @@ export function createStandaloneScope(
 ): StandaloneAppScope {
   const paths = resolveStandaloneAppPaths(options);
   const env = loadStandaloneAppEnv({
+    rootDir: paths.rootDir,
     overrides: options.env,
   });
   const defaultAppName = 'main';
@@ -99,6 +110,40 @@ export function createStandaloneScope(
     abortReason:
       options.abortReason ?? new Error('Standalone application closed.'),
   });
+}
+
+function readDotenvFiles(
+  files: readonly string[],
+  baseEnv: EnvMap,
+): Record<string, string> {
+  const parser = dotenvParser();
+  const environment: Record<string, string> = {};
+
+  for (const filePath of files) {
+    if (!existsSync(filePath)) continue;
+    const parsed = parser.parse(readFileSync(filePath));
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string') environment[key] = value;
+    }
+  }
+
+  const expansionEnvironment = { ...baseEnv, ...environment };
+  for (const [key, value] of Object.entries(environment)) {
+    environment[key] = expandEnvironmentValue(value, expansionEnvironment);
+    expansionEnvironment[key] = environment[key];
+  }
+
+  return environment;
+}
+
+function expandEnvironmentValue(value: string, env: EnvMap): string {
+  return value.replace(
+    /\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g,
+    (match, key: string): string => {
+      if (match.startsWith('\\')) return match.slice(1);
+      return env[key] ?? '';
+    },
+  );
 }
 
 export function resolveStandaloneAppPaths(

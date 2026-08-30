@@ -79,6 +79,26 @@ describe('@nocobase/app-plugin-install routes', () => {
     await expect(apiResponse.text()).resolves.toBe('application');
   });
 
+  it('enters install mode when no configuration provides an auth secret', async () => {
+    const rootDir = createTemporaryRoot();
+    const router = await rootRoutes.createRouter({
+      appName: 'main',
+      publicBasePath: '/main',
+      config: createPluginConfig(undefined),
+      paths: createConfigPaths({ rootDir }),
+      router: new Hono(),
+      container: new ServiceContainer(),
+    });
+    router.get('*', (context) => context.text('application'));
+
+    const response = await router.request('/login', {
+      headers: { Accept: 'text/html' },
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/install');
+  });
+
   it('configures an application without returning its secret', async () => {
     const rootDir = createTemporaryRoot();
     const router = new Hono();
@@ -150,7 +170,7 @@ function createTemporaryRoot(): string {
   return directory;
 }
 
-function createPluginConfig(secret: string): AppConfig {
+function createPluginConfig(secret: string | undefined): AppConfig {
   const config = new AppConfig();
   config.get = <TValue>(): TValue => ({ secret }) as TValue;
   return config;

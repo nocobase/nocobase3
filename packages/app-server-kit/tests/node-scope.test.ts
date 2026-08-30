@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -23,6 +23,7 @@ describe('standalone app environment', () => {
   it('merges the process environment and explicit overrides', () => {
     expect(
       loadStandaloneAppEnv({
+        rootDir: '/app',
         baseEnv: {
           PROCESS_ONLY: 'yes',
           SHARED_VALUE: 'process',
@@ -33,6 +34,41 @@ describe('standalone app environment', () => {
         },
       }),
     ).toEqual({
+      PROCESS_ONLY: 'yes',
+      OVERRIDE_ONLY: 'yes',
+      SHARED_VALUE: 'override',
+    });
+  });
+
+  it('loads dotenv files below process environment and explicit overrides', () => {
+    const rootDir = createTempDirectory();
+    writeFileSync(
+      path.join(rootDir, '.env'),
+      'DOTENV_ONLY=yes\nSHARED_VALUE=dotenv\nEXPANDED=$BASE_VALUE/suffix\n',
+    );
+    writeFileSync(
+      path.join(rootDir, '.env.local'),
+      'LOCAL_ONLY=yes\nSHARED_VALUE=local\n',
+    );
+
+    expect(
+      loadStandaloneAppEnv({
+        rootDir,
+        baseEnv: {
+          BASE_VALUE: 'base',
+          PROCESS_ONLY: 'yes',
+          SHARED_VALUE: 'process',
+        },
+        overrides: {
+          OVERRIDE_ONLY: 'yes',
+          SHARED_VALUE: 'override',
+        },
+      }),
+    ).toEqual({
+      BASE_VALUE: 'base',
+      DOTENV_ONLY: 'yes',
+      EXPANDED: 'base/suffix',
+      LOCAL_ONLY: 'yes',
       PROCESS_ONLY: 'yes',
       OVERRIDE_ONLY: 'yes',
       SHARED_VALUE: 'override',

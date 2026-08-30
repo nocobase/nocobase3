@@ -207,7 +207,7 @@
     "url": "git+https://github.com/nocobase/app-template-default.git"
   },
   "scripts": {
-    "dev": "node ./scripts/dev.mjs",
+    "dev": "tsx ./scripts/dev.mjs",
     "server:config": "tsx --tsconfig tsconfig.node.json ./scripts/server-config.ts",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",

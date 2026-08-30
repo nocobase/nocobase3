@@ -65,7 +65,8 @@ export function resolveAuthSecret(
   if (secret) return secret;
   if (
     !existsSync(path.join(rootDir, 'config.yml')) &&
-    !existsSync(path.join(rootDir, 'config.yaml'))
+    !existsSync(path.join(rootDir, 'config.yaml')) &&
+    !existsSync(path.join(rootDir, 'config.json'))
   ) {
     return INSTALL_MODE_AUTH_SECRET;
   }

@@ -2,6 +2,7 @@ import spawn from 'cross-spawn';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadStandaloneAppEnv } from '@nocobase/app-server-kit/node';
 
 import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
 import { resolveConfigWatch } from './dev-config-watch.mjs';
@@ -14,7 +15,7 @@ const rootDir = path.resolve(
 );
 const viteDevPreferredPort = 5173;
 
-const loadEnv = () => ({ ...process.env });
+const loadEnv = () => loadStandaloneAppEnv({ rootDir });
 
 const toUrlHost = (host) => {
   if (host === '0.0.0.0') return '127.0.0.1';
