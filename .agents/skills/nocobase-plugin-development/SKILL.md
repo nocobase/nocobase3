@@ -28,28 +28,30 @@ Always read the repository `AGENTS.md` first, then read
 `docs/development/plugin-development/README.md`. Read only the relevant topic page
 for the current task:
 
-| Task                                 | Read                                       |
-| ------------------------------------ | ------------------------------------------ |
-| Create and register a plugin         | `quick-start.md`, `plugin-registration.md` |
-| Implement a complete business plugin | `development-workflow.md`                  |
-| Choose an App or cross-plugin entry  | `public-contracts.md`                      |
-| Choose a Client module               | `client.md`                                |
-| Build public or internal Client UI   | `client-components.md`                     |
-| Share React Context                  | `client-providers.md`                      |
-| Add imperative Client initialization | `client-bootstrap.md`                      |
-| Choose a Server module               | `server.md`                                |
-| Choose a Service/Token/Provider      | `server-services-and-providers.md`         |
-| Implement Provider lifecycle         | `service-provider.md`                      |
-| Apply Token/Container patterns       | `service-token-examples.md`                |
-| Add asynchronous work                | `server-jobs.md`                           |
-| Choose a database operation          | `database.md`                              |
-| Change schema                        | `database-migrations.md`                   |
-| Add required initial records         | `database-seeds.md`                        |
-| Add Client or Server translations    | `i18n.md`                                  |
-| Choose an App-owned Registry item    | `registry.md`                              |
-| Build, publish, or upgrade Registry  | `plugin-registry.md`                       |
-| Write Plugin Skills for an App Agent | `skills.md`                                |
-| Test, build, and verify              | `testing.md`                               |
+| Task                                 | Read                                                 |
+| ------------------------------------ | ---------------------------------------------------- |
+| Create and register a plugin         | `quick-start.md`, `plugin-registration-workspace.md` |
+| Implement a complete business plugin | `development-workflow.md`                            |
+| Choose an App or cross-plugin entry  | `public-contracts.md`                                |
+| Choose a Client module               | `client.md`                                          |
+| Build public or internal Client UI   | `client-components.md`                               |
+| Share React Context                  | `client-providers.md`                                |
+| Add imperative Client initialization | `client-bootstrap.md`                                |
+| Choose a Server module               | `server.md`                                          |
+| Choose a Service/Token/Provider      | `server-services-and-providers.md`                   |
+| Implement Provider lifecycle         | `service-provider.md`                                |
+| Apply Token/Container patterns       | `service-token-examples.md`                          |
+| Add asynchronous work                | `server-jobs.md`                                     |
+| Choose a database operation          | `database.md`                                        |
+| Change schema                        | `database-migrations.md`                             |
+| Add required initial records         | `database-seeds.md`                                  |
+| Add Client or Server translations    | `i18n.md`                                            |
+| Choose an App-owned Registry item    | `registry.md`                                        |
+| Author a Registry item               | `registry-authoring.md`                              |
+| Build, publish, or install Registry  | `registry-delivery.md`                               |
+| Upgrade or remove a Registry item    | `registry-upgrades.md`                               |
+| Write Plugin Skills for an App Agent | `skills.md`                                          |
+| Test, build, and verify              | `testing.md`                                         |
 
 For every HTTP or browser Route task, read `routes.md` first. It covers all four
 Route APIs as one cross-runtime topic. For `defineRootRoutes()` or

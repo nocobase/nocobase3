@@ -1,9 +1,11 @@
 ---
-title: Plugin Registry 完整开发与发布
-description: 说明 NocoBase v3 插件如何构建、发布、安装和升级 App-owned 的可编辑 Client Registry 源码。
+title: Plugin Registry 深入参考
+description: NocoBase v3 Plugin Registry 的完整字段、工具边界、发布产物、可运行示例和当前限制参考。
 ---
 
-# Plugin Registry 完整开发与发布
+# Plugin Registry 深入参考
+
+本页用于查询完整字段、工具边界和可运行示例，不是普通 Registry 任务的起点。首先阅读[Registry 模块选择](./registry.md)，再按任务进入[编写 item](./registry-authoring.md)、[构建与安装](./registry-delivery.md)或[升级与移除](./registry-upgrades.md)。
 
 Plugin Registry 是插件发布“可复制、可编辑源码配方”的通用机制。它可以交付页面和组件，也可以交付 Provider、Context、hooks、类型、适配器、工具函数、配置或其他客户端源码。其中，包含页面、组件、表单、布局或交互的 item 属于 UI 类型的 Registry item。
 
@@ -654,8 +656,9 @@ pnpm --filter @nocobase/app-template-default lint
 pnpm --filter @nocobase/app-template-default typecheck
 pnpm --filter @nocobase/app-template-default test
 pnpm --filter @nocobase/app-template-default build
-pnpm --filter @nocobase/app-template-default client:inspect
 ```
+
+只有 Registry item 实际形成 Client contribution，而且需要诊断 composition 时，才额外运行 `client:inspect`。它不是 Registry build、materialize 或消费端验证的默认步骤。
 
 示例插件的 ESLint 和 declaration build 会忽略 `registry/**`，因为 Registry source 使用消费应用的 `@/` alias，不能作为插件 declaration build 的一部分编译。仓库脚本测试会把三个 item 物化到临时应用目录并验证文件、target 和关键 import；对于正式 Registry，还应在真实消费应用中执行 typecheck 和 build。仅执行插件自身 typecheck 不能证明安装后的 Registry source 可用。
 
@@ -758,6 +761,7 @@ pnpm --filter @nocobase/app-plugin-registry-example registry:build
 - 已有 target 拒绝覆盖；
 - Portal SDK 版本依赖的最低限度检查；
 - `prepack` 生成 npm 包内 Registry 产物；
+- `plugin:create --with registry` 生成最小可扩展 Registry 结构；
 - Default Template 自动发现 `client/extensions/*/extension.ts`。
 
 ### 尚未实现
@@ -770,7 +774,6 @@ pnpm --filter @nocobase/app-plugin-registry-example registry:build
 - Registry 安装记录、版本、hash 或 lockfile；
 - 自动 update、remove 和三方合并；
 - 对所有源码 import 和 `dependencies` 的完整一致性检查；
-- 新插件脚手架自动生成可选 Registry 结构；
 - 每个非预安装 Registry 的独立消费端编译 fixture。
 
 ## 15. 推荐的当前工作方式

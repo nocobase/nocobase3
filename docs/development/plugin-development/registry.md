@@ -58,7 +58,15 @@ Item 按实际 API 组织：页面可以带 `extension.ts` 自动提供 route co
 
 每个 item README 说明入口、前置插件、App 可修改范围和升级策略。相对 import 留在 item 内；插件依赖使用正式 public export；App 的基础 UI 可以通过 `registryDependencies` 和 `@/` alias 接入。
 
-## Materialize、build 和升级
+## 下一步按任务阅读
+
+| 任务                            | 阅读                                          |
+| ------------------------------- | --------------------------------------------- |
+| 定义 item、源码形态和公开契约   | [编写 Registry item](./registry-authoring.md) |
+| build、发布、materialize 或安装 | [构建、发布与安装](./registry-delivery.md)    |
+| 合并更新或移除 App-owned 副本   | [升级与移除](./registry-upgrades.md)          |
+
+## 最小交付流程
 
 Source workspace 可以直接 materialize：
 
@@ -82,6 +90,6 @@ pnpm registry materialize \
 - 自动 extension 要验证真实 route override/Provider composition；
 - Plugin Skill 明确 item、安装目标、所有权、前置插件和升级方式。
 
-不要把 `<app>/.agents/skills` 或 materialized App 源码当作插件 canonical source。更完整的工具、发布、安装和升级参考见 [Plugin Registry 完整开发与发布](./plugin-registry.md)。
+不要把 `<app>/.agents/skills` 或 materialized App 源码当作插件 canonical source。低频字段、完整 CLI 边界和可运行示例见[Registry 深入参考](./plugin-registry-reference.md)。
 
 返回[插件开发目录](./README.md)，或继续编写[Plugin Skills](./skills.md)。
