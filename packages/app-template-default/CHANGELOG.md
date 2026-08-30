@@ -1,5 +1,7 @@
 # @nocobase/app-template-default
 
+- Simplify Client startup into Runtime definition, application creation, and rendering stages by using the shared `@nocobase/app-client/runtime` API.
+
 ## 0.1.0-beta.9
 
 ### Minor Changes

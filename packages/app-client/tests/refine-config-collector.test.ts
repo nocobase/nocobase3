@@ -1,8 +1,8 @@
 import type { AppClientRefineConfig } from '@nocobase/app-client';
-import { dataProvider } from '@nocobase/app-portal-sdk/data';
+import type { DataProvider } from '@refinedev/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRefineConfigCollector } from '../../client/refine-runtime.ts';
+import { createRefineConfigCollector } from '../src/runtime/refine-config-collector.js';
 
 type RefineAuthProvider = NonNullable<AppClientRefineConfig['authProvider']>;
 
@@ -14,10 +14,20 @@ const authProvider: RefineAuthProvider = {
   onError: vi.fn(),
 };
 
+const dataProvider: DataProvider = {
+  create: vi.fn(),
+  deleteOne: vi.fn(),
+  getApiUrl: vi.fn(),
+  getList: vi.fn(),
+  getMany: vi.fn(),
+  getOne: vi.fn(),
+  update: vi.fn(),
+};
+
 describe('client refine runtime', () => {
   it('supports every configurable Refine prop through explicit setters', () => {
     const collector = createRefineConfigCollector({});
-    const refine = collector.forPlugin('@nocobase/app-plugin-refine');
+    const refine = collector.forContribution('@nocobase/app-plugin-refine');
     const routerProvider: NonNullable<AppClientRefineConfig['routerProvider']> =
       {
         back: () => () => undefined,
@@ -98,9 +108,9 @@ describe('client refine runtime', () => {
     });
 
     collector
-      .forPlugin('@nocobase/app-plugin-first')
+      .forContribution('@nocobase/app-plugin-first')
       .addLiveEventHandler(firstHandler);
-    const second = collector.forPlugin('@nocobase/app-plugin-second');
+    const second = collector.forContribution('@nocobase/app-plugin-second');
     second.addLiveEventHandler(secondHandler);
     second.setOptions({ mutationMode: 'undoable' });
 
@@ -125,12 +135,12 @@ describe('client refine runtime', () => {
   it('rejects multiple plugins setting the same Refine prop', () => {
     const collector = createRefineConfigCollector({});
     collector
-      .forPlugin('@nocobase/app-plugin-first')
+      .forContribution('@nocobase/app-plugin-first')
       .setAuthProvider(authProvider);
 
     expect(() =>
       collector
-        .forPlugin('@nocobase/app-plugin-second')
+        .forContribution('@nocobase/app-plugin-second')
         .setAuthProvider(authProvider),
     ).toThrow(
       'Refine property "authProvider" is already registered by "@nocobase/app-plugin-first"',
@@ -139,7 +149,7 @@ describe('client refine runtime', () => {
 
   it('closes retained registries after finalization', () => {
     const collector = createRefineConfigCollector({});
-    const refine = collector.forPlugin('@nocobase/app-plugin-refine');
+    const refine = collector.forContribution('@nocobase/app-plugin-refine');
 
     collector.finalize();
 
@@ -154,10 +164,10 @@ describe('client refine runtime', () => {
   it('rejects duplicate resource identifiers across contributions', () => {
     const collector = createRefineConfigCollector({});
     collector
-      .forPlugin('@nocobase/app-plugin-first')
+      .forContribution('@nocobase/app-plugin-first')
       .addResources([{ identifier: 'records', name: 'firstRecords' }]);
     collector
-      .forPlugin('@nocobase/app-plugin-second')
+      .forContribution('@nocobase/app-plugin-second')
       .addResources([{ identifier: 'records', name: 'secondRecords' }]);
 
     expect(() => collector.finalize()).toThrow(

@@ -5,17 +5,18 @@ import type {
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
 import { defineAppRoutes } from '@nocobase/app-client/plugins';
+import {
+  defineAppRuntime,
+  resolveAppRuntime,
+  type AppRuntimeDefinition,
+} from '@nocobase/app-client/runtime';
 import dataProviderBootstrap from '@nocobase/app-plugin-data-provider/client/bootstrap';
 import type { AuthProvider } from '@refinedev/core';
 import type { ComponentType, PropsWithChildren } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import application from '../../client/application.ts';
 import { createApp } from '../../client/app.ts';
-import {
-  createAppRuntime as createRawAppRuntime,
-  type CreateAppRuntimeOptions,
-} from '../../client/runtime.ts';
+import appRuntime from '../../client/runtime.ts';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 const authProvider: AuthProvider = {
@@ -25,6 +26,13 @@ const authProvider: AuthProvider = {
   logout: vi.fn(),
   onError: vi.fn(),
 };
+
+const {
+  plugins: _plugins,
+  routeComponentOverrides: _routeComponentOverrides,
+  sourceExtensions: _sourceExtensions,
+  ...applicationRuntime
+} = appRuntime;
 
 describe('app client runtime', () => {
   it('loads contribution modules in parallel and bootstraps in plugin order', async () => {
@@ -130,10 +138,12 @@ describe('app client runtime', () => {
 
   it('requires a data provider plugin', async () => {
     await expect(
-      createRawAppRuntime({
-        application,
-        plugins: [createAuthPlugin('@nocobase/app-plugin-authentication')],
-      }),
+      resolveAppRuntime(
+        defineAppRuntime({
+          ...applicationRuntime,
+          plugins: [createAuthPlugin('@nocobase/app-plugin-authentication')],
+        }),
+      ),
     ).rejects.toThrow(
       'requires an enabled client plugin that registers a data provider',
     );
@@ -418,13 +428,18 @@ describe('app client runtime', () => {
 });
 
 function createAppRuntime(
-  options: Omit<CreateAppRuntimeOptions, 'application'>,
-): ReturnType<typeof createRawAppRuntime> {
-  return createRawAppRuntime({
-    ...options,
-    application,
-    plugins: [...options.plugins, createDataProviderPlugin()],
-  });
+  options: Pick<
+    AppRuntimeDefinition,
+    'plugins' | 'routeComponentOverrides' | 'sourceExtensions'
+  >,
+): ReturnType<typeof resolveAppRuntime> {
+  return resolveAppRuntime(
+    defineAppRuntime({
+      ...applicationRuntime,
+      ...options,
+      plugins: [...options.plugins, createDataProviderPlugin()],
+    }),
+  );
 }
 
 function createDataProviderPlugin(): AppClientPluginLoader {

@@ -4,6 +4,8 @@
 
 ### Minor Changes
 
+- Add the shared Client Runtime definition and resolution API for composing application and plugin contributions before rendering.
+
 - 7cdffbd: Replace separate API and root route arrays with one ordered `routes` contribution array. Route factories now receive the Application, create and return their own Hono router, and are mounted automatically at `/api` or the application root according to their definition.
 
   Standardize plugin server modules around `providers/index.ts` and `routes/index.ts` collection entries, `services/` domain implementations, and a stable `tokens.ts` public contract.

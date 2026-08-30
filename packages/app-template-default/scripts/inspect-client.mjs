@@ -97,7 +97,10 @@ export async function inspectAppClient({
     await import('@nocobase/app-client/plugins');
 
   const clientPlugins = await loadClientPlugins(appRoot);
-  const applicationLoader = await loadApplicationLoader(appRoot);
+  const applicationLoader = await loadApplicationLoader(
+    appRoot,
+    appPackageName,
+  );
   const contributions = [
     ...(applicationLoader
       ? [await loadContribution(applicationLoader, 'application')]
@@ -298,30 +301,27 @@ async function loadClientPlugins(appRoot) {
   }
 }
 
-async function loadApplicationLoader(appRoot) {
-  const entry = await findApplicationEntry(appRoot, 'application');
-  if (!entry) {
-    return undefined;
+async function loadApplicationLoader(appRoot, packageName) {
+  const runtimeEntry = await findApplicationEntry(appRoot, 'runtime');
+  if (runtimeEntry) {
+    return {
+      packageName,
+      bootstrap: createLocalContributionLoader(appRoot, 'bootstrap'),
+      providers: createLocalContributionLoader(appRoot, 'providers'),
+      routes: createLocalContributionLoader(appRoot, 'routes'),
+    };
   }
 
-  try {
-    const module = await import(pathToFileURL(entry).href);
-    if (!module.default || typeof module.default !== 'object') {
-      throw inspectionError(
-        'CLIENT_APPLICATION_INVALID',
-        'the default export must be a client application loader',
-      );
-    }
-    return module.default;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    if (error instanceof ClientInspectionError) throw error;
-    throw inspectionError(
-      'CLIENT_APPLICATION_IMPORT_FAILED',
-      `Failed to inspect client/application.ts: ${reason}`,
-      error,
-    );
-  }
+  return undefined;
+}
+
+function createLocalContributionLoader(appRoot, contribution) {
+  const entry = ['ts', 'tsx', 'js']
+    .map((extension) =>
+      path.join(appRoot, `client/${contribution}.${extension}`),
+    )
+    .find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
+  return entry ? () => import(pathToFileURL(entry).href) : undefined;
 }
 
 /**

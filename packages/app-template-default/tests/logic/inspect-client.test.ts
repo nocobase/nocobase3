@@ -23,8 +23,8 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
     JSON.stringify({ name: '@example/inspect-app', type: 'module' }),
   );
   await writeFile(
-    path.join(appRoot, 'client/application.ts'),
-    `export default { packageName: '@example/inspect-app' };`,
+    path.join(appRoot, 'client/runtime.ts'),
+    `export default { packageName: '@example/inspect-app', plugins: [] };`,
   );
   if (pluginsSource !== undefined) {
     await writeFile(path.join(appRoot, 'client/plugins.ts'), pluginsSource);

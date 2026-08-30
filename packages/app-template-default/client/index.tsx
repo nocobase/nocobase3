@@ -1,13 +1,10 @@
 import { AppClientRoot } from '@nocobase/app-client';
+import { resolveAppRuntime } from '@nocobase/app-client/runtime';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import application from './application';
 import { createApp } from './app';
-import clientPlugins from './plugins';
-import routeComponentOverrides from './route-overrides';
-import { createAppRuntime } from './runtime';
-import sourceExtensions from './source-extensions';
+import appRuntime from './runtime';
 import { AppStartupError } from './startup';
 import './styles.css';
 
@@ -21,15 +18,7 @@ const root = createRoot(container);
 
 async function start(): Promise<void> {
   try {
-    const runtime = await createAppRuntime({
-      application,
-      plugins: clientPlugins.plugins,
-      routeComponentOverrides: [
-        ...clientPlugins.routeComponentOverrides,
-        ...routeComponentOverrides,
-      ],
-      sourceExtensions,
-    });
+    const runtime = await resolveAppRuntime(appRuntime);
     const app = createApp(runtime);
 
     root.render(

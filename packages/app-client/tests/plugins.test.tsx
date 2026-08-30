@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   applyClientRouteComponentOverrides,
   defineAppRoutes,
-  defineClientApplication,
   defineClientPlugin,
   defineClientPlugins,
   defineClientProviders,
@@ -54,9 +53,6 @@ describe('client plugin definitions', () => {
   });
 
   it('freezes route and provider definitions', () => {
-    const application = defineClientApplication({
-      packageName: '@nocobase/app-template-default',
-    });
     const routes = defineAppRoutes([
       {
         name: 'index',
@@ -76,8 +72,6 @@ describe('client plugin definitions', () => {
     expect(Object.isFrozen(routes[0])).toBe(true);
     expect(Object.isFrozen(providers)).toBe(true);
     expect(Object.isFrozen(providers[0].before)).toBe(true);
-    expect(application).toMatchObject({ source: 'application' });
-    expect(Object.isFrozen(application)).toBe(true);
   });
 
   it('resolves routes and sorts providers from outer to inner', () => {

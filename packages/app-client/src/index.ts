@@ -16,7 +16,6 @@ export {
 export {
   applyClientRouteComponentOverrides,
   isAppClientSettingsRouteGroup,
-  defineClientApplication,
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineAppRoutes,
@@ -24,7 +23,6 @@ export {
   resolveAppClientContributions,
 } from './plugins.js';
 export type {
-  AppClientApplicationLoader,
   AppClientAppRoutesContribution,
   AppClientBootstrap,
   AppClientBootstrapContext,

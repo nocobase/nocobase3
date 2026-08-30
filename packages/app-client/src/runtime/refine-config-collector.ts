@@ -1,5 +1,5 @@
-import type { AppClientRefineConfig } from '@nocobase/app-client';
-import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
+import type { AppClientRefineConfig } from '../config.js';
+import type { AppClientRefineRegistry } from '../plugins.js';
 
 type RefineResources = NonNullable<AppClientRefineConfig['resources']>;
 type RefineResource = RefineResources[number];
@@ -13,8 +13,6 @@ interface ResourceContribution {
 
 export interface AppClientRefineConfigCollector {
   forContribution(packageName: string): AppClientRefineRegistry;
-  /** @deprecated Use forContribution(). */
-  forPlugin(packageName: string): AppClientRefineRegistry;
   finalize(): AppClientRefineConfig;
 }
 
@@ -186,11 +184,7 @@ export function createRefineConfigCollector(
     });
   }
 
-  return Object.freeze({
-    forContribution,
-    forPlugin: forContribution,
-    finalize,
-  });
+  return Object.freeze({ forContribution, finalize });
 }
 
 function freezeResources(resources: RefineResources): RefineResources {

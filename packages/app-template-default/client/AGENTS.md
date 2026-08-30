@@ -4,7 +4,7 @@ This directory is the active Default App browser client.
 
 - Never import from or edit `../client-old/`; it is a temporary migration
   archive, not a source dependency.
-- Keep the Default App contribution boundary explicit in `application.ts`.
+- Keep the Default App composition root explicit in `runtime.ts`.
 - Put application startup contributions in `bootstrap.ts`, application-owned
   route declarations in `routes.ts`, and application Provider declarations in
   `providers.ts`.
