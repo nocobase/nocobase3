@@ -168,6 +168,60 @@ describe('createPlugin', () => {
     },
   );
 
+  it.each([
+    ['database', ['dist', 'README.md', 'CHANGELOG.md', 'database']],
+    ['server.jobs', ['dist', 'README.md', 'CHANGELOG.md']],
+    ['client.providers', ['dist', 'README.md', 'CHANGELOG.md']],
+    ['skills', ['dist', 'README.md', 'CHANGELOG.md', 'skills']],
+  ] as const)(
+    '%s publishes only its declared package files',
+    async (capability, packageFiles) => {
+      const result = await createWith([capability]);
+      const manifest = JSON.parse(
+        await readFile(
+          path.join(result.targetDirectory, 'package.json'),
+          'utf8',
+        ),
+      ) as {
+        files: string[];
+        scripts: Record<string, string>;
+      };
+
+      expect(manifest.files).toEqual(packageFiles);
+      expect(manifest.scripts.prepack).toBeUndefined();
+    },
+  );
+
+  it('publishes the complete Registry ownership and build surface', async () => {
+    const result = await createWith(['client.components', 'registry']);
+    const manifest = JSON.parse(
+      await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
+    ) as {
+      files: string[];
+      nocobase?: unknown;
+      scripts: Record<string, string>;
+    };
+
+    expect(manifest.files).toEqual([
+      'dist',
+      'README.md',
+      'CHANGELOG.md',
+      'components.json',
+      'registry',
+      'registry.config.json',
+      'public/r',
+    ]);
+    expect(manifest.nocobase).toEqual({
+      registry: { items: { 'component-ui': './registry/component-ui' } },
+    });
+    expect(manifest.scripts).toMatchObject({
+      'registry:build': 'node ../../scripts/registry.mjs build --package .',
+      'registry:materialize':
+        'node ../../scripts/registry.mjs materialize --package .',
+      prepack: 'pnpm registry:build',
+    });
+  });
+
   it('uses the same file plan for dry-run and real creation', async () => {
     const dryRunRepo = await createTestRepo();
     const dryRun = await createPlugin({
