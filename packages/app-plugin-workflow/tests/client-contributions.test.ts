@@ -1,29 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
-import type { AppClient } from '@nocobase/app-sdk';
+import { describe, expect, it } from 'vitest';
 
 import packageJson from '../package.json' with { type: 'json' };
-import bootstrap from '../client/bootstrap.js';
-import { WORKFLOW_ROUTE_IDS } from '../client/index.js';
+import workflow, { WORKFLOW_ROUTE_IDS } from '../client/index.js';
 import routes from '../client/routes.js';
-
-const NS = '@nocobase/app-plugin-workflow';
 
 describe('workflow client contributions', () => {
   it('uses the explicit client plugin registration surface', () => {
-    expect(packageJson.nocobase).not.toHaveProperty('plugin');
+    expect(packageJson).not.toHaveProperty('nocobase');
     expect(packageJson.exports).toHaveProperty('./client');
     expect(packageJson.publishConfig.exports).toHaveProperty('./client');
-    expect(
-      Object.keys(packageJson.exports).filter((entry) =>
-        entry.startsWith('./client'),
-      ),
-    ).toEqual(['./client']);
-    expect(
-      Object.keys(packageJson.publishConfig.exports).filter((entry) =>
-        entry.startsWith('./client'),
-      ),
-    ).toEqual(['./client']);
+    expect(workflow().bootstrap).toEqual(expect.any(Function));
   });
 
   it('keeps collection definitions internal to the plugin', () => {
@@ -33,72 +19,43 @@ describe('workflow client contributions', () => {
     );
   });
 
-  it('owns stable workflow management routes', () => {
-    expect(routes.parent).toBe('app');
-    expect(routes.routes.map(({ name, path }) => ({ name, path }))).toEqual([
-      { name: 'workflow-list', path: '/workflow/workflows' },
-      {
-        name: 'workflow-detail',
-        path: '/workflow/workflows/:workflowId',
-      },
-      { name: 'workflow-run-list', path: '/workflow/runs' },
-      {
-        name: 'workflow-run-detail',
-        path: '/workflow/runs/:runId',
-      },
-    ]);
+  it('contributes workflow management settings and nested detail routes', () => {
+    const settings = routes.find((route) => route.parent === 'settings');
+    const appRoutes = routes.find((route) => route.parent === 'app');
+
+    expect(settings?.routes[0]).toMatchObject({
+      name: 'automation',
+      path: '/automation',
+      navigation: { title: 'Automation' },
+      children: [
+        {
+          name: 'workflows',
+          path: '/workflows',
+          navigation: { title: 'Workflows' },
+        },
+        {
+          name: 'workflow-runs',
+          path: '/workflow-runs',
+          navigation: { title: 'Workflow runs' },
+        },
+      ],
+    });
+    expect(settings?.routes[0]).toHaveProperty('navigation.icon');
+    expect(appRoutes?.routes.map(({ name, path }) => ({ name, path }))).toEqual(
+      [
+        {
+          name: 'workflow-detail',
+          path: '/settings/automation/workflows/:workflowId',
+        },
+        {
+          name: 'workflow-run-detail',
+          path: '/settings/automation/workflow-runs/:runId',
+        },
+      ],
+    );
     expect(WORKFLOW_ROUTE_IDS).toEqual({
       workflowDetail: '@nocobase/app-plugin-workflow:workflow-detail',
-      workflowList: '@nocobase/app-plugin-workflow:workflow-list',
       workflowRunDetail: '@nocobase/app-plugin-workflow:workflow-run-detail',
-      workflowRunList: '@nocobase/app-plugin-workflow:workflow-run-list',
     });
-  });
-
-  it('contributes the workflow navigation resources', () => {
-    const addResources = vi.fn();
-    const appClient: AppClient = {
-      request: vi.fn<AppClient['request']>(),
-    };
-    const refine: AppClientRefineRegistry = {
-      addLiveEventHandler: vi.fn(),
-      addResources,
-      setAccessControlProvider: vi.fn(),
-      setAuditLogProvider: vi.fn(),
-      setAuthProvider: vi.fn(),
-      setChildren: vi.fn(),
-      setDataProvider: vi.fn(),
-      setI18nProvider: vi.fn(),
-      setLiveProvider: vi.fn(),
-      setNotificationProvider: vi.fn(),
-      setOnLiveEvent: vi.fn(),
-      setOptions: vi.fn(),
-      setResources: vi.fn(),
-      setRouterProvider: vi.fn(),
-    };
-
-    bootstrap({
-      appClient,
-      packageName: '@nocobase/app-plugin-workflow',
-      refine,
-      source: 'plugin',
-    });
-
-    expect(addResources).toHaveBeenCalledOnce();
-    // Resources register before a language is known, so a label is a translation key plus the namespace to read it
-    // from; the navigation resolves it as it renders.
-    expect(addResources.mock.calls[0]?.[0]).toEqual([
-      { name: 'workflow', meta: { label: 'nav.workflow', i18nNs: NS } },
-      {
-        name: 'workflow.workflows',
-        list: '/workflow/workflows',
-        meta: { label: 'nav.workflows', i18nNs: NS, parent: 'workflow' },
-      },
-      {
-        name: 'workflow.runs',
-        list: '/workflow/runs',
-        meta: { label: 'nav.runs', i18nNs: NS, parent: 'workflow' },
-      },
-    ]);
   });
 });

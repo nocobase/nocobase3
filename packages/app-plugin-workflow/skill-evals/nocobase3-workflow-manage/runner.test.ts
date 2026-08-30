@@ -131,7 +131,7 @@ describe('workflow skill prompt fixtures', () => {
       }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
-      publishArtifact: async (): Promise<void> => undefined,
+      ensureArtifactMaterialized: async () => undefined,
     };
     const runs = new WorkflowRunRepository(fixture.database, runtime);
     await expect(runs.get(9001)).resolves.toMatchObject({
@@ -188,7 +188,7 @@ describe('workflow skill prompt fixtures', () => {
       }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
-      publishArtifact: async (): Promise<void> => undefined,
+      ensureArtifactMaterialized: async () => undefined,
     };
     await expect(
       new WorkflowRunRepository(firstFixture.database, runtime).get(9001),

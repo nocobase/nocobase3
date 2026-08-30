@@ -4,7 +4,9 @@
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
   "version": "0.1.0-beta.2",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -74,33 +76,21 @@
   },
   "files": [
     "dist",
-    "registry",
-    "registry.config.json",
-    "public/r",
+    ".agents",
     "skills"
   ],
-  "nocobase": {
-    "registry": {
-      "items": {
-        "workflow-management": "./registry/workflow-management"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-client-assets.mjs && tsc -p tsconfig.migrations.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit",
     "test": "vitest run --passWithNoTests",
-    "registry:build": "node ../../scripts/registry.mjs build --package .",
-    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
-    "prepack": "pnpm registry:build",
     "eval:skill": "node --import tsx skill-evals/nocobase3-workflow-manage/runner/cli.ts",
     "eval:skill:test": "vitest run --config skill-evals/nocobase3-workflow-manage/vitest.config.ts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
@@ -112,18 +102,24 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@base-ui/react": "^1.6.0",
+    "@nocobase/app-sdk": "workspace:^",
+    "@xyflow/react": "^12.11.3",
+    "elkjs": "^0.10.2",
     "esbuild": "^0.25.12",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "lucide-react": "^0.487.0"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
+    "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
     "react-router": "^7.0.2"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
-    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@refinedev/core": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",

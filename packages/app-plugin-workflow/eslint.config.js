@@ -2,10 +2,6 @@ import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';
 
 export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
-  // The canonical Registry source is validated through the materialized
-  // Default Template snapshot, where application aliases and UI dependencies
-  // are available.
-  ignores: ['registry/**'],
   overrides: [
     {
       name: 'workflow-plugin/intentional-invalid-eval-fixture',

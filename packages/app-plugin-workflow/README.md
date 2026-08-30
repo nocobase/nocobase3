@@ -26,31 +26,16 @@ The application owns when this runs during development and production builds;
 the plugin owns workflow discovery, validation, compilation, and Artifact
 emission.
 
+The client contributes Workflows and Workflow runs under the application's
+Automation settings group. Their record detail routes stay inside the settings
+layout at `/settings/automation/workflows/:workflowId` and
+`/settings/automation/workflow-runs/:runId`.
+
 Register it with `pnpm plugin:register workflow --app app-template-default`.
-Application-owned workflow source remains in the application package. This
-package publishes the canonical `workflow-management` Registry recipe. Once
-materialized, its editable UI snapshot belongs to the consuming application
-and calls only this plugin's stable public exports. The default application
-only loads the Workflow runtime, migrations, Provider, and routes when this
-plugin is enabled.
-
-Build the Registry payload with:
-
-```sh
-pnpm registry build --package @nocobase/app-plugin-workflow
-```
-
-Materialize it into a new application output tree with:
-
-```sh
-pnpm registry materialize \
-  --package @nocobase/app-plugin-workflow \
-  --item workflow-management \
-  --output-root /path/to/application
-```
-
-Materialization refuses to overwrite an existing extension. Update an
-installed snapshot with an explicit three-way merge.
+Application-owned workflow source remains in the application package. The
+plugin itself owns and publishes its complete management UI; enabling the
+plugin is sufficient to register the Automation settings pages and their
+detail routes.
 
 ## Development dependencies
 

@@ -27,7 +27,7 @@ describe('workflow repositories', () => {
       }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
-      publishArtifact: async (): Promise<void> => undefined,
+      ensureArtifactMaterialized: async () => undefined,
     };
     workflows = new WorkflowRepository(database, service);
     workflowRuns = new WorkflowRunRepository(database, service);
@@ -100,6 +100,29 @@ describe('workflow repositories', () => {
     ]);
   });
 
+  it('loads detail execution counts from workflow stats without run details', async () => {
+    const workflow = await createTestWorkflow(database, {
+      key: 'detail-stats',
+      nodes: [],
+    });
+    await database
+      .query()
+      .insertInto(WORKFLOW_COLLECTIONS.stats)
+      .values({ key: workflow.key, executed: 7 })
+      .execute();
+    await insertTestRun(database, {
+      workflowId: workflow.id,
+      workflowKey: workflow.key,
+      eventKey: 'latest-run',
+      status: 1,
+    });
+
+    await expect(workflows.get(workflow.id)).resolves.toMatchObject({
+      executed: 7,
+      latestRun: null,
+    });
+  });
+
   it('paginates matching undeployed artifacts after database workflows', async () => {
     await createTestWorkflow(database, { key: 'database-workflow', nodes: [] });
     const artifacts: WorkflowDistArtifact[] = [
@@ -114,7 +137,7 @@ describe('workflow repositories', () => {
       }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => artifacts,
-      publishArtifact: async (): Promise<void> => undefined,
+      ensureArtifactMaterialized: async () => undefined,
     };
     workflows = new WorkflowRepository(database, service);
 
@@ -161,6 +184,30 @@ describe('workflow repositories', () => {
 
     expect(page).toMatchObject({ page: 1, pageSize: 1, total: 1 });
     expect(page.data.map((item) => item.eventKey)).toEqual(['leave-failed']);
+  });
+
+  it('loads the materialized workflow title and version with run details', async () => {
+    const workflow = await createTestWorkflow(database, {
+      key: 'versioned-run',
+      nodes: [],
+    });
+    await database
+      .query()
+      .updateTable(WORKFLOW_COLLECTIONS.workflows)
+      .set({ title: 'Versioned run', version: 'version-3' })
+      .where('id', '=', workflow.id)
+      .execute();
+    const run = await insertTestRun(database, {
+      workflowId: workflow.id,
+      workflowKey: workflow.key,
+      eventKey: 'versioned-run-detail',
+      status: 1,
+    });
+
+    await expect(workflowRuns.get(run)).resolves.toMatchObject({
+      workflowTitle: 'Versioned run',
+      workflowVersion: 'version-3',
+    });
   });
 
   it('keeps enabled exclusive to the current revision', async () => {
