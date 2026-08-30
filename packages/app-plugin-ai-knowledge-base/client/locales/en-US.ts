@@ -5,6 +5,7 @@ export default {
   'Adopt server version': 'Adopt server version',
   'AI Employees': 'AI Employees',
   'Ask this knowledge base': 'Ask this knowledge base',
+  Back: 'Back',
   'Back to workspace': 'Back to workspace',
   'Browse knowledge bases available to a workspace, switch between layouts, and search by name.':
     'Browse knowledge bases available to a workspace, switch between layouts, and search by name.',

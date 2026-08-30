@@ -1,5 +1,4 @@
 export {
-  aiSettingsPath,
   aiEmployeePath,
   llmServicePath,
   knowledgeBasePath,
@@ -7,10 +6,10 @@ export {
   vectorDatabasesPath,
 } from '@nocobase/app-plugin-ai-employee/client';
 
-import { knowledgeBasePath } from '@nocobase/app-plugin-ai-employee/client';
+import { knowledgeBaseRoutePath } from '@nocobase/app-plugin-ai-employee/client';
 
 export const knowledgeBaseWorkspacePath = (knowledgeBaseKey: string): string =>
-  `${knowledgeBasePath}/${encodeURIComponent(knowledgeBaseKey)}`;
+  `${knowledgeBaseRoutePath}/${encodeURIComponent(knowledgeBaseKey)}`;
 export const knowledgeBaseDocumentPath = (
   knowledgeBaseKey: string,
   documentId: string | number,

@@ -1,4 +1,8 @@
 export default {
+  'AI Employee': 'AI 员工',
+  'AI settings': 'AI 设置',
+  'LLM Service': 'LLM 服务',
+  'Vector Database': '向量数据库',
   Avatar: '头像',
   Bio: '简介',
   Cancel: '取消',

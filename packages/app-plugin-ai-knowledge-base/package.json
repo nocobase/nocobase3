@@ -27,6 +27,10 @@
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
     "./client/bootstrap": {
       "types": "./client/bootstrap.ts",
       "import": "./client/bootstrap.ts"
@@ -34,6 +38,10 @@
     "./client/routes": {
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
+    },
+    "./client/settings-pages": {
+      "types": "./client/settings-pages.tsx",
+      "import": "./client/settings-pages.tsx"
     },
     "./client/vector-databases": {
       "types": "./client/vector-databases.ts",
@@ -52,6 +60,10 @@
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./client/bootstrap": {
         "types": "./dist/client/bootstrap.d.ts",
         "import": "./dist/client/bootstrap.js"
@@ -59,6 +71,10 @@
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
+      },
+      "./client/settings-pages": {
+        "types": "./dist/client/settings-pages.d.ts",
+        "import": "./dist/client/settings-pages.js"
       },
       "./client/vector-databases": {
         "types": "./dist/client/vector-databases.d.ts",
@@ -70,8 +86,7 @@
   "nocobase": {
     "plugin": {
       "client": {
-        "bootstrap": "./client/bootstrap",
-        "routes": "./client/routes"
+        "bootstrap": "./client/bootstrap"
       },
       "database": {
         "migrations": "database/migrations"

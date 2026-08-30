@@ -1,80 +1,77 @@
 import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { getAISettingsTabs } from './ai-settings.js';
+import { useT } from './locales/index.js';
 import {
-  aiEmployeePath,
-  knowledgeBasePath,
-  llmServicePath,
-  vectorDatabasesPath,
+  aiSettingsPath,
+  knowledgeBaseRoutePath,
+  vectorDatabaseRoutePath,
 } from './route-paths.js';
 
-export interface AISettingsTab {
-  label: string;
-  path: string;
-  active: (pathname: string) => boolean;
-}
-
-export const aiSettingsTabs: readonly AISettingsTab[] = [
-  {
-    label: 'AI 员工',
-    path: aiEmployeePath,
-    active: (pathname) => pathname === aiEmployeePath,
-  },
-  {
-    label: 'LLM 服务',
-    path: llmServicePath,
-    active: (pathname) => pathname === llmServicePath,
-  },
-  {
-    label: '知识库',
-    path: knowledgeBasePath,
-    active: (pathname) =>
-      pathname === knowledgeBasePath ||
-      pathname.startsWith(`${knowledgeBasePath}/`),
-  },
-  {
-    label: '向量数据库',
-    path: vectorDatabasesPath,
-    active: (pathname) =>
-      pathname === vectorDatabasesPath ||
-      pathname.startsWith(`${vectorDatabasesPath}/`),
-  },
-];
-
-export function getActiveAISettingsPath(pathname: string): string | undefined {
-  return aiSettingsTabs.find((tab) => tab.active(pathname))?.path;
-}
-
 export interface AISettingsShellProps {
-  children: ReactNode;
+  readonly activeTabKey?: string;
+  readonly children: ReactNode;
+  readonly onTabChange?: (tabKey: string) => void;
+}
+
+export function getActiveAISettingsTabKey(
+  pathname: string,
+  search = '',
+): string {
+  if (pathname.startsWith(`${knowledgeBaseRoutePath}/`)) {
+    return 'knowledge-base';
+  }
+  if (pathname.startsWith(`${vectorDatabaseRoutePath}/`)) {
+    return 'vector-database';
+  }
+  if (pathname === aiSettingsPath) {
+    return new URLSearchParams(search).get('tab') ?? 'ai-employee';
+  }
+  return 'ai-employee';
 }
 
 export function AISettingsShell({
+  activeTabKey,
   children,
+  onTabChange,
 }: AISettingsShellProps): ReactElement {
+  const t = useT();
   const location = useLocation();
   const navigate = useNavigate();
-  const activePath = getActiveAISettingsPath(location.pathname);
+  const resolvedActiveTabKey =
+    activeTabKey ??
+    getActiveAISettingsTabKey(location.pathname, location.search);
+
   return (
     <div className='min-h-full bg-background text-foreground'>
       <header className='border-b bg-background px-4 pt-5 sm:px-6 lg:px-8'>
-        <h1 className='text-2xl font-semibold tracking-tight'>AI Employee</h1>
+        <h1 className='text-2xl font-semibold tracking-tight'>
+          {t('AI Employee')}
+        </h1>
         <nav
-          aria-label='AI settings'
+          aria-label={t('AI settings')}
           className='mt-4 flex gap-1 overflow-x-auto'
         >
-          {aiSettingsTabs.map((tab) => {
-            const active = activePath === tab.path;
+          {getAISettingsTabs().map((tab) => {
+            const active = resolvedActiveTabKey === tab.key;
             return (
               <button
-                key={tab.path}
+                key={tab.key}
                 type='button'
                 aria-current={active ? 'page' : undefined}
                 className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${active ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                 onClick={() => {
-                  if (!active) void navigate(tab.path);
+                  if (active) return;
+                  if (onTabChange) {
+                    onTabChange(tab.key);
+                    return;
+                  }
+                  void navigate(aiSettingsPath, {
+                    state: { aiSettingsTab: tab.key },
+                  });
                 }}
               >
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             );
           })}

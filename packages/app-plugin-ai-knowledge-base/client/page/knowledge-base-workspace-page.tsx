@@ -19,20 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog.js';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '../components/ui/breadcrumb.js';
 import { Button } from '../components/ui/button.js';
 import {
+  ArrowLeft,
   CircleAlert,
   CircleFadingArrowUpIcon,
   FileText,
   RefreshCw,
+  Search,
 } from 'lucide-react';
 import { LoadingState } from '../components/app-shell-loading-state.js';
 import {
@@ -66,7 +60,6 @@ import {
 import { knowledgeBaseLiveRoutes } from '../knowledge-base-routes.js';
 import {
   liveLocationPath,
-  liveReturnTo,
   knowledgeBaseWorkspaceSearch,
   parseKnowledgeBaseWorkspaceState,
 } from './url-state.js';
@@ -119,11 +112,6 @@ export default function KnowledgeBaseWorkspacePage() {
   const documents = documentState.documents.paginated;
   const retrieval = knowledgeBase.retrieval;
   const hasSubmittedRetrievalQuery = !!workspace.retrievalQuery;
-  const listReturnTo = liveReturnTo(
-    location.state,
-    knowledgeBaseLiveRoutes.list,
-    knowledgeBaseLiveRoutes.list,
-  );
 
   useEffect(() => {
     setQueryDraft('');
@@ -291,25 +279,6 @@ export default function KnowledgeBaseWorkspacePage() {
 
   return (
     <main className='space-y-5 px-4 pb-12 pt-4 sm:px-6 lg:px-8'>
-      <header className='space-y-2'>
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink render={<Link to={listReturnTo} />}>
-                {t('Knowledge bases')}
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>{base.data.name}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-        <h1 className='text-2xl font-semibold tracking-tight'>
-          {base.data.name}
-        </h1>
-      </header>
-
       <Tabs
         defaultValue={local ? 'documents' : 'retrieve'}
         onValueChange={(value) => {
@@ -317,13 +286,29 @@ export default function KnowledgeBaseWorkspacePage() {
         }}
         className='gap-0'
       >
-        <div className='border-b'>
-          <TabsList variant='line' className='h-9'>
+        <div className='flex items-center justify-between gap-3 border-b pb-3'>
+          <TabsList className='h-auto rounded-lg border bg-muted/40 p-1'>
             {local ? (
-              <TabsTrigger value='documents'>{t('Documents')}</TabsTrigger>
+              <TabsTrigger value='documents' className='gap-2 px-3 py-1.5'>
+                <FileText aria-hidden='true' className='size-4' />
+                {t('Documents')}
+              </TabsTrigger>
             ) : null}
-            <TabsTrigger value='retrieve'>{t('Hit tests')}</TabsTrigger>
+            <TabsTrigger value='retrieve' className='gap-2 px-3 py-1.5'>
+              <Search aria-hidden='true' className='size-4' />
+              {t('Hit tests')}
+            </TabsTrigger>
           </TabsList>
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            className='shrink-0 text-muted-foreground'
+            onClick={() => navigate(knowledgeBaseLiveRoutes.list)}
+          >
+            <ArrowLeft data-icon='inline-start' aria-hidden='true' />
+            {t('Back')}
+          </Button>
         </div>
         {local ? (
           <TabsContent value='documents' className='mt-5 space-y-3'>

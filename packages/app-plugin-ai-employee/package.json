@@ -36,9 +36,25 @@
       "types": "./client/bootstrap.ts",
       "import": "./client/bootstrap.ts"
     },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
     "./client/routes": {
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
+    },
+    "./client/ai-settings": {
+      "types": "./client/ai-settings.ts",
+      "import": "./client/ai-settings.ts"
+    },
+    "./client/settings": {
+      "types": "./client/settings.ts",
+      "import": "./client/settings.ts"
+    },
+    "./client/settings-pages": {
+      "types": "./client/settings-pages.ts",
+      "import": "./client/settings-pages.ts"
     }
   },
   "publishConfig": {
@@ -64,6 +80,22 @@
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
+      },
+      "./client/ai-settings": {
+        "types": "./dist/client/ai-settings.d.ts",
+        "import": "./dist/client/ai-settings.js"
+      },
+      "./client/settings": {
+        "types": "./dist/client/settings.d.ts",
+        "import": "./dist/client/settings.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
+      "./client/settings-pages": {
+        "types": "./dist/client/settings-pages.d.ts",
+        "import": "./dist/client/settings-pages.js"
       }
     }
   },
@@ -74,8 +106,7 @@
       },
       "server": "./server/bootstrap.ts",
       "client": {
-        "bootstrap": "./client/bootstrap",
-        "routes": "./client/routes"
+        "bootstrap": "./client/bootstrap"
       }
     }
   },

@@ -1,4 +1,8 @@
 export default {
+  'AI Employee': 'AI Employee',
+  'AI settings': 'AI settings',
+  'LLM Service': 'LLM Service',
+  'Vector Database': 'Vector Database',
   Avatar: 'Avatar',
   Bio: 'Bio',
   Cancel: 'Cancel',

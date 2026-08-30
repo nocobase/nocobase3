@@ -5,6 +5,7 @@ export default {
   'Adopt server version': '采用服务器版本',
   'AI Employees': 'AI 员工',
   'Ask this knowledge base': '询问此知识库',
+  Back: '返回',
   'Back to workspace': '返回工作区',
   'Browse knowledge bases available to a workspace, switch between layouts, and search by name.':
     '浏览工作区可用知识库，可切换布局并按名称搜索。',

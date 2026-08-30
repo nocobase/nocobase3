@@ -1,10 +1,6 @@
 export {
   AISettingsShell,
-  aiSettingsTabs,
-  getActiveAISettingsPath,
+  getActiveAISettingsTabKey,
   withAISettingsShell,
 } from '@nocobase/app-plugin-ai-employee/client';
-export type {
-  AISettingsShellProps,
-  AISettingsTab,
-} from '@nocobase/app-plugin-ai-employee/client';
+export type { AISettingsShellProps } from '@nocobase/app-plugin-ai-employee/client';
