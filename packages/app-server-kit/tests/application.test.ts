@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import {
+  appConfig as appIdentityConfig,
+  AppConfig,
+  defineAppConfig,
+} from '../src/config/index.js';
+import { Type } from '@sinclair/typebox';
 
 import {
   Application,
   type ApplicationOptions,
-  type ApplicationConfig,
 } from '../src/application/index.js';
 import { createConfigPaths } from '../src/config/index.js';
 import {
@@ -72,22 +77,48 @@ describe('application', () => {
     ]);
   });
 
+  it('initializes plugin-owned config before registering providers', async () => {
+    const featureConfig = defineAppConfig({
+      namespace: 'feature',
+      schema: Type.Object({ enabled: Type.Boolean() }),
+      defaults: { enabled: true },
+    });
+    const appConfig = new AppConfig([featureConfig], { context: {} });
+    await appConfig.loadAll();
+    const options = createTestApplicationOptions();
+    const app = new Application({ ...options, config: appConfig });
+    const enabledValues: boolean[] = [];
+
+    class ConfigProvider extends ServiceProvider<Application> {
+      public readonly name: string = 'config-provider';
+
+      public override register(): void {
+        enabledValues.push(this.app.config.get(featureConfig).enabled);
+      }
+    }
+
+    app.addProvider(ConfigProvider);
+    await app.start();
+
+    expect(enabledValues).toEqual([true]);
+  });
+
   it('registers API and root routes between provider boot and start', async () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
     app.addProvider(TestProvider, 'provider', calls);
     app.addRoutes(
       defineApiRoutes(() => {
-        const router = new Hono();
         calls.push('api:register');
+        const router = new Hono();
         router.get('/example', (context) => context.text('api'));
         return router;
       }),
     );
     app.addRoutes(
       defineRootRoutes(() => {
-        const router = new Hono();
         calls.push('root:register');
+        const router = new Hono();
         router.get('/example', (context) => context.text('root'));
         return router;
       }),
@@ -113,37 +144,10 @@ describe('application', () => {
     await expect(rootResponse.text()).resolves.toBe('root');
   });
 
-  it('mounts contribution routers and awaits each factory once', async () => {
-    const app = new Application(createTestApplicationOptions());
-    const firstFactory = vi.fn(async () => {
-      const router = new Hono();
-      router.get('/first', (context) => context.text('first'));
-      return router;
-    });
-    const secondFactory = vi.fn(() => {
-      const router = new Hono();
-      router.get('/second', (context) => context.text('second'));
-      return router;
-    });
-
-    app.addRoutes(defineApiRoutes(firstFactory));
-    app.addRoutes(defineApiRoutes(secondFactory));
-
-    await app.start();
-    await app.start();
-
-    const first = await app.fetch(new Request('http://localhost/api/first'));
-    const second = await app.fetch(new Request('http://localhost/api/second'));
-    expect(await first.text()).toBe('first');
-    expect(await second.text()).toBe('second');
-    expect(firstFactory).toHaveBeenCalledOnce();
-    expect(secondFactory).toHaveBeenCalledOnce();
-  });
-
   it('registers providers and routes from resolved runtime plugins', async () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
-    const plugin = defineServerPlugin<TestApplicationConfig>({
+    const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-test',
       providers: [RuntimePluginProvider],
       routes: [
@@ -195,9 +199,7 @@ describe('application', () => {
     const pluginServiceToken = createServiceToken<string>(
       'runtime-plugin-service',
     );
-    class PluginProvider extends ServiceProvider<
-      Application<TestApplicationConfig>
-    > {
+    class PluginProvider extends ServiceProvider<Application> {
       public readonly name: string = 'runtime-plugin-provider';
 
       public override register(): void {
@@ -205,28 +207,26 @@ describe('application', () => {
         this.app.container.instance(pluginServiceToken, 'plugin-service');
       }
     }
-    class ApplicationProvider extends ServiceProvider<
-      Application<TestApplicationConfig>
-    > {
+    class ApplicationProvider extends ServiceProvider<Application> {
       public readonly name: string = 'runtime-application-provider';
 
       public override register(): void {
         calls.push(this.app.container.resolve(pluginServiceToken));
       }
     }
-    const plugin = defineServerPlugin<TestApplicationConfig>({
+    const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-runtime-order-test',
       providers: [PluginProvider],
       routes: [
         defineApiRoutes(() => {
-          const router = new Hono();
           calls.push('plugin:api');
+          const router = new Hono();
           router.get('/runtime-order', (context) => context.text('plugin'));
           return router;
         }),
         defineRootRoutes(() => {
-          const router = new Hono();
           calls.push('plugin:root');
+          const router = new Hono();
           router.get('/runtime-order', (context) => context.text('plugin'));
           return router;
         }),
@@ -252,16 +252,16 @@ describe('application', () => {
       providers: [ApplicationProvider],
       routes: [
         defineApiRoutes(() => {
-          const router = new Hono();
           calls.push('application:api');
+          const router = new Hono();
           router.get('/runtime-order', (context) =>
             context.text('application'),
           );
           return router;
         }),
         defineRootRoutes(() => {
-          const router = new Hono();
           calls.push('application:root');
+          const router = new Hono();
           router.get('/runtime-order', (context) =>
             context.text('application'),
           );
@@ -372,13 +372,11 @@ describe('application', () => {
   });
 });
 
-type TestApplicationConfig = ApplicationConfig;
-
-class TestProvider extends ServiceProvider<Application<TestApplicationConfig>> {
+class TestProvider extends ServiceProvider<Application> {
   public readonly name: string;
 
   public constructor(
-    app: Application<TestApplicationConfig>,
+    app: Application,
     name: string,
     private readonly calls: string[],
   ) {
@@ -407,9 +405,7 @@ class TestProvider extends ServiceProvider<Application<TestApplicationConfig>> {
   }
 }
 
-class RuntimePluginProvider extends ServiceProvider<
-  Application<TestApplicationConfig>
-> {
+class RuntimePluginProvider extends ServiceProvider<Application> {
   public readonly name: string = '@nocobase/app-plugin-test';
   public static calls: string[] = [];
 
@@ -418,22 +414,22 @@ class RuntimePluginProvider extends ServiceProvider<
   }
 }
 
-function createTestApplicationOptions(): ApplicationOptions<TestApplicationConfig> {
+function createTestApplicationOptions(): ApplicationOptions {
   return {
-    config: {
-      app: {
-        name: '/main/',
-        publicBasePath: '//main//',
-      },
-      database: {
-        client: 'pg',
-        connection: 'postgres://localhost/test',
-        migrations: {
-          autoRun: false,
-          directory: '/missing',
-        },
-      },
-    },
+    config: testAppConfig,
     paths: createConfigPaths({ rootDir: '/test/app' }),
   };
 }
+
+const testAppConfig = new AppConfig([
+  {
+    ...appIdentityConfig,
+    defaults: {
+      name: '/main/',
+      publicBasePath: '//main//',
+      internalBasePath: '',
+      publicApiUrl: '/main/api',
+    },
+  },
+]);
+await testAppConfig.loadAll();

@@ -7,34 +7,27 @@ import { createAppDatabaseManager } from './manager.js';
 import { createAppMigrator } from './migrator.js';
 import { createAppSeeder } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
+import { databaseConfig } from './config.js';
+import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
 
-export interface DatabaseProviderApplicationConfig {
-  readonly database: AppDatabaseConfig;
-}
-
-export interface DatabaseProviderApplication<
-  TConfig extends DatabaseProviderApplicationConfig =
-    DatabaseProviderApplicationConfig,
-> {
-  readonly config: TConfig;
+export interface DatabaseProviderApplication {
+  readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
+  readonly paths: ConfigPaths;
 }
 
-export class DatabaseProvider<
-  TApplication extends DatabaseProviderApplication =
-    DatabaseProviderApplication,
-> extends ServiceProvider<TApplication> {
+export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplication> {
   public readonly name: string = '@nocobase/app-server-kit/database';
 
   public override register(): void {
-    const config = this.app.config.database;
+    const config = this.getDatabaseConfig();
     if (config.default === 'none') {
       return;
     }
 
     this.app.container.singleton(databaseManagerToken, () => {
-      const database = createAppDatabaseManager(config);
+      const database = createAppDatabaseManager(config, this.app.paths);
       if (!database) {
         throw new Error('Database is not configured.');
       }
@@ -49,8 +42,8 @@ export class DatabaseProvider<
       return;
     }
 
-    const config = this.app.config.database;
-    await prepareAppDatabaseStorage(config);
+    const config = this.getDatabaseConfig();
+    await prepareAppDatabaseStorage(config, this.app.paths);
     const database = container.resolve(databaseManagerToken);
 
     if (config.migrations.autoRun) {
@@ -72,5 +65,9 @@ export class DatabaseProvider<
 
   public override async shutdown(): Promise<void> {
     await this.app.container.resolveIfCreated(databaseManagerToken)?.destroy();
+  }
+
+  private getDatabaseConfig(): AppDatabaseConfig {
+    return this.app.config.get(databaseConfig);
   }
 }

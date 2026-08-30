@@ -52,8 +52,7 @@ async function createApp(): Promise<string> {
 function sourceWith(...shortNames: string[]): string {
   const imports = shortNames
     .map(
-      (name) =>
-        `import ${name} from '@nocobase/app-plugin-${name}/server/plugin';\n`,
+      (name) => `import ${name} from '@nocobase/app-plugin-${name}/server';\n`,
     )
     .join('');
   const array =
@@ -74,7 +73,7 @@ export default serverPlugins;
 describe('server plugin source editor', () => {
   it('uses the public server plugin export', () => {
     expect(serverPluginEntrySpecifier('@nocobase/app-plugin-audit-log')).toBe(
-      '@nocobase/app-plugin-audit-log/server/plugin',
+      '@nocobase/app-plugin-audit-log/server',
     );
   });
 
@@ -86,7 +85,7 @@ describe('server plugin source editor', () => {
     );
 
     expect(added.sourceText).toContain(
-      "import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';",
+      "import auditLog from '@nocobase/app-plugin-audit-log/server';",
     );
     expect(added.sourceText).toContain('  auditLog');
     expect(added.sourceText).not.toContain('auditLog()');
@@ -134,7 +133,7 @@ describe('server plugin source editor', () => {
 
     const added = editor.add(source, '@nocobase/app-plugin-audit-log');
     const pluginImport = added.sourceText.indexOf(
-      "import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';",
+      "import auditLog from '@nocobase/app-plugin-audit-log/server';",
     );
     const relativeImport = added.sourceText.indexOf(
       "import type { AppConfig } from './config/index.js';",

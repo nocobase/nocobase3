@@ -30,11 +30,22 @@ export function AppRouter({
   clientSettings,
   clientSettingGroups,
 }: AppRouterProps): ReactElement {
+  const settingsRoutes = useMemo(
+    () =>
+      clientRoutes.filter(
+        (route) =>
+          route.auth === 'required' && route.path.startsWith('/settings/'),
+      ),
+    [clientRoutes],
+  );
   const routeGroups = useMemo(
     () => ({
       guest: clientRoutes.filter((route) => route.auth === 'guest'),
       optional: clientRoutes.filter((route) => route.auth === 'optional'),
-      required: clientRoutes.filter((route) => route.auth === 'required'),
+      required: clientRoutes.filter(
+        (route) =>
+          route.auth === 'required' && !route.path.startsWith('/settings/'),
+      ),
     }),
     [clientRoutes],
   );
@@ -70,6 +81,7 @@ export function AppRouter({
             >
               <SettingsLayout
                 groups={clientSettingGroups}
+                routes={settingsRoutes}
                 settings={clientSettings}
               />
             </Suspense>

@@ -6,10 +6,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 
 import { Application } from '../src/application/index.js';
-import type { ConfigPaths } from '../src/config/index.js';
+import {
+  appConfig,
+  AppConfig,
+  type AppConfigAccessor,
+  type ConfigPaths,
+} from '../src/config/index.js';
 import {
   createStandaloneServer,
   defineStandaloneServer,
+  nodeServerConfig,
   type StandaloneApplicationDefinition,
   type StandaloneAppScope,
 } from '../src/node/index.js';
@@ -18,22 +24,11 @@ import {
   defineAppRuntime,
   resolveAppRuntime,
   startApplicationInScope,
-  type AppRuntimeConfig,
   type AppRuntimeDefinition,
   type AppScope,
 } from '../src/runtime/index.js';
 
-interface TestConfig extends AppRuntimeConfig {
-  readonly app: {
-    readonly name: string;
-    readonly publicBasePath: string;
-  };
-  readonly server: {
-    readonly host: string;
-    readonly port: number;
-    readonly startLog: boolean;
-  };
-}
+const serverConfig = nodeServerConfig;
 
 const tempDirs: string[] = [];
 
@@ -111,7 +106,7 @@ describe('standalone runtime server', () => {
     let capturedScope: StandaloneAppScope | undefined;
     const dispose = vi.fn();
     const baseDefinition = createStandaloneDefinition(rootDir, '/main');
-    const definition: StandaloneApplicationDefinition<TestConfig, unknown> = {
+    const definition: StandaloneApplicationDefinition = {
       ...baseDefinition,
       createServer: (scope) => {
         capturedScope = scope as StandaloneAppScope;
@@ -132,46 +127,51 @@ function createStandaloneDefinition(
   rootDir: string,
   publicBasePath: string,
   onCreate: (scope: AppScope) => void = () => undefined,
-): StandaloneApplicationDefinition<TestConfig, unknown> {
+): StandaloneApplicationDefinition {
   const appRuntime = createDefinition(publicBasePath);
   return {
     rootDir,
     appRuntime,
+    serverConfig,
     createServer: async (scope) => {
       onCreate(scope);
-      const runtime = resolveAppRuntime(appRuntime, scope);
-      const app = createApplication(runtime.config, runtime.configPaths);
+      const runtime = await resolveAppRuntime(appRuntime, scope);
+      const app = createApplication(runtime.appConfig, runtime.configPaths);
       return startApplicationInScope(scope, app);
     },
   };
 }
 
-function createDefinition(
-  publicBasePath: string,
-): AppRuntimeDefinition<TestConfig> {
-  return defineAppRuntime<TestConfig>({
-    config: {
-      app: ({ routing }) => ({
-        name: routing?.name ?? 'main',
-        publicBasePath: routing?.publicBasePath ?? publicBasePath,
-      }),
-      server: () => ({
-        host: '127.0.0.1',
-        port: 13000,
-        startLog: false,
-      }),
+function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
+  return defineAppRuntime({
+    config: async (context) => {
+      const config = new AppConfig(
+        [
+          appConfig,
+          {
+            ...serverConfig,
+            defaults: {
+              host: '127.0.0.1',
+              port: 13000,
+              startLog: false,
+            },
+          },
+        ],
+        { context },
+      );
+      return config;
     },
-    plugins: defineServerPlugins<TestConfig>([]),
+    plugins: defineServerPlugins([]),
     providers: [],
     routes: [],
   });
 }
 
 function createApplication(
-  config: TestConfig,
+  config: AppConfigAccessor,
   paths: ConfigPaths,
-): Application<TestConfig> {
-  const app = new Application<TestConfig>({
+): Application {
+  const app = new Application({
     config,
     paths,
   });

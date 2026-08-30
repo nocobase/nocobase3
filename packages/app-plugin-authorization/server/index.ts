@@ -1,3 +1,4 @@
+export { default } from './plugin.js';
 export {
   createAppAuthorization,
   type AppAuthorization,

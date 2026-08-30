@@ -1,12 +1,14 @@
 import { databaseManagerToken } from '@nocobase/app-database';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
-import { loggingToken } from '@nocobase/logging';
-import { queueManagerToken } from '@nocobase/queue';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
+import { driveConfig } from '@nocobase/app-server-kit/drive';
 
 import { WorkflowService } from '../runtime/runtime.js';
 import { workflowServiceToken } from '../tokens.js';
+import { workflowConfig } from '../config.js';
 
 export interface WorkflowProviderConfig {
   readonly app: {
@@ -33,6 +35,8 @@ export class WorkflowProvider<
 
   public override register(): void {
     if (!this.app.container.has(databaseManagerToken)) return;
+    const workflow = this.app.config.get(workflowConfig);
+    const drive = this.app.config.get(driveConfig);
 
     this.app.container.singleton(
       workflowServiceToken,
@@ -42,12 +46,11 @@ export class WorkflowProvider<
           queue: container.resolve(queueManagerToken),
           queueName: `workflow:${this.app.appName}`,
           app: this.app,
-          sourceRoot: this.app.config.workflow.sourceRoot,
-          distRoot: this.app.config.workflow.distRoot,
-          artifactDisk: resolveWorkflowArtifactDisk(this.app.config),
-          production: this.app.config.workflow.production,
-          sourceResolverDiagnostic:
-            this.app.config.workflow.sourceResolverDiagnostic,
+          sourceRoot: workflow.sourceRoot,
+          distRoot: workflow.distRoot,
+          artifactDisk: resolveWorkflowArtifactDisk(workflow, drive),
+          production: workflow.production,
+          sourceResolverDiagnostic: workflow.sourceResolverDiagnostic,
           warn: (message: string): void =>
             container.resolve(loggingToken).getLogger().warn(message),
         }),
@@ -60,10 +63,11 @@ export class WorkflowProvider<
 }
 
 function resolveWorkflowArtifactDisk(
-  config: WorkflowProviderConfig,
+  workflow: WorkflowProviderConfig['workflow'],
+  drive: AppDriveConfig,
 ): FsDriveDiskConfig {
-  const name = config.workflow.artifactDisk ?? config.drive.default;
-  const disk = config.drive.disks[name];
+  const name = workflow.artifactDisk ?? drive.default;
+  const disk = drive.disks[name];
   if (!disk) {
     throw new Error(`Workflow Artifact disk "${name}" is not configured`);
   }

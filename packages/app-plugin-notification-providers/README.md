@@ -28,8 +28,8 @@ For backward compatibility, an omitted in-app recipient defaults to the current
 authenticated user and an omitted Email recipient uses
 `notification.test.emailRecipient`. IM tests send to the group owned by the
 selected Provider Webhook. The default application template maps these settings
-from `NOTIFICATION_PROVIDER_TEST_ENABLED` and `TEST_EMAIL_RECIPIENT`, enables
-the page outside production, and disables it by default in production.
+from `notification.test` in `config.yml`. The page is disabled unless
+`notification.test.enabled` is explicitly set to `true`.
 
 ## Register definitions
 

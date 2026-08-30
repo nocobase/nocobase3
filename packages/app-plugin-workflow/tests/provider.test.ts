@@ -2,16 +2,14 @@ import {
   createDatabaseManager,
   databaseManagerToken,
 } from '@nocobase/app-database';
-import {
-  createLogging,
-  createSilentLoggingConfig,
-  loggingToken,
-} from '@nocobase/logging';
-import {
-  createQueueManager,
-  createSyncQueueConfig,
-  queueManagerToken,
-} from '@nocobase/queue';
+import { createLogging, createSilentLoggingConfig } from '@nocobase/logging';
+import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import { loggingToken } from '@nocobase/app-server-kit/logging';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+import type {
+  AppConfigAccessor,
+  AppConfigToken,
+} from '@nocobase/app-server-kit/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -78,7 +76,7 @@ function createProvider(
   const provider = new WorkflowProvider({
     appName,
     container,
-    config: {
+    config: createTestConfig({
       drive: {
         default: 'local',
         disks: {
@@ -96,8 +94,20 @@ function createProvider(
         sourceResolverDiagnostic: false,
         production: false,
       },
-    },
+    }),
   });
   providers.push(provider);
   return provider;
+}
+
+function createTestConfig(
+  values: Readonly<Record<string, unknown>>,
+): AppConfigAccessor {
+  return {
+    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
+      values[definition.namespace] as TValue,
+    raw: () => values,
+    reload: () => Promise.resolve({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
+  };
 }

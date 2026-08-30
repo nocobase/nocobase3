@@ -2,8 +2,10 @@ import spawn from 'cross-spawn';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadStandaloneAppEnv } from '@nocobase/app-server-kit/node';
 
 import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
+import { resolveConfigWatch } from './dev-config-watch.mjs';
 import { findAvailablePort } from './dev-ports.mjs';
 import { waitForHttpReady } from './dev-readiness.mjs';
 
@@ -13,55 +15,7 @@ const rootDir = path.resolve(
 );
 const viteDevPreferredPort = 5173;
 
-const parseEnv = (content) => {
-  const parsed = {};
-  const linePattern =
-    /^\s*(?:export\s+)?([\w.-]+)\s*=\s*('(?:\\'|[^'])*'|"(?:\\"|[^"])*"|[^#\r\n]*)?\s*(?:#.*)?$/;
-
-  for (const line of content.split(/\r?\n/)) {
-    const match = line.match(linePattern);
-    if (!match) continue;
-
-    const [, key, rawValue = ''] = match;
-    const quote = rawValue[0];
-    let value = rawValue.trim();
-
-    if (
-      (quote === '"' || quote === "'") &&
-      value.endsWith(quote) &&
-      value.length >= 2
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    parsed[key] = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
-  }
-
-  return parsed;
-};
-
-const expandEnvValue = (value, env) =>
-  value.replace(/\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g, (match, key) => {
-    if (match.startsWith('\\')) return match.slice(1);
-    return env[key] ?? '';
-  });
-
-const loadEnv = () => {
-  const env = {};
-
-  for (const envFile of ['.env', '.env.local']) {
-    const envPath = path.join(rootDir, envFile);
-    if (!fs.existsSync(envPath)) continue;
-    Object.assign(env, parseEnv(fs.readFileSync(envPath, 'utf8')));
-  }
-
-  const expansionEnv = { ...env, ...process.env };
-  for (const [key, value] of Object.entries(env)) {
-    env[key] = expandEnvValue(value, expansionEnv);
-  }
-
-  return { ...env, ...process.env };
-};
+const loadEnv = () => loadStandaloneAppEnv({ rootDir });
 
 const toUrlHost = (host) => {
   if (host === '0.0.0.0') return '127.0.0.1';
@@ -277,9 +231,12 @@ if (serverChild.stdin) {
   process.stdin.pipe(serverChild.stdin);
 }
 
-envWatcher = fs.watch(rootDir, (_eventType, filename) => {
+const configuredConfigPath = serverEnv.APP_CONFIG_FILE;
+const configWatch = resolveConfigWatch(rootDir, configuredConfigPath);
+
+envWatcher = fs.watch(configWatch.directory, (_eventType, filename) => {
   const changedFile = filename?.toString();
-  if (changedFile !== '.env' && changedFile !== '.env.local') return;
+  if (!changedFile || !configWatch.filenames.has(changedFile)) return;
 
   if (envRestartTimer) clearTimeout(envRestartTimer);
   envRestartTimer = setTimeout(() => {

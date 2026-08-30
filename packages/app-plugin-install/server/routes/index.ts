@@ -11,6 +11,10 @@ import {
   InstallConfigurationError,
 } from '../configure.js';
 import { isInstallModeAuthSecret } from '../install-mode.js';
+import {
+  authenticationConfig,
+  resolveAuthSecret,
+} from '@nocobase/app-plugin-authentication/server';
 
 export interface InstallPluginConfig {
   readonly app: {
@@ -64,7 +68,9 @@ export function createInstallRoutes(options: CreateInstallRoutesOptions): Hono {
 export const rootRoutes: AppRootRouteContribution<InstallPluginRoutesApplication> =
   defineRootRoutes(({ config, paths }) => {
     const router = new Hono();
-    const installMode = isInstallModeAuthSecret(config.auth.secret);
+    const installMode = isInstallModeAuthSecret(
+      resolveAuthSecret(config.get(authenticationConfig).secret, paths.root()),
+    );
 
     router.get('/install/status', (context) => {
       context.header('Cache-Control', 'no-store');

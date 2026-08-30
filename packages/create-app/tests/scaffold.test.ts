@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertTargetIsUsable,
   assertValidAppName,
-  readEnvExample,
+  readConfigExample,
   REQUIRED_PACKAGE_MANAGER,
   scaffoldFromTemplate,
 } from '../src/lib/scaffold.ts';
@@ -133,11 +133,11 @@ describe('scaffoldFromTemplate', () => {
 
   /**
    * npm refuses to publish a `.gitignore`, so templates ship it under another name. Without restoring it the generated
-   * project would commit `node_modules` and its `.env.local`.
+   * project would commit `node_modules` and its `config.yml`.
    */
   it('restores .gitignore from the name npm allows', async () => {
     const templateDirectory = await createTemplate({
-      '.npmignore': 'node_modules\n.env.local\n',
+      '.npmignore': 'node_modules\nconfig.yml\n',
     });
     const parent = await createTempDirectory();
     const targetDirectory = path.join(parent, 'crm');
@@ -163,14 +163,14 @@ describe('scaffoldFromTemplate', () => {
       targetDirectory,
       templateDirectory,
       extraFiles: {
-        '.env.local': 'DB_DIALECT=sqlite\n',
+        'config.yml': 'database:\n  default: main\n',
         'nested/file.txt': 'content',
       },
     });
 
     expect(
-      await readFile(path.join(targetDirectory, '.env.local'), 'utf8'),
-    ).toBe('DB_DIALECT=sqlite\n');
+      await readFile(path.join(targetDirectory, 'config.yml'), 'utf8'),
+    ).toBe('database:\n  default: main\n');
     expect(
       await readFile(path.join(targetDirectory, 'nested/file.txt'), 'utf8'),
     ).toBe('content');
@@ -263,19 +263,21 @@ describe('packageManager', () => {
   });
 });
 
-describe('readEnvExample', () => {
+describe('readConfigExample', () => {
   it('reads the template example when present', async () => {
     const directory = await createTemplate({
-      '.env.example': 'APP_BASE_PATH=/main\n',
+      'config.example.yml': 'app:\n  publicBasePath: /main\n',
     });
 
-    expect(await readEnvExample(directory)).toBe('APP_BASE_PATH=/main\n');
+    expect(await readConfigExample(directory)).toBe(
+      'app:\n  publicBasePath: /main\n',
+    );
   });
 
   it('returns undefined when the template ships none', async () => {
     const directory = await createTemplate();
 
-    expect(await readEnvExample(directory)).toBeUndefined();
+    expect(await readConfigExample(directory)).toBeUndefined();
   });
 });
 
@@ -335,7 +337,7 @@ describe('addDriverDependency', () => {
 describe('gitignore handling', () => {
   /**
    * The published `@nocobase/app-template-default` ships no ignore file of any name. Without a fallback the generated
-   * project would put `node_modules` and the secret-bearing `.env.local` on its first commit.
+   * project would put `node_modules` and the secret-bearing `config.yml` on its first commit.
    */
   it('writes a fallback when the template ships no ignore file', async () => {
     const templateDirectory = await createTemplate();
@@ -354,7 +356,9 @@ describe('gitignore handling', () => {
     );
 
     expect(contents).toContain('node_modules');
-    expect(contents).toContain('.env.local');
+    expect(contents).toContain('/config.yml');
+    expect(contents).toContain('/.nocobase/');
+    expect(contents).toContain('/.nb3/');
   });
 
   it('prefers the template gitignore over the fallback', async () => {

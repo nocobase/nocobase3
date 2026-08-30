@@ -1,5 +1,6 @@
 import type { NotificationRecipient } from '@nocobase/app-plugin-notification';
 import { notificationServiceToken } from '@nocobase/app-plugin-notification';
+import { notificationConfig } from '@nocobase/app-plugin-notification/server';
 import {
   authenticationToken,
   type Auth,
@@ -14,6 +15,7 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server-kit/router';
 import type { ServiceContainer } from '@nocobase/service-provider';
+import type { AppConfigAccessor } from '@nocobase/app-server-kit/config';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 
@@ -21,7 +23,7 @@ import type { NotificationProvidersPluginConfig } from '../bootstrap.js';
 import { TEST_PAGE_HTML } from './test-page.js';
 
 export interface NotificationProviderRoutesApplication {
-  readonly config: NotificationProvidersPluginConfig;
+  readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
 }
 
@@ -38,7 +40,10 @@ export function registerNotificationProviderRoutes(
   app: NotificationProviderRoutesApplication,
   router: Hono,
 ): void {
-  const { config, container } = app;
+  const { container } = app;
+  const config: NotificationProvidersPluginConfig = {
+    notification: app.config.get(notificationConfig),
+  };
   const auth = container.resolve(authenticationToken);
   const authorization = container.resolve(authorizationToken);
   const routes = new Hono<AuthorizationEnv>();
@@ -165,7 +170,7 @@ export function registerNotificationProviderRoutes(
       return context.json(
         {
           error:
-            'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
+            'recipient is required when notification.test.emailRecipient is not configured.',
         },
         409,
       );
@@ -242,17 +247,16 @@ export function registerNotificationProviderRoutes(
   router.route('/notification-providers', routes);
 }
 
-export const apiRoutes: AppApiRouteContribution<
-  AppPluginApplication<NotificationProvidersPluginConfig>
-> = defineApiRoutes((app) => {
-  const router = new Hono();
-  registerNotificationProviderRoutes(app, router);
-  return router;
-});
+export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
+  defineApiRoutes((app) => {
+    const router = new Hono();
+    registerNotificationProviderRoutes(app, router);
+    return router;
+  });
 
-const routes: readonly AppApiRouteContribution<
-  AppPluginApplication<NotificationProvidersPluginConfig>
->[] = [apiRoutes];
+const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
+  apiRoutes,
+];
 
 export default routes;
 

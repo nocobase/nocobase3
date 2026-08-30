@@ -8,6 +8,10 @@ import {
   authorizationToken,
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
+import type {
+  AppConfigAccessor,
+  AppConfigToken,
+} from '@nocobase/app-server-kit/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
@@ -273,7 +277,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     expect(missingRecipient.status).toBe(409);
     await expect(missingRecipient.json()).resolves.toEqual({
       error:
-        'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
+        'recipient is required when notification.test.emailRecipient is not configured.',
     });
     expect(send).not.toHaveBeenCalled();
   });
@@ -345,9 +349,10 @@ function createApp(options: CreateAppOptions = {}): {
   } as unknown as AppAuthorization);
   container.instance(notificationServiceToken, notification);
   const apiRouter = new Hono();
+  const configured = options.config ?? createConfig('recipient@example.com');
   registerNotificationProviderRoutes(
     {
-      config: options.config ?? createConfig('recipient@example.com'),
+      config: createConfigAccessor(configured),
       container,
     },
     apiRouter,
@@ -362,7 +367,6 @@ function createConfig(
   enabled = true,
 ): NotificationProvidersPluginConfig {
   return {
-    app: { publicBasePath: '' },
     notification: {
       channels: [
         {
@@ -386,5 +390,20 @@ function createConfig(
       ],
       test: { enabled, emailRecipient },
     },
+  };
+}
+
+function createConfigAccessor(
+  config: NotificationProvidersPluginConfig,
+): AppConfigAccessor {
+  const values: Readonly<Record<string, unknown>> = {
+    notification: config.notification,
+  };
+  return {
+    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
+      values[definition.namespace] as TValue,
+    raw: () => values,
+    reload: async () => ({ changedNamespaces: [] }),
+    subscribe: () => () => undefined,
   };
 }

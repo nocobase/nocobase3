@@ -367,11 +367,11 @@ plugin schema 和 migration 应保持一致。增加字段时，两处需要一�
 ```ts
 const auth = createAuthentication({
   connection: services.resolve(databaseManagerToken).connection(),
-  secret: config.auth.secret,
+  secret: app.config.get(authenticationConfig).secret,
   plugins: [
     ticketAuthPlugin({
-      issuer: config.auth.ticket.issuer,
-      audience: config.auth.ticket.audience,
+      issuer: app.config.get(authenticationConfig).ticket.issuer,
+      audience: app.config.get(authenticationConfig).ticket.audience,
       verifyTicket: ticketProtocolClient.verify,
       allowSignUp: false,
     }),

@@ -7,7 +7,7 @@ import {
   startApplicationInScope,
 } from '../src/runtime/index.js';
 import { Application } from '../src/application/index.js';
-import { createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createConfigPaths } from '../src/config/index.js';
 
 describe('application resource disposal', () => {
   it('runs registered disposers once in reverse registration order', async () => {
@@ -79,7 +79,9 @@ describe('application scope lifecycle', () => {
   it('starts an application and binds shutdown to the scope', async () => {
     const lifecycle = new AppScopeLifecycle();
     const app = new Application({
-      config: { app: { name: 'test', publicBasePath: '' } },
+      config: new AppConfig(),
+      appName: 'test',
+      publicBasePath: '',
       paths: createConfigPaths({ rootDir: '/test/app' }),
     });
     const start = vi.spyOn(app, 'start');

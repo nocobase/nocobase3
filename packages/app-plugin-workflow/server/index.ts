@@ -1,3 +1,4 @@
+export { default } from './plugin.js';
 export { WorkflowProvider } from './providers/workflow.js';
 export type {
   WorkflowProviderApplication,
@@ -5,6 +6,7 @@ export type {
 } from './providers/workflow.js';
 export { workflowServiceToken } from './tokens.js';
 export {
+  workflowConfig,
   resolveWorkflowRuntimeConfig,
   type ResolveWorkflowRuntimeConfigOptions,
   type WorkflowRuntimeConfig,

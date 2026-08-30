@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authentication",
   "displayName": "Authentication App Plugin",
   "description": "Authentication plugin for NocoBase applications.",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -19,10 +19,6 @@
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
-    },
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
     },
     "./client": {
       "types": "./client/index.ts",
@@ -63,10 +59,6 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
-      },
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
       },
       "./client": {
         "types": "./dist/client/index.d.ts",
@@ -134,6 +126,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@sinclair/typebox": "catalog:",
     "@base-ui/react": "^1.6.0",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",

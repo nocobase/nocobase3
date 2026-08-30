@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-client",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "description": "React and Refine runtime for NocoBase applications.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -46,6 +46,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
+    "@nocobase/app-i18n": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "@refinedev/react-router": "^2.0.0",
@@ -53,6 +54,7 @@
     "react-router": "^7.0.0"
   },
   "devDependencies": {
+    "@nocobase/app-i18n": "workspace:*",
     "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@refinedev/core": "catalog:",
