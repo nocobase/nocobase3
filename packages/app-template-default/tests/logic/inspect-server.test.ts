@@ -47,12 +47,13 @@ describe('Server inspection', () => {
       inspection.routes.map((_route, index) => index + 1),
     );
     expect(
-      inspection.routes.some(
-        ({ packageName, scope }) =>
-          packageName === '@nocobase/app-plugin-routes-example' &&
-          scope === 'api',
-      ),
-    ).toBe(true);
+      inspection.routes
+        .filter(
+          ({ packageName }) =>
+            packageName === '@nocobase/app-plugin-routes-example',
+        )
+        .map(({ scope }) => scope),
+    ).toEqual(['root', 'api']);
     expect(
       inspection.routes.some(
         ({ packageName, scope }) =>

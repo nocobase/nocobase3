@@ -5,7 +5,7 @@ description: 在 NocoBase 插件中使用 bootstrap、defineAppRoutes、defineSe
 
 # Client 插件开发
 
-Client 插件只公开 `bootstrap`、`routes`、`providers` 三类可选入口。Settings 属于 routes；Registry 是另一套源码 materialization 能力，不是 Client runtime contribution。
+Client 插件只公开 `bootstrap`、`routes`、`providers` 三类可选入口。四类 Route API 和前后端组合见[Route 插件开发](./routes.md)；本页重点说明 Client contribution wiring、bootstrap、providers 和 options。Settings 属于 routes；Registry 是另一套源码 materialization 能力，不是 Client runtime contribution。
 
 ## 选择 contribution
 

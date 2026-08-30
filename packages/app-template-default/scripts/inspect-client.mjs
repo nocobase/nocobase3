@@ -5,7 +5,10 @@ import { pathToFileURL } from 'node:url';
 const help = `Inspect the client bootstrap, routes, and providers this app resolves.
 
 Loads client/plugins.ts and runs the same resolution the browser does, so the
-output reflects what the app will actually render.
+output reflects the final Client contribution composition. Inspection imports
+declaration modules and executes Route and Provider factories. It does not run
+bootstrap functions, load Route page components, render Providers, or start a
+browser.
 
 Usage:
   pnpm client:inspect [options]
@@ -22,6 +25,22 @@ Examples:
   pnpm client:inspect --type bootstrap
   pnpm client:inspect --type settings
   pnpm client:inspect --type providers`;
+
+export class ClientInspectionError extends Error {
+  constructor(code, message, options) {
+    super(message, options);
+    this.name = 'ClientInspectionError';
+    this.code = code;
+  }
+}
+
+function inspectionError(code, message, cause) {
+  return new ClientInspectionError(
+    code,
+    message,
+    cause === undefined ? undefined : { cause },
+  );
+}
 
 export function parseInspectAppClientArgs(args) {
   const options = {
@@ -43,12 +62,16 @@ export function parseInspectAppClientArgs(args) {
     if (argument === '--type') {
       const value = args[index + 1];
       if (value === undefined || value.startsWith('-')) {
-        throw new Error('--type requires a value.');
+        throw inspectionError(
+          'CLIENT_INSPECT_ARGUMENT_INVALID',
+          '--type requires a value.',
+        );
       }
       if (
         !['all', 'bootstrap', 'routes', 'settings', 'providers'].includes(value)
       ) {
-        throw new Error(
+        throw inspectionError(
+          'CLIENT_INSPECT_ARGUMENT_INVALID',
           '--type must be all, bootstrap, routes, settings, or providers.',
         );
       }
@@ -56,7 +79,10 @@ export function parseInspectAppClientArgs(args) {
       index += 1;
       continue;
     }
-    throw new Error(`Unknown argument: ${argument}`);
+    throw inspectionError(
+      'CLIENT_INSPECT_ARGUMENT_INVALID',
+      `Unknown argument: ${argument}`,
+    );
   }
 
   return options;
@@ -73,12 +99,24 @@ export async function inspectAppClient({
   const clientPlugins = await loadClientPlugins(appRoot);
   const applicationLoader = await loadApplicationLoader(appRoot);
   const contributions = [
-    await loadContribution(applicationLoader, 'application'),
+    ...(applicationLoader
+      ? [await loadContribution(applicationLoader, 'application')]
+      : []),
     ...(await Promise.all(
       clientPlugins.plugins.map((plugin) => loadContribution(plugin, 'plugin')),
     )),
   ];
-  const resolved = resolveAppClientContributions(contributions);
+  let resolved;
+  try {
+    resolved = resolveAppClientContributions(contributions);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw inspectionError(
+      'CLIENT_CONTRIBUTION_RESOLUTION_FAILED',
+      `Failed to resolve Client contributions: ${reason}`,
+      error,
+    );
+  }
   const sourceExtensions = await loadApplicationSourceExtensions(appRoot);
   const overrides = [
     ...clientPlugins.routeComponentOverrides.map((override) => ({
@@ -95,14 +133,27 @@ export async function inspectAppClient({
       })),
     ),
   ];
-  const routes = applyClientRouteComponentOverrides(resolved.routes, overrides);
+  let routes;
+  try {
+    routes = applyClientRouteComponentOverrides(resolved.routes, overrides);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw inspectionError(
+      'CLIENT_ROUTE_OVERRIDES_INVALID',
+      `Failed to apply Client Route component overrides: ${reason}`,
+      error,
+    );
+  }
   const entryOf = (packageName, contribution) =>
     packageName === appPackageName
       ? `./client/${contribution}`
       : `${packageName}/client/${contribution}`;
 
-  return {
-    app: appPackageName,
+  const result = {
+    app: {
+      packageName: appPackageName,
+      appRoot,
+    },
     bootstraps: [
       ...(applicationLoader?.bootstrap
         ? [
@@ -168,6 +219,27 @@ export async function inspectAppClient({
       after: provider.after ?? [],
     })),
   };
+
+  const issues = result.settings
+    .filter((setting) => setting.access === undefined)
+    .map((setting) => ({
+      code: 'CLIENT_SETTINGS_ACCESS_MISSING',
+      message: `Settings Route "${setting.id}" from "${setting.packageName}" does not declare access.`,
+      packageName: setting.packageName,
+      routeId: setting.id,
+    }));
+
+  return {
+    ...result,
+    consistent: issues.length === 0,
+    issues,
+    suggestions:
+      issues.length === 0
+        ? []
+        : [
+            'Declare resource and action access on every Settings Route, then rerun client:inspect.',
+          ],
+  };
 }
 
 function describeOverrideOrigin(origin) {
@@ -196,7 +268,8 @@ function describeOptions(options) {
 async function loadClientPlugins(appRoot) {
   const entry = await findApplicationEntry(appRoot, 'plugins');
   if (!entry) {
-    throw new Error(
+    throw inspectionError(
+      'CLIENT_COMPOSITION_NOT_FOUND',
       `Application at ${appRoot} does not declare client/plugins.ts.`,
     );
   }
@@ -205,7 +278,8 @@ async function loadClientPlugins(appRoot) {
     const module = await import(pathToFileURL(entry).href);
     const declared = module.default;
     if (!declared || !Array.isArray(declared.plugins)) {
-      throw new Error(
+      throw inspectionError(
+        'CLIENT_COMPOSITION_INVALID',
         'the default export must come from defineClientPlugins()',
       );
     }
@@ -215,9 +289,12 @@ async function loadClientPlugins(appRoot) {
     };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to inspect client/plugins.ts: ${reason}`, {
-      cause: error,
-    });
+    if (error instanceof ClientInspectionError) throw error;
+    throw inspectionError(
+      'CLIENT_COMPOSITION_IMPORT_FAILED',
+      `Failed to inspect client/plugins.ts: ${reason}`,
+      error,
+    );
   }
 }
 
@@ -230,14 +307,20 @@ async function loadApplicationLoader(appRoot) {
   try {
     const module = await import(pathToFileURL(entry).href);
     if (!module.default || typeof module.default !== 'object') {
-      throw new Error('the default export must be a client application loader');
+      throw inspectionError(
+        'CLIENT_APPLICATION_INVALID',
+        'the default export must be a client application loader',
+      );
     }
     return module.default;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to inspect client/application.ts: ${reason}`, {
-      cause: error,
-    });
+    if (error instanceof ClientInspectionError) throw error;
+    throw inspectionError(
+      'CLIENT_APPLICATION_IMPORT_FAILED',
+      `Failed to inspect client/application.ts: ${reason}`,
+      error,
+    );
   }
 }
 
@@ -300,15 +383,22 @@ async function loadContributionEntry(loader, contribution) {
       return definitions;
     }
     {
-      throw new Error(
+      throw inspectionError(
+        contribution === 'routes'
+          ? 'CLIENT_ROUTES_INVALID'
+          : 'CLIENT_PROVIDERS_INVALID',
         `the ${contribution} entry must default-export a valid contribution, or a function returning one`,
       );
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
+    if (error instanceof ClientInspectionError) throw error;
+    throw inspectionError(
+      contribution === 'routes'
+        ? 'CLIENT_ROUTES_LOAD_FAILED'
+        : 'CLIENT_PROVIDERS_LOAD_FAILED',
       `Failed to inspect client ${contribution} for "${loader.packageName}": ${reason}`,
-      { cause: error },
+      error,
     );
   }
 }
@@ -329,16 +419,19 @@ async function loadApplicationRouteComponentOverrides(appRoot) {
   try {
     const module = await import(pathToFileURL(entry).href);
     if (!Array.isArray(module.default)) {
-      throw new Error(
+      throw inspectionError(
+        'CLIENT_ROUTE_OVERRIDES_INVALID',
         'the default export must be an override definition array',
       );
     }
     return module.default;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
+    if (error instanceof ClientInspectionError) throw error;
+    throw inspectionError(
+      'CLIENT_ROUTE_OVERRIDES_IMPORT_FAILED',
       `Failed to inspect application route component overrides: ${reason}`,
-      { cause: error },
+      error,
     );
   }
 }
@@ -363,14 +456,19 @@ async function loadApplicationSourceExtensions(appRoot) {
     try {
       const module = await import(pathToFileURL(entry).href);
       if (!module.default || typeof module.default !== 'object') {
-        throw new Error('the default export must be a source extension');
+        throw inspectionError(
+          'CLIENT_SOURCE_EXTENSION_INVALID',
+          'the default export must be a source extension',
+        );
       }
       extensions.push(module.default);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      throw new Error(
+      if (error instanceof ClientInspectionError) throw error;
+      throw inspectionError(
+        'CLIENT_SOURCE_EXTENSION_IMPORT_FAILED',
         `Failed to inspect application source extension ${path.relative(appRoot, entry)}: ${reason}`,
-        { cause: error },
+        error,
       );
     }
   }
@@ -387,7 +485,7 @@ async function findApplicationEntry(appRoot, contribution) {
 }
 
 export function formatAppClientInspection(inspection, type = 'all') {
-  const sections = [`App: ${inspection.app}`];
+  const sections = [`App: ${inspection.app.packageName}`];
   if (type === 'all' || type === 'bootstrap') {
     sections.push(formatBootstraps(inspection.bootstraps));
   }
@@ -400,6 +498,10 @@ export function formatAppClientInspection(inspection, type = 'all') {
   if (type === 'all' || type === 'providers') {
     sections.push(formatProviders(inspection.providers));
   }
+  sections.push(formatIssues(inspection.issues));
+  sections.push(
+    'Inspection scope: Client declarations and resolved contributions only.\nBootstrap, Route components, Providers, browser behavior, and Server security are not inspected.',
+  );
   return sections.join('\n\n');
 }
 
@@ -418,7 +520,48 @@ export function selectAppClientInspection(inspection, type = 'all') {
     ...(type === 'all' || type === 'providers'
       ? { providers: inspection.providers }
       : {}),
+    consistent: inspection.consistent,
+    issues: inspection.issues,
+    suggestions: inspection.suggestions,
   };
+}
+
+export function createAppClientInspectionSuccess(inspection, type = 'all') {
+  return {
+    schemaVersion: 1,
+    ok: true,
+    operation: 'client:inspect',
+    status: 'success',
+    result: selectAppClientInspection(inspection, type),
+  };
+}
+
+export function createAppClientInspectionFailure(error) {
+  return {
+    schemaVersion: 1,
+    ok: false,
+    operation: 'client:inspect',
+    status: 'failure',
+    error: {
+      code:
+        error instanceof ClientInspectionError
+          ? error.code
+          : 'CLIENT_INSPECTION_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      suggestions: [
+        'Check client/plugins.ts and registered Client declaration modules, then rerun client:inspect.',
+      ],
+    },
+  };
+}
+
+function formatIssues(issues) {
+  if (issues.length === 0) {
+    return 'Issues: none';
+  }
+  return `Issues: ${issues.length}\n${issues
+    .map((issue) => `- ${issue.code}: ${issue.message}`)
+    .join('\n')}`;
 }
 
 function formatBootstraps(bootstraps) {
@@ -509,6 +652,7 @@ function formatProviders(providers) {
 }
 
 async function main() {
+  const jsonRequested = process.argv.slice(2).includes('--json');
   try {
     const options = parseInspectAppClientArgs(process.argv.slice(2));
     if (options.help) {
@@ -520,15 +664,17 @@ async function main() {
     console.log(
       options.json
         ? JSON.stringify(
-            selectAppClientInspection(inspection, options.type),
+            createAppClientInspectionSuccess(inspection, options.type),
             null,
             2,
           )
         : formatAppClientInspection(inspection, options.type),
     );
   } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    console.error('Run pnpm client:inspect --help for usage.');
+    if (!jsonRequested) throw error;
+    console.error(
+      JSON.stringify(createAppClientInspectionFailure(error), null, 2),
+    );
     process.exitCode = 1;
   }
 }

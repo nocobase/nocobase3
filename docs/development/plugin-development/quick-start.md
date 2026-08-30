@@ -31,7 +31,7 @@ description: 在 NocoBase source workspace 中按显式 capability 创建 App �
 | `registry`          | 安装后归 App 所有的可编辑 Registry source                      |
 | `skills`            | 插件提供给 App Agent 的能力和集成指南                          |
 
-这些 capability 不继续细分成 CLI 参数。选择 `server.routes` 不代表同时生成 API Route 和 Root Route 的虚假业务示例；选择 `client.routes` 也不代表同时生成普通页面和 Settings 页面。Agent 在业务实现阶段选择实际 API。
+这些 capability 不继续细分成 CLI 参数。选择 `server.routes` 不代表同时生成 API Route 和 Root Route 的虚假业务示例；选择 `client.routes` 也不代表同时生成普通页面和 Settings 页面。Agent 在业务实现阶段按[Route 插件开发](./routes.md)选择实际 API。
 
 ## 先预览生成计划
 
@@ -144,7 +144,9 @@ pnpm plugin:inspect system-info --app app-template-default --json
 本地的 `.agents/skills/`。整个 `.agents/` 是被 Git 忽略的生成产物；不要编辑或提交同步
 副本。提交插件的 `skills/` 源文件，以及 Agent 按 Skill 完成的 App 正式源码。
 
-涉及 Client 时检查最终 contributions：
+涉及 Client 时检查最终 contributions。JSON 模式先读取 `ok` 和 `status`，再读取
+`result.consistent`、`result.issues`；不要把 inspection 成功解释为 bootstrap、页面、
+Provider 或浏览器行为已经验证：
 
 ```bash
 pnpm --filter @nocobase/app-template-default client:inspect --json

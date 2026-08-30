@@ -37,7 +37,8 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 | 判断生成文件是否需要保留             | Package structure  | 插件根目录                               | [插件结构](./plugin-development/plugin-structure.md)             |
 | 声明 Client 或 Server 能力           | Plugin declaration | `client/plugin.ts`、`server/plugin.ts`   | [插件声明](./plugin-development/plugin-declaration.md)           |
 | 安装、启用、配置或移除插件           | Registration       | App manifest 和 composition roots        | [插件注册](./plugin-development/plugin-registration.md)          |
-| 添加业务服务或 HTTP 接口             | Server             | `server/`                                | [Server 插件开发](./plugin-development/server.md)                |
+| 添加 HTTP 接口或浏览器页面           | Route              | `client/routes.ts`、`server/routes/`     | [Route 插件开发](./plugin-development/routes.md)                 |
+| 添加业务服务                         | Server             | `server/`                                | [Server 插件开发](./plugin-development/server.md)                |
 | 创建数据库结构或初始数据             | Database           | `database/`                              | [数据库迁移和初始数据](./plugin-development/database.md)         |
 | 添加页面、Settings 或 React Provider | Client             | `client/`                                | [Client 插件开发](./plugin-development/client.md)                |
 | 添加后台任务                         | Queue Job          | `server/jobs/`                           | [Server 插件开发](./plugin-development/server.md)                |
@@ -118,6 +119,7 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 - [安装和注册插件](./plugin-development/plugin-registration.md)
 - [Server 插件开发](./plugin-development/server.md)
 - [Server 插件 Agent 友好性审计](./plugin-development/server-agent-audit.md)
+- [Route 插件开发](./plugin-development/routes.md)
 - [Client 插件开发](./plugin-development/client.md)
 - [数据库迁移和初始数据](./plugin-development/database.md)
 - [描述插件提供给 App 的能力](./plugin-development/skills.md)

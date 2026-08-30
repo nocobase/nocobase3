@@ -1,13 +1,36 @@
 // @vitest-environment node
 
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ClientInspectionError,
+  createAppClientInspectionFailure,
+  createAppClientInspectionSuccess,
   formatAppClientInspection,
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
 } from '../../scripts/inspect-client.mjs';
+
+async function createInspectionApp(pluginsSource?: string): Promise<string> {
+  const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
+  await mkdir(path.join(appRoot, 'client'));
+  await writeFile(
+    path.join(appRoot, 'package.json'),
+    JSON.stringify({ name: '@example/inspect-app', type: 'module' }),
+  );
+  await writeFile(
+    path.join(appRoot, 'client/application.ts'),
+    `export default { packageName: '@example/inspect-app' };`,
+  );
+  if (pluginsSource !== undefined) {
+    await writeFile(path.join(appRoot, 'client/plugins.ts'), pluginsSource);
+  }
+  return appRoot;
+}
 
 function settingFor(id: string, title: string) {
   return {
@@ -49,7 +72,11 @@ describe('client inspection', () => {
   it('inspects configured client routes and providers', async () => {
     const inspection = await inspectAppClient();
 
-    expect(inspection.app).toBe('@nocobase/app-template-default');
+    expect(inspection.app).toMatchObject({
+      packageName: '@nocobase/app-template-default',
+    });
+    expect(inspection.consistent).toBe(true);
+    expect(inspection.issues).toEqual([]);
     expect(
       inspection.routes.map(({ auth, id, path }) => ({ auth, id, path })),
     ).toEqual([
@@ -189,6 +216,19 @@ describe('client inspection', () => {
       settingFor('sharing-rules', 'Sharing Rules'),
       settingFor('restriction-rules', 'Restriction Rules'),
     ]);
+    expect(inspection.settings).toContainEqual({
+      access: {
+        action: 'read',
+        resource: 'routes-example.settings',
+      },
+      entry: '@nocobase/app-plugin-routes-example/client/routes',
+      id: 'routes-example',
+      packageName: '@nocobase/app-plugin-routes-example',
+      parent: 'settings',
+      path: '/settings/routes-example',
+      source: 'plugin',
+      title: 'Routes example',
+    });
     expect(
       inspection.routes.some((route) => route.path.startsWith('/settings/')),
     ).toBe(false);
@@ -198,11 +238,11 @@ describe('client inspection', () => {
     expect(output).toMatch(/Settings/u);
     expect(output).toMatch(/group: authorization/u);
     expect(formatAppClientInspection(inspection, 'settings')).not.toMatch(
-      /Routes/u,
+      /\nRoutes\n/u,
     );
     expect(
       Object.keys(selectAppClientInspection(inspection, 'settings')),
-    ).toEqual(['app', 'settings']);
+    ).toEqual(['app', 'settings', 'consistent', 'issues', 'suggestions']);
     expect(output).toMatch(/Routes/u);
     expect(output).toMatch(/auth: guest/u);
     expect(output).toMatch(/route source: plugin/u);
@@ -212,6 +252,8 @@ describe('client inspection', () => {
     );
     expect(output).toMatch(/Providers \(outer -> inner\)/u);
     expect(output).toMatch(/layer: root/u);
+    expect(output).toMatch(/Issues: none/u);
+    expect(output).toMatch(/Route components.*not inspected/su);
 
     // `entry` used to duplicate `routeEntry`, and `componentEntry` was emitted as
     // an explicit undefined. Both are gone: the key is present only when set.
@@ -294,12 +336,118 @@ describe('client inspection', () => {
     );
 
     expect(selectAppClientInspection(inspection, 'routes')).toEqual({
-      app: '@nocobase/app-template-default',
+      app: inspection.app,
       routes: inspection.routes,
+      consistent: true,
+      issues: [],
+      suggestions: [],
     });
     expect(selectAppClientInspection(inspection, 'bootstrap')).toEqual({
-      app: '@nocobase/app-template-default',
+      app: inspection.app,
       bootstraps: inspection.bootstraps,
+      consistent: true,
+      issues: [],
+      suggestions: [],
+    });
+
+    expect(createAppClientInspectionSuccess(inspection, 'settings')).toEqual({
+      schemaVersion: 1,
+      ok: true,
+      operation: 'client:inspect',
+      status: 'success',
+      result: selectAppClientInspection(inspection, 'settings'),
+    });
+  });
+
+  it('reports missing Settings access without loading pages or running bootstrap', async () => {
+    const appRoot = await createInspectionApp(`
+      globalThis.__clientInspectCalls = { bootstrap: 0, page: 0, routes: 0 };
+      const plugin = {
+        packageName: '@example/client-plugin',
+        bootstrap: async () => ({
+          default: () => { globalThis.__clientInspectCalls.bootstrap += 1; },
+        }),
+        routes: async () => {
+          globalThis.__clientInspectCalls.routes += 1;
+          return {
+            default: [{
+              parent: 'settings',
+              routes: [{
+                name: 'example',
+                path: '/example',
+                navigation: { title: 'Example' },
+                componentLoader: async () => {
+                  globalThis.__clientInspectCalls.page += 1;
+                  return { default: () => null };
+                },
+              }],
+            }],
+          };
+        },
+        providers: undefined,
+        options: undefined,
+      };
+      export default { plugins: [plugin], routeComponentOverrides: [] };
+    `);
+
+    const inspection = await inspectAppClient({ appRoot });
+
+    expect(globalThis.__clientInspectCalls).toEqual({
+      bootstrap: 0,
+      page: 0,
+      routes: 1,
+    });
+    expect(inspection.consistent).toBe(false);
+    expect(inspection.issues).toEqual([
+      expect.objectContaining({
+        code: 'CLIENT_SETTINGS_ACCESS_MISSING',
+        packageName: '@example/client-plugin',
+        routeId: 'example',
+      }),
+    ]);
+  });
+
+  it('uses stable errors for missing and invalid Client composition', async () => {
+    const missingRoot = await createInspectionApp();
+    await expect(
+      inspectAppClient({ appRoot: missingRoot }),
+    ).rejects.toMatchObject({
+      code: 'CLIENT_COMPOSITION_NOT_FOUND',
+    });
+
+    const invalidRoot = await createInspectionApp('export default {};');
+    await expect(
+      inspectAppClient({ appRoot: invalidRoot }),
+    ).rejects.toMatchObject({
+      code: 'CLIENT_COMPOSITION_INVALID',
+    });
+  });
+
+  it('formats stable JSON failures', () => {
+    expect(
+      createAppClientInspectionFailure(
+        new ClientInspectionError(
+          'CLIENT_ROUTES_LOAD_FAILED',
+          'Unable to load Routes.',
+        ),
+      ),
+    ).toEqual({
+      schemaVersion: 1,
+      ok: false,
+      operation: 'client:inspect',
+      status: 'failure',
+      error: {
+        code: 'CLIENT_ROUTES_LOAD_FAILED',
+        message: 'Unable to load Routes.',
+        suggestions: [
+          'Check client/plugins.ts and registered Client declaration modules, then rerun client:inspect.',
+        ],
+      },
     });
   });
 });
+
+declare global {
+  var __clientInspectCalls:
+    { bootstrap: number; page: number; routes: number } | undefined;
+}

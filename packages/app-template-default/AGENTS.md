@@ -97,6 +97,11 @@ The output distinguishes the plugin-owned route entry from the final component
 source. When adding an application override, give it a `componentEntry` so the
 CLI and future Agents can locate the owning file.
 
+In JSON mode, read `ok`, `status`, and `result.consistent`, then process stable
+issue codes. Inspection imports Client declarations and executes Route and
+Provider factories. It does not run bootstrap functions, load Route page
+components, render Providers, start a browser, or verify Server security.
+
 ## Keep the server inspectable
 
 Run the static Server inspector after changing Server plugin composition:

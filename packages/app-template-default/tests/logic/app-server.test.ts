@@ -620,14 +620,19 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('keeps a plugin API authenticated by the owning Route contribution', async () => {
+  it('keeps plugin API and Root Routes authenticated by their owning contributions', async () => {
     const app = trackCloseable(
       await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
     const anonymous = await requestApp(app, `${baseUrl}/api/routes-example`);
+    const anonymousRoot = await requestApp(
+      app,
+      `${baseUrl}/routes-example/root`,
+    );
 
     expect(anonymous.status).toBe(401);
+    expect(anonymousRoot.status).toBe(401);
 
     const signIn = await requestApp(
       app,
@@ -643,10 +648,21 @@ describe('app server', () => {
     const response = await requestApp(app, `${baseUrl}/api/routes-example`, {
       headers: { cookie: cookie ?? '' },
     });
+    const rootResponse = await requestApp(
+      app,
+      `${baseUrl}/routes-example/root`,
+      { headers: { cookie: cookie ?? '' } },
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       plugin: '@nocobase/app-plugin-routes-example',
+      scope: 'api',
+    });
+    expect(rootResponse.status).toBe(200);
+    await expect(rootResponse.json()).resolves.toMatchObject({
+      plugin: '@nocobase/app-plugin-routes-example',
+      scope: 'root',
     });
   });
 

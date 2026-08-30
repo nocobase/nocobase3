@@ -39,6 +39,11 @@ for the current task:
 | Write Plugin Skills for an App Agent     | `skills.md`                                |
 | Test, build, and verify                  | `testing.md`                               |
 
+For any HTTP or browser Route task, read `routes.md` first. It covers
+`defineRootRoutes()`, `defineApiRoutes()`, `defineAppRoutes()`, and
+`defineSettingsRoutes()` as one cross-runtime topic; then read `client.md` or
+`server.md` for adjacent Provider, Service, or Job work.
+
 ## Stable v3 protocol
 
 - Create new plugins under `packages/app-plugin-<name>/` with

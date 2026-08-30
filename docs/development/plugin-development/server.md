@@ -5,6 +5,8 @@ description: 在 NocoBase 插件中使用 Service、ServiceToken、ServiceProvid
 
 # Server 插件开发
 
+Route 入口（`defineRootRoutes()`、`defineApiRoutes()`）统一见[Route 插件开发](./routes.md)。本页重点说明 Service、Provider、Job 和 Server composition。
+
 本页面向实现服务端能力的 Agent。先阅读 [插件结构](./plugin-structure.md) 和 [插件声明](./plugin-declaration.md)，再按需求选择 Service、Route、Provider、Job 或 Database。
 
 ## 先选择哪种能力
