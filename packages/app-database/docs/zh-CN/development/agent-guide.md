@@ -83,10 +83,13 @@ Agent 的推荐 DSL 取决于输出载体：
 - 需要 `field.name -> columnName` 的查询映射时，等待或实现 Repository，而不是让 `db.query()` 读取 Collection metadata。
 - 当前 `db.query()` 是数据库层 query identifier 接口；遇到 `tableName` 或 `columnName` 覆盖时，查询代码必须显式使用物理名或可被 naming 归一化的 identifier。
 
-## Repository Filter 规则
+## Repository Select、Filter 和 Sort 规则
 
-Repository 和 Repository Filter Builder 当前是规划设计，尚未实现。写设计文档、示例或未来代码时遵守以下规则：
+Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 当前是规划设计，尚未
+实现。写设计文档、示例或未来代码时遵守以下规则：
 
+- 结果字段和 relation 使用 Select AST；标量字段放 `fields`，relation 放 `relations`。
+- 嵌套 relation 递归写 relation 节点，不在 `fields` 中写 dot-string。
 - TypeScript 代码优先使用 `filter: (filter) => ...` 的 Filter Builder。
 - HTTP、CLI、file sync 或持久化配置可以使用 Filter AST。
 - 不要使用 callable builder，例如 `filter('status')`。
@@ -99,6 +102,11 @@ Repository 和 Repository Filter Builder 当前是规划设计，尚未实现。
 - to-many relation 必须使用 `filter.relation().some()`、`none()`、`exists()`、`notExists()`、`empty()` 或 `notEmpty()`。
 - 变量使用 `filter.variable('$user.id')`，Repository operation options 使用 `context`。
 - Filter AST 中不写 raw SQL、tableName 或 columnName。
+- 排序使用 Sort AST 的结构化 `items`，不使用字符串、tuple 或 object map 简写。
+- 当前字段排序使用 `field`，纯 to-one path 使用 `relationField`，to-many 父级排序使用
+  显式 `relationAggregate`。
+- relation 返回数组的排序放在对应 Select relation 节点中。
+- Select AST 和 Sort AST 中也不写 raw SQL、tableName、columnName 或方言 option。
 
 ## 测试规则
 
@@ -116,7 +124,7 @@ Repository 和 Repository Filter Builder 当前是规划设计，尚未实现。
 - QueryAdapter 用法放 `query/`。
 - Migration 用法和维护清单放 `migration/`。
 - Seed 用法和维护清单放 `seed/`。
-- Repository 和 Repository Filter 规划放 `repository/`。
+- Repository、Select AST、Filter 和 Sort AST 规划放 `repository/`。
 - 开发维护说明放 `development/`。
 - 纯 API 签名和类型说明放 `reference/`。
 

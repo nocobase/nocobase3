@@ -35,13 +35,23 @@ Repository 当前尚未实现。当前 `DatabaseManager` 没有 `db.repository()
 
 规划中的常规操作：
 
-- `findMany(options?)`
-- `findOne(options?)`
+- `findMany({ select?, filter?, sort?, limit?, offset?, context? })`
+- `findOne({ select?, filter?, sort?, context? })`：必须至少提供 `filter` 或非空
+  `sort`
+- `count({ filter?, context? })`
+- `exists({ filter?, context? })`
 - `create({ values })`
-- `update({ filter, values })`
-- `delete({ filter })`
+- `update({ filter, values })` 或显式全量更新 `update({ all: true, values })`
+- `delete({ filter })` 或显式全量删除 `delete({ all: true })`
 
-规划中的筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder；HTTP、CLI 和持久化配置可以使用 Filter AST。详见 [Repository 概览](../repository/overview.md)、[Filter Builder](../repository/filter-builder.md) 和 [Filter AST](../repository/filter-ast.md)。
+`update()` 和 `delete()` 都是批量操作，返回 `{ affectedCount }`；缺失 `filter` 不能隐式
+表示全量写入。`select` 使用 Select AST 描述标量字段和 relation 结果树；`sort` 使用
+Sort AST 区分直接字段、to-one relation field 和 to-many relation aggregate。
+
+规划中的筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder；HTTP、CLI 和
+持久化配置使用结构化 AST。详见 [Repository 概览](../repository/overview.md)、
+[Select AST](../repository/select-ast.md)、[Filter Builder](../repository/filter-builder.md)、
+[Filter AST](../repository/filter-ast.md) 和 [Sort AST](../repository/sort-ast.md)。
 
 ## Migration
 
@@ -114,8 +124,10 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 - [Seed](../seed/overview.md)
 - [Seed 维护清单](../seed/maintenance.md)
 - [Repository 概览（规划中）](../repository/overview.md)
+- [Repository Select AST（规划中）](../repository/select-ast.md)
 - [Repository Filter Builder（规划中）](../repository/filter-builder.md)
 - [Repository Filter AST（规划中）](../repository/filter-ast.md)
+- [Repository Sort AST（规划中）](../repository/sort-ast.md)
 - [CollectionDefinition](./collection-definition.md)
 - [FieldDefinition](./field-definition.md)
 - [CollectionOperation](./collection-operation.md)

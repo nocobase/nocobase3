@@ -60,9 +60,13 @@ CollectionBuilder -> SchemaAdapter -> KnexSchemaAdapter -> Knex
 
 ## Repository
 
-`Repository` 是计划中的 Collection-aware 数据访问层，当前尚未实现。它会读取 Collection metadata，用 Collection / Field 逻辑名做常规 CRUD，并通过 Filter Builder / Filter AST 表达应用层筛选条件。
+`Repository` 是计划中的 Collection-aware 数据访问层，当前尚未实现。它会读取 Collection
+metadata，用 Collection / Field 逻辑名做常规 CRUD，通过 Select AST 表达结果形状、
+Filter Builder / Filter AST 表达筛选条件，并通过 Sort AST 表达排序。
 
-详细设计见 [Repository 概览](../repository/overview.md)、[Filter Builder](../repository/filter-builder.md) 和 [Filter AST](../repository/filter-ast.md)。
+详细设计见 [Repository 概览](../repository/overview.md)、
+[Select AST](../repository/select-ast.md)、[Filter Builder](../repository/filter-builder.md)、
+[Filter AST](../repository/filter-ast.md) 和 [Sort AST](../repository/sort-ast.md)。
 
 ## Agent 注意事项
 

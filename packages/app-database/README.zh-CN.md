@@ -46,8 +46,10 @@ await db.destroy();
 - [Builder API 总览](./docs/zh-CN/builder/overview.md)
 - [QueryAdapter 概览](./docs/zh-CN/query/overview.md)
 - [Repository 规划](./docs/zh-CN/repository/overview.md)
+- [Repository Select AST 规划](./docs/zh-CN/repository/select-ast.md)
 - [Repository Filter Builder 规划](./docs/zh-CN/repository/filter-builder.md)
 - [Repository Filter AST 规划](./docs/zh-CN/repository/filter-ast.md)
+- [Repository Sort AST 规划](./docs/zh-CN/repository/sort-ast.md)
 - [数据库概览](./docs/zh-CN/database/overview.md)
 - [真实数据库集成测试](./docs/zh-CN/testing/integration.md)
 - [源码与测试目录结构](./docs/zh-CN/development/source-layout.md)
@@ -96,8 +98,10 @@ docs/
       compile.md
     repository/
       overview.md
+      select-ast.md
       filter-builder.md
       filter-ast.md
+      sort-ast.md
     testing/
       integration.md
     development/
@@ -151,7 +155,8 @@ npm run test:db:down
 ## 当前边界
 
 - 当前只实现了 Collection Builder，没有实现 Collection Generator。
-- 当前没有 Repository、Repository Filter Builder、Repository Filter AST、Model、Transformer。
+- 当前没有 Repository、Repository Select AST、Repository Filter Builder、Repository
+  Filter AST、Repository Sort AST、Model、Transformer。
 - Schema Adapter 默认基于 Knex。
 - `check` constraint 已建模，但还没有完整编译到 SQL。
 - `dropConstraint` 当前实现仍较基础，后续需要按 constraint 类型增强。

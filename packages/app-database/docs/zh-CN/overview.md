@@ -41,7 +41,9 @@ Collection 提供一层稳定的应用抽象：
 - `QueryAdapter`：数据库层 Query Builder，Repository 尚未实现。
 - `Migration`：版本化数据库变更 runner，负责加载 migration、执行 pending、写 history、控制事务和 lock。
 - `Repository`：计划中的 Collection-aware 数据访问层，当前未实现。
+- `Select AST`：计划中的 Repository 结果选择树，当前未实现。
 - `Repository Filter Builder`：计划中的应用层筛选条件 DSL，当前未实现。
+- `Sort AST`：计划中的 Repository 排序结构，当前未实现。
 - `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
 
 ## 文档地图
@@ -51,7 +53,9 @@ Collection 提供一层稳定的应用抽象：
 - Query 用法见 [QueryAdapter 概览](./query/overview.md)。
 - Migration 用法和维护清单见 [Migration](./migration/overview.md) 和 [Migration 维护清单](./migration/maintenance.md)。
 - Repository 规划见 [Repository 概览](./repository/overview.md)。
+- Repository 结果选择设计见 [Select AST](./repository/select-ast.md)。
 - Repository filter 设计见 [Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
+- Repository 排序设计见 [Sort AST](./repository/sort-ast.md)。
 - 命名策略见 [命名概念](./concepts/naming.md)。
 - 数据库连接见 [Database 概览](./database/overview.md)。
 - 真实数据库测试见 [集成测试](./testing/integration.md)。
@@ -69,8 +73,11 @@ Agent 的推荐 DSL 取决于输出载体：
 - 调用 HTTP API、CLI，或生成 `collection.json` 这类可序列化配置时，优先使用 Object DSL。
 - 做 file sync、snapshot diff、执行计划审计或批量 apply 时，优先使用 `CollectionOperation[]`。
 - `db.query()` 只做物理查询名的轻量归一化，不读取 Collection metadata。
+- 未来写 Repository 数据访问代码时，结果字段和 relation 使用 Select AST，排序使用
+  Sort AST。
 - 未来写 Repository 数据访问代码时，筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder。
-- 当前 Repository 和 Filter Builder 还没有实现，不要把规划接口当作可运行代码。
+- 当前 Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 还没有实现，
+  不要把规划接口当作可运行代码。
 
 对 destructive 操作，例如 `dropField`、`dropCollection`，应先使用：
 

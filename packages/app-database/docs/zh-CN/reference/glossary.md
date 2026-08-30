@@ -34,8 +34,10 @@
 | Migration History         | 记录已执行 migration 的数据库表。                                                            |
 | Migration Lock            | 避免多个进程同时执行 migration 的锁。                                                        |
 | Repository                | 计划中的 Collection-aware 常规数据访问封装，当前未实现。                                     |
+| Select AST                | 计划中的 Repository 结果选择树，描述标量字段、relation 和嵌套返回形状。                      |
 | Repository Filter Builder | 计划中的 Repository 筛选条件代码 DSL，当前未实现。                                           |
 | Filter AST                | 计划中的 Repository 筛选条件结构化表示，当前未实现。                                         |
+| Sort AST                  | 计划中的 Repository 排序结构，区分直接字段、to-one relation field 和 relation aggregate。    |
 | Filter operator group     | 字段类型对应的筛选操作符分组，例如 string、number、date、select、relation。                  |
 | `context`                 | Repository operation 中用于解析 filter 变量的运行时上下文。                                  |
 | `filter.variable()`       | 计划中的变量值表达式入口，例如 `filter.variable('$user.id')`。                               |
@@ -58,8 +60,10 @@ Agent 生成代码或解释 API 时，应优先使用英文 API 名和类型名�
 
 涉及命名映射时，应明确区分逻辑名和物理名。
 
-涉及 Repository filter 时，应明确区分：
+涉及 Repository 查询时，应明确区分：
 
+- Select AST：描述返回字段和 relation 结果树。
 - Filter Builder：TypeScript 代码中的 callback DSL。
 - Filter AST：HTTP、CLI、file sync 和持久化配置可以使用的结构化数据。
+- Sort AST：描述排序优先级、目标、方向、NULL 位置和关系排序语义。
 - NocoBase 既有 object filter：兼容层或序列化目标之一，不作为未来 Repository 代码 API 的首选形态。

@@ -271,7 +271,10 @@ field.name: createdAt -> naming -> created_at
 ];
 ```
 
-Repository 的筛选条件计划使用 Filter Builder，而不是旧的 object shorthand。详细设计见 [Repository 概览](./repository/overview.md)、[Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
+Repository 的结果选择计划使用 Select AST，筛选条件使用 Filter Builder / Filter AST，
+排序使用 Sort AST。详细设计见 [Repository 概览](./repository/overview.md)、
+[Select AST](./repository/select-ast.md)、[Filter Builder](./repository/filter-builder.md)、
+[Filter AST](./repository/filter-ast.md) 和 [Sort AST](./repository/sort-ast.md)。
 
 所以三层职责可以这样看：
 
