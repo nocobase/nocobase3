@@ -16,6 +16,11 @@ Route 是一个跨 Client 和 Server 的能力专题。NocoBase v3 提供四种 
 
 先按需求选择 Route，再分别实现自己的路径、声明、安全边界和测试。不要从文件名或目录猜测 Route 类型。
 
+| 已选择的 Route                                | 继续阅读                                                 |
+| --------------------------------------------- | -------------------------------------------------------- |
+| `defineRootRoutes()`、`defineApiRoutes()`     | [Server Route 最佳实践示例](./server-routes-examples.md) |
+| `defineAppRoutes()`、`defineSettingsRoutes()` | [Client Route 最佳实践示例](./client-routes-examples.md) |
+
 ## Server 和 Client 的边界
 
 Server Route 看 `scope`：`root` 或 `api`。Client Route 看 `parent`：`app` 或 `settings`。
@@ -30,7 +35,7 @@ Browser navigation
   → HTTP response
 ```
 
-四类 Route 不会因为名称相同而自动配对。Client 的 `auth` 或 Settings 的 `access` 只保护浏览器侧导航，不能替代 Server authentication/authorization。每个 Server Route 都必须安装并测试自己的边界，不能依赖其他 contribution 或当前 composition order。
+四类 Route 不会因为名称相同而自动配对。Client 的 `auth` 或 Settings 的 `access` 只保护浏览器侧导航，不能替代 Server security。每个 Server Route 都必须明确拥有并测试自己的安全策略，不能依赖其他 contribution 或当前 composition order。登录用户 Route 按需求安装 authentication 和 authorization；有意公开的 webhook/callback 必须记录公开原因，并实现和测试签名、state、时间戳、重放保护、幂等或协议要求的其他边界。
 
 ## 四类 Route
 
@@ -49,6 +54,21 @@ API Route 挂载到 `/api` scope，代码中的路径不重复写 `/api`。`/api
 ### `defineSettingsRoutes()`
 
 Settings 页面仍然属于 Client `routes` entry，不存在独立 settings loader。路径相对于内置 Settings Route，不要在 path 中重复 `/settings`。敏感页面应声明 `navigation` 和 `access`；access 被拒绝时页面不会进入可用导航，也不会加载页面组件。
+
+## 选择内部实现结构
+
+Server Route 只有少量 handler 时，直接写在 `defineApiRoutes()` 或
+`defineRootRoutes()` factory 中。存在多个 handler、共享错误处理或独立业务子域时，
+可以抽取 `createXxxRoutes(options): Hono`，由 contribution factory 解析 Token 后挂载
+这个子 router。不要仅为了测试导出修改调用方 router 的
+`registerXxxRoutes(router, ...): void`；测试可以直接执行真实 contribution 的
+`createRouter()`。完整代码见 [Server Route 最佳实践示例](./server-routes-examples.md)。
+
+Client 普通页面使用 `defineAppRoutes()`，Settings 页面使用
+`defineSettingsRoutes()`。只替换插件页面 UI 时使用 Route component override，不要重复
+声明 Route；多个页面共享 React Context 时使用 `client/providers.ts`，不要把 Provider
+职责塞进 Route declaration。完整代码见
+[Client Route 最佳实践示例](./client-routes-examples.md)。
 
 ## 前后端组合规则
 
@@ -70,9 +90,17 @@ pnpm --filter <app> client:inspect --json
 
 Inspector 成功只证明 declaration 和 composition 可解析。继续用行为测试验证匿名/已认证请求、authorization、页面 loader、Settings access 和真实页面到 API 的闭环。
 
+验证分三层：Inspector 检查 declaration/composition；contribution test 执行真实
+factory、Token、middleware 和 handler；目标 App integration test 验证最终 URL、public
+base path、多个 contributions、真实登录和权限。复杂 Server Route 可以单独测试领域子
+router，但仍要测试 production contribution 的 wiring。
+
 ## 推荐参考
 
 `packages/app-plugin-routes-example` 是前后端 Route 的规范示例，覆盖 Root/API/App/Settings 四类 Route，并展示独立的安全和导航边界。不要把它当作通用插件模板复制；只复制与当前需求对应的 Route 和测试结构。
+
+- Root/API 的实现和测试模式见 [Server Route 最佳实践示例](./server-routes-examples.md)；
+- App/Settings 的实现和测试模式见 [Client Route 最佳实践示例](./client-routes-examples.md)。
 
 其他能力请阅读对应的真实插件：
 
@@ -86,7 +114,9 @@ Inspector 成功只证明 declaration 和 composition 可解析。继续用行�
 ## 完成条件
 
 - Route 类型、scope/parent 和最终路径明确；
-- 每个 Server Route 自有 authentication/authorization 边界；
+- 每个 Server Route 的安全策略明确并经过行为测试；
+- 需要登录或权限时，由自己的 contribution 安装 authentication/authorization；
+- 有意公开的 Route 记录公开原因并测试协议特定边界；
 - App/Settings Route 的 auth/access 明确；
 - Client 页面保持 lazy loading；
 - Server/Client declaration、exports 和 App composition 一致；

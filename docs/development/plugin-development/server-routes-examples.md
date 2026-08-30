@@ -10,13 +10,12 @@ NocoBase v3 的 Server Route 是由插件直接贡献给应用的 Hono router：
 - `defineApiRoutes()` 创建挂载在 `/api` 下的业务 API；
 - `defineRootRoutes()` 创建不带 `/api` 前缀的顶层 HTTP 入口；
 - Route factory 自己创建并返回 router，并从 `container` 解析依赖；
-- 每个 contribution 拥有自己的 authentication 和 authorization 边界；
+- 每个 contribution 拥有自己的显式安全策略；需要登录或权限时，自己安装 authentication 和 authorization；
 - `server/routes/index.ts` 统一组合 contributions，`server/plugin.ts` 再把它们交给应用。
 
 下面的示例只展示 Server Route。完整的跨 Client/Server 选择规则见
-[Route 插件开发](./development/plugin-development/routes.md)，Service、Provider 和
-Server 插件组合规则见
-[Server 插件开发](./development/plugin-development/server.md)。
+[Route 插件开发](./routes.md)，Service、Provider 和 Server 插件组合规则见
+[Server 插件开发](./server.md)。
 
 ## 先选择 Root Route 还是 API Route
 
@@ -280,6 +279,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
 推荐使用 `createOrderRoutes(options): Hono` 的条件是抽取后形成了清晰、可独立测试的
 业务子路由。只有一个简单 handler 时，直接写在 contribution factory 中通常更清楚。
+这是一种插件内部代码组织方式，不是框架新增的 Route API；框架契约仍然是
+`defineApiRoutes()`、`defineRootRoutes()` 以及 contribution 的 `createRouter()`。
 
 避免把下面这种测试辅助写法当成标准 Route API：
 
@@ -388,6 +389,10 @@ describe('root routes', () => {
 
 ## 验证清单
 
+本页规则面向 `packages/app-plugin-*/server/routes/` 中的插件 Route contribution。
+`app-server-kit` 内部的 SPA、WebSocket 或其他 runtime router helper 有自己的所有权和
+测试边界，不应因为命名相似而被机械改写。
+
 - 根据最终 URL 明确选择 `defineApiRoutes()` 或 `defineRootRoutes()`；
 - Route factory 创建并返回自己拥有的 router；
 - 从 `container` 解析能力所有者导出的原始 Token，不重建同名 Token；
@@ -400,3 +405,6 @@ describe('root routes', () => {
 - `server/routes/index.ts` 导出直接 contributions，`server/plugin.ts` 不使用 loader；
 - 运行插件的 `lint`、`typecheck`、`test` 和 `build`，并运行目标 App 的
   `server:inspect --json` 和相关集成测试。
+
+返回[Route 插件开发](./routes.md)，或继续阅读[测试和验证插件](./testing.md)和
+`packages/app-plugin-routes-example` 的可运行四 Route 示例。

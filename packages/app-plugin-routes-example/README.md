@@ -39,6 +39,13 @@ middleware, the other Route, or Server contribution order. The App Route guard
 and Settings access independently protect browser navigation; Client checks do
 not replace Server authentication or authorization.
 
+The two small Server Routes are declared directly inside their production
+contribution factories, and their tests execute the real `createRouter()`
+functions with a test container. Complex domains may instead extract a focused
+factory that returns its own `Hono`; do not add a helper that mutates a caller's
+router only to make tests easier. See the Server and Client Route best-practice
+pages under `docs/development/plugin-development/` for the complete patterns.
+
 Enable the plugin in an App package with:
 
 ```json

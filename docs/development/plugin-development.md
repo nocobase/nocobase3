@@ -120,6 +120,8 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 - [Server 插件开发](./plugin-development/server.md)
 - [Server 插件 Agent 友好性审计](./plugin-development/server-agent-audit.md)
 - [Route 插件开发](./plugin-development/routes.md)
+- [Server Route 最佳实践示例](./plugin-development/server-routes-examples.md)
+- [Client Route 最佳实践示例](./plugin-development/client-routes-examples.md)
 - [Client 插件开发](./plugin-development/client.md)
 - [数据库迁移和初始数据](./plugin-development/database.md)
 - [描述插件提供给 App 的能力](./plugin-development/skills.md)

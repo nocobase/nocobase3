@@ -39,10 +39,14 @@ for the current task:
 | Write Plugin Skills for an App Agent     | `skills.md`                                |
 | Test, build, and verify                  | `testing.md`                               |
 
-For any HTTP or browser Route task, read `routes.md` first. It covers
-`defineRootRoutes()`, `defineApiRoutes()`, `defineAppRoutes()`, and
-`defineSettingsRoutes()` as one cross-runtime topic; then read `client.md` or
-`server.md` for adjacent Provider, Service, or Job work.
+For every HTTP or browser Route task, read `routes.md` first. It covers all four
+Route APIs as one cross-runtime topic. For `defineRootRoutes()` or
+`defineApiRoutes()`, also read `server-routes-examples.md`. For
+`defineAppRoutes()` or `defineSettingsRoutes()`, also read
+`client-routes-examples.md`. Read `client.md` or `server.md` only when the task
+also changes bootstrap, Providers, options, Services, Jobs, or composition.
+Inspect only the matching files in `packages/app-plugin-routes-example` when a
+runnable reference is needed.
 
 ## Stable v3 protocol
 
@@ -67,11 +71,18 @@ For any HTTP or browser Route task, read `routes.md` first. It covers
   optional and lazy-loaded.
 - Settings pages are routes declared with `defineSettingsRoutes()`; there is no
   fourth `settings` loader or `client/settings.ts` runtime contract.
+- Keep Client page components behind lazy `componentLoader()` functions. Use a
+  Route component override to replace a plugin page; do not redeclare its Route.
 - Server Routes are direct contributions passed to `defineServerPlugin()`; do
   not write a Server route loader.
-- Every Server Route owns and tests its authentication and authorization
-  boundary. Never rely on middleware from another contribution or on the
-  current Server composition order for protection.
+- Write a small Server Route directly in its contribution factory. Extract a
+  `createXxxRoutes(options): Hono` only for a coherent, complex child router;
+  do not export a `registerXxxRoutes(router, ...)` helper merely for testing.
+- Test the production Server contribution through `createRouter()`. Every
+  Server Route owns and tests an explicit security policy. Authenticated Routes
+  install their own authentication and authorization; intentionally public
+  callbacks document and test their protocol-specific boundary. Never rely on
+  another contribution or on current composition order for protection.
 - Register Client and Server definitions explicitly in the target App's
   `client/plugins.ts` and `server/plugins.ts`.
 - Prefer lifecycle commands with `--json`. Branch on `ok` and `status`; treat

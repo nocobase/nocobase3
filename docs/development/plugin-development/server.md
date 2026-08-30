@@ -5,7 +5,7 @@ description: 在 NocoBase 插件中使用 Service、ServiceToken、ServiceProvid
 
 # Server 插件开发
 
-Route 入口（`defineRootRoutes()`、`defineApiRoutes()`）统一见[Route 插件开发](./routes.md)。本页重点说明 Service、Provider、Job 和 Server composition。
+Route 入口（`defineRootRoutes()`、`defineApiRoutes()`）统一见[Route 插件开发](./routes.md)，具体实现、安全边界和测试模式见[Server Route 最佳实践示例](./server-routes-examples.md)。本页重点说明 Service、Provider、Job 和 Server composition。
 
 本页面向实现服务端能力的 Agent。先阅读 [插件结构](./plugin-structure.md) 和 [插件声明](./plugin-declaration.md)，再按需求选择 Service、Route、Provider、Job 或 Database。
 
@@ -68,8 +68,13 @@ Server composition 顺序偶然提供身份或权限保护；插件顺序变化�
 Route factory 直接作为 contribution 返回 Hono router，并从 `container` 解析公开 Token：
 
 ```ts
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
+
 export const apiRoutes = defineApiRoutes(({ container }) => {
   const router = new Hono();
+  const authentication = container.resolve(authenticationToken);
+
+  router.use('/audit-log', authentication.required());
   router.get('/audit-log', (c) =>
     c.json(container.resolve(auditLogToken).list()),
   );
@@ -80,6 +85,11 @@ export const apiRoutes = defineApiRoutes(({ container }) => {
 `defineApiRoutes()` 的路径挂在 App 的 `/api` 下；`defineRootRoutes()` 用于不应带 `/api` 的顶层入口。路径写 package 自己的相对子路径，不重复宿主的 `/api`、public base path 或 app name；测试时同时覆盖配置了 base path 的 App。
 
 Routes 是直接 contributions，不使用 `routes: () => import(...)` loader。统一在 `server/routes/index.ts` 导出数组，再由 `server/plugin.ts` 组合。
+
+简单 Route 直接写在 contribution factory 中；复杂业务域才抽取返回自己 `Hono` 的
+`createXxxRoutes(options)`。不要为了测试增加修改外部 router 的 `registerXxxRoutes()`；
+直接测试真实 contribution 的 `createRouter()`。完整示例见
+[Server Route 最佳实践示例](./server-routes-examples.md)。
 
 ## Queue Jobs
 

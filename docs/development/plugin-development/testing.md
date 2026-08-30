@@ -28,7 +28,22 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、Skil
 
 ## Server 测试
 
-用独立 `ServiceContainer` 验证 Provider 注册、惰性实例和生命周期；用 contribution 的 `createRouter()` 发出真实请求，注入测试 Token 实现。Plugin test 应确保 `server/plugin.ts` 只声明当前仍存在的 contributions。
+用独立 `ServiceContainer` 验证 Provider 注册、惰性实例和生命周期。简单 Route 直接用
+production contribution 的 `createRouter()` 创建 router，注入测试 Token 后发出真实
+请求；不要为了测试导出 `registerXxxRoutes(router, ...): void`。复杂业务域可以分别测试
+返回 `Hono` 的 `createXxxRoutes(options)` 子 router，以及 production contribution 的
+Token 解析、安全 wiring 和挂载。目标 App integration test 再验证 `/api` 或 root
+前缀、public base path、多个 contributions、真实登录和权限。完整示例见
+[Server Route 最佳实践示例](./server-routes-examples.md)。Plugin test 应确保
+`server/plugin.ts` 只声明当前仍存在的 contributions。
+
+## Client Route 测试
+
+Plugin test 验证 App/Settings descriptor、auth/access/navigation 和实际
+`componentLoader()`；`client:inspect --json` 验证目标 App 的最终 composition；目标 App
+测试验证导航、access、override、Provider 和页面行为。页面调用 Server API 时，还要
+完成真实页面到 API 的 full-stack 闭环。完整示例见
+[Client Route 最佳实践示例](./client-routes-examples.md)。
 
 ## Database 和 Queue 测试
 
