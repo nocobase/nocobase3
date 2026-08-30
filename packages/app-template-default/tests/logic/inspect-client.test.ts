@@ -26,6 +26,10 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
     path.join(appRoot, 'client/runtime.ts'),
     `export default { packageName: '@example/inspect-app', plugins: [] };`,
   );
+  await writeFile(
+    path.join(appRoot, 'client/locales.ts'),
+    `throw new Error('client:inspect must not load application locales');`,
+  );
   if (pluginsSource !== undefined) {
     await writeFile(path.join(appRoot, 'client/plugins.ts'), pluginsSource);
   }
@@ -64,8 +68,11 @@ describe('client inspection', () => {
     expect(parseInspectAppClientArgs(['--type', 'settings']).type).toBe(
       'settings',
     );
+    expect(parseInspectAppClientArgs(['--type', 'locales']).type).toBe(
+      'locales',
+    );
     expect(() => parseInspectAppClientArgs(['--type', 'setting'])).toThrow(
-      '--type must be all, bootstrap, routes, settings, or providers.',
+      '--type must be all, bootstrap, routes, settings, providers, or locales.',
     );
   });
 
@@ -203,6 +210,19 @@ describe('client inspection', () => {
       packageName: '@nocobase/app-plugin-notification',
       source: 'plugin',
     });
+    expect(inspection.locales).toEqual(
+      expect.arrayContaining([
+        {
+          order: 1,
+          packageName: '@nocobase/app-template-default',
+          source: 'application',
+        },
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-workflow',
+          source: 'plugin',
+        }),
+      ]),
+    );
 
     // Administration pages are settings contributions; record detail pages may remain routes nested below them.
     expect(inspection.settings.slice(0, 4)).toEqual([
@@ -260,6 +280,7 @@ describe('client inspection', () => {
       /client\/extensions\/nocobase-auth-ui\/pages\/login-page/u,
     );
     expect(output).toMatch(/Providers \(outer -> inner\)/u);
+    expect(output).toMatch(/Locale declarations/u);
     expect(output).toMatch(/layer: root/u);
     expect(output).toMatch(/Issues: none/u);
     expect(output).toMatch(/Route components.*not inspected/su);
@@ -339,6 +360,13 @@ describe('client inspection', () => {
       issues: [],
       suggestions: [],
     });
+    expect(selectAppClientInspection(inspection, 'locales')).toEqual({
+      app: inspection.app,
+      locales: inspection.locales,
+      consistent: true,
+      issues: [],
+      suggestions: [],
+    });
 
     expect(createAppClientInspectionSuccess(inspection, 'settings')).toEqual({
       schemaVersion: 1,
@@ -351,12 +379,16 @@ describe('client inspection', () => {
 
   it('reports missing Settings access without loading pages or running bootstrap', async () => {
     const appRoot = await createInspectionApp(`
-      globalThis.__clientInspectCalls = { bootstrap: 0, page: 0, routes: 0 };
+      globalThis.__clientInspectCalls = { bootstrap: 0, locales: 0, page: 0, routes: 0 };
       const plugin = {
         packageName: '@example/client-plugin',
         bootstrap: async () => ({
           default: () => { globalThis.__clientInspectCalls.bootstrap += 1; },
         }),
+        locales: async () => {
+          globalThis.__clientInspectCalls.locales += 1;
+          return { default: {} };
+        },
         routes: async () => {
           globalThis.__clientInspectCalls.routes += 1;
           return {
@@ -384,10 +416,23 @@ describe('client inspection', () => {
 
     expect(globalThis.__clientInspectCalls).toEqual({
       bootstrap: 0,
+      locales: 0,
       page: 0,
       routes: 1,
     });
     expect(inspection.consistent).toBe(false);
+    expect(inspection.locales).toEqual([
+      {
+        order: 1,
+        packageName: '@example/inspect-app',
+        source: 'application',
+      },
+      {
+        order: 2,
+        packageName: '@example/client-plugin',
+        source: 'plugin',
+      },
+    ]);
     expect(inspection.issues).toEqual([
       expect.objectContaining({
         code: 'CLIENT_SETTINGS_ACCESS_MISSING',

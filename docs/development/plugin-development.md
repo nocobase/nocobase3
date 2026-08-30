@@ -1,6 +1,6 @@
 ---
 title: 插件开发
-description: 在 NocoBase source workspace 中创建、修改、注册和验证 App 插件，并根据需求选择 Client、Server、Database、Queue、Skills 或 Registry 能力。
+description: 在 NocoBase source workspace 中创建、修改、注册和验证 App 插件，并根据需求选择 Client、Server、Database、Queue、I18n、Skills 或 Registry 能力。
 ---
 
 # 插件开发
@@ -9,7 +9,7 @@ description: 在 NocoBase source workspace 中创建、修改、注册和验证 
 
 第一版 Create Plugin 只在 NocoBase source workspace 中创建插件。workspace 根目录包含 `packages/` 和 `pnpm-workspace.yaml`，新插件固定创建到 `packages/app-plugin-<name>/`。独立 App 可以安装和注册已发布插件，但第一版不在独立 App 中创建 standalone 插件工程。
 
-Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with` 显式选择 `database`、`server.providers`、`server.routes`、`server.jobs`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`registry` 或 `skills`；只创建 package foundation 时显式使用 `--empty`。Agent 应先运行 `--dry-run --json` 检查生成计划。
+Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with` 显式选择 `database`、`server.providers`、`server.routes`、`server.jobs`、`server.locales`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`client.locales`、`registry` 或 `skills`；只创建 package foundation 时显式使用 `--empty`。Agent 应先运行 `--dry-run --json` 检查生成计划。
 
 ## 标准工作流
 
@@ -20,7 +20,7 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 3. 确认目标插件和目标 App；新插件默认接入 `app-template-default`。
 4. 判断是创建新插件还是修改已有插件。
 5. 检查插件的 `package.json`、`client/plugin.ts` 和 `server/plugin.ts`，确认当前公开能力。
-6. 将需求分类到 Client、Server、Database、Queue、Skills 或 Registry。
+6. 将需求分类到 Client、Server、Database、Queue、I18n、Skills 或 Registry。
 7. 只读取与本次任务相关的专题和可运行 example。
 8. 在拥有该能力的插件包中实现最小完整改动，不把领域逻辑放进 App Template。
 9. 添加或更新行为级测试；测试统一放在插件根目录的 `tests/` 下。
@@ -42,6 +42,7 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 | 创建数据库结构或初始数据            | Database           | `database/`                              | [Database 模块选择](./plugin-development/database.md)            |
 | 添加页面、组件或 React Provider     | Client             | `client/`                                | [Client 模块选择](./plugin-development/client.md)                |
 | 添加后台任务                        | Queue Job          | `server/jobs/`                           | [Server Jobs](./plugin-development/server-jobs.md)               |
+| 翻译 Client、Server 或外发消息      | I18n               | `client/locales/`、`server/locales/`     | [插件国际化](./plugin-development/i18n.md)                       |
 | 描述插件向 App 提供的能力和集成方式 | Skills             | `<plugin>/skills/`                       | [描述插件提供给 App 的能力](./plugin-development/skills.md)      |
 | 向 App 安装可编辑 Client 源码       | Registry           | `<plugin>/registry/`                     | [Plugin Registry](./plugin-development/registry.md)              |
 | 验证或发布插件                      | Quality/Publishing | `tests/`、`package.json`、`CHANGELOG.md` | [测试和验证插件](./plugin-development/testing.md)                |
@@ -69,13 +70,14 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 │   ├── 初始数据              → Seed
 │   └── 后台任务              → Queue Job
 │
+├── 跨运行时文案与消息翻译 → Client/Server locales
 ├── 插件向 App 提供什么、如何集成和使用 → skills/
 └── 安装后归 App 的可编辑源码 → registry/
 ```
 
 ## 当前稳定协议
 
-- Client 插件只有 `bootstrap`、`routes` 和 `providers` 三类入口，且全部可选。
+- Client runtime contribution 只有 `bootstrap`、`routes` 和 `providers` 三类；此外可通过 `locales` 声明翻译资源，以上入口全部可选。
 - Settings 页面属于 `routes`，使用 `defineSettingsRoutes()` 声明；没有独立 `settings` loader。
 - Server Routes 是直接传给 `defineServerPlugin()` 的 route contributions，不使用 loader。
 - 每个 Server Route 必须拥有并测试自己的 authentication 和 authorization 边界，不能依赖其他 contribution 的 middleware 或当前 composition order 提供保护。
@@ -83,6 +85,7 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 - `package.json#nocobase.plugins` 是安装、CLI、构建、开发监听和 Skills 同步所需的管理元数据，不承担 Client 或 Server 运行时发现。
 - `exports["./client"]` 是 Client 注册判据；`exports["./server/plugin"]` 是 Server 注册判据。
 - Database migrations、seeds 和 Queue jobs 都由 Server 插件声明。
+- Client 和 Server 都可通过 `locales` loader 声明各自的插件翻译资源；namespace 使用插件 `packageName`。
 - Plugin Skills 是插件拥有的 App 能力与集成指南：描述公共能力、集成流程、边界和验证方式；源文件位于顶层 `skills/`，并同步到 App 的 `.agents/skills/` 供 App Agent 使用。
 - Registry 发布可 materialize 的 Client 源码配方，不属于 Client runtime contribution；安装副本由 App 拥有。
 
@@ -132,6 +135,7 @@ Create Plugin 没有隐式插件类型。新插件必须用可重复的 `--with`
 - [Client Route 最佳实践示例](./plugin-development/client-routes-examples.md)
 - [Client Providers](./plugin-development/client-providers.md)
 - [Client Bootstrap](./plugin-development/client-bootstrap.md)
+- [插件国际化](./plugin-development/i18n.md)
 - [Plugin Registry](./plugin-development/registry.md)
 - [描述插件提供给 App 的能力](./plugin-development/skills.md)
 - [测试和验证插件](./plugin-development/testing.md)

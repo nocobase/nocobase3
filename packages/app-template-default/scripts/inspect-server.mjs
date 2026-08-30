@@ -6,8 +6,8 @@ const help = `Inspect this App's imported Server plugin declarations.
 
 Importing server/plugins.ts executes module initialization, so declaration
 modules must not start runtime services. The command does not construct
-Providers, run lifecycle code, execute Route factories, connect to a database,
-start workers, or load Queue Job modules.
+Providers, run lifecycle code, execute Route factories, load locale resources,
+connect to a database, start workers, or load Queue Job modules.
 
 Usage:
   pnpm server:inspect [options]
@@ -81,6 +81,7 @@ export function formatAppServerInspection(inspection) {
       `${plugin.order}. ${plugin.packageName}@${plugin.version}`,
       `   providers: ${plugin.contributions.providers}`,
       `   routes: ${routeScopes.length > 0 ? routeScopes.join(', ') : 'none'}`,
+      `   locales: ${plugin.contributions.locales ? 'declared' : 'none'}`,
     );
     if (databaseContributions.length > 0) {
       lines.push(`   database: ${databaseContributions.join(', ')}`);
@@ -101,7 +102,7 @@ export function formatAppServerInspection(inspection) {
   lines.push(
     '',
     'Inspection scope: declarations and resolved contribution locations only.',
-    'Runtime Provider, Route, database, and Job behavior is not inspected.',
+    'Runtime Provider, Route, locale, database, and Job behavior is not inspected.',
   );
   return lines.join('\n');
 }

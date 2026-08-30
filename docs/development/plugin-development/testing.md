@@ -1,6 +1,6 @@
 ---
 title: 测试和验证插件
-description: 根据 NocoBase 插件的 Client、Server、Database、Queue、Skills 和 package exports 变化选择行为级测试，并完成插件与目标 App 的分层验证。
+description: 根据 NocoBase 插件的 Client、Server、Database、Queue、I18n、Skills 和 package exports 变化选择行为级测试，并完成插件与目标 App 的分层验证。
 ---
 
 # 测试和验证插件
@@ -9,21 +9,22 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、Skil
 
 ## 按变化选择测试
 
-| 变化                      | 最少测试                                                |
-| ------------------------- | ------------------------------------------------------- |
-| Client descriptor/options | factory 解析后的 entries 和 options                     |
-| App/Settings Routes       | parent、path、navigation、access、component loader      |
-| Client Component          | props、交互、公共 export 和目标 App 渲染                |
-| Client Provider           | descriptor、Context 行为、顺序和 cleanup                |
-| Client Bootstrap          | Refine 注册、options、异步失败和 import-time 副作用     |
-| Service/Provider          | Token、惰性单例、生命周期、错误清理                     |
-| API/Root Route            | 真实 router 请求、状态码、响应、权限、base path         |
-| Server plugin             | providers/routes/database/queue composition             |
-| Migration/Seed            | 真实数据库的 schema、metadata、up/down、数据结果        |
-| Queue Job                 | handler、payload、Service、重试/幂等和可观察结果        |
-| Registry                  | config、build、materialize、App typecheck/build         |
-| Plugin Skills             | 结构、同步和语义检查                                    |
-| exports/publish           | source export、dist export、tarball 内容和 declarations |
+| 变化                      | 最少测试                                                     |
+| ------------------------- | ------------------------------------------------------------ |
+| Client descriptor/options | factory 解析后的 entries 和 options                          |
+| App/Settings Routes       | parent、path、navigation、access、component loader           |
+| Client Component          | props、交互、公共 export 和目标 App 渲染                     |
+| Client Provider           | descriptor、Context 行为、顺序和 cleanup                     |
+| Client Bootstrap          | Refine 注册、options、异步失败和 import-time 副作用          |
+| Service/Provider          | Token、惰性单例、生命周期、错误清理                          |
+| API/Root Route            | 真实 router 请求、状态码、响应、权限、base path              |
+| Server plugin             | providers/routes/database/queue composition                  |
+| Migration/Seed            | 真实数据库的 schema、metadata、up/down、数据结果             |
+| Queue Job                 | handler、payload、Service、重试/幂等和可观察结果             |
+| Plugin I18n               | key 结构、namespace、双语言渲染、请求/外发语言和 lazy chunks |
+| Registry                  | config、build、materialize、App typecheck/build              |
+| Plugin Skills             | 结构、同步和语义检查                                         |
+| exports/publish           | source export、dist export、tarball 内容和 declarations      |
 
 ## Client 测试
 
@@ -55,6 +56,12 @@ Migration 使用真实测试数据库验证物理 schema 和 metadata，执行 `
 ## Registry 测试
 
 验证 `registry.config.json`、item roots、入口和公开 imports，再运行 Registry build。将 item materialize 到临时或目标 App，验证文件、source extension、typecheck、test 和 build。App-owned 副本不是插件测试的 canonical source，升级策略也不能只靠快照证明。
+
+## I18n 测试
+
+以 `en-US` 为 key 结构的 source of truth，运行 `pnpm i18n:check` 并用类型检查发现其他语言的遗漏或多余 key。Client 至少在两种语言下渲染真实文本；公共组件还要放入 App-owned render tree，确认它显式使用插件 namespace。Server 用真实请求验证 session/header/default locale resolution，并验证结构化 error 经目标 App HTTP error handler 输出稳定 `code/ns/key/params` 和翻译后的 `message`。
+
+Job、cron、邮件或通知必须覆盖非默认收件人语言，并证明代码先加载资源再取得固定 translator。Build 和 tarball 检查每种支持语言的 dynamic import chunk 都存在。Inspector 只静态报告 locale declaration 是否进入 composition；它不执行 loader、不展开 locale keys，也不验证翻译、fallback 或 language switching。完整规则见[插件国际化](./i18n.md)。
 
 ## Plugin Skills 检查
 
@@ -104,7 +111,7 @@ pnpm --filter <target-app> test
 pnpm --filter <target-app> build
 ```
 
-最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job 和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
+最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job、语言切换和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
 
 Inspector 只回答插件是否登记、最终组合了哪些 contributions，以及是否存在确定性的装配问题。Client inspection 不运行 Bootstrap、不加载页面、不渲染 Provider；Server inspection 不执行 Provider、Route factory、Job 或数据库操作。Agent 通过源码、类型、模块测试和目标 App 行为理解实现，不根据 inspect 推断业务正确性。
 

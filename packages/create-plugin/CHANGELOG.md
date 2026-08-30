@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Add explicit `client.locales` and `server.locales` capabilities, and stop generating locale resources implicitly for unrelated Client capabilities.
 - b049266: Scaffold a plugin with locale files and a declared `locales` entry, so a new plugin starts out translatable rather than needing i18n retrofitted.
 - 7cdffbd: Replace separate API and root route arrays with one ordered `routes` contribution array. Route factories now receive the Application, create and return their own Hono router, and are mounted automatically at `/api` or the application root according to their definition.
 

@@ -36,6 +36,10 @@ describe('runCreatePluginCli', () => {
           '--with',
           'server.routes',
           '--with',
+          'server.locales',
+          '--with',
+          'client.locales',
+          '--with',
           'skills',
           '--dry-run',
           '--json',
@@ -50,7 +54,11 @@ describe('runCreatePluginCli', () => {
       schemaVersion: number;
       mode: string;
       requestedCapabilities: string[];
-      capabilities: { server: { routes: boolean }; skills: boolean };
+      capabilities: {
+        client: { locales: boolean };
+        server: { locales: boolean; routes: boolean };
+        skills: boolean;
+      };
       derivedStructure: { clientPlugin: boolean; serverPlugin: boolean };
       files: Array<{ path: string; reason: string }>;
       writes: string[];
@@ -59,9 +67,18 @@ describe('runCreatePluginCli', () => {
     expect(result).toMatchObject({
       schemaVersion: 1,
       mode: 'dry-run',
-      requestedCapabilities: ['server.routes', 'skills'],
-      capabilities: { server: { routes: true }, skills: true },
-      derivedStructure: { clientPlugin: false, serverPlugin: true },
+      requestedCapabilities: [
+        'server.routes',
+        'server.locales',
+        'client.locales',
+        'skills',
+      ],
+      capabilities: {
+        client: { locales: true },
+        server: { locales: true, routes: true },
+        skills: true,
+      },
+      derivedStructure: { clientPlugin: true, serverPlugin: true },
       writes: [],
       commands: [],
     });
@@ -72,6 +89,14 @@ describe('runCreatePluginCli', () => {
     expect(result.files).toContainEqual({
       path: 'skills/nocobase-app-plugin-audit-log/SKILL.md',
       reason: 'skills',
+    });
+    expect(result.files).toContainEqual({
+      path: 'client/locales/index.ts',
+      reason: 'client.locales',
+    });
+    expect(result.files).toContainEqual({
+      path: 'server/locales/index.ts',
+      reason: 'server.locales',
     });
     await expect(
       readFile(
@@ -93,6 +118,10 @@ describe('runCreatePluginCli', () => {
           'audit-log',
           '--with',
           'server.routes',
+          '--with',
+          'server.locales',
+          '--with',
+          'client.locales',
           '--with',
           'skills',
           '--no-install',

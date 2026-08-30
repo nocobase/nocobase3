@@ -55,6 +55,12 @@ componentLoader: () => import('./pages/audit-log-page.js');
 - 必须保留的 CSS bare import 要精确声明 side effects，或由明确入口加载；
 - package public component 和 Registry materialized component 是不同所有权模型。
 
+## 公共组件的 i18n namespace
+
+插件 Route/Provider tree 会按 contribution 的 `packageName` 提供默认 namespace；但公共组件被 App 或其他插件渲染时处于消费方 render tree。只要组件可能离开本插件 tree，就使用 `useTranslation(PLUGIN_NS)` 或 `withNamespace(PLUGIN_NS, Component)` 显式绑定，不能根据源码目录推断 namespace。
+
+显式绑定不会注册 resources。只有公共 component subpath、没有 `./client` runtime entry 的插件，必须在“文案归 App”和“增加只含 `locales` 的 Client plugin factory 并由 App 注册”之间明确选择；不要假设 component export 会触发 Client plugin registration。完整资源声明和测试见[插件国际化](./i18n.md)。
+
 ## 测试和验证
 
 - 组件测试验证 props、用户交互、accessibility 和错误状态；

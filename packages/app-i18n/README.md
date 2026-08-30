@@ -165,9 +165,15 @@ app.addHttpMiddleware(i18nHttpMiddleware);
 Resolution order: the session's stored locale → `Accept-Language` → the configured default. The middleware awaits the locale's resources, so a handler can translate synchronously:
 
 ```ts
-const t = c.get('t');
+import { getRequestTranslator } from '@nocobase/app-i18n/server';
+
+const t = getRequestTranslator(c, NS);
 t('errors.notFound');
 ```
+
+Omit the namespace to use the translator's application namespace. Passing one binds it as the default for that
+translator; an explicit `ns` on an individual call still overrides the binding. The accessor throws a wiring error if
+the i18n HTTP middleware has not run before the route.
 
 ### Outside a request
 

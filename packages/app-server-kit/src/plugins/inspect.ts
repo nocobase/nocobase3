@@ -26,6 +26,12 @@ export interface AppServerRouteSnapshot {
   readonly scope: 'api' | 'root';
 }
 
+export interface AppServerLocalesSnapshot {
+  readonly order: number;
+  readonly pluginOrder: number;
+  readonly packageName: string;
+}
+
 export interface AppServerDatabaseSnapshot {
   readonly packageName: string;
   readonly migrations?: {
@@ -51,6 +57,7 @@ export interface AppServerPluginSnapshot {
   readonly contributions: {
     readonly providers: number;
     readonly routes: number;
+    readonly locales: boolean;
     readonly migrations: boolean;
     readonly seeds: boolean;
     readonly jobLocations: number;
@@ -62,6 +69,7 @@ export interface AppServerInspectionSnapshot {
   readonly plugins: readonly AppServerPluginSnapshot[];
   readonly providers: readonly AppServerProviderSnapshot[];
   readonly routes: readonly AppServerRouteSnapshot[];
+  readonly locales: readonly AppServerLocalesSnapshot[];
   readonly database: readonly AppServerDatabaseSnapshot[];
   readonly jobs: readonly AppServerJobsSnapshot[];
   readonly issues: readonly AppServerInspectionIssue[];
@@ -69,14 +77,15 @@ export interface AppServerInspectionSnapshot {
 
 /**
  * Describes imported Server plugin declarations and resolved contribution locations without constructing Providers,
- * running lifecycle code, executing Route factories, or loading Queue Job modules. Importing the declarations remains
- * the caller's responsibility and may execute module initialization code.
+ * running lifecycle code, executing Route factories, loading locale resources, or loading Queue Job modules.
+ * Importing the declarations remains the caller's responsibility and may execute module initialization code.
  */
 export function inspectResolvedAppServerPlugins<
   TConfig extends ApplicationConfig = ApplicationConfig,
 >(resolved: ResolvedAppServerPlugins<TConfig>): AppServerInspectionSnapshot {
   const providers: AppServerProviderSnapshot[] = [];
   const routes: AppServerRouteSnapshot[] = [];
+  const locales: AppServerLocalesSnapshot[] = [];
   const database: AppServerDatabaseSnapshot[] = [];
   const jobs: AppServerJobsSnapshot[] = [];
   const issues: AppServerInspectionIssue[] = [];
@@ -85,6 +94,13 @@ export function inspectResolvedAppServerPlugins<
   let routeOrder = 0;
   const plugins = resolved.plugins.map((plugin, index) => {
     const pluginOrder = index + 1;
+    if (plugin.definition.locales) {
+      locales.push({
+        order: locales.length + 1,
+        pluginOrder,
+        packageName: plugin.metadata.packageName,
+      });
+    }
     plugin.definition.providers.forEach((Provider) => {
       providerOrder += 1;
       providers.push({
@@ -173,6 +189,7 @@ export function inspectResolvedAppServerPlugins<
       contributions: {
         providers: plugin.definition.providers.length,
         routes: plugin.definition.routes.length,
+        locales: plugin.definition.locales !== undefined,
         migrations: configuredMigrations !== undefined,
         seeds: configuredSeeds !== undefined,
         jobLocations: configuredJobs.length,
@@ -185,6 +202,7 @@ export function inspectResolvedAppServerPlugins<
     plugins,
     providers,
     routes,
+    locales,
     database,
     jobs,
     issues,

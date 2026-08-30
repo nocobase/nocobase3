@@ -90,6 +90,30 @@ export function getRequestLocale(context: Context): Locale | undefined {
   return context.get(LOCALE_CONTEXT_KEY) as Locale | undefined;
 }
 
-export function getRequestTranslator(context: Context): Translator | undefined {
-  return context.get(TRANSLATOR_CONTEXT_KEY) as Translator | undefined;
+/**
+ * Returns the translator installed for the current request, optionally bound to a namespace.
+ *
+ * The i18n middleware loads the request locale before installing this translator. A missing translator therefore
+ * means the middleware did not run before the route, which is an application wiring error rather than an optional
+ * request state.
+ */
+export function getRequestTranslator(
+  context: Context,
+  namespace?: Namespace,
+): Translator {
+  const translator = context.get(TRANSLATOR_CONTEXT_KEY) as
+    Translator | undefined;
+  if (!translator) {
+    throw new Error(
+      'Request translator is unavailable. Make sure the i18n HTTP middleware is mounted before the route.',
+    );
+  }
+
+  if (!namespace) return translator;
+
+  return (key, options) =>
+    translator(key, {
+      ...options,
+      ns: options?.ns ?? namespace,
+    });
 }

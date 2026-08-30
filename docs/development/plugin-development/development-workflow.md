@@ -1,6 +1,6 @@
 ---
 title: 开发一个完整插件
-description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Database、Queue 和 Plugin Skills 能力，按依赖顺序实现、注册并验证完整业务闭环。
+description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Database、Queue、I18n 和 Plugin Skills 能力，按依赖顺序实现、注册并验证完整业务闭环。
 ---
 
 # 开发一个完整插件
@@ -17,22 +17,23 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 
 ## 2. 把需求映射到能力
 
-| 需求信息                    | 判断           | 主要位置               |
-| --------------------------- | -------------- | ---------------------- |
-| 插件保存自己的持久数据      | Migration      | `database/migrations/` |
-| App 必须创建业务 collection | App 前置条件   | Plugin Skills          |
-| 多模块调用稳定服务          | ServiceToken   | `server/tokens.ts`     |
-| Browser 调用服务端          | API Route      | `server/routes/`       |
-| 用户需要独立页面            | App Route      | `client/routes.ts`     |
-| 管理员配置插件              | Settings Route | `client/routes.ts`     |
-| 可复用 UI 构件              | Component      | `client/components/`   |
-| 页面共享状态                | Provider       | `client/providers.ts`  |
-| 命令式 Client 初始化        | Bootstrap      | `client/bootstrap.ts`  |
-| 操作异步执行                | Queue Job      | `server/jobs/`         |
-| App Agent 需要组合插件能力  | Plugin Skills  | `skills/`              |
-| 安装可编辑 Client 源码      | Registry       | `registry/`            |
+| 需求信息                     | 判断           | 主要位置                             |
+| ---------------------------- | -------------- | ------------------------------------ |
+| 插件保存自己的持久数据       | Migration      | `database/migrations/`               |
+| App 必须创建业务 collection  | App 前置条件   | Plugin Skills                        |
+| 多模块调用稳定服务           | ServiceToken   | `server/tokens.ts`                   |
+| Browser 调用服务端           | API Route      | `server/routes/`                     |
+| 用户需要独立页面             | App Route      | `client/routes.ts`                   |
+| 管理员配置插件               | Settings Route | `client/routes.ts`                   |
+| 可复用 UI 构件               | Component      | `client/components/`                 |
+| 页面共享状态                 | Provider       | `client/providers.ts`                |
+| 命令式 Client 初始化         | Bootstrap      | `client/bootstrap.ts`                |
+| 操作异步执行                 | Queue Job      | `server/jobs/`                       |
+| Client/Server 文案或外发消息 | I18n           | `client/locales/`、`server/locales/` |
+| App Agent 需要组合插件能力   | Plugin Skills  | `skills/`                            |
+| 安装可编辑 Client 源码       | Registry       | `registry/`                          |
 
-创建新插件时，把这些判断直接映射为一个或多个 `plugin:create --with <capability>`。
+创建新插件时，把这些判断直接映射为一个或多个 `plugin:create --with <capability>`。Client 文案选择 `client.locales`，Server/API/外发消息文案选择 `server.locales`；两侧都需要时分别选择，不能依靠其他 Client 或 Server capability 隐式生成。
 先运行 `--dry-run --json` 检查文件、依赖和派生的 Client/Server entry。生成器只创建
 显式选择的能力，不要先生成完整模板再依靠事后删除确定插件结构。
 
@@ -58,6 +59,7 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 → Service contract / Token / implementation / Provider
 → API Route / Root Route / Queue Job
 → Client components / routes / providers / bootstrap
+→ Client / Server locale resources
 → Registry（只有 App 需要拥有可编辑源码时）
 → App-facing Plugin Skills
 → App 注册和集成
@@ -67,7 +69,7 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 
 ## 5. 同步更新声明和包契约
 
-每次添加或删除能力，都同时检查 `client/plugin.ts`、`server/plugin.ts`、`package.json` 的 source/publish exports、dependencies、`files`、测试和 README。Client/Server 运行时必须由 App 的 `client/plugins.ts` 和 `server/plugins.ts` 显式注册。
+每次添加或删除能力，都同时检查 `client/plugin.ts`、`server/plugin.ts`、`package.json` 的 source/publish exports、dependencies、`files`、测试和 README。增加翻译时还要检查两侧实际使用的 `locales` loader、namespace、lazy chunks 和非默认语言行为。Client/Server 运行时必须由 App 的 `client/plugins.ts` 和 `server/plugins.ts` 显式注册。
 
 ## 6. 编写 Plugin Skills
 
@@ -104,6 +106,7 @@ unit behavior
 - [Database 模块选择](./database.md)
 - [Server 模块选择](./server.md)
 - [Client 模块选择](./client.md)
+- [插件国际化](./i18n.md)
 - [Plugin Registry](./registry.md)
 - [描述插件提供给 App 的能力](./skills.md)
 - [测试和验证插件](./testing.md)

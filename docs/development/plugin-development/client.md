@@ -5,7 +5,7 @@ description: 面向 AI Agent 的 NocoBase v3 Client 插件模块导航，帮助�
 
 # Client 模块选择
 
-Client 插件的 runtime contributions 只有 `routes`、`providers` 和 `bootstrap`，全部可选且通过 loader 惰性导入。Components 是 UI 源码或公共导出能力，不是第四种 runtime contribution；Settings 属于 Routes；Registry 是 App-owned 源码 materialization。
+Client 插件的 runtime contributions 只有 `routes`、`providers` 和 `bootstrap`，全部可选且通过 loader 惰性导入。`locales` 是独立的翻译资源声明，不是第四种 UI contribution；Components 是 UI 源码或公共导出能力；Settings 属于 Routes；Registry 是 App-owned 源码 materialization。
 
 ## 按需求选模块
 
@@ -18,6 +18,7 @@ Client 插件的 runtime contributions 只有 `routes`、`providers` 和 `bootst
 | 多个 Client surfaces 共享 React Context | `defineClientProviders()` | [Client Providers](./client-providers.md)    |
 | App 初始化时执行命令式配置              | Client Bootstrap          | [Client Bootstrap](./client-bootstrap.md)    |
 | 不同 App 传入不同稳定配置               | Client plugin options     | 本页“共享 typed options”                     |
+| 翻译 Client 页面或公共组件              | Client locale resources   | [插件国际化](./i18n.md)                      |
 | 安装后让 App 直接编辑源码               | Registry                  | [Plugin Registry](./registry.md)             |
 
 优先使用最局部的所有权：单页面状态留在页面，普通组件不创建 Provider，可以惰性完成的工作不放 Bootstrap，只替换 UI 时不重复声明 Route。
@@ -53,6 +54,7 @@ export interface AuditLogClientOptions {
 const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-audit-log',
+    locales: () => import('./locales/index.js'),
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
     providers: () => import('./providers.js'),

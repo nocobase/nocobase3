@@ -41,6 +41,7 @@ export interface AuditLogClientOptions {
 const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-audit-log',
+    locales: () => import('./locales/index.js'),
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
     providers: () => import('./providers.js'),
@@ -49,15 +50,16 @@ const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
 export default auditLog;
 ```
 
-只有三类 Client entries：
+只有三类 Client runtime contribution entries；`locales` 是并列的资源声明，不产生 UI contribution：
 
 | Entry       | 用途                                     | 加载方式                                       |
 | ----------- | ---------------------------------------- | ---------------------------------------------- |
 | `bootstrap` | 命令式配置 Refine resources 或 providers | 动态 import                                    |
 | `routes`    | App Routes 和 Settings Routes            | 动态 import                                    |
 | `providers` | React Context Providers                  | 动态 import entry；Provider component 同步声明 |
+| `locales`   | 当前 package namespace 的翻译资源        | 动态 import locale loader map                  |
 
-三类 entries 全部可选。删除某类实现时，同时删除 `defineClientPlugin()` 中对应 loader；不要保留返回空数组的无意义模块。
+这些 entries 全部可选。删除某类实现或翻译资源时，同时删除 `defineClientPlugin()` 中对应 loader；不要保留返回空数组的无意义模块。`locales` 的完整规则见[插件国际化](./i18n.md)。
 
 ### Client options
 
@@ -151,6 +153,7 @@ import routes from './routes/index.js';
 
 const auditLogPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-audit-log',
+  locales: () => import('./locales/index.js'),
   providers,
   routes,
   database: {
@@ -167,13 +170,14 @@ export default auditLogPlugin;
 
 Server contributions：
 
-| Contribution          | 用途                            | 是否可选 |
-| --------------------- | ------------------------------- | -------- |
-| `providers`           | Service 注册和生命周期          | 是       |
-| `routes`              | API 和 Root Route contributions | 是       |
-| `database.migrations` | 插件 Migration 目录             | 是       |
-| `database.seeds`      | 插件 Seed 目录                  | 是       |
-| `queue.jobs`          | Job 文件或目录位置              | 是       |
+| Contribution          | 用途                              | 是否可选 |
+| --------------------- | --------------------------------- | -------- |
+| `providers`           | Service 注册和生命周期            | 是       |
+| `routes`              | API 和 Root Route contributions   | 是       |
+| `database.migrations` | 插件 Migration 目录               | 是       |
+| `database.seeds`      | 插件 Seed 目录                    | 是       |
+| `queue.jobs`          | Job 文件或目录位置                | 是       |
+| `locales`             | 当前 package namespace 的翻译资源 | 是       |
 
 Server Routes 是直接 contributions：
 
@@ -318,7 +322,7 @@ Plugin Skills 不属于 `defineClientPlugin()` 或 `defineServerPlugin()`，也�
 
 - `packageName` 与 `package.json#name` 一致；
 - Client 使用 factory，Server 使用 definition；
-- Client 只有 `bootstrap`、`routes`、`providers` 三类 entries；
+- Client 只有 `bootstrap`、`routes`、`providers` 三类 runtime contributions，`locales` 只声明资源；
 - Settings 通过 `defineSettingsRoutes()` 并入 `routes`；
 - Server Routes 是直接 contributions；
 - source exports 和 `publishConfig.exports` 成对更新；

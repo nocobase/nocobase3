@@ -75,6 +75,7 @@ function classifyCreatePluginError(error: unknown): JsonCliError {
 
 function capabilityReason(file: string): string {
   if (file.startsWith('database/')) return 'database';
+  if (file.startsWith('server/locales/')) return 'server.locales';
   if (
     file.startsWith('server/providers/') ||
     file.startsWith('server/services/') ||
@@ -86,6 +87,7 @@ function capabilityReason(file: string): string {
     return 'server.routes';
   if (file.startsWith('server/jobs/') || file === 'tests/jobs.test.ts')
     return 'server.jobs';
+  if (file.startsWith('client/locales/')) return 'client.locales';
   if (file === 'client/routes.ts' || file === 'tests/client.test.ts')
     return 'client.routes';
   if (
@@ -159,11 +161,13 @@ export async function runCreatePluginCli(
             derivedStructure: {
               clientPlugin:
                 result.capabilities.client.bootstrap ||
+                result.capabilities.client.locales ||
                 result.capabilities.client.providers ||
                 result.capabilities.client.routes,
               serverPlugin:
                 result.capabilities.database ||
                 result.capabilities.server.jobs ||
+                result.capabilities.server.locales ||
                 result.capabilities.server.providers ||
                 result.capabilities.server.routes,
             },

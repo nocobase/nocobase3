@@ -2,19 +2,19 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const help = `Inspect the client bootstrap, routes, and providers this app resolves.
+const help = `Inspect the client bootstrap, routes, providers, and locale declarations this app resolves.
 
 Loads client/plugins.ts and runs the same resolution the browser does, so the
 output reflects the final Client contribution composition. Inspection imports
 declaration modules and executes Route and Provider factories. It does not run
-bootstrap functions, load Route page components, render Providers, or start a
-browser.
+bootstrap functions, load locale resources or Route page components, render
+Providers, or start a browser.
 
 Usage:
   pnpm client:inspect [options]
 
 Options:
-  --type <type>      all, bootstrap, routes, settings, or providers
+  --type <type>      all, bootstrap, routes, settings, providers, or locales
                      (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help
@@ -24,7 +24,8 @@ Examples:
   pnpm client:inspect --json
   pnpm client:inspect --type bootstrap
   pnpm client:inspect --type settings
-  pnpm client:inspect --type providers`;
+  pnpm client:inspect --type providers
+  pnpm client:inspect --type locales`;
 
 export class ClientInspectionError extends Error {
   constructor(code, message, options) {
@@ -68,11 +69,18 @@ export function parseInspectAppClientArgs(args) {
         );
       }
       if (
-        !['all', 'bootstrap', 'routes', 'settings', 'providers'].includes(value)
+        ![
+          'all',
+          'bootstrap',
+          'routes',
+          'settings',
+          'providers',
+          'locales',
+        ].includes(value)
       ) {
         throw inspectionError(
           'CLIENT_INSPECT_ARGUMENT_INVALID',
-          '--type must be all, bootstrap, routes, settings, or providers.',
+          '--type must be all, bootstrap, routes, settings, providers, or locales.',
         );
       }
       options.type = value;
@@ -178,6 +186,24 @@ export async function inspectAppClient({
           ...(hasOptions(plugin.options)
             ? { options: describeOptions(plugin.options) }
             : {}),
+        })),
+    ],
+    locales: [
+      ...(applicationLoader?.locales
+        ? [
+            {
+              order: 1,
+              packageName: appPackageName,
+              source: 'application',
+            },
+          ]
+        : []),
+      ...clientPlugins.plugins
+        .filter((plugin) => plugin.locales)
+        .map((plugin, index) => ({
+          order: index + (applicationLoader?.locales ? 2 : 1),
+          packageName: plugin.packageName,
+          source: 'plugin',
         })),
     ],
     routes: routes.map((route) => {
@@ -307,6 +333,7 @@ async function loadApplicationLoader(appRoot, packageName) {
     return {
       packageName,
       bootstrap: createLocalContributionLoader(appRoot, 'bootstrap'),
+      locales: createLocalContributionLoader(appRoot, 'locales'),
       providers: createLocalContributionLoader(appRoot, 'providers'),
       routes: createLocalContributionLoader(appRoot, 'routes'),
     };
@@ -317,9 +344,10 @@ async function loadApplicationLoader(appRoot, packageName) {
 
 function createLocalContributionLoader(appRoot, contribution) {
   const entry = ['ts', 'tsx', 'js']
-    .map((extension) =>
+    .flatMap((extension) => [
       path.join(appRoot, `client/${contribution}.${extension}`),
-    )
+      path.join(appRoot, `client/${contribution}/index.${extension}`),
+    ])
     .find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
   return entry ? () => import(pathToFileURL(entry).href) : undefined;
 }
@@ -498,9 +526,12 @@ export function formatAppClientInspection(inspection, type = 'all') {
   if (type === 'all' || type === 'providers') {
     sections.push(formatProviders(inspection.providers));
   }
+  if (type === 'all' || type === 'locales') {
+    sections.push(formatLocales(inspection.locales));
+  }
   sections.push(formatIssues(inspection.issues));
   sections.push(
-    'Inspection scope: Client declarations and resolved contributions only.\nBootstrap, Route components, Providers, browser behavior, and Server security are not inspected.',
+    'Inspection scope: Client declarations and resolved contributions only.\nBootstrap, locale resources, Route components, Providers, browser behavior, and Server security are not inspected.',
   );
   return sections.join('\n\n');
 }
@@ -519,6 +550,9 @@ export function selectAppClientInspection(inspection, type = 'all') {
       : {}),
     ...(type === 'all' || type === 'providers'
       ? { providers: inspection.providers }
+      : {}),
+    ...(type === 'all' || type === 'locales'
+      ? { locales: inspection.locales }
       : {}),
     consistent: inspection.consistent,
     issues: inspection.issues,
@@ -648,6 +682,18 @@ function formatProviders(providers) {
         ...constraints,
       ].join('\n');
     })
+    .join('\n')}`;
+}
+
+function formatLocales(locales) {
+  if (locales.length === 0) {
+    return 'Locale declarations\n  (none)';
+  }
+  return `Locale declarations\n${locales
+    .map(
+      (locale) =>
+        `  ${locale.order}. ${locale.packageName}\n    source: ${locale.source}`,
+    )
     .join('\n')}`;
 }
 

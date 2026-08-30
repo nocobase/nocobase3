@@ -29,6 +29,7 @@ describe('Server plugin inspection', () => {
   it('snapshots composition without constructing Providers or Route routers', () => {
     providerConstructorCalls = 0;
     let routeFactoryCalls = 0;
+    let localeLoaderCalls = 0;
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-example',
       providers: [FirstProvider],
@@ -47,6 +48,10 @@ describe('Server plugin inspection', () => {
         seeds: './database/seeds',
       },
       queue: { jobs: ['./server/jobs'] },
+      locales: async () => {
+        localeLoaderCalls += 1;
+        return { default: {} };
+      },
     });
     const resolved: ResolvedAppServerPlugins<ApplicationConfig> = {
       appPackageName: '@nocobase/app-example',
@@ -69,6 +74,7 @@ describe('Server plugin inspection', () => {
 
     expect(providerConstructorCalls).toBe(0);
     expect(routeFactoryCalls).toBe(0);
+    expect(localeLoaderCalls).toBe(0);
     expect(inspection.plugins).toEqual([
       expect.objectContaining({
         order: 1,
@@ -76,6 +82,7 @@ describe('Server plugin inspection', () => {
         contributions: {
           providers: 1,
           routes: 2,
+          locales: true,
           migrations: true,
           seeds: true,
           jobLocations: 1,
@@ -92,8 +99,52 @@ describe('Server plugin inspection', () => {
       expect.objectContaining({ scope: 'api', order: 1 }),
       expect.objectContaining({ scope: 'root', order: 2 }),
     ]);
+    expect(inspection.locales).toEqual([
+      {
+        order: 1,
+        pluginOrder: 1,
+        packageName: '@nocobase/app-plugin-example',
+      },
+    ]);
     expect(inspection.issues).toEqual([]);
     expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
+  });
+
+  it('keeps a locales-only plugin visible without loading its resources', () => {
+    let localeLoaderCalls = 0;
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-locales-only',
+      locales: async () => {
+        localeLoaderCalls += 1;
+        return { default: {} };
+      },
+    });
+
+    const inspection = inspectResolvedAppServerPlugins({
+      appPackageName: '@nocobase/app-example',
+      plugins: [
+        {
+          definition: plugin,
+          metadata: {
+            packageName: plugin.packageName,
+            version: '1.0.0',
+            rootDir: '/plugins/locales-only',
+            jobLocations: [],
+          },
+        },
+      ],
+    });
+
+    expect(localeLoaderCalls).toBe(0);
+    expect(inspection.plugins[0]?.contributions).toEqual({
+      providers: 0,
+      routes: 0,
+      locales: true,
+      migrations: false,
+      seeds: false,
+      jobLocations: 0,
+    });
+    expect(inspection.locales).toHaveLength(1);
   });
 
   it('reports configured contribution locations that did not resolve', () => {

@@ -76,6 +76,8 @@ domain operation → behavior and persistence
 
 当前默认 Queue job factory 构造 Job 时提供 `database` 和 `logger`，不提供 `ServiceContainer`。不要在 Job 中假设可以直接 `container.resolve()`，也不要只为单元测试设计一个生产环境不会使用的 constructor。需要共享逻辑时，把它提取成可由明确依赖构造的领域操作；需要连接 App container Service 的复杂插件，应由插件 Provider 建立显式 adapter 或 dispatcher，并对该集成做目标 App 测试。不要把尚不存在的通用 Service 注入机制写进 Job 契约。
 
+Job 生成邮件、通知或其他外发内容时没有请求语言可继承。语言由收件人决定；对每个目标 locale 先 `ensureLocaleLoaded(locale)`，再取得绑定插件 namespace 和该 locale 的 translator。默认 Job 又不注入 Container，因此 i18n runtime 也必须通过明确 adapter/dispatcher 接入，不能在 handler 中假设存在全局实例。完整规则见[插件国际化](./i18n.md)。
+
 ## 分层测试
 
 - 直接执行 handler，覆盖 payload 校验、成功和错误；

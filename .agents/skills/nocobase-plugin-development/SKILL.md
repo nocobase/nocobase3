@@ -43,6 +43,7 @@ for the current task:
 | Choose a database operation          | `database.md`                              |
 | Change schema                        | `database-migrations.md`                   |
 | Add required initial records         | `database-seeds.md`                        |
+| Add Client or Server translations    | `i18n.md`                                  |
 | Deliver App-owned editable source    | `registry.md`                              |
 | Write Plugin Skills for an App Agent | `skills.md`                                |
 | Test, build, and verify              | `testing.md`                               |
@@ -67,8 +68,9 @@ runnable reference is needed.
   on `ok`; recover from failures by using `error.code` and
   `error.suggestions`, while still treating the non-zero exit code as failure.
 - The public creation capabilities are `database`, `server.providers`,
-  `server.routes`, `server.jobs`, `client.routes`, `client.components`,
-  `client.providers`, `client.bootstrap`, `registry`, and `skills`.
+  `server.routes`, `server.jobs`, `server.locales`, `client.routes`,
+  `client.components`, `client.providers`, `client.bootstrap`,
+  `client.locales`, `registry`, and `skills`.
 - The first Create Plugin workflow creates plugins only in a NocoBase source
   workspace. It does not create a standalone plugin project inside an App.
 - Keep the runtime-aware shared development configuration emitted by
@@ -76,8 +78,20 @@ runnable reference is needed.
   a Node runtime declaration, Server-only plugins use the server library and
   Node ESLint presets, and full-stack plugins add DOM/JSX locally to the server
   library preset. Do not copy a complete config from another package.
-- Client entries are only `bootstrap`, `routes`, and `providers`; all are
-  optional and lazy-loaded.
+- Client runtime contribution entries are only `bootstrap`, `routes`, and
+  `providers`; all are optional and lazy-loaded. `locales` is an optional
+  resource declaration on both Client and Server plugins, not another UI
+  contribution. Its namespace is always the plugin `packageName`.
+- Locale scaffolding is explicit. Select `client.locales` for Client resources
+  and `server.locales` for Server resources; select both when both runtimes own
+  translated messages. Routes, Providers, and Bootstrap do not implicitly add
+  locale files.
+- Public Client components rendered outside their owning plugin tree must bind
+  their namespace explicitly. Binding does not register resources: a
+  component-only package either leaves copy to the App or exposes and registers
+  a locales-only `./client` plugin factory. Request-external messages must
+  choose the recipient locale, load it, and then use a fixed translator; do not
+  inherit a triggering user's request locale.
 - Client Components are source or public exports, not a fourth runtime
   contribution. Use Routes for pages, Providers for shared React Context, and
   Bootstrap only for imperative Client initialization.
@@ -109,8 +123,11 @@ runnable reference is needed.
 - Run the target App's `server:inspect --json` when Server contributions are
   involved. Check `issues`: the command imports declaration modules and reports
   plugin order, best-effort Provider constructor names, Route scopes, Database
-  sources, and Job locations. It does not inspect runtime Provider, Route,
-  database, or Job behavior.
+  sources, locale declarations, and Job locations. It does not execute locale
+  loaders or inspect runtime Provider, Route, locale, database, or Job behavior.
+- Use `client:inspect --type locales --json` to confirm Client locale declarations
+  entered composition. It does not execute locale loaders or inspect locale
+  names, keys, translations, fallback, or language switching.
 - Keep `server/plugin.ts` and the declaration modules it imports free of runtime
   startup side effects. Inspection imports these modules even though it does
   not instantiate Providers, execute Route factories, or load Job modules.

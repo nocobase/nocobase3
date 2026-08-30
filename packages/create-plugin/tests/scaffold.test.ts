@@ -70,10 +70,12 @@ describe('createPlugin', () => {
     ['server.providers', 'server/providers/index.ts', 'server/routes/'],
     ['server.routes', 'server/routes/index.ts', 'server/providers/'],
     ['server.jobs', 'server/jobs/audit-log.ts', 'client/'],
+    ['server.locales', 'server/locales/index.ts', 'client/'],
     ['client.routes', 'client/routes.ts', 'server/'],
     ['client.components', 'client/components/plugin-component.tsx', 'server/'],
     ['client.providers', 'client/providers.ts', 'server/'],
     ['client.bootstrap', 'client/bootstrap.ts', 'server/'],
+    ['client.locales', 'client/locales/index.ts', 'server/'],
     ['registry', 'registry.config.json', 'database/'],
     ['skills', 'skills/nocobase-app-plugin-audit-log/SKILL.md', 'client/'],
   ] as const)(
@@ -114,9 +116,15 @@ describe('createPlugin', () => {
       [],
     ],
     [
+      'server.locales',
+      ['./package.json', './server/plugin'],
+      ['@nocobase/app-i18n', '@nocobase/app-server-kit'],
+      [],
+    ],
+    [
       'client.routes',
       ['./client', './client/plugin', './client/routes', './package.json'],
-      ['@nocobase/app-i18n'],
+      [],
       ['@nocobase/app-client'],
     ],
     [
@@ -128,12 +136,18 @@ describe('createPlugin', () => {
     [
       'client.providers',
       ['./client', './client/plugin', './client/providers', './package.json'],
-      ['@nocobase/app-i18n'],
+      [],
       ['@nocobase/app-client', 'react'],
     ],
     [
       'client.bootstrap',
       ['./client', './client/bootstrap', './client/plugin', './package.json'],
+      [],
+      ['@nocobase/app-client'],
+    ],
+    [
+      'client.locales',
+      ['./client', './client/plugin', './package.json'],
       ['@nocobase/app-i18n'],
       ['@nocobase/app-client'],
     ],
@@ -407,7 +421,7 @@ describe('createPlugin', () => {
     expect(result.files).not.toContain('client/routes.ts');
     expect(result.files).not.toContain('client/providers.ts');
     expect(plugin).toContain("bootstrap: () => import('./bootstrap.js')");
-    expect(plugin).toContain("locales: () => import('./locales/index.js')");
+    expect(plugin).not.toContain('locales:');
     expect(plugin).not.toContain('routes:');
     expect(plugin).not.toContain('providers:');
   });
@@ -418,10 +432,12 @@ describe('createPlugin', () => {
       'server.providers',
       'server.routes',
       'server.jobs',
+      'server.locales',
       'client.routes',
       'client.components',
       'client.providers',
       'client.bootstrap',
+      'client.locales',
       'registry',
       'skills',
     ]);
@@ -442,6 +458,7 @@ describe('createPlugin', () => {
     expect(result.files).toContain('registry.config.json');
     expect(manifest.dependencies).toMatchObject({
       '@nocobase/app-database': 'workspace:^',
+      '@nocobase/app-i18n': 'workspace:^',
       '@nocobase/app-server-kit': 'workspace:^',
       '@nocobase/queue': 'workspace:^',
       '@nocobase/service-provider': 'workspace:^',

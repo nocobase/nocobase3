@@ -24,10 +24,12 @@ description: 在 NocoBase source workspace 中按显式 capability 创建 App �
 | `server.providers`  | Server Provider 能力；内部包含 ServiceProvider、Service、Token |
 | `server.routes`     | Server Route contribution；支持 API Routes 和 Root Routes      |
 | `server.jobs`       | Queue Jobs                                                     |
+| `server.locales`    | Server 翻译资源声明                                            |
 | `client.routes`     | Client Route contribution；支持 App Routes 和 Settings Routes  |
 | `client.components` | 插件拥有的 React components                                    |
 | `client.providers`  | React Context/Provider contribution                            |
 | `client.bootstrap`  | Refine 和 Browser 初始化                                       |
+| `client.locales`    | Client 翻译资源声明                                            |
 | `registry`          | 安装后归 App 所有的可编辑 Registry source                      |
 | `skills`            | 插件提供给 App Agent 的能力和集成指南                          |
 
@@ -154,7 +156,7 @@ pnpm --filter @nocobase/app-template-default server:inspect --json
 ```
 
 Client-only 插件可以跳过 Server inspection；Server-only 插件可以跳过 Client inspection。
-检查 `server:inspect` 的 `issues`，并继续用行为测试验证 Provider、Route 权限、Database 和 Job 的运行时行为。
+`client:inspect` 和 `server:inspect` 会显示 locales 声明是否进入最终 composition，但不会执行 locale loader，也不会读取语言列表、key 或翻译内容。检查 `server:inspect` 的 `issues`，并继续用 `i18n:check --strict` 与行为测试验证翻译、Provider、Route 权限、Database 和 Job 的运行时行为。
 
 最后运行目标 App 的相关 typecheck、test、build 和按风险选择的运行时验证。
 

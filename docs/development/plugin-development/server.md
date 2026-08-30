@@ -9,16 +9,17 @@ Server 插件把可复用领域逻辑放入 Service，用 Token 表达稳定能�
 
 ## 按需求选模块
 
-| 需求                           | 使用                 | 继续阅读                                                                   |
-| ------------------------------ | -------------------- | -------------------------------------------------------------------------- |
-| 可复用领域逻辑                 | Service              | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
-| 跨模块/插件的稳定能力 identity | ServiceToken         | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
-| 注册实现和管理生命周期         | ServiceProvider      | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
-| App 内 `/api` 接口             | `defineApiRoutes()`  | [Server Routes](./server-routes-examples.md)                               |
-| callback、webhook 或顶层入口   | `defineRootRoutes()` | [Server Routes](./server-routes-examples.md)                               |
-| 异步、延迟、批量或可重试工作   | Queue Job            | [Server Jobs](./server-jobs.md)                                            |
-| 表、字段、索引、约束、metadata | Migration            | [Database Migrations](./database-migrations.md)                            |
-| 插件必需的初始记录             | Seed                 | [Database Seeds](./database-seeds.md)                                      |
+| 需求                           | 使用                    | 继续阅读                                                                   |
+| ------------------------------ | ----------------------- | -------------------------------------------------------------------------- |
+| 可复用领域逻辑                 | Service                 | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
+| 跨模块/插件的稳定能力 identity | ServiceToken            | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
+| 注册实现和管理生命周期         | ServiceProvider         | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
+| App 内 `/api` 接口             | `defineApiRoutes()`     | [Server Routes](./server-routes-examples.md)                               |
+| callback、webhook 或顶层入口   | `defineRootRoutes()`    | [Server Routes](./server-routes-examples.md)                               |
+| 异步、延迟、批量或可重试工作   | Queue Job               | [Server Jobs](./server-jobs.md)                                            |
+| 表、字段、索引、约束、metadata | Migration               | [Database Migrations](./database-migrations.md)                            |
+| 插件必需的初始记录             | Seed                    | [Database Seeds](./database-seeds.md)                                      |
+| API error、响应或外发消息翻译  | Server locale resources | [插件国际化](./i18n.md)                                                    |
 
 ```text
 Route   → HTTP input/output and security policy
@@ -43,6 +44,7 @@ import routes from './routes/index.js';
 
 const plugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-audit-log',
+  locales: () => import('./locales/index.js'),
   providers,
   routes,
   queue: { jobs: ['./server/jobs'] },

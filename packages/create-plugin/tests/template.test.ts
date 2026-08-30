@@ -50,11 +50,15 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
     'tests/jobs.test.ts',
     'tests/plugin.test.ts',
   ],
+  'server.locales': [
+    'server/locales/en-US.ts',
+    'server/locales/index.ts',
+    'server/locales/zh-CN.ts',
+    'server/plugin.ts',
+    'tests/plugin.test.ts',
+  ],
   'client.routes': [
     'client/index.ts',
-    'client/locales/en-US.ts',
-    'client/locales/index.ts',
-    'client/locales/zh-CN.ts',
     'client/plugin.ts',
     'client/routes.ts',
     'tests/client.test.ts',
@@ -67,9 +71,6 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
     'client/components/provider.tsx',
     'client/contexts.ts',
     'client/index.ts',
-    'client/locales/en-US.ts',
-    'client/locales/index.ts',
-    'client/locales/zh-CN.ts',
     'client/plugin.ts',
     'client/providers.ts',
     'tests/client-provider.test.tsx',
@@ -77,11 +78,15 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
   'client.bootstrap': [
     'client/bootstrap.ts',
     'client/index.ts',
+    'client/plugin.ts',
+    'tests/bootstrap.test.ts',
+  ],
+  'client.locales': [
+    'client/index.ts',
     'client/locales/en-US.ts',
     'client/locales/index.ts',
     'client/locales/zh-CN.ts',
     'client/plugin.ts',
-    'tests/bootstrap.test.ts',
   ],
   registry: [
     'client/styles.css',
@@ -128,15 +133,17 @@ describe('bundled capability templates', () => {
   });
 
   it.each([
-    ['client-only', ['client.routes', 'client.components']],
-    ['server-only', ['server.providers', 'server.routes']],
+    ['client-only', ['client.routes', 'client.components', 'client.locales']],
+    ['server-only', ['server.providers', 'server.routes', 'server.locales']],
     [
       'full-stack',
       [
         'client.routes',
         'client.components',
+        'client.locales',
         'server.providers',
         'server.routes',
+        'server.locales',
       ],
     ],
     ['data-oriented', ['database', 'server.providers', 'server.routes']],

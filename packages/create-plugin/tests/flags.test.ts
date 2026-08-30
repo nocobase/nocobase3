@@ -74,7 +74,9 @@ describe('formatHelp', () => {
       'pnpm plugin:create <name> (--with <capability>... | --empty) [options]',
     );
     expect(help).toContain('server.providers');
+    expect(help).toContain('server.locales');
     expect(help).toContain('client.bootstrap');
+    expect(help).toContain('client.locales');
     expect(help).toContain('--json');
   });
 });

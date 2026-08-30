@@ -4,10 +4,12 @@ export const PLUGIN_CAPABILITIES = [
   'server.providers',
   'server.routes',
   'server.jobs',
+  'server.locales',
   'client.routes',
   'client.components',
   'client.providers',
   'client.bootstrap',
+  'client.locales',
   'registry',
   'skills',
 ] as const;
@@ -20,12 +22,14 @@ export interface PluginCapabilities {
     readonly providers: boolean;
     readonly routes: boolean;
     readonly jobs: boolean;
+    readonly locales: boolean;
   };
   readonly client: {
     readonly routes: boolean;
     readonly components: boolean;
     readonly providers: boolean;
     readonly bootstrap: boolean;
+    readonly locales: boolean;
   };
   readonly registry: boolean;
   readonly skills: boolean;
@@ -41,12 +45,14 @@ export function normalizePluginCapabilities(
       providers: selected.has('server.providers'),
       routes: selected.has('server.routes'),
       jobs: selected.has('server.jobs'),
+      locales: selected.has('server.locales'),
     },
     client: {
       routes: selected.has('client.routes'),
       components: selected.has('client.components'),
       providers: selected.has('client.providers'),
       bootstrap: selected.has('client.bootstrap'),
+      locales: selected.has('client.locales'),
     },
     registry: selected.has('registry'),
     skills: selected.has('skills'),

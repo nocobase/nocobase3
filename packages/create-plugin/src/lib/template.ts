@@ -42,6 +42,7 @@ const BASE_TEMPLATE_FILES = new Set([
 function hasClientPlugin(capabilities: PluginCapabilities): boolean {
   return (
     capabilities.client.bootstrap ||
+    capabilities.client.locales ||
     capabilities.client.providers ||
     capabilities.client.routes
   );
@@ -51,6 +52,7 @@ function hasServerPlugin(capabilities: PluginCapabilities): boolean {
   return (
     capabilities.database ||
     capabilities.server.jobs ||
+    capabilities.server.locales ||
     capabilities.server.providers ||
     capabilities.server.routes
   );
@@ -60,6 +62,7 @@ function hasBrowserCode(capabilities: PluginCapabilities): boolean {
   return (
     capabilities.client.bootstrap ||
     capabilities.client.components ||
+    capabilities.client.locales ||
     capabilities.client.providers ||
     capabilities.client.routes ||
     capabilities.registry
@@ -73,10 +76,12 @@ function includeTemplateFile(
   if (BASE_TEMPLATE_FILES.has(relativePath)) return true;
   if (
     relativePath === 'client/index.ts' ||
-    relativePath === 'client/plugin.ts' ||
-    relativePath.startsWith('client/locales/')
+    relativePath === 'client/plugin.ts'
   ) {
     return hasClientPlugin(capabilities);
+  }
+  if (relativePath.startsWith('client/locales/')) {
+    return capabilities.client.locales;
   }
   if (
     relativePath === 'client/bootstrap.ts' ||
@@ -110,6 +115,9 @@ function includeTemplateFile(
     relativePath === 'tests/plugin.test.ts'
   ) {
     return hasServerPlugin(capabilities);
+  }
+  if (relativePath.startsWith('server/locales/')) {
+    return capabilities.server.locales;
   }
   if (
     relativePath.startsWith('server/providers/') ||
@@ -372,7 +380,8 @@ async function renderManifest(
   }
 
   const dependencies: Record<string, string> = {};
-  if (clientPlugin) dependencies['@nocobase/app-i18n'] = 'workspace:^';
+  if (capabilities.client.locales || capabilities.server.locales)
+    dependencies['@nocobase/app-i18n'] = 'workspace:^';
   if (serverPlugin) dependencies['@nocobase/app-server-kit'] = 'workspace:^';
   if (capabilities.database)
     dependencies['@nocobase/app-database'] = 'workspace:^';
@@ -495,7 +504,9 @@ function renderClientPlugin(
   capabilities: PluginCapabilities,
 ): string {
   const entries = [
-    "  locales: () => import('./locales/index.js'),",
+    capabilities.client.locales
+      ? "  locales: () => import('./locales/index.js'),"
+      : undefined,
     capabilities.client.bootstrap
       ? "  bootstrap: () => import('./bootstrap.js'),"
       : undefined,
@@ -526,6 +537,9 @@ function renderServerPlugin(
     .filter(Boolean)
     .join('\n');
   const entries = [
+    capabilities.server.locales
+      ? "  locales: () => import('./locales/index.js'),"
+      : undefined,
     capabilities.server.providers ? '  providers,' : undefined,
     capabilities.server.routes ? '  routes,' : undefined,
     capabilities.database
@@ -545,6 +559,9 @@ function renderPluginTest(
   capabilities: PluginCapabilities,
 ): string {
   const checks = [
+    capabilities.server.locales
+      ? '      locales: expect.any(Function),'
+      : undefined,
     capabilities.server.providers
       ? '      providers: expect.any(Array),'
       : undefined,
@@ -570,10 +587,12 @@ function renderReadme(
     capabilities.server.providers && 'server.providers',
     capabilities.server.routes && 'server.routes',
     capabilities.server.jobs && 'server.jobs',
+    capabilities.server.locales && 'server.locales',
     capabilities.client.routes && 'client.routes',
     capabilities.client.components && 'client.components',
     capabilities.client.providers && 'client.providers',
     capabilities.client.bootstrap && 'client.bootstrap',
+    capabilities.client.locales && 'client.locales',
     capabilities.registry && 'registry',
     capabilities.skills && 'skills',
   ].filter(Boolean);

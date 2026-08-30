@@ -1,5 +1,11 @@
 # @nocobase/app-template-default
 
+## Unreleased
+
+### Patch Changes
+
+- Show Client and Server locale declarations in application inspection without executing locale loaders.
+
 - Simplify Client startup into Runtime definition, application creation, and rendering stages by using the shared `@nocobase/app-client/runtime` API.
 
 ## 0.1.0-beta.9

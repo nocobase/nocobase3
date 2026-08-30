@@ -37,7 +37,7 @@ Token 接口应描述行为而不是默认实现。明确返回值、错误、�
 
 ## Client 契约
 
-`exports["./client"]` 返回 Client plugin factory；插件只使用 `bootstrap`、`routes`、`providers` 三类 entry。App 通过 typed options 配置稳定行为，页面通过 routes，跨页面状态通过 providers。重组件使用 lazy loader；可复用的组件、hook 或 factory 只有在确实需要跨插件组合时才单独 export。
+`exports["./client"]` 返回 Client plugin factory；插件只使用 `bootstrap`、`routes`、`providers` 三类 runtime contribution entry，并可通过 `locales` 声明翻译资源。App 通过 typed options 配置稳定行为，页面通过 routes，跨页面状态通过 providers。重组件使用 lazy loader；可复用的组件、hook 或 factory 只有在确实需要跨插件组合时才单独 export。
 
 ```ts
 auditLog({ resourceLabel: 'Audit logs' });
@@ -49,7 +49,7 @@ Options 必须可由 App 在注册时明确提供，不依赖隐藏环境变量�
 
 ## API 契约
 
-API 路径、HTTP method、输入、响应、错误状态和权限属于公共契约。`defineApiRoutes()` 的路径挂在 `/api` 下；不要让调用方猜测 base path、用户身份或内部数据库字段。Root Route 只用于明确不属于 `/api` 的入口。
+API 路径、HTTP method、输入、响应、错误状态和权限属于公共契约。可翻译 error 还应保留稳定 `code/ns/key/params`，而不是只返回已经翻译且无法重新解释的 message。`defineApiRoutes()` 的路径挂在 `/api` 下；不要让调用方猜测 base path、用户身份或内部数据库字段。Root Route 只用于明确不属于 `/api` 的入口。
 
 ## App 和插件的所有权
 
