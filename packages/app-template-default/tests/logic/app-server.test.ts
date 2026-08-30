@@ -680,6 +680,43 @@ describe('app server', () => {
     });
   });
 
+  it('loads the Skills example API with its owning authentication boundary', async () => {
+    const app = trackCloseable(
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
+    );
+    const baseUrl = `http://localhost${app.application.publicBasePath}`;
+    const anonymous = await requestApp(
+      app,
+      `${baseUrl}/api/skills-example/notice`,
+    );
+
+    expect(anonymous.status).toBe(401);
+
+    const signIn = await requestApp(
+      app,
+      `${baseUrl}/api/auth/sign-in/username`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
+      },
+    );
+    const cookie = signIn.headers.get('set-cookie');
+    expect(signIn.status).toBe(200);
+    const response = await requestApp(
+      app,
+      `${baseUrl}/api/skills-example/notice`,
+      { headers: { cookie: cookie ?? '' } },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      description: 'This notice was provided by a NocoBase plugin.',
+      title: 'Plugin Skills are working',
+      tone: 'success',
+    });
+  });
+
   it('redirects HTML navigation to installation in install mode', async () => {
     vi.stubEnv('APP_BASE_PATH', '/main');
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
@@ -1397,6 +1434,7 @@ function createEmbeddedPluginFixture(rootDir: string): void {
   const pluginPackages = [
     '@nocobase/app-plugin-authentication',
     '@nocobase/app-plugin-authorization',
+    '@nocobase/app-plugin-skills-example',
   ];
   writeFileSync(
     path.join(rootDir, 'package.json'),

@@ -581,8 +581,34 @@ function renderReadme(
   return `# ${context.packageName}\n\n${context.description}\n\n## Generated capabilities\n\n${list}\n\nImplement only the public behavior this plugin owns. Keep declarations, exports, dependencies, tests, README, and Plugin Skills aligned when capabilities change. Every concrete Server Route must own and test its authentication and authorization boundary.\n\n## Verification\n\n\`\`\`bash\npnpm --filter ${context.packageName} lint\npnpm --filter ${context.packageName} typecheck\npnpm --filter ${context.packageName} test\npnpm --filter ${context.packageName} build\n\`\`\`\n`;
 }
 
-function renderSkill(context: PluginTemplateContext): string {
-  return `---\nname: nocobase-app-plugin-${context.shortName}\ndescription: Document the implemented App-facing capabilities of ${context.displayName} before synchronizing this Skill.\n---\n\n# ${context.displayName}\n\nThis is a development draft. Replace it with the plugin's actual public capabilities, integration workflow, permissions, constraints, and observable verification steps before registering the plugin with an App.\n`;
+function renderSkill(
+  context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
+): string {
+  const capabilityPrompts = [
+    capabilities.client.components &&
+      '- Client components: document each public package export, required props, and where the App should place it. Do not imply that a direct component import requires Client plugin registration.',
+    capabilities.client.routes &&
+      '- Client routes: document the implemented App or Settings path, navigation entry, and access conditions.',
+    capabilities.client.providers &&
+      '- Client providers: document the context or behavior exposed to the App and any required composition order.',
+    capabilities.client.bootstrap &&
+      '- Client bootstrap: document the App-visible side effects and how an Agent can verify them.',
+    capabilities.server.providers &&
+      '- Server providers: document any public `ServiceToken` export and the supported Server-to-Server workflow.',
+    capabilities.server.routes &&
+      '- Server routes: document every implemented method and path, plus its authentication and authorization boundary.',
+    capabilities.server.jobs &&
+      '- Server jobs: document how each job is triggered, required payloads, retry behavior, and observable results.',
+    capabilities.database &&
+      '- Database: document only App-visible schema prerequisites and lifecycle constraints; do not copy migration implementation details.',
+    capabilities.registry &&
+      '- Registry: document which files the App materializes, who owns the resulting code, and how updates are applied.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return `---\nname: nocobase-app-plugin-${context.shortName}\ndescription: Development draft for the App-facing capabilities of ${context.displayName}; replace this description with concrete Agent trigger conditions before synchronization.\n---\n\n# ${context.displayName}\n\n> Development draft: replace every instruction below with verified, implemented behavior before registering this plugin with an App. Do not synchronize placeholder claims.\n\n## Use this Skill when\n\nDescribe the App-level user outcome that should trigger this Skill. State when the Agent should not use it.\n\n## Public surfaces\n\nList only stable package exports, routes, services, jobs, schema requirements, or registry assets that actually exist.\n\n${capabilityPrompts || '- This plugin selected no runtime capability alongside `skills`. Document any real App-facing contract added during implementation.'}\n\n## Prerequisites\n\nList required plugin registration, authentication, permissions, configuration, and data.\n\n## App workflow\n\nGive the shortest ordered workflow an App Agent can execute. Identify which files or UI surfaces belong to the App and which belong to the plugin.\n\n## Ownership\n\nState what the plugin owns, what the App may customize, and whether generated or materialized files may be edited.\n\n## Permissions and constraints\n\nState authentication and authorization requirements separately. Document important unsupported behavior and failure modes.\n\n## Verification\n\nList observable checks that prove the integration works. Verify behavioral claims in the target App; Skill synchronization alone proves only that the files match.\n`;
 }
 
 async function formatRenderedSource(
@@ -648,7 +674,7 @@ export async function renderTemplate(options: {
                   : file.outputPath === 'tests/plugin.test.ts'
                     ? renderPluginTest(options.context, options.capabilities)
                     : file.outputPath.startsWith('skills/')
-                      ? renderSkill(options.context)
+                      ? renderSkill(options.context, options.capabilities)
                       : renderTemplateValue(
                           await readFile(file.sourcePath, 'utf8'),
                           options.context,

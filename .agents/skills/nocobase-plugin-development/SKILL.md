@@ -91,6 +91,10 @@ for the current task:
 - Plugin-owned App integration knowledge belongs in the plugin's top-level
   `skills/` and is synchronized to the App's `.agents/skills/` for the App
   Agent. It is not runtime code and is not plugin-source development guidance.
+- Use `packages/app-plugin-skills-example` as the minimal normative Plugin
+  Skill reference. A public Client component subpath export does not require a
+  `./client` runtime entry or Client plugin registration. Verify Skill claims
+  through observable target-App behavior, not only synchronized file equality.
 - Tests belong under the plugin-root `tests/` directory.
 - Migrations are immutable historical records: make them explicit,
   deterministic, self-contained, and never import live runtime schemas.

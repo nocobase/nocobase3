@@ -53,6 +53,9 @@
       "@nocobase/app-plugin-service-provider-example": {
         "enabled": true
       },
+      "@nocobase/app-plugin-skills-example": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-system-info": {
         "enabled": true
       },
@@ -85,6 +88,7 @@
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
     "@nocobase/app-plugin-service-provider-example": "workspace:^",
+    "@nocobase/app-plugin-skills-example": "workspace:^",
     "@nocobase/app-plugin-system-info": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",

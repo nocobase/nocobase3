@@ -46,6 +46,11 @@ Migration 使用真实测试数据库验证物理 schema 和 metadata，执行 `
 
 固定字符串或快照不能证明 Skill 的语义质量。开发 Agent 仍需逐项核对 Skill 描述的公共入口、工作流、权限、约束和验证是否与真实插件一致。
 
+`packages/app-plugin-skills-example` 展示了两层检查如何配合：插件测试核对 exports、Route
+认证和 Skill 内容；目标 App 测试再通过公开 component export 渲染页面，并对真实 App
+Server 发出匿名和已登录请求。只有后者能证明“App Agent 按 Skill 执行后得到可见结果”，
+`plugin:inspect` 的 `contentMatches: true` 只能证明同步副本与源文件一致。
+
 ## Package 和发布检查
 
 Client/Server 能力变化时同时检查 source `exports` 与 `publishConfig.exports`。构建后确认 declarations 可解析；`files` 只包含预期发布内容，tarball 不含测试和配置源码。发布包保留 `CHANGELOG.md`，变更摘要面向外部读者时使用 English。

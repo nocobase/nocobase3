@@ -11,6 +11,11 @@ description: 在插件顶层 skills 目录描述插件向 App 提供的公共能
 
 本指南由开发插件的 Agent 阅读，用来编写供 App Agent 使用的 Plugin Skills。插件开发文档回答“如何修改插件源码”；Plugin Skills 回答“插件向 App 提供了什么，以及 App 如何集成和使用”。
 
+仓库中的 `packages/app-plugin-skills-example` 是最小但完整的参考实现。它不是只放一份
+`SKILL.md` 的空示例，而是同时提供可导入的 Client component、Server
+`ServiceToken`、带自身认证边界的 API，以及在 `app-template-default` 中由 App 拥有的
+页面组合和行为测试。开发新 Skill 时优先对照这个闭环，不要只对照 Markdown 结构。
+
 ## Plugin Skills 的职责和读者
 
 ```text
@@ -51,6 +56,24 @@ Do not bypass  私有模块、内部表、同步副本
 ## 编写 App 集成工作流
 
 把流程写成可执行的最短闭环：发现前置条件 → 配置 App 数据或权限 → 调用公共入口 → 验证结果 → 失败时诊断。示例应使用真实名称和输入，避免模板占位符。
+
+## 区分 package export 与 Client runtime contribution
+
+可复用 component 的公开 subpath export 不等于 `exports["./client"]`。例如 Skills
+Example 公开：
+
+```text
+@nocobase/app-plugin-skills-example/client/components/app-notice
+```
+
+App 可以直接在自己拥有的页面中导入并组合它；插件没有 `./client`，因此 App 不应为了
+使用这个组件而新增 Client plugin registration。只有插件实际提供 bootstrap、routes 或
+providers contribution 时，才通过 `./client` 注册 Client plugin。Skill 必须把这两类入口
+写清楚，避免 Agent 根据 `client/` 文件路径猜测 runtime composition。
+
+同一个示例的 Server API `GET /api/skills-example/notice` 要求已登录，但对固定、非敏感
+示例数据没有额外业务授权。这里需要同时写出“有 authentication”和“为什么没有额外
+authorization”；如果响应改为私有或用户相关数据，必须重新设计权限边界并更新 Skill。
 
 ## 描述权限、约束和验证
 

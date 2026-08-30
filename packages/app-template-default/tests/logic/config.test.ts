@@ -2,7 +2,13 @@
 
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -244,6 +250,17 @@ describe('app config', () => {
     const dataDir = path.join(root, 'data');
     const clientDir = path.join(root, 'dist/client');
     tempDirs.push(root);
+    const skillsExampleRoot = path.dirname(
+      requirePackage.resolve(
+        '@nocobase/app-plugin-skills-example/package.json',
+      ),
+    );
+    const skillsExampleTarget = path.join(
+      root,
+      'node_modules/@nocobase/app-plugin-skills-example',
+    );
+    mkdirSync(path.dirname(skillsExampleTarget), { recursive: true });
+    symlinkSync(skillsExampleRoot, skillsExampleTarget, 'dir');
 
     const config = resolveEmbeddedConfig({
       id: 'main',

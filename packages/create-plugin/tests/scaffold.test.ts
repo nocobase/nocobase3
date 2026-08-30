@@ -452,6 +452,35 @@ describe('createPlugin', () => {
     expect(manifest.scripts?.prepack).toBe('pnpm registry:build');
   });
 
+  it('generates a capability-aware App-facing Skill draft', async () => {
+    const result = await createWith([
+      'client.components',
+      'server.providers',
+      'server.routes',
+      'skills',
+    ]);
+    const skill = await readFile(
+      path.join(
+        result.targetDirectory,
+        'skills/nocobase-app-plugin-audit-log/SKILL.md',
+      ),
+      'utf8',
+    );
+
+    expect(skill).toContain('## Use this Skill when');
+    expect(skill).toContain('## Public surfaces');
+    expect(skill).toContain('## App workflow');
+    expect(skill).toContain('## Ownership');
+    expect(skill).toContain('## Permissions and constraints');
+    expect(skill).toContain('## Verification');
+    expect(skill).toContain('public package export');
+    expect(skill).toContain('public `ServiceToken` export');
+    expect(skill).toContain('authentication and authorization boundary');
+    expect(skill).toContain('Development draft');
+    expect(skill).not.toContain('/api/example');
+    expect(skill).not.toContain('/settings/example');
+  });
+
   it('does not write or synchronize during a dry run', async () => {
     const repoRoot = await createTestRepo();
     const synchronize = vi.fn();

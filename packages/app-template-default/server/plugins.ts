@@ -16,6 +16,7 @@ import {
   type AppServerPlugins,
 } from '@nocobase/app-server-kit/plugins';
 import systemInfo from '@nocobase/app-plugin-system-info/server/plugin';
+import skillsExample from '@nocobase/app-plugin-skills-example/server/plugin';
 
 import type { AppConfig } from './config/index.js';
 
@@ -35,6 +36,7 @@ const serverPlugins: AppServerPlugins<AppConfig> =
     serviceProviderExample,
     workflow,
     systemInfo,
+    skillsExample,
   ]);
 
 export default serverPlugins;
