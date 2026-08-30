@@ -42,7 +42,7 @@ The exception is what most mistakes come from: a component a plugin exports for 
 ## Adding a string
 
 1. Find the package that owns the text. Application text goes in `client/locales/`; a plugin's text goes in that plugin's `client/locales/`.
-2. Add the key to `en-US.ts` — both to the exported interface and to the value. The interface is the contract; other locales are annotated with it, so this is what makes a typo a compile error.
+2. Add the key to `en-US.ts`. The structure is written once: the type is derived from the value with `LocaleResource<typeof enUS>`, and other locales are annotated with it, which is what makes a typo a compile error.
 3. Add the translation to every other locale file. A missing key falls back rather than breaking, so this can lag, but `pnpm i18n:check` will report it.
 4. Render it with `useTranslation` from `@nocobase/app-i18n/client`.
 
@@ -99,7 +99,7 @@ Without `i18nNs`, the label is treated as literal text and rendered as-is.
 
 ## Adding a language
 
-1. Copy `en-US.ts` to the new locale, annotate it with the same interface, translate the values.
+1. Copy `en-US.ts` to the new locale, annotate it with the type `en-US.ts` exports, and translate the values. Use `PartialLocaleResource<typeof enUS>` while a translation is deliberately incomplete.
 2. Add the loader to `locales/index.ts`:
 
    ```ts

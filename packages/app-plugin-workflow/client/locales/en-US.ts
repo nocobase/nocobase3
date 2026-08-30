@@ -1,25 +1,6 @@
-/**
- * The shape every locale of this plugin follows. English is the source of truth: a key exists here first, and a
- * locale that omits it falls back rather than breaking.
- */
-export interface WorkflowResource {
-  readonly nav: {
-    readonly workflow: string;
-    readonly workflows: string;
-    readonly runs: string;
-  };
-  readonly pages: {
-    readonly list: { readonly title: string; readonly description: string };
-    readonly detail: { readonly title: string; readonly description: string };
-    readonly runList: { readonly title: string; readonly description: string };
-    readonly runDetail: {
-      readonly title: string;
-      readonly description: string;
-    };
-  };
-}
+import type { LocaleResource } from '@nocobase/app-i18n';
 
-const enUS: WorkflowResource = {
+const enUS = {
   nav: {
     workflow: 'Workflow',
     workflows: 'Workflows',
@@ -48,5 +29,13 @@ const enUS: WorkflowResource = {
     },
   },
 };
+
+/**
+ * The shape every locale of this plugin follows, derived from the English wording above.
+ *
+ * English is the source of truth: a key exists here first, and a locale annotated with this type reports both a
+ * missing key and one that does not exist here at all.
+ */
+export type WorkflowResource = LocaleResource<typeof enUS>;
 
 export default enUS;

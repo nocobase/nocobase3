@@ -14,6 +14,12 @@ export default defineConfig({
         test: {
           name: 'node',
           include: ['tests/*.test.ts', 'tests/server/**/*.test.ts'],
+          // The exported types are part of the contract: a locale type that stops catching a typo is a regression
+          // no runtime test would notice.
+          typecheck: {
+            enabled: true,
+            include: ['tests/**/*.test-d.ts'],
+          },
         },
       }),
     ],

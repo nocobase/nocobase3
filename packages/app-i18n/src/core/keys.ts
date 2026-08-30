@@ -4,6 +4,43 @@
 type TranslationLeaf = string | number | boolean;
 
 /**
+ * The shape of a locale, derived from the source locale rather than written out by hand.
+ *
+ * A locale file states its structure once, in `en-US`, and every other locale is annotated with this so a key that
+ * does not exist in the source is a compile error:
+ *
+ * ```ts
+ * // en-US.ts
+ * const enUS = { language: { label: 'Language' } };
+ * export type AppResource = LocaleResource<typeof enUS>;
+ * export default enUS;
+ *
+ * // zh-CN.ts
+ * const zhCN: AppResource = { language: { label: '语言' } };
+ * ```
+ *
+ * Leaves widen to `string`, so a translation is not forced to repeat the English wording as a literal type, and each
+ * level is readonly, which keeps a resource from being mutated after it is registered.
+ */
+export type LocaleResource<TSource> = TSource extends TranslationLeaf
+  ? string
+  : {
+      readonly [Key in keyof TSource]: LocaleResource<TSource[Key]>;
+    };
+
+/**
+ * The same shape with every key optional, for a locale that is only partly translated.
+ *
+ * A missing key falls back rather than breaking, so a package may ship a translation before it is complete. Prefer
+ * `LocaleResource` where a locale is meant to be exhaustive: it reports the omission instead of silently falling back.
+ */
+export type PartialLocaleResource<TSource> = TSource extends TranslationLeaf
+  ? string
+  : {
+      readonly [Key in keyof TSource]?: PartialLocaleResource<TSource[Key]>;
+    };
+
+/**
  * Every addressable path in a resource object, as the dot-separated strings `t()` accepts.
  *
  * `{ trigger: { title: 'Trigger' } }` flattens to `'trigger' | 'trigger.title'`. The group itself stays in the union

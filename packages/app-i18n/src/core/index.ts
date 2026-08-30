@@ -18,7 +18,12 @@ export {
   type I18nTranslateOptions,
   type Translator,
 } from './runtime.js';
-export type { FlattenKeys, TranslationKey } from './keys.js';
+export type {
+  FlattenKeys,
+  LocaleResource,
+  PartialLocaleResource,
+  TranslationKey,
+} from './keys.js';
 export type {
   Locale,
   LocaleDefinition,

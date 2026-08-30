@@ -354,27 +354,33 @@ export default defineClientPlugin({
 });
 ```
 
-`en-US.ts` 是基准，导出一个描述结构的 interface；其他语言用它标注，写错 key 立刻报错，缺 key 只是回落：
+`en-US.ts` 写文案，类型由 `LocaleResource` 从文案推出来——结构不用写第二遍。其他语言用这个类型标注，写错 key 或漏 key 都会立刻报错：
 
 ```ts
 // client/locales/en-US.ts
-export interface AuditLogResource {
-  readonly list: { readonly title: string };
-}
+import type { LocaleResource } from '@nocobase/app-i18n';
 
-const enUS: AuditLogResource = {
+const enUS = {
   list: { title: 'Audit log' },
 };
+
+export type AuditLogResource = LocaleResource<typeof enUS>;
 
 export default enUS;
 ```
 
 ```ts
 // client/locales/zh-CN.ts
+import type { AuditLogResource } from './en-US.js';
+
 const zhCN: AuditLogResource = {
   list: { title: '审计日志' },
 };
+
+export default zhCN;
 ```
+
+暂时只翻译一部分时用 `PartialLocaleResource`，缺的 key 会回落而不是报错。
 
 页面里直接翻译，不用写 namespace——App 渲染插件页面时会自动把插件包名注入为默认 ns：
 

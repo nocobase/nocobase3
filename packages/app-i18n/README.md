@@ -84,7 +84,7 @@ t('label', { ns: APP_NS }); // named explicitly
 
 ### Files
 
-A locale file is a TypeScript module. `en-US` is the source of truth and exports an interface describing the structure; other locales are annotated with it, so a key that does not exist there is a compile error:
+A locale file is a TypeScript module. `en-US` is the source of truth: it states the wording, and `LocaleResource` derives the shape from it so nothing is written twice. Other locales are annotated with that type, which reports both a key that does not exist and one that was left out:
 
 ```
 client/locales/
@@ -93,7 +93,30 @@ client/locales/
 └── zh-CN.ts      const zhCN: XxxResource = { ... }
 ```
 
-The interface is explicit rather than `satisfies typeof enUS`, because a package that emits declarations runs with `isolatedDeclarations`, under which `satisfies` yields no exportable type.
+```ts
+// en-US.ts
+import type { LocaleResource } from '@nocobase/app-i18n';
+
+const enUS = {
+  language: { label: 'Language' },
+};
+
+export type AppResource = LocaleResource<typeof enUS>;
+export default enUS;
+```
+
+```ts
+// zh-CN.ts
+import type { AppResource } from './en-US.js';
+
+const zhCN: AppResource = {
+  language: { label: '语言' },
+};
+
+export default zhCN;
+```
+
+Leaves widen to `string`, so a translation is not tied to the English wording. Use `PartialLocaleResource` for a language that is deliberately incomplete; a missing key falls back rather than breaking, but the plain type is what reports the omission.
 
 Keys nest and are addressed with dots:
 

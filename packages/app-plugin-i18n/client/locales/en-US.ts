@@ -1,19 +1,18 @@
-/**
- * The shape every locale of this namespace follows. English is the source of truth: a key exists here first, and a
- * translation that omits it falls back rather than breaking.
- */
-export interface I18nPluginResource {
-  readonly language: {
-    readonly label: string;
-    readonly switchError: string;
-  };
-}
+import type { LocaleResource } from '@nocobase/app-i18n';
 
-const enUS: I18nPluginResource = {
+const enUS = {
   language: {
     label: 'Language',
     switchError: 'Unable to switch language.',
   },
 };
+
+/**
+ * The shape every locale of this namespace follows, derived from the English wording above.
+ *
+ * English is the source of truth: a key exists here first, and a locale annotated with this type reports both a
+ * missing key and one that does not exist here at all.
+ */
+export type I18nPluginResource = LocaleResource<typeof enUS>;
 
 export default enUS;

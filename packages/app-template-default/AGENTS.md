@@ -84,17 +84,19 @@ canonical copy under this package's `registry/` directory.
 
 `@nocobase/app-plugin-i18n` is registered by default, so any string a user reads goes through a translation key rather than a literal.
 
-The application's own copy lives in `client/locales/`. `en-US.ts` is the source of truth and exports the interface every other locale is annotated with, so a key that does not exist there is a compile error while a missing translation simply falls back:
+The application's own copy lives in `client/locales/`. `en-US.ts` states the wording, and `LocaleResource` derives the shape from it — the structure is never written twice. Other locales are annotated with that type, so a key that does not exist there is a compile error:
 
 ```ts
 // client/locales/en-US.ts
-export interface AppResource {
-  readonly actions: { readonly save: string };
-}
+import type { LocaleResource } from '@nocobase/app-i18n';
 
-const enUS: AppResource = {
+const enUS = {
   actions: { save: 'Save' },
 };
+
+export type AppResource = LocaleResource<typeof enUS>;
+
+export default enUS;
 ```
 
 ```ts
