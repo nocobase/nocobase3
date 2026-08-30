@@ -16,7 +16,12 @@ import type { NocoBaseDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server-kit/drive';
 import { createLogger, type Logger, type Logging } from '@nocobase/logging';
 import { loggingToken } from '@nocobase/app-server-kit/logging';
+import { sessionManagerToken } from '@nocobase/app-server-kit/session';
 import { ServiceContainer } from '@nocobase/service-provider';
+import {
+  createSessionManager,
+  type NocoBaseSessionManager,
+} from '@nocobase/session';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -101,6 +106,30 @@ describe('file plugin route factory and registrar', () => {
       publicBasePath: '/base',
       tokenSecret: 'demo-token-secret',
     });
+  });
+
+  it('uses the resolved session manager secret when config is ephemeral', () => {
+    const ephemeralSecret = 'ephemeral-session-secret';
+    const runtime = resolveFilePluginRuntime(
+      createContainer(
+        { ...config, session: undefined },
+        {
+          ...deps,
+          sessionManager: createSessionManager({
+            enabled: false,
+            default: 'null',
+            stores: { null: { driver: 'null' } },
+            cookie: { name: 'session' },
+            lifetime: { absolute: '2h' },
+            secret: ephemeralSecret,
+          }),
+        },
+      ),
+      createConfigAccessor({ ...config, session: undefined }),
+    );
+
+    expect(isFilePluginRuntimeUnavailable(runtime)).toBe(false);
+    expect(runtime).toMatchObject({ tokenSecret: ephemeralSecret });
   });
 
   it('does not initialize demo fixtures during provider boot', async () => {
@@ -297,7 +326,6 @@ describe('file plugin route factory and registrar', () => {
   it.each([
     ['database', { database: undefined }],
     ['Drive', { driveManager: undefined }],
-    ['token secret', {}, { session: undefined }],
   ] as const)(
     'keeps the app startable and returns 503 without %s',
     async (_name, depsOverride, configOverride = {}) => {
@@ -403,6 +431,7 @@ interface HostServices {
   readonly auth: Pick<Auth, 'required'>;
   readonly authz: HostAuthorization;
   readonly logging: Pick<Logging, 'getLogger'>;
+  readonly sessionManager?: NocoBaseSessionManager;
 }
 
 function createContainer(
@@ -420,6 +449,21 @@ function createContainer(
   container.instance(authenticationToken, services.auth as Auth);
   container.instance(authorizationToken, services.authz as AppAuthorization);
   container.instance(loggingToken, services.logging as Logging);
+  if (services.sessionManager) {
+    container.instance(sessionManagerToken, services.sessionManager);
+  } else if (config.session?.secret) {
+    container.instance(
+      sessionManagerToken,
+      createSessionManager({
+        enabled: false,
+        default: 'null',
+        stores: { null: { driver: 'null' } },
+        cookie: { name: 'session' },
+        lifetime: { absolute: '2h' },
+        secret: config.session.secret,
+      }),
+    );
+  }
   if (includeRuntime) {
     container.singleton(filePluginRuntimeToken, (resolver) =>
       resolveFilePluginRuntime(resolver, createConfigAccessor(config)),

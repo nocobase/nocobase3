@@ -176,9 +176,11 @@ const report = {
         : '(none)',
       rolling: session.lifetime.rolling ?? true,
     },
-    secret: session.secret ? '<configured>' : '(missing)',
+    secret: session.secret ? '<configured>' : '(ephemeral)',
     previousSecrets: session.previousSecrets?.length ?? 0,
-    gcLottery: session.gcLottery ?? [2, 100],
+    gcLottery: session.gcLottery
+      ? [session.gcLottery.hits, session.gcLottery.total]
+      : [2, 100],
   },
   notification: {
     test: {

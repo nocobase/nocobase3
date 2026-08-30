@@ -10,8 +10,21 @@ import {
 import { defineAppConfig, type AppConfigDefinition } from '../config/index.js';
 import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 
-export const sessionConfig: AppConfigDefinition<
+export interface AppSessionGcLotteryConfig {
+  readonly hits: number;
+  readonly total: number;
+}
+
+export interface AppSessionConfigInput extends Omit<
   AppSessionConfig,
+  'gcLottery' | 'secret'
+> {
+  readonly gcLottery: AppSessionGcLotteryConfig;
+  readonly secret?: string;
+}
+
+export const sessionConfig: AppConfigDefinition<
+  AppSessionConfigInput,
   ResolvedAppRuntimeConfigContext
 > = defineAppConfig({
   namespace: 'session',
@@ -39,10 +52,14 @@ export const sessionConfig: AppConfigDefinition<
       inactivity: Type.Optional(Type.Union([Type.Number(), Type.String()])),
       rolling: Type.Optional(Type.Boolean()),
     }),
-    secret: Type.String(),
+    secret: Type.Optional(Type.String({ minLength: 32 })),
     previousSecrets: Type.Optional(Type.Array(Type.String())),
-    gcLottery: Type.Optional(
-      Type.Tuple([Type.Number({ minimum: 0 }), Type.Number({ minimum: 1 })]),
+    gcLottery: Type.Object(
+      {
+        hits: Type.Integer({ minimum: 0 }),
+        total: Type.Integer({ minimum: 1 }),
+      },
+      { additionalProperties: false },
     ),
     stores: Type.Unsafe<AppSessionConfig['stores']>(
       Type.Record(
@@ -72,7 +89,6 @@ export const sessionConfig: AppConfigDefinition<
     cookie: {
       name: 'nocobase_session',
       path: '/',
-      secure: false,
       httpOnly: true,
       sameSite: 'lax' as const,
       partitioned: false,
@@ -82,9 +98,8 @@ export const sessionConfig: AppConfigDefinition<
       absolute: '2h',
       rolling: true,
     },
-    secret: 'nocobase-local-session-secret',
     previousSecrets: [],
-    gcLottery: [2, 100],
+    gcLottery: { hits: 2, total: 100 },
     stores: {
       memory: {
         driver: 'memory',
@@ -121,8 +136,8 @@ export const sessionConfig: AppConfigDefinition<
     SESSION_ROLLING: envBoolean('lifetime.rolling'),
     SESSION_SECRET: envString('secret'),
     SESSION_PREVIOUS_SECRETS: envStrings('previousSecrets'),
-    SESSION_GC_LOTTERY_HITS: envInteger('gcLottery.0'),
-    SESSION_GC_LOTTERY_TOTAL: envInteger('gcLottery.1'),
+    SESSION_GC_LOTTERY_HITS: envInteger('gcLottery.hits'),
+    SESSION_GC_LOTTERY_TOTAL: envInteger('gcLottery.total'),
     SESSION_FILES: envString('stores.fs.base'),
     SESSION_REDIS_URL: envString('stores.redis.url'),
     REDIS_HOST: envString('stores.redis.host'),

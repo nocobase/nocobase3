@@ -4,7 +4,7 @@ import {
 } from '@nocobase/app-database';
 import type { NocoBaseDriveManager } from '@nocobase/drive';
 import { driveConfig, driveManagerToken } from '@nocobase/app-server-kit/drive';
-import { sessionConfig } from '@nocobase/app-server-kit/session';
+import { sessionManagerToken } from '@nocobase/app-server-kit/session';
 import {
   appConfig,
   type AppConfigAccessor,
@@ -54,7 +54,7 @@ export function resolveFilePluginRuntime(
   }
   const database = container.resolve(databaseManagerToken);
   const drive = container.resolve(driveManagerToken);
-  const session = config.get(sessionConfig);
+  const session = container.resolve(sessionManagerToken).config;
   const driveConfigValue = config.get(driveConfig);
   const app = config.get(appConfig);
   const tokenSecret = session?.secret;

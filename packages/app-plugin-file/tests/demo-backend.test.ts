@@ -21,8 +21,10 @@ import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server-kit/drive';
 import { createLogger, type Logging } from '@nocobase/logging';
 import { loggingToken } from '@nocobase/app-server-kit/logging';
+import { sessionManagerToken } from '@nocobase/app-server-kit/session';
 import type { AppConfigAccessor } from '@nocobase/app-server-kit/config';
 import { ServiceContainer } from '@nocobase/service-provider';
+import { createSessionManager } from '@nocobase/session';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -561,7 +563,7 @@ interface HostServices {
 }
 
 function createContainer(
-  _config: FilePluginConfig,
+  config: FilePluginConfig,
   services: HostServices,
 ): ServiceContainer {
   const container = new ServiceContainer();
@@ -574,6 +576,19 @@ function createContainer(
   container.instance(authenticationToken, services.auth as Auth);
   container.instance(authorizationToken, services.authz as AppAuthorization);
   container.instance(loggingToken, services.logging as Logging);
+  if (config.session?.secret) {
+    container.instance(
+      sessionManagerToken,
+      createSessionManager({
+        enabled: false,
+        default: 'null',
+        stores: { null: { driver: 'null' } },
+        cookie: { name: 'session' },
+        lifetime: { absolute: '2h' },
+        secret: config.session.secret,
+      }),
+    );
+  }
   return container;
 }
 
