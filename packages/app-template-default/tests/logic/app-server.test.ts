@@ -655,7 +655,7 @@ describe('app server', () => {
 
   it('keeps plugin API and Root Routes authenticated by their owning contributions', async () => {
     const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl: false }),
+      await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
     const anonymous = await requestApp(app, `${baseUrl}/api/routes-example`);
@@ -701,7 +701,7 @@ describe('app server', () => {
 
   it('loads the system info API from the registered app plugin', async () => {
     const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl: false }),
+      await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
     const signIn = await requestApp(
@@ -731,7 +731,7 @@ describe('app server', () => {
 
   it('loads the Skills example API with its owning authentication boundary', async () => {
     const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl: false }),
+      await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
     const anonymous = await requestApp(
@@ -800,7 +800,7 @@ describe('app server', () => {
   it('dispatches jobs from enabled app plugins', async () => {
     vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
     const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl: false }),
+      await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
     const anonymous = await requestApp(app, `${baseUrl}/api/queue-example`);
@@ -1493,6 +1493,19 @@ async function createIsolatedStandaloneServer(
       databaseDir: path.join(sourceRoot, 'database'),
       clientDir: path.join(sourceRoot, 'dist/client'),
       storageDir: path.join(sourceRoot, 'storage'),
+    },
+  });
+}
+
+function createInstalledStandaloneServer(
+  options: StandaloneServerOptions = {},
+): Promise<StandaloneServer> {
+  return createIsolatedStandaloneServer({
+    ...options,
+    env: {
+      ...options.env,
+      DB_MIGRATIONS_AUTO_RUN: 'true',
+      DB_SEEDS_AUTO_RUN: 'true',
     },
   });
 }
