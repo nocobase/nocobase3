@@ -13,6 +13,18 @@ import type { ServiceResolver } from '@nocobase/service-provider';
 
 import { FileUnavailableError } from './errors.js';
 
+export interface FilePluginConfig {
+  readonly app: {
+    readonly publicBasePath: string;
+  };
+  readonly drive?: {
+    readonly default: string;
+  };
+  readonly session?: {
+    readonly secret?: string;
+  };
+}
+
 export interface UnavailableFilePluginRuntime {
   readonly unavailable: true;
   readonly error: FileUnavailableError;

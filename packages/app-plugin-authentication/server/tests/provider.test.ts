@@ -5,10 +5,8 @@ import {
   type DatabaseManager,
 } from '@nocobase/app-database';
 import { ServiceContainer } from '@nocobase/service-provider';
-import type { Caching } from '@nocobase/caching';
-import { cachingToken } from '@nocobase/app-server-kit/caching';
-import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
-import { AppConfig, appConfig } from '@nocobase/app-server-kit/config';
+import { cachingToken, type Caching } from '@nocobase/caching';
+import { idGeneratorToken } from '@nocobase/id-generator';
 
 const authHandler = vi.hoisted(() =>
   vi.fn((request: Request) => Promise.resolve(new Response(request.url))),
@@ -22,14 +20,14 @@ vi.mock('../auth.js', async (importOriginal) => {
   return { ...actual, createAuthentication };
 });
 
-import AuthenticationProvider, {
+import {
+  AuthenticationProvider,
   createCookiePrefix,
   resolvePublicPath,
   toPublicRequest,
   type AuthenticationProviderConfig,
-} from '../provider.js';
-import { authenticationToken } from '../token.js';
-import { authenticationConfig } from '../config.js';
+} from '../providers/authentication.js';
+import { authenticationToken } from '../tokens.js';
 
 describe('authentication provider', () => {
   it('registers authentication with the application runtime and dependencies', async () => {
@@ -51,15 +49,7 @@ describe('authentication provider', () => {
       generateString: vi.fn(() => 'generated-id'),
     };
     const container = new ServiceContainer();
-    const values = createConfig();
-    const config = new AppConfig(
-      [
-        { ...appConfig, defaults: values.app },
-        { ...authenticationConfig, defaults: values.auth },
-      ],
-      { context: {} },
-    );
-    await config.loadAll();
+    const config = createConfig();
     container.instance(databaseManagerToken, database);
     container.instance(cachingToken, caching);
     container.instance(idGeneratorToken, idGenerator);
@@ -129,13 +119,7 @@ function createConfig(): AuthenticationProviderConfig {
       name: 'main app',
       publicOrigin: 'https://example.com',
       publicBasePath: '/main',
-      internalBasePath: '',
-      publicApiUrl: '/main/api',
     },
-    auth: {
-      secret: 'test-auth-secret-at-least-32-characters',
-      emailAndPassword: { enabled: true, autoSignIn: false },
-      session: { storeSessionInDatabase: true },
-    },
+    auth: { secret: 'test-auth-secret-at-least-32-characters' },
   };
 }

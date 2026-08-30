@@ -1,17 +1,16 @@
-export { default as WorkflowProvider } from './provider.js';
+export { WorkflowProvider } from './providers/workflow.js';
 export type {
   WorkflowProviderApplication,
   WorkflowProviderConfig,
-} from './provider.js';
-export { workflowServiceToken } from './token.js';
+} from './providers/workflow.js';
+export { workflowServiceToken } from './tokens.js';
 export {
+  workflowConfig,
   resolveWorkflowRuntimeConfig,
   type ResolveWorkflowRuntimeConfigOptions,
   type WorkflowRuntimeConfig,
 } from './config.js';
-export { createWorkflowRoutes } from './routes/routes.js';
-export { default as registerWorkflowRoutes } from './routes/routes.js';
-export type { WorkflowPluginRoutesApplication } from './routes/routes.js';
+export { createWorkflowRoutes } from './routes/workflow.js';
 export type {
   JsonObject,
   WorkflowEventOptions,

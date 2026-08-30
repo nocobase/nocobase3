@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-server-kit",
-  "version": "0.0.1-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -85,6 +85,10 @@
     "./websocket": {
       "types": "./src/websocket.ts",
       "import": "./src/websocket.ts"
+    },
+    "./i18n": {
+      "types": "./src/i18n/index.ts",
+      "import": "./src/i18n/index.ts"
     }
   },
   "files": [
@@ -186,8 +190,9 @@
   "dependencies": {
     "@hono/node-server": "catalog:",
     "@nocobase/app-database": "workspace:^",
-    "@nocobase/config": "workspace:^",
+    "@nocobase/app-i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
+    "@nocobase/config": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",

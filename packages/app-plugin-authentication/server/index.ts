@@ -1,12 +1,12 @@
 export * from './auth.js';
 export * from './auth-storage.js';
+export { authenticationConfig, resolveAuthSecret } from './config.js';
 export * from './better-auth/database-adapter.js';
 export {
-  default as AuthenticationProvider,
+  AuthenticationProvider,
   createCookiePrefix,
   resolvePublicPath,
   toPublicRequest,
   type AuthenticationProviderConfig,
-} from './provider.js';
-export * from './token.js';
-export * from './config.js';
+} from './providers/authentication.js';
+export * from './tokens.js';

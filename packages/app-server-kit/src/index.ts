@@ -5,6 +5,7 @@ export * from './database/index.js';
 export * from './caching/index.js';
 export * from './drive/index.js';
 export * from './id-generator/index.js';
+export * from './i18n/index.js';
 export * from './logging/index.js';
 export * from './queue/index.js';
 export * from './session/index.js';

@@ -1,5 +1,22 @@
 # @nocobase/app-plugin-database-example
 
+## 0.0.1-beta.2
+
+### Patch Changes
+
+- Updated dependencies [b049266]
+- Updated dependencies [7cdffbd]
+- Updated dependencies [7cdffbd]
+- Updated dependencies [7cdffbd]
+- Updated dependencies [ce4eab8]
+- Updated dependencies [7cdffbd]
+- Updated dependencies [7cdffbd]
+- Updated dependencies [7cdffbd]
+- Updated dependencies [7cdffbd]
+- Updated dependencies [7cdffbd]
+  - @nocobase/app-server-kit@0.1.0-beta.2
+  - @nocobase/app-database@0.0.1-beta.1
+
 ## 0.0.1-beta.1
 
 ### Patch Changes

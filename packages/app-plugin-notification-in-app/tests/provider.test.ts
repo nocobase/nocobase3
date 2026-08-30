@@ -14,8 +14,8 @@ import {
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import InAppNotificationProvider from '../server/provider.js';
-import { inAppNotificationStoreToken } from '../server/token.js';
+import { InAppNotificationProvider } from '../server/providers/in-app-notification.js';
+import { inAppNotificationStoreToken } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-notification-in-app provider', () => {
   it('registers its Channel and Provider during boot', async () => {

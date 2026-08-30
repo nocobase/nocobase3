@@ -16,8 +16,8 @@ vi.mock('../server/authorization.js', async (importOriginal) => {
   return { ...actual, createAppAuthorization };
 });
 
-import AuthorizationProvider from '../server/provider.js';
-import { authorizationToken } from '../server/token.js';
+import { AuthorizationProvider } from '../server/providers/authorization.js';
+import { authorizationToken } from '../server/tokens.js';
 
 describe('authorization provider', () => {
   it('registers authorization with the service-container database', () => {

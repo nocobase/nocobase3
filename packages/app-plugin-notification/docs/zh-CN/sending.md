@@ -1,7 +1,7 @@
 ---
 title: '发送通知'
-description: '使用 NocoBase NotificationManager 发送站内信和邮件，并读取发送结果。'
-keywords: 'NocoBase,NotificationManager,发送通知,站内信,邮件'
+description: '使用 NocoBase NotificationManager 发送站内信、邮件和 IM Webhook 消息，并读取发送结果。'
+keywords: 'NocoBase,NotificationManager,发送通知,站内信,邮件,飞书,钉钉'
 ---
 
 # 发送通知
@@ -88,6 +88,93 @@ await notification.send({
 
 Provider 由 Channel 配置统一选择；普通业务代码不需要维护 Provider 名称或底层 Delivery 字段。
 
+## 选择 Provider
+
+Provider 路由默认使用 `single` 策略。大部分时候不需要传 `routing`——系统会选择当前 Channel 配置中第一个启用的 Provider。
+
+如果一个 Channel 配置了多个 Provider，并且你需要明确选择其中一个，只需要传 Provider 的 `name`：
+
+```ts
+await notification.send({
+  to: { type: 'email', address: 'alice@example.com' },
+  channels: ['email'],
+  routing: {
+    email: {
+      providers: {
+        provider: 'primary-smtp',
+      },
+    },
+  },
+  content: {
+    title: '审批待处理',
+    body: '你有一条新的审批任务。',
+  },
+});
+```
+
+同一个 Channel 内的 Provider `name` 必须唯一，所以发送时不需要再传 Provider `type`。省略 `strategy` 就是 `single`，上面的写法等同于显式传入 `strategy: 'single'`。
+
+Provider 路由支持这些写法：
+
+| 配置                                                                    | 行为                                                     |
+| ----------------------------------------------------------------------- | -------------------------------------------------------- |
+| 省略 `routing`                                                          | 默认使用 `single`，选择配置中的第一个启用 Provider。     |
+| `{ providers: { provider: 'primary-smtp' } }`                           | 默认使用 `single`，选择指定名称的 Provider。             |
+| `{ providers: { strategy: 'single' } }`                                 | 选择默认 Provider。                                      |
+| `{ providers: { strategy: 'all' } }`                                    | 为当前 Channel 的所有已启用 Provider 分别创建 Delivery。 |
+| `{ providers: { strategy: 'all', providers: ['feishu', 'dingtalk'] } }` | 只向列出的 Provider 分别创建 Delivery。                  |
+
+`single` 只表示一次发送为这个 Channel 选择一个 Provider。Provider 投递失败后不会自动切换到另一个 Provider。
+
+## 发送飞书或钉钉消息
+
+Webhook Provider 的目标使用逻辑目标 ID 表示。默认模板将飞书和钉钉 Webhook 都映射到 `default` 目标：
+
+```ts
+await notification.send({
+  to: { type: 'target', id: 'default' },
+  channels: ['im'],
+  content: {
+    title: '部署完成',
+    body: '生产环境已经完成部署。',
+    actionUrl: 'https://example.com/deployments/42',
+  },
+});
+```
+
+如果只发送到飞书，可以通过路由指定 Provider。`provider` 的值必须与配置中的 Provider `name` 一致：
+
+```ts
+await notification.send({
+  to: { type: 'target', id: 'default' },
+  channels: ['im'],
+  routing: {
+    im: {
+      providers: {
+        provider: 'feishu',
+      },
+    },
+  },
+  content: { title: '部署完成', body: '生产环境已经完成部署。' },
+});
+```
+
+如果你通过 `createImChannelDefinition()` 提供了用户 ID 到 IM 目标的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
+
+如果要同时发送到所有已启用的 IM Provider，使用 `strategy: 'all'`。每个 Provider 会创建一条独立 Delivery：
+
+```ts
+await notification.send({
+  to: { type: 'target', id: 'default' },
+  channels: ['im'],
+  routing: { im: { providers: { strategy: 'all' } } },
+  content: {
+    title: '部署完成',
+    body: '生产环境已经完成部署。',
+  },
+});
+```
+
 ## 读取返回结果
 
 `send()` 返回 Notification ID 和每条 Delivery 的 ID：
@@ -98,6 +185,7 @@ const result = await notification.send(input);
 result.notificationId;
 result.status;
 result.deliveries[0]?.id;
+result.deliveries[0]?.provider;
 ```
 
 新建 Notification 和 Delivery 的初始状态是 `pending`，只表示通知已经保存并交给队列，不表示 Provider 已接受消息。需要最终结果时，通过日志查询：
@@ -122,6 +210,6 @@ Channel 不支持某种接收人时，对应组合会创建一条失败的 Deliv
 ## 相关链接
 
 - [通知概览](./overview.md)——了解一次发送如何拆分为 Delivery
-- [配置通知](./configuration.md)——启用站内信和 SMTP 邮件
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——启用 Email 和 IM Provider
 - [手动接入通知](./integration.md)——创建 manager 并注册 Channel / Provider
 - [通知日志](./logs.md)——查询最终投递结果

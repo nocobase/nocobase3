@@ -1,0 +1,52 @@
+{
+  "name": "@nocobase/create-plugin",
+  "version": "0.0.2-beta.0",
+  "description": "Create a NocoBase 3 application plugin.",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "bin": {
+    "create-plugin": "./bin/run.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "template",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
+    "test": "vitest run",
+    "prepack": "pnpm build",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-create-plugin.tgz\" && pnpm exec publint ."
+  },
+  "dependencies": {
+    "@nocobase/dev-config": "workspace:^",
+    "prettier": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "publint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/create-plugin"
+  },
+  "license": "Apache-2.0"
+}

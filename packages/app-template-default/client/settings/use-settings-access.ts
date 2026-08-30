@@ -99,12 +99,19 @@ export function buildNavEntries(
   visible: readonly AppClientRegisteredSetting[],
   groups: readonly AppClientRegisteredSettingGroup[],
 ): readonly SettingsNavEntry[] {
-  const visiblePaths = new Set(visible.map((setting) => setting.path));
+  const visiblePaths = new Set(
+    visible
+      .filter((setting) => setting.navigation !== false)
+      .map((setting) => setting.path),
+  );
   const groupsById = new Map(groups.map((group) => [group.id, group]));
   const entries: SettingsNavEntry[] = [];
   const seenGroups = new Set<string>();
 
   for (const setting of visible) {
+    if (setting.navigation === false) {
+      continue;
+    }
     if (setting.groupId === undefined) {
       entries.push({ kind: 'page', setting });
       continue;

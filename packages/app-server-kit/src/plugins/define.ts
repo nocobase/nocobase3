@@ -7,17 +7,16 @@ import type {
 
 const PACKAGE_NAME_PATTERN = /^@[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
 
-export function defineServerPlugin(
-  definition: AppServerPluginDefinition,
-): AppServerPlugin {
+export function defineServerPlugin<TConfig = object>(
+  definition: AppServerPluginDefinition<TConfig>,
+): AppServerPlugin<TConfig> {
   const packageName = normalizePackageName(definition.packageName);
 
   return Object.freeze({
     packageName,
     config: Object.freeze(normalizeConfigDefinitions(definition.config)),
     providers: Object.freeze([...(definition.providers ?? [])]),
-    apiRoutes: Object.freeze([...(definition.apiRoutes ?? [])]),
-    rootRoutes: Object.freeze([...(definition.rootRoutes ?? [])]),
+    routes: Object.freeze([...(definition.routes ?? [])]),
     database: definition.database
       ? Object.freeze({ ...definition.database })
       : undefined,
@@ -29,6 +28,7 @@ export function defineServerPlugin(
             : undefined,
         })
       : undefined,
+    locales: definition.locales,
   });
 }
 

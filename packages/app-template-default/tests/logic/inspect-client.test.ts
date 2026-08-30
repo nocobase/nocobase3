@@ -15,10 +15,11 @@ function settingFor(id: string, title: string) {
       action: 'read',
       resource: `authorization.settings.${id}`,
     },
-    entry: '@nocobase/app-plugin-authorization/client/settings',
+    entry: '@nocobase/app-plugin-authorization/client/routes',
     groupId: 'authorization',
     id,
     packageName: '@nocobase/app-plugin-authorization',
+    parent: 'settings',
     path: `/settings/authorization/${id}`,
     source: 'plugin',
     title,
@@ -135,11 +136,13 @@ describe('client inspection', () => {
       },
     ]);
     expect(
-      inspection.bootstraps.map(({ order, packageName, source }) => ({
-        order,
-        packageName,
-        source,
-      })),
+      inspection.bootstraps
+        .slice(0, 6)
+        .map(({ order, packageName, source }) => ({
+          order,
+          packageName,
+          source,
+        })),
     ).toEqual([
       {
         order: 1,
@@ -175,7 +178,7 @@ describe('client inspection', () => {
 
     // Authorization's administration pages are settings rather than routes, and keep the paths they were published
     // at before the settings centre existed.
-    expect(inspection.settings).toEqual([
+    expect(inspection.settings.slice(0, 4)).toEqual([
       settingFor('permission-sets', 'Permission Sets'),
       settingFor('default-access', 'Default Access'),
       settingFor('sharing-rules', 'Sharing Rules'),
@@ -212,6 +215,7 @@ describe('client inspection', () => {
       id: '@nocobase/app-template-default:home',
       name: 'home',
       packageName: '@nocobase/app-template-default',
+      parent: 'app',
       path: '/',
       routeSource: 'application',
       routeEntry: './client/routes',

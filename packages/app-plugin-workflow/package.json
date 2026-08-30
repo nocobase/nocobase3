@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -123,7 +123,7 @@
     "registry",
     "registry.config.json",
     "public/r",
-    ".agents"
+    "skills"
   ],
   "nocobase": {
     "registry": {
@@ -151,9 +151,10 @@
   },
   "dependencies": {
     "@sinclair/typebox": "catalog:",
-    "@nocobase/app-server-kit": "workspace:^",
-    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-i18n": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",

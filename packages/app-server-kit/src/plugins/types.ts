@@ -7,23 +7,24 @@ import type {
   AppConfigAccessor,
   AppConfigDefinition,
 } from '../config/index.js';
+import type { LocalesModule } from '@nocobase/app-i18n';
 
 import type { ConfigPaths } from '../config/index.js';
-import type { AppApiRoutes, AppRootRoutes } from '../router/index.js';
+import type { AppRouteContribution } from '../router/index.js';
 
-export interface AppPluginApplication {
+export interface AppPluginApplication<TConfig = object> {
   readonly appName: string;
   readonly publicBasePath: string;
-  readonly config: AppConfigAccessor;
+  readonly config: AppConfigAccessor & Partial<Record<never, TConfig>>;
   readonly paths: ConfigPaths;
   readonly router: Hono;
-  readonly apiRouter: Hono;
   readonly container: ServiceContainer;
 }
 
-export type AppPluginProviderConstructor = new (
-  app: AppPluginApplication,
-) => ServiceProviderLifecycle;
+export interface AppPluginProviderConstructor<TConfig = object> {
+  new (app: AppPluginApplication): ServiceProviderLifecycle;
+  readonly __config?: TConfig;
+}
 
 export interface AppServerPluginDatabaseContribution {
   readonly migrations?: string;
@@ -34,26 +35,29 @@ export interface AppServerPluginQueueContribution {
   readonly jobs?: readonly string[];
 }
 
-export interface AppServerPluginDefinition {
+export type AppServerPluginLocalesLoader = () => Promise<LocalesModule>;
+
+export interface AppServerPluginDefinition<TConfig = object> {
   readonly packageName: string;
   readonly config?:
     | AppConfigDefinition<unknown, never>
     | readonly AppConfigDefinition<unknown, never>[];
-  readonly providers?: readonly AppPluginProviderConstructor[];
-  readonly apiRoutes?: readonly AppApiRoutes<AppPluginApplication>[];
-  readonly rootRoutes?: readonly AppRootRoutes<AppPluginApplication>[];
+  readonly providers?: readonly AppPluginProviderConstructor<TConfig>[];
+  readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
-export interface AppServerPlugin {
+export interface AppServerPlugin<TConfig = object> {
   readonly packageName: string;
   readonly config: readonly AppConfigDefinition<unknown, never>[];
-  readonly providers: readonly AppPluginProviderConstructor[];
-  readonly apiRoutes: readonly AppApiRoutes<AppPluginApplication>[];
-  readonly rootRoutes: readonly AppRootRoutes<AppPluginApplication>[];
+  readonly providers: readonly AppPluginProviderConstructor<TConfig>[];
+  readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
+  readonly locales?: AppServerPluginLocalesLoader;
+  readonly __config?: TConfig;
 }
 
 export interface AppServerPlugins {

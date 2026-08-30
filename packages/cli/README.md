@@ -10,31 +10,31 @@ NocoBase 3 内部开发命令行工具，命令名为 `nb3`。
 
 已实现：
 
-| 命令                         | 说明                                                        |
-| ---------------------------- | ----------------------------------------------------------- |
-| `nb3 app create`             | 从 npm 下载模板包并生成本地 App 项目                        |
-| `nb3 app dev`                | 用项目自身的包管理器运行其 `dev` 脚本                       |
-| `nb3 app info`               | 显示 App 名称、目录、模板来源、依赖是否已安装               |
-| `nb3 app config`             | 读写 `.nb3/config.json`                                     |
-| `nb3 app plugin register`    | 安装插件并写入依赖、`nocobase.plugins`、`client/plugins.ts` |
-| `nb3 app plugin unregister`  | 上述的逆操作，并卸载插件包                                  |
-| `nb3 app plugin update`      | 升级插件包并同步其 skills                                   |
-| `nb3 app plugin skills sync` | 同步插件 skills，不升级                                     |
-| `nb3 app destroy`            | 删除本地 App 目录，带确认和路径防护                         |
-| `nb3 hub create`             | 下载模板包并生成 Hub 项目                                   |
-| `nb3 hub start`              | 后台启动 Hub 并记录进程，`--foreground` 可留在当前终端      |
-| `nb3 hub dev`                | 开发模式启动，停留在当前终端                                |
-| `nb3 hub restart`            | 停止后重新启动                                              |
-| `nb3 hub status`             | 显示运行状态、进程号、地址、已部署 App 数                   |
-| `nb3 hub stop`               | 停止 Hub，先 SIGTERM 再 SIGKILL，并清理陈旧记录             |
-| `nb3 hub logs`               | 查看日志，支持 `--tail` 和 `--follow`                       |
-| `nb3 hub open`               | 打开 App Console                                            |
+| 命令                         | 说明                                                   |
+| ---------------------------- | ------------------------------------------------------ |
+| `nb3 app create`             | 从 npm 下载模板包并生成本地 App 项目                   |
+| `nb3 app dev`                | 用项目自身的包管理器运行其 `dev` 脚本                  |
+| `nb3 app info`               | 显示 App 名称、目录、模板来源、依赖是否已安装          |
+| `nb3 app config`             | 读写 `.nb3/config.json`                                |
+| `nb3 app plugin register`    | 安装插件并写入 manifest、Client 与 Server 显式入口     |
+| `nb3 app plugin unregister`  | 上述的逆操作，并卸载插件包                             |
+| `nb3 app plugin update`      | 升级插件包并同步其 skills                              |
+| `nb3 app plugin skills sync` | 同步插件 skills，不升级                                |
+| `nb3 app destroy`            | 删除本地 App 目录，带确认和路径防护                    |
+| `nb3 hub create`             | 下载模板包并生成 Hub 项目                              |
+| `nb3 hub start`              | 后台启动 Hub 并记录进程，`--foreground` 可留在当前终端 |
+| `nb3 hub dev`                | 开发模式启动，停留在当前终端                           |
+| `nb3 hub restart`            | 停止后重新启动                                         |
+| `nb3 hub status`             | 显示运行状态、进程号、地址、已部署 App 数              |
+| `nb3 hub stop`               | 停止 Hub，先 SIGTERM 再 SIGKILL，并清理陈旧记录        |
+| `nb3 hub logs`               | 查看日志，支持 `--tail` 和 `--follow`                  |
+| `nb3 hub open`               | 打开 App Console                                       |
 
 `nb3 app deploy`、`nb3 app pull`、`nb3 app list` 需要 Hub 提供 App 管理 API，而 v3 的 Hub 目前只有健康检查和一个 API 代理，因此这三条命令以退出码 3 明确报错，不打印占位输出——脚本里 deploy 返回成功却什么都没做，比直接失败危险得多。
 
 `nb3 hub` 的 8 条命令全部可用。
 
-插件注册的实现在 `src/lib/` 下的 `client-plugins.ts`、`plugin-registration.ts`、`skills-sync.ts`，仓库根目录的 `scripts/*-plugin.mjs` 共用同一份，区别只在插件从工作区还是从 `node_modules` 解析。`client-plugins.ts` 把 TypeScript 和 Prettier 都从目标 App 解析，所以 App 用自己的版本和配置格式化自己的源码，两者缺失也不会让注册失败。
+插件注册的实现在 `src/lib/` 下的 `client-plugins.ts`、`server-plugins.ts`、`plugin-registration.ts` 和 `skills-sync.ts`。仓库根命令也直接调用 `nb3 app plugin * --workspace-root .`，不再维护第二套 register、unregister 或 skills sync 脚本。`--workspace-root` 模式从 workspace 选择 App，并默认写入 `workspace:^`；普通 App 模式则从当前 App 的 `node_modules` 解析插件。两个显式入口编辑器都从目标 App 解析 TypeScript 和 Prettier，所以 App 用自己的版本和配置格式化自己的源码，两者缺失也不会让注册失败。
 
 停止 Hub 时终止的是整个进程组而不是单个进程：start 脚本通常是包管理器的包装进程，真正监听端口的服务是它的孙进程，只杀记录的 pid 会留下占着端口的孤儿。
 

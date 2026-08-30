@@ -1,9 +1,9 @@
 import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import type { ConfigPaths } from '@nocobase/app-server-kit/config';
 import {
-  authenticationConfig,
-  resolveAuthSecret,
-} from '@nocobase/app-plugin-authentication/server';
+  defineRootRoutes,
+  type AppRootRouteContribution,
+} from '@nocobase/app-server-kit/router';
 import { Hono } from 'hono';
 
 import {
@@ -11,8 +11,20 @@ import {
   InstallConfigurationError,
 } from '../configure.js';
 import { isInstallModeAuthSecret } from '../install-mode.js';
+import { authenticationConfig } from '@nocobase/app-plugin-authentication/server';
 
-export type InstallPluginRoutesApplication = AppPluginApplication;
+export interface InstallPluginConfig {
+  readonly app: {
+    readonly name: string | undefined;
+    readonly publicBasePath: string;
+  };
+  readonly auth: {
+    readonly secret?: string;
+  };
+}
+
+export type InstallPluginRoutesApplication =
+  AppPluginApplication<InstallPluginConfig>;
 
 export interface CreateInstallRoutesOptions {
   readonly paths: ConfigPaths;
@@ -50,36 +62,41 @@ export function createInstallRoutes(options: CreateInstallRoutesOptions): Hono {
   return routes;
 }
 
-export default function registerInstallRoutes(
-  { config, paths }: InstallPluginRoutesApplication,
-  router: Hono,
-): void {
-  const installMode = isInstallModeAuthSecret(
-    resolveAuthSecret(config.get(authenticationConfig).secret, paths.root()),
-  );
+export const rootRoutes: AppRootRouteContribution<InstallPluginRoutesApplication> =
+  defineRootRoutes(({ config, paths }) => {
+    const router = new Hono();
+    const installMode = isInstallModeAuthSecret(
+      config.get(authenticationConfig).secret,
+    );
 
-  router.get('/install/status', (context) => {
-    context.header('Cache-Control', 'no-store');
-    return context.json<InstallStatusResponse>({ installed: !installMode });
-  });
+    router.get('/install/status', (context) => {
+      context.header('Cache-Control', 'no-store');
+      return context.json<InstallStatusResponse>({ installed: !installMode });
+    });
 
-  if (!installMode) {
-    return;
-  }
-
-  router.use('*', async (context, next) => {
-    const isInstallRequest =
-      context.req.path === '/install' ||
-      context.req.path.startsWith('/install/');
-    const isHtmlNavigation =
-      context.req.method === 'GET' &&
-      context.req.header('Accept')?.includes('text/html');
-    if (isInstallRequest || !isHtmlNavigation) {
-      await next();
-      return;
+    if (!installMode) {
+      return router;
     }
 
-    return context.redirect('/install');
+    router.use('*', async (context, next) => {
+      const isInstallRequest =
+        context.req.path === '/install' ||
+        context.req.path.startsWith('/install/');
+      const isHtmlNavigation =
+        context.req.method === 'GET' &&
+        context.req.header('Accept')?.includes('text/html');
+      if (isInstallRequest || !isHtmlNavigation) {
+        await next();
+        return;
+      }
+
+      return context.redirect('/install');
+    });
+    router.route('/install', createInstallRoutes({ paths }));
+    return router;
   });
-  router.route('/install', createInstallRoutes({ paths }));
-}
+
+const routes: readonly AppRootRouteContribution<InstallPluginRoutesApplication>[] =
+  [rootRoutes];
+
+export default routes;

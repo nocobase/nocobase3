@@ -1,9 +1,9 @@
 import {
-  defineClientRoutes,
-  type AppClientRouteDefinition,
+  defineAppRoutes,
+  type AppClientAppRoutesContribution,
 } from '@nocobase/app-client/plugins';
 
-const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
+const routes: AppClientAppRoutesContribution = defineAppRoutes([
   {
     name: 'workflow-list',
     path: '/workflow/workflows',

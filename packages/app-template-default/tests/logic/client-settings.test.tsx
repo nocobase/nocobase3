@@ -58,7 +58,10 @@ describe('settings centre', () => {
     expect(
       screen.getByRole('button', { name: /Switch to .* theme/ }),
     ).toBeVisible();
-    expect((await screen.findAllByText('Alice')).length).toBeGreaterThan(0);
+    // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
+    expect(
+      await screen.findByRole('button', { name: 'Open account menu' }),
+    ).toHaveAttribute('title', 'Alice');
     expect(
       screen.queryByRole('link', { name: 'Settings' }),
     ).not.toBeInTheDocument();

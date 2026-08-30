@@ -140,18 +140,22 @@ function resolvePlugin(
     version:
       typeof packageJson.version === 'string' ? packageJson.version : 'unknown',
     rootDir: packageRoot,
-    migrationsDirectory: resolveOptionalPath(
+    migrationsDirectory: resolveOptionalDirectoryPath(
       packageRoot,
       definition.database?.migrations,
     ),
-    seedsDirectory: resolveOptionalPath(
+    seedsDirectory: resolveOptionalDirectoryPath(
       packageRoot,
       definition.database?.seeds,
     ),
     jobLocations: Object.freeze(
-      (definition.queue?.jobs ?? []).map((configuredPath) =>
-        createJobLocation(resolveRequiredPath(packageRoot, configuredPath)),
-      ),
+      (definition.queue?.jobs ?? []).flatMap((configuredPath) => {
+        const resolvedPath = resolveOptionalDirectoryPath(
+          packageRoot,
+          configuredPath,
+        );
+        return resolvedPath ? [createJobLocation(resolvedPath)] : [];
+      }),
     ),
   };
 }
@@ -162,32 +166,20 @@ function createJobLocation(resolvedPath: string): string {
     : resolvedPath;
 }
 
-function resolveOptionalPath(
+function resolveOptionalDirectoryPath(
   packageRoot: string,
   configuredPath: string | undefined,
 ): string | undefined {
-  return configuredPath
-    ? resolveRequiredPath(packageRoot, configuredPath)
-    : undefined;
-}
-
-function resolveRequiredPath(
-  packageRoot: string,
-  configuredPath: string,
-): string {
+  if (!configuredPath) {
+    return undefined;
+  }
   validatePackagePath(configuredPath);
   const relativePath = configuredPath.slice(2);
   const candidates = [
     path.resolve(packageRoot, relativePath),
     path.resolve(packageRoot, 'dist', relativePath),
   ];
-  const resolved = candidates.find((candidate) => existsSync(candidate));
-  if (!resolved) {
-    throw new Error(
-      `Server plugin path "${configuredPath}" does not exist in ${packageRoot}.`,
-    );
-  }
-  return resolved;
+  return candidates.find((candidate) => existsSync(candidate));
 }
 
 function validatePackagePath(configuredPath: string): void {

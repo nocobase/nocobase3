@@ -6,15 +6,13 @@ import {
 import { createAppConfig } from './config/index.js';
 import plugins from './plugins.js';
 import providers from './providers/index.js';
-import apiRoutes from './routes/api/index.js';
-import rootRoutes from './routes/index.js';
+import routes from './routes/index.js';
 
 const appRuntime: AppRuntimeDefinition = defineAppRuntime({
   config: createAppConfig,
   plugins,
   providers,
-  apiRoutes,
-  rootRoutes,
+  routes,
 });
 
 export default appRuntime;

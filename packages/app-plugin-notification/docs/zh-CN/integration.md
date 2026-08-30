@@ -1,12 +1,12 @@
 ---
 title: '手动接入通知'
-description: '在 NocoBase 应用中手动接入 NotificationManager、站内信 Channel、SMTP Provider、路由和生命周期。'
-keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP'
+description: '在 NocoBase 应用中手动接入 NotificationManager、站内信、Email 与 IM Provider、路由和生命周期。'
+keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP,Resend,飞书,钉钉'
 ---
 
 # 手动接入通知
 
-通知包通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建 `NotificationManager`，并负责启动与关闭。自定义宿主仍可按本文后半部分手动组合这些能力。
+通知包通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建 `NotificationManager`，并负责启动与关闭。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
@@ -31,6 +31,9 @@ pnpm add @nocobase/app-plugin-notification \
       },
       "@nocobase/app-plugin-notification-in-app": {
         "enabled": true
+      },
+      "@nocobase/app-plugin-notification-providers": {
+        "enabled": true
       }
     }
   }
@@ -43,11 +46,11 @@ pnpm add @nocobase/app-plugin-notification \
 pnpm migrate
 ```
 
-插件声明同时用于发现 migrations、Provider 和 routes；启用插件后会自动创建对应运行时。
+插件声明同时用于发现 migrations、Service Provider 和 routes。默认模板启用插件后会自动注册内置 definitions，并提供受登录和权限保护的测试页面；自定义宿主可继续按下面的步骤手动创建运行时和挂载路由。
 
 ## 第二步：创建配置
 
-配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件：
+配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件。Resend、飞书与钉钉的字段和环境变量见[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)：
 
 ```ts
 import {
@@ -97,6 +100,7 @@ import {
   createNotificationManager,
   createNotificationRegistry,
   type NotificationManager,
+  type NotificationProviderIdentity,
 } from '@nocobase/app-plugin-notification';
 import {
   createDatabaseProviderDefinition,
@@ -108,10 +112,18 @@ import {
 } from '@nocobase/app-plugin-notification-in-app';
 import {
   createEmailChannelDefinition,
+  createResendProviderDefinition,
   createSmtpProviderDefinition,
   type EmailMessage,
   type EmailRecipient,
 } from '@nocobase/app-plugin-notification-providers';
+import {
+  createDingTalkWebhookProviderDefinition,
+  createFeishuWebhookProviderDefinition,
+  createImChannelDefinition,
+  type ImMessage,
+  type ImRecipient,
+} from '@nocobase/app-plugin-notification-providers/im';
 import type { Logger } from '@nocobase/logging';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
@@ -126,6 +138,10 @@ interface AppNotificationChannels {
     readonly recipient: EmailRecipient;
     readonly message: EmailMessage;
   };
+  readonly im: {
+    readonly recipient: ImRecipient;
+    readonly message: ImMessage;
+  };
 }
 
 export interface AppNotificationRuntime {
@@ -137,7 +153,10 @@ export function createAppNotificationRuntime(options: {
   readonly database: DatabaseManager;
   readonly queue: NocoBaseQueueManager;
   readonly logger: Logger;
-  readonly resolveUserEmail?: (userId: string) => Promise<string | undefined>;
+  readonly resolveUserEmail?: (
+    userId: string,
+    provider: NotificationProviderIdentity,
+  ) => Promise<string | undefined>;
 }): AppNotificationRuntime {
   const registry = createNotificationRegistry();
   const inAppStore = createInAppStore(options.database);
@@ -153,7 +172,11 @@ export function createAppNotificationRuntime(options: {
         resolveUserEmail: options.resolveUserEmail,
       }),
     )
-    .registerProvider('email', createSmtpProviderDefinition());
+    .registerProvider('email', createSmtpProviderDefinition())
+    .registerProvider('email', createResendProviderDefinition())
+    .registerChannel(createImChannelDefinition())
+    .registerProvider('im', createFeishuWebhookProviderDefinition())
+    .registerProvider('im', createDingTalkWebhookProviderDefinition());
 
   const manager = createNotificationManager<AppNotificationChannels>({
     database: options.database,
@@ -167,7 +190,7 @@ export function createAppNotificationRuntime(options: {
 }
 ```
 
-如果不需要站内信，可以删除 `inAppStore`、`in-app` Channel 和 database Provider。邮件也可以用同样方式按需移除。
+如果不需要站内信，可以删除 `inAppStore`、`in-app` Channel 和 database Provider。Email 与 IM definitions 也可以按需移除。只注册 definitions 不会发送消息；只有配置中启用相应 Provider，并调用 `send()` 后才会发生外部请求。
 
 ## 第四步：挂载路由
 
@@ -249,6 +272,6 @@ pnpm registry materialize \
 ## 相关链接
 
 - [通知概览](./overview.md)——了解 Notification、Delivery 和 Attempt
-- [配置通知](./configuration.md)——调整 Channel 和 Provider 配置
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——配置 SMTP、Resend、飞书和钉钉
 - [发送通知](./sending.md)——使用 `NotificationManager.send()`
 - [通知日志](./logs.md)——查询 Delivery 和 Attempt

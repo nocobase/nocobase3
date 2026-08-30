@@ -76,7 +76,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
 export default clientPlugins;
 ```
 
-数组顺序就是 bootstrap 的执行顺序。当前 `nocobase.plugins` 的 key 顺序同样决定执行顺序（`register-plugin.mjs` 按包名排序插入），区别在于它是隐式副作用，而数组顺序是作者可见、可调整的。
+数组顺序就是 bootstrap 的执行顺序。当前 `nocobase.plugins` 的 key 顺序同样决定执行顺序（注册命令按包名排序插入），区别在于它是隐式副作用，而数组顺序是作者可见、可调整的。
 
 ### 2.2 插件侧
 
@@ -517,7 +517,7 @@ componentSource: routeComponentOverrides.some((o) => o.routeId === route.id)
 
 本期只摘掉第一个。删除 `nocobase.plugins` 需要先完成 server 侧的等价改造，该改造有一处额外成本：
 
-**插件的 server 入口目前由 manifest 与 Provider 文件约定共同解析**：`@nocobase/app-server-kit/plugins` 优先读取 `nocobase.plugin.server`，未声明时只探测 `server/provider.ts` 或构建后的等价文件。Route 文件是 Provider 的内部实现，不是第二个插件入口。改成 App 源码显式 import 后，每个插件仍需要提供稳定的 server 注册 export，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/plugins.ts` 解析包名。
+**插件的 server 入口目前由 manifest 与插件定义共同解析**：`@nocobase/app-server-kit/plugins` 读取 `nocobase.plugin.server` 指向的 `server/plugin.ts`。Provider 集合位于 `server/providers/index.ts`，Route 集合位于 `server/routes/index.ts`；它们都是 `server/plugin.ts` 的内部贡献，不是独立的插件入口。改成 App 源码显式 import 后，每个插件仍需要提供稳定的 server 注册 export，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/plugins.ts` 解析包名。
 
 顺序：**client 显式注册（本期）→ server 显式注册 → 删除 `nocobase.plugins`**。
 
@@ -560,7 +560,7 @@ componentSource: routeComponentOverrides.some((o) => o.routeId === route.id)
 
 ### 7.2 实现要点
 
-提议抽出 `scripts/lib/client-plugins.mjs`，供 register / unregister / remove / inspect 共用：
+最终实现位于 `packages/cli/src/lib/client-plugins.ts`，由 register、unregister 和 remove 共用：
 
 ```
 readClientPlugins(appRoot)                              → { imports, entries, sourceText, ranges }
@@ -574,7 +574,7 @@ removeClientPlugin(sourceText, {packageName})            → 新的 sourceText
 - **插入位置**：import 插在最后一条 import 之后；数组项追加到数组末尾，不排序。追加比排序更可预测，且不会打乱作者安排的 bootstrap 顺序。
 - **幂等**：包名已存在则不写文件，输出 `already registered`。
 - **`--dry-run`**：打印将要写入的结果，不落盘。
-- **失败回滚**：沿用 `register-plugin.mjs` 现有的快照恢复模式（它已经对 `package.json` 和 `pnpm-lock.yaml` 这么做了），把 `client/plugins.ts` 一并纳入快照。
+- **失败处理**：注册计划必须在写入前完成；包管理器失败时不能写入 Client 或 Server 入口。
 - **`client/plugins.ts` 不存在时**：生成一个只含 `defineClientPlugins([])` 的骨架文件。
 
 ### 7.3 前置依赖
@@ -583,7 +583,7 @@ removeClientPlugin(sourceText, {packageName})            → 新的 sourceText
 
 ### 7.4 需要连带改动的命令
 
-- **`unregister-plugin.mjs`**：反向删除 import 和数组项。
+- **`nb3 app plugin unregister`**：反向删除 import 和数组项。
 - **`remove-plugin.mjs`**：现在的引用扫描只看 package.json 的依赖字段和 `nocobase.plugins`（`scripts/remove-plugin.mjs:228`）。必须扩展到扫描各 App 的 `client/plugins.ts`，否则会出现「插件已删除但 App 仍 import 它」的破坏性结果。
 - **inspect**：改为加载 `client/plugins.ts`，实现方式见 §7.6。脚本已移入模板包，成为 `pnpm client:inspect`。它同时是 codegen 的验证手段：生成的代码能被加载并解析出预期贡献，即证明 codegen 正确。
 
@@ -817,7 +817,7 @@ Registry 交付的是「拿去改」的源码配方，skills 交付的是「跟�
 | 本仓库（monorepo）          | `pnpm plugin:skills:sync`  | 根 `package.json` 脚本              |
 | `create-app` 生成的独立应用 | `pnpm nb3 app skills:sync` | `@nocobase/nb3-cli`（bin 为 `nb3`） |
 
-同步逻辑在 `@nocobase/nb3-cli` 的 `src/lib/skills-sync.ts`，两者共用；`scripts/lib/skills-sync.mjs` 只提供 monorepo 的插件解析（从 workspace 找），独立应用则从 `node_modules` 找。
+同步逻辑在 `@nocobase/nb3-cli` 的 `src/lib/skills-sync.ts`。仓库根命令通过 `--workspace-root .` 选择 workspace App；独立应用则以当前目录为 App，并从 `node_modules` 找插件。
 
 #### monorepo 命令（主入口）
 
@@ -864,7 +864,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 ### 8.6 发布相关的前置问题
 
-插件要随包发布 skills，`package.json` 的 `files` 必须包含 `.agents`。但 `scripts/create-plugin.mjs` 生成的 package.json **完全没有 `files` 字段**——这违反了仓库根 AGENTS.md「A new package therefore … declares `files`」的规则，且直接阻塞 skills 发布。本期需要一并修复。
+插件要随包发布 skills，`package.json` 的 `files` 必须包含 `.agents`。旧的根脚手架没有生成 `files` 字段，这违反了仓库根 AGENTS.md「A new package therefore … declares `files`」的规则，且直接阻塞 skills 发布。现在 `@nocobase/create-plugin` 的模板已经补齐该字段。
 
 同一处模板生成的 `version` 是 `0.1.0`，而 AGENTS.md 要求新包从 `0.0.1` 起。这是与本方案无关的既有不一致，是否一并修正见 §10。
 
@@ -921,22 +921,18 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 路由覆盖列表在 `index.tsx` 合并，`createAppRuntime` 的签名不变。
 
-### 9.4 根 `scripts/`
+### 9.4 根命令与 `scripts/`
 
-| 文件                     | 改动                                     |
-| ------------------------ | ---------------------------------------- |
-| `lib/client-modules.mjs` | 新增，AST 定位 + splice + prettier       |
-| `lib/skills-sync.mjs`    | 新增，workspace 解析 + 复用 CLI 同步逻辑 |
-| `register-plugin.mjs`    | 写入 client/plugins.ts；调用 skills sync |
-| `unregister-plugin.mjs`  | 从 client/plugins.ts 移除；清理 skills   |
-| `remove-plugin.mjs`      | 引用扫描扩展到 client/plugins.ts         |
-| inspect（已移入模板包）  | 改为加载 client/plugins.ts               |
-| `create-plugin.mjs`      | 生成 `client/plugin.ts`；补 `files` 字段 |
-| `sync-skills.mjs`        | 新增，`plugin:skills:sync` 入口          |
+| 入口                      | 最终实现                                        |
+| ------------------------- | ----------------------------------------------- |
+| `pnpm plugin:register`    | `nb3 app plugin register --workspace-root .`    |
+| `pnpm plugin:unregister`  | `nb3 app plugin unregister --workspace-root .`  |
+| `pnpm plugin:skills:sync` | `nb3 app plugin skills sync --workspace-root .` |
+| `remove-plugin.mjs`       | 引用扫描覆盖 Client 和 Server 显式入口          |
+| inspect（已移入模板包）   | 加载 `client/plugins.ts`                        |
+| `packages/create-plugin`  | 生成 `client/plugin.ts`，并声明完整发布文件     |
 
-根 `package.json`：加 `typescript: catalog:` 到 devDependencies，加 `plugin:skills:sync` 脚本。
-
-`lib/skills-sync.mjs` 从 `@nocobase/nb3-cli` 导入同步逻辑，只保留 workspace 的插件解析。CLI 侧新增 `src/lib/skills-sync.ts`、`src/lib/plugin-update.ts`，以及 `src/commands/app/plugin/` 下的 `update.ts` 与 `skills/sync.ts`。
+根 `package.json` 把 `@nocobase/nb3-cli` 声明为 workspace devDependency。注册、卸载和 skills 同步不再有根目录 `.mjs` 实现；CLI 侧的 `src/lib/workspace-app.ts` 只负责 workspace App 选择，其余流程与独立 App 完全一致。
 
 ### 9.5 独立应用侧
 
@@ -962,7 +958,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | 2   | 本期是否在模板里演示 `authentication({ loginPage })`？（§4）                     | 不演示，采用 §4 方案 A；能力已具备并有测试覆盖                      |
 | 3   | 是否一并删除 `nocobase.plugin.client` 字段和 resolve.ts 的 client 解析？（§9.2） | 已删除，连同 `readClientManifest` 和三个 `client*Entry` 字段        |
 | 4   | `packages/authorization/skills/` 是否迁移到 `.agents/skills/`？（§8.7）          | **未做。** 该包是库而非插件，同步范围不含库，迁移与否不影响本期机制 |
-| 5   | `create-plugin.mjs` 生成的 `version` 与 AGENTS.md 要求不一致（§8.6）             | 已改为 `0.0.1`，并补上缺失的 `files` 字段（`dist` 与 `.agents`）    |
+| 5   | 旧脚手架生成的 `version` 与 AGENTS.md 要求不一致（§8.6）                         | 已改为 `0.0.1`，并补上缺失的 `files` 字段（`dist` 与 `.agents`）    |
 
 ### 10.1 实现与本文的差异
 
@@ -974,7 +970,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名                      |
 | §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 改为 `nb3 app plugin update` 与 `nb3 app plugin skills sync`；不挂 postinstall |
 | §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`                        |
-| §7.2 codegen 位置   | `scripts/lib/client-plugins.mjs`      | 实现移到 `@nocobase/nb3-cli`，`scripts/` 只留一层薄封装（见下）                |
+| §7.2 codegen 位置   | `scripts/lib/client-plugins.mjs`      | 实现移到 `@nocobase/nb3-cli`，仓库根命令也直接调用 `nb3`（见下）               |
 
 postinstall 经实测覆盖不到「更新插件」这条主路径，已决定不挂（§8.4）；改由 `pnpm plugin:update` 把升级与同步合并成一步，该命令已实现。
 
@@ -990,7 +986,7 @@ postinstall 经实测覆盖不到「更新插件」这条主路径，已决定�
 | 改 `nocobase.plugins` 与依赖 | `src/lib/plugin-registration.ts` |
 | 复制 skills                  | `src/lib/skills-sync.ts`         |
 
-两边真正的差异只有两处，因此以参数而非分支表达：插件从哪里解析（工作区 `packages/` 对 App 的 `node_modules`），以及依赖记什么范围（`workspace:^` 对 registry 上的实际版本）。`scripts/*-plugin.mjs` 因此只保留仓库特有的部分：解析 `--app`、跑 `pnpm install`、失败时回滚 `pnpm-lock.yaml`。
+两边真正的差异只有两处，因此以参数而非重复脚本表达：插件从哪里解析（工作区 `packages/` 对 App 的 `node_modules`），以及依赖记什么范围（`workspace:^` 对 registry 上的实际版本）。仓库根脚本直接执行 `nb3 app plugin * --workspace-root .`；该模式负责解析 `--app` 并默认使用 `workspace:^`，所以不再需要 `register-plugin.mjs`、`unregister-plugin.mjs` 或 `sync-skills.mjs`。
 
 `client-plugins.ts` 把 TypeScript 和 Prettier 都从目标 App 解析，而不是从 CLI 自己的依赖树，这样 App 用自己的版本和配置格式化自己的源码；Prettier 缺失时跳过格式化而不失败，TypeScript 缺失则明确报错且不写入任何文件。
 

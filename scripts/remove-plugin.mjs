@@ -12,13 +12,22 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { normalizePluginName } from './create-plugin.mjs';
-import { listClientPlugins, readClientPlugins } from './lib/client-plugins.mjs';
+import {
+  createClientPluginsEditor,
+  readClientPlugins,
+} from '../packages/cli/src/lib/client-plugins.ts';
+import {
+  createServerPluginsEditor,
+  readServerPlugins,
+} from '../packages/cli/src/lib/server-plugins.ts';
+import { normalizePluginName } from '../packages/create-plugin/src/lib/names.ts';
 
 const packagePrefix = '@nocobase/app-plugin-';
 const directoryPrefix = 'app-plugin-';
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultRepoRoot = path.resolve(path.dirname(scriptPath), '..');
+const clientPluginsEditor = await createClientPluginsEditor(defaultRepoRoot);
+const serverPluginsEditor = await createServerPluginsEditor(defaultRepoRoot);
 const dependencyFields = [
   'dependencies',
   'devDependencies',
@@ -49,7 +58,8 @@ Options:
   -h, --help    Show this help
 
 Removal is refused while another workspace package references the plugin in a
-dependency field or nocobase.plugins. Remove those registrations first.`;
+dependency field, nocobase.plugins, client/plugins.ts, or server/plugins.ts.
+Remove those registrations first.`;
 
 export function parseRemovePluginArgs(args) {
   const options = {
@@ -238,6 +248,11 @@ async function findWorkspaceReferences({
     ) {
       locations.push('client/plugins.ts');
     }
+    if (
+      await referencesServerPlugin(path.dirname(packageJsonPath), packageName)
+    ) {
+      locations.push('server/plugins.ts');
+    }
 
     if (locations.length > 0) {
       references.push({
@@ -259,12 +274,26 @@ async function referencesClientPlugin(appRoot, packageName) {
     return false;
   }
   try {
-    return listClientPlugins(sourceText).some(
-      (entry) => entry.packageName === packageName,
-    );
+    return clientPluginsEditor
+      .list(sourceText)
+      .some((entry) => entry.packageName === packageName);
   } catch {
     // An unparsable file is the application author's to fix; treat it as no
     // reference rather than blocking an unrelated removal.
+    return false;
+  }
+}
+
+async function referencesServerPlugin(appRoot, packageName) {
+  const { exists, sourceText } = await readServerPlugins(appRoot);
+  if (!exists) {
+    return false;
+  }
+  try {
+    return serverPluginsEditor
+      .list(sourceText)
+      .some((entry) => entry.packageName === packageName);
+  } catch {
     return false;
   }
 }
@@ -308,7 +337,8 @@ function formatReferenceError(packageName, references) {
         if (
           !locations.includes('devDependencies') &&
           !locations.includes('nocobase.plugins') &&
-          !locations.includes('client/plugins.ts')
+          !locations.includes('client/plugins.ts') &&
+          !locations.includes('server/plugins.ts')
         ) {
           return [];
         }

@@ -27,10 +27,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202608270001_create_file_demo_tables.js';
 import seed from '../database/seeds/202608270002_seed_file_demo.js';
-import FileProvider, {
+import {
+  FileProvider,
   ensureFileDemoFixtures,
   prepareFileDemoFixtures,
-} from '../server/provider.js';
+} from '../server/providers/file.js';
 import {
   FILE_DEMO_AVATAR,
   FILE_DEMO_PRIVATE_ATTACHMENT,

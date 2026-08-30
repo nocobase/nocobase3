@@ -4,6 +4,7 @@ import type {
   AppClientProviderDefinition,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
+import { defineAppRoutes } from '@nocobase/app-client/plugins';
 import dataProviderBootstrap from '@nocobase/app-plugin-data-provider/client/bootstrap';
 import type { AuthProvider } from '@refinedev/core';
 import type { ComponentType, PropsWithChildren } from 'react';
@@ -44,7 +45,7 @@ describe('app client runtime', () => {
         },
         routes: async () => {
           calls.push('load:routes');
-          return { default: [] };
+          return { default: defineAppRoutes([]) };
         },
       },
       {
@@ -64,7 +65,9 @@ describe('app client runtime', () => {
           };
         },
         routes: async () => ({
-          default: [createRoute('login', '/login', undefined, 'guest')],
+          default: defineAppRoutes([
+            createRoute('login', '/login', undefined, 'guest'),
+          ]),
         }),
       },
     ];
@@ -74,6 +77,8 @@ describe('app client runtime', () => {
     expect(runtime.refine.authProvider).toBe(authProvider);
     expect(runtime.refine.dataProvider).toBeDefined();
     expect(createApp(runtime).refine).toBe(runtime.refine);
+    // The runtime supplies a default i18nProvider that a plugin may still replace.
+    expect(runtime.refine.i18nProvider).toBeDefined();
     expect(runtime.routes).toMatchObject([
       {
         auth: 'required',
@@ -289,10 +294,10 @@ describe('app client runtime', () => {
     const plugin: AppClientPluginLoader = {
       packageName: '@nocobase/app-plugin-routes',
       routes: async () => ({
-        default: [
+        default: defineAppRoutes([
           createRoute('list', '/first'),
           createRoute('list', '/second'),
-        ],
+        ]),
       }),
     };
 
@@ -362,7 +367,8 @@ describe('app client runtime', () => {
       '@nocobase/app-plugin-foundation:outer',
       '@nocobase/app-plugin-feature:inner',
     ]);
-    expect(createApp(runtime).providers).toEqual([
+    // i18n wraps everything else, so it is prepended rather than ordered among the contributed providers.
+    expect(createApp(runtime).providers?.slice(1)).toEqual([
       AppThemeProvider,
       OuterProvider,
       InnerProvider,
@@ -440,9 +446,9 @@ function createAuthPlugin(
       },
     }),
     routes: async () => ({
-      default: [
+      default: defineAppRoutes([
         createRoute('login', '/login', { default: LoginPage }, 'guest'),
-      ],
+      ]),
     }),
   };
 }
@@ -456,7 +462,7 @@ function createRoutePlugin(
   return {
     packageName,
     routes: async () => ({
-      default: [createRoute(name, path, module)],
+      default: defineAppRoutes([createRoute(name, path, module)]),
     }),
   };
 }

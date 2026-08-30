@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification-providers",
   "displayName": "Notification Providers App Plugin",
   "description": "Provides built-in notification Channels and Providers.",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -11,6 +11,7 @@
   "sideEffects": false,
   "files": [
     "dist",
+    "docs",
     "README.md"
   ],
   "main": "./dist/server/index.js",
@@ -24,9 +25,17 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./email": {
       "types": "./server/email/index.ts",
       "import": "./server/email/index.ts"
+    },
+    "./im": {
+      "types": "./server/im/index.ts",
+      "import": "./server/im/index.ts"
     },
     "./package.json": "./package.json"
   },
@@ -41,15 +50,24 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
       "./email": {
         "types": "./dist/server/email/index.d.ts",
         "import": "./dist/server/email/index.js"
+      },
+      "./im": {
+        "types": "./dist/server/im/index.d.ts",
+        "import": "./dist/server/im/index.js"
       },
       "./package.json": "./package.json"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -60,8 +78,14 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
-    "nodemailer": "^9.0.5"
+    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
+    "hono": "catalog:",
+    "nodemailer": "^9.0.5",
+    "resend": "^6.22.1"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

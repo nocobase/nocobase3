@@ -6,13 +6,15 @@ import { FILE_ROUTE_IDS } from '../../client/route-contracts.js';
 
 describe('file plugin client route', () => {
   it('contributes the frozen lazy demo Route', async () => {
-    expect(routes).toHaveLength(1);
-    expect(routes[0]).toMatchObject({
+    expect(routes.parent).toBe('app');
+    expect(routes.routes).toHaveLength(1);
+    expect(routes.routes[0]).toMatchObject({
       name: 'demo',
       path: '/file-demo',
     });
     expect(Object.isFrozen(routes)).toBe(true);
-    expect(Object.isFrozen(routes[0])).toBe(true);
+    expect(Object.isFrozen(routes.routes)).toBe(true);
+    expect(Object.isFrozen(routes.routes[0])).toBe(true);
 
     const [registered] = resolveAppClientContributions([
       {
@@ -27,7 +29,7 @@ describe('file plugin client route', () => {
       path: '/file-demo',
       source: 'plugin',
     });
-    await expect(routes[0]?.componentLoader()).resolves.toMatchObject({
+    await expect(routes.routes[0]?.componentLoader()).resolves.toMatchObject({
       default: expect.any(Function),
     });
   });

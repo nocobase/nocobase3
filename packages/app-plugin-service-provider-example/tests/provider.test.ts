@@ -1,8 +1,8 @@
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it } from 'vitest';
 
-import ServiceProviderExampleProvider from '../server/provider.js';
-import { heartbeatServiceToken } from '../server/token.js';
+import { ServiceProviderExampleProvider } from '../server/providers/service-provider-example.js';
+import { heartbeatServiceToken } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-service-provider-example provider', () => {
   it('registers the heartbeat and manages its lifecycle', async () => {

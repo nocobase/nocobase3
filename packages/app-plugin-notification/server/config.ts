@@ -24,6 +24,12 @@ export const notificationConfig: AppConfigDefinition<NotificationConfig> =
               { additionalProperties: true },
             ),
           ),
+          test: Type.Optional(
+            Type.Object({
+              enabled: Type.Boolean(),
+              emailRecipient: Type.Optional(Type.String()),
+            }),
+          ),
         }),
       ),
     }),

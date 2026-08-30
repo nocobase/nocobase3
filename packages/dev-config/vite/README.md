@@ -5,8 +5,9 @@
 - an injected Portal SDK compatibility plugin;
 - React and Tailwind Vite plugins;
 - `dist/client` build output;
-- development HMR host and client port from `APP_VITE_DEV_HOST` and
-  `APP_VITE_DEV_PORT`.
+- development HMR client port from `APP_VITE_DEV_PORT`;
+- development HMR host from `APP_VITE_DEV_HOST` when it is set to a specific
+  hostname. When it is unset or `0.0.0.0`, Vite uses the page hostname.
 
 Pass a Vite config object or config function. It is merged after the shared
 configuration, so local values can extend or override the baseline:

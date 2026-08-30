@@ -62,11 +62,11 @@ entries back to `catalog:` once the workspace database fixture is upgraded.
 ## Agent Skill
 
 The Workflow Agent Skill lives at
-`.agents/skills/nocobase-app-plugin-workflow` and is published with this
+`skills/nocobase-app-plugin-workflow` and is published with this
 plugin. Whenever the DSL, registered instructions, checker, Artifact builder,
 service APIs, or runtime contracts change, review and update the Skill in the
 same change.
 
 The Skill is tailored to the default application's workflow source root.
 Plugin activation infrastructure is responsible for exposing installed plugin
-skills to agents.
+skills to agents under the application's `.agents/skills/` directory.

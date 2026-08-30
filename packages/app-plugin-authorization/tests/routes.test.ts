@@ -8,11 +8,10 @@ import {
 } from '@nocobase/app-plugin-authentication';
 
 import { authorizationToken, type AppAuthorization } from '../server/index.js';
-import registerAuthorizationRoutes from '../server/routes/index.js';
+import { apiRoutes } from '../server/routes/index.js';
 
 describe('@nocobase/app-plugin-authorization routes', () => {
   it('protects its HTTP routes with authentication', async () => {
-    const router = new Hono();
     const container = new ServiceContainer();
     container.instance(authenticationToken, {
       required: () => (context) =>
@@ -27,18 +26,14 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       middleware: () => async (_context, next) => next(),
     } as unknown as AppAuthorization);
 
-    registerAuthorizationRoutes(
-      {
-        appName: 'main',
-        publicBasePath: '/main',
-        config: { app: { name: 'main', publicBasePath: '/main' } },
-        paths: createConfigPaths({ rootDir: '/missing' }),
-        router,
-        apiRouter: router,
-        container,
-      },
-      router,
-    );
+    const router = await apiRoutes.createRouter({
+      appName: 'main',
+      publicBasePath: '/main',
+      config: { app: { name: 'main', publicBasePath: '/main' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
+      router: new Hono(),
+      container,
+    });
 
     const response = await router.request('/authz/permissions');
 
@@ -61,7 +56,6 @@ describe('@nocobase/app-plugin-authorization routes', () => {
   ])(
     'checks $expected when setting default access',
     async ({ existing, expected }) => {
-      const router = new Hono();
       const container = new ServiceContainer();
       const require = vi.fn(() => Promise.resolve());
       const set = vi.fn((rule: object) => Promise.resolve(rule));
@@ -78,18 +72,14 @@ describe('@nocobase/app-plugin-authorization routes', () => {
           set,
         },
       } as unknown as AppAuthorization);
-      registerAuthorizationRoutes(
-        {
-          appName: 'main',
-          publicBasePath: '/main',
-          config: { app: { name: 'main', publicBasePath: '/main' } },
-          paths: createConfigPaths({ rootDir: '/missing' }),
-          router,
-          apiRouter: router,
-          container,
-        },
-        router,
-      );
+      const router = await apiRoutes.createRouter({
+        appName: 'main',
+        publicBasePath: '/main',
+        config: { app: { name: 'main', publicBasePath: '/main' } },
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router: new Hono(),
+        container,
+      });
 
       const response = await router.request('/authz/default-access', {
         method: 'PUT',

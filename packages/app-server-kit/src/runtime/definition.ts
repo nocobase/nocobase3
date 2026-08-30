@@ -14,7 +14,7 @@ import {
   type AppServerPlugins,
   type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
-import type { AppApiRoutes, AppRootRoutes } from '../router/index.js';
+import type { AppRouteContribution } from '../router/index.js';
 import {
   createAppConfigPaths,
   resolveAppScopeRuntime,
@@ -52,8 +52,7 @@ export interface AppRuntimeDefinition {
   ) => AppConfig | Promise<AppConfig>;
   readonly plugins: AppServerPlugins;
   readonly providers: readonly ApplicationServiceProviderConstructor[];
-  readonly apiRoutes: readonly AppApiRoutes<Application>[];
-  readonly rootRoutes: readonly AppRootRoutes<Application>[];
+  readonly routes: readonly AppRouteContribution<Application>[];
 }
 
 export interface ResolvedAppRuntime extends ResolvedAppScopeRuntime {
@@ -61,15 +60,18 @@ export interface ResolvedAppRuntime extends ResolvedAppScopeRuntime {
   readonly configPaths: ConfigPaths;
   readonly plugins: ResolvedAppServerPlugins;
   readonly providers: readonly ApplicationServiceProviderConstructor[];
-  readonly apiRoutes: readonly AppApiRoutes<Application>[];
-  readonly rootRoutes: readonly AppRootRoutes<Application>[];
+  readonly routes: readonly AppRouteContribution<Application>[];
   readonly appConfig: AppConfig;
 }
 
 export function defineAppRuntime(
   definition: AppRuntimeDefinition,
 ): AppRuntimeDefinition {
-  return definition;
+  return Object.freeze({
+    ...definition,
+    providers: Object.freeze([...definition.providers]),
+    routes: Object.freeze([...definition.routes]),
+  });
 }
 
 export async function resolveAppRuntime(
@@ -87,8 +89,7 @@ export async function resolveAppRuntime(
     configPaths: context.paths,
     plugins: context.plugins,
     providers: definition.providers,
-    apiRoutes: definition.apiRoutes,
-    rootRoutes: definition.rootRoutes,
+    routes: definition.routes,
     appConfig,
   };
 }

@@ -1,14 +1,36 @@
 import type { Application } from '@nocobase/app-server-kit/application';
 import {
+  defineApiRoutes,
   defineRootRoutes,
-  type AppRootRoutes,
+  type AppApiRouteContribution,
+  type AppRouteContribution,
+  type AppRootRouteContribution,
 } from '@nocobase/app-server-kit/router';
+import { Hono } from 'hono';
 
 import { appExampleServiceToken } from '../providers/index.js';
 
-const exampleRootRoutes: AppRootRoutes<Application> = defineRootRoutes({
-  name: '@nocobase/app-template-default/root/example',
-  register(router, app): void {
+export const apiRoutes: AppApiRouteContribution<Application> = defineApiRoutes(
+  (app) => {
+    const router = new Hono();
+
+    router.get('/example', (context) => {
+      const exampleService = app.container.resolve(appExampleServiceToken);
+
+      return context.json({
+        scope: 'api',
+        message: exampleService.getMessage(),
+      });
+    });
+
+    return router;
+  },
+);
+
+export const rootRoutes: AppRootRouteContribution<Application> =
+  defineRootRoutes((app) => {
+    const router = new Hono();
+
     router.get('/example', (context) => {
       const exampleService = app.container.resolve(appExampleServiceToken);
 
@@ -27,9 +49,13 @@ const exampleRootRoutes: AppRootRoutes<Application> = defineRootRoutes({
   </body>
 </html>`);
     });
-  },
-});
 
-const rootRoutes: readonly AppRootRoutes<Application>[] = [exampleRootRoutes];
+    return router;
+  });
 
-export default rootRoutes;
+const routes: readonly AppRouteContribution<Application>[] = [
+  apiRoutes,
+  rootRoutes,
+];
+
+export default routes;

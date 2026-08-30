@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { queueExampleExecutions } from '../server/jobs/queue-example.js';
-import registerRoutes from '../server/routes/index.js';
+import { apiRoutes } from '../server/routes/index.js';
 
 describe('queue example plugin routes', () => {
   const managers: Array<ReturnType<typeof createQueueManager>> = [];
@@ -26,22 +26,18 @@ describe('queue example plugin routes', () => {
         }),
     });
     managers.push(queueManager);
-    const router = new Hono();
+    const hostRouter = new Hono();
     const container = new ServiceContainer();
     container.instance(queueManagerToken, queueManager);
 
-    registerRoutes(
-      {
-        appName: 'main',
-        publicBasePath: '/main',
-        config: { app: { name: 'main', publicBasePath: '/main' } },
-        paths: createConfigPaths({ rootDir: '/missing' }),
-        router,
-        apiRouter: router,
-        container,
-      },
-      router,
-    );
+    const router = await apiRoutes.createRouter({
+      appName: 'main',
+      publicBasePath: '/main',
+      config: { app: { name: 'main', publicBasePath: '/main' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
+      router: hostRouter,
+      container,
+    });
 
     const response = await router.request('/queue-example');
 

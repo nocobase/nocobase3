@@ -1,7 +1,7 @@
 // Reads and edits an application's `client/plugins.ts`.
 //
 // The file is application source, so edits preserve everything the author wrote. TypeScript is used only to locate two
-// things — the end of the import block and the argument array of `defineClientPlugins(...)` — and the edit itself is a
+// things — the package import group and the argument array of `defineClientPlugins(...)` — and the edit itself is a
 // splice into the original text. A full AST reprint would discard comments and formatting.
 //
 // TypeScript and Prettier are resolved from the application rather than from this package, so an app formats its own
@@ -15,7 +15,13 @@ import path from 'node:path';
 import type ts from 'typescript';
 
 const PLUGIN_PACKAGE_PATTERN = /^@nocobase\/app-plugin-([a-z0-9][a-z0-9-]*)$/;
-const REGISTER_CALL_NAME = 'defineClientPlugins';
+const CLIENT_SOURCE_DEFINITION: PluginSourceDefinition = {
+  entryKind: 'call',
+  entrySpecifierSuffix: '/client',
+  entrySuffixes: ['/client/plugin', '/client'],
+  fileLabel: 'client/plugins.ts',
+  registerCallName: 'defineClientPlugins',
+};
 
 const EMPTY_FILE = `import {
   defineClientPlugins,
@@ -35,15 +41,27 @@ export interface ClientPluginsFile {
   readonly sourceText: string;
 }
 
-export interface ClientPluginEntry {
+export interface PluginSourceEntry {
   readonly localName: string;
   readonly packageName: string;
 }
 
-export interface ClientPluginsEdit {
+export type ClientPluginEntry = PluginSourceEntry;
+
+export interface PluginSourceEdit {
   readonly changed: boolean;
   readonly localName?: string;
   readonly sourceText: string;
+}
+
+export type ClientPluginsEdit = PluginSourceEdit;
+
+export interface PluginSourceDefinition {
+  readonly entryKind: 'call' | 'value';
+  readonly entrySpecifierSuffix: string;
+  readonly entrySuffixes: readonly string[];
+  readonly fileLabel: string;
+  readonly registerCallName: string;
 }
 
 export function clientPluginsPath(appRoot: string): string {
@@ -95,14 +113,17 @@ export async function writeClientPlugins(
  * Loads the TypeScript the application depends on. Editing app source with the app's own compiler avoids a second
  * TypeScript in the dependency tree purely so the CLI can parse a file the app already builds.
  */
-async function loadTypeScript(appRoot: string): Promise<typeof ts> {
+async function loadTypeScript(
+  appRoot: string,
+  fileLabel: string,
+): Promise<typeof ts> {
   const require = createRequire(path.join(appRoot, 'package.json'));
   let loaded: unknown;
   try {
     loaded = await import(require.resolve('typescript'));
   } catch (error) {
     throw new MissingTypeScriptError(
-      `TypeScript is not installed in ${appRoot}, so client/plugins.ts cannot be edited automatically.`,
+      `TypeScript is not installed in ${appRoot}, so ${fileLabel} cannot be edited automatically.`,
       { cause: error },
     );
   }
@@ -179,6 +200,7 @@ function parse(typescript: typeof ts, sourceText: string): ts.SourceFile {
 function findRegistrationArray(
   typescript: typeof ts,
   sourceFile: ts.SourceFile,
+  definition: PluginSourceDefinition,
 ): ts.ArrayLiteralExpression {
   let found: ts.ArrayLiteralExpression | undefined;
   const visit = (node: ts.Node): void => {
@@ -188,7 +210,7 @@ function findRegistrationArray(
     if (
       typescript.isCallExpression(node) &&
       typescript.isIdentifier(node.expression) &&
-      node.expression.text === REGISTER_CALL_NAME &&
+      node.expression.text === definition.registerCallName &&
       node.arguments.length === 1 &&
       typescript.isArrayLiteralExpression(node.arguments[0])
     ) {
@@ -201,17 +223,40 @@ function findRegistrationArray(
 
   if (!found) {
     throw new Error(
-      `client/plugins.ts must call ${REGISTER_CALL_NAME}() with an array literal.`,
+      `${definition.fileLabel} must call ${definition.registerCallName}() with an array literal.`,
     );
   }
   return found;
 }
 
 /** Package names already registered, in registration order. */
-export function listClientPlugins(
+function elementLocalName(
+  typescript: typeof ts,
+  element: ts.Expression,
+  definition: PluginSourceDefinition,
+): string | undefined {
+  const candidate =
+    definition.entryKind === 'call' && typescript.isCallExpression(element)
+      ? element.expression
+      : element;
+  return typescript.isIdentifier(candidate) ? candidate.text : undefined;
+}
+
+function packageNameFromSpecifier(
+  specifier: string,
+  definition: PluginSourceDefinition,
+): string | undefined {
+  const suffix = definition.entrySuffixes.find((entry) =>
+    specifier.endsWith(entry),
+  );
+  return suffix ? specifier.slice(0, -suffix.length) : undefined;
+}
+
+export function listPluginSourceEntries(
   typescript: typeof ts,
   sourceText: string,
-): ClientPluginEntry[] {
+  definition: PluginSourceDefinition,
+): PluginSourceEntry[] {
   const sourceFile = parse(typescript, sourceText);
   const importsByLocalName = new Map<string, string>();
   for (const statement of sourceFile.statements) {
@@ -227,25 +272,27 @@ export function listClientPlugins(
     }
   }
 
-  const entries: ClientPluginEntry[] = [];
-  for (const element of findRegistrationArray(typescript, sourceFile)
-    .elements) {
-    const callee = typescript.isCallExpression(element)
-      ? element.expression
-      : element;
-    if (!typescript.isIdentifier(callee)) {
+  const entries: PluginSourceEntry[] = [];
+  for (const element of findRegistrationArray(
+    typescript,
+    sourceFile,
+    definition,
+  ).elements) {
+    const localName = elementLocalName(typescript, element, definition);
+    if (!localName) {
       continue;
     }
-    const specifier = importsByLocalName.get(callee.text);
+    const specifier = importsByLocalName.get(localName);
     if (!specifier) {
       continue;
     }
+    const packageName = packageNameFromSpecifier(specifier, definition);
+    if (!packageName) {
+      continue;
+    }
     entries.push({
-      localName: callee.text,
-      // `/client` is what registration writes today; `/client/plugin` is what it wrote before the barrel gained its
-      // default export. Both must be recognised, or an app wired the old way looks unregistered and gets a second,
-      // conflicting import.
-      packageName: specifier.replace(/\/client(\/plugin)?$/, ''),
+      localName,
+      packageName,
     });
   }
   return entries;
@@ -256,19 +303,29 @@ function insertionOffsetForImport(
   sourceFile: ts.SourceFile,
 ): number {
   const imports = sourceFile.statements.filter(typescript.isImportDeclaration);
+  const packageImports = imports.filter((statement) => {
+    return (
+      typescript.isStringLiteral(statement.moduleSpecifier) &&
+      !statement.moduleSpecifier.text.startsWith('.')
+    );
+  });
+  if (packageImports.length > 0) {
+    return packageImports[packageImports.length - 1].getEnd();
+  }
   if (imports.length > 0) {
-    return imports[imports.length - 1].getEnd();
+    return imports[0].getFullStart();
   }
   return sourceFile.statements[0]?.getStart(sourceFile) ?? 0;
 }
 
-export function addClientPlugin(
+export function addPluginSourceEntry(
   typescript: typeof ts,
   sourceText: string,
   packageName: string,
-): ClientPluginsEdit {
+  definition: PluginSourceDefinition,
+): PluginSourceEdit {
   const localName = localNameFor(packageName);
-  const existing = listClientPlugins(typescript, sourceText);
+  const existing = listPluginSourceEntries(typescript, sourceText, definition);
   if (existing.some((entry) => entry.packageName === packageName)) {
     return { changed: false, sourceText };
   }
@@ -281,18 +338,20 @@ export function addClientPlugin(
   );
   if (conflicting) {
     throw new Error(
-      `client/plugins.ts already binds "${localName}" to something else; add ${packageName} by hand.`,
+      `${definition.fileLabel} already binds "${localName}" to something else; add ${packageName} by hand.`,
     );
   }
 
-  const array = findRegistrationArray(typescript, sourceFile);
-  const importText = `\nimport ${localName} from '${clientPluginEntrySpecifier(packageName)}';`;
+  const array = findRegistrationArray(typescript, sourceFile, definition);
+  const importText = `\nimport ${localName} from '${packageName}${definition.entrySpecifierSuffix}';`;
   const importOffset = insertionOffsetForImport(typescript, sourceFile);
 
   // Append rather than sort: appending is predictable and preserves whatever bootstrap order the author arranged.
   const last = array.elements[array.elements.length - 1];
   const entryOffset = last ? last.getEnd() : array.getStart(sourceFile) + 1;
-  const entryText = last ? `,\n  ${localName}()` : `\n  ${localName}(),\n`;
+  const expression =
+    definition.entryKind === 'call' ? `${localName}()` : localName;
+  const entryText = last ? `,\n  ${expression}` : `\n  ${expression},\n`;
 
   const withEntry =
     sourceText.slice(0, entryOffset) +
@@ -306,24 +365,24 @@ export function addClientPlugin(
   return { changed: true, localName, sourceText: updated };
 }
 
-export function removeClientPlugin(
+export function removePluginSourceEntry(
   typescript: typeof ts,
   sourceText: string,
   packageName: string,
-): ClientPluginsEdit {
-  const existing = listClientPlugins(typescript, sourceText);
+  definition: PluginSourceDefinition,
+): PluginSourceEdit {
+  const existing = listPluginSourceEntries(typescript, sourceText, definition);
   const target = existing.find((entry) => entry.packageName === packageName);
   if (!target) {
     return { changed: false, sourceText };
   }
 
   const sourceFile = parse(typescript, sourceText);
-  const array = findRegistrationArray(typescript, sourceFile);
+  const array = findRegistrationArray(typescript, sourceFile, definition);
   const index = array.elements.findIndex((element) => {
-    const callee = typescript.isCallExpression(element)
-      ? element.expression
-      : element;
-    return typescript.isIdentifier(callee) && callee.text === target.localName;
+    return (
+      elementLocalName(typescript, element, definition) === target.localName
+    );
   });
   const element = array.elements[index];
 
@@ -365,7 +424,7 @@ export function removeClientPlugin(
  * Formats with the application's own Prettier and configuration. An app without Prettier keeps the unformatted splice,
  * which is still valid TypeScript, rather than failing the registration over formatting.
  */
-export async function formatClientPlugins(
+export async function formatPluginsFile(
   appRoot: string,
   sourceText: string,
   filePath: string,
@@ -398,7 +457,52 @@ export async function formatClientPlugins(
   });
 }
 
-export interface ClientPluginsEditor {
+export function listClientPlugins(
+  typescript: typeof ts,
+  sourceText: string,
+): ClientPluginEntry[] {
+  return listPluginSourceEntries(
+    typescript,
+    sourceText,
+    CLIENT_SOURCE_DEFINITION,
+  );
+}
+
+export function addClientPlugin(
+  typescript: typeof ts,
+  sourceText: string,
+  packageName: string,
+): ClientPluginsEdit {
+  return addPluginSourceEntry(
+    typescript,
+    sourceText,
+    packageName,
+    CLIENT_SOURCE_DEFINITION,
+  );
+}
+
+export function removeClientPlugin(
+  typescript: typeof ts,
+  sourceText: string,
+  packageName: string,
+): ClientPluginsEdit {
+  return removePluginSourceEntry(
+    typescript,
+    sourceText,
+    packageName,
+    CLIENT_SOURCE_DEFINITION,
+  );
+}
+
+export async function formatClientPlugins(
+  appRoot: string,
+  sourceText: string,
+  filePath: string,
+): Promise<string> {
+  return formatPluginsFile(appRoot, sourceText, filePath);
+}
+
+export interface PluginSourceEditor {
   readonly add: (sourceText: string, packageName: string) => ClientPluginsEdit;
   readonly list: (sourceText: string) => ClientPluginEntry[];
   readonly remove: (
@@ -407,6 +511,8 @@ export interface ClientPluginsEditor {
   ) => ClientPluginsEdit;
 }
 
+export type ClientPluginsEditor = PluginSourceEditor;
+
 /**
  * Binds the editing functions to the application's TypeScript, so a caller performing several edits loads the compiler
  * once and does not thread it through every call.
@@ -414,12 +520,30 @@ export interface ClientPluginsEditor {
 export async function createClientPluginsEditor(
   appRoot: string,
 ): Promise<ClientPluginsEditor> {
-  const typescript = await loadTypeScript(appRoot);
+  const typescript = await loadTypeScript(
+    appRoot,
+    CLIENT_SOURCE_DEFINITION.fileLabel,
+  );
   return {
     add: (sourceText, packageName) =>
       addClientPlugin(typescript, sourceText, packageName),
     list: (sourceText) => listClientPlugins(typescript, sourceText),
     remove: (sourceText, packageName) =>
       removeClientPlugin(typescript, sourceText, packageName),
+  };
+}
+
+export async function createPluginSourceEditor(
+  appRoot: string,
+  definition: PluginSourceDefinition,
+): Promise<PluginSourceEditor> {
+  const typescript = await loadTypeScript(appRoot, definition.fileLabel);
+  return {
+    add: (sourceText, packageName) =>
+      addPluginSourceEntry(typescript, sourceText, packageName, definition),
+    list: (sourceText) =>
+      listPluginSourceEntries(typescript, sourceText, definition),
+    remove: (sourceText, packageName) =>
+      removePluginSourceEntry(typescript, sourceText, packageName, definition),
   };
 }

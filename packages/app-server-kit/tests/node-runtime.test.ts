@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
 
 import { Application } from '../src/application/index.js';
 import {
@@ -165,8 +166,7 @@ function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
     },
     plugins: defineServerPlugins([]),
     providers: [],
-    apiRoutes: [],
-    rootRoutes: [],
+    routes: [],
   });
 }
 
@@ -182,11 +182,14 @@ function createApplication(
     publicBasePath,
     paths,
   });
-  app.addRootRoutes({
-    register(router): void {
+  app.addRoutes({
+    scope: 'root',
+    createRouter(): Hono {
+      const router = new Hono();
       router.get('/status', (context) =>
         context.json({ path: context.req.path }),
       );
+      return router;
     },
   });
   return app;

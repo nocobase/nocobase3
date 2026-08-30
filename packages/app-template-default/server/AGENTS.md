@@ -27,7 +27,7 @@ or app plugin.
   lifecycle helpers live in `@nocobase/app-server-kit/runtime`.
 - Plugin server behavior is explicitly registered through `server/plugins.ts`.
   Each package exports one `server/plugin.ts` definition. Providers own service
-  lifecycle; API and root routes are separate contributions.
+  lifecycle; each route contribution creates and returns its own Hono router.
 
 The template must not grow demo APIs, generic repositories, or compatibility
 layers for the removed `deps`, `services`, `bootstrap.ts`, and separately
@@ -67,8 +67,10 @@ responsible for stripping and restoring that path.
 ## Adding Server Behavior
 
 1. Prefer a focused app plugin with one `server/plugin.ts` entry.
-2. Register typed services in Provider `register()` and HTTP routes through
-   explicit `apiRoutes` or `rootRoutes`.
+2. Register typed services in Provider `register()` and add HTTP contributions
+   to the single `routes` array with `defineApiRoutes()` or `defineRootRoutes()`.
+   Each factory creates and returns its own Hono router. API route paths are
+   relative because the Application adds the `/api` prefix automatically.
 3. Resolve cross-package dependencies through exported ServiceTokens.
 4. Keep long-lived start/stop behavior in `start()` and `shutdown()`.
 5. Add tests under the package root `tests/` directory.

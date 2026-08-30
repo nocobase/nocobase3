@@ -9,12 +9,14 @@ import { queueConfig } from './queue/index.js';
 import type { ResolvedAppRuntimeConfigContext } from './runtime/index.js';
 import { sessionConfig } from './session/index.js';
 import { spaConfig } from './spa/index.js';
+import { i18nConfig } from './i18n/index.js';
 
 export const coreConfigs: readonly AppConfigDefinition<
   unknown,
   ResolvedAppRuntimeConfigContext
 >[] = [
   appConfig,
+  i18nConfig,
   cachingConfig,
   databaseConfig,
   driveConfig,

@@ -27,9 +27,11 @@ pnpm plugin:register <name> --app app-template-default
 pnpm plugin:unregister <name> --app app-template-default
 ```
 
-`plugin:register` adds the `devDependencies` entry and the `nocobase.plugins` entry, appends an import and an array item to `client/plugins.ts`, and copies the plugin's skills into `.agents/skills/`. `--disabled` records `enabled: false` and leaves `client/plugins.ts` alone; `--no-skills` skips the skills copy. `plugin:unregister` reverses all of it. Run `pnpm plugin:skills:sync` on its own after a plugin upgrade changes its skills.
+`plugin:register` adds the `devDependencies` entry and the `nocobase.plugins` entry, appends imports and array items to the Client and Server composition roots for the exports the package ships, and copies the plugin's skills into `.agents/skills/`. `--disabled` records `enabled: false` and leaves both composition roots alone; `--no-skills` skips the skills copy. `plugin:unregister` reverses all of it. Run `pnpm plugin:skills:sync` on its own after a plugin upgrade changes its skills.
 
 Only a plugin that ships a `./client` export reaches `client/plugins.ts`. A server-only plugin is registered in `package.json` and skipped there, because an import of an export it does not have fails to resolve at build time. The check looks for `./client` because that is the specifier registration writes; a plugin carrying only `./client/plugin` predates the barrel and is skipped for the same reason.
+
+Only a plugin that ships a `./server/plugin` export reaches `server/plugins.ts`. A client-only plugin is skipped there for the same reason. Server entries are plugin definitions and appear in the array as `auditLog`; Client entries are factories and appear as `auditLog()`.
 
 Those commands run in this repository and find plugins in `packages/`. An application generated from this template runs the same commands without `--app`, and they install from the registry instead:
 
@@ -77,6 +79,48 @@ components or duplicate session state. See
 The upstream recipe is published by
 `@nocobase/app-plugin-authentication/registry/auth-ui`; do not restore a second
 canonical copy under this package's `registry/` directory.
+
+## Write user-facing text through i18n
+
+`@nocobase/app-plugin-i18n` is registered by default, so any string a user reads goes through a translation key rather than a literal.
+
+The application's own copy lives in `client/locales/`. `en-US.ts` states the wording, and `LocaleResource` derives the shape from it — the structure is never written twice. Other locales are annotated with that type, so a key that does not exist there is a compile error:
+
+```ts
+// client/locales/en-US.ts
+import type { LocaleResource } from '@nocobase/app-i18n';
+
+const enUS = {
+  actions: { save: 'Save' },
+};
+
+export type AppResource = LocaleResource<typeof enUS>;
+
+export default enUS;
+```
+
+```ts
+// client/locales/zh-CN.ts
+const zhCN: AppResource = {
+  actions: { save: '保存' },
+};
+```
+
+Translate in a component with no namespace — the application's own is the default here:
+
+```tsx
+import { useTranslation } from '@nocobase/app-i18n/client';
+
+const { t } = useTranslation();
+t('actions.save');
+```
+
+Two things are worth knowing:
+
+- A plugin's own strings live in that plugin, not here. To reword one, add an `overrides` block to the application's locale file keyed by the plugin's package name; do not edit the plugin.
+- A string rendered where i18n may not be mounted — a component a focused test renders on its own — should pass `defaultValue` so it stays readable: `t('actions.save', { defaultValue: 'Save' })`.
+
+`pnpm i18n:check` at the repository root reports keys a locale is missing. Full reference: [app-i18n README](../app-i18n/README.md).
 
 ## Keep the client inspectable
 

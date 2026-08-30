@@ -1,5 +1,5 @@
 import { FileUnavailableError, InvalidFileInputError } from './errors.js';
-import { issueFileToken, verifyFileToken } from './token.js';
+import { issueFileToken, verifyFileToken } from './tokens.js';
 
 export interface FileAccessUrl {
   readonly url: string;
