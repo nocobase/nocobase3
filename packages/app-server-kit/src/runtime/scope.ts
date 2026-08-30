@@ -2,7 +2,6 @@ import path from 'node:path';
 
 import {
   createConfigPaths,
-  readEnvFiles,
   type ConfigPaths,
   type EnvMap,
 } from '../config/index.js';
@@ -76,13 +75,11 @@ export function resolveAppScopePaths(scope: AppScope): AppPathOptions {
 
 export function resolveAppScopeEnv(
   scope: AppScope,
-  paths: AppPathOptions,
+  _paths: AppPathOptions,
   overrides: EnvMap = {},
 ): EnvMap {
-  const configPaths = createAppConfigPaths(paths);
   return {
-    ...(scope.env ??
-      readEnvFiles([configPaths.root('.env'), configPaths.root('.env.local')])),
+    ...(scope.env ?? process.env),
     ...overrides,
   };
 }

@@ -20,20 +20,10 @@ afterEach(() => {
 });
 
 describe('standalone app environment', () => {
-  it('merges env files, the process environment, and explicit overrides', () => {
-    const rootDir = createTempDirectory();
-    writeFileSync(
-      path.join(rootDir, '.env'),
-      'FILE_ONLY=base\nSHARED_VALUE=base\n',
-    );
-    writeFileSync(
-      path.join(rootDir, '.env.local'),
-      'LOCAL_ONLY=yes\nSHARED_VALUE=local\n',
-    );
-
+  it('merges the process environment and explicit overrides', () => {
     expect(
       loadStandaloneAppEnv({
-        rootDir,
+        rootDir: '/app',
         baseEnv: {
           PROCESS_ONLY: 'yes',
           SHARED_VALUE: 'process',
@@ -44,7 +34,40 @@ describe('standalone app environment', () => {
         },
       }),
     ).toEqual({
-      FILE_ONLY: 'base',
+      PROCESS_ONLY: 'yes',
+      OVERRIDE_ONLY: 'yes',
+      SHARED_VALUE: 'override',
+    });
+  });
+
+  it('loads dotenv files below process environment and explicit overrides', () => {
+    const rootDir = createTempDirectory();
+    writeFileSync(
+      path.join(rootDir, '.env'),
+      'DOTENV_ONLY=yes\nSHARED_VALUE=dotenv\nEXPANDED=$BASE_VALUE/suffix\n',
+    );
+    writeFileSync(
+      path.join(rootDir, '.env.local'),
+      'LOCAL_ONLY=yes\nSHARED_VALUE=local\n',
+    );
+
+    expect(
+      loadStandaloneAppEnv({
+        rootDir,
+        baseEnv: {
+          BASE_VALUE: 'base',
+          PROCESS_ONLY: 'yes',
+          SHARED_VALUE: 'process',
+        },
+        overrides: {
+          OVERRIDE_ONLY: 'yes',
+          SHARED_VALUE: 'override',
+        },
+      }),
+    ).toEqual({
+      BASE_VALUE: 'base',
+      DOTENV_ONLY: 'yes',
+      EXPANDED: 'base/suffix',
       LOCAL_ONLY: 'yes',
       PROCESS_ONLY: 'yes',
       OVERRIDE_ONLY: 'yes',
@@ -127,20 +150,18 @@ describe('standalone app scope', () => {
     expect(fromOptions.basePath).toBe('/operations');
   });
 
-  it('owns identity, environment, paths, config, and lifecycle', async () => {
+  it('owns identity, environment, paths, and lifecycle', async () => {
     const paths = {
       rootDir: '/srv/apps/main',
       serverDir: '/srv/apps/main/server',
       clientDir: '/srv/apps/main/client',
       storageDir: '/data/apps/main',
     };
-    const config = { feature: true };
     const scope = new StandaloneAppScope({
       appName: 'main',
       basePath: '/main',
       paths,
       env: { APP_NAME: 'main' },
-      config,
     });
 
     expect(scope).toMatchObject({
@@ -153,7 +174,6 @@ describe('standalone app scope', () => {
       dataDir: '/data/apps/main',
       clientDir: '/srv/apps/main/client',
       env: { APP_NAME: 'main' },
-      config,
     });
     expect(scope.signal.aborted).toBe(false);
 

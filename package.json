@@ -22,6 +22,7 @@
     "format:all": "prettier . --write --ignore-path .prettierignore",
     "preformat:check": "pnpm dev-config:build",
     "format:check": "node ./scripts/format-changed.mjs --check",
+    "i18n:check": "node ./scripts/i18n-check.mjs",
     "plugin:create": "node ./packages/create-plugin/bin/run.js",
     "plugin:register": "nb3 app plugin register --workspace-root .",
     "plugin:unregister": "nb3 app plugin unregister --workspace-root .",

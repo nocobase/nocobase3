@@ -98,10 +98,10 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
 
 数组里出现即启用，数组顺序就是 bootstrap 顺序。命令按包短名转 camelCase 生成本地变量名，追加到数组末尾而不排序，然后用 App 的 prettier 配置格式化。文件里其余内容（注释、手写格式、你调整过的顺序）逐字保留，所以这个文件平时可以放心手改——手改的场景通常是调整顺序，或者给某个插件传配置。
 
-第三处是 `server/plugins.ts`。插件声明 `exports["./server/plugin"]` 时，命令会插入 Server import 和数组项：
+第三处是 `server/plugins.ts`。插件声明 `exports["./server"]` 时，命令会插入 Server import 和数组项：
 
 ```ts
-import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';
+import auditLog from '@nocobase/app-plugin-audit-log/server';
 
 const serverPlugins: AppServerPlugins<AppConfig> =
   defineServerPlugins<AppConfig>([
@@ -158,7 +158,7 @@ pnpm plugin:unregister audit-log
 
 **纯服务端插件不会写进 `client/plugins.ts`。** 两边都按插件的 `exports["./client"]` 判断：没有这个导出就跳过客户端注册，因为写进去的 import 在构建时解析不到。
 
-反过来，纯客户端插件不会写进 `server/plugins.ts`。判据是 `exports["./server/plugin"]`；Client 和 Server 注册面分别判断，互不推测。
+反过来，纯客户端插件不会写进 `server/plugins.ts`。判据是 `exports["./server"]`；Client 和 Server 注册面分别判断，互不推测。
 
 ## 3. 开发插件
 
@@ -187,7 +187,8 @@ pnpm --filter @nocobase/app-template-default seed
 
 ### Server
 
-- `server/plugin.ts`：唯一的服务端注册入口，显式声明 Providers、API Routes、Root Routes、database 和 queue 贡献；
+- `server/index.ts`：公开的服务端入口，默认导出 `server/plugin.ts` 组合的插件定义；
+- `server/plugin.ts`：显式声明 Providers、API Routes、Root Routes、database 和 queue 贡献；
 - `server/providers/index.ts`：组合并导出 Provider 集合；具体 Provider 放在同一目录的领域文件中；
 - `server/services/*.ts`：放置领域服务的默认实现；
 - `server/tokens.ts`：定义稳定的服务接口和 ServiceToken，供 Provider、Route 和其他消费者共享；
@@ -341,6 +342,69 @@ id 是单个 URL 段，层级由树结构决定，所以上面这个页面挂在
 barrel 里的其他导出（类型、工具函数、组件）不会因此进入入口 chunk：脚手架给每个插件声明了 `sideEffects: false`，打包器据此把 App 没用到的导出摇掉。实测 8 个插件走 `<包名>/client` 与走 `<包名>/client/plugin` 的入口体积逐字节相同。反过来说，如果插件里真的存在模块级副作用（例如 `import './x.css'`），就不能保留这条声明。
 
 脚手架已经在 `package.json` 的 `exports` 和 `publishConfig.exports` 里各开了 `./client` 和 `./client/plugin` 两条，以及另外四个入口。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
+
+### 多语言
+
+脚手架已经生成了 `client/locales/`，`client/plugin.ts` 里也已经声明好：
+
+```ts
+export default defineClientPlugin({
+  packageName: '@nocobase/app-plugin-audit-log',
+  locales: () => import('./locales/index.js'),
+  // ……其余入口
+});
+```
+
+`en-US.ts` 写文案，类型由 `LocaleResource` 从文案推出来——结构不用写第二遍。其他语言用这个类型标注，写错 key 或漏 key 都会立刻报错：
+
+```ts
+// client/locales/en-US.ts
+import type { LocaleResource } from '@nocobase/app-i18n';
+
+const enUS = {
+  list: { title: 'Audit log' },
+};
+
+export type AuditLogResource = LocaleResource<typeof enUS>;
+
+export default enUS;
+```
+
+```ts
+// client/locales/zh-CN.ts
+import type { AuditLogResource } from './en-US.js';
+
+const zhCN: AuditLogResource = {
+  list: { title: '审计日志' },
+};
+
+export default zhCN;
+```
+
+暂时只翻译一部分时用 `PartialLocaleResource`，缺的 key 会回落而不是报错。
+
+页面里直接翻译，不用写 namespace——App 渲染插件页面时会自动把插件包名注入为默认 ns：
+
+```tsx
+import { useTranslation } from '@nocobase/app-i18n/client';
+
+const { t } = useTranslation();
+t('list.title'); // 自己的 key
+t('save'); // 自己没有就回落到 App，再回落到基础包的通用词
+```
+
+有两处需要显式写 ns：
+
+- **插件导出给 App 复用的组件**。ns 跟着渲染树走而不是代码归属，这类组件在 App 的树里渲染时拿到的是 App 的 ns，得写 `useTranslation('@nocobase/app-plugin-audit-log')`。判断标准是它会不会在插件自己的路由之外被渲染。
+- **在 bootstrap 里注册的静态文案**，比如菜单标签。那时还不知道用户要用哪种语言，所以传 key 加 ns，由导航渲染时翻译：
+
+  ```ts
+  meta: { label: 'nav.list', i18nNs: '@nocobase/app-plugin-audit-log' }
+  ```
+
+服务端同理：`server/locales/` 的写法和前端完全一样，`defineServerPlugin` 里加 `locales` 字段，路由处理器里用 `c.get('t')`。请求之外的场景（queue job、cron）必须自己 `await i18n.ensureLocaleLoaded(locale)` 再翻译，漏了不报错但会静默回落。
+
+完整说明见 [app-i18n README](../packages/app-i18n/README.md)。
 
 ## 4. 检查和启动
 

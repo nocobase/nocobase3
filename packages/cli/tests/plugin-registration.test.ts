@@ -85,7 +85,7 @@ async function createPlugin(
       version: '1.0.0',
       exports: {
         ...(client ? { './client': './client/index.js' } : {}),
-        ...(server ? { './server/plugin': './server/plugin.js' } : {}),
+        ...(server ? { './server': './server/index.js' } : {}),
       },
     }),
   );
@@ -292,7 +292,7 @@ describe('planPluginRegistration', () => {
       '@nocobase/app-plugin-audit-log/client',
     );
     expect(plan.serverPluginsText).toContain(
-      '@nocobase/app-plugin-audit-log/server/plugin',
+      '@nocobase/app-plugin-audit-log/server',
     );
   });
 

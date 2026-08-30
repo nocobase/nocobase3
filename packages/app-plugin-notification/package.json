@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification",
   "displayName": "Notification App Plugin",
   "description": "Provides the application notification runtime, storage, delivery, and logs.",
-  "version": "0.0.1",
+  "version": "0.0.2-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -19,10 +19,6 @@
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
-    },
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
     },
     "./client": {
       "types": "./client/index.ts",
@@ -65,10 +61,6 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
-      },
       "./client": {
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
@@ -110,6 +102,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@sinclair/typebox": "catalog:",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",

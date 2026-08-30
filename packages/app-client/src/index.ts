@@ -7,6 +7,13 @@ export {
   type AppClientRefineConfig,
 } from './config.js';
 export {
+  createAppI18nRuntime,
+  readStoredLocale,
+  writeStoredLocale,
+  type AppClientLocaleContribution,
+  type CreateAppI18nRuntimeOptions,
+} from './i18n.js';
+export {
   applyClientRouteComponentOverrides,
   isAppClientSettingsRouteGroup,
   defineClientApplication,
@@ -24,6 +31,7 @@ export type {
   AppClientBootstrapLoader,
   AppClientBootstrapModule,
   AppClientContributionLoader,
+  AppClientLocalesLoader,
   AppClientContributions,
   AppClientContributionSource,
   AppClientPluginBootstrap,

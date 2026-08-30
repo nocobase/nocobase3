@@ -13,9 +13,9 @@ const database = services.resolve(databaseManagerToken);
 
 const auth = createAuthentication({
   connection: database.connection(),
-  baseURL: config.auth.baseURL,
-  secret: config.auth.secret,
-  appName: config.app.name,
+  baseURL: app.config.get(appConfig).publicOrigin,
+  secret: app.config.get(authenticationConfig).secret,
+  appName: app.config.get(appConfig).name,
 });
 ```
 
@@ -116,7 +116,7 @@ app.use(
 import { createAuthStorage } from '@nocobase/app-plugin-authentication';
 import { createCaching } from '@nocobase/caching';
 
-const caching = createCaching(config.caching);
+const caching = createCaching(app.config.get(cachingConfig));
 
 const auth = createAuthentication({
   connection,

@@ -2,75 +2,61 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Hono } from 'hono';
+import { Type } from '@sinclair/typebox';
+import { afterEach, describe, expect, it } from 'vitest';
 
+import {
+  AppConfig,
+  defineAppConfig,
+  defineAppConfigVariant,
+} from '../src/config/index.js';
 import { resolveStandaloneAppRuntime } from '../src/node/index.js';
-import { defineServerPlugins } from '../src/plugins/index.js';
+import {
+  defineServerPlugin,
+  defineServerPlugins,
+} from '../src/plugins/index.js';
 import {
   defineAppRuntime,
   resolveAppRuntime,
-  resolveAppRuntimeConfigSection,
-  type AppRuntimeConfig,
   type AppRuntimeDefinition,
   type AppScope,
+  type ResolvedAppRuntimeConfigContext,
 } from '../src/runtime/index.js';
 
-interface TestScopeConfig {
-  readonly label?: string;
-}
-
-interface TestConfig extends AppRuntimeConfig {
-  readonly app: {
-    readonly name: string;
-    readonly publicBasePath: string;
-  };
-  readonly feature: {
-    readonly label: string;
-  };
-  readonly expensive: {
-    readonly loaded: boolean;
-  };
-}
+const featureSchema = Type.Object({ label: Type.String() });
+const featureConfig = defineAppConfig<
+  typeof featureSchema,
+  ResolvedAppRuntimeConfigContext
+>({
+  namespace: 'feature',
+  schema: featureSchema,
+  defaults: { label: 'default' },
+});
 
 const tempDirs: string[] = [];
 
 afterEach(() => {
-  vi.restoreAllMocks();
   for (const directory of tempDirs.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
 describe('application runtime definition', () => {
-  it('resolves routing, structured scope config, paths, and plugins before config factories', () => {
+  it('resolves scope, paths, plugins, and typed config definitions', async () => {
     const rootDir = createAppRoot();
-    const definition = createDefinition();
-    const runtime = resolveAppRuntime(
-      definition,
-      createScope(rootDir, { label: 'embedded' }),
+    const runtime = await resolveAppRuntime(
+      createDefinition(),
+      createScope(rootDir),
     );
 
-    expect(runtime.config).toEqual({
-      app: {
-        name: 'customer',
-        publicBasePath: '/customers',
-      },
-      feature: { label: 'embedded' },
-      expensive: { loaded: true },
-      plugins: [],
-    });
+    expect(runtime.appConfig.get(featureConfig)).toEqual({ label: 'default' });
     expect(runtime.configPaths.root()).toBe(rootDir);
     expect(runtime.plugins.appPackageName).toBe('@example/customer-app');
-    expect(runtime.providers).toEqual([]);
-    expect(runtime.routes).toEqual([]);
   });
 
-  it('creates and resolves standalone scopes from core defaults', () => {
-    const rootDir = createAppRoot();
-    const runtime = resolveStandaloneAppRuntime(createDefinition(), {
-      rootDir,
-      config: { label: 'standalone' },
+  it('creates standalone scopes from core defaults', async () => {
+    const runtime = await resolveStandaloneAppRuntime(createDefinition(), {
+      rootDir: createAppRoot(),
     });
 
     expect(runtime.mode).toBe('standalone');
@@ -78,79 +64,113 @@ describe('application runtime definition', () => {
       name: 'main',
       publicBasePath: '/main',
     });
-    expect(runtime.config.feature.label).toBe('standalone');
+    expect(runtime.appConfig.get(featureConfig).label).toBe('default');
   });
 
-  it('resolves one config section without evaluating unrelated sections', () => {
-    const rootDir = createAppRoot();
-    const expensive = vi.fn(() => {
-      throw new Error('unrelated config was evaluated');
+  it('loads and reloads plugin-owned config definitions', async () => {
+    let label = 'initial';
+    const pluginConfig = defineAppConfig({
+      namespace: 'pluginFeature',
+      schema: Type.Object({ label: Type.String() }),
     });
-    const definition = createDefinition(expensive);
-
-    const resolved = resolveAppRuntimeConfigSection(
-      definition,
-      createScope(rootDir, { label: 'database-task' }),
-      'feature',
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-service-provider-example',
+      config: pluginConfig,
+    });
+    const runtime = await resolveAppRuntime(
+      {
+        ...createDefinition(),
+        plugins: defineServerPlugins([plugin]),
+        config: async (context) => {
+          const config = new AppConfig(context.configs, { context });
+          config.load({
+            name: 'plugin-feature',
+            read: async () => ({
+              kind: 'map',
+              value: { pluginFeature: { label } },
+            }),
+          });
+          return config;
+        },
+      },
+      createScope(createAppRoot()),
     );
 
-    expect(resolved.config).toEqual({ label: 'database-task' });
-    expect(expensive).not.toHaveBeenCalled();
-    expect(resolved.plugins.plugins).toEqual([]);
+    expect(runtime.appConfig.get(pluginConfig)).toEqual({ label: 'initial' });
+
+    label = 'reloaded';
+    await runtime.appConfig.reload();
+    expect(runtime.appConfig.get(pluginConfig)).toEqual({ label: 'reloaded' });
   });
 
-  it('copies and freezes runtime contributions without creating routers', () => {
-    const rootDir = createAppRoot();
-    const createRouter = vi.fn(() => new Hono());
-    const definition = createDefinition();
-    const routes = [{ scope: 'api' as const, createRouter }];
-    const runtimeDefinition = defineAppRuntime({
-      ...definition,
-      routes,
+  it('collects plugin-owned config variants before loading', async () => {
+    const providersConfig = defineAppConfig({
+      namespace: 'providers',
+      schema: Type.Object({
+        entries: Type.Record(
+          Type.String(),
+          Type.Object(
+            { driver: Type.String() },
+            { additionalProperties: true },
+          ),
+        ),
+      }),
+      defaults: {
+        entries: {
+          primary: { driver: 'redis', url: 'redis://localhost:6379' },
+        },
+      },
     });
+    const redisVariant = defineAppConfigVariant({
+      target: 'providers.entries',
+      discriminator: 'driver',
+      value: 'redis',
+      schema: Type.Object({
+        driver: Type.Literal('redis'),
+        url: Type.String(),
+      }),
+    });
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-service-provider-example',
+      config: redisVariant,
+    });
+    const runtime = await resolveAppRuntime(
+      {
+        ...createDefinition(),
+        plugins: defineServerPlugins([plugin]),
+        config: async (context) =>
+          new AppConfig([providersConfig, ...context.configs], { context }),
+      },
+      createScope(createAppRoot()),
+    );
 
-    routes.length = 0;
-    const runtime = resolveAppRuntime(runtimeDefinition, createScope(rootDir));
-
-    expect(runtime.routes).toHaveLength(1);
-    expect(Object.isFrozen(runtimeDefinition.routes)).toBe(true);
-    expect(createRouter).not.toHaveBeenCalled();
+    expect(runtime.appConfig.get('providers.entries.primary')).toEqual({
+      driver: 'redis',
+      url: 'redis://localhost:6379',
+    });
   });
 });
 
-function createDefinition(
-  expensive: () => TestConfig['expensive'] = () => ({ loaded: true }),
-): AppRuntimeDefinition<TestConfig, TestScopeConfig> {
-  return defineAppRuntime<TestConfig, TestScopeConfig>({
-    config: {
-      app: ({ routing }) => ({
-        name: routing?.name ?? 'app',
-        publicBasePath: routing?.publicBasePath ?? '/',
-      }),
-      feature: ({ scopeConfig }) => ({
-        label: scopeConfig?.label ?? 'default',
-      }),
-      expensive,
+function createDefinition(): AppRuntimeDefinition {
+  return defineAppRuntime({
+    config: async (context) => {
+      const config = new AppConfig([featureConfig, ...context.configs], {
+        context,
+      });
+      return config;
     },
-    plugins: defineServerPlugins<TestConfig>([]),
+    plugins: defineServerPlugins([]),
     providers: [],
     routes: [],
   });
 }
 
-function createScope(
-  rootDir: string,
-  config?: TestScopeConfig,
-): AppScope<TestScopeConfig> {
+function createScope(rootDir: string): AppScope {
   return {
     id: 'customer',
     appName: 'customer',
     basePath: '/customers',
-    paths: {
-      rootDir,
-      serverDir: path.join(rootDir, 'server'),
-    },
-    config,
+    paths: { rootDir, serverDir: path.join(rootDir, 'server') },
     registerDisposer(): void {},
   };
 }

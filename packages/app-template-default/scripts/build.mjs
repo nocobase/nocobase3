@@ -213,6 +213,8 @@ run('Build server workspace dependencies', 'pnpm', [
   '--filter',
   '@nocobase/app-database',
   '--filter',
+  '@nocobase/app-i18n',
+  '--filter',
   '@nocobase/app-server-kit',
   '--filter',
   '@nocobase/caching',

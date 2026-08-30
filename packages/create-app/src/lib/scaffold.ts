@@ -40,7 +40,7 @@ export async function assertTargetIsUsable(directory: string): Promise<void> {
 }
 
 /**
- * The minimum a generated project must ignore. `.env.local` carries the generated `AUTH_SECRET`, so committing it
+ * The minimum a generated project must ignore. `config.yml` carries the generated `AUTH_SECRET`, so committing it
  * would publish a credential; the rest are build output and local state.
  */
 const FALLBACK_GITIGNORE = [
@@ -48,9 +48,8 @@ const FALLBACK_GITIGNORE = [
   'dist/',
   'coverage/',
   '',
-  '# Environment variables, including the generated AUTH_SECRET.',
-  '.env',
-  '.env.local',
+  '# Local configuration, including the generated AUTH_SECRET.',
+  '/config.yml',
   '',
   '# Local application state.',
   '/storage/',
@@ -66,7 +65,7 @@ const FALLBACK_GITIGNORE = [
  * npm refuses to publish a file by that name, so templates ship it as `.npmignore` or `gitignore` and it has to be
  * renamed on the way out. A template may ship neither — the published `@nocobase/app-template-default` currently does
  * not — and in that case a fallback is written rather than leaving the project with no ignore rules at all, which
- * would put `node_modules` and the secret-bearing `.env.local` on the first commit.
+ * would put `node_modules` and the secret-bearing `config.yml` on the first commit.
  */
 async function restoreGitignore(directory: string): Promise<void> {
   const target = path.join(directory, '.gitignore');
@@ -156,14 +155,13 @@ export async function removeDirectory(directory: string): Promise<void> {
 }
 
 /**
- * Reads the template's `.env.example` so its non-database settings survive into the generated `.env.local`. A template
- * without one is not an error — the database block alone is a valid env file.
+ * Reads the template's `config.example.yml` for callers that inspect the example.
  */
-export async function readEnvExample(
+export async function readConfigExample(
   directory: string,
 ): Promise<string | undefined> {
   try {
-    return await readFile(path.join(directory, '.env.example'), 'utf8');
+    return await readFile(path.join(directory, 'config.example.yml'), 'utf8');
   } catch {
     return undefined;
   }

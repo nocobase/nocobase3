@@ -24,10 +24,7 @@ import {
   createAppDatabaseManager,
   createAppMigrator,
   createAppSeeder,
-  createConfigEnv,
   createConfigPaths,
-  defineConfig,
-  loadConfig,
   prepareAppDatabaseStorage,
   type AppDatabaseConfig,
 } from '../src/index.js';
@@ -44,45 +41,6 @@ afterEach(() => {
 });
 
 describe('app-server config runtime', () => {
-  it('reads typed env values with defaults', () => {
-    const env = createConfigEnv({
-      APP_NAME: ' app ',
-      APP_PORT: '13000',
-      APP_ENABLED: 'yes',
-      APP_LOCALES: 'en-US, zh-CN',
-    });
-
-    expect(env.string('APP_NAME')).toBe('app');
-    expect(env.string('MISSING', 'fallback')).toBe('fallback');
-    expect(env.number('APP_PORT', 80)).toBe(13000);
-    expect(env.boolean('APP_ENABLED', false)).toBe(true);
-    expect(env.list('APP_LOCALES', [])).toEqual(['en-US', 'zh-CN']);
-  });
-
-  it('loads config factories with injected env and paths', () => {
-    const env = createConfigEnv({
-      APP_NAME: 'orders',
-    });
-    const paths = createConfigPaths({
-      rootDir: '/tmp/app',
-    });
-    const factories = {
-      app: defineConfig(({ env, paths }) => ({
-        name: env.string('APP_NAME', 'app'),
-        migrations: paths.database('migrations'),
-        storage: paths.storage('database.sqlite'),
-      })),
-    };
-
-    expect(loadConfig(factories, { env, paths })).toEqual({
-      app: {
-        name: 'orders',
-        migrations: '/tmp/app/database/migrations',
-        storage: '/tmp/app/storage/database.sqlite',
-      },
-    });
-  });
-
   it('supports custom database runtime paths', () => {
     const paths = createConfigPaths({
       rootDir: '/tmp/app',

@@ -4,9 +4,10 @@ dist-ssr/
 logs/
 *.log
 
-.env
-.env.*
-!.env.example
+config.yml
+!config.example.yml
+.env.e2e
+.env.e2e.local
 !.env.e2e.example
 
 coverage/

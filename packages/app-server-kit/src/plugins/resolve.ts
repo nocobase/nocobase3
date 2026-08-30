@@ -4,7 +4,6 @@ import path from 'node:path';
 
 import type { MigrationSource, SeedSource } from '@nocobase/app-database';
 
-import type { ApplicationConfig } from '../application/index.js';
 import type { AppDatabaseConfig } from '../database/index.js';
 import type {
   AppServerPlugin,
@@ -24,13 +23,11 @@ export interface ResolvedAppPluginDatabaseConfig {
   readonly plugins: readonly ResolvedAppPlugin[];
 }
 
-export function resolveAppServerPlugins<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(
+export function resolveAppServerPlugins(
   rootDir: string,
-  serverPlugins: AppServerPlugins<TConfig>,
+  serverPlugins: AppServerPlugins,
   options: ResolveAppServerPluginsOptions = {},
-): ResolvedAppServerPlugins<TConfig> {
+): ResolvedAppServerPlugins {
   const appPackagePath = path.join(rootDir, 'package.json');
   const appPackage = existsSync(appPackagePath) ? readJson(appPackagePath) : {};
 
@@ -46,23 +43,19 @@ export function resolveAppServerPlugins<
   };
 }
 
-export function resolveAppPluginDatabaseConfig<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(
+export function resolveAppPluginDatabaseConfig(
   rootDir: string,
   database: AppDatabaseConfig,
-  serverPlugins: AppServerPlugins<TConfig>,
+  serverPlugins: AppServerPlugins,
   options: ResolveAppServerPluginsOptions = {},
 ): ResolvedAppPluginDatabaseConfig {
   const resolved = resolveAppServerPlugins(rootDir, serverPlugins, options);
   return createAppPluginDatabaseConfig(database, resolved);
 }
 
-export function createAppPluginDatabaseConfig<
-  TConfig extends ApplicationConfig = ApplicationConfig,
->(
+export function createAppPluginDatabaseConfig(
   database: AppDatabaseConfig,
-  resolved: ResolvedAppServerPlugins<TConfig>,
+  resolved: ResolvedAppServerPlugins,
 ): ResolvedAppPluginDatabaseConfig {
   const plugins = resolved.plugins.map((plugin) => plugin.metadata);
   const appMigrationSource: MigrationSource = {
@@ -134,9 +127,9 @@ export function createPluginJobLocations(
   return plugins.flatMap((plugin) => plugin.jobLocations);
 }
 
-function resolvePlugin<TConfig extends ApplicationConfig>(
+function resolvePlugin(
   rootDir: string,
-  definition: AppServerPlugin<TConfig>,
+  definition: AppServerPlugin,
 ): ResolvedAppPlugin {
   const packageJsonPath = resolvePackageJson(rootDir, definition.packageName);
   const packageJson = readJson(packageJsonPath);

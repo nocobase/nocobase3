@@ -7,7 +7,7 @@ import {
   parseDialect,
   type DatabaseDialect,
 } from './lib/database.ts';
-import { buildEnvFile } from './lib/env-file.ts';
+import { buildConfigFile } from './lib/config-file.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
 import { installDependencies, verifyDriver } from './lib/install.ts';
 import { addDriverDependency } from './lib/manifest.ts';
@@ -26,7 +26,6 @@ import {
 import {
   assertTargetIsUsable,
   assertValidAppName,
-  readEnvExample,
   removeDirectory,
   scaffoldFromTemplate,
 } from './lib/scaffold.ts';
@@ -123,14 +122,12 @@ async function run(input: ParsedInput): Promise<void> {
   }
 
   try {
-    const envExample = await readEnvExample(template.directory);
-
     await scaffoldFromTemplate({
       name,
       targetDirectory,
       templateDirectory: template.directory,
       extraFiles: {
-        '.env.local': buildEnvFile({ database, template: envExample }),
+        'config.yml': buildConfigFile({ database }),
       },
     });
   } finally {
@@ -182,7 +179,7 @@ async function reportDriverVerification(
 /**
  * Prints what the user has to do next, in the order they have to do it.
  *
- * Editing `.env.local` is a step rather than a trailing remark, because for postgres and mysql it is the one thing
+ * Editing `config.yml` is a step rather than a trailing remark, because for postgres and mysql it is the one thing
  * standing between a generated project and a running one: the file holds stock credentials pointing at localhost, so
  * `pnpm dev` fails on connection until it is filled in. SQLite needs no server and its generated defaults already
  * work, so there the file is only worth mentioning.
@@ -192,11 +189,11 @@ function finish(
   state: { installed: boolean; dialect: DatabaseDialect },
   message = 'Done.',
 ): void {
-  const mustEditEnv = needsConnectionDetails(state.dialect);
+  const mustEditConfig = needsConnectionDetails(state.dialect);
   const steps = [`cd ${name}`];
 
-  if (mustEditEnv) {
-    steps.push(`edit .env.local — set your ${state.dialect} connection`);
+  if (mustEditConfig) {
+    steps.push(`edit config.yml — set your ${state.dialect} connection`);
   }
 
   if (!state.installed) {
@@ -208,9 +205,9 @@ function finish(
   note(steps.join('\n'), 'Next steps');
 
   log.info(
-    mustEditEnv
-      ? `.env.local has DB_HOST, DB_DATABASE, DB_USERNAME, and DB_PASSWORD set to defaults. Point them at your ${state.dialect} server before starting the app.`
-      : 'Database settings were written to .env.local, and the defaults work as they are.',
+    mustEditConfig
+      ? `config.yml contains default ${state.dialect} connection values. Update them before starting the app.`
+      : 'Database settings were written to config.yml, and the defaults work as they are.',
   );
 
   outro(message);

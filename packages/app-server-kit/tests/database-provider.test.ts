@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { AppConfig } from '../src/config/index.js';
 import {
   databaseManagerToken,
   type DatabaseManager,
@@ -30,6 +31,7 @@ vi.mock('@nocobase/app-database', async (importOriginal) => {
 
 import {
   DatabaseProvider,
+  databaseConfig,
   runAppMigrations,
   runAppSeeds,
   type AppDatabaseConfig,
@@ -51,10 +53,10 @@ afterEach(() => {
 });
 
 describe('DatabaseProvider', () => {
-  it('registers a lazy database manager created from runtime config', () => {
+  it('registers a lazy database manager created from runtime config', async () => {
     const database = createMockDatabase();
     createDatabaseManagerMock.mockReturnValue(database);
-    const { provider, container } = createProvider(createConfig());
+    const { provider, container } = await createProvider(createConfig());
 
     provider.register();
 
@@ -64,8 +66,8 @@ describe('DatabaseProvider', () => {
     expect(createDatabaseManagerMock).toHaveBeenCalledOnce();
   });
 
-  it('does not register a database when the default connection is none', () => {
-    const { provider, container } = createProvider({
+  it('does not register a database when the default connection is none', async () => {
+    const { provider, container } = await createProvider({
       ...createConfig(),
       default: 'none',
       connections: {},
@@ -95,7 +97,7 @@ describe('DatabaseProvider', () => {
       }),
     });
     const config = createConfig(root, true);
-    const { provider, container } = createProvider(config);
+    const { provider, container } = await createProvider(config);
     const registry = new ServiceProviderRegistry();
     registry.add(provider);
     registry.registerAll();
@@ -113,7 +115,7 @@ describe('DatabaseProvider', () => {
   it('does not run automatic tasks when autoRun is disabled', async () => {
     const database = createMockDatabase();
     createDatabaseManagerMock.mockReturnValue(database);
-    const { provider } = createProvider(createConfig());
+    const { provider } = await createProvider(createConfig());
 
     provider.register();
     await provider.boot();
@@ -132,7 +134,7 @@ describe('DatabaseProvider', () => {
       latest: vi.fn().mockRejectedValue(error),
       rollback: vi.fn(),
     });
-    const { provider } = createProvider(
+    const { provider } = await createProvider(
       createConfig(createTempDirectory(), true),
     );
     const registry = new ServiceProviderRegistry();
@@ -193,13 +195,17 @@ describe('standalone database tasks', () => {
   });
 });
 
-function createProvider(database: AppDatabaseConfig): {
+async function createProvider(database: AppDatabaseConfig): Promise<{
   readonly provider: DatabaseProvider<DatabaseProviderApplication>;
   readonly container: ServiceContainer;
-} {
+}> {
   const container = new ServiceContainer();
+  const appConfig = new AppConfig([{ ...databaseConfig, defaults: database }], {
+    context: {},
+  });
+  await appConfig.loadAll();
   const app: DatabaseProviderApplication = {
-    config: { database },
+    config: appConfig,
     container,
   };
   return {

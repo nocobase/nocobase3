@@ -17,8 +17,8 @@ import {
 
 const SERVER_SOURCE_DEFINITION: PluginSourceDefinition = {
   entryKind: 'value',
-  entrySpecifierSuffix: '/server/plugin',
-  entrySuffixes: ['/server/plugin'],
+  entrySpecifierSuffix: '/server',
+  entrySuffixes: ['/server'],
   fileLabel: 'server/plugins.ts',
   registerCallName: 'defineServerPlugins',
 };
@@ -53,7 +53,7 @@ export function serverPluginsPath(appRoot: string): string {
 }
 
 export function serverPluginEntrySpecifier(packageName: string): string {
-  return `${packageName}/server/plugin`;
+  return `${packageName}/server`;
 }
 
 export async function readServerPlugins(

@@ -5,8 +5,8 @@ import {
 } from '@nocobase/app-server-kit/router';
 import { Hono } from 'hono';
 
-import type { AuthenticationProviderConfig } from '../providers/authentication.js';
 import { authenticationToken } from '../tokens.js';
+import type { AuthenticationProviderConfig } from '../providers/authentication.js';
 
 export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<AuthenticationProviderConfig>

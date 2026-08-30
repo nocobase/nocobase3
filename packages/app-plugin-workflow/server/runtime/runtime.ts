@@ -93,7 +93,7 @@ export class WorkflowService {
     input: JsonObject,
     triggerOptions: WorkflowEventOptions = {},
   ): Promise<WorkflowTriggerReceipt> {
-    let row = await this.database
+    const row = await this.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
       .select(['id', 'enabled', 'hash'])
@@ -103,18 +103,8 @@ export class WorkflowService {
     if (!row) return { status: 'skipped', reason: 'not-found' };
     if (!triggerOptions.force && !triggerOptions.manually && !row.enabled)
       return { status: 'skipped', reason: 'disabled' };
-
-    await this.loader.sync(workflowKey, 'trigger');
-    row = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['id', 'enabled', 'hash'])
-      .where('key', '=', workflowKey)
-      .where('current', '=', true)
-      .executeTakeFirst();
-    if (!row) return { status: 'skipped', reason: 'not-found' };
-    if (!triggerOptions.force && !triggerOptions.manually && !row.enabled)
-      return { status: 'skipped', reason: 'disabled' };
+    if (typeof row.hash === 'string')
+      await this.loader.ensureMaterialized(row.hash);
 
     const workflow = await loadWorkflow(
       this.database.query(),
@@ -151,11 +141,8 @@ export class WorkflowService {
     return this.loader.discover();
   }
 
-  async publishArtifact(
-    key: string,
-    reason: 'enable' | 'trigger',
-  ): Promise<void> {
-    await this.loader.sync(key, reason);
+  ensureArtifactMaterialized(hash: string): Promise<WorkflowId | undefined> {
+    return this.loader.ensureMaterialized(hash);
   }
 
   async dispose(): Promise<void> {
@@ -251,7 +238,7 @@ export type WorkflowServiceApi = Pick<
   | 'triggerRevision'
   | 'refreshSourceResolvers'
   | 'discoverArtifacts'
-  | 'publishArtifact'
+  | 'ensureArtifactMaterialized'
 >;
 
 export { appWorkflowInstructions } from './instructions.js';

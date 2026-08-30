@@ -10,10 +10,10 @@ while the `/install` route itself redirects back to the application root. The
 installation page configures the Template's `main` SQLite, PostgreSQL, or MySQL
 database connection through `POST /install/configure`.
 
-The configure endpoint preserves `.env.example`, adds the selected `DB_*`
-values, generates `AUTH_SECRET` on the server, and creates
-`paths.root('.env')` with an exclusive write. It never overwrites an existing
-environment file or returns the generated secret. The middleware's install
+The configure endpoint writes the selected database values and a generated
+authentication secret to `paths.root('config.yml')` with an exclusive write.
+It never overwrites an existing configuration file or returns the generated
+secret. The middleware's install
 mode is fixed for the life of the running process, so the application must be
 restarted after configuration.
 

@@ -2,25 +2,25 @@
   "name": "@nocobase/app-plugin-service-provider-example",
   "displayName": "Service Provider Example App Plugin",
   "description": "Example app plugin that registers and manages a service through a ServiceProvider.",
-  "version": "0.0.1",
+  "version": "0.0.2-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "exports": {
-    "./server/plugin": {
-      "types": "./server/plugin.ts",
-      "import": "./server/plugin.ts"
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
     },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
     "exports": {
-      "./server/plugin": {
-        "types": "./dist/server/plugin.d.ts",
-        "import": "./dist/server/plugin.js"
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
       },
       "./package.json": "./package.json"
     }
@@ -43,6 +43,7 @@
   "dependencies": {
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@sinclair/typebox": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {
