@@ -357,6 +357,8 @@ describe('gitignore handling', () => {
 
     expect(contents).toContain('node_modules');
     expect(contents).toContain('/config.yml');
+    expect(contents).toContain('/.nocobase/');
+    expect(contents).toContain('/.nb3/');
   });
 
   it('prefers the template gitignore over the fallback', async () => {

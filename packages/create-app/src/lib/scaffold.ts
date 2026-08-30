@@ -53,6 +53,8 @@ const FALLBACK_GITIGNORE = [
   '',
   '# Local application state.',
   '/storage/',
+  '/.nocobase/',
+  '/.nb3/',
   '*.log',
   '',
 ].join('\n');
