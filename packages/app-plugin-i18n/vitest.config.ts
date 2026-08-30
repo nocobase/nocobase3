@@ -1,5 +1,5 @@
 import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
 
 export default createNodeVitestConfig({
-  test: { include: ['tests/server/**/*.test.ts'] },
+  test: { include: ['tests/**/*.test.ts'] },
 });

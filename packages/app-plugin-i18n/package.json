@@ -79,12 +79,14 @@
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "hono": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/app-server-kit": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/service-provider": "workspace:*",

@@ -759,6 +759,9 @@ importers:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../app-client
+      '@nocobase/app-sdk':
+        specifier: workspace:*
+        version: link:../app-sdk
       '@nocobase/app-server-kit':
         specifier: workspace:*
         version: link:../app-server-kit

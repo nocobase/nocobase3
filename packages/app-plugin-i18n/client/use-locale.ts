@@ -6,10 +6,24 @@ import {
   type LocaleDefinition,
 } from '@nocobase/app-i18n/client';
 import { writeStoredLocale } from '@nocobase/app-client';
+import { createAppClient, type AppClient } from '@nocobase/app-sdk';
 import { useCallback, useEffect } from 'react';
 
-/** Where the server is told which language to answer in. */
-const LOCALE_ENDPOINT = '/api/i18n/locale';
+/** Path under the application's API root, which is where the server is told which language to answer in. */
+const LOCALE_PATH = 'i18n/locale';
+
+let client: AppClient | undefined;
+
+/**
+ * The API client, created on first use.
+ *
+ * It resolves paths against the application's own base — an app served from `/main/` answers at `/main/api`, so a
+ * hard-coded `/api/...` would miss it entirely.
+ */
+function getClient(): AppClient {
+  client ??= createAppClient();
+  return client;
+}
 
 export interface UseAppLocaleResult {
   readonly locale: Locale;
@@ -19,11 +33,14 @@ export interface UseAppLocaleResult {
   readonly error: Error | undefined;
 }
 
-async function notifyServer(locale: Locale): Promise<void> {
-  await fetch(LOCALE_ENDPOINT, {
+/**
+ * Tells the server which language to answer in.
+ *
+ * Exported so the path resolution can be tested: it has to land under the application's base, not the origin root.
+ */
+export async function notifyServerLocale(locale: Locale): Promise<void> {
+  await getClient().request(LOCALE_PATH, {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ locale }),
   });
 }
@@ -47,7 +64,7 @@ export function useAppLocale(): UseAppLocaleResult {
       writeStoredLocale(next);
       await setLocale(next);
       try {
-        await notifyServer(next);
+        await notifyServerLocale(next);
       } catch (cause) {
         // The interface has already switched; only server-rendered strings lag behind, and the next startup
         // reconciles them. Failing the switch over this would be worse than the inconsistency.
@@ -73,7 +90,7 @@ export function useSyncServerLocale(): void {
   const runtime = useI18nRuntime();
 
   useEffect(() => {
-    void notifyServer(runtime.getLocale()).catch(() => {
+    void notifyServerLocale(runtime.getLocale()).catch(() => {
       // Nothing to do: the interface is already correct, and the next startup tries again.
     });
   }, [runtime]);
