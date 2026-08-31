@@ -62,7 +62,7 @@
   },
   "scripts": {
     "clean": "node ./scripts/clean-dist.ts",
-    "build": "pnpm clean && tsc -p tsconfig.build.json",
+    "build": "node ./scripts/build.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix --max-warnings=0",
