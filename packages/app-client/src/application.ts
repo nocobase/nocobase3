@@ -9,10 +9,7 @@ import {
   type ServiceResolver,
   type ServiceToken,
 } from '@nocobase/service-provider';
-import { createElement } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 
-import { AppClientRoot } from './app-client.js';
 import type {
   AppClientConfig,
   AppClientRefineConfig,
@@ -107,13 +104,12 @@ export class ClientApplication {
   public readonly container: ServiceContainer;
   public readonly services: ServiceResolver;
 
-  private readonly providers = new ServiceProviderRegistry();
+  private readonly providerRegistry = new ServiceProviderRegistry();
   private readonly refineCollector: AppClientRefineConfigCollector;
   private readonly createRenderConfig: ClientApplicationRenderConfigFactory;
   private currentProviderContext: ClientServiceProviderContext | undefined;
   private resolvedRefine: Readonly<AppClientRefineConfig> | undefined;
   private resolvedRenderConfig: AppClientRenderConfig | undefined;
-  private reactRoot: Root | undefined;
   private state: ClientApplicationState = 'created';
   private startPromise: Promise<void> | undefined;
   private shutdownPromise: Promise<void> | undefined;
@@ -128,7 +124,7 @@ export class ClientApplication {
       i18nProvider: createRefineI18nProvider(options.runtime.i18n),
     });
 
-    this.providers.add(new CoreClientServiceProvider(this));
+    this.providerRegistry.add(new CoreClientServiceProvider(this));
     this.addServiceProviders(options.runtime.serviceProviders);
   }
 
@@ -167,7 +163,7 @@ export class ClientApplication {
       );
     }
     const provider = new contribution.Provider(this, contribution.context);
-    this.providers.add(
+    this.providerRegistry.add(
       new ContextualServiceProvider(this, provider, contribution.context),
     );
   }
@@ -183,24 +179,6 @@ export class ClientApplication {
   public start(): Promise<void> {
     this.startPromise ??= this.startApplication();
     return this.startPromise;
-  }
-
-  public mount(target: string | Element): void {
-    if (this.state !== 'started') {
-      throw new Error('Client Application must be started before mounting.');
-    }
-    if (this.reactRoot) {
-      throw new Error('Client Application is already mounted.');
-    }
-    const element = resolveMountTarget(target);
-    const root = createRoot(element);
-    root.render(createElement(AppClientRoot, { app: this }));
-    this.reactRoot = root;
-  }
-
-  public unmount(): void {
-    this.reactRoot?.unmount();
-    this.reactRoot = undefined;
   }
 
   public shutdown(): Promise<void> {
@@ -242,13 +220,13 @@ export class ClientApplication {
     }
     this.state = 'starting';
     try {
-      this.providers.registerAll();
-      await this.providers.bootAll();
+      this.providerRegistry.registerAll();
+      await this.providerRegistry.bootAll();
       this.resolvedRefine = this.refineCollector.finalize();
       this.resolvedRenderConfig = Object.freeze(this.createRenderConfig(this));
       await this.runtime.validate?.(this);
-      await this.providers.startAll();
-      await this.providers.readyAll();
+      await this.providerRegistry.startAll();
+      await this.providerRegistry.readyAll();
       this.state = 'started';
     } catch (error) {
       this.state = 'failed';
@@ -274,9 +252,8 @@ export class ClientApplication {
       return;
     }
     this.state = 'shutting-down';
-    this.unmount();
     try {
-      await this.providers.shutdown();
+      await this.providerRegistry.shutdown();
     } finally {
       this.state = 'shutdown';
     }
@@ -288,17 +265,4 @@ export function createApp(
   createRenderConfig: ClientApplicationRenderConfigFactory,
 ): ClientApplication {
   return new ClientApplication({ runtime, createRenderConfig });
-}
-
-function resolveMountTarget(target: string | Element): Element {
-  if (typeof target !== 'string') {
-    return target;
-  }
-  const element = globalThis.document?.querySelector(target);
-  if (!element) {
-    throw new Error(
-      `Client Application mount target "${target}" was not found.`,
-    );
-  }
-  return element;
 }

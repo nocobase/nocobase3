@@ -35,7 +35,7 @@ export default reactWrappers;
 
 `before` 和 `after` 引用同一 layer 中的稳定 Wrapper ID，只表达真实依赖。Wrapper A 消费 Wrapper B 的 Context 时，应让依赖关系在 declaration、测试和文档中一致；跨 layer 排序、缺失引用和循环依赖都会被拒绝。
 
-React Wrapper declaration 在 Runtime resolution 时已经静态可见，component 只在 `app.mount()` 后渲染。Declaration module 不得访问 DOM、发请求或启动 timer；React 副作用放在 effect 中并提供 cleanup，非 React 生命周期工作放在 ServiceProvider。
+React Wrapper declaration 在 Runtime resolution 时已经静态可见，component 只在 `app.start()` 成功且 Browser Host 渲染 `AppClientRoot` 后执行。Declaration module 不得访问 DOM、发请求或启动 timer；React 副作用放在 effect 中并提供 cleanup，非 React 生命周期工作放在 ServiceProvider。
 
 ## 使用 typed options
 

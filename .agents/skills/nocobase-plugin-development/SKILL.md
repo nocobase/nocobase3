@@ -114,7 +114,8 @@ runnable reference is needed.
   imports at leaf boundaries such as route page components, locale messages,
   heavy SDKs, or truly optional features.
 - Client ServiceProvider lifecycle runs inside `ClientApplication.start()`.
-  React Wrappers render only through `ClientApplication.mount()`.
+  The Browser host owns the React DOM root and renders React Wrappers through
+  `AppClientRoot` only after application startup succeeds.
 - Server Routes are direct contributions passed to `defineServerPlugin()`; do
   not write a Server route loader.
 - Define a Service contract and owner-created Token before a public or shared

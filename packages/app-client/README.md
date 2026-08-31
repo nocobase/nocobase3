@@ -19,7 +19,7 @@ public HTML config + static declarations
           ├── Refine configuration
           └── React render configuration
                     ↓
-              start() → mount()
+          start() → host render()
 ```
 
 The Client and Server use the same explicit `serviceProviders` term for
@@ -63,22 +63,29 @@ modules must therefore remain side-effect-free.
 ## Client entry
 
 ```tsx
+import { AppClientRoot } from '@nocobase/app-client';
 import { resolveAppRuntime } from '@nocobase/app-client/runtime';
+import { createRoot } from 'react-dom/client';
 
 import { createApp } from './app.js';
 import appRuntime from './runtime.js';
+
+const container = document.getElementById('root');
+if (!container) throw new Error('Missing application root element.');
+const root = createRoot(container);
 
 const runtime = await resolveAppRuntime(appRuntime);
 const app = createApp(runtime);
 
 await app.start();
-app.mount('#root');
+root.render(<AppClientRoot app={app} />);
 ```
 
 `app.start()` performs the complete ServiceProvider lifecycle and finalizes the
-Refine and render configuration. `app.mount()` requires a started application
-and owns the React root. `app.shutdown()` unmounts the React tree and shuts down
-providers in reverse order.
+Refine and render configuration. The Browser host owns the React root and
+renders `AppClientRoot` only after startup succeeds. During disposal, the host
+unmounts its React root and `app.shutdown()` shuts down providers in reverse
+order.
 
 ## ClientApplication
 
@@ -91,7 +98,7 @@ An application owns:
 - the API client binding under `appApiClientToken`;
 - mutable `app.refine` setters during Provider lifecycle;
 - finalized `app.refineConfig` after startup;
-- React mount and unmount state.
+- finalized React render configuration consumed by `AppClientRoot`.
 
 Create an application directly when the default helper is sufficient:
 
@@ -188,7 +195,8 @@ export default reactWrappers;
 ```
 
 Wrappers are ordered outer-to-inner by layer and explicit `before`/`after`
-constraints. Their components render only when the application mounts. Use a
+constraints. Their components render only when the Browser host renders
+`AppClientRoot` for a started application. Use a
 Wrapper for React Context or tree-local UI behavior; use a ServiceProvider for
 application services, Container bindings, Refine setup, connections, listeners,
 and lifecycle cleanup.

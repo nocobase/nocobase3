@@ -78,7 +78,7 @@ instantiate
 → ready all
 ```
 
-`app.shutdown()` 先 unmount React root，再逆序执行 Provider `shutdown()`。启动失败也会尝试逆序清理已经进入生命周期的 Provider。
+`app.shutdown()` 只负责逆序执行 Provider `shutdown()`；React root 由 Browser Host 持有并单独 unmount。启动失败也会尝试逆序清理已经进入生命周期的 Provider。
 
 ## 测试
 

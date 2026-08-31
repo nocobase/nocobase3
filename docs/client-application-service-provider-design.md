@@ -104,17 +104,17 @@ const appRuntime = defineAppRuntime({
 });
 ```
 
-Client 的 `config` 是应用级配置工厂；`serviceProviders`、`reactWrappers` 和 Route definitions 是 Application 基础装配的一部分，静态 import 后在启动或挂载前确定。页面组件、语言消息和重型 SDK 仍然可以在实际使用时通过 `componentLoader()` 或模块内部 `import()` 按需加载。
+Client 的 `config` 是应用级配置工厂；`serviceProviders`、`reactWrappers` 和 Route definitions 是 Application 基础装配的一部分，静态 import 后在启动或首次渲染前确定。页面组件、语言消息和重型 SDK 仍然可以在实际使用时通过 `componentLoader()` 或模块内部 `import()` 按需加载。
 
 ### Client 加载和拆包边界
 
-加载方式按“是否在首次启动时必需”划分，而不是按 contribution 目录划分。如果 `resolveAppRuntime()`、`app.start()` 或首次 `app.mount()` 必须等待某个模块，那么把该模块包装成动态 import 只会增加启动阶段的 chunk 和异步依赖，不构成真正的按需加载。
+加载方式按“是否在首次启动时必需”划分，而不是按 contribution 目录划分。如果 `resolveAppRuntime()`、`app.start()` 或 Browser Host 首次渲染必须等待某个模块，那么把该模块包装成动态 import 只会增加启动阶段的 chunk 和异步依赖，不构成真正的按需加载。
 
 | 内容                           | 加载方式 | 边界                                                |
 | ------------------------------ | -------- | --------------------------------------------------- |
 | App/Plugin config declaration  | 静态     | Runtime 解析前必须可见                              |
 | `serviceProviders`             | 静态     | `app.start()` 前必须确定                            |
-| `reactWrappers`                | 静态     | `app.mount()` 前必须确定                            |
+| `reactWrappers`                | 静态     | Browser Host 首次渲染前必须确定                     |
 | Route definitions              | 静态     | Runtime 组合和 Router 建立时必须可见                |
 | 默认启用的 Client Plugin       | 静态     | 每次启动都参与 config 和 contribution 组合          |
 | Route page component           | 动态     | 用户导航到页面时加载                                |
@@ -163,7 +163,7 @@ resolveAppRuntime() 规范化并冻结装配计划
   ↓
 app.start() 执行 ServiceProvider 生命周期
   ↓
-app.mount() 渲染 React Wrappers
+Browser Host 渲染 AppClientRoot 和 React Wrappers
 ```
 
 所有 declaration module 必须保持无副作用。Service 注册只发生在 Provider `register()`；React Wrapper 只在 Mount 后渲染；网络连接、listener 和 timer 分别由 Provider 生命周期或 React effect 管理。
@@ -310,7 +310,7 @@ const runtime = await resolveAppRuntime(appRuntime);
 const app = createApp(runtime);
 
 await app.start();
-app.mount('#root');
+root.render(<AppClientRoot app={app} />);
 ```
 
 只有 `resolveAppRuntime()` 的 Browser config source 可以读取 `#nocobase-runtime-config`。`ClientApplication`、ServiceProvider 和 Plugin 不能直接读取该 DOM 节点。这样 Browser Host 的传输方式不会泄漏到 Application 和 Plugin 协议中。
@@ -518,10 +518,6 @@ export class ClientApplication {
 
   public start(): Promise<void>;
 
-  public mount(target: string | Element): void;
-
-  public unmount(): void;
-
   public shutdown(): Promise<void>;
 }
 ```
@@ -617,7 +613,7 @@ start all ServiceProviders
   ↓
 ready all ServiceProviders
   ↓
-mount React application
+render React application through Browser Host
 ```
 
 这与 Server 的原则一致：所有 Provider 先完成同一阶段，再进入下一阶段；shutdown 按相反顺序执行。
@@ -636,8 +632,8 @@ createApp(runtime)
 app.start()
   register → boot → finalize config → validate → start → ready
 
-app.mount('#root')
-  创建或获取 Browser Host 的 React root，并渲染 AppClientRoot
+Browser Host
+  创建 React root，并在 app.start() 成功后渲染 AppClientRoot
 ```
 
 Provider 的职责按生命周期拆分：
@@ -747,28 +743,29 @@ React Component
 
 非 React 代码应显式接收具体 Service、`ServiceResolver` 或 `ClientApplication`，不能调用模块级 `getXxxClient()` 隐式寻找当前 App。
 
-## Client Mount Boundary
+## Client Render Boundary
 
-目标入口只调用 `resolveAppRuntime()`；它在内部从 HTML JSON data block 获取并解析 Config，然后创建 Application、启动 Application 并挂载到 DOM：
+目标入口由 Browser Host 持有 React DOM Root。`resolveAppRuntime()` 在内部从 HTML JSON data block 获取并解析 Config；Host 创建 Application、启动 Application，再渲染 `AppClientRoot`：
 
 ```tsx
+const container = document.getElementById('root');
+if (!container) throw new Error('Missing application root element.');
+const root = createRoot(container);
+
 const runtime = await resolveAppRuntime(appRuntime);
 const app = createApp(runtime);
 
 await app.start();
-app.mount('#root');
+root.render(<AppClientRoot app={app} />);
 ```
 
-`mount()` 是 `ClientApplication` 对 Browser Host 和 React render boundary 的统一封装。它只能在 `start()` 成功后调用，内部负责解析目标元素、创建 React root、注入 `ClientApplicationContext`，并渲染 `AppClientRoot`：
+`ClientApplication` 不创建或持有 React DOM Root。它只负责 Application、Container、ServiceProvider 和 Refine 生命周期；Browser Host 负责目标元素、React Root、启动错误页面和 React tree 的卸载。`AppClientRoot` 是两者之间的公开桥接组件：
 
-```ts
-export interface ClientApplication {
-  mount(target: string | Element): void;
-  unmount(): void;
-}
+```tsx
+root.render(<AppClientRoot app={app} />);
 ```
 
-`ClientApplication.start()` 在所有 Provider 完成 `boot()` 后 finalize `app.refine`，并据此形成内部只读 `renderConfig`；通过 validation 后再继续执行 `start()` 与 `ready()`。对外只有整个启动流程完成后才能读取 `renderConfig`，启动期间不能返回部分配置。`AppClientRoot` 是内部渲染组件，只消费已经启动完成的 Application，不再要求 Client entry 直接 import 或调用它。
+`ClientApplication.start()` 在所有 Provider 完成 `boot()` 后 finalize `app.refine`，并据此形成内部只读 `renderConfig`；通过 validation 后再继续执行 `start()` 与 `ready()`。对外只有整个启动流程完成后才能读取 `renderConfig`，启动期间不能返回部分配置。`AppClientRoot` 只消费已经启动完成的 Application。
 
 为避免和 `app.config` 混淆，当前表示 React 渲染结果的 `AppClientConfig` 建议改名为 `AppClientRenderConfig`；其 `providers` 字段同步改名为 `reactWrappers`：
 
@@ -796,20 +793,19 @@ Refine
 Routes
 ```
 
-DOM `createRoot()`、`root.render()` 和 `root.unmount()` 仍由 Browser Host Adapter 实现；`ClientApplication.mount()`/`unmount()` 只是 Application 暴露的稳定 facade，不把 React root 或 DOM 细节暴露给 Client entry。这与 Server Application 不负责 Node `listen()` 的边界一致。
+DOM `createRoot()`、`root.render()` 和 `root.unmount()` 全部由 Browser Host 实现。这与 Server Application 不负责 Node `listen()` 的边界一致，也让嵌入式 Host、测试和其他 React 容器能够直接控制自己的渲染生命周期。
 
-重复挂载和销毁规则：
+启动、渲染和销毁规则：
 
-- `mount()` 在 `start()` 成功前调用必须失败；
-- 同一个 Application 不能重复挂载，除非先调用 `unmount()`；
-- target selector 不存在时必须给出明确错误；
-- `unmount()` 负责触发 React effects cleanup，但不结束 ServiceProvider 生命周期；
-- `shutdown()` 在仍处于 mounted 状态时先执行 `unmount()`，再逆序关闭 ServiceProviders；
-- App Host、HMR 和测试只需最终调用 `shutdown()`，显式 `unmount()` 只用于保留已启动 Application 的重新挂载场景。
+- Host 必须在创建 Application 前验证目标元素；
+- Host 只在 `app.start()` 成功后渲染 `AppClientRoot`；
+- `root.unmount()` 负责触发 React effects cleanup，但不结束 ServiceProvider 生命周期；
+- `app.shutdown()` 只逆序关闭 ServiceProviders，不操作 React Root；
+- Host 销毁时先 `root.unmount()`，再调用 `app.shutdown()`；
+- 如果 Application 已启动而 Host 渲染失败，Host 必须尝试 `app.shutdown()` 后再渲染启动错误页面。
 
-```ts
-app.mount('#root');
-
+```tsx
+root.unmount();
 await app.shutdown();
 ```
 
@@ -1523,8 +1519,8 @@ packages/app-client/src/app-client.tsx
 - React Wrapper 类型重命名；
 - 删除 Bootstrap protocol，并把现有 Bootstrap 逻辑迁入对应 ServiceProvider 的 `boot()`；
 - `defineClientPlugin()` 和 `defineClientPlugins()`；
-- `ClientApplication.mount()`/`unmount()` 封装 Browser Host；
-- `AppClientRoot` 作为内部组件接收 `ClientApplication`。
+- Browser Host 持有 React Root，并在 Application 启动后渲染 `AppClientRoot`；
+- `AppClientRoot` 作为公开桥接组件接收 `ClientApplication`。
 
 ### 阶段三：Server 协议显式化
 
@@ -1600,8 +1596,8 @@ Plugin Skills
 - shutdown 不创建未使用的 lazy singleton；
 - shutdown 幂等；
 - React `useService()` 只解析当前 Application 的 Service。
-- `mount()` 只能在 Application ready 后执行，并正确注入 `AppClientRoot`；
-- `unmount()` 清理 React effects，但不会隐式跳过或重复执行 Provider shutdown。
+- Browser Host 只在 Application ready 后渲染 `AppClientRoot`；
+- `root.unmount()` 清理 React effects，`app.shutdown()` 独立且只执行一次 Provider shutdown。
 
 ### Client Runtime 和 Plugin
 
@@ -1697,7 +1693,7 @@ CI=true pnpm install --no-frozen-lockfile
 2. Server 将 `config.yml.client` 作为安全 JSON data block 嵌入 SPA HTML，Client 由 `resolveAppRuntime()` 读取并规范化，最终由 `ClientApplication.config` 持有且通过 `app.config.get()` 使用；
 3. 两端 Runtime 和 Plugin 统一使用 `serviceProviders`；
 4. Client React 组件树 contribution 统一使用 `reactWrappers`；
-5. `ClientApplication.start()` 完成 ServiceProvider `boot()`、Refine finalize、validation、`start()` 和 `ready()` 后，`app.mount('#root')` 才允许执行；
+5. `ClientApplication.start()` 完成 ServiceProvider `boot()`、Refine finalize、validation、`start()` 和 `ready()` 后，Browser Host 才渲染 `AppClientRoot`；
 6. Client Application 可以独立 shutdown，且不会泄露 listener、timer、connection 或模块级 singleton；
 7. 当前 Authorization、Notification、Workflow 等应用级 Client Service 不再依赖模块级全局实例；
 8. 脚手架、Inspector、模板、文档、AGENTS.md 和测试全部使用新术语；
@@ -1766,11 +1762,12 @@ defineServerPlugin({
 
 ```tsx
 // Client entry
+const root = createRoot(container);
 const runtime = await resolveAppRuntime(appRuntime);
 const app = createApp(runtime);
 
 await app.start();
-app.mount('#root');
+root.render(<AppClientRoot app={app} />);
 ```
 
 最终的跨端规则有三条：

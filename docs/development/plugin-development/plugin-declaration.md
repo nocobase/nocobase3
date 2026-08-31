@@ -53,17 +53,17 @@ const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
 export default auditLog;
 ```
 
-| Field              | 用途                                       | 执行边界                       |
-| ------------------ | ------------------------------------------ | ------------------------------ |
-| `config`           | Browser 公开配置的 namespace、默认值与校验 | Runtime 解析                   |
-| `serviceProviders` | Client Service、Refine 配置和生命周期      | `ClientApplication.start()`    |
-| `reactWrappers`    | React Context 和应用组件树 wrapper         | `ClientApplication.mount()`    |
-| `routes`           | App Routes 和 Settings Routes              | Runtime 组合；页面导航时才加载 |
-| `locales`          | package namespace 的语言资源 manifest      | 选择或切换语言时加载 messages  |
+| Field              | 用途                                       | 执行边界                          |
+| ------------------ | ------------------------------------------ | --------------------------------- |
+| `config`           | Browser 公开配置的 namespace、默认值与校验 | Runtime 解析                      |
+| `serviceProviders` | Client Service、Refine 配置和生命周期      | `ClientApplication.start()`       |
+| `reactWrappers`    | React Context 和应用组件树 wrapper         | Browser Host 渲染 `AppClientRoot` |
+| `routes`           | App Routes 和 Settings Routes              | Runtime 组合；页面导航时才加载    |
+| `locales`          | package namespace 的语言资源 manifest      | 选择或切换语言时加载 messages     |
 
 这些字段都可选。删除某类实现时也删除对应字段和无用 public export。基础声明必须静态可见；动态 import 下沉到 Route page、locale messages、重型 SDK 或真正可选的 Feature。
 
-静态 import 不等于执行：declaration module 顶层不得注册 Service、连接网络、建立 listener、启动 timer 或渲染 React。Service 注册在 Provider `register()` 中完成，Refine/启动配置在生命周期中完成，React Wrapper 只在 mount 后执行。
+静态 import 不等于执行：declaration module 顶层不得注册 Service、连接网络、建立 listener、启动 timer 或渲染 React。Service 注册在 Provider `register()` 中完成，Refine/启动配置在生命周期中完成，React Wrapper 只在 Browser Host 渲染 `AppClientRoot` 后执行。
 
 ### Client options
 

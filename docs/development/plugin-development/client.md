@@ -55,12 +55,12 @@ export default example;
 ```text
 config           → app.config
 serviceProviders → app.container + lifecycle + app.refine
-reactWrappers    → app.mount() 创建的 React tree
+reactWrappers    → Browser Host 渲染的 AppClientRoot tree
 routes           → Router 和页面 componentLoader
 locales          → locale manifest 和 message loader
 ```
 
-`ClientApplication.start()` 执行 ServiceProvider lifecycle；`app.mount()` 才渲染 React Wrappers。Inspector 读取声明和可检查 metadata，但不执行 lifecycle、不渲染组件，也不加载叶子模块。
+`ClientApplication.start()` 执行 ServiceProvider lifecycle；启动成功后由 Browser Host 渲染 `AppClientRoot` 和 React Wrappers。Inspector 读取声明和可检查 metadata，但不执行 lifecycle、不渲染组件，也不加载叶子模块。
 
 ## config 与 options
 
@@ -77,7 +77,7 @@ locales          → locale manifest 和 message loader
 | ---------------------------- | ------------------------------- |
 | contribution declarations    | 静态 import，Runtime 解析前可见 |
 | ServiceProvider lifecycle    | `app.start()`                   |
-| React Wrapper component tree | `app.mount()`                   |
+| React Wrapper component tree | Browser Host 首次渲染           |
 | Route page component         | 实际导航时                      |
 | locale messages              | 选择或切换语言时                |
 | 重型 SDK                     | 对应 Service/UI 首次实际使用时  |

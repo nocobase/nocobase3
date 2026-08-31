@@ -92,6 +92,22 @@ describe('app client', () => {
     await app.shutdown();
   });
 
+  it('leaves React DOM root ownership to the host', async () => {
+    const app = await createTestApplication(
+      () => defineAppClientRenderConfig({ routes: 'Hosted application' }),
+      (current) => current.refine.setRouterProvider({}),
+    );
+
+    expect(app).not.toHaveProperty('mount');
+    expect(app).not.toHaveProperty('unmount');
+
+    const view = render(<AppClientRoot app={app} />);
+    expect(screen.getByText('Hosted application')).toBeInTheDocument();
+
+    view.unmount();
+    await app.shutdown();
+  });
+
   it('requires startup before rendering and shuts providers down in reverse order', async () => {
     const calls: string[] = [];
     const createProvider = (name: string) =>

@@ -179,7 +179,7 @@ Browser request
 Server Routes 按顺序匹配，`/*` 作为最后的 SPA fallback。首次直接访问
 `/<custom-page>` 时，Server 先返回 `index.html` 并注入
 HTML 中版本化的 JSON data block；Client Runtime 解析后由
-`ClientApplication.start()` 激活服务，再通过 `app.mount()` 渲染 Refine App 和前端路由。
+`ClientApplication.start()` 激活服务，再由 Browser Host 渲染 `AppClientRoot`、Refine App 和前端路由。
 
 ### Server 组装（createApp）
 
@@ -254,7 +254,7 @@ createApp(runtime) → ClientApplication                创建 App 和 ServiceCo
     └── reactWrappers + Routes
     │
     ▼
-app.start() → app.mount('#root') → Refine App
+app.start() → root.render(<AppClientRoot app={app} />) → Refine App
 ```
 
 最终的 React 结构大致如下：
@@ -434,7 +434,7 @@ resolveAppRuntime()
 ClientApplication
   ├── ServiceContainer + serviceProviders（app.start()）
   ├── Refine configuration
-  └── reactWrappers（app.mount()）
+  └── reactWrappers（Browser Host 渲染 AppClientRoot）
        ├── BrowserRouter
        ├── ThemeProvider
        └── Other React Wrappers
@@ -450,17 +450,17 @@ Client 和 Server 采用相同的四层应用装配模型：
 Config → Runtime → App → Start / Render
 ```
 
-| 层次           | 职责                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------- |
-| Config         | 声明应用需要什么，包括公开配置、插件、ServiceProvider、React Wrapper、Routes 等可组合能力。 |
-| Runtime        | 解析并汇总 Config，形成当前运行环境中可直接使用的完整静态装配计划。                         |
-| App            | 将已解析的 Runtime 组装为有状态 Application，建立 ServiceContainer、Refine 和渲染边界。     |
-| Start / Render | 激活应用：Server 启动服务生命周期；Client 先 `app.start()`，再 `app.mount('#root')`。       |
+| 层次           | 职责                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| Config         | 声明应用需要什么，包括公开配置、插件、ServiceProvider、React Wrapper、Routes 等可组合能力。          |
+| Runtime        | 解析并汇总 Config，形成当前运行环境中可直接使用的完整静态装配计划。                                  |
+| App            | 将已解析的 Runtime 组装为有状态 Application，建立 ServiceContainer、Refine 和渲染边界。              |
+| Start / Render | 激活应用：Server 启动服务生命周期；Client 先 `app.start()`，再由 Browser Host 渲染 `AppClientRoot`。 |
 
 因此，两端的整体架构可以分别表示为：
 
 ```text
-Client: Config → Runtime → ClientApplication → start → mount/render
+Client: Config → Runtime → ClientApplication → start → host render
 Server: Config → Runtime → App → Start
 ```
 

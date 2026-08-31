@@ -21,4 +21,4 @@
 
 Unify Client and Server application composition around the explicit `serviceProviders` contribution and rename Client React tree contributions to `reactWrappers`.
 
-Replace Client bootstrap modules with application-owned ServiceProvider lifecycle hooks, make the default Client start and mount through `ClientApplication`, and update built-in plugins and runtime inspection to the new static contribution protocol.
+Replace Client bootstrap modules with application-owned ServiceProvider lifecycle hooks, make the default Client start through `ClientApplication` and render through the Browser host, and update built-in plugins and runtime inspection to the new static contribution protocol.
