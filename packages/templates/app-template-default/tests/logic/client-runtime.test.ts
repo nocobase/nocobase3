@@ -90,7 +90,6 @@ describe('app client runtime', () => {
     await expect(app.start()).resolves.toBeUndefined();
     expect(app.config.get('app.title')).toBe('NocoBase');
     expect(app.refineConfig.authProvider).toBeDefined();
-    expect(app.refineConfig.dataProvider).toBeDefined();
     await app.shutdown();
   });
 

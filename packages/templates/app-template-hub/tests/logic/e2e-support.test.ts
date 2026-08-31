@@ -12,7 +12,7 @@ describe('Portal E2E environment', () => {
   it('resolves a locally hosted sub-application Portal and its API metadata', () => {
     const environment = loadPortalE2EEnvironment({
       NOCOBASE_E2E_PORT: '4180',
-      NOCOBASE_PORTAL_BASE: '/x/apps/sales/crm',
+      APP_BASE_PATH: '/x/apps/sales/crm',
       NOCOBASE_E2E_API_URL: 'https://api.example.test/api/__app/sales',
       NOCOBASE_E2E_AUTHENTICATOR: 'password',
       NOCOBASE_E2E_ROLE: 'sales-manager',
@@ -39,7 +39,7 @@ describe('Portal E2E environment', () => {
 
   it('uses app-scoped session keys unless the sub-app token is shared', () => {
     const environment = loadPortalE2EEnvironment({
-      NOCOBASE_PORTAL_BASE: '/x/apps/sales/crm/',
+      APP_BASE_PATH: '/x/apps/sales/crm/',
       NOCOBASE_API_URL: '/api/__app/sales',
     });
 

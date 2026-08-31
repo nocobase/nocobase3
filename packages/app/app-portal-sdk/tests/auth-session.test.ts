@@ -55,7 +55,7 @@ describe('Portal authentication session', () => {
       value: {
         location: { origin: 'http://localhost:14000' },
         NOCOBASE_API_URL: '/api',
-        NOCOBASE_PORTAL_BASE: '/x/demo/',
+        APP_BASE_PATH: '/x/demo/',
       },
     });
 
@@ -68,7 +68,7 @@ describe('Portal authentication session', () => {
     expect(new NocoBaseClient('/api').getHeaders()['X-Portal']).toBe('demo');
 
     window.NOCOBASE_API_URL = '/api/__app/crm';
-    window.NOCOBASE_PORTAL_BASE = '/x/apps/crm/customer/';
+    window.APP_BASE_PATH = '/x/apps/crm/customer/';
     expect(resolveNocoBaseSettingsUrl()).toBe(
       'http://localhost:14000/settings/apps/crm',
     );

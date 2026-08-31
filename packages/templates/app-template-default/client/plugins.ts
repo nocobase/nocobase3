@@ -4,7 +4,6 @@ import {
 } from '@nocobase/app-client/plugins';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
-import dataProvider from '@nocobase/app-plugin-data-provider/client';
 import install from '@nocobase/app-plugin-install/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import routesExample from '@nocobase/app-plugin-routes-example/client';
@@ -19,7 +18,6 @@ import systemInfo from '@nocobase/app-plugin-system-info/client';
 const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   authorization(),
-  dataProvider(),
   i18n(),
   install(),
   notificationProvider(),

@@ -43,7 +43,7 @@ const numberFromEnv = (value: string | undefined): number | undefined => {
 // https://vite.dev/config/
 export default createPortalViteConfig(
   portalSdkCompatibilityPlugin,
-  ({ command, mode }) => {
+  ({ command }) => {
     // Configuration is loaded by the application runtime. Vite should only
     // consume the environment explicitly supplied by the invoking process;
     // reading .env here would make the client and server use different paths.
@@ -54,11 +54,7 @@ export default createPortalViteConfig(
       env.AGENT_ANNOTATIONS_ENABLED,
     );
     const publicApiUrl =
-      command === 'serve'
-        ? mode === 'e2e' && env.NOCOBASE_E2E_API_URL?.trim()
-          ? env.NOCOBASE_E2E_API_URL.trim().replace(/\/$/, '')
-          : joinBase(appBase, '/api')
-        : undefined;
+      command === 'serve' ? joinBase(appBase, '/api') : undefined;
     const viteHmrHost = env.APP_VITE_HMR_HOST;
     const viteDevPort = numberFromEnv(env.APP_VITE_DEV_PORT) ?? 5173;
     const defineEnv: Record<string, string> = {
@@ -77,7 +73,7 @@ export default createPortalViteConfig(
     optionalDefineEnv(
       defineEnv,
       'NOCOBASE_AUTHENTICATOR',
-      env.NOCOBASE_AUTHENTICATOR ?? env.NOCOBASE_E2E_AUTHENTICATOR,
+      env.NOCOBASE_AUTHENTICATOR,
     );
     optionalDefineEnv(defineEnv, 'NOCOBASE_WS_URL', env.NOCOBASE_WS_URL);
     optionalDefineEnv(defineEnv, 'NOCOBASE_WS_PATH', env.NOCOBASE_WS_PATH);

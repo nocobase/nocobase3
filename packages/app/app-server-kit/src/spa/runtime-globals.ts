@@ -16,7 +16,7 @@ export function createNocoBaseSpaRuntimeGlobals(
   config: NocoBaseSpaRuntimeConfig,
 ): SpaRuntimeGlobals {
   return {
-    NOCOBASE_PORTAL_BASE: toBrowserBasePath(config.appBasePath),
+    APP_BASE_PATH: toBrowserBasePath(config.appBasePath),
     NOCOBASE_API_URL: config.apiUrl,
     __nocobase_api_client_storage_prefix__:
       config.storagePrefix?.trim() || 'NOCOBASE_',

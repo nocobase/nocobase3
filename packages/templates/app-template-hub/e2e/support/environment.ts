@@ -61,9 +61,7 @@ export function loadPortalE2EEnvironment(
 ): PortalE2EEnvironment {
   const port = resolvePort(source);
   const origin = `http://127.0.0.1:${port}`;
-  const portalBase = normalizePortalBase(
-    readValue(source, 'NOCOBASE_PORTAL_BASE'),
-  );
+  const portalBase = normalizePortalBase(readValue(source, 'APP_BASE_PATH'));
   const baseURL = new URL(portalBase, `${origin}/`).toString();
   const apiURL = resolveApiURL(
     readValue(source, 'NOCOBASE_E2E_API_URL') ??

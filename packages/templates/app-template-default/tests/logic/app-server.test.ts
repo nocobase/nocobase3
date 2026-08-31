@@ -568,9 +568,7 @@ describe('app server', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain(
-      'window.NOCOBASE_PORTAL_BASE = "/app-template-default/";',
-    );
+    expect(html).toContain('window.APP_BASE_PATH = "/app-template-default/";');
     expect(html).toContain(
       'window.NOCOBASE_API_URL = "/app-template-default/api";',
     );
@@ -1049,13 +1047,11 @@ describe('app server', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain(
-      'window.NOCOBASE_PORTAL_BASE = "/app-template-default/";',
-    );
+    expect(html).toContain('window.APP_BASE_PATH = "/app-template-default/";');
     expect(html).toContain(
       'window.NOCOBASE_API_URL = "/app-template-default/api";',
     );
-    expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
+    expect(html.indexOf('window.APP_BASE_PATH')).toBeLessThan(
       html.indexOf('<script type="module"'),
     );
   });

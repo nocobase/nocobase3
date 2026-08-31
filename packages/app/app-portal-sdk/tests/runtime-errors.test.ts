@@ -142,7 +142,7 @@ it('the WebSocket URL preserves the server prefix and selects a sub-application'
     globalThis.window = {
       location: { origin: 'https://example.com' },
       NOCOBASE_API_URL: 'https://example.com/nocobase/api/__app/crm',
-      NOCOBASE_PORTAL_BASE: '/nocobase/x/apps/crm/customer/',
+      APP_BASE_PATH: '/nocobase/x/apps/crm/customer/',
     };
     expect(resolveNocoBaseWebSocketUrl()).toBe(
       'wss://example.com/nocobase/ws?__appName=crm',

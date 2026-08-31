@@ -18,9 +18,6 @@
       "@nocobase/app-plugin-authorization": {
         "enabled": true
       },
-      "@nocobase/app-plugin-data-provider": {
-        "enabled": true
-      },
       "@nocobase/app-plugin-database-example": {
         "enabled": true
       },
@@ -82,7 +79,6 @@
     "@nocobase/app-i18n": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
-    "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
@@ -110,7 +106,6 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
-    "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/devtools": "^2.0.1",
@@ -239,11 +234,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:sdk": "pnpm --filter @nocobase/app-portal-sdk test",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug",
-    "test:e2e:install": "playwright install chromium",
-    "test:all": "pnpm typecheck && pnpm test && pnpm test:sdk && pnpm build && pnpm test:e2e",
+    "test:all": "pnpm typecheck && pnpm test && pnpm test:sdk && pnpm build",
     "registry:build": "node ../../../scripts/registry.mjs build --package .",
     "registry:materialize": "node ../../../scripts/registry.mjs materialize --package .",
     "start": "node ./scripts/start.mjs",

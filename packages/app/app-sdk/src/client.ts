@@ -53,15 +53,15 @@ export function resolveAppUrl(path: string = '/'): string {
   if (/^[a-z][a-z\d+.-]*:/i.test(path)) {
     return path;
   }
-  const runtime = window as Window & { NOCOBASE_PORTAL_BASE?: unknown };
+  const runtime = window as Window & { APP_BASE_PATH?: unknown };
   const viteEnv = (
     import.meta as ImportMeta & {
       env?: { BASE_URL?: string };
     }
   ).env;
   const base =
-    typeof runtime.NOCOBASE_PORTAL_BASE === 'string'
-      ? runtime.NOCOBASE_PORTAL_BASE
+    typeof runtime.APP_BASE_PATH === 'string'
+      ? runtime.APP_BASE_PATH
       : (viteEnv?.BASE_URL ?? '/');
   const normalizedBase =
     base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}/`;

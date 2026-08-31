@@ -126,7 +126,7 @@ Copy `.env.e2e.example` to `.env.e2e` and provide a dedicated test account.
 Playwright always starts an isolated Portal dev server at
 `http://127.0.0.1:4173` (configurable with `NOCOBASE_E2E_PORT`) and stops it when
 the run finishes. Set `NOCOBASE_E2E_API_URL` to the real NocoBase backend and
-`NOCOBASE_PORTAL_BASE` to the Portal path under test. The default command never
+`APP_BASE_PATH` to the Portal path under test. The default command never
 reuses a manually started frontend.
 
 ```bash

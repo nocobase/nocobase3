@@ -92,7 +92,7 @@ export const portalSdkCompatibilityPlugin = ({
 
 const defaultRuntimeConfig = `<!-- nocobase-runtime-config:start -->
 <script>
-  window.NOCOBASE_PORTAL_BASE = "/";
+  window.APP_BASE_PATH = "/";
   window.NOCOBASE_API_URL = "/api";
   window.__nocobase_api_client_storage_prefix__ = window.__nocobase_api_client_storage_prefix__ ?? "NOCOBASE_";
   window.__nocobase_api_client_storage_type__ = window.__nocobase_api_client_storage_type__ ?? "localStorage";
@@ -111,7 +111,7 @@ const renderPortalBuiltUrl: RenderBuiltAssetUrl = (
 
   if (hostType === 'js') {
     return {
-      runtime: `new URL(${JSON.stringify(filename)}, new URL(window.NOCOBASE_PORTAL_BASE || "/", window.location.origin)).href`,
+      runtime: `new URL(${JSON.stringify(filename)}, new URL(window.APP_BASE_PATH || "/", window.location.origin)).href`,
     };
   }
 

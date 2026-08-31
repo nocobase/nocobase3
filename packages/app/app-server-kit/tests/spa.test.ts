@@ -24,17 +24,17 @@ describe('SPA runtime globals', () => {
     const html =
       '<main></main><script type="module" src="/assets/index.js"></script>';
     const result = injectSpaRuntimeGlobals(html, {
-      NOCOBASE_PORTAL_BASE: '/main/test/',
+      APP_BASE_PATH: '/main/test/',
       'api-url': '</script><script>alert(1)</script>',
       ignored: undefined,
     });
 
-    expect(result).toContain('window.NOCOBASE_PORTAL_BASE = "/main/test/";');
+    expect(result).toContain('window.APP_BASE_PATH = "/main/test/";');
     expect(result).toContain(
       'window["api-url"] = "\\u003C/script\\u003E\\u003Cscript\\u003Ealert(1)\\u003C/script\\u003E";',
     );
     expect(result).not.toContain('window.ignored');
-    expect(result.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
+    expect(result.indexOf('window.APP_BASE_PATH')).toBeLessThan(
       result.indexOf('<script type="module"'),
     );
   });
@@ -68,7 +68,7 @@ describe('SPA routes', () => {
       basePath: '/main/test',
       indexPath: path.join(root, 'index.html'),
       runtimeGlobals: {
-        NOCOBASE_PORTAL_BASE: '/main/test/',
+        APP_BASE_PATH: '/main/test/',
       },
     });
 
@@ -93,7 +93,7 @@ describe('SPA routes', () => {
       basePath: '/main/test',
       indexPath: path.join(root, 'index.html'),
       runtimeGlobals: {
-        NOCOBASE_PORTAL_BASE: '/main/test/',
+        APP_BASE_PATH: '/main/test/',
       },
       clientConfig: { app: { title: 'NocoBase' } },
     });
@@ -104,7 +104,7 @@ describe('SPA routes', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/main/test/";');
+    expect(html).toContain('window.APP_BASE_PATH = "/main/test/";');
     expect(html).toContain(
       '{"version":1,"config":{"app":{"title":"NocoBase"}}}',
     );
@@ -119,7 +119,7 @@ describe('SPA routes', () => {
       basePath: '/main/test',
       indexPath: '/unused/index.html',
       clientConfig: { feature: { enabled: true } },
-      runtimeGlobals: { NOCOBASE_PORTAL_BASE: '/main/test/' },
+      runtimeGlobals: { APP_BASE_PATH: '/main/test/' },
       handler: (request) =>
         new URL(request.url).pathname.endsWith('.js')
           ? new Response('export default true;', {

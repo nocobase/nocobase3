@@ -227,7 +227,7 @@ function createRuntimeConfigHtml({
 
   return `${runtimeConfigStartMarker}
 <script>
-  window.NOCOBASE_PORTAL_BASE = ${JSON.stringify(toBrowserBasePath(appBasePath))};
+  window.APP_BASE_PATH = ${JSON.stringify(toBrowserBasePath(appBasePath))};
   window.NOCOBASE_API_URL = ${JSON.stringify(apiUrl)};
   window.__nocobase_api_client_storage_prefix__ = ${JSON.stringify(normalizedStoragePrefix)};
   window.__nocobase_api_client_storage_type__ = ${JSON.stringify(normalizedStorageType)};
