@@ -1,5 +1,28 @@
 # @nocobase/nb3-cli
 
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- 78cf0a2: Add machine-readable plugin lifecycle results and a read-only plugin registration inspector for Agent workflows.
+- ac3f033: Export every server plugin from its package's `./server` entry point, and update application composition, plugin discovery, and generated plugins to use the unified entry point.
+
+### Patch Changes
+
+- 78cf0a2: Return a single versioned JSON envelope for both successful and failed Create
+  Plugin and Plugin Skills synchronization commands. Plugin Skills
+  synchronization now includes consistent success and failure statuses. JSON
+  failures keep a non-zero exit code and expose stable error codes, readable
+  messages, and actionable suggestions without appending non-JSON usage output.
+- 78cf0a2: Keep synchronized `.agents` content out of generated application source control while preserving local Plugin Skill synchronization and inspection.
+- fb1a752: Replace the ambiguous plugin scaffold capabilities `server.providers`, `client.providers`, and `client.bootstrap` with `server.service-providers`, `client.service-providers`, and `client.react-providers`.
+
+  Generate static Client and Server contribution declarations, Client ServiceProvider lifecycle structure, and explicitly named React Provider structure for the selected capabilities.
+
+- 1b5f10f: Rename the Hub template package from `@nocobase/hub` to `@nocobase/app-template-hub`, so it matches the naming the other v3 templates already use and reads as the template it is rather than as the Hub runtime itself.
+
+  This is a breaking rename with no compatibility shim: `@nocobase/hub` will not receive further releases, and nothing is published under the old name from here on. The new package starts its version history over rather than continuing the old one, so a dependency on `@nocobase/hub` has to be repointed by hand. `nb3 hub create` now defaults to the new package, which means an older `nb3` still downloads the old name and pins whatever `@nocobase/hub@beta` last resolved to.
+
 ## 0.1.0-beta.2
 
 ### Patch Changes

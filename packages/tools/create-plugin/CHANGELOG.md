@@ -1,5 +1,31 @@
 # @nocobase/create-plugin
 
+## 0.1.0-beta.1
+
+### Minor Changes
+
+- fb1a752: Replace the ambiguous plugin scaffold capabilities `server.providers`, `client.providers`, and `client.bootstrap` with `server.service-providers`, `client.service-providers`, and `client.react-providers`.
+
+  Generate static Client and Server contribution declarations, Client ServiceProvider lifecycle structure, and explicitly named React Provider structure for the selected capabilities.
+
+- ac3f033: Export every server plugin from its package's `./server` entry point, and update application composition, plugin discovery, and generated plugins to use the unified entry point.
+
+### Patch Changes
+
+- 78cf0a2: Return a single versioned JSON envelope for both successful and failed Create
+  Plugin and Plugin Skills synchronization commands. Plugin Skills
+  synchronization now includes consistent success and failure statuses. JSON
+  failures keep a non-zero exit code and expose stable error codes, readable
+  messages, and actionable suggestions without appending non-JSON usage output.
+- 78cf0a2: Add a complete App-facing Plugin Skill example with a reusable Notice component, an authenticated Server API, target-App integration tests, and capability-aware Skill scaffolding. Clarify System Info ownership, authorization, and behavioral verification guidance.
+- 78cf0a2: Align Route examples, scaffolding guidance, and Agent-facing Client and Server Route documentation with the latest ownership and testing practices.
+- 78cf0a2: Generate runtime-aware TypeScript, ESLint, Node engine, and development dependency configuration for Client-only, Server-only, and full-stack plugins, including stable package-scoped Queue Job identities.
+
+  Keep plugins aligned with the Agent development contract by giving Queue, System Information, and Workflow Routes path-scoped authentication, documenting the Queue API path and Database declaration source accurately, and storing example tests under each plugin's root test directory.
+
+- Updated dependencies [fb1a752]
+  - @nocobase/dev-config@0.0.1-beta.2
+
 ## 0.0.2-beta.0
 
 ### Patch Changes

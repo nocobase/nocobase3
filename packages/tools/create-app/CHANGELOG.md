@@ -1,5 +1,24 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.5
+
+### Minor Changes
+
+- 1b5f10f: Accept `--template hub` in `create-app`, and scaffold a hub as a hub rather than as an app.
+
+  A hub has no database, so the app flow was wrong for it in every step that touches one: it would have asked which dialect to use, added a driver dependency the hub never loads, and written a `config.yml` the hub never reads. A template now declares what it is through `nocobase.templateKind`, and `create-app` reads that to decide which flow applies — falling back to the package name so a local path to a checkout predating the field still works. The kind is settled after the template is downloaded, because a package specifier or a local path does not reveal it any earlier.
+
+  A generated hub gets the scaffolding `nb3 hub create` already produced: `.env` derived from the template's `.env.example` with `APP_NAME` set to the project name, `.nb3/hub.json` so the `nb3 hub` commands can find it, `app-dist/` for the apps it serves, the runtime directories it writes into, and the matching `.gitignore` entries. `--db-dialect` is reported as ignored rather than silently dropped when it is passed alongside a hub template.
+
+### Patch Changes
+
+- 78cf0a2: Keep synchronized `.agents` content out of generated application source control while preserving local Plugin Skill synchronization and inspection.
+- a7d4453: Synchronize plugin skills into a generated app after its dependencies are installed. The sync resolves plugins out of `node_modules`, so it can only run after the install; `create-app` now runs the app's own `plugin:skills:sync` script at that point, which leaves a new project carrying the skills of the plugins the template ships instead of an empty `.agents/skills/`.
+
+  Skills are an assistive layer rather than something the app needs to boot, so a failed sync is reported as a warning along with the command to run by hand, and the generated project is still reported as created.
+
+- d048955: Ignore local NocoBase runtime state in newly generated applications.
+
 ## 0.1.0-beta.4
 
 ### Patch Changes

@@ -1,5 +1,34 @@
 # @nocobase/app-server-kit
 
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- ac3f033: Replace aggregated application configuration objects and config factories with typed module-owned configuration definitions. Applications now compose defaults, file providers, environment layers, validation, explicit reloads, and subscriptions through `AppConfig`, while providers read their configuration through `app.config.get(definition)`.
+- fb1a752: Unify Client and Server application composition around the explicit `serviceProviders` contribution and rename Client React tree contributions to `reactProviders`.
+
+  Replace Client bootstrap modules with application-owned ServiceProvider lifecycle hooks, make the default Client start through `ClientApplication` and render through the Browser host, and update built-in plugins and runtime inspection to the new static contribution protocol.
+
+- 78cf0a2: Add declaration-level Server plugin inspection with real Route contribution order, and make the Routes example own a path-scoped authentication boundary.
+- fb1a752: Transport public Client configuration through a versioned, safely escaped JSON data block in SPA HTML and read it automatically during Client runtime resolution.
+
+  Apply the same HTML transformation to production static responses and development Vite proxy responses, and document the public `config.yml` Client section in the default template.
+
+### Patch Changes
+
+- 948304d: Close logging transport workers during application shutdown to prevent full application test suites and server processes from hanging during cleanup.
+- Updated dependencies [948304d]
+- Updated dependencies [ac3f033]
+- Updated dependencies [fb1a752]
+  - @nocobase/logging@0.1.0-beta.3
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/drive@0.1.0-beta.2
+  - @nocobase/id-generator@0.1.0-beta.2
+  - @nocobase/queue@0.1.0-beta.2
+  - @nocobase/session@0.1.0-beta.2
+  - @nocobase/config@0.0.2-beta.0
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.2
 
 ### Minor Changes
