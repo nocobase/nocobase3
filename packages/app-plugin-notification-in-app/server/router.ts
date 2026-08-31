@@ -6,6 +6,13 @@ import type {
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import type { InAppStore } from './store.js';
+import type { InAppItem } from './types.js';
+
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+const MAX_CURSOR_LENGTH = 2_048;
+const INBOX_ACTIONS = ['read', 'unread', 'delete'] as const;
+type InboxAction = (typeof INBOX_ACTIONS)[number];
 
 export type InAppUserIdResolver = (
   request: Request,
@@ -45,15 +52,32 @@ export function createInAppRouter(
     });
     return context.json({ token });
   });
-  router.get('/', async (context) =>
-    context.json({
-      data: await store.list({
-        userId: context.var.notificationUserId,
-        unreadOnly: context.req.query('unreadOnly') === 'true',
-        limit: Number(context.req.query('limit') ?? 25),
-      }),
-    }),
-  );
+  router.get('/', async (context) => {
+    const limit = parseLimit(context.req.query('limit'));
+    if (limit === undefined)
+      return context.json(
+        { error: `limit must be an integer between 1 and ${MAX_PAGE_SIZE}.` },
+        400,
+      );
+    const cursorValue = context.req.query('cursor');
+    const before = parseCursor(cursorValue);
+    if (cursorValue && !before)
+      return context.json({ error: 'cursor is invalid.' }, 400);
+    const rows = await store.list({
+      userId: context.var.notificationUserId,
+      unreadOnly: context.req.query('unreadOnly') === 'true',
+      limit: limit + 1,
+      before,
+    });
+    const data = rows.slice(0, limit);
+    return context.json({
+      data,
+      nextCursor:
+        rows.length > limit && data.length > 0
+          ? encodeCursor(data[data.length - 1])
+          : undefined,
+    });
+  });
   router.get('/unread-count', async (context) =>
     context.json({
       count: await store.countUnread(context.var.notificationUserId),
@@ -79,19 +103,80 @@ export function createInAppRouter(
       )
     )
       return context.json({ error: 'Invalid CSRF token.' }, 403);
-    const body = await context.req.json<{
-      action?: 'read' | 'unread' | 'delete';
-    }>();
+    const body: unknown = await context.req.json().catch(() => undefined);
+    if (!isRecord(body))
+      return context.json(
+        { error: 'Request body must be a JSON object.' },
+        400,
+      );
+    const action = body.action ?? 'read';
+    if (!isInboxAction(action))
+      return context.json(
+        { error: 'action must be read, unread, or delete.' },
+        400,
+      );
     const updated = await store.update({
       id: context.req.param('id'),
       userId: context.var.notificationUserId,
-      action: body.action ?? 'read',
+      action,
     });
     return updated
       ? context.json({ data: updated })
       : context.json({ error: 'Not found.' }, 404);
   });
   return router;
+}
+
+function parseLimit(value: string | undefined): number | undefined {
+  if (value === undefined) return DEFAULT_PAGE_SIZE;
+  if (!/^\d+$/.test(value)) return undefined;
+  const limit = Number(value);
+  return Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_PAGE_SIZE
+    ? limit
+    : undefined;
+}
+
+function encodeCursor(item: InAppItem): string {
+  return Buffer.from(
+    JSON.stringify({ createdAt: item.createdAt, id: item.id }),
+  ).toString('base64url');
+}
+
+function parseCursor(
+  value: string | undefined,
+): { readonly createdAt: string; readonly id: string } | undefined {
+  if (!value || value.length > MAX_CURSOR_LENGTH) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(
+      Buffer.from(value, 'base64url').toString('utf8'),
+    );
+    if (
+      !isRecord(parsed) ||
+      typeof parsed.createdAt !== 'string' ||
+      !isCanonicalTimestamp(parsed.createdAt) ||
+      typeof parsed.id !== 'string' ||
+      parsed.id.length === 0
+    )
+      return undefined;
+    return { createdAt: parsed.createdAt, id: parsed.id };
+  } catch {
+    return undefined;
+  }
+}
+
+function isCanonicalTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return (
+    Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isInboxAction(value: unknown): value is InboxAction {
+  return INBOX_ACTIONS.some((action) => action === value);
 }
 async function userId(
   session: NocoBaseSession | undefined,

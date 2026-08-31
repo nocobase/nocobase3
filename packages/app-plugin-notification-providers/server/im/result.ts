@@ -1,5 +1,7 @@
 import type { ProviderSendResult } from '@nocobase/app-plugin-notification';
 
+import { sanitizeProviderErrorMessage } from '../error.js';
+
 export async function evaluateJsonResult(
   response: Response,
   fields: {
@@ -26,7 +28,10 @@ export async function evaluateJsonResult(
       category,
       message:
         typeof message === 'string'
-          ? message
+          ? sanitizeProviderErrorMessage(
+              message,
+              'IM Provider rejected the message.',
+            )
           : 'IM Provider rejected the message.',
     },
   };

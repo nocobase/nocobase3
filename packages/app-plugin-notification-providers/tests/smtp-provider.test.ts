@@ -63,6 +63,28 @@ describe('SMTP Provider', () => {
     });
   });
 
+  it('redacts credentials and recipient addresses from transport errors', async () => {
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(
+        new Error('authorization=secret-token recipient alice@example.com'),
+        { code: 'EAUTH' },
+      ),
+    );
+    const provider = await createProvider();
+
+    const result = await provider.send(sendInput());
+    expect(JSON.stringify(result)).not.toContain('secret-token');
+    expect(JSON.stringify(result)).not.toContain('alice@example.com');
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'EAUTH',
+        category: 'authentication',
+        message: 'authorization=[redacted] recipient [redacted-email]',
+      },
+    });
+  });
+
   it.each([
     [450, 'same_provider'],
     [550, 'never'],

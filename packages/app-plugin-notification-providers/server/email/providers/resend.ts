@@ -5,7 +5,10 @@ import type {
 } from '@nocobase/app-plugin-notification';
 import type { ErrorResponse } from 'resend';
 
-import { providerErrorCode } from '../../error.js';
+import {
+  providerErrorCode,
+  sanitizeProviderErrorMessage,
+} from '../../error.js';
 import type { PreparedEmailMessage, ResendProviderConfig } from '../types.js';
 
 export function defineResendProviderConfig(
@@ -60,7 +63,10 @@ function resendFailure(error: ErrorResponse): ProviderSendResult {
       error: {
         code: error.name,
         category: 'network',
-        message: error.message,
+        message: sanitizeProviderErrorMessage(
+          error.message,
+          'Resend request failed.',
+        ),
       },
     };
   }
@@ -71,7 +77,10 @@ function resendFailure(error: ErrorResponse): ProviderSendResult {
     error: {
       code: error.name,
       category,
-      message: error.message,
+      message: sanitizeProviderErrorMessage(
+        error.message,
+        'Resend request failed.',
+      ),
     },
   };
 }
@@ -120,7 +129,7 @@ function resendDisposition(error: ErrorResponse): 'never' | 'same_provider' {
 }
 
 function thrownFailure(error: unknown): ProviderSendResult {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = sanitizeProviderErrorMessage(error, 'Resend request failed.');
   const code = providerErrorCode(error);
   if (code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'EPIPE') {
     return {

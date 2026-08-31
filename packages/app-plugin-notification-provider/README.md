@@ -6,8 +6,8 @@ The plugin has three independent client contributions:
 
 - `client/bootstrap.ts` registers `refine.setNotificationProvider(...)`.
 - `client/providers.ts` mounts the global Sonner notification host.
-- `client/routes.ts` exposes a lazy notification test page at
-  `/notification-provider`.
+- `client/routes.ts` can expose a lazy notification test page at
+  `/notification-provider` when `enableDemoRoute: true` is passed explicitly.
 
 Undoable mutation notifications are rendered by the plugin itself and do not
 depend on the application's archived `client-old` tree or on Refine context.
@@ -33,5 +33,13 @@ Register the plugin in an application package:
 }
 ```
 
-With the default App base path, open `/main/notification-provider` after
-signing in. The page can trigger success, error, and undoable notifications.
+The default registration does not expose the demonstration route. A development
+App may opt in explicitly:
+
+```ts
+notificationProvider({ enableDemoRoute: true });
+```
+
+With the default App base path, the page is then available at
+`/main/notification-provider` after signing in. It can trigger success, error,
+and undoable notifications and should not be enabled in production.

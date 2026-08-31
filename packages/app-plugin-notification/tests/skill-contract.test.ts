@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -25,5 +25,28 @@ describe('@nocobase/app-plugin-notification Agent Skill contract', () => {
     expect(skill).toContain('name: nocobase-app-plugin-notification');
     expect(skill).toContain('notificationServiceToken');
     expect(skill).toContain('references/delivery-diagnostics.md');
+    expect(skill).toMatch(/missing required input/i);
+    expect(skill).toMatch(/high-impact actions/i);
+    expect(skill).toMatch(/rollback/i);
+
+    const references = [
+      'notification-concepts.md',
+      'integration-and-configuration.md',
+      'sending-notifications.md',
+      'delivery-diagnostics.md',
+      'channel-and-provider-extensions.md',
+    ];
+    for (const reference of references) {
+      expect(
+        existsSync(
+          path.join(
+            packageRoot,
+            'skills/nocobase-app-plugin-notification/references',
+            reference,
+          ),
+        ),
+      ).toBe(true);
+      expect(skill).toContain(`references/${reference}`);
+    }
   });
 });

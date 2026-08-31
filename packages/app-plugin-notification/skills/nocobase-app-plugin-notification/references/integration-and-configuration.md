@@ -64,6 +64,8 @@ The core `manager.router` exposes `GET /logs` and `GET /logs/:id` without adding
 
 The in-app router must derive the current user from trusted authentication state. Never accept a client-supplied user id as the current identity. Its write endpoints use a CSRF token/cookie pair.
 
+List the current user's inbox with `GET /api/notifications/in-app`. `limit` must be an integer from 1 through 100. When the response includes `nextCursor`, pass that opaque base64url value back as `cursor`; do not parse, edit, or manufacture cursors. Write requests accept only `read`, `unread`, and `delete`, require a JSON object body, and reject malformed JSON or unknown actions.
+
 ## Provider test surface
 
 The built-in Provider package exposes authenticated `/api/notification-providers/test` routes only when `notification.test.enabled` is true. Sending also requires `x-nocobase-provider-test: 1` and the notification logs page permission. Tests use the real manager and create persistent logs.

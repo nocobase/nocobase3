@@ -10,12 +10,12 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
   {
     name: 'notifications',
     path: '/notifications',
-    navigation: { title: 'Notifications', icon: BellRing },
+    navigation: { title: 'nav.notifications', icon: BellRing },
     children: [
       {
         name: 'logs',
         path: '/logs',
-        navigation: { title: 'Notification logs', icon: FileClock },
+        navigation: { title: 'nav.logs', icon: FileClock },
         access: {
           resource: NOTIFICATION_LOGS_RESOURCE,
           action: 'access',

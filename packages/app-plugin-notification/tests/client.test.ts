@@ -7,7 +7,7 @@ import notificationPlugin from '../client/plugin.js';
 import routes from '../client/routes.js';
 
 describe('@nocobase/app-plugin-notification client', () => {
-  it('contributes notification logs through the settings centre', () => {
+  it('contributes notification logs and locale resources through the settings centre', async () => {
     const registration = notificationPlugin();
 
     bootstrap({
@@ -19,6 +19,13 @@ describe('@nocobase/app-plugin-notification client', () => {
     });
 
     expect(registration.routes).toBeTypeOf('function');
+    expect(registration.locales).toBeTypeOf('function');
+    await expect(registration.locales?.()).resolves.toMatchObject({
+      default: {
+        'en-US': expect.any(Function),
+        'zh-CN': expect.any(Function),
+      },
+    });
     expect(routes).toMatchObject({
       parent: 'settings',
       routes: [
@@ -33,7 +40,7 @@ describe('@nocobase/app-plugin-notification client', () => {
       { packageName: registration.packageName, routes },
     ]);
     expect(resolved.settingGroups).toMatchObject([
-      { id: 'notifications', title: 'Notifications' },
+      { id: 'notifications', title: 'nav.notifications' },
     ]);
     expect(resolved.settings).toMatchObject([
       {

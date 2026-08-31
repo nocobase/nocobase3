@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
+import { useTranslation } from '@nocobase/app-i18n/client';
 
 import type {
   NotificationDeliveryDetails,
@@ -12,6 +13,7 @@ import { getNotificationClient } from '../runtime.js';
 const notification = getNotificationClient();
 
 export default function NotificationLogsPage(): ReactElement {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<readonly NotificationLogDetails[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -33,7 +35,15 @@ export default function NotificationLogsPage(): ReactElement {
           if (active) setLogs(nextLogs);
         },
         (cause: unknown) => {
-          if (active) setError(errorMessage(cause));
+          if (active)
+            setError(
+              errorMessage(
+                cause,
+                t('errors.requestFailed', {
+                  defaultValue: 'Notification request failed.',
+                }),
+              ),
+            );
         },
       )
       .finally(() => {
@@ -42,7 +52,7 @@ export default function NotificationLogsPage(): ReactElement {
     return () => {
       active = false;
     };
-  }, [revision]);
+  }, [revision, t]);
 
   const totals = useMemo(
     () => ({
@@ -60,14 +70,16 @@ export default function NotificationLogsPage(): ReactElement {
         <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
           <div>
             <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              Notifications
+              {t('logs.eyebrow', { defaultValue: 'Notifications' })}
             </p>
             <h1 className='mt-1 text-2xl font-semibold tracking-tight'>
-              Notification logs
+              {t('logs.title', { defaultValue: 'Notification logs' })}
             </h1>
             <p className='mt-1 max-w-3xl text-sm text-muted-foreground'>
-              Trace notification delivery and every provider attempt. Message
-              bodies, recipients, and lease tokens are redacted.
+              {t('logs.description', {
+                defaultValue:
+                  'Trace notification delivery and every provider attempt. Message bodies, recipients, and lease tokens are redacted.',
+              })}
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -77,14 +89,18 @@ export default function NotificationLogsPage(): ReactElement {
               onClick={refresh}
               type='button'
             >
-              {loading ? 'Refreshing…' : 'Refresh'}
+              {loading
+                ? t('logs.refreshing', { defaultValue: 'Refreshing…' })
+                : t('logs.refresh', { defaultValue: 'Refresh' })}
             </button>
             <button
               className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
               onClick={() => setTestOpen(true)}
               type='button'
             >
-              Send test notification
+              {t('logs.sendTest', {
+                defaultValue: 'Send test notification',
+              })}
             </button>
           </div>
         </div>
@@ -92,30 +108,50 @@ export default function NotificationLogsPage(): ReactElement {
 
       <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
         <div className='grid max-w-md grid-cols-2 gap-3'>
-          <Metric label='Deliveries shown' value={totals.deliveries} />
-          <Metric attention label='Need attention' value={totals.attention} />
+          <Metric
+            label={t('logs.deliveriesShown', {
+              defaultValue: 'Deliveries shown',
+            })}
+            value={totals.deliveries}
+          />
+          <Metric
+            attention
+            label={t('logs.needAttention', { defaultValue: 'Need attention' })}
+            value={totals.attention}
+          />
         </div>
 
         {error ? (
           <div className='rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive'>
-            <p className='font-medium'>Logs unavailable</p>
+            <p className='font-medium'>
+              {t('logs.unavailable', { defaultValue: 'Logs unavailable' })}
+            </p>
             <p className='mt-1'>{error}</p>
           </div>
         ) : null}
 
         <section className='overflow-hidden rounded-xl border bg-card shadow-sm'>
           <div className='border-b bg-muted/20 px-5 py-4'>
-            <h2 className='font-semibold'>Recent notifications</h2>
+            <h2 className='font-semibold'>
+              {t('logs.recent', { defaultValue: 'Recent notifications' })}
+            </h2>
           </div>
           {loading ? (
             <div className='p-12 text-center text-sm text-muted-foreground'>
-              Loading delivery history…
+              {t('logs.loading', {
+                defaultValue: 'Loading delivery history…',
+              })}
             </div>
           ) : logs.length === 0 ? (
             <div className='p-12 text-center'>
-              <p className='font-medium'>No deliveries yet</p>
+              <p className='font-medium'>
+                {t('logs.emptyTitle', { defaultValue: 'No deliveries yet' })}
+              </p>
               <p className='mt-1 text-sm text-muted-foreground'>
-                Delivery records will appear here after notifications are sent.
+                {t('logs.emptyDescription', {
+                  defaultValue:
+                    'Delivery records will appear here after notifications are sent.',
+                })}
               </p>
             </div>
           ) : (
@@ -140,6 +176,7 @@ function TestNotificationDialog({
   readonly onClose: () => void;
   readonly onSent: () => void;
 }): ReactElement {
+  const { t } = useTranslation();
   const [providers, setProviders] = useState<
     readonly NotificationTestProvider[]
   >([]);
@@ -149,8 +186,14 @@ function TestNotificationDialog({
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [recipient, setRecipient] = useState('');
-  const [title, setTitle] = useState('NocoBase notification test');
-  const [body, setBody] = useState('This is a test notification from Hub.');
+  const [title, setTitle] = useState(() =>
+    t('test.defaultTitle', { defaultValue: 'NocoBase notification test' }),
+  );
+  const [body, setBody] = useState(() =>
+    t('test.defaultBody', {
+      defaultValue: 'This is a test notification from Hub.',
+    }),
+  );
 
   useEffect(() => {
     let active = true;
@@ -161,7 +204,15 @@ function TestNotificationDialog({
           if (active) setProviders(items);
         },
         (cause: unknown) => {
-          if (active) setError(errorMessage(cause));
+          if (active)
+            setError(
+              errorMessage(
+                cause,
+                t('errors.requestFailed', {
+                  defaultValue: 'Notification request failed.',
+                }),
+              ),
+            );
         },
       )
       .finally(() => {
@@ -170,7 +221,7 @@ function TestNotificationDialog({
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   const channels = useMemo(
     () => [...new Set(providers.map((item) => item.channel))],
@@ -191,10 +242,23 @@ function TestNotificationDialog({
       })
       .then(
         (result) => {
-          setSuccess(`Test notification ${result.notificationId} accepted.`);
+          setSuccess(
+            t('test.accepted', {
+              defaultValue: `Test notification ${result.notificationId} accepted.`,
+              id: result.notificationId,
+            }),
+          );
           onSent();
         },
-        (cause: unknown) => setError(errorMessage(cause)),
+        (cause: unknown) =>
+          setError(
+            errorMessage(
+              cause,
+              t('errors.requestFailed', {
+                defaultValue: 'Notification request failed.',
+              }),
+            ),
+          ),
       )
       .finally(() => setSending(false));
   };
@@ -216,15 +280,19 @@ function TestNotificationDialog({
         <div className='flex items-start justify-between gap-4 border-b px-5 py-4'>
           <div>
             <h2 id='notification-test-title' className='font-semibold'>
-              Send test notification
+              {t('test.title', { defaultValue: 'Send test notification' })}
             </h2>
             <p className='mt-1 text-sm text-muted-foreground'>
-              Select a Channel and Provider, then click Send. The message is
-              sent to the recipient you provide and recorded below.
+              {t('test.description', {
+                defaultValue:
+                  'Select a Channel and Provider, then click Send. The message is sent to the recipient you provide and recorded below.',
+              })}
             </p>
           </div>
           <button
-            aria-label='Close test notification dialog'
+            aria-label={t('test.close', {
+              defaultValue: 'Close test notification dialog',
+            })}
             className='grid size-8 shrink-0 place-items-center rounded-md text-lg hover:bg-muted disabled:opacity-50'
             disabled={sending}
             onClick={onClose}
@@ -237,17 +305,25 @@ function TestNotificationDialog({
         <div className='space-y-4 px-5 py-5'>
           {loading ? (
             <span className='text-sm text-muted-foreground'>
-              Loading configured Providers…
+              {t('test.loadingProviders', {
+                defaultValue: 'Loading configured Providers…',
+              })}
             </span>
           ) : providers.length === 0 && !error ? (
             <span className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>
-              No enabled Providers are configured.
+              {t('test.noProviders', {
+                defaultValue: 'No enabled Providers are configured.',
+              })}
             </span>
           ) : (
             <label className='grid gap-1.5 text-sm font-medium'>
-              Channel and Provider
+              {t('test.channelProvider', {
+                defaultValue: 'Channel and Provider',
+              })}
               <select
-                aria-label='Channel and Provider'
+                aria-label={t('test.channelProvider', {
+                  defaultValue: 'Channel and Provider',
+                })}
                 className='h-9 w-full rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
                 disabled={sending}
                 onChange={(event) => {
@@ -260,7 +336,11 @@ function TestNotificationDialog({
                 }}
                 value={selected ? providerKey(selected) : ''}
               >
-                <option value=''>Select a Channel and Provider</option>
+                <option value=''>
+                  {t('test.selectProvider', {
+                    defaultValue: 'Select a Channel and Provider',
+                  })}
+                </option>
                 {channels.map((channel) => (
                   <optgroup key={channel} label={channelLabel(channel)}>
                     {providers
@@ -281,14 +361,18 @@ function TestNotificationDialog({
 
           {selected && selected.channel !== 'im' ? (
             <label className='grid gap-1.5 text-sm font-medium'>
-              Recipient
+              {t('test.recipient', { defaultValue: 'Recipient' })}
               <input
-                aria-label='Recipient'
+                aria-label={t('test.recipient', { defaultValue: 'Recipient' })}
                 className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
                 disabled={sending}
                 onChange={(event) => setRecipient(event.target.value)}
                 placeholder={
-                  selected.channel === 'email' ? 'name@example.com' : 'User ID'
+                  selected.channel === 'email'
+                    ? 'name@example.com'
+                    : t('test.userIdPlaceholder', {
+                        defaultValue: 'User ID',
+                      })
                 }
                 required
                 type={selected.channel === 'email' ? 'email' : 'text'}
@@ -296,14 +380,20 @@ function TestNotificationDialog({
               />
               <span className='text-xs font-normal text-muted-foreground'>
                 {selected.channel === 'email'
-                  ? 'The email address that should receive this test.'
-                  : 'The user ID that should receive this in-app message.'}
+                  ? t('test.emailHelp', {
+                      defaultValue:
+                        'The email address that should receive this test.',
+                    })
+                  : t('test.userHelp', {
+                      defaultValue:
+                        'The user ID that should receive this in-app message.',
+                    })}
               </span>
             </label>
           ) : null}
 
           <label className='grid gap-1.5 text-sm font-medium'>
-            Title
+            {t('test.messageTitle', { defaultValue: 'Title' })}
             <input
               className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
               disabled={sending}
@@ -313,7 +403,7 @@ function TestNotificationDialog({
             />
           </label>
           <label className='grid gap-1.5 text-sm font-medium'>
-            Message
+            {t('test.message', { defaultValue: 'Message' })}
             <textarea
               className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
               disabled={sending}
@@ -341,7 +431,7 @@ function TestNotificationDialog({
             onClick={onClose}
             type='button'
           >
-            Cancel
+            {t('test.cancel', { defaultValue: 'Cancel' })}
           </button>
           <button
             className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50'
@@ -355,7 +445,9 @@ function TestNotificationDialog({
             onClick={send}
             type='button'
           >
-            {sending ? 'Sending…' : 'Send'}
+            {sending
+              ? t('test.sending', { defaultValue: 'Sending…' })
+              : t('test.send', { defaultValue: 'Send' })}
           </button>
         </div>
       </section>
@@ -413,17 +505,35 @@ function NotificationLogsTable({
 }: {
   readonly logs: readonly NotificationLogDetails[];
 }): ReactElement {
+  const { t } = useTranslation();
   return (
     <div className='overflow-x-auto'>
       <table className='w-full min-w-[860px] text-sm'>
         <thead className='bg-muted/35 text-left'>
           <tr className='border-b'>
-            <th className='w-12 px-4 py-3' aria-label='Expand notification' />
-            <th className='px-4 py-3 font-medium'>Source</th>
-            <th className='px-4 py-3 font-medium'>Notification ID</th>
-            <th className='px-4 py-3 font-medium'>Status</th>
-            <th className='px-4 py-3 text-right font-medium'>Deliveries</th>
-            <th className='px-4 py-3 font-medium'>Created</th>
+            <th
+              className='w-12 px-4 py-3'
+              aria-label={t('logs.expand', {
+                defaultValue: 'Expand notification',
+              })}
+            />
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.source', { defaultValue: 'Source' })}
+            </th>
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.notificationId', {
+                defaultValue: 'Notification ID',
+              })}
+            </th>
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.status', { defaultValue: 'Status' })}
+            </th>
+            <th className='px-4 py-3 text-right font-medium'>
+              {t('logs.columns.deliveries', { defaultValue: 'Deliveries' })}
+            </th>
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.created', { defaultValue: 'Created' })}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -441,6 +551,7 @@ function NotificationTableRow({
 }: {
   readonly details: NotificationLogDetails;
 }): ReactElement {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   return (
     <Fragment>
@@ -448,7 +559,13 @@ function NotificationTableRow({
         <td className='px-4 py-3'>
           <button
             className='grid size-8 place-items-center rounded-md hover:bg-muted'
-            aria-label={open ? 'Collapse notification' : 'Expand notification'}
+            aria-label={
+              open
+                ? t('logs.collapse', {
+                    defaultValue: 'Collapse notification',
+                  })
+                : t('logs.expand', { defaultValue: 'Expand notification' })
+            }
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
             type='button'
@@ -502,10 +619,13 @@ function DeliveryTable({
 }: {
   readonly deliveries: readonly NotificationDeliveryDetails[];
 }): ReactElement {
+  const { t } = useTranslation();
   if (deliveries.length === 0) {
     return (
       <p className='py-4 text-center text-sm text-muted-foreground'>
-        No deliveries recorded.
+        {t('logs.noDeliveries', {
+          defaultValue: 'No deliveries recorded.',
+        })}
       </p>
     );
   }
@@ -515,11 +635,21 @@ function DeliveryTable({
       <table className='w-full min-w-[760px] text-sm'>
         <thead className='bg-muted/35 text-left'>
           <tr className='border-b'>
-            <th className='px-4 py-3 font-medium'>Channel</th>
-            <th className='px-4 py-3 font-medium'>Provider</th>
-            <th className='px-4 py-3 font-medium'>Status</th>
-            <th className='px-4 py-3 text-right font-medium'>Attempts</th>
-            <th className='px-4 py-3 font-medium'>Updated</th>
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.channel', { defaultValue: 'Channel' })}
+            </th>
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.provider', { defaultValue: 'Provider' })}
+            </th>
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.status', { defaultValue: 'Status' })}
+            </th>
+            <th className='px-4 py-3 text-right font-medium'>
+              {t('logs.columns.attempts', { defaultValue: 'Attempts' })}
+            </th>
+            <th className='px-4 py-3 font-medium'>
+              {t('logs.columns.updated', { defaultValue: 'Updated' })}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -563,9 +693,12 @@ function AttemptList({
 }: {
   readonly details: NotificationDeliveryDetails;
 }): ReactElement {
+  const { t } = useTranslation();
   if (details.attempts.length === 0) {
     return (
-      <p className='text-xs text-muted-foreground'>No attempts recorded.</p>
+      <p className='text-xs text-muted-foreground'>
+        {t('logs.noAttempts', { defaultValue: 'No attempts recorded.' })}
+      </p>
     );
   }
   return (
@@ -601,11 +734,12 @@ function StatusBadge({
 }: {
   readonly status: NotificationStatus;
 }): ReactElement {
+  const { t } = useTranslation();
   return (
     <span
       className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(status)}`}
     >
-      {status.replace('_', ' ')}
+      {t(`status.${status}`, { defaultValue: status.replace('_', ' ') })}
     </span>
   );
 }
@@ -627,8 +761,6 @@ function formatTime(value: string): string {
   }).format(new Date(value));
 }
 
-function errorMessage(value: unknown): string {
-  return value instanceof Error
-    ? value.message
-    : 'Notification request failed.';
+function errorMessage(value: unknown, fallback: string): string {
+  return value instanceof Error ? value.message : fallback;
 }

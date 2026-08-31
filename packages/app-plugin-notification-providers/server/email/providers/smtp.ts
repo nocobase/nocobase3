@@ -3,7 +3,10 @@ import type {
   ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
 
-import { providerErrorCode } from '../../error.js';
+import {
+  providerErrorCode,
+  sanitizeProviderErrorMessage,
+} from '../../error.js';
 import type { PreparedEmailMessage, SmtpProviderConfig } from '../types.js';
 
 export function defineSmtpProviderConfig(
@@ -54,8 +57,10 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
                       ? 'timeout'
                       : 'network',
                   code: providerErrorCode(error),
-                  message:
-                    error instanceof Error ? error.message : String(error),
+                  message: sanitizeProviderErrorMessage(
+                    error,
+                    'SMTP transport failed.',
+                  ),
                 },
               };
             }
@@ -64,7 +69,10 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
               error: {
                 category: smtpErrorCategory(error),
                 code: providerErrorCode(error),
-                message: error instanceof Error ? error.message : String(error),
+                message: sanitizeProviderErrorMessage(
+                  error,
+                  'SMTP delivery failed.',
+                ),
               },
               disposition: smtpDisposition(error, transportFailure),
             };

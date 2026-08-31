@@ -11,6 +11,7 @@ const notification: AppClientPluginFactory<NotificationClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-notification',
     bootstrap: () => import('./bootstrap.js'),
+    locales: () => import('./locales/index.js'),
     routes: () => import('./routes.js'),
   });
 

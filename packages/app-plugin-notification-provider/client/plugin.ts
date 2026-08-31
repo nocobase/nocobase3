@@ -6,6 +6,8 @@ import {
 export interface NotificationProviderClientOptions {
   /** Label of the undo action in undoable (progress) notifications. */
   readonly undoLabel?: string;
+  /** Enables the development-only Refine notification demonstration page. */
+  readonly enableDemoRoute?: boolean;
 }
 
 const notificationProvider: AppClientPluginFactory<NotificationProviderClientOptions> =

@@ -4,8 +4,8 @@ description: 'Use when agents need to integrate, configure, send, inspect, or di
 argument-hint: '[action: explain|integrate|configure|send|inspect|diagnose] [channel-or-notification-id]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: notification
-version: 1.0.0
-last-reviewed: 2026-08-30
+version: 1.0.1
+last-reviewed: 2026-08-31
 risk-level: medium
 metadata:
   domain-owner: '@nocobase/app-plugin-notification'
@@ -61,6 +61,7 @@ Rules:
 - Before a real send, confirm recipient, Channels, content, source identity when relevant, Provider routing, and expected external effect.
 - Before configuration mutation, confirm the owning application, secret source, enabled Channels, and Provider names/types.
 - If required information is absent, stop mutation or sending and report the missing contract.
+- Missing required input always blocks mutation or sending; stop and ask for the missing contract before executing.
 
 # Workflow
 
@@ -97,6 +98,10 @@ Rules:
 Secondary confirmation template:
 
 - "Confirm execution: {{action}} through {{channels/providers}} to {{recipient scope}}. Expected impact: {{external messages/configuration change}}. Reply `confirm` to continue."
+
+# Rollback for high-impact actions
+
+Trigger rollback when a high-impact configuration or send validation fails, a mutation is rejected, or the user declines the confirmation. Record the previous configuration before mutation and do not silently retry an unknown external submission.
 
 Rollback guidance:
 

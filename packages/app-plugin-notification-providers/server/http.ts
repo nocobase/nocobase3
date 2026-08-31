@@ -4,7 +4,7 @@ import type {
   ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
 
-import { providerErrorCode } from './error.js';
+import { providerErrorCode, sanitizeProviderErrorMessage } from './error.js';
 
 export async function postJson(
   url: string,
@@ -36,16 +36,19 @@ export async function postJson(
           error: {
             code: 'INVALID_PROVIDER_RESPONSE',
             category: 'provider',
-            message: error instanceof Error ? error.message : String(error),
+            message: sanitizeProviderErrorMessage(
+              error,
+              'Provider returned an invalid response.',
+            ),
           },
         };
       }
     }
-    const text = await response.text();
+    await response.body?.cancel().catch(() => undefined);
     const error: NotificationProviderSendError = {
       code: String(response.status),
       category: httpCategory(response.status),
-      message: text || `HTTP request failed with status ${response.status}.`,
+      message: `Provider request failed with HTTP ${response.status}.`,
     };
     if (response.status === 429)
       return {
@@ -61,7 +64,10 @@ export async function postJson(
       };
     return { status: 'failed', error, disposition: 'never' };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = sanitizeProviderErrorMessage(
+      error,
+      'Provider network request failed.',
+    );
     if (input.signal.aborted)
       return {
         status: 'submission_unknown',
