@@ -99,7 +99,7 @@ Inspector 仅在需要时辅助观察装配，不构成第三层行为验证。�
 
 ## 推荐参考
 
-`packages/app-plugin-routes-example` 是前后端 Route 的规范示例，覆盖 Root/API/App/Settings 四类 Route，并展示独立的安全和导航边界。不要把它当作通用插件模板复制；只复制与当前需求对应的 Route 和测试结构。
+`packages/examples/app-plugin-routes-example` 是前后端 Route 的规范示例，覆盖 Root/API/App/Settings 四类 Route，并展示独立的安全和导航边界。不要把它当作通用插件模板复制；只复制与当前需求对应的 Route 和测试结构。
 
 - Root/API 的实现和测试模式见 [Server Route 最佳实践示例](./server-routes-examples.md)；
 - App/Settings 的实现和测试模式见 [Client Route 最佳实践示例](./client-routes-examples.md)。

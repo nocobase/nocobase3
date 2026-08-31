@@ -10,14 +10,21 @@ const root = process.cwd();
 const changesetDir = path.join(root, '.changeset');
 const VALID_BUMPS = new Set(['patch', 'minor', 'major']);
 
+// packages/ 是两层的：packages/<分类>/<包>，分类目录本身没有 package.json。
+// 只读一层会得到空集合，于是每个 changeset 里的包名都会被判成「未知的包名」。
 function readWorkspacePackages() {
   const packagesDir = path.join(root, 'packages');
   const names = new Set();
   if (!fs.existsSync(packagesDir)) return names;
-  for (const dir of fs.readdirSync(packagesDir)) {
-    const manifest = path.join(packagesDir, dir, 'package.json');
-    if (!fs.existsSync(manifest)) continue;
-    names.add(JSON.parse(fs.readFileSync(manifest, 'utf8')).name);
+  for (const category of fs.readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!category.isDirectory()) continue;
+    const categoryDir = path.join(packagesDir, category.name);
+    for (const entry of fs.readdirSync(categoryDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const manifest = path.join(categoryDir, entry.name, 'package.json');
+      if (!fs.existsSync(manifest)) continue;
+      names.add(JSON.parse(fs.readFileSync(manifest, 'utf8')).name);
+    }
   }
   return names;
 }

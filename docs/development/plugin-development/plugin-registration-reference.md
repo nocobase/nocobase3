@@ -11,10 +11,10 @@ description: NocoBase v3 插件生命周期命令、JSON 状态、静态诊断�
 
 ## 两种环境
 
-| 环境             | 插件来源                           | 依赖范围         | 命令执行位置            |
-| ---------------- | ---------------------------------- | ---------------- | ----------------------- |
-| Source workspace | `packages/` 中的 workspace package | `workspace:^`    | source workspace 根目录 |
-| 独立 App         | package registry 中的已发布插件    | 实际安装版本范围 | App 根目录              |
+| 环境             | 插件来源                             | 依赖范围         | 命令执行位置            |
+| ---------------- | ------------------------------------ | ---------------- | ----------------------- |
+| Source workspace | `packages/*/` 中的 workspace package | `workspace:^`    | source workspace 根目录 |
+| 独立 App         | package registry 中的已发布插件      | 实际安装版本范围 | App 根目录              |
 
 第一版 Create Plugin 只创建 source workspace 插件。独立 App 可以安装、配置、升级和移除已发布插件。
 
@@ -145,7 +145,7 @@ Server 注册 definition 本身，不调用它。
 插件源：
 
 ```text
-packages/app-plugin-audit-log/
+packages/plugins/app-plugin-audit-log/
 └── skills/
     └── nocobase-app-plugin-audit-log/
         └── SKILL.md
@@ -154,7 +154,7 @@ packages/app-plugin-audit-log/
 App 副本：
 
 ```text
-packages/app-template-default/
+packages/templates/app-template-default/
 └── .agents/skills/
     └── nocobase-app-plugin-audit-log/
         └── SKILL.md
@@ -224,7 +224,7 @@ pnpm plugin:skills:sync
 pnpm plugin:skills:sync --plugin audit-log
 ```
 
-本仓库内对应的 App 是 `packages/app-template-default`，进这个目录跑同一条命令。仓库根目录没有这个脚本。
+本仓库内对应的 App 是 `packages/templates/app-template-default`，进这个目录跑同一条命令。仓库根目录没有这个脚本。
 
 同步规则：
 

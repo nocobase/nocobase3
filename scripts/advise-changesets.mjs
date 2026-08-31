@@ -20,21 +20,28 @@ function git(...args) {
 }
 
 // 明确不影响发布产物的路径。判断不准时按「影响产物」处理，宁可多提醒。
+// 路径是 packages/<分类>/<包>/…，所以这里要匹配两层。
 const IGNORED = [
-  /^packages\/[^/]+\/test\//,
-  /^packages\/[^/]+\/.*\.test\.[jt]sx?$/,
-  /^packages\/[^/]+\/README\.md$/,
+  /^packages\/[^/]+\/[^/]+\/test\//,
+  /^packages\/[^/]+\/[^/]+\/.*\.test\.[jt]sx?$/,
+  /^packages\/[^/]+\/[^/]+\/README\.md$/,
 ];
 
+// key 是相对 packages/ 的两段路径（如 libs/app-database），和下面从改动文件里截出来的前缀对齐。
 function loadPackages() {
   const dir = path.join(root, 'packages');
   const map = new Map();
   if (!fs.existsSync(dir)) return map;
-  for (const d of fs.readdirSync(dir)) {
-    const manifest = path.join(dir, d, 'package.json');
-    if (!fs.existsSync(manifest)) continue;
-    const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-    map.set(d, pkg);
+  for (const category of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!category.isDirectory()) continue;
+    const categoryDir = path.join(dir, category.name);
+    for (const entry of fs.readdirSync(categoryDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const manifest = path.join(categoryDir, entry.name, 'package.json');
+      if (!fs.existsSync(manifest)) continue;
+      const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+      map.set(`${category.name}/${entry.name}`, pkg);
+    }
   }
   return map;
 }
@@ -52,7 +59,7 @@ const changed = git(
 
 const touched = new Set();
 for (const file of changed) {
-  const m = file.match(/^packages\/([^/]+)\//);
+  const m = file.match(/^packages\/([^/]+\/[^/]+)\//);
   if (!m) continue;
   if (IGNORED.some((re) => re.test(file))) continue;
   const pkg = packages.get(m[1]);

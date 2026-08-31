@@ -9,7 +9,7 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 
 ## 1. 明确目标和边界
 
-先记录目标 App、插件短名、用户角色、核心业务对象、主要操作、是否需要持久化，以及插件与 App 各自拥有的内容。第一版 Create Plugin 只在 source workspace 的 `packages/` 下创建插件。
+先记录目标 App、插件短名、用户角色、核心业务对象、主要操作、是否需要持久化，以及插件与 App 各自拥有的内容。第一版 Create Plugin 只在 source workspace 的 `packages/plugins/` 下创建插件。
 
 不要一开始就在 App Template 中实现领域逻辑。先判断该逻辑是否随插件发布、是否被多个 App 复用；若是，应由插件包拥有。
 

@@ -511,8 +511,8 @@ public override register(): void {
 
 ## 相关实现
 
-- `packages/app-server-kit/src/config/`：`AppConfig`、definition 和环境映射入口；
-- `packages/app-server-kit/src/core-configs.ts`：标准 App 配置集合；
-- `packages/config/`：通用 Config、provider 和 parser 基础库；
-- `packages/app-template-default/server/config/index.ts`：Default App 配置来源选择；
-- `packages/app-template-default/config.example.yml`：应用配置文件示例。
+- `packages/app/app-server-kit/src/config/`：`AppConfig`、definition 和环境映射入口；
+- `packages/app/app-server-kit/src/core-configs.ts`：标准 App 配置集合；
+- `packages/libs/config/`：通用 Config、provider 和 parser 基础库；
+- `packages/templates/app-template-default/server/config/index.ts`：Default App 配置来源选择；
+- `packages/templates/app-template-default/config.example.yml`：应用配置文件示例。

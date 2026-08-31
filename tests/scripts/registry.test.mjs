@@ -13,10 +13,13 @@ import {
 } from '../../scripts/registry.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
-const ownerRoot = path.join(repoRoot, 'packages/app-plugin-authentication');
+const ownerRoot = path.join(
+  repoRoot,
+  'packages/plugins/app-plugin-authentication',
+);
 const exampleOwnerRoot = path.join(
   repoRoot,
-  'packages/app-plugin-registry-example',
+  'packages/examples/app-plugin-registry-example',
 );
 
 test('parses package-scoped Registry commands', () => {
@@ -28,14 +31,14 @@ test('parses package-scoped Registry commands', () => {
       '--item',
       'auth-ui',
       '--output-root',
-      'packages/app-template-default',
+      'packages/templates/app-template-default',
     ]),
     {
       action: 'materialize',
       all: false,
       help: false,
       item: 'auth-ui',
-      outputRoot: 'packages/app-template-default',
+      outputRoot: 'packages/templates/app-template-default',
       package: '@nocobase/app-plugin-authentication',
     },
   );
@@ -96,7 +99,7 @@ test('materializes the authentication recipe without overwriting it', async (t) 
   const recipeRoot = path.join(ownerRoot, 'registry/auth-ui');
   const preinstalledRoot = path.join(
     repoRoot,
-    'packages/app-template-default/client/extensions/nocobase-auth-ui',
+    'packages/templates/app-template-default/client/extensions/nocobase-auth-ui',
   );
   const recipeFiles = walkFiles(recipeRoot);
 

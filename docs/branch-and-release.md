@@ -519,8 +519,8 @@ Vue 的做法是同样的：`v3.4.0`、`v3.5.0`、`v3.5.41` 全部是 `minor` �
 `main` 发布修复后 merge 回 `develop`，必然在两类文件上冲突：
 
 ```text
-packages/<name>/package.json     版本号
-packages/<name>/CHANGELOG.md     发布记录
+packages/<category>/<name>/package.json     版本号
+packages/<category>/<name>/CHANGELOG.md     发布记录
 ```
 
 `main` 发布时已经消费掉了修复的 changeset 文件，合过来时 `.changeset/` 里没有它，因此**不会在 develop 上重复发布**。但代码修复合过来了，会包含在下一个 beta 中。
@@ -662,7 +662,7 @@ pnpm changeset
 ```md
 ---
 "@nocobase/portal-sdk": minor
-"@nocobase/hub": patch
+"@nocobase/app-template-hub": patch
 ---
 
 Add a new Portal extension API and update the built-in Hub integration.
@@ -760,7 +760,7 @@ CI 不应根据 diff 自动猜测 bump 级别。它可以发现「缺少 changes
 ---
 "@nocobase/app-template-default": major
 "@nocobase/portal-sdk": major
-"@nocobase/hub": minor
+"@nocobase/app-template-hub": minor
 ---
 
 Prepare app-template-default 3.0 and its supporting runtime APIs.

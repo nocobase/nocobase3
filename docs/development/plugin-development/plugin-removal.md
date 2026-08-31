@@ -58,7 +58,7 @@ pnpm plugin:remove audit-log
 ## 删除前检查
 
 - 用户明确要求删除的是插件源码，而不只是从某个 App 解除注册；
-- 目标解析为一个明确的 `packages/app-plugin-*` 目录；
+- 目标解析为一个明确的 `packages/plugins/app-plugin-*` 目录；
 - 所有目标 App 已解除注册；
 - 没有其他 workspace package 依赖该插件；
 - 插件目录没有需要保留或尚未提交的用户修改；

@@ -5,7 +5,7 @@ description: 在 NocoBase v3 source workspace 中预览、注册和配置本地�
 
 # Source workspace 插件注册
 
-本页适用于当前仓库 `packages/app-plugin-*` 中的插件。执行命令前确认插件包名、目标 App 和工作树状态。
+本页适用于当前仓库 `packages/plugins/app-plugin-*` 中的插件。执行命令前确认插件包名、目标 App 和工作树状态。
 
 ## 最小注册流程
 
@@ -109,7 +109,7 @@ auditLog({
 
 ## Skills 同步
 
-插件能力或说明发生变化后，可以单独同步。这条命令属于 App，在 App 目录下执行——本仓库内即 `packages/app-template-default`：
+插件能力或说明发生变化后，可以单独同步。这条命令属于 App，在 App 目录下执行——本仓库内即 `packages/templates/app-template-default`：
 
 ```bash
 pnpm plugin:skills:sync

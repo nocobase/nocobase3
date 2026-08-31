@@ -72,9 +72,9 @@ Source workspace 可以直接 materialize：
 
 ```bash
 pnpm registry materialize \
-  --package packages/app-plugin-audit-log \
+  --package packages/plugins/app-plugin-audit-log \
   --item component-ui \
-  --output-root packages/app-template-default
+  --output-root packages/templates/app-template-default
 ```
 
 发布流程使用 `registry build` 生成可分发 JSON。确保 `package.json#files`、`nocobase.registry.items`、`registry.config.json` 和实际源码一致。
