@@ -1,18 +1,8 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
-import type {
-  ConfigEnv,
-  PluginOption,
-  Rollup,
-  UserConfig,
-  UserConfigExport,
-} from 'vite';
+import type { ConfigEnv, Rollup, UserConfig, UserConfigExport } from 'vite';
 import { defineConfig, loadEnv, mergeConfig } from 'vite';
-
-export type PortalSdkCompatibilityPluginFactory = (options: {
-  root: string;
-}) => PluginOption;
 
 // A locale module is a `locales/` sibling named after the locale it provides, such as `en-US.ts` or
 // `zh-CN.js`. Both extensions are accepted because a consumer may build from plugin sources or from an
@@ -84,9 +74,8 @@ const resolveLocalConfig = async (
 };
 
 export const createPortalViteConfig: (
-  portalSdkCompatibilityPlugin: PortalSdkCompatibilityPluginFactory,
   localConfig?: UserConfigExport,
-) => UserConfigExport = (portalSdkCompatibilityPlugin, localConfig = {}) =>
+) => UserConfigExport = (localConfig = {}) =>
   defineConfig(async (configEnvironment): Promise<UserConfig> => {
     const resolvedLocalConfig = await resolveLocalConfig(
       localConfig,
@@ -104,7 +93,7 @@ export const createPortalViteConfig: (
     const devPort = positiveInteger(env.APP_VITE_DEV_PORT) ?? 5173;
     const sharedConfig: UserConfig = {
       root,
-      plugins: [portalSdkCompatibilityPlugin({ root }), react(), tailwindcss()],
+      plugins: [react(), tailwindcss()],
       build: {
         outDir: 'dist/client',
         rollupOptions: {

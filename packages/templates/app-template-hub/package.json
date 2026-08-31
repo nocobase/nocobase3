@@ -139,15 +139,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:sdk": "pnpm --filter @nocobase/app-portal-sdk test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:install": "playwright install chromium",
-    "test:all": "pnpm typecheck && pnpm test && pnpm test:sdk && pnpm build && pnpm test:e2e",
+    "test:all": "pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e",
     "start": "node ./scripts/start.mjs",
     "refine": "refine",
-    "sdk:check": "pnpm exec portal-sdk check",
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-hub.tgz\" && pnpm exec publint ."
   },
   "browserslist": {

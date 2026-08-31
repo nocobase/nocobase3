@@ -1,3 +1,12 @@
+/**
+ * The Portal HTTP client for a v2 NocoBase server, kept for the file upload flow that still talks to one.
+ *
+ * `NocoBaseClient` carries the v2 semantics: a Bearer token held in browser storage, `X-Authenticator` and `X-Role`
+ * headers, and the `resource:action` endpoint shape. A v3 application speaks to its own server over cookies through
+ * `@nocobase/app-client`, so the two are not interchangeable and this one must not be used for new work.
+ *
+ * @deprecated Use `@nocobase/app-client` unless you are calling a v2 NocoBase API.
+ */
 import {
   API_ORIGIN,
   API_URL,
@@ -348,4 +357,3 @@ export const nocobaseClient: NocoBaseClient = new NocoBaseClient();
 
 export * from './auth-session.ts';
 export * from './error.ts';
-export * from './websocket.ts';

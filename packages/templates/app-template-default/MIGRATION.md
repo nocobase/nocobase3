@@ -19,15 +19,14 @@ will overwrite it.
    pages, translations, or customized installed extensions.
 4. Update `nocobase.defaultTemplateVersion` in the derived application only
    after the corresponding source changes have been incorporated.
-5. Update `@nocobase/app-portal-sdk` when the release requires a new compatible SDK.
-6. Run `pnpm sdk:check`, install dependencies, build, and verify direct URLs,
-   nested route surfaces, authentication, ACL, and locale switching.
+5. Install dependencies, build, and verify direct URLs, nested route surfaces,
+   authentication, ACL, and locale switching.
 
 ## Default Template 3.0
 
-Template 3 uses the Portal SDK 2 route contract. Read the
-[Portal SDK migration guide](../../app/app-portal-sdk/MIGRATION.md) when upgrading Registry
-extensions or other code that consumes SDK routing APIs.
+Template 3 uses the Portal SDK 2 route contract. That SDK's routing APIs have
+since been removed; upgrade Registry extensions and other consumers to the
+route contract this template ships.
 
 ### Lazy-load application pages
 

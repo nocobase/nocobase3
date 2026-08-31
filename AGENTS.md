@@ -41,7 +41,7 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 - Inherit Prettier through `"prettier": "@nocobase/dev-config/prettier"` in `package.json`.
 - Prefer `pnpm fix` after editing code. It always runs ESLint `--fix` before Prettier `--write`. `pnpm format:check` is a read-only incremental check.
 - Node tests use `createNodeVitestConfig`. React/jsdom tests use `createReactVitestConfig`. The React preset already installs jest-dom matchers and Testing Library cleanup.
-- Portal Vite configurations use `createPortalViteConfig` and inject the compatibility plugin from `@nocobase/app-portal-sdk/vite`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
+- Portal Vite configurations use `createPortalViteConfig`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
 - Keep Playwright configuration package-local for now; there is no shared Playwright preset.
 
 ### Dependencies and Runtime

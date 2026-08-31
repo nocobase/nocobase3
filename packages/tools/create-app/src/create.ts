@@ -246,8 +246,8 @@ interface CreateHubOptions {
  * `.env` for its own settings, `.nb3/hub.json` so the `nb3 hub` commands can find it, and the runtime directories it
  * writes into — the same scaffolding `nb3 hub create` performs, so a hub is identical whichever command produced it.
  *
- * `ensureAllowBuilds` still runs. The hub depends on `@nocobase/app-portal-sdk` and `esbuild`, both of which need
- * their install scripts, and pnpm 11 skips those for any package missing from `allowBuilds`.
+ * `ensureAllowBuilds` still runs. The hub depends on `esbuild`, which needs its install script, and pnpm 11 skips
+ * that for any package missing from `allowBuilds`.
  */
 async function createHub(options: CreateHubOptions): Promise<void> {
   const { input, name, targetDirectory, template } = options;

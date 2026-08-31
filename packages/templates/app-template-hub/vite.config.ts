@@ -1,6 +1,5 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
-import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
 import { loadEnv } from 'vite';
@@ -16,42 +15,39 @@ const normalizeBase = (base?: string) => {
 };
 
 // https://vite.dev/config/
-export default createPortalViteConfig(
-  portalSdkCompatibilityPlugin,
-  ({ command, mode }) => {
-    const env = loadEnv(mode, process.cwd(), '');
-    const appName = env.APP_NAME || 'hub';
-    const appBase = normalizeBase(env.APP_BASE_PATH ?? `/${appName}`);
-    const viteBase = appBase;
-    const registrySourceRoot = path.resolve(__dirname, './registry');
-    const extensionsRoot = fs.existsSync(registrySourceRoot)
-      ? registrySourceRoot
-      : path.resolve(__dirname, './client/extensions');
+export default createPortalViteConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const appName = env.APP_NAME || 'hub';
+  const appBase = normalizeBase(env.APP_BASE_PATH ?? `/${appName}`);
+  const viteBase = appBase;
+  const registrySourceRoot = path.resolve(__dirname, './registry');
+  const extensionsRoot = fs.existsSync(registrySourceRoot)
+    ? registrySourceRoot
+    : path.resolve(__dirname, './client/extensions');
 
-    return {
-      base: viteBase,
-      plugins: [
-        agentAnnotations({
-          root: __dirname,
-          clientExtensions: [
-            path.resolve(__dirname, 'client/agent-annotations-host.ts'),
-          ],
-        }),
-      ],
-      define: {
-        __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
-          command === 'serve' ? path.resolve(__dirname) : '',
-        ),
-        __PORTAL_TEMPLATE_NAME__: JSON.stringify(portalTemplate.displayName),
-        __PORTAL_TEMPLATE_VERSION__: JSON.stringify(portalTemplate.version),
+  return {
+    base: viteBase,
+    plugins: [
+      agentAnnotations({
+        root: __dirname,
+        clientExtensions: [
+          path.resolve(__dirname, 'client/agent-annotations-host.ts'),
+        ],
+      }),
+    ],
+    define: {
+      __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
+        command === 'serve' ? path.resolve(__dirname) : '',
+      ),
+      __PORTAL_TEMPLATE_NAME__: JSON.stringify(portalTemplate.displayName),
+      __PORTAL_TEMPLATE_VERSION__: JSON.stringify(portalTemplate.version),
+    },
+    envPrefix: ['VITE_', 'NOCOBASE_', 'API_CLIENT_'],
+    resolve: {
+      alias: {
+        '@/extensions': extensionsRoot,
+        '@': path.resolve(__dirname, './client'),
       },
-      envPrefix: ['VITE_', 'NOCOBASE_', 'API_CLIENT_'],
-      resolve: {
-        alias: {
-          '@/extensions': extensionsRoot,
-          '@': path.resolve(__dirname, './client'),
-        },
-      },
-    };
-  },
-);
+    },
+  };
+});

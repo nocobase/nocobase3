@@ -12,16 +12,12 @@ export const PNPM_WORKSPACE_FILE = 'pnpm-workspace.yaml';
  * still reports success, and the failure surfaces much later: `better-sqlite3` throws "Could not locate the bindings
  * file" at the first query, naming nothing actionable.
  *
- * All three are written regardless of which database was chosen. `better-sqlite3` is only installed for sqlite, but
+ * Both are written regardless of which database was chosen. `better-sqlite3` is only installed for sqlite, but
  * listing it costs nothing and means switching an existing app to sqlite later just works, instead of failing with
  * that same opaque error. The list mirrors the repository's own `pnpm-workspace.yaml`, so an app and the monorepo
  * build the same set.
  */
-export const ALLOWED_BUILDS: readonly string[] = [
-  '@nocobase/app-portal-sdk',
-  'better-sqlite3',
-  'esbuild',
-];
+export const ALLOWED_BUILDS: readonly string[] = ['better-sqlite3', 'esbuild'];
 
 /** YAML needs quotes around a scoped name, whose leading `@` would otherwise start a reserved indicator. */
 function formatEntry(name: string): string {
