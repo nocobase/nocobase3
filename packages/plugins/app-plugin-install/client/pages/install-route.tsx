@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
-import { resolveAppUrl } from '@nocobase/app-sdk';
+import { resolveAppUrl } from '@nocobase/app-client';
 
 import { Button } from '../components/ui/button.js';
 import InstallPage from './install-page.js';

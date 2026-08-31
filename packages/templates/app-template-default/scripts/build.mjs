@@ -204,8 +204,6 @@ run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
 run('Build client', 'pnpm', ['exec', 'refine', 'build']);
 run('Build server workspace dependencies', 'pnpm', [
   '--filter',
-  '@nocobase/app-sdk',
-  '--filter',
   '@nocobase/app-database',
   '--filter',
   '@nocobase/app-i18n',

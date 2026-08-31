@@ -5,8 +5,11 @@ import {
   type Locale,
   type LocaleDefinition,
 } from '@nocobase/app-i18n/client';
-import { writeStoredLocale } from '@nocobase/app-client';
-import { createAppClient, type AppClient } from '@nocobase/app-sdk';
+import {
+  createAppClient,
+  writeStoredLocale,
+  type AppClient,
+} from '@nocobase/app-client';
 import { useCallback, useEffect } from 'react';
 
 /** Path under the application's API root, which is where the server is told which language to answer in. */
@@ -15,10 +18,20 @@ const LOCALE_PATH = 'i18n/locale';
 let client: AppClient | undefined;
 
 /**
- * The API client, created on first use.
+ * Hands the plugin the Application's own API client. The client ServiceProvider calls this during boot, which is what
+ * makes a configured `api.baseURL` apply here too instead of being silently ignored.
+ */
+export function configureLocaleClient(appClient: AppClient): AppClient {
+  client = appClient;
+  return appClient;
+}
+
+/**
+ * The API client. The Application's own once it has booted, and otherwise one created here.
  *
- * It resolves paths against the application's own base — an app served from `/main/` answers at `/main/api`, so a
- * hard-coded `/api/...` would miss it entirely.
+ * The fallback covers a component rendered outside an Application, which is what a focused test does. It resolves
+ * paths against the application's own base — an app served from `/main/` answers at `/main/api`, so a hard-coded
+ * `/api/...` would miss it entirely.
  */
 function getClient(): AppClient {
   client ??= createAppClient();

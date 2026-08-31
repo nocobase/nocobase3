@@ -121,7 +121,6 @@
     "@sinclair/typebox": "catalog:",
     "@base-ui/react": "^1.6.0",
     "@nocobase/app-server-kit": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/id-generator": "workspace:^",

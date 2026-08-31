@@ -148,7 +148,6 @@ Every package that emits `.d.ts` files (`declaration: true`) enables both `isola
 | Configuration                                                  | Purpose                    |
 | -------------------------------------------------------------- | -------------------------- |
 | `packages/app/app-portal-sdk/tsconfig.json`                    | Portal SDK                 |
-| `packages/app/app-sdk/tsconfig.json`                           | Browser app SDK            |
 | `packages/plugins/app-plugin-authentication/tsconfig.json`     | Authentication library     |
 | `packages/libs/authorization/tsconfig.json`                    | Authorization library      |
 | `packages/libs/app-database/tsconfig.json`                     | Database package           |

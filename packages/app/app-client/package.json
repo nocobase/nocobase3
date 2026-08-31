@@ -55,7 +55,6 @@
   },
   "peerDependencies": {
     "@nocobase/app-i18n": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "@refinedev/react-router": "^2.0.0",
     "react": "^19.0.0",
@@ -67,7 +66,6 @@
   },
   "devDependencies": {
     "@nocobase/app-i18n": "workspace:*",
-    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@refinedev/core": "catalog:",

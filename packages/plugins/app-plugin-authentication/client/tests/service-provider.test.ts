@@ -1,6 +1,6 @@
-import type { AppClient } from '@nocobase/app-sdk';
 import {
   appApiClientToken,
+  type AppClient,
   type ClientApplication,
 } from '@nocobase/app-client';
 import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';

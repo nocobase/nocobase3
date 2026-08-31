@@ -1,7 +1,9 @@
+import { appApiClientToken, useService } from '@nocobase/app-client';
 import { useGetIdentity } from '@refinedev/core';
-import type { ReactElement } from 'react';
+import { useCallback, type ReactElement } from 'react';
 
 import { SkillsExampleNotice } from '../components/skills-example-notice';
+import { loadSkillsExampleNotice } from '../components/skills-example-notice-data';
 
 interface AppIdentity {
   email?: string;
@@ -11,6 +13,12 @@ interface AppIdentity {
 
 export default function HomePage(): ReactElement {
   const { data: identity } = useGetIdentity<AppIdentity>();
+  // The Application's own API client, so the notice request follows its configured `api.baseURL`.
+  const appClient = useService(appApiClientToken);
+  const loadNotice = useCallback(
+    () => loadSkillsExampleNotice(appClient),
+    [appClient],
+  );
 
   return (
     <section className='mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-5xl place-items-center px-6 py-10'>
@@ -25,7 +33,7 @@ export default function HomePage(): ReactElement {
           Describe what you need, and your AI Agent will help you build it.
         </p>
         <div className='text-left'>
-          <SkillsExampleNotice />
+          <SkillsExampleNotice loadNotice={loadNotice} />
         </div>
       </div>
     </section>

@@ -393,7 +393,7 @@ POST /api/auth/sign-in/ticket
 封装一个小 client：
 
 ```ts
-import type { AppClient } from '@nocobase/app-sdk';
+import type { AppClient } from '@nocobase/app-client';
 
 export class TicketAuthClient {
   constructor(private readonly client: AppClient) {}

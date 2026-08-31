@@ -1,5 +1,5 @@
+import type { AppClient } from '@nocobase/app-client';
 import { render, screen } from '@testing-library/react';
-import type { AppClient } from '@nocobase/app-sdk';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SkillsExampleNotice } from '../../client/components/skills-example-notice.tsx';

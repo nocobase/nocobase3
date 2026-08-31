@@ -34,7 +34,6 @@ const nodeLibraryRoots = [
 const devConfigRoots = ['packages/tools/dev-config'];
 const clientLibraryRoots = [
   'packages/app/app-client',
-  'packages/app/app-sdk',
   'packages/app/app-portal-sdk',
 ];
 const portalRoots = [

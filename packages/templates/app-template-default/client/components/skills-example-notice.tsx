@@ -2,17 +2,14 @@ import { AppNotice } from '@nocobase/app-plugin-skills-example/client/components
 import type { AppNoticeData } from '@nocobase/app-plugin-skills-example/server/tokens';
 import { useEffect, useState, type ReactElement } from 'react';
 
-import {
-  loadSkillsExampleNotice,
-  type LoadSkillsExampleNotice,
-} from './skills-example-notice-data';
+import type { LoadSkillsExampleNotice } from './skills-example-notice-data';
 
 export interface SkillsExampleNoticeProps {
-  readonly loadNotice?: LoadSkillsExampleNotice;
+  readonly loadNotice: LoadSkillsExampleNotice;
 }
 
 export function SkillsExampleNotice({
-  loadNotice = loadSkillsExampleNotice,
+  loadNotice,
 }: SkillsExampleNoticeProps): ReactElement {
   const [notice, setNotice] = useState<AppNoticeData>();
   const [error, setError] = useState<string>();

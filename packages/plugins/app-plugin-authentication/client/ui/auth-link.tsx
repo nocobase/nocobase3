@@ -1,4 +1,4 @@
-import { resolveAppUrl } from '@nocobase/app-sdk';
+import { resolveAppUrl } from '@nocobase/app-client';
 import { useGo } from '@refinedev/core';
 import type { MouseEvent, PropsWithChildren, ReactElement } from 'react';
 

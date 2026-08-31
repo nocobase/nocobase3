@@ -88,7 +88,6 @@
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
-    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@refinedev/core": "catalog:",
     "@testing-library/jest-dom": "catalog:",

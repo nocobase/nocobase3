@@ -10,7 +10,6 @@
       "dependencies": [
         "@nocobase/app-client@^0.1.0",
         "@nocobase/app-plugin-authentication@^0.1.0",
-        "@nocobase/app-sdk@^0.1.0",
         "lucide-react@^0.487.0"
       ],
       "registryDependencies": ["button", "input", "label"],

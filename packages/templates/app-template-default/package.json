@@ -95,7 +95,6 @@
     "@nocobase/app-plugin-system-info": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/dev-config": "workspace:*",

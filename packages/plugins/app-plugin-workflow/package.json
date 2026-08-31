@@ -95,7 +95,6 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@base-ui/react": "^1.6.0",
-    "@nocobase/app-sdk": "workspace:^",
     "@xyflow/react": "^12.11.3",
     "elkjs": "^0.10.2",
     "esbuild": "^0.25.12",
