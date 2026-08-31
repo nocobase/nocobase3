@@ -1,9 +1,7 @@
 import { databaseManagerToken } from '@nocobase/app-database';
 import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/tokens';
-import {
-  queueManagerToken,
-  type AppPluginApplication,
-} from '@nocobase/app-server-kit';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,

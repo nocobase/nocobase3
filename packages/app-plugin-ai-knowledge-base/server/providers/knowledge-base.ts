@@ -1,9 +1,7 @@
 import { databaseManagerToken } from '@nocobase/app-database';
-import {
-  driveManagerToken,
-  queueManagerToken,
-  type AppPluginApplication,
-} from '@nocobase/app-server-kit';
+import { driveManagerToken } from '@nocobase/app-server-kit/drive';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { queueManagerToken } from '@nocobase/app-server-kit/queue';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import bootstrap from '../bootstrap.js';
