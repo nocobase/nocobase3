@@ -217,19 +217,14 @@ auditLog({
 
 ## 同步 Skills
 
-插件升级或公开能力变化后，可以单独同步：
-
-```bash
-pnpm plugin:skills:sync --app app-template-default
-pnpm plugin:skills:sync --app app-template-default --plugin audit-log
-```
-
-独立 App 中省略 `--app`：
+插件升级或公开能力变化后，可以单独同步。这条命令在 App 目录下执行：
 
 ```bash
 pnpm plugin:skills:sync
 pnpm plugin:skills:sync --plugin audit-log
 ```
+
+本仓库内对应的 App 是 `packages/app-template-default`，进这个目录跑同一条命令。仓库根目录没有这个脚本。
 
 同步规则：
 

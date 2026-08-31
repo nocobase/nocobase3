@@ -19,6 +19,7 @@ const PRIVATE_ATTACHMENT_CONTENT =
 export interface FileDemoFixture extends EnsureFileObjectInput {
   readonly id: string;
   readonly filename: string;
+  readonly preserveExistingScopeRecord: boolean;
   readonly public: boolean;
   readonly table: string;
   readonly scope: Readonly<Record<string, number>>;
@@ -27,9 +28,13 @@ export interface FileDemoFixture extends EnsureFileObjectInput {
 }
 
 export const FILE_DEMO_FIXTURES: readonly FileDemoFixture[] = Object.freeze([
-  createFixture(FILE_DEMO_AVATAR, AVATAR_CONTENT, 'fileDemoProfileAvatars', {
-    profileId: 1,
-  }),
+  createFixture(
+    FILE_DEMO_AVATAR,
+    AVATAR_CONTENT,
+    'fileDemoProfileAvatars',
+    { profileId: 1 },
+    { preserveExistingScopeRecord: true },
+  ),
   createFixture(
     FILE_DEMO_PUBLIC_ATTACHMENT,
     PUBLIC_ATTACHMENT_CONTENT,
@@ -49,6 +54,7 @@ function createFixture(
   content: string | Uint8Array,
   table: string,
   scope: Readonly<Record<string, number>>,
+  options: { readonly preserveExistingScopeRecord?: boolean } = {},
 ): FileDemoFixture {
   const size =
     typeof content === 'string'
@@ -64,6 +70,7 @@ function createFixture(
     key: file.key,
     filename: file.filename,
     mimeType: file.mimeType,
+    preserveExistingScopeRecord: options.preserveExistingScopeRecord ?? false,
     public: file.public,
     table,
     scope,

@@ -109,11 +109,11 @@ auditLog({
 
 ## Skills 同步
 
-插件能力或说明发生变化后，可以单独同步：
+插件能力或说明发生变化后，可以单独同步。这条命令属于 App，在 App 目录下执行——本仓库内即 `packages/app-template-default`：
 
 ```bash
-pnpm plugin:skills:sync --app app-template-default
-pnpm plugin:skills:sync --app app-template-default --plugin audit-log
+pnpm plugin:skills:sync
+pnpm plugin:skills:sync --plugin audit-log
 ```
 
 同步边界：
