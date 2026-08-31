@@ -31,6 +31,10 @@ opaque and must not construct or persist internal table queries.
 `POST /:id` with `read`, `unread`, or `delete`, and `POST /read-all`. Every
 write requires the CSRF token and cookie obtained from `GET /csrf`.
 
+Durable inbox mutations publish a user-scoped realtime invalidation event.
+Clients use that event as a refetch signal and continue to treat the HTTP API as
+the authoritative inbox state.
+
 Every operation resolves the authenticated user and constrains reads and
 writes to that user. Invalid pagination, cursor, JSON, or mutation input returns
 `400`; unauthenticated requests return `401`; invalid CSRF returns `403`.
@@ -42,6 +46,10 @@ target App. It is App-owned Client source, not a Client contribution from this
 package. The target App owns the installed copy, its locale keys and wording,
 and any source extension that mounts it. The package continues to own the API,
 storage, authentication, CSRF, and user-isolation boundaries.
+
+The installed runtime subscribes lazily, reconnects after authentication
+changes, and refetches the unread count on realtime invalidation, WebSocket
+reconnection, and browser focus.
 
 ## Development
 

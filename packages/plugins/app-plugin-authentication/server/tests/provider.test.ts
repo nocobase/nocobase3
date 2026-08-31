@@ -13,13 +13,15 @@ import {
   createConfigPaths,
 } from '@nocobase/app-server-kit/config';
 import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
+import { realtimePrincipalResolverToken } from '@nocobase/app-server-kit/realtime';
 import { Hono } from 'hono';
 
 const authHandler = vi.hoisted(() =>
   vi.fn((request: Request) => Promise.resolve(new Response(request.url))),
 );
+const getSession = vi.hoisted(() => vi.fn());
 const createAuthentication = vi.hoisted(() =>
-  vi.fn(() => ({ handler: authHandler })),
+  vi.fn(() => ({ handler: authHandler, getSession })),
 );
 
 vi.mock('../auth.js', async (importOriginal) => {
@@ -71,7 +73,14 @@ describe('authentication provider', () => {
 
     provider.register();
     const auth = container.resolve(authenticationToken);
+    getSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
 
+    expect(container.has(realtimePrincipalResolverToken)).toBe(true);
+    await expect(
+      container
+        .resolve(realtimePrincipalResolverToken)
+        .resolve(new Request('http://localhost/ws')),
+    ).resolves.toEqual({ userId: 'user-1' });
     expect(provider.name).toBe('@nocobase/app-plugin-authentication');
     expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({

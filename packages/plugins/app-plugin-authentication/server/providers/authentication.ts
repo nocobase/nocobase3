@@ -11,6 +11,10 @@ import { databaseManagerToken } from '@nocobase/app-database';
 import { cachingToken } from '@nocobase/app-server-kit/caching';
 import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
 import { appConfig } from '@nocobase/app-server-kit/config';
+import {
+  realtimePrincipalResolverToken,
+  type RealtimePrincipal,
+} from '@nocobase/app-server-kit/realtime';
 
 import {
   createAuthentication,
@@ -52,6 +56,21 @@ export class AuthenticationProvider<
     this.app.container.singleton(authenticationToken, (container) =>
       this.createAuthentication(container),
     );
+    if (!this.app.container.has(realtimePrincipalResolverToken)) {
+      this.app.container.singleton(
+        realtimePrincipalResolverToken,
+        (container) => ({
+          async resolve(
+            request: Request,
+          ): Promise<RealtimePrincipal | undefined> {
+            const session = await container
+              .resolve(authenticationToken)
+              .getSession(request.headers);
+            return session ? { userId: session.user.id } : undefined;
+          },
+        }),
+      );
+    }
   }
 
   private createAuthentication(container: ServiceResolver): Auth {

@@ -8,6 +8,7 @@
       "title": "NocoBase In-app Notification UI",
       "description": "Application-owned personal inbox, unread count, and runtime Provider backed by the NocoBase in-app notification API.",
       "dependencies": [
+        "@nocobase/app-client@^1.0.0-beta.5",
         "@nocobase/app-portal-sdk@^2.0.0",
         "lucide-react@^0.487.0",
         "react-router@^7.0.2"

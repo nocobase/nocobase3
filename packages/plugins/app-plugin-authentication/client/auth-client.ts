@@ -9,7 +9,7 @@ export class AuthClient {
 
   async signIn(identifier: string, password: string): Promise<AuthSession> {
     const isEmail = identifier.includes('@');
-    return this.send<AuthSession>(
+    const session = await this.send<AuthSession>(
       isEmail ? 'sign-in/email' : 'sign-in/username',
       {
         method: 'POST',
@@ -20,6 +20,8 @@ export class AuthClient {
         ),
       },
     );
+    this.options.client.realtime?.refreshSession();
+    return session;
   }
 
   async signUp(
@@ -28,10 +30,12 @@ export class AuthClient {
     email: string,
     password: string,
   ): Promise<AuthSession> {
-    return this.send<AuthSession>('sign-up/email', {
+    const session = await this.send<AuthSession>('sign-up/email', {
       method: 'POST',
       body: JSON.stringify({ name, username, email, password }),
     });
+    this.options.client.realtime?.refreshSession();
+    return session;
   }
 
   async signOut(): Promise<void> {
@@ -39,6 +43,7 @@ export class AuthClient {
       method: 'POST',
       body: JSON.stringify({}),
     });
+    this.options.client.realtime?.refreshSession();
   }
 
   async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
@@ -53,6 +58,10 @@ export class AuthClient {
       method: 'POST',
       body: JSON.stringify({ newPassword, token }),
     });
+  }
+
+  refreshRealtimeSession(): void {
+    this.options.client.realtime?.refreshSession();
   }
 
   private async send<T>(path: string, init: RequestInit = {}): Promise<T> {
