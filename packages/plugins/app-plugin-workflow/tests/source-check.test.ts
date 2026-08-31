@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { checkWorkflowPackage } from '../server/loader/source-check.js';
+import { checkWorkflowPackage } from '../build/index.js';
 import { validateWorkflowFlatIrTopology } from '../server/loader/source-compiler.js';
 import { typecheckWorkflowSource } from '../server/loader/source-parser.js';
 
