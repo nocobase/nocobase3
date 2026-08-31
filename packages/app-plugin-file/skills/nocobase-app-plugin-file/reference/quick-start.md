@@ -6,8 +6,8 @@ the [Route API guide](route-api.md) lists the fixed HTTP surface and access
 rules.
 
 All code below is a partial example. Follow the current application template
-for ordinary plugin structure and imports; this guide only calls out file
-integration decisions that are easy to get wrong.
+for ordinary plugin layout and Route registration; this guide only calls out
+file integration decisions that are easy to get wrong.
 
 ## 1. Confirm the host context
 
@@ -41,15 +41,33 @@ the business table with `hasMany('attachments', 'purchaseOrderAttachments')`.
 ## 3. Create a scoped Route
 
 Keep the table name in server code and derive the owner from a validated Route
-parameter. This is an assembly fragment, not a standalone module:
+parameter. Use `authenticationToken` and `AuthEnv` from
+`@nocobase/app-plugin-authentication`, `authorizationToken` and
+`AuthorizationEnv` from `@nocobase/app-plugin-authorization`, and
+`MiddlewareHandler` from `hono`. This is an assembly fragment, not a standalone
+module:
 
 ```ts
+type Env = {
+  Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
+};
+
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ config, container }) => {
-    const router = new Hono();
+    const router = new Hono<Env>();
+    const authentication = container.resolve(authenticationToken);
+    const authorization = container.resolve(authorizationToken);
     const app = config.get(appConfig);
     const drive = config.get(driveConfig);
     const session = container.resolve(sessionManagerToken).config;
+    const authenticate =
+      authentication.required() as unknown as MiddlewareHandler<Env>;
+    const resolveAuthorization =
+      authorization.middleware() as unknown as MiddlewareHandler<Env>;
+    const requireManagement: MiddlewareHandler<Env> = (context, next) =>
+      authenticate(context, async () => {
+        await resolveAuthorization(context, next);
+      });
 
     router.route(
       '/purchase-orders/:orderId/attachments',
@@ -84,18 +102,17 @@ const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
 export default routes;
 ```
 
-Use the owning packages and the current application template for imports. The
-inner Hono path omits the `/api` prefix added by the Application, and the
-contribution must be included in the plugin's `routes` array passed to
-`defineServerPlugin(...)`. Build `requireManagement` from the application's
-existing authentication and authorization middleware.
+Use the owning packages for the remaining imports. The inner Hono path omits
+the `/api` prefix added by the Application, and the contribution must be
+included in the plugin's `routes` array passed to `defineServerPlugin(...)`.
 
-The authorization callback must call the existing business authorization
-boundary and deliberately map every `FileRouteAction`. Do not invent a second
-file ACL or an unregistered resource type. If the parent uses database
-authorization, check it through its authorized service/query and apply the
-returned record conditions. Do not treat a `conditional` database decision as
-a plain `permit`.
+`authorizePurchaseOrderFile` is the business-specific extension point. The
+business module must define it as a `FileRouteAuthorizer`; it must call the
+existing business authorization boundary and deliberately map every
+`FileRouteAction`. Do not invent a second file ACL or an unregistered resource
+type. If the parent uses database authorization, check it through its
+authorized service/query and apply the returned record conditions. Do not
+treat a `conditional` database decision as a plain `permit`.
 
 ## 4. Connect the client
 
