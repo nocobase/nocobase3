@@ -24,6 +24,10 @@ mounting, form submission, and authorization.
 - Protect management operations with the application's existing authorization
   model. Public content and short-lived private token URLs follow the route's
   configured visibility contract.
+- Declare business HTTP routes with `defineApiRoutes()`. Paths inside its Hono
+  router are relative to `/api`; export the contribution in the plugin's
+  `routes` array. Resolve typed config with `config.get(appConfig)`,
+  `config.get(driveConfig)`, and `config.get(sessionConfig)`.
 - Keep Registry source limited to application-owned UI. It must not contain
   database, Drive, token, or authorization logic.
 - Prefer the one-call `database + table + scope` Route configuration. The
@@ -51,9 +55,11 @@ Read only the guide needed for the current task:
 - Configure or review HTTP behavior: [Route API](reference/route-api.md)
 - Implement a single file relation: [one-to-one recipe](reference/recipes/one-to-one.md)
 - Implement multiple attachments: [one-to-many recipe](reference/recipes/one-to-many.md)
+- Copy a tested complete implementation: [purchase-order file example](reference/examples/purchase-order-files/routes.ts)
 
-For business authorization rules, also read the
-[authorization development Skill](../../../authorization/skills/authorization-development/SKILL.md).
+The references are self-contained because plugin Skills are synchronized into
+applications independently. Do not depend on repository-relative links to a
+Skill shipped by another package.
 
 Do not use the legacy `storages:*` protocol, direct storage-driver calls from
 business modules, or an upload-intent/complete flow.

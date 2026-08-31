@@ -47,69 +47,17 @@ records.
 
 ## Store and Route
 
-```ts
-import { createFileRoute } from '@nocobase/app-plugin-file/server';
-import type { MiddlewareHandler } from 'hono';
+Use the complete, type-checked
+[purchase-order Route module](../examples/purchase-order-files/routes.ts). It
+imports every service token, reads typed config with `config.get(...)`,
+composes authentication and authorization middleware, mounts
+`/purchase-orders/:orderId/attachments` inside `defineApiRoutes()`, and exports
+the contribution in the default `routes` array. Because the Application adds
+the `/api` prefix, the inner Hono path does not include `/api`.
 
-const allowedMimeTypes = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-] as const;
-
-const requireAuth = app.container.resolve(authenticationToken).required();
-const resolveAuthorization = app.container
-  .resolve(authorizationToken)
-  .middleware();
-const managementAuth: MiddlewareHandler = (context, next) =>
-  requireAuth(context, async () => {
-    await resolveAuthorization(context, next);
-  });
-
-app.route(
-  '/api/purchase-orders/:orderId/attachments',
-  createFileRoute({
-    database: app.container.resolve(databaseManagerToken),
-    table: 'purchaseOrderAttachments',
-    scope: (context) => {
-      const raw = context.req.param('orderId');
-      const orderId = Number(raw);
-      if (!raw || !Number.isSafeInteger(orderId) || orderId < 1) {
-        throw new TypeError('A valid orderId is required.');
-      }
-      return { orderId };
-    },
-    order: { field: 'createdAt', direction: 'desc' },
-    drive: app.container.resolve(driveManagerToken),
-    defaultDisk: config.drive.default,
-    publicBasePath: config.app.publicBasePath,
-    tokenSecret: config.session.secret,
-    audience: 'purchase-order-attachments',
-    auth: managementAuth,
-    authorize: async (context, action) => {
-      const orderId = context.req.param('orderId');
-      const decision = await context.get('authz').authorize({
-        resource: { type: 'purchase-order', id: orderId },
-        action:
-          action === 'upload'
-            ? 'update'
-            : action === 'delete'
-              ? 'delete'
-              : 'read',
-      });
-      if (decision.effect !== 'permit') {
-        return context.json({ code: 'FORBIDDEN' }, 403);
-      }
-    },
-    visibility: { default: 'private', allowClientOverride: false },
-    limits: {
-      maxSize: 50 * 1024 * 1024,
-      maxFiles: 10,
-      mimeTypes: allowedMimeTypes,
-    },
-  }),
-);
-```
+The matching [migration](../examples/purchase-order-files/migration.ts) and
+[client component](../examples/purchase-order-files/client.tsx) are part of the
+same executable recipe contract.
 
 `maxFiles: 10` serializes uploads for the same owner within one process and
 Route instance. Simultaneous uploads on multiple application nodes can still

@@ -1,8 +1,8 @@
 # Route API
 
 `createFileRoute()` returns a Hono Router with exactly six relative endpoints.
-Mount it below a business path such as
-`/api/orders/:orderId/attachments`:
+Mount it inside a `defineApiRoutes()` contribution below a business path such
+as `/orders/:orderId/attachments`. The Application adds the `/api` prefix.
 
 This is the stable public route factory for business modules. The plugin's
 internal `createFileDemoRoutes()` composes its built-in Demo Router, while the
@@ -25,28 +25,12 @@ decision.
 
 ## Create the Route
 
-```ts
-const route = createFileRoute({
-  database: app.container.resolve(databaseManagerToken),
-  table: 'orderAttachments',
-  scope: (context) => ({ orderId: context.req.param('orderId') }),
-  drive: app.container.resolve(driveManagerToken),
-  defaultDisk: config.drive.default,
-  publicBasePath: config.app.publicBasePath,
-  tokenSecret: config.session.secret,
-  audience: 'order-attachments',
-  auth: app.container.resolve(authenticationToken).required(),
-  authorize: authorizeOrderFile,
-  visibility: { default: 'private', allowClientOverride: false },
-  limits: {
-    maxSize: 50 * 1024 * 1024,
-    maxFiles: 10,
-    mimeTypes: ['application/pdf', 'text/plain'],
-  },
-});
-
-app.route('/api/orders/:orderId/attachments', route);
-```
+Use the complete, type-checked
+[purchase-order Route module](examples/purchase-order-files/routes.ts). It is
+the executable reference for imports, service resolution, typed configuration,
+middleware composition, scope validation, authorization, and the exported
+`routes` array. Do not write `/api` in `router.route(...)`; the Application
+adds that prefix for every `defineApiRoutes()` contribution.
 
 `auth` handles login state. `authorize` is optional, but a business module
 should use it to delegate `list`, `upload`, `read`, `issue-token`, and `delete`

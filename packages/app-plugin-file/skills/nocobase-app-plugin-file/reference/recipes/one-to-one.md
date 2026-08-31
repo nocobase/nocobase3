@@ -44,62 +44,16 @@ repository's migration definition and current collection builder imports.
 
 ## Store and Route
 
-Create the scoped Store and Route in the registrar. The table is a
-server constant and `profileId` is validated before it reaches the query:
+Use the complete, type-checked
+[profile avatar Route module](../examples/profile-avatar/routes.ts). It includes
+all imports, typed configuration reads, middleware composition, scope
+validation, authorization action mapping, `defineApiRoutes()`, and the default
+`routes` export. Its inner path is `/profiles/:profileId/avatar`; the
+Application adds `/api`.
 
-```ts
-import { createFileRoute } from '@nocobase/app-plugin-file/server';
-import type { MiddlewareHandler } from 'hono';
-
-const requireAuth = app.container.resolve(authenticationToken).required();
-const resolveAuthorization = app.container
-  .resolve(authorizationToken)
-  .middleware();
-const managementAuth: MiddlewareHandler = (context, next) =>
-  requireAuth(context, async () => {
-    await resolveAuthorization(context, next);
-  });
-
-app.route(
-  '/api/profiles/:profileId/avatar',
-  createFileRoute({
-    database: app.container.resolve(databaseManagerToken),
-    table: 'profileAvatars',
-    scope: (context) => {
-      const raw = context.req.param('profileId');
-      const profileId = Number(raw);
-      if (!raw || !Number.isSafeInteger(profileId) || profileId < 1) {
-        throw new TypeError('A valid profileId is required.');
-      }
-      return { profileId };
-    },
-    drive: app.container.resolve(driveManagerToken),
-    defaultDisk: config.drive.default,
-    publicBasePath: config.app.publicBasePath,
-    tokenSecret: config.session.secret,
-    audience: 'profile-avatar',
-    auth: managementAuth,
-    authorize: async (context, action) => {
-      const profileId = context.req.param('profileId');
-      const decision = await context.get('authz').authorize({
-        resource: { type: 'profile', id: profileId },
-        action: action === 'upload' || action === 'delete' ? 'update' : 'read',
-      });
-      if (decision.effect !== 'permit') {
-        return context.json({ code: 'FORBIDDEN' }, 403);
-      }
-    },
-    visibility: { default: 'private', allowClientOverride: false },
-    limits: {
-      maxSize: 5 * 1024 * 1024,
-      maxFiles: 1,
-      mimeTypes: ['image/png', 'image/jpeg'],
-    },
-  }),
-);
-```
-
-The UNIQUE `profileId` constraint remains authoritative under concurrency;
+The complete module must export `apiRoutes` and include it in the default
+`routes` array, exactly as the tested example does. The UNIQUE `profileId`
+constraint remains authoritative under concurrency;
 `maxFiles: 1` cannot coordinate separate application instances.
 
 `managementAuth` runs only on the five management operations because it is
@@ -107,10 +61,9 @@ passed through the Route's `auth` option; Public or valid-Token content GET
 remains session-independent.
 
 For a database collection decision that returns conditional field or record
-constraints, apply those conditions in the business query path as described
-by the [authorization development Skill](../../../../../authorization/skills/authorization-development/SKILL.md).
-The file callback remains a hook into that existing system; it is not a new
-file permission model.
+constraints, apply those conditions in the business query path. The file
+callback remains a hook into the existing authorization system; it is not a
+new file permission model.
 
 ## Client setup
 

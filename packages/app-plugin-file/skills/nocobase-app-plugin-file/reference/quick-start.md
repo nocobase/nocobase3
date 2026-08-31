@@ -7,25 +7,22 @@ rules.
 
 ## 1. Confirm the host context
 
-Enable `@nocobase/app-plugin-file` in the application. Its ServiceProvider
+Enable `@nocobase/app-plugin-file` in the application. The business plugin
 resolves the existing database, Drive, authentication, and authorization
-services from the Application's shared container. The Application config must
-provide `app.publicBasePath`, `drive.default`, and `session.secret`.
+services from the Application's shared container. Read host configuration
+through `config.get(appConfig)`, `config.get(driveConfig)`, and
+`config.get(sessionConfig)`.
 
-Import the public Route factory:
+Start from the complete, type-checked example files shipped with this Skill:
 
-```ts
-import { createFileRoute } from '@nocobase/app-plugin-file/server';
+- [migration.ts](examples/purchase-order-files/migration.ts)
+- [routes.ts](examples/purchase-order-files/routes.ts)
+- [client.tsx](examples/purchase-order-files/client.tsx)
 
-export default function registerPurchaseOrderFiles(
-  app: PurchaseOrderApplication,
-): void {
-  // Continue with the migration and Route below.
-}
-```
-
-`PurchaseOrderPluginRoutesContext` is the business module's existing typed
-plugin context. Do not widen it or expose DatabaseManager to browser code.
+Put the Route contribution in the business plugin's `server/routes/index.ts`.
+Its default export is the `routes` array that `server/plugin.ts` passes to
+`defineServerPlugin(...)`. Omitting that import and property leaves the Route
+unregistered.
 
 Do not add another file service, dependency injection mechanism, or a second
 DatabaseManager/Drive manager. Registry installation does not install
@@ -35,31 +32,9 @@ this server code or a migration.
 
 Create the business table and a separate standard file table. A one-to-many
 table uses an indexed owner key; use the [one-to-one recipe](recipes/one-to-one.md)
-for a unique owner key. The essential migration fragment is:
-
-```ts
-await builder.createCollection('purchaseOrderAttachments', (table) => {
-  table.string('id', { length: 64 }).notNull();
-  table.string('disk', { length: 64 }).notNull();
-  table.string('key', { length: 512 }).notNull();
-  table.string('filename', { length: 255 }).notNull();
-  table.string('mimeType', { length: 255 }).notNull();
-  table.bigInt('size').notNull();
-  table.boolean('public').notNull().defaultTo(false);
-  table.datetime('createdAt').notNull();
-  table.datetime('updatedAt').notNull();
-  table
-    .belongsTo('order', 'purchaseOrders')
-    .foreignKey('orderId')
-    .foreignKeyType('integer')
-    .constraints(true)
-    .index();
-  table.primary('id', { name: 'pk_purchase_order_attachments' });
-  table.unique(['disk', 'key'], {
-    name: 'uq_purchase_order_attachment_object',
-  });
-});
-```
+for a unique owner key. The tested [migration example](examples/purchase-order-files/migration.ts)
+declares every field, relation, index, and constraint directly and implements
+the reverse-order `down` operation.
 
 Use a reverse-order `down` migration. Register the logical inverse relation on
 the business table with `hasMany('attachments', 'purchaseOrderAttachments')`.
@@ -67,35 +42,12 @@ See [data-model](data-model.md) for all fields and constraints.
 
 ## 3. Create a scoped Route
 
-Keep the table name in server code and derive the owner from the Route
-parameter. Validate the parameter before returning a scope:
-
-```ts
-app.route(
-  '/api/purchase-orders/:orderId/attachments',
-  createFileRoute({
-    database: app.container.resolve(databaseManagerToken),
-    table: 'purchaseOrderAttachments',
-    scope: (context) => {
-      const raw = context.req.param('orderId');
-      const orderId = Number(raw);
-      if (!raw || !Number.isSafeInteger(orderId) || orderId < 1) {
-        throw new TypeError('A valid orderId is required.');
-      }
-      return { orderId };
-    },
-    drive: app.container.resolve(driveManagerToken),
-    defaultDisk: config.drive.default,
-    publicBasePath: config.app.publicBasePath,
-    tokenSecret: config.session.secret,
-    audience: 'purchase-order-attachments',
-    auth: app.container.resolve(authenticationToken).required(),
-    authorize: authorizePurchaseOrderFile,
-    visibility: { default: 'private', allowClientOverride: false },
-    limits: { maxSize: 50 * 1024 * 1024, maxFiles: 10 },
-  }),
-);
-```
+Keep the table name in server code and derive the owner from a validated Route
+parameter. Copy the [complete Route module](examples/purchase-order-files/routes.ts),
+which includes all imports, `defineApiRoutes()`, typed `config.get(...)` reads,
+authentication plus authorization middleware composition, path validation,
+action mapping, and the default `routes` array export. Its inner Hono path is
+`/purchase-orders/:orderId/attachments`; the Application adds `/api`.
 
 `maxFiles` serializes checks for the same owner within one Route instance and
 process. Concurrent requests on multiple application nodes can still exceed

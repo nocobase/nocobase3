@@ -101,22 +101,9 @@ Use the current app-database builder with logical collection and field names:
 - `index('ownerId')` for one-to-many.
 
 Build the standard Route with a hard-coded table and a scope resolver that
-reads only a validated server Route parameter:
-
-```ts
-const route = createFileRoute({
-  database: app.container.resolve(databaseManagerToken),
-  table: 'orderAttachments',
-  scope: (context) => {
-    const raw = context.req.param('orderId');
-    const orderId = Number(raw);
-    if (!raw || !Number.isSafeInteger(orderId) || orderId < 1) {
-      throw new TypeError('A valid orderId is required.');
-    }
-    return { orderId };
-  },
-});
-```
+reads only a validated server Route parameter. Use the complete
+[purchase-order Route example](examples/purchase-order-files/routes.ts) rather
+than assembling a partial `createFileRoute()` options object.
 
 The Store must apply every scope equality to list, find, create, and remove.
 Find and remove must combine the file ID and scope in the same database
