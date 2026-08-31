@@ -12,11 +12,10 @@
     "index.ts",
     "client/**/*.ts",
     "client/**/*.tsx",
+    "ai/**/*.ts",
     "server/**/*.ts",
     "database/**/*.ts",
-    "tests/**/*.ts",
-    "tests/**/*.tsx",
-    "../app-portal-sdk/src/env.d.ts"
+    "../../app/app-portal-sdk/src/env.d.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }

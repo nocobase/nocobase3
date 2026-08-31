@@ -51,7 +51,7 @@ const FORBIDDEN_SOURCE_PATTERNS: Array<[string, RegExp]> = [
   ],
 ];
 
-describe('packages/ai-employee dependency boundary', () => {
+describe('packages/libs/ai-employee dependency boundary', () => {
   it('does not import old NocoBase runtime packages', () => {
     const files = walk(SRC);
     const offenders: string[] = [];
