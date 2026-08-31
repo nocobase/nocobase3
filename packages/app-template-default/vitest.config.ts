@@ -38,6 +38,7 @@ export default createReactVitestConfig({
       'tests/logic/dev-plugin-watches.test.ts',
       'tests/logic/e2e-support.test.ts',
       'tests/logic/lifecycle.test.ts',
+      'tests/logic/package-scripts.test.ts',
       'tests/logic/plugin-commands.test.ts',
       'tests/logic/skills-example-integration.test.tsx',
       'tests/logic/tailwind-sources.test.ts',

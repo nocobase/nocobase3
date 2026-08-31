@@ -216,6 +216,11 @@
   },
   "scripts": {
     "dev": "tsx ./scripts/dev.mjs",
+    "deploy": "nocobase-app deploy",
+    "hub:login": "nocobase-app hub:login",
+    "hub:logout": "nocobase-app hub:logout",
+    "release": "nocobase-app release",
+    "status": "nocobase-app status",
     "server:config": "tsx --tsconfig tsconfig.node.json ./scripts/server-config.ts",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",
