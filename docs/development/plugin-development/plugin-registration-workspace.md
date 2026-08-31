@@ -32,7 +32,7 @@ pnpm plugin:register audit-log --app app-template-default
 
 ```bash
 pnpm plugin:create audit-log \
-  --with server.providers \
+  --with server.service-providers \
   --with server.routes \
   --no-install
 
@@ -75,7 +75,7 @@ import auditLog from '@nocobase/app-plugin-audit-log/server';
 const serverPlugins: AppServerPlugins = defineServerPlugins([auditLog]);
 ```
 
-Client 数组顺序也是 bootstrap 顺序。命令默认把新插件追加到末尾；只有确实存在顺序要求或需要传 options 时才手工调整。
+Client 数组顺序也是静态 contribution 和 ServiceProvider lifecycle 的组合顺序。命令默认把新插件追加到末尾；只有确实存在顺序要求或需要传 options 时才手工调整。
 
 ## 安装但不启用
 

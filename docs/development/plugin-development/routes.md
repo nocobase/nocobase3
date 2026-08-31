@@ -66,7 +66,7 @@ Server Route 只有少量 handler 时，直接写在 `defineApiRoutes()` 或
 
 Client 普通页面使用 `defineAppRoutes()`，Settings 页面使用
 `defineSettingsRoutes()`。只替换插件页面 UI 时使用 Route component override，不要重复
-声明 Route；多个页面共享 React Context 时使用 `client/providers.ts`，不要把 Provider
+声明 Route；多个页面共享 React Context 时使用 `client/react-wrappers/`，不要把 React Wrapper
 职责塞进 Route declaration。完整代码见
 [Client Route 最佳实践示例](./client-routes-examples.md)。
 
@@ -88,7 +88,7 @@ pnpm --filter <app> client:inspect --json
 
 - `plugin:inspect` 检查安装、登记、显式 Client/Server 注册和 Skills 状态；
 - `server:inspect` 检查 Server contribution 的 `scope`、顺序和来源，不执行 Route factory；
-- `client:inspect` 解析 Client Route/Provider factory，可以执行 routes/providers factory，但不执行 bootstrap、不加载页面 `componentLoader`、不渲染 Provider，也不验证 Server 安全。
+- `client:inspect` 读取静态 Client Route 和 React Wrapper declarations，但不实例化 ServiceProvider、不执行 lifecycle、不加载页面 `componentLoader`、不渲染 React Wrapper，也不验证 Server 安全。
 
 Inspector 只提供 declaration/composition 的只读快照；命令成功或 `consistent: true` 都不能证明 Route 正确或安全。使用行为测试验证匿名/已认证请求、authorization、页面 loader、Settings access 和真实页面到 API 的闭环。
 

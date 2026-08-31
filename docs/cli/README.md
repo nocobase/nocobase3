@@ -153,7 +153,7 @@ pnpm plugin:inspect audit-log --json
 
 仓库专属的 `plugin:remove` 也支持 `--dry-run --json`。仍有 workspace 引用时，它以非零退出码返回 `PLUGIN_STILL_REFERENCED`，并在 `error.details.references` 和结构化 `error.suggestions` 中列出阻塞引用及解除注册命令。
 
-`plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.providers`、`server.routes`、`server.jobs`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
+`plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.service-providers`、`server.routes`、`server.jobs`、`server.locales`、`client.routes`、`client.components`、`client.service-providers`、`client.react-wrappers`、`client.locales`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
 
 `plugin:create --json` 和 `plugin:skills:sync --json` 在成功和失败时都输出稳定的 JSON
 envelope。失败结果包含 `ok: false`、`error.code`、`error.message` 和

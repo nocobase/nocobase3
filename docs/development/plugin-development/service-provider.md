@@ -61,7 +61,7 @@ export class HeartbeatProvider extends ServiceProvider<AppPluginApplication> {
 }
 ```
 
-直接作为 `defineServerPlugin({ providers })` contribution 的 Provider 可以使用 `AppPluginApplication`。实现中只访问实际需要的 App 字段；测试 fixture 也只提供这些字段。不要因为 Provider 能访问整个 App，就让它承担 Route、Host 或其他插件的职责。
+直接作为 `defineServerPlugin({ serviceProviders })` contribution 的 Provider 可以使用 `AppPluginApplication`。实现中只访问实际需要的 App 字段；测试 fixture 也只提供这些字段。不要因为 Provider 能访问整个 App，就让它承担 Route、Host 或其他插件的职责。
 
 Provider `name` 必须稳定且在 Application 内唯一。插件只有一个 Provider 时通常使用包名；多个 Provider 时使用包名加能力后缀，例如：
 
@@ -148,12 +148,12 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 
-import providers from './providers/index.js';
+import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const plugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-heartbeat',
-  providers,
+  serviceProviders,
   routes,
 });
 

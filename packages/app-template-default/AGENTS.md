@@ -12,12 +12,12 @@ architecture, stage it, or treat it as current source. It may be consulted only
 as a short-lived visual reference and will be deleted after migration.
 
 A plugin's client extensions are registered in `client/plugins.ts`. Being in
-that array is what enables them and the array order is the bootstrap order;
+that array is what enables them and the array order is the contribution order;
 there is no `enabled` flag on the client side.
 
 `client/plugins.ts` and `server/plugins.ts` are the authoritative runtime
 registration surfaces. `nocobase.plugins` remains temporarily for CLI,
-skills, dev-watch, and workspace build tooling; server providers, routes,
+skills, dev-watch, and workspace build tooling; Server ServiceProviders, routes,
 migrations, seeds, and jobs are no longer discovered from it.
 
 Both places are written by the repository commands; do not edit either by hand:
@@ -52,16 +52,17 @@ directory and commit App integrations to the App's normal source directories.
 
 ## Keep extension ownership explicit
 
-- Plugin `client/plugin` entries are the registration surface, re-exported as
-  the default from `client/index.ts` and imported as `<package>/client`: package name,
-  the loaders for the three entries below, and the options the plugin accepts.
-- Plugin `client/bootstrap` entries register Refine capabilities such as auth,
-  data, notification, and live providers.
-- Plugin `client/routes` entries own route ID, path, and authentication mode.
-- Plugin `client/providers` entries declare synchronous React providers and
+- Plugin `client/plugin` entries are the static registration surface,
+  re-exported as the default from `client/index.ts` and imported as
+  `<package>/client`: package name, config, ServiceProviders, React Wrappers,
+  routes, locales, and the options the plugin accepts.
+- Plugin `client/serviceProviders` entries register Client services and Refine
+  capabilities through `ClientApplication.start()`.
+- Plugin `client/reactWrappers` entries declare synchronous React wrappers and
   explicit ordering constraints.
+- Plugin `client/routes` entries own route ID, path, and authentication mode.
 - The application owns its root route, theme, page composition, branding,
-  loading states, and final provider tree.
+  loading states, and final React Wrapper tree.
 
 Do not redeclare a plugin route merely to customize its UI. A plugin that
 exposes an option for the page takes it through `client/plugins.ts`;
@@ -140,9 +141,10 @@ source. When adding an application override, give it a `componentEntry` so the
 CLI and future Agents can locate the owning file.
 
 In JSON mode, read `ok`, `status`, and `result.consistent`, then process stable
-issue codes. Inspection imports Client declarations and executes Route and
-Provider factories. It does not run bootstrap functions, load Route page
-components, render Providers, start a browser, or verify Server security.
+issue codes. Inspection imports Client declarations and reads static Route,
+ServiceProvider, and React Wrapper declarations. It does not instantiate
+ServiceProviders, run lifecycle hooks, load Route page components or locale
+messages, render React Wrappers, start a browser, or verify Server security.
 
 ## Keep the server inspectable
 
@@ -153,10 +155,10 @@ pnpm server:inspect --json
 ```
 
 The command imports `server/plugins.ts`, so that module and its declaration
-imports must not start runtime services. It does not construct Providers, run
+imports must not start runtime services. It does not construct ServiceProviders, run
 lifecycle code, execute Route factories, connect to the database, start
 workers, or load Queue Job modules. Check `issues`, then cover runtime Route,
-Provider, database, and Job behavior with integration tests.
+ServiceProvider, database, and Job behavior with integration tests.
 
 ## Dependencies and tests
 

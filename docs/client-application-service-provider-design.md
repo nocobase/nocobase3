@@ -7,13 +7,13 @@ description: 设计 Client Application、ServiceContainer、ServiceProvider 和 
 
 ## 文档状态
 
-本文是目标架构和实施方案，不描述当前已经完成的行为。实现过程中应以本文确定的术语、所有权和生命周期为准，并同步迁移 Runtime、Plugin、默认应用、脚手架、Inspector、测试和开发文档。
+本文记录已经实施的目标架构、关键决策和迁移边界。当前 Runtime、Plugin、默认应用、脚手架、Inspector、测试和开发文档均以本文确定的术语、所有权和生命周期为准；文中的旧名称只出现在明确标注的迁移对照或禁止示例中。
 
 ## 背景
 
-当前 Server 已有真正的 `Application`：它拥有 `ServiceContainer`，通过 `ServiceProvider` 注册应用级 Service，并负责 `register → boot → start → ready → shutdown` 生命周期。
+Server 和 Client 现在都拥有真正的 `Application`：它们各自拥有 `ServiceContainer`，通过 `ServiceProvider` 注册应用级 Service，并负责 `register → boot → start → ready → shutdown` 生命周期。
 
-当前 Client 的 `createApp()` 只返回 React 渲染配置，并不是真正的应用实例。Client 现有的 `providers` 实际是包裹 React 组件树的 React Provider，而 Authorization、Notification、Workflow 等非 UI 能力开始使用模块级单例或各自创建 API Client。这些对象没有明确的 Application 所有权，也不能在多 App、测试、HMR 或卸载时被独立管理。
+迁移前 Client 的 `createApp()` 只返回 React 渲染配置，并不是真正的应用实例；旧 `providers` 实际是包裹 React 组件树的 React Provider，而 Authorization、Notification、Workflow 等非 UI 能力使用模块级单例或各自创建 API Client。这些问题促成了本次 Application ownership 和跨端 ServiceProvider 统一。
 
 本方案解决以下问题：
 
@@ -171,7 +171,7 @@ app.mount() 渲染 React Wrappers
 基础 contribution 不再接受这种统一的模块 loader 写法：
 
 ```ts
-// Avoid contribution-level chunks that are required during every startup.
+// Invalid old-style declaration: do not use contribution-level loaders.
 defineClientPlugin({
   packageName: '@nocobase/app-plugin-example',
   serviceProviders: () => import('./providers/index.js'),
