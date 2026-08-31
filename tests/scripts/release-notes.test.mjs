@@ -149,8 +149,8 @@ for (const { label, manifests } of [
     assert.deepEqual(
       [...byName].sort(([left], [right]) => left.localeCompare(right)),
       [
-        ['@nocobase/db', directories[0]],
         ['@nocobase/app-template-default', directories[1]],
+        ['@nocobase/db', directories[0]],
       ],
     );
   });
