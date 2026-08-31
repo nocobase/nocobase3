@@ -53,7 +53,7 @@ export class MemoryCollectionRepository<
     for (const sort of [...(query.sort ?? [])].reverse()) {
       const descending = sort.startsWith('-');
       const field = descending ? sort.slice(1) : sort;
-      values = values.toSorted((left, right) => {
+      values = [...values].sort((left, right) => {
         const result = compareValues(
           (left as Record<string, unknown>)[field],
           (right as Record<string, unknown>)[field],

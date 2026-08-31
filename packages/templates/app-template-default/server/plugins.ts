@@ -21,28 +21,25 @@ import {
   type AppServerPlugins,
 } from '@nocobase/app-server-kit/plugins';
 
-import type { AppConfig } from './config/index.js';
-
-const serverPlugins: AppServerPlugins<AppConfig> =
-  defineServerPlugins<AppConfig>([
-    authentication,
-    aiEmployee,
-    aiKnowledgeBase,
-    authorization,
-    databaseExample,
-    file,
-    i18n,
-    install,
-    notification,
-    notificationInApp,
-    notificationProviders,
-    queueExample,
-    realtimeExample,
-    routesExample,
-    serviceProviderExample,
-    workflow,
-    systemInfo,
-    skillsExample,
-  ]);
+const serverPlugins: AppServerPlugins = defineServerPlugins([
+  authentication,
+  aiEmployee,
+  aiKnowledgeBase,
+  authorization,
+  databaseExample,
+  file,
+  i18n,
+  install,
+  notification,
+  notificationInApp,
+  notificationProviders,
+  queueExample,
+  realtimeExample,
+  routesExample,
+  serviceProviderExample,
+  workflow,
+  systemInfo,
+  skillsExample,
+]);
 
 export default serverPlugins;
