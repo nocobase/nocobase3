@@ -1,5 +1,17 @@
 # @nocobase/queue
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- ac3f033: Replace aggregated application configuration objects and config factories with typed module-owned configuration definitions. Applications now compose defaults, file providers, environment layers, validation, explicit reloads, and subscriptions through `AppConfig`, while providers read their configuration through `app.config.get(definition)`.
+
+### Patch Changes
+
+- Updated dependencies [948304d]
+- Updated dependencies [ac3f033]
+  - @nocobase/logging@0.1.0-beta.3
+
 ## 0.1.0-beta.1
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @nocobase/logging
 
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- ac3f033: Replace aggregated application configuration objects and config factories with typed module-owned configuration definitions. Applications now compose defaults, file providers, environment layers, validation, explicit reloads, and subscriptions through `AppConfig`, while providers read their configuration through `app.config.get(definition)`.
+
+### Patch Changes
+
+- 948304d: Close logging transport workers during application shutdown to prevent full application test suites and server processes from hanging during cleanup.
+
 ## 0.1.0-beta.2
 
 ### Minor Changes

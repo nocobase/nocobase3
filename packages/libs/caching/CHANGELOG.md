@@ -1,5 +1,11 @@
 # @nocobase/caching
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- ac3f033: Replace aggregated application configuration objects and config factories with typed module-owned configuration definitions. Applications now compose defaults, file providers, environment layers, validation, explicit reloads, and subscriptions through `AppConfig`, while providers read their configuration through `app.config.get(definition)`.
+
 ## 0.0.1-beta.1
 
 ### Patch Changes

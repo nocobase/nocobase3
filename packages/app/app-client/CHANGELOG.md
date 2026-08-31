@@ -1,5 +1,24 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.5
+
+### Minor Changes
+
+- fb1a752: Introduce the stateful ClientApplication with application-scoped services, ServiceProvider lifecycle management, static Client contributions, read-only runtime configuration, React Providers, and application-owned startup and shutdown boundaries. Keep the React DOM root in the Browser host, which renders `AppClientRoot` after application startup.
+
+  Remove the Client bootstrap and lazy contribution-loader contracts. Rename the React tree contribution to `reactProviders` and add the cross-runtime `serviceProviders` contribution.
+
+### Patch Changes
+
+- fb1a752: Transport public Client configuration through a versioned, safely escaped JSON data block in SPA HTML and read it automatically during Client runtime resolution.
+
+  Apply the same HTML transformation to production static responses and development Vite proxy responses, and document the public `config.yml` Client section in the default template.
+
+- Updated dependencies [fb1a752]
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-sdk@0.0.1-beta.0
+  - @nocobase/app-i18n@0.0.2-beta.0
+
 ## 1.0.0-beta.4
 
 ### Minor Changes

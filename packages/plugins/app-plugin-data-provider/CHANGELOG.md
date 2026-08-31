@@ -1,5 +1,19 @@
 # @nocobase/app-plugin-data-provider
 
+## 0.1.0-beta.3
+
+### Patch Changes
+
+- fb1a752: Unify Client and Server application composition around the explicit `serviceProviders` contribution and rename Client React tree contributions to `reactProviders`.
+
+  Replace Client bootstrap modules with application-owned ServiceProvider lifecycle hooks, make the default Client start through `ClientApplication` and render through the Browser host, and update built-in plugins and runtime inspection to the new static contribution protocol.
+
+- Updated dependencies [fb1a752]
+- Updated dependencies [fb1a752]
+- Updated dependencies [fb1a752]
+  - @nocobase/app-client@1.0.0-beta.5
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.2
 
 ### Minor Changes
