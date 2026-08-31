@@ -67,6 +67,22 @@ Name test files `*.test.ts` or `*.test.tsx`. Vitest discovers them by filename r
 
 Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/libs/app-database` does.
 
+### Never Assert a Package's Own Version as a Literal
+
+A test must not spell out the version of a package in this repository. Read it from the manifest instead:
+
+```ts
+import packageMetadata from '../package.json' with { type: 'json' };
+
+expect(service.getInfo()).toMatchObject({ version: packageMetadata.version });
+```
+
+The release workflow runs `changeset version` and then runs the tests, so every published package is on a version different from the one committed by the time the suite executes. A literal that matches today fails during the next release, and it fails after the version bump — the point where the branch has already been rewritten and the run has to be repaired before anything can ship. `@nocobase/app-plugin-system-info` broke a release exactly this way, asserting `'0.0.1'` against a package `changeset version` had just moved to `0.1.0-beta.0`. `packages/templates/app-template-default` shows the shape to copy: its `declaredPluginVersion` helper resolves the version through `require` rather than repeating it.
+
+This applies to the version of any workspace package, whether the test owns it or depends on it. It does not apply to a version a test makes up for a fixture it writes itself — `version: '1.0.0'` in a synthetic `package.json` describes nothing real and never drifts.
+
+The same reasoning covers anything else a release rewrites. Assert against the manifest, not against a copy of what it currently says.
+
 ### Validation
 
 Run `lint`, `typecheck`, `test`, and `build` for the packages you modified, and for the packages that consume what you changed. Scope the run to those with `pnpm --filter <package>`; a workspace-wide `pnpm -r test` takes minutes and is CI's job, not a routine step after an edit.

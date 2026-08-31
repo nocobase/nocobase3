@@ -435,6 +435,29 @@ jobs:
             ${{ steps.sync.outputs.synced == 'true' && '补丁已同步到 develop。' || '' }}
         run: ./scripts/feishu-notify.sh
 
+      # 兜底通知，理由同 release-beta：上面几条只覆盖流程末尾暴露的失败，
+      # 早于它们的任何一步失败都不会有任何通知，发版静默挂掉。
+      #
+      # 排除合回失败：那条已经单独通知过，其后的 exit 1 会让 failure() 为真。
+      - name: Notify failure
+        if: >-
+          failure() && !inputs.dry_run
+          && steps.merge.outputs.merged != 'false'
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: NocoBase 3 稳定版发布失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 发版中断
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            稳定版发版流程中断。
+
+            如果失败发生在 publish 之前，npm 上没有产生这批版本，修好后重新触发即可；
+            请先看构建详情确认 publish 这一步有没有跑过。
+        run: ./scripts/feishu-notify.sh
+
   # 与 release-beta 一样：把这批发布渲染成 GitHub Release。
   # 场景 A 用转正时打的聚合 tag，场景 B 用这次新建的。
   github-release:
