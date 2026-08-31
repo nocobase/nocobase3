@@ -31,20 +31,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import migration from '../database/migrations/202608270001_create_file_demo_tables.js';
 import seed from '../database/seeds/202608270002_seed_file_demo.js';
 import {
-  FileProvider,
-  ensureFileDemoFixtures,
-  prepareFileDemoFixtures,
-} from '../server/providers/file.js';
-import {
   FILE_DEMO_AVATAR,
   FILE_DEMO_PRIVATE_ATTACHMENT,
   FILE_DEMO_PUBLIC_ATTACHMENT,
 } from '../server/demo/constants.js';
+import {
+  ensureFileDemoFixtures,
+  prepareFileDemoFixtures,
+} from '../server/demo/fixture-manager.js';
 import { FILE_DEMO_FIXTURES } from '../server/demo/fixtures.js';
 import {
   resolveFilePluginRuntime,
   type FilePluginConfig,
 } from '../server/plugin-runtime.js';
+import { FileProvider } from '../server/providers/index.js';
 import { filePluginRuntimeToken } from '../server/runtime-token.js';
 import { createFileDemoRoutes } from '../server/routes/index.js';
 

@@ -1,6 +1,25 @@
-import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plugins';
+import type {
+  AppPluginApplication,
+  AppPluginProviderConstructor,
+} from '@nocobase/app-server-kit/plugins';
+import { ServiceProvider } from '@nocobase/service-provider';
 
-import { FileProvider, type FileProviderApplication } from './file.js';
+import { resolveFilePluginRuntime } from '../plugin-runtime.js';
+import { filePluginRuntimeToken } from '../runtime-token.js';
+
+export type FileProviderApplication = AppPluginApplication;
+
+export class FileProvider<
+  TApplication extends FileProviderApplication = FileProviderApplication,
+> extends ServiceProvider<TApplication> {
+  public readonly name: string = '@nocobase/app-plugin-file';
+
+  public override register(): void {
+    this.app.container.singleton(filePluginRuntimeToken, (container) =>
+      resolveFilePluginRuntime(container, this.app.config),
+    );
+  }
+}
 
 const providers: readonly AppPluginProviderConstructor<
   FileProviderApplication['config']
