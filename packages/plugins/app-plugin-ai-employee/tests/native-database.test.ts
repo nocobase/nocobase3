@@ -4,7 +4,7 @@ import {
   createDatabaseManager,
   createMigrator,
   type DatabaseManager,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import { CollectionRepositoryFactory } from '../server/repository/database/factory.js';
 
 const managers: DatabaseManager[] = [];

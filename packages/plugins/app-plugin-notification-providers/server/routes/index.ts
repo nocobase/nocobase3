@@ -9,11 +9,11 @@ import {
   authorizationToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import type { ServiceContainer } from '@nocobase/service-provider';
 import type { Context } from 'hono';
 import { Hono } from 'hono';

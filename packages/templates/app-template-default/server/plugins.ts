@@ -19,7 +19,7 @@ import skillsExample from '@nocobase/app-plugin-skills-example/server';
 import {
   defineServerPlugins,
   type AppServerPlugins,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,

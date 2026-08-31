@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import type { Job } from '@boringnode/queue';
 import type {
   DispatchManyResult,

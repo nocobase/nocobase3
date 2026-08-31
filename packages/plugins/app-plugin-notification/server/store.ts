@@ -1,4 +1,4 @@
-import type { DatabaseManager, Row } from '@nocobase/app-database';
+import type { DatabaseManager, Row } from '@nocobase/db';
 import {
   isNotificationProviderErrorCategory,
   type NotificationProviderErrorCategory,

@@ -35,7 +35,7 @@ describe('@nocobase/app-plugin-notification-in-app Registry contract', () => {
       expect.objectContaining({
         name: 'in-app-ui',
         dependencies: expect.arrayContaining([
-          '@nocobase/app-portal-sdk@^2.0.0',
+          '@nocobase/app-portal-sdk@^0.0.1-beta.1',
           'react-router@^7.0.2',
         ]),
         registryDependencies: ['alert', 'badge', 'button', 'card'],

@@ -1,10 +1,10 @@
-import { databaseManagerToken } from '@nocobase/app-database';
+import { databaseManagerToken } from '@nocobase/db';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
-import { loggingToken } from '@nocobase/app-server-kit/logging';
-import { queueManagerToken } from '@nocobase/app-server-kit/queue';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { loggingToken } from '@nocobase/app-server/logging';
+import { queueManagerToken } from '@nocobase/app-server/queue';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
-import { driveConfig } from '@nocobase/app-server-kit/drive';
+import { driveConfig } from '@nocobase/app-server/drive';
 
 import { WorkflowService } from '../runtime/runtime.js';
 import { workflowServiceToken } from '../tokens.js';

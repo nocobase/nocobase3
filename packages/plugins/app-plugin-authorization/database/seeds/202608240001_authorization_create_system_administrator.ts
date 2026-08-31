@@ -1,4 +1,4 @@
-import { defineSeed, type SeedDefinition } from '@nocobase/app-database';
+import { defineSeed, type SeedDefinition } from '@nocobase/db';
 
 const SYSTEM_ADMINISTRATOR = 'system-administrator';
 

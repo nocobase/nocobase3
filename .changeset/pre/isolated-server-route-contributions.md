@@ -1,5 +1,5 @@
 ---
-'@nocobase/app-server-kit': minor
+'@nocobase/app-server': minor
 '@nocobase/app-client': minor
 '@nocobase/app-template-default': patch
 '@nocobase/nb3-cli': patch

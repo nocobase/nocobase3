@@ -2,7 +2,7 @@ import {
   defineMigration,
   type MigrationContext,
   type MigrationDefinition,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608260001_create_ai_knowledge_base',

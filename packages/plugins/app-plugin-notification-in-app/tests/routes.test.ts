@@ -2,15 +2,12 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   notificationServiceToken,
   type NotificationService,
 } from '@nocobase/app-plugin-notification';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';

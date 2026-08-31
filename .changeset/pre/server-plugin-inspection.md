@@ -1,5 +1,5 @@
 ---
-'@nocobase/app-server-kit': minor
+'@nocobase/app-server': minor
 '@nocobase/app-template-default': patch
 '@nocobase/app-plugin-routes-example': patch
 ---

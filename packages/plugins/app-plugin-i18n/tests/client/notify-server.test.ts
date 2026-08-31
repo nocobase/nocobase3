@@ -21,7 +21,7 @@ describe('telling the server which language to answer in', () => {
     vi.stubGlobal('fetch', fetchSpy);
     vi.stubGlobal('window', {
       location: { origin: 'http://localhost:13000' },
-      NOCOBASE_PORTAL_BASE: BASE,
+      APP_BASE_PATH: BASE,
     });
     vi.stubGlobal('localStorage', {
       getItem: () => null,

@@ -107,7 +107,7 @@ test('finds unresolved workspace and catalog protocols with field paths', () => 
   assert.deepEqual(
     findUnresolvedProtocols({
       dependencies: {
-        '@nocobase/app-sdk': 'workspace:^',
+        '@nocobase/app-client': 'workspace:^',
         react: '^19.0.0',
       },
       devDependencies: {
@@ -116,7 +116,7 @@ test('finds unresolved workspace and catalog protocols with field paths', () => 
     }),
     [
       {
-        field: 'dependencies.@nocobase/app-sdk',
+        field: 'dependencies.@nocobase/app-client',
         value: 'workspace:^',
       },
       {

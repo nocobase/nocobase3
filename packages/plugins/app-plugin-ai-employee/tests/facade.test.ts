@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import { createMigrator } from '@nocobase/app-database';
+import { createConfigPaths } from '@nocobase/app-server/config';
+import { createMigrator } from '@nocobase/db';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 

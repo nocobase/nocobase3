@@ -6,6 +6,14 @@ export {
   type ClientApplicationRenderConfigFactory,
 } from './application.js';
 export { AppClientRoot, type AppClientRootProps } from './app-client.js';
+export {
+  AppRequestError,
+  createAppClient,
+  resolveAppBase,
+  resolveAppUrl,
+  type AppClient,
+  type AppClientOptions,
+} from './client.js';
 export { useClientApplication, useService } from './hooks.js';
 export {
   createAppClientConfig,

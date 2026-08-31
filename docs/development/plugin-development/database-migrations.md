@@ -23,10 +23,7 @@ Migration 是插件数据库结构的不可变历史。表、字段、关系、�
 Migration 必须直接声明这次历史操作的完整结构，不能 import 或遍历会继续演化的 collection schema、field definition、model definition 或注册列表。
 
 ```ts
-import {
-  defineMigration,
-  type MigrationDefinition,
-} from '@nocobase/app-database';
+import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608300001-create-audit-logs',

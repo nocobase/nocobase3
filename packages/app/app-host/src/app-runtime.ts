@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { addBasePathToRedirectResponse } from '@nocobase/app-server-kit/support';
+import { addBasePathToRedirectResponse } from '@nocobase/app-server/support';
 
 import {
   AppEventBus,

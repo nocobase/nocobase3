@@ -4,7 +4,7 @@ import {
   loadMigrations,
   validateMigrations,
   type CollectionBuilder,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import { describe, expect, it } from 'vitest';
 
 const directory = fileURLToPath(

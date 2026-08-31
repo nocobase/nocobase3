@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import {
   betterAuth,
   type BetterAuthOptions,

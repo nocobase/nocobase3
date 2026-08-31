@@ -1,4 +1,4 @@
-import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginServerContext } from '@nocobase/app-server/plugins';
 import type { AIManager, FileManager } from '@nocobase/ai-employee';
 import { DriveFileManager, MemoryFileManager } from '@nocobase/ai-employee';
 import { KnowledgeBaseService } from './service.js';

@@ -1,8 +1,8 @@
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import { createConfigPaths } from '@nocobase/app-server/config';
 import { createAuthentication } from '@nocobase/app-plugin-authentication';
-import { SnowflakeIdGenerator } from '@nocobase/id-generator';
+import { SnowflakeIdGenerator } from '@nocobase/snowflake';
 import { createLogging } from '@nocobase/logging';
-import { createDatabaseManager } from '@nocobase/app-database';
+import { createDatabaseManager } from '@nocobase/db';
 import { createAIManager } from '@nocobase/ai-employee';
 import type { AppDeps } from '../../server/runtime.js';
 

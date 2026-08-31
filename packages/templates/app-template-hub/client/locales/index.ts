@@ -1,8 +1,9 @@
-import { registerTranslationResources } from '@nocobase/app-portal-sdk/i18n';
-import { starter as enUSStarter } from './en-US';
-import { starter as zhCNStarter } from './zh-CN';
+import type { LocaleLoaders } from '@nocobase/i18n';
 
-registerTranslationResources('starter', {
-  'en-US': enUSStarter,
-  'zh-CN': zhCNStarter,
-});
+// One dynamic import per locale, so the browser downloads only the language it is showing.
+const locales: LocaleLoaders = {
+  'en-US': () => import('./en-US.js'),
+  'zh-CN': () => import('./zh-CN.js'),
+};
+
+export default locales;

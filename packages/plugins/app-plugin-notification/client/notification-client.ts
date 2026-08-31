@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-sdk';
+import type { AppClient } from '@nocobase/app-client';
 
 export type NotificationStatus =
   | 'pending'

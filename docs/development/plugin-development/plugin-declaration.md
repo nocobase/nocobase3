@@ -123,7 +123,7 @@ Server 同样使用明确的 `serviceProviders` 字段：
 import {
   defineServerPlugin,
   type AppServerPlugin,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
@@ -205,7 +205,7 @@ export default defineClientPlugins([auditLogClient()]);
 
 ```ts
 import auditLogServer from '@nocobase/app-plugin-audit-log/server';
-import { defineServerPlugins } from '@nocobase/app-server-kit/plugins';
+import { defineServerPlugins } from '@nocobase/app-server/plugins';
 
 export default defineServerPlugins([auditLogServer]);
 ```

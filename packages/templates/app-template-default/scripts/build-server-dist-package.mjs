@@ -194,7 +194,7 @@ const addPackage = (packageName) => {
     }
   }
 
-  if (packageName === '@nocobase/app-database') {
+  if (packageName === '@nocobase/db') {
     for (const driver of databaseRuntimeDrivers) {
       addExternalPackage(driver, packageDir, packageJson);
     }

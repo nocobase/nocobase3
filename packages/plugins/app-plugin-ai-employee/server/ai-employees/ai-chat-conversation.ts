@@ -18,7 +18,7 @@ import {
   AIMessageQuery,
   AIMessageRemoveOptions,
 } from '@nocobase/ai-employee';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { CollectionFilter } from '@nocobase/ai-employee';
 import { recordAIUsageEventsForMessages } from './ai-usage-events.js';
 export const createAIChatConversation = (

@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import { describe, expect, it, vi } from 'vitest';
 import { TableRepository } from '../server/repository.js';
 import { normalizeSegmentOptions } from '../server/service.js';

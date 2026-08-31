@@ -1,4 +1,4 @@
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { DefaultHeartbeatService } from '../services/heartbeat.js';

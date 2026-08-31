@@ -1,29 +1,17 @@
-import {
-  getCurrentLocale,
-  registerTranslationResources,
-} from '@nocobase/app-portal-sdk/i18n';
-import { useTranslate } from '@refinedev/core';
+import { useTranslation } from '@nocobase/i18n/client';
+import type { LocaleLoaders } from '@nocobase/i18n';
 import { useCallback } from 'react';
 
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
-import enUS from './en-US.js';
-import zhCN from './zh-CN.js';
 
-registerTranslationResources(packageMetadata.name, {
-  'en-US': enUS,
-  'zh-CN': zhCN,
-});
+const locales: LocaleLoaders = {
+  'en-US': () => import('./en-US.js'),
+  'zh-CN': () => import('./zh-CN.js'),
+};
+
+export default locales;
 
 export function useT(): (key: string) => string {
-  const translate = useTranslate();
-  return useCallback(
-    (key: string) => {
-      const resources = getCurrentLocale().toLowerCase().startsWith('zh')
-        ? zhCN
-        : enUS;
-      const fallback = resources[key as keyof typeof resources] ?? key;
-      return translate(key, { ns: packageMetadata.name }, fallback);
-    },
-    [translate],
-  );
+  const { t } = useTranslation(packageMetadata.name);
+  return useCallback((key: string) => t(key, { defaultValue: key }), [t]);
 }

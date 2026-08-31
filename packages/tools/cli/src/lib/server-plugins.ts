@@ -26,7 +26,7 @@ const SERVER_SOURCE_DEFINITION: PluginSourceDefinition = {
 const EMPTY_FILE = `import {
   defineServerPlugins,
   type AppServerPlugins,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 // Array order is server composition order. A plugin is enabled by appearing
 // in this list; removing its entry and import disables its server behavior.

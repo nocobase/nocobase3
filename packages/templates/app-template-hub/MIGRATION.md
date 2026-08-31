@@ -1,9 +1,14 @@
-# Default Template migrations
+# Hub Template migrations
 
 This guide describes source changes that derived Portal applications must merge
-from new releases of `@nocobase/portal-template-default`. Updating
-`nocobase.defaultTemplateVersion` records a completed source upgrade; changing
-the value alone does not apply template changes.
+from new releases of `@nocobase/app-template-hub`. In a derived
+application, `nocobase.defaultTemplateVersion` records a completed source
+upgrade; changing the value alone does not apply template changes.
+
+In this package the field means something different: it mirrors the package's
+own `version`, and the release workflow keeps the two aligned through
+`scripts/sync-template-version.mjs`. Do not edit it by hand here — a release
+will overwrite it.
 
 ## Upgrade checklist
 
@@ -12,42 +17,40 @@ the value alone does not apply template changes.
    fit the application.
 3. Merge template runtime and composition changes without overwriting business
    pages, translations, or customized installed extensions.
-4. Update `nocobase.defaultTemplateVersion` only after the corresponding source
-   changes have been incorporated.
-5. Update `@nocobase/app-portal-sdk` when the release requires a new compatible SDK.
-6. Run `pnpm sdk:check`, install dependencies, build, and verify direct URLs,
-   nested route surfaces, authentication, ACL, and locale switching.
+4. Update `nocobase.defaultTemplateVersion` in the derived application only
+   after the corresponding source changes have been incorporated.
+5. Install dependencies, build, and verify direct URLs, nested route surfaces,
+   authentication, ACL, and locale switching.
 
-## Default Template 3.0
+## Hub Template 3.0
 
-Template 3 uses the Portal SDK 2 route contract. Read the
-[Portal SDK migration guide](../../app/app-portal-sdk/MIGRATION.md) when upgrading Registry
-extensions or other code that consumes SDK routing APIs.
+Template 3 uses the Portal SDK 2 route contract. That SDK's routing APIs have
+since been removed; upgrade Registry extensions and other consumers to the
+route contract this template ships.
 
 ### Lazy-load application pages
 
 Migrate application-owned page routes as part of the Template 3 source merge,
-not only Registry extension routes. Keep route, resource, menu, and access
-metadata synchronous in `client/routes.tsx`, but remove eager business-page imports
-and load their renderers through `lazy`:
+not only Registry extension routes. Keep route metadata synchronous in
+`client/routes.ts`, but remove eager business-page imports and load their
+renderers through `componentLoader`:
 
-```tsx
-{
-  name: "customers",
-  path: "/customers",
-  resource: { meta: { label: "Customers" } },
-  lazy: () =>
-    import("./pages/customers").then((module) => ({
-      default: module.CustomersPage,
-    })),
-}
+```ts
+const routes = defineAppRoutes([
+  {
+    name: 'customers',
+    path: '/customers',
+    auth: 'required',
+    componentLoader: () => import('./pages/customers.js'),
+  },
+]);
 ```
 
-When a route needs resource/action ACL, route params, or contextual composition,
-put that boundary in a small default-exported route component and lazy-load the
-component. Do not keep the business page eagerly imported in `client/routes.tsx`
-only to wrap it. `element` and `lazy` are mutually exclusive. Lightweight
-redirects, outlets, and inline layouts may continue to use `element`.
+The loaded module must default-export its page component. Keep route placement,
+authentication boundaries, loading, and error presentation in `client/routing/`;
+do not add product routes there. Plugin-owned routes continue to be declared by
+the plugin and may be customized by the application through
+`client/extensions/*/extension.ts` or `client/route-overrides.ts`.
 
 ### Keep loading feedback inside its surface
 

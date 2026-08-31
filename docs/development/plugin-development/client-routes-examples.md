@@ -168,7 +168,7 @@ defineSettingsRoutes([
 ```text
 /orders
   → OrdersPage
-  → @nocobase/app-sdk
+  → @nocobase/app-client
   → GET /api/orders
   → Server authentication
   → Server authorization

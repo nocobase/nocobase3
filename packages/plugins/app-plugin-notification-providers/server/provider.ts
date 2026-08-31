@@ -1,5 +1,5 @@
 import { notificationServiceToken } from '@nocobase/app-plugin-notification';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { registerBuiltInNotificationProviders } from './bootstrap.js';

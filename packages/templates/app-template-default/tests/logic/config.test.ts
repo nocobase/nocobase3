@@ -2,16 +2,16 @@
 
 import { fileURLToPath } from 'node:url';
 
-import { appConfig } from '@nocobase/app-server-kit/config';
-import { databaseConfig } from '@nocobase/app-server-kit/database';
-import { resolveStandaloneAppRuntime } from '@nocobase/app-server-kit/node';
+import { appConfig } from '@nocobase/app-server/config';
+import { databaseConfig } from '@nocobase/app-server/database';
+import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import {
   cachingConfig,
   driveConfig,
   loggingConfig,
   queueConfig,
   sessionConfig,
-} from '@nocobase/app-server-kit';
+} from '@nocobase/app-server';
 import { describe, expect, it } from 'vitest';
 
 import appRuntime from '../../server/runtime.ts';

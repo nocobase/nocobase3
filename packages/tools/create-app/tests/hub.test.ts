@@ -35,13 +35,11 @@ const TEMPLATE_ENV_EXAMPLE = [
   'APP_NAME=hub',
   'APP_BASE_PATH=/hub',
   '',
-  '# Browser-facing NocoBase REST API root. The Hub server proxies this path.',
-  'NOCOBASE_API_URL=/hub/v2/api',
+  '# Server',
+  '# APP_SERVER_HOST=127.0.0.1',
+  '# APP_SERVER_PORT=13000',
   '',
-  '# Upstream NocoBase REST API root. The /api suffix is required.',
-  'NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api',
-  '',
-  '# Keep these aligned with the main NocoBase frontend when customized.',
+  '# Browser API client storage, kept aligned with the main NocoBase frontend when customized.',
   '# API_CLIENT_STORAGE_PREFIX=NOCOBASE_',
   '# API_CLIENT_STORAGE_TYPE=localStorage',
   '# API_CLIENT_SHARE_TOKEN=false',
@@ -60,33 +58,16 @@ describe('buildHubEnvFile', () => {
   });
 
   /**
-   * The base path is where the hub is served, not what it is called, and `NOCOBASE_API_URL` spells it out a second
-   * time. Renaming it per project would have to rewrite both or leave the client requesting its API under a path the
-   * server does not route — which is exactly the mismatch this test pins down.
+   * The base path is where the hub is served rather than what it is called, so it stays at the template's `/hub` even
+   * when the project is named something else. A deployment that wants the hub elsewhere sets the value itself.
    */
-  it('leaves the base path and the API url agreeing with each other', () => {
+  it('leaves the base path alone', () => {
     const env = buildHubEnvFile({
       example: TEMPLATE_ENV_EXAMPLE,
       name: 'my-hub',
     });
 
     expect(env).toContain('APP_BASE_PATH=/hub');
-    expect(env).toContain('NOCOBASE_API_URL=/hub/v2/api');
-  });
-
-  /**
-   * Only the user knows where their NocoBase instance is, so the proxy target is left exactly as the template shipped
-   * it — a placeholder the next steps tell them to edit, not a value this command can guess.
-   */
-  it('leaves the upstream API target alone', () => {
-    const env = buildHubEnvFile({
-      example: TEMPLATE_ENV_EXAMPLE,
-      name: 'my-hub',
-    });
-
-    expect(env).toContain(
-      'NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api',
-    );
   });
 
   /** The comments explain each setting, and the commented-out keys are documented defaults. Both must survive. */
@@ -96,7 +77,7 @@ describe('buildHubEnvFile', () => {
       name: 'my-hub',
     });
 
-    expect(env).toContain('# Upstream NocoBase REST API root.');
+    expect(env).toContain('# Server');
     expect(env).toContain('# API_CLIENT_STORAGE_PREFIX=NOCOBASE_');
   });
 
@@ -117,7 +98,6 @@ describe('buildHubEnvFile', () => {
 
     expect(env).toContain('APP_NAME=my-hub');
     expect(env).toContain('APP_BASE_PATH=/hub');
-    expect(env).toContain('NOCOBASE_API_PROXY_TARGET=');
   });
 
   it('ends with exactly one trailing newline', () => {

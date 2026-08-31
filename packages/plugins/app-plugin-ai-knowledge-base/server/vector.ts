@@ -111,7 +111,7 @@ export const PG_VECTOR_PROVIDER_NAME = 'NocobaseDefaultPGVectorProvider';
 
 export class KnowledgeBaseFeatureService {
   constructor(
-    database: import('@nocobase/app-database').DatabaseConnection,
+    database: import('@nocobase/db').DatabaseConnection,
     private readonly ai: AIManager,
     private readonly vectorProvider: PGVectorProvider,
   ) {

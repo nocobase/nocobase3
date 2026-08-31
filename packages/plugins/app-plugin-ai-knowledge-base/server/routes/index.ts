@@ -1,5 +1,5 @@
 import type { AIManager } from '@nocobase/ai-employee';
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
 import { Hono, type Context } from 'hono';
 import { nanoid } from 'nanoid';
 import { createHash } from 'node:crypto';

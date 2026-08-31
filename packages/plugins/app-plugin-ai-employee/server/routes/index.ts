@@ -1,4 +1,4 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
 import { Hono, type MiddlewareHandler } from 'hono';
 import type { AIEmployeePluginDeps } from '../bootstrap.js';
 import {

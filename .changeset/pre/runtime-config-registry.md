@@ -1,5 +1,5 @@
 ---
-'@nocobase/app-server-kit': minor
+'@nocobase/app-server': minor
 '@nocobase/app-template-default': minor
 '@nocobase/app-plugin-authentication': minor
 '@nocobase/app-plugin-file': patch
@@ -9,7 +9,7 @@
 '@nocobase/app-plugin-workflow': minor
 '@nocobase/caching': minor
 '@nocobase/drive': minor
-'@nocobase/id-generator': minor
+'@nocobase/snowflake': minor
 '@nocobase/logging': minor
 '@nocobase/queue': minor
 '@nocobase/session': minor

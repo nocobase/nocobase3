@@ -33,7 +33,7 @@ Do not manually invoke loaders from application code. The enabled AI employee pl
 Executable registrations belong to an enabled App plugin's `server/bootstrap.ts`:
 
 ```ts
-import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginServerContext } from '@nocobase/app-server/plugins';
 import type { AIManager } from '@nocobase/ai-employee';
 
 interface PluginDeps {

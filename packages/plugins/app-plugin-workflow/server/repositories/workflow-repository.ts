@@ -6,7 +6,7 @@ import type {
   Row,
   SelectQuery,
   SqlBool,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import { WORKFLOW_COLLECTIONS } from '../collections/index.js';
 import {
   loadWorkflow,

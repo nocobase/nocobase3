@@ -11,7 +11,7 @@ import type { SkillsEntity } from '@nocobase/ai-employee';
  */
 
 import type { AIToolMessageEntity } from '../../repository/index.js';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import { LLMProvider } from '@nocobase/ai-employee';
 import { getSystemPrompt } from '../../ai-employees/prompts.js';
 import _ from 'lodash';

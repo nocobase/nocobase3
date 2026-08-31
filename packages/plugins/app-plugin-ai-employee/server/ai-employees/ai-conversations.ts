@@ -8,7 +8,7 @@
  */
 
 import type { Context } from '../context.js';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import {
   AIMessage,
   AIToolCall,

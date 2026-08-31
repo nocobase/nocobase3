@@ -36,7 +36,6 @@ async function readWorkspace(directory: string): Promise<string> {
 
 describe('ALLOWED_BUILDS', () => {
   it('covers the packages a generated app needs to build', () => {
-    expect(ALLOWED_BUILDS).toContain('@nocobase/app-portal-sdk');
     expect(ALLOWED_BUILDS).toContain('better-sqlite3');
     expect(ALLOWED_BUILDS).toContain('esbuild');
   });
@@ -56,8 +55,8 @@ describe('buildAllowBuildsYaml', () => {
 
   /** A leading `@` starts a reserved indicator in YAML, so a scoped name has to be quoted to parse. */
   it('quotes scoped names', () => {
-    expect(buildAllowBuildsYaml()).toContain(
-      "  '@nocobase/app-portal-sdk': true",
+    expect(buildAllowBuildsYaml(['@scope/native-addon'])).toContain(
+      "  '@scope/native-addon': true",
     );
     expect(buildAllowBuildsYaml()).toContain('  better-sqlite3: true');
   });
@@ -230,14 +229,14 @@ describe('ensureAllowBuilds', () => {
 
     await writeFile(
       path.join(directory, PNPM_WORKSPACE_FILE),
-      'allowBuilds:\n  "@nocobase/app-portal-sdk": true\n',
+      'allowBuilds:\n  "@scope/native-addon": true\n',
       'utf8',
     );
-    await ensureAllowBuilds(directory);
+    await ensureAllowBuilds(directory, ['@scope/native-addon']);
 
     const contents = await readWorkspace(directory);
 
-    expect(contents.match(/@nocobase\/app-portal-sdk/gu)).toHaveLength(1);
+    expect(contents.match(/@scope\/native-addon/gu)).toHaveLength(1);
   });
 
   it('replaces an empty file rather than appending to it', async () => {

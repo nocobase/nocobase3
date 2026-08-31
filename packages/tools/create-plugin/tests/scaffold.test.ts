@@ -94,31 +94,31 @@ describe('createPlugin', () => {
     [
       'database',
       ['./package.json', './server'],
-      ['@nocobase/app-database', '@nocobase/app-server-kit'],
+      ['@nocobase/app-server', '@nocobase/db'],
       [],
     ],
     [
       'server.service-providers',
       ['./package.json', './server', './server/tokens'],
-      ['@nocobase/app-server-kit', '@nocobase/service-provider'],
+      ['@nocobase/app-server', '@nocobase/service-provider'],
       [],
     ],
     [
       'server.routes',
       ['./package.json', './server'],
-      ['@nocobase/app-server-kit', 'hono'],
+      ['@nocobase/app-server', 'hono'],
       [],
     ],
     [
       'server.jobs',
       ['./package.json', './server'],
-      ['@nocobase/app-server-kit', '@nocobase/queue'],
+      ['@nocobase/app-server', '@nocobase/queue'],
       [],
     ],
     [
       'server.locales',
       ['./package.json', './server'],
-      ['@nocobase/app-i18n', '@nocobase/app-server-kit'],
+      ['@nocobase/app-server', '@nocobase/i18n'],
       [],
     ],
     [
@@ -153,7 +153,7 @@ describe('createPlugin', () => {
     [
       'client.locales',
       ['./client', './client/plugin', './package.json'],
-      ['@nocobase/app-i18n'],
+      ['@nocobase/i18n'],
       ['@nocobase/app-client'],
     ],
     ['registry', ['./package.json'], [], ['react']],
@@ -408,7 +408,7 @@ describe('createPlugin', () => {
     expect(plugin).not.toContain('providers,');
     expect(plugin).not.toContain('database:');
     expect(manifest.dependencies).toEqual({
-      '@nocobase/app-server-kit': 'workspace:^',
+      '@nocobase/app-server': 'workspace:^',
       hono: 'catalog:',
     });
     expect(manifest.exports).toHaveProperty('./server');
@@ -481,9 +481,9 @@ describe('createPlugin', () => {
     );
     expect(result.files).toContain('registry.config.json');
     expect(manifest.dependencies).toMatchObject({
-      '@nocobase/app-database': 'workspace:^',
-      '@nocobase/app-i18n': 'workspace:^',
-      '@nocobase/app-server-kit': 'workspace:^',
+      '@nocobase/db': 'workspace:^',
+      '@nocobase/i18n': 'workspace:^',
+      '@nocobase/app-server': 'workspace:^',
       '@nocobase/queue': 'workspace:^',
       '@nocobase/service-provider': 'workspace:^',
       hono: 'catalog:',

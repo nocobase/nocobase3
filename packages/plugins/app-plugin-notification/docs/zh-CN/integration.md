@@ -96,7 +96,7 @@ Provider 的 `name` 和 `type` 会写入 Delivery。应用重启或更新配置�
 在宿主自己的模块中创建 manager。先注册所有 Channel 和 Provider definition，再调用 `start()`：
 
 ```ts
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import {
   createNotificationManager,
   createNotificationRegistry,

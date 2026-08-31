@@ -16,7 +16,7 @@ interface ImportMeta {
 }
 
 interface Window {
-  NOCOBASE_PORTAL_BASE?: string;
+  APP_BASE_PATH?: string;
   NOCOBASE_API_URL?: string;
   NOCOBASE_WS_PATH?: string;
   NOCOBASE_WS_URL?: string;

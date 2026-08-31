@@ -1,13 +1,10 @@
-import {
-  getContextSession,
-  LOCALE_SESSION_KEY,
-} from '@nocobase/app-i18n/server';
-import { i18nToken } from '@nocobase/app-server-kit/i18n';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { getContextSession, LOCALE_SESSION_KEY } from '@nocobase/i18n/server';
+import { i18nToken } from '@nocobase/app-server/i18n';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 /**

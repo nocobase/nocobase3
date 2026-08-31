@@ -82,7 +82,7 @@ return { ai /* other App dependencies */ };
 An App plugin consumes that same instance:
 
 ```ts
-import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginServerContext } from '@nocobase/app-server/plugins';
 import type { AIManager } from '@nocobase/ai-employee';
 
 type PluginDeps = {

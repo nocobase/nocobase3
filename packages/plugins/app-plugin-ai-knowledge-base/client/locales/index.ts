@@ -1,33 +1,26 @@
-import { useTranslate } from '@refinedev/core';
+import { useTranslation } from '@nocobase/i18n/client';
+import type { LocaleLoaders } from '@nocobase/i18n';
 import { useCallback } from 'react';
-import { registerTranslationResources } from '@nocobase/app-portal-sdk/i18n';
-import enUS from './en-US.js';
-import zhCN from './zh-CN.js';
 
 export const NOCOBASE_AI_KNOWLEDGE_BASE_I18N_NAMESPACE =
-  'nocobase-ai-knowledge-base';
+  '@nocobase/app-plugin-ai-knowledge-base';
 
-registerTranslationResources(NOCOBASE_AI_KNOWLEDGE_BASE_I18N_NAMESPACE, {
-  'en-US': enUS,
-  'zh-CN': zhCN,
-});
+const locales: LocaleLoaders = {
+  'en-US': () => import('./en-US.js'),
+  'zh-CN': () => import('./zh-CN.js'),
+};
 
-export function useT() {
-  const translate = useTranslate();
+export default locales;
+
+export function useT(): (
+  key: string,
+  options?: Record<string, unknown>,
+) => string {
+  const { t } = useTranslation(NOCOBASE_AI_KNOWLEDGE_BASE_I18N_NAMESPACE);
 
   return useCallback(
-    (key: string, options: Record<string, unknown> = {}) => {
-      const translated = translate(
-        key,
-        { ...options, ns: NOCOBASE_AI_KNOWLEDGE_BASE_I18N_NAMESPACE },
-        key,
-      );
-      return Object.entries(options).reduce(
-        (value, [name, replacement]) =>
-          value.split(`{{${name}}}`).join(String(replacement)),
-        translated,
-      );
-    },
-    [translate],
+    (key: string, options: Record<string, unknown> = {}) =>
+      t(key, { ...options, defaultValue: key }),
+    [t],
   );
 }

@@ -1,4 +1,4 @@
-import type { BuilderResult, CollectionBuilder } from '@nocobase/app-database';
+import type { BuilderResult, CollectionBuilder } from '@nocobase/db';
 
 export function createAIFileCollection(
   builder: CollectionBuilder,

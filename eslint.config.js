@@ -20,13 +20,13 @@ const rootNodeFiles = [
 // `packages/app`, `packages/app` mixes node and client libraries, and
 // `packages/libs` also holds packages this root configuration does not cover.
 const nodeLibraryRoots = [
-  'packages/app/app-server-kit',
+  'packages/app/app-server',
   'packages/libs/authorization',
   'packages/libs/caching',
-  'packages/libs/app-database',
+  'packages/libs/db',
   'packages/libs/drive',
   'packages/app/app-host',
-  'packages/libs/id-generator',
+  'packages/libs/snowflake',
   'packages/libs/logging',
   'packages/libs/queue',
   'packages/libs/session',
@@ -34,7 +34,6 @@ const nodeLibraryRoots = [
 const devConfigRoots = ['packages/tools/dev-config'];
 const clientLibraryRoots = [
   'packages/app/app-client',
-  'packages/app/app-sdk',
   'packages/app/app-portal-sdk',
 ];
 const portalRoots = [

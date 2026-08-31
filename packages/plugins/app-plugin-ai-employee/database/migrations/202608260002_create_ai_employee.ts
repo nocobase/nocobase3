@@ -2,7 +2,7 @@ import {
   defineMigration,
   type MigrationContext,
   type MigrationDefinition,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import {
   createAIEmployeeCollection,
   createAIConversationCollection,

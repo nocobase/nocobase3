@@ -1,5 +1,4 @@
-import { createRefineI18nProvider } from '@nocobase/app-i18n/client';
-import { createAppClient, type AppClient } from '@nocobase/app-sdk';
+import { createRefineI18nProvider } from '@nocobase/i18n/client';
 import {
   createServiceToken,
   ServiceContainer,
@@ -10,6 +9,7 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
+import { createAppClient, type AppClient } from './client.js';
 import type {
   AppClientConfig,
   AppClientRefineConfig,

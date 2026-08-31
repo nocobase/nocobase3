@@ -1,7 +1,7 @@
 import {
   defineServerPlugin,
   type AppServerPlugin,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 import serviceProviders from './providers/index.js';
 import routes from './routes/plugin.js';

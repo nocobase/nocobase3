@@ -1,10 +1,10 @@
 import { createAIManager } from '@nocobase/ai-employee';
-import { databaseManagerToken } from '@nocobase/app-database';
-import { cachingToken } from '@nocobase/app-server-kit/caching';
-import { driveManagerToken } from '@nocobase/app-server-kit/drive';
-import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
-import { loggingToken } from '@nocobase/app-server-kit/logging';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { databaseManagerToken } from '@nocobase/db';
+import { cachingToken } from '@nocobase/app-server/caching';
+import { driveManagerToken } from '@nocobase/app-server/drive';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { loggingToken } from '@nocobase/app-server/logging';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { authenticationToken } from '@nocobase/app-plugin-authentication/server';
 import {
   ServiceProvider,

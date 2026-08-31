@@ -10,11 +10,11 @@
 import type {
   AppWebSocketAcceptResult,
   AppWebSocketHandler,
-} from '@nocobase/app-server-kit/websocket';
+} from '@nocobase/app-server/websocket';
 import type {
   AppDisposer as ServerAppDisposer,
   AppScope as ServerAppScope,
-} from '@nocobase/app-server-kit/runtime';
+} from '@nocobase/app-server/runtime';
 
 import type { AppState } from './events.ts';
 
@@ -30,7 +30,7 @@ export type {
   AppWebSocketOpenEvent,
   AppWebSocketReadyState,
   AppWebSocketSendOptions,
-} from '@nocobase/app-server-kit/websocket';
+} from '@nocobase/app-server/websocket';
 
 export type AppDisposer = ServerAppDisposer;
 

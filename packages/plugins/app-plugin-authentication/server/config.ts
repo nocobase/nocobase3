@@ -6,9 +6,9 @@ import {
   defineAppConfig,
   envString,
   type AppConfigDefinition,
-} from '@nocobase/app-server-kit/config';
+} from '@nocobase/app-server/config';
 import { Type } from '@sinclair/typebox';
-import type { ResolvedAppRuntimeConfigContext } from '@nocobase/app-server-kit/runtime';
+import type { ResolvedAppRuntimeConfigContext } from '@nocobase/app-server/runtime';
 
 import type { CreateAuthenticationOptions } from './auth.js';
 

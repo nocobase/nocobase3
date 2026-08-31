@@ -1,10 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type {
-  DatabaseManager,
-  QueryAdapter,
-  Row,
-} from '@nocobase/app-database';
+import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
 import type { Knex } from 'knex';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import type { WorkflowFlatIr } from '../instructions/definition.js';

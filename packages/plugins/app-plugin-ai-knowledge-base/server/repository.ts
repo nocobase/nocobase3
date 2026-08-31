@@ -1,8 +1,4 @@
-import type {
-  DatabaseConnection,
-  Row,
-  SelectQuery,
-} from '@nocobase/app-database';
+import type { DatabaseConnection, Row, SelectQuery } from '@nocobase/db';
 
 const JSON_FIELDS: Record<string, readonly string[]> = {
   aiKnowledgeBase: ['vectorStoreProps', 'segmentOptions'],

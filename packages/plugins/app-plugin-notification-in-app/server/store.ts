@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DatabaseManager, Row } from '@nocobase/app-database';
+import type { DatabaseManager, Row } from '@nocobase/db';
 import type { InAppItem, InAppMessage } from './types.js';
 
 export interface InAppPageCursor {

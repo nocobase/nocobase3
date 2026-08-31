@@ -1,4 +1,4 @@
-import type { LocaleLoaders } from '@nocobase/app-i18n';
+import type { LocaleLoaders } from '@nocobase/i18n';
 
 // One dynamic import per locale, so the browser downloads only the language it is showing.
 const locales: LocaleLoaders = {

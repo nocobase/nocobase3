@@ -1,9 +1,9 @@
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import type { ConfigPaths } from '@nocobase/app-server-kit/config';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import type { ConfigPaths } from '@nocobase/app-server/config';
 import {
   defineRootRoutes,
   type AppRootRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import {

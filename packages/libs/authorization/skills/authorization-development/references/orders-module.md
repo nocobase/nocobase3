@@ -11,10 +11,7 @@ The migration belongs to the module that owns Orders, not to the authorization
 package:
 
 ```ts
-import {
-  defineMigration,
-  type MigrationDefinition,
-} from '@nocobase/app-database';
+import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 
 export default defineMigration({
   name: 'orders_create_orders',
@@ -100,7 +97,7 @@ import type {
   ExpressionBuilder,
   Row,
   SqlBool,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 
 interface OrderInput extends Row {
   number?: string;

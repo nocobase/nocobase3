@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 import type { AIManager } from '../manager/index.js';
 import type { AIMessageInput } from './ai-chat-conversation.type.js';

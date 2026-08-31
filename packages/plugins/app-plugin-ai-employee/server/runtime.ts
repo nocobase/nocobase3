@@ -12,12 +12,12 @@ import { createWorkContextHandler } from './agent/ai-employee/work-context/index
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import type { ConfigPaths } from '@nocobase/app-server-kit/config';
+import type { ConfigPaths } from '@nocobase/app-server/config';
 import type { NocoBaseDriveManager } from '@nocobase/drive';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { Caching } from '@nocobase/caching';
-import type { DatabaseManager } from '@nocobase/app-database';
-import type { IdGeneratorService } from '@nocobase/id-generator';
+import type { DatabaseManager } from '@nocobase/db';
+import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { Env, MiddlewareHandler } from 'hono';
 import type { CurrentUser } from './context.js';
 import {

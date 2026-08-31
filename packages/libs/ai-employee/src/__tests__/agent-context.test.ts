@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest';
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import type { AgentContext, AgentState } from '../index.js';
 
 describe('AgentContext public contract', () => {

@@ -19,7 +19,7 @@ import type {
 } from '../types.js';
 import { NativeCollectionSaver } from '../../ai-employees/checkpoints/index.js';
 import type { AIMessageInput } from '@nocobase/ai-employee';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import {
   convertAIMessage,
   convertHumanMessage,

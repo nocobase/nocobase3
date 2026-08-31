@@ -107,7 +107,7 @@ import {
   createAuthClient,
   createAuthProvider,
 } from '@nocobase/app-plugin-authentication/client';
-import { createAppClient } from '@nocobase/app-sdk';
+import { createAppClient } from '@nocobase/app-client';
 
 export const appClient = createAppClient();
 export const authClient = createAuthClient({ client: appClient });

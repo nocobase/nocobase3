@@ -36,7 +36,6 @@ export default createReactVitestConfig({
       'tests/logic/inspect-client.test.ts',
       'tests/logic/dev-readiness.test.ts',
       'tests/logic/dev-plugin-watches.test.ts',
-      'tests/logic/e2e-support.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugin-commands.test.ts',
       'tests/logic/skills-example-integration.test.tsx',

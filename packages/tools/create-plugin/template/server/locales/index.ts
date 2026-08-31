@@ -1,4 +1,4 @@
-import type { LocaleLoaders } from '@nocobase/app-i18n';
+import type { LocaleLoaders } from '@nocobase/i18n';
 
 const locales: LocaleLoaders = {
   'en-US': () => import('./en-US.js'),

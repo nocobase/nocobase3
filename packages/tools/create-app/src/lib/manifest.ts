@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /**
- * Version ranges for the database drivers, matching what `@nocobase/app-database` declares so a generated app resolves
+ * Version ranges for the database drivers, matching what `@nocobase/db` declares so a generated app resolves
  * the same major versions the database package is tested against.
  */
 export const DRIVER_VERSIONS: Readonly<Record<string, string>> = {

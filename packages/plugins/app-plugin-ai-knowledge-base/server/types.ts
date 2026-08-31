@@ -1,8 +1,5 @@
 import type { AIManager, FileManager } from '@nocobase/ai-employee';
-import type {
-  DatabaseConnection,
-  DatabaseManager,
-} from '@nocobase/app-database';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
 export type SegmentOptions = {

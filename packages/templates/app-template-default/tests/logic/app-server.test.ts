@@ -15,34 +15,34 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { createDefaultCachingConfig } from '@nocobase/caching';
-import { CachingProvider } from '@nocobase/app-server-kit/caching';
-import { DriveProvider } from '@nocobase/app-server-kit/drive';
-import { IdGeneratorProvider } from '@nocobase/app-server-kit/id-generator';
+import { CachingProvider } from '@nocobase/app-server/caching';
+import { DriveProvider } from '@nocobase/app-server/drive';
+import { IdGeneratorProvider } from '@nocobase/app-server/id-generator';
 import {
   LoggingProvider,
   requestLoggingMiddleware,
-} from '@nocobase/app-server-kit/logging';
-import { QueueProvider } from '@nocobase/app-server-kit/queue';
+} from '@nocobase/app-server/logging';
+import { QueueProvider } from '@nocobase/app-server/queue';
 import {
   SessionProvider,
   sessionHttpMiddleware,
-} from '@nocobase/app-server-kit/session';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
+} from '@nocobase/app-server/session';
+import { createConfigPaths } from '@nocobase/app-server/config';
 import {
   appConfig,
   type AppConfigAccessor,
   type AppConfigToken,
-} from '@nocobase/app-server-kit/config';
-import { startNodeAppServer } from '@nocobase/app-server-kit/node';
+} from '@nocobase/app-server/config';
+import { startNodeAppServer } from '@nocobase/app-server/node';
 import {
   createRealtimeService,
   realtimeServiceToken,
   type RealtimeServerMessage,
-} from '@nocobase/app-server-kit/realtime';
+} from '@nocobase/app-server/realtime';
 import {
   defineApiRoutes,
   healthCheckApiRoutes,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import {
   createServiceToken,
   ServiceContainer,
@@ -52,44 +52,44 @@ import {
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-server-kit/websocket';
+} from '@nocobase/app-server/websocket';
 import {
   databaseManagerToken,
   type DatabaseManager,
   type QueryAdapter,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
   createNocoBaseSpaRuntimeGlobals,
   spaRootRoutes,
-} from '@nocobase/app-server-kit/spa';
+} from '@nocobase/app-server/spa';
 import { createNullSessionConfig } from '@nocobase/session';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveAppNameFromBasePath,
-} from '@nocobase/app-server-kit/support';
+} from '@nocobase/app-server/support';
 import {
   createAppDisposerRegistry,
   createPublicBasePathAdapter,
   resolveAppRuntime,
   type AppDisposer,
   type AppScope,
-} from '@nocobase/app-server-kit/runtime';
-import { Application } from '@nocobase/app-server-kit/application';
+} from '@nocobase/app-server/runtime';
+import { Application } from '@nocobase/app-server/application';
 import {
   defineServerPlugin,
   defineServerPlugins,
   type AppServerPlugin,
   type ResolvedAppServerPlugins,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server';
 import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server';
 
 import { createApp } from '../../server/app.ts';
 import { createServer as createEmbeddedServer } from '../../server/embedded.ts';
-import { createStandaloneRuntimeScope } from '@nocobase/app-server-kit/node';
+import { createStandaloneRuntimeScope } from '@nocobase/app-server/node';
 import appRuntime from '../../server/runtime.ts';
 import {
   createStandaloneServer,
@@ -568,9 +568,7 @@ describe('app server', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain(
-      'window.NOCOBASE_PORTAL_BASE = "/app-template-default/";',
-    );
+    expect(html).toContain('window.APP_BASE_PATH = "/app-template-default/";');
     expect(html).toContain(
       'window.NOCOBASE_API_URL = "/app-template-default/api";',
     );
@@ -1049,13 +1047,11 @@ describe('app server', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain(
-      'window.NOCOBASE_PORTAL_BASE = "/app-template-default/";',
-    );
+    expect(html).toContain('window.APP_BASE_PATH = "/app-template-default/";');
     expect(html).toContain(
       'window.NOCOBASE_API_URL = "/app-template-default/api";',
     );
-    expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
+    expect(html.indexOf('window.APP_BASE_PATH')).toBeLessThan(
       html.indexOf('<script type="module"'),
     );
   });

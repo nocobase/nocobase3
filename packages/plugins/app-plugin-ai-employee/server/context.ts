@@ -5,12 +5,9 @@ import type {
   DocumentLoaders,
   FileManager,
 } from '@nocobase/ai-employee';
-import type {
-  DatabaseConnection,
-  DatabaseManager,
-} from '@nocobase/app-database';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { Caching } from '@nocobase/caching';
-import type { IdGeneratorService } from '@nocobase/id-generator';
+import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { WorkContextHandler } from './agent/ai-employee/work-context/index.js';
 import type { KnowledgeBaseManager } from './agent/ai-employee/ai-knowledge-base.js';
 

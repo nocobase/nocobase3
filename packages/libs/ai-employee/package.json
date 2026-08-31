@@ -58,7 +58,7 @@
     "@langchain/ollama": "1.2.7",
     "@langchain/openai": "1.4.7",
     "@langchain/xai": "1.3.19",
-    "@nocobase/app-database": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "axios": "^1.7.0",

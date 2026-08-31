@@ -1,5 +1,5 @@
-import { I18nRuntime } from '@nocobase/app-i18n';
-import { i18nToken } from '@nocobase/app-server-kit/i18n';
+import { I18nRuntime } from '@nocobase/i18n';
+import { i18nToken } from '@nocobase/app-server/i18n';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';

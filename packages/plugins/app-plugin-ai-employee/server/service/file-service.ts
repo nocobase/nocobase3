@@ -1,7 +1,7 @@
 import type { Context } from '../context.js';
 import { Buffer } from 'node:buffer';
 import path from 'node:path';
-import type { IdGeneratorService } from '@nocobase/id-generator';
+import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { FileManager } from '@nocobase/ai-employee';
 
 type UploadResult = {

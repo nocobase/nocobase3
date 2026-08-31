@@ -1,6 +1,6 @@
 ---
-'@nocobase/app-server-kit': patch
-'@nocobase/app-database': patch
+'@nocobase/app-server': patch
+'@nocobase/db': patch
 '@nocobase/app-template-default': patch
 '@nocobase/app-plugin-authorization': patch
 '@nocobase/app-plugin-install': patch
@@ -10,7 +10,7 @@
 '@nocobase/app-plugin-authentication': patch
 '@nocobase/caching': patch
 '@nocobase/drive': patch
-'@nocobase/id-generator': patch
+'@nocobase/snowflake': patch
 '@nocobase/logging': patch
 '@nocobase/queue': patch
 '@nocobase/service-provider': patch

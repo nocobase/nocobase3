@@ -1,11 +1,11 @@
-import { databaseManagerToken } from '@nocobase/app-database';
+import { databaseManagerToken } from '@nocobase/db';
 import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/tokens';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { queueManagerToken } from '@nocobase/app-server/queue';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import registerRoutes from './index.js';

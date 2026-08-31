@@ -1196,7 +1196,7 @@ TypeScript 直接继承 `@nocobase/dev-config/tsconfig/base.json`，再由 `pack
 
 ```text
 @nocobase/app-client
-@nocobase/app-server-kit
+@nocobase/app-server
 React / Refine
 ClientApplication / Server Application
 DOM / HTTP / Database
@@ -1527,9 +1527,9 @@ packages/app/app-client/src/app-client.tsx
 涉及：
 
 ```text
-packages/app/app-server-kit/src/runtime
-packages/app/app-server-kit/src/plugins
-packages/app/app-server-kit/src/application
+packages/app/app-server/src/runtime
+packages/app/app-server/src/plugins
+packages/app/app-server/src/application
 ```
 
 完成所有 `providers` → `serviceProviders` 的 Runtime、Plugin、Application 和 Inspector 重命名。
@@ -1654,7 +1654,7 @@ Plugin Skills
 ```text
 @nocobase/service-provider
 @nocobase/app-client
-@nocobase/app-server-kit
+@nocobase/app-server
 @nocobase/create-plugin
 @nocobase/app-template-default
 所有被迁移的 app-plugin-* packages

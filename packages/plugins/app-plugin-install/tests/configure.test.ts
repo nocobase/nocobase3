@@ -3,7 +3,7 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import { createConfigPaths } from '@nocobase/app-server/config';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {

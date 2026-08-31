@@ -1,7 +1,7 @@
 import {
   defineMigration,
   type MigrationDefinition,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 
 const migration: MigrationDefinition = defineMigration({
   name: __NOCOBASE_MIGRATION_NAME_LITERAL__,

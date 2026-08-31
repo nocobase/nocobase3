@@ -123,7 +123,7 @@ Use an explicit `supportedModel`. Although provider listing can display an omitt
 ## Plugin Bootstrap Registration
 
 ```ts
-import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginServerContext } from '@nocobase/app-server/plugins';
 import type { AIManager } from '@nocobase/ai-employee';
 import { companyProviderOptions } from './ai/company-provider.js';
 

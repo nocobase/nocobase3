@@ -1,10 +1,10 @@
-import type { Application } from '@nocobase/app-server-kit/application';
+import type { Application } from '@nocobase/app-server/application';
 import {
   resolveAppRuntime,
   startApplicationInScope,
   type AppDisposer,
   type AppScope,
-} from '@nocobase/app-server-kit/runtime';
+} from '@nocobase/app-server/runtime';
 
 import { createApp } from './app.js';
 import appRuntime from './runtime.js';

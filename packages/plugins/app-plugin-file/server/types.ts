@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseDriveManager } from '@nocobase/drive';
 import type { Context, MiddlewareHandler } from 'hono';
 

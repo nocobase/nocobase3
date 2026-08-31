@@ -3,7 +3,7 @@ import {
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
   type Row,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202608270001_create_file_demo_tables.js';

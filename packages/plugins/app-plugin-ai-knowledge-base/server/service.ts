@@ -3,7 +3,7 @@ import { Document } from '@langchain/core/documents';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { nanoid } from 'nanoid';
 import type { AIManager, FileManager } from '@nocobase/ai-employee';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { TableRepository } from './repository.js';
 import type {

@@ -6,7 +6,7 @@ import type {
   Row,
   SelectQuery,
   UpdateQuery,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import type {
   CollectionMutation,
   CollectionQuery,

@@ -1,5 +1,5 @@
 import type { Logger } from '@nocobase/logging';
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import type { NotificationStore } from './store.js';
 import type { NotificationRegistry } from './registry.js';

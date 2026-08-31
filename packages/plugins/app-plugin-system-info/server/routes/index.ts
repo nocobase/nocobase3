@@ -1,9 +1,9 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import { systemInfoServiceToken } from '../tokens.js';

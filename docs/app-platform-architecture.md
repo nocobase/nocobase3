@@ -230,8 +230,8 @@ Provider 负责注册和管理服务端扩展的生命周期，并在 `boot()` �
 `app-template-default/server/runtime.ts` 只声明应用自身的 Runtime Definition：
 包名、默认 `appName`/`basePath`、配置工厂和显式插件列表。Scope 规范化、
 ConfigPaths 创建、插件解析和 Config Factory 执行由
-`@nocobase/app-server-kit/runtime` 统一完成。Standalone 模式额外需要文件系统、
-`.env` 和目录约定，因此对应工厂位于 `@nocobase/app-server-kit/node`；Embedded
+`@nocobase/app-server/runtime` 统一完成。Standalone 模式额外需要文件系统、
+`.env` 和目录约定，因此对应工厂位于 `@nocobase/app-server/node`；Embedded
 模式则直接使用 Host 提供的 `AppScope`。模板不再维护 `config/scope.ts`、
 `config/load.ts` 或兼容转发层。
 
@@ -406,7 +406,7 @@ Provider 生命周期，而不需要让 Provider 感知承载它的网络框架�
 
 `Application` 默认提供基于 `RealtimeService` 的 WebSocket 实现，并注册 App-local
 `/ws` 端点；应用组合时不需要传入 WebSocket factory。默认实现位于
-`@nocobase/app-server-kit/realtime`，通过 `realtimeServiceToken` 连接由
+`@nocobase/app-server/realtime`，通过 `realtimeServiceToken` 连接由
 `RealtimeProvider` 注册的服务。`ApplicationOptions.websocket` 只保留为需要替换整个
 WebSocket 接入实现时的高级覆盖入口。
 

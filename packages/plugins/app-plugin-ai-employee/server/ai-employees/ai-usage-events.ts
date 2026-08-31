@@ -7,7 +7,7 @@
  * affected by this no-op.
  */
 import type { Context } from '../context.js';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 
 export async function recordAIUsageEventsForMessages(

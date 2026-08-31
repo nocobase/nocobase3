@@ -1,5 +1,5 @@
 import { QueueSchemaService } from '@boringnode/queue';
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import {
   createQueueManager,
   type AppQueueConfig,

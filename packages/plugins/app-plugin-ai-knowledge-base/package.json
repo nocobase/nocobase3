@@ -114,12 +114,14 @@
     "@langchain/core": "1.1.49",
     "@langchain/textsplitters": "1.0.1",
     "@nocobase/ai-employee": "workspace:^",
-    "@nocobase/app-database": "workspace:^",
     "@nocobase/app-plugin-ai-employee": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
-    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/drive": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "catalog:",
@@ -127,9 +129,8 @@
     "nanoid": "^3.3.18",
     "pg": "^8.23.0",
     "tailwind-merge": "^3.2.0",
-    "zod": "^3.25.76",
     "yauzl": "^2.10.0",
-    "@nocobase/service-provider": "workspace:^"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
