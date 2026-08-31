@@ -51,6 +51,6 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   public override async shutdown(): Promise<void> {
-    await this.app.container.resolveIfCreated(loggingToken)?.flush();
+    await this.app.container.resolveIfCreated(loggingToken)?.close();
   }
 }

@@ -119,7 +119,6 @@ const apps: CloseableResource[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
 const TEST_REALTIME_TOPIC = 'test:realtime';
-const APP_CLEANUP_TIMEOUT_MS = 30_000;
 const require = createRequire(import.meta.url);
 
 function declaredPluginVersion(packageName: string): string {
@@ -161,7 +160,7 @@ afterEach(async () => {
         }),
     ),
   );
-}, APP_CLEANUP_TIMEOUT_MS);
+});
 
 describe('app server', () => {
   it('represents the NocoBase application separately from its Hono router', () => {

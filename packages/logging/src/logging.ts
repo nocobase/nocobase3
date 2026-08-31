@@ -1,12 +1,27 @@
+import { symbols, type DestinationStream } from 'pino';
+
 import { createDefaultLoggingConfig } from './config.js';
 import { createLogger } from './logger.js';
 import type { Logger, LoggerConfig, LoggingConfig } from './types.js';
+
+interface ClosableDestinationStream extends DestinationStream {
+  readonly closed?: boolean;
+  readonly destroyed?: boolean;
+  end(): void;
+  off(event: 'close', listener: () => void): this;
+  off(event: 'error', listener: (error: Error) => void): this;
+  once(event: 'close', listener: () => void): this;
+  once(event: 'error', listener: (error: Error) => void): this;
+}
 
 export class Logging {
   private readonly defaultLogger: string;
   private readonly defaultConfig: LoggerConfig;
   private readonly loggerConfigs: Readonly<Record<string, LoggerConfig>>;
   private readonly loggers = new Map<string, Logger>();
+  private readonly transportLoggers = new Set<Logger>();
+  private readonly transportStreams = new Set<ClosableDestinationStream>();
+  private closePromise: Promise<void> | undefined;
 
   constructor(config: LoggingConfig = createDefaultLoggingConfig()) {
     const {
@@ -31,6 +46,10 @@ export class Logging {
       name,
     );
     const logger = createLogger(config).child({ logger: name });
+    if (config.transport) {
+      this.transportLoggers.add(logger);
+      this.transportStreams.add(resolveClosableStream(logger));
+    }
     this.loggers.set(name, logger);
     return logger;
   }
@@ -39,6 +58,22 @@ export class Logging {
     await Promise.all(
       [...this.loggers.values()].map((logger) => this.flushLogger(logger)),
     );
+  }
+
+  close(): Promise<void> {
+    this.closePromise ??= this.closeLoggers();
+    return this.closePromise;
+  }
+
+  private async closeLoggers(): Promise<void> {
+    await Promise.all([
+      ...[...this.loggers.values()]
+        .filter((logger) => !this.transportLoggers.has(logger))
+        .map((logger) => this.flushLogger(logger)),
+      ...[...this.transportStreams].map(closeTransportStream),
+    ]);
+    this.transportLoggers.clear();
+    this.transportStreams.clear();
   }
 
   private flushLogger(logger: Logger): Promise<void> {
@@ -52,6 +87,53 @@ export class Logging {
       });
     });
   }
+}
+
+function resolveClosableStream(logger: Logger): ClosableDestinationStream {
+  const stream = (
+    logger as unknown as {
+      readonly [symbols.streamSym]: DestinationStream;
+    }
+  )[symbols.streamSym];
+  if (
+    typeof (stream as Partial<ClosableDestinationStream>).end !== 'function' ||
+    typeof (stream as Partial<ClosableDestinationStream>).once !== 'function'
+  ) {
+    throw new Error('Configured logging transport is not closable.');
+  }
+  return stream as ClosableDestinationStream;
+}
+
+function closeTransportStream(
+  stream: ClosableDestinationStream,
+): Promise<void> {
+  if (stream.closed || stream.destroyed) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = (): void => {
+      stream.off('close', handleClose);
+      stream.off('error', handleError);
+    };
+    const handleClose = (): void => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (error: Error): void => {
+      cleanup();
+      reject(error);
+    };
+
+    stream.once('close', handleClose);
+    stream.once('error', handleError);
+    try {
+      stream.end();
+    } catch (error) {
+      cleanup();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
 }
 
 export function createLogging(

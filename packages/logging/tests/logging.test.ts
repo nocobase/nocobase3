@@ -82,16 +82,23 @@ describe('Logging', () => {
         { timeout: 5_000 },
       );
     } finally {
-      rmSync(directory, { recursive: true, force: true });
+      try {
+        await logging.close();
+        await logging.close();
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
     }
   });
 
-  it('provides a silent fallback and flushes instantiated loggers', async () => {
+  it('provides a silent fallback and closes instantiated loggers idempotently', async () => {
     const logging = createLogging(createSilentLoggingConfig());
 
     logging.getLogger().fatal('hidden');
 
     await expect(logging.flush()).resolves.toBeUndefined();
+    await expect(logging.close()).resolves.toBeUndefined();
+    await expect(logging.close()).resolves.toBeUndefined();
   });
 });
 
