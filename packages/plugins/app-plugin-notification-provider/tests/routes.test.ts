@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import createRoutes from '../client/routes.js';
+import routes from '../client/routes.js';
 
 describe('client routes', () => {
-  it('does not expose the demonstration route by default', () => {
-    expect(createRoutes({})).toEqual([]);
-  });
-
-  it('defines a lazy notification provider demo route when explicitly enabled', async () => {
-    const routes = createRoutes({ enableDemoRoute: true });
-    if (Array.isArray(routes))
-      throw new Error('Expected a route contribution.');
+  it('defines a lazy notification provider demo route', async () => {
     const [route] = routes.routes;
 
     expect(routes.parent).toBe('app');

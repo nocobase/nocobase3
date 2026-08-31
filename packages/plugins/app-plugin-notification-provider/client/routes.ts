@@ -2,9 +2,8 @@ import {
   defineAppRoutes,
   type AppClientAppRoutesContribution,
 } from '@nocobase/app-client/plugins';
-import type { NotificationProviderClientOptions } from './plugin.js';
 
-const demoRoutes: AppClientAppRoutesContribution = defineAppRoutes([
+const routes: AppClientAppRoutesContribution = defineAppRoutes([
   {
     name: 'demo',
     path: '/notification-provider',
@@ -12,8 +11,4 @@ const demoRoutes: AppClientAppRoutesContribution = defineAppRoutes([
   },
 ]);
 
-export default function routes(
-  options: NotificationProviderClientOptions,
-): AppClientAppRoutesContribution | readonly AppClientAppRoutesContribution[] {
-  return options.enableDemoRoute ? demoRoutes : [];
-}
+export default routes;
