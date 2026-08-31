@@ -439,3 +439,31 @@ Routes
   ↓
 render
 ```
+
+## 统一流程
+
+## Client 与 Server 的统一装配模型
+
+Client 和 Server 采用相同的四层应用装配模型：
+
+```text
+Config → Runtime → App → Start / Render
+```
+
+| 层次     | 职责                                                                      |
+| -------- | ------------------------------------------------------------------------- |
+| Config   | 声明应用需要什么，包括配置、插件、Provider、Routes 等可组合能力。         |
+| Runtime  | 解析并汇总 Config，形成当前运行环境中可直接使用的完整运行时。             |
+| App      | 将已解析的 Runtime 组装为应用实体，建立各能力之间的连接，但尚未对外运行。 |
+| Activate | 激活应用：Server 启动服务生命周期，Client 将应用渲染到浏览器。            |
+
+因此，两端的整体架构可以分别表示为：
+
+```text
+Client: Config → Runtime → App → Render
+Server: Config → Runtime → App → Start
+```
+
+这种统一分层将“应用包含什么”、“当前环境中实际启用什么”、“如何组成完整应用”和
+“如何对外运行”分离开。Client 与 Server 可以共享一致的架构语义，同时在最后一层保留各自的执行方式：
+Client 关注 UI 渲染，Server 关注服务启动与生命周期。
