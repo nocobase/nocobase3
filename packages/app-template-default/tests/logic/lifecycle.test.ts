@@ -91,7 +91,7 @@ describe('app service providers', () => {
     const sessionManager = services.resolve(sessionManagerToken);
     const queueManager = services.resolve(queueManagerToken);
     const realtime = services.resolve(realtimeServiceToken);
-    const flush = vi.spyOn(logging, 'flush');
+    const closeLogging = vi.spyOn(logging, 'close');
     const dispose = vi.spyOn(caching, 'dispose');
     const disposeSession = vi.spyOn(sessionManager, 'dispose');
     const closeQueue = vi.spyOn(queueManager, 'close');
@@ -105,7 +105,7 @@ describe('app service providers', () => {
     expect(closeQueue).toHaveBeenCalledOnce();
     expect(disposeSession).toHaveBeenCalledOnce();
     expect(dispose).toHaveBeenCalledOnce();
-    expect(flush).toHaveBeenCalledOnce();
+    expect(closeLogging).toHaveBeenCalledOnce();
     expect(disposeSession.mock.invocationCallOrder[0]).toBeLessThan(
       dispose.mock.invocationCallOrder[0],
     );
@@ -116,7 +116,7 @@ describe('app service providers', () => {
       closeQueue.mock.invocationCallOrder[0],
     );
     expect(dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      flush.mock.invocationCallOrder[0],
+      closeLogging.mock.invocationCallOrder[0],
     );
   });
 
