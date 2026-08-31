@@ -37,7 +37,7 @@ export default clientPlugins;
 const SERVER_SOURCE = `import {
   defineServerPlugins,
   type AppServerPlugins,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([]);
 

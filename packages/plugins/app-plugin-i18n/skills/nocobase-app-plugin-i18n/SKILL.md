@@ -44,10 +44,10 @@ The exception is what most mistakes come from: a component a plugin exports for 
 1. Find the package that owns the text. Application text goes in `client/locales/`; a plugin's text goes in that plugin's `client/locales/`.
 2. Add the key to `en-US.ts`. The structure is written once: the type is derived from the value with `LocaleResource<typeof enUS>`, and other locales are annotated with it, which is what makes a typo a compile error.
 3. Add the translation to every other locale file. A missing key falls back rather than breaking, so this can lag, but `pnpm i18n:check` will report it.
-4. Render it with `useTranslation` from `@nocobase/app-i18n/client`.
+4. Render it with `useTranslation` from `@nocobase/i18n/client`.
 
 ```tsx
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 
 const { t } = useTranslation();
 t('actions.save');
@@ -70,7 +70,7 @@ Keep the namespace in one constant per package rather than repeating the literal
 **Reaching for the application's wording deliberately.** A plugin cannot write the application's package name — the user chose it — so use the sentinel:
 
 ```tsx
-import { APP_NS } from '@nocobase/app-i18n';
+import { APP_NS } from '@nocobase/i18n';
 
 t('save', { ns: APP_NS });
 ```
@@ -155,5 +155,5 @@ This Skill is copied into each application that installs the plugin, so the
 packages are named rather than linked by path — where they resolve to depends
 on whether you are in this repository or in a generated application.
 
-- `@nocobase/app-i18n` README — namespaces, the fallback chain, server-side translation, error payloads
+- `@nocobase/i18n` README — namespaces, the fallback chain, server-side translation, error payloads
 - `@nocobase/app-plugin-i18n` README — the switch itself, endpoints, `useAppLocale`

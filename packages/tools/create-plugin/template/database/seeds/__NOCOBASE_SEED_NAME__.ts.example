@@ -1,4 +1,4 @@
-import { defineSeed, type SeedDefinition } from '@nocobase/app-database';
+import { defineSeed, type SeedDefinition } from '@nocobase/db';
 
 const seed: SeedDefinition = defineSeed({
   name: __NOCOBASE_SEED_NAME_LITERAL__,

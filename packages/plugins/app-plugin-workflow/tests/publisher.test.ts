@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { DatabaseManager, Row } from '@nocobase/app-database';
+import type { DatabaseManager, Row } from '@nocobase/db';
 import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
   buildWorkflowArtifact,

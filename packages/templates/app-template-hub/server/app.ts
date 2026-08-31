@@ -1,27 +1,24 @@
 import {
   Application,
   type ApplicationConfig,
-} from '@nocobase/app-server-kit/application';
-import { DatabaseProvider } from '@nocobase/app-server-kit/database';
-import {
-  I18nProvider,
-  i18nHttpMiddleware,
-} from '@nocobase/app-server-kit/i18n';
-import { CachingProvider } from '@nocobase/app-server-kit/caching';
-import { DriveProvider } from '@nocobase/app-server-kit/drive';
-import { IdGeneratorProvider } from '@nocobase/app-server-kit/id-generator';
+} from '@nocobase/app-server/application';
+import { DatabaseProvider } from '@nocobase/app-server/database';
+import { I18nProvider, i18nHttpMiddleware } from '@nocobase/app-server/i18n';
+import { CachingProvider } from '@nocobase/app-server/caching';
+import { DriveProvider } from '@nocobase/app-server/drive';
+import { IdGeneratorProvider } from '@nocobase/app-server/id-generator';
 import {
   LoggingProvider,
   requestLoggingMiddleware,
-} from '@nocobase/app-server-kit/logging';
-import { QueueProvider } from '@nocobase/app-server-kit/queue';
+} from '@nocobase/app-server/logging';
+import { QueueProvider } from '@nocobase/app-server/queue';
 import {
   SessionProvider,
   sessionHttpMiddleware,
-} from '@nocobase/app-server-kit/session';
-import { healthCheckApiRoutes } from '@nocobase/app-server-kit/router';
-import type { ResolvedAppRuntime } from '@nocobase/app-server-kit/runtime';
-import { spaRootRoutes } from '@nocobase/app-server-kit/spa';
+} from '@nocobase/app-server/session';
+import { healthCheckApiRoutes } from '@nocobase/app-server/router';
+import type { ResolvedAppRuntime } from '@nocobase/app-server/runtime';
+import { spaRootRoutes } from '@nocobase/app-server/spa';
 
 export function createApp(runtime: ResolvedAppRuntime): Application {
   const app = new Application<ApplicationConfig>({

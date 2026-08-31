@@ -1,11 +1,11 @@
-import type { Application } from '@nocobase/app-server-kit/application';
+import type { Application } from '@nocobase/app-server/application';
 import {
   defineApiRoutes,
   defineRootRoutes,
   type AppApiRouteContribution,
   type AppRouteContribution,
   type AppRootRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import { appExampleServiceToken } from '../providers/index.js';

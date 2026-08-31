@@ -1,6 +1,6 @@
 ---
 name: nocobase-plugin-development
-description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/plugins/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/tools/create-plugin, packages/app/app-client, and packages/app/app-server-kit. Do not use for legacy NocoBase v2 plugin workspaces.'
+description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/plugins/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/tools/create-plugin, packages/app/app-client, and packages/app/app-server. Do not use for legacy NocoBase v2 plugin workspaces.'
 ---
 
 # NocoBase Plugin Development
@@ -16,7 +16,7 @@ Before changing files, confirm the workspace contains:
 ```text
 packages/tools/create-plugin/
 packages/app/app-client/
-packages/app/app-server-kit/
+packages/app/app-server/
 pnpm-workspace.yaml
 ```
 

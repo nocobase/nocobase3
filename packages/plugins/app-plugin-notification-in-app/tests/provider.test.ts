@@ -1,7 +1,4 @@
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   notificationServiceToken,
   type NotificationService,

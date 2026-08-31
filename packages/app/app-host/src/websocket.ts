@@ -12,9 +12,9 @@ export {
   createWebSocketUpgradeRequest,
   isWebSocketUpgrade,
   rejectWebSocketUpgrade,
-} from '@nocobase/app-server-kit/websocket';
+} from '@nocobase/app-server/websocket';
 
 export type {
   AcceptWebSocketUpgradeOptions,
   CreateWebSocketUpgradeRequestOptions,
-} from '@nocobase/app-server-kit/websocket';
+} from '@nocobase/app-server/websocket';

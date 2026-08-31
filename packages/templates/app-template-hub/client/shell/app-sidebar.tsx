@@ -1,4 +1,4 @@
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 import { useCan, useMenu, type TreeMenuItem } from '@refinedev/core';
 import { ChevronRight, Home, List, ShieldCheck, X } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';

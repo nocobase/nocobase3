@@ -1,4 +1,4 @@
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 import { useGetIdentity, useLogout } from '@refinedev/core';
 import { LogOut, UserRound } from 'lucide-react';
 import type { ReactElement } from 'react';

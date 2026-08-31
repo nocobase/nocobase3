@@ -48,7 +48,7 @@ function moduleDirectory(packageName: string): string {
  */
 const FIXTURE_DEPENDENCY_DIRECTORIES: Readonly<Record<string, string>> = {
   '@nocobase/app-client': 'app/app-client',
-  '@nocobase/app-server-kit': 'app/app-server-kit',
+  '@nocobase/app-server': 'app/app-server',
   '@nocobase/dev-config': 'tools/dev-config',
   '@nocobase/service-provider': 'libs/service-provider',
 };
@@ -183,7 +183,7 @@ describe('Agent plugin development loop', () => {
       if (expectsServer) {
         await writeFile(
           path.join(pluginRoot, 'server', 'routes', 'index.ts'),
-          `import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';\nimport { defineApiRoutes, defineRootRoutes, type AppRouteContribution } from '@nocobase/app-server-kit/router';\n\nconst unavailable = (): never => { throw new Error('Inspection must not execute Route factories.'); };\nconst routes: readonly AppRouteContribution<AppPluginApplication>[] = [defineRootRoutes(unavailable), defineApiRoutes(unavailable)];\n\nexport default routes;\n`,
+          `import type { AppPluginApplication } from '@nocobase/app-server/plugins';\nimport { defineApiRoutes, defineRootRoutes, type AppRouteContribution } from '@nocobase/app-server/router';\n\nconst unavailable = (): never => { throw new Error('Inspection must not execute Route factories.'); };\nconst routes: readonly AppRouteContribution<AppPluginApplication>[] = [defineRootRoutes(unavailable), defineApiRoutes(unavailable)];\n\nexport default routes;\n`,
         );
       }
 

@@ -1,4 +1,4 @@
-import type { Application } from '@nocobase/app-server-kit/application';
+import type { Application } from '@nocobase/app-server/application';
 import {
   createServiceToken,
   ServiceProvider,

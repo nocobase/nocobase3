@@ -1,8 +1,8 @@
 import path from 'node:path';
 
-import { runAppSeeds } from '@nocobase/app-server-kit/database';
-import { databaseConfig } from '@nocobase/app-server-kit/database';
-import { resolveStandaloneAppRuntime } from '@nocobase/app-server-kit/node';
+import { runAppSeeds } from '@nocobase/app-server/database';
+import { databaseConfig } from '@nocobase/app-server/database';
+import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 
 import appRuntime from '../server/runtime.js';
 

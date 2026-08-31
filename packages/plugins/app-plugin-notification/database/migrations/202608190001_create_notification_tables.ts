@@ -1,7 +1,4 @@
-import {
-  defineMigration,
-  type MigrationDefinition,
-} from '@nocobase/app-database';
+import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608190001_create_notification_tables',

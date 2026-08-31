@@ -5,9 +5,9 @@ import {
 import {
   createConfigPaths,
   type AppConfigAccessor,
-} from '@nocobase/app-server-kit/config';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+} from '@nocobase/app-server/config';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { queueManagerToken } from '@nocobase/app-server/queue';
 import {
   createQueueManager,
   createSyncQueueConfig,

@@ -1,4 +1,4 @@
-import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginProviderConstructor } from '@nocobase/app-server/plugins';
 
 import { WorkflowProvider, type WorkflowProviderConfig } from './workflow.js';
 

@@ -1,4 +1,4 @@
-import { defineMigration } from '@nocobase/app-database';
+import { defineMigration } from '@nocobase/db';
 
 // Copied from @nocobase/authentication/server/migrations.
 

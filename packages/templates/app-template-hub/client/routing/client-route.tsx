@@ -2,7 +2,7 @@ import type {
   AppClientRegisteredRoute,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
-import { NamespaceScope } from '@nocobase/app-i18n/client';
+import { NamespaceScope } from '@nocobase/i18n/client';
 import { useCan } from '@refinedev/core';
 import { type ReactElement, useEffect, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';

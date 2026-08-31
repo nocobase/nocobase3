@@ -1,9 +1,6 @@
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
-import { loggingToken } from '@nocobase/app-server-kit/logging';
-import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import { loggingToken } from '@nocobase/app-server/logging';
+import { queueManagerToken } from '@nocobase/app-server/queue';
 import { createLogger, type Logging } from '@nocobase/logging';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { ServiceContainer } from '@nocobase/service-provider';

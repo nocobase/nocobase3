@@ -2,7 +2,7 @@
 
 Use this guide when changing the default app server. The template is an
 explicit composition root; reusable runtime and HTTP mechanics belong in
-`@nocobase/app-server-kit`, while domain behavior belongs in its owning package
+`@nocobase/app-server`, while domain behavior belongs in its owning package
 or app plugin.
 
 ## Mental Model
@@ -12,19 +12,19 @@ or app plugin.
 - `runtime.ts` declares config factories, explicit server plugins, serviceProviders,
   and routes through `defineAppRuntime()`. The application package name comes
   from `rootDir/package.json`, and generic standalone mount defaults belong in
-  `@nocobase/app-server-kit/node`.
+  `@nocobase/app-server/node`.
 - `config/*` owns application-specific defaults, environment mapping, and the
   final composition of package-owned config sections. Generic Scope, path,
-  plugin, and config resolution belongs in `@nocobase/app-server-kit`.
+  plugin, and config resolution belongs in `@nocobase/app-server`.
 - `embedded.ts` is the app-host entry. It resolves config, creates the
   application, binds shutdown to the host scope, starts ServiceProviders, and returns
   the ready application.
 - `standalone.ts` adapts the same embedded entry to Node HTTP. Generic Node
   standalone scopes, environment-file loading, serving, WebSocket upgrades,
   process signals, draining, and forced shutdown live in
-  `@nocobase/app-server-kit/node`.
+  `@nocobase/app-server/node`.
 - Shared scope paths, routing, cancellation, mount adapters, and application
-  lifecycle helpers live in `@nocobase/app-server-kit/runtime`.
+  lifecycle helpers live in `@nocobase/app-server/runtime`.
 - Plugin server behavior is explicitly registered through `server/plugins.ts`.
   Each package exports one `server/index.ts` entry. ServiceProviders own service
   lifecycle; each route contribution creates and returns its own Hono router.
@@ -46,7 +46,7 @@ runtime-ready application config before `createApp()` assembles the application;
 `startApplicationInScope()` binds cleanup and starts its Provider lifecycle.
 
 Node-only server entrypoints use `defineStandaloneServer()` from
-`@nocobase/app-server-kit/node` to bind their root directory, Runtime
+`@nocobase/app-server/node` to bind their root directory, Runtime
 Definition, and shared `createServer(scope)` factory. The resulting create and
 start operations own standalone Scope creation, Vite overrides, public-path
 mounting, Node listen configuration, and lifecycle cleanup. Config-only

@@ -8,7 +8,7 @@ import {
   databaseManagerToken,
   createDatabaseManager,
   type DatabaseManager,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import {
   authenticationToken,
   type Auth,
@@ -18,11 +18,11 @@ import {
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
-import { driveManagerToken } from '@nocobase/app-server-kit/drive';
+import { driveManagerToken } from '@nocobase/app-server/drive';
 import { createLogger, type Logging } from '@nocobase/logging';
-import { loggingToken } from '@nocobase/app-server-kit/logging';
-import { sessionManagerToken } from '@nocobase/app-server-kit/session';
-import type { AppConfigAccessor } from '@nocobase/app-server-kit/config';
+import { loggingToken } from '@nocobase/app-server/logging';
+import { sessionManagerToken } from '@nocobase/app-server/session';
+import type { AppConfigAccessor } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { createSessionManager } from '@nocobase/session';
 import { Hono, type MiddlewareHandler } from 'hono';

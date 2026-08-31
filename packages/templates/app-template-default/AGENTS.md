@@ -1,7 +1,7 @@
 # Default App Development Guidelines
 
 This package is the reference application for the new `@nocobase/app-client`
-and `@nocobase/app-server-kit` architecture. Follow the repository root
+and `@nocobase/app-server` architecture. Follow the repository root
 `AGENTS.md` first, then these package-specific rules.
 
 ## Use the current client architecture
@@ -93,7 +93,7 @@ The application's own copy lives in `client/locales/`. `en-US.ts` states the wor
 
 ```ts
 // client/locales/en-US.ts
-import type { LocaleResource } from '@nocobase/app-i18n';
+import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   actions: { save: 'Save' },
@@ -114,7 +114,7 @@ const zhCN: AppResource = {
 Translate in a component with no namespace — the application's own is the default here:
 
 ```tsx
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 
 const { t } = useTranslation();
 t('actions.save');
@@ -125,7 +125,7 @@ Two things are worth knowing:
 - A plugin's own strings live in that plugin, not here. To reword one, add an `overrides` block to the application's locale file keyed by the plugin's package name; do not edit the plugin.
 - A string rendered where i18n may not be mounted — a component a focused test renders on its own — should pass `defaultValue` so it stays readable: `t('actions.save', { defaultValue: 'Save' })`.
 
-`pnpm i18n:check` at the repository root reports keys a locale is missing. Full reference: [app-i18n README](../../libs/app-i18n/README.md).
+`pnpm i18n:check` at the repository root reports keys a locale is missing. Full reference: [i18n README](../../libs/i18n/README.md).
 
 ## Keep the client inspectable
 

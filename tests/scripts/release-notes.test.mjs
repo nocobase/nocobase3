@@ -124,7 +124,7 @@ for (const { label, manifests } of [
   {
     label: 'grouped',
     manifests: {
-      'libs/app-database/package.json': '@nocobase/db',
+      'libs/db/package.json': '@nocobase/db',
       'templates/app-template-default/package.json':
         '@nocobase/app-template-default',
     },

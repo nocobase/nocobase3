@@ -1,5 +1,5 @@
-import { databaseManagerToken } from '@nocobase/app-database';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { databaseManagerToken } from '@nocobase/db';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { createAppAuthorization } from '../authorization.js';

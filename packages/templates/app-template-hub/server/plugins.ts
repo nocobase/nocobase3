@@ -15,7 +15,7 @@ import workflow from '@nocobase/app-plugin-workflow/server';
 import {
   defineServerPlugins,
   type AppServerPlugins,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 import systemInfo from '@nocobase/app-plugin-system-info/server';
 import skillsExample from '@nocobase/app-plugin-skills-example/server';
 

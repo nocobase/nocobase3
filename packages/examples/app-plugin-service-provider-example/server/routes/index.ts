@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/router';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 
 import { heartbeatServiceToken } from '../tokens.js';
 

@@ -2,7 +2,7 @@ import {
   defineMigration,
   type CollectionDefinitionBuilder,
   type MigrationDefinition,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 
 // Published database sources cannot import the package's uncompiled server sources.
 const COLLECTIONS = Object.freeze({

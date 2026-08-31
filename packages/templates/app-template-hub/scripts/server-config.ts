@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { resolveStandaloneAppRuntime } from '@nocobase/app-server-kit/node';
-import { appConfig } from '@nocobase/app-server-kit/config';
-import { databaseConfig } from '@nocobase/app-server-kit/database';
-import { nodeServerConfig } from '@nocobase/app-server-kit/node';
-import { spaConfig } from '@nocobase/app-server-kit/spa';
+import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
+import { appConfig } from '@nocobase/app-server/config';
+import { databaseConfig } from '@nocobase/app-server/database';
+import { nodeServerConfig } from '@nocobase/app-server/node';
+import { spaConfig } from '@nocobase/app-server/spa';
 import {
   cachingConfig,
   driveConfig,
@@ -13,7 +13,7 @@ import {
   queueConfig,
   sessionConfig,
   snowflakeConfig,
-} from '@nocobase/app-server-kit';
+} from '@nocobase/app-server';
 import { notificationConfig } from '@nocobase/app-plugin-notification/server';
 import appRuntime from '../server/runtime.ts';
 

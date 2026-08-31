@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@boringnode/queue": "^0.7.1",
-    "@nocobase/app-database": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "ioredis": "catalog:",
     "knex": "catalog:"

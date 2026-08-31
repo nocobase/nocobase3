@@ -7,7 +7,7 @@ import {
   createDatabaseManager,
   type DatabaseManager,
   type Row,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import {
   createQueueManager,
   createSyncQueueConfig,

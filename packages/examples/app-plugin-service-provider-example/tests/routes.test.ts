@@ -1,4 +1,4 @@
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';

@@ -7,7 +7,7 @@ import type {
   SelectQuery,
   SqlBool,
   UpdateQuery,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import type { BetterAuthOptions, DBAdapterInstance, Where } from 'better-auth';
 import { createAdapterFactory, type CustomAdapter } from 'better-auth/adapters';
 import type { Knex } from 'knex';

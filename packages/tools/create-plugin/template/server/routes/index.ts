@@ -1,7 +1,7 @@
 import {
   type AppRouteContribution,
-} from '@nocobase/app-server-kit/router';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/router';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 
 // Add defineApiRoutes() or defineRootRoutes() contributions here. Every Route
 // must own and test an explicit security policy. Authenticated Routes install

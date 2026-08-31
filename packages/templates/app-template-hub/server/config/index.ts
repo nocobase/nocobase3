@@ -1,6 +1,6 @@
-import { AppConfig } from '@nocobase/app-server-kit/config';
-import { coreConfigs } from '@nocobase/app-server-kit';
-import type { ResolvedAppRuntimeConfigContext } from '@nocobase/app-server-kit/runtime';
+import { AppConfig } from '@nocobase/app-server/config';
+import { coreConfigs } from '@nocobase/app-server';
+import type { ResolvedAppRuntimeConfigContext } from '@nocobase/app-server/runtime';
 
 export function createAppConfig(
   context: ResolvedAppRuntimeConfigContext,

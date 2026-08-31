@@ -1,5 +1,5 @@
-import { I18nProvider } from '@nocobase/app-i18n/client';
-import { I18nRuntime } from '@nocobase/app-i18n';
+import { I18nProvider } from '@nocobase/i18n/client';
+import { I18nRuntime } from '@nocobase/i18n';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { validateMigrations, validateSeeds } from '@nocobase/app-database';
+import { validateMigrations, validateSeeds } from '@nocobase/db';
 import { describe, expect, it } from 'vitest';
 
 describe('@nocobase/app-plugin-authorization database', () => {

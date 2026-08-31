@@ -1,4 +1,4 @@
-import type { LocaleResource } from '@nocobase/app-i18n';
+import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {};
 

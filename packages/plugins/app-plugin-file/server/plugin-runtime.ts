@@ -1,14 +1,8 @@
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import type { NocoBaseDriveManager } from '@nocobase/drive';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server-kit/drive';
-import { sessionManagerToken } from '@nocobase/app-server-kit/session';
-import {
-  appConfig,
-  type AppConfigAccessor,
-} from '@nocobase/app-server-kit/config';
+import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import { sessionManagerToken } from '@nocobase/app-server/session';
+import { appConfig, type AppConfigAccessor } from '@nocobase/app-server/config';
 import type { ServiceResolver } from '@nocobase/service-provider';
 
 import { FileUnavailableError } from './errors.js';

@@ -86,10 +86,10 @@
   },
   "dependencies": {
     "@sinclair/typebox": "catalog:",
-    "@nocobase/app-database": "workspace:^",
-    "@nocobase/app-i18n": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",

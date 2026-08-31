@@ -145,7 +145,7 @@ database/migrations/
 ```
 
 可以让 Agent 对照 plugin 文档中的 schema，逐项列出字段、类型、唯一约束和索引，
-再转换为 `@nocobase/app-database` Fluent DSL。
+再转换为 `@nocobase/db` Fluent DSL。
 
 ### 4. 增加客户端入口
 

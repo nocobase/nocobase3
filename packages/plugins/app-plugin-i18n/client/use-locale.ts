@@ -4,7 +4,7 @@ import {
   applyDocumentLocale,
   type Locale,
   type LocaleDefinition,
-} from '@nocobase/app-i18n/client';
+} from '@nocobase/i18n/client';
 import {
   createAppClient,
   writeStoredLocale,

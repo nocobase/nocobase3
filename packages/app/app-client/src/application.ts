@@ -1,4 +1,4 @@
-import { createRefineI18nProvider } from '@nocobase/app-i18n/client';
+import { createRefineI18nProvider } from '@nocobase/i18n/client';
 import {
   createServiceToken,
   ServiceContainer,

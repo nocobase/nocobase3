@@ -39,7 +39,7 @@ export async function inspectAppServer({
   }
 
   const { inspectResolvedAppServerPlugins, resolveAppServerPlugins } =
-    await import('@nocobase/app-server-kit/plugins');
+    await import('@nocobase/app-server/plugins');
   let plugins;
   try {
     const loaded = await import(pathToFileURL(entry).href);

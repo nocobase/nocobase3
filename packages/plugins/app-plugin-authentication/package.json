@@ -120,10 +120,10 @@
   "dependencies": {
     "@sinclair/typebox": "catalog:",
     "@base-ui/react": "^1.6.0",
-    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/app-database": "workspace:^",
-    "@nocobase/id-generator": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/snowflake": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "better-auth": "catalog:",
     "class-variance-authority": "^0.7.1",

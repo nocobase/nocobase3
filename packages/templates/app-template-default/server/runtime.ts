@@ -1,7 +1,7 @@
 import {
   defineAppRuntime,
   type AppRuntimeDefinition,
-} from '@nocobase/app-server-kit/runtime';
+} from '@nocobase/app-server/runtime';
 
 import { createAppConfig } from './config/index.js';
 import plugins from './plugins.js';

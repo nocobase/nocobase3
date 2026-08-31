@@ -3,45 +3,30 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   RealtimeProvider,
   realtimeServiceToken,
-} from '@nocobase/app-server-kit/realtime';
+} from '@nocobase/app-server/realtime';
 import {
   ServiceContainer,
   ServiceProviderRegistry,
 } from '@nocobase/service-provider';
 import { createDefaultCachingConfig } from '@nocobase/caching';
-import {
-  CachingProvider,
-  cachingToken,
-} from '@nocobase/app-server-kit/caching';
+import { CachingProvider, cachingToken } from '@nocobase/app-server/caching';
 import type {
   AppConfigAccessor,
   AppConfigToken,
-} from '@nocobase/app-server-kit/config';
-import {
-  DriveProvider,
-  driveManagerToken,
-} from '@nocobase/app-server-kit/drive';
+} from '@nocobase/app-server/config';
+import { DriveProvider, driveManagerToken } from '@nocobase/app-server/drive';
 import {
   IdGeneratorProvider,
   idGeneratorToken,
-} from '@nocobase/app-server-kit/id-generator';
-import {
-  LoggingProvider,
-  loggingToken,
-} from '@nocobase/app-server-kit/logging';
-import {
-  QueueProvider,
-  queueManagerToken,
-} from '@nocobase/app-server-kit/queue';
+} from '@nocobase/app-server/id-generator';
+import { LoggingProvider, loggingToken } from '@nocobase/app-server/logging';
+import { QueueProvider, queueManagerToken } from '@nocobase/app-server/queue';
 import {
   SessionProvider,
   sessionManagerToken,
-} from '@nocobase/app-server-kit/session';
+} from '@nocobase/app-server/session';
 import { createNullSessionConfig } from '@nocobase/session';
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 
 describe('app service providers', () => {
   it('registers core services and shuts them down in reverse order', async () => {

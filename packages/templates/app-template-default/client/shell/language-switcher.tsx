@@ -1,5 +1,5 @@
 import { useAppLocale } from '@nocobase/app-plugin-i18n/client';
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 
 import {

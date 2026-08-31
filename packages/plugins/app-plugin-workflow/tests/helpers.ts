@@ -5,7 +5,7 @@ import {
   type CollectionBuilder,
   type DatabaseManager,
   type Row,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 
 import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import type {

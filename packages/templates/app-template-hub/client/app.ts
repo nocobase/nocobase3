@@ -3,7 +3,7 @@ import {
   defineAppClientRenderConfig,
   type AppClientRenderConfig,
 } from '@nocobase/app-client';
-import { I18nProvider } from '@nocobase/app-i18n/client';
+import { I18nProvider } from '@nocobase/i18n/client';
 import type { ResolvedAppRuntime } from '@nocobase/app-client/runtime';
 import {
   createElement,

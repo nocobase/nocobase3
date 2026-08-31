@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type {
-  DatabaseManager,
-  QueryAdapter,
-  Row,
-} from '@nocobase/app-database';
+import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
 
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import { EXECUTION_STATUS } from './constants.js';

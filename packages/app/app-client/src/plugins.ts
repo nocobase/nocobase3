@@ -1,4 +1,4 @@
-import type { LocalesModule } from '@nocobase/app-i18n';
+import type { LocalesModule } from '@nocobase/i18n';
 import type { ServiceProviderLifecycle } from '@nocobase/service-provider';
 import type { ComponentType } from 'react';
 
