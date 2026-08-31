@@ -1,47 +1,48 @@
-import React from 'react';
+import { AppClientRoot, type ClientApplication } from '@nocobase/app-client';
+import { resolveAppRuntime } from '@nocobase/app-client/runtime';
 import { createRoot } from 'react-dom/client';
-import { captureAuthenticationCallback } from '@nocobase/app-portal-sdk/auth';
-import {
-  NocoBaseErrorBoundary,
-  NocoBaseErrorFallback,
-} from '@/extensions/nocobase-error-boundary';
 
-import './locales';
-import { portalI18nReady } from './providers/i18n/runtime';
-import App from './App';
+import { createApp } from './app';
+import appRuntime from './runtime';
+import { AppStartupError } from './startup';
+import './styles.css';
 
-async function bootstrap() {
-  const container = document.getElementById('root') as HTMLElement;
-  const root = createRoot(container);
-  const errorContext = {
-    templateName: __PORTAL_TEMPLATE_NAME__,
-    templateVersion: __PORTAL_TEMPLATE_VERSION__,
-  };
+const container = document.getElementById('root');
 
+if (!container) {
+  throw new Error('Missing application root element.');
+}
+
+const root = createRoot(container);
+let app: ClientApplication | undefined;
+let applicationStarted = false;
+
+async function start(): Promise<void> {
   try {
-    captureAuthenticationCallback();
-    try {
-      await portalI18nReady;
-    } catch (error) {
-      console.warn('Unable to initialize Portal translations', error);
+    const runtime = await resolveAppRuntime(appRuntime);
+
+    app = createApp(runtime);
+    await app.start();
+    applicationStarted = true;
+
+    root.render(<AppClientRoot app={app} />);
+  } catch (startupError) {
+    let error: unknown = startupError;
+
+    if (app && applicationStarted) {
+      try {
+        await app.shutdown();
+      } catch (shutdownError) {
+        error = new AggregateError(
+          [startupError, shutdownError],
+          'Client Application startup and shutdown both failed.',
+          { cause: startupError },
+        );
+      }
     }
 
-    root.render(
-      <NocoBaseErrorBoundary variant='root' context={errorContext}>
-        <App />
-      </NocoBaseErrorBoundary>,
-    );
-  } catch (error) {
-    console.error('Unable to bootstrap Portal', error);
-    root.render(
-      <NocoBaseErrorFallback
-        variant='root'
-        error={error}
-        context={errorContext}
-        onReload={() => window.location.reload()}
-      />,
-    );
+    root.render(<AppStartupError error={error} />);
   }
 }
 
-void bootstrap();
+void start();

@@ -41,10 +41,8 @@ export interface BuildHubEnvOptions {
  * setting and the commented-out optional keys reach the user.
  *
  * Only `APP_NAME` is rewritten. `APP_BASE_PATH` deliberately stays at the template's `/hub`: it is the path the hub is
- * served under, not an identifier, and it is spelled again inside `NOCOBASE_API_URL`, so moving it to `/<name>` would
- * have to move that too or leave the client asking for its API under a path the server does not route. `/hub` is also
- * the more useful default — a hub is a fixed piece of infrastructure at a known address, and a deployment that wants
- * it elsewhere sets both values together.
+ * served under rather than an identifier, and a hub is a fixed piece of infrastructure at a known address. A
+ * deployment that wants it elsewhere sets the value itself.
  */
 export function buildHubEnvFile(options: BuildHubEnvOptions): string {
   const { name } = options;
@@ -55,18 +53,12 @@ export function buildHubEnvFile(options: BuildHubEnvOptions): string {
 
 /**
  * Written when the template ships no `.env.example`, so a generated hub is never left without the settings that name
- * it. The proxy target matches the example's own default: a NocoBase instance on the local machine.
+ * it and place it.
  */
 const FALLBACK_HUB_ENV = [
   '# Application',
   'APP_NAME=hub',
   'APP_BASE_PATH=/hub',
-  '',
-  '# Browser-facing NocoBase REST API root. The Hub server proxies this path.',
-  'NOCOBASE_API_URL=/hub/v2/api',
-  '',
-  '# Upstream NocoBase REST API root. The /api suffix is required.',
-  'NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api',
   '',
 ].join('\n');
 

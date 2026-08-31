@@ -1,45 +1,181 @@
-# Application Development Guidelines
+# Hub Development Guidelines
 
-This repository is a starter for building a NocoBase-powered application. Keep changes focused on the application being built and follow these guidelines before introducing new abstractions.
+This package is the reference application for the new `@nocobase/app-client`
+and `@nocobase/app-server-kit` architecture. Follow the repository root
+`AGENTS.md` first, then these package-specific rules.
 
-## Reuse existing extensions
+## Use the current client architecture
 
-When the active milestone requires application source changes, search `registry` in the Registry source repository or `client/extensions` in a published template for similar pages, hooks, components, and integration patterns before writing that source. Inspect the closest matching implementation and only the direct dependencies needed to understand its contract. Expand the search when a specific unanswered question blocks implementation; do not recursively read Registry or extension directories to build a complete inventory. Reuse an existing implementation directly when it already fits the requirement, and extend or compose it when only a small adaptation is needed.
+The active browser application is `client/`. `client-old/` is a temporary,
+untracked migration archive. Never import from it, copy its routing/provider
+architecture, stage it, or treat it as current source. It may be consulted only
+as a short-lived visual reference and will be deleted after migration.
 
-## Customize UI components through composition
+A plugin's client extensions are registered in `client/plugins.ts`. Being in
+that array is what enables them and the array order is the contribution order;
+there is no `enabled` flag on the client side.
 
-Treat `client/components/ui` as the project's shadcn/ui foundation. When application-specific behavior or styling is needed, prefer wrapping, pre-composing, or re-exporting the base component from a feature-level component instead of editing the base component directly. This keeps the base components replaceable and makes future updates easier to review.
+`client/plugins.ts` and `server/plugins.ts` are the authoritative runtime
+registration surfaces. `nocobase.plugins` remains temporarily for CLI,
+skills, dev-watch, and workspace build tooling; Server ServiceProviders, routes,
+migrations, seeds, and jobs are no longer discovered from it.
 
-Components copied from shadcn/ui are owned and maintained by this project; upstream changes are not applied automatically. If a base component must be changed or updated, compare it with the upstream version first, then selectively merge bug fixes and improvements while preserving intentional local behavior. Do not blindly overwrite customized components.
+Both places are written by the repository commands; do not edit either by hand:
 
-## Add dependencies as development dependencies
+```bash
+pnpm plugin:register <name> --app app-template-hub
+pnpm plugin:inspect <name> --app app-template-hub --json
+pnpm plugin:unregister <name> --app app-template-hub
+```
 
-Portal production deployments serve the built `dist` output and do not install or execute the project's Node.js dependencies. Add every new package to `devDependencies`, including packages imported by application runtime source, because they are required only while installing, developing, checking, or building the Portal. Use the package manager's development-dependency option and do not add new entries to `dependencies`.
+`plugin:register` adds the `devDependencies` entry and the `nocobase.plugins` entry, appends imports and array items to the Client and Server composition roots for the exports the package ships, and copies the plugin's skills into `.agents/skills/`. `--disabled` records `enabled: false` and leaves both composition roots alone; `--no-skills` skips the skills copy. `plugin:unregister` reverses all of it. `pnpm plugin:skills:sync` synchronizes on its own; `pnpm create @nocobase/app` runs it once after the install, and you run it again after a plugin upgrade changes its skills. `plugin:inspect --json` is read-only and verifies the static registration surfaces; it does not replace route-security, runtime, test, or build checks.
 
-## Test at the correct boundary
+Only a plugin that ships a `./client` export reaches `client/plugins.ts`. A server-only plugin is registered in `package.json` and skipped there, because an import of an export it does not have fails to resolve at build time. The check looks for `./client` because that is the specifier registration writes; a plugin carrying only `./client/plugin` predates the barrel and is skipped for the same reason.
 
-Put frontend logic and component tests under `tests/`. Keep them independent of backend data: pass ordinary props to components and test local rendering and interaction without mocking NocoBase APIs, authentication, ACL, or data providers. If behavior requires real data, authentication, roles, permissions, routing integration, files, AI, or another server capability, test it under `e2e/` with Playwright against a real NocoBase test environment. Do not make application tests depend on bundled Registry example pages.
+Only a plugin that ships a `./server` export reaches `server/plugins.ts`. A client-only plugin is skipped there for the same reason. Server entries are plugin definitions and appear in the array as `auditLog`; Client entries are factories and appear as `auditLog()`.
 
-Run the relevant frontend tests while developing and update a focused E2E flow when a critical user workflow changes. Avoid tests that only assert that a component exists or duplicate implementation details.
+Those commands run in this repository and find plugins in `packages/`. An application generated from this template runs the same commands without `--app`, and they install from the registry instead:
 
-## Define application routes once
+```bash
+pnpm plugin:register <name>
+pnpm plugin:inspect <name> --json
+pnpm plugin:unregister <name>
+```
 
-Put application-owned business routes in `client/routes.tsx` with `defineAppRoutes`. A route with a `resource` entry contributes its Refine resource and navigation item, while the same definition generates its React Router route. Mark create, edit, and show children with `resourceAction` so their paths populate the same Refine resource instead of being repeated. Use `access.roles` for route-level role constraints; nested routes inherit parent constraints, and the runtime applies the complete chain to both menu visibility and direct URL access. Do not repeat those roles in `resource.meta.acl` or a manually written route guard.
+The editing itself is one implementation in `@nocobase/nb3-cli`, shared by both. See [docs/cli](../../../docs/cli/README.md).
 
-Use a route's `lazy` loader for page modules so business and Registry pages stay out of the initial bundle until their URL is rendered. The loader follows `React.lazy` and resolves a module with a default component. Reserve `element` for lightweight inline layouts, redirects, and outlet composition; `element` and `lazy` are mutually exclusive.
+The entire `.agents/` directory is ignored local synchronization output and
+must not be committed or used as a source of truth. Directories under
+`.agents/skills/` whose names start with `nocobase-` are replaced wholesale on
+the next sync. Commit plugin-owned Skill sources under the plugin's `skills/`
+directory and commit App integrations to the App's normal source directories.
 
-Give every resource route a real path such as `/dashboard`. Do not combine `index: true` with `resource` or `resourceAction`; the application index is reserved for navigation to the first accessible menu route.
+## Keep extension ownership explicit
 
-`resourceAction` assigns a child path to the parent Refine resource's create, edit, or show URL; it does not choose the presentation. The automatic outlet keeps the resource page mounted, so the child must render `RouteDrawer` or `RouteDialog`; use `outlet: "manual"` when a full page should replace the list or needs custom nesting.
+- Plugin `client/plugin` entries are the static registration surface,
+  re-exported as the default from `client/index.ts` and imported as
+  `<package>/client`: package name, config, ServiceProviders, React Providers,
+  routes, locales, and the options the plugin accepts.
+- Plugin `client/serviceProviders` entries register Client services and Refine
+  capabilities through `ClientApplication.start()`.
+- Plugin `client/reactProviders` entries declare synchronous React Providers and
+  explicit ordering constraints.
+- Plugin `client/routes` entries own route ID, path, and authentication mode.
+- The application owns its root route, theme, page composition, branding,
+  loading states, and final React Provider tree.
 
-Every page intended to appear in the sidebar must declare both its route and a `resource` entry; a route element alone is not a menu item.
+Do not redeclare a plugin route merely to customize its UI. A plugin that
+exposes an option for the page takes it through `client/plugins.ts`;
+otherwise, application source extensions under
+`client/extensions/*/extension.ts` may contribute component replacements and
+`client/route-overrides.ts` remains available for direct application
+overrides. Overrides may replace only `componentLoader`; route identity, path,
+auth mode, and plugin ownership remain unchanged. A route may be overridden
+exactly once across all three sources, so pick one rather than layering two.
+Keep every route page lazy-loaded and default-export its component.
 
-The bundled Registry routes are examples, not application structure. When beginning the real application, set `registryRoutesEnabled` to `false` in `client/routes.tsx` and define the application's own routes there. This removes Registry-contributed main routes, resources, and navigation without modifying installed extension source; extension providers, authentication adapters, and `/dev` showcases remain available.
+Authentication-specific UI customization belongs in the installed
+`client/extensions/nocobase-auth-ui/` Registry source. Reuse `AuthLink` from the
+stable `@nocobase/app-plugin-authentication/client/ui` export, keep the final
+password forms in the Registry `forms/` directory, and use `client/actions` for
+a fully custom form. Do not call Better Auth endpoints directly from page
+components or duplicate session state. See
+`client/extensions/nocobase-auth-ui/README.md` for the edit map.
+The upstream recipe is published by
+`@nocobase/app-plugin-authentication/registry/auth-ui`; do not restore a second
+canonical copy under this package's `registry/` directory.
 
-Route access currently centralizes role constraints only. Keep NocoBase resource/action, region, field, and record checks in the existing `CanAccess` and ACL boundaries close to the protected query or UI. Server ACL remains authoritative.
+## Write user-facing text through i18n
 
-## Develop Portal Registry items
+`@nocobase/app-plugin-i18n` is registered by default, so any string a user reads goes through a translation key rather than a literal.
 
-Canonical NocoBase Registry source lives under `registry/`. In this source repository, normal development and builds load it directly; do not copy it into `client/extensions` for preview. Registry items must import stable Portal runtime, client, authentication, ACL, routing, and extension contracts from documented `@nocobase/app-portal-sdk` exports. Imports to user-owned host UI and composition must use the `@/` alias. Relative imports must stay within that Registry item's own root so the item remains portable after installation. Registry items target this Portal Template's React, shadcn Base UI, and pnpm toolchain. They must never import Ant Design or NocoBase's Ant Design-based client components.
+The application's own copy lives in `client/locales/`. `en-US.ts` states the wording, and `LocaleResource` derives the shape from it — the structure is never written twice. Other locales are annotated with that type, so a key that does not exist there is a compile error:
 
-Keep Registry items portable and focused on reusable API adapters, hooks, components, and small demos. Update `registry.config.json` whenever an item's files, dependencies, or installation target changes. Validate Registry changes with the normal application build and the relevant regression scripts.
+```ts
+// client/locales/en-US.ts
+import type { LocaleResource } from '@nocobase/app-i18n';
+
+const enUS = {
+  actions: { save: 'Save' },
+};
+
+export type AppResource = LocaleResource<typeof enUS>;
+
+export default enUS;
+```
+
+```ts
+// client/locales/zh-CN.ts
+const zhCN: AppResource = {
+  actions: { save: '保存' },
+};
+```
+
+Translate in a component with no namespace — the application's own is the default here:
+
+```tsx
+import { useTranslation } from '@nocobase/app-i18n/client';
+
+const { t } = useTranslation();
+t('actions.save');
+```
+
+Two things are worth knowing:
+
+- A plugin's own strings live in that plugin, not here. To reword one, add an `overrides` block to the application's locale file keyed by the plugin's package name; do not edit the plugin.
+- A string rendered where i18n may not be mounted — a component a focused test renders on its own — should pass `defaultValue` so it stays readable: `t('actions.save', { defaultValue: 'Save' })`.
+
+`pnpm i18n:check` at the repository root reports keys a locale is missing. Full reference: [app-i18n README](../../libs/app-i18n/README.md).
+
+## Keep the client inspectable
+
+Run the inspector before changing client ownership or contribution wiring:
+
+```bash
+pnpm client:inspect
+pnpm client:inspect --json
+```
+
+The output distinguishes the plugin-owned route entry from the final component
+source. When adding an application override, give it a `componentEntry` so the
+CLI and future Agents can locate the owning file.
+
+In JSON mode, read `ok`, `status`, and `result.consistent`, then process stable
+issue codes. Inspection imports Client declarations and reads static Route,
+ServiceProvider, and React Provider declarations. It does not instantiate
+ServiceProviders, run lifecycle hooks, load Route page components or locale
+messages, render React Providers, start a browser, or verify Server security.
+
+## Keep the server inspectable
+
+Run the static Server inspector after changing Server plugin composition:
+
+```bash
+pnpm server:inspect --json
+```
+
+The command imports `server/plugins.ts`, so that module and its declaration
+imports must not start runtime services. It does not construct ServiceProviders, run
+lifecycle code, execute Route factories, connect to the database, start
+workers, or load Queue Job modules. Check `issues`, then cover runtime Route,
+ServiceProvider, database, and Job behavior with integration tests.
+
+## Dependencies and tests
+
+This application ships built output, so browser build-time packages belong in
+`devDependencies`. Use `workspace:` for internal packages and `catalog:` for
+shared critical dependencies. After dependency changes, run:
+
+```bash
+CI=true pnpm install --no-frozen-lockfile
+```
+
+Keep tests under `tests/logic` or `e2e`, never beside client source. After a
+change, run at least:
+
+```bash
+pnpm --filter @nocobase/app-template-hub lint
+pnpm --filter @nocobase/app-template-hub typecheck
+pnpm --filter @nocobase/app-template-hub test
+pnpm --filter @nocobase/app-template-hub build
+```

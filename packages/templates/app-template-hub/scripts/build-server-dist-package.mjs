@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { listWorkspacePackages } from './workspace-packages.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -9,11 +11,17 @@ const rootDir = path.resolve(
 const distDir = path.join(rootDir, 'dist');
 const rootPackagePath = path.join(rootDir, 'package.json');
 const distPackagePath = path.join(distDir, 'package.json');
-const serverRuntimeDirs = ['server'];
+const vendorDir = path.join(distDir, 'vendor');
+const runtimeDirs = ['server', 'database', 'scripts'];
+const databaseRuntimeDrivers = ['better-sqlite3', 'pg', 'mysql2'];
 
 const toPosix = (value) => value.split(path.sep).join('/');
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+
+const writeJson = (file, value) => {
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+};
 
 const walkFiles = (directory) => {
   if (!fs.existsSync(directory)) return [];
@@ -61,9 +69,9 @@ const findBareImports = (content) => {
   return specifiers;
 };
 
-const getInstalledVersion = (packageName) => {
+const getInstalledVersion = (packageName, fromDir = rootDir) => {
   const packagePath = path.join(
-    rootDir,
+    fromDir,
     'node_modules',
     ...packageName.split('/'),
     'package.json',
@@ -73,14 +81,54 @@ const getInstalledVersion = (packageName) => {
   return readJson(packagePath).version;
 };
 
-const getDeclaredVersion = (rootPackage, packageName) => {
+const getDeclaredVersion = (packageJson, packageName) => {
   const version =
-    rootPackage.dependencies?.[packageName] ??
-    rootPackage.devDependencies?.[packageName] ??
-    rootPackage.peerDependencies?.[packageName];
+    packageJson.dependencies?.[packageName] ??
+    packageJson.optionalDependencies?.[packageName] ??
+    packageJson.devDependencies?.[packageName] ??
+    packageJson.peerDependencies?.[packageName];
 
   if (!version) return undefined;
   return version.replace(/^[~^]/, '');
+};
+
+const isWorkspaceVersion = (version) => version?.startsWith('workspace:');
+
+const getVendorPackagePath = (packageName) =>
+  path.join(vendorDir, ...packageName.split('/'));
+
+const createRuntimePackageJson = (packageJson) => ({
+  name: packageJson.name,
+  displayName: packageJson.displayName,
+  description: packageJson.description,
+  version: packageJson.version ?? '0.0.0',
+  private: true,
+  type: packageJson.type,
+  main: packageJson.main,
+  types: packageJson.types,
+  exports: packageJson.publishConfig?.exports ?? packageJson.exports,
+  engines: packageJson.engines,
+  nocobase: packageJson.nocobase,
+});
+
+const copyWorkspacePackage = (packageName, packageDir) => {
+  const packageJson = readJson(path.join(packageDir, 'package.json'));
+  const sourceDistDir = path.join(packageDir, 'dist');
+
+  if (!fs.existsSync(sourceDistDir)) {
+    throw new Error(
+      `Missing ${path.relative(rootDir, sourceDistDir)}. Build ${packageName} before generating the server package.`,
+    );
+  }
+
+  const targetDir = getVendorPackagePath(packageName);
+  fs.rmSync(targetDir, { recursive: true, force: true });
+  fs.mkdirSync(targetDir, { recursive: true });
+  fs.cpSync(sourceDistDir, path.join(targetDir, 'dist'), { recursive: true });
+  writeJson(
+    path.join(targetDir, 'package.json'),
+    createRuntimePackageJson(packageJson),
+  );
 };
 
 if (!fs.existsSync(path.join(distDir, 'server'))) {
@@ -88,43 +136,108 @@ if (!fs.existsSync(path.join(distDir, 'server'))) {
 }
 
 const rootPackage = readJson(rootPackagePath);
-const files = serverRuntimeDirs.flatMap((runtimeDir) =>
+const configuredPluginNames = Object.keys(rootPackage.nocobase?.plugins ?? {});
+const workspacePackages = listWorkspacePackages(rootDir);
+const files = runtimeDirs.flatMap((runtimeDir) =>
   walkFiles(path.join(distDir, runtimeDir)).filter((file) =>
     /\.[cm]?js$/.test(file),
   ),
 );
-const packageNames = new Set();
+const workspacePackageNames = new Set();
+const externalPackageNames = new Map();
+
+const addExternalPackage = (
+  packageName,
+  sourcePackageDir = rootDir,
+  sourcePackage = rootPackage,
+) => {
+  if (externalPackageNames.has(packageName)) return;
+
+  const version =
+    getInstalledVersion(packageName, sourcePackageDir) ??
+    getInstalledVersion(packageName) ??
+    getDeclaredVersion(sourcePackage, packageName) ??
+    getDeclaredVersion(rootPackage, packageName);
+
+  if (!version) {
+    throw new Error(
+      `Could not find a declared or installed version for ${packageName}`,
+    );
+  }
+
+  externalPackageNames.set(packageName, version);
+};
+
+const addPackage = (packageName) => {
+  const packageDir = workspacePackages.get(packageName);
+  if (!packageDir) {
+    addExternalPackage(packageName);
+    return;
+  }
+
+  if (workspacePackageNames.has(packageName)) return;
+  workspacePackageNames.add(packageName);
+
+  const packageJson = readJson(path.join(packageDir, 'package.json'));
+  const dependencies = {
+    ...packageJson.dependencies,
+    ...packageJson.optionalDependencies,
+  };
+
+  for (const [dependencyName, dependencyVersion] of Object.entries(
+    dependencies,
+  )) {
+    if (isWorkspaceVersion(dependencyVersion)) {
+      addPackage(dependencyName);
+    } else {
+      addExternalPackage(dependencyName, packageDir, packageJson);
+    }
+  }
+
+  if (packageName === '@nocobase/app-database') {
+    for (const driver of databaseRuntimeDrivers) {
+      addExternalPackage(driver, packageDir, packageJson);
+    }
+  }
+};
 
 for (const file of files) {
   const content = fs.readFileSync(file, 'utf8');
   for (const packageName of findBareImports(content)) {
-    packageNames.add(packageName);
+    addPackage(packageName);
   }
 }
 
-const dependencies = Object.fromEntries(
-  [...packageNames]
+for (const packageName of configuredPluginNames) {
+  addPackage(packageName);
+}
+
+for (const packageName of workspacePackageNames) {
+  copyWorkspacePackage(packageName, workspacePackages.get(packageName));
+}
+
+const workspaceDependencies = Object.fromEntries(
+  [...workspacePackageNames]
     .sort((left, right) => left.localeCompare(right))
-    .map((packageName) => {
-      const version =
-        getInstalledVersion(packageName) ??
-        getDeclaredVersion(rootPackage, packageName);
-
-      if (!version) {
-        throw new Error(
-          `Could not find a declared or installed version for ${packageName}`,
-        );
-      }
-
-      return [packageName, version];
-    }),
+    .map((packageName) => [
+      packageName,
+      `file:${toPosix(path.relative(distDir, getVendorPackagePath(packageName)))}`,
+    ]),
 );
+
+const dependencies = Object.fromEntries([
+  ...[...externalPackageNames.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  ),
+  ...Object.entries(workspaceDependencies),
+]);
 
 const distPackage = {
   name: rootPackage.name,
   version: rootPackage.version ?? '0.0.0',
   private: true,
   type: 'module',
+  nocobase: rootPackage.nocobase,
   main: './server/embedded.js',
   exports: {
     '.': './server/embedded.js',
@@ -133,6 +246,8 @@ const distPackage = {
   },
   scripts: {
     start: 'node ./server/standalone.js',
+    migrate: 'node ./scripts/migrate.js',
+    seed: 'node ./scripts/seed.js',
   },
   engines: rootPackage.engines ?? {
     node: '>=20',
@@ -140,10 +255,10 @@ const distPackage = {
   dependencies,
 };
 
-fs.writeFileSync(distPackagePath, `${JSON.stringify(distPackage, null, 2)}\n`);
+writeJson(distPackagePath, distPackage);
 
 console.log(
   `Generated ${toPosix(path.relative(rootDir, distPackagePath))} with ${
     Object.keys(dependencies).length
-  } production dependencies.`,
+  } production dependencies and ${workspacePackageNames.size} vendored workspace packages.`,
 );

@@ -307,16 +307,14 @@ async function createHub(options: CreateHubOptions): Promise<void> {
 /**
  * Prints what the user has to do next for a hub.
  *
- * Editing `.env` is a step rather than a remark: the generated file points `NOCOBASE_API_PROXY_TARGET` at a NocoBase
- * instance on localhost, which is a placeholder in every case where the user is not already running one there. A hub
- * also has to be built before it can be started, unlike an app whose `pnpm dev` compiles as it serves.
+ * A hub has to be built before it can be started, unlike an app whose `pnpm dev` compiles as it serves.
  */
 function finishHub(
   name: string,
   state: { installed: boolean },
   message = 'Done.',
 ): void {
-  const steps = [`cd ${name}`, 'edit .env — set NOCOBASE_API_PROXY_TARGET'];
+  const steps = [`cd ${name}`];
 
   if (!state.installed) {
     steps.push('pnpm install');
