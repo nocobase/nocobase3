@@ -180,7 +180,8 @@ describe('client inspection', () => {
         }),
       ]),
     );
-    expect(inspection.settings.slice(0, 4).map(({ id }) => id)).toEqual([
+    expect(inspection.settings.slice(0, 5).map(({ id }) => id)).toEqual([
+      'ai',
       'permission-sets',
       'default-access',
       'sharing-rules',

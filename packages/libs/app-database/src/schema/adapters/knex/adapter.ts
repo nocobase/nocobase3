@@ -217,6 +217,9 @@ export class KnexSchemaAdapter implements SchemaAdapter {
         case 'json':
           builder = table.json(column.name);
           break;
+        case 'blob':
+          builder = table.binary(column.name, column.length);
+          break;
         case 'uuid':
           builder = table.uuid(column.name);
           break;
@@ -415,8 +418,10 @@ function addPrimaryConstraint(
         deferrable?: 'not deferrable' | 'immediate' | 'deferred';
       },
 ): void {
-  if (typeof options === 'string' || options === undefined) {
+  if (typeof options === 'string') {
     table.primary(columns, options);
+  } else if (options === undefined) {
+    table.primary(columns);
   } else {
     table.primary(columns, options);
   }
@@ -429,16 +434,18 @@ function addUniqueConstraint(
     | string
     | {
         indexName?: string;
-        deferrable?: unknown;
+        deferrable?: 'not deferrable' | 'immediate' | 'deferred';
         storageEngineIndexType?: string;
         useConstraint?: boolean;
         predicate?: Knex.QueryBuilder;
       },
 ): void {
-  if (typeof options === 'string' || options === undefined) {
+  if (typeof options === 'string') {
     table.unique(columns, options);
+  } else if (options === undefined) {
+    table.unique(columns);
   } else {
-    table.unique(columns, options as any);
+    table.unique(columns, options);
   }
 }
 

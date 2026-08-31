@@ -1,0 +1,18 @@
+interface:
+  display_name: 'NocoBase App AI Employee'
+  short_description: 'Build CLI-created App AI features'
+  default_prompt: >
+    Use $nocobase-plugin-ai-employee when developing a NocoBase App created by
+    pnpm create @nocobase/app. Treat the current directory as the App root and
+    make changes only in App-owned ai/, client/extensions/nocobase-ai, client/,
+    server/, tests, or App plugins. Consume the public @nocobase/ai-employee
+    root exports, installed AI service/components, and public plugin client
+    APIs. Before writing code, load the skill's contracts.md and api-reference.md
+    and copy parameter names, optionality, enums, defaults, request bodies, and
+    return shapes exactly; never guess a contract because dependency source may
+    be unavailable. Never require knowledge of the underlying template package,
+    deep-import AgentService, or modify framework dependencies to complete an
+    App feature.
+
+policy:
+  allow_implicit_invocation: true

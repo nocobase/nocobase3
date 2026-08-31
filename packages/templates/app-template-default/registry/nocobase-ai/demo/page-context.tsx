@@ -142,7 +142,6 @@ type LeadIntakeValues = {
 function FormFillerShowcase() {
   const { employees } = useAI();
   const employee =
-    employees.find((item) => item.username === 'form_assistant') ??
     employees.find((item) => item.username.toLowerCase() === 'dex') ??
     employees.filter(isBusinessEmployee)[0]!;
   const controller = useAIChatController();

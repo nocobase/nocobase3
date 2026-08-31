@@ -1,0 +1,7 @@
+interface:
+  display_name: 'NocoBase App AI Employee'
+  short_description: 'Use @nocobase/ai-employee in generated NocoBase Apps'
+  default_prompt: 'Use $nocobase-ai-employee to develop the current NocoBase App created with pnpm create @nocobase/app, using App-owned AI resources, deps.ai manager registration, and application-specific LLM providers without modifying dependency packages.'
+
+policy:
+  allow_implicit_invocation: true

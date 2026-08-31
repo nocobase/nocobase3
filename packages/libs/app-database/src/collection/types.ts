@@ -14,6 +14,7 @@ export type FieldType =
   | 'time'
   | 'datetime'
   | 'json'
+  | 'blob'
   | 'uuid'
   | 'native'
   | 'belongsTo'
@@ -473,6 +474,10 @@ export interface CollectionDefinitionBuilder {
     options?: Partial<FieldDefinition>,
   ): FieldDefinitionBuilder;
   json(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  blob(
     name: string,
     options?: Partial<FieldDefinition>,
   ): FieldDefinitionBuilder;

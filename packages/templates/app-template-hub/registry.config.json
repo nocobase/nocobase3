@@ -102,7 +102,7 @@
         "separator",
         "skeleton"
       ],
-      "docs": "Requires the compatible Portal Starter resource components, data table, NocoBase data provider, and ACL provider. AI page-element and form registration is enabled automatically when @nocobase/ai is also installed.",
+      "docs": "Requires the compatible Portal Starter resource components, data table, NocoBase data provider, and ACL provider. AI page-element and form registration is enabled automatically when @nocobase/ai-employee is also installed.",
       "source": {
         "root": "registry/nocobase-users-example",
         "target": "client/extensions/nocobase-users-example",

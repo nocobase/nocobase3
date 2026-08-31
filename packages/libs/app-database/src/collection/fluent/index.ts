@@ -130,6 +130,13 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     return this.field({ name, type: 'json', ...options });
   }
 
+  blob(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ name, type: 'blob', ...options });
+  }
+
   uuid(
     name: string,
     options: Partial<FieldDefinition> = {},
@@ -509,7 +516,7 @@ export class FluentRelationFieldBuilder
   extends FluentFieldDefinitionBuilder
   implements RelationFieldBuilder
 {
-  override definition: RelationFieldDefinition;
+  declare definition: RelationFieldDefinition;
 
   constructor(
     collection: FluentCollectionDefinitionBuilder,

@@ -31,6 +31,13 @@ describe('application config', () => {
     expect(runtime.appConfig.get(driveConfig).default).toBe('local');
     expect(runtime.appConfig.get(loggingConfig).default).toBe('system');
     expect(runtime.appConfig.get(queueConfig).default).toBe('sync');
+    expect(runtime.appConfig.get(queueConfig).jobs?.locations).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /app-plugin-ai-knowledge-base\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+        ),
+      ]),
+    );
     expect(runtime.appConfig.get(sessionConfig).default).toBe('memory');
   });
 
