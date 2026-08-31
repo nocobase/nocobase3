@@ -26,6 +26,12 @@ import {
   type AppClientSourceExtension,
   type ClientServiceProviderConstructor,
 } from '../plugins.js';
+import { readAppClientRuntimeConfig } from './browser-config.js';
+
+export {
+  readAppClientRuntimeConfig,
+  type AppClientRuntimeConfigPayload,
+} from './browser-config.js';
 
 export type AppRuntimeValidator = (
   app: ClientApplication,
@@ -84,7 +90,10 @@ export async function resolveAppRuntime(
   options: ResolveAppRuntimeOptions = {},
 ): Promise<ResolvedAppRuntime> {
   const config = await definition.config({
-    rawConfig: options.rawConfig ?? {},
+    rawConfig:
+      options.rawConfig === undefined
+        ? readAppClientRuntimeConfig()
+        : options.rawConfig,
     configs: Object.freeze(
       definition.plugins.flatMap((plugin) => plugin.config),
     ),

@@ -9,7 +9,11 @@ import { appConfig, type AppConfigAccessor } from '../config/index.js';
 import { spaConfig } from './config.js';
 import { createMountedOriginProxyHandler } from '../proxy/index.js';
 import { joinBasePath } from '../support/index.js';
-import { createNocoBaseSpaRuntimeGlobals } from './runtime-globals.js';
+import {
+  createNocoBaseSpaRuntimeGlobals,
+  type NocoBaseSpaRuntimeConfig,
+} from './runtime-globals.js';
+import type { SpaClientConfigMap } from './types.js';
 
 export interface SpaRoutesApplication {
   readonly config: AppConfigAccessor;
@@ -22,6 +26,7 @@ export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
     const router = new Hono();
     const identity = app.config.get(appConfig);
     const spa = app.config.get(spaConfig);
+    const apiUrl = joinBasePath(app.publicBasePath, '/api');
     registerSpaRoutes(router, {
       basePath: identity.internalBasePath,
       handler:
@@ -32,11 +37,44 @@ export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
             })
           : undefined,
       indexPath: spa.indexPath,
+      clientConfig: createPublicClientConfig(
+        app.config.get<SpaClientConfigMap>('client') ?? {},
+        { appBasePath: app.publicBasePath, apiUrl },
+      ),
       runtimeGlobals: createNocoBaseSpaRuntimeGlobals({
         appBasePath: app.publicBasePath,
-        apiUrl: joinBasePath(app.publicBasePath, '/api'),
+        apiUrl,
         ...spa.runtime,
       }),
     });
     return router;
   });
+
+function createPublicClientConfig(
+  configured: SpaClientConfigMap,
+  runtime: Pick<NocoBaseSpaRuntimeConfig, 'appBasePath' | 'apiUrl'>,
+): SpaClientConfigMap {
+  return {
+    ...configured,
+    app: {
+      ...readConfigSection(configured.app),
+      basePath: runtime.appBasePath,
+    },
+    api: {
+      ...readConfigSection(configured.api),
+      baseURL: runtime.apiUrl,
+    },
+  };
+}
+
+function readConfigSection(
+  value: SpaClientConfigMap[string] | undefined,
+): SpaClientConfigMap {
+  return isClientConfigMap(value) ? value : {};
+}
+
+function isClientConfigMap(
+  value: SpaClientConfigMap[string] | undefined,
+): value is SpaClientConfigMap {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

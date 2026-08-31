@@ -1,4 +1,8 @@
-import type { SpaRuntimeGlobalValue, SpaRuntimeGlobals } from './types.js';
+import type {
+  SpaClientConfigMap,
+  SpaRuntimeGlobalValue,
+  SpaRuntimeGlobals,
+} from './types.js';
 
 export interface NocoBaseSpaRuntimeConfig {
   readonly appBasePath: string;
@@ -24,6 +28,7 @@ export function createNocoBaseSpaRuntimeGlobals(
 
 const runtimeGlobalsStartMarker = '<!-- nocobase-spa-runtime:start -->';
 const runtimeGlobalsEndMarker = '<!-- nocobase-spa-runtime:end -->';
+const runtimeConfigElementId = 'nocobase-runtime-config';
 
 export function injectSpaRuntimeGlobals(
   html: string,
@@ -42,6 +47,24 @@ export function injectSpaRuntimeGlobals(
   }
 
   return `${cleanHtml.slice(0, moduleScriptMatch.index)}${runtimeGlobalsHtml}${cleanHtml.slice(moduleScriptMatch.index)}`;
+}
+
+export function injectSpaRuntimeHtml(
+  html: string,
+  options: {
+    readonly clientConfig?: SpaClientConfigMap;
+    readonly runtimeGlobals?: SpaRuntimeGlobals;
+  } = {},
+): string {
+  const withGlobals = injectSpaRuntimeGlobals(html, options.runtimeGlobals);
+  const cleanHtml = stripExistingRuntimeConfig(withGlobals);
+  const configHtml = createSpaRuntimeConfigHtml(options.clientConfig ?? {});
+  const moduleScriptPattern = /<script\s+[^>]*type=["']module["'][^>]*>/i;
+  const moduleScriptMatch = cleanHtml.match(moduleScriptPattern);
+  if (moduleScriptMatch?.index === undefined) {
+    return `${cleanHtml}\n${configHtml}`;
+  }
+  return `${cleanHtml.slice(0, moduleScriptMatch.index)}${configHtml}${cleanHtml.slice(moduleScriptMatch.index)}`;
 }
 
 function stripExistingRuntimeGlobals(html: string): string {
@@ -95,13 +118,27 @@ function serializeRuntimeGlobalValue(value: SpaRuntimeGlobalValue): string {
   return escapeScriptJson(serializedValue);
 }
 
-function escapeScriptJson(value: string): string {
+export function escapeScriptJson(value: string): string {
   return value
     .replace(/</g, '\\u003C')
     .replace(/>/g, '\\u003E')
     .replace(/&/g, '\\u0026')
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
+}
+
+function stripExistingRuntimeConfig(html: string): string {
+  const pattern = new RegExp(
+    `<script\\s+[^>]*id=["']${runtimeConfigElementId}["'][^>]*>[\\s\\S]*?<\\/script>\\s*`,
+    'gi',
+  );
+  return html.replace(pattern, '');
+}
+
+function createSpaRuntimeConfigHtml(config: SpaClientConfigMap): string {
+  return `<script id="${runtimeConfigElementId}" type="application/json">${escapeScriptJson(
+    JSON.stringify({ version: 1, config }),
+  )}</script>\n`;
 }
 
 function toBrowserBasePath(value: string): string {
