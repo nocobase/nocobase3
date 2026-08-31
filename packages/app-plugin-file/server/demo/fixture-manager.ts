@@ -1,15 +1,9 @@
-import type { Row } from '@nocobase/app-database';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import { ServiceProvider } from '@nocobase/service-provider';
+import type { QueryAdapter, Row } from '@nocobase/app-database';
 
-import { FILE_DEMO_FIXTURES } from '../demo/fixtures.js';
 import { FileUnavailableError } from '../errors.js';
-import {
-  resolveFilePluginRuntime,
-  type FilePluginRuntime,
-} from '../plugin-runtime.js';
-import { filePluginRuntimeToken } from '../runtime-token.js';
 import { ensureFileObject } from '../file-storage.js';
+import type { FilePluginRuntime } from '../plugin-runtime.js';
+import { FILE_DEMO_FIXTURES } from './fixtures.js';
 
 type FileDemoRuntime = {
   readonly database: FilePluginRuntime['database'];
@@ -21,20 +15,6 @@ const readinessByDatabase = new WeakMap<
   FileDemoRuntime['database'],
   Map<string, Promise<void>>
 >();
-
-export type FileProviderApplication = AppPluginApplication;
-
-export class FileProvider<
-  TApplication extends FileProviderApplication = FileProviderApplication,
-> extends ServiceProvider<TApplication> {
-  public readonly name: string = '@nocobase/app-plugin-file';
-
-  public override register(): void {
-    this.app.container.singleton(filePluginRuntimeToken, (container) =>
-      resolveFilePluginRuntime(container, this.app.config),
-    );
-  }
-}
 
 export function prepareFileDemoFixtures(
   runtime: FileDemoRuntime,
@@ -88,6 +68,13 @@ async function reconcileFixture(
     .select('id')
     .where('id', '=', fixture.id)
     .executeTakeFirst();
+  if (
+    !existing &&
+    fixture.preserveExistingScopeRecord &&
+    (await hasScopeRecord(query, fixture))
+  ) {
+    return;
+  }
   await ensureFileObject(
     { drive: runtime.drive, defaultDisk: runtime.defaultDisk },
     fixture,
@@ -116,4 +103,15 @@ async function reconcileFixture(
       .values({ ...row, createdAt: now })
       .execute();
   }
+}
+
+async function hasScopeRecord(
+  query: QueryAdapter,
+  fixture: (typeof FILE_DEMO_FIXTURES)[number],
+): Promise<boolean> {
+  let scoped = query.selectFrom(fixture.table).select('id');
+  for (const [field, value] of Object.entries(fixture.scope)) {
+    scoped = scoped.where(field, '=', value);
+  }
+  return scoped.exists();
 }

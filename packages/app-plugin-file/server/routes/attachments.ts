@@ -12,13 +12,13 @@ import type { ServiceResolver } from '@nocobase/service-provider';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
-import { prepareFileDemoFixtures } from '../providers/file.js';
 import { createFileRoute } from '../create-file-route.js';
 import {
   FILE_DEMO_COLLECTIONS,
   FILE_DEMO_ORDER,
   FILE_DEMO_PROFILE,
 } from '../demo/constants.js';
+import { prepareFileDemoFixtures } from '../demo/fixture-manager.js';
 import {
   isFilePluginRuntimeUnavailable,
   type FilePluginConfig,

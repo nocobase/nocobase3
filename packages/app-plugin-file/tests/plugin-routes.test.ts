@@ -53,12 +53,12 @@ vi.mock('../server/file-storage.js', () => ({
   removeFileObject: removeFileObjectMock,
 }));
 
-import { FileProvider } from '../server/providers/file.js';
 import {
   isFilePluginRuntimeUnavailable,
   resolveFilePluginRuntime,
   type FilePluginConfig,
 } from '../server/plugin-runtime.js';
+import { FileProvider } from '../server/providers/index.js';
 import { filePluginRuntimeToken } from '../server/runtime-token.js';
 import { apiRoutes, createFileDemoRoutes } from '../server/routes/index.js';
 
@@ -357,7 +357,7 @@ describe('file plugin route factory and registrar', () => {
     const sources = await Promise.all(
       [
         '../server/plugin-runtime.ts',
-        '../server/providers/file.ts',
+        '../server/providers/index.ts',
         '../server/routes/index.ts',
       ].map(async (path) => readFile(new URL(path, import.meta.url), 'utf8')),
     );
@@ -495,10 +495,13 @@ function createConfigAccessor(config: FilePluginConfig): AppConfigAccessor {
 function createBootstrapDatabase(): DatabaseManager {
   const execute = async (): Promise<void> => undefined;
   const executeTakeFirst = async (): Promise<undefined> => undefined;
+  const exists = async (): Promise<boolean> => false;
   return {
     query: () => ({
       selectFrom: () => ({
-        select: () => ({ where: () => ({ executeTakeFirst }) }),
+        select: () => ({
+          where: () => ({ executeTakeFirst, exists }),
+        }),
       }),
       insertInto: () => ({ values: () => ({ execute }) }),
       updateTable: () => ({
