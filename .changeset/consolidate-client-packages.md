@@ -20,7 +20,7 @@
 
 Consolidate the browser packages into `@nocobase/app-client`.
 
-`@nocobase/app-sdk` is gone; its API client now lives in `@nocobase/app-client` and is imported from there. `@nocobase/app-portal-sdk` keeps only `NocoBaseClient` and the runtime configuration it reads, which exists to reach a v2 NocoBase server and is deprecated for everything else. Its ACL, auth, data, routing, extension, i18n, and system-settings modules are removed.
+`@nocobase/app-sdk` is gone; its API client now lives in `@nocobase/app-client` and is imported from there. `@nocobase/app-portal-sdk` is deprecated and keeps only what still has consumers: `NocoBaseClient` and the runtime configuration it reads, which exist to reach a v2 NocoBase server, and the route surface containers under `/routing`. Its ACL, auth, data, extension, i18n, and system-settings modules are removed, as is the route tree that `/routing` used to export alongside the surfaces.
 
 `@nocobase/app-client` gains `resolveAppBase()`, which reports the path the application is mounted at.
 

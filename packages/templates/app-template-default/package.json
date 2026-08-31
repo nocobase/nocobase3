@@ -15,6 +15,12 @@
       "@nocobase/app-plugin-authentication": {
         "enabled": true
       },
+      "@nocobase/app-plugin-ai-employee": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-ai-knowledge-base": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-authorization": {
         "enabled": true
       },
@@ -176,7 +182,11 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@nocobase/ai-employee": "workspace:^",
+    "@nocobase/app-plugin-ai-employee": "workspace:^",
+    "@nocobase/app-plugin-ai-knowledge-base": "workspace:^",
+    "@nocobase/cron": "workspace:^"
   },
   "files": [
     "client",

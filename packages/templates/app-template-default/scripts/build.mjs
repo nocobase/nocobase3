@@ -247,6 +247,7 @@ run('Generate server package', 'node', [
 run('Install server production dependencies', 'npm', [
   'install',
   '--omit=dev',
+  '--legacy-peer-deps',
   '--package-lock=false',
   '--prefix',
   './dist',

@@ -22,6 +22,10 @@
     "./runtime": {
       "types": "./src/runtime/index.ts",
       "import": "./src/runtime/index.ts"
+    },
+    "./routing": {
+      "types": "./src/routing/index.ts",
+      "import": "./src/routing/index.ts"
     }
   },
   "nocobase": {
@@ -37,6 +41,10 @@
       "./runtime": {
         "types": "./dist/runtime/index.d.ts",
         "import": "./dist/runtime/index.js"
+      },
+      "./routing": {
+        "types": "./dist/routing/index.d.ts",
+        "import": "./dist/routing/index.js"
       }
     }
   },
@@ -58,9 +66,16 @@
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "react": "catalog:",
+    "react-router": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-router": "^7.0.0"
   }
 }

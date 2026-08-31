@@ -1,0 +1,180 @@
+{
+  "name": "@nocobase/app-plugin-ai-employee",
+  "displayName": "AI Employee App Plugin",
+  "description": "Database-backed AI employee runtime, routes, resources, and built-in employees for NocoBase Apps.",
+  "version": "0.0.1",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "client",
+    "server",
+    "database",
+    "ai",
+    "package.json"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/ai-settings": {
+      "types": "./client/ai-settings.ts",
+      "import": "./client/ai-settings.ts"
+    },
+    "./client/settings": {
+      "types": "./client/settings.ts",
+      "import": "./client/settings.ts"
+    },
+    "./client/settings-pages": {
+      "types": "./client/settings-pages.ts",
+      "import": "./client/settings-pages.ts"
+    },
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
+    "./server/tokens": {
+      "types": "./server/tokens.ts",
+      "import": "./server/tokens.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./package.json": "./package.json",
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/ai-settings": {
+        "types": "./dist/client/ai-settings.d.ts",
+        "import": "./dist/client/ai-settings.js"
+      },
+      "./client/settings": {
+        "types": "./dist/client/settings.d.ts",
+        "import": "./dist/client/settings.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
+      "./client/settings-pages": {
+        "types": "./dist/client/settings-pages.d.ts",
+        "import": "./dist/client/settings-pages.js"
+      },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
+      "./server/tokens": {
+        "types": "./dist/server/tokens.d.ts",
+        "import": "./dist/server/tokens.js"
+      }
+    }
+  },
+  "nocobase": {
+    "plugin": {
+      "database": {
+        "migrations": "./database/migrations"
+      },
+      "server": "./server/bootstrap.ts"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-ai-resources.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@dicebear/core": "^9.4.3",
+    "@langchain/core": "1.1.49",
+    "@langchain/langgraph": "1.4.4",
+    "@langchain/langgraph-checkpoint": "1.1.2",
+    "@nocobase/ai-employee": "workspace:^",
+    "@nocobase/ai-employee-avatars": "^1.0.2",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-portal-sdk": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/drive": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/logging": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
+    "@nocobase/snowflake": "workspace:^",
+    "hono": "catalog:",
+    "langchain": "1.2.39",
+    "lodash": "^4.17.21",
+    "lucide-react": "^0.487.0",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/lodash": "^4.17.0",
+    "@types/node": "catalog:",
+    "better-sqlite3": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@langchain/openai": "1.4.7",
+    "@nocobase/app-client": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "vite": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
+    "@refinedev/core": "^5.0.0",
+    "react": "^19.0.0",
+    "react-router": "^7.0.0"
+  }
+}
