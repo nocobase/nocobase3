@@ -41,9 +41,9 @@ const BASE_TEMPLATE_FILES = new Set([
 
 function hasClientPlugin(capabilities: PluginCapabilities): boolean {
   return (
-    capabilities.client.bootstrap ||
+    capabilities.client.serviceProviders ||
     capabilities.client.locales ||
-    capabilities.client.providers ||
+    capabilities.client.reactWrappers ||
     capabilities.client.routes
   );
 }
@@ -53,17 +53,17 @@ function hasServerPlugin(capabilities: PluginCapabilities): boolean {
     capabilities.database ||
     capabilities.server.jobs ||
     capabilities.server.locales ||
-    capabilities.server.providers ||
+    capabilities.server.serviceProviders ||
     capabilities.server.routes
   );
 }
 
 function hasBrowserCode(capabilities: PluginCapabilities): boolean {
   return (
-    capabilities.client.bootstrap ||
+    capabilities.client.serviceProviders ||
     capabilities.client.components ||
     capabilities.client.locales ||
-    capabilities.client.providers ||
+    capabilities.client.reactWrappers ||
     capabilities.client.routes ||
     capabilities.registry
   );
@@ -84,10 +84,10 @@ function includeTemplateFile(
     return capabilities.client.locales;
   }
   if (
-    relativePath === 'client/bootstrap.ts' ||
-    relativePath === 'tests/bootstrap.test.ts'
+    relativePath.startsWith('client/providers/') ||
+    relativePath === 'tests/client-service-provider.test.ts'
   ) {
-    return capabilities.client.bootstrap;
+    return capabilities.client.serviceProviders;
   }
   if (
     relativePath === 'client/routes.ts' ||
@@ -96,12 +96,12 @@ function includeTemplateFile(
     return capabilities.client.routes;
   }
   if (
-    relativePath === 'client/providers.ts' ||
+    relativePath.startsWith('client/react-wrappers/') ||
     relativePath === 'client/contexts.ts' ||
     relativePath === 'client/components/provider.tsx' ||
-    relativePath === 'tests/client-provider.test.tsx'
+    relativePath === 'tests/client-react-wrapper.test.tsx'
   ) {
-    return capabilities.client.providers;
+    return capabilities.client.reactWrappers;
   }
   if (
     relativePath === 'client/components/plugin-component.tsx' ||
@@ -126,7 +126,7 @@ function includeTemplateFile(
     relativePath === 'server/tokens.ts' ||
     relativePath === 'tests/server-provider.test.ts'
   ) {
-    return capabilities.server.providers;
+    return capabilities.server.serviceProviders;
   }
   if (
     relativePath === 'server/routes/index.ts' ||
@@ -304,7 +304,7 @@ async function renderManifest(
   const browserCode = hasBrowserCode(capabilities);
   const react =
     capabilities.client.components ||
-    capabilities.client.providers ||
+    capabilities.client.reactWrappers ||
     capabilities.registry;
   const exports: Record<string, unknown> = {};
   const publishExports: Record<string, unknown> = {};
@@ -317,7 +317,7 @@ async function renderManifest(
   };
   if (serverPlugin)
     addExport('./server', './server/index.ts', './dist/server/index.js');
-  if (capabilities.server.providers)
+  if (capabilities.server.serviceProviders)
     addExport(
       './server/tokens',
       './server/tokens.ts',
@@ -331,11 +331,11 @@ async function renderManifest(
       './dist/client/plugin.js',
     );
   }
-  if (capabilities.client.bootstrap)
+  if (capabilities.client.serviceProviders)
     addExport(
-      './client/bootstrap',
-      './client/bootstrap.ts',
-      './dist/client/bootstrap.js',
+      './client/providers',
+      './client/providers/index.ts',
+      './dist/client/providers/index.js',
     );
   if (capabilities.client.routes)
     addExport(
@@ -343,11 +343,11 @@ async function renderManifest(
       './client/routes.ts',
       './dist/client/routes.js',
     );
-  if (capabilities.client.providers)
+  if (capabilities.client.reactWrappers)
     addExport(
-      './client/providers',
-      './client/providers.ts',
-      './dist/client/providers.js',
+      './client/react-wrappers',
+      './client/react-wrappers/index.ts',
+      './dist/client/react-wrappers/index.js',
     );
   if (capabilities.client.components)
     addExport(
@@ -386,7 +386,10 @@ async function renderManifest(
   if (serverPlugin) dependencies['@nocobase/app-server-kit'] = 'workspace:^';
   if (capabilities.database)
     dependencies['@nocobase/app-database'] = 'workspace:^';
-  if (capabilities.server.providers)
+  if (
+    capabilities.server.serviceProviders ||
+    capabilities.client.serviceProviders
+  )
     dependencies['@nocobase/service-provider'] = 'workspace:^';
   if (capabilities.server.routes) dependencies.hono = 'catalog:';
   if (capabilities.server.jobs) dependencies['@nocobase/queue'] = 'workspace:^';
@@ -505,22 +508,30 @@ function renderClientPlugin(
   capabilities: PluginCapabilities,
 ): string {
   const entries = [
-    capabilities.client.locales
-      ? "  locales: () => import('./locales/index.js'),"
+    capabilities.client.locales ? '  locales,' : undefined,
+    capabilities.client.serviceProviders ? '  serviceProviders,' : undefined,
+    capabilities.client.routes ? '  routes,' : undefined,
+    capabilities.client.reactWrappers ? '  reactWrappers,' : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const imports = [
+    capabilities.client.serviceProviders
+      ? "import serviceProviders from './providers/index.js';"
       : undefined,
-    capabilities.client.bootstrap
-      ? "  bootstrap: () => import('./bootstrap.js'),"
+    capabilities.client.locales
+      ? "import locales from './locales/index.js';"
       : undefined,
     capabilities.client.routes
-      ? "  routes: () => import('./routes.js'),"
+      ? "import routes from './routes.js';"
       : undefined,
-    capabilities.client.providers
-      ? "  providers: () => import('./providers.js'),"
+    capabilities.client.reactWrappers
+      ? "import reactWrappers from './react-wrappers/index.js';"
       : undefined,
   ]
     .filter(Boolean)
     .join('\n');
-  return `import { defineClientPlugin, type AppClientPluginFactory } from '@nocobase/app-client/plugins';\n\nconst ${context.moduleName}: AppClientPluginFactory = defineClientPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName};\n`;
+  return `import { defineClientPlugin, type AppClientPluginFactory } from '@nocobase/app-client/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}: AppClientPluginFactory = defineClientPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName};\n`;
 }
 
 function renderServerPlugin(
@@ -528,7 +539,7 @@ function renderServerPlugin(
   capabilities: PluginCapabilities,
 ): string {
   const imports = [
-    capabilities.server.providers
+    capabilities.server.serviceProviders
       ? "import providers from './providers/index.js';"
       : undefined,
     capabilities.server.routes
@@ -541,7 +552,9 @@ function renderServerPlugin(
     capabilities.server.locales
       ? "  locales: () => import('./locales/index.js'),"
       : undefined,
-    capabilities.server.providers ? '  providers,' : undefined,
+    capabilities.server.serviceProviders
+      ? '  serviceProviders: providers,'
+      : undefined,
     capabilities.server.routes ? '  routes,' : undefined,
     capabilities.database
       ? "  database: {\n    migrations: './database/migrations',\n    seeds: './database/seeds',\n  },"
@@ -563,8 +576,8 @@ function renderPluginTest(
     capabilities.server.locales
       ? '      locales: expect.any(Function),'
       : undefined,
-    capabilities.server.providers
-      ? '      providers: expect.any(Array),'
+    capabilities.server.serviceProviders
+      ? '      serviceProviders: expect.any(Array),'
       : undefined,
     capabilities.server.routes ? '      routes: expect.any(Array),' : undefined,
     capabilities.database
@@ -585,14 +598,14 @@ function renderReadme(
 ): string {
   const selected = [
     capabilities.database && 'database',
-    capabilities.server.providers && 'server.providers',
+    capabilities.server.serviceProviders && 'server.service-providers',
     capabilities.server.routes && 'server.routes',
     capabilities.server.jobs && 'server.jobs',
     capabilities.server.locales && 'server.locales',
     capabilities.client.routes && 'client.routes',
     capabilities.client.components && 'client.components',
-    capabilities.client.providers && 'client.providers',
-    capabilities.client.bootstrap && 'client.bootstrap',
+    capabilities.client.serviceProviders && 'client.service-providers',
+    capabilities.client.reactWrappers && 'client.react-wrappers',
     capabilities.client.locales && 'client.locales',
     capabilities.registry && 'registry',
     capabilities.skills && 'skills',
@@ -613,12 +626,12 @@ function renderSkill(
       '- Client components: document each public package export, required props, and where the App should place it. Do not imply that a direct component import requires Client plugin registration.',
     capabilities.client.routes &&
       '- Client routes: document the implemented App or Settings path, navigation entry, and access conditions.',
-    capabilities.client.providers &&
-      '- Client providers: document the context or behavior exposed to the App and any required composition order.',
-    capabilities.client.bootstrap &&
-      '- Client bootstrap: document the App-visible side effects and how an Agent can verify them.',
-    capabilities.server.providers &&
-      '- Server providers: document any public `ServiceToken` export and the supported Server-to-Server workflow.',
+    capabilities.client.serviceProviders &&
+      '- Client ServiceProviders: document registered services, lifecycle side effects, and how an Agent can verify them.',
+    capabilities.client.reactWrappers &&
+      '- Client React wrappers: document the React context or UI behavior exposed to the App and any required composition order.',
+    capabilities.server.serviceProviders &&
+      '- Server ServiceProviders: document any public `ServiceToken` export and the supported Server-to-Server workflow.',
     capabilities.server.routes &&
       '- Server routes: document every implemented method and path, plus its authentication and authorization boundary.',
     capabilities.server.jobs &&

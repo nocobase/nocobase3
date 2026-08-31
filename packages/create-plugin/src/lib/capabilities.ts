@@ -1,14 +1,14 @@
 /** Capabilities a generated plugin may provide to an App or another plugin. */
 export const PLUGIN_CAPABILITIES = [
   'database',
-  'server.providers',
+  'server.service-providers',
   'server.routes',
   'server.jobs',
   'server.locales',
   'client.routes',
   'client.components',
-  'client.providers',
-  'client.bootstrap',
+  'client.service-providers',
+  'client.react-wrappers',
   'client.locales',
   'registry',
   'skills',
@@ -19,7 +19,7 @@ export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number];
 export interface PluginCapabilities {
   readonly database: boolean;
   readonly server: {
-    readonly providers: boolean;
+    readonly serviceProviders: boolean;
     readonly routes: boolean;
     readonly jobs: boolean;
     readonly locales: boolean;
@@ -27,8 +27,8 @@ export interface PluginCapabilities {
   readonly client: {
     readonly routes: boolean;
     readonly components: boolean;
-    readonly providers: boolean;
-    readonly bootstrap: boolean;
+    readonly serviceProviders: boolean;
+    readonly reactWrappers: boolean;
     readonly locales: boolean;
   };
   readonly registry: boolean;
@@ -42,7 +42,7 @@ export function normalizePluginCapabilities(
   return {
     database: selected.has('database'),
     server: {
-      providers: selected.has('server.providers'),
+      serviceProviders: selected.has('server.service-providers'),
       routes: selected.has('server.routes'),
       jobs: selected.has('server.jobs'),
       locales: selected.has('server.locales'),
@@ -50,8 +50,8 @@ export function normalizePluginCapabilities(
     client: {
       routes: selected.has('client.routes'),
       components: selected.has('client.components'),
-      providers: selected.has('client.providers'),
-      bootstrap: selected.has('client.bootstrap'),
+      serviceProviders: selected.has('client.service-providers'),
+      reactWrappers: selected.has('client.react-wrappers'),
       locales: selected.has('client.locales'),
     },
     registry: selected.has('registry'),
