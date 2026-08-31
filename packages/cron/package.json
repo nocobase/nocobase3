@@ -1,7 +1,6 @@
 {
   "name": "@nocobase/cron",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -17,6 +16,7 @@
     }
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
