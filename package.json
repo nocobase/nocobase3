@@ -60,12 +60,5 @@
     "publint": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
-  },
-  "lint-staged": {
-    "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}": [
-      "eslint --fix --no-warn-ignored --max-warnings 0",
-      "prettier --write"
-    ],
-    "*.{json,json5,jsonc,md,mdx,yml,yaml,css,scss,less,html}": "prettier --write"
   }
 }
