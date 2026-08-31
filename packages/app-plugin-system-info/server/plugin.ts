@@ -8,7 +8,7 @@ import routes from './routes/index.js';
 
 const systemInfoPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-system-info',
-  providers,
+  serviceProviders: providers,
   routes,
 });
 

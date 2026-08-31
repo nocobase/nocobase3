@@ -57,7 +57,7 @@ describe('application', () => {
   it('starts providers before dispatching the first HTTP request', async () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
-    app.addProvider(TestProvider, 'lazy', calls);
+    app.addServiceProvider(TestProvider, 'lazy', calls);
     app.addRoutes(
       defineApiRoutes(() => {
         const router = new Hono();
@@ -97,7 +97,7 @@ describe('application', () => {
       }
     }
 
-    app.addProvider(ConfigProvider);
+    app.addServiceProvider(ConfigProvider);
     await app.start();
 
     expect(enabledValues).toEqual([true]);
@@ -106,7 +106,7 @@ describe('application', () => {
   it('registers API and root routes between provider boot and start', async () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
-    app.addProvider(TestProvider, 'provider', calls);
+    app.addServiceProvider(TestProvider, 'provider', calls);
     app.addRoutes(
       defineApiRoutes(() => {
         calls.push('api:register');
@@ -149,7 +149,7 @@ describe('application', () => {
     const app = new Application(createTestApplicationOptions());
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-test',
-      providers: [RuntimePluginProvider],
+      serviceProviders: [RuntimePluginProvider],
       routes: [
         defineApiRoutes(() => {
           const router = new Hono();
@@ -216,7 +216,7 @@ describe('application', () => {
     }
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-runtime-order-test',
-      providers: [PluginProvider],
+      serviceProviders: [PluginProvider],
       routes: [
         defineApiRoutes(() => {
           calls.push('plugin:api');
@@ -249,7 +249,7 @@ describe('application', () => {
           },
         ],
       },
-      providers: [ApplicationProvider],
+      serviceProviders: [ApplicationProvider],
       routes: [
         defineApiRoutes(() => {
           calls.push('application:api');
@@ -295,8 +295,8 @@ describe('application', () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
 
-    app.addProvider(TestProvider, 'first', calls);
-    app.addProvider(TestProvider, 'second', calls);
+    app.addServiceProvider(TestProvider, 'first', calls);
+    app.addServiceProvider(TestProvider, 'second', calls);
     const firstStart = app.start();
     const secondStart = app.start();
     expect(secondStart).toBe(firstStart);

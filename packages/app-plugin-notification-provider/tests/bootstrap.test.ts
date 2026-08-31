@@ -1,14 +1,14 @@
-import type { AppClient } from '@nocobase/app-sdk';
-import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
+import type { ClientApplication } from '@nocobase/app-client';
+import type {
+  AppClientRefineRegistry,
+  ClientServiceProviderContext,
+} from '@nocobase/app-client/plugins';
 import { describe, expect, it, vi } from 'vitest';
 
-import bootstrap from '../client/bootstrap.js';
+import { NotificationProviderServiceProvider } from '../client/service-provider.js';
 
-describe('client bootstrap', () => {
+describe('client ServiceProvider', () => {
   it('registers the notification provider with the app runtime', async () => {
-    const appClient: AppClient = {
-      request: vi.fn<AppClient['request']>(),
-    };
     const setNotificationProvider = vi.fn();
     const refine: AppClientRefineRegistry = {
       addLiveEventHandler: vi.fn(),
@@ -27,11 +27,15 @@ describe('client bootstrap', () => {
       setRouterProvider: vi.fn(),
     };
 
-    await bootstrap({
-      appClient,
-      packageName: '@nocobase/app-plugin-notification-provider',
+    const app = {
       refine,
-    });
+    } as unknown as ClientApplication;
+    const context: ClientServiceProviderContext = {
+      packageName: '@nocobase/app-plugin-notification-provider',
+      source: 'plugin',
+      options: {},
+    };
+    await new NotificationProviderServiceProvider(app, context).boot();
 
     expect(setNotificationProvider).toHaveBeenCalledExactlyOnceWith({
       close: expect.any(Function),

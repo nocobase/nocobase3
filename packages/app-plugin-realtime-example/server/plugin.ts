@@ -8,7 +8,7 @@ import routes from './routes/index.js';
 
 const realtimeExamplePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-realtime-example',
-  providers,
+  serviceProviders: providers,
   routes,
 });
 

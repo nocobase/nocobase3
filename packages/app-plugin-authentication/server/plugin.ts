@@ -12,7 +12,7 @@ const authenticationPlugin: AppServerPlugin<AuthenticationProviderConfig> =
   defineServerPlugin<AuthenticationProviderConfig>({
     packageName: '@nocobase/app-plugin-authentication',
     config: authenticationConfig,
-    providers,
+    serviceProviders: providers,
     routes,
     database: {
       migrations: './database/migrations',

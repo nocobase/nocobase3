@@ -192,7 +192,7 @@ describe('app server', () => {
       plugins: [
         defineServerPlugin<AppConfig>({
           packageName: '@nocobase/app-plugin-test',
-          providers: [TestPluginProvider],
+          serviceProviders: [TestPluginProvider],
         }),
       ],
     });
@@ -288,7 +288,7 @@ describe('app server', () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       app: {
-        name: 'app-template-default',
+        name: app.appName,
         basePath: '/embedded-app-template-default',
       },
       basePath: '/embedded-app-template-default',
@@ -331,7 +331,10 @@ describe('app server', () => {
       {
         ...appRuntime,
         plugins: defineServerPlugins<AppConfig>([]),
-        providers: [...appRuntime.providers, TestRuntimeApplicationProvider],
+        serviceProviders: [
+          ...appRuntime.serviceProviders,
+          TestRuntimeApplicationProvider,
+        ],
       },
       scope,
     );
@@ -340,7 +343,7 @@ describe('app server', () => {
       plugins: createResolvedTestServerPlugins([
         defineServerPlugin<AppConfig>({
           packageName: '@nocobase/app-plugin-runtime-test',
-          providers: [TestRuntimePluginProvider],
+          serviceProviders: [TestRuntimePluginProvider],
         }),
       ]),
     };
@@ -1374,14 +1377,14 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     paths,
   });
   if (database) {
-    app.addProvider(TestDatabaseProvider);
+    app.addServiceProvider(TestDatabaseProvider);
   }
-  app.addProvider(LoggingProvider);
-  app.addProvider(CachingProvider);
-  app.addProvider(IdGeneratorProvider);
-  app.addProvider(SessionProvider);
-  app.addProvider(DriveProvider);
-  app.addProvider(QueueProvider);
+  app.addServiceProvider(LoggingProvider);
+  app.addServiceProvider(CachingProvider);
+  app.addServiceProvider(IdGeneratorProvider);
+  app.addServiceProvider(SessionProvider);
+  app.addServiceProvider(DriveProvider);
+  app.addServiceProvider(QueueProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
   app.addRoutes(healthCheckApiRoutes);

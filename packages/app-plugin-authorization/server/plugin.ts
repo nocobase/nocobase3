@@ -8,7 +8,7 @@ import routes from './routes/index.js';
 
 const authorizationPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-authorization',
-  providers,
+  serviceProviders: providers,
   routes,
   database: {
     migrations: './database/migrations',

@@ -12,7 +12,7 @@ const workflowPlugin: AppServerPlugin<WorkflowProviderConfig> =
   defineServerPlugin<WorkflowProviderConfig>({
     packageName: '@nocobase/app-plugin-workflow',
     config: workflowConfig,
-    providers,
+    serviceProviders: providers,
     routes,
     database: {
       migrations: './database/migrations',

@@ -3,6 +3,10 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
+import reactWrappers from './react-wrappers.js';
+import routes from './routes.js';
+import { AuthorizationServiceProvider } from './service-provider.js';
+
 export interface AuthorizationClientOptions {
   readonly placeholder?: never;
 }
@@ -10,9 +14,9 @@ export interface AuthorizationClientOptions {
 const authorization: AppClientPluginFactory<AuthorizationClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-authorization',
-    bootstrap: () => import('./bootstrap.js'),
-    routes: () => import('./routes.js'),
-    providers: () => import('./providers.js'),
+    serviceProviders: [AuthorizationServiceProvider],
+    routes,
+    reactWrappers,
   });
 
 export default authorization;

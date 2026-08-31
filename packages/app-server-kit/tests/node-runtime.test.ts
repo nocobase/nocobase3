@@ -162,7 +162,7 @@ function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
       return config;
     },
     plugins: defineServerPlugins([]),
-    providers: [],
+    serviceProviders: [],
     routes: [],
   });
 }

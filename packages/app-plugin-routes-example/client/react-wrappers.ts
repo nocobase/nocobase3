@@ -1,17 +1,16 @@
 import {
-  defineClientProviders,
-  type AppClientProviderDefinition,
+  defineClientReactWrappers,
+  type AppClientReactWrapperDefinition,
 } from '@nocobase/app-client/plugins';
 
 import { RoutesExampleProvider } from './components/routes-example-provider.js';
 
-const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
-  [
+export const reactWrappers: readonly AppClientReactWrapperDefinition[] =
+  defineClientReactWrappers([
     {
       name: 'routes-example',
       component: RoutesExampleProvider,
     },
-  ],
-);
+  ]);
 
-export default providers;
+export default reactWrappers;

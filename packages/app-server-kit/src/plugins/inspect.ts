@@ -54,7 +54,7 @@ export interface AppServerPluginSnapshot {
   readonly packageName: string;
   readonly version: string;
   readonly contributions: {
-    readonly providers: number;
+    readonly serviceProviders: number;
     readonly routes: number;
     readonly locales: boolean;
     readonly migrations: boolean;
@@ -66,7 +66,7 @@ export interface AppServerPluginSnapshot {
 export interface AppServerInspectionSnapshot {
   readonly app: { readonly packageName: string };
   readonly plugins: readonly AppServerPluginSnapshot[];
-  readonly providers: readonly AppServerProviderSnapshot[];
+  readonly serviceProviders: readonly AppServerProviderSnapshot[];
   readonly routes: readonly AppServerRouteSnapshot[];
   readonly locales: readonly AppServerLocalesSnapshot[];
   readonly database: readonly AppServerDatabaseSnapshot[];
@@ -84,7 +84,7 @@ export interface AppServerInspectionSnapshot {
 export function inspectResolvedAppServerPlugins(
   resolved: ResolvedAppServerPlugins,
 ): AppServerInspectionSnapshot {
-  const providers: AppServerProviderSnapshot[] = [];
+  const serviceProviders: AppServerProviderSnapshot[] = [];
   const routes: AppServerRouteSnapshot[] = [];
   const locales: AppServerLocalesSnapshot[] = [];
   const database: AppServerDatabaseSnapshot[] = [];
@@ -102,9 +102,9 @@ export function inspectResolvedAppServerPlugins(
         packageName: plugin.metadata.packageName,
       });
     }
-    plugin.definition.providers.forEach((Provider) => {
+    plugin.definition.serviceProviders.forEach((Provider) => {
       providerOrder += 1;
-      providers.push({
+      serviceProviders.push({
         order: providerOrder,
         pluginOrder,
         packageName: plugin.metadata.packageName,
@@ -188,7 +188,7 @@ export function inspectResolvedAppServerPlugins(
       packageName: plugin.metadata.packageName,
       version: plugin.metadata.version,
       contributions: {
-        providers: plugin.definition.providers.length,
+        serviceProviders: plugin.definition.serviceProviders.length,
         routes: plugin.definition.routes.length,
         locales: plugin.definition.locales !== undefined,
         migrations: configuredMigrations !== undefined,
@@ -201,7 +201,7 @@ export function inspectResolvedAppServerPlugins(
   return {
     app: { packageName: resolved.appPackageName },
     plugins,
-    providers,
+    serviceProviders,
     routes,
     locales,
     database,

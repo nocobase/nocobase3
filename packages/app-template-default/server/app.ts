@@ -29,14 +29,14 @@ export function createApp(runtime: ResolvedAppRuntime): Application {
     mode: runtime.mode,
     paths: runtime.configPaths,
   });
-  app.addProvider(DatabaseProvider);
-  app.addProvider(I18nProvider);
-  app.addProvider(LoggingProvider);
-  app.addProvider(CachingProvider);
-  app.addProvider(IdGeneratorProvider);
-  app.addProvider(SessionProvider);
-  app.addProvider(DriveProvider);
-  app.addProvider(QueueProvider);
+  app.addServiceProvider(DatabaseProvider);
+  app.addServiceProvider(I18nProvider);
+  app.addServiceProvider(LoggingProvider);
+  app.addServiceProvider(CachingProvider);
+  app.addServiceProvider(IdGeneratorProvider);
+  app.addServiceProvider(SessionProvider);
+  app.addServiceProvider(DriveProvider);
+  app.addServiceProvider(QueueProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
   app.addHttpMiddleware(i18nHttpMiddleware);

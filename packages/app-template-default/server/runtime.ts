@@ -11,7 +11,7 @@ import routes from './routes/index.js';
 const appRuntime: AppRuntimeDefinition = defineAppRuntime({
   config: createAppConfig,
   plugins,
-  providers,
+  serviceProviders: providers,
   routes,
 });
 

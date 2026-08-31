@@ -19,9 +19,9 @@
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
     },
-    "./client/providers": {
-      "types": "./client/providers.ts",
-      "import": "./client/providers.ts"
+    "./client/react-wrappers": {
+      "types": "./client/react-wrappers.ts",
+      "import": "./client/react-wrappers.ts"
     },
     "./client": {
       "types": "./client/index.ts",
@@ -44,9 +44,9 @@
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
       },
-      "./client/providers": {
-        "types": "./dist/client/providers.d.ts",
-        "import": "./dist/client/providers.js"
+      "./client/react-wrappers": {
+        "types": "./dist/client/react-wrappers.d.ts",
+        "import": "./dist/client/react-wrappers.js"
       },
       "./client": {
         "types": "./dist/client/index.d.ts",

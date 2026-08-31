@@ -12,7 +12,7 @@ const notificationPlugin: AppServerPlugin<NotificationProviderApplicationConfig>
   defineServerPlugin<NotificationProviderApplicationConfig>({
     packageName: '@nocobase/app-plugin-notification',
     config: notificationConfig,
-    providers,
+    serviceProviders: providers,
     routes,
     database: {
       migrations: './database/migrations',

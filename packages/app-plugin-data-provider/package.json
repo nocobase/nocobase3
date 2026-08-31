@@ -19,10 +19,6 @@
       "types": "./client/plugin.ts",
       "import": "./client/plugin.ts"
     },
-    "./client/bootstrap": {
-      "types": "./client/bootstrap.ts",
-      "import": "./client/bootstrap.ts"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -38,10 +34,6 @@
       "./client/plugin": {
         "types": "./dist/client/plugin.d.ts",
         "import": "./dist/client/plugin.js"
-      },
-      "./client/bootstrap": {
-        "types": "./dist/client/bootstrap.d.ts",
-        "import": "./dist/client/bootstrap.js"
       },
       "./package.json": "./package.json"
     },
@@ -67,7 +59,8 @@
     "@refinedev/core": "^5.0.0"
   },
   "dependencies": {
-    "@nocobase/app-portal-sdk": "workspace:^"
+    "@nocobase/app-portal-sdk": "workspace:^",
+    "@nocobase/service-provider": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",

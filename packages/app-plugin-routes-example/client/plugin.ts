@@ -3,10 +3,13 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
+import reactWrappers from './react-wrappers.js';
+import routes from './routes.js';
+
 const routesExample: AppClientPluginFactory = defineClientPlugin({
   packageName: '@nocobase/app-plugin-routes-example',
-  routes: () => import('./routes.js'),
-  providers: () => import('./providers.js'),
+  routes,
+  reactWrappers,
 });
 
 export default routesExample;

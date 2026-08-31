@@ -61,7 +61,7 @@ export interface ApplicationRuntimeContributions<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
   readonly plugins: ResolvedAppServerPlugins;
-  readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
+  readonly serviceProviders: readonly ApplicationServiceProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
 }
 
@@ -93,7 +93,7 @@ export class Application<
     new ServiceProviderRegistry();
   private readonly websocketFactory: ApplicationWebSocketFactory;
   private readonly usesDefaultWebSocket: boolean;
-  private providersRegistered = false;
+  private serviceProvidersRegistered = false;
   private routesRegistered = false;
   private readonly httpMiddleware: AppHttpMiddleware<Application<TConfig>>[] =
     [];
@@ -117,9 +117,9 @@ export class Application<
       await this.start();
       return this.getWebSocketHandler()(request, env);
     };
-    this.addProvider(RouterProvider);
+    this.addServiceProvider(RouterProvider);
     if (this.usesDefaultWebSocket) {
-      this.addProvider(RealtimeProvider);
+      this.addServiceProvider(RealtimeProvider);
     }
   }
 
@@ -135,26 +135,26 @@ export class Application<
     return this.container.resolve(routerToken);
   }
 
-  public addProvider<TArguments extends readonly unknown[]>(
+  public addServiceProvider<TArguments extends readonly unknown[]>(
     Provider: ApplicationServiceProviderConstructor<TConfig, TArguments>,
     ...args: TArguments
   ): void {
     this.providerRegistry.add(new Provider(this, ...args));
   }
 
-  public addProviders(
+  public addServiceProviders(
     Providers: readonly ApplicationServiceProviderConstructor<TConfig>[],
   ): void {
     for (const Provider of Providers) {
-      this.addProvider(Provider);
+      this.addServiceProvider(Provider);
     }
   }
 
   public addServerPlugins(serverPlugins: ResolvedAppServerPlugins): void {
     this.appPackageName = serverPlugins.appPackageName;
     for (const plugin of serverPlugins.plugins) {
-      for (const Provider of plugin.definition.providers) {
-        this.addProvider(Provider);
+      for (const Provider of plugin.definition.serviceProviders) {
+        this.addServiceProvider(Provider);
       }
       for (const routes of plugin.definition.routes) {
         this.addRoutes(routes);
@@ -172,7 +172,7 @@ export class Application<
     runtime: ApplicationRuntimeContributions<TConfig>,
   ): void {
     this.addServerPlugins(runtime.plugins);
-    this.addProviders(runtime.providers);
+    this.addServiceProviders(runtime.serviceProviders);
     for (const routes of runtime.routes) {
       this.addRoutes(routes);
     }
@@ -191,18 +191,18 @@ export class Application<
   }
 
   public registerProviders(): void {
-    if (this.providersRegistered) {
+    if (this.serviceProvidersRegistered) {
       return;
     }
     this.providerRegistry.registerAll();
-    this.providersRegistered = true;
+    this.serviceProvidersRegistered = true;
     if (this.usesDefaultWebSocket && this.container.has(routerToken)) {
       registerRealtimeWebSocketRoutes(this.router);
     }
   }
 
   public start(): Promise<void> {
-    this.startPromise ??= this.startProviders();
+    this.startPromise ??= this.startServiceProviders();
     return this.startPromise;
   }
 
@@ -215,7 +215,7 @@ export class Application<
     return this.websocketHandler;
   }
 
-  private async startProviders(): Promise<void> {
+  private async startServiceProviders(): Promise<void> {
     this.registerProviders();
     await this.registerLocales();
     await this.providerRegistry.bootAll();

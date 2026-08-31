@@ -32,7 +32,7 @@ describe('Server plugin inspection', () => {
     let localeLoaderCalls = 0;
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-example',
-      providers: [FirstProvider],
+      serviceProviders: [FirstProvider],
       routes: [
         defineApiRoutes(() => {
           routeFactoryCalls += 1;
@@ -80,7 +80,7 @@ describe('Server plugin inspection', () => {
         order: 1,
         packageName: '@nocobase/app-plugin-example',
         contributions: {
-          providers: 1,
+          serviceProviders: 1,
           routes: 2,
           locales: true,
           migrations: true,
@@ -89,7 +89,7 @@ describe('Server plugin inspection', () => {
         },
       }),
     ]);
-    expect(inspection.providers).toEqual([
+    expect(inspection.serviceProviders).toEqual([
       expect.objectContaining({
         order: 1,
         constructorName: 'FirstProvider',
@@ -139,7 +139,7 @@ describe('Server plugin inspection', () => {
 
     expect(localeLoaderCalls).toBe(0);
     expect(inspection.plugins[0]?.contributions).toEqual({
-      providers: 0,
+      serviceProviders: 0,
       routes: 0,
       locales: true,
       migrations: false,

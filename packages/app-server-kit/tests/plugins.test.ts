@@ -21,13 +21,13 @@ describe('server plugin definitions', () => {
     expect(plugin).toEqual({
       packageName: '@nocobase/app-plugin-example',
       config: [],
-      providers: [],
+      serviceProviders: [],
       routes: [],
       database: undefined,
       queue: undefined,
     });
     expect(Object.isFrozen(plugin)).toBe(true);
-    expect(Object.isFrozen(plugin.providers)).toBe(true);
+    expect(Object.isFrozen(plugin.serviceProviders)).toBe(true);
   });
 
   it('preserves order and rejects duplicate packages', () => {

@@ -79,7 +79,7 @@ export function formatAppServerInspection(inspection) {
     ].filter(Boolean);
     lines.push(
       `${plugin.order}. ${plugin.packageName}@${plugin.version}`,
-      `   providers: ${plugin.contributions.providers}`,
+      `   service providers: ${plugin.contributions.serviceProviders}`,
       `   routes: ${routeScopes.length > 0 ? routeScopes.join(', ') : 'none'}`,
       `   locales: ${plugin.contributions.locales ? 'declared' : 'none'}`,
     );

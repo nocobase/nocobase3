@@ -10,7 +10,7 @@ import type { FileProviderApplication } from './providers/file.js';
 const filePlugin: AppServerPlugin<FileProviderApplication['config']> =
   defineServerPlugin<FileProviderApplication['config']>({
     packageName: '@nocobase/app-plugin-file',
-    providers,
+    serviceProviders: providers,
     routes,
     database: {
       migrations: './database/migrations',

@@ -26,17 +26,13 @@
       "types": "./client/plugin.ts",
       "import": "./client/plugin.ts"
     },
-    "./client/bootstrap": {
-      "types": "./client/bootstrap.ts",
-      "import": "./client/bootstrap.ts"
-    },
     "./client/routes": {
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
     },
-    "./client/providers": {
-      "types": "./client/providers.ts",
-      "import": "./client/providers.ts"
+    "./client/react-wrappers": {
+      "types": "./client/react-wrappers.ts",
+      "import": "./client/react-wrappers.ts"
     },
     "./package.json": "./package.json"
   },
@@ -63,17 +59,13 @@
         "types": "./dist/client/plugin.d.ts",
         "import": "./dist/client/plugin.js"
       },
-      "./client/bootstrap": {
-        "types": "./dist/client/bootstrap.d.ts",
-        "import": "./dist/client/bootstrap.js"
-      },
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
       },
-      "./client/providers": {
-        "types": "./dist/client/providers.d.ts",
-        "import": "./dist/client/providers.js"
+      "./client/react-wrappers": {
+        "types": "./dist/client/react-wrappers.d.ts",
+        "import": "./dist/client/react-wrappers.js"
       },
       "./package.json": "./package.json"
     }

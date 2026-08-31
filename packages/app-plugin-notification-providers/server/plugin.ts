@@ -10,7 +10,7 @@ import type { NotificationProvidersPluginConfig } from './bootstrap.js';
 const notificationProvidersPlugin: AppServerPlugin<NotificationProvidersPluginConfig> =
   defineServerPlugin<NotificationProvidersPluginConfig>({
     packageName: '@nocobase/app-plugin-notification-providers',
-    providers: [NotificationProvidersProvider],
+    serviceProviders: [NotificationProvidersProvider],
     routes,
   });
 

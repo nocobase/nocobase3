@@ -3,6 +3,8 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
+import { DataProviderServiceProvider } from './service-provider.js';
+
 export interface DataProviderClientOptions {
   readonly placeholder?: never;
 }
@@ -10,7 +12,7 @@ export interface DataProviderClientOptions {
 const dataProvider: AppClientPluginFactory<DataProviderClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-data-provider',
-    bootstrap: () => import('./bootstrap.js'),
+    serviceProviders: [DataProviderServiceProvider],
   });
 
 export default dataProvider;

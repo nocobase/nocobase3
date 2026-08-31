@@ -8,7 +8,7 @@ import routes from './routes/index.js';
 
 const skillsExamplePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-skills-example',
-  providers,
+  serviceProviders: providers,
   routes,
 });
 

@@ -160,7 +160,7 @@ function createDefinition(): AppRuntimeDefinition {
       return config;
     },
     plugins: defineServerPlugins([]),
-    providers: [],
+    serviceProviders: [],
     routes: [],
   });
 }

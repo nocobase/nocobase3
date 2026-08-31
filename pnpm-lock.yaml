@@ -599,6 +599,9 @@ importers:
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../app-portal-sdk
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../service-provider
     devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
@@ -1008,6 +1011,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../service-provider
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

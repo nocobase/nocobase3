@@ -8,7 +8,7 @@ import routes from './routes/index.js';
 
 const inAppNotificationPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-notification-in-app',
-  providers,
+  serviceProviders: providers,
   routes,
   database: {
     migrations: './database/migrations',
