@@ -5,7 +5,7 @@ import {
 
 import locales from './locales/index.js';
 import serviceProviders from './providers/index.js';
-import reactWrappers from './react-wrappers/index.js';
+import reactProviders from './react-providers/index.js';
 import routes from './routes.js';
 
 export interface __NOCOBASE_SYMBOL_NAME__ClientOptions {
@@ -18,7 +18,7 @@ const __NOCOBASE_MODULE_NAME__: AppClientPluginFactory<__NOCOBASE_SYMBOL_NAME__C
     packageName: __NOCOBASE_PACKAGE_NAME_LITERAL__,
     locales,
     serviceProviders,
-    reactWrappers,
+    reactProviders,
     routes,
   });
 

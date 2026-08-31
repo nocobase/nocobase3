@@ -1,6 +1,6 @@
 ---
 title: Client Application 与跨端 ServiceProvider 设计
-description: 设计 Client Application、ServiceContainer、ServiceProvider 和 React Wrapper，并统一 Client、Server Runtime 与 Plugin 的装配协议。
+description: 设计 Client Application、ServiceContainer、ServiceProvider 和 React Provider，并统一 Client、Server Runtime 与 Plugin 的装配协议。
 ---
 
 # Client Application 与跨端 ServiceProvider 设计
@@ -22,7 +22,7 @@ Server 和 Client 现在都拥有真正的 `Application`：它们各自拥有 `S
 - Client Application 拥有独立的 `ServiceContainer`；
 - Client 删除独立的 `bootstrap` contribution，由 ServiceProvider `boot()` 承接启动期初始化；
 - Client 和 Server 统一使用 `serviceProviders` 声明 Service Provider；
-- Client 原来的 React `providers` 改为 `reactWrappers`；
+- Client 原来的 React `providers` 改为 `reactProviders`；
 - `defineAppRuntime()`、`defineClientPlugin()` 和 `defineServerPlugin()` 使用一致、无歧义的字段；
 - 非 UI Service 和 React 组件树组合形成清晰边界；
 - 消除 Client 模块级 Service singleton，支持多 Application 隔离和完整清理。
@@ -43,7 +43,7 @@ ClientApplication                         Server Application
 ├── ServiceContainer                      ├── ServiceContainer
 ├── ServiceProviders                      ├── ServiceProviders
 ├── Resolved Runtime                      ├── Resolved Runtime
-├── React Wrappers                        ├── HTTP Routes
+├── React Providers                        ├── HTTP Routes
 ├── React Routes                          ├── HTTP/WebSocket boundary
 ├── start()/shutdown()                    └── start()/shutdown()
 └── React render boundary
@@ -58,27 +58,27 @@ Server: Config → Runtime → Application → Start
 
 ## 统一术语
 
-| 术语               | 含义                                                     |
-| ------------------ | -------------------------------------------------------- |
-| `Application`      | 某次运行中的有状态应用实例                               |
-| `config`           | Application 持有的只读、已规范化运行时配置               |
-| `ServiceContainer` | Application 拥有的应用级服务作用域                       |
-| `ServiceToken<T>`  | Service 在 Container 中的稳定运行时 identity             |
-| `ServiceProvider`  | 注册 Service binding 并管理 Service 生命周期             |
-| `serviceProviders` | Runtime 或 Plugin 中的 Service Provider contribution     |
-| `React Wrapper`    | 接收 `children` 并包裹 Client React 组件树的组件         |
-| `reactWrappers`    | Client Runtime 或 Plugin 中的 React Wrapper contribution |
-| `routes`           | Client 页面路由或 Server HTTP 路由 contribution          |
+| 术语               | 含义                                                      |
+| ------------------ | --------------------------------------------------------- |
+| `Application`      | 某次运行中的有状态应用实例                                |
+| `config`           | Application 持有的只读、已规范化运行时配置                |
+| `ServiceContainer` | Application 拥有的应用级服务作用域                        |
+| `ServiceToken<T>`  | Service 在 Container 中的稳定运行时 identity              |
+| `ServiceProvider`  | 注册 Service binding 并管理 Service 生命周期              |
+| `serviceProviders` | Runtime 或 Plugin 中的 Service Provider contribution      |
+| `React Provider`   | 接收 `children` 并包裹 Client React 组件树的组件          |
+| `reactProviders`   | Client Runtime 或 Plugin 中的 React Provider contribution |
+| `routes`           | Client 页面路由或 Server HTTP 路由 contribution           |
 
 必须保持以下不变量：
 
 ```text
 serviceProviders → ServiceContainer 和 Service 生命周期
-reactWrappers    → React 组件树组合
+reactProviders    → React 组件树组合
 routes           → 应用入口和导航/HTTP surface
 ```
 
-项目中仍然可以存在 React 的 `ThemeProvider`、`I18nProvider`，以及 Refine 的 `authProvider`、`dataProvider` 等名称。它们不会被重命名；只有它们在 NocoBase Client 装配协议中的角色统一称为 React Wrapper。
+项目中仍然可以存在 React 的 `ThemeProvider`、`I18nProvider`，以及 Refine 的 `authProvider`、`dataProvider` 等名称。它们不会被重命名；只有它们在 NocoBase Client 装配协议中的角色统一称为 React Provider。
 
 ## 目标 Runtime API
 
@@ -89,7 +89,7 @@ Client 的基础装配声明使用静态 import；真正需要按需加载的页
 ```ts
 import { createAppConfig } from './config/index.js';
 import { locales } from './locales/index.js';
-import { reactWrappers } from './react-wrappers/index.js';
+import { reactProviders } from './react-providers/index.js';
 import { routes } from './routes/index.js';
 import { serviceProviders } from './providers/index.js';
 
@@ -97,14 +97,14 @@ const appRuntime = defineAppRuntime({
   packageName: '@nocobase/app-template-default',
   config: createAppConfig,
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
   locales,
   plugins: clientPlugins.plugins,
 });
 ```
 
-Client 的 `config` 是应用级配置工厂；`serviceProviders`、`reactWrappers` 和 Route definitions 是 Application 基础装配的一部分，静态 import 后在启动或首次渲染前确定。页面组件、语言消息和重型 SDK 仍然可以在实际使用时通过 `componentLoader()` 或模块内部 `import()` 按需加载。
+Client 的 `config` 是应用级配置工厂；`serviceProviders`、`reactProviders` 和 Route definitions 是 Application 基础装配的一部分，静态 import 后在启动或首次渲染前确定。页面组件、语言消息和重型 SDK 仍然可以在实际使用时通过 `componentLoader()` 或模块内部 `import()` 按需加载。
 
 ### Client 加载和拆包边界
 
@@ -114,7 +114,7 @@ Client 的 `config` 是应用级配置工厂；`serviceProviders`、`reactWrappe
 | ------------------------------ | -------- | --------------------------------------------------- |
 | App/Plugin config declaration  | 静态     | Runtime 解析前必须可见                              |
 | `serviceProviders`             | 静态     | `app.start()` 前必须确定                            |
-| `reactWrappers`                | 静态     | Browser Host 首次渲染前必须确定                     |
+| `reactProviders`               | 静态     | Browser Host 首次渲染前必须确定                     |
 | Route definitions              | 静态     | Runtime 组合和 Router 建立时必须可见                |
 | 默认启用的 Client Plugin       | 静态     | 每次启动都参与 config 和 contribution 组合          |
 | Route page component           | 动态     | 用户导航到页面时加载                                |
@@ -154,7 +154,7 @@ export const locales = defineClientLocales({
 });
 ```
 
-静态 import 只使 declaration 可见，不会提前执行 ServiceProvider 生命周期或渲染 React Wrapper：
+静态 import 只使 declaration 可见，不会提前执行 ServiceProvider 生命周期或渲染 React Provider：
 
 ```text
 import declarations
@@ -163,10 +163,10 @@ resolveAppRuntime() 规范化并冻结装配计划
   ↓
 app.start() 执行 ServiceProvider 生命周期
   ↓
-Browser Host 渲染 AppClientRoot 和 React Wrappers
+Browser Host 渲染 AppClientRoot 和 React Providers
 ```
 
-所有 declaration module 必须保持无副作用。Service 注册只发生在 Provider `register()`；React Wrapper 只在 Mount 后渲染；网络连接、listener 和 timer 分别由 Provider 生命周期或 React effect 管理。
+所有 declaration module 必须保持无副作用。Service 注册只发生在 Provider `register()`；React Provider 只在 Mount 后渲染；网络连接、listener 和 timer 分别由 Provider 生命周期或 React effect 管理。
 
 基础 contribution 不再接受这种统一的模块 loader 写法：
 
@@ -175,7 +175,7 @@ Browser Host 渲染 AppClientRoot 和 React Wrappers
 defineClientPlugin({
   packageName: '@nocobase/app-plugin-example',
   serviceProviders: () => import('./providers/index.js'),
-  reactWrappers: () => import('./react-wrappers/index.js'),
+  reactProviders: () => import('./react-providers/index.js'),
   routes: () => import('./routes/index.js'),
   locales: () => import('./locales/index.js'),
 });
@@ -392,7 +392,7 @@ Client App Runtime：
 
 ```ts
 import { config } from './config/index.js';
-import { reactWrappers } from './react-wrappers/index.js';
+import { reactProviders } from './react-providers/index.js';
 import { routes } from './routes/index.js';
 import { serviceProviders } from './providers/index.js';
 
@@ -400,7 +400,7 @@ defineAppRuntime({
   packageName: '@nocobase/app-template-default',
   config,
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
   plugins: clientPlugins.plugins,
 });
@@ -410,7 +410,7 @@ Client Plugin：
 
 ```ts
 import { config } from './config/index.js';
-import { reactWrappers } from './react-wrappers/index.js';
+import { reactProviders } from './react-providers/index.js';
 import { routes } from './routes/index.js';
 import { serviceProviders } from './providers/index.js';
 
@@ -418,7 +418,7 @@ defineClientPlugin({
   packageName: '@nocobase/app-plugin-example',
   config,
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
 });
 ```
@@ -572,7 +572,7 @@ ClientApplication
 ServiceProviders
   注册和管理 Service
         ↓
-React Wrappers / Components
+React Providers / Components
   消费 Service
 ```
 
@@ -644,7 +644,7 @@ Provider 的职责按生命周期拆分：
 - `ready()` 表示 Client Application 内部服务可用；
 - `shutdown()` 释放连接、监听器和其他资源。
 
-因此这里不是保留 Bootstrap 并换一个入口，而是删除 Bootstrap 协议，由统一的 ServiceProvider 生命周期承接其职责。如果某项逻辑不需要 Service、Container 或生命周期，它应成为拥有方 Service 的普通方法或 React Wrapper/Route 的局部逻辑。
+因此这里不是保留 Bootstrap 并换一个入口，而是删除 Bootstrap 协议，由统一的 ServiceProvider 生命周期承接其职责。如果某项逻辑不需要 Service、Container 或生命周期，它应成为拥有方 Service 的普通方法或 React Provider/Route 的局部逻辑。
 
 ### 启动失败
 
@@ -767,12 +767,12 @@ root.render(<AppClientRoot app={app} />);
 
 `ClientApplication.start()` 在所有 Provider 完成 `boot()` 后 finalize `app.refine`，并据此形成内部只读 `renderConfig`；通过 validation 后再继续执行 `start()` 与 `ready()`。对外只有整个启动流程完成后才能读取 `renderConfig`，启动期间不能返回部分配置。`AppClientRoot` 只消费已经启动完成的 Application。
 
-为避免和 `app.config` 混淆，当前表示 React 渲染结果的 `AppClientConfig` 建议改名为 `AppClientRenderConfig`；其 `providers` 字段同步改名为 `reactWrappers`：
+为避免和 `app.config` 混淆，当前表示 React 渲染结果的 `AppClientConfig` 建议改名为 `AppClientRenderConfig`；其 `providers` 字段同步改名为 `reactProviders`：
 
 ```ts
 export interface AppClientRenderConfig {
   readonly basename?: string;
-  readonly reactWrappers?: readonly AppClientReactWrapper[];
+  readonly reactProviders?: readonly AppClientReactProvider[];
   readonly routes: ReactNode;
 }
 ```
@@ -786,7 +786,7 @@ ClientApplicationContext
   ↓
 BrowserRouter
   ↓
-React Wrappers（outer → inner）
+React Providers（outer → inner）
   ↓
 Refine
   ↓
@@ -820,7 +820,7 @@ export interface AppRuntimeDefinition {
   readonly packageName: string;
   readonly config: AppClientConfigFactory;
   readonly serviceProviders?: AppClientServiceProviders;
-  readonly reactWrappers?: AppClientReactWrappers;
+  readonly reactProviders?: AppClientReactProviders;
   readonly routes?: AppClientRoutes;
   readonly locales?: AppClientLocales;
   readonly basename?: string;
@@ -850,7 +850,7 @@ export type AppClientConfigFactory = (
 export interface AppClientContribution<TOptions = void> {
   readonly packageName: string;
   readonly serviceProviders?: AppClientServiceProviders<TOptions>;
-  readonly reactWrappers?: AppClientReactWrappers<TOptions>;
+  readonly reactProviders?: AppClientReactProviders<TOptions>;
   readonly routes?: AppClientRoutes<TOptions>;
   readonly locales?: AppClientLocales;
   readonly options?: TOptions;
@@ -865,7 +865,7 @@ export interface ResolvedAppRuntime {
   readonly basename: string;
   readonly i18n: I18nRuntime;
   readonly serviceProviders: readonly AppClientRegisteredServiceProvider[];
-  readonly reactWrappers: readonly AppClientRegisteredReactWrapper[];
+  readonly reactProviders: readonly AppClientRegisteredReactProvider[];
   readonly routes: readonly AppClientRegisteredRoute[];
   readonly settings: readonly AppClientRegisteredSetting[];
   readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
@@ -873,7 +873,7 @@ export interface ResolvedAppRuntime {
 }
 ```
 
-这里的 Resolved Runtime 是已汇总、已规范化但尚未激活的装配计划。它携带只读 `config`、ServiceProvider constructor 及其 owner context、React Wrapper、Route、Locale 和 validator 声明；Refine registry、ServiceContainer 和最终 `AppClientRenderConfig` 属于 Application startup state。Runtime 不能拥有 ServiceContainer、Provider 实例、可变 Refine 状态或已经执行的 Service 副作用。
+这里的 Resolved Runtime 是已汇总、已规范化但尚未激活的装配计划。它携带只读 `config`、ServiceProvider constructor 及其 owner context、React Provider、Route、Locale 和 validator 声明；Refine registry、ServiceContainer 和最终 `AppClientRenderConfig` 属于 Application startup state。Runtime 不能拥有 ServiceContainer、Provider 实例、可变 Refine 状态或已经执行的 Service 副作用。
 
 `AppRuntimeValidator` 相应调整为验证已经完成 Provider `boot()` 和 Refine finalize 的 Application，而不是验证 Runtime：
 
@@ -894,9 +894,9 @@ export type AppClientServiceProviders<TOptions = void> =
       options: TOptions,
     ) => readonly ClientServiceProviderConstructor<TOptions>[]);
 
-export type AppClientReactWrappers<TOptions = void> =
-  | readonly AppClientReactWrapperDefinition[]
-  | ((options: TOptions) => readonly AppClientReactWrapperDefinition[]);
+export type AppClientReactProviders<TOptions = void> =
+  | readonly AppClientReactProviderDefinition[]
+  | ((options: TOptions) => readonly AppClientReactProviderDefinition[]);
 
 export type AppClientRoutes<TOptions = void> =
   | readonly AppClientRouteDefinition[]
@@ -912,44 +912,44 @@ export interface AppClientLocales {
 
 Runtime resolution 会为每个 constructor 保留 `packageName`、contribution `source` 和同一份 resolved `options`，形成 `AppClientRegisteredServiceProvider`。Application 再以 `(app, context)` 实例化 Provider。这样 Provider 可以读取自己的 typed options，同时 Runtime 仍只保存不可变装配信息，不需要模块级变量或闭包式临时 class。
 
-### React Wrapper 类型
+### React Provider 类型
 
-当前 Client Provider 类型全部改为 React Wrapper 术语：
+当前 Client Provider 类型全部改为 React Provider 术语：
 
 ```text
 AppClientProvider
-  → AppClientReactWrapper
+  → AppClientReactProvider
 
 AppClientProviderDefinition
-  → AppClientReactWrapperDefinition
+  → AppClientReactProviderDefinition
 
 AppClientRegisteredProvider
-  → AppClientRegisteredReactWrapper
+  → AppClientRegisteredReactProvider
 
 AppClientProviderLayer
-  → AppClientReactWrapperLayer
+  → AppClientReactProviderLayer
 
 AppClientProvidersModule
-  → AppClientReactWrappers
+  → AppClientReactProviders
 
 AppClientProvidersLoader
-  → 删除，由静态 AppClientReactWrappers 取代
+  → 删除，由静态 AppClientReactProviders 取代
 
 defineClientProviders()
-  → defineClientReactWrappers()
+  → defineClientReactProviders()
 ```
 
 建议类型：
 
 ```ts
-export type AppClientReactWrapper = ComponentType<PropsWithChildren>;
+export type AppClientReactProvider = ComponentType<PropsWithChildren>;
 
-export type AppClientReactWrapperLayer = 'root' | 'application' | 'extension';
+export type AppClientReactProviderLayer = 'root' | 'application' | 'extension';
 
-export interface AppClientReactWrapperDefinition {
+export interface AppClientReactProviderDefinition {
   readonly name: string;
-  readonly component: AppClientReactWrapper;
-  readonly layer?: AppClientReactWrapperLayer;
+  readonly component: AppClientReactProvider;
+  readonly layer?: AppClientReactProviderLayer;
   readonly before?: readonly string[];
   readonly after?: readonly string[];
 }
@@ -966,7 +966,7 @@ const plugin = defineClientPlugin({
   packageName: '@nocobase/app-plugin-example',
   config: exampleClientConfig,
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
   locales,
 });
@@ -983,18 +983,18 @@ export interface AppClientPluginDefinition<
 }
 ```
 
-配置 contribution 应保持轻量和无副作用，使 `resolveAppRuntime()` 可以先完成配置汇总与校验，再进入 ServiceProvider 生命周期。`AppClientPluginDefinition`、`AppClientPluginRegistration` 和 `defineClientPlugins()` 必须传递 config contributions，并分别传递 `serviceProviders` 与 `reactWrappers`；不能再保留 `bootstrap` 或一个含义不明确的 `providers` contribution。
+配置 contribution 应保持轻量和无副作用，使 `resolveAppRuntime()` 可以先完成配置汇总与校验，再进入 ServiceProvider 生命周期。`AppClientPluginDefinition`、`AppClientPluginRegistration` 和 `defineClientPlugins()` 必须传递 config contributions，并分别传递 `serviceProviders` 与 `reactProviders`；不能再保留 `bootstrap` 或一个含义不明确的 `providers` contribution。
 
 Client Plugin options 继续传递给：
 
 ```text
 serviceProviders factory(options)
-reactWrappers factory(options)
+reactProviders factory(options)
 routes factory(options)
 routeComponentOverrides(options)
 ```
 
-Plugin registration module 仍然必须轻量。`client/plugin.ts` 可以静态导入配置、ServiceProvider、React Wrapper 和 Route declaration；这些模块只能提供无副作用的结构描述。页面实现、语言文件和重型 SDK 仍应留在 `componentLoader()` 或 Service 内部的动态 import 后面。
+Plugin registration module 仍然必须轻量。`client/plugin.ts` 可以静态导入配置、ServiceProvider、React Provider 和 Route declaration；这些模块只能提供无副作用的结构描述。页面实现、语言文件和重型 SDK 仍应留在 `componentLoader()` 或 Service 内部的动态 import 后面。
 
 ## ServiceProvider 访问 Client Application
 
@@ -1269,8 +1269,8 @@ providers/
 serviceProviders
   → 模块 export 和 Runtime/Plugin 公共字段
 
-react-wrappers/
-  → Client React Wrapper 源码，不再使用 providers/ 表示 React 树包装
+react-providers/
+  → Client React Provider 源码，不再使用 providers/ 表示 React 树包装
 ```
 
 `providers/index.ts` 推荐使用同名导出，使内部路径简洁而公共语义明确：
@@ -1295,7 +1295,7 @@ client/
     index.ts
   providers/
     index.ts
-  react-wrappers/
+  react-providers/
     index.ts
   routes/
     index.ts
@@ -1312,7 +1312,7 @@ client/
   providers/
     authorization.ts
     index.ts
-  react-wrappers/
+  react-providers/
     authorization-context.tsx
     index.ts
   routes/
@@ -1331,7 +1331,7 @@ server/
     index.ts
 ```
 
-目录名保持简洁，字段名和导出名保持精确。通过 `serviceProviders` 与 `reactWrappers` 区分两类公共 contribution，而不是依赖目录名推断语义。
+目录名保持简洁，字段名和导出名保持精确。通过 `serviceProviders` 与 `reactProviders` 区分两类公共 contribution，而不是依赖目录名推断语义。
 
 ## Create Plugin 脚手架
 
@@ -1339,17 +1339,17 @@ server/
 
 ```text
 client.service-providers
-client.react-wrappers
+client.react-providers
 server.service-providers
 ```
 
 生成规则：
 
-| Capability                 | 生成文件                         | 导出/Plugin 字段   |
-| -------------------------- | -------------------------------- | ------------------ |
-| `client.service-providers` | `client/providers/index.ts`      | `serviceProviders` |
-| `client.react-wrappers`    | `client/react-wrappers/index.ts` | `reactWrappers`    |
-| `server.service-providers` | `server/providers/index.ts`      | `serviceProviders` |
+| Capability                 | 生成文件                          | 导出/Plugin 字段   |
+| -------------------------- | --------------------------------- | ------------------ |
+| `client.service-providers` | `client/providers/index.ts`       | `serviceProviders` |
+| `client.react-providers`   | `client/react-providers/index.ts` | `reactProviders`   |
+| `server.service-providers` | `server/providers/index.ts`       | `serviceProviders` |
 
 旧 capability：
 
@@ -1369,7 +1369,7 @@ Client Inspector 目标输出：
 {
   "configs": [],
   "serviceProviders": [],
-  "reactWrappers": [],
+  "reactProviders": [],
   "routes": []
 }
 ```
@@ -1390,7 +1390,7 @@ Inspector 只读取 declaration facts：
 - contribution order；
 - Config namespace 和 declaration source；
 - Service Provider constructor name；
-- React Wrapper ID、layer 和顺序；
+- React Provider ID、layer 和顺序；
 - declaration 或叶子资源 loader 的位置；
 - 重复或缺失 declaration。
 
@@ -1404,7 +1404,7 @@ Inspector 不实例化 Provider、不创建 ServiceContainer、不执行 Provide
 
 ```text
 Client 旧 providers
-  → reactWrappers
+  → reactProviders
 
 Client 新 serviceProviders
   → Client Service Provider contributions
@@ -1424,7 +1424,7 @@ config loader/value
 serviceProviders module loader
   → 静态 Provider constructor 数组或 options factory
 
-reactWrappers module loader
+reactProviders module loader
   → 静态 Wrapper definition 数组或 options factory
 
 routes module loader
@@ -1444,7 +1444,7 @@ locales module loader
 ```ts
 // 禁止
 providers:
-  | readonly AppClientReactWrapperDefinition[]
+  | readonly AppClientReactProviderDefinition[]
   | readonly ClientServiceProviderConstructor[];
 ```
 
@@ -1511,12 +1511,12 @@ packages/app-client/src/app-client.tsx
 完成：
 
 - 静态 `serviceProviders` contribution；
-- 静态 `reactWrappers` contribution；
+- 静态 `reactProviders` contribution；
 - 静态 Route declaration 和动态页面 component loader 的分层；
 - 静态 Locale manifest 和动态语言 messages loader 的分层；
 - 默认 Client Plugin 改为静态 registration；
 - `defineAppRuntime.config` 和 `defineClientPlugin.config` 装配；
-- React Wrapper 类型重命名；
+- React Provider 类型重命名；
 - 删除 Bootstrap protocol，并把现有 Bootstrap 逻辑迁入对应 ServiceProvider 的 `boot()`；
 - `defineClientPlugin()` 和 `defineClientPlugins()`；
 - Browser Host 持有 React Root，并在 Application 启动后渲染 `AppClientRoot`；
@@ -1545,7 +1545,7 @@ packages/app-plugin-*
 
 完成：
 
-- Client React Provider contribution 迁移为 `reactWrappers`；
+- Client React Provider contribution 迁移为 `reactProviders`；
 - Client application-level singleton 迁移为 ServiceProvider；
 - Client App 和默认 Client Plugin 的基础 contributions 改为静态声明；
 - 页面、语言 messages 和重型 SDK 的动态 import 下沉到实际按需使用的位置；
@@ -1609,12 +1609,12 @@ Plugin Skills
 - Client App 和 Plugin 的 `config` contributions 都被汇总、校验并传入 Runtime config factory；
 - 缺失或无效的 Browser 配置在创建 Application 前给出明确错误；
 - App 和 Plugin 的静态 `serviceProviders` declarations 都被规范化；
-- App 和 Plugin 的静态 `reactWrappers` declarations 都被排序；
+- App 和 Plugin 的静态 `reactProviders` declarations 都被排序；
 - 默认 Client Plugin 通过静态 registration 参与 Runtime 组合；
 - Route declarations 静态可见，页面组件只有在导航时才加载；
 - Locale manifest 静态可见，只加载当前语言的 messages；
 - Plugin typed options 到达两个 factory；
-- Service Provider 与 React Wrapper 不会相互进入错误集合；
+- Service Provider 与 React Provider 不会相互进入错误集合；
 - ServiceProviders 按 Application、Plugin registration order 装配；
 - Provider `boot()` 可以解析已注册的 Service 并配置 `app.refine`；
 - validation 在所有 Provider `boot()` 和 Refine finalize 完成后、Mount 前执行；
@@ -1630,7 +1630,7 @@ Plugin Skills
 - Server Inspector 使用 `serviceProviders`；
 - 原有 Provider 生命周期和失败清理行为不回退。
 
-### React Wrappers
+### React Providers
 
 - layer 仍为 `root → application → extension`；
 - `before`、`after` 只引用同一 layer；
@@ -1643,7 +1643,7 @@ Plugin Skills
 - 新 capability 生成正确文件、exports 和 Plugin declaration；
 - 旧 `client.providers`、`client.bootstrap` 和 `server.providers` capability 不再被 CLI 接受；
 - 未选择 capability 时不生成空 entry；
-- Client Inspector 分别输出 `configs`、`serviceProviders` 和 `reactWrappers`；
+- Client Inspector 分别输出 `configs`、`serviceProviders` 和 `reactProviders`；
 - Server Inspector 输出 `serviceProviders`；
 - Inspector 不执行 Provider lifecycle 或 React behavior。
 
@@ -1692,7 +1692,7 @@ CI=true pnpm install --no-frozen-lockfile
 1. Client 和 Server 都有真正的 Application 和独立 ServiceContainer；
 2. Server 将 `config.yml.client` 作为安全 JSON data block 嵌入 SPA HTML，Client 由 `resolveAppRuntime()` 读取并规范化，最终由 `ClientApplication.config` 持有且通过 `app.config.get()` 使用；
 3. 两端 Runtime 和 Plugin 统一使用 `serviceProviders`；
-4. Client React 组件树 contribution 统一使用 `reactWrappers`；
+4. Client React 组件树 contribution 统一使用 `reactProviders`；
 5. `ClientApplication.start()` 完成 ServiceProvider `boot()`、Refine finalize、validation、`start()` 和 `ready()` 后，Browser Host 才渲染 `AppClientRoot`；
 6. Client Application 可以独立 shutdown，且不会泄露 listener、timer、connection 或模块级 singleton；
 7. 当前 Authorization、Notification、Workflow 等应用级 Client Service 不再依赖模块级全局实例；
@@ -1708,7 +1708,7 @@ CI=true pnpm install --no-frozen-lockfile
 // Client App Runtime
 import { config } from './config/index.js';
 import { locales } from './locales/index.js';
-import { reactWrappers } from './react-wrappers/index.js';
+import { reactProviders } from './react-providers/index.js';
 import { routes } from './routes/index.js';
 import { serviceProviders } from './providers/index.js';
 
@@ -1716,7 +1716,7 @@ defineAppRuntime({
   packageName: '@nocobase/app-template-default',
   config,
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
   locales,
 });
@@ -1726,7 +1726,7 @@ defineAppRuntime({
 // Client Plugin
 import { config } from './config/index.js';
 import { locales } from './locales/index.js';
-import { reactWrappers } from './react-wrappers/index.js';
+import { reactProviders } from './react-providers/index.js';
 import { routes } from './routes/index.js';
 import { serviceProviders } from './providers/index.js';
 
@@ -1734,7 +1734,7 @@ defineClientPlugin({
   packageName: '@nocobase/app-plugin-example',
   config,
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
   locales,
 });
@@ -1775,5 +1775,5 @@ root.render(<AppClientRoot app={app} />);
 ```text
 Config belongs to Application and is read through app.config.
 Service belongs to Application and is registered by serviceProviders.
-React tree composition belongs to the Client and is declared by reactWrappers.
+React tree composition belongs to the Client and is declared by reactProviders.
 ```

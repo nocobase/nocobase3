@@ -5,7 +5,7 @@ import type { ComponentType } from 'react';
 import type { ClientApplication } from './application.js';
 import type {
   AppClientConfigContribution,
-  AppClientReactWrapper,
+  AppClientReactProvider,
   AppClientRefineConfig,
 } from './config.js';
 
@@ -24,7 +24,7 @@ export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
 export type AppClientContributionSource = 'application' | 'plugin';
 
-export type AppClientReactWrapperLayer = 'root' | 'application' | 'extension';
+export type AppClientReactProviderLayer = 'root' | 'application' | 'extension';
 
 export interface AppClientRouteComponentModule {
   default: ComponentType;
@@ -154,17 +154,17 @@ export interface AppClientSourceExtension {
   readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
 }
 
-export interface AppClientReactWrapperDefinition {
+export interface AppClientReactProviderDefinition {
   readonly name: string;
-  readonly component: AppClientReactWrapper;
-  readonly layer?: AppClientReactWrapperLayer;
+  readonly component: AppClientReactProvider;
+  readonly layer?: AppClientReactProviderLayer;
   readonly before?: readonly string[];
   readonly after?: readonly string[];
 }
 
-export interface AppClientRegisteredReactWrapper extends AppClientReactWrapperDefinition {
+export interface AppClientRegisteredReactProvider extends AppClientReactProviderDefinition {
   readonly id: string;
-  readonly layer: AppClientReactWrapperLayer;
+  readonly layer: AppClientReactProviderLayer;
   readonly packageName: string;
   readonly source: AppClientContributionSource;
 }
@@ -215,9 +215,9 @@ export type AppClientRoutes<TOptions = void> =
       options: TOptions,
     ) => AppClientRouteContribution | readonly AppClientRouteContribution[]);
 
-export type AppClientReactWrappers<TOptions = void> =
-  | readonly AppClientReactWrapperDefinition[]
-  | ((options: TOptions) => readonly AppClientReactWrapperDefinition[]);
+export type AppClientReactProviders<TOptions = void> =
+  | readonly AppClientReactProviderDefinition[]
+  | ((options: TOptions) => readonly AppClientReactProviderDefinition[]);
 
 export type AppClientServiceProviders<TOptions = void> =
   | readonly ClientServiceProviderConstructor<TOptions>[]
@@ -230,7 +230,7 @@ export type AppClientLocales = LocalesModule;
 export interface AppClientContribution<TOptions = void> {
   readonly packageName: string;
   readonly serviceProviders?: AppClientServiceProviders<TOptions>;
-  readonly reactWrappers?: AppClientReactWrappers<TOptions>;
+  readonly reactProviders?: AppClientReactProviders<TOptions>;
   readonly routes?: AppClientRoutes<TOptions>;
   readonly locales?: AppClientLocales;
   readonly options?: TOptions;
@@ -241,7 +241,7 @@ export interface AppClientContributions {
   readonly source?: AppClientContributionSource;
   readonly routes?:
     AppClientRouteContribution | readonly AppClientRouteContribution[];
-  readonly reactWrappers?: readonly AppClientReactWrapperDefinition[];
+  readonly reactProviders?: readonly AppClientReactProviderDefinition[];
 }
 
 export type AppClientPluginContributions = AppClientContributions;
@@ -252,7 +252,7 @@ export interface ResolvedAppClientContributions {
   readonly settings: readonly AppClientRegisteredSetting[];
   /** The same pages as a tree, in declaration order — what the navigation renders. */
   readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
-  readonly reactWrappers: readonly AppClientRegisteredReactWrapper[];
+  readonly reactProviders: readonly AppClientRegisteredReactProvider[];
 }
 
 export interface AppClientPluginDefinition<
@@ -271,7 +271,7 @@ export interface AppClientPluginRegistration {
   readonly config: readonly AppClientConfigContribution[];
   readonly serviceProviders: readonly ClientServiceProviderConstructor[];
   readonly routes: readonly AppClientRouteContribution[];
-  readonly reactWrappers: readonly AppClientReactWrapperDefinition[];
+  readonly reactProviders: readonly AppClientReactProviderDefinition[];
   readonly locales?: AppClientLocales;
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
   readonly options: unknown;
@@ -315,8 +315,8 @@ export function defineClientPlugin<TOptions = void>(
           resolveContribution(definition.routes, resolvedOptions),
         ),
       ),
-      reactWrappers: defineClientReactWrappers(
-        resolveContribution(definition.reactWrappers, resolvedOptions) ?? [],
+      reactProviders: defineClientReactProviders(
+        resolveContribution(definition.reactProviders, resolvedOptions) ?? [],
       ),
       locales: definition.locales,
       routeComponentOverrides: defineClientRouteComponentOverrides(overrides),
@@ -482,15 +482,15 @@ function normalizeRouteOverrideId(routeId: string): string {
   return normalized;
 }
 
-export function defineClientReactWrappers(
-  reactWrappers: readonly AppClientReactWrapperDefinition[],
-): readonly AppClientReactWrapperDefinition[] {
+export function defineClientReactProviders(
+  reactProviders: readonly AppClientReactProviderDefinition[],
+): readonly AppClientReactProviderDefinition[] {
   return Object.freeze(
-    reactWrappers.map((reactWrapper) =>
+    reactProviders.map((reactProvider) =>
       Object.freeze({
-        ...reactWrapper,
-        before: freezeOptionalList(reactWrapper.before),
-        after: freezeOptionalList(reactWrapper.after),
+        ...reactProvider,
+        before: freezeOptionalList(reactProvider.before),
+        after: freezeOptionalList(reactProvider.after),
       }),
     ),
   );
@@ -508,8 +508,8 @@ export function resolveAppClientContributions(
   const settingGroups: AppClientRegisteredSettingGroup[] = [];
   const settingPaths = new Map<string, AppClientRegisteredSetting>();
   const settingGroupIds = new Map<string, AppClientRegisteredSettingGroup>();
-  const reactWrappers: AppClientRegisteredReactWrapper[] = [];
-  const reactWrapperIds = new Set<string>();
+  const reactProviders: AppClientRegisteredReactProvider[] = [];
+  const reactProviderIds = new Set<string>();
 
   for (const contribution of contributions) {
     const packageName = normalizePackageName(contribution.packageName);
@@ -587,20 +587,20 @@ export function resolveAppClientContributions(
       }
     }
 
-    for (const reactWrapper of contribution.reactWrappers ?? []) {
-      const registeredReactWrapper = createRegisteredReactWrapper(
+    for (const reactProvider of contribution.reactProviders ?? []) {
+      const registeredReactProvider = createRegisteredReactProvider(
         packageName,
         source,
-        reactWrapper,
+        reactProvider,
       );
-      if (reactWrapperIds.has(registeredReactWrapper.id)) {
+      if (reactProviderIds.has(registeredReactProvider.id)) {
         throw new Error(
-          `Plugin "${packageName}" defined duplicate client reactWrapper name "${registeredReactWrapper.name}".`,
+          `Plugin "${packageName}" defined duplicate client reactProvider name "${registeredReactProvider.name}".`,
         );
       }
 
-      reactWrapperIds.add(registeredReactWrapper.id);
-      reactWrappers.push(registeredReactWrapper);
+      reactProviderIds.add(registeredReactProvider.id);
+      reactProviders.push(registeredReactProvider);
     }
   }
 
@@ -608,7 +608,7 @@ export function resolveAppClientContributions(
     routes: Object.freeze(routes),
     settings: Object.freeze(settings),
     settingGroups: Object.freeze(settingGroups),
-    reactWrappers: sortReactWrappers(reactWrappers),
+    reactProviders: sortReactProviders(reactProviders),
   });
 }
 
@@ -942,23 +942,23 @@ function normalizeRouteAuth(
   return normalized;
 }
 
-function createRegisteredReactWrapper(
+function createRegisteredReactProvider(
   packageName: string,
   source: AppClientContributionSource,
-  reactWrapper: AppClientReactWrapperDefinition,
-): AppClientRegisteredReactWrapper {
+  reactProvider: AppClientReactProviderDefinition,
+): AppClientRegisteredReactProvider {
   const name = normalizeContributionName(
-    reactWrapper.name,
+    reactProvider.name,
     packageName,
-    'reactWrapper',
+    'reactProvider',
   );
-  if (!reactWrapper.component) {
+  if (!reactProvider.component) {
     throw new Error(
-      `Client reactWrapper "${name}" from plugin "${packageName}" must define a component.`,
+      `Client reactProvider "${name}" from plugin "${packageName}" must define a component.`,
     );
   }
-  const layer = normalizeReactWrapperLayer(
-    reactWrapper.layer,
+  const layer = normalizeReactProviderLayer(
+    reactProvider.layer,
     source,
     packageName,
     name,
@@ -970,22 +970,26 @@ function createRegisteredReactWrapper(
     packageName,
     source,
     layer,
-    component: reactWrapper.component,
-    before: normalizeReactWrapperTargets(
-      reactWrapper.before,
+    component: reactProvider.component,
+    before: normalizeReactProviderTargets(
+      reactProvider.before,
       packageName,
       name,
     ),
-    after: normalizeReactWrapperTargets(reactWrapper.after, packageName, name),
+    after: normalizeReactProviderTargets(
+      reactProvider.after,
+      packageName,
+      name,
+    ),
   });
 }
 
-function normalizeReactWrapperLayer(
-  layer: AppClientReactWrapperLayer | undefined,
+function normalizeReactProviderLayer(
+  layer: AppClientReactProviderLayer | undefined,
   source: AppClientContributionSource,
   packageName: string,
-  reactWrapperName: string,
-): AppClientReactWrapperLayer {
+  reactProviderName: string,
+): AppClientReactProviderLayer {
   const normalized =
     layer ?? (source === 'application' ? 'application' : 'extension');
   if (
@@ -994,17 +998,17 @@ function normalizeReactWrapperLayer(
     normalized !== 'extension'
   ) {
     throw new Error(
-      `Client reactWrapper "${reactWrapperName}" from "${packageName}" uses unsupported layer "${String(layer)}".`,
+      `Client reactProvider "${reactProviderName}" from "${packageName}" uses unsupported layer "${String(layer)}".`,
     );
   }
   if (source === 'plugin' && normalized !== 'extension') {
     throw new Error(
-      `Client reactWrapper "${reactWrapperName}" from plugin "${packageName}" cannot use layer "${normalized}"; plugin reactWrappers must use layer "extension".`,
+      `Client reactProvider "${reactProviderName}" from plugin "${packageName}" cannot use layer "${normalized}"; plugin reactProviders must use layer "extension".`,
     );
   }
   if (source === 'application' && normalized === 'extension') {
     throw new Error(
-      `Client reactWrapper "${reactWrapperName}" from application "${packageName}" cannot use layer "extension"; application reactWrappers must use layer "root" or "application".`,
+      `Client reactProvider "${reactProviderName}" from application "${packageName}" cannot use layer "extension"; application reactProviders must use layer "root" or "application".`,
     );
   }
   return normalized;
@@ -1013,7 +1017,7 @@ function normalizeReactWrapperLayer(
 function normalizeContributionName(
   name: string,
   packageName: string,
-  type: 'reactWrapper' | 'route',
+  type: 'reactProvider' | 'route',
 ): string {
   const normalized = name.trim();
   if (!normalized) {
@@ -1029,10 +1033,10 @@ function normalizeContributionName(
   return normalized;
 }
 
-function normalizeReactWrapperTargets(
+function normalizeReactProviderTargets(
   targets: readonly string[] | undefined,
   packageName: string,
-  reactWrapperName: string,
+  reactProviderName: string,
 ): readonly string[] | undefined {
   if (!targets) {
     return undefined;
@@ -1041,12 +1045,12 @@ function normalizeReactWrapperTargets(
   const normalized = targets.map((target) => target.trim());
   if (normalized.some((target) => !target || !target.includes(':'))) {
     throw new Error(
-      `Client reactWrapper "${reactWrapperName}" from plugin "${packageName}" must reference reactWrappers by their full plugin-qualified ID.`,
+      `Client reactProvider "${reactProviderName}" from plugin "${packageName}" must reference reactProviders by their full plugin-qualified ID.`,
     );
   }
   if (new Set(normalized).size !== normalized.length) {
     throw new Error(
-      `Client reactWrapper "${reactWrapperName}" from plugin "${packageName}" contains duplicate ordering references.`,
+      `Client reactProvider "${reactProviderName}" from plugin "${packageName}" contains duplicate ordering references.`,
     );
   }
   return Object.freeze(normalized);
@@ -1107,54 +1111,57 @@ function wrapRouteComponentLoader(
   };
 }
 
-function sortReactWrappers(
-  reactWrappers: readonly AppClientRegisteredReactWrapper[],
-): readonly AppClientRegisteredReactWrapper[] {
-  const reactWrappersById = new Map(
-    reactWrappers.map((reactWrapper) => [reactWrapper.id, reactWrapper]),
+function sortReactProviders(
+  reactProviders: readonly AppClientRegisteredReactProvider[],
+): readonly AppClientRegisteredReactProvider[] {
+  const reactProvidersById = new Map(
+    reactProviders.map((reactProvider) => [reactProvider.id, reactProvider]),
   );
-  for (const reactWrapper of reactWrappers) {
+  for (const reactProvider of reactProviders) {
     for (const targetId of [
-      ...(reactWrapper.before ?? []),
-      ...(reactWrapper.after ?? []),
+      ...(reactProvider.before ?? []),
+      ...(reactProvider.after ?? []),
     ]) {
-      assertReactWrapperTarget(reactWrappersById, reactWrapper.id, targetId);
-      const target = reactWrappersById.get(targetId);
-      if (target && target.layer !== reactWrapper.layer) {
+      assertReactProviderTarget(reactProvidersById, reactProvider.id, targetId);
+      const target = reactProvidersById.get(targetId);
+      if (target && target.layer !== reactProvider.layer) {
         throw new Error(
-          `Client reactWrapper "${reactWrapper.id}" in layer "${reactWrapper.layer}" cannot declare ordering against reactWrapper "${target.id}" in layer "${target.layer}"; before/after constraints may only reference reactWrappers in the same layer.`,
+          `Client reactProvider "${reactProvider.id}" in layer "${reactProvider.layer}" cannot declare ordering against reactProvider "${target.id}" in layer "${target.layer}"; before/after constraints may only reference reactProviders in the same layer.`,
         );
       }
     }
   }
 
-  const layerOrder: readonly AppClientReactWrapperLayer[] = [
+  const layerOrder: readonly AppClientReactProviderLayer[] = [
     'root',
     'application',
     'extension',
   ];
   const sorted = layerOrder.flatMap((layer) =>
-    sortReactWrapperLayer(
-      reactWrappers.filter((reactWrapper) => reactWrapper.layer === layer),
+    sortReactProviderLayer(
+      reactProviders.filter((reactProvider) => reactProvider.layer === layer),
     ),
   );
   return Object.freeze(sorted);
 }
 
-function sortReactWrapperLayer(
-  reactWrappers: readonly AppClientRegisteredReactWrapper[],
-): readonly AppClientRegisteredReactWrapper[] {
-  const reactWrappersById = new Map(
-    reactWrappers.map((reactWrapper) => [reactWrapper.id, reactWrapper]),
+function sortReactProviderLayer(
+  reactProviders: readonly AppClientRegisteredReactProvider[],
+): readonly AppClientRegisteredReactProvider[] {
+  const reactProvidersById = new Map(
+    reactProviders.map((reactProvider) => [reactProvider.id, reactProvider]),
   );
   const registrationIndex = new Map(
-    reactWrappers.map((reactWrapper, index) => [reactWrapper.id, index]),
+    reactProviders.map((reactProvider, index) => [reactProvider.id, index]),
   );
   const outgoing = new Map(
-    reactWrappers.map((reactWrapper) => [reactWrapper.id, new Set<string>()]),
+    reactProviders.map((reactProvider) => [
+      reactProvider.id,
+      new Set<string>(),
+    ]),
   );
   const indegree = new Map(
-    reactWrappers.map((reactWrapper) => [reactWrapper.id, 0]),
+    reactProviders.map((reactProvider) => [reactProvider.id, 0]),
   );
 
   const addEdge = (from: string, to: string): void => {
@@ -1166,21 +1173,21 @@ function sortReactWrapperLayer(
     indegree.set(to, (indegree.get(to) ?? 0) + 1);
   };
 
-  for (const reactWrapper of reactWrappers) {
-    for (const target of reactWrapper.before ?? []) {
-      assertReactWrapperTarget(reactWrappersById, reactWrapper.id, target);
-      addEdge(reactWrapper.id, target);
+  for (const reactProvider of reactProviders) {
+    for (const target of reactProvider.before ?? []) {
+      assertReactProviderTarget(reactProvidersById, reactProvider.id, target);
+      addEdge(reactProvider.id, target);
     }
-    for (const target of reactWrapper.after ?? []) {
-      assertReactWrapperTarget(reactWrappersById, reactWrapper.id, target);
-      addEdge(target, reactWrapper.id);
+    for (const target of reactProvider.after ?? []) {
+      assertReactProviderTarget(reactProvidersById, reactProvider.id, target);
+      addEdge(target, reactProvider.id);
     }
   }
 
-  const ready = reactWrappers
-    .filter((reactWrapper) => indegree.get(reactWrapper.id) === 0)
-    .map((reactWrapper) => reactWrapper.id);
-  const sorted: AppClientRegisteredReactWrapper[] = [];
+  const ready = reactProviders
+    .filter((reactProvider) => indegree.get(reactProvider.id) === 0)
+    .map((reactProvider) => reactProvider.id);
+  const sorted: AppClientRegisteredReactProvider[] = [];
 
   while (ready.length > 0) {
     ready.sort(
@@ -1192,11 +1199,11 @@ function sortReactWrapperLayer(
     if (!id) {
       break;
     }
-    const reactWrapper = reactWrappersById.get(id);
-    if (!reactWrapper) {
+    const reactProvider = reactProvidersById.get(id);
+    if (!reactProvider) {
       continue;
     }
-    sorted.push(reactWrapper);
+    sorted.push(reactProvider);
 
     for (const target of outgoing.get(id) ?? []) {
       const nextIndegree = (indegree.get(target) ?? 0) - 1;
@@ -1207,30 +1214,30 @@ function sortReactWrapperLayer(
     }
   }
 
-  if (sorted.length !== reactWrappers.length) {
-    const cycle = findReactWrapperCycle(reactWrappers, outgoing);
+  if (sorted.length !== reactProviders.length) {
+    const cycle = findReactProviderCycle(reactProviders, outgoing);
     throw new Error(
-      `Circular client reactWrapper order detected: ${cycle.join(' -> ')}.`,
+      `Circular client reactProvider order detected: ${cycle.join(' -> ')}.`,
     );
   }
 
   return Object.freeze(sorted);
 }
 
-function assertReactWrapperTarget(
-  reactWrappersById: ReadonlyMap<string, AppClientRegisteredReactWrapper>,
-  reactWrapperId: string,
+function assertReactProviderTarget(
+  reactProvidersById: ReadonlyMap<string, AppClientRegisteredReactProvider>,
+  reactProviderId: string,
   targetId: string,
 ): void {
-  if (!reactWrappersById.has(targetId)) {
+  if (!reactProvidersById.has(targetId)) {
     throw new Error(
-      `Client reactWrapper "${reactWrapperId}" references missing reactWrapper "${targetId}".`,
+      `Client reactProvider "${reactProviderId}" references missing reactProvider "${targetId}".`,
     );
   }
 }
 
-function findReactWrapperCycle(
-  reactWrappers: readonly AppClientRegisteredReactWrapper[],
+function findReactProviderCycle(
+  reactProviders: readonly AppClientRegisteredReactProvider[],
   outgoing: ReadonlyMap<string, ReadonlySet<string>>,
 ): readonly string[] {
   const visited = new Set<string>();
@@ -1260,12 +1267,12 @@ function findReactWrapperCycle(
     return undefined;
   };
 
-  for (const reactWrapper of reactWrappers) {
-    const cycle = visit(reactWrapper.id);
+  for (const reactProvider of reactProviders) {
+    const cycle = visit(reactProvider.id);
     if (cycle) {
       return cycle;
     }
   }
 
-  return reactWrappers.map((reactWrapper) => reactWrapper.id);
+  return reactProviders.map((reactProvider) => reactProvider.id);
 }

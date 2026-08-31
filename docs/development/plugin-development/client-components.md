@@ -1,23 +1,23 @@
 ---
 title: Client Components
-description: 在 NocoBase v3 插件中区分页面、React Wrapper、公共和内部 React Components，并正确设计导出、依赖、所有权与测试。
+description: 在 NocoBase v3 插件中区分页面、React Provider、公共和内部 React Components，并正确设计导出、依赖、所有权与测试。
 ---
 
 # Client Components
 
-Component 是 Client UI 的基础源码，但 `client.components` 不是 Client runtime contribution。组件只有被 Route 惰性加载、被 React Wrapper 渲染、被其他组件引用，或通过公共 package export 被 App 使用时，才进入真实应用行为。
+Component 是 Client UI 的基础源码，但 `client.components` 不是 Client runtime contribution。组件只有被 Route 惰性加载、被 React Provider 渲染、被其他组件引用，或通过公共 package export 被 App 使用时，才进入真实应用行为。
 
 ## 先判断组件身份
 
-| 类型          | 谁装配                               | 所有权                          |
-| ------------- | ------------------------------------ | ------------------------------- |
-| 页面组件      | `componentLoader()`                  | 插件 Route 或 App override      |
-| Wrapper 组件  | `defineClientReactWrappers()`        | 插件 React Wrapper contribution |
-| 公共组件      | App/其他插件从 package export import | 插件维护 API，消费方组合        |
-| 内部组件      | 插件内部 import                      | 插件私有实现                    |
-| Registry 组件 | materialize 后由 App import          | 安装副本归 App                  |
+| 类型          | 谁装配                               | 所有权                           |
+| ------------- | ------------------------------------ | -------------------------------- |
+| 页面组件      | `componentLoader()`                  | 插件 Route 或 App override       |
+| Wrapper 组件  | `defineClientReactProviders()`       | 插件 React Provider contribution |
+| 公共组件      | App/其他插件从 package export import | 插件维护 API，消费方组合         |
+| 内部组件      | 插件内部 import                      | 插件私有实现                     |
+| Registry 组件 | materialize 后由 App import          | 安装副本归 App                   |
 
-需要可导航页面时阅读 [Client Routes](./client-routes-examples.md)；需要共享 React Context 时阅读 [Client React Wrappers](./client-react-wrappers.md)；需要交付可编辑源码时阅读 [Registry](./registry.md)。
+需要可导航页面时阅读 [Client Routes](./client-routes-examples.md)；需要共享 React Context 时阅读 [Client React Providers](./client-react-providers.md)；需要交付可编辑源码时阅读 [Registry](./registry.md)。
 
 ## 编写最小组件
 
@@ -57,7 +57,7 @@ componentLoader: () => import('./pages/audit-log-page.js');
 
 ## 公共组件的 i18n namespace
 
-插件 Route/React Wrapper tree 会按 contribution 的 `packageName` 提供默认 namespace；但公共组件被 App 或其他插件渲染时处于消费方 render tree。只要组件可能离开本插件 tree，就使用 `useTranslation(PLUGIN_NS)` 或 `withNamespace(PLUGIN_NS, Component)` 显式绑定，不能根据源码目录推断 namespace。
+插件 Route/React Provider tree 会按 contribution 的 `packageName` 提供默认 namespace；但公共组件被 App 或其他插件渲染时处于消费方 render tree。只要组件可能离开本插件 tree，就使用 `useTranslation(PLUGIN_NS)` 或 `withNamespace(PLUGIN_NS, Component)` 显式绑定，不能根据源码目录推断 namespace。
 
 显式绑定不会注册 resources。只有公共 component subpath、没有 `./client` runtime entry 的插件，必须在“文案归 App”和“增加只含 `locales` 的 Client plugin factory 并由 App 注册”之间明确选择；不要假设 component export 会触发 Client plugin registration。完整资源声明和测试见[插件国际化](./i18n.md)。
 
@@ -67,8 +67,8 @@ componentLoader: () => import('./pages/audit-log-page.js');
 - 公共 export 测试从正式 subpath import，而不是从源码路径 import；
 - 页面测试实际调用 `componentLoader()` 并确认 default export；
 - 插件 build 和 pack check 验证声明、exports 和发布文件；
-- 目标 App 测试验证真实主题、React Wrapper、Route 和数据依赖。
+- 目标 App 测试验证真实主题、React Provider、Route 和数据依赖。
 
-公共组件不属于 Client composition，因此不要求出现在 `client:inspect`。Inspect 只会看到装配该组件的 Route 或 React Wrapper；组件本身由类型、测试、build 和目标 App 行为验证。
+公共组件不属于 Client composition，因此不要求出现在 `client:inspect`。Inspect 只会看到装配该组件的 Route 或 React Provider；组件本身由类型、测试、build 和目标 App 行为验证。
 
-返回[Client 模块选择](./client.md)，或继续阅读 [Client React Wrappers](./client-react-wrappers.md)。
+返回[Client 模块选择](./client.md)，或继续阅读 [Client React Providers](./client-react-providers.md)。

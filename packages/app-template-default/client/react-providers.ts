@@ -1,12 +1,12 @@
 import {
-  defineClientReactWrappers,
-  type AppClientReactWrapperDefinition,
+  defineClientReactProviders,
+  type AppClientReactProviderDefinition,
 } from '@nocobase/app-client/plugins';
 
 import { AppThemeProvider } from './theme/theme-provider.js';
 
-export const reactWrappers: readonly AppClientReactWrapperDefinition[] =
-  defineClientReactWrappers([
+export const reactProviders: readonly AppClientReactProviderDefinition[] =
+  defineClientReactProviders([
     {
       component: AppThemeProvider,
       layer: 'root',
@@ -14,4 +14,4 @@ export const reactWrappers: readonly AppClientReactWrapperDefinition[] =
     },
   ]);
 
-export default reactWrappers;
+export default reactProviders;

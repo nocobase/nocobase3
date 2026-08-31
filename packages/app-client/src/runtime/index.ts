@@ -8,13 +8,13 @@ import {
 } from '../i18n.js';
 import {
   applyClientRouteComponentOverrides,
-  defineClientReactWrappers,
+  defineClientReactProviders,
   resolveAppClientContributions,
   type AppClientLocales,
   type AppClientPluginRegistration,
-  type AppClientReactWrapperDefinition,
-  type AppClientReactWrappers,
-  type AppClientRegisteredReactWrapper,
+  type AppClientReactProviderDefinition,
+  type AppClientReactProviders,
+  type AppClientRegisteredReactProvider,
   type AppClientRegisteredRoute,
   type AppClientRegisteredServiceProvider,
   type AppClientRegisteredSetting,
@@ -41,7 +41,7 @@ export interface AppRuntimeDefinition {
   readonly packageName: string;
   readonly config: AppClientConfigFactory;
   readonly serviceProviders?: AppClientServiceProviders;
-  readonly reactWrappers?: AppClientReactWrappers;
+  readonly reactProviders?: AppClientReactProviders;
   readonly routes?: AppClientRoutes;
   readonly locales?: AppClientLocales;
   readonly basename?: string;
@@ -60,7 +60,7 @@ export interface ResolvedAppRuntime {
   readonly i18n: I18nRuntime;
   readonly basename: string;
   readonly serviceProviders: readonly AppClientRegisteredServiceProvider[];
-  readonly reactWrappers: readonly AppClientRegisteredReactWrapper[];
+  readonly reactProviders: readonly AppClientRegisteredReactProvider[];
   readonly routes: readonly AppClientRegisteredRoute[];
   readonly settings: readonly AppClientRegisteredSetting[];
   readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
@@ -74,7 +74,7 @@ export function defineAppRuntime(
     ...definition,
     plugins: Object.freeze([...definition.plugins]),
     serviceProviders: freezeOptionalList(definition.serviceProviders),
-    reactWrappers: freezeOptionalList(definition.reactWrappers),
+    reactProviders: freezeOptionalList(definition.reactProviders),
     routes: freezeRouteDeclarations(definition.routes),
     routeComponentOverrides: definition.routeComponentOverrides
       ? Object.freeze([...definition.routeComponentOverrides])
@@ -103,7 +103,7 @@ export async function resolveAppRuntime(
     packageName: plugin.packageName,
     source: 'plugin' as const,
     routes: plugin.routes,
-    reactWrappers: plugin.reactWrappers,
+    reactProviders: plugin.reactProviders,
   }));
   const contributions = resolveAppClientContributions([
     applicationContribution,
@@ -136,7 +136,7 @@ export async function resolveAppRuntime(
         ),
       ),
     ]),
-    reactWrappers: contributions.reactWrappers,
+    reactProviders: contributions.reactProviders,
     routes: applyClientRouteComponentOverrides(contributions.routes, [
       ...(definition.routeComponentOverrides ?? []),
       ...extensionOverrides,
@@ -151,14 +151,14 @@ function createApplicationContribution(definition: AppRuntimeDefinition): {
   readonly packageName: string;
   readonly source: 'application';
   readonly routes: readonly AppClientRouteContribution[];
-  readonly reactWrappers: readonly AppClientReactWrapperDefinition[];
+  readonly reactProviders: readonly AppClientReactProviderDefinition[];
 } {
   return {
     packageName: definition.packageName,
     source: 'application',
     routes: normalizeRoutes(resolveDeclaration(definition.routes, undefined)),
-    reactWrappers: defineClientReactWrappers(
-      resolveDeclaration(definition.reactWrappers, undefined) ?? [],
+    reactProviders: defineClientReactProviders(
+      resolveDeclaration(definition.reactProviders, undefined) ?? [],
     ),
   };
 }

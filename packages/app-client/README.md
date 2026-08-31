@@ -24,7 +24,7 @@ public HTML config + static declarations
 
 The Client and Server use the same explicit `serviceProviders` term for
 application services and lifecycle. Client React tree contributions are named
-`reactWrappers`, so they cannot be confused with ServiceProviders or with
+`reactProviders`, so they cannot be confused with ServiceProviders or with
 Refine properties such as `authProvider` and `dataProvider`.
 
 ## Application runtime declaration
@@ -40,14 +40,14 @@ import { defineAppRuntime } from '@nocobase/app-client/runtime';
 import locales from './locales/index.js';
 import plugins from './plugins.js';
 import serviceProviders from './providers/index.js';
-import reactWrappers from './react-wrappers/index.js';
+import reactProviders from './react-providers/index.js';
 import routes from './routes.js';
 
 export default defineAppRuntime({
   packageName: '@example/app',
   config: createAppClientConfig,
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
   locales,
   plugins: plugins.plugins,
@@ -109,7 +109,7 @@ const app = createApp(runtime, (application) => {
   const { runtime, refineConfig } = application;
   return {
     basename: runtime.basename,
-    reactWrappers: runtime.reactWrappers.map(({ component }) => component),
+    reactProviders: runtime.reactProviders.map(({ component }) => component),
     routes: createRoutes(runtime.routes, refineConfig),
   };
 });
@@ -171,18 +171,18 @@ const app = useClientApplication();
 const audit = useService(auditToken);
 ```
 
-## React Wrappers
+## React Providers
 
-React Wrappers are synchronous React components that receive `children`:
+React Providers are synchronous React components that receive `children`:
 
 ```tsx
 import {
-  defineClientReactWrappers,
-  type AppClientReactWrapperDefinition,
+  defineClientReactProviders,
+  type AppClientReactProviderDefinition,
 } from '@nocobase/app-client/plugins';
 
-const reactWrappers: readonly AppClientReactWrapperDefinition[] =
-  defineClientReactWrappers([
+const reactProviders: readonly AppClientReactProviderDefinition[] =
+  defineClientReactProviders([
     {
       name: 'audit-context',
       component: AuditContextProvider,
@@ -191,10 +191,10 @@ const reactWrappers: readonly AppClientReactWrapperDefinition[] =
     },
   ]);
 
-export default reactWrappers;
+export default reactProviders;
 ```
 
-Wrappers are ordered outer-to-inner by layer and explicit `before`/`after`
+React Providers are ordered outer-to-inner by layer and explicit `before`/`after`
 constraints. Their components render only when the Browser host renders
 `AppClientRoot` for a started application. Use a
 Wrapper for React Context or tree-local UI behavior; use a ServiceProvider for
@@ -241,7 +241,7 @@ import {
 
 import locales from './locales/index.js';
 import serviceProviders from './providers/index.js';
-import reactWrappers from './react-wrappers/index.js';
+import reactProviders from './react-providers/index.js';
 import routes from './routes.js';
 
 export interface AuditClientOptions {
@@ -252,7 +252,7 @@ const audit: AppClientPluginFactory<AuditClientOptions> = defineClientPlugin({
   packageName: '@example/app-plugin-audit',
   config: [auditClientConfig],
   serviceProviders,
-  reactWrappers,
+  reactProviders,
   routes,
   locales,
 });
@@ -295,7 +295,7 @@ inspection output.
 
 Client inspection imports `client/runtime.ts` and `client/plugins.ts` and reads
 static declarations. It does not create `ClientApplication`, instantiate or run
-ServiceProviders, render React Wrappers, load route page components, or load
+ServiceProviders, render React Providers, load route page components, or load
 locale messages. Inspection is a composition diagnostic, not proof of runtime
 behavior.
 

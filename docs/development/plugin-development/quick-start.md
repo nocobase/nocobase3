@@ -28,7 +28,7 @@ description: 在 NocoBase source workspace 中按显式 capability 创建 App �
 | `client.routes`            | Client Route contribution；支持 App Routes 和 Settings Routes  |
 | `client.components`        | 插件拥有的 React components                                    |
 | `client.service-providers` | Client Service、生命周期和启动期初始化                         |
-| `client.react-wrappers`    | React Context/Wrapper contribution                             |
+| `client.react-providers`   | React Context/Wrapper contribution                             |
 | `client.locales`           | Client 翻译资源声明                                            |
 | `registry`                 | 安装后归 App 所有的可编辑 Registry source                      |
 | `skills`                   | 插件提供给 App Agent 的能力和集成指南                          |
@@ -103,7 +103,7 @@ pnpm plugin:create system-info \
 - 每个具体 Server Route 自己拥有并测试 authentication/authorization 边界，不能依赖 contribution order；
 - `server.service-providers`：把领域逻辑放在 Service，由 Provider 注册 Token；
 - `client.service-providers`：在 Client Application Container 中注册 Service，并用 lifecycle 管理启动和清理；
-- `client.react-wrappers`：声明包裹 React tree 的 Context 或 UI wrapper；
+- `client.react-providers`：声明为 React tree 提供 Context 或 UI 能力的 Provider；
 - `database`：把 `.ts.example` 改成任务需要的显式、自包含 migration/seed，删除不需要的示例；
 - `skills`：把开发 draft 替换成插件真实提供给 App Agent 的公共能力、集成流程、权限、约束和验证方式。
 
@@ -148,7 +148,7 @@ pnpm plugin:inspect system-info --app app-template-default --json
 本地的 `.agents/skills/`。整个 `.agents/` 是被 Git 忽略的生成产物；不要编辑或提交同步
 副本。提交插件的 `skills/` 源文件，以及 Agent 按 Skill 完成的 App 正式源码。
 
-Client 或 Server composition 发生变化，或者需要排查 contribution 为什么不可用时，可以按变化范围查看对应的只读快照。不要默认把两个命令都运行一遍。JSON 模式先读取 `ok` 和 `status`，再读取 `result.consistent`、`result.issues`；不要把 inspection 成功解释为 ServiceProvider lifecycle、页面、React Wrapper、Route 或浏览器行为已经验证：
+Client 或 Server composition 发生变化，或者需要排查 contribution 为什么不可用时，可以按变化范围查看对应的只读快照。不要默认把两个命令都运行一遍。JSON 模式先读取 `ok` 和 `status`，再读取 `result.consistent`、`result.issues`；不要把 inspection 成功解释为 ServiceProvider lifecycle、页面、React Provider、Route 或浏览器行为已经验证：
 
 ```bash
 pnpm --filter @nocobase/app-template-default client:inspect --json

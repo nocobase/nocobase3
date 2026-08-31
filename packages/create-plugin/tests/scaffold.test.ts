@@ -73,7 +73,7 @@ describe('createPlugin', () => {
     ['server.locales', 'server/locales/index.ts', 'client/'],
     ['client.routes', 'client/routes.ts', 'server/'],
     ['client.components', 'client/components/plugin-component.tsx', 'server/'],
-    ['client.react-wrappers', 'client/react-wrappers/index.ts', 'server/'],
+    ['client.react-providers', 'client/react-providers/index.ts', 'server/'],
     ['client.service-providers', 'client/providers/index.ts', 'server/'],
     ['client.locales', 'client/locales/index.ts', 'server/'],
     ['registry', 'registry.config.json', 'database/'],
@@ -134,11 +134,11 @@ describe('createPlugin', () => {
       ['react'],
     ],
     [
-      'client.react-wrappers',
+      'client.react-providers',
       [
         './client',
         './client/plugin',
-        './client/react-wrappers',
+        './client/react-providers',
         './package.json',
       ],
       [],
@@ -190,7 +190,7 @@ describe('createPlugin', () => {
   it.each([
     ['database', ['dist', 'README.md', 'CHANGELOG.md', 'database']],
     ['server.jobs', ['dist', 'README.md', 'CHANGELOG.md']],
-    ['client.react-wrappers', ['dist', 'README.md', 'CHANGELOG.md']],
+    ['client.react-providers', ['dist', 'README.md', 'CHANGELOG.md']],
     ['skills', ['dist', 'README.md', 'CHANGELOG.md', 'skills']],
   ] as const)(
     '%s publishes only its declared package files',
@@ -443,11 +443,11 @@ describe('createPlugin', () => {
     expect(result.files).toContain('client/providers/index.ts');
     expect(result.files).toContain('client/components/plugin-component.tsx');
     expect(result.files).not.toContain('client/routes.ts');
-    expect(result.files).not.toContain('client/react-wrappers/index.ts');
+    expect(result.files).not.toContain('client/react-providers/index.ts');
     expect(plugin).toContain('serviceProviders,');
     expect(plugin).not.toContain('locales:');
     expect(plugin).not.toContain('routes:');
-    expect(plugin).not.toContain('reactWrappers:');
+    expect(plugin).not.toContain('reactProviders:');
   });
 
   it('generates metadata for all explicitly selected capabilities', async () => {
@@ -460,7 +460,7 @@ describe('createPlugin', () => {
       'client.routes',
       'client.components',
       'client.service-providers',
-      'client.react-wrappers',
+      'client.react-providers',
       'client.locales',
       'registry',
       'skills',

@@ -1,11 +1,11 @@
 ---
 title: Client 模块选择
-description: 面向 AI Agent 的 NocoBase v3 Client 插件模块导航，帮助在 Components、Routes、React Wrappers、ServiceProviders、config、options 和 Registry 之间选择正确所有权。
+description: 面向 AI Agent 的 NocoBase v3 Client 插件模块导航，帮助在 Components、Routes、React Providers、ServiceProviders、config、options 和 Registry 之间选择正确所有权。
 ---
 
 # Client 模块选择
 
-Client 的基础装配是静态、可检查的声明：`config`、`serviceProviders`、`reactWrappers`、`routes` 和 `locales`。静态 import 只让声明可见，不会执行 ServiceProvider 生命周期、渲染 React Wrapper、加载页面组件或语言消息。
+Client 的基础装配是静态、可检查的声明：`config`、`serviceProviders`、`reactProviders`、`routes` 和 `locales`。静态 import 只让声明可见，不会执行 ServiceProvider 生命周期、渲染 React Provider、加载页面组件或语言消息。
 
 ## 先按职责选择
 
@@ -13,14 +13,14 @@ Client 的基础装配是静态、可检查的声明：`config`、`serviceProvid
 | -------------------------------------- | -------------------- | -------------------------------------------------------- |
 | 导出可复用 UI 或 Hook                  | Component            | [Client Components](./client-components.md)              |
 | 增加 App 页面或 Settings 页面          | Route                | [Client Routes](./client-routes-examples.md)             |
-| 多个 Client surface 共享 React Context | React Wrapper        | [Client React Wrappers](./client-react-wrappers.md)      |
+| 多个 Client surface 共享 React Context | React Provider       | [Client React Providers](./client-react-providers.md)    |
 | 注册 Client Service 或执行启动期初始化 | ServiceProvider      | [Client ServiceProviders](./client-service-providers.md) |
 | 声明浏览器公开配置的默认值与校验       | Client config        | 本页“config 与 options”                                  |
 | 配置某次插件注册的稳定行为             | typed plugin options | 本页“config 与 options”                                  |
 | 声明翻译 namespace 和按语言消息 loader | Client locales       | [插件国际化](./i18n.md)                                  |
 | 向目标 App 交付可编辑源码              | Registry             | [Plugin Registry](./registry.md)                         |
 
-不要因为组件名字包含 `Provider` 就把它归为 ServiceProvider。判断标准是所有权：参与 Container 和生命周期的是 `serviceProviders`；包裹 React tree 的是 `reactWrappers`。
+不要因为组件名字包含 `Provider` 就把它归为 ServiceProvider。判断标准是所有权：参与 Container 和生命周期的是 `serviceProviders`；包裹 React tree 的是 `reactProviders`。
 
 ## 静态插件声明
 
@@ -32,7 +32,7 @@ import {
 
 import locales from './locales/index.js';
 import serviceProviders from './providers/index.js';
-import reactWrappers from './react-wrappers/index.js';
+import reactProviders from './react-providers/index.js';
 import routes from './routes.js';
 
 const example: AppClientPluginFactory<ExampleClientOptions> =
@@ -40,7 +40,7 @@ const example: AppClientPluginFactory<ExampleClientOptions> =
     packageName: '@nocobase/app-plugin-example',
     config: [exampleClientConfig],
     serviceProviders,
-    reactWrappers,
+    reactProviders,
     routes,
     locales,
   });
@@ -55,12 +55,12 @@ export default example;
 ```text
 config           → app.config
 serviceProviders → app.container + lifecycle + app.refine
-reactWrappers    → Browser Host 渲染的 AppClientRoot tree
+reactProviders    → Browser Host 渲染的 AppClientRoot tree
 routes           → Router 和页面 componentLoader
 locales          → locale manifest 和 message loader
 ```
 
-`ClientApplication.start()` 执行 ServiceProvider lifecycle；启动成功后由 Browser Host 渲染 `AppClientRoot` 和 React Wrappers。Inspector 读取声明和可检查 metadata，但不执行 lifecycle、不渲染组件，也不加载叶子模块。
+`ClientApplication.start()` 执行 ServiceProvider lifecycle；启动成功后由 Browser Host 渲染 `AppClientRoot` 和 React Providers。Inspector 读取声明和可检查 metadata，但不执行 lifecycle、不渲染组件，也不加载叶子模块。
 
 ## config 与 options
 
@@ -73,24 +73,24 @@ locales          → locale manifest 和 message loader
 
 ## 加载边界
 
-| 内容                         | 加载时机                        |
-| ---------------------------- | ------------------------------- |
-| contribution declarations    | 静态 import，Runtime 解析前可见 |
-| ServiceProvider lifecycle    | `app.start()`                   |
-| React Wrapper component tree | Browser Host 首次渲染           |
-| Route page component         | 实际导航时                      |
-| locale messages              | 选择或切换语言时                |
-| 重型 SDK                     | 对应 Service/UI 首次实际使用时  |
+| 内容                          | 加载时机                        |
+| ----------------------------- | ------------------------------- |
+| contribution declarations     | 静态 import，Runtime 解析前可见 |
+| ServiceProvider lifecycle     | `app.start()`                   |
+| React Provider component tree | Browser Host 首次渲染           |
+| Route page component          | 实际导航时                      |
+| locale messages               | 选择或切换语言时                |
+| 重型 SDK                      | 对应 Service/UI 首次实际使用时  |
 
 ## 自检
 
-- `client/plugin.ts` 只声明 `config`、`serviceProviders`、`reactWrappers`、`routes`、`locales` 和 typed options；
+- `client/plugin.ts` 只声明 `config`、`serviceProviders`、`reactProviders`、`routes`、`locales` 和 typed options；
 - 不存在旧的 `bootstrap` Runtime field；
 - 不使用含义模糊的 `providers` Runtime field；
 - `client/providers/` 可以继续作为 ServiceProvider 源码目录，但公共字段始终叫 `serviceProviders`；
-- React tree contribution 使用 `reactWrappers`，组件内部仍可使用 `ThemeProvider`、`I18nProvider` 等 React 名称；
+- React tree contribution 使用 `reactProviders`，组件内部仍可使用 `ThemeProvider`、`I18nProvider` 等 React 名称；
 - 页面组件和语言消息保持 leaf-level lazy loading；
 - declaration 顶层没有网络连接、listener、timer 或注册副作用；
-- 测试分别覆盖声明、ServiceProvider lifecycle、React Wrapper behavior 和 Route behavior。
+- 测试分别覆盖声明、ServiceProvider lifecycle、React Provider behavior 和 Route behavior。
 
 返回[插件开发总览](./README.md)。

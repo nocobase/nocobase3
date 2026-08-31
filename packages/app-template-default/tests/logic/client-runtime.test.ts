@@ -32,7 +32,7 @@ describe('app client runtime', () => {
         packageName: '@example/app',
         config: createAppClientConfig,
         serviceProviders: [Provider],
-        reactWrappers: [],
+        reactProviders: [],
         routes: [],
         plugins: [],
       }),
@@ -42,7 +42,7 @@ describe('app client runtime', () => {
       Provider,
       context: { packageName: '@example/app', source: 'application' },
     });
-    expect(runtime.reactWrappers).toEqual([]);
+    expect(runtime.reactProviders).toEqual([]);
     expect(calls).toEqual([]);
   });
 

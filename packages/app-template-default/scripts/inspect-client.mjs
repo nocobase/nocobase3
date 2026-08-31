@@ -6,7 +6,7 @@ const inspectionTypes = [
   'all',
   'config',
   'service-providers',
-  'react-wrappers',
+  'react-providers',
   'routes',
   'settings',
   'locales',
@@ -16,13 +16,13 @@ const help = `Inspect the static Client Runtime and Plugin declarations this app
 
 Inspection imports declaration modules and evaluates lightweight contribution
 factories. It does not create a ClientApplication, run ServiceProvider lifecycle
-methods, load locale messages or Route page components, or render React wrappers.
+methods, load locale messages or Route page components, or render React Providers.
 
 Usage:
   pnpm client:inspect [options]
 
 Options:
-  --type <type>      all, config, service-providers, react-wrappers, routes,
+  --type <type>      all, config, service-providers, react-providers, routes,
                      settings, or locales (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help`;
@@ -66,7 +66,7 @@ export function parseInspectAppClientArgs(args) {
       if (!inspectionTypes.includes(value)) {
         throw inspectionError(
           'CLIENT_INSPECT_ARGUMENT_INVALID',
-          '--type must be all, config, service-providers, react-wrappers, routes, settings, or locales.',
+          '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
         );
       }
       options.type = value;
@@ -120,13 +120,13 @@ export async function inspectAppClient({
       packageName: appPackageName,
       source: 'application',
       routes: resolveDeclaration(application.routes),
-      reactWrappers: resolveDeclaration(application.reactWrappers) ?? [],
+      reactProviders: resolveDeclaration(application.reactProviders) ?? [],
     },
     ...clientPlugins.plugins.map((plugin) => ({
       packageName: plugin.packageName,
       source: 'plugin',
       routes: plugin.routes,
-      reactWrappers: plugin.reactWrappers,
+      reactProviders: plugin.reactProviders,
     })),
   ];
   let resolved;
@@ -173,16 +173,16 @@ export async function inspectAppClient({
     packageName === appPackageName
       ? `./client/${contribution}`
       : `${packageName}/client/${contribution}`;
-  const reactWrappers = resolved.reactWrappers.map((wrapper, index) => ({
+  const reactProviders = resolved.reactProviders.map((provider, index) => ({
     order: index + 1,
-    id: wrapper.id,
-    name: wrapper.name,
-    packageName: wrapper.packageName,
-    source: wrapper.source,
-    layer: wrapper.layer,
-    entry: entryOf(wrapper.packageName, 'react-wrappers'),
-    before: wrapper.before ?? [],
-    after: wrapper.after ?? [],
+    id: provider.id,
+    name: provider.name,
+    packageName: provider.packageName,
+    source: provider.source,
+    layer: provider.layer,
+    entry: entryOf(provider.packageName, 'react-providers'),
+    before: provider.before ?? [],
+    after: provider.after ?? [],
   }));
   const routeSnapshots = routes.map((route, index) => {
     const override = overrides.find((entry) => entry.routeId === route.id);
@@ -222,7 +222,7 @@ export async function inspectAppClient({
     appRoot,
     configs,
     serviceProviders,
-    reactWrappers,
+    reactProviders,
     routes: routeSnapshots,
     settings,
     locales,
@@ -234,7 +234,7 @@ function createInspectionResult({
   appRoot,
   configs = [],
   serviceProviders = [],
-  reactWrappers = [],
+  reactProviders = [],
   routes = [],
   settings = [],
   locales = [],
@@ -251,7 +251,7 @@ function createInspectionResult({
     app: { packageName: appPackageName, appRoot },
     configs,
     serviceProviders,
-    reactWrappers,
+    reactProviders,
     routes,
     settings,
     locales,
@@ -516,8 +516,8 @@ export function formatAppClientInspection(inspection, type = 'all') {
   if (type === 'all' || type === 'settings') {
     sections.push(formatSettings(inspection.settings));
   }
-  if (type === 'all' || type === 'react-wrappers') {
-    sections.push(formatReactWrappers(inspection.reactWrappers));
+  if (type === 'all' || type === 'react-providers') {
+    sections.push(formatReactProviders(inspection.reactProviders));
   }
   if (type === 'all' || type === 'locales') {
     sections.push(formatLocales(inspection.locales));
@@ -544,8 +544,8 @@ export function selectAppClientInspection(inspection, type = 'all') {
     ...(type === 'all' || type === 'settings'
       ? { settings: inspection.settings }
       : {}),
-    ...(type === 'all' || type === 'react-wrappers'
-      ? { reactWrappers: inspection.reactWrappers }
+    ...(type === 'all' || type === 'react-providers'
+      ? { reactProviders: inspection.reactProviders }
       : {}),
     ...(type === 'all' || type === 'locales'
       ? { locales: inspection.locales }
@@ -659,25 +659,25 @@ function formatSettings(settings) {
     .join('\n')}`;
 }
 
-function formatReactWrappers(reactWrappers) {
-  if (reactWrappers.length === 0) {
-    return 'React wrappers (outer -> inner)\n  (none)';
+function formatReactProviders(reactProviders) {
+  if (reactProviders.length === 0) {
+    return 'React Providers (outer -> inner)\n  (none)';
   }
-  return `React wrappers (outer -> inner)\n${reactWrappers
-    .map((wrapper) => {
+  return `React Providers (outer -> inner)\n${reactProviders
+    .map((provider) => {
       const constraints = [
-        wrapper.before.length > 0
-          ? `    before: ${wrapper.before.join(', ')}`
+        provider.before.length > 0
+          ? `    before: ${provider.before.join(', ')}`
           : undefined,
-        wrapper.after.length > 0
-          ? `    after: ${wrapper.after.join(', ')}`
+        provider.after.length > 0
+          ? `    after: ${provider.after.join(', ')}`
           : undefined,
       ].filter(Boolean);
       return [
-        `  ${wrapper.order}. ${wrapper.id}`,
-        `    layer: ${wrapper.layer}`,
-        `    source: ${wrapper.source}`,
-        `    entry: ${wrapper.entry}`,
+        `  ${provider.order}. ${provider.id}`,
+        `    layer: ${provider.layer}`,
+        `    source: ${provider.source}`,
+        `    entry: ${provider.entry}`,
         ...constraints,
       ].join('\n');
     })

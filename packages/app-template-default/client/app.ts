@@ -22,9 +22,9 @@ export function createApp(runtime: ResolvedAppRuntime): ClientApplication {
     createRenderConfig: (): AppClientRenderConfig =>
       defineAppClientRenderConfig({
         basename: runtime.basename,
-        reactWrappers: [
+        reactProviders: [
           AppI18nProvider,
-          ...runtime.reactWrappers.map((wrapper) => wrapper.component),
+          ...runtime.reactProviders.map((provider) => provider.component),
         ],
         routes: createElement(AppRouter, {
           clientRoutes: runtime.routes,

@@ -5,7 +5,7 @@ Client-only App plugin that connects Refine notifications to Sonner.
 The plugin has three independent client contributions:
 
 - `client/service-provider.ts` registers `refine.setNotificationProvider(...)`.
-- `client/react-wrappers.ts` mounts the global Sonner notification host.
+- `client/react-providers.ts` mounts the global Sonner notification host.
 - `client/routes.ts` exposes a lazy notification test page at
   `/notification-provider`.
 

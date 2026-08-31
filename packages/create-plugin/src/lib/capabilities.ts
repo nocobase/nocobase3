@@ -8,7 +8,7 @@ export const PLUGIN_CAPABILITIES = [
   'client.routes',
   'client.components',
   'client.service-providers',
-  'client.react-wrappers',
+  'client.react-providers',
   'client.locales',
   'registry',
   'skills',
@@ -28,7 +28,7 @@ export interface PluginCapabilities {
     readonly routes: boolean;
     readonly components: boolean;
     readonly serviceProviders: boolean;
-    readonly reactWrappers: boolean;
+    readonly reactProviders: boolean;
     readonly locales: boolean;
   };
   readonly registry: boolean;
@@ -51,7 +51,7 @@ export function normalizePluginCapabilities(
       routes: selected.has('client.routes'),
       components: selected.has('client.components'),
       serviceProviders: selected.has('client.service-providers'),
-      reactWrappers: selected.has('client.react-wrappers'),
+      reactProviders: selected.has('client.react-providers'),
       locales: selected.has('client.locales'),
     },
     registry: selected.has('registry'),

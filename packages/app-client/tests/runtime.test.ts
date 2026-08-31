@@ -12,7 +12,7 @@ import { createAppClientConfig, defineAppClientConfig } from '../src/config.js';
 import {
   defineAppRoutes,
   defineClientPlugin,
-  defineClientReactWrappers,
+  defineClientReactProviders,
 } from '../src/plugins.js';
 import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
 import type { ClientApplication } from '../src/application.js';
@@ -40,7 +40,7 @@ describe('app runtime', () => {
     expect(Object.isFrozen(definition.sourceExtensions)).toBe(true);
   });
 
-  it('resolves config, providers, wrappers, and routes without activating providers', async () => {
+  it('resolves config, ServiceProviders, React Providers, and routes without activating providers', async () => {
     class Provider extends ServiceProvider<ClientApplication> {
       public readonly name: string = '@example/plugin/provider';
     }
@@ -52,7 +52,7 @@ describe('app runtime', () => {
         defaults: { enabled: false },
       }),
       serviceProviders: [Provider],
-      reactWrappers: defineClientReactWrappers([
+      reactProviders: defineClientReactProviders([
         { name: 'feature', component: Wrapper },
       ]),
     });
@@ -83,7 +83,7 @@ describe('app runtime', () => {
         source: 'plugin',
       },
     });
-    expect(runtime.reactWrappers[0]).toMatchObject({
+    expect(runtime.reactProviders[0]).toMatchObject({
       id: '@example/plugin:feature',
       source: 'plugin',
     });

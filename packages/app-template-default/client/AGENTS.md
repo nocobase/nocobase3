@@ -6,8 +6,8 @@ This directory is the active Default App browser client.
   archive, not a source dependency.
 - Keep the Default App composition root explicit in `runtime.ts`.
 - Put application startup contributions in `service-provider.ts`, application-owned
-  route declarations in `routes.ts`, and application React Wrapper declarations in
-  `react-wrappers.ts`.
+  route declarations in `routes.ts`, and application React Provider declarations in
+  `react-providers.ts`.
 - Register plugin client extensions in `plugins.ts`. Array order is contribution
   order and presence in the array is what enables a plugin. Let
   `pnpm plugin:register` and `pnpm plugin:unregister` write this file; edit it
@@ -39,8 +39,8 @@ This directory is the active Default App browser client.
 - Use Refine hooks and providers for authentication state. Do not call Better
   Auth endpoints directly from pages or create another session store.
 - Keep app-wide theme and loading behavior applicable to plugin pages.
-- React Wrapper layers are outer-to-inner: `root`, `application`, `extension`.
-  Application wrappers may use the first two; plugins own the extension
+- React Provider layers are outer-to-inner: `root`, `application`, `extension`.
+  Application React Providers may use the first two; plugins own the extension
   layer. Use `before` and `after` only inside one layer.
 
 Before finishing client changes, run the Default App lint, typecheck, tests,

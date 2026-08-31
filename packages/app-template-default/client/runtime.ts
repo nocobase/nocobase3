@@ -3,7 +3,7 @@ import { defineAppRuntime } from '@nocobase/app-client/runtime';
 import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 
 import clientPlugins from './plugins.js';
-import reactWrappers from './react-wrappers.js';
+import reactProviders from './react-providers.js';
 import routeComponentOverrides from './route-overrides.js';
 import routes from './routes.js';
 import serviceProviders from './service-provider.js';
@@ -18,7 +18,7 @@ const appRuntime = defineAppRuntime({
     'en-US': () => import('./locales/en-US.js'),
     'zh-CN': () => import('./locales/zh-CN.js'),
   },
-  reactWrappers,
+  reactProviders,
   routes,
   plugins: clientPlugins.plugins,
   routeComponentOverrides: [

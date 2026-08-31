@@ -33,7 +33,7 @@ import {
 
 import locales from './locales/index.js';
 import serviceProviders from './providers/index.js';
-import reactWrappers from './react-wrappers/index.js';
+import reactProviders from './react-providers/index.js';
 import routes from './routes.js';
 
 export interface AuditLogClientOptions {
@@ -45,7 +45,7 @@ const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
     packageName: '@nocobase/app-plugin-audit-log',
     config: [auditLogClientConfig],
     serviceProviders,
-    reactWrappers,
+    reactProviders,
     routes,
     locales,
   });
@@ -57,13 +57,13 @@ export default auditLog;
 | ------------------ | ------------------------------------------ | --------------------------------- |
 | `config`           | Browser 公开配置的 namespace、默认值与校验 | Runtime 解析                      |
 | `serviceProviders` | Client Service、Refine 配置和生命周期      | `ClientApplication.start()`       |
-| `reactWrappers`    | React Context 和应用组件树 wrapper         | Browser Host 渲染 `AppClientRoot` |
+| `reactProviders`   | React Context 和应用组件树组合             | Browser Host 渲染 `AppClientRoot` |
 | `routes`           | App Routes 和 Settings Routes              | Runtime 组合；页面导航时才加载    |
 | `locales`          | package namespace 的语言资源 manifest      | 选择或切换语言时加载 messages     |
 
 这些字段都可选。删除某类实现时也删除对应字段和无用 public export。基础声明必须静态可见；动态 import 下沉到 Route page、locale messages、重型 SDK 或真正可选的 Feature。
 
-静态 import 不等于执行：declaration module 顶层不得注册 Service、连接网络、建立 listener、启动 timer 或渲染 React。Service 注册在 Provider `register()` 中完成，Refine/启动配置在生命周期中完成，React Wrapper 只在 Browser Host 渲染 `AppClientRoot` 后执行。
+静态 import 不等于执行：declaration module 顶层不得注册 Service、连接网络、建立 listener、启动 timer 或渲染 React。Service 注册在 Provider `register()` 中完成，Refine/启动配置在生命周期中完成，React Provider 只在 Browser Host 渲染 `AppClientRoot` 后执行。
 
 ### Client options
 
@@ -218,7 +218,7 @@ Client 数组顺序是静态 contribution 和 ServiceProvider lifecycle 的组�
 
 Inspector 导入 `client/runtime.ts`、`client/plugins.ts` 或 Server declarations，读取静态装配计划：
 
-- Client 不创建 Application、不实例化 ServiceProvider、不运行 lifecycle、不渲染 React Wrapper、不加载页面或语言 messages；
+- Client 不创建 Application、不实例化 ServiceProvider、不运行 lifecycle、不渲染 React Provider、不加载页面或语言 messages；
 - Server 不启动 ServiceProvider、不执行 Route factory、Job 或数据库操作；
 - `consistent: true` 只表示观察到的装配没有静态冲突，不代表业务行为正确。
 
@@ -226,7 +226,7 @@ Inspector 导入 `client/runtime.ts`、`client/plugins.ts` 或 Server declaratio
 
 - `packageName` 与 `package.json#name` 一致；
 - Client 使用 factory，Server 使用 definition；
-- Client 公共字段只使用明确的 `config`、`serviceProviders`、`reactWrappers`、`routes`、`locales`；
+- Client 公共字段只使用明确的 `config`、`serviceProviders`、`reactProviders`、`routes`、`locales`；
 - 不保留旧 `bootstrap` 或含义模糊的 `providers` Runtime field；
 - Settings 通过 `defineSettingsRoutes()` 并入 `routes`；
 - Server 使用 `serviceProviders` 和直接 Route contributions；
@@ -254,6 +254,6 @@ pnpm --filter <target-app> build
 
 - [Client 模块选择](./client.md)
 - [Client ServiceProviders](./client-service-providers.md)
-- [Client React Wrappers](./client-react-wrappers.md)
+- [Client React Providers](./client-react-providers.md)
 - [插件结构和文件所有权](./plugin-structure.md)
 - [安装和注册插件](./plugin-registration.md)

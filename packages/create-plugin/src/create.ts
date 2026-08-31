@@ -101,12 +101,12 @@ function capabilityReason(file: string): string {
   )
     return 'client.service-providers';
   if (
-    file.startsWith('client/react-wrappers/') ||
+    file.startsWith('client/react-providers/') ||
     file === 'client/contexts.ts' ||
     file === 'client/components/provider.tsx' ||
-    file === 'tests/client-react-wrapper.test.tsx'
+    file === 'tests/client-react-provider.test.tsx'
   )
-    return 'client.react-wrappers';
+    return 'client.react-providers';
   if (
     file.startsWith('registry/') ||
     file === 'registry.config.json' ||
@@ -167,7 +167,7 @@ export async function runCreatePluginCli(
             capabilities: result.capabilities,
             derivedStructure: {
               clientPlugin:
-                result.capabilities.client.reactWrappers ||
+                result.capabilities.client.reactProviders ||
                 result.capabilities.client.locales ||
                 result.capabilities.client.serviceProviders ||
                 result.capabilities.client.routes,

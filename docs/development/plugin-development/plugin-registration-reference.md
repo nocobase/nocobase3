@@ -359,7 +359,7 @@ Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 
 pnpm --filter <target-app> client:inspect --json
 ```
 
-该命令可查看 Config declarations、ServiceProvider 顺序、Routes、Settings、React Wrappers 和 component overrides，但不执行 lifecycle、render 或 leaf loaders，也不验证这些能力的运行行为。只有 Client composition 变化或需要诊断时才运行。
+该命令可查看 Config declarations、ServiceProvider 顺序、Routes、Settings、React Providers 和 component overrides，但不执行 lifecycle、render 或 leaf loaders，也不验证这些能力的运行行为。只有 Client composition 变化或需要诊断时才运行。
 
 ## 常见不一致
 

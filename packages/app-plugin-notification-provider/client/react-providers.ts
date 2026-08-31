@@ -1,16 +1,16 @@
 import {
-  defineClientReactWrappers,
-  type AppClientReactWrapperDefinition,
+  defineClientReactProviders,
+  type AppClientReactProviderDefinition,
 } from '@nocobase/app-client/plugins';
 
 import { NotificationHost } from './components/notification-host.js';
 
-export const reactWrappers: readonly AppClientReactWrapperDefinition[] =
-  defineClientReactWrappers([
+export const reactProviders: readonly AppClientReactProviderDefinition[] =
+  defineClientReactProviders([
     {
       name: 'notification-host',
       component: NotificationHost,
     },
   ]);
 
-export default reactWrappers;
+export default reactProviders;

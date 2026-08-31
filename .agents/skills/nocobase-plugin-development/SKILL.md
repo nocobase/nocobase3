@@ -35,7 +35,7 @@ for the current task:
 | Choose an App or cross-plugin entry    | `public-contracts.md`                                |
 | Choose a Client module                 | `client.md`                                          |
 | Build public or internal Client UI     | `client-components.md`                               |
-| Share React Context                    | `client-react-wrappers.md`                           |
+| Share React Context                    | `client-react-providers.md`                          |
 | Add a Client Service or initialization | `client-service-providers.md`                        |
 | Choose a Server module                 | `server.md`                                          |
 | Choose a Service/Token/Provider        | `server-services-and-providers.md`                   |
@@ -74,7 +74,7 @@ runnable reference is needed.
   `error.suggestions`, while still treating the non-zero exit code as failure.
 - The public creation capabilities are `database`, `server.service-providers`,
   `server.routes`, `server.jobs`, `server.locales`, `client.routes`,
-  `client.components`, `client.service-providers`, `client.react-wrappers`,
+  `client.components`, `client.service-providers`, `client.react-providers`,
   `client.locales`, `registry`, and `skills`.
 - The first Create Plugin workflow creates plugins only in a NocoBase source
   workspace. It does not create a standalone plugin project inside an App.
@@ -84,17 +84,17 @@ runnable reference is needed.
   Node ESLint presets, and full-stack plugins add DOM/JSX locally to the server
   library preset. Do not copy a complete config from another package.
 - Client Runtime and plugin declarations use the optional static fields
-  `config`, `serviceProviders`, `reactWrappers`, `routes`, and `locales`.
+  `config`, `serviceProviders`, `reactProviders`, `routes`, and `locales`.
   ServiceProvider aggregation modules default-export a constructor array named
   `serviceProviders`; declaration modules default-import that same name and use
   the `serviceProviders,` property shorthand instead of declaring constructor
   arrays inline.
   Static imports make the composition inspectable but do not execute a
-  ServiceProvider lifecycle, render a React Wrapper, or load route pages and
+  ServiceProvider lifecycle, render a React Provider, or load route pages and
   locale messages. The locale namespace is always the plugin `packageName`.
 - Locale scaffolding is explicit. Select `client.locales` for Client resources
   and `server.locales` for Server resources; select both when both runtimes own
-  translated messages. Routes, ServiceProviders, and React Wrappers do not implicitly add
+  translated messages. Routes, ServiceProviders, and React Providers do not implicitly add
   locale files.
 - Public Client components rendered outside their owning plugin tree must bind
   their namespace explicitly. Binding does not register resources: a
@@ -103,7 +103,7 @@ runnable reference is needed.
   choose the recipient locale, load it, and then use a fixed translator; do not
   inherit a triggering user's request locale.
 - Client Components are source or public exports, not a Runtime contribution.
-  Use Routes for pages, React Wrappers for shared React Context, and Client
+  Use Routes for pages, React Providers for shared React Context, and Client
   ServiceProviders for application-owned Services, Refine configuration, and
   imperative initialization.
 - Settings pages are routes declared with `defineSettingsRoutes()`; there is no
@@ -114,7 +114,7 @@ runnable reference is needed.
   imports at leaf boundaries such as route page components, locale messages,
   heavy SDKs, or truly optional features.
 - Client ServiceProvider lifecycle runs inside `ClientApplication.start()`.
-  The Browser host owns the React DOM root and renders React Wrappers through
+  The Browser host owns the React DOM root and renders React Providers through
   `AppClientRoot` only after application startup succeeds.
 - Server Routes are direct contributions passed to `defineServerPlugin()`; do
   not write a Server route loader.
@@ -145,7 +145,7 @@ runnable reference is needed.
   `issues`, and `suggestions`. `server:inspect --json` reports declaration and
   resolved-location facts without executing ServiceProvider, Route, locale, database,
   or Job behavior. `client:inspect --type locales --json` imports Client plugin
-  declarations without executing ServiceProvider lifecycle, rendering React Wrappers, or loading locale messages and does
+  declarations without executing ServiceProvider lifecycle, rendering React Providers, or loading locale messages and does
   not inspect locale names, keys, translations, fallback, or language switching.
 - Keep `server/plugin.ts` and the declaration modules it imports free of runtime
   startup side effects. Inspection imports these modules even though it does

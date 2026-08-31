@@ -54,15 +54,15 @@ directory and commit App integrations to the App's normal source directories.
 
 - Plugin `client/plugin` entries are the static registration surface,
   re-exported as the default from `client/index.ts` and imported as
-  `<package>/client`: package name, config, ServiceProviders, React Wrappers,
+  `<package>/client`: package name, config, ServiceProviders, React Providers,
   routes, locales, and the options the plugin accepts.
 - Plugin `client/serviceProviders` entries register Client services and Refine
   capabilities through `ClientApplication.start()`.
-- Plugin `client/reactWrappers` entries declare synchronous React wrappers and
+- Plugin `client/reactProviders` entries declare synchronous React Providers and
   explicit ordering constraints.
 - Plugin `client/routes` entries own route ID, path, and authentication mode.
 - The application owns its root route, theme, page composition, branding,
-  loading states, and final React Wrapper tree.
+  loading states, and final React Provider tree.
 
 Do not redeclare a plugin route merely to customize its UI. A plugin that
 exposes an option for the page takes it through `client/plugins.ts`;
@@ -142,9 +142,9 @@ CLI and future Agents can locate the owning file.
 
 In JSON mode, read `ok`, `status`, and `result.consistent`, then process stable
 issue codes. Inspection imports Client declarations and reads static Route,
-ServiceProvider, and React Wrapper declarations. It does not instantiate
+ServiceProvider, and React Provider declarations. It does not instantiate
 ServiceProviders, run lifecycle hooks, load Route page components or locale
-messages, render React Wrappers, start a browser, or verify Server security.
+messages, render React Providers, start a browser, or verify Server security.
 
 ## Keep the server inspectable
 

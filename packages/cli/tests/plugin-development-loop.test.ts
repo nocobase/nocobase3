@@ -73,7 +73,7 @@ async function createLoopFixture(
   packageName: '@nocobase/agent-loop-app',
   config: async () => ({}),
   serviceProviders: [],
-  reactWrappers: [],
+  reactProviders: [],
   routes: [],
   locales: {},
   plugins: [],

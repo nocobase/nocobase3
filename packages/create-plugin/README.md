@@ -28,7 +28,7 @@ CAPABILITIES
   client.routes
   client.components
   client.service-providers
-  client.react-wrappers
+  client.react-providers
   client.locales
   registry
   skills
@@ -50,7 +50,7 @@ OPTIONS
 structure. `server.routes` supports both API and Root Route contributions
 without choosing either one for the plugin. `client.routes` similarly supports
 App and Settings Routes. `client.service-providers` generates application-owned
-Client services and lifecycle hooks, while `client.react-wrappers` generates
+Client services and lifecycle hooks, while `client.react-providers` generates
 React context composition owned by the rendered tree.
 
 The generator derives Client and Server plugin declarations, package exports,

@@ -76,7 +76,7 @@ describe('formatHelp', () => {
     expect(help).toContain('server.service-providers');
     expect(help).toContain('server.locales');
     expect(help).toContain('client.service-providers');
-    expect(help).toContain('client.react-wrappers');
+    expect(help).toContain('client.react-providers');
     expect(help).toContain('client.locales');
     expect(help).toContain('--json');
   });

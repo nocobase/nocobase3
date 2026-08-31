@@ -43,7 +43,7 @@ function hasClientPlugin(capabilities: PluginCapabilities): boolean {
   return (
     capabilities.client.serviceProviders ||
     capabilities.client.locales ||
-    capabilities.client.reactWrappers ||
+    capabilities.client.reactProviders ||
     capabilities.client.routes
   );
 }
@@ -63,7 +63,7 @@ function hasBrowserCode(capabilities: PluginCapabilities): boolean {
     capabilities.client.serviceProviders ||
     capabilities.client.components ||
     capabilities.client.locales ||
-    capabilities.client.reactWrappers ||
+    capabilities.client.reactProviders ||
     capabilities.client.routes ||
     capabilities.registry
   );
@@ -96,12 +96,12 @@ function includeTemplateFile(
     return capabilities.client.routes;
   }
   if (
-    relativePath.startsWith('client/react-wrappers/') ||
+    relativePath.startsWith('client/react-providers/') ||
     relativePath === 'client/contexts.ts' ||
     relativePath === 'client/components/provider.tsx' ||
-    relativePath === 'tests/client-react-wrapper.test.tsx'
+    relativePath === 'tests/client-react-provider.test.tsx'
   ) {
-    return capabilities.client.reactWrappers;
+    return capabilities.client.reactProviders;
   }
   if (
     relativePath === 'client/components/plugin-component.tsx' ||
@@ -304,7 +304,7 @@ async function renderManifest(
   const browserCode = hasBrowserCode(capabilities);
   const react =
     capabilities.client.components ||
-    capabilities.client.reactWrappers ||
+    capabilities.client.reactProviders ||
     capabilities.registry;
   const exports: Record<string, unknown> = {};
   const publishExports: Record<string, unknown> = {};
@@ -343,11 +343,11 @@ async function renderManifest(
       './client/routes.ts',
       './dist/client/routes.js',
     );
-  if (capabilities.client.reactWrappers)
+  if (capabilities.client.reactProviders)
     addExport(
-      './client/react-wrappers',
-      './client/react-wrappers/index.ts',
-      './dist/client/react-wrappers/index.js',
+      './client/react-providers',
+      './client/react-providers/index.ts',
+      './dist/client/react-providers/index.js',
     );
   if (capabilities.client.components)
     addExport(
@@ -511,7 +511,7 @@ function renderClientPlugin(
     capabilities.client.locales ? '  locales,' : undefined,
     capabilities.client.serviceProviders ? '  serviceProviders,' : undefined,
     capabilities.client.routes ? '  routes,' : undefined,
-    capabilities.client.reactWrappers ? '  reactWrappers,' : undefined,
+    capabilities.client.reactProviders ? '  reactProviders,' : undefined,
   ]
     .filter(Boolean)
     .join('\n');
@@ -525,8 +525,8 @@ function renderClientPlugin(
     capabilities.client.routes
       ? "import routes from './routes.js';"
       : undefined,
-    capabilities.client.reactWrappers
-      ? "import reactWrappers from './react-wrappers/index.js';"
+    capabilities.client.reactProviders
+      ? "import reactProviders from './react-providers/index.js';"
       : undefined,
   ]
     .filter(Boolean)
@@ -603,7 +603,7 @@ function renderReadme(
     capabilities.client.routes && 'client.routes',
     capabilities.client.components && 'client.components',
     capabilities.client.serviceProviders && 'client.service-providers',
-    capabilities.client.reactWrappers && 'client.react-wrappers',
+    capabilities.client.reactProviders && 'client.react-providers',
     capabilities.client.locales && 'client.locales',
     capabilities.registry && 'registry',
     capabilities.skills && 'skills',
@@ -626,8 +626,8 @@ function renderSkill(
       '- Client routes: document the implemented App or Settings path, navigation entry, and access conditions.',
     capabilities.client.serviceProviders &&
       '- Client ServiceProviders: document registered services, lifecycle side effects, and how an Agent can verify them.',
-    capabilities.client.reactWrappers &&
-      '- Client React wrappers: document the React context or UI behavior exposed to the App and any required composition order.',
+    capabilities.client.reactProviders &&
+      '- Client React Providers: document the React context or UI behavior exposed to the App and any required composition order.',
     capabilities.server.serviceProviders &&
       '- Server ServiceProviders: document any public `ServiceToken` export and the supported Server-to-Server workflow.',
     capabilities.server.routes &&

@@ -10,9 +10,9 @@ types contributed by an application plugin:
 - `client/routes.ts` contributes the authenticated `/routes-example` page with
   `defineAppRoutes()` and `/settings/routes-example` with
   `defineSettingsRoutes()`;
-- `client/react-wrappers.ts` contributes a synchronous React Wrapper with
-  `defineClientReactWrappers`;
-- `client/components/` contains React Wrapper component implementations;
+- `client/react-providers.ts` contributes a synchronous React Provider with
+  `defineClientReactProviders`;
+- `client/components/` contains React Provider component implementations;
 - `client/contexts/` contains shared React contexts and their hooks;
 - `client/pages/routes-example-page.tsx` is loaded only when that page route is
   visited and calls the server route through `@nocobase/app-sdk`.
@@ -23,7 +23,7 @@ types and relative `.js` imports required by this declaration-emitting ESM
 package.
 
 The Client plugin declaration statically contributes `routes` and
-`reactWrappers`; route page components remain lazy through `componentLoader()`.
+`reactProviders`; route page components remain lazy through `componentLoader()`.
 
 The Root Route and API Route each resolve the public Authentication Token and
 install `auth.required()` on their own router. Neither depends on App

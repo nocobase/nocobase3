@@ -30,7 +30,7 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
         packageName: '@example/inspect-app',
         config: () => ({}),
         serviceProviders: [AppProvider],
-        reactWrappers: [],
+        reactProviders: [],
         routes: [],
         locales: { 'en-US': async () => ({ default: {} }) },
         plugins: [],
@@ -46,8 +46,8 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 describe('client inspection', () => {
   it('parses the static Client contribution types', () => {
     expect(
-      parseInspectAppClientArgs(['--type', 'react-wrappers', '--json']),
-    ).toEqual({ help: false, json: true, type: 'react-wrappers' });
+      parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
+    ).toEqual({ help: false, json: true, type: 'react-providers' });
     expect(
       parseInspectAppClientArgs(['--type', 'service-providers']).type,
     ).toBe('service-providers');
@@ -59,7 +59,7 @@ describe('client inspection', () => {
       'locales',
     );
     expect(() => parseInspectAppClientArgs(['--type', 'providers'])).toThrow(
-      '--type must be all, config, service-providers, react-wrappers, routes, settings, or locales.',
+      '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
     );
   });
 
@@ -136,7 +136,7 @@ describe('client inspection', () => {
       },
     ]);
     expect(
-      inspection.reactWrappers.map(({ id, order }) => ({ id, order })),
+      inspection.reactProviders.map(({ id, order }) => ({ id, order })),
     ).toEqual([
       { id: '@nocobase/app-template-default:theme', order: 1 },
       {
@@ -190,7 +190,7 @@ describe('client inspection', () => {
     const output = formatAppClientInspection(inspection);
     expect(output).toMatch(/Config declarations/u);
     expect(output).toMatch(/ServiceProviders/u);
-    expect(output).toMatch(/React wrappers \(outer -> inner\)/u);
+    expect(output).toMatch(/React Providers \(outer -> inner\)/u);
     expect(output).toMatch(/Locale declarations/u);
     expect(output).toMatch(/Issues: none/u);
     expect(output).toMatch(/ServiceProvider lifecycle.*not inspected/su);
@@ -244,7 +244,7 @@ describe('client inspection', () => {
             },
           }],
         }],
-        reactWrappers: [],
+        reactProviders: [],
         routeComponentOverrides: [],
         options: {},
       };
@@ -285,7 +285,7 @@ describe('client inspection', () => {
           globalThis.__clientLocalesOnlyCalls.route += 1;
           throw new Error('routes must not be read during locales-only inspection');
         },
-        reactWrappers: [],
+        reactProviders: [],
         routeComponentOverrides: [],
         options: {},
       };
@@ -301,7 +301,7 @@ describe('client inspection', () => {
     });
     expect(inspection.locales).toHaveLength(2);
     expect(inspection.routes).toEqual([]);
-    expect(inspection.reactWrappers).toEqual([]);
+    expect(inspection.reactProviders).toEqual([]);
   });
 
   it('uses stable errors for missing and invalid Client composition', async () => {

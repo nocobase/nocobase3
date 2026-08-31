@@ -13,7 +13,7 @@ NocoBase v3 插件只通过一个 `client/routes.ts` entry 提供 Client Routes�
 - 页面通过 `componentLoader()` 惰性加载；
 - Client `auth` 和 `access` 保护导航与页面加载，不能替代 Server 安全边界。
 
-完整的四类 Route 选择见[Route 插件开发](./routes.md)。Client ServiceProvider、React Wrapper、
+完整的四类 Route 选择见[Route 插件开发](./routes.md)。Client ServiceProvider、React Provider、
 options 和 wiring 见[Client 模块选择](./client.md)。
 
 ## 先选择 App Route 还是 Settings Route
@@ -205,7 +205,7 @@ const override = {
 ## Provider 与 Route 的边界
 
 Route 只声明页面入口。多个插件页面确实共享 React Context 时，才在
-`client/react-wrappers/index.ts` 使用 `defineClientReactWrappers()`；页面局部状态保留在页面内部。
+`client/react-providers/index.ts` 使用 `defineClientReactProviders()`；页面局部状态保留在页面内部。
 `client:inspect` 会解析 Route 和 Provider contributions，但不会加载页面、渲染
 Provider 或启动浏览器。
 
@@ -226,7 +226,7 @@ Client Route composition 发生变化，或者需要排查 Route 是否进入目
 pnpm --filter <target-app> client:inspect --json
 ```
 
-它提供最终 Client composition 的只读快照，但不运行 ServiceProvider lifecycle、页面 loader 或 React Wrapper，也不验证 Route 行为。目标 App
+它提供最终 Client composition 的只读快照，但不运行 ServiceProvider lifecycle、页面 loader 或 React Provider，也不验证 Route 行为。目标 App
 测试继续验证真实导航、access、override、Provider 和页面行为；有 Server API 时完成
 页面到真实 API 的 full-stack 闭环。
 

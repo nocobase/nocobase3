@@ -37,7 +37,7 @@ Token 接口应描述行为而不是默认实现。明确返回值、错误、�
 
 ## Client 契约
 
-`exports["./client"]` 返回 Client plugin factory。基础 Client 声明使用 `config`、`serviceProviders`、`reactWrappers`、`routes` 和 `locales`：Application config 通过 `app.config` 读取，服务和启动期初始化由 ServiceProvider lifecycle 管理，跨页面 React Context 通过 React Wrappers 组合。App 通过 typed options 配置一次插件 registration 的稳定行为。页面组件、语言消息和重型 SDK 在叶子节点 lazy load；可复用的组件、hook、Token 或 factory 只有在确实需要跨插件组合时才单独 export。
+`exports["./client"]` 返回 Client plugin factory。基础 Client 声明使用 `config`、`serviceProviders`、`reactProviders`、`routes` 和 `locales`：Application config 通过 `app.config` 读取，服务和启动期初始化由 ServiceProvider lifecycle 管理，跨页面 React Context 通过 React Providers 组合。App 通过 typed options 配置一次插件 registration 的稳定行为。页面组件、语言消息和重型 SDK 在叶子节点 lazy load；可复用的组件、hook、Token 或 factory 只有在确实需要跨插件组合时才单独 export。
 
 ```ts
 auditLog({ resourceLabel: 'Audit logs' });

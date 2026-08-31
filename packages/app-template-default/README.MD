@@ -55,7 +55,7 @@ pnpm plugin:remove audit-log
 ```
 
 See [Plugin development quick start](../../docs/development/plugin-development/quick-start.md)
-for the server, database, Client ServiceProvider, React Wrapper, routes, and
+for the server, database, Client ServiceProvider, React Provider, routes, and
 configuration protocols.
 
 ## Current client architecture
@@ -66,7 +66,7 @@ The active browser source is `client/`:
 client/
 ├── service-provider.ts     application ServiceProvider defaults
 ├── routes.ts               application-owned route declarations
-├── react-wrappers.ts       application React Wrapper declarations
+├── react-providers.ts       application React Provider declarations
 ├── route-overrides.ts      application component replacements
 ├── routing/                route placement, lazy loading, and error UI
 ├── auth/                    application authentication presentation
@@ -85,7 +85,7 @@ provider architecture reference.
 Enabled client plugins contribute independently:
 
 - `client/serviceProviders`: Client services, Refine capabilities and lifecycle;
-- `client/reactWrappers`: synchronous React Context and tree wrappers;
+- `client/reactProviders`: synchronous React Context and tree Providers;
 - `client/routes`: inspectable route path/auth metadata and lazy page loaders;
 - `client/locales`: static manifests with lazy language messages.
 
@@ -94,9 +94,9 @@ The Default App contributes through the same protocol, wired by
 home route is declared in `client/routes.ts`, while `client/routing/` only
 renders the resolved routes.
 
-React Wrappers are composed outer-to-inner in fixed layer order:
+React Providers are composed outer-to-inner in fixed layer order:
 `root -> application -> extension`. The app Theme Provider uses `root`;
-application wrappers otherwise default to `application`, and plugin wrappers
+application React Providers otherwise default to `application`, and plugin React Providers
 use `extension`. `before` and `after` can refine order only within the same
 layer.
 
@@ -109,7 +109,7 @@ pnpm app:client:inspect --app app-template-default --type service-providers
 ```
 
 The output shows ServiceProvider order, route ownership and final component
-source, and React Wrapper source/layer/order.
+source, and React Provider source/layer/order.
 
 ## Authentication UI
 

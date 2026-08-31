@@ -251,7 +251,7 @@ createApp(runtime) → ClientApplication                创建 App 和 ServiceCo
     │
     ├── app.config + AppClient/API Client
     ├── serviceProviders + Refine config
-    └── reactWrappers + Routes
+    └── reactProviders + Routes
     │
     ▼
 app.start() → root.render(<AppClientRoot app={app} />) → Refine App
@@ -261,11 +261,11 @@ app.start() → root.render(<AppClientRoot app={app} />) → Refine App
 
 ```tsx
 <BrowserRouter basename={runtime.basename}>
-  <ReactWrapperTree wrappers={runtime.reactWrappers}>
+  <ReactProviderTree wrappers={runtime.reactProviders}>
     <Refine {...app.refineConfig}>
       <AppRouter routes={runtime.routes} />
     </Refine>
-  </ReactWrapperTree>
+  </ReactProviderTree>
 </BrowserRouter>
 ```
 
@@ -412,15 +412,15 @@ WebSocket 接入实现时的高级覆盖入口。
 
 ## Client 的核心
 
-Client 的核心是 Application-owned Services、React Wrappers 和 Routes。
+Client 的核心是 Application-owned Services、React Providers 和 Routes。
 
 ```tsx
 <BrowserRouter basename={runtime.basename}>
-  <ReactWrapperTree wrappers={runtime.reactWrappers}>
+  <ReactProviderTree wrappers={runtime.reactProviders}>
     <Refine {...app.refineConfig}>
       <AppRouter routes={runtime.routes} />
     </Refine>
-  </ReactWrapperTree>
+  </ReactProviderTree>
 </BrowserRouter>
 ```
 
@@ -434,10 +434,10 @@ resolveAppRuntime()
 ClientApplication
   ├── ServiceContainer + serviceProviders（app.start()）
   ├── Refine configuration
-  └── reactWrappers（Browser Host 渲染 AppClientRoot）
+  └── reactProviders（Browser Host 渲染 AppClientRoot）
        ├── BrowserRouter
        ├── ThemeProvider
-       └── Other React Wrappers
+       └── Other React Providers
              ↓
            Routes → render
 ```
@@ -452,7 +452,7 @@ Config → Runtime → App → Start / Render
 
 | 层次           | 职责                                                                                                 |
 | -------------- | ---------------------------------------------------------------------------------------------------- |
-| Config         | 声明应用需要什么，包括公开配置、插件、ServiceProvider、React Wrapper、Routes 等可组合能力。          |
+| Config         | 声明应用需要什么，包括公开配置、插件、ServiceProvider、React Provider、Routes 等可组合能力。         |
 | Runtime        | 解析并汇总 Config，形成当前运行环境中可直接使用的完整静态装配计划。                                  |
 | App            | 将已解析的 Runtime 组装为有状态 Application，建立 ServiceContainer、Refine 和渲染边界。              |
 | Start / Render | 激活应用：Server 启动服务生命周期；Client 先 `app.start()`，再由 Browser Host 渲染 `AppClientRoot`。 |

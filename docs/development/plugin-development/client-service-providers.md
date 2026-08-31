@@ -5,7 +5,7 @@ description: 在 NocoBase v3 ClientApplication 中使用共享 ServiceProvider �
 
 # Client ServiceProviders
 
-Client 与 Server 共享 `@nocobase/service-provider` 的 Container、Token 和生命周期原语。Client ServiceProvider 由 `ClientApplication` 实例化，在 `app.start()` 中执行；它取代旧的 Client Bootstrap，并与只负责 React 树组合的 `reactWrappers` 明确分工。
+Client 与 Server 共享 `@nocobase/service-provider` 的 Container、Token 和生命周期原语。Client ServiceProvider 由 `ClientApplication` 实例化，在 `app.start()` 中执行；它取代旧的 Client Bootstrap，并与只负责 React 树组合的 `reactProviders` 明确分工。
 
 ## 适用场景
 
@@ -14,7 +14,7 @@ Client 与 Server 共享 `@nocobase/service-provider` 的 Container、Token 和�
 - 在 `start()` 中启动 listener、connection 或 timer；
 - 在 `shutdown()` 中释放 Provider 拥有的资源。
 
-页面用 Route，共享 React Context 用 React Wrapper，页面局部数据加载放在 component lifecycle。
+页面用 Route，共享 React Context 用 React Provider，页面局部数据加载放在 component lifecycle。
 
 ## 最小 Client ServiceProvider
 

@@ -17,9 +17,9 @@ export function AppClientRoot({ app }: AppClientRootProps): ReactElement {
   const configuredChildren =
     refine.children === undefined ? config.routes : refine.children;
   const configuredRouterProvider = refine.routerProvider ?? routerProvider;
-  const reactWrappers = config.reactWrappers ?? [];
-  const content = reactWrappers.reduceRight<ReactNode>(
-    (children, ReactWrapper) => <ReactWrapper>{children}</ReactWrapper>,
+  const reactProviders = config.reactProviders ?? [];
+  const content = reactProviders.reduceRight<ReactNode>(
+    (children, ReactProvider) => <ReactProvider>{children}</ReactProvider>,
     <Refine
       {...refine}
       routerProvider={configuredRouterProvider}

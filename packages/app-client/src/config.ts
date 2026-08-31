@@ -40,13 +40,13 @@ export type AppClientConfigFactory = (
   context: AppClientConfigContext,
 ) => AppClientConfig | Promise<AppClientConfig>;
 
-export type AppClientReactWrapper = ComponentType<PropsWithChildren>;
+export type AppClientReactProvider = ComponentType<PropsWithChildren>;
 
 export type AppClientRefineConfig = RefineProps;
 
 export interface AppClientRenderConfig {
   readonly basename?: string;
-  readonly reactWrappers?: readonly AppClientReactWrapper[];
+  readonly reactProviders?: readonly AppClientReactProvider[];
   readonly routes: ReactNode;
 }
 
@@ -93,10 +93,10 @@ export function defineAppClientRenderConfig(
 ): AppClientRenderConfig {
   return Object.freeze({
     ...config,
-    reactWrappers:
-      config.reactWrappers === undefined
+    reactProviders:
+      config.reactProviders === undefined
         ? undefined
-        : Object.freeze([...config.reactWrappers]),
+        : Object.freeze([...config.reactProviders]),
   });
 }
 

@@ -14,7 +14,7 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、I18n
 | Client descriptor/options | factory 解析后的 entries 和 options                          |
 | App/Settings Routes       | parent、path、navigation、access、component loader           |
 | Client Component          | props、交互、公共 export 和目标 App 渲染                     |
-| Client React Wrapper      | descriptor、Context 行为、顺序和 cleanup                     |
+| Client React Provider     | descriptor、Context 行为、顺序和 cleanup                     |
 | Client ServiceProvider    | Service/Refine 注册、options、lifecycle、失败清理和副作用    |
 | Service/Provider          | Token、惰性单例、生命周期、错误清理                          |
 | API/Root Route            | 真实 router 请求、状态码、响应、权限、base path              |
@@ -28,7 +28,7 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、I18n
 
 ## Client 测试
 
-不要只断言模块存在。Components 测试 props、交互和正式 public export；Routes 测试 descriptor 并实际调用 component loaders；React Wrapper 分别测试 declaration、组合顺序和 Context 行为；ServiceProvider 使用独立 Client Application 或最小 fixture 验证 Container binding、Refine 注册、options、完整 lifecycle、异步失败和逆序清理。详细边界见 [Client 模块选择](./client.md)。
+不要只断言模块存在。Components 测试 props、交互和正式 public export；Routes 测试 descriptor 并实际调用 component loaders；React Provider 分别测试 declaration、组合顺序和 Context 行为；ServiceProvider 使用独立 Client Application 或最小 fixture 验证 Container binding、Refine 注册、options、完整 lifecycle、异步失败和逆序清理。详细边界见 [Client 模块选择](./client.md)。
 
 ## Server 测试
 
@@ -127,7 +127,7 @@ pnpm --filter <target-app> build
 
 最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job、语言切换和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
 
-Inspector 只提供静态登记和 composition 的局部快照，并报告其检查范围内确定的装配问题。Client inspection 不实例化或运行 ServiceProvider、不加载页面或语言消息、不渲染 React Wrapper；Server inspection 不执行 ServiceProvider、Route factory、Job 或数据库操作。Agent 通过模块文档、源码、类型、行为测试和目标 App 运行结果理解实现，不根据 Inspector 推断业务正确性，也不把 `consistent: true` 作为完成条件。
+Inspector 只提供静态登记和 composition 的局部快照，并报告其检查范围内确定的装配问题。Client inspection 不实例化或运行 ServiceProvider、不加载页面或语言消息、不渲染 React Provider；Server inspection 不执行 ServiceProvider、Route factory、Job 或数据库操作。Agent 通过模块文档、源码、类型、行为测试和目标 App 运行结果理解实现，不根据 Inspector 推断业务正确性，也不把 `consistent: true` 作为完成条件。
 
 ## 完成条件
 

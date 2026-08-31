@@ -26,7 +26,7 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 | 用户需要独立页面             | App Route       | `client/routes.ts`                   |
 | 管理员配置插件               | Settings Route  | `client/routes.ts`                   |
 | 可复用 UI 构件               | Component       | `client/components/`                 |
-| 页面共享状态                 | React Wrapper   | `client/react-wrappers/`             |
+| 页面共享状态                 | React Provider  | `client/react-providers/`            |
 | Client Service 或初始化      | ServiceProvider | `client/providers/`                  |
 | 操作异步执行                 | Queue Job       | `server/jobs/`                       |
 | Client/Server 文案或外发消息 | I18n            | `client/locales/`、`server/locales/` |
@@ -58,7 +58,7 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 数据模型和 Migration / Seed
 → Service contract / Token / implementation / Provider
 → API Route / Root Route / Queue Job
-→ Client components / routes / reactWrappers / serviceProviders
+→ Client components / routes / reactProviders / serviceProviders
 → Client / Server locale resources
 → Registry（只有 App 需要拥有可编辑源码时）
 → App-facing Plugin Skills

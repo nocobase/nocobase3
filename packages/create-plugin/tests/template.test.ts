@@ -72,13 +72,13 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
     'client/components/plugin-component.tsx',
     'tests/component.test.tsx',
   ],
-  'client.react-wrappers': [
+  'client.react-providers': [
     'client/components/provider.tsx',
     'client/contexts.ts',
     'client/index.ts',
     'client/plugin.ts',
-    'client/react-wrappers/index.ts',
-    'tests/client-react-wrapper.test.tsx',
+    'client/react-providers/index.ts',
+    'tests/client-react-provider.test.tsx',
   ],
   'client.service-providers': [
     'client/providers/__NOCOBASE_SHORT_NAME__.ts',
