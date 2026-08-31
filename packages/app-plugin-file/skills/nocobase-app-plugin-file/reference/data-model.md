@@ -23,100 +23,56 @@ Every standard file table stores these stable values:
 Use `PRIMARY KEY (id)` and `UNIQUE (disk, key)` in every table. Do not store a
 final URL or a Token. A URL depends on the mounted app base path and a Private
 URL expires; every content request must still resolve the current record.
+Make the standard fields non-null, use an unsigned `size`, and default `public`
+to `false`.
 
 ## One-to-one
 
 Put the owner foreign key on the file table and make it unique. The business
-table owns the inverse logical relation:
+table owns the inverse logical relation. In addition to the standard fields:
 
 ```ts
-await builder.createCollection('profiles', (table) => {
-  table.increments('id');
-  table.string('name', { length: 255 }).notNull();
-  table.hasOne('avatar', 'profileAvatars').foreignKey('profileId');
-});
-
-await builder.createCollection('profileAvatars', (table) => {
-  addStandardFileFields(table);
-  table
-    .belongsTo('profile', 'profiles')
-    .foreignKey('profileId')
-    .foreignKeyType('integer')
-    .constraints(true)
-    .unique();
-  table.primary('id');
-  table.unique(['disk', 'key']);
-});
+collection.integer('profileId').unsigned().notNull();
+collection.unique('profileId', { name: 'uq_<table>_profile' });
+collection
+  .belongsTo('profile', 'profiles', { index: false })
+  .foreignKey('profileId')
+  .targetKey('id')
+  .constraints(true)
+  .onDelete('cascade');
 ```
 
-The unique owner constraint is the durable one-to-one guarantee. The Route may
-also set `maxFiles: 1` for an earlier rejection and single-process,
-single-Route serialization, but the UNIQUE constraint remains authoritative
-across application instances. Relation names (`avatar`, `profile`) are logical
-metadata; `profileId` is the explicit physical foreign-key field.
+Also register the inverse `hasOne` relation on the business table. The unique
+owner constraint is the durable one-to-one guarantee. Relation names are
+logical metadata; `profileId` is the explicit physical foreign-key field.
 
 ## One-to-many
 
 Put an indexed owner foreign key on the file table and leave it non-unique:
 
 ```ts
-await builder.createCollection('orders', (table) => {
-  table.increments('id');
-  table.string('number', { length: 64 }).notNull();
-  table.hasMany('attachments', 'orderAttachments').foreignKey('orderId');
-});
-
-await builder.createCollection('orderAttachments', (table) => {
-  addStandardFileFields(table);
-  table
-    .belongsTo('order', 'orders')
-    .foreignKey('orderId')
-    .foreignKeyType('integer')
-    .constraints(true)
-    .index();
-  table.primary('id');
-  table.unique(['disk', 'key']);
-});
+collection.integer('orderId').unsigned().notNull();
+collection.index('orderId', { name: 'idx_<table>_order' });
+collection
+  .belongsTo('order', 'orders', { index: false })
+  .foreignKey('orderId')
+  .targetKey('id')
+  .constraints(true)
+  .onDelete('cascade');
 ```
 
-Multiple rows may point to one order. The Route serializes `maxFiles` checks
-for the same owner within one process and Route instance. Concurrent
-multi-node uploads still need a database constraint or distributed mechanism
-when the limit must be durable; the database index makes scoped
-list/find/delete queries predictable.
+Also register the inverse `hasMany` relation on the business table. Multiple
+rows may point to one order; the index makes scoped list/find/delete queries
+predictable.
 
-In real migrations, write each standard field explicitly rather than relying
-on an untracked helper. The snippets use `addStandardFileFields(table)` only
-to keep the relation examples short.
+Write every standard field and reverse operation explicitly in the migration;
+do not import a live collection definition or schema helper.
 
 ## Constraints and scope
 
-Use the current app-database builder with logical collection and field names:
-
-- `belongsTo(...).foreignKey(...).foreignKeyType(...).constraints(true)` for
-  the owner-side database constraint;
-- `hasOne` or `hasMany` for inverse relation metadata;
-- `unique(['disk', 'key'])` for object identity;
-- `unique('ownerId')` for one-to-one;
-- `index('ownerId')` for one-to-many.
-
 Build the standard Route with a hard-coded table and a scope resolver that
-reads only a validated server Route parameter:
-
-```ts
-const route = createFileRoute({
-  database: app.container.resolve(databaseManagerToken),
-  table: 'orderAttachments',
-  scope: (context) => {
-    const raw = context.req.param('orderId');
-    const orderId = Number(raw);
-    if (!raw || !Number.isSafeInteger(orderId) || orderId < 1) {
-      throw new TypeError('A valid orderId is required.');
-    }
-    return { orderId };
-  },
-});
-```
+reads only a validated server Route parameter. Use the assembly pattern in
+[quick start](quick-start.md).
 
 The Store must apply every scope equality to list, find, create, and remove.
 Find and remove must combine the file ID and scope in the same database
@@ -127,5 +83,4 @@ The Store is not an authorization layer. The business Route must authenticate
 and call the existing authorization system before management operations.
 DatabaseManager stays on the server; it is not exposed to browser code.
 
-See [one-to-one](recipes/one-to-one.md) and [one-to-many](recipes/one-to-many.md)
-for complete small migrations and acceptance tests.
+See [quick start](quick-start.md) for the Route and client assembly pattern.

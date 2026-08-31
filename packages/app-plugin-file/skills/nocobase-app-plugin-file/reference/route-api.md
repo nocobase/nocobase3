@@ -1,13 +1,10 @@
 # Route API
 
 `createFileRoute()` returns a Hono Router with exactly six relative endpoints.
-Mount it below a business path such as
-`/api/orders/:orderId/attachments`:
+Mount it inside a `defineApiRoutes()` contribution below a business path such
+as `/orders/:orderId/attachments`. The Application adds the `/api` prefix.
 
-This is the stable public route factory for business modules. The plugin's
-internal `createFileDemoRoutes()` composes its built-in Demo Router, while the
-convention registrar only mounts that Router at `/api/attachments`; neither
-Demo assembly API is exported from `@nocobase/app-plugin-file/server`.
+This is the stable public route factory for business modules.
 
 | Method   | Relative path  | Action                      | Authentication        |
 | -------- | -------------- | --------------------------- | --------------------- |
@@ -25,28 +22,9 @@ decision.
 
 ## Create the Route
 
-```ts
-const route = createFileRoute({
-  database: app.container.resolve(databaseManagerToken),
-  table: 'orderAttachments',
-  scope: (context) => ({ orderId: context.req.param('orderId') }),
-  drive: app.container.resolve(driveManagerToken),
-  defaultDisk: config.drive.default,
-  publicBasePath: config.app.publicBasePath,
-  tokenSecret: config.session.secret,
-  audience: 'order-attachments',
-  auth: app.container.resolve(authenticationToken).required(),
-  authorize: authorizeOrderFile,
-  visibility: { default: 'private', allowClientOverride: false },
-  limits: {
-    maxSize: 50 * 1024 * 1024,
-    maxFiles: 10,
-    mimeTypes: ['application/pdf', 'text/plain'],
-  },
-});
-
-app.route('/api/orders/:orderId/attachments', route);
-```
+Use the assembly pattern in [quick start](quick-start.md). Do not write `/api`
+in `router.route(...)`; the Application adds that prefix for every
+`defineApiRoutes()` contribution.
 
 `auth` handles login state. `authorize` is optional, but a business module
 should use it to delegate `list`, `upload`, `read`, `issue-token`, and `delete`
@@ -64,58 +42,24 @@ missing infrastructure and receive stable `FILE_UNAVAILABLE` responses when
 storage or Private Token operations are attempted. Keep Drive credentials and
 the Token secret in server-only configuration; they are never request fields.
 
-The exact callback mapping is:
-
-- `GET /` -> `list` without a record;
-- `POST /` -> `upload` without a record;
-- `GET /:id` -> `read` with the scoped record;
-- `POST /:id/token` -> `issue-token` with the scoped record;
-- `DELETE /:id` -> `delete` with the scoped record.
-
 Do not create another ACL. For a database collection, register the collection
 and use the existing authorization `authorize()` result and its field/record
-conditions at the business boundary. A plain guard is appropriate only when a
-yes/no decision is sufficient.
+conditions at the business boundary. The file Route cannot apply conditions to
+the parent business record: authorize that parent through its normal
+service/query before allowing the file operation. A plain guard is appropriate
+only when a yes/no decision is sufficient.
 
 ## Request and response envelopes
 
-All JSON responses use `{ "data": ... }` unless the response is `204` or an
-error. List returns an array. Upload and metadata return a client record with a
-current, unsigned `contentUrl`; the client-facing record need not expose
-`disk` or `key`:
+JSON responses use `{ data: ... }` unless the response is `204` or an error.
+List returns an array. Upload and metadata return the stable client fields plus
+an unsigned `contentUrl`; they do not expose `disk` or `key`. For Private
+content, request `POST /:id/token` and use its `{ url, expiresAt }` result. A
+Public file returns the unsigned URL with `expiresAt: null`. Never store or log
+a Token URL.
 
-```json
-{
-  "data": {
-    "id": "file-123",
-    "filename": "contract.pdf",
-    "mimeType": "application/pdf",
-    "size": 428193,
-    "public": false,
-    "contentUrl": "/main/api/orders/1001/attachments/file-123/content",
-    "createdAt": "2026-08-27T09:00:00.000Z",
-    "updatedAt": "2026-08-27T09:00:00.000Z"
-  }
-}
-```
-
-The unsigned URL is useful for Public content. For Private content the client
-must request a Token URL first:
-
-```json
-{
-  "data": {
-    "url": "/main/api/orders/1001/attachments/file-123/content?token=...",
-    "expiresAt": "2026-08-27T09:15:00.000Z"
-  }
-}
-```
-
-The Token is returned only inside the URL. Do not store or log it. Delete
-returns `204` with no body, including when the scoped record is already absent.
-A missing scoped record returns `404` for read and content operations.
-For a Public record, the Token endpoint returns the unsigned content URL with
-`expiresAt: null`; it does not create a long-lived Token.
+Delete is idempotent and returns `204`. A missing scoped record returns `404`
+for read and content operations.
 
 ## Upload contract and validation
 
@@ -129,21 +73,10 @@ Before writing to storage, the Route validates:
 - `maxSize` (`FILE_TOO_LARGE`, normally `413`);
 - configured exact MIME types (`FILE_TYPE_NOT_ALLOWED`).
 
-The Route uses a 50 MiB single-file limit when `maxSize` is omitted. It applies
-the effective limit before `formData()` parses the complete multipart payload
-and again to the parsed `File.size`. It rejects an
-obviously excessive valid `Content-Length` immediately and independently
-counts bytes read from missing, forged, or chunked lengths. The body allowance
-is `maxSize` plus bounded multipart overhead: 1% of `maxSize`, clamped between
-64 KiB and 1 MiB. The parsed `File.size` remains the authoritative second
-check. This permits a file exactly at `maxSize` with normal boundary and part
-headers while bounding memory and ensuring Drive and Store mutations do not
-start after a request-level overflow.
-
-The database `filename` preserves safe Unicode display text after removing
-path segments, control and formatting characters, header delimiters, dot-only
-names, and abnormal whitespace. The storage key is independent: a server UUID
-plus only a short ASCII extension. It never contains the user basename.
+The Route uses a 50 MiB single-file limit when `maxSize` is omitted and applies
+the limit before storage or database mutation. The server normalizes the
+display filename and generates the storage key independently; business code
+must not derive a key from the uploaded filename.
 
 When `maxFiles` is configured, one Route instance serializes upload limit
 checks and writes by the current request path, which represents the actual
@@ -153,11 +86,6 @@ owners remain independent. Multiple application processes or nodes can still
 exceed the limit without a database constraint or distributed mechanism.
 Enforce one-to-one relations with a database UNIQUE constraint on the owner
 field.
-
-An empty browser MIME type must follow one documented consistent policy. Do not
-perform content sniffing or virus scanning in version 1. If a database write
-fails after storage succeeds, make a best-effort object removal and preserve
-the original failure.
 
 When `allowClientOverride` is false, an attempted `public` override must be
 rejected as invalid input or ignored under a documented safe policy; rejection
@@ -171,32 +99,19 @@ or verifies a Private Token against the configured audience, file ID,
 signature, and expiry. It then opens the Drive object and streams the bytes
 without buffering the full file.
 
-Set a safe `Content-Type` from the record MIME type, sanitize the filename for
-`Content-Disposition`, and support `?download=1` for attachment disposition.
-Token URLs should receive private/no-cache headers. Public access still checks
-the database record on every request. Token content also sends
-`Referrer-Policy: no-referrer` so capability URLs are not exposed through a
-browser referrer.
-
-HTML, SVG, XHTML, and XML content is always served as an attachment with a
-restrictive sandbox Content Security Policy. PNG, PDF, audio, video, and plain
-text remain eligible for inline preview.
+Public access still checks the database record on every request. Private Token
+URLs are short-lived capabilities and must not be stored or logged.
 
 ## Errors and deletion
 
-Known errors use stable codes such as `FILE_REQUIRED`, `FILE_TOO_LARGE`,
-`FILE_TYPE_NOT_ALLOWED`, `FILE_LIMIT_REACHED`, `FILE_NOT_FOUND`,
-`FILE_TOKEN_REQUIRED`, `FILE_TOKEN_INVALID`, `FILE_TOKEN_EXPIRED`, and
-`FILE_UNAVAILABLE`. Authentication and authorization responses remain the
+Known validation, limit, not-found, Token, and unavailable failures use stable
+`FILE_*` codes. Authentication and authorization responses remain the
 responses from the existing middleware or authorizer. Missing Database or
-Drive maps to `503`; unexpected errors must not become false success.
+Drive maps to `503`.
 
-Deletion removes the database record before the storage object so a database
-failure cannot leave metadata pointing at a missing object. Object deletion is
-best-effort after the record is gone: failures are logged and the Route still
-returns `204`. Repeating a delete after the record is gone also returns `204`.
-Version 1 has no soft delete,
-reference counting, cleanup queue, or recycle bin.
+Deletion is idempotent and returns `204` when the scoped record is already
+absent. Version 1 has no soft delete, reference counting, cleanup queue, or
+recycle bin.
 
-See the complete [one-to-one](recipes/one-to-one.md) and
-[one-to-many](recipes/one-to-many.md) recipes for integration examples.
+See [quick start](quick-start.md) for the Route and client assembly pattern and
+[data model](data-model.md) for one-to-one and one-to-many relations.
