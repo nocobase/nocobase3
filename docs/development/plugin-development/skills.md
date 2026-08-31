@@ -109,10 +109,10 @@ nocobase-app-plugin-workflow-diagnostics
 
 ## 发布和同步到 App
 
-`package.json#files` 必须包含 `skills`。注册默认同步；也可执行：
+`package.json#files` 必须包含 `skills`。注册默认同步；也可以进目标 App 目录单独执行：
 
 ```bash
-pnpm plugin:skills:sync --app <target-app> --plugin <plugin-name>
+pnpm plugin:skills:sync --plugin <plugin-name>
 ```
 
 每个目录整体替换，源文件删除的 Skill 会从 App 清理，名称冲突会失败。`--disabled` 默认仍同步 Skills；只有显式 `--no-skills` 才跳过。不要编辑 App 中的同步副本。
