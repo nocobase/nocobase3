@@ -37,7 +37,7 @@ Server contributions 在 `server/plugin.ts` 直接组合：
 import {
   defineServerPlugin,
   type AppServerPlugin,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';

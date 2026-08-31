@@ -6,11 +6,11 @@
 '@nocobase/app-plugin-queue-example': patch
 '@nocobase/app-plugin-realtime-example': patch
 '@nocobase/app-plugin-routes-example': patch
-'@nocobase/app-server-kit': patch
+'@nocobase/app-server': patch
 '@nocobase/app-template-default': patch
 '@nocobase/caching': patch
 '@nocobase/drive': patch
-'@nocobase/id-generator': patch
+'@nocobase/snowflake': patch
 '@nocobase/logging': patch
 '@nocobase/queue': patch
 '@nocobase/service-provider': patch

@@ -27,7 +27,7 @@ const IGNORED = [
   /^packages\/[^/]+\/[^/]+\/README\.md$/,
 ];
 
-// key 是相对 packages/ 的两段路径（如 libs/app-database），和下面从改动文件里截出来的前缀对齐。
+// key 是相对 packages/ 的两段路径（如 libs/db），和下面从改动文件里截出来的前缀对齐。
 function loadPackages() {
   const dir = path.join(root, 'packages');
   const map = new Map();

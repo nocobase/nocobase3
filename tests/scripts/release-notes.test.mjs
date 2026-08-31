@@ -117,14 +117,14 @@ for (const { label, manifests } of [
   {
     label: 'flat',
     manifests: {
-      'app-database/package.json': '@nocobase/app-database',
+      'app-database/package.json': '@nocobase/db',
       'app-template-default/package.json': '@nocobase/app-template-default',
     },
   },
   {
     label: 'grouped',
     manifests: {
-      'libs/app-database/package.json': '@nocobase/app-database',
+      'libs/app-database/package.json': '@nocobase/db',
       'templates/app-template-default/package.json':
         '@nocobase/app-template-default',
     },
@@ -149,7 +149,7 @@ for (const { label, manifests } of [
     assert.deepEqual(
       [...byName].sort(([left], [right]) => left.localeCompare(right)),
       [
-        ['@nocobase/app-database', directories[0]],
+        ['@nocobase/db', directories[0]],
         ['@nocobase/app-template-default', directories[1]],
       ],
     );

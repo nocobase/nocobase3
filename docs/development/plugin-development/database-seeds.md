@@ -25,7 +25,7 @@ Seed 写入插件运行所必需的初始记录，例如默认配置、基础规
 ## 编写确定的数据操作
 
 ```ts
-import { defineSeed, type SeedDefinition } from '@nocobase/app-database';
+import { defineSeed, type SeedDefinition } from '@nocobase/db';
 
 const seed: SeedDefinition = defineSeed({
   name: '202608300002-seed-audit-settings',

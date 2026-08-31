@@ -36,11 +36,11 @@ public base path 由宿主统一恢复。
 
 ```ts
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import { orderServiceToken } from '../tokens.js';
@@ -74,11 +74,11 @@ API Route，Root Route 仍然必须明确声明自己的安全策略。
 
 ```ts
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineRootRoutes,
   type AppRootRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 export const rootRoutes: AppRootRouteContribution<AppPluginApplication> =
@@ -108,11 +108,11 @@ Route，但“公开”不等于“没有安全边界”。它应校验签名、
 返回必要信息。
 
 ```ts
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineRootRoutes,
   type AppRootRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import { paymentWebhookServiceToken } from '../tokens.js';
@@ -159,11 +159,11 @@ import {
   authorizationToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import { orderServiceToken } from '../tokens.js';
@@ -253,11 +253,11 @@ export function createOrderRoutes(options: CreateOrderRoutesOptions): Hono {
 ```ts
 // server/routes/index.ts
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
+} from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import { orderServiceToken } from '../tokens.js';
@@ -298,8 +298,8 @@ Root 和 API Route 可以放在不同文件中，再由 `server/routes/index.ts`
 顺序的数组：
 
 ```ts
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
-import type { AppRouteContribution } from '@nocobase/app-server-kit/router';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import type { AppRouteContribution } from '@nocobase/app-server/router';
 
 import { apiRoutes } from './api.js';
 import { rootRoutes } from './root.js';
@@ -318,7 +318,7 @@ export default routes;
 import {
   defineServerPlugin,
   type AppServerPlugin,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 import routes from './routes/index.js';
 
@@ -343,7 +343,7 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
@@ -390,7 +390,7 @@ describe('root routes', () => {
 ## 验证清单
 
 本页规则面向 `packages/plugins/app-plugin-*/server/routes/` 中的插件 Route contribution。
-`app-server-kit` 内部的 SPA、WebSocket 或其他 runtime router helper 有自己的所有权和
+`app-server` 内部的 SPA、WebSocket 或其他 runtime router helper 有自己的所有权和
 测试边界，不应因为命名相似而被机械改写。
 
 - 根据最终 URL 明确选择 `defineApiRoutes()` 或 `defineRootRoutes()`；

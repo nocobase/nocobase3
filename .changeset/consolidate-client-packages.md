@@ -3,7 +3,7 @@
 '@nocobase/app-portal-sdk': major
 '@nocobase/app-template-default': major
 '@nocobase/app-template-hub': major
-'@nocobase/app-server-kit': major
+'@nocobase/app-server': major
 '@nocobase/app-plugin-authentication': minor
 '@nocobase/app-plugin-authorization': minor
 '@nocobase/app-plugin-file': minor

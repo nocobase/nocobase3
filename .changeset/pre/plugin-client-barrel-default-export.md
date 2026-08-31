@@ -1,7 +1,6 @@
 ---
 '@nocobase/app-plugin-authentication': minor
 '@nocobase/app-plugin-authorization': minor
-'@nocobase/app-plugin-data-provider': minor
 '@nocobase/app-plugin-file': minor
 '@nocobase/app-plugin-install': minor
 '@nocobase/app-plugin-notification-provider': minor

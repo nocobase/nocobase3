@@ -36,7 +36,7 @@ import {
   defineAppConfig,
   envBoolean,
   type AppConfigDefinition,
-} from '@nocobase/app-server-kit/config';
+} from '@nocobase/app-server/config';
 import { Type } from '@sinclair/typebox';
 
 export interface HeartbeatConfig {
@@ -102,7 +102,7 @@ const config = new AppConfig([...coreConfigs, ...context.configs], {
 });
 ```
 
-- `coreConfigs` 是 `app-server-kit` 提供的标准应用配置；
+- `coreConfigs` 是 `app-server` 提供的标准应用配置；
 - `context.configs` 是当前 App 注册的服务端插件贡献的配置；
 - `context` 供函数式 defaults 读取应用路径、运行模式和插件元数据；
 - `environment` 是 Host 或 standalone runtime 传入的环境变量快照。
@@ -138,8 +138,8 @@ await config.loadAll();
 Default App 在 `server/config/index.ts` 中完成配置组装：
 
 ```ts
-import { coreConfigs } from '@nocobase/app-server-kit';
-import { AppConfig } from '@nocobase/app-server-kit/config';
+import { coreConfigs } from '@nocobase/app-server';
+import { AppConfig } from '@nocobase/app-server/config';
 
 export function createAppConfig(context) {
   const config = new AppConfig([...coreConfigs, ...context.configs], {
@@ -511,8 +511,8 @@ public override register(): void {
 
 ## 相关实现
 
-- `packages/app/app-server-kit/src/config/`：`AppConfig`、definition 和环境映射入口；
-- `packages/app/app-server-kit/src/core-configs.ts`：标准 App 配置集合；
+- `packages/app/app-server/src/config/`：`AppConfig`、definition 和环境映射入口；
+- `packages/app/app-server/src/core-configs.ts`：标准 App 配置集合；
 - `packages/libs/config/`：通用 Config、provider 和 parser 基础库；
 - `packages/templates/app-template-default/server/config/index.ts`：Default App 配置来源选择；
 - `packages/templates/app-template-default/config.example.yml`：应用配置文件示例。

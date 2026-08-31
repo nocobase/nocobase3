@@ -33,7 +33,7 @@ Provider 通常做三件事：
 ## 最小 Provider
 
 ```ts
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { DefaultHeartbeatService } from '../services/heartbeat.js';
@@ -146,7 +146,7 @@ Provider constructors 是直接 Server contributions，不使用 loader：
 import {
   defineServerPlugin,
   type AppServerPlugin,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 
 import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';

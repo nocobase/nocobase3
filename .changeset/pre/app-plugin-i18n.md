@@ -1,7 +1,7 @@
 ---
 '@nocobase/app-plugin-i18n': patch
 '@nocobase/app-client': patch
-'@nocobase/app-server-kit': patch
+'@nocobase/app-server': patch
 '@nocobase/dev-config': patch
 ---
 
