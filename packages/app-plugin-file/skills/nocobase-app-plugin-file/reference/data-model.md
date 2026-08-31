@@ -23,6 +23,8 @@ Every standard file table stores these stable values:
 Use `PRIMARY KEY (id)` and `UNIQUE (disk, key)` in every table. Do not store a
 final URL or a Token. A URL depends on the mounted app base path and a Private
 URL expires; every content request must still resolve the current record.
+Make the standard fields non-null, use an unsigned `size`, and default `public`
+to `false`.
 
 ## One-to-one
 
@@ -30,40 +32,38 @@ Put the owner foreign key on the file table and make it unique. The business
 table owns the inverse logical relation. In addition to the standard fields:
 
 ```ts
-profileTable.hasOne('avatar', 'profileAvatars').foreignKey('profileId');
-avatarTable
-  .belongsTo('profile', 'profiles')
+collection.integer('profileId').unsigned().notNull();
+collection.unique('profileId', { name: 'uq_<table>_profile' });
+collection
+  .belongsTo('profile', 'profiles', { index: false })
   .foreignKey('profileId')
-  .foreignKeyType('integer')
+  .targetKey('id')
   .constraints(true)
-  .unique();
+  .onDelete('cascade');
 ```
 
-The unique owner constraint is the durable one-to-one guarantee. The Route may
-also set `maxFiles: 1` for an earlier rejection and single-process,
-single-Route serialization, but the UNIQUE constraint remains authoritative
-across application instances. Relation names (`avatar`, `profile`) are logical
-metadata; `profileId` is the explicit physical foreign-key field.
+Also register the inverse `hasOne` relation on the business table. The unique
+owner constraint is the durable one-to-one guarantee. Relation names are
+logical metadata; `profileId` is the explicit physical foreign-key field.
 
 ## One-to-many
 
 Put an indexed owner foreign key on the file table and leave it non-unique:
 
 ```ts
-orderTable.hasMany('attachments', 'orderAttachments').foreignKey('orderId');
-attachmentTable
-  .belongsTo('order', 'orders')
+collection.integer('orderId').unsigned().notNull();
+collection.index('orderId', { name: 'idx_<table>_order' });
+collection
+  .belongsTo('order', 'orders', { index: false })
   .foreignKey('orderId')
-  .foreignKeyType('integer')
+  .targetKey('id')
   .constraints(true)
-  .index();
+  .onDelete('cascade');
 ```
 
-Multiple rows may point to one order. The Route serializes `maxFiles` checks
-for the same owner within one process and Route instance. Concurrent
-multi-node uploads still need a database constraint or distributed mechanism
-when the limit must be durable; the database index makes scoped
-list/find/delete queries predictable.
+Also register the inverse `hasMany` relation on the business table. Multiple
+rows may point to one order; the index makes scoped list/find/delete queries
+predictable.
 
 Write every standard field and reverse operation explicitly in the migration;
 do not import a live collection definition or schema helper.

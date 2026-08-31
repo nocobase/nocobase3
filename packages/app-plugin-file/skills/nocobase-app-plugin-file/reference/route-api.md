@@ -44,8 +44,10 @@ the Token secret in server-only configuration; they are never request fields.
 
 Do not create another ACL. For a database collection, register the collection
 and use the existing authorization `authorize()` result and its field/record
-conditions at the business boundary. A plain guard is appropriate only when a
-yes/no decision is sufficient.
+conditions at the business boundary. The file Route cannot apply conditions to
+the parent business record: authorize that parent through its normal
+service/query before allowing the file operation. A plain guard is appropriate
+only when a yes/no decision is sufficient.
 
 ## Request and response envelopes
 

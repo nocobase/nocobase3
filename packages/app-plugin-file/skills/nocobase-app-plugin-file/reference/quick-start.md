@@ -5,28 +5,18 @@ module. The [data model guide](data-model.md) explains the table contract, and
 the [Route API guide](route-api.md) lists the fixed HTTP surface and access
 rules.
 
+All code below is a partial example. Follow the current application template
+for ordinary plugin structure and imports; this guide only calls out file
+integration decisions that are easy to get wrong.
+
 ## 1. Confirm the host context
 
 Enable `@nocobase/app-plugin-file` in the application. The business plugin
 resolves the existing database, Drive, authentication, and authorization
-services from the Application's shared container. Read host configuration
-through `config.get(appConfig)`, `config.get(driveConfig)`, and
-`config.get(sessionConfig)`.
-
-Use these public imports in the business plugin:
-
-| Capability                                   | Package                               |
-| -------------------------------------------- | ------------------------------------- |
-| `databaseManagerToken`                       | `@nocobase/app-database`              |
-| `authenticationToken`, `AuthEnv`             | `@nocobase/app-plugin-authentication` |
-| `authorizationToken`, `AuthorizationEnv`     | `@nocobase/app-plugin-authorization`  |
-| `createFileRoute`, `FileRouteAuthorizer`     | `@nocobase/app-plugin-file/server`    |
-| `appConfig`                                  | `@nocobase/app-server-kit/config`     |
-| `driveConfig`, `driveManagerToken`           | `@nocobase/app-server-kit/drive`      |
-| `AppPluginApplication`                       | `@nocobase/app-server-kit/plugins`    |
-| `defineApiRoutes`, `AppApiRouteContribution` | `@nocobase/app-server-kit/router`     |
-| `sessionConfig`                              | `@nocobase/app-server-kit/session`    |
-| `Hono`, `MiddlewareHandler`                  | `hono`                                |
+services from the Application's shared container. Read `appConfig` and
+`driveConfig` with `config.get(...)`. For private-token signing, use the
+effective secret from `container.resolve(sessionManagerToken).config.secret`,
+not the optional raw `sessionConfig.secret` value.
 
 Put the Route contribution in the business plugin's `server/routes/index.ts`.
 Its default export is the `routes` array that `server/plugin.ts` passes to
@@ -39,10 +29,11 @@ this server code or a migration.
 
 ## 2. Create the migration
 
-Create the business table and a separate standard file table. A one-to-many
-table uses an indexed owner key; a one-to-one table uses a unique owner key.
-Declare every field, relation, index, and constraint directly in the migration;
-see [data model](data-model.md).
+For a new module, create the business table and a separate standard file table.
+For an existing business table, alter it to add the inverse relation and create
+only the file table. A one-to-many table uses an indexed owner key; a one-to-one
+table uses a unique owner key. Declare every field, relation, index, and
+constraint directly in the migration; see [data model](data-model.md).
 
 Use a reverse-order `down` migration. Register the logical inverse relation on
 the business table with `hasMany('attachments', 'purchaseOrderAttachments')`.
@@ -50,30 +41,15 @@ the business table with `hasMany('attachments', 'purchaseOrderAttachments')`.
 ## 3. Create a scoped Route
 
 Keep the table name in server code and derive the owner from a validated Route
-parameter. This is a key assembly fragment, not a standalone module; adapt its
-table, resource, authorization callback, visibility, and limits:
+parameter. This is an assembly fragment, not a standalone module:
 
 ```ts
-type Env = {
-  Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
-};
-
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ config, container }) => {
     const router = new Hono();
-    const authentication = container.resolve(authenticationToken);
-    const authorization = container.resolve(authorizationToken);
     const app = config.get(appConfig);
     const drive = config.get(driveConfig);
-    const session = config.get(sessionConfig);
-    const authenticate =
-      authentication.required() as unknown as MiddlewareHandler<Env>;
-    const resolveAuthorization =
-      authorization.middleware() as unknown as MiddlewareHandler<Env>;
-    const requireManagement: MiddlewareHandler<Env> = (context, next) =>
-      authenticate(context, async () => {
-        await resolveAuthorization(context, next);
-      });
+    const session = container.resolve(sessionManagerToken).config;
 
     router.route(
       '/purchase-orders/:orderId/attachments',
@@ -95,11 +71,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         auth: requireManagement,
         authorize: authorizePurchaseOrderFile,
         visibility: { default: 'private', allowClientOverride: false },
-        limits: {
-          maxSize: 50 * 1024 * 1024,
-          maxFiles: 10,
-          mimeTypes: ['application/pdf'],
-        },
+        limits: { maxFiles: 10, mimeTypes: ['application/pdf'] },
       }),
     );
     return router;
@@ -112,51 +84,24 @@ const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
 export default routes;
 ```
 
-Import the service tokens, config definitions, `AppPluginApplication`,
-`defineApiRoutes`, Hono, and the `AuthEnv`/`AuthorizationEnv` types from their
-owning packages. Define `Env` as the intersection of their `Variables` types.
-The inner Hono path omits the `/api` prefix added by the Application.
-
-The authorization callback is business-specific. Its essential shape is:
-
-```ts
-const authorizePurchaseOrderFile: FileRouteAuthorizer = async (
-  context,
-  action,
-) => {
-  const authz = Reflect.get(
-    context.var,
-    'authz',
-  ) as AuthorizationEnv['Variables']['authz'];
-  const decision = await authz.authorize({
-    resource: {
-      type: 'purchase-order',
-      id: context.req.param('orderId'),
-    },
-    action:
-      action === 'upload' ? 'update' : action === 'delete' ? 'delete' : 'read',
-  });
-  if (decision.effect !== 'permit') {
-    return context.json({ code: 'FORBIDDEN' }, 403);
-  }
-};
-```
-
-`maxFiles` serializes checks for the same owner within one Route instance and
-process. Concurrent requests on multiple application nodes can still exceed
-it without a database constraint or distributed mechanism. Use a database
-UNIQUE owner constraint when the relation must be one-to-one. When `maxSize`
-is omitted, the Route defaults to 50 MiB per file.
+Use the owning packages and the current application template for imports. The
+inner Hono path omits the `/api` prefix added by the Application, and the
+contribution must be included in the plugin's `routes` array passed to
+`defineServerPlugin(...)`. Build `requireManagement` from the application's
+existing authentication and authorization middleware.
 
 The authorization callback must call the existing business authorization
-system and deliberately map every `FileRouteAction`. It must not introduce a
-second file ACL. The Route has six fixed endpoints; see
-[route-api](route-api.md).
+boundary and deliberately map every `FileRouteAction`. Do not invent a second
+file ACL or an unregistered resource type. If the parent uses database
+authorization, check it through its authorized service/query and apply the
+returned record conditions. Do not treat a `conditional` database decision as
+a plain `permit`.
 
 ## 4. Connect the client
 
 The following is the client integration fragment; `orderId`, `attachments`,
-and form state belong to the business module:
+and form state belong to the business module. Persist the parent record first;
+only then construct this client and enable uploads:
 
 ```tsx
 const client = createFilesClient({
@@ -171,12 +116,14 @@ const client = createFilesClient({
   multiple
   accept={['application/pdf']}
   maxFiles={10}
+  removeOnDelete
 />;
 ```
 
-The business form owns the relation and submission state; treat `uploading`
-and `error` as submission blockers. Registry UI does not install the server
-Route or migration.
+Initialize `attachments` from `await client.list()` in edit/read views. The
+business form owns the relation and submission state; treat `uploading` and
+`error` as submission blockers. `removeOnDelete` calls the server DELETE
+endpoint; omit it only when the business workflow performs deletion itself.
 
 ## 5. Validate
 
