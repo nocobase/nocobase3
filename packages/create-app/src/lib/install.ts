@@ -170,3 +170,50 @@ async function npmConfigIgnoresScripts(): Promise<boolean> {
     return false;
   }
 }
+
+const SKILLS_SYNC_TIMEOUT_MS = 2 * 60 * 1000;
+
+export interface SkillsSyncResult {
+  ok: boolean;
+  /** Set when the sync did not run to completion, with something the user can act on. */
+  reason?: string;
+}
+
+/**
+ * Copies the skills of every registered plugin into the app's `.agents/skills/`.
+ *
+ * This only works once the dependencies are installed, because the plugins the sync reads from are resolved out of
+ * `node_modules`. The template ships the script and the CLI behind it, so the generated app owns the command and
+ * running it here is the same thing the user would run themselves after a plugin upgrade.
+ *
+ * Skills are an assistive layer rather than something the app needs to boot, so a failure is reported and the
+ * generated project is still usable — the caller warns instead of aborting.
+ */
+export async function syncPluginSkills(
+  directory: string,
+): Promise<SkillsSyncResult> {
+  try {
+    await runCommand('pnpm', ['run', 'plugin:skills:sync'], {
+      cwd: directory,
+      timeoutMs: SKILLS_SYNC_TIMEOUT_MS,
+    });
+
+    return { ok: true };
+  } catch (error) {
+    const detail =
+      error instanceof CommandFailedError
+        ? error.stderr || error.message
+        : (error as Error).message;
+
+    return {
+      ok: false,
+      reason: [
+        'Could not synchronize plugin skills into .agents/skills.',
+        detail,
+        '',
+        'To do it later, run this inside the app directory:',
+        '  pnpm plugin:skills:sync',
+      ].join('\n'),
+    };
+  }
+}

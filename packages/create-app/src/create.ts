@@ -9,7 +9,11 @@ import {
 } from './lib/database.ts';
 import { buildConfigFile } from './lib/config-file.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
-import { installDependencies, verifyDriver } from './lib/install.ts';
+import {
+  installDependencies,
+  syncPluginSkills,
+  verifyDriver,
+} from './lib/install.ts';
 import { addDriverDependency } from './lib/manifest.ts';
 import { ensureAllowBuilds } from './lib/pnpm-workspace.ts';
 import {
@@ -164,6 +168,19 @@ async function run(input: ParsedInput): Promise<void> {
     } else if (!verification.ok && verification.reason) {
       log.warn(verification.reason);
     }
+  }
+
+  // Runs only after the install, because the sync reads the plugins out of `node_modules`.
+  const skills = spinner();
+  skills.start('Synchronizing plugin skills');
+
+  const synchronized = await syncPluginSkills(targetDirectory);
+
+  if (synchronized.ok) {
+    skills.stop('Synchronized plugin skills.');
+  } else {
+    skills.stop('Synchronizing plugin skills failed.');
+    log.warn(synchronized.reason ?? 'Could not synchronize plugin skills.');
   }
 
   finish(name, { installed: true, dialect });

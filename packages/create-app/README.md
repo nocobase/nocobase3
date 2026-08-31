@@ -122,6 +122,7 @@ pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
 - 写 `.gitignore`：模板没带的话会生成一份兜底的，防止 `config.yml` 里的认证密钥被提交
 - 选 sqlite 时写 `pnpm-workspace.yaml` 的 `allowBuilds`（见下）
 - 安装依赖（`--no-install` 可跳过）
+- 装完依赖后跑一次应用自己的 `pnpm plugin:skills:sync`，把模板内置插件的 skills 复制进 `.agents/skills/`。这一步必须在安装之后，因为同步是从 `node_modules` 里解析插件的。同步失败只警告，不影响生成出来的应用能跑，之后随时可以在应用目录里手动补跑
 
 ## 关于 sqlite 的原生模块
 
