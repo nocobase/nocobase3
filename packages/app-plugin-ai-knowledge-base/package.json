@@ -126,7 +126,6 @@
     "@langchain/textsplitters": "1.0.1",
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/app-database": "workspace:^",
-    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-ai-employee": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",

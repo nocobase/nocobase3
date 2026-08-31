@@ -22,12 +22,11 @@ Use the App's supported plugin-management command or admin UI to confirm registr
 The package declares and uses:
 
 - `@nocobase/app-plugin-ai-employee`: provides AI Manager, AI settings shell/routes, LLM service/model actions, and knowledge-base feature contracts;
-- `@nocobase/app-plugin-authentication`: every compatibility route calls the authentication service and rejects a missing user ID with 401;
 - database manager/connection: required for plugin tables and migrations;
 - queue manager: all document vectorization is dispatched to queue `default`;
 - an enabled LLM service with an `EMBEDDING` model for vector creation/search.
 
-The server cannot finish route registration if bootstrap did not initialize its internal service. Missing AI/queue/database/auth dependencies are startup/configuration errors, not recoverable client states.
+The server cannot finish route registration if bootstrap did not initialize its internal service. Missing AI, queue, or database dependencies are startup/configuration errors, not recoverable client states.
 
 ## Storage and PGVector
 

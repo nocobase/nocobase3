@@ -10,6 +10,9 @@ const aiKnowledgeBasePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-ai-knowledge-base',
   providers,
   routes,
+  queue: {
+    jobs: ['./server/jobs'],
+  },
   database: {
     migrations: './database/migrations',
   },

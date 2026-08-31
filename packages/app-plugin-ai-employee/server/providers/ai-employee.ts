@@ -1,11 +1,13 @@
 import { createAIManager } from '@nocobase/ai-employee';
 import { databaseManagerToken } from '@nocobase/app-database';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import {
+  cachingToken,
+  driveManagerToken,
+  idGeneratorToken,
+  loggingToken,
+  type AppPluginApplication,
+} from '@nocobase/app-server-kit';
 import { authenticationToken } from '@nocobase/app-plugin-authentication/server';
-import { cachingToken } from '@nocobase/caching';
-import { driveManagerToken } from '@nocobase/drive';
-import { idGeneratorToken } from '@nocobase/id-generator';
-import { loggingToken } from '@nocobase/logging';
 import {
   ServiceProvider,
   type ServiceResolver,
@@ -32,7 +34,8 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   public override async boot(): Promise<void> {
-    initializePluginRuntimeResources(this.resolveDeps(this.app.container));
+    const deps = this.resolveDeps(this.app.container);
+    initializePluginRuntimeResources(deps);
     await waitForPluginReady();
   }
 

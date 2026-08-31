@@ -1,5 +1,4 @@
 import type { AIManager } from '@nocobase/ai-employee';
-import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 import { Hono, type Context } from 'hono';
 import { nanoid } from 'nanoid';
@@ -12,8 +11,7 @@ import type {
 } from '../types.js';
 import { PG_VECTOR_PROVIDER_NAME } from '../vector.js';
 
-type RoutesDeps = KnowledgeBasePluginDeps & { auth: Auth };
-type RoutesContext = AppPluginRoutesContext<RoutesDeps, unknown>;
+type RoutesContext = AppPluginRoutesContext<KnowledgeBasePluginDeps, unknown>;
 const data = (context: Context, value: unknown, status = 200): Response =>
   context.json({ data: value }, status as 200);
 const error = (context: Context, status: number, message: string): Response =>
@@ -83,15 +81,6 @@ export default function registerRoutes(
       'Knowledge base plugin bootstrap did not initialize its service',
     );
   const routes = new Hono();
-  routes.use('*', async (context, next) => {
-    const session = await deps.auth.getSession(context.req.raw.headers);
-    if (!session?.user?.id)
-      return error(context, 401, 'Authentication required');
-    context.set('knowledgeBaseActorId', String(session.user.id));
-    await next();
-  });
-  const actor = (context: Context): string =>
-    String(context.get('knowledgeBaseActorId' as never));
   const guard =
     (handler: (context: Context) => Promise<Response>) =>
     async (context: Context): Promise<Response> => {
@@ -276,21 +265,17 @@ export default function registerRoutes(
           return error(c, 400, 'knowledgeBaseKey and file are required');
         return data(
           c,
-          await service.upload(
-            kb,
-            {
-              name: file.name,
-              type: file.type,
-              bytes: new Uint8Array(await file.arrayBuffer()),
-            },
-            actor(c),
-          ),
+          await service.upload(kb, {
+            name: file.name,
+            type: file.type,
+            bytes: new Uint8Array(await file.arrayBuffer()),
+          }),
         );
       }
       const values = await body(c);
       const kb = key || String(values.knowledgeBaseKey ?? '');
       if (!kb) return error(c, 400, 'knowledgeBaseKey is required');
-      return data(c, await service.finalizeUpload(kb, values, actor(c)));
+      return data(c, await service.finalizeUpload(kb, values));
     }),
   );
   routes.post(
@@ -608,10 +593,4 @@ export default function registerRoutes(
   );
   if (mountLegacy) app.route('/v2/api', routes);
   return routes;
-}
-
-declare module 'hono' {
-  interface ContextVariableMap {
-    knowledgeBaseActorId: string;
-  }
 }
