@@ -67,8 +67,8 @@ Example 公开：
 ```
 
 App 可以直接在自己拥有的页面中导入并组合它；插件没有 `./client`，因此 App 不应为了
-使用这个组件而新增 Client plugin registration。只有插件实际提供 bootstrap、routes 或
-providers contribution 时，才通过 `./client` 注册 Client plugin。Skill 必须把这两类入口
+使用这个组件而新增 Client plugin registration。只有插件实际提供 config、serviceProviders、reactProviders、routes 或
+locales contribution 时，才通过 `./client` 注册 Client plugin。Skill 必须把这两类入口
 写清楚，避免 Agent 根据 `client/` 文件路径猜测 runtime composition。
 
 同一个示例的 Server API `GET /api/skills-example/notice` 要求已登录，但对固定、非敏感

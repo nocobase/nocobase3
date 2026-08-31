@@ -40,7 +40,10 @@ client entries can be resolved during development and build.
 Create and register a plugin from the repository root:
 
 ```bash
-pnpm plugin:create audit-log
+pnpm plugin:create audit-log \
+  --with client.routes \
+  --with server.service-providers \
+  --with server.routes
 pnpm plugin:register audit-log --app app-template-default
 ```
 
@@ -52,7 +55,8 @@ pnpm plugin:remove audit-log
 ```
 
 See [Plugin development quick start](../../docs/development/plugin-development/quick-start.md)
-for the server, database, client bootstrap, routes, and providers protocols.
+for the server, database, Client ServiceProvider, React Provider, routes, and
+configuration protocols.
 
 ## Current client architecture
 
@@ -60,10 +64,9 @@ The active browser source is `client/`:
 
 ```text
 client/
-├── application.ts          application contribution loader
-├── bootstrap.ts            application Refine defaults
+├── service-provider.ts     application ServiceProvider defaults
 ├── routes.ts               application-owned route declarations
-├── providers.ts            application Provider declarations
+├── react-providers.ts       application React Provider declarations
 ├── route-overrides.ts      application component replacements
 ├── routing/                route placement, lazy loading, and error UI
 ├── auth/                    application authentication presentation
@@ -81,19 +84,19 @@ provider architecture reference.
 
 Enabled client plugins contribute independently:
 
-- `client/bootstrap`: Refine capabilities such as auth, data, notifications,
-  access control, i18n, and live providers;
+- `client/serviceProviders`: Client services, Refine capabilities and lifecycle;
+- `client/reactProviders`: synchronous React Context and tree Providers;
 - `client/routes`: inspectable route path/auth metadata and lazy page loaders;
-- `client/providers`: synchronous React providers with explicit ordering.
+- `client/locales`: static manifests with lazy language messages.
 
-The Default App contributes through the same three protocols, wired by
-`client/runtime.ts`. Its bootstrap runs before plugin bootstraps. Its `/`
+The Default App contributes through the same protocol, wired by
+`client/runtime.ts`. Its ServiceProvider runs during `app.start()`. Its `/`
 home route is declared in `client/routes.ts`, while `client/routing/` only
 renders the resolved routes.
 
-Providers are composed outer-to-inner in fixed layer order:
+React Providers are composed outer-to-inner in fixed layer order:
 `root -> application -> extension`. The app Theme Provider uses `root`;
-application providers otherwise default to `application`, and plugin providers
+application React Providers otherwise default to `application`, and plugin React Providers
 use `extension`. `before` and `after` can refine order only within the same
 layer.
 
@@ -102,11 +105,11 @@ Inspect the final client composition with:
 ```bash
 pnpm app:client:inspect --app app-template-default
 pnpm app:client:inspect --app app-template-default --json
-pnpm app:client:inspect --app app-template-default --type bootstrap
+pnpm app:client:inspect --app app-template-default --type service-providers
 ```
 
-The output shows bootstrap order, route ownership and final component source,
-and Provider source/layer/order.
+The output shows ServiceProvider order, route ownership and final component
+source, and React Provider source/layer/order.
 
 ## Authentication UI
 

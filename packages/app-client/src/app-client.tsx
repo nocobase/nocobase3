@@ -3,20 +3,23 @@ import routerProvider from '@refinedev/react-router';
 import { type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter } from 'react-router';
 
-import { normalizeAppClientBasename, type AppClientConfig } from './config.js';
+import type { ClientApplication } from './application.js';
+import { ClientApplicationContext } from './application-context.js';
+import { normalizeAppClientBasename } from './config.js';
 
 export interface AppClientRootProps {
-  config: AppClientConfig;
+  readonly app: ClientApplication;
 }
 
-export function AppClientRoot({ config }: AppClientRootProps): ReactElement {
-  const refine = config.refine ?? {};
+export function AppClientRoot({ app }: AppClientRootProps): ReactElement {
+  const config = app.renderConfig;
+  const refine = app.refineConfig;
   const configuredChildren =
     refine.children === undefined ? config.routes : refine.children;
   const configuredRouterProvider = refine.routerProvider ?? routerProvider;
-  const providers = config.providers ?? [];
-  const content = providers.reduceRight<ReactNode>(
-    (children, Provider) => <Provider>{children}</Provider>,
+  const reactProviders = config.reactProviders ?? [];
+  const content = reactProviders.reduceRight<ReactNode>(
+    (children, ReactProvider) => <ReactProvider>{children}</ReactProvider>,
     <Refine
       {...refine}
       routerProvider={configuredRouterProvider}
@@ -31,8 +34,10 @@ export function AppClientRoot({ config }: AppClientRootProps): ReactElement {
   );
 
   return (
-    <BrowserRouter basename={normalizeAppClientBasename(config.basename)}>
-      {content}
-    </BrowserRouter>
+    <ClientApplicationContext.Provider value={app}>
+      <BrowserRouter basename={normalizeAppClientBasename(config.basename)}>
+        {content}
+      </BrowserRouter>
+    </ClientApplicationContext.Provider>
   );
 }

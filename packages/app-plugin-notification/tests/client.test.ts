@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 
-import bootstrap from '../client/bootstrap.js';
 import { NotificationClient } from '../client/notification-client.js';
 import notificationPlugin from '../client/plugin.js';
 import routes from '../client/routes.js';
@@ -10,15 +9,8 @@ describe('@nocobase/app-plugin-notification client', () => {
   it('contributes notification logs through the settings centre', () => {
     const registration = notificationPlugin();
 
-    bootstrap({
-      appClient: { request: vi.fn() },
-      packageName: '@nocobase/app-plugin-notification',
-      refine: {} as never,
-      source: 'plugin',
-      options: {},
-    });
-
-    expect(registration.routes).toBeTypeOf('function');
+    expect(registration.serviceProviders).toHaveLength(1);
+    expect(registration.routes).toEqual([routes]);
     expect(routes).toMatchObject({
       parent: 'settings',
       routes: [

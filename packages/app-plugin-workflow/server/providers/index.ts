@@ -2,7 +2,7 @@ import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plug
 
 import { WorkflowProvider, type WorkflowProviderConfig } from './workflow.js';
 
-const providers: readonly AppPluginProviderConstructor<WorkflowProviderConfig>[] =
+const serviceProviders: readonly AppPluginProviderConstructor<WorkflowProviderConfig>[] =
   [WorkflowProvider];
 
-export default providers;
+export default serviceProviders;

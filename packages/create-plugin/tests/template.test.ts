@@ -30,7 +30,7 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
     'tests/database.test.ts',
     'tests/plugin.test.ts',
   ],
-  'server.providers': [
+  'server.service-providers': [
     'server/index.ts',
     'server/plugin.ts',
     'server/providers/__NOCOBASE_SHORT_NAME__.ts',
@@ -72,19 +72,20 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
     'client/components/plugin-component.tsx',
     'tests/component.test.tsx',
   ],
-  'client.providers': [
+  'client.react-providers': [
     'client/components/provider.tsx',
     'client/contexts.ts',
     'client/index.ts',
     'client/plugin.ts',
-    'client/providers.ts',
-    'tests/client-provider.test.tsx',
+    'client/react-providers/index.ts',
+    'tests/client-react-provider.test.tsx',
   ],
-  'client.bootstrap': [
-    'client/bootstrap.ts',
+  'client.service-providers': [
+    'client/providers/__NOCOBASE_SHORT_NAME__.ts',
+    'client/providers/index.ts',
     'client/index.ts',
     'client/plugin.ts',
-    'tests/bootstrap.test.ts',
+    'tests/client-service-provider.test.ts',
   ],
   'client.locales': [
     'client/index.ts',
@@ -139,19 +140,25 @@ describe('bundled capability templates', () => {
 
   it.each([
     ['client-only', ['client.routes', 'client.components', 'client.locales']],
-    ['server-only', ['server.providers', 'server.routes', 'server.locales']],
+    [
+      'server-only',
+      ['server.service-providers', 'server.routes', 'server.locales'],
+    ],
     [
       'full-stack',
       [
         'client.routes',
         'client.components',
         'client.locales',
-        'server.providers',
+        'server.service-providers',
         'server.routes',
         'server.locales',
       ],
     ],
-    ['data-oriented', ['database', 'server.providers', 'server.routes']],
+    [
+      'data-oriented',
+      ['database', 'server.service-providers', 'server.routes'],
+    ],
     ['App Agent integration', ['server.routes', 'skills']],
     ['editable UI distribution', ['client.components', 'registry']],
   ] as const)('composes the exact %s file set', async (_name, capabilities) => {

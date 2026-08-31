@@ -4,6 +4,11 @@ app:
   # Public origin used for callbacks and redirects in production.
   # publicOrigin: https://apps.example.com
 
+# Values under client are public and embedded in the SPA HTML.
+client:
+  app:
+    title: NocoBase
+
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
   # secret: replace-with-a-unique-secret

@@ -178,7 +178,8 @@ Browser request
 
 Server Routes 按顺序匹配，`/*` 作为最后的 SPA fallback。首次直接访问
 `/<custom-page>` 时，Server 先返回 `index.html` 并注入
-`window.nb_config`；Client 启动后，再由 Refine App 中的前端路由渲染页面。
+HTML 中版本化的 JSON data block；Client Runtime 解析后由
+`ClientApplication.start()` 激活服务，再由 Browser Host 渲染 `AppClientRoot`、Refine App 和前端路由。
 
 ### Server 组装（createApp）
 
@@ -237,31 +238,31 @@ ConfigPaths 创建、插件解析和 Config Factory 执行由
 迁移、Seed 等数据库任务通过 `resolveAppRuntimeConfigSection(..., 'database')`
 只解析所需配置段，避免为了数据库任务初始化 Auth、SPA 等无关配置。
 
-### Client 组装（createAppClient）
+### Client 组装（ClientApplication）
 
 ```text
-window.nb_config
+HTML JSON data block
     │
     ▼
-loadAppClientConfig() → AppClientConfig                 加载并规范化配置
+resolveAppRuntime() → ResolvedAppRuntime              解析公开配置和静态 contributions
     │
     ▼
-createAppClient({ config })            Client App 组装
+createApp(runtime) → ClientApplication                创建 App 和 ServiceContainer
     │
-    ├── AppClient / API Client
-    ├── bootstrap + Refine config
-    └── Providers + Routes
+    ├── app.config + AppClient/API Client
+    ├── serviceProviders + Refine config
+    └── reactProviders + Routes
     │
     ▼
-Refine App（React App）
+app.start() → root.render(<AppClientRoot app={app} />) → Refine App
 ```
 
 最终的 React 结构大致如下：
 
 ```tsx
-<BrowserRouter basename={config.app.basePath}>
-  <ReactProviderTree providers={runtime.providers}>
-    <Refine {...runtime.refine}>
+<BrowserRouter basename={runtime.basename}>
+  <ReactProviderTree wrappers={runtime.reactProviders}>
+    <Refine {...app.refineConfig}>
       <AppRouter routes={runtime.routes} />
     </Refine>
   </ReactProviderTree>
@@ -411,12 +412,12 @@ WebSocket 接入实现时的高级覆盖入口。
 
 ## Client 的核心
 
-Client 的核心就是 ReactProvider 和 Routes
+Client 的核心是 Application-owned Services、React Providers 和 Routes。
 
 ```tsx
-<BrowserRouter basename={config.app.basePath}>
-  <ReactProviderTree providers={runtime.providers}>
-    <Refine {...runtime.refine}>
+<BrowserRouter basename={runtime.basename}>
+  <ReactProviderTree wrappers={runtime.reactProviders}>
+    <Refine {...app.refineConfig}>
       <AppRouter routes={runtime.routes} />
     </Refine>
   </ReactProviderTree>
@@ -426,18 +427,19 @@ Client 的核心就是 ReactProvider 和 Routes
 扁平化
 
 ```bash
-Config（从 window.nb_config 获取）
+公开 Config（HTML JSON data block）
   ↓
-ReactProviders
-  ├── BrowserRouter
-  ├── ThemeProvider
-  └── Other Providers
+resolveAppRuntime()
   ↓
-Refine
-  ↓
-Routes
-  ↓
-render
+ClientApplication
+  ├── ServiceContainer + serviceProviders（app.start()）
+  ├── Refine configuration
+  └── reactProviders（Browser Host 渲染 AppClientRoot）
+       ├── BrowserRouter
+       ├── ThemeProvider
+       └── Other React Providers
+             ↓
+           Routes → render
 ```
 
 ## Client 与 Server 的统一装配流程
@@ -448,17 +450,17 @@ Client 和 Server 采用相同的四层应用装配模型：
 Config → Runtime → App → Start / Render
 ```
 
-| 层次           | 职责                                                                      |
-| -------------- | ------------------------------------------------------------------------- |
-| Config         | 声明应用需要什么，包括配置、插件、Provider、Routes 等可组合能力。         |
-| Runtime        | 解析并汇总 Config，形成当前运行环境中可直接使用的完整运行时。             |
-| App            | 将已解析的 Runtime 组装为应用实体，建立各能力之间的连接，但尚未对外运行。 |
-| Start / Render | 激活应用：Server 启动服务生命周期，Client 将应用渲染到浏览器。            |
+| 层次           | 职责                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| Config         | 声明应用需要什么，包括公开配置、插件、ServiceProvider、React Provider、Routes 等可组合能力。         |
+| Runtime        | 解析并汇总 Config，形成当前运行环境中可直接使用的完整静态装配计划。                                  |
+| App            | 将已解析的 Runtime 组装为有状态 Application，建立 ServiceContainer、Refine 和渲染边界。              |
+| Start / Render | 激活应用：Server 启动服务生命周期；Client 先 `app.start()`，再由 Browser Host 渲染 `AppClientRoot`。 |
 
 因此，两端的整体架构可以分别表示为：
 
 ```text
-Client: Config → Runtime → App → Render
+Client: Config → Runtime → ClientApplication → start → host render
 Server: Config → Runtime → App → Start
 ```
 

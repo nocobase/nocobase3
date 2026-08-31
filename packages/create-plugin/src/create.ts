@@ -82,7 +82,7 @@ function capabilityReason(file: string): string {
     file === 'server/tokens.ts' ||
     file === 'tests/server-provider.test.ts'
   )
-    return 'server.providers';
+    return 'server.service-providers';
   if (file.startsWith('server/routes/') || file === 'tests/routes.test.ts')
     return 'server.routes';
   if (file.startsWith('server/jobs/') || file === 'tests/jobs.test.ts')
@@ -96,14 +96,17 @@ function capabilityReason(file: string): string {
   )
     return 'client.components';
   if (
-    file === 'client/providers.ts' ||
+    file.startsWith('client/providers/') ||
+    file === 'tests/client-service-provider.test.ts'
+  )
+    return 'client.service-providers';
+  if (
+    file.startsWith('client/react-providers/') ||
     file === 'client/contexts.ts' ||
     file === 'client/components/provider.tsx' ||
-    file === 'tests/client-provider.test.tsx'
+    file === 'tests/client-react-provider.test.tsx'
   )
-    return 'client.providers';
-  if (file === 'client/bootstrap.ts' || file === 'tests/bootstrap.test.ts')
-    return 'client.bootstrap';
+    return 'client.react-providers';
   if (
     file.startsWith('registry/') ||
     file === 'registry.config.json' ||
@@ -164,15 +167,15 @@ export async function runCreatePluginCli(
             capabilities: result.capabilities,
             derivedStructure: {
               clientPlugin:
-                result.capabilities.client.bootstrap ||
+                result.capabilities.client.reactProviders ||
                 result.capabilities.client.locales ||
-                result.capabilities.client.providers ||
+                result.capabilities.client.serviceProviders ||
                 result.capabilities.client.routes,
               serverPlugin:
                 result.capabilities.database ||
                 result.capabilities.server.jobs ||
                 result.capabilities.server.locales ||
-                result.capabilities.server.providers ||
+                result.capabilities.server.serviceProviders ||
                 result.capabilities.server.routes,
             },
             files: result.files.map((file) => ({

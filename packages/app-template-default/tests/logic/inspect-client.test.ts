@@ -24,11 +24,18 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
   );
   await writeFile(
     path.join(appRoot, 'client/runtime.ts'),
-    `export default { packageName: '@example/inspect-app', plugins: [] };`,
-  );
-  await writeFile(
-    path.join(appRoot, 'client/locales.ts'),
-    `throw new Error('client:inspect must not load application locales');`,
+    `
+      class AppProvider {}
+      export default {
+        packageName: '@example/inspect-app',
+        config: () => ({}),
+        serviceProviders: [AppProvider],
+        reactProviders: [],
+        routes: [],
+        locales: { 'en-US': async () => ({ default: {} }) },
+        plugins: [],
+      };
+    `,
   );
   if (pluginsSource !== undefined) {
     await writeFile(path.join(appRoot, 'client/plugins.ts'), pluginsSource);
@@ -36,48 +43,27 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
   return appRoot;
 }
 
-function settingFor(id: string, title: string, order: number) {
-  return {
-    access: {
-      action: 'read',
-      resource: `authorization.settings.${id}`,
-    },
-    entry: '@nocobase/app-plugin-authorization/client/routes',
-    groupId: 'authorization',
-    id,
-    order,
-    packageName: '@nocobase/app-plugin-authorization',
-    parent: 'settings',
-    path: `/settings/authorization/${id}`,
-    source: 'plugin',
-    title,
-  };
-}
-
 describe('client inspection', () => {
-  it('parses app client inspection options', () => {
+  it('parses the static Client contribution types', () => {
     expect(
-      parseInspectAppClientArgs(['--type', 'providers', '--json']),
-    ).toEqual({
-      help: false,
-      json: true,
-      type: 'providers',
-    });
-    expect(parseInspectAppClientArgs(['--type', 'bootstrap']).type).toBe(
-      'bootstrap',
-    );
+      parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
+    ).toEqual({ help: false, json: true, type: 'react-providers' });
+    expect(
+      parseInspectAppClientArgs(['--type', 'service-providers']).type,
+    ).toBe('service-providers');
+    expect(parseInspectAppClientArgs(['--type', 'config']).type).toBe('config');
     expect(parseInspectAppClientArgs(['--type', 'settings']).type).toBe(
       'settings',
     );
     expect(parseInspectAppClientArgs(['--type', 'locales']).type).toBe(
       'locales',
     );
-    expect(() => parseInspectAppClientArgs(['--type', 'setting'])).toThrow(
-      '--type must be all, bootstrap, routes, settings, providers, or locales.',
+    expect(() => parseInspectAppClientArgs(['--type', 'providers'])).toThrow(
+      '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
     );
   });
 
-  it('inspects configured client routes and providers', async () => {
+  it('inspects configured Client contributions without running lifecycle or leaf loaders', async () => {
     const inspection = await inspectAppClient();
 
     expect(inspection.app).toMatchObject({
@@ -150,12 +136,9 @@ describe('client inspection', () => {
       },
     ]);
     expect(
-      inspection.providers.map(({ id, order }) => ({ id, order })),
+      inspection.reactProviders.map(({ id, order }) => ({ id, order })),
     ).toEqual([
-      {
-        id: '@nocobase/app-template-default:theme',
-        order: 1,
-      },
+      { id: '@nocobase/app-template-default:theme', order: 1 },
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 2,
@@ -166,50 +149,23 @@ describe('client inspection', () => {
       },
     ]);
     expect(
-      inspection.bootstraps
-        .slice(0, 6)
-        .map(({ order, packageName, source }) => ({
-          order,
-          packageName,
-          source,
-        })),
+      inspection.serviceProviders.map(({ packageName, order }) => ({
+        packageName,
+        order,
+      })),
     ).toEqual([
-      {
-        order: 1,
-        packageName: '@nocobase/app-template-default',
-        source: 'application',
-      },
-      {
-        order: 2,
-        packageName: '@nocobase/app-plugin-authentication',
-        source: 'plugin',
-      },
-      {
-        order: 3,
-        packageName: '@nocobase/app-plugin-authorization',
-        source: 'plugin',
-      },
-      {
-        order: 4,
-        packageName: '@nocobase/app-plugin-data-provider',
-        source: 'plugin',
-      },
-      {
-        order: 5,
-        packageName: '@nocobase/app-plugin-notification-provider',
-        source: 'plugin',
-      },
-      {
-        order: 6,
-        packageName: '@nocobase/app-plugin-workflow',
-        source: 'plugin',
-      },
+      { packageName: '@nocobase/app-template-default', order: 1 },
+      { packageName: '@nocobase/app-plugin-authentication', order: 2 },
+      { packageName: '@nocobase/app-plugin-authorization', order: 3 },
+      { packageName: '@nocobase/app-plugin-data-provider', order: 4 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
+      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
+      { packageName: '@nocobase/app-plugin-notification', order: 7 },
     ]);
-
-    expect(inspection.bootstraps[6]).toMatchObject({
-      order: 7,
-      packageName: '@nocobase/app-plugin-notification',
-      source: 'plugin',
+    expect(inspection.configs[0]).toMatchObject({
+      kind: 'factory',
+      packageName: '@nocobase/app-template-default',
+      source: 'application',
     });
     expect(inspection.locales).toEqual(
       expect.arrayContaining([
@@ -224,153 +180,33 @@ describe('client inspection', () => {
         }),
       ]),
     );
-
-    // Administration pages are settings contributions; record detail pages may remain routes nested below them.
-    expect(inspection.settings.slice(0, 4)).toEqual([
-      settingFor('permission-sets', 'Permission Sets', 1),
-      settingFor('default-access', 'Default Access', 2),
-      settingFor('sharing-rules', 'Sharing Rules', 3),
-      settingFor('restriction-rules', 'Restriction Rules', 4),
+    expect(inspection.settings.slice(0, 4).map(({ id }) => id)).toEqual([
+      'permission-sets',
+      'default-access',
+      'sharing-rules',
+      'restriction-rules',
     ]);
-    expect(inspection.settings).toContainEqual({
-      access: {
-        action: 'read',
-        resource: 'routes-example.settings',
-      },
-      entry: '@nocobase/app-plugin-routes-example/client/routes',
-      id: 'routes-example',
-      order: 5,
-      packageName: '@nocobase/app-plugin-routes-example',
-      parent: 'settings',
-      path: '/settings/routes-example',
-      source: 'plugin',
-      title: 'Routes example',
-    });
-    expect(inspection.settings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'workflows',
-          groupId: 'automation',
-          path: '/settings/automation/workflows',
-        }),
-        expect.objectContaining({
-          id: 'workflow-runs',
-          groupId: 'automation',
-          path: '/settings/automation/workflow-runs',
-        }),
-      ]),
-    );
-    expect(
-      inspection.routes.filter((route) => route.path.startsWith('/settings/')),
-    ).toHaveLength(2);
 
     const output = formatAppClientInspection(inspection);
-    expect(output).toMatch(/Bootstrap order/u);
-    expect(output).toMatch(/Settings/u);
-    expect(output).toMatch(/group: authorization/u);
+    expect(output).toMatch(/Config declarations/u);
+    expect(output).toMatch(/ServiceProviders/u);
+    expect(output).toMatch(/React Providers \(outer -> inner\)/u);
+    expect(output).toMatch(/Locale declarations/u);
+    expect(output).toMatch(/Issues: none/u);
+    expect(output).toMatch(/ServiceProvider lifecycle.*not inspected/su);
     expect(formatAppClientInspection(inspection, 'settings')).not.toMatch(
       /\nRoutes\n/u,
     );
     expect(
       Object.keys(selectAppClientInspection(inspection, 'settings')),
     ).toEqual(['app', 'settings', 'consistent', 'issues', 'suggestions']);
-    expect(output).toMatch(/Routes/u);
-    expect(output).toMatch(/auth: guest/u);
-    expect(output).toMatch(/route source: plugin/u);
-    expect(output).toMatch(/component source: application/u);
-    expect(output).toMatch(
-      /client\/extensions\/nocobase-auth-ui\/pages\/login-page/u,
-    );
-    expect(output).toMatch(/Providers \(outer -> inner\)/u);
-    expect(output).toMatch(/Locale declarations/u);
-    expect(output).toMatch(/layer: root/u);
-    expect(output).toMatch(/Issues: none/u);
-    expect(output).toMatch(/Route components.*not inspected/su);
-
-    // `entry` used to duplicate `routeEntry`, and `componentEntry` was emitted as
-    // an explicit undefined. Both are gone: the key is present only when set.
-    expect(inspection.routes[0]).toEqual({
-      auth: 'required',
-      id: '@nocobase/app-template-default:home',
-      name: 'home',
-      order: 1,
-      packageName: '@nocobase/app-template-default',
-      parent: 'app',
-      path: '/',
-      routeSource: 'application',
-      routeEntry: './client/routes',
-      componentSource: 'application',
-    });
-    expect(
-      inspection.providers.map(({ id, layer, source }) => ({
-        id,
-        layer,
-        source,
-      })),
-    ).toEqual([
-      {
-        id: '@nocobase/app-template-default:theme',
-        layer: 'root',
-        source: 'application',
-      },
-      {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
-        layer: 'extension',
-        source: 'plugin',
-      },
-      {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
-        layer: 'extension',
-        source: 'plugin',
-      },
-    ]);
-
-    expect(
-      inspection.routes
-        .filter(({ packageName }) =>
-          packageName.endsWith('app-plugin-authentication'),
-        )
-        .map(({ componentEntry, componentSource, routeSource }) => ({
-          componentEntry,
-          componentSource,
-          routeSource,
-        })),
-    ).toEqual(
-      [
-        './client/extensions/nocobase-auth-ui/pages/login-page',
-        './client/extensions/nocobase-auth-ui/pages/register-page',
-        './client/extensions/nocobase-auth-ui/pages/forgot-password-page',
-        './client/extensions/nocobase-auth-ui/pages/reset-password-page',
-      ].map((componentEntry) => ({
-        componentEntry,
-        // The override source is now named, rather than a flat "application".
-        componentSource: 'application (extension:nocobase-auth-ui)',
-        routeSource: 'plugin',
-      })),
-    );
-
-    expect(selectAppClientInspection(inspection, 'routes')).toEqual({
+    expect(selectAppClientInspection(inspection, 'service-providers')).toEqual({
       app: inspection.app,
-      routes: inspection.routes,
+      serviceProviders: inspection.serviceProviders,
       consistent: true,
       issues: [],
       suggestions: [],
     });
-    expect(selectAppClientInspection(inspection, 'bootstrap')).toEqual({
-      app: inspection.app,
-      bootstraps: inspection.bootstraps,
-      consistent: true,
-      issues: [],
-      suggestions: [],
-    });
-    expect(selectAppClientInspection(inspection, 'locales')).toEqual({
-      app: inspection.app,
-      locales: inspection.locales,
-      consistent: true,
-      issues: [],
-      suggestions: [],
-    });
-
     expect(createAppClientInspectionSuccess(inspection, 'settings')).toEqual({
       schemaVersion: 1,
       ok: true,
@@ -380,37 +216,37 @@ describe('client inspection', () => {
     });
   });
 
-  it('reports missing Settings access without loading pages or running bootstrap', async () => {
+  it('reports missing Settings access without running providers or leaf loaders', async () => {
     const appRoot = await createInspectionApp(`
-      globalThis.__clientInspectCalls = { bootstrap: 0, locales: 0, page: 0, routes: 0 };
+      globalThis.__clientInspectCalls = { lifecycle: 0, locale: 0, page: 0 };
+      class ExampleProvider {
+        boot() { globalThis.__clientInspectCalls.lifecycle += 1; }
+      }
       const plugin = {
         packageName: '@example/client-plugin',
-        bootstrap: async () => ({
-          default: () => { globalThis.__clientInspectCalls.bootstrap += 1; },
-        }),
-        locales: async () => {
-          globalThis.__clientInspectCalls.locales += 1;
-          return { default: {} };
+        config: [],
+        serviceProviders: [ExampleProvider],
+        locales: {
+          'en-US': async () => {
+            globalThis.__clientInspectCalls.locale += 1;
+            return { default: {} };
+          },
         },
-        routes: async () => {
-          globalThis.__clientInspectCalls.routes += 1;
-          return {
-            default: [{
-              parent: 'settings',
-              routes: [{
-                name: 'example',
-                path: '/example',
-                navigation: { title: 'Example' },
-                componentLoader: async () => {
-                  globalThis.__clientInspectCalls.page += 1;
-                  return { default: () => null };
-                },
-              }],
-            }],
-          };
-        },
-        providers: undefined,
-        options: undefined,
+        routes: [{
+          parent: 'settings',
+          routes: [{
+            name: 'example',
+            path: '/example',
+            navigation: { title: 'Example' },
+            componentLoader: async () => {
+              globalThis.__clientInspectCalls.page += 1;
+              return { default: () => null };
+            },
+          }],
+        }],
+        reactProviders: [],
+        routeComponentOverrides: [],
+        options: {},
       };
       export default { plugins: [plugin], routeComponentOverrides: [] };
     `);
@@ -418,24 +254,11 @@ describe('client inspection', () => {
     const inspection = await inspectAppClient({ appRoot });
 
     expect(globalThis.__clientInspectCalls).toEqual({
-      bootstrap: 0,
-      locales: 0,
+      lifecycle: 0,
+      locale: 0,
       page: 0,
-      routes: 1,
     });
     expect(inspection.consistent).toBe(false);
-    expect(inspection.locales).toEqual([
-      {
-        order: 1,
-        packageName: '@example/inspect-app',
-        source: 'application',
-      },
-      {
-        order: 2,
-        packageName: '@example/client-plugin',
-        source: 'plugin',
-      },
-    ]);
     expect(inspection.issues).toEqual([
       expect.objectContaining({
         code: 'CLIENT_SETTINGS_ACCESS_MISSING',
@@ -445,23 +268,26 @@ describe('client inspection', () => {
     ]);
   });
 
-  it('inspects only locale declarations without executing unrelated factories', async () => {
+  it('inspects a single declaration type without resolving unrelated contributions', async () => {
     const appRoot = await createInspectionApp(`
-      globalThis.__clientLocalesOnlyCalls = { locales: 0, providers: 0, routes: 0 };
+      globalThis.__clientLocalesOnlyCalls = { lifecycle: 0, locale: 0, route: 0 };
       const plugin = {
         packageName: '@example/client-locales-only-inspection',
-        locales: async () => {
-          globalThis.__clientLocalesOnlyCalls.locales += 1;
-          return { default: {} };
+        config: [],
+        serviceProviders: [],
+        locales: {
+          'en-US': async () => {
+            globalThis.__clientLocalesOnlyCalls.locale += 1;
+            return { default: {} };
+          },
         },
-        routes: async () => {
-          globalThis.__clientLocalesOnlyCalls.routes += 1;
-          throw new Error('routes must not run during locales-only inspection');
+        get routes() {
+          globalThis.__clientLocalesOnlyCalls.route += 1;
+          throw new Error('routes must not be read during locales-only inspection');
         },
-        providers: async () => {
-          globalThis.__clientLocalesOnlyCalls.providers += 1;
-          throw new Error('providers must not run during locales-only inspection');
-        },
+        reactProviders: [],
+        routeComponentOverrides: [],
+        options: {},
       };
       export default { plugins: [plugin], routeComponentOverrides: [] };
     `);
@@ -469,55 +295,33 @@ describe('client inspection', () => {
     const inspection = await inspectAppClient({ appRoot, type: 'locales' });
 
     expect(globalThis.__clientLocalesOnlyCalls).toEqual({
-      locales: 0,
-      providers: 0,
-      routes: 0,
+      lifecycle: 0,
+      locale: 0,
+      route: 0,
     });
-    expect(inspection).toEqual({
-      app: {
-        packageName: '@example/inspect-app',
-        appRoot,
-      },
-      locales: [
-        {
-          order: 1,
-          packageName: '@example/inspect-app',
-          source: 'application',
-        },
-        {
-          order: 2,
-          packageName: '@example/client-locales-only-inspection',
-          source: 'plugin',
-        },
-      ],
-      consistent: true,
-      issues: [],
-      suggestions: [],
-    });
+    expect(inspection.locales).toHaveLength(2);
+    expect(inspection.routes).toEqual([]);
+    expect(inspection.reactProviders).toEqual([]);
   });
 
   it('uses stable errors for missing and invalid Client composition', async () => {
     const missingRoot = await createInspectionApp();
     await expect(
       inspectAppClient({ appRoot: missingRoot }),
-    ).rejects.toMatchObject({
-      code: 'CLIENT_COMPOSITION_NOT_FOUND',
-    });
+    ).rejects.toMatchObject({ code: 'CLIENT_COMPOSITION_NOT_FOUND' });
 
     const invalidRoot = await createInspectionApp('export default {};');
     await expect(
       inspectAppClient({ appRoot: invalidRoot }),
-    ).rejects.toMatchObject({
-      code: 'CLIENT_COMPOSITION_INVALID',
-    });
+    ).rejects.toMatchObject({ code: 'CLIENT_COMPOSITION_INVALID' });
   });
 
   it('formats stable JSON failures', () => {
     expect(
       createAppClientInspectionFailure(
         new ClientInspectionError(
-          'CLIENT_ROUTES_LOAD_FAILED',
-          'Unable to load Routes.',
+          'CLIENT_RUNTIME_IMPORT_FAILED',
+          'Unable to import Client Runtime.',
         ),
       ),
     ).toEqual({
@@ -526,10 +330,10 @@ describe('client inspection', () => {
       operation: 'client:inspect',
       status: 'failure',
       error: {
-        code: 'CLIENT_ROUTES_LOAD_FAILED',
-        message: 'Unable to load Routes.',
+        code: 'CLIENT_RUNTIME_IMPORT_FAILED',
+        message: 'Unable to import Client Runtime.',
         suggestions: [
-          'Check client/plugins.ts and registered Client declaration modules, then rerun client:inspect.',
+          'Check client/runtime.ts, client/plugins.ts, and registered Client declarations, then rerun client:inspect.',
         ],
       },
     });
@@ -538,5 +342,7 @@ describe('client inspection', () => {
 
 declare global {
   var __clientInspectCalls:
-    { bootstrap: number; page: number; routes: number } | undefined;
+    { lifecycle: number; locale: number; page: number } | undefined;
+  var __clientLocalesOnlyCalls:
+    { lifecycle: number; locale: number; route: number } | undefined;
 }

@@ -41,7 +41,7 @@ describe('Server inspection', () => {
       ),
     ).toMatchObject({ contributions: { jobLocations: 1 } });
     expect(
-      inspection.providers.find(
+      inspection.serviceProviders.find(
         ({ packageName }) => packageName === '@nocobase/app-plugin-system-info',
       ),
     ).toMatchObject({ constructorName: 'SystemInfoProvider' });

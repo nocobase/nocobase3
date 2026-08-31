@@ -3,12 +3,12 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 
-import providers from './providers/index.js';
+import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const realtimeExamplePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-realtime-example',
-  providers,
+  serviceProviders,
   routes,
 });
 

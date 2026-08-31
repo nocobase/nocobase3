@@ -6,7 +6,7 @@ import {
   defineAppRoutes,
   defineClientPlugin,
   defineClientPlugins,
-  defineClientProviders,
+  defineClientReactProviders,
   defineClientRouteComponentOverrides,
   defineSettingsRoutes,
   defineClientSourceExtension,
@@ -15,11 +15,11 @@ import {
   type AppClientSettingsRoutePageDefinition,
 } from '../src/plugins.js';
 
-function FirstProvider({ children }: PropsWithChildren): ReactElement {
+function FirstWrapper({ children }: PropsWithChildren): ReactElement {
   return <>{children}</>;
 }
 
-function SecondProvider({ children }: PropsWithChildren): ReactElement {
+function SecondWrapper({ children }: PropsWithChildren): ReactElement {
   return <>{children}</>;
 }
 
@@ -52,7 +52,7 @@ describe('client plugin definitions', () => {
     expect(Object.isFrozen(extension.routeComponentOverrides?.[0])).toBe(true);
   });
 
-  it('freezes route and provider definitions', () => {
+  it('freezes route and reactProvider definitions', () => {
     const routes = defineAppRoutes([
       {
         name: 'index',
@@ -60,21 +60,21 @@ describe('client plugin definitions', () => {
         componentLoader: async () => ({ default: () => null }),
       },
     ]);
-    const providers = defineClientProviders([
+    const reactProviders = defineClientReactProviders([
       {
         name: 'first',
-        component: FirstProvider,
+        component: FirstWrapper,
         before: ['@nocobase/app-plugin-example:second'],
       },
     ]);
 
     expect(Object.isFrozen(routes)).toBe(true);
     expect(Object.isFrozen(routes[0])).toBe(true);
-    expect(Object.isFrozen(providers)).toBe(true);
-    expect(Object.isFrozen(providers[0].before)).toBe(true);
+    expect(Object.isFrozen(reactProviders)).toBe(true);
+    expect(Object.isFrozen(reactProviders[0].before)).toBe(true);
   });
 
-  it('resolves routes and sorts providers from outer to inner', () => {
+  it('resolves routes and sorts reactProviders from outer to inner', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-feature',
@@ -86,18 +86,18 @@ describe('client plugin definitions', () => {
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
-        providers: defineClientProviders([
+        reactProviders: defineClientReactProviders([
           {
             name: 'second',
-            component: SecondProvider,
+            component: SecondWrapper,
             after: ['@nocobase/app-plugin-foundation:first'],
           },
         ]),
       },
       {
         packageName: '@nocobase/app-plugin-foundation',
-        providers: defineClientProviders([
-          { name: 'first', component: FirstProvider },
+        reactProviders: defineClientReactProviders([
+          { name: 'first', component: FirstWrapper },
         ]),
       },
     ]);
@@ -109,7 +109,9 @@ describe('client plugin definitions', () => {
       source: 'plugin',
       access: { resource: 'feature.dashboard', action: 'access' },
     });
-    expect(resolved.providers.map((provider) => provider.id)).toEqual([
+    expect(
+      resolved.reactProviders.map((reactProvider) => reactProvider.id),
+    ).toEqual([
       '@nocobase/app-plugin-foundation:first',
       '@nocobase/app-plugin-feature:second',
     ]);
@@ -267,47 +269,45 @@ describe('client plugin definitions', () => {
     );
   });
 
-  it('keeps registration order when providers have no constraints', () => {
+  it('keeps registration order when reactProviders have no constraints', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-example',
-        providers: defineClientProviders([
-          { name: 'first', component: FirstProvider },
-          { name: 'second', component: SecondProvider },
+        reactProviders: defineClientReactProviders([
+          { name: 'first', component: FirstWrapper },
+          { name: 'second', component: SecondWrapper },
         ]),
       },
     ]);
 
-    expect(resolved.providers.map((provider) => provider.name)).toEqual([
-      'first',
-      'second',
-    ]);
-    expect(resolved.providers.map((provider) => provider.layer)).toEqual([
-      'extension',
-      'extension',
-    ]);
+    expect(
+      resolved.reactProviders.map((reactProvider) => reactProvider.name),
+    ).toEqual(['first', 'second']);
+    expect(
+      resolved.reactProviders.map((reactProvider) => reactProvider.layer),
+    ).toEqual(['extension', 'extension']);
   });
 
-  it('sorts provider layers before applying same-layer constraints', () => {
+  it('sorts reactProvider layers before applying same-layer constraints', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-feature',
-        providers: defineClientProviders([
-          { name: 'extension', component: SecondProvider },
+        reactProviders: defineClientReactProviders([
+          { name: 'extension', component: SecondWrapper },
         ]),
       },
       {
         packageName: '@nocobase/app-template-default',
         source: 'application',
-        providers: defineClientProviders([
+        reactProviders: defineClientReactProviders([
           {
             name: 'workspace',
-            component: SecondProvider,
+            component: SecondWrapper,
             layer: 'application',
           },
           {
             name: 'theme',
-            component: FirstProvider,
+            component: FirstWrapper,
             layer: 'root',
           },
         ]),
@@ -315,7 +315,7 @@ describe('client plugin definitions', () => {
     ]);
 
     expect(
-      resolved.providers.map(({ id, layer, source }) => ({
+      resolved.reactProviders.map(({ id, layer, source }) => ({
         id,
         layer,
         source,
@@ -339,36 +339,36 @@ describe('client plugin definitions', () => {
     ]);
   });
 
-  it('rejects invalid provider layers and cross-layer constraints', () => {
+  it('rejects invalid reactProvider layers and cross-layer constraints', () => {
     expect(() =>
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-feature',
-          providers: defineClientProviders([
+          reactProviders: defineClientReactProviders([
             {
               name: 'feature',
-              component: FirstProvider,
+              component: FirstWrapper,
               layer: 'root',
             },
           ]),
         },
       ]),
-    ).toThrow('plugin providers must use layer "extension"');
+    ).toThrow('plugin reactProviders must use layer "extension"');
 
     expect(() =>
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-template-default',
           source: 'application',
-          providers: defineClientProviders([
+          reactProviders: defineClientReactProviders([
             {
               name: 'theme',
-              component: FirstProvider,
+              component: FirstWrapper,
               layer: 'root',
             },
             {
               name: 'workspace',
-              component: SecondProvider,
+              component: SecondWrapper,
               layer: 'application',
               after: ['@nocobase/app-template-default:theme'],
             },
@@ -376,70 +376,67 @@ describe('client plugin definitions', () => {
         },
       ]),
     ).toThrow(
-      'before/after constraints may only reference providers in the same layer',
+      'before/after constraints may only reference reactProviders in the same layer',
     );
   });
 
-  it('rejects missing references and circular provider ordering', () => {
+  it('rejects missing references and circular reactProvider ordering', () => {
     expect(() =>
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-example',
-          providers: defineClientProviders([
+          reactProviders: defineClientReactProviders([
             {
               name: 'first',
-              component: FirstProvider,
-              after: ['@nocobase/app-plugin-missing:provider'],
+              component: FirstWrapper,
+              after: ['@nocobase/app-plugin-missing:reactProvider'],
             },
           ]),
         },
       ]),
-    ).toThrow('references missing provider');
+    ).toThrow('references missing reactProvider');
 
     expect(() =>
       resolveAppClientContributions([
         {
           packageName: '@nocobase/app-plugin-example',
-          providers: defineClientProviders([
+          reactProviders: defineClientReactProviders([
             {
               name: 'first',
-              component: FirstProvider,
+              component: FirstWrapper,
               after: ['@nocobase/app-plugin-example:second'],
             },
             {
               name: 'second',
-              component: SecondProvider,
+              component: SecondWrapper,
               after: ['@nocobase/app-plugin-example:first'],
             },
           ]),
         },
       ]),
-    ).toThrow('Circular client provider order detected');
+    ).toThrow('Circular client reactProvider order detected');
   });
 });
 
 describe('client modules', () => {
   const loadComponent = async () => ({ default: () => null });
-  const bootstrapLoader = async () => ({ default: () => {} });
-  const routesLoader = async () => ({
-    default: defineAppRoutes([
-      { name: 'index', path: '/example', componentLoader: loadComponent },
-    ]),
-  });
+  const routes = defineAppRoutes([
+    { name: 'index', path: '/example', componentLoader: loadComponent },
+  ]);
 
   it('forwards options and exposes the declared entries', () => {
     const example = defineClientPlugin<{ readonly label?: string }>({
       packageName: '@nocobase/app-plugin-example',
-      bootstrap: bootstrapLoader,
-      routes: routesLoader,
+      routes,
+      reactProviders: (options) =>
+        options.label ? [{ name: options.label, component: FirstWrapper }] : [],
     });
 
     const registration = example({ label: 'custom' });
 
     expect(registration.packageName).toBe('@nocobase/app-plugin-example');
-    expect(registration.bootstrap).toBe(bootstrapLoader);
-    expect(registration.routes).toBe(routesLoader);
-    expect(registration.providers).toBeUndefined();
+    expect(registration.routes).toEqual([routes]);
+    expect(registration.reactProviders[0]?.name).toBe('custom');
     expect(registration.options).toEqual({ label: 'custom' });
     expect(registration.routeComponentOverrides).toEqual([]);
   });
@@ -481,7 +478,6 @@ describe('client modules', () => {
   it('collects plugins in order and merges their route overrides', () => {
     const first = defineClientPlugin({
       packageName: '@nocobase/app-plugin-first',
-      bootstrap: bootstrapLoader,
       routeComponentOverrides: () => [
         {
           routeId: '@nocobase/app-plugin-second:login',
@@ -491,7 +487,7 @@ describe('client modules', () => {
     });
     const second = defineClientPlugin({
       packageName: '@nocobase/app-plugin-second',
-      routes: routesLoader,
+      routes,
     });
 
     const modules = defineClientPlugins([first(), second()]);
@@ -500,7 +496,6 @@ describe('client modules', () => {
       '@nocobase/app-plugin-first',
       '@nocobase/app-plugin-second',
     ]);
-    expect(modules.plugins[0]?.source).toBe('plugin');
     expect(modules.routeComponentOverrides).toHaveLength(1);
   });
 
@@ -904,16 +899,16 @@ describe('client settings', () => {
     );
   });
 
-  it('carries the Routes loader used for Settings contributions into registration', () => {
-    const settingsLoader = async () => ({ default: [] });
+  it('carries static Settings Route contributions into registration', () => {
+    const settings = defineSettingsRoutes([]);
     const plugin = defineClientPlugin({
       packageName: '@nocobase/app-plugin-example',
-      routes: settingsLoader,
+      routes: settings,
     });
 
-    expect(plugin().routes).toBe(settingsLoader);
-    expect(defineClientPlugins([plugin()]).plugins[0].routes).toBe(
-      settingsLoader,
-    );
+    expect(plugin().routes).toEqual([settings]);
+    expect(defineClientPlugins([plugin()]).plugins[0].routes).toEqual([
+      settings,
+    ]);
   });
 });

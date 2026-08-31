@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  injectSpaRuntimeHtml,
   injectSpaRuntimeGlobals,
   registerSpaRoutes,
 } from '../src/spa/index.js';
@@ -34,6 +35,26 @@ describe('SPA runtime globals', () => {
     );
     expect(result).not.toContain('window.ignored');
     expect(result.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
+      result.indexOf('<script type="module"'),
+    );
+  });
+
+  it('injects a safe versioned Client config data block', () => {
+    const html = '<script type="module" src="/assets/index.js"></script>';
+    const result = injectSpaRuntimeHtml(html, {
+      clientConfig: {
+        title: '</script><script>alert(1)</script>',
+        separators: '\u2028\u2029',
+      },
+    });
+
+    expect(result).toContain(
+      '<script id="nocobase-runtime-config" type="application/json">',
+    );
+    expect(result).toContain('"version":1');
+    expect(result).toContain('\\u003C/script\\u003E');
+    expect(result).toContain('\\u2028\\u2029');
+    expect(result.indexOf('nocobase-runtime-config')).toBeLessThan(
       result.indexOf('<script type="module"'),
     );
   });
@@ -74,6 +95,7 @@ describe('SPA routes', () => {
       runtimeGlobals: {
         NOCOBASE_PORTAL_BASE: '/main/test/',
       },
+      clientConfig: { app: { title: 'NocoBase' } },
     });
 
     const response = await router.request(
@@ -84,8 +106,44 @@ describe('SPA routes', () => {
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/main/test/";');
     expect(html).toContain(
+      '{"version":1,"config":{"app":{"title":"NocoBase"}}}',
+    );
+    expect(html).toContain(
       '<script type="module" src="/main/test/assets/index.js"></script>',
     );
+  });
+
+  it('injects the same runtime payload into proxied development HTML only', async () => {
+    const router = new Hono();
+    registerSpaRoutes(router, {
+      basePath: '/main/test',
+      indexPath: '/unused/index.html',
+      clientConfig: { feature: { enabled: true } },
+      runtimeGlobals: { NOCOBASE_PORTAL_BASE: '/main/test/' },
+      handler: (request) =>
+        new URL(request.url).pathname.endsWith('.js')
+          ? new Response('export default true;', {
+              headers: { 'content-type': 'text/javascript' },
+            })
+          : new Response(
+              '<script type="module" src="/src/main.tsx"></script>',
+              {
+                headers: { 'content-type': 'text/html; charset=utf-8' },
+              },
+            ),
+    });
+
+    const htmlResponse = await router.request(
+      'http://localhost/main/test/settings',
+    );
+    const assetResponse = await router.request(
+      'http://localhost/main/test/src/main.js',
+    );
+
+    await expect(htmlResponse.text()).resolves.toContain(
+      '{"version":1,"config":{"feature":{"enabled":true}}}',
+    );
+    await expect(assetResponse.text()).resolves.toBe('export default true;');
   });
 
   it('does not return the SPA index for missing assets', async () => {

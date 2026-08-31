@@ -3,6 +3,10 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
+import reactProviders from './react-providers.js';
+import routes from './routes.js';
+import serviceProviders from './service-provider.js';
+
 export interface NotificationProviderClientOptions {
   /** Label of the undo action in undoable (progress) notifications. */
   readonly undoLabel?: string;
@@ -11,9 +15,9 @@ export interface NotificationProviderClientOptions {
 const notificationProvider: AppClientPluginFactory<NotificationProviderClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-notification-provider',
-    bootstrap: () => import('./bootstrap.js'),
-    routes: () => import('./routes.js'),
-    providers: () => import('./providers.js'),
+    serviceProviders,
+    routes,
+    reactProviders,
   });
 
 export default notificationProvider;

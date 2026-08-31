@@ -193,8 +193,8 @@ logout、check、getIdentity 和 onError。
 
 ## 客户端插件入口
 
-- `@nocobase/app-plugin-authentication/client/bootstrap` 默认导出客户端插件
-  bootstrap，用于注册 Refine `authProvider`；
+- `@nocobase/app-plugin-authentication/client` 默认导出 Client plugin factory，
+  其 ServiceProvider 在 `boot()` 中注册 Refine `authProvider`；
 - `@nocobase/app-plugin-authentication/client/routes` 默认导出登录、注册、忘记密码和
   重置密码的 guest 路由定义；
 - `@nocobase/app-plugin-authentication/client/route-contracts` 导出稳定的

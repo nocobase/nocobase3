@@ -9,7 +9,7 @@ describe('workflow client contributions', () => {
     expect(packageJson).not.toHaveProperty('nocobase');
     expect(packageJson.exports).toHaveProperty('./client');
     expect(packageJson.publishConfig.exports).toHaveProperty('./client');
-    expect(workflow().bootstrap).toEqual(expect.any(Function));
+    expect(workflow().serviceProviders).toHaveLength(1);
   });
 
   it('keeps collection definitions internal to the plugin', () => {

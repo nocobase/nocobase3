@@ -1,10 +1,14 @@
 import type { AppClient } from '@nocobase/app-sdk';
+import {
+  appApiClientToken,
+  type ClientApplication,
+} from '@nocobase/app-client';
 import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
 import { describe, expect, it, vi } from 'vitest';
 
-import bootstrap from '../bootstrap.js';
+import { AuthenticationServiceProvider } from '../service-provider.js';
 
-describe('client bootstrap', () => {
+describe('client ServiceProvider', () => {
   it('registers the authentication provider with the app runtime', async () => {
     const appClient: AppClient = {
       request: vi.fn<AppClient['request']>(),
@@ -27,11 +31,16 @@ describe('client bootstrap', () => {
       setRouterProvider: vi.fn(),
     };
 
-    await bootstrap({
-      appClient,
-      packageName: '@nocobase/app-plugin-authentication',
+    const app = {
+      container: {
+        resolve: vi.fn((token) => {
+          expect(token).toBe(appApiClientToken);
+          return appClient;
+        }),
+      },
       refine,
-    });
+    } as unknown as ClientApplication;
+    await new AuthenticationServiceProvider(app).boot();
 
     expect(setAuthProvider).toHaveBeenCalledExactlyOnceWith({
       login: expect.any(Function),

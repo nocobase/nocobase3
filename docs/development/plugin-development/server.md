@@ -39,13 +39,13 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 
-import providers from './providers/index.js';
+import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const plugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-audit-log',
   locales: () => import('./locales/index.js'),
-  providers,
+  serviceProviders,
   routes,
   queue: { jobs: ['./server/jobs'] },
   database: {

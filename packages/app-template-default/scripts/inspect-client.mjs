@@ -2,32 +2,30 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const help = `Inspect the client bootstrap, routes, providers, and locale declarations this app resolves.
+const inspectionTypes = [
+  'all',
+  'config',
+  'service-providers',
+  'react-providers',
+  'routes',
+  'settings',
+  'locales',
+];
 
-Loads client/plugins.ts and runs the same resolution the browser does, so the
-output reflects the final Client contribution composition. Inspection imports
-declaration modules and executes Route and Provider factories. It does not run
-bootstrap functions, load locale resources or Route page components, render
-Providers, or start a browser.
+const help = `Inspect the static Client Runtime and Plugin declarations this app resolves.
+
+Inspection imports declaration modules and evaluates lightweight contribution
+factories. It does not create a ClientApplication, run ServiceProvider lifecycle
+methods, load locale messages or Route page components, or render React Providers.
 
 Usage:
   pnpm client:inspect [options]
 
 Options:
-  --type <type>      all, bootstrap, routes, settings, providers, or locales
-                     (default: all)
-                     locales inspects declarations without executing Route or
-                     Provider factories
+  --type <type>      all, config, service-providers, react-providers, routes,
+                     settings, or locales (default: all)
   --json             Print machine-readable JSON
-  -h, --help         Show this help
-
-Examples:
-  pnpm client:inspect
-  pnpm client:inspect --json
-  pnpm client:inspect --type bootstrap
-  pnpm client:inspect --type settings
-  pnpm client:inspect --type providers
-  pnpm client:inspect --type locales`;
+  -h, --help         Show this help`;
 
 export class ClientInspectionError extends Error {
   constructor(code, message, options) {
@@ -46,12 +44,7 @@ function inspectionError(code, message, cause) {
 }
 
 export function parseInspectAppClientArgs(args) {
-  const options = {
-    help: false,
-    json: false,
-    type: 'all',
-  };
-
+  const options = { help: false, json: false, type: 'all' };
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--help' || argument === '-h') {
@@ -70,19 +63,10 @@ export function parseInspectAppClientArgs(args) {
           '--type requires a value.',
         );
       }
-      if (
-        ![
-          'all',
-          'bootstrap',
-          'routes',
-          'settings',
-          'providers',
-          'locales',
-        ].includes(value)
-      ) {
+      if (!inspectionTypes.includes(value)) {
         throw inspectionError(
           'CLIENT_INSPECT_ARGUMENT_INVALID',
-          '--type must be all, bootstrap, routes, settings, providers, or locales.',
+          '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
         );
       }
       options.type = value;
@@ -94,7 +78,6 @@ export function parseInspectAppClientArgs(args) {
       `Unknown argument: ${argument}`,
     );
   }
-
   return options;
 }
 
@@ -106,36 +89,45 @@ export async function inspectAppClient({
   const appPackageName = JSON.parse(readFileSync(packageJsonPath, 'utf8')).name;
   const { applyClientRouteComponentOverrides, resolveAppClientContributions } =
     await import('@nocobase/app-client/plugins');
-
-  const clientPlugins = await loadClientPlugins(appRoot);
-  const applicationLoader = await loadApplicationLoader(
-    appRoot,
-    appPackageName,
-  );
+  const [application, clientPlugins] = await Promise.all([
+    loadApplicationRuntime(appRoot, appPackageName),
+    loadClientPlugins(appRoot),
+  ]);
   const locales = localeSnapshots(
     appPackageName,
-    applicationLoader,
+    application,
     clientPlugins.plugins,
   );
-  if (type === 'locales') {
-    return {
-      app: {
-        packageName: appPackageName,
-        appRoot,
-      },
+  const configs = configSnapshots(appPackageName, clientPlugins.plugins);
+  const serviceProviders = serviceProviderSnapshots(
+    appPackageName,
+    application,
+    clientPlugins.plugins,
+  );
+
+  if (type === 'locales' || type === 'config' || type === 'service-providers') {
+    return createInspectionResult({
+      appPackageName,
+      appRoot,
+      configs,
+      serviceProviders,
       locales,
-      consistent: true,
-      issues: [],
-      suggestions: [],
-    };
+    });
   }
+
   const contributions = [
-    ...(applicationLoader
-      ? [await loadContribution(applicationLoader, 'application')]
-      : []),
-    ...(await Promise.all(
-      clientPlugins.plugins.map((plugin) => loadContribution(plugin, 'plugin')),
-    )),
+    {
+      packageName: appPackageName,
+      source: 'application',
+      routes: resolveDeclaration(application.routes),
+      reactProviders: resolveDeclaration(application.reactProviders) ?? [],
+    },
+    ...clientPlugins.plugins.map((plugin) => ({
+      packageName: plugin.packageName,
+      source: 'plugin',
+      routes: plugin.routes,
+      reactProviders: plugin.reactProviders,
+    })),
   ];
   let resolved;
   try {
@@ -148,6 +140,7 @@ export async function inspectAppClient({
       error,
     );
   }
+
   const sourceExtensions = await loadApplicationSourceExtensions(appRoot);
   const overrides = [
     ...clientPlugins.routeComponentOverrides.map((override) => ({
@@ -175,86 +168,78 @@ export async function inspectAppClient({
       error,
     );
   }
+
   const entryOf = (packageName, contribution) =>
     packageName === appPackageName
       ? `./client/${contribution}`
       : `${packageName}/client/${contribution}`;
+  const reactProviders = resolved.reactProviders.map((provider, index) => ({
+    order: index + 1,
+    id: provider.id,
+    name: provider.name,
+    packageName: provider.packageName,
+    source: provider.source,
+    layer: provider.layer,
+    entry: entryOf(provider.packageName, 'react-providers'),
+    before: provider.before ?? [],
+    after: provider.after ?? [],
+  }));
+  const routeSnapshots = routes.map((route, index) => {
+    const override = overrides.find((entry) => entry.routeId === route.id);
+    return {
+      order: index + 1,
+      parent: 'app',
+      auth: route.auth,
+      id: route.id,
+      name: route.name,
+      packageName: route.packageName,
+      path: route.path,
+      routeSource: route.source,
+      routeEntry: entryOf(route.packageName, 'routes'),
+      componentSource: override
+        ? describeOverrideOrigin(override.origin)
+        : route.source,
+      ...(override?.componentEntry
+        ? { componentEntry: override.componentEntry }
+        : {}),
+    };
+  });
+  const settings = resolved.settings.map((setting, index) => ({
+    order: index + 1,
+    parent: 'settings',
+    id: setting.id,
+    title: setting.title,
+    packageName: setting.packageName,
+    path: setting.path,
+    source: setting.source,
+    entry: entryOf(setting.packageName, 'routes'),
+    ...(setting.groupId ? { groupId: setting.groupId } : {}),
+    ...(setting.access ? { access: setting.access } : {}),
+  }));
 
-  const result = {
-    app: {
-      packageName: appPackageName,
-      appRoot,
-    },
-    bootstraps: [
-      ...(applicationLoader?.bootstrap
-        ? [
-            {
-              order: 1,
-              packageName: appPackageName,
-              source: 'application',
-              entry: entryOf(appPackageName, 'bootstrap'),
-            },
-          ]
-        : []),
-      ...clientPlugins.plugins
-        .filter((plugin) => plugin.bootstrap)
-        .map((plugin, index) => ({
-          order: index + (applicationLoader?.bootstrap ? 2 : 1),
-          packageName: plugin.packageName,
-          source: 'plugin',
-          entry: entryOf(plugin.packageName, 'bootstrap'),
-          ...(hasOptions(plugin.options)
-            ? { options: describeOptions(plugin.options) }
-            : {}),
-        })),
-    ],
+  return createInspectionResult({
+    appPackageName,
+    appRoot,
+    configs,
+    serviceProviders,
+    reactProviders,
+    routes: routeSnapshots,
+    settings,
     locales,
-    routes: routes.map((route, index) => {
-      const override = overrides.find((entry) => entry.routeId === route.id);
-      return {
-        order: index + 1,
-        parent: 'app',
-        auth: route.auth,
-        id: route.id,
-        name: route.name,
-        packageName: route.packageName,
-        path: route.path,
-        routeSource: route.source,
-        routeEntry: entryOf(route.packageName, 'routes'),
-        componentSource: override
-          ? describeOverrideOrigin(override.origin)
-          : route.source,
-        ...(override?.componentEntry
-          ? { componentEntry: override.componentEntry }
-          : {}),
-      };
-    }),
-    settings: resolved.settings.map((setting, index) => ({
-      order: index + 1,
-      parent: 'settings',
-      id: setting.id,
-      title: setting.title,
-      packageName: setting.packageName,
-      path: setting.path,
-      source: setting.source,
-      entry: entryOf(setting.packageName, 'routes'),
-      ...(setting.groupId ? { groupId: setting.groupId } : {}),
-      ...(setting.access ? { access: setting.access } : {}),
-    })),
-    providers: resolved.providers.map((provider, index) => ({
-      order: index + 1,
-      id: provider.id,
-      name: provider.name,
-      packageName: provider.packageName,
-      source: provider.source,
-      layer: provider.layer,
-      entry: entryOf(provider.packageName, 'providers'),
-      before: provider.before ?? [],
-      after: provider.after ?? [],
-    })),
-  };
+  });
+}
 
-  const issues = result.settings
+function createInspectionResult({
+  appPackageName,
+  appRoot,
+  configs = [],
+  serviceProviders = [],
+  reactProviders = [],
+  routes = [],
+  settings = [],
+  locales = [],
+}) {
+  const issues = settings
     .filter((setting) => setting.access === undefined)
     .map((setting) => ({
       code: 'CLIENT_SETTINGS_ACCESS_MISSING',
@@ -262,9 +247,14 @@ export async function inspectAppClient({
       packageName: setting.packageName,
       routeId: setting.id,
     }));
-
   return {
-    ...result,
+    app: { packageName: appPackageName, appRoot },
+    configs,
+    serviceProviders,
+    reactProviders,
+    routes,
+    settings,
+    locales,
     consistent: issues.length === 0,
     issues,
     suggestions:
@@ -276,21 +266,77 @@ export async function inspectAppClient({
   };
 }
 
-function localeSnapshots(appPackageName, applicationLoader, plugins) {
+function resolveDeclaration(declaration) {
+  return typeof declaration === 'function'
+    ? declaration(undefined)
+    : declaration;
+}
+
+function configSnapshots(appPackageName, plugins) {
+  let order = 1;
   return [
-    ...(applicationLoader?.locales
-      ? [
-          {
-            order: 1,
-            packageName: appPackageName,
-            source: 'application',
-          },
-        ]
+    {
+      order,
+      packageName: appPackageName,
+      source: 'application',
+      entry: './client/runtime',
+      kind: 'factory',
+    },
+    ...plugins.flatMap((plugin) =>
+      plugin.config.map((config) => ({
+        order: (order += 1),
+        packageName: plugin.packageName,
+        source: 'plugin',
+        entry: `${plugin.packageName}/client/plugin`,
+        kind: 'contribution',
+        namespace: config.namespace,
+      })),
+    ),
+  ];
+}
+
+function serviceProviderSnapshots(appPackageName, application, plugins) {
+  const contributions = [
+    {
+      packageName: appPackageName,
+      source: 'application',
+      Providers: resolveDeclaration(application.serviceProviders) ?? [],
+      options: undefined,
+    },
+    ...plugins.map((plugin) => ({
+      packageName: plugin.packageName,
+      source: 'plugin',
+      Providers: plugin.serviceProviders,
+      options: plugin.options,
+    })),
+  ];
+  let order = 0;
+  return contributions.flatMap((contribution) =>
+    contribution.Providers.map((Provider) => ({
+      order: (order += 1),
+      packageName: contribution.packageName,
+      source: contribution.source,
+      provider: Provider.name || '(anonymous)',
+      entry:
+        contribution.source === 'application'
+          ? './client/providers'
+          : `${contribution.packageName}/client/providers`,
+      ...(hasOptions(contribution.options)
+        ? { options: describeOptions(contribution.options) }
+        : {}),
+    })),
+  );
+}
+
+function localeSnapshots(appPackageName, application, plugins) {
+  return [
+    ...(application.locales
+      ? [{ order: 1, packageName: appPackageName, source: 'application' }]
       : []),
     ...plugins
       .filter((plugin) => plugin.locales)
       .map((plugin, index) => ({
-        order: index + (applicationLoader?.locales ? 2 : 1),
+        order: index + (application.locales ? 2 : 1),
         packageName: plugin.packageName,
         source: 'plugin',
       })),
@@ -298,12 +344,8 @@ function localeSnapshots(appPackageName, applicationLoader, plugins) {
 }
 
 function describeOverrideOrigin(origin) {
-  if (origin === 'plugins-entry') {
-    return 'application (plugin options)';
-  }
-  if (origin === 'route-overrides') {
-    return 'application (route-overrides)';
-  }
+  if (origin === 'plugins-entry') return 'application (plugin options)';
+  if (origin === 'route-overrides') return 'application (route-overrides)';
   return `application (${origin})`;
 }
 
@@ -313,7 +355,6 @@ function hasOptions(options) {
   );
 }
 
-/** Functions carry no useful text once bundled, so they render as a marker. */
 function describeOptions(options) {
   return JSON.stringify(options, (_key, value) =>
     typeof value === 'function' ? '[loader]' : value,
@@ -328,7 +369,6 @@ async function loadClientPlugins(appRoot) {
       `Application at ${appRoot} does not declare client/plugins.ts.`,
     );
   }
-
   try {
     const module = await import(pathToFileURL(entry).href);
     const declared = module.default;
@@ -353,123 +393,48 @@ async function loadClientPlugins(appRoot) {
   }
 }
 
-async function loadApplicationLoader(appRoot, packageName) {
-  const runtimeEntry = await findApplicationEntry(appRoot, 'runtime');
-  if (runtimeEntry) {
-    return {
-      packageName,
-      bootstrap: createLocalContributionLoader(appRoot, 'bootstrap'),
-      locales: createLocalContributionLoader(appRoot, 'locales'),
-      providers: createLocalContributionLoader(appRoot, 'providers'),
-      routes: createLocalContributionLoader(appRoot, 'routes'),
-    };
+async function loadApplicationRuntime(appRoot, packageName) {
+  const entry = await findApplicationEntry(appRoot, 'runtime');
+  if (!entry) {
+    throw inspectionError(
+      'CLIENT_RUNTIME_NOT_FOUND',
+      `Application at ${appRoot} does not declare client/runtime.ts.`,
+    );
   }
-
-  return undefined;
-}
-
-function createLocalContributionLoader(appRoot, contribution) {
-  const entry = ['ts', 'tsx', 'js']
-    .flatMap((extension) => [
-      path.join(appRoot, `client/${contribution}.${extension}`),
-      path.join(appRoot, `client/${contribution}/index.${extension}`),
-    ])
-    .find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
-  return entry ? () => import(pathToFileURL(entry).href) : undefined;
-}
-
-/**
- * Loads one contribution the same way the browser runtime does, including the
- * factory form of routes and providers.
- */
-async function loadContribution(loader, source) {
-  if (!loader) {
-    return {
-      packageName: '',
-      source,
-      routes: undefined,
-      providers: undefined,
-    };
-  }
-
-  const [routes, providers] = await Promise.all([
-    loadContributionEntry(loader, 'routes'),
-    loadContributionEntry(loader, 'providers'),
-  ]);
-
-  return {
-    packageName: loader.packageName,
-    source,
-    routes,
-    providers,
-  };
-}
-
-async function loadContributionEntry(loader, contribution) {
-  const load = loader[contribution];
-  if (!load) {
-    return undefined;
-  }
-
   try {
-    const module = await load();
-    const exported = module.default;
-    const definitions =
-      typeof exported === 'function'
-        ? exported(loader.options ?? {})
-        : exported;
-    if (contribution === 'routes') {
-      const normalized = Array.isArray(definitions)
-        ? definitions
-        : [definitions];
-      if (
-        normalized.every(
-          (item) =>
-            typeof item === 'object' &&
-            item !== null &&
-            (item.parent === 'app' || item.parent === 'settings') &&
-            Array.isArray(item.routes),
-        )
-      ) {
-        return normalized;
-      }
-    } else if (Array.isArray(definitions)) {
-      return definitions;
-    }
-    {
+    const module = await import(pathToFileURL(entry).href);
+    const runtime = module.default;
+    if (!runtime || typeof runtime !== 'object') {
       throw inspectionError(
-        contribution === 'routes'
-          ? 'CLIENT_ROUTES_INVALID'
-          : 'CLIENT_PROVIDERS_INVALID',
-        `the ${contribution} entry must default-export a valid contribution, or a function returning one`,
+        'CLIENT_RUNTIME_INVALID',
+        'the default export must come from defineAppRuntime()',
       );
     }
+    if (runtime.packageName && runtime.packageName !== packageName) {
+      throw inspectionError(
+        'CLIENT_RUNTIME_INVALID',
+        `client/runtime.ts declares packageName "${runtime.packageName}" instead of "${packageName}".`,
+      );
+    }
+    return runtime;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     if (error instanceof ClientInspectionError) throw error;
     throw inspectionError(
-      contribution === 'routes'
-        ? 'CLIENT_ROUTES_LOAD_FAILED'
-        : 'CLIENT_PROVIDERS_LOAD_FAILED',
-      `Failed to inspect client ${contribution} for "${loader.packageName}": ${reason}`,
+      'CLIENT_RUNTIME_IMPORT_FAILED',
+      `Failed to inspect client/runtime.ts: ${reason}`,
       error,
     );
   }
 }
 
 async function loadApplicationRouteComponentOverrides(appRoot) {
-  const candidates = [
-    path.join(appRoot, 'client/route-overrides.ts'),
-    path.join(appRoot, 'client/route-overrides.tsx'),
-    path.join(appRoot, 'client/route-overrides.js'),
-  ];
-  const entry = candidates.find(
-    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
-  );
-  if (!entry) {
-    return [];
-  }
-
+  const entry = ['ts', 'tsx', 'js']
+    .map((extension) =>
+      path.join(appRoot, `client/route-overrides.${extension}`),
+    )
+    .find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
+  if (!entry) return [];
   try {
     const module = await import(pathToFileURL(entry).href);
     if (!Array.isArray(module.default)) {
@@ -530,18 +495,20 @@ async function loadApplicationSourceExtensions(appRoot) {
 }
 
 async function findApplicationEntry(appRoot, contribution) {
-  const candidates = ['ts', 'tsx', 'js'].map((extension) =>
-    path.join(appRoot, `client/${contribution}.${extension}`),
-  );
-  return candidates.find(
-    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
-  );
+  return ['ts', 'tsx', 'js']
+    .map((extension) =>
+      path.join(appRoot, `client/${contribution}.${extension}`),
+    )
+    .find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
 }
 
 export function formatAppClientInspection(inspection, type = 'all') {
   const sections = [`App: ${inspection.app.packageName}`];
-  if (type === 'all' || type === 'bootstrap') {
-    sections.push(formatBootstraps(inspection.bootstraps));
+  if (type === 'all' || type === 'config') {
+    sections.push(formatConfigs(inspection.configs));
+  }
+  if (type === 'all' || type === 'service-providers') {
+    sections.push(formatServiceProviders(inspection.serviceProviders));
   }
   if (type === 'all' || type === 'routes') {
     sections.push(formatRoutes(inspection.routes));
@@ -549,15 +516,15 @@ export function formatAppClientInspection(inspection, type = 'all') {
   if (type === 'all' || type === 'settings') {
     sections.push(formatSettings(inspection.settings));
   }
-  if (type === 'all' || type === 'providers') {
-    sections.push(formatProviders(inspection.providers));
+  if (type === 'all' || type === 'react-providers') {
+    sections.push(formatReactProviders(inspection.reactProviders));
   }
   if (type === 'all' || type === 'locales') {
     sections.push(formatLocales(inspection.locales));
   }
   sections.push(formatIssues(inspection.issues));
   sections.push(
-    'Inspection scope: Client declarations and resolved contributions only.\nBootstrap, locale resources, Route components, Providers, browser behavior, and Server security are not inspected.',
+    'Inspection scope: static Client declarations and resolved contributions only.\nConfig resolution, ServiceProvider lifecycle, locale messages, Route components, React rendering, browser behavior, and Server security are not inspected.',
   );
   return sections.join('\n\n');
 }
@@ -565,8 +532,11 @@ export function formatAppClientInspection(inspection, type = 'all') {
 export function selectAppClientInspection(inspection, type = 'all') {
   return {
     app: inspection.app,
-    ...(type === 'all' || type === 'bootstrap'
-      ? { bootstraps: inspection.bootstraps }
+    ...(type === 'all' || type === 'config'
+      ? { configs: inspection.configs }
+      : {}),
+    ...(type === 'all' || type === 'service-providers'
+      ? { serviceProviders: inspection.serviceProviders }
       : {}),
     ...(type === 'all' || type === 'routes'
       ? { routes: inspection.routes }
@@ -574,8 +544,8 @@ export function selectAppClientInspection(inspection, type = 'all') {
     ...(type === 'all' || type === 'settings'
       ? { settings: inspection.settings }
       : {}),
-    ...(type === 'all' || type === 'providers'
-      ? { providers: inspection.providers }
+    ...(type === 'all' || type === 'react-providers'
+      ? { reactProviders: inspection.reactProviders }
       : {}),
     ...(type === 'all' || type === 'locales'
       ? { locales: inspection.locales }
@@ -609,41 +579,46 @@ export function createAppClientInspectionFailure(error) {
           : 'CLIENT_INSPECTION_FAILED',
       message: error instanceof Error ? error.message : String(error),
       suggestions: [
-        'Check client/plugins.ts and registered Client declaration modules, then rerun client:inspect.',
+        'Check client/runtime.ts, client/plugins.ts, and registered Client declarations, then rerun client:inspect.',
       ],
     },
   };
 }
 
 function formatIssues(issues) {
-  if (issues.length === 0) {
-    return 'Issues: none';
-  }
+  if (issues.length === 0) return 'Issues: none';
   return `Issues: ${issues.length}\n${issues
     .map((issue) => `- ${issue.code}: ${issue.message}`)
     .join('\n')}`;
 }
 
-function formatBootstraps(bootstraps) {
-  if (bootstraps.length === 0) {
-    return 'Bootstrap order\n  (none)';
-  }
-  return `Bootstrap order\n${bootstraps
-    .map((bootstrap) =>
+function formatConfigs(configs) {
+  if (configs.length === 0) return 'Config declarations\n  (none)';
+  return `Config declarations\n${configs
+    .map(
+      (config) =>
+        `  ${config.order}. ${config.packageName}${config.namespace ? ` (${config.namespace})` : ''}\n    source: ${config.source}\n    entry: ${config.entry}`,
+    )
+    .join('\n')}`;
+}
+
+function formatServiceProviders(serviceProviders) {
+  if (serviceProviders.length === 0) return 'ServiceProviders\n  (none)';
+  return `ServiceProviders\n${serviceProviders
+    .map((provider) =>
       [
-        `  ${bootstrap.order}. ${bootstrap.packageName}`,
-        `    source: ${bootstrap.source}`,
-        `    entry: ${bootstrap.entry}`,
-        ...(bootstrap.options ? [`    options: ${bootstrap.options}`] : []),
+        `  ${provider.order}. ${provider.provider}`,
+        `    source: ${provider.source}`,
+        `    package: ${provider.packageName}`,
+        `    entry: ${provider.entry}`,
+        ...(provider.options ? [`    options: ${provider.options}`] : []),
       ].join('\n'),
     )
     .join('\n')}`;
 }
 
 function formatRoutes(routes) {
-  if (routes.length === 0) {
-    return 'Routes\n  (none)';
-  }
+  if (routes.length === 0) return 'Routes\n  (none)';
   return `Routes\n${routes
     .map((route) =>
       [
@@ -663,9 +638,7 @@ function formatRoutes(routes) {
 }
 
 function formatSettings(settings) {
-  if (settings.length === 0) {
-    return 'Settings\n  (none)';
-  }
+  if (settings.length === 0) return 'Settings\n  (none)';
   return `Settings\n${settings
     .map((setting) =>
       [
@@ -686,11 +659,11 @@ function formatSettings(settings) {
     .join('\n')}`;
 }
 
-function formatProviders(providers) {
-  if (providers.length === 0) {
-    return 'Providers (outer -> inner)\n  (none)';
+function formatReactProviders(reactProviders) {
+  if (reactProviders.length === 0) {
+    return 'React Providers (outer -> inner)\n  (none)';
   }
-  return `Providers (outer -> inner)\n${providers
+  return `React Providers (outer -> inner)\n${reactProviders
     .map((provider) => {
       const constraints = [
         provider.before.length > 0
@@ -712,9 +685,7 @@ function formatProviders(providers) {
 }
 
 function formatLocales(locales) {
-  if (locales.length === 0) {
-    return 'Locale declarations\n  (none)';
-  }
+  if (locales.length === 0) return 'Locale declarations\n  (none)';
   return `Locale declarations\n${locales
     .map(
       (locale) =>
@@ -731,7 +702,6 @@ async function main() {
       console.log(help);
       return;
     }
-
     const inspection = await inspectAppClient({ type: options.type });
     console.log(
       options.json

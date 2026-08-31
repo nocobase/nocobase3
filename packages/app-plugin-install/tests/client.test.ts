@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import providers from '../client/providers.js';
+import reactProviders from '../client/react-providers.js';
 import routes from '../client/routes.js';
 import { resolveInstalledDestination } from '../client/pages/install-navigation.js';
 
@@ -13,7 +13,7 @@ describe('@nocobase/app-plugin-install client', () => {
     await expect(routes.routes[0]?.componentLoader()).resolves.toMatchObject({
       default: expect.any(Function),
     });
-    expect(providers).toEqual([]);
+    expect(reactProviders).toEqual([]);
   });
 
   it('redirects completed installation to home and later visits to login', () => {

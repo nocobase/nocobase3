@@ -1,15 +1,12 @@
-import type { AppClient } from '@nocobase/app-sdk';
+import type { ClientApplication } from '@nocobase/app-client';
 import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
 import { describe, expect, it, vi } from 'vitest';
 
-import bootstrap from '../client/bootstrap.js';
 import { dataProvider } from '../client/data-provider.js';
+import { DataProviderServiceProvider } from '../client/service-provider.js';
 
-describe('client bootstrap', () => {
+describe('client ServiceProvider', () => {
   it('registers the NocoBase data provider with the app runtime', async () => {
-    const appClient: AppClient = {
-      request: vi.fn<AppClient['request']>(),
-    };
     const setDataProvider = vi.fn();
     const refine: AppClientRefineRegistry = {
       addLiveEventHandler: vi.fn(),
@@ -28,11 +25,10 @@ describe('client bootstrap', () => {
       setRouterProvider: vi.fn(),
     };
 
-    await bootstrap({
-      appClient,
-      packageName: '@nocobase/app-plugin-data-provider',
+    const app = {
       refine,
-    });
+    } as unknown as ClientApplication;
+    await new DataProviderServiceProvider(app).boot();
 
     expect(setDataProvider).toHaveBeenCalledExactlyOnceWith(dataProvider);
   });

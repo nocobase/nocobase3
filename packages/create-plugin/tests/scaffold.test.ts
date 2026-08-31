@@ -67,14 +67,14 @@ async function listFiles(
 describe('createPlugin', () => {
   it.each([
     ['database', 'database/README.md', 'client/'],
-    ['server.providers', 'server/providers/index.ts', 'server/routes/'],
+    ['server.service-providers', 'server/providers/index.ts', 'server/routes/'],
     ['server.routes', 'server/routes/index.ts', 'server/providers/'],
     ['server.jobs', 'server/jobs/audit-log.ts', 'client/'],
     ['server.locales', 'server/locales/index.ts', 'client/'],
     ['client.routes', 'client/routes.ts', 'server/'],
     ['client.components', 'client/components/plugin-component.tsx', 'server/'],
-    ['client.providers', 'client/providers.ts', 'server/'],
-    ['client.bootstrap', 'client/bootstrap.ts', 'server/'],
+    ['client.react-providers', 'client/react-providers/index.ts', 'server/'],
+    ['client.service-providers', 'client/providers/index.ts', 'server/'],
     ['client.locales', 'client/locales/index.ts', 'server/'],
     ['registry', 'registry.config.json', 'database/'],
     ['skills', 'skills/nocobase-app-plugin-audit-log/SKILL.md', 'client/'],
@@ -98,7 +98,7 @@ describe('createPlugin', () => {
       [],
     ],
     [
-      'server.providers',
+      'server.service-providers',
       ['./package.json', './server', './server/tokens'],
       ['@nocobase/app-server-kit', '@nocobase/service-provider'],
       [],
@@ -134,15 +134,20 @@ describe('createPlugin', () => {
       ['react'],
     ],
     [
-      'client.providers',
-      ['./client', './client/plugin', './client/providers', './package.json'],
+      'client.react-providers',
+      [
+        './client',
+        './client/plugin',
+        './client/react-providers',
+        './package.json',
+      ],
       [],
       ['@nocobase/app-client', 'react'],
     ],
     [
-      'client.bootstrap',
-      ['./client', './client/bootstrap', './client/plugin', './package.json'],
-      [],
+      'client.service-providers',
+      ['./client', './client/plugin', './client/providers', './package.json'],
+      ['@nocobase/service-provider'],
       ['@nocobase/app-client'],
     ],
     [
@@ -185,7 +190,7 @@ describe('createPlugin', () => {
   it.each([
     ['database', ['dist', 'README.md', 'CHANGELOG.md', 'database']],
     ['server.jobs', ['dist', 'README.md', 'CHANGELOG.md']],
-    ['client.providers', ['dist', 'README.md', 'CHANGELOG.md']],
+    ['client.react-providers', ['dist', 'README.md', 'CHANGELOG.md']],
     ['skills', ['dist', 'README.md', 'CHANGELOG.md', 'skills']],
   ] as const)(
     '%s publishes only its declared package files',
@@ -272,7 +277,7 @@ describe('createPlugin', () => {
     ],
     [
       'server-only',
-      ['server.providers', 'server.routes'],
+      ['server.service-providers', 'server.routes'],
       '@nocobase/dev-config/tsconfig/server-library.json',
       'createNodeLibraryConfig',
       true,
@@ -280,7 +285,7 @@ describe('createPlugin', () => {
     ],
     [
       'full-stack',
-      ['client.routes', 'server.providers', 'server.routes'],
+      ['client.routes', 'server.service-providers', 'server.routes'],
       '@nocobase/dev-config/tsconfig/server-library.json',
       'createClientLibraryConfig',
       true,
@@ -427,32 +432,35 @@ describe('createPlugin', () => {
   });
 
   it('maps selected Client entries without inventing routes or providers', async () => {
-    const result = await createWith(['client.bootstrap', 'client.components']);
+    const result = await createWith([
+      'client.service-providers',
+      'client.components',
+    ]);
     const plugin = await readFile(
       path.join(result.targetDirectory, 'client/plugin.ts'),
       'utf8',
     );
-    expect(result.files).toContain('client/bootstrap.ts');
+    expect(result.files).toContain('client/providers/index.ts');
     expect(result.files).toContain('client/components/plugin-component.tsx');
     expect(result.files).not.toContain('client/routes.ts');
-    expect(result.files).not.toContain('client/providers.ts');
-    expect(plugin).toContain("bootstrap: () => import('./bootstrap.js')");
+    expect(result.files).not.toContain('client/react-providers/index.ts');
+    expect(plugin).toContain('serviceProviders,');
     expect(plugin).not.toContain('locales:');
     expect(plugin).not.toContain('routes:');
-    expect(plugin).not.toContain('providers:');
+    expect(plugin).not.toContain('reactProviders:');
   });
 
   it('generates metadata for all explicitly selected capabilities', async () => {
     const result = await createWith([
       'database',
-      'server.providers',
+      'server.service-providers',
       'server.routes',
       'server.jobs',
       'server.locales',
       'client.routes',
       'client.components',
-      'client.providers',
-      'client.bootstrap',
+      'client.service-providers',
+      'client.react-providers',
       'client.locales',
       'registry',
       'skills',
@@ -489,7 +497,7 @@ describe('createPlugin', () => {
   it('generates a capability-aware App-facing Skill draft', async () => {
     const result = await createWith([
       'client.components',
-      'server.providers',
+      'server.service-providers',
       'server.routes',
       'skills',
     ]);

@@ -8,7 +8,7 @@ describe('parseCreatePluginArgs', () => {
       parseCreatePluginArgs([
         '@nocobase/app-plugin-audit-log',
         '--with',
-        'server.providers',
+        'server.service-providers',
         '--with',
         'server.routes',
         '--with',
@@ -23,7 +23,7 @@ describe('parseCreatePluginArgs', () => {
       ]),
     ).toEqual({
       flags: {
-        capabilities: ['server.providers', 'server.routes'],
+        capabilities: ['server.service-providers', 'server.routes'],
         description: 'Tracks changes.',
         displayName: 'Audit Log',
         dryRun: true,
@@ -73,9 +73,10 @@ describe('formatHelp', () => {
     expect(help).toContain(
       'pnpm plugin:create <name> (--with <capability>... | --empty) [options]',
     );
-    expect(help).toContain('server.providers');
+    expect(help).toContain('server.service-providers');
     expect(help).toContain('server.locales');
-    expect(help).toContain('client.bootstrap');
+    expect(help).toContain('client.service-providers');
+    expect(help).toContain('client.react-providers');
     expect(help).toContain('client.locales');
     expect(help).toContain('--json');
   });

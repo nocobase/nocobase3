@@ -41,7 +41,7 @@ export interface AppServerPluginDefinition<TConfig = object> {
   readonly packageName: string;
   readonly config?:
     AppConfigContribution<never> | readonly AppConfigContribution<never>[];
-  readonly providers?: readonly AppPluginProviderConstructor<TConfig>[];
+  readonly serviceProviders?: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;
@@ -51,7 +51,7 @@ export interface AppServerPluginDefinition<TConfig = object> {
 export interface AppServerPlugin<TConfig = object> {
   readonly packageName: string;
   readonly config: readonly AppConfigContribution<never>[];
-  readonly providers: readonly AppPluginProviderConstructor<TConfig>[];
+  readonly serviceProviders: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly queue?: AppServerPluginQueueContribution;

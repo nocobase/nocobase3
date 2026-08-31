@@ -3,13 +3,15 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 
-import providers, { type FileProviderApplication } from './providers/index.js';
+import serviceProviders, {
+  type FileProviderApplication,
+} from './providers/index.js';
 import routes from './routes/index.js';
 
 const filePlugin: AppServerPlugin<FileProviderApplication['config']> =
   defineServerPlugin<FileProviderApplication['config']>({
     packageName: '@nocobase/app-plugin-file',
-    providers,
+    serviceProviders,
     routes,
     database: {
       migrations: './database/migrations',

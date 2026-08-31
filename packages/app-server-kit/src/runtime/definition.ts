@@ -48,7 +48,7 @@ export interface AppRuntimeDefinition {
     context: ResolvedAppRuntimeConfigContext,
   ) => AppConfig | Promise<AppConfig>;
   readonly plugins: AppServerPlugins;
-  readonly providers: readonly ApplicationServiceProviderConstructor[];
+  readonly serviceProviders: readonly ApplicationServiceProviderConstructor[];
   readonly routes: readonly AppRouteContribution<Application>[];
 }
 
@@ -56,7 +56,7 @@ export interface ResolvedAppRuntime extends ResolvedAppScopeRuntime {
   readonly scope: AppScope;
   readonly configPaths: ConfigPaths;
   readonly plugins: ResolvedAppServerPlugins;
-  readonly providers: readonly ApplicationServiceProviderConstructor[];
+  readonly serviceProviders: readonly ApplicationServiceProviderConstructor[];
   readonly routes: readonly AppRouteContribution<Application>[];
   readonly appConfig: AppConfig;
 }
@@ -66,7 +66,7 @@ export function defineAppRuntime(
 ): AppRuntimeDefinition {
   return Object.freeze({
     ...definition,
-    providers: Object.freeze([...definition.providers]),
+    serviceProviders: Object.freeze([...definition.serviceProviders]),
     routes: Object.freeze([...definition.routes]),
   });
 }
@@ -85,7 +85,7 @@ export async function resolveAppRuntime(
     scope,
     configPaths: context.paths,
     plugins: context.plugins,
-    providers: definition.providers,
+    serviceProviders: definition.serviceProviders,
     routes: definition.routes,
     appConfig,
   };

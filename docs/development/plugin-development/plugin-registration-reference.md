@@ -71,7 +71,7 @@ pnpm plugin:register audit-log \
 
 ```bash
 pnpm plugin:create audit-log \
-  --with server.providers \
+  --with server.service-providers \
   --with server.routes \
   --no-install
 pnpm plugin:register audit-log --app app-template-default
@@ -124,7 +124,7 @@ import auditLog from '@nocobase/app-plugin-audit-log/client';
 const clientPlugins: AppClientPlugins = defineClientPlugins([auditLog()]);
 ```
 
-Client 数组顺序是 bootstrap 顺序。注册命令把新插件追加到数组末尾，不自动排序。只有调整顺序或给插件传 options 时才需要手工修改注册项。
+Client 数组顺序是静态 contribution 和 ServiceProvider lifecycle 的组合顺序。注册命令把新插件追加到数组末尾，不自动排序。只有调整顺序或给插件传 options 时才需要手工修改注册项。
 
 ### Server composition root
 
@@ -359,7 +359,7 @@ Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 
 pnpm --filter <target-app> client:inspect --json
 ```
 
-该命令可查看最终 bootstrap 顺序、Routes、Settings、Providers 和 component overrides，但不验证这些能力的运行行为。只有 Client composition 变化或需要诊断时才运行。
+该命令可查看 Config declarations、ServiceProvider 顺序、Routes、Settings、React Providers 和 component overrides，但不执行 lifecycle、render 或 leaf loaders，也不验证这些能力的运行行为。只有 Client composition 变化或需要诊断时才运行。
 
 ## 常见不一致
 

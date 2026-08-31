@@ -7,9 +7,9 @@ or app plugin.
 
 ## Mental Model
 
-- `app.ts` creates the NocoBase `Application` and declares its providers in
+- `app.ts` creates the NocoBase `Application` and declares its ServiceProviders in
   dependency order. Hono is only the Router service exposed as `app.router`.
-- `runtime.ts` declares config factories, explicit server plugins, providers,
+- `runtime.ts` declares config factories, explicit server plugins, serviceProviders,
   and routes through `defineAppRuntime()`. The application package name comes
   from `rootDir/package.json`, and generic standalone mount defaults belong in
   `@nocobase/app-server-kit/node`.
@@ -17,7 +17,7 @@ or app plugin.
   final composition of package-owned config sections. Generic Scope, path,
   plugin, and config resolution belongs in `@nocobase/app-server-kit`.
 - `embedded.ts` is the app-host entry. It resolves config, creates the
-  application, binds shutdown to the host scope, starts providers, and returns
+  application, binds shutdown to the host scope, starts ServiceProviders, and returns
   the ready application.
 - `standalone.ts` adapts the same embedded entry to Node HTTP. Generic Node
   standalone scopes, environment-file loading, serving, WebSocket upgrades,
@@ -26,7 +26,7 @@ or app plugin.
 - Shared scope paths, routing, cancellation, mount adapters, and application
   lifecycle helpers live in `@nocobase/app-server-kit/runtime`.
 - Plugin server behavior is explicitly registered through `server/plugins.ts`.
-  Each package exports one `server/index.ts` entry. Providers own service
+  Each package exports one `server/index.ts` entry. ServiceProviders own service
   lifecycle; each route contribution creates and returns its own Hono router.
 
 The template must not grow demo APIs, generic repositories, or compatibility
@@ -81,7 +81,7 @@ contributions, and do not depend on earlier App or plugin middleware.
 
 Application config stays explicit under `config/*`. Package-owned config
 normalizers and composition helpers should be reused rather than copied into
-the template. Do not read `process.env` in providers or routes.
+the template. Do not read `process.env` in ServiceProviders or routes.
 
 ## Validation
 

@@ -2,8 +2,8 @@ import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plug
 
 import { RealtimeExampleProvider } from './realtime-example.js';
 
-const providers: readonly AppPluginProviderConstructor[] = [
+const serviceProviders: readonly AppPluginProviderConstructor[] = [
   RealtimeExampleProvider,
 ];
 
-export default providers;
+export default serviceProviders;

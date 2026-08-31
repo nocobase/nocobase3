@@ -1,390 +1,312 @@
 # @nocobase/app-client
 
-Shared browser runtime for NocoBase applications built with React, Refine,
-React Router, and shadcn.
+Browser application runtime for NocoBase v3. It provides the stateful
+`ClientApplication`, application-scoped services, static Client plugin
+composition, Refine integration, React tree composition, routes, locale
+resources, and public runtime configuration.
 
-For now, this package only owns the stable application root:
+## Architecture
 
-- React Router and Refine setup;
-- application-level provider composition;
-- client plugin registration, bootstrap, route, and provider contribution
-  contracts;
-- the smallest shared shadcn UI primitives.
+```text
+public HTML config + static declarations
+                    ↓
+          resolveAppRuntime()
+                    ↓
+          ClientApplication
+          ├── config
+          ├── ServiceContainer
+          ├── ServiceProviders
+          ├── Refine configuration
+          └── React render configuration
+                    ↓
+          start() → host render()
+```
 
-Application routes, pages, authentication wiring, and product-specific layout
-stay in the application package, such as `app-template-default/client`.
-Plugin loading, Registry discovery, ACL UI, and the complete application shell
-stay in the application package until those boundaries are shared by more than
-one application.
+The Client and Server use the same explicit `serviceProviders` term for
+application services and lifecycle. Client React tree contributions are named
+`reactProviders`, so they cannot be confused with ServiceProviders or with
+Refine properties such as `authProvider` and `dataProvider`.
 
-Applications use the same contribution contracts as plugins without
-pretending to be plugins. The Runtime Definition explicitly identifies the
-application-owned bootstrap, routes, and providers:
+## Application runtime declaration
+
+Startup-required declarations use static imports. Lazy loading belongs at leaf
+boundaries such as route pages, locale messages, heavy SDKs, and truly optional
+features.
 
 ```ts
+import { createAppClientConfig } from '@nocobase/app-client';
 import { defineAppRuntime } from '@nocobase/app-client/runtime';
 
+import locales from './locales/index.js';
+import plugins from './plugins.js';
+import serviceProviders from './providers/index.js';
+import reactProviders from './react-providers/index.js';
+import routes from './routes.js';
+
 export default defineAppRuntime({
-  packageName: '@nocobase/app-template-default',
-  bootstrap: () => import('./bootstrap.js'),
-  routes: () => import('./routes.js'),
-  providers: () => import('./providers.js'),
-  plugins: [],
+  packageName: '@example/app',
+  config: createAppClientConfig,
+  serviceProviders,
+  reactProviders,
+  routes,
+  locales,
+  plugins: plugins.plugins,
+  routeComponentOverrides: plugins.routeComponentOverrides,
 });
 ```
 
-The application bootstrap runs first, followed by registered plugin bootstraps
-in registration order. The application may own `/`; plugins may not.
+Static import makes the composition plan available to runtime resolution and
+inspection. It does not register a service, execute lifecycle hooks, render a
+React component, load a route page, or load locale messages. Declaration
+modules must therefore remain side-effect-free.
 
-## The plugin registration surface
+## Client entry
 
-A plugin exposes its client contributions through `client/plugin.ts`, which
-default-exports the factory returned by `defineClientPlugin`. This file is the
-plugin's outward-facing registration surface: it names the package, points at
-the three optional entries, and declares the options an application may pass:
+```tsx
+import { AppClientRoot } from '@nocobase/app-client';
+import { resolveAppRuntime } from '@nocobase/app-client/runtime';
+import { createRoot } from 'react-dom/client';
+
+import { createApp } from './app.js';
+import appRuntime from './runtime.js';
+
+const container = document.getElementById('root');
+if (!container) throw new Error('Missing application root element.');
+const root = createRoot(container);
+
+const runtime = await resolveAppRuntime(appRuntime);
+const app = createApp(runtime);
+
+await app.start();
+root.render(<AppClientRoot app={app} />);
+```
+
+`app.start()` performs the complete ServiceProvider lifecycle and finalizes the
+Refine and render configuration. The Browser host owns the React root and
+renders `AppClientRoot` only after startup succeeds. During disposal, the host
+unmounts its React root and `app.shutdown()` shuts down providers in reverse
+order.
+
+## ClientApplication
+
+An application owns:
+
+- the resolved Runtime;
+- a read-only `app.config`;
+- one application-scoped `ServiceContainer`;
+- ServiceProvider instances and lifecycle state;
+- the API client binding under `appApiClientToken`;
+- mutable `app.refine` setters during Provider lifecycle;
+- finalized `app.refineConfig` after startup;
+- finalized React render configuration consumed by `AppClientRoot`.
+
+Create an application directly when the default helper is sufficient:
 
 ```ts
-import {
-  defineClientPlugin,
-  type AppClientPluginFactory,
-} from '@nocobase/app-client/plugins';
+import { createApp } from '@nocobase/app-client';
 
-export interface ExampleClientOptions {
-  readonly undoLabel?: string;
+const app = createApp(runtime, (application) => {
+  const { runtime, refineConfig } = application;
+  return {
+    basename: runtime.basename,
+    reactProviders: runtime.reactProviders.map(({ component }) => component),
+    routes: createRoutes(runtime.routes, refineConfig),
+  };
+});
+```
+
+The default template constructs `ClientApplication` directly because it adds
+its own router and application-level i18n wrapper.
+
+## ServiceProviders
+
+Client ServiceProviders share `@nocobase/service-provider` with Server
+applications:
+
+```ts
+import { ClientApplication } from '@nocobase/app-client';
+import { ServiceProvider } from '@nocobase/service-provider';
+
+export class AuditServiceProvider extends ServiceProvider<ClientApplication> {
+  public readonly name: string = '@example/audit/client';
+
+  public override register(): void {
+    this.app.container.singleton(auditToken, () =>
+      createAuditService(this.app.config),
+    );
+  }
+
+  public override async boot(): Promise<void> {
+    this.app.refine.setLiveProvider(createLiveProvider());
+  }
+
+  public override async shutdown(): Promise<void> {
+    await this.app.container.resolve(auditToken).close();
+  }
 }
-
-const example: AppClientPluginFactory<ExampleClientOptions> =
-  defineClientPlugin({
-    packageName: '@nocobase/app-plugin-example',
-    bootstrap: () => import('./bootstrap.js'),
-    routes: () => import('./routes.js'),
-    providers: () => import('./providers.js'),
-  });
-
-export default example;
 ```
 
-Every entry is optional; declare only the ones the plugin actually has.
+The lifecycle order inside `app.start()` is:
 
-Re-export that factory as the default from `client/index.ts`, so an application
-imports the plugin as `<package>/client`:
-
-```ts
-export { default } from './plugin.js';
+```text
+register all
+→ boot all
+→ finalize Refine and render configuration
+→ validate Runtime
+→ start all
+→ ready all
 ```
 
-Publish both subpaths in `exports` and `publishConfig.exports`. `./client` is
-what applications import; `./client/plugin` stays available for anything that
-wants the descriptor alone.
+Startup failure triggers reverse cleanup for providers that entered lifecycle.
+Async hooks retain the owning Provider context, so `this.app.refine` remains
+valid across `await` while the hook is running. Outside Provider lifecycle,
+read the finalized `app.refineConfig` instead of mutating `app.refine`.
 
-The application imports that factory statically, so anything reachable from
-`client/index.ts` at value level can land in the application entry chunk.
-Reference the four entries with `() => import()`, import plugin types with
-`import type`, and declare `"sideEffects": false` so a bundler can drop the
-barrel exports the application does not use. Declaring it is only correct when
-the package really has no module-level side effects — a bare `import './x.css'`
-is one, and would be dropped along with everything else.
+Application components can resolve services through:
 
-Keep components, provider factories, and service classes inside `bootstrap`,
-`routes`, and `providers` rather than importing them here. This is a
-recommendation rather than an enforced rule; nothing validates it.
+```tsx
+import { useClientApplication, useService } from '@nocobase/app-client';
 
-A plugin that wants to let an application replace one of its route components
-maps options to overrides with `routeComponentOverrides`. It receives the
-resolved options and returns an array, empty when the option is absent:
+const app = useClientApplication();
+const audit = useService(auditToken);
+```
 
-```ts
+## React Providers
+
+React Providers are synchronous React components that receive `children`:
+
+```tsx
 import {
-  defineClientPlugin,
-  type AppClientPluginFactory,
-  type AppClientRouteComponentLoader,
+  defineClientReactProviders,
+  type AppClientReactProviderDefinition,
 } from '@nocobase/app-client/plugins';
 
-import { EXAMPLE_ROUTE_IDS } from './route-contracts.js';
-
-export interface ExampleClientOptions {
-  readonly detailPage?: AppClientRouteComponentLoader;
-}
-
-const example: AppClientPluginFactory<ExampleClientOptions> =
-  defineClientPlugin({
-    packageName: '@nocobase/app-plugin-example',
-    routes: () => import('./routes.js'),
-    routeComponentOverrides: (options) =>
-      options.detailPage
-        ? [
-            {
-              routeId: EXAMPLE_ROUTE_IDS.detail,
-              componentLoader: options.detailPage,
-            },
-          ]
-        : [],
-  });
-
-export default example;
-```
-
-Declare such options as `AppClientRouteComponentLoader` rather than
-`ComponentType`. A loader keeps the page out of the application entry chunk and
-keeps `client/plugins.ts` loadable outside Vite, which is how
-`pnpm client:inspect` reads it.
-
-## Assembling an application's plugins
-
-The application lists its plugins in `client/plugins.ts` and passes the result
-to its runtime:
-
-```ts
-import {
-  defineClientPlugins,
-  type AppClientPlugins,
-} from '@nocobase/app-client/plugins';
-import authentication from '@nocobase/app-plugin-authentication/client';
-import example from '@nocobase/app-plugin-example/client';
-
-const clientPlugins: AppClientPlugins = defineClientPlugins([
-  authentication(),
-  example({ undoLabel: 'Revert' }),
-]);
-
-export default clientPlugins;
-```
-
-Array order is bootstrap order, and appearing in the array is what enables a
-plugin; there is no `enabled` flag. A plugin that needs no configuration is a
-pair of empty parentheses. Registering the same package twice throws with the
-package name.
-
-`defineClientPlugins` returns `plugins`, the loaders in registration order, and
-`routeComponentOverrides`, the merged overrides every registration contributed.
-The application passes the first to the runtime and merges the second with its
-own overrides.
-
-This mechanism covers client contributions only. Server plugin loading still
-reads `nocobase.plugins` from the application `package.json`; there is no
-server-side equivalent of `client/plugins.ts` yet.
-
-## Routes and providers
-
-Client plugins declare authenticated routes in a dedicated entry. Route pages
-use a second dynamic import so their code is only loaded when the URL is
-rendered:
-
-```ts
-import {
-  defineAppRoutes,
-  defineSettingsRoutes,
-} from '@nocobase/app-client/plugins';
-import { KeyRound, ShieldCheck } from 'lucide-react';
-
-const appRoutes = defineAppRoutes([
-  {
-    name: 'index',
-    path: '/example',
-    componentLoader: () => import('./pages/example'),
-  },
-]);
-```
-
-Settings pages share the same routes entry. The application mounts them under
-its built-in Settings Route and builds navigation from their metadata. A group
-carries the icon and title once for the whole section:
-
-```ts
-const settingsRoutes = defineSettingsRoutes([
-  {
-    name: 'example',
-    path: '/example',
-    navigation: { title: 'Example', icon: ShieldCheck },
-    children: [
-      {
-        name: 'general',
-        path: '/general',
-        navigation: { title: 'General', icon: KeyRound },
-        access: { resource: 'example.settings.general', action: 'read' },
-        componentLoader: () => import('./pages/general'),
-      },
-    ],
-  },
-]);
-
-export default [appRoutes, settingsRoutes];
-```
-
-Names are stable identifiers and paths are relative to the built-in Settings
-Route, so the page above is served at `/settings/example/general`. A plugin
-contributing a single page declares it without a group and it is rendered as
-one flat row rather than a disclosure. Groups nest one level: a group's
-children are pages, not further groups.
-
-`icon` is optional on both groups and pages. It is a component taking a
-`className`, which a lucide-react icon satisfies directly; the application
-supplies the size so entries line up across plugins.
-
-`access` is optional and belongs to a page. When present the application checks
-it before loading: a page the check denies is left out of the navigation and
-cannot be reached by its URL either, and a group whose pages are all denied
-disappears with them. A page without it is visible to anyone who can open the
-settings centre.
-
-Groups and pages keep declaration order, and `resolveAppClientContributions`
-returns both a flat `settings` list — what the router mounts — and a
-`settingGroups` tree, which is what the navigation renders.
-
-Routes and settings share one path space. A page at `/settings/general` and a
-route at the same path are a conflict, and resolution fails with both
-identities named rather than mounting two pages at one address.
-
-Global providers are synchronous components declared separately:
-
-```ts
-import {
-  defineClientProviders,
-  type AppClientProviderDefinition,
-} from '@nocobase/app-client/plugins';
-
-import { ExampleProvider } from './components/example-provider';
-
-const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
-  [
+const reactProviders: readonly AppClientReactProviderDefinition[] =
+  defineClientReactProviders([
     {
-      name: 'example',
-      component: ExampleProvider,
+      name: 'audit-context',
+      component: AuditContextProvider,
+      layer: 'extension',
+      after: ['theme'],
     },
-  ],
-);
+  ]);
 
-export default providers;
+export default reactProviders;
 ```
 
-A routes or providers entry may default-export a function of the plugin's
-options instead of a contribution. The runtime calls it with the options the
-application passed, so a plugin can add or drop contributions per application
-without a second entry:
+React Providers are ordered outer-to-inner by layer and explicit `before`/`after`
+constraints. Their components render only when the Browser host renders
+`AppClientRoot` for a started application. Use a
+Wrapper for React Context or tree-local UI behavior; use a ServiceProvider for
+application services, Container bindings, Refine setup, connections, listeners,
+and lifecycle cleanup.
+
+## Routes and locale resources
+
+Route definitions are static, while page components remain lazy:
 
 ```ts
-import {
-  defineSettingsRoutes,
-  type AppClientSettingsRoutesContribution,
-} from '@nocobase/app-client/plugins';
+import { defineAppRoutes } from '@nocobase/app-client/plugins';
 
-import type { SettingsClientOptions } from './plugin.js';
-
-const routes = (
-  options: SettingsClientOptions,
-): AppClientSettingsRoutesContribution =>
-  defineSettingsRoutes(
-    options.settingsPages === false ? [] : [...SETTINGS_ROUTES],
-  );
-
-export default routes;
-```
-
-For providers this is also the only place configuration can reach the
-component, since `AppClientProviderDefinition.component` is a
-`ComponentType<PropsWithChildren>` and takes no extra props; the factory form
-gives the plugin a closure to capture options in. Entries that need no options
-stay arrays; nothing about them changes.
-
-Provider definitions may use full provider IDs in `before` and `after`.
-Provider arrays are ordered from outer to inner by the fixed layers
-`root -> application -> extension`, with stable topological sorting inside
-each layer. Application providers default to `application` and may explicitly
-use `root`; plugin providers always use `extension`. Ordering constraints may
-only reference another provider in the same layer. Missing references,
-cross-layer constraints, duplicate IDs, and cycles fail before the first React
-render.
-
-The application owns route placement, authentication, loading, error UI, the
-settings centre chrome, and the final provider tree. `bootstrap` remains the
-imperative initialization entry; routes and providers remain inspectable
-declarations. Settings pages are inspected as children of the built-in Settings
-Route rather than as a separate contribution entry.
-
-## Route component overrides
-
-An application may customize a plugin route's final component without taking
-over its path or auth metadata:
-
-```ts
-import {
-  applyClientRouteComponentOverrides,
-  defineClientRouteComponentOverrides,
-} from '@nocobase/app-client/plugins';
-
-const overrides = defineClientRouteComponentOverrides([
+export default defineAppRoutes([
   {
-    routeId: '@nocobase/app-plugin-authentication:login',
-    componentEntry: './client/auth/pages/login-page',
-    componentLoader: () => import('./auth/pages/login-page'),
+    name: 'audit-log',
+    path: '/audit-log',
+    auth: 'required',
+    componentLoader: () => import('./pages/audit-log.js'),
   },
 ]);
-
-const finalRoutes = applyClientRouteComponentOverrides(routes, overrides);
 ```
 
-Overrides are applied after route normalization and before the route module is
-loaded.
-They can replace only the loader. Missing targets, duplicate overrides, invalid
-loaders, and invalid component modules fail with the stable route ID.
-
-A route may be overridden exactly once, no matter where the override comes
-from. Passing a plugin option that produces an override for a route another
-override already claims fails with that route ID; move the override to one
-place rather than layering two.
-
-## The bootstrap context
-
-The bootstrap context exposes a plugin-scoped Refine registry. Its setters are
-derived from `RefineProps`, so every Refine prop has a required `setXxx()`
-method:
+Locale manifests are static, while each language module remains lazy:
 
 ```ts
-import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';
-
-const bootstrap: AppClientPluginBootstrap = ({ refine }) => {
-  refine.setChildren(customAppContent);
-  refine.setAuthProvider(authProvider);
-  refine.setDataProvider(dataProvider);
-  refine.setRouterProvider(routerProvider);
-  refine.setLiveProvider(liveProvider);
-  refine.setNotificationProvider(notificationProvider);
-  refine.setAccessControlProvider(accessControlProvider);
-  refine.setAuditLogProvider(auditLogProvider);
-  refine.setI18nProvider(i18nProvider);
-  refine.setOnLiveEvent(onLiveEvent);
-  refine.setOptions({ mutationMode: 'optimistic' });
-  refine.setResources([{ name: 'records' }]);
+export default {
+  'en-US': () => import('./locales/en-US.js'),
+  'zh-CN': () => import('./locales/zh-CN.js'),
 };
-
-export default bootstrap;
 ```
 
-Each `setXxx()` property may be claimed by only one plugin. Duplicate claims
-fail with both package names. Multiple plugins can instead contribute resources
-with `addResources()` and live event listeners with `addLiveEventHandler()`.
-The resolved configuration is frozen as `runtime.refine` before rendering.
-Application routes are the default Refine children; calling `setChildren()`
-explicitly replaces them.
+Settings pages use `defineSettingsRoutes()`. Route component overrides replace
+only a page component loader and keep the plugin-owned route identity, path,
+authentication, navigation, and access metadata.
 
-The context also carries `options`, the value the application passed to this
-plugin's factory, or an empty object when it passed none. This is where
-imperative configuration lands, as opposed to the declarative route
-replacements that go through `routeComponentOverrides`. Type the bootstrap with
-the plugin's own options interface to read it:
+## Client plugin declaration
 
 ```ts
-import type { AppClientBootstrap } from '@nocobase/app-client/plugins';
+import {
+  defineClientPlugin,
+  type AppClientPluginFactory,
+} from '@nocobase/app-client/plugins';
 
-import type { ExampleClientOptions } from './plugin.js';
-import { createNotificationProvider } from './notification-provider.js';
+import locales from './locales/index.js';
+import serviceProviders from './providers/index.js';
+import reactProviders from './react-providers/index.js';
+import routes from './routes.js';
 
-const bootstrap: AppClientBootstrap<ExampleClientOptions> = ({
-  refine,
-  options,
-}) => {
-  refine.setNotificationProvider(createNotificationProvider(options));
-};
+export interface AuditClientOptions {
+  readonly resourceLabel?: string;
+}
 
-export default bootstrap;
+const audit: AppClientPluginFactory<AuditClientOptions> = defineClientPlugin({
+  packageName: '@example/app-plugin-audit',
+  config: [auditClientConfig],
+  serviceProviders,
+  reactProviders,
+  routes,
+  locales,
+});
+
+export default audit;
 ```
+
+The target application enables plugins explicitly:
+
+```ts
+import audit from '@example/app-plugin-audit/client';
+import { defineClientPlugins } from '@nocobase/app-client/plugins';
+
+export default defineClientPlugins([audit({ resourceLabel: 'Audit logs' })]);
+```
+
+Array order is contribution order. Plugin options are immutable registration
+configuration; they are not deployment secrets or mutable global state.
+
+## Public runtime configuration
+
+Server-rendered SPA HTML contains a versioned JSON data block:
+
+```html
+<script id="nocobase-runtime-config" type="application/json">
+  { "version": 1, "config": { "app": { "title": "NocoBase" } } }
+</script>
+```
+
+`resolveAppRuntime()` reads and validates this payload, then passes its public
+`config` value to the application config factory. Plugin config contributions
+provide namespaced defaults and validation; deployment values override those
+defaults. Runtime code reads the normalized result with `app.config.get()`.
+
+Only public Browser configuration belongs in this payload. Server secrets must
+never be copied into the HTML data block, Client plugin options, logs, or
+inspection output.
+
+## Inspection boundary
+
+Client inspection imports `client/runtime.ts` and `client/plugins.ts` and reads
+static declarations. It does not create `ClientApplication`, instantiate or run
+ServiceProviders, render React Providers, load route page components, or load
+locale messages. Inspection is a composition diagnostic, not proof of runtime
+behavior.
+
+## Verification
+
+```bash
+pnpm --filter @nocobase/app-client lint
+pnpm --filter @nocobase/app-client typecheck
+pnpm --filter @nocobase/app-client test
+pnpm --filter @nocobase/app-client build
+```
+
+After changing a public contract, also validate the default template and the
+plugins that consume the changed fields.

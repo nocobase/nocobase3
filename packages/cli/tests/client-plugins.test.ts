@@ -202,7 +202,7 @@ describe('addClientPlugin', () => {
     ]);
   });
 
-  it('appends rather than sorting, so bootstrap order survives', async () => {
+  it('appends rather than sorting, so contribution order survives', async () => {
     const editor = await createEditor();
 
     const added = editor.add(

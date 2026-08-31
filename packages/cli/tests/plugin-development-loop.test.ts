@@ -66,6 +66,19 @@ async function createLoopFixture(
     path.join(appRoot, 'package.json'),
     `${JSON.stringify({ name: '@nocobase/agent-loop-app', private: true }, null, 2)}\n`,
   );
+  await mkdir(path.join(appRoot, 'client'));
+  await writeFile(
+    path.join(appRoot, 'client', 'runtime.ts'),
+    `export default {
+  packageName: '@nocobase/agent-loop-app',
+  config: async () => ({}),
+  serviceProviders: [],
+  reactProviders: [],
+  routes: [],
+  locales: {},
+  plugins: [],
+};\n`,
+  );
   for (const dependency of ['typescript', 'prettier', 'tsx']) {
     await symlink(
       moduleDirectory(dependency),
@@ -118,7 +131,7 @@ describe('Agent plugin development loop', () => {
     ['client-only', ['client.routes', 'client.components'], true, false, false],
     [
       'server-only',
-      ['server.providers', 'server.routes', 'server.jobs'],
+      ['server.service-providers', 'server.routes', 'server.jobs'],
       false,
       true,
       false,
@@ -128,7 +141,7 @@ describe('Agent plugin development loop', () => {
       [
         'client.routes',
         'client.components',
-        'server.providers',
+        'server.service-providers',
         'server.routes',
         'skills',
       ],

@@ -1,15 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import providers from '../client/providers.js';
+import reactProviders from '../client/react-providers.js';
 
 vi.mock('sonner', () => ({
   Toaster: () => <div data-testid='sonner-toaster' />,
 }));
 
-describe('client providers', () => {
+describe('client React Providers', () => {
   it('mounts the notification host around application content', () => {
-    const Provider = providers[0].component;
+    const Provider = reactProviders[0].component;
 
     render(
       <Provider>
@@ -22,11 +22,11 @@ describe('client providers', () => {
   });
 
   it('declares a stable provider contribution', () => {
-    expect(providers).toMatchObject([
+    expect(reactProviders).toMatchObject([
       {
         name: 'notification-host',
       },
     ]);
-    expect(Object.isFrozen(providers)).toBe(true);
+    expect(Object.isFrozen(reactProviders)).toBe(true);
   });
 });

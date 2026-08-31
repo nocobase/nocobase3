@@ -7,6 +7,8 @@ The ESLint export uses ESLint 10 flat config, `@eslint/js`,
 
 ## Factories
 
+- `createUniversalLibraryConfig` applies only standard ECMAScript globals to
+  environment-neutral source files.
 - `createNodeLibraryConfig` applies Node globals to source files.
 - `createClientLibraryConfig` applies browser and React rules, with Node globals
   for scripts and configuration files.

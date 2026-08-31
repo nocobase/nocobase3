@@ -28,7 +28,7 @@ const EMPTY_FILE = `import {
   type AppClientPlugins,
 } from '@nocobase/app-client/plugins';
 
-// Array order is bootstrap order. A plugin is enabled by appearing in this
+// Array order is contribution order. A plugin is enabled by appearing in this
 // list; removing its entry and its import disables it.
 const clientPlugins: AppClientPlugins = defineClientPlugins([]);
 
@@ -346,7 +346,7 @@ export function addPluginSourceEntry(
   const importText = `\nimport ${localName} from '${packageName}${definition.entrySpecifierSuffix}';`;
   const importOffset = insertionOffsetForImport(typescript, sourceFile);
 
-  // Append rather than sort: appending is predictable and preserves whatever bootstrap order the author arranged.
+  // Append rather than sort: appending is predictable and preserves the contribution order arranged by the author.
   const last = array.elements[array.elements.length - 1];
   const entryOffset = last ? last.getEnd() : array.getStart(sourceFile) + 1;
   const expression =

@@ -1,61 +1,70 @@
-import type { I18nRuntime, LocalesModule } from '@nocobase/app-i18n';
-import { createRefineI18nProvider } from '@nocobase/app-i18n/client';
-import { createAppClient, type AppClient } from '@nocobase/app-sdk';
+import type { I18nRuntime } from '@nocobase/app-i18n';
 
-import type { AppClientRefineConfig } from '../config.js';
+import type { ClientApplication } from '../application.js';
+import type { AppClientConfig, AppClientConfigFactory } from '../config.js';
 import {
   createAppI18nRuntime,
   type AppClientLocaleContribution,
 } from '../i18n.js';
 import {
   applyClientRouteComponentOverrides,
+  defineClientReactProviders,
   resolveAppClientContributions,
-  type AppClientBootstrap,
-  type AppClientContributionLoader,
-  type AppClientContributionSource,
-  type AppClientPluginLoader,
-  type AppClientProviderDefinition,
-  type AppClientRegisteredProvider,
+  type AppClientLocales,
+  type AppClientPluginRegistration,
+  type AppClientReactProviderDefinition,
+  type AppClientReactProviders,
+  type AppClientRegisteredReactProvider,
   type AppClientRegisteredRoute,
+  type AppClientRegisteredServiceProvider,
   type AppClientRegisteredSetting,
   type AppClientRegisteredSettingGroup,
   type AppClientRouteComponentOverrideDefinition,
   type AppClientRouteContribution,
+  type AppClientRoutes,
+  type AppClientServiceProviders,
   type AppClientSourceExtension,
+  type ClientServiceProviderConstructor,
 } from '../plugins.js';
-import { createRefineConfigCollector } from './refine-config-collector.js';
+import { readAppClientRuntimeConfig } from './browser-config.js';
+
+export {
+  readAppClientRuntimeConfig,
+  type AppClientRuntimeConfigPayload,
+} from './browser-config.js';
 
 export type AppRuntimeValidator = (
-  runtime: ResolvedAppRuntime,
+  app: ClientApplication,
 ) => void | Promise<void>;
 
-export interface AppRuntimeDefinition extends AppClientContributionLoader {
+export interface AppRuntimeDefinition {
+  readonly packageName: string;
+  readonly config: AppClientConfigFactory;
+  readonly serviceProviders?: AppClientServiceProviders;
+  readonly reactProviders?: AppClientReactProviders;
+  readonly routes?: AppClientRoutes;
+  readonly locales?: AppClientLocales;
   readonly basename?: string;
-  readonly plugins: readonly AppClientPluginLoader[];
+  readonly plugins: readonly AppClientPluginRegistration[];
   readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
   readonly sourceExtensions?: readonly AppClientSourceExtension[];
   readonly validate?: AppRuntimeValidator;
 }
 
+export interface ResolveAppRuntimeOptions {
+  readonly rawConfig?: unknown;
+}
+
 export interface ResolvedAppRuntime {
-  readonly appClient: AppClient;
+  readonly config: AppClientConfig;
   readonly i18n: I18nRuntime;
   readonly basename: string;
-  readonly refine: Readonly<AppClientRefineConfig>;
-  readonly providers: readonly AppClientRegisteredProvider[];
+  readonly serviceProviders: readonly AppClientRegisteredServiceProvider[];
+  readonly reactProviders: readonly AppClientRegisteredReactProvider[];
   readonly routes: readonly AppClientRegisteredRoute[];
   readonly settings: readonly AppClientRegisteredSetting[];
   readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
-}
-
-interface LoadedClientContribution {
-  readonly packageName: string;
-  readonly source: AppClientContributionSource;
-  readonly bootstrap?: AppClientBootstrap<unknown>;
-  readonly locales?: LocalesModule;
-  readonly providers?: readonly AppClientProviderDefinition[];
-  readonly routes?: readonly AppClientRouteContribution[];
-  readonly options: unknown;
+  readonly validate?: AppRuntimeValidator;
 }
 
 export function defineAppRuntime(
@@ -64,6 +73,9 @@ export function defineAppRuntime(
   return Object.freeze({
     ...definition,
     plugins: Object.freeze([...definition.plugins]),
+    serviceProviders: freezeOptionalList(definition.serviceProviders),
+    reactProviders: freezeOptionalList(definition.reactProviders),
+    routes: freezeRouteDeclarations(definition.routes),
     routeComponentOverrides: definition.routeComponentOverrides
       ? Object.freeze([...definition.routeComponentOverrides])
       : undefined,
@@ -75,73 +87,117 @@ export function defineAppRuntime(
 
 export async function resolveAppRuntime(
   definition: AppRuntimeDefinition,
+  options: ResolveAppRuntimeOptions = {},
 ): Promise<ResolvedAppRuntime> {
-  const appClient = createAppClient();
-  const application = { ...definition, source: 'application' as const };
-  const loadedContributions = await Promise.all([
-    loadClientContribution(application),
-    ...definition.plugins.map((plugin) =>
-      loadClientContribution({ ...plugin, source: 'plugin' }),
+  const config = await definition.config({
+    rawConfig:
+      options.rawConfig === undefined
+        ? readAppClientRuntimeConfig()
+        : options.rawConfig,
+    configs: Object.freeze(
+      definition.plugins.flatMap((plugin) => plugin.config),
     ),
+  });
+  const applicationContribution = createApplicationContribution(definition);
+  const pluginContributions = definition.plugins.map((plugin) => ({
+    packageName: plugin.packageName,
+    source: 'plugin' as const,
+    routes: plugin.routes,
+    reactProviders: plugin.reactProviders,
+  }));
+  const contributions = resolveAppClientContributions([
+    applicationContribution,
+    ...pluginContributions,
   ]);
   const i18n = await createAppI18nRuntime({
-    contributions: loadedContributions.flatMap(
-      (contribution): AppClientLocaleContribution[] =>
-        contribution.locales
-          ? [
-              {
-                packageName: contribution.packageName,
-                source: contribution.source,
-                locales: contribution.locales,
-              },
-            ]
-          : [],
-    ),
+    contributions: collectLocaleContributions(definition),
   });
-  const refineCollector = createRefineConfigCollector({
-    i18nProvider: createRefineI18nProvider(i18n),
-  });
-
-  for (const contribution of loadedContributions) {
-    if (!contribution.bootstrap) {
-      continue;
-    }
-    try {
-      await contribution.bootstrap({
-        appClient,
-        packageName: contribution.packageName,
-        refine: refineCollector.forContribution(contribution.packageName),
-        source: contribution.source,
-        options: contribution.options,
-      });
-    } catch (error) {
-      throw new Error(
-        `Failed to bootstrap client ${contribution.source} "${contribution.packageName}".`,
-        { cause: error },
-      );
-    }
-  }
-
-  const contributions = resolveAppClientContributions(loadedContributions);
   const extensionOverrides = collectSourceExtensionRouteOverrides(
     definition.sourceExtensions ?? [],
   );
-  const runtime: ResolvedAppRuntime = Object.freeze({
-    appClient,
+
+  return Object.freeze({
+    config,
     i18n,
     basename: definition.basename ?? '/',
-    refine: refineCollector.finalize(),
-    providers: contributions.providers,
+    serviceProviders: Object.freeze([
+      ...registerServiceProviders(
+        definition.packageName,
+        'application',
+        resolveServiceProviders(definition.serviceProviders),
+        {},
+      ),
+      ...definition.plugins.flatMap((plugin) =>
+        registerServiceProviders(
+          plugin.packageName,
+          'plugin',
+          plugin.serviceProviders,
+          plugin.options,
+        ),
+      ),
+    ]),
+    reactProviders: contributions.reactProviders,
     routes: applyClientRouteComponentOverrides(contributions.routes, [
       ...(definition.routeComponentOverrides ?? []),
       ...extensionOverrides,
     ]),
     settings: contributions.settings,
     settingGroups: contributions.settingGroups,
+    validate: definition.validate,
   });
+}
 
-  await definition.validate?.(runtime);
-  return runtime;
+function createApplicationContribution(definition: AppRuntimeDefinition): {
+  readonly packageName: string;
+  readonly source: 'application';
+  readonly routes: readonly AppClientRouteContribution[];
+  readonly reactProviders: readonly AppClientReactProviderDefinition[];
+} {
+  return {
+    packageName: definition.packageName,
+    source: 'application',
+    routes: normalizeRoutes(resolveDeclaration(definition.routes, undefined)),
+    reactProviders: defineClientReactProviders(
+      resolveDeclaration(definition.reactProviders, undefined) ?? [],
+    ),
+  };
+}
+
+function collectLocaleContributions(
+  definition: AppRuntimeDefinition,
+): readonly AppClientLocaleContribution[] {
+  const contributions: AppClientLocaleContribution[] = [];
+  if (definition.locales) {
+    contributions.push({
+      packageName: definition.packageName,
+      source: 'application',
+      locales: definition.locales,
+    });
+  }
+  for (const plugin of definition.plugins) {
+    if (plugin.locales) {
+      contributions.push({
+        packageName: plugin.packageName,
+        source: 'plugin',
+        locales: plugin.locales,
+      });
+    }
+  }
+  return Object.freeze(contributions);
+}
+
+function registerServiceProviders(
+  packageName: string,
+  source: 'application' | 'plugin',
+  Providers: readonly ClientServiceProviderConstructor[],
+  options: unknown,
+): readonly AppClientRegisteredServiceProvider[] {
+  return Providers.map((Provider) =>
+    Object.freeze({
+      Provider,
+      context: Object.freeze({ packageName, source, options }),
+    }),
+  );
 }
 
 function collectSourceExtensionRouteOverrides(
@@ -165,151 +221,51 @@ function collectSourceExtensionRouteOverrides(
   });
 }
 
-type ResolvableContribution = AppClientContributionLoader & {
-  readonly source: AppClientContributionSource;
-};
-
-async function loadClientContribution(
-  contribution: ResolvableContribution,
-): Promise<LoadedClientContribution> {
-  const [bootstrap, routes, providers, locales] = await Promise.all([
-    loadBootstrap(contribution),
-    loadRoutes(contribution),
-    loadProviders(contribution),
-    loadLocales(contribution),
-  ]);
-
-  return Object.freeze({
-    packageName: contribution.packageName,
-    source: contribution.source,
-    bootstrap,
-    routes,
-    providers,
-    locales,
-    options: contribution.options ?? {},
-  });
+function resolveDeclaration<T>(
+  declaration: T | ((options: void) => T) | undefined,
+  options: void,
+): T | undefined {
+  return typeof declaration === 'function'
+    ? (declaration as (value: void) => T)(options)
+    : declaration;
 }
 
-async function loadLocales(
-  contribution: ResolvableContribution,
-): Promise<LocalesModule | undefined> {
-  if (!contribution.locales) {
-    return undefined;
-  }
-  try {
-    return await contribution.locales();
-  } catch (error) {
-    throw new Error(
-      `Failed to load client locales for ${contribution.source} "${contribution.packageName}".`,
-      { cause: error },
-    );
-  }
+function resolveServiceProviders(
+  declaration: AppClientServiceProviders | undefined,
+): readonly ClientServiceProviderConstructor[] {
+  return (resolveDeclaration(declaration, undefined) ??
+    []) as readonly ClientServiceProviderConstructor[];
 }
 
-async function loadBootstrap(
-  contribution: ResolvableContribution,
-): Promise<AppClientBootstrap<unknown> | undefined> {
-  if (!contribution.bootstrap) {
-    return undefined;
+function normalizeRoutes(
+  routes:
+    | AppClientRouteContribution
+    | readonly AppClientRouteContribution[]
+    | undefined,
+): readonly AppClientRouteContribution[] {
+  if (routes === undefined) {
+    return Object.freeze([]);
   }
-  try {
-    const module = await contribution.bootstrap();
-    if (typeof module.default !== 'function') {
-      throw new Error('The bootstrap entry must default-export a function.');
-    }
-    return module.default as AppClientBootstrap<unknown>;
-  } catch (error) {
-    throw new Error(
-      `Failed to load client bootstrap for ${contribution.source} "${contribution.packageName}".`,
-      { cause: error },
-    );
-  }
+  return Object.freeze('parent' in routes ? [routes] : [...routes]);
 }
 
-async function loadRoutes(
-  contribution: ResolvableContribution,
-): Promise<readonly AppClientRouteContribution[] | undefined> {
-  if (!contribution.routes) {
-    return undefined;
-  }
-  try {
-    const module = await contribution.routes();
-    const exported: unknown = module.default;
-    const definitions: unknown =
-      typeof exported === 'function'
-        ? (
-            exported as (
-              options: unknown,
-            ) =>
-              AppClientRouteContribution | readonly AppClientRouteContribution[]
-          )(contribution.options ?? {})
-        : exported;
-    const normalized: unknown = Array.isArray(definitions)
-      ? definitions
-      : [definitions];
-    if (!isRouteContributions(normalized)) {
-      throw new Error(
-        'The client routes entry must default-export a Route contribution, a Route contribution array, or a function returning either.',
-      );
-    }
-    return normalized;
-  } catch (error) {
-    throw new Error(
-      `Failed to load client routes for ${contribution.source} "${contribution.packageName}".`,
-      { cause: error },
-    );
-  }
+function freezeOptionalList<T>(
+  value: readonly T[] | ((options: void) => readonly T[]) | undefined,
+): readonly T[] | ((options: void) => readonly T[]) | undefined {
+  return isReadonlyArray(value) ? Object.freeze([...value]) : value;
 }
 
-async function loadProviders(
-  contribution: ResolvableContribution,
-): Promise<readonly AppClientProviderDefinition[] | undefined> {
-  if (!contribution.providers) {
-    return undefined;
-  }
-  try {
-    const module = await contribution.providers();
-    const exported: unknown = module.default;
-    const definitions: unknown =
-      typeof exported === 'function'
-        ? (
-            exported as (
-              options: unknown,
-            ) => readonly AppClientProviderDefinition[]
-          )(contribution.options ?? {})
-        : exported;
-    if (!isProviderDefinitions(definitions)) {
-      throw new Error(
-        'The client providers entry must default-export a provider definition array, or a function returning one.',
-      );
-    }
-    return definitions;
-  } catch (error) {
-    throw new Error(
-      `Failed to load client providers for ${contribution.source} "${contribution.packageName}".`,
-      { cause: error },
-    );
-  }
-}
-
-function isRouteContributions(
-  value: unknown,
-): value is readonly AppClientRouteContribution[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (item) =>
-        typeof item === 'object' &&
-        item !== null &&
-        ((item as { readonly parent?: unknown }).parent === 'app' ||
-          (item as { readonly parent?: unknown }).parent === 'settings') &&
-        Array.isArray((item as { readonly routes?: unknown }).routes),
-    )
-  );
-}
-
-function isProviderDefinitions(
-  value: unknown,
-): value is readonly AppClientProviderDefinition[] {
+function isReadonlyArray<T>(
+  value: readonly T[] | ((options: void) => readonly T[]) | undefined,
+): value is readonly T[] {
   return Array.isArray(value);
+}
+
+function freezeRouteDeclarations(
+  value: AppClientRoutes | undefined,
+): AppClientRoutes | undefined {
+  if (value === undefined || typeof value === 'function') {
+    return value;
+  }
+  return Object.freeze('parent' in value ? { ...value } : [...value]);
 }

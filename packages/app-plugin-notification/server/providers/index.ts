@@ -5,7 +5,7 @@ import {
   type NotificationProviderApplicationConfig,
 } from './notification.js';
 
-const providers: readonly AppPluginProviderConstructor<NotificationProviderApplicationConfig>[] =
+const serviceProviders: readonly AppPluginProviderConstructor<NotificationProviderApplicationConfig>[] =
   [NotificationProvider];
 
-export default providers;
+export default serviceProviders;

@@ -6,7 +6,7 @@ capabilities explicitly selected by the caller.
 
 ```bash
 pnpm create @nocobase/plugin audit-log \
-  --with server.providers \
+  --with server.service-providers \
   --with server.routes \
   --with database \
   --with skills
@@ -21,13 +21,15 @@ USAGE
 
 CAPABILITIES
   database
-  server.providers
+  server.service-providers
   server.routes
   server.jobs
+  server.locales
   client.routes
   client.components
-  client.providers
-  client.bootstrap
+  client.service-providers
+  client.react-providers
+  client.locales
   registry
   skills
 
@@ -43,10 +45,13 @@ OPTIONS
   -h, --help                   Show help
 ```
 
-`database` includes the migrations and seeds structure. `server.providers`
-includes ServiceProvider, Service, and Token structure. `server.routes`
-supports both API and Root Route contributions without choosing either one for
-the plugin. `client.routes` similarly supports App and Settings Routes.
+`database` includes the migrations and seeds structure.
+`server.service-providers` includes ServiceProvider, Service, and Token
+structure. `server.routes` supports both API and Root Route contributions
+without choosing either one for the plugin. `client.routes` similarly supports
+App and Settings Routes. `client.service-providers` generates application-owned
+Client services and lifecycle hooks, while `client.react-providers` generates
+React context composition owned by the rendered tree.
 
 The generator derives Client and Server plugin declarations, package exports,
 dependencies, tests, publication files, Registry scripts, and Plugin Skill

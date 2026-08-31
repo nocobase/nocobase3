@@ -3,6 +3,9 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
+import reactProviders from './react-providers.js';
+import routes from './routes.js';
+
 export interface InstallClientOptions {
   readonly placeholder?: never;
 }
@@ -10,8 +13,8 @@ export interface InstallClientOptions {
 const install: AppClientPluginFactory<InstallClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-install',
-    routes: () => import('./routes.js'),
-    providers: () => import('./providers.js'),
+    routes,
+    reactProviders,
   });
 
 export default install;

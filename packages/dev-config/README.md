@@ -77,6 +77,9 @@ export default createNodeLibraryConfig({
 });
 ```
 
+Environment-neutral libraries use `createUniversalLibraryConfig` so their
+runtime source does not implicitly receive Node, browser, or React globals.
+
 Use the shared formatter directly from `prettier.config.js`:
 
 ```js

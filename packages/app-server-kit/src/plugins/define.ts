@@ -15,7 +15,7 @@ export function defineServerPlugin<TConfig = object>(
   return Object.freeze({
     packageName,
     config: Object.freeze(normalizeConfigDefinitions(definition.config)),
-    providers: Object.freeze([...(definition.providers ?? [])]),
+    serviceProviders: Object.freeze([...(definition.serviceProviders ?? [])]),
     routes: Object.freeze([...(definition.routes ?? [])]),
     database: definition.database
       ? Object.freeze({ ...definition.database })

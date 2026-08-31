@@ -1,17 +1,16 @@
 import {
-  defineClientProviders,
-  type AppClientProviderDefinition,
+  defineClientReactProviders,
+  type AppClientReactProviderDefinition,
 } from '@nocobase/app-client/plugins';
 
 import { RoutesExampleProvider } from './components/routes-example-provider.js';
 
-const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
-  [
+export const reactProviders: readonly AppClientReactProviderDefinition[] =
+  defineClientReactProviders([
     {
       name: 'routes-example',
       component: RoutesExampleProvider,
     },
-  ],
-);
+  ]);
 
-export default providers;
+export default reactProviders;

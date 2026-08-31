@@ -5,22 +5,21 @@ This directory is the active Default App browser client.
 - Never import from or edit `../client-old/`; it is a temporary migration
   archive, not a source dependency.
 - Keep the Default App composition root explicit in `runtime.ts`.
-- Put application startup contributions in `bootstrap.ts`, application-owned
-  route declarations in `routes.ts`, and application Provider declarations in
-  `providers.ts`.
-- Register plugin client extensions in `plugins.ts`. Array order is bootstrap
+- Put application startup contributions in `service-provider.ts`, application-owned
+  route declarations in `routes.ts`, and application React Provider declarations in
+  `react-providers.ts`.
+- Register plugin client extensions in `plugins.ts`. Array order is contribution
   order and presence in the array is what enables a plugin. Let
   `pnpm plugin:register` and `pnpm plugin:unregister` write this file; edit it
   by hand only to reorder entries or to pass a plugin its options.
-- Keep plugin capability setup in plugin `client/bootstrap` entries.
+- Keep plugin Service and Refine setup in plugin `client/serviceProviders` entries.
 - Keep plugin route path and auth metadata in plugin `client/routes` entries.
 - A plugin is imported as `<package>/client`, whose default export comes from
   the plugin's `client/plugin.ts`.
-- A plugin's own `client/plugin.ts` should not statically import its business
-  implementation, because `plugins.ts` imports it statically and pulls whatever
-  it references into the entry chunk. Reference the entries with
-  `() => import()` and use `import type` for types. This is a recommendation,
-  not a validated rule.
+- A plugin's own `client/plugin.ts` statically imports lightweight contribution
+  declarations. Keep page components, locale messages, and heavy SDKs behind
+  leaf-level `componentLoader()` or feature imports; declarations themselves
+  must have no startup side effects.
 - Keep route rendering, auth grouping, loading, and error handling under
   `routing/`; do not declare product routes there.
 - Put application-only page composition and branding here.
@@ -40,8 +39,8 @@ This directory is the active Default App browser client.
 - Use Refine hooks and providers for authentication state. Do not call Better
   Auth endpoints directly from pages or create another session store.
 - Keep app-wide theme and loading behavior applicable to plugin pages.
-- Provider layers are outer-to-inner: `root`, `application`, `extension`.
-  Application providers may use the first two; plugins own the extension
+- React Provider layers are outer-to-inner: `root`, `application`, `extension`.
+  Application React Providers may use the first two; plugins own the extension
   layer. Use `before` and `after` only inside one layer.
 
 Before finishing client changes, run the Default App lint, typecheck, tests,

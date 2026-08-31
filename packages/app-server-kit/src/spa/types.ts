@@ -8,6 +8,18 @@ export type SpaRuntimeGlobalValue =
   | SpaRuntimeGlobalValue[]
   | { [key: string]: SpaRuntimeGlobalValue };
 
+export type SpaClientConfigValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly SpaClientConfigValue[]
+  | SpaClientConfigMap;
+
+export interface SpaClientConfigMap {
+  readonly [key: string]: SpaClientConfigValue;
+}
+
 export type SpaRuntimeGlobals = Record<
   string,
   SpaRuntimeGlobalValue | undefined
@@ -19,4 +31,5 @@ export interface RegisterSpaRoutesOptions {
   indexPath: string;
   assetsPath?: string;
   runtimeGlobals?: SpaRuntimeGlobals;
+  clientConfig?: SpaClientConfigMap;
 }

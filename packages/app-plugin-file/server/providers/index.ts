@@ -21,8 +21,8 @@ export class FileProvider<
   }
 }
 
-const providers: readonly AppPluginProviderConstructor<
+const serviceProviders: readonly AppPluginProviderConstructor<
   FileProviderApplication['config']
 >[] = [FileProvider];
 
-export default providers;
+export default serviceProviders;
