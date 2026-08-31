@@ -1,0 +1,77 @@
+import type { NotificationResource } from './en-US.js';
+
+const zhCN: NotificationResource = {
+  nav: {
+    notifications: '通知',
+    logs: '通知日志',
+  },
+  logs: {
+    eyebrow: '通知',
+    title: '通知日志',
+    description:
+      '追踪通知投递及每一次服务商尝试。消息正文、收件人和租约令牌均已脱敏。',
+    refreshing: '正在刷新…',
+    refresh: '刷新',
+    sendTest: '发送测试通知',
+    deliveriesShown: '当前投递数',
+    needAttention: '需要关注',
+    unavailable: '通知日志不可用',
+    recent: '最近通知',
+    loading: '正在加载投递记录…',
+    emptyTitle: '暂无投递记录',
+    emptyDescription: '发送通知后，投递记录会显示在这里。',
+    expand: '展开通知',
+    collapse: '收起通知',
+    noDeliveries: '暂无投递记录。',
+    noAttempts: '暂无尝试记录。',
+    columns: {
+      source: '来源',
+      notificationId: '通知 ID',
+      status: '状态',
+      deliveries: '投递',
+      created: '创建时间',
+      channel: '渠道',
+      provider: '服务商',
+      attempts: '尝试',
+      updated: '更新时间',
+    },
+  },
+  test: {
+    title: '发送测试通知',
+    description:
+      '选择渠道和服务商后发送。消息会投递给指定收件人，并记录在下方日志中。',
+    close: '关闭测试通知对话框',
+    loadingProviders: '正在加载已配置的服务商…',
+    noProviders: '没有已启用的服务商配置。',
+    channelProvider: '渠道和服务商',
+    selectProvider: '选择渠道和服务商',
+    recipient: '收件人',
+    userIdPlaceholder: '用户 ID',
+    emailHelp: '接收本次测试的邮箱地址。',
+    userHelp: '接收本次站内消息的用户 ID。',
+    messageTitle: '标题',
+    message: '消息',
+    cancel: '取消',
+    sending: '正在发送…',
+    send: '发送',
+    defaultTitle: 'NocoBase 通知测试',
+    defaultBody: '这是一条来自 Hub 的测试通知。',
+    accepted: '测试通知 {{id}} 已受理。',
+  },
+  status: {
+    pending: '等待中',
+    processing: '处理中',
+    completed: '已完成',
+    partial: '部分完成',
+    failed: '失败',
+    unknown: '状态未知',
+    preparing: '准备中',
+    submitting: '提交中',
+    accepted: '已受理',
+  },
+  errors: {
+    requestFailed: '通知请求失败。',
+  },
+};
+
+export default zhCN;

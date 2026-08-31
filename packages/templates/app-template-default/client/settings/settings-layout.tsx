@@ -3,6 +3,7 @@ import type {
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
 } from '@nocobase/app-client/plugins';
+import { useTranslation } from '@nocobase/app-i18n/client';
 import { ArrowLeft, ChevronRight, PanelLeft, X } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import {
@@ -204,6 +205,8 @@ function SettingsGroupNav({
   group,
   onNavigate,
 }: SettingsGroupNavProps): ReactElement {
+  const { t } = useTranslation(group.packageName);
+  const title = t(group.title, { defaultValue: group.title });
   const GroupIcon = group.icon;
 
   return (
@@ -213,7 +216,7 @@ function SettingsGroupNav({
     >
       <summary
         className={`flex cursor-pointer list-none items-center rounded-lg px-3 py-2 text-sm font-medium outline-none hover:bg-muted [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'}`}
-        title={collapsed ? group.title : undefined}
+        title={collapsed ? title : undefined}
       >
         <span className='flex min-w-0 items-center gap-3'>
           {GroupIcon ? (
@@ -222,7 +225,7 @@ function SettingsGroupNav({
             </SettingsIcon>
           ) : null}
           <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
-            {group.title}
+            {title}
           </span>
         </span>
         <ChevronRight
@@ -259,6 +262,8 @@ function SettingsLink({
   onNavigate,
   setting,
 }: SettingsLinkProps): ReactElement {
+  const { t } = useTranslation(setting.packageName);
+  const title = t(setting.title, { defaultValue: setting.title });
   const isSelected = setting.path === activePath;
   const Icon = setting.icon;
 
@@ -267,7 +272,7 @@ function SettingsLink({
       aria-current={isSelected ? 'page' : undefined}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${collapsed ? 'md:justify-center md:px-2' : ''} ${isSelected ? 'bg-primary/10 font-medium text-primary' : 'text-card-foreground hover:bg-muted'}`}
       onClick={onNavigate}
-      title={collapsed ? setting.title : undefined}
+      title={collapsed ? title : undefined}
       to={setting.path}
     >
       {Icon ? (
@@ -276,7 +281,7 @@ function SettingsLink({
         </SettingsIcon>
       ) : null}
       <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
-        {setting.title}
+        {title}
       </span>
     </Link>
   );
@@ -305,6 +310,7 @@ function SettingsMobileNav({
   active,
   entries,
 }: SettingsMobileNavProps): ReactElement {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -322,16 +328,28 @@ function SettingsMobileNav({
       >
         {entries.map((entry) =>
           entry.kind === 'group' ? (
-            <optgroup key={entry.group.id} label={entry.group.title}>
+            <optgroup
+              key={entry.group.id}
+              label={t(entry.group.title, {
+                defaultValue: entry.group.title,
+                ns: entry.group.packageName,
+              })}
+            >
               {entry.group.settings.map((setting) => (
                 <option key={setting.path} value={setting.path}>
-                  {setting.title}
+                  {t(setting.title, {
+                    defaultValue: setting.title,
+                    ns: setting.packageName,
+                  })}
                 </option>
               ))}
             </optgroup>
           ) : (
             <option key={entry.setting.path} value={entry.setting.path}>
-              {entry.setting.title}
+              {t(entry.setting.title, {
+                defaultValue: entry.setting.title,
+                ns: entry.setting.packageName,
+              })}
             </option>
           ),
         )}

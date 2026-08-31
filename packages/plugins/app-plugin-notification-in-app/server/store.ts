@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseManager, Row } from '@nocobase/app-database';
 import type { InAppItem, InAppMessage } from './types.js';
 
+export interface InAppPageCursor {
+  readonly createdAt: string;
+  readonly id: string;
+}
+
 export interface InAppStore {
   deliver(input: {
     readonly deliveryId: string;
@@ -14,7 +19,7 @@ export interface InAppStore {
     readonly userId: string;
     readonly unreadOnly?: boolean;
     readonly limit?: number;
-    readonly before?: string;
+    readonly before?: InAppPageCursor;
   }): Promise<readonly InAppItem[]>;
   countUnread(userId: string): Promise<number>;
   update(input: {
@@ -56,13 +61,16 @@ export class MemoryInAppStore implements InAppStore {
     readonly userId: string;
     readonly unreadOnly?: boolean;
     readonly limit?: number;
+    readonly before?: InAppPageCursor;
   }): Promise<readonly InAppItem[]> {
     return [...this.items.values()]
       .filter(
         (item) =>
-          item.userId === input.userId && (!input.unreadOnly || !item.readAt),
+          item.userId === input.userId &&
+          (!input.unreadOnly || !item.readAt) &&
+          (!input.before || isBefore(item, input.before)),
       )
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort(compareItemsDescending)
       .slice(0, input.limit ?? 25);
   }
   async countUnread(userId: string): Promise<number> {
@@ -165,6 +173,7 @@ export class DatabaseInAppStore implements InAppStore {
     readonly userId: string;
     readonly unreadOnly?: boolean;
     readonly limit?: number;
+    readonly before?: InAppPageCursor;
   }): Promise<readonly InAppItem[]> {
     let query = this.database
       .query()
@@ -172,8 +181,19 @@ export class DatabaseInAppStore implements InAppStore {
       .selectAll()
       .where('userId', '=', input.userId)
       .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc')
       .limit(input.limit ?? 25);
     if (input.unreadOnly) query = query.where('readAt', 'is', null);
+    if (input.before)
+      query = query.where((builder) =>
+        builder.or([
+          builder('createdAt', '<', input.before?.createdAt),
+          builder.and([
+            builder('createdAt', '=', input.before?.createdAt),
+            builder('id', '<', input.before?.id),
+          ]),
+        ]),
+      );
     return (await query.execute<ItemRow>()).map(fromRow);
   }
   async countUnread(userId: string): Promise<number> {
@@ -276,4 +296,15 @@ function toRow(item: InAppItem): ItemRow {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+}
+
+function compareItemsDescending(a: InAppItem, b: InAppItem): number {
+  return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
+}
+
+function isBefore(item: InAppItem, cursor: InAppPageCursor): boolean {
+  return (
+    item.createdAt < cursor.createdAt ||
+    (item.createdAt === cursor.createdAt && item.id < cursor.id)
+  );
 }

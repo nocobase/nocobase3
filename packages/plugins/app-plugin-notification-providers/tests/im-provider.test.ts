@@ -208,11 +208,45 @@ describe('IM webhook Providers', () => {
         error: {
           code: String(status),
           category,
-          message: 'rejected',
+          message: `Provider request failed with HTTP ${status}.`,
         },
       });
     },
   );
+
+  it('does not persist an HTTP response body that may contain secrets', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            'access_token=secret-value recipient=alice@example.com',
+            { status: 500 },
+          ),
+      ),
+    );
+    const provider =
+      await createDingTalkWebhookProviderDefinition().createProvider(
+        providerContext(),
+        defineDingTalkWebhookProviderConfig({
+          name: 'primary',
+          webhookUrl:
+            'https://oapi.dingtalk.com/robot/send?access_token=example-token',
+        }),
+      );
+
+    const result = await provider.send(sendInput());
+    expect(result).toEqual({
+      status: 'submission_unknown',
+      error: {
+        code: '500',
+        category: 'provider',
+        message: 'Provider request failed with HTTP 500.',
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('secret-value');
+    expect(JSON.stringify(result)).not.toContain('alice@example.com');
+  });
 });
 
 function providerContext(): NotificationProviderContext {

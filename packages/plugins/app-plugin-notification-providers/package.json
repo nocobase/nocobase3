@@ -58,7 +58,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "prepack": "pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
