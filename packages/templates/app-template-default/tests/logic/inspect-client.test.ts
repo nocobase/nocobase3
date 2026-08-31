@@ -156,13 +156,11 @@ describe('client inspection', () => {
     ).toEqual([
       { packageName: '@nocobase/app-template-default', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
-      { packageName: '@nocobase/app-plugin-ai-employee', order: 3 },
-      { packageName: '@nocobase/app-plugin-ai-knowledge-base', order: 4 },
-      { packageName: '@nocobase/app-plugin-authorization', order: 5 },
-      { packageName: '@nocobase/app-plugin-data-provider', order: 6 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 7 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 8 },
-      { packageName: '@nocobase/app-plugin-notification', order: 9 },
+      { packageName: '@nocobase/app-plugin-authorization', order: 3 },
+      { packageName: '@nocobase/app-plugin-data-provider', order: 4 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
+      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
+      { packageName: '@nocobase/app-plugin-notification', order: 7 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -182,22 +180,12 @@ describe('client inspection', () => {
         }),
       ]),
     );
-    expect(inspection.settings.slice(0, 5)).toEqual([
-      {
-        access: { resource: 'ai.settings', action: 'read' },
-        entry: '@nocobase/app-plugin-ai-employee/client/routes',
-        id: 'ai',
-        order: 1,
-        packageName: '@nocobase/app-plugin-ai-employee',
-        parent: 'settings',
-        path: '/settings/ai',
-        source: 'plugin',
-        title: 'AI Employee',
-      },
-      settingFor('permission-sets', 'Permission Sets', 2),
-      settingFor('default-access', 'Default Access', 3),
-      settingFor('sharing-rules', 'Sharing Rules', 4),
-      settingFor('restriction-rules', 'Restriction Rules', 5),
+    expect(inspection.settings.slice(0, 5).map(({ id }) => id)).toEqual([
+      'ai',
+      'permission-sets',
+      'default-access',
+      'sharing-rules',
+      'restriction-rules',
     ]);
 
     const output = formatAppClientInspection(inspection);

@@ -2,7 +2,9 @@ import {
   defineClientPlugin,
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
+import './locales/index.js';
 import './register-settings.js';
+import routes from './routes.js';
 
 export interface AIKnowledgeBaseClientOptions {
   readonly placeholder?: never;
@@ -11,11 +13,7 @@ export interface AIKnowledgeBaseClientOptions {
 const aiKnowledgeBase: AppClientPluginFactory<AIKnowledgeBaseClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-ai-knowledge-base',
-    bootstrap: () => import('./bootstrap.js'),
-    routes: async () => {
-      await import('./register-settings.js');
-      return import('./routes.js');
-    },
+    routes,
   });
 
 export default aiKnowledgeBase;

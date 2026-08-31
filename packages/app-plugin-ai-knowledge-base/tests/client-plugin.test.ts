@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest';
 import aiKnowledgeBase from '../client/plugin.ts';
 
-test('registers the knowledge base client bootstrap only', () => {
+test('registers the knowledge base client contributions', () => {
   const plugin = aiKnowledgeBase();
   expect(plugin.packageName).toBe('@nocobase/app-plugin-ai-knowledge-base');
-  expect(plugin.bootstrap).toBeTypeOf('function');
+  expect(plugin.routes).toEqual([{ parent: 'app', routes: [] }]);
 });

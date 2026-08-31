@@ -3,6 +3,8 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
+import './locales/index.js';
+import routes from './routes.js';
 export interface AIEmployeeClientOptions {
   readonly placeholder?: never;
 }
@@ -10,8 +12,7 @@ export interface AIEmployeeClientOptions {
 const aiEmployee: AppClientPluginFactory<AIEmployeeClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-ai-employee',
-    bootstrap: () => import('./bootstrap.js'),
-    routes: () => import('./routes.js'),
+    routes,
   });
 
 export default aiEmployee;

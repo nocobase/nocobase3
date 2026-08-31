@@ -3,12 +3,12 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 
-import providers from './providers/index.js';
+import serviceProviders from './providers/index.js';
 import routes from './routes/plugin.js';
 
 const aiKnowledgeBasePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-ai-knowledge-base',
-  providers,
+  serviceProviders,
   routes,
   queue: {
     jobs: ['./server/jobs'],

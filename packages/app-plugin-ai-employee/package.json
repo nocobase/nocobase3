@@ -32,10 +32,6 @@
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
-    "./client/bootstrap": {
-      "types": "./client/bootstrap.ts",
-      "import": "./client/bootstrap.ts"
-    },
     "./client/plugin": {
       "types": "./client/plugin.ts",
       "import": "./client/plugin.ts"
@@ -81,10 +77,6 @@
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
-      "./client/bootstrap": {
-        "types": "./dist/client/bootstrap.d.ts",
-        "import": "./dist/client/bootstrap.js"
-      },
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
@@ -120,10 +112,7 @@
       "database": {
         "migrations": "./database/migrations"
       },
-      "server": "./server/bootstrap.ts",
-      "client": {
-        "bootstrap": "./client/bootstrap"
-      }
+      "server": "./server/bootstrap.ts"
     }
   },
   "scripts": {
