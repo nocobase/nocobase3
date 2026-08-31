@@ -59,12 +59,17 @@
     "@refinedev/core": "^5.0.0",
     "@refinedev/react-router": "^2.0.0",
     "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "react-router": "^7.0.0"
+  },
+  "dependencies": {
+    "@nocobase/service-provider": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/app-i18n": "workspace:*",
     "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@refinedev/core": "catalog:",
     "@refinedev/react-router": "^2.0.0",
     "@testing-library/jest-dom": "catalog:",

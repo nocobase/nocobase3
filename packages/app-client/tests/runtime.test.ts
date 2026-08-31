@@ -1,154 +1,112 @@
-import type { AuthProvider, DataProvider } from '@refinedev/core';
-import type { ComponentType } from 'react';
+import {
+  createElement,
+  Fragment,
+  type ComponentType,
+  type PropsWithChildren,
+  type ReactElement,
+} from 'react';
+import { ServiceProvider } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
-import { defineAppRoutes } from '../src/plugins.js';
+import { createAppClientConfig, defineAppClientConfig } from '../src/config.js';
 import {
-  defineAppRuntime,
-  resolveAppRuntime,
-  type AppRuntimeDefinition,
-} from '../src/runtime/index.js';
+  defineAppRoutes,
+  defineClientPlugin,
+  defineClientReactWrappers,
+} from '../src/plugins.js';
+import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
+import type { ClientApplication } from '../src/application.js';
 
-const authProvider: AuthProvider = {
-  check: vi.fn(),
-  getIdentity: vi.fn(),
-  login: vi.fn(),
-  logout: vi.fn(),
-  onError: vi.fn(),
-};
-
-const dataProvider: DataProvider = {
-  create: vi.fn(),
-  deleteOne: vi.fn(),
-  getApiUrl: vi.fn(),
-  getList: vi.fn(),
-  getMany: vi.fn(),
-  getOne: vi.fn(),
-  update: vi.fn(),
-};
+function Wrapper({ children }: PropsWithChildren): ReactElement {
+  return createElement(Fragment, undefined, children);
+}
 
 describe('app runtime', () => {
-  it('defines an immutable runtime without loading contributions', () => {
-    const bootstrap = vi.fn();
-    const plugin = { packageName: '@example/plugin', bootstrap };
+  it('defines immutable static declarations without activating them', () => {
+    const serviceProviders = vi.fn(() => []);
     const definition = defineAppRuntime({
       packageName: '@example/app',
-      plugins: [plugin],
+      config: createAppClientConfig,
+      serviceProviders,
+      plugins: [],
       routeComponentOverrides: [],
       sourceExtensions: [],
     });
 
-    expect(bootstrap).not.toHaveBeenCalled();
+    expect(serviceProviders).not.toHaveBeenCalled();
     expect(Object.isFrozen(definition)).toBe(true);
     expect(Object.isFrozen(definition.plugins)).toBe(true);
     expect(Object.isFrozen(definition.routeComponentOverrides)).toBe(true);
     expect(Object.isFrozen(definition.sourceExtensions)).toBe(true);
   });
 
-  it('loads in parallel, bootstraps in order, and resolves contributions', async () => {
-    const calls: string[] = [];
-    let releaseApplication:
-      ((module: { default: () => void }) => void) | undefined;
-    const applicationBootstrap = new Promise<{ default: () => void }>(
-      (resolve) => {
-        releaseApplication = resolve;
-      },
-    );
+  it('resolves config, providers, wrappers, and routes without activating providers', async () => {
+    class Provider extends ServiceProvider<ClientApplication> {
+      public readonly name: string = '@example/plugin/provider';
+    }
     const Page: ComponentType = () => null;
+    const plugin = defineClientPlugin({
+      packageName: '@example/plugin',
+      config: defineAppClientConfig({
+        namespace: 'feature',
+        defaults: { enabled: false },
+      }),
+      serviceProviders: [Provider],
+      reactWrappers: defineClientReactWrappers([
+        { name: 'feature', component: Wrapper },
+      ]),
+    });
     const definition = defineAppRuntime({
       packageName: '@example/app',
       basename: '/portal',
-      bootstrap: async () => {
-        calls.push('load:application');
-        return applicationBootstrap;
-      },
-      providers: async () => ({
-        default: [{ name: 'root', component: () => null, layer: 'root' }],
-      }),
-      routes: async () => ({
-        default: defineAppRoutes([
-          {
-            name: 'home',
-            path: '/',
-            componentLoader: async () => ({ default: Page }),
-          },
-        ]),
-      }),
-      plugins: [
+      config: createAppClientConfig,
+      routes: defineAppRoutes([
         {
-          packageName: '@example/plugin',
-          bootstrap: async () => {
-            calls.push('load:plugin');
-            releaseApplication?.({
-              default: () => calls.push('bootstrap:application'),
-            });
-            return {
-              default: ({ refine }) => {
-                calls.push('bootstrap:plugin');
-                refine.setAuthProvider(authProvider);
-                refine.setDataProvider(dataProvider);
-              },
-            };
-          },
+          name: 'home',
+          path: '/',
+          componentLoader: async () => ({ default: Page }),
         },
-      ],
+      ]),
+      plugins: [plugin()],
     });
 
-    const runtime = await resolveAppRuntime(definition);
+    const runtime = await resolveAppRuntime(definition, {
+      rawConfig: { feature: { enabled: true } },
+    });
 
-    expect(calls).toEqual([
-      'load:application',
-      'load:plugin',
-      'bootstrap:application',
-      'bootstrap:plugin',
-    ]);
     expect(runtime.basename).toBe('/portal');
-    expect(runtime.refine.authProvider).toBe(authProvider);
-    expect(runtime.refine.dataProvider).toBe(dataProvider);
+    expect(runtime.config.get('feature.enabled')).toBe(true);
+    expect(runtime.serviceProviders[0]).toMatchObject({
+      Provider,
+      context: {
+        packageName: '@example/plugin',
+        source: 'plugin',
+      },
+    });
+    expect(runtime.reactWrappers[0]).toMatchObject({
+      id: '@example/plugin:feature',
+      source: 'plugin',
+    });
     expect(runtime.routes[0]).toMatchObject({
       id: '@example/app:home',
       path: '/',
       source: 'application',
     });
-    expect(runtime.providers[0]).toMatchObject({
-      id: '@example/app:root',
-      source: 'application',
-    });
     expect(Object.isFrozen(runtime)).toBe(true);
   });
 
-  it('runs app validation after the runtime is fully resolved', async () => {
-    let validatedRuntime: unknown;
-    const definition: AppRuntimeDefinition = defineAppRuntime({
-      packageName: '@example/app',
-      plugins: [],
-      validate(runtime) {
-        validatedRuntime = runtime;
-        throw new Error('App requirement failed.');
-      },
-    });
-
-    await expect(resolveAppRuntime(definition)).rejects.toThrow(
-      'App requirement failed.',
+  it('does not run application validation while resolving runtime', async () => {
+    const validate = vi.fn();
+    const runtime = await resolveAppRuntime(
+      defineAppRuntime({
+        packageName: '@example/app',
+        config: createAppClientConfig,
+        plugins: [],
+        validate,
+      }),
     );
-    expect(validatedRuntime).toMatchObject({ basename: '/', routes: [] });
-  });
 
-  it('adds source context to contribution loading and bootstrap errors', async () => {
-    await expect(
-      resolveAppRuntime(
-        defineAppRuntime({
-          packageName: '@example/app',
-          plugins: [
-            {
-              packageName: '@example/broken',
-              bootstrap: async () => ({ default: undefined }) as never,
-            },
-          ],
-        }),
-      ),
-    ).rejects.toThrow(
-      'Failed to load client bootstrap for plugin "@example/broken".',
-    );
+    expect(validate).not.toHaveBeenCalled();
+    expect(runtime.validate).toBe(validate);
   });
 });
