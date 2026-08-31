@@ -5,7 +5,7 @@ import {
   type AuthenticationProviderConfig,
 } from './authentication.js';
 
-const providers: readonly AppPluginProviderConstructor<AuthenticationProviderConfig>[] =
+const serviceProviders: readonly AppPluginProviderConstructor<AuthenticationProviderConfig>[] =
   [AuthenticationProvider];
 
-export default providers;
+export default serviceProviders;

@@ -5,7 +5,7 @@ import {
 
 import reactWrappers from './react-wrappers.js';
 import routes from './routes.js';
-import { NotificationProviderServiceProvider } from './service-provider.js';
+import serviceProviders from './service-provider.js';
 
 export interface NotificationProviderClientOptions {
   /** Label of the undo action in undoable (progress) notifications. */
@@ -15,7 +15,7 @@ export interface NotificationProviderClientOptions {
 const notificationProvider: AppClientPluginFactory<NotificationProviderClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-notification-provider',
-    serviceProviders: [NotificationProviderServiceProvider],
+    serviceProviders,
     routes,
     reactWrappers,
   });

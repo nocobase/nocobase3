@@ -163,9 +163,8 @@ export function createAppConfig(context) {
 export default defineAppRuntime({
   config: createAppConfig,
   plugins,
-  providers,
-  apiRoutes,
-  rootRoutes,
+  serviceProviders,
+  routes,
 });
 ```
 

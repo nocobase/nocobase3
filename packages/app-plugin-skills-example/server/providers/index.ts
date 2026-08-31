@@ -2,8 +2,8 @@ import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plug
 
 import { SkillsExampleProvider } from './skills-example.js';
 
-const providers: readonly AppPluginProviderConstructor[] = [
+const serviceProviders: readonly AppPluginProviderConstructor[] = [
   SkillsExampleProvider,
 ];
 
-export default providers;
+export default serviceProviders;

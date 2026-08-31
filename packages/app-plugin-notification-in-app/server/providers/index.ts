@@ -2,8 +2,8 @@ import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plug
 
 import { InAppNotificationProvider } from './in-app-notification.js';
 
-const providers: readonly AppPluginProviderConstructor[] = [
+const serviceProviders: readonly AppPluginProviderConstructor[] = [
   InAppNotificationProvider,
 ];
 
-export default providers;
+export default serviceProviders;

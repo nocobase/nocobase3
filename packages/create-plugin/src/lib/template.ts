@@ -540,7 +540,7 @@ function renderServerPlugin(
 ): string {
   const imports = [
     capabilities.server.serviceProviders
-      ? "import providers from './providers/index.js';"
+      ? "import serviceProviders from './providers/index.js';"
       : undefined,
     capabilities.server.routes
       ? "import routes from './routes/index.js';"
@@ -552,9 +552,7 @@ function renderServerPlugin(
     capabilities.server.locales
       ? "  locales: () => import('./locales/index.js'),"
       : undefined,
-    capabilities.server.serviceProviders
-      ? '  serviceProviders: providers,'
-      : undefined,
+    capabilities.server.serviceProviders ? '  serviceProviders,' : undefined,
     capabilities.server.routes ? '  routes,' : undefined,
     capabilities.database
       ? "  database: {\n    migrations: './database/migrations',\n    seeds: './database/seeds',\n  },"

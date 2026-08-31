@@ -5,7 +5,7 @@ import {
 
 import locales from './locales/index.js';
 import routes from './routes.js';
-import { WorkflowServiceProvider } from './service-provider.js';
+import serviceProviders from './service-provider.js';
 
 export interface WorkflowClientOptions {
   readonly placeholder?: never;
@@ -14,7 +14,7 @@ export interface WorkflowClientOptions {
 const workflow: AppClientPluginFactory<WorkflowClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-workflow',
-    serviceProviders: [WorkflowServiceProvider],
+    serviceProviders,
     locales,
     routes,
   });

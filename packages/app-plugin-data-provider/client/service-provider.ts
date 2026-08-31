@@ -1,4 +1,5 @@
 import { ClientApplication } from '@nocobase/app-client';
+import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { dataProvider } from './data-provider.js';
@@ -11,3 +12,9 @@ export class DataProviderServiceProvider extends ServiceProvider<ClientApplicati
     return Promise.resolve();
   }
 }
+
+const serviceProviders: readonly ClientServiceProviderConstructor[] = [
+  DataProviderServiceProvider,
+];
+
+export default serviceProviders;

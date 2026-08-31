@@ -2,6 +2,7 @@ import {
   ClientApplication,
   type ClientServiceProviderContext,
 } from '@nocobase/app-client';
+import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { createNotificationProvider } from './notification-provider.js';
@@ -25,3 +26,8 @@ export class NotificationProviderServiceProvider extends ServiceProvider<ClientA
     return Promise.resolve();
   }
 }
+
+const serviceProviders: readonly ClientServiceProviderConstructor<NotificationProviderClientOptions>[] =
+  [NotificationProviderServiceProvider];
+
+export default serviceProviders;

@@ -6,14 +6,14 @@ import clientPlugins from './plugins.js';
 import reactWrappers from './react-wrappers.js';
 import routeComponentOverrides from './route-overrides.js';
 import routes from './routes.js';
-import { DefaultClientServiceProvider } from './service-provider.js';
+import serviceProviders from './service-provider.js';
 import sourceExtensions from './source-extensions.js';
 
 const appRuntime = defineAppRuntime({
   packageName: '@nocobase/app-template-default',
   basename: getPortalBase(),
   config: createAppClientConfig,
-  serviceProviders: [DefaultClientServiceProvider],
+  serviceProviders,
   locales: {
     'en-US': () => import('./locales/en-US.js'),
     'zh-CN': () => import('./locales/zh-CN.js'),

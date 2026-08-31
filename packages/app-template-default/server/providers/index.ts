@@ -7,8 +7,8 @@ export {
   type AppExampleService,
 } from './app-example.js';
 
-const providers: readonly ApplicationServiceProviderConstructor[] = [
+const serviceProviders: readonly ApplicationServiceProviderConstructor[] = [
   AppExampleProvider,
 ];
 
-export default providers;
+export default serviceProviders;

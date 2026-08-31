@@ -2,6 +2,8 @@ import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plug
 
 import { SystemInfoProvider } from './system-info.js';
 
-const providers: readonly AppPluginProviderConstructor[] = [SystemInfoProvider];
+const serviceProviders: readonly AppPluginProviderConstructor[] = [
+  SystemInfoProvider,
+];
 
-export default providers;
+export default serviceProviders;

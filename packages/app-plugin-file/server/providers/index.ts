@@ -2,8 +2,8 @@ import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plug
 
 import { FileProvider, type FileProviderApplication } from './file.js';
 
-const providers: readonly AppPluginProviderConstructor<
+const serviceProviders: readonly AppPluginProviderConstructor<
   FileProviderApplication['config']
 >[] = [FileProvider];
 
-export default providers;
+export default serviceProviders;

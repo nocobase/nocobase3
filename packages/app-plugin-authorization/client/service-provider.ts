@@ -1,5 +1,6 @@
 import { appApiClientToken, ClientApplication } from '@nocobase/app-client';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
+import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { configureAuthorizationClient } from './runtime.js';
@@ -37,6 +38,12 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
     return Promise.resolve();
   }
 }
+
+const serviceProviders: readonly ClientServiceProviderConstructor[] = [
+  AuthorizationServiceProvider,
+];
+
+export default serviceProviders;
 
 function administrationAction(action: string): string {
   switch (action) {

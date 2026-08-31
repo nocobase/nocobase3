@@ -30,7 +30,7 @@ session、account 和 verification 的常用查询字段带有索引。
 ```ts
 export default defineServerPlugin({
   packageName: '@nocobase/app-plugin-authentication',
-  serviceProviders: providers,
+  serviceProviders,
   routes,
   database: {
     migrations: './database/migrations',

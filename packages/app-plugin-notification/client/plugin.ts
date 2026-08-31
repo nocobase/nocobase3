@@ -4,7 +4,7 @@ import {
 } from '@nocobase/app-client/plugins';
 
 import routes from './routes.js';
-import { NotificationServiceProvider } from './service-provider.js';
+import serviceProviders from './service-provider.js';
 
 export interface NotificationClientOptions {
   readonly placeholder?: never;
@@ -13,7 +13,7 @@ export interface NotificationClientOptions {
 const notification: AppClientPluginFactory<NotificationClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-notification',
-    serviceProviders: [NotificationServiceProvider],
+    serviceProviders,
     routes,
   });
 

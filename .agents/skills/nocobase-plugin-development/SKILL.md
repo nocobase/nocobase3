@@ -85,6 +85,10 @@ runnable reference is needed.
   library preset. Do not copy a complete config from another package.
 - Client Runtime and plugin declarations use the optional static fields
   `config`, `serviceProviders`, `reactWrappers`, `routes`, and `locales`.
+  ServiceProvider aggregation modules default-export a constructor array named
+  `serviceProviders`; declaration modules default-import that same name and use
+  the `serviceProviders,` property shorthand instead of declaring constructor
+  arrays inline.
   Static imports make the composition inspectable but do not execute a
   ServiceProvider lifecycle, render a React Wrapper, or load route pages and
   locale messages. The locale namespace is always the plugin `packageName`.
