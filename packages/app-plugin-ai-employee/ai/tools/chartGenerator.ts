@@ -9,15 +9,15 @@
 
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../namespace.js';
+import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 export default defineTools<AgentContext<{}, {}>>({
   scope: 'GENERAL',
   requiresContext: false,
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("Chart generator", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
-    about: `{{t("Generates ECharts options (JSON) based on user input or data context.", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    title: `{{t("Chart generator", { ns: "${packageMetadata.name}" })}}`,
+    about: `{{t("Generates ECharts options (JSON) based on user input or data context.", { ns: "${packageMetadata.name}" })}}`,
   },
   definition: {
     name: 'chartGenerator',

@@ -18,7 +18,7 @@ import {
   getAccessibleAIEmployee,
   serializeEmployeeDetail,
 } from '../../sub-agents/shared.js';
-import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../../namespace.js';
+import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 type AIEmployeeContext = AgentContext<
   { aiEmployees: AIEmployeeRepository },
@@ -29,8 +29,8 @@ export default defineTools<AIEmployeeContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("Get AI employee", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
-    about: `{{t("Get the detailed definition of AI employee", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    title: `{{t("Get AI employee", { ns: "${packageMetadata.name}" })}}`,
+    about: `{{t("Get the detailed definition of AI employee", { ns: "${packageMetadata.name}" })}}`,
   },
   definition: {
     name: 'get-ai-employee',

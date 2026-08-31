@@ -9,14 +9,14 @@
 
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../namespace.js';
+import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 export default defineTools<AgentContext<{}, {}>>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("Load specific SKILLS", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
-    about: `{{t("Loading content of the specific SKILLS", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    title: `{{t("Load specific SKILLS", { ns: "${packageMetadata.name}" })}}`,
+    about: `{{t("Loading content of the specific SKILLS", { ns: "${packageMetadata.name}" })}}`,
   },
   definition: {
     name: 'getSkill',

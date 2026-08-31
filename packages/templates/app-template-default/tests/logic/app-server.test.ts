@@ -1453,6 +1453,7 @@ function createEmbeddedTestScope(
   return {
     ...options,
     env: {
+      DB_MIGRATIONS_AUTO_RUN: 'true',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },
@@ -1487,6 +1488,7 @@ async function createIsolatedStandaloneServer(
   return createStandaloneServer({
     ...options,
     env: {
+      DB_MIGRATIONS_AUTO_RUN: 'true',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },

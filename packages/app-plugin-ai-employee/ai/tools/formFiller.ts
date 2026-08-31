@@ -9,7 +9,7 @@
 
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../namespace.js';
+import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 export default defineTools<AgentContext<{}, {}>>({
   scope: 'GENERAL',
@@ -17,8 +17,8 @@ export default defineTools<AgentContext<{}, {}>>({
   defaultPermission: 'ALLOW',
   execution: 'frontend',
   introduction: {
-    title: `{{t("Form filler", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
-    about: `{{t("Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    title: `{{t("Form filler", { ns: "${packageMetadata.name}" })}}`,
+    about: `{{t("Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.", { ns: "${packageMetadata.name}" })}}`,
   },
   definition: {
     name: 'formFiller',

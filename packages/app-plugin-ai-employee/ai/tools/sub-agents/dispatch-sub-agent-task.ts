@@ -21,7 +21,7 @@ import {
   getSkillSettingsFromMain,
   updateMessageMetadata,
 } from '../../sub-agents/shared.js';
-import { AI_EMPLOYEE_I18N_NAMESPACE } from '../../../namespace.js';
+import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 type DispatchContext = AgentContext<
   {
@@ -48,8 +48,8 @@ export default defineTools<DispatchContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("AI employee task dispatching", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
-    about: `{{t("Awaken and assign specific tasks to ai employees", { ns: "${AI_EMPLOYEE_I18N_NAMESPACE}" })}}`,
+    title: `{{t("AI employee task dispatching", { ns: "${packageMetadata.name}" })}}`,
+    about: `{{t("Awaken and assign specific tasks to ai employees", { ns: "${packageMetadata.name}" })}}`,
   },
   definition: {
     name: 'dispatch-sub-agent-task',
