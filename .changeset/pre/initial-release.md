@@ -17,7 +17,7 @@
 '@nocobase/caching': patch
 '@nocobase/dev-config': patch
 '@nocobase/drive': patch
-'@nocobase/hub': patch
+'@nocobase/app-template-hub': patch
 '@nocobase/id-generator': patch
 '@nocobase/logging': patch
 '@nocobase/nb3-cli': patch

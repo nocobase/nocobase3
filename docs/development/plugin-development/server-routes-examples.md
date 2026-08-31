@@ -389,7 +389,7 @@ describe('root routes', () => {
 
 ## 验证清单
 
-本页规则面向 `packages/app-plugin-*/server/routes/` 中的插件 Route contribution。
+本页规则面向 `packages/plugins/app-plugin-*/server/routes/` 中的插件 Route contribution。
 `app-server-kit` 内部的 SPA、WebSocket 或其他 runtime router helper 有自己的所有权和
 测试边界，不应因为命名相似而被机械改写。
 
@@ -407,4 +407,4 @@ describe('root routes', () => {
   Server composition 变化或需要诊断时，可用 `server:inspect --json` 查看只读装配快照。
 
 返回[Route 插件开发](./routes.md)，或继续阅读[测试和验证插件](./testing.md)和
-`packages/app-plugin-routes-example` 的可运行四 Route 示例。
+`packages/examples/app-plugin-routes-example` 的可运行四 Route 示例。

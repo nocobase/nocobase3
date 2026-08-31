@@ -1,6 +1,6 @@
 ---
 name: nocobase-plugin-development
-description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/create-plugin, packages/app-client, and packages/app-server-kit. Do not use for legacy NocoBase v2 plugin workspaces.'
+description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/plugins/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/tools/create-plugin, packages/app/app-client, and packages/app/app-server-kit. Do not use for legacy NocoBase v2 plugin workspaces.'
 ---
 
 # NocoBase Plugin Development
@@ -14,44 +14,46 @@ lives under `docs/development/plugin-development/`.
 Before changing files, confirm the workspace contains:
 
 ```text
-packages/create-plugin/
-packages/app-client/
-packages/app-server-kit/
+packages/tools/create-plugin/
+packages/app/app-client/
+packages/app/app-server-kit/
 pnpm-workspace.yaml
 ```
 
-If the project instead uses `packages/plugins/`, `src/client-v2/`,
-`nb scaffold plugin`, or the legacy `Plugin` class, do not apply this Skill.
-That is a different plugin protocol.
+`packages/plugins/` by itself does not identify the workspace: v3 keeps its own
+plugins there as `app-plugin-*`. If the project instead has `packages/core/`,
+`packages/plugins/@nocobase/plugin-*`, `src/client-v2/`, `nb scaffold plugin`, or
+the legacy `Plugin` class, do not apply this Skill. That is a different plugin
+protocol.
 
 Always read the repository `AGENTS.md` first, then read
 `docs/development/plugin-development/README.md`. Read only the relevant topic page
 for the current task:
 
-| Task                                 | Read                                                 |
-| ------------------------------------ | ---------------------------------------------------- |
-| Create and register a plugin         | `quick-start.md`, `plugin-registration-workspace.md` |
-| Implement a complete business plugin | `development-workflow.md`                            |
-| Choose an App or cross-plugin entry  | `public-contracts.md`                                |
-| Choose a Client module               | `client.md`                                          |
-| Build public or internal Client UI   | `client-components.md`                               |
-| Share React Context                  | `client-providers.md`                                |
-| Add imperative Client initialization | `client-bootstrap.md`                                |
-| Choose a Server module               | `server.md`                                          |
-| Choose a Service/Token/Provider      | `server-services-and-providers.md`                   |
-| Implement Provider lifecycle         | `service-provider.md`                                |
-| Apply Token/Container patterns       | `service-token-examples.md`                          |
-| Add asynchronous work                | `server-jobs.md`                                     |
-| Choose a database operation          | `database.md`                                        |
-| Change schema                        | `database-migrations.md`                             |
-| Add required initial records         | `database-seeds.md`                                  |
-| Add Client or Server translations    | `i18n.md`                                            |
-| Choose an App-owned Registry item    | `registry.md`                                        |
-| Author a Registry item               | `registry-authoring.md`                              |
-| Build, publish, or install Registry  | `registry-delivery.md`                               |
-| Upgrade or remove a Registry item    | `registry-upgrades.md`                               |
-| Write Plugin Skills for an App Agent | `skills.md`                                          |
-| Test, build, and verify              | `testing.md`                                         |
+| Task                                   | Read                                                 |
+| -------------------------------------- | ---------------------------------------------------- |
+| Create and register a plugin           | `quick-start.md`, `plugin-registration-workspace.md` |
+| Implement a complete business plugin   | `development-workflow.md`                            |
+| Choose an App or cross-plugin entry    | `public-contracts.md`                                |
+| Choose a Client module                 | `client.md`                                          |
+| Build public or internal Client UI     | `client-components.md`                               |
+| Share React Context                    | `client-react-providers.md`                          |
+| Add a Client Service or initialization | `client-service-providers.md`                        |
+| Choose a Server module                 | `server.md`                                          |
+| Choose a Service/Token/Provider        | `server-services-and-providers.md`                   |
+| Implement Provider lifecycle           | `service-provider.md`                                |
+| Apply Token/Container patterns         | `service-token-examples.md`                          |
+| Add asynchronous work                  | `server-jobs.md`                                     |
+| Choose a database operation            | `database.md`                                        |
+| Change schema                          | `database-migrations.md`                             |
+| Add required initial records           | `database-seeds.md`                                  |
+| Add Client or Server translations      | `i18n.md`                                            |
+| Choose an App-owned Registry item      | `registry.md`                                        |
+| Author a Registry item                 | `registry-authoring.md`                              |
+| Build, publish, or install Registry    | `registry-delivery.md`                               |
+| Upgrade or remove a Registry item      | `registry-upgrades.md`                               |
+| Write Plugin Skills for an App Agent   | `skills.md`                                          |
+| Test, build, and verify                | `testing.md`                                         |
 
 For every HTTP or browser Route task, read `routes.md` first. It covers all four
 Route APIs as one cross-runtime topic. For `defineRootRoutes()` or
@@ -60,21 +62,21 @@ Route APIs as one cross-runtime topic. For `defineRootRoutes()` or
 `client-routes-examples.md`. Read `client.md` or `server.md` to choose an
 adjacent module, then read only that module's page rather than loading every
 Client or Server guide.
-Inspect only the matching files in `packages/app-plugin-routes-example` when a
+Inspect only the matching files in `packages/examples/app-plugin-routes-example` when a
 runnable reference is needed.
 
 ## Stable v3 protocol
 
-- Create new plugins under `packages/app-plugin-<name>/` with
+- Create new plugins under `packages/plugins/app-plugin-<name>/` with
   `pnpm plugin:create`; do not use `nb scaffold plugin`.
 - `plugin:create` has no implicit plugin shape. Select one or more explicit
   capabilities with repeatable `--with`, or use `--empty` for only the package
   foundation. Prefer `--dry-run --json` before creation. In JSON mode, branch
   on `ok`; recover from failures by using `error.code` and
   `error.suggestions`, while still treating the non-zero exit code as failure.
-- The public creation capabilities are `database`, `server.providers`,
+- The public creation capabilities are `database`, `server.service-providers`,
   `server.routes`, `server.jobs`, `server.locales`, `client.routes`,
-  `client.components`, `client.providers`, `client.bootstrap`,
+  `client.components`, `client.service-providers`, `client.react-providers`,
   `client.locales`, `registry`, and `skills`.
 - The first Create Plugin workflow creates plugins only in a NocoBase source
   workspace. It does not create a standalone plugin project inside an App.
@@ -83,13 +85,18 @@ runnable reference is needed.
   a Node runtime declaration, Server-only plugins use the server library and
   Node ESLint presets, and full-stack plugins add DOM/JSX locally to the server
   library preset. Do not copy a complete config from another package.
-- Client runtime contribution entries are only `bootstrap`, `routes`, and
-  `providers`; all are optional and lazy-loaded. `locales` is an optional
-  resource declaration on both Client and Server plugins, not another UI
-  contribution. Its namespace is always the plugin `packageName`.
+- Client Runtime and plugin declarations use the optional static fields
+  `config`, `serviceProviders`, `reactProviders`, `routes`, and `locales`.
+  ServiceProvider aggregation modules default-export a constructor array named
+  `serviceProviders`; declaration modules default-import that same name and use
+  the `serviceProviders,` property shorthand instead of declaring constructor
+  arrays inline.
+  Static imports make the composition inspectable but do not execute a
+  ServiceProvider lifecycle, render a React Provider, or load route pages and
+  locale messages. The locale namespace is always the plugin `packageName`.
 - Locale scaffolding is explicit. Select `client.locales` for Client resources
   and `server.locales` for Server resources; select both when both runtimes own
-  translated messages. Routes, Providers, and Bootstrap do not implicitly add
+  translated messages. Routes, ServiceProviders, and React Providers do not implicitly add
   locale files.
 - Public Client components rendered outside their owning plugin tree must bind
   their namespace explicitly. Binding does not register resources: a
@@ -97,13 +104,20 @@ runnable reference is needed.
   a locales-only `./client` plugin factory. Request-external messages must
   choose the recipient locale, load it, and then use a fixed translator; do not
   inherit a triggering user's request locale.
-- Client Components are source or public exports, not a fourth runtime
-  contribution. Use Routes for pages, Providers for shared React Context, and
-  Bootstrap only for imperative Client initialization.
+- Client Components are source or public exports, not a Runtime contribution.
+  Use Routes for pages, React Providers for shared React Context, and Client
+  ServiceProviders for application-owned Services, Refine configuration, and
+  imperative initialization.
 - Settings pages are routes declared with `defineSettingsRoutes()`; there is no
   fourth `settings` loader or `client/settings.ts` runtime contract.
 - Keep Client page components behind lazy `componentLoader()` functions. Use a
   Route component override to replace a plugin page; do not redeclare its Route.
+- Keep contribution declarations static and side-effect-free. Put dynamic
+  imports at leaf boundaries such as route page components, locale messages,
+  heavy SDKs, or truly optional features.
+- Client ServiceProvider lifecycle runs inside `ClientApplication.start()`.
+  The Browser host owns the React DOM root and renders React Providers through
+  `AppClientRoot` only after application startup succeeds.
 - Server Routes are direct contributions passed to `defineServerPlugin()`; do
   not write a Server route loader.
 - Define a Service contract and owner-created Token before a public or shared
@@ -131,13 +145,13 @@ runnable reference is needed.
   runtime behavior, Route security, locale content, tests, or builds.
 - When an Inspector is useful, read `ok` and `status`, then `consistent`,
   `issues`, and `suggestions`. `server:inspect --json` reports declaration and
-  resolved-location facts without executing Provider, Route, locale, database,
+  resolved-location facts without executing ServiceProvider, Route, locale, database,
   or Job behavior. `client:inspect --type locales --json` imports Client plugin
-  declarations without executing Route, Provider, or locale factories and does
+  declarations without executing ServiceProvider lifecycle, rendering React Providers, or loading locale messages and does
   not inspect locale names, keys, translations, fallback, or language switching.
 - Keep `server/plugin.ts` and the declaration modules it imports free of runtime
   startup side effects. Inspection imports these modules even though it does
-  not instantiate Providers, execute Route factories, or load Job modules.
+  not instantiate ServiceProviders, execute Route factories, or load Job modules.
 - `package.json#nocobase.plugins` is management metadata for install, CLI,
   build/watch, and Skills synchronization. It is not runtime discovery.
 - `exports["./client"]` and `exports["./server"]` are the Client and
@@ -148,7 +162,7 @@ runnable reference is needed.
   Agent. The App's entire `.agents/` directory is ignored local output: never
   commit it or use it as a source of truth. It is not runtime code and is not
   plugin-source development guidance.
-- Use `packages/app-plugin-skills-example` as the minimal normative Plugin
+- Use `packages/examples/app-plugin-skills-example` as the minimal normative Plugin
   Skill reference. A public Client component subpath export does not require a
   `./client` runtime entry or Client plugin registration. Verify Skill claims
   through observable target-App behavior, not only synchronized file equality.

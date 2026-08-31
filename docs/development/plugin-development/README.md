@@ -30,8 +30,8 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 | 添加后台任务                       | [Server 模块选择](./server.md)          | [Jobs](./server-jobs.md)                                                |
 | 提供 React 组件                    | [Client 模块选择](./client.md)          | [Components](./client-components.md)                                    |
 | 添加 App 或 Settings 页面          | [Route 插件开发](./routes.md)           | [Client Routes 示例](./client-routes-examples.md)                       |
-| 共享 React Context                 | [Client 模块选择](./client.md)          | [Providers](./client-providers.md)                                      |
-| 添加命令式 Client 初始化           | [Client 模块选择](./client.md)          | [Bootstrap](./client-bootstrap.md)                                      |
+| 共享 React Context                 | [Client 模块选择](./client.md)          | [React Providers](./client-react-providers.md)                          |
+| 添加 Client Service 或启动初始化   | [Client 模块选择](./client.md)          | [Client ServiceProviders](./client-service-providers.md)                |
 | 添加 Client 或 Server 翻译         | [Plugin I18n](./i18n.md)                | 页面内的 Advanced scenarios                                             |
 | 交付 App-owned 可编辑 Client 源码  | [Registry 模块选择](./registry.md)      | [编写 item](./registry-authoring.md)、[交付](./registry-delivery.md)    |
 | 描述插件提供给 App Agent 的能力    | [Plugin Skills](./skills.md)            | [测试与验证](./testing.md)                                              |
@@ -70,8 +70,8 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 - [Client 模块选择](./client.md)
 - [Components](./client-components.md)
 - [Client Routes 示例](./client-routes-examples.md)
-- [Providers](./client-providers.md)
-- [Bootstrap](./client-bootstrap.md)
+- [React Providers](./client-react-providers.md)
+- [Client ServiceProviders](./client-service-providers.md)
 
 ## Route
 

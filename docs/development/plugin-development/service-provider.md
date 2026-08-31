@@ -61,7 +61,7 @@ export class HeartbeatProvider extends ServiceProvider<AppPluginApplication> {
 }
 ```
 
-直接作为 `defineServerPlugin({ providers })` contribution 的 Provider 可以使用 `AppPluginApplication`。实现中只访问实际需要的 App 字段；测试 fixture 也只提供这些字段。不要因为 Provider 能访问整个 App，就让它承担 Route、Host 或其他插件的职责。
+直接作为 `defineServerPlugin({ serviceProviders })` contribution 的 Provider 可以使用 `AppPluginApplication`。实现中只访问实际需要的 App 字段；测试 fixture 也只提供这些字段。不要因为 Provider 能访问整个 App，就让它承担 Route、Host 或其他插件的职责。
 
 Provider `name` 必须稳定且在 Application 内唯一。插件只有一个 Provider 时通常使用包名；多个 Provider 时使用包名加能力后缀，例如：
 
@@ -148,12 +148,12 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server-kit/plugins';
 
-import providers from './providers/index.js';
+import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const plugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-heartbeat',
-  providers,
+  serviceProviders,
   routes,
 });
 
@@ -171,7 +171,7 @@ Route factory 从 App container 解析 Token，但 Route 自己负责 HTTP metho
 ## 测试生命周期行为
 
 Provider 测试使用独立 `ServiceContainer` 和只包含实际依赖的 App fixture。仓库中的
-`packages/app-plugin-service-provider-example/tests/provider.test.ts` 展示了完整模式。至少覆盖：
+`packages/examples/app-plugin-service-provider-example/tests/provider.test.ts` 展示了完整模式。至少覆盖：
 
 - `register()` 后 binding 存在，但 lazy singleton 尚未创建；
 - 第一次 `resolve()` 创建实例，多次解析返回同一实例；
@@ -190,4 +190,4 @@ Provider 测试使用独立 `ServiceContainer` 和只包含实际依赖的 App f
 - [ServiceToken 与 ServiceContainer 示例](./service-token-examples.md)
 - [Server Routes](./server-routes-examples.md)
 - [Server Jobs](./server-jobs.md)
-- 可运行参考：`packages/app-plugin-service-provider-example`
+- 可运行参考：`packages/examples/app-plugin-service-provider-example`

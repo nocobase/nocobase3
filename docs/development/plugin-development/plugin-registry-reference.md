@@ -21,12 +21,12 @@ Plugin Registry 是插件发布“可复制、可编辑源码配方”的通用�
 
 插件代码不要求全部写成 Registry。一个提供可编辑客户端源码的插件通常同时包含运行时代码和 Registry 配方：
 
-| 类型               | 位置                                       | 所有者 | 是否跟随插件升级 | 是否允许应用直接修改          |
-| ------------------ | ------------------------------------------ | ------ | ---------------- | ----------------------------- |
-| 插件运行时 UI      | `packages/app-plugin-*/client/**`          | 插件   | 是               | 否                            |
-| 插件 Registry 配方 | `packages/app-plugin-*/registry/<item>/**` | 插件   | 是               | 否，这是上游 canonical source |
-| Registry 安装副本  | `<app>/client/extensions/<name>/**`        | 应用   | 否               | 是                            |
-| 应用基础 shadcn UI | `<app>/client/components/ui/**`            | 应用   | 否               | 是                            |
+| 类型               | 位置                                               | 所有者 | 是否跟随插件升级 | 是否允许应用直接修改          |
+| ------------------ | -------------------------------------------------- | ------ | ---------------- | ----------------------------- |
+| 插件运行时 UI      | `packages/plugins/app-plugin-*/client/**`          | 插件   | 是               | 否                            |
+| 插件 Registry 配方 | `packages/plugins/app-plugin-*/registry/<item>/**` | 插件   | 是               | 否，这是上游 canonical source |
+| Registry 安装副本  | `<app>/client/extensions/<name>/**`                | 应用   | 否               | 是                            |
+| 应用基础 shadcn UI | `<app>/client/components/ui/**`                    | 应用   | 否               | 是                            |
 
 核心原则是：
 
@@ -162,7 +162,7 @@ Registry item 也不等于页面目录。`registry/<item>` 应该按它实际交
 插件本身需要的基础组件按需生成到插件目录：
 
 ```bash
-cd packages/app-plugin-registry-example
+cd packages/examples/app-plugin-registry-example
 pnpm exec shadcn add button
 ```
 
@@ -220,7 +220,7 @@ import { Button } from '@/components/ui/button';
 源码放在插件自己的 Registry 目录，并按交付 API 自然组织：
 
 ```text
-packages/app-plugin-registry-example/registry/
+packages/examples/app-plugin-registry-example/registry/
 ├── page-ui/
 │   ├── README.md
 │   ├── extension.ts
@@ -409,7 +409,7 @@ pnpm registry build \
 也可以在插件目录执行包内命令：
 
 ```bash
-cd packages/app-plugin-registry-example
+cd packages/examples/app-plugin-registry-example
 pnpm registry:build
 ```
 
@@ -492,13 +492,13 @@ https://registry.example.com/registry-example/r/component-ui.json
 pnpm registry materialize \
   --package @nocobase/app-plugin-registry-example \
   --item component-ui \
-  --output-root packages/app-template-default
+  --output-root packages/templates/app-template-default
 ```
 
 结果：
 
 ```text
-packages/app-template-default/
+packages/templates/app-template-default/
 └── client/extensions/nocobase-registry-example-component-ui/
 ```
 
@@ -530,7 +530,7 @@ packages/app-template-default/
 如果 Registry JSON 已经有可访问地址，可以直接安装：
 
 ```bash
-cd packages/app-template-default
+cd packages/templates/app-template-default
 pnpm exec shadcn add \
   https://registry.example.com/registry-example/r/component-ui.json
 ```
@@ -683,7 +683,7 @@ pnpm scripts:test
 仓库提供了一个专门展示上述边界的示例包：
 
 ```text
-packages/app-plugin-registry-example/
+packages/examples/app-plugin-registry-example/
 ├── client/
 │   ├── components/ui/button.tsx        插件自己的 shadcn Button
 │   ├── default-pages/                   插件可独立运行的 fallback 页面
@@ -723,7 +723,7 @@ pnpm plugin:register registry-example --app app-template-default
 pnpm registry materialize \
   --package @nocobase/app-plugin-registry-example \
   --item page-ui \
-  --output-root packages/app-template-default
+  --output-root packages/templates/app-template-default
 ```
 
 应用重新构建后，同一路由会由 `client/extensions/nocobase-registry-example-page-ui` 中的可编辑页面接管。其他 item 可以独立安装：
@@ -732,12 +732,12 @@ pnpm registry materialize \
 pnpm registry materialize \
   --package @nocobase/app-plugin-registry-example \
   --item component-ui \
-  --output-root packages/app-template-default
+  --output-root packages/templates/app-template-default
 
 pnpm registry materialize \
   --package @nocobase/app-plugin-registry-example \
   --item provider-ui \
-  --output-root packages/app-template-default
+  --output-root packages/templates/app-template-default
 ```
 
 安装后，应用从对应目录的 `index.ts` 直接引用 `EditablePanel` 或 `ExampleUiProvider`。Registry 构建和发布产物可以单独验证：
@@ -746,7 +746,7 @@ pnpm registry materialize \
 pnpm --filter @nocobase/app-plugin-registry-example registry:build
 ```
 
-包内 [README](../../../packages/app-plugin-registry-example/README.md) 记录了 build、materialize、远程 `shadcn add` 和升级合并流程。
+包内 [README](../../../packages/examples/app-plugin-registry-example/README.md) 记录了 build、materialize、远程 `shadcn add` 和升级合并流程。
 
 ## 14. 当前能力和缺口
 

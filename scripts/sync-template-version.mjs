@@ -23,7 +23,10 @@ const repoRoot = path.resolve(
 );
 
 /** Packages carrying a `nocobase.defaultTemplateVersion` that mirrors their own version. */
-const TARGETS = ['packages/app-template-default'];
+const TARGETS = [
+  'packages/templates/app-template-default',
+  'packages/templates/app-template-hub',
+];
 
 const checkOnly = process.argv.includes('--check');
 const drifted = [];

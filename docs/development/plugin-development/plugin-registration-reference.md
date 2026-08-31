@@ -11,10 +11,10 @@ description: NocoBase v3 插件生命周期命令、JSON 状态、静态诊断�
 
 ## 两种环境
 
-| 环境             | 插件来源                           | 依赖范围         | 命令执行位置            |
-| ---------------- | ---------------------------------- | ---------------- | ----------------------- |
-| Source workspace | `packages/` 中的 workspace package | `workspace:^`    | source workspace 根目录 |
-| 独立 App         | package registry 中的已发布插件    | 实际安装版本范围 | App 根目录              |
+| 环境             | 插件来源                             | 依赖范围         | 命令执行位置            |
+| ---------------- | ------------------------------------ | ---------------- | ----------------------- |
+| Source workspace | `packages/*/` 中的 workspace package | `workspace:^`    | source workspace 根目录 |
+| 独立 App         | package registry 中的已发布插件      | 实际安装版本范围 | App 根目录              |
 
 第一版 Create Plugin 只创建 source workspace 插件。独立 App 可以安装、配置、升级和移除已发布插件。
 
@@ -71,7 +71,7 @@ pnpm plugin:register audit-log \
 
 ```bash
 pnpm plugin:create audit-log \
-  --with server.providers \
+  --with server.service-providers \
   --with server.routes \
   --no-install
 pnpm plugin:register audit-log --app app-template-default
@@ -124,7 +124,7 @@ import auditLog from '@nocobase/app-plugin-audit-log/client';
 const clientPlugins: AppClientPlugins = defineClientPlugins([auditLog()]);
 ```
 
-Client 数组顺序是 bootstrap 顺序。注册命令把新插件追加到数组末尾，不自动排序。只有调整顺序或给插件传 options 时才需要手工修改注册项。
+Client 数组顺序是静态 contribution 和 ServiceProvider lifecycle 的组合顺序。注册命令把新插件追加到数组末尾，不自动排序。只有调整顺序或给插件传 options 时才需要手工修改注册项。
 
 ### Server composition root
 
@@ -145,7 +145,7 @@ Server 注册 definition 本身，不调用它。
 插件源：
 
 ```text
-packages/app-plugin-audit-log/
+packages/plugins/app-plugin-audit-log/
 └── skills/
     └── nocobase-app-plugin-audit-log/
         └── SKILL.md
@@ -154,7 +154,7 @@ packages/app-plugin-audit-log/
 App 副本：
 
 ```text
-packages/app-template-default/
+packages/templates/app-template-default/
 └── .agents/skills/
     └── nocobase-app-plugin-audit-log/
         └── SKILL.md
@@ -217,19 +217,14 @@ auditLog({
 
 ## 同步 Skills
 
-插件升级或公开能力变化后，可以单独同步：
-
-```bash
-pnpm plugin:skills:sync --app app-template-default
-pnpm plugin:skills:sync --app app-template-default --plugin audit-log
-```
-
-独立 App 中省略 `--app`：
+插件升级或公开能力变化后，可以单独同步。这条命令在 App 目录下执行：
 
 ```bash
 pnpm plugin:skills:sync
 pnpm plugin:skills:sync --plugin audit-log
 ```
+
+本仓库内对应的 App 是 `packages/templates/app-template-default`，进这个目录跑同一条命令。仓库根目录没有这个脚本。
 
 同步规则：
 
@@ -364,7 +359,7 @@ Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 
 pnpm --filter <target-app> client:inspect --json
 ```
 
-该命令可查看最终 bootstrap 顺序、Routes、Settings、Providers 和 component overrides，但不验证这些能力的运行行为。只有 Client composition 变化或需要诊断时才运行。
+该命令可查看 Config declarations、ServiceProvider 顺序、Routes、Settings、React Providers 和 component overrides，但不执行 lifecycle、render 或 leaf loaders，也不验证这些能力的运行行为。只有 Client composition 变化或需要诊断时才运行。
 
 ## 常见不一致
 

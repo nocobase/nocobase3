@@ -42,6 +42,16 @@ jobs:
       - name: Build shared development config
         run: pnpm dev-config:build
 
+      # ESLint is run per package rather than over one list of every changed file. The type-aware rules build a
+      # TypeScript program per file and hold it for the length of the run, so a single process grows with the size of
+      # the change: a repository-wide refactor touching a couple of thousand files exhausts the runner's heap and the
+      # job dies with an allocation failure instead of a lint result. One process per package bounds that, because
+      # each exits and frees what it held. `--filter "[$BASE_SHA]"` selects exactly the packages the diff touched, so
+      # an ordinary pull request still lints only what it changed.
+      #
+      # Prettier keeps taking every changed file at once. It parses and prints one file at a time without any
+      # cross-file analysis, so its memory does not scale the same way — the same diff that kills ESLint peaks well
+      # under half a gigabyte here.
       - name: Check changed files
         shell: bash
         env:
@@ -52,27 +62,32 @@ jobs:
             BASE_SHA="$(git rev-list --max-parents=0 "$HEAD_SHA")"
           fi
 
-          eslint_files=()
+          # Files outside any package: the root ESLint configuration covers `scripts/`, `tests/`, and the root
+          # `.js`/`.mjs`/`.cjs` files, but no package owns them, so the per-package run below never reaches them.
+          root_files=()
           prettier_files=()
 
           while IFS= read -r -d '' file; do
             case "$file" in
-              *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts)
-                eslint_files+=("$file")
-                prettier_files+=("$file")
-                ;;
-              *.json|*.json5|*.jsonc|*.md|*.mdx|*.yml|*.yaml|*.css|*.scss|*.less|*.html)
+              packages/*) ;;
+              *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts) root_files+=("$file") ;;
+            esac
+
+            case "$file" in
+              *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.json|*.json5|*.jsonc|*.md|*.mdx|*.yml|*.yaml|*.css|*.scss|*.less|*.html)
                 prettier_files+=("$file")
                 ;;
             esac
           done < <(git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA")
 
-          if ((${#eslint_files[@]})); then
-            pnpm exec eslint --no-warn-ignored --max-warnings 0 -- "${eslint_files[@]}"
+          if ((${#root_files[@]})); then
+            pnpm exec eslint --no-warn-ignored --max-warnings 0 -- "${root_files[@]}"
           fi
 
+          pnpm --filter "[$BASE_SHA]" --if-present lint
+
           if ((${#prettier_files[@]})); then
-            pnpm exec prettier --check -- "${prettier_files[@]}"
+            pnpm exec prettier --check --ignore-path .prettierignore -- "${prettier_files[@]}"
           fi
 
   validation:

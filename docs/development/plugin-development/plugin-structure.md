@@ -14,16 +14,16 @@ Create Plugin 生成一个可发布的 workspace package。Agent 不应根据目
 composition entry；只创建 package foundation 时使用 `--empty`。
 
 ```text
-packages/app-plugin-audit-log/
+packages/plugins/app-plugin-audit-log/
 ├── client/
 │   ├── components/
 │   ├── pages/
-│   ├── bootstrap.ts
 │   ├── contexts.ts
 │   ├── index.ts
 │   ├── locales/
 │   ├── plugin.ts
-│   ├── providers.ts
+│   ├── providers/
+│   ├── react-providers/
 │   ├── routes.ts
 │   └── styles.css
 ├── database/
@@ -52,12 +52,12 @@ packages/app-plugin-audit-log/
 ```
 
 `server/jobs/`、`registry/`、`database/`、`skills/` 和各个 Client/Server 文件都由
-对应 capability 决定是否生成。选择 `server.routes` 不会顺带生成 Providers、
+对应 capability 决定是否生成。选择 `server.routes` 不会顺带生成 ServiceProviders、
 Database、Client 或 Skills；选择 `client.routes` 不会顺带生成页面、Settings 页面、
-Provider 或 bootstrap。选择 `database` 时 migrations 和 seeds 作为一个 capability
+ServiceProvider 或 React Provider。选择 `database` 时 migrations 和 seeds 作为一个 capability
 一起生成，其中 `.ts.example` 文件默认不执行。
 
-Locale resources 也必须显式选择：`client.locales` 只生成 Client locale resources 和必要的 Client plugin entry，`server.locales` 只生成 Server locale resources 和必要的 Server plugin entry。选择 routes、providers 或 bootstrap 不会顺带生成 locales。
+Locale resources 也必须显式选择：`client.locales` 只生成 Client locale resources 和必要的 Client plugin entry，`server.locales` 只生成 Server locale resources 和必要的 Server plugin entry。选择 routes、service-providers 或 react-providers 不会顺带生成 locales。
 
 ## 顶层能力和所有权
 
@@ -110,27 +110,27 @@ Plugin Skills 的读者是使用插件能力的 App Agent，不是维护插件�
 
 ## Client 文件
 
-| 文件                                       | 权威职责                                                            |
-| ------------------------------------------ | ------------------------------------------------------------------- |
-| `client/index.ts`                          | `./client` 包入口；default 重新导出 Client plugin factory           |
-| `client/plugin.ts`                         | 声明包名、Client options、`locales` 与 runtime contribution loaders |
-| `client/locales/`                          | Client namespace 的 lazy locale resources                           |
-| `client/bootstrap.ts`                      | 命令式初始化 Refine resources 或 providers                          |
-| `client/routes.ts`                         | 通过 `defineAppRoutes()` 和 `defineSettingsRoutes()` 声明页面       |
-| `client/providers.ts`                      | 通过 `defineClientProviders()` 声明 React Providers                 |
-| `client/pages/`                            | 由 `componentLoader` 按需加载的页面组件                             |
-| `client/contexts.ts` 或 `client/contexts/` | Context 和 hooks                                                    |
-| `client/components/`                       | 插件拥有的 runtime UI 组件                                          |
-| `client/styles.css`                        | 插件 UI 生成入口；只有实际需要时保留                                |
+| 文件                                       | 权威职责                                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `client/index.ts`                          | `./client` 包入口；default 重新导出 Client plugin factory                           |
+| `client/plugin.ts`                         | 静态声明包名、config、options、ServiceProviders、React Providers、Routes 和 locales |
+| `client/locales/`                          | Client namespace 的 lazy locale resources                                           |
+| `client/providers/`                        | Client ServiceProvider 实现和 constructor 数组                                      |
+| `client/react-providers/`                  | 通过 `defineClientReactProviders()` 声明 React tree Providers                       |
+| `client/routes.ts`                         | 通过 `defineAppRoutes()` 和 `defineSettingsRoutes()` 声明页面                       |
+| `client/pages/`                            | 由 `componentLoader` 按需加载的页面组件                                             |
+| `client/contexts.ts` 或 `client/contexts/` | Context 和 hooks                                                                    |
+| `client/components/`                       | 插件拥有的 runtime UI 组件                                                          |
+| `client/styles.css`                        | 插件 UI 生成入口；只有实际需要时保留                                                |
 
-Client 只有三个 runtime contribution entries，另有独立的资源声明：
+Client 的基础静态声明包括：
 
 ```text
-bootstrap
+config
+serviceProviders
+reactProviders
 routes
-providers
-
-locales → 翻译资源声明，不是 UI contribution
+locales
 ```
 
 Settings 属于 `routes`，不存在独立 `client/settings.ts` 契约。
@@ -141,23 +141,23 @@ Settings 属于 `routes`，不存在独立 `client/settings.ts` 契约。
 package.json
 → client/index.ts
 → client/plugin.ts
-→ client/bootstrap.ts / client/routes.ts / client/providers.ts
+→ client/providers/index.ts / client/react-providers/index.ts / client/routes.ts / client/locales/index.ts
 → tests/
 → <target-app>/client/plugins.ts
 ```
 
 ## Server 文件
 
-| 文件                | 权威职责                                                    |
-| ------------------- | ----------------------------------------------------------- |
-| `server/index.ts`   | 公开导出 Server plugin definition                           |
-| `server/plugin.ts`  | 组合 Providers、Routes、Database、Queue 和 locale resources |
-| `server/locales/`   | Server namespace 的 lazy locale resources                   |
-| `server/services/`  | 不依赖 HTTP 边界的领域行为默认实现                          |
-| `server/tokens.ts`  | 稳定服务接口和 ServiceToken                                 |
-| `server/providers/` | 服务注册和生命周期                                          |
-| `server/routes/`    | API 和 Root Route contributions                             |
-| `server/jobs/`      | Queue Job definitions                                       |
+| 文件                | 权威职责                                                           |
+| ------------------- | ------------------------------------------------------------------ |
+| `server/index.ts`   | 公开导出 Server plugin definition                                  |
+| `server/plugin.ts`  | 组合 ServiceProviders、Routes、Database、Queue 和 locale resources |
+| `server/locales/`   | Server namespace 的 lazy locale resources                          |
+| `server/services/`  | 不依赖 HTTP 边界的领域行为默认实现                                 |
+| `server/tokens.ts`  | 稳定服务接口和 ServiceToken                                        |
+| `server/providers/` | 服务注册和生命周期                                                 |
+| `server/routes/`    | API 和 Root Route contributions                                    |
+| `server/jobs/`      | Queue Job definitions                                              |
 
 推荐职责链：
 
@@ -253,7 +253,9 @@ exports["./server"]
 结构骨架：
 
 - `client.routes` 和 `server.routes` 从空 contributions 开始，由 Agent 添加真实 Route；
-- `server.providers` 提供 ServiceProvider、Service 和 Token 结构；
+- `server.service-providers` 提供 ServiceProvider、Service 和 Token 结构；
+- `client.service-providers` 提供 Client Provider constructors 和生命周期测试；
+- `client.react-providers` 提供 React Context、Wrapper declaration 和行为测试；
 - `database` 提供 disabled Migration/Seed examples；
 - `server.jobs` 提供最小 Job 结构和测试；
 - `client.locales`、`server.locales` 分别提供独立的 lazy locale resource 骨架；

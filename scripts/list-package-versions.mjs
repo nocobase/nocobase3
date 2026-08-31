@@ -17,20 +17,30 @@ import path from 'node:path';
 
 const PACKAGES_DIR = 'packages';
 
+// packages/ 是两层的：packages/<分类>/<包>，分类目录自己没有 package.json，所以要下钻一层才能读到包。
+// 只读一层会得到空列表，而发版 workflow 靠这里算「这次发了什么」，读空了就会静默发布空集。
+// 返回的 dir 是相对 packages/ 的路径（如 libs/app-database），不是裸包名。
 export function readPackages() {
   const out = [];
   if (!fs.existsSync(PACKAGES_DIR)) return out;
-  for (const dir of fs.readdirSync(PACKAGES_DIR)) {
-    const file = path.join(PACKAGES_DIR, dir, 'package.json');
-    if (!fs.existsSync(file)) continue;
-    const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
-    out.push({
-      dir,
-      file,
-      name: pkg.name,
-      version: pkg.version,
-      private: !!pkg.private,
-    });
+  for (const category of fs.readdirSync(PACKAGES_DIR, {
+    withFileTypes: true,
+  })) {
+    if (!category.isDirectory()) continue;
+    const categoryDir = path.join(PACKAGES_DIR, category.name);
+    for (const entry of fs.readdirSync(categoryDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const file = path.join(categoryDir, entry.name, 'package.json');
+      if (!fs.existsSync(file)) continue;
+      const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+      out.push({
+        dir: `${category.name}/${entry.name}`,
+        file,
+        name: pkg.name,
+        version: pkg.version,
+        private: !!pkg.private,
+      });
+    }
   }
   return out;
 }

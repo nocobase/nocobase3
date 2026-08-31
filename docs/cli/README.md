@@ -8,6 +8,8 @@
 
 这些命令在 App 目录下执行。用户从 npm 拉下模板生成自己的 App 之后，装插件、卸插件、升级插件都靠它们。
 
+`pnpm create @nocobase/app` 会在装完依赖后自动跑一次 `pnpm plugin:skills:sync`，所以新生成的 App 一开始就带着模板内置插件的 skills。之后插件有变化再手动同步。
+
 | 脚本                      | 实际执行                     | 作用                        |
 | ------------------------- | ---------------------------- | --------------------------- |
 | `pnpm plugin:register`    | `nb3 app plugin register`    | 安装插件包，并写入显式注册  |
@@ -138,27 +140,23 @@ pnpm plugin:inspect audit-log --json
 
 ## 仓库内开发命令
 
-在本仓库根目录开发插件时仍使用这些 `pnpm` scripts。除创建和删除源码外，注册、卸载和 skills 同步都直接调用同一个 `nb3 app plugin *` 实现：
+在本仓库根目录开发插件时仍使用这些 `pnpm` scripts。除创建和删除源码外，注册和卸载都直接调用同一个 `nb3 app plugin *` 实现。根目录没有独立的 skills 同步脚本：`plugin:register` 已经顺带复制 skills；要单独重新同步，进 `packages/templates/app-template-default` 跑 `pnpm plugin:skills:sync`。
 
-| 命令                                            | 作用                                                    |
-| ----------------------------------------------- | ------------------------------------------------------- |
-| `pnpm plugin:create <name> --with <capability>` | 按显式 capability 生成 `packages/app-plugin-<name>/`    |
-| `pnpm plugin:register <name>`                   | 写依赖、manifest、Client/Server 显式入口，并复制 skills |
-| `pnpm plugin:unregister <name>`                 | 上述四项的逆操作                                        |
-| `pnpm plugin:inspect <name>`                    | 只读检查多面注册状态和 Skills                           |
-| `pnpm plugin:remove <name>`                     | 删除插件源码；仍被引用时会拒绝并提示先 unregister       |
-| `pnpm plugin:skills:sync`                       | 只同步 skills（从 `packages/` 解析插件）                |
+| 命令                                            | 作用                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| `pnpm plugin:create <name> --with <capability>` | 按显式 capability 生成 `packages/plugins/app-plugin-<name>/` |
+| `pnpm plugin:register <name>`                   | 写依赖、manifest、Client/Server 显式入口，并复制 skills      |
+| `pnpm plugin:unregister <name>`                 | 上述四项的逆操作                                             |
+| `pnpm plugin:inspect <name>`                    | 只读检查多面注册状态和 Skills                                |
+| `pnpm plugin:remove <name>`                     | 删除插件源码；仍被引用时会拒绝并提示先 unregister            |
 
 完整参数用 `--help` 查看。插件开发流程见[插件开发](../development/plugin-development/README.md)。
 
 仓库专属的 `plugin:remove` 也支持 `--dry-run --json`。仍有 workspace 引用时，它以非零退出码返回 `PLUGIN_STILL_REFERENCED`，并在 `error.details.references` 和结构化 `error.suggestions` 中列出阻塞引用及解除注册命令。
 
-`plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.providers`、`server.routes`、`server.jobs`、`client.routes`、`client.components`、`client.providers`、`client.bootstrap`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
+`plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.service-providers`、`server.routes`、`server.jobs`、`server.locales`、`client.routes`、`client.components`、`client.service-providers`、`client.react-providers`、`client.locales`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
 
-`plugin:create --json` 和 `plugin:skills:sync --json` 在成功和失败时都输出稳定的 JSON
-envelope。失败结果包含 `ok: false`、`error.code`、`error.message` 和
-`error.suggestions`，同时保持非零退出码；Agent 不应把 JSON 模式的 stderr 当作普通
-帮助文本解析。
+`plugin:create --json` 输出稳定的 JSON envelope，`nb3 app plugin *` 的各条命令也一样。失败结果包含 `ok: false`、`error.code`、`error.message` 和 `error.suggestions`，同时保持非零退出码；Agent 不应把 JSON 模式的 stderr 当作普通帮助文本解析。
 
 Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数表：
 
@@ -187,11 +185,11 @@ Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数�
 
 真正的差别只有两处，所以它们是同一条命令的运行参数：
 
-- **插件从哪里找。** 仓库内是 `packages/` 下的工作区目录，App 内是 `node_modules` 里装好的依赖。
+- **插件从哪里找。** 仓库内是 `packages/*/` 下的工作区目录，App 内是 `node_modules` 里装好的依赖。
 - **依赖记什么版本。** 仓库内是 `workspace:^`，App 内是从 registry 装到的实际版本（`^1.2.0`）。
 
-仓库根目录不再保留 `create-plugin.mjs`、`register-plugin.mjs`、`unregister-plugin.mjs` 或 `sync-skills.mjs`。改动注册逻辑时只改对应包内实现：创建逻辑位于 `@nocobase/create-plugin`，注册与 skills 逻辑位于 `@nocobase/nb3-cli`。只有删除 workspace 插件源码的 `plugin:remove` 仍是仓库专属命令，继续留在 `scripts/`。
+仓库根目录不再保留 `create-plugin.mjs`、`register-plugin.mjs`、`unregister-plugin.mjs` 或 `sync-skills.mjs`，也不再保留独立的 `plugin:skills:sync` 脚本。改动注册逻辑时只改对应包内实现：创建逻辑位于 `@nocobase/create-plugin`，注册与 skills 逻辑位于 `@nocobase/nb3-cli`。只有删除 workspace 插件源码的 `plugin:remove` 仍是仓库专属命令，继续留在 `scripts/`。
 
 ## App 与 Hub 命令
 
-`nb3 app create`、`nb3 app dev`、`nb3 hub *` 等命令的实现仍在 `packages/cli/src/commands/` 中，但尚未定稿，文档暂不提供。需要了解当前行为时直接看源码或 `nb3 <topic> --help`。
+`nb3 app create`、`nb3 app dev`、`nb3 hub *` 等命令的实现仍在 `packages/tools/cli/src/commands/` 中，但尚未定稿，文档暂不提供。需要了解当前行为时直接看源码或 `nb3 <topic> --help`。

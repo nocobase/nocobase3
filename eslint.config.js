@@ -14,25 +14,33 @@ const rootNodeFiles = [
   'scripts/**/*.{js,mjs,cjs}',
   'tools/**/*.{js,mjs,cjs}',
 ];
+// These roots stay enumerated rather than collapsing into globs such as
+// `packages/libs/*`, because the directory grouping does not match the
+// configuration grouping: node libraries are split across `packages/libs` and
+// `packages/app`, `packages/app` mixes node and client libraries, and
+// `packages/libs` also holds packages this root configuration does not cover.
 const nodeLibraryRoots = [
-  'packages/app-server-kit',
-  'packages/authorization',
-  'packages/caching',
-  'packages/app-database',
-  'packages/drive',
-  'packages/app-host',
-  'packages/id-generator',
-  'packages/logging',
-  'packages/queue',
-  'packages/session',
+  'packages/app/app-server-kit',
+  'packages/libs/authorization',
+  'packages/libs/caching',
+  'packages/libs/app-database',
+  'packages/libs/drive',
+  'packages/app/app-host',
+  'packages/libs/id-generator',
+  'packages/libs/logging',
+  'packages/libs/queue',
+  'packages/libs/session',
 ];
-const devConfigRoots = ['packages/dev-config'];
+const devConfigRoots = ['packages/tools/dev-config'];
 const clientLibraryRoots = [
-  'packages/app-client',
-  'packages/app-sdk',
-  'packages/app-portal-sdk',
+  'packages/app/app-client',
+  'packages/app/app-sdk',
+  'packages/app/app-portal-sdk',
 ];
-const portalRoots = ['packages/app-template-default', 'packages/hub'];
+const portalRoots = [
+  'packages/templates/app-template-default',
+  'packages/templates/app-template-hub',
+];
 const prefixPatterns = (roots, patterns) =>
   roots.flatMap((root) => patterns.map((pattern) => `${root}/${pattern}`));
 
@@ -88,7 +96,7 @@ export default [
       tsconfigRootDir: import.meta.dirname,
       ignores: ['ui/**'],
     }),
-    ['packages/app-plugin-authentication'],
+    ['packages/plugins/app-plugin-authentication'],
     'app-plugin-authentication',
   ),
   ...scopePackageConfigs(

@@ -11,7 +11,7 @@ description: 在插件顶层 skills 目录描述插件向 App 提供的公共能
 
 本指南由开发插件的 Agent 阅读，用来编写供 App Agent 使用的 Plugin Skills。插件开发文档回答“如何修改插件源码”；Plugin Skills 回答“插件向 App 提供了什么，以及 App 如何集成和使用”。
 
-仓库中的 `packages/app-plugin-skills-example` 是最小但完整的参考实现。它不是只放一份
+仓库中的 `packages/examples/app-plugin-skills-example` 是最小但完整的参考实现。它不是只放一份
 `SKILL.md` 的空示例，而是同时提供可导入的 Client component、Server
 `ServiceToken`、带自身认证边界的 API，以及在 `app-template-default` 中由 App 拥有的
 页面组合和行为测试。开发新 Skill 时优先对照这个闭环，不要只对照 Markdown 结构。
@@ -67,8 +67,8 @@ Example 公开：
 ```
 
 App 可以直接在自己拥有的页面中导入并组合它；插件没有 `./client`，因此 App 不应为了
-使用这个组件而新增 Client plugin registration。只有插件实际提供 bootstrap、routes 或
-providers contribution 时，才通过 `./client` 注册 Client plugin。Skill 必须把这两类入口
+使用这个组件而新增 Client plugin registration。只有插件实际提供 config、serviceProviders、reactProviders、routes 或
+locales contribution 时，才通过 `./client` 注册 Client plugin。Skill 必须把这两类入口
 写清楚，避免 Agent 根据 `client/` 文件路径猜测 runtime composition。
 
 同一个示例的 Server API `GET /api/skills-example/notice` 要求已登录，但对固定、非敏感
@@ -109,10 +109,10 @@ nocobase-app-plugin-workflow-diagnostics
 
 ## 发布和同步到 App
 
-`package.json#files` 必须包含 `skills`。注册默认同步；也可执行：
+`package.json#files` 必须包含 `skills`。注册默认同步；也可以进目标 App 目录单独执行：
 
 ```bash
-pnpm plugin:skills:sync --app <target-app> --plugin <plugin-name>
+pnpm plugin:skills:sync --plugin <plugin-name>
 ```
 
 每个目录整体替换，源文件删除的 Skill 会从 App 清理，名称冲突会失败。`--disabled` 默认仍同步 Skills；只有显式 `--no-skills` 才跳过。不要编辑 App 中的同步副本。

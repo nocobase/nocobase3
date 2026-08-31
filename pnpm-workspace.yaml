@@ -1,8 +1,5 @@
 packages:
-  - packages/*
-  - examples/*
-  - examples/*/apps/*
-  - examples/*/packages/*
+  - packages/*/*
 
 # Commands with --dry-run must not trigger an implicit install before their
 # own code can enforce read-only behavior. Dependency changes are synchronized

@@ -5,7 +5,7 @@ description: 在 NocoBase v3 source workspace 中预览、注册和配置本地�
 
 # Source workspace 插件注册
 
-本页适用于当前仓库 `packages/app-plugin-*` 中的插件。执行命令前确认插件包名、目标 App 和工作树状态。
+本页适用于当前仓库 `packages/plugins/app-plugin-*` 中的插件。执行命令前确认插件包名、目标 App 和工作树状态。
 
 ## 最小注册流程
 
@@ -32,7 +32,7 @@ pnpm plugin:register audit-log --app app-template-default
 
 ```bash
 pnpm plugin:create audit-log \
-  --with server.providers \
+  --with server.service-providers \
   --with server.routes \
   --no-install
 
@@ -75,7 +75,7 @@ import auditLog from '@nocobase/app-plugin-audit-log/server';
 const serverPlugins: AppServerPlugins = defineServerPlugins([auditLog]);
 ```
 
-Client 数组顺序也是 bootstrap 顺序。命令默认把新插件追加到末尾；只有确实存在顺序要求或需要传 options 时才手工调整。
+Client 数组顺序也是静态 contribution 和 ServiceProvider lifecycle 的组合顺序。命令默认把新插件追加到末尾；只有确实存在顺序要求或需要传 options 时才手工调整。
 
 ## 安装但不启用
 
@@ -109,11 +109,11 @@ auditLog({
 
 ## Skills 同步
 
-插件能力或说明发生变化后，可以单独同步：
+插件能力或说明发生变化后，可以单独同步。这条命令属于 App，在 App 目录下执行——本仓库内即 `packages/templates/app-template-default`：
 
 ```bash
-pnpm plugin:skills:sync --app app-template-default
-pnpm plugin:skills:sync --app app-template-default --plugin audit-log
+pnpm plugin:skills:sync
+pnpm plugin:skills:sync --plugin audit-log
 ```
 
 同步边界：

@@ -88,6 +88,6 @@ Job 生成邮件、通知或其他外发内容时没有请求语言可继承。�
 - 运行目标 App Queue integration，确认发现、派发、worker 和关闭流程；
 - 需要 HTTP producer 时，继续覆盖 Route 的匿名、无权限和允许访问。
 
-`packages/app-plugin-queue-example` 是最小发现和派发参考；复杂持久化、worker lifecycle 和幂等策略应参考与当前业务相近的真实插件，而不是复制演示插件的内存数组。
+`packages/examples/app-plugin-queue-example` 是最小发现和派发参考；复杂持久化、worker lifecycle 和幂等策略应参考与当前业务相近的真实插件，而不是复制演示插件的内存数组。
 
 返回[Server 模块选择](./server.md)，或阅读[测试和验证插件](./testing.md)。

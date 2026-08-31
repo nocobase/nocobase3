@@ -1,0 +1,46 @@
+{
+  "name": "@nocobase/service-provider",
+  "description": "Service container and provider lifecycle infrastructure for NocoBase applications.",
+  "version": "0.0.2-beta.0",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

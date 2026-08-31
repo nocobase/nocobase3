@@ -46,7 +46,7 @@ Hub 是用于部署和管理 App 的应用中心。
 如果需要本地 Hub：
 
 ```bash
-pnpm create @nocobase/hub my-hub
+pnpm create @nocobase/app my-hub --template hub
 cd my-hub
 pnpm build
 pnpm start
@@ -88,10 +88,12 @@ pnpm deploy
 
 不需要。Hub 可以在本机、测试环境或线上。
 
-### `pnpm create @nocobase/app` 和 `pnpm create @nocobase/hub` 有什么区别？
+### 创建 App 和创建 Hub 有什么区别？
 
-- `pnpm create @nocobase/app` 创建业务 App 源码。
-- `pnpm create @nocobase/hub` 创建应用中心运行环境。
+两者都用 `pnpm create @nocobase/app`，区别在 `--template`：
+
+- 不带 `--template`（等同于 `--template default`）创建业务 App 源码，会询问数据库类型并写入 `config.yml`。
+- `--template hub` 创建应用中心运行环境。Hub 没有数据库，它代理上游的 NocoBase API，配置写在 `.env` 里。
 
 ## 架构介绍
 

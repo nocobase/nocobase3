@@ -14,11 +14,11 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、I18n
 | Client descriptor/options | factory 解析后的 entries 和 options                          |
 | App/Settings Routes       | parent、path、navigation、access、component loader           |
 | Client Component          | props、交互、公共 export 和目标 App 渲染                     |
-| Client Provider           | descriptor、Context 行为、顺序和 cleanup                     |
-| Client Bootstrap          | Refine 注册、options、异步失败和 import-time 副作用          |
+| Client React Provider     | descriptor、Context 行为、顺序和 cleanup                     |
+| Client ServiceProvider    | Service/Refine 注册、options、lifecycle、失败清理和副作用    |
 | Service/Provider          | Token、惰性单例、生命周期、错误清理                          |
 | API/Root Route            | 真实 router 请求、状态码、响应、权限、base path              |
-| Server plugin             | providers/routes/database/queue composition                  |
+| Server plugin             | serviceProviders/routes/database/queue composition           |
 | Migration/Seed            | 真实数据库的 schema、metadata、up/down、数据结果             |
 | Queue Job                 | handler、payload、Service、重试/幂等和可观察结果             |
 | Plugin I18n               | key 结构、namespace、双语言渲染、请求/外发语言和 lazy chunks |
@@ -28,7 +28,7 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、I18n
 
 ## Client 测试
 
-不要只断言模块存在。Components 测试 props、交互和正式 public export；Routes 测试 descriptor 并实际调用 component loaders；Provider 分别测试 declaration 和 React Context；Bootstrap 使用最小 context 验证 Refine、options 和错误传播。详细边界见 [Client 模块选择](./client.md)。
+不要只断言模块存在。Components 测试 props、交互和正式 public export；Routes 测试 descriptor 并实际调用 component loaders；React Provider 分别测试 declaration、组合顺序和 Context 行为；ServiceProvider 使用独立 Client Application 或最小 fixture 验证 Container binding、Refine 注册、options、完整 lifecycle、异步失败和逆序清理。详细边界见 [Client 模块选择](./client.md)。
 
 ## Server 测试
 
@@ -76,7 +76,7 @@ Job、cron、邮件或通知必须覆盖非默认收件人语言，并证明代�
 
 固定字符串或快照不能证明 Skill 的语义质量。开发 Agent 仍需逐项核对 Skill 描述的公共入口、工作流、权限、约束和验证是否与真实插件一致。
 
-`packages/app-plugin-skills-example` 展示了两层检查如何配合：插件测试核对 exports、Route
+`packages/examples/app-plugin-skills-example` 展示了两层检查如何配合：插件测试核对 exports、Route
 认证和 Skill 内容；目标 App 测试再通过公开 component export 渲染页面，并对真实 App
 Server 发出匿名和已登录请求。只有后者能证明“App Agent 按 Skill 执行后得到可见结果”，
 `plugin:inspect` 的 `contentMatches: true` 只能证明同步副本与源文件一致。
@@ -127,7 +127,7 @@ pnpm --filter <target-app> build
 
 最后按风险启动 App，验证真实页面、Settings 导航与 access、HTTP 路径、Migration/Seed、Job、语言切换和 Agent 对同步 Skills 的发现。命令成功不等于运行时闭环已验证。
 
-Inspector 只提供静态登记和 composition 的局部快照，并报告其检查范围内确定的装配问题。Client inspection 不运行 Bootstrap、不加载页面、不渲染 Provider；Server inspection 不执行 Provider、Route factory、Job 或数据库操作。Agent 通过模块文档、源码、类型、行为测试和目标 App 运行结果理解实现，不根据 Inspector 推断业务正确性，也不把 `consistent: true` 作为完成条件。
+Inspector 只提供静态登记和 composition 的局部快照，并报告其检查范围内确定的装配问题。Client inspection 不实例化或运行 ServiceProvider、不加载页面或语言消息、不渲染 React Provider；Server inspection 不执行 ServiceProvider、Route factory、Job 或数据库操作。Agent 通过模块文档、源码、类型、行为测试和目标 App 运行结果理解实现，不根据 Inspector 推断业务正确性，也不把 `consistent: true` 作为完成条件。
 
 ## 完成条件
 
