@@ -1,0 +1,7 @@
+interface:
+  display_name: 'NocoBase App Plugin Notification'
+  short_description: 'Integrate, send, inspect, and diagnose NocoBase notifications'
+  default_prompt: 'Use $nocobase-app-plugin-notification to integrate, configure, send, inspect, or diagnose NocoBase notifications using the installed runtime contracts.'
+
+policy:
+  allow_implicit_invocation: true
