@@ -31,6 +31,9 @@ import { SUPPORTED_DOCUMENT_EXTNAMES } from '../manager/document-loader/plugin/i
 import path from 'node:path';
 import { MODEL_KWARGS_KEY } from './common/reasoning.js';
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 export type ParsedAttachmentResult = {
   placement: string;
   content: any;
@@ -244,16 +247,52 @@ export abstract class LLMProvider {
         },
       });
       return { models: res?.data.data };
-    } catch (e) {
-      const status = e.response?.status || 500;
-      const data = e.response?.data;
+    } catch (error) {
+      const response =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? error.response
+          : undefined;
+      const responseRecord =
+        typeof response === 'object' && response !== null
+          ? response
+          : undefined;
+      const status =
+        responseRecord &&
+        'status' in responseRecord &&
+        typeof responseRecord.status === 'number'
+          ? responseRecord.status
+          : 500;
+      const data =
+        responseRecord && 'data' in responseRecord
+          ? responseRecord.data
+          : undefined;
+      const dataRecord =
+        typeof data === 'object' && data !== null ? data : undefined;
+      const nestedError =
+        dataRecord && 'error' in dataRecord ? dataRecord.error : undefined;
+      const nestedErrorRecord =
+        typeof nestedError === 'object' && nestedError !== null
+          ? nestedError
+          : undefined;
       const errorMsg =
-        data?.error?.message ||
-        data?.message ||
-        (typeof data?.error === 'string' ? data.error : undefined) ||
+        (nestedErrorRecord &&
+        'message' in nestedErrorRecord &&
+        typeof nestedErrorRecord.message === 'string'
+          ? nestedErrorRecord.message
+          : undefined) ||
+        (dataRecord &&
+        'message' in dataRecord &&
+        typeof dataRecord.message === 'string'
+          ? dataRecord.message
+          : undefined) ||
+        (typeof nestedError === 'string' ? nestedError : undefined) ||
         (typeof data === 'string' ? data : undefined) ||
-        e.response?.statusText ||
-        e.message;
+        (responseRecord &&
+        'statusText' in responseRecord &&
+        typeof responseRecord.statusText === 'string'
+          ? responseRecord.statusText
+          : undefined) ||
+        getErrorMessage(error);
       return { code: status, errMsg: errorMsg };
     }
   }
@@ -343,13 +382,20 @@ export abstract class LLMProvider {
     runtime: AttachmentParseRuntime,
   ): Promise<ParsedAttachmentResult> {
     const data = await this.encodeAttachment(attachment, runtime);
-    if (attachment.mimetype.startsWith('image/')) {
+    const mimetype = attachment.mimetype;
+    if (!mimetype) {
+      return {
+        placement: 'system',
+        content: 'The user provided an attachment without a MIME type.',
+      };
+    }
+    if (mimetype.startsWith('image/')) {
       return {
         placement: 'contentBlocks',
         content: {
           type: 'image_url',
           image_url: {
-            url: `data:image/${attachment.mimetype.split('/')[1]};base64,${data}`,
+            url: `data:image/${mimetype.split('/')[1]};base64,${data}`,
           },
         },
       } as ParsedAttachmentResult;
@@ -358,7 +404,7 @@ export abstract class LLMProvider {
       placement: 'contentBlocks',
       content: {
         type: 'file',
-        mimeType: attachment.mimetype,
+        mimeType: mimetype,
         metadata: {
           filename: attachment.filename,
         },
@@ -452,12 +498,12 @@ export abstract class LLMProvider {
     message?: string;
   }> {
     try {
-      const result = await this.chatModel.invoke('hello');
+      await this.chatModel.invoke('hello');
     } catch (error) {
       return {
         status: 'error',
         code: 1,
-        message: error.message,
+        message: getErrorMessage(error),
       };
     }
     return {
@@ -487,23 +533,23 @@ export abstract class LLMProvider {
   }
 
   parseWebSearchAction(
-    chunk: AIMessageChunk,
+    _chunk: AIMessageChunk,
   ): { type: string; query: string }[] {
     return [];
   }
 
   parseReasoningContent(
-    chunk: AIMessageChunk,
+    _chunk: AIMessageChunk,
   ): { status: string; content: string } | null {
     return null;
   }
 
-  parseResponseMetadata(output: LLMResult): any {
+  parseResponseMetadata(_output: LLMResult): any {
     return [null, null];
   }
 
-  parseResponseError(err) {
-    return err?.message ?? 'Unexpected LLM service error';
+  parseResponseError(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unexpected LLM service error';
   }
 
   prepareStoredAssistantAdditionalKwargs(

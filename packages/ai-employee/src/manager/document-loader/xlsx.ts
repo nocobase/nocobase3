@@ -56,7 +56,7 @@ export const loadXlsx = async (
 
   const documents: Document[] = [];
 
-  workbook.SheetNames.forEach((sheetName, index) => {
+  workbook.SheetNames.forEach((sheetName: string, index: number) => {
     const sheet = workbook.Sheets[sheetName];
 
     if (!sheet) {

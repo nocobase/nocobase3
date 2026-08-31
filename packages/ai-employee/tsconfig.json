@@ -4,11 +4,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "isolatedDeclarations": false,
-    "lib": ["ES2024", "DOM", "DOM.Iterable"],
-    "strict": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": false
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
   "include": ["src"],
   "exclude": ["src/**/__tests__", "src/**/test"]

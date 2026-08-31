@@ -22,6 +22,20 @@ import {
 } from '../manager/llm-provider/types.js';
 import { AIMessageChunk } from '@langchain/core/messages';
 
+type AnthropicRequestError = {
+  message?: string;
+  response?: {
+    status?: number;
+    data?: { error?: { message?: string } };
+  };
+};
+
+function isAnthropicRequestError(
+  error: unknown,
+): error is AnthropicRequestError {
+  return typeof error === 'object' && error !== null;
+}
+
 // Kimi code API only accept anthropic client
 // And anthropic default max_tokens is 2k that is too small for Kimi code
 const MAX_TOKENS_PRESET = {
@@ -112,9 +126,15 @@ export class AnthropicProvider extends LLMProvider {
       return {
         models: res?.data?.data,
       };
-    } catch (e) {
-      const status = e.response?.status || 500;
-      const errorMsg = e.response?.data?.error?.message || e.message;
+    } catch (error) {
+      const status = isAnthropicRequestError(error)
+        ? (error.response?.status ?? 500)
+        : 500;
+      const errorMsg = isAnthropicRequestError(error)
+        ? (error.response?.data?.error?.message ??
+          error.message ??
+          String(error))
+        : String(error);
       return { code: status, errMsg: `Anthropic API Error: ${errorMsg}` };
     }
   }
@@ -227,13 +247,14 @@ export class AnthropicProvider extends LLMProvider {
     runtime: AttachmentParseRuntime,
   ): Promise<ParsedAttachmentResult> {
     const data = await this.encodeAttachment(attachment, runtime);
-    if (attachment.mimetype.startsWith('image/')) {
+    const mimetype = attachment.mimetype ?? 'application/octet-stream';
+    if (mimetype.startsWith('image/')) {
       return {
         placement: 'contentBlocks',
         content: {
           type: 'image_url',
           image_url: {
-            url: `data:image/${attachment.mimetype.split('/')[1]};base64,${data}`,
+            url: `data:image/${mimetype.split('/')[1]};base64,${data}`,
           },
         },
       };

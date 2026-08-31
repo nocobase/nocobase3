@@ -12,10 +12,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { Document } from '@langchain/core/documents';
 import type { Cache, Caching } from '@nocobase/caching';
-import { DOCUMENT_PARSE_META_KEY } from './constants.js';
-import {
+import type {
   DocumentLoaderLike,
-  DocumentParseMeta,
   ParseableFile,
   ParsedDocumentResult,
 } from './types.js';

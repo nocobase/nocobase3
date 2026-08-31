@@ -10,7 +10,6 @@
 import type {
   AIEmployeeEntity,
   AIEmployeeRepository,
-  AIEmployeeKnowledgeBase,
   AIEmployeeToolSetting,
 } from '../../repository/index.js';
 

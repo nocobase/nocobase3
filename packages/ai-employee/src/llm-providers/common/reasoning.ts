@@ -14,6 +14,11 @@ import type OpenAI from 'openai';
 export const REASONING_MAP_KEY = '__nb_reasoning_map';
 export const MODEL_KWARGS_KEY = '__nb_model_kwargs';
 
+export type NocoBaseRequestOptions = OpenAI.RequestOptions & {
+  [REASONING_MAP_KEY]?: Map<string, string>;
+  [MODEL_KWARGS_KEY]?: Record<string, unknown>;
+};
+
 export const collectReasoningMap = (messages: BaseMessage[]) => {
   const reasoningMap = new Map<string, string>();
   for (let i = 0; i < messages.length; i++) {
@@ -152,10 +157,10 @@ export class ReasoningChatOpenAI extends ChatOpenAICompletions {
     | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
     | OpenAI.Chat.Completions.ChatCompletion
   > {
-    const reasoningMap = requestOptions?.[REASONING_MAP_KEY] as
-      Map<string, string> | undefined;
-    const modelKwargs = requestOptions?.[MODEL_KWARGS_KEY] as
-      Record<string, any> | undefined;
+    const extendedRequestOptions = requestOptions as
+      NocoBaseRequestOptions | undefined;
+    const reasoningMap = extendedRequestOptions?.[REASONING_MAP_KEY];
+    const modelKwargs = extendedRequestOptions?.[MODEL_KWARGS_KEY];
     patchRequestMessagesReasoning(request, reasoningMap);
     patchRequestModelKwargs(request, modelKwargs);
     if (request.stream) {

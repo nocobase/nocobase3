@@ -18,7 +18,6 @@ import {
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { SupportedModel } from '../manager/llm-provider/types.js';
 import _ from 'lodash';
-import path from 'node:path';
 import { ReasoningChatOpenAI } from './common/reasoning.js';
 import { AIFileAttachment } from '../types/ai-file-attachment.js';
 
@@ -130,7 +129,7 @@ export class DashscopeProvider extends LLMProvider {
   parseReasoningContent(chunk: AIMessageChunk): {
     status: string;
     content: string;
-  } {
+  } | null {
     if (!_.isEmpty(chunk?.additional_kwargs?.reasoning_content)) {
       return {
         status: 'streaming',

@@ -1,8 +1,4 @@
-import type {
-  CollectionQuery,
-  CollectionRepository,
-  RepositoryOptions,
-} from '../collection.js';
+import type { CollectionQuery, CollectionRepository } from '../collection.js';
 
 function matches<T extends object>(
   value: T,
@@ -17,10 +13,12 @@ function matches<T extends object>(
       if ('$notIn' in operators)
         return !(operators.$notIn as readonly unknown[]).includes(actual);
       if ('$ne' in operators) return actual !== operators.$ne;
-      if ('$lt' in operators) return actual < operators.$lt;
-      if ('$lte' in operators) return actual <= operators.$lte;
-      if ('$gt' in operators) return actual > operators.$gt;
-      if ('$gte' in operators) return actual >= operators.$gte;
+      if ('$lt' in operators) return compareValues(actual, operators.$lt) < 0;
+      if ('$lte' in operators)
+        return compareValues(actual, operators.$lte) <= 0;
+      if ('$gt' in operators) return compareValues(actual, operators.$gt) > 0;
+      if ('$gte' in operators)
+        return compareValues(actual, operators.$gte) >= 0;
     }
     return Array.isArray(expected)
       ? expected.includes(actual)

@@ -15,7 +15,6 @@ import {
   FileDescriptor,
 } from './scanner.js';
 import { readFile } from 'fs/promises';
-import _ from 'lodash';
 import { existsSync } from 'fs';
 import { AIManager } from '../manager/index.js';
 import { LoadAndRegister } from './types.js';
@@ -32,7 +31,7 @@ export class ToolsLoader extends LoadAndRegister<ToolsLoaderOptions> {
 
   protected files: FileDescriptor[] = [];
   protected toolsDescriptors: ToolsDescriptor[] = [];
-  protected logger: Logger;
+  protected logger?: Logger;
 
   constructor(
     protected readonly ai: AIManager,
@@ -59,10 +58,9 @@ export class ToolsLoader extends LoadAndRegister<ToolsLoaderOptions> {
         fd.basename === 'description.md'
           ? fd.directory
           : fd.name;
-      if (!grouped.has(key)) {
-        grouped.set(key, []);
-      }
-      grouped.get(key).push(fd);
+      const group = grouped.get(key) ?? [];
+      group.push(fd);
+      grouped.set(key, group);
     }
 
     this.toolsDescriptors = (
@@ -72,13 +70,13 @@ export class ToolsLoader extends LoadAndRegister<ToolsLoaderOptions> {
             (fd) => fd.extname === '.ts' || fd.extname === '.js',
           );
           const descFile = fds.find((fd) => fd.basename === 'description.md');
-          const entry: ToolsDescriptor = { name, tsFile, descFile };
           if (!tsFile || !existsSync(tsFile.path)) {
             this.logger?.error(
               `tools [${name}] ignored: can not find .ts file`,
             );
             return null;
           }
+          const entry: ToolsDescriptor = { name, tsFile, descFile };
           try {
             const module = await importModule(tsFile.path);
             const candidate = typeof module === 'function' ? module() : module;
@@ -121,7 +119,11 @@ export class ToolsLoader extends LoadAndRegister<ToolsLoaderOptions> {
         );
         continue;
       }
-      const { name, toolsOptions, description } = descriptor;
+      const { name, description } = descriptor;
+      const toolsOptions: ToolsOptions = {
+        ...descriptor.toolsOptions,
+        definition: { ...descriptor.toolsOptions.definition },
+      };
       if (
         (await toolsManager.isToolsExisted(name)) &&
         !this.options.overrideExisting
@@ -133,7 +135,7 @@ export class ToolsLoader extends LoadAndRegister<ToolsLoaderOptions> {
       }
       if (toolsOptions.definition) {
         toolsOptions.definition.name = name;
-        if (!_.isEmpty(description)) {
+        if (typeof description === 'string' && description.length > 0) {
           toolsOptions.definition.description = description;
         }
       }
@@ -161,7 +163,7 @@ function isToolsOptions(value: unknown): value is ToolsOptions {
 
 export type ToolsDescriptor = {
   name: string;
-  tsFile?: FileDescriptor;
+  tsFile: FileDescriptor;
   descFile?: FileDescriptor;
   toolsOptions?: ToolsOptions;
   description?: string;

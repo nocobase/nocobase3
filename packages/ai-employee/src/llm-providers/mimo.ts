@@ -17,7 +17,11 @@ import { convertCompletionsDeltaToBaseMessageChunk } from '@langchain/openai';
 import { AIMessageChunk, BaseMessageChunk } from '@langchain/core/messages';
 import { ReasoningChatOpenAI } from './common/reasoning.js';
 import { AIFileAttachment } from '../types/ai-file-attachment.js';
+import type OpenAI from 'openai';
 
+type ReasoningDelta = Record<string, unknown> & {
+  reasoning_content?: string;
+};
 export class MiMoProvider extends LLMProvider {
   declare chatModel: ReasoningChatOpenAI;
 
@@ -78,7 +82,7 @@ export class MiMoProvider extends LLMProvider {
   parseReasoningContent(chunk: AIMessageChunk): {
     status: string;
     content: string;
-  } {
+  } | null {
     if (!_.isEmpty(chunk?.additional_kwargs?.reasoning_content)) {
       return {
         status: 'streaming',
@@ -107,9 +111,9 @@ export class MiMoProvider extends LLMProvider {
 
 class ChatMiMoCompletions extends ReasoningChatOpenAI {
   _convertCompletionsDeltaToBaseMessageChunk(
-    delta,
-    rawResponse,
-    defaultRole,
+    delta: ReasoningDelta,
+    rawResponse: OpenAI.Chat.Completions.ChatCompletionChunk,
+    defaultRole?: OpenAI.Chat.ChatCompletionRole,
   ): BaseMessageChunk {
     const chunk = convertCompletionsDeltaToBaseMessageChunk({
       delta,

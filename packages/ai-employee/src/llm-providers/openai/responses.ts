@@ -15,8 +15,21 @@ import {
 } from '../provider.js';
 import { stripToolCallTags } from '../../utils/messages.js';
 import { AIMessageChunk } from '@langchain/core/messages';
-import { LLMResult } from '@langchain/core/outputs';
 
+type ReferenceAnnotation = { title?: string; url?: string };
+type TextContent = {
+  type?: string;
+  text?: string;
+  annotations?: ReferenceAnnotation[];
+};
+type ResponseOutputContent = {
+  type?: string;
+  annotations?: ReferenceAnnotation[];
+};
+type ResponseOutputItem = {
+  type?: string;
+  content?: ResponseOutputContent[];
+};
 export class OpenAIResponsesProvider extends LLMProvider {
   declare chatModel: ChatOpenAI;
 
@@ -93,7 +106,9 @@ export class OpenAIResponsesProvider extends LLMProvider {
     }
 
     if (Array.isArray(content.content)) {
-      const textMessage = content.content.find((msg) => msg.type === 'text');
+      const textMessage = content.content.find(
+        (msg: TextContent) => msg.type === 'text',
+      );
       content.content = textMessage?.text;
 
       // get web search results from openai response's annotations
@@ -110,11 +125,11 @@ export class OpenAIResponsesProvider extends LLMProvider {
     if (metadata?.response_metadata?.output?.length) {
       content.reference = content.reference ?? [];
       const output = metadata.response_metadata.output.find(
-        (it) => it.type === 'message',
+        (it: ResponseOutputItem) => it.type === 'message',
       );
       if (output?.content?.length) {
         const outputContent = output.content.find(
-          (it) => it.type === 'output_text',
+          (it: ResponseOutputContent) => it.type === 'output_text',
         );
         for (const annotation of outputContent?.annotations ?? []) {
           content.reference.push({

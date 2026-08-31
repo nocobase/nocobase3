@@ -33,6 +33,7 @@ import {
 import {
   collectReasoningMap,
   MODEL_KWARGS_KEY,
+  type NocoBaseRequestOptions,
   patchRequestMessagesReasoning,
   patchRequestModelKwargs,
   REASONING_MAP_KEY,
@@ -132,9 +133,10 @@ class ReasoningDeepSeek extends ChatDeepSeek {
     options: this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
   ) {
+    const extendedOptions = options as typeof options & NocoBaseRequestOptions;
     const reasoningMap =
-      options?.[REASONING_MAP_KEY] instanceof Map
-        ? (options[REASONING_MAP_KEY] as Map<string, string>)
+      extendedOptions[REASONING_MAP_KEY] instanceof Map
+        ? extendedOptions[REASONING_MAP_KEY]
         : collectReasoningMap(messages);
     yield* super._streamResponseChunks(
       messages,
@@ -163,10 +165,10 @@ class ReasoningDeepSeek extends ChatDeepSeek {
     | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
     | OpenAI.Chat.Completions.ChatCompletion
   > {
-    const reasoningMap = requestOptions?.[REASONING_MAP_KEY] as
-      Map<string, string> | undefined;
-    const modelKwargs = requestOptions?.[MODEL_KWARGS_KEY] as
-      Record<string, unknown> | undefined;
+    const extendedRequestOptions = requestOptions as
+      NocoBaseRequestOptions | undefined;
+    const reasoningMap = extendedRequestOptions?.[REASONING_MAP_KEY];
+    const modelKwargs = extendedRequestOptions?.[MODEL_KWARGS_KEY];
     patchRequestMessagesReasoning(request, reasoningMap);
     patchRequestModelKwargs(request, modelKwargs);
     normalizeDeepSeekChatRequest(request, this.reasoningConfig);

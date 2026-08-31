@@ -30,7 +30,7 @@ export class MCPLoader extends LoadAndRegister<MCPLoaderOptions> {
 
   protected files: FileDescriptor[] = [];
   protected mcpDescriptors: MCPDescriptor[] = [];
-  protected logger: Logger;
+  protected logger?: Logger;
 
   constructor(
     protected readonly ai: AIManager,

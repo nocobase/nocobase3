@@ -5,7 +5,7 @@
     "outDir": "dist",
     "jsx": "react-jsx",
     "isolatedDeclarations": false,
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": ["node", "vite/client"]
   },
   "include": [
@@ -15,7 +15,8 @@
     "server/**/*.ts",
     "database/**/*.ts",
     "tests/**/*.ts",
-    "tests/**/*.tsx"
+    "tests/**/*.tsx",
+    "../app-portal-sdk/src/env.d.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }

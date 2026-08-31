@@ -32,7 +32,7 @@ export class AIEmployeeLoader extends LoadAndRegister<AIEmployeeLoaderOptions> {
 
   protected files: FileDescriptor[] = [];
   protected employeeDescriptors: AIEmployeeDescriptor[] = [];
-  protected logger: Logger;
+  protected logger?: Logger;
 
   constructor(
     protected readonly ai: AIManager,

@@ -1,7 +1,7 @@
 import type { ToolsEntity } from '../repository/tool.js';
 import { tool } from 'langchain';
 
-const noWriter = (chunk: any): void =>
+const noWriter = (chunk: unknown): void =>
   console.warn(`No writer in tools runtime, chunk:[${chunk}]`);
 
 export function buildTool<TContext = unknown>(
@@ -15,7 +15,10 @@ export function buildTool<TContext = unknown>(
   return tool(
     (input, config) => {
       const { context, toolCall } = config;
-      const writer = (config['writer'] as (chunk: any) => void) ?? noWriter;
+      const writer =
+        'writer' in config && typeof config.writer === 'function'
+          ? (config.writer as (chunk: unknown) => void)
+          : noWriter;
       if (requiresContext && !context?.agentContext) {
         throw new Error(`Agent context is required to execute tool "${name}"`);
       }

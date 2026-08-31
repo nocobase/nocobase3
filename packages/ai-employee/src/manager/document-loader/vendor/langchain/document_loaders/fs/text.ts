@@ -12,14 +12,14 @@ import { getEnv } from '@langchain/core/utils/env';
 import { BaseDocumentLoader } from '@langchain/core/document_loaders/base';
 
 export class TextLoader extends BaseDocumentLoader {
-  private filePathOrBlob: any;
+  private filePathOrBlob: string | Blob;
 
-  constructor(filePathOrBlob) {
+  constructor(filePathOrBlob: string | Blob) {
     super();
     this.filePathOrBlob = filePathOrBlob;
   }
 
-  async parse(raw) {
+  async parse(raw: string): Promise<string[]> {
     return [raw];
   }
 

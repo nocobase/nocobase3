@@ -16,6 +16,7 @@ import {
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { serverRequest } from '../utils/server-request.js';
 
+type OllamaModel = { name: string };
 const OLLAMA_DEFAULT_URL = 'http://localhost:11434';
 
 export class OllamaProvider extends LLMProvider {
@@ -66,16 +67,16 @@ export class OllamaProvider extends LLMProvider {
       const models = res?.data?.models || [];
 
       return {
-        models: models.map((model) => ({
+        models: (models as OllamaModel[]).map((model) => ({
           id: model.name,
         })),
       };
-    } catch (e) {
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return {
         code: 500,
-        errMsg: `Failed to fetch Ollama models: ${
-          e.message
-        }. Make sure Ollama is running at ${this.getResolvedBaseURL()}`,
+        errMsg: `Failed to fetch Ollama models: ${errorMessage}. Make sure Ollama is running at ${this.getResolvedBaseURL()}`,
       };
     }
   }

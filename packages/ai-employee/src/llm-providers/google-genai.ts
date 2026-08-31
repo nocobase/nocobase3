@@ -25,7 +25,17 @@ import {
 } from '../manager/llm-provider/types.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { AIChatContext } from '../types/ai-chat-conversation.type.js';
-import { ChatGenerationChunk, LLMResult } from '@langchain/core/outputs';
+import { LLMResult } from '@langchain/core/outputs';
+
+type GoogleModel = { name: string };
+type GoogleRequestError = {
+  message?: string;
+  response?: { status?: number };
+};
+
+function isGoogleRequestError(error: unknown): error is GoogleRequestError {
+  return typeof error === 'object' && error !== null;
+}
 
 const GOOGLE_GEN_AI_URL = 'https://generativelanguage.googleapis.com';
 
@@ -76,12 +86,20 @@ export class GoogleGenAIProvider extends LLMProvider {
         url,
       });
       return {
-        models: res?.data?.models.map((model) => ({
-          id: model.name,
-        })),
+        models: (res?.data?.models as GoogleModel[] | undefined)?.map(
+          (model) => ({
+            id: model.name,
+          }),
+        ),
       };
-    } catch (e) {
-      return { code: e.response?.status || 500, errMsg: e.message };
+    } catch (error) {
+      const code = isGoogleRequestError(error)
+        ? (error.response?.status ?? 500)
+        : 500;
+      const errMsg = isGoogleRequestError(error)
+        ? (error.message ?? String(error))
+        : String(error);
+      return { code, errMsg };
     }
   }
 
@@ -109,7 +127,9 @@ export class GoogleGenAIProvider extends LLMProvider {
     }
 
     if (Array.isArray(content.content)) {
-      const textMessage = content.content.find((msg) => msg.type === 'text');
+      const textMessage = content.content.find(
+        (msg: { type?: string }) => msg.type === 'text',
+      );
       content.content = textMessage?.text;
     }
     if (
@@ -183,7 +203,7 @@ export class GoogleGenAIProvider extends LLMProvider {
       return;
     }
 
-    const methods = {
+    const methods: Partial<Record<string, string>> = {
       json_object: 'jsonMode',
       json_schema: 'jsonSchema',
     };

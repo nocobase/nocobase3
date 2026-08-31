@@ -19,7 +19,7 @@ export class Registry<T> {
     this.map.set(key, value);
   }
 
-  public get(key: string): T {
+  public get(key: string): T | undefined {
     return this.map.get(key);
   }
 

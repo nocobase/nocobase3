@@ -31,7 +31,7 @@ export class SkillsLoader extends LoadAndRegister<SkillsLoaderOptions> {
 
   protected files: FileDescriptor[] = [];
   protected skillsDescriptors: SkillsDescriptor[] = [];
-  protected logger: Logger;
+  protected logger?: Logger;
 
   constructor(
     protected readonly ai: AIManager,
@@ -51,69 +51,70 @@ export class SkillsLoader extends LoadAndRegister<SkillsLoaderOptions> {
       return;
     }
 
-    this.skillsDescriptors = await Promise.all(
-      this.files
-        .map(async (skillsFile) => {
-          if (skillsFile.basename !== 'SKILLS.md') {
-            return null;
-          }
-          if (!existsSync(skillsFile.path)) {
-            this.logger?.error(
-              `skills [${skillsFile.directory}] ignored: can not find SKILLS.md at ${skillsFile.path}`,
-            );
-            return null;
-          }
-          const skillsDir = new FileDescriptor(path.dirname(skillsFile.path));
-          const name = skillsFile.directory;
-          const entry: Partial<SkillsDescriptor> = {
-            name,
-            skillsFile,
-            skillsDir,
-          };
-          try {
-            const skills = await readFile(skillsFile.path, 'utf-8');
-            const { data, content } = matter(skills);
-            entry.scope = data['scope'] ?? 'SPECIFIED';
-            entry.name = data['name'];
-            entry.description = data['description'];
-            entry.content = content;
-            entry.introduction = data['introduction'];
-            entry.tools = data['tools'] ?? [];
-          } catch (e) {
-            this.logger?.error(
-              { error: e },
-              `skills [${name}] load fail: error occur when reading SKILLS.md at ${skillsFile.path}`,
-            );
-            return null;
-          }
+    const descriptors = await Promise.all(
+      this.files.map(async (skillsFile): Promise<SkillsDescriptor | null> => {
+        if (skillsFile.basename !== 'SKILLS.md') {
+          return null;
+        }
+        if (!existsSync(skillsFile.path)) {
+          this.logger?.error(
+            `skills [${skillsFile.directory}] ignored: can not find SKILLS.md at ${skillsFile.path}`,
+          );
+          return null;
+        }
+        const skillsDir = new FileDescriptor(path.dirname(skillsFile.path));
+        const name = skillsFile.directory;
+        const entry: Partial<SkillsDescriptor> = {
+          name,
+          skillsFile,
+          skillsDir,
+        };
+        try {
+          const skills = await readFile(skillsFile.path, 'utf-8');
+          const { data, content } = matter(skills);
+          entry.scope = data['scope'] ?? 'SPECIFIED';
+          entry.name = data['name'];
+          entry.description = data['description'];
+          entry.content = content;
+          entry.introduction = data['introduction'];
+          entry.tools = data['tools'] ?? [];
+        } catch (e) {
+          this.logger?.error(
+            { error: e },
+            `skills [${name}] load fail: error occur when reading SKILLS.md at ${skillsFile.path}`,
+          );
+          return null;
+        }
 
-          try {
-            const toolsScanner = new DirectoryScanner({
-              basePath: skillsDir.path,
-              pattern: ['tools/**/*.ts', 'tools/**/*.js', '!tools/**/*.d.ts'],
-            });
-            const toolsFiles = await toolsScanner.scan();
-            entry.tools = Array.from(
-              new Set([
-                ...entry.tools,
-                ...toolsFiles.map((it) =>
-                  it.basename === 'index.ts' || it.basename === 'index.js'
-                    ? it.directory
-                    : it.name,
-                ),
-              ]),
-            );
-          } catch (e) {
-            this.logger?.error(
-              { error: e },
-              `skills [${name}] load fail: error occur when loading tools at ${skillsDir.path}`,
-            );
-            return null;
-          }
+        try {
+          const toolsScanner = new DirectoryScanner({
+            basePath: skillsDir.path,
+            pattern: ['tools/**/*.ts', 'tools/**/*.js', '!tools/**/*.d.ts'],
+          });
+          const toolsFiles = await toolsScanner.scan();
+          entry.tools = Array.from(
+            new Set([
+              ...(entry.tools ?? []),
+              ...toolsFiles.map((it) =>
+                it.basename === 'index.ts' || it.basename === 'index.js'
+                  ? it.directory
+                  : it.name,
+              ),
+            ]),
+          );
+        } catch (e) {
+          this.logger?.error(
+            { error: e },
+            `skills [${name}] load fail: error occur when loading tools at ${skillsDir.path}`,
+          );
+          return null;
+        }
 
-          return entry as SkillsDescriptor;
-        })
-        .filter((it) => it != null),
+        return entry as SkillsDescriptor;
+      }),
+    );
+    this.skillsDescriptors = descriptors.filter(
+      (descriptor): descriptor is SkillsDescriptor => descriptor !== null,
     );
   }
 

@@ -82,7 +82,7 @@ export class KimiProvider extends LLMProvider {
   parseReasoningContent(chunk: AIMessageChunk): {
     status: string;
     content: string;
-  } {
+  } | null {
     if (!_.isEmpty(chunk?.additional_kwargs?.reasoning_content)) {
       return {
         status: 'streaming',

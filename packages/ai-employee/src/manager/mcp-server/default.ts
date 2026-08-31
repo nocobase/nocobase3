@@ -38,7 +38,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
 
   constructor(
     private readonly repository: AIMCPRepository,
-    private readonly runtime: MCPRuntime = {},
+    _runtime: MCPRuntime = {},
   ) {}
 
   async registerMCP(registration: {
@@ -114,7 +114,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
   }
 
   getMCPToolsProvider(): DynamicToolsProvider {
-    return async (register: ToolsRegistration, filter): Promise<void> => {
+    return async (register: ToolsRegistration, _filter): Promise<void> => {
       for (const [serverName, tools] of Object.entries(this.toolsMap)) {
         await this.registerToolsFromMap(register, serverName, tools);
       }
