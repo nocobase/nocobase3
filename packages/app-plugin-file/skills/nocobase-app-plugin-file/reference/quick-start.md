@@ -13,11 +13,20 @@ services from the Application's shared container. Read host configuration
 through `config.get(appConfig)`, `config.get(driveConfig)`, and
 `config.get(sessionConfig)`.
 
-Start from the complete, type-checked example files shipped with this Skill:
+Use these public imports in the business plugin:
 
-- [migration.ts](examples/purchase-order-files/migration.ts)
-- [routes.ts](examples/purchase-order-files/routes.ts)
-- [client.tsx](examples/purchase-order-files/client.tsx)
+| Capability                                   | Package                               |
+| -------------------------------------------- | ------------------------------------- |
+| `databaseManagerToken`                       | `@nocobase/app-database`              |
+| `authenticationToken`, `AuthEnv`             | `@nocobase/app-plugin-authentication` |
+| `authorizationToken`, `AuthorizationEnv`     | `@nocobase/app-plugin-authorization`  |
+| `createFileRoute`, `FileRouteAuthorizer`     | `@nocobase/app-plugin-file/server`    |
+| `appConfig`                                  | `@nocobase/app-server-kit/config`     |
+| `driveConfig`, `driveManagerToken`           | `@nocobase/app-server-kit/drive`      |
+| `AppPluginApplication`                       | `@nocobase/app-server-kit/plugins`    |
+| `defineApiRoutes`, `AppApiRouteContribution` | `@nocobase/app-server-kit/router`     |
+| `sessionConfig`                              | `@nocobase/app-server-kit/session`    |
+| `Hono`, `MiddlewareHandler`                  | `hono`                                |
 
 Put the Route contribution in the business plugin's `server/routes/index.ts`.
 Its default export is the `routes` array that `server/plugin.ts` passes to
@@ -31,23 +40,107 @@ this server code or a migration.
 ## 2. Create the migration
 
 Create the business table and a separate standard file table. A one-to-many
-table uses an indexed owner key; use the [one-to-one recipe](recipes/one-to-one.md)
-for a unique owner key. The tested [migration example](examples/purchase-order-files/migration.ts)
-declares every field, relation, index, and constraint directly and implements
-the reverse-order `down` operation.
+table uses an indexed owner key; a one-to-one table uses a unique owner key.
+Declare every field, relation, index, and constraint directly in the migration;
+see [data model](data-model.md).
 
 Use a reverse-order `down` migration. Register the logical inverse relation on
 the business table with `hasMany('attachments', 'purchaseOrderAttachments')`.
-See [data-model](data-model.md) for all fields and constraints.
 
 ## 3. Create a scoped Route
 
 Keep the table name in server code and derive the owner from a validated Route
-parameter. Copy the [complete Route module](examples/purchase-order-files/routes.ts),
-which includes all imports, `defineApiRoutes()`, typed `config.get(...)` reads,
-authentication plus authorization middleware composition, path validation,
-action mapping, and the default `routes` array export. Its inner Hono path is
-`/purchase-orders/:orderId/attachments`; the Application adds `/api`.
+parameter. This is a key assembly fragment, not a standalone module; adapt its
+table, resource, authorization callback, visibility, and limits:
+
+```ts
+type Env = {
+  Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
+};
+
+export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
+  defineApiRoutes(({ config, container }) => {
+    const router = new Hono();
+    const authentication = container.resolve(authenticationToken);
+    const authorization = container.resolve(authorizationToken);
+    const app = config.get(appConfig);
+    const drive = config.get(driveConfig);
+    const session = config.get(sessionConfig);
+    const authenticate =
+      authentication.required() as unknown as MiddlewareHandler<Env>;
+    const resolveAuthorization =
+      authorization.middleware() as unknown as MiddlewareHandler<Env>;
+    const requireManagement: MiddlewareHandler<Env> = (context, next) =>
+      authenticate(context, async () => {
+        await resolveAuthorization(context, next);
+      });
+
+    router.route(
+      '/purchase-orders/:orderId/attachments',
+      createFileRoute({
+        database: container.resolve(databaseManagerToken),
+        table: 'purchaseOrderAttachments',
+        scope: (context) => {
+          const orderId = Number(context.req.param('orderId'));
+          if (!Number.isSafeInteger(orderId) || orderId < 1) {
+            throw new TypeError('A valid orderId is required.');
+          }
+          return { orderId };
+        },
+        drive: container.resolve(driveManagerToken),
+        defaultDisk: drive.default,
+        publicBasePath: app.publicBasePath,
+        tokenSecret: session.secret,
+        audience: 'purchase-order-attachments',
+        auth: requireManagement,
+        authorize: authorizePurchaseOrderFile,
+        visibility: { default: 'private', allowClientOverride: false },
+        limits: {
+          maxSize: 50 * 1024 * 1024,
+          maxFiles: 10,
+          mimeTypes: ['application/pdf'],
+        },
+      }),
+    );
+    return router;
+  });
+
+const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
+  apiRoutes,
+];
+
+export default routes;
+```
+
+Import the service tokens, config definitions, `AppPluginApplication`,
+`defineApiRoutes`, Hono, and the `AuthEnv`/`AuthorizationEnv` types from their
+owning packages. Define `Env` as the intersection of their `Variables` types.
+The inner Hono path omits the `/api` prefix added by the Application.
+
+The authorization callback is business-specific. Its essential shape is:
+
+```ts
+const authorizePurchaseOrderFile: FileRouteAuthorizer = async (
+  context,
+  action,
+) => {
+  const authz = Reflect.get(
+    context.var,
+    'authz',
+  ) as AuthorizationEnv['Variables']['authz'];
+  const decision = await authz.authorize({
+    resource: {
+      type: 'purchase-order',
+      id: context.req.param('orderId'),
+    },
+    action:
+      action === 'upload' ? 'update' : action === 'delete' ? 'delete' : 'read',
+  });
+  if (decision.effect !== 'permit') {
+    return context.json({ code: 'FORBIDDEN' }, 403);
+  }
+};
+```
 
 `maxFiles` serializes checks for the same owner within one Route instance and
 process. Concurrent requests on multiple application nodes can still exceed
@@ -55,16 +148,17 @@ it without a database constraint or distributed mechanism. Use a database
 UNIQUE owner constraint when the relation must be one-to-one. When `maxSize`
 is omitted, the Route defaults to 50 MiB per file.
 
-`authorizePurchaseOrderFile` must call the existing authorization system for
-the purchase order and action. It must not introduce a second file ACL. The
-Route has six fixed endpoints; see [route-api](route-api.md).
+The authorization callback must call the existing business authorization
+system and deliberately map every `FileRouteAction`. It must not introduce a
+second file ACL. The Route has six fixed endpoints; see
+[route-api](route-api.md).
 
 ## 4. Connect the client
 
-```tsx
-import { createFilesClient } from '@nocobase/app-plugin-file/client/files-client';
-import { FileUploadField } from '@nocobase/app-plugin-file/client/components';
+The following is the client integration fragment; `orderId`, `attachments`,
+and form state belong to the business module:
 
+```tsx
 const client = createFilesClient({
   endpoint: `/api/purchase-orders/${orderId}/attachments`,
 });
@@ -73,49 +167,19 @@ const client = createFilesClient({
   client={client}
   value={attachments}
   onChange={setAttachments}
+  onStatusChange={setAttachmentUploadStatus}
   multiple
   accept={['application/pdf']}
   maxFiles={10}
-  onStatusChange={setAttachmentUploadStatus}
 />;
 ```
 
-The business form submits the relation and owner ID. The client handles the
-plugin endpoint, same-origin base path, multipart upload, authentication, and
-content URL flow. Each upload can be cancelled and pending requests are
-aborted when the field unmounts. Treat `uploading` and `error` status as form
-submission blockers. File UI accepts only relative or HTTP(S) content and
-access URLs; unsafe schemes such as `javascript:` and external `data:` are not
-rendered or fetched. Use `FilePreviewField` for compact read-only thumbnails,
-optionally with `showFilenames`, and `FilePreviewDialog` with `files` plus
-`initialIndex` for multi-file preview and keyboard navigation. Markdown uses
-safe GFM rendering without raw HTML. Office and OpenDocument files use Office
-Online only for internet-accessible absolute HTTP(S) Public URLs or freshly
-issued Private access URLs; relative, localhost, blob, and failed embeds fall
-back to download. The runtime Demo works without Registry; install
-`component-ui` only when the application needs editable UI source. Install
-`page-ui` when the application should own and customize the Demo page. The two
-Registry items are independently installable; `page-ui` composes the plugin's
-stable public client exports.
-
-The built-in Demo management endpoints and page require the existing
-`system-administrator` Permission Set. This Demo policy does not alter the
-generic `createFileRoute()` authorization contract or Public/Private content
-access.
+The business form owns the relation and submission state; treat `uploading`
+and `error` as submission blockers. Registry UI does not install the server
+Route or migration.
 
 ## 5. Validate
 
-Run the migration and focused business tests, including allowed/denied
+Run the migration and focused business tests for allowed and denied
 authorization, scope isolation, Public access, Private Token access, MIME and
-size limits, and deletion. Then run the package checks:
-
-```bash
-pnpm --filter @nocobase/app-plugin-file lint
-pnpm --filter @nocobase/app-plugin-file format:check
-pnpm --filter @nocobase/app-plugin-file typecheck
-pnpm --filter @nocobase/app-plugin-file test
-pnpm --filter @nocobase/app-plugin-file build
-```
-
-For a complete small implementation, compare the [one-to-many recipe](recipes/one-to-many.md)
-or [one-to-one recipe](recipes/one-to-one.md).
+size limits, deletion, and the relation's database constraint.

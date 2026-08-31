@@ -27,26 +27,16 @@ URL expires; every content request must still resolve the current record.
 ## One-to-one
 
 Put the owner foreign key on the file table and make it unique. The business
-table owns the inverse logical relation:
+table owns the inverse logical relation. In addition to the standard fields:
 
 ```ts
-await builder.createCollection('profiles', (table) => {
-  table.increments('id');
-  table.string('name', { length: 255 }).notNull();
-  table.hasOne('avatar', 'profileAvatars').foreignKey('profileId');
-});
-
-await builder.createCollection('profileAvatars', (table) => {
-  addStandardFileFields(table);
-  table
-    .belongsTo('profile', 'profiles')
-    .foreignKey('profileId')
-    .foreignKeyType('integer')
-    .constraints(true)
-    .unique();
-  table.primary('id');
-  table.unique(['disk', 'key']);
-});
+profileTable.hasOne('avatar', 'profileAvatars').foreignKey('profileId');
+avatarTable
+  .belongsTo('profile', 'profiles')
+  .foreignKey('profileId')
+  .foreignKeyType('integer')
+  .constraints(true)
+  .unique();
 ```
 
 The unique owner constraint is the durable one-to-one guarantee. The Route may
@@ -60,23 +50,13 @@ metadata; `profileId` is the explicit physical foreign-key field.
 Put an indexed owner foreign key on the file table and leave it non-unique:
 
 ```ts
-await builder.createCollection('orders', (table) => {
-  table.increments('id');
-  table.string('number', { length: 64 }).notNull();
-  table.hasMany('attachments', 'orderAttachments').foreignKey('orderId');
-});
-
-await builder.createCollection('orderAttachments', (table) => {
-  addStandardFileFields(table);
-  table
-    .belongsTo('order', 'orders')
-    .foreignKey('orderId')
-    .foreignKeyType('integer')
-    .constraints(true)
-    .index();
-  table.primary('id');
-  table.unique(['disk', 'key']);
-});
+orderTable.hasMany('attachments', 'orderAttachments').foreignKey('orderId');
+attachmentTable
+  .belongsTo('order', 'orders')
+  .foreignKey('orderId')
+  .foreignKeyType('integer')
+  .constraints(true)
+  .index();
 ```
 
 Multiple rows may point to one order. The Route serializes `maxFiles` checks
@@ -85,25 +65,14 @@ multi-node uploads still need a database constraint or distributed mechanism
 when the limit must be durable; the database index makes scoped
 list/find/delete queries predictable.
 
-In real migrations, write each standard field explicitly rather than relying
-on an untracked helper. The snippets use `addStandardFileFields(table)` only
-to keep the relation examples short.
+Write every standard field and reverse operation explicitly in the migration;
+do not import a live collection definition or schema helper.
 
 ## Constraints and scope
 
-Use the current app-database builder with logical collection and field names:
-
-- `belongsTo(...).foreignKey(...).foreignKeyType(...).constraints(true)` for
-  the owner-side database constraint;
-- `hasOne` or `hasMany` for inverse relation metadata;
-- `unique(['disk', 'key'])` for object identity;
-- `unique('ownerId')` for one-to-one;
-- `index('ownerId')` for one-to-many.
-
 Build the standard Route with a hard-coded table and a scope resolver that
-reads only a validated server Route parameter. Use the complete
-[purchase-order Route example](examples/purchase-order-files/routes.ts) rather
-than assembling a partial `createFileRoute()` options object.
+reads only a validated server Route parameter. Use the assembly pattern in
+[quick start](quick-start.md).
 
 The Store must apply every scope equality to list, find, create, and remove.
 Find and remove must combine the file ID and scope in the same database
@@ -114,5 +83,4 @@ The Store is not an authorization layer. The business Route must authenticate
 and call the existing authorization system before management operations.
 DatabaseManager stays on the server; it is not exposed to browser code.
 
-See [one-to-one](recipes/one-to-one.md) and [one-to-many](recipes/one-to-many.md)
-for complete small migrations and acceptance tests.
+See [quick start](quick-start.md) for the Route and client assembly pattern.
