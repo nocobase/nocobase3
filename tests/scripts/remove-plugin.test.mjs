@@ -74,7 +74,10 @@ test('prints one JSON success document to stdout for a dry run', async (t) => {
       directoryName: 'app-plugin-audit-log',
       packageName: '@nocobase/app-plugin-audit-log',
       shortName: 'audit-log',
-      targetDirectory: path.join(repoRoot, 'packages/app-plugin-audit-log'),
+      targetDirectory: path.join(
+        repoRoot,
+        'packages/plugins/app-plugin-audit-log',
+      ),
       commands: ['CI=true pnpm install --no-frozen-lockfile'],
     },
   });
@@ -83,7 +86,7 @@ test('prints one JSON success document to stdout for a dry run', async (t) => {
 test('prints one structured reference error to stderr and exits non-zero', async (t) => {
   const repoRoot = await createTestRepo(t);
   await createPluginPackage(repoRoot, 'audit-log');
-  const appDirectory = path.join(repoRoot, 'packages/app');
+  const appDirectory = path.join(repoRoot, 'packages/templates/app');
   await mkdir(appDirectory);
   await writeJson(path.join(appDirectory, 'package.json'), {
     name: '@nocobase/app',
@@ -143,7 +146,7 @@ test('dry-run validates but preserves the plugin', async (t) => {
 test('refuses removal while a workspace package references the plugin', async (t) => {
   const repoRoot = await createTestRepo(t);
   const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
-  const appDirectory = path.join(repoRoot, 'packages/app');
+  const appDirectory = path.join(repoRoot, 'packages/templates/app');
   await mkdir(appDirectory);
   await writeJson(path.join(appDirectory, 'package.json'), {
     name: '@nocobase/app',
@@ -160,7 +163,7 @@ test('refuses removal while a workspace package references the plugin', async (t
   await assert.rejects(
     removePlugin({ install: false, name: 'audit-log', repoRoot }),
     (error) => {
-      assert.match(error.message, /packages\/app\/package\.json/u);
+      assert.match(error.message, /packages\/templates\/app\/package\.json/u);
       assert.match(error.message, /dependencies/u);
       assert.match(error.message, /nocobase\.plugins/u);
       assert.match(
@@ -175,8 +178,11 @@ test('refuses removal while a workspace package references the plugin', async (t
 
 test('refuses a directory whose package name does not match', async (t) => {
   const repoRoot = await createTestRepo(t);
-  const targetDirectory = path.join(repoRoot, 'packages/app-plugin-audit-log');
-  await mkdir(targetDirectory);
+  const targetDirectory = path.join(
+    repoRoot,
+    'packages/plugins/app-plugin-audit-log',
+  );
+  await mkdir(targetDirectory, { recursive: true });
   await writeJson(path.join(targetDirectory, 'package.json'), {
     name: '@nocobase/app-plugin-something-else',
   });
@@ -191,7 +197,7 @@ test('refuses a directory whose package name does not match', async (t) => {
 test('refuses removal while server/plugins.ts imports the plugin', async (t) => {
   const repoRoot = await createTestRepo(t);
   const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
-  const appDirectory = path.join(repoRoot, 'packages/app');
+  const appDirectory = path.join(repoRoot, 'packages/templates/app');
   await mkdir(path.join(appDirectory, 'server'), { recursive: true });
   await writeJson(path.join(appDirectory, 'package.json'), {
     name: '@nocobase/app',
@@ -222,7 +228,7 @@ export default defineServerPlugins([auditLog]);
 test('refuses removal while client/plugins.ts imports the plugin', async (t) => {
   const repoRoot = await createTestRepo(t);
   const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
-  const appDirectory = path.join(repoRoot, 'packages/app');
+  const appDirectory = path.join(repoRoot, 'packages/templates/app');
   await mkdir(path.join(appDirectory, 'client'), { recursive: true });
   await writeJson(path.join(appDirectory, 'package.json'), {
     name: '@nocobase/app',
@@ -253,7 +259,7 @@ export default defineClientPlugins([auditLog()]);
 test('removes a plugin after every application reference is gone', async (t) => {
   const repoRoot = await createTestRepo(t);
   const targetDirectory = await createPluginPackage(repoRoot, 'audit-log');
-  const appDirectory = path.join(repoRoot, 'packages/app');
+  const appDirectory = path.join(repoRoot, 'packages/templates/app');
   await mkdir(path.join(appDirectory, 'client'), { recursive: true });
   await mkdir(path.join(appDirectory, 'server'), { recursive: true });
   await writeJson(path.join(appDirectory, 'package.json'), {
@@ -316,7 +322,10 @@ async function createTestRepo(t) {
   const repoRoot = await mkdtemp(
     path.join(tmpdir(), 'nocobase-remove-plugin-'),
   );
-  await mkdir(path.join(repoRoot, 'packages'));
+  // Mirror the two-level layout: plugins live in packages/plugins/, and the application fixtures the reference walk
+  // has to reach live in a different category.
+  await mkdir(path.join(repoRoot, 'packages/plugins'), { recursive: true });
+  await mkdir(path.join(repoRoot, 'packages/templates'), { recursive: true });
   await writeJson(path.join(repoRoot, 'package.json'), {
     name: 'test-workspace',
     private: true,
@@ -328,9 +337,9 @@ async function createTestRepo(t) {
 async function createPluginPackage(repoRoot, shortName) {
   const targetDirectory = path.join(
     repoRoot,
-    `packages/app-plugin-${shortName}`,
+    `packages/plugins/app-plugin-${shortName}`,
   );
-  await mkdir(targetDirectory);
+  await mkdir(targetDirectory, { recursive: true });
   await writeJson(path.join(targetDirectory, 'package.json'), {
     name: `@nocobase/app-plugin-${shortName}`,
   });

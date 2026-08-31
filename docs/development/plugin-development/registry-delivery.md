@@ -49,7 +49,7 @@ pnpm registry build \
 pnpm registry materialize \
   --package @nocobase/app-plugin-registry-example \
   --item component-ui \
-  --output-root packages/app-template-default
+  --output-root packages/templates/app-template-default
 ```
 
 当前 materialize 只复制 canonical source。它不安装 npm dependencies 或 registryDependencies，不注册插件，不强制检查 required plugins，不记录版本或 hash，并且目标存在时拒绝覆盖。因此调用方必须先准备依赖和插件，再确认目标目录不存在。
@@ -57,7 +57,7 @@ pnpm registry materialize \
 ## 远程安装
 
 ```bash
-cd packages/app-template-default
+cd packages/templates/app-template-default
 pnpm exec shadcn add \
   https://registry.example.com/feature-card/r/component-ui.json
 ```

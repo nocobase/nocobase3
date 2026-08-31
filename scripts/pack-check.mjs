@@ -77,15 +77,33 @@ export function validatePackageManifest(manifest, directory) {
   }
 }
 
+// packages/ groups its packages one level deep, as packages/<category>/<package>. The category directories themselves
+// carry no package.json, so publishable packages are found by descending into each of them. Reading only the top level
+// would discover nothing and let `pnpm pack:check` pass without checking anything.
+async function listPackageDirectories(packagesDirectory) {
+  const categories = await readdir(packagesDirectory, { withFileTypes: true });
+  const directories = [];
+
+  for (const category of categories) {
+    if (!category.isDirectory()) continue;
+    const categoryDirectory = path.join(packagesDirectory, category.name);
+    for (const entry of await readdir(categoryDirectory, {
+      withFileTypes: true,
+    })) {
+      if (!entry.isDirectory()) continue;
+      directories.push(path.join(categoryDirectory, entry.name));
+    }
+  }
+
+  return directories;
+}
+
 export async function discoverPackages(repoRoot) {
   const packagesDirectory = path.join(repoRoot, 'packages');
-  const entries = await readdir(packagesDirectory, { withFileTypes: true });
+  const directories = await listPackageDirectories(packagesDirectory);
   const packages = [];
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-
-    const directory = path.join(packagesDirectory, entry.name);
+  for (const directory of directories) {
     const manifestPath = path.join(directory, 'package.json');
     let manifest;
 

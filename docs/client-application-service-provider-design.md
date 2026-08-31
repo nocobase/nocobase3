@@ -1162,7 +1162,7 @@ Tests
   → 测试环境不等于发布包运行环境
 ```
 
-TypeScript 直接继承 `@nocobase/dev-config/tsconfig/base.json`，再由 `packages/service-provider/tsconfig.json` 本地补齐该包实际需要的类库构建选项，不新增共享 preset：
+TypeScript 直接继承 `@nocobase/dev-config/tsconfig/base.json`，再由 `packages/libs/service-provider/tsconfig.json` 本地补齐该包实际需要的类库构建选项，不新增共享 preset：
 
 ```json
 {
@@ -1229,16 +1229,16 @@ Client 接入时，`@nocobase/app-client` 必须声明正式 runtime dependency�
 
 实施时至少涉及以下文件：
 
-| 文件                                         | 调整                                                                |
-| -------------------------------------------- | ------------------------------------------------------------------- |
-| `packages/service-provider/package.json`     | 删除 Node runtime engine 和不必要的 Node 类型依赖，保留跨端 exports |
-| `packages/service-provider/tsconfig.json`    | 从 `server-library` 切换为 `base.json` + 包内声明构建选项           |
-| `packages/service-provider/eslint.config.js` | 移除 Node-only 默认环境，保持 `src/**` 环境中立                     |
-| `packages/service-provider/vitest.config.ts` | 保留 Node test runner，不改变发布包的运行环境声明                   |
-| `packages/service-provider/tests/`           | 保留核心行为测试，并补足跨端 package contract 验证                  |
-| `packages/app-client/package.json`           | 增加 `@nocobase/service-provider` 正式 runtime dependency           |
-| `packages/app-client` 的 Application 和测试  | 创建独立 Container/Registry，并验证 Browser consumer 和实例隔离     |
-| `packages/dev-config`                        | 本阶段不新增 preset；只有未来出现重复需求时再单独评估               |
+| 文件                                              | 调整                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| `packages/libs/service-provider/package.json`     | 删除 Node runtime engine 和不必要的 Node 类型依赖，保留跨端 exports |
+| `packages/libs/service-provider/tsconfig.json`    | 从 `server-library` 切换为 `base.json` + 包内声明构建选项           |
+| `packages/libs/service-provider/eslint.config.js` | 移除 Node-only 默认环境，保持 `src/**` 环境中立                     |
+| `packages/libs/service-provider/vitest.config.ts` | 保留 Node test runner，不改变发布包的运行环境声明                   |
+| `packages/libs/service-provider/tests/`           | 保留核心行为测试，并补足跨端 package contract 验证                  |
+| `packages/app/app-client/package.json`            | 增加 `@nocobase/service-provider` 正式 runtime dependency           |
+| `packages/app/app-client` 的 Application 和测试   | 创建独立 Container/Registry，并验证 Browser consumer 和实例隔离     |
+| `packages/tools/dev-config`                       | 本阶段不新增 preset；只有未来出现重复需求时再单独评估               |
 
 共享包的现有 Container 和 Registry 测试继续保留，并增加跨端消费验证：
 
@@ -1481,8 +1481,8 @@ Runtime 不识别旧字段，CLI 不接受旧 capability，Inspector 不输出�
 涉及：
 
 ```text
-packages/service-provider
-packages/app-client
+packages/libs/service-provider
+packages/app/app-client
 ```
 
 完成：
@@ -1502,10 +1502,10 @@ packages/app-client
 涉及：
 
 ```text
-packages/app-client/src/runtime
-packages/app-client/src/plugins.ts
-packages/app-client/src/config.ts
-packages/app-client/src/app-client.tsx
+packages/app/app-client/src/runtime
+packages/app/app-client/src/plugins.ts
+packages/app/app-client/src/config.ts
+packages/app/app-client/src/app-client.tsx
 ```
 
 完成：
@@ -1527,9 +1527,9 @@ packages/app-client/src/app-client.tsx
 涉及：
 
 ```text
-packages/app-server-kit/src/runtime
-packages/app-server-kit/src/plugins
-packages/app-server-kit/src/application
+packages/app/app-server-kit/src/runtime
+packages/app/app-server-kit/src/plugins
+packages/app/app-server-kit/src/application
 ```
 
 完成所有 `providers` → `serviceProviders` 的 Runtime、Plugin、Application 和 Inspector 重命名。
@@ -1539,8 +1539,8 @@ packages/app-server-kit/src/application
 涉及：
 
 ```text
-packages/app-template-default
-packages/app-plugin-*
+packages/templates/app-template-default
+packages/plugins/app-plugin-*
 ```
 
 完成：
@@ -1557,8 +1557,8 @@ packages/app-plugin-*
 涉及：
 
 ```text
-packages/create-plugin
-packages/app-template-default/scripts
+packages/tools/create-plugin
+packages/templates/app-template-default/scripts
 docs/development/plugin-development
 相关 AGENTS.md
 Plugin Skills

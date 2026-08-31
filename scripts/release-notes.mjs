@@ -22,9 +22,12 @@ function git(args) {
   });
 }
 
-function gitOrUndefined(args) {
+// `cwd` defaults to the process directory, which is what the release workflow wants. Tests override it to read a
+// throwaway repository built in a specific layout.
+function gitOrUndefined(args, { cwd } = {}) {
   try {
     return execFileSync('git', args, {
+      cwd,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -86,28 +89,56 @@ export function extractChangelogSection(changelog, version) {
   );
 }
 
-function findPackageDirectories(commit) {
-  const listing = gitOrUndefined([
-    'ls-tree',
-    '--name-only',
-    `${commit}:packages`,
-  ]);
-  if (!listing) return [];
-  return listing
+// Lists the directory of every published package in the tagged tree, as a path relative to `packages/`.
+//
+// Both layouts have to work. `packages/` was flat until the repository regrouped it into
+// `packages/<category>/<package>`, so a tag cut before that move points at a tree whose manifests sit one level deep,
+// while a tag cut after it points at a tree two levels deep. Release notes are rendered from whichever commit the tag
+// names, including tags from before the move, and a layout mismatch fails silently: `resolveDirectories` just returns
+// an empty map and every package renders as "no changelog entry". Reading the tree itself rather than assuming a depth
+// keeps both eras — and any later regrouping — working.
+//
+// `-r` walks the whole tree, so it also reports manifests nested inside a package: `app-host` ships five of them under
+// `fixtures/app-dist/`. A nested manifest is never a published package, and keeping it would let it overwrite the entry
+// for the package that contains it, because `resolveDirectories` keys by name and the last writer wins. Whether that
+// happens at all comes down to which path git sorts last, which is far too subtle to rely on, so descendants are
+// dropped here instead.
+export function findPackageDirectories(commit, { cwd } = {}) {
+  const listing = gitOrUndefined(
+    ['ls-tree', '-r', '--name-only', `${commit}:packages`],
+    { cwd },
+  );
+  if (listing === undefined) {
+    throw new Error(
+      `Cannot read packages/ from ${commit} — the tagged tree could not be listed`,
+    );
+  }
+
+  const directories = listing
     .split('\n')
-    .filter(Boolean)
-    .map((entry) => entry.replace(/\/$/u, ''));
+    .filter((entry) => entry.endsWith('/package.json'))
+    .map((entry) => entry.slice(0, -'/package.json'.length))
+    .sort();
+
+  // Sorting puts a parent directly before everything nested under it, so one pass over the sorted list is enough.
+  const roots = [];
+  for (const directory of directories) {
+    const parent = roots.at(-1);
+    if (parent !== undefined && directory.startsWith(`${parent}/`)) continue;
+    roots.push(directory);
+  }
+  return roots;
 }
 
 // Maps published package names back to their directory in the tagged tree, so
 // the changelog can be read from the same commit the release was cut from.
-export function resolveDirectories(commit, directories) {
+export function resolveDirectories(commit, directories, { cwd } = {}) {
   const byName = new Map();
   for (const directory of directories) {
-    const raw = gitOrUndefined([
-      'show',
-      `${commit}:packages/${directory}/package.json`,
-    ]);
+    const raw = gitOrUndefined(
+      ['show', `${commit}:packages/${directory}/package.json`],
+      { cwd },
+    );
     if (!raw) continue;
     try {
       const { name } = JSON.parse(raw);
@@ -140,6 +171,14 @@ export function renderReleaseNotes(tag) {
     commit,
     findPackageDirectories(commit),
   );
+  // Resolving nothing while package tags exist means the tree was read but no manifest matched a published name — a
+  // layout or tooling change the lookup no longer understands. Rendering would still "succeed", emitting a full set of
+  // "no changelog entry" placeholders that reads like a release with no changes, so fail instead of publishing that.
+  if (directories.size === 0) {
+    throw new Error(
+      `No package directories in ${commit} matched the ${packages.length} package tags for ${tag}`,
+    );
+  }
   const label = channel === 'beta' ? 'Beta release' : 'Stable release';
   const lines = [
     `${label} \`${batch}\` published ${packages.length} package${packages.length === 1 ? '' : 's'}.`,

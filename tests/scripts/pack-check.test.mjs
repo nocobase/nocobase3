@@ -18,7 +18,10 @@ const repoRoot = path.resolve(import.meta.dirname, '../..');
 test('publishes the default template as source instead of a runtime library', async () => {
   const manifest = JSON.parse(
     await readFile(
-      path.join(repoRoot, 'packages/app-template-default/package.json'),
+      path.join(
+        repoRoot,
+        'packages/templates/app-template-default/package.json',
+      ),
       'utf8',
     ),
   );
@@ -38,8 +41,8 @@ test('derives stable archive names from scoped package names', () => {
 
 test('discovers packages from packages directories in package-name order', async (t) => {
   const repoRoot = await createTestRepo(t);
-  await createPackage(repoRoot, 'zeta', '@nocobase/zeta');
-  await createPackage(repoRoot, 'alpha', '@nocobase/alpha');
+  await createPackage(repoRoot, 'tools/zeta', '@nocobase/zeta');
+  await createPackage(repoRoot, 'libs/alpha', '@nocobase/alpha');
 
   const packages = await discoverPackages(repoRoot);
 
@@ -58,7 +61,7 @@ test('rejects incomplete publication metadata', () => {
           private: true,
           version: '0.0.1',
         },
-        '/repo/packages/incomplete',
+        '/repo/packages/libs/incomplete',
       ),
     /must not be private[\s\S]*publishConfig\.access[\s\S]*files/u,
   );
@@ -66,7 +69,7 @@ test('rejects incomplete publication metadata', () => {
 
 test('requires every discovered package to have a changelog', async (t) => {
   const repoRoot = await createTestRepo(t);
-  await createPackage(repoRoot, 'missing-changelog', '@nocobase/missing', {
+  await createPackage(repoRoot, 'libs/missing-changelog', '@nocobase/missing', {
     changelog: false,
   });
 
@@ -78,7 +81,7 @@ test('requires every discovered package to have a changelog', async (t) => {
 
 test('validates changelog package names', async (t) => {
   const repoRoot = await createTestRepo(t);
-  await createPackage(repoRoot, 'invalid-changelog', '@nocobase/invalid', {
+  await createPackage(repoRoot, 'libs/invalid-changelog', '@nocobase/invalid', {
     changelogContents: '# @nocobase/wrong\n',
   });
 
@@ -90,7 +93,7 @@ test('validates changelog package names', async (t) => {
 
 test('requires the current released version in the changelog', async (t) => {
   const repoRoot = await createTestRepo(t);
-  await createPackage(repoRoot, 'stale-changelog', '@nocobase/stale', {
+  await createPackage(repoRoot, 'libs/stale-changelog', '@nocobase/stale', {
     changelogContents: '# @nocobase/stale\n\n## 0.0.0\n',
   });
 
@@ -176,13 +179,14 @@ async function createTestRepo(t) {
   return repoRoot;
 }
 
+// `relativeDirectory` is a `<category>/<package>` path, matching the two-level layout of `packages/`.
 async function createPackage(
   repoRoot,
-  directoryName,
+  relativeDirectory,
   packageName,
   { changelog = true, changelogContents } = {},
 ) {
-  const directory = path.join(repoRoot, 'packages', directoryName);
+  const directory = path.join(repoRoot, 'packages', relativeDirectory);
   await mkdir(directory, { recursive: true });
   await writeFile(
     path.join(directory, 'package.json'),

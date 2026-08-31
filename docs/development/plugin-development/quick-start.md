@@ -7,7 +7,7 @@ description: 在 NocoBase source workspace 中按显式 capability 创建 App �
 
 `plugin:create` 不猜测插件类型，也不生成需要事后裁剪的完整示例。Agent 先把需求映射为 capability，再由生成器确定性地生成对应文件、Client/Server declaration、exports、依赖、测试和发布配置。
 
-第一版只在 NocoBase source workspace 的 `packages/` 下创建插件，不创建 standalone 插件工程。
+第一版只在 NocoBase source workspace 的 `packages/plugins/` 下创建插件，不创建 standalone 插件工程。
 
 ## 创建前检查
 

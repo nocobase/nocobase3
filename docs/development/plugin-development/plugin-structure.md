@@ -14,7 +14,7 @@ Create Plugin 生成一个可发布的 workspace package。Agent 不应根据目
 composition entry；只创建 package foundation 时使用 `--empty`。
 
 ```text
-packages/app-plugin-audit-log/
+packages/plugins/app-plugin-audit-log/
 ├── client/
 │   ├── components/
 │   ├── pages/

@@ -8,13 +8,13 @@ playwright-report/
 .env.*.local
 .agent-annotations/
 
-!packages/app-host/fixtures/app-dist/**/dist/
-!packages/app-host/fixtures/app-dist/**/dist/**
-!packages/app-host/fixtures/app-dist/**/dist/node_modules/
-!packages/app-host/fixtures/app-dist/**/dist/node_modules/**
+!packages/app/app-host/fixtures/app-dist/**/dist/
+!packages/app/app-host/fixtures/app-dist/**/dist/**
+!packages/app/app-host/fixtures/app-dist/**/dist/node_modules/
+!packages/app/app-host/fixtures/app-dist/**/dist/node_modules/**
 
-packages/app-host/fixtures/app-dist/main/
-packages/app-host/fixtures/app-dist/hub/dist/
-packages/app-host/fixtures/app-dist/hub/dist/**
+packages/app/app-host/fixtures/app-dist/main/
+packages/app/app-host/fixtures/app-dist/hub/dist/
+packages/app/app-host/fixtures/app-dist/hub/dist/**
 
-packages/app-template-default/server/workflows
+packages/templates/app-template-default/server/workflows

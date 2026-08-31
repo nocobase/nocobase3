@@ -15,12 +15,12 @@ import { fileURLToPath } from 'node:url';
 import {
   createClientPluginsEditor,
   readClientPlugins,
-} from '../packages/cli/src/lib/client-plugins.ts';
+} from '../packages/tools/cli/src/lib/client-plugins.ts';
 import {
   createServerPluginsEditor,
   readServerPlugins,
-} from '../packages/cli/src/lib/server-plugins.ts';
-import { normalizePluginName } from '../packages/create-plugin/src/lib/names.ts';
+} from '../packages/tools/cli/src/lib/server-plugins.ts';
+import { normalizePluginName } from '../packages/tools/create-plugin/src/lib/names.ts';
 
 const packagePrefix = '@nocobase/app-plugin-';
 const directoryPrefix = 'app-plugin-';
@@ -43,7 +43,7 @@ const skippedDirectoryNames = new Set([
   'node_modules',
 ]);
 
-const help = `Remove a NocoBase plugin package from packages/.
+const help = `Remove a NocoBase plugin package from packages/plugins/.
 
 Usage:
   pnpm plugin:remove <name> [options]
@@ -118,7 +118,8 @@ export async function removePlugin({
   const packageName = `${packagePrefix}${shortName}`;
   const directoryName = `${directoryPrefix}${shortName}`;
   const resolvedRepoRoot = path.resolve(repoRoot);
-  const packagesDirectory = path.join(resolvedRepoRoot, 'packages');
+  // Plugins are scaffolded into `packages/plugins/`, so that is the only directory removal targets.
+  const packagesDirectory = path.join(resolvedRepoRoot, 'packages', 'plugins');
   const targetDirectory = path.join(packagesDirectory, directoryName);
 
   await access(packagesDirectory, constants.W_OK);
@@ -229,14 +230,14 @@ async function findWorkspaceReferences({
   repoRoot,
   targetDirectory,
 }) {
+  // `packages/` now holds every workspace package, examples included, and the walk below is recursive, so one root
+  // covers all of them.
   const packageJsonPaths = [path.join(repoRoot, 'package.json')];
-  for (const directory of ['packages', 'examples']) {
-    const root = path.join(repoRoot, directory);
-    if (await pathExists(root)) {
-      packageJsonPaths.push(
-        ...(await findPackageJsonFiles(root, targetDirectory)),
-      );
-    }
+  const packagesRoot = path.join(repoRoot, 'packages');
+  if (await pathExists(packagesRoot)) {
+    packageJsonPaths.push(
+      ...(await findPackageJsonFiles(packagesRoot, targetDirectory)),
+    );
   }
 
   const references = [];

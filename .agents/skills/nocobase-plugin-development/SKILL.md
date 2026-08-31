@@ -1,6 +1,6 @@
 ---
 name: nocobase-plugin-development
-description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/create-plugin, packages/app-client, and packages/app-server-kit. Do not use for legacy NocoBase v2 plugin workspaces.'
+description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/plugins/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/tools/create-plugin, packages/app/app-client, and packages/app/app-server-kit. Do not use for legacy NocoBase v2 plugin workspaces.'
 ---
 
 # NocoBase Plugin Development
@@ -14,15 +14,17 @@ lives under `docs/development/plugin-development/`.
 Before changing files, confirm the workspace contains:
 
 ```text
-packages/create-plugin/
-packages/app-client/
-packages/app-server-kit/
+packages/tools/create-plugin/
+packages/app/app-client/
+packages/app/app-server-kit/
 pnpm-workspace.yaml
 ```
 
-If the project instead uses `packages/plugins/`, `src/client-v2/`,
-`nb scaffold plugin`, or the legacy `Plugin` class, do not apply this Skill.
-That is a different plugin protocol.
+`packages/plugins/` by itself does not identify the workspace: v3 keeps its own
+plugins there as `app-plugin-*`. If the project instead has `packages/core/`,
+`packages/plugins/@nocobase/plugin-*`, `src/client-v2/`, `nb scaffold plugin`, or
+the legacy `Plugin` class, do not apply this Skill. That is a different plugin
+protocol.
 
 Always read the repository `AGENTS.md` first, then read
 `docs/development/plugin-development/README.md`. Read only the relevant topic page
@@ -60,12 +62,12 @@ Route APIs as one cross-runtime topic. For `defineRootRoutes()` or
 `client-routes-examples.md`. Read `client.md` or `server.md` to choose an
 adjacent module, then read only that module's page rather than loading every
 Client or Server guide.
-Inspect only the matching files in `packages/app-plugin-routes-example` when a
+Inspect only the matching files in `packages/examples/app-plugin-routes-example` when a
 runnable reference is needed.
 
 ## Stable v3 protocol
 
-- Create new plugins under `packages/app-plugin-<name>/` with
+- Create new plugins under `packages/plugins/app-plugin-<name>/` with
   `pnpm plugin:create`; do not use `nb scaffold plugin`.
 - `plugin:create` has no implicit plugin shape. Select one or more explicit
   capabilities with repeatable `--with`, or use `--empty` for only the package
@@ -160,7 +162,7 @@ runnable reference is needed.
   Agent. The App's entire `.agents/` directory is ignored local output: never
   commit it or use it as a source of truth. It is not runtime code and is not
   plugin-source development guidance.
-- Use `packages/app-plugin-skills-example` as the minimal normative Plugin
+- Use `packages/examples/app-plugin-skills-example` as the minimal normative Plugin
   Skill reference. A public Client component subpath export does not require a
   `./client` runtime entry or Client plugin registration. Verify Skill claims
   through observable target-App behavior, not only synchronized file equality.

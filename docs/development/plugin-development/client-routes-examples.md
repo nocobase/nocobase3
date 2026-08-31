@@ -243,4 +243,4 @@ pnpm --filter <target-app> client:inspect --json
 - 把共享 Provider 状态复制进多个页面。
 
 返回[Route 插件开发](./routes.md)，或继续阅读[测试和验证插件](./testing.md)和
-`packages/app-plugin-routes-example` 的可运行四 Route 示例。
+`packages/examples/app-plugin-routes-example` 的可运行四 Route 示例。

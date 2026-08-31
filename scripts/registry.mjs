@@ -349,6 +349,9 @@ function validateDependencies(item, includedFiles, sourceRoot) {
   }
 }
 
+// packages/ groups its packages one level deep, as packages/<category>/<package>, and a category directory has no
+// package.json of its own. Scanning only the top level would find nothing, so `registry build --all` would report that
+// no workspace Registry packages exist.
 function findWorkspacePackages(repoRoot) {
   const packagesRoot = path.join(repoRoot, 'packages');
   if (!fs.existsSync(packagesRoot)) {
@@ -356,13 +359,19 @@ function findWorkspacePackages(repoRoot) {
   }
   return fs
     .readdirSync(packagesRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) => {
-      const root = path.join(packagesRoot, entry.name);
-      const packageJsonPath = path.join(root, 'package.json');
-      return fs.existsSync(packageJsonPath)
-        ? [{ packageJson: readJson(packageJsonPath), root }]
-        : [];
+    .filter((category) => category.isDirectory())
+    .flatMap((category) => {
+      const categoryRoot = path.join(packagesRoot, category.name);
+      return fs
+        .readdirSync(categoryRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .flatMap((entry) => {
+          const root = path.join(categoryRoot, entry.name);
+          const packageJsonPath = path.join(root, 'package.json');
+          return fs.existsSync(packageJsonPath)
+            ? [{ packageJson: readJson(packageJsonPath), root }]
+            : [];
+        });
     });
 }
 

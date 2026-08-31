@@ -1,8 +1,23 @@
 # AGENTS.md
 
+## Repository Layout
+
+Every published package lives under `packages/`, grouped into six directories by what the package is. The grouping is a convention for readers: pnpm resolves packages by name, so which directory a package sits in changes nothing about how it is depended on or filtered.
+
+| Directory             | What belongs here                                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/libs/`      | Runtime libraries that solve one problem and know nothing about NocoBase applications, such as `caching`, `drive`, and `app-i18n`  |
+| `packages/app/`       | The application runtime itself — what an application is built out of, such as `app-server-kit`, `app-client`, and `app-portal-sdk` |
+| `packages/plugins/`   | Application plugins that ship as product features, such as `app-plugin-authentication`                                             |
+| `packages/examples/`  | Application plugins that exist to demonstrate a capability, such as `app-plugin-routes-example`                                    |
+| `packages/templates/` | Complete applications that `create-app` scaffolds from: `app-template-default` and `app-template-hub`                              |
+| `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `cli`, and `create-app`                |
+
+`packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
+
 ## Selecting and Using Shared Development Configuration
 
-All new packages must use `@nocobase/dev-config` by default. Do not copy a complete tsconfig, ESLint, Prettier, Vitest, or Vite configuration from an existing package. See `packages/dev-config/README.md` for the full English documentation; each configuration directory also has its own README.
+All new packages must use `@nocobase/dev-config` by default. Do not copy a complete tsconfig, ESLint, Prettier, Vitest, or Vite configuration from an existing package. See `packages/tools/dev-config/README.md` for the full English documentation; each configuration directory also has its own README.
 
 ### Selecting a TypeScript Preset
 
@@ -38,7 +53,7 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 
 ### Package Publishing
 
-Every package in `packages/` is published to npm, so none of them set `private: true`. Root `pnpm pack:check` automatically discovers every package in that directory and rejects private packages, incomplete publish metadata, missing or stale changelogs, invalid tarballs, unresolved workspace protocols, and broken export or declaration metadata.
+Every package under `packages/` is published to npm, so none of them set `private: true`. Root `pnpm pack:check` automatically discovers every package in that directory and rejects private packages, incomplete publish metadata, missing or stale changelogs, invalid tarballs, unresolved workspace protocols, and broken export or declaration metadata.
 
 A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
 
@@ -46,11 +61,11 @@ Package names must not collide with what the v2 line already publishes. `@nocoba
 
 ### Test Layout
 
-Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/app-database`, or `tests/logic` and `tests/components` in the Portal packages.
+Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/plugins/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/libs/app-database`, or `tests/logic` and `tests/components` in the Portal packages.
 
 Name test files `*.test.ts` or `*.test.tsx`. Vitest discovers them by filename rather than by directory, so a test placed outside `tests/` still runs and will not fail loudly; keeping the layout consistent is a convention the tooling does not enforce for you.
 
-Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/app-database` does.
+Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/libs/app-database` does.
 
 ### Validation
 
@@ -62,7 +77,7 @@ Root `pnpm check` also performs incremental formatting and publish-ready tarball
 
 The executable source of `@nocobase/dev-config` is TypeScript, while its npm
 exports resolve to compiled ESM JavaScript and declarations in `dist`. When
-changing `packages/dev-config`, run
+changing `packages/tools/dev-config`, run
 `pnpm --filter @nocobase/dev-config check`; do not hand-edit generated output.
 
 ## Database Migration Development
@@ -81,11 +96,11 @@ Before editing an existing migration, check its Git history and the status of th
 
 pnpm 11 does not run a dependency's install script unless the package is listed under `allowBuilds` in `pnpm-workspace.yaml`. That file is the only place the setting is read from: the `pnpm` field in `package.json` was removed in pnpm 11, and `.npmrc` has never carried build settings. A dependency that compiles a native addon and is missing from the list installs without building, `pnpm install` still reports success, and the failure surfaces much later as a runtime error that names nothing actionable — `better-sqlite3` reports `Could not locate the bindings file`.
 
-`@nocobase/create-app` writes this file into each application it generates, listing only the driver that application actually needs. `DRIVERS_NEEDING_BUILD` in `packages/create-app/src/lib/database.ts` is the list of drivers that require an entry; a pure-JavaScript driver such as `pg` or `mysql2` must not be added, because an entry it does not need is noise in every generated project.
+`@nocobase/create-app` writes this file into each application it generates, listing only the driver that application actually needs. `DRIVERS_NEEDING_BUILD` in `packages/tools/create-app/src/lib/database.ts` is the list of drivers that require an entry; a pure-JavaScript driver such as `pg` or `mysql2` must not be added, because an entry it does not need is noise in every generated project.
 
-Do not put `pnpm-workspace.yaml` in `packages/app-template-default`, and do not generate it there at pack time either. pnpm treats any directory holding that file as a workspace root, so a copy inside the package severs it from the monorepo: `pnpm list` stops resolving `workspace:` dependencies, and `pnpm pack` fails outright with `ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC` because the package's `catalog:` ranges resolve against the nested file rather than the repository root. Copying the root catalog into the generated file does make `pack` succeed, but it duplicates the catalog into a second source of truth that silently goes stale.
+Do not put `pnpm-workspace.yaml` in `packages/templates/app-template-default`, and do not generate it there at pack time either. pnpm treats any directory holding that file as a workspace root, so a copy inside the package severs it from the monorepo: `pnpm list` stops resolving `workspace:` dependencies, and `pnpm pack` fails outright with `ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC` because the package's `catalog:` ranges resolve against the nested file rather than the repository root. Copying the root catalog into the generated file does make `pack` succeed, but it duplicates the catalog into a second source of truth that silently goes stale.
 
-When another native dependency needs the same treatment, add it to `DRIVERS_NEEDING_BUILD` and cover it in `packages/create-app/tests/pnpm-workspace.test.ts`. If it belongs to the template rather than to a database choice, add it to the root `pnpm-workspace.yaml` so the monorepo builds it, and extend the generated file in `packages/create-app/src/lib/pnpm-workspace.ts` so applications built from the template get it too.
+When another native dependency needs the same treatment, add it to `DRIVERS_NEEDING_BUILD` and cover it in `packages/tools/create-app/tests/pnpm-workspace.test.ts`. If it belongs to the template rather than to a database choice, add it to the root `pnpm-workspace.yaml` so the monorepo builds it, and extend the generated file in `packages/tools/create-app/src/lib/pnpm-workspace.ts` so applications built from the template get it too.
 
 A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's npm configuration suppresses install scripts globally and outranks `allowBuilds`, so a correct `allowBuilds` still yields an uncompiled addon. `pnpm install` cannot repair this — the package is already in the store, so pnpm skips it and reports success without building. `pnpm rebuild <package>` does, and works without changing the developer's configuration. `create-app` verifies the driver by loading it and runs that rebuild automatically.
 
@@ -114,23 +129,23 @@ The workflow files under `.github/workflows/` still carry Chinese comments writt
 
 Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:
 
-| Configuration                                        | Purpose                    |
-| ---------------------------------------------------- | -------------------------- |
-| `packages/app-portal-sdk/tsconfig.json`              | Portal SDK                 |
-| `packages/app-sdk/tsconfig.json`                     | Browser app SDK            |
-| `packages/app-plugin-authentication/tsconfig.json`   | Authentication library     |
-| `packages/authorization/tsconfig.json`               | Authorization library      |
-| `packages/app-database/tsconfig.json`                | Database package           |
-| `packages/app-host/tsconfig.json`                    | Application host           |
-| `packages/app-server-kit/tsconfig.json`              | Application server library |
-| `packages/caching/tsconfig.json`                     | Caching library            |
-| `packages/drive/tsconfig.json`                       | File storage library       |
-| `packages/id-generator/tsconfig.json`                | ID generator library       |
-| `packages/logging/tsconfig.json`                     | Logging library            |
-| `packages/queue/tsconfig.json`                       | Queue library              |
-| `packages/session/tsconfig.json`                     | Session library            |
-| `packages/app-template-default/tsconfig.server.json` | Default template server    |
-| `packages/hub/tsconfig.server.json`                  | Hub server                 |
+| Configuration                                                  | Purpose                    |
+| -------------------------------------------------------------- | -------------------------- |
+| `packages/app/app-portal-sdk/tsconfig.json`                    | Portal SDK                 |
+| `packages/app/app-sdk/tsconfig.json`                           | Browser app SDK            |
+| `packages/plugins/app-plugin-authentication/tsconfig.json`     | Authentication library     |
+| `packages/libs/authorization/tsconfig.json`                    | Authorization library      |
+| `packages/libs/app-database/tsconfig.json`                     | Database package           |
+| `packages/app/app-host/tsconfig.json`                          | Application host           |
+| `packages/app/app-server-kit/tsconfig.json`                    | Application server library |
+| `packages/libs/caching/tsconfig.json`                          | Caching library            |
+| `packages/libs/drive/tsconfig.json`                            | File storage library       |
+| `packages/libs/id-generator/tsconfig.json`                     | ID generator library       |
+| `packages/libs/logging/tsconfig.json`                          | Logging library            |
+| `packages/libs/queue/tsconfig.json`                            | Queue library              |
+| `packages/libs/session/tsconfig.json`                          | Session library            |
+| `packages/templates/app-template-default/tsconfig.server.json` | Default template server    |
+| `packages/templates/app-template-hub/tsconfig.server.json`     | Hub server                 |
 
 Within these scopes, every exported API must be declarable from the current file alone, without relying on cross-file type inference.
 
@@ -149,8 +164,8 @@ Annotations must match runtime behavior. For example, `resolveAclDataSourceKey` 
 
 ### Validation After Changes
 
-Run `pnpm typecheck` and `pnpm build` for the affected package. When changing `portal-sdk`, also run the `app-template-default` and `hub` typechecks because their exports point directly to SDK source and immediately consume its annotations.
+Run `pnpm typecheck` and `pnpm build` for the affected package. When changing `portal-sdk`, also run the `app-template-default` and `app-template-hub` typechecks because their exports point directly to SDK source and immediately consume its annotations.
 
 ## Other Notes
 
-- Client code in `app-template-default` and `hub` (`tsconfig.json` and `tsconfig.node.json`) uses `noEmit` and only requires `isolatedModules`; it is not subject to the `isolatedDeclarations` rules above.
+- Client code in `app-template-default` and `app-template-hub` (`tsconfig.json` and `tsconfig.node.json`) uses `noEmit` and only requires `isolatedModules`; it is not subject to the `isolatedDeclarations` rules above.

@@ -11,7 +11,7 @@ description: 在插件顶层 skills 目录描述插件向 App 提供的公共能
 
 本指南由开发插件的 Agent 阅读，用来编写供 App Agent 使用的 Plugin Skills。插件开发文档回答“如何修改插件源码”；Plugin Skills 回答“插件向 App 提供了什么，以及 App 如何集成和使用”。
 
-仓库中的 `packages/app-plugin-skills-example` 是最小但完整的参考实现。它不是只放一份
+仓库中的 `packages/examples/app-plugin-skills-example` 是最小但完整的参考实现。它不是只放一份
 `SKILL.md` 的空示例，而是同时提供可导入的 Client component、Server
 `ServiceToken`、带自身认证边界的 API，以及在 `app-template-default` 中由 App 拥有的
 页面组合和行为测试。开发新 Skill 时优先对照这个闭环，不要只对照 Markdown 结构。

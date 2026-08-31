@@ -18,11 +18,11 @@ description: 根据 source workspace 或独立 App 的插件来源选择正确�
 
 ## 先确认运行环境
 
-| 环境             | 插件来源                            | 依赖范围         | 继续阅读                                                    |
-| ---------------- | ----------------------------------- | ---------------- | ----------------------------------------------------------- |
-| Source workspace | 当前仓库 `packages/app-plugin-*`    | `workspace:^`    | [Source workspace 注册](./plugin-registration-workspace.md) |
-| 独立 App         | package registry 中已经发布的插件包 | 实际安装版本范围 | [独立 App 安装与升级](./plugin-registration-installed.md)   |
-| 移除插件         | 任一环境                            | 取决于来源       | [解除注册与删除](./plugin-removal.md)                       |
+| 环境             | 插件来源                                 | 依赖范围         | 继续阅读                                                    |
+| ---------------- | ---------------------------------------- | ---------------- | ----------------------------------------------------------- |
+| Source workspace | 当前仓库 `packages/plugins/app-plugin-*` | `workspace:^`    | [Source workspace 注册](./plugin-registration-workspace.md) |
+| 独立 App         | package registry 中已经发布的插件包      | 实际安装版本范围 | [独立 App 安装与升级](./plugin-registration-installed.md)   |
+| 移除插件         | 任一环境                                 | 取决于来源       | [解除注册与删除](./plugin-removal.md)                       |
 
 第一版 `plugin:create` 只在 NocoBase source workspace 中创建插件。不要在独立 App 中运行它来创建本地插件。
 
