@@ -259,6 +259,10 @@ export const createNodeLibraryConfig: (
     environment: [...node, ...(options.environment ?? [])],
   });
 
+export const createUniversalLibraryConfig: (
+  options?: SharedConfigOptions,
+) => Linter.Config[] = (options = {}) => createConfig(options);
+
 export const createClientLibraryConfig: (
   options?: SharedConfigOptions,
 ) => Linter.Config[] = (options = {}) =>

@@ -1,5 +1,5 @@
-import { createNodeLibraryConfig } from '@nocobase/dev-config/eslint';
+import { createUniversalLibraryConfig } from '@nocobase/dev-config/eslint';
 
-export default createNodeLibraryConfig({
+export default createUniversalLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
 });
