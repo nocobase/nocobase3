@@ -1,20 +1,35 @@
 # Integration Tests
 
-These tests exercise Builder and Query behavior against real database
-connections. They are intentionally organized under `tests/integration` rather
-than by one database backend because the same behavior should work across all
-supported databases.
+These tests exercise database package behavior against real database
+connections. They are intentionally organized under `tests/integration` by
+public capability rather than by database backend because the same behavior
+should work across all supported databases.
 
 The suite is split by public capability:
 
 ```text
-tests/integration/
-  builder/
-  query/
+tests/
+  fixtures/
+  integration/
+    builder/
+    collection/
+    metadata/
+    migration/
+    query/
+    schema/
+    seed/
 ```
 
-`builder/` covers Collection Builder DDL and metadata behavior. `query/` covers
-the QueryAdapter API against real SQL execution.
+`builder/` covers Collection Builder DDL and metadata synchronization.
+`collection/` covers the resolved Collection API for managed and external
+Schemas. `metadata/` covers persistent Store, compare-and-swap, pagination, and
+transaction behavior. `query/`, `migration/`, `schema/`, and `seed/` cover their
+corresponding public APIs against real SQL execution.
+
+Reusable typed scenario inputs live under `tests/fixtures/`. Resolver fixtures
+pair physical Schema with supplemental Metadata and expected results;
+integration fixtures provide inputs that tests apply through public APIs. They
+are test data, not another source of runtime Collection truth.
 
 By default, the integration suite uses an in-memory SQLite database:
 
