@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { resolveAppBase } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Check,
   Copy,
-  Download,
   ExternalLink,
   PackageCheck,
   Play,
@@ -21,6 +20,7 @@ import {
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
+import { AuditLogView } from '../components/audit-log-view.js';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,7 +75,11 @@ import {
   createActivity,
   createDeployment,
 } from '../domain/applications-data.js';
-import { DEPLOYMENT_FIXTURES, formatDuration } from '../domain/operations.js';
+import {
+  DEPLOYMENT_FIXTURES,
+  formatDuration,
+  type AuditRecord,
+} from '../domain/operations.js';
 import type {
   ApplicationRuntimeState,
   HubApplicationAccess,
@@ -1211,120 +1215,99 @@ function ActivityTab({
 }: {
   readonly application: HubApplicationRecord;
 }): ReactElement {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const records = useMemo(
+    () =>
+      application.activity.map((event) => toAuditRecord(application, event)),
+    [application],
+  );
   return (
-    <div className='space-y-4 pt-5'>
-      <div className='flex flex-wrap items-end justify-between gap-3'>
-        <div>
-          <h2 className='text-lg font-semibold'>
-            {t('applicationDetail.activity.title', {
-              defaultValue: 'Operation activity',
-            })}
-          </h2>
-          <p className='text-sm text-muted-foreground'>
-            {t('applicationDetail.activity.description', {
-              defaultValue: 'A local audit trail for this application page.',
-            })}
-          </p>
-        </div>
-        <Button
-          type='button'
-          variant='outline'
-          onClick={() =>
-            downloadCsv(
-              `${application.slug}-activity.csv`,
-              ['id', 'action', 'actor', 'result', 'createdAt'],
-              application.activity.map((event) => [
-                event.id,
-                event.action,
-                event.actor,
-                event.result,
-                event.createdAt,
-              ]),
-            )
-          }
-        >
-          <Download aria-hidden='true' />
-          {t('applicationDetail.activity.export', {
-            defaultValue: 'Export CSV',
-          })}
-        </Button>
-      </div>
-      <Card className='py-0'>
-        <CardContent className='px-0'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  {t('applicationDetail.activity.action', {
-                    defaultValue: 'Action',
-                  })}
-                </TableHead>
-                <TableHead>
-                  {t('applicationDetail.activity.actor', {
-                    defaultValue: 'Actor',
-                  })}
-                </TableHead>
-                <TableHead>
-                  {t('applicationDetail.activity.result', {
-                    defaultValue: 'Result',
-                  })}
-                </TableHead>
-                <TableHead>
-                  {t('applicationDetail.activity.time', {
-                    defaultValue: 'Time',
-                  })}
-                </TableHead>
-                <TableHead>
-                  {t('applicationDetail.activity.details', {
-                    defaultValue: 'Details',
-                  })}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {application.activity.map((event) => (
-                <TableRow key={event.id}>
-                  <TableCell className='font-medium'>{event.action}</TableCell>
-                  <TableCell>{event.actor}</TableCell>
-                  <TableCell>
-                    <Badge variant='secondary'>
-                      {t('applicationDetail.activity.success', {
-                        defaultValue: 'Success',
-                      })}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{formatDate(event.createdAt, locale)}</TableCell>
-                  <TableCell className='max-w-md whitespace-normal text-muted-foreground'>
-                    {event.details}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+    <AuditLogView
+      records={records}
+      actions={[]}
+      applicationOptions={[]}
+      showFilters={false}
+      showApplication={false}
+      exportFileName={`${application.slug}-activity.csv`}
+      title={t('applicationDetail.activity.title', {
+        defaultValue: 'Operation activity',
+      })}
+      description={t('applicationDetail.activity.description', {
+        defaultValue: 'A local audit trail for this application page.',
+      })}
+      variant='embedded'
+    />
   );
 }
 
-function downloadCsv(
-  filename: string,
-  headers: readonly string[],
-  rows: readonly (readonly string[])[],
-): void {
-  const escape = (value: string): string => `"${value.replaceAll('"', '""')}"`;
-  const csv = [headers, ...rows]
-    .map((row) => row.map(escape).join(','))
-    .join('\n');
-  const anchor = document.createElement('a');
-  anchor.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
-  anchor.download = filename;
-  anchor.hidden = true;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
+function toAuditRecord(
+  application: HubApplicationRecord,
+  event: HubApplicationRecord['activity'][number],
+): AuditRecord {
+  const resource = activityResource(event.action);
+  return {
+    id: event.id,
+    createdAt: event.createdAt,
+    actorId: `actor-${stableSlug(event.actor)}`,
+    actorName: event.actor,
+    actorEmail: null,
+    applicationId: application.id,
+    applicationName: application.name,
+    action: event.action,
+    result: event.result === 'failed' ? 'failure' : 'success',
+    source: 'web',
+    resource,
+    resourceId: activityResourceId(application, resource, event.details),
+    requestId: event.id,
+    client: {
+      name: 'Hub web console',
+      credentialId: null,
+      ipAddress: '—',
+      userAgent:
+        typeof navigator === 'undefined'
+          ? 'Hub browser session'
+          : navigator.userAgent,
+    },
+    details: { message: event.details },
+  };
+}
+
+function activityResource(action: string): string {
+  if (action.startsWith('release.')) return 'release';
+  if (action.startsWith('deployment.')) return 'deployment';
+  if (action.startsWith('permission.')) return 'role';
+  return 'application';
+}
+
+function activityResourceId(
+  application: HubApplicationRecord,
+  resource: string,
+  details: string,
+): string | null {
+  if (resource === 'application') return `app-${application.slug}`;
+  if (resource === 'release') {
+    return (
+      application.releases.find((release) => details.includes(release.version))
+        ?.id ?? null
+    );
+  }
+  if (resource === 'deployment') {
+    return (
+      application.deployments.find((deployment) =>
+        details.includes(deployment.version),
+      )?.id ?? null
+    );
+  }
+  return null;
+}
+
+function stableSlug(value: string): string {
+  const slug = value
+    .normalize('NFKD')
+    .toLocaleLowerCase()
+    .replaceAll(/[^\p{Letter}\p{Number}]+/gu, '-')
+    .replaceAll(/^-|-$/g, '');
+  return slug || 'unknown';
 }
 
 function PermissionsTab({
