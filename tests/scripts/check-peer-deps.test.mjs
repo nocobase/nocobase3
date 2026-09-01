@@ -63,7 +63,8 @@ test('accepts an identity-sensitive package declared as a peer with a matching d
   assert.deepEqual(violations, []);
 });
 
-// Without the devDependency the package resolves nothing when it is typechecked or tested on its own.
+// Without the devDependency, development and tests float across the wide peer range instead of pinning this
+// repository's copy.
 test('reports a workspace peer that has no devDependency', () => {
   const violations = findViolations({
     name: '@nocobase/app-plugin-example',

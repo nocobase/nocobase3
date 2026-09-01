@@ -13,8 +13,16 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-// Packages whose runtime identity must be unique in a process. The reason is recorded per package because the
-// remedy — moving the entry to peerDependencies — otherwise looks like arbitrary bookkeeping.
+// Packages whose runtime identity must be unique in a process.
+//
+// This list records decisions already made; it is not the rule and it is expected to be incomplete. A package belongs
+// here when it exports something that only works while one copy of the module exists: a value used as a key by
+// identity (a ServiceToken in the container's Map), a React context, a module-level singleton, or a registration into
+// a process-wide registry. A package exporting only classes, functions, and types holds nothing a second copy could
+// split, and stays an ordinary dependency until it gains one of those exports.
+//
+// The reason is recorded per package because it is what lets someone apply the rule to a package not listed here. A
+// bare list gets copied without being understood. See AGENTS.md, "Depending on Identity-Sensitive Packages".
 export const IDENTITY_SENSITIVE_PACKAGES = new Map([
   [
     '@nocobase/service-provider',
@@ -52,10 +60,14 @@ export function reasonFor(packageName) {
 /**
  * Violations for a single manifest.
  *
- * A peer dependency on a workspace package also needs a devDependency on the same package, or the package cannot
- * resolve it while it is being developed and tested on its own. Third-party peers such as `react` are exempt: they
- * usually resolve transitively through another dependency, and demanding a direct devDependency for each one would
- * report noise rather than a defect.
+ * A peer on a workspace package is also declared as a devDependency. Not for resolution — pnpm links a `workspace:`
+ * peer whether or not it is one — but because the peer range is deliberately wide (`workspace:^` publishes as
+ * `^1.0.0`) while development and tests should run against the copy in this repository. `workspace:*` pins that. The
+ * pairing also keeps each declaration honest about its audience: the peer is the published contract, the devDependency
+ * never leaves the repository.
+ *
+ * Third-party peers such as `react` are exempt. They usually resolve through another dependency, and demanding a
+ * direct devDependency for each one would report noise rather than a defect.
  */
 export function findViolations(manifest) {
   const dependencies = Object.keys(manifest.dependencies ?? {});
@@ -79,7 +91,7 @@ export function findViolations(manifest) {
     violations.push({
       kind: 'missing-dev',
       dependency,
-      message: `"${dependency}" is a peerDependency but has no matching devDependency, so it cannot resolve during local development`,
+      message: `"${dependency}" is a peerDependency but has no matching devDependency, so development and tests float across the peer range instead of using this repository's copy`,
     });
   }
 
@@ -93,6 +105,9 @@ export function findViolations(manifest) {
 // depending on `@nocobase/db` is what puts the single copy in place for everyone else — and `packages/templates` are
 // applications, which is the side that satisfies a peer range. Requiring peers there would leave the ranges with
 // nothing to resolve against.
+//
+// A new group under `packages/` needs a deliberate decision about which side of that line it sits on before it is
+// added here.
 const CHECKED_GROUPS = ['plugins', 'examples'];
 
 export async function collectPackages(repositoryRoot) {

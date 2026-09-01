@@ -186,7 +186,8 @@ describe('createPlugin', () => {
         peerDependencyNames,
       );
 
-      // A workspace peer that has no devDependency cannot resolve while the plugin is developed on its own.
+      // A workspace peer is paired with a devDependency so development and tests pin this repository's copy rather
+      // than floating across the wide peer range.
       for (const packageName of Object.keys(manifest.peerDependencies ?? {})) {
         if (!packageName.startsWith('@nocobase/')) continue;
         expect(manifest.devDependencies ?? {}).toHaveProperty(packageName);

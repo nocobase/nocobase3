@@ -27,6 +27,6 @@ A plugin used to list `@nocobase/app-server`, `@nocobase/db`, `@nocobase/service
 
 The monorepo could never show the problem, because `workspace:` links every consumer to one directory. It appears once a plugin is installed from a registry into an application, and it appears at runtime rather than at install time: a service that is registered reports `Service "..." is not registered`, or a context reads `undefined` under a mounted provider.
 
-Each of these packages is now a peer dependency paired with a devDependency, so the application provides the single copy and the plugin still resolves the package while it is developed on its own. Applications built from the templates are unaffected — they already install every one of these packages directly, which is what satisfies the new peer ranges.
+Each of these packages is now a peer dependency paired with a devDependency. The peer is the published contract that makes the installing application provide the single copy; the devDependency pins this repository's copy for development and tests, which the deliberately wide peer range does not. Applications built from the templates are unaffected — they already install every one of these packages directly, which is what satisfies the new peer ranges.
 
 `pnpm plugin:create` generates the same shape, and `pnpm peers:check` enforces it in CI.

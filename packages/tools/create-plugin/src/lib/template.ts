@@ -403,8 +403,8 @@ async function renderManifest(
 
   // A plugin is loaded into an application that already provides the runtime, so anything carrying process-wide state
   // — service tokens, React contexts, the queue's job registry — is declared as a peer and never installed by the
-  // plugin itself. The matching devDependency is what makes the package resolve while the plugin is developed on its
-  // own. See AGENTS.md, "Depending on Identity-Sensitive Packages".
+  // plugin itself. The matching devDependency pins this repository's copy for development and tests, which the wide
+  // peer range deliberately does not. See AGENTS.md, "Depending on Identity-Sensitive Packages".
   const addRuntimePeer = (packageName: string): void => {
     peerDependencies[packageName] = 'workspace:^';
     devDependencies[packageName] = 'workspace:*';

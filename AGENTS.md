@@ -124,9 +124,28 @@ A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's
 
 ## Depending on Identity-Sensitive Packages
 
-A plugin declares the runtime it plugs into as a `peerDependency`, never as a `dependency`. `pnpm peers:check` enforces this and runs in CI.
+A plugin declares the runtime it plugs into as a `peerDependency` paired with a `devDependency`, never as a `dependency`. `pnpm peers:check` enforces this and runs in CI.
 
-Several workspace packages carry state whose correctness depends on there being exactly one copy of the module in the process:
+### Deciding whether a package belongs to the rule
+
+The list in `IDENTITY_SENSITIVE_PACKAGES` in `scripts/check-peer-deps.mjs` is what the check reads, but it is a record of past decisions rather than the rule itself. It will be incomplete: every new package, and every new export added to an existing one, has to be judged. Ask one question:
+
+> Does this package hold state that is only correct while exactly one copy of the module exists in the process?
+
+If yes, it belongs to the rule. In practice that means the package exports at least one of:
+
+- **A value used as a key by identity.** `createServiceToken` returns a frozen object and `ServiceContainer` keys its `Map` by that object, so two tokens with the same `name` are two different keys. Anything compared with `===`, or used as a `Map`/`Set`/`WeakMap` key across a module boundary, has this property.
+- **A React context.** `createContext` returns a new object each call, and `useContext` only matches the provider created from the same one.
+- **A module-level singleton.** A `const` holding a `new` instance or accumulated state, such as `nocobaseClient`, gives each copy its own session, cache, or connection.
+- **A registration into a process-wide registry.** `@nocobase/queue` registers job classes into the `Locator` of `@boringnode/queue`; the second copy registers into a table the first one never reads.
+
+A package that exports only classes, functions, and types holds nothing a second copy could split. Constructing two instances of a class is what callers already do, and a duplicated pure function behaves identically. `@nocobase/drive`, `@nocobase/caching`, `@nocobase/logging`, `@nocobase/session`, and `@nocobase/snowflake` are in this group today and stay ordinary dependencies. They move only if they gain one of the exports above — adding a token or a context to any of them is the moment to revisit the entry, not a later release.
+
+Two cases need no judgement. Every `@nocobase/app-plugin-*` is covered unconditionally, because plugins export tokens for one another and `isIdentitySensitive` matches them by prefix, so a new plugin is included the day it is created. And a package that only ever appears in `import type` needs no runtime declaration at all.
+
+When you do add an entry, record what breaks without it rather than only the package name. The reason is what lets the next person apply this rule to a package nobody has seen yet; a bare list decays into something people copy without understanding.
+
+The current entries:
 
 | Package                      | What breaks when a second copy exists                                                                                                                |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -139,9 +158,13 @@ Several workspace packages carry state whose correctness depends on there being 
 | `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                               |
 | any `@nocobase/app-plugin-*` | Plugins export tokens for one another, such as `authenticationToken` and `notificationServiceToken`                                                  |
 
-A second copy fails in a way that is expensive to diagnose. Nothing warns at install time, the build succeeds, and the application starts; the symptom appears at runtime as `Service "..." is not registered` for a service that is demonstrably registered, or as a React context reading `undefined` under a provider that is demonstrably mounted. It surfaces only in an installed application, because the monorepo links every consumer to one directory through the `workspace:` protocol and cannot produce a second copy at all.
+### Why a second copy is worth this much trouble
 
-Declare each of these as a peer alongside a devDependency on the same package. The peer range is what the application satisfies; the devDependency is what lets the plugin resolve the package while it is typechecked and tested on its own:
+Nothing warns at install time, the build succeeds, and the application starts. The symptom appears at runtime as `Service "..." is not registered` for a service that is demonstrably registered, or as a React context reading `undefined` under a provider that is demonstrably mounted — the error points at correct code, and the actual fault is a duplicated module that appears nowhere in the source.
+
+It cannot be reproduced here. The monorepo links every consumer to one directory through the `workspace:` protocol, so a second copy is impossible; it becomes possible only once a plugin is installed from a registry, where a `dependencies` range lets a package manager satisfy it with its own copy. That is why the declaration has to be right before publishing, not after the first report.
+
+### Declaring both, and why
 
 ```json
 {
@@ -150,11 +173,20 @@ Declare each of these as a peer alongside a devDependency on the same package. T
 }
 ```
 
-The rule applies to plugins, which are guests in an application someone else assembled. It does not apply to `packages/app` and `packages/libs`, which compose the runtime and are what puts the single copy in place, nor to `packages/templates`, which are applications and therefore the side that satisfies a peer range.
+The two entries say different things about the same package, and each is load-bearing:
 
-A library that exports only classes and factories holds no state a second copy could split. `@nocobase/drive`, `@nocobase/caching`, `@nocobase/logging`, `@nocobase/session`, and `@nocobase/snowflake` stay ordinary dependencies. When adding a package to `IDENTITY_SENSITIVE_PACKAGES` in `scripts/check-peer-deps.mjs`, record what breaks without it rather than only its name — the entry is the reason the rule can be applied to a package nobody has seen before.
+- **`peerDependencies` is the published contract.** It is what npm ships in the package metadata, and it tells the installing application "provide this, and provide exactly one". `devDependencies` are not published at all, so without the peer entry an installed plugin declares no requirement and a package manager is free to give it a second copy.
+- **`devDependencies` pins the version used here.** The peer range is deliberately wide — `workspace:^` publishes as `^1.0.0` — because an application may reasonably satisfy it with any compatible version. Development and tests should not float across that range; `workspace:*` resolves to the copy in this repository, which is the one being changed alongside the plugin.
 
-`pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. Keep `packages/tools/create-plugin/src/lib/template.ts` aligned when the list changes.
+Note that a peer written with the `workspace:` protocol resolves on its own here, so the `devDependency` is not what makes the package importable — pnpm links a `workspace:` peer whether or not it is also a devDependency. It matters for version pinning and for keeping the two declarations honest about their audiences. A peer written as a plain semver range does _not_ resolve on its own, so if an entry ever needs a non-workspace range, the devDependency becomes load-bearing for resolution as well.
+
+### Scope
+
+The rule applies to plugins, which are guests in an application someone else assembled: `packages/plugins` and `packages/examples`, which is what `CHECKED_GROUPS` in the check script covers.
+
+It does not apply to `packages/app` and `packages/libs`. They compose the runtime and are what puts the single copy in place — `app-server` depending on `@nocobase/db` is precisely how the one copy comes to exist. Nor does it apply to `packages/templates`, which are applications, and therefore the side that satisfies a peer range rather than declaring one. A new group under `packages/` needs a deliberate decision about which side of this line it sits on before it is added to `CHECKED_GROUPS`.
+
+`pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
 
 ## Language
 
