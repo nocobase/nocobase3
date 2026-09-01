@@ -1007,6 +1007,9 @@ importers:
       tedious:
         specifier: 'catalog:'
         version: 20.0.0
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.12
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1135,7 +1138,7 @@ importers:
     dependencies:
       '@boringnode/queue':
         specifier: ^0.7.1
-        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg@8.23.0))(kysely@0.29.5)
+        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg@8.23.0)(tedious@20.0.0))(kysely@0.29.5)
       '@nocobase/db':
         specifier: workspace:^
         version: link:../db
@@ -11822,7 +11825,7 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg@8.23.0))(kysely@0.29.5)':
+  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg@8.23.0)(tedious@20.0.0))(kysely@0.29.5)':
     dependencies:
       '@lukeed/ms': 2.0.2
       '@poppinss/utils': 7.0.1

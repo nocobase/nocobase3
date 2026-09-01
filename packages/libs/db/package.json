@@ -28,6 +28,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "example": "tsx ./examples/command.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:db:up": "docker compose up -d postgres mysql",
@@ -39,11 +40,12 @@
     "test:integration:oracle": "INTEGRATION_DB_CONNECTIONS=oracle vitest run tests/integration",
     "test:integration:mssql": "INTEGRATION_DB_CONNECTIONS=mssql vitest run tests/integration",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:examples": "tsc -p examples/tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm typecheck:examples && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
@@ -60,6 +62,7 @@
     "oracledb": "catalog:",
     "pg": "^8.23.0",
     "tedious": "catalog:",
+    "tsx": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
