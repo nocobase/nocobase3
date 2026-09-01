@@ -107,7 +107,7 @@ createdAt -> created_at
 
 Collection 可以用 `collection.naming({ underscored, tablePrefix })` 覆盖 Connection 命名配置。`underscored` 默认是 `true`；`tablePrefix: ''` 表示清除继承的前缀。不能显式指定任意物理名。
 
-更完整的概念见 [命名概念](../concepts/naming.md)，Builder 编译规则见 [Builder 命名映射](../builder/naming.md)。
+更完整的概念见 [命名概念](../concepts/naming.md)，端到端行为见 [underscored 命名规则](../concepts/underscored.md)，Builder 编译规则见 [Builder 命名映射](../builder/naming.md)。
 
 ## defineDatabase
 

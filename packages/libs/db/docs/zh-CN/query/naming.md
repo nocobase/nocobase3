@@ -7,6 +7,8 @@ description: 说明 QueryAdapter 的 underscored 转换、结果 key 与 Collect
 
 `db.query()` 是数据库查询层，不是 Repository，也不读取 Collection Metadata。默认的 Connection naming 会把 camelCase table 和 column identifier 转为小写下划线：
 
+Connection、Collection Builder 与 Query 的完整行为对照见 [underscored 命名规则](../concepts/underscored.md)。
+
 ```ts
 await db
   .query()

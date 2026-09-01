@@ -57,6 +57,7 @@ Collection 提供一层稳定的应用抽象：
 - Repository filter 设计见 [Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
 - Repository 排序设计见 [Sort AST](./repository/sort-ast.md)。
 - 命名策略见 [命名概念](./concepts/naming.md)。
+- `underscored` 的转换算法和跨层行为见 [underscored 命名规则](./concepts/underscored.md)。
 - Collection 的解析与 Metadata Store 设计见 [Collection 架构](./collection/architecture.md)。
 - 数据库连接见 [Database 概览](./database/overview.md)。
 - 真实数据库测试见 [集成测试](./testing/integration.md)。

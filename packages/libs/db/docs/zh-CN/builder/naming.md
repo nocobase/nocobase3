@@ -15,6 +15,8 @@ normalized(name) = effectiveNaming.underscored ? snake_case(name) : name
 
 `effectiveNaming` 合并 Connection 和 Collection 的 `naming`。`underscored` 默认是 `true`，`tablePrefix` 默认是空字符串。
 
+具体转换算法、缩写边界以及 Query 的不同处理方式见 [underscored 命名规则](../concepts/underscored.md)。
+
 ## Connection 默认前缀
 
 ```ts
@@ -108,7 +110,7 @@ Builder 会在 DDL 前检查所有 Metadata。Relation target/through、Foreign 
 
 ## 旧 Metadata
 
-连接时会验证旧 `tableName`、`columnName` 和 `naming.underscored`。只有旧物理名称与确定性规则一致时才允许继续；不一致会抛出 `COLLECTION_NAMING_INCOMPATIBLE`，要求先提供显式 Migration。
+连接时会验证旧 `tableName` 和 `columnName`。只有旧物理名称与当前 effective naming 一致时才允许继续；不一致会抛出 `COLLECTION_NAMING_INCOMPATIBLE`，要求先提供显式 Migration。
 
 ## 与 Query 的边界
 

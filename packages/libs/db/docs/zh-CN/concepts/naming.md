@@ -24,6 +24,8 @@ orderItems.createdAt -> order_items.created_at
 
 `underscored` 默认是 `true`。Connection 提供默认命名配置，Collection 可以局部覆盖。Collection DSL 不支持自定义 `tableName`、`columnName` 或 `namingStrategy`。
 
+完整的转换算法、Connection/Builder/Query 行为矩阵和 Migration 要求见 [underscored 命名规则](./underscored.md)。
+
 ## tablePrefix
 
 Connection 可以设置默认前缀：
