@@ -28,6 +28,7 @@ describe('@nocobase/app-plugin-hub Client ServiceProvider', () => {
       {
         name: 'hub.applications',
         list: '/apps',
+        show: '/apps/:appId',
         meta: {
           label: 'navigation.applications',
           i18nNs: '@nocobase/app-plugin-hub',
@@ -37,6 +38,7 @@ describe('@nocobase/app-plugin-hub Client ServiceProvider', () => {
       {
         name: 'hub.deployments',
         list: '/deployments',
+        show: '/deployments/:deploymentId',
         meta: {
           label: 'navigation.deployments',
           i18nNs: '@nocobase/app-plugin-hub',
