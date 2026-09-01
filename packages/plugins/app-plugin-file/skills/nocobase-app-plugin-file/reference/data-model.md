@@ -1,8 +1,8 @@
 # Data model
 
-File capability is a relation between a business record and a standard file
-record. A global `files` table is optional; a module may own a table such as
-`profileAvatars` or `orderAttachments`.
+File capability is a relation between an application business record and a
+standard file record. A global `files` table is optional; the application may
+own a table such as `profileAvatars` or `orderAttachments`.
 
 ## Standard fields
 
@@ -70,17 +70,18 @@ do not import a live collection definition or schema helper.
 
 ## Constraints and scope
 
-Build the standard Route with a hard-coded table and a scope resolver that
-reads only a validated server Route parameter. Use the assembly pattern in
-[quick start](quick-start.md).
+Build the standard Route in application Server source with a hard-coded table
+and a scope resolver that reads only a validated Route parameter. Use the App
+assembly pattern in [quick start](quick-start.md).
 
 The Store must apply every scope equality to list, find, create, and remove.
 Find and remove must combine the file ID and scope in the same database
 operation. Never fall back to an unscoped query. Never accept table names,
 scope field names, disk, key, or raw SQL from a browser request.
 
-The Store is not an authorization layer. The business Route must authenticate
-and call the existing authorization system before management operations.
-DatabaseManager stays on the server; it is not exposed to browser code.
+The Store is not an authorization layer. The application Route must
+authenticate and call the App's existing authorization system before
+management operations. DatabaseManager stays on the server; it is not exposed
+to browser code.
 
 See [quick start](quick-start.md) for the Route and client assembly pattern.

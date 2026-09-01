@@ -31,36 +31,6 @@
         "target": "client/extensions/nocobase-file-component-ui",
         "include": ["."]
       }
-    },
-    {
-      "name": "page-ui",
-      "type": "registry:block",
-      "title": "NocoBase File Page UI",
-      "description": "Application-owned Demo page for the plugin's real attachments API.",
-      "dependencies": [
-        "@nocobase/app-client@^1.0.0-beta.2",
-        "@nocobase/app-portal-sdk@^0.0.1-beta.1",
-        "@nocobase/app-plugin-file@^0.0.1",
-        "lucide-react@^0.487.0",
-        "react@^19.0.0",
-        "react-dom@^19.0.0"
-      ],
-      "registryDependencies": ["button"],
-      "docs": "Requires @nocobase/app-plugin-file and composes its stable public client API and components. The page calls GET /api/attachments/examples, then uses the returned endpoints for the Profile Avatar and Order Attachments clients. Its extension overrides the existing File Demo route component and does not declare another /file-demo route. The installed source is application-owned, is not overwritten by plugin upgrades, and should be reviewed with a three-way merge.",
-      "meta": {
-        "ownership": "application",
-        "upgradePolicy": "three-way-merge",
-        "nocobase": {
-          "requiresPlugins": {
-            "@nocobase/app-plugin-file": ">=0.0.1 <0.1.0"
-          }
-        }
-      },
-      "source": {
-        "root": "registry/page-ui",
-        "target": "client/extensions/nocobase-file-page-ui",
-        "include": ["."]
-      }
     }
   ]
 }

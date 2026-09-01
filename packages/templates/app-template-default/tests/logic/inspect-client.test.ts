@@ -120,11 +120,6 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-file:demo',
-        path: '/file-demo',
-      },
-      {
-        auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-detail',
         path: '/settings/automation/workflows/:workflowId',
       },

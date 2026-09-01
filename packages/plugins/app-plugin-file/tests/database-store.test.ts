@@ -3,17 +3,13 @@ import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { Hono, type Context } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import migration from '../database/migrations/202608270001_create_file_demo_tables.js';
 import { createDatabaseFileStore } from '../server/database-file-store.js';
-import { FILE_DEMO_COLLECTIONS } from '../server/demo/constants.js';
 import type {
   DatabaseFileScopeResolver,
   NewFileRecord,
 } from '../server/types.js';
 
-interface RawDatabaseClient {
-  raw(sql: string): Promise<unknown>;
-}
+const TEST_FILE_TABLE = 'testOrderFiles';
 
 describe('database file store', () => {
   let database: DatabaseManager;
@@ -28,15 +24,23 @@ describe('database file store', () => {
         },
       },
     });
-    const connection = database.connection();
-    const client = await connection.client<RawDatabaseClient>();
-    await client.raw('PRAGMA foreign_keys = ON');
-    await migration.up({
-      builder: connection.builder,
-      query: connection.query,
-      connection,
+    await database.builder().createCollection(TEST_FILE_TABLE, (collection) => {
+      collection.string('id', { length: 64 }).notNull();
+      collection.integer('orderId').unsigned().notNull();
+      collection.string('disk', { length: 64 }).notNull();
+      collection.string('key', { length: 512 }).notNull();
+      collection.string('filename', { length: 255 }).notNull();
+      collection.string('mimeType', { length: 255 }).notNull();
+      collection.bigInt('size').unsigned().notNull();
+      collection.boolean('public').notNull().defaultTo(false);
+      collection.datetime('createdAt').notNull();
+      collection.datetime('updatedAt').notNull();
+      collection.primary('id', { name: 'pk_test_order_files' });
+      collection.unique(['disk', 'key'], {
+        name: 'uq_test_order_files_disk_key',
+      });
+      collection.index('orderId', { name: 'idx_test_order_files_order' });
     });
-    await insertDemoParents(database);
   });
 
   afterEach(async () => {
@@ -45,11 +49,11 @@ describe('database file store', () => {
 
   it('keeps list, find, create, and remove inside the resolved scope', async () => {
     const store = createDatabaseFileStore(database, {
-      table: FILE_DEMO_COLLECTIONS.orderAttachments,
+      table: TEST_FILE_TABLE,
       scope: (context) => ({ orderId: Number(context.req.param('orderId')) }),
     });
-    await insertAttachment(database, createFile('order-1-file'), 1);
-    await insertAttachment(database, createFile('order-2-file'), 2);
+    await insertFile(database, createFile('order-1-file'), 1);
+    await insertFile(database, createFile('order-2-file'), 2);
     const orderOneRequest = await createContext(
       '/orders/:orderId',
       '/orders/1',
@@ -89,7 +93,7 @@ describe('database file store', () => {
     await expect(
       database
         .query()
-        .selectFrom(FILE_DEMO_COLLECTIONS.orderAttachments)
+        .selectFrom(TEST_FILE_TABLE)
         .select([
           'id',
           'orderId',
@@ -118,7 +122,7 @@ describe('database file store', () => {
     await expect(
       database
         .query()
-        .selectFrom(FILE_DEMO_COLLECTIONS.orderAttachments)
+        .selectFrom(TEST_FILE_TABLE)
         .where('id', '=', 'order-2-file')
         .exists(),
     ).resolves.toBe(true);
@@ -135,7 +139,7 @@ describe('database file store', () => {
     ).toThrow('Invalid database file table identifier');
     expect(() =>
       createDatabaseFileStore(database, {
-        table: FILE_DEMO_COLLECTIONS.orderAttachments,
+        table: TEST_FILE_TABLE,
         order: { field: 'disk' as never },
       }),
     ).toThrow('Invalid database file order field');
@@ -151,13 +155,13 @@ describe('database file store', () => {
     ];
     for (const scope of invalidScopes) {
       const store = createDatabaseFileStore(database, {
-        table: FILE_DEMO_COLLECTIONS.orderAttachments,
+        table: TEST_FILE_TABLE,
         scope,
       });
       await expect(store.list(request)).rejects.toThrow(/scope/i);
     }
     const unscopedStore = createDatabaseFileStore(database, {
-      table: FILE_DEMO_COLLECTIONS.orderAttachments,
+      table: TEST_FILE_TABLE,
     });
     await expect(unscopedStore.find('', request)).rejects.toThrow(
       'file id must not be empty',
@@ -167,15 +171,15 @@ describe('database file store', () => {
   it('converts database sizes only when they are safe API integers', async () => {
     const orderRequest = await createContext('/orders/:orderId', '/orders/1');
     const store = createDatabaseFileStore(database, {
-      table: FILE_DEMO_COLLECTIONS.orderAttachments,
+      table: TEST_FILE_TABLE,
       scope: () => ({ orderId: 1 }),
     });
-    await insertAttachment(database, createFile('safe-size'), 1);
+    await insertFile(database, createFile('safe-size'), 1);
     await expect(store.find('safe-size', orderRequest)).resolves.toMatchObject({
       size: 42,
     });
 
-    await insertAttachment(
+    await insertFile(
       database,
       { ...createFile('unsafe-size'), size: Number.MAX_SAFE_INTEGER + 1 },
       1,
@@ -200,27 +204,7 @@ async function createContext(route: string, path: string): Promise<Context> {
   return captured;
 }
 
-async function insertDemoParents(database: DatabaseManager): Promise<void> {
-  const now = new Date();
-  await database
-    .query()
-    .insertInto(FILE_DEMO_COLLECTIONS.profiles)
-    .values([
-      { id: 1, name: 'Profile 1', createdAt: now, updatedAt: now },
-      { id: 2, name: 'Profile 2', createdAt: now, updatedAt: now },
-    ])
-    .execute();
-  await database
-    .query()
-    .insertInto(FILE_DEMO_COLLECTIONS.orders)
-    .values([
-      { id: 1, number: 'ORDER-1', createdAt: now, updatedAt: now },
-      { id: 2, number: 'ORDER-2', createdAt: now, updatedAt: now },
-    ])
-    .execute();
-}
-
-async function insertAttachment(
+async function insertFile(
   database: DatabaseManager,
   file: NewFileRecord,
   orderId: number,
@@ -228,7 +212,7 @@ async function insertAttachment(
   const now = new Date();
   await database
     .query()
-    .insertInto(FILE_DEMO_COLLECTIONS.orderAttachments)
+    .insertInto(TEST_FILE_TABLE)
     .values({ ...file, orderId, createdAt: now, updatedAt: now })
     .execute();
 }

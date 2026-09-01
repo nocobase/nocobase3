@@ -10,7 +10,6 @@
     "outDir": "dist"
   },
   "include": [
-    "database/**/*.ts",
     "server/**/*.ts",
     "client/**/*.ts",
     "client/**/*.tsx",
