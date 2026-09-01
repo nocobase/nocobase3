@@ -2,7 +2,10 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import type { DatabaseManager } from '@nocobase/db';
+import {
+  InMemoryCollectionMetadataStore,
+  type DatabaseManager,
+} from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createDatabaseMigratorMock = vi.hoisted(() => vi.fn());
@@ -82,6 +85,37 @@ describe('app database manager', () => {
     };
 
     expect(createAppDatabaseManager(config)).toBeDefined();
+  });
+
+  it('forwards the manager-level Collection Metadata Store', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const config: AppDatabaseConfig = {
+      default: 'sqlite',
+      metadataStore,
+      connections: {
+        sqlite: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+    const database = createAppDatabaseManager(config)!;
+
+    try {
+      await database.builder().createCollection('orders', (collection) => {
+        collection.title('Orders');
+        collection.increments('id');
+      });
+      await expect(metadataStore.get('orders')).resolves.toMatchObject({
+        document: { name: 'orders', title: 'Orders' },
+      });
+    } finally {
+      await database.destroy();
+    }
   });
 
   it('creates an Oracle manager without opening a connection eagerly', () => {

@@ -1,59 +1,39 @@
-# Metadata-only API
+# Metadata-only 更新
 
-metadata-only API 用于补充或修改 Collection 元信息，不改变数据库结构。
+纯 Metadata 更新用于补充或修改 Collection 的应用层信息，不改变数据库结构。最终统一入口是
+`connection.collectionMetadata`，不属于 Builder API。
 
-## updateCollectionMetadata
+## Collection Metadata
 
 ```ts
-await builder.updateCollectionMetadata('orders', {
+await connection.collectionMetadata.updateCollection('orders', {
   title: 'Orders',
   description: 'Customer purchase orders.',
-  fields: {
-    amount: {
-      title: 'Amount',
-      description: 'Total order amount before refunds.',
-    },
-  },
 });
 ```
 
-## updateFieldMetadata
+## Field Metadata
 
 ```ts
-await builder.updateFieldMetadata('orders', 'amount', {
+await connection.collectionMetadata.updateField('orders', 'amount', {
   title: 'Amount',
   description: 'Total order amount before refunds.',
 });
 ```
 
-## Schema 影响
-
-不会生成 schema operation。
-
-```ts
-const result = await builder.updateFieldMetadata('orders', 'amount', {
-  title: 'Amount',
-});
-
-console.log(result.schemaOperations); // []
-```
+两次更新都只写 `CollectionMetadataStore`，不会生成或执行 Schema operation。写入成功后，
+`connection.collections` 的相关缓存会主动失效，下一次读取返回合并后的完整 Collection。
 
 ## 适用场景
 
-- 已有数据库表不需要改变。
-- 只需要补充业务标题或描述。
+- 已有数据库表不需要改变，只需要补充业务标题或描述。
 - Agent 需要补充字段解释。
-- Collection Generator 从数据库元数据生成基础 Collection 后，需要人工或 Agent 补充应用层元信息。
+- 外部数据库使用显式配置的可写 Metadata Store 保存应用语义。
 
 ## 不适用场景
 
-- 新增数据库列。
-- 修改数据库列类型。
+- 新增或修改数据库列。
 - 创建数据库索引或约束。
 - 写数据库 comment。
 
-## Agent 注意事项
-
-- 只补充业务说明时，用 metadata-only API。
-- 不要把 `title`、`description` 写到 `db.comment`。
-- metadata-only 操作的 impact 应是 safe。
+以上物理结构操作使用 `connection.builder`。`title`、`description` 不应写到 `db.comment`。

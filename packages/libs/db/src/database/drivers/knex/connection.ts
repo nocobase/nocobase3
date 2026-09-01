@@ -7,10 +7,8 @@ import {
 } from '../../../collection/registry/index.js';
 import {
   CollectionMetadataService,
-  DatabaseCollectionMetadataDocumentStore,
-  LegacyCollectionMetadataDocumentStore,
-  TransactionCollectionMetadataDocumentStore,
-  type CollectionMetadataDocumentStore,
+  DatabaseCollectionMetadataStore,
+  TransactionCollectionMetadataStore,
   type CollectionMetadataInvalidation,
   type CollectionMetadataInvalidator,
   type CollectionMetadataStore,
@@ -53,17 +51,22 @@ export class KnexDatabaseConnection implements DatabaseConnection {
 
   private knexInstance?: Knex;
   private readonly config: KnexConnectionConfig;
+  private readonly metadataStore: CollectionMetadataStore;
 
   constructor(
     readonly name: string,
     private readonly sourceConfig: ConnectionConfig,
-    private readonly metadataStore: CollectionMetadataStore,
-    private readonly collectionMetadataStore: CollectionMetadataDocumentStore,
+    metadataStore?: CollectionMetadataStore,
     knexInstance?: Knex,
     transactionInvalidations?: TransactionInvalidationCollector,
   ) {
     this.knexInstance = knexInstance;
     this.config = resolveKnexConnectionConfig(sourceConfig);
+    this.metadataStore =
+      metadataStore ??
+      new DatabaseCollectionMetadataStore({
+        resolveClient: () => this.resolveClient(),
+      });
     this.driver = this.config.driver;
     this.dialect = this.config.dialect;
     this.schemaManagement = this.config.schemaManagement;
@@ -103,8 +106,14 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     );
     const collections = new CollectionRegistry({
       inspector: this.schemaInspector,
-      metadataStore: collectionMetadataStore,
+      metadataStore: this.metadataStore,
       naming: this.config.naming,
+      isInternalPhysicalCollection:
+        this.metadataStore instanceof DatabaseCollectionMetadataStore
+          ? (identity) =>
+              this.metadataStore instanceof DatabaseCollectionMetadataStore &&
+              this.metadataStore.isInternalPhysicalCollection(identity)
+          : undefined,
     });
     this.collections = collections;
     const invalidator = transactionInvalidations
@@ -114,10 +123,10 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         )
       : collections;
     this.collectionMetadata = new CollectionMetadataService({
-      store: collectionMetadataStore,
+      store: this.metadataStore,
       validator: new RegistryMetadataDocumentValidator({
         inspector: this.schemaInspector,
-        metadataStore: collectionMetadataStore,
+        metadataStore: this.metadataStore,
         collections,
         naming: this.config.naming,
       }),
@@ -127,12 +136,8 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     });
     this.builder = new CollectionBuilder({
       schemaAdapter: this.schema,
-      metadataStore,
       collections,
-      collectionMetadata:
-        collectionMetadataStore instanceof LegacyCollectionMetadataDocumentStore
-          ? undefined
-          : this.collectionMetadata,
+      collectionMetadata: this.collectionMetadata,
       schemaInvalidator: invalidator,
       naming: this.config.naming,
     });
@@ -141,7 +146,6 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   async connect(): Promise<this> {
     this.getClient();
     await (this.collections as CollectionRegistry).initialize();
-    await this.builder.validateMetadataCompatibility();
     return this;
   }
 
@@ -169,23 +173,21 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T> {
     const client = await this.resolveClient();
-    let stagedMetadata: TransactionCollectionMetadataDocumentStore | undefined;
+    let stagedMetadata: TransactionCollectionMetadataStore | undefined;
     const invalidations = new TransactionInvalidationCollector();
     let result: T;
     try {
       result = await client.transaction(async (trx) => {
-        const collectionMetadataStore =
-          this.collectionMetadataStore instanceof
-          DatabaseCollectionMetadataDocumentStore
-            ? this.collectionMetadataStore.withClient(async () => trx)
-            : (stagedMetadata = new TransactionCollectionMetadataDocumentStore(
-                this.collectionMetadataStore,
+        const metadataStore =
+          this.metadataStore instanceof DatabaseCollectionMetadataStore
+            ? this.metadataStore.withClient(async () => trx)
+            : (stagedMetadata = new TransactionCollectionMetadataStore(
+                this.metadataStore,
               ));
         const connection = new KnexDatabaseConnection(
           this.name,
           this.sourceConfig,
-          this.metadataStore,
-          collectionMetadataStore,
+          metadataStore,
           trx,
           invalidations,
         );

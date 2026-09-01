@@ -1,6 +1,6 @@
 import type { Knex } from 'knex';
 import type {
-  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
   CollectionMetadataPage,
   CollectionMetadataStoreCapabilities,
   DeleteCollectionMetadataOptions,
@@ -28,7 +28,7 @@ import { validateCollectionMetadataDocument } from './validation.js';
 export const DEFAULT_COLLECTION_METADATA_TABLE =
   '__nocobase_collection_metadata';
 
-export interface DatabaseCollectionMetadataDocumentStoreOptions {
+export interface DatabaseCollectionMetadataStoreOptions {
   readonly resolveClient: () => Promise<Knex>;
   readonly tableName?: string;
   readonly schema?: string;
@@ -40,7 +40,7 @@ interface CollectionMetadataRow {
   readonly revision: number | string;
 }
 
-export class DatabaseCollectionMetadataDocumentStore implements CollectionMetadataDocumentStore {
+export class DatabaseCollectionMetadataStore implements CollectionMetadataStore {
   readonly capabilities: CollectionMetadataStoreCapabilities = Object.freeze({
     writable: true,
     optimisticConcurrency: true,
@@ -48,14 +48,29 @@ export class DatabaseCollectionMetadataDocumentStore implements CollectionMetada
 
   private initializationPromise?: Promise<void>;
 
+  get tableName(): string {
+    return this.options.tableName ?? DEFAULT_COLLECTION_METADATA_TABLE;
+  }
+
+  isInternalPhysicalCollection(identity: {
+    readonly tableName: string;
+    readonly schema: string;
+  }): boolean {
+    return (
+      identity.tableName === this.tableName &&
+      (this.options.schema === undefined ||
+        identity.schema === this.options.schema)
+    );
+  }
+
   constructor(
-    private readonly options: DatabaseCollectionMetadataDocumentStoreOptions,
+    private readonly options: DatabaseCollectionMetadataStoreOptions,
   ) {}
 
   withClient(
     resolveClient: () => Promise<Knex>,
-  ): DatabaseCollectionMetadataDocumentStore {
-    return new DatabaseCollectionMetadataDocumentStore({
+  ): DatabaseCollectionMetadataStore {
+    return new DatabaseCollectionMetadataStore({
       ...this.options,
       resolveClient,
     });
@@ -187,16 +202,13 @@ export class DatabaseCollectionMetadataDocumentStore implements CollectionMetada
   }
 
   private async createTable(): Promise<void> {
-    validateCollectionMetadataStoreName(
-      this.options.tableName ?? DEFAULT_COLLECTION_METADATA_TABLE,
-    );
+    validateCollectionMetadataStoreName(this.tableName);
     if (this.options.schema !== undefined) {
       validateCollectionMetadataStoreName(this.options.schema);
     }
     const knex = await this.options.resolveClient();
     const schema = this.schema(knex);
-    const tableName =
-      this.options.tableName ?? DEFAULT_COLLECTION_METADATA_TABLE;
+    const tableName = this.tableName;
     if (await schema.hasTable(tableName)) return;
     try {
       await schema.createTable(tableName, (table) => {
@@ -212,8 +224,7 @@ export class DatabaseCollectionMetadataDocumentStore implements CollectionMetada
   }
 
   private table(knex: Knex): Knex.QueryBuilder {
-    const tableName =
-      this.options.tableName ?? DEFAULT_COLLECTION_METADATA_TABLE;
+    const tableName = this.tableName;
     return this.options.schema
       ? knex.withSchema(this.options.schema).table(tableName)
       : knex(tableName);

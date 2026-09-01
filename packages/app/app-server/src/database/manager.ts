@@ -20,6 +20,7 @@ export function createAppDatabaseManager(
     defineDatabase({
       default: config.default,
       connections: resolveConnections(config.connections, paths),
+      metadataStore: config.metadataStore,
     }),
   );
 }

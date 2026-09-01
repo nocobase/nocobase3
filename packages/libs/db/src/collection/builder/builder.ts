@@ -13,14 +13,11 @@ import {
   FluentViewCollectionDefinitionBuilder,
 } from '../fluent/index.js';
 import {
-  CollectionMetadataFieldNotFoundError,
   type CollectionMetadataInvalidator,
   type CollectionMetadataService,
   CollectionMetadataStoreReadOnlyError,
-  InMemoryCollectionMetadataStore,
-  LegacyCollectionMetadataTransitionError,
-  type CollectionMetadataStore,
   extractLegacyCollectionMetadata,
+  type LegacyMetadataExtractionDiagnostic,
 } from '../../metadata/index.js';
 import type { ConnectionCollections } from '../registry/index.js';
 import type {
@@ -32,14 +29,11 @@ import type {
   CollectionAlterInput,
   CollectionDefinition,
   CollectionDefinitionInput,
-  CollectionMetadataPatch,
   CollectionOperation,
   ConstraintDefinition,
   FieldAlterInput,
-  FieldMetadataPatch,
   IndexDefinition,
   MaterializedViewCollectionInput,
-  MetadataUpdateOptions,
   NamingOptions,
   RefreshMaterializedViewOptions,
   ViewCollectionInput,
@@ -48,32 +42,33 @@ import type {
 
 export interface CollectionBuilderOptions {
   schemaAdapter?: SchemaAdapter;
-  /** @deprecated Use collections and collectionMetadata for the V1 architecture. */
-  metadataStore?: CollectionMetadataStore;
   collections?: Pick<ConnectionCollections, 'get' | 'scan'>;
   collectionMetadata?: CollectionMetadataService;
   schemaInvalidator?: CollectionMetadataInvalidator;
   naming?: NamingOptions;
 }
 
-export type CollectionNamingDifferenceKind = 'tableName' | 'columnName';
+export class CollectionMetadataFieldNotFoundError extends Error {
+  readonly code = 'COLLECTION_METADATA_FIELD_NOT_FOUND' as const;
 
-export interface CollectionNamingDifference {
-  kind: CollectionNamingDifferenceKind;
-  collection: string;
-  field?: string;
-  legacyValue: string;
-  expectedValue: string;
+  constructor(
+    readonly collection: string,
+    readonly field: string,
+  ) {
+    super(`Collection "${collection}" does not contain Field "${field}".`);
+    this.name = 'CollectionMetadataFieldNotFoundError';
+  }
 }
 
-export class CollectionNamingCompatibilityError extends Error {
-  readonly code = 'COLLECTION_NAMING_INCOMPATIBLE' as const;
-  readonly differences: CollectionNamingDifference[];
+export class CollectionMetadataExtractionError extends Error {
+  readonly code = 'COLLECTION_METADATA_EXTRACTION_FAILED' as const;
 
-  constructor(differences: CollectionNamingDifference[]) {
-    super(formatNamingCompatibilityError(differences));
-    this.name = 'CollectionNamingCompatibilityError';
-    this.differences = differences;
+  constructor(
+    readonly collection: string,
+    readonly diagnostics: readonly LegacyMetadataExtractionDiagnostic[],
+  ) {
+    super(`Supplemental Metadata extraction failed for "${collection}".`);
+    this.name = 'CollectionMetadataExtractionError';
   }
 }
 
@@ -125,17 +120,15 @@ export class CollectionRenameAtomicityError extends Error {
 
 export class CollectionBuilder {
   private readonly schemaAdapter: SchemaAdapter;
-  private readonly metadataStore: CollectionMetadataStore;
   private readonly collections?: Pick<ConnectionCollections, 'get' | 'scan'>;
   private readonly collectionMetadata?: CollectionMetadataService;
   private readonly schemaInvalidator?: CollectionMetadataInvalidator;
   private readonly compiler: CollectionCompiler;
+  private readonly plannedCollections = new Map<string, CollectionDefinition>();
 
   constructor(options: CollectionBuilderOptions = {}) {
     assertSupportedBuilderOptions(options);
     this.schemaAdapter = options.schemaAdapter ?? new NoopSchemaAdapter();
-    this.metadataStore =
-      options.metadataStore ?? new InMemoryCollectionMetadataStore();
     this.collections = options.collections;
     this.collectionMetadata = options.collectionMetadata;
     this.schemaInvalidator = options.schemaInvalidator;
@@ -319,48 +312,6 @@ export class CollectionBuilder {
     );
   }
 
-  async updateCollectionMetadata(
-    collection: string,
-    patch: CollectionMetadataPatch,
-    options: MetadataUpdateOptions = {},
-  ): Promise<BuilderResult> {
-    return this.apply(
-      [{ type: 'updateCollectionMetadata', collection, patch }],
-      options,
-    );
-  }
-
-  async updateFieldMetadata(
-    collection: string,
-    field: string,
-    patch: FieldMetadataPatch,
-    options: MetadataUpdateOptions = {},
-  ): Promise<BuilderResult> {
-    return this.apply(
-      [{ type: 'updateFieldMetadata', collection, field, patch }],
-      options,
-    );
-  }
-
-  async validateMetadataCompatibility(): Promise<void> {
-    if (this.collectionMetadata) return;
-    const differences: CollectionNamingDifference[] = [];
-    for (const definition of await this.metadataStore.listCollections()) {
-      const name = definition.name;
-      if (!name) {
-        throw new Error(
-          'Stored collection metadata must include a logical collection name.',
-        );
-      }
-      differences.push(
-        ...collectNamingDifferences(definition, name, this.compiler),
-      );
-    }
-    if (differences.length > 0) {
-      throw new CollectionNamingCompatibilityError(differences);
-    }
-  }
-
   async apply(
     operations: CollectionOperation[],
     options: BuilderExecOptions = {},
@@ -398,30 +349,26 @@ export class CollectionBuilder {
     ];
 
     if (!options.dryRun) {
+      const executedOperations = filterMetadataOperations(
+        this.compiler,
+        effectiveOperations,
+        schemaOperations,
+        compilerContext,
+      );
       const metadataOperations =
-        options.syncMetadata !== false
-          ? filterMetadataOperations(
-              this.compiler,
-              effectiveOperations,
-              schemaOperations,
-              compilerContext,
-            )
-          : undefined;
+        options.syncMetadata !== false ? executedOperations : undefined;
       if (metadataOperations) {
         assertMetadataFieldChanges(metadataOperations, compilerContext);
         await this.assertDocumentMetadataWritable(metadataOperations);
       }
       await this.schemaAdapter.execute(schemaOperations);
+      this.updatePlannedCollections(executedOperations);
       this.invalidatePhysicalSchema(effectiveOperations);
       if (metadataOperations) {
-        if (this.collectionMetadata) {
-          await this.applyDocumentMetadataChanges(
-            metadataOperations,
-            compilerContext,
-          );
-        } else {
-          await this.applyMetadataChanges(metadataOperations, compilerContext);
-        }
+        await this.applyDocumentMetadataChanges(
+          metadataOperations,
+          compilerContext,
+        );
       }
     }
 
@@ -466,8 +413,6 @@ export class CollectionBuilder {
         case 'addIndex':
         case 'dropIndex':
         case 'dropConstraint':
-        case 'updateCollectionMetadata':
-        case 'updateFieldMetadata':
         case 'refreshMaterializedViewCollection':
           names.add(operation.collection);
           break;
@@ -494,20 +439,10 @@ export class CollectionBuilder {
         if (!collection.name) continue;
         collections[collection.name] = collection;
       }
-    } else if (includesRename) {
-      const storedCollections = await this.metadataStore.listCollections();
-      for (const storedCollection of storedCollections) {
-        const name = storedCollection.name;
-        if (!name) {
-          throw new Error(
-            'Stored collection metadata must include a logical collection name.',
-          );
-        }
-        collections[name] = normalizeStoredCollection(
-          storedCollection,
-          name,
-          this.compiler,
-        );
+    }
+    if (!this.collections) {
+      for (const [name, definition] of this.plannedCollections) {
+        collections[name] = structuredClone(definition);
       }
     }
     await Promise.all(
@@ -515,14 +450,7 @@ export class CollectionBuilder {
         if (Object.hasOwn(collections, name)) {
           return;
         }
-        if (this.collections) {
-          collections[name] = await this.collections.get(name);
-        } else {
-          const storedCollection = await this.metadataStore.getCollection(name);
-          collections[name] = storedCollection
-            ? normalizeStoredCollection(storedCollection, name, this.compiler)
-            : undefined;
-        }
+        collections[name] = await this.collections?.get(name);
       }),
     );
     for (const operation of operations) {
@@ -541,6 +469,85 @@ export class CollectionBuilder {
       }
     }
     return { collections };
+  }
+
+  private updatePlannedCollections(operations: CollectionOperation[]): void {
+    if (this.collections) return;
+    for (const operation of operations) {
+      switch (operation.type) {
+        case 'createCollection':
+        case 'createViewCollection':
+        case 'replaceViewCollection':
+        case 'createMaterializedViewCollection':
+          this.plannedCollections.set(operation.name, {
+            ...structuredClone(operation.definition),
+            name: operation.name,
+          });
+          break;
+        case 'dropCollection':
+          this.plannedCollections.delete(operation.collection);
+          break;
+        case 'renameCollection': {
+          const current = this.plannedCollections.get(operation.from);
+          this.plannedCollections.delete(operation.from);
+          if (current) {
+            this.plannedCollections.set(operation.to, {
+              ...current,
+              name: operation.to,
+            });
+          }
+          break;
+        }
+        case 'alterCollection': {
+          const current = this.plannedCollections.get(operation.collection);
+          if (current) {
+            this.plannedCollections.set(
+              operation.collection,
+              applyAlterMetadata(current, operation.changes),
+            );
+          }
+          break;
+        }
+        case 'addField': {
+          const current = this.plannedCollections.get(operation.collection);
+          if (current) {
+            this.plannedCollections.set(operation.collection, {
+              ...current,
+              fields: [...(current.fields ?? []), operation.field],
+            });
+          }
+          break;
+        }
+        case 'alterField': {
+          const current = this.plannedCollections.get(operation.collection);
+          if (current) {
+            this.plannedCollections.set(
+              operation.collection,
+              applyAlterMetadata(current, {
+                alterFields: [
+                  { name: operation.field, changes: operation.changes },
+                ],
+              }),
+            );
+          }
+          break;
+        }
+        case 'dropField': {
+          const current = this.plannedCollections.get(operation.collection);
+          if (current) {
+            this.plannedCollections.set(operation.collection, {
+              ...current,
+              fields: current.fields?.filter(
+                (field) => field.name !== operation.field,
+              ),
+            });
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
   }
 
   private async applyDocumentMetadataChanges(
@@ -674,26 +681,12 @@ export class CollectionBuilder {
         case 'dropConstraint':
         case 'refreshMaterializedViewCollection':
           break;
-        case 'updateCollectionMetadata':
-          await applyCollectionMetadataPatch(
-            service,
-            operation.collection,
-            operation.patch,
-          );
-          break;
-        case 'updateFieldMetadata':
-          await service.updateField(
-            operation.collection,
-            operation.field,
-            operation.patch,
-          );
-          break;
       }
     }
   }
 
   private invalidatePhysicalSchema(operations: CollectionOperation[]): void {
-    if (!this.schemaInvalidator || operations.every(isMetadataOnlyOperation)) {
+    if (!this.schemaInvalidator) {
       return;
     }
     if (
@@ -726,168 +719,6 @@ export class CollectionBuilder {
         throw new CollectionMetadataStoreReadOnlyError(write);
       }
     }
-  }
-
-  private async applyMetadataChanges(
-    operations: CollectionOperation[],
-    context: CollectionCompilerContext,
-  ): Promise<void> {
-    for (const operation of operations) {
-      switch (operation.type) {
-        case 'createCollection':
-        case 'createViewCollection':
-        case 'replaceViewCollection':
-        case 'createMaterializedViewCollection':
-          await this.metadataStore.saveCollection(operation.name, {
-            ...operation.definition,
-            name: operation.name,
-          });
-          break;
-        case 'dropCollection':
-          await this.metadataStore.removeCollection(operation.collection);
-          break;
-        case 'renameCollection': {
-          const current = context.collections?.[operation.from] ??
-            (await this.getStoredCollection(operation.from)) ?? {
-              name: operation.from,
-              fields: [],
-            };
-          const next: CollectionDefinition = {
-            ...current,
-            name: operation.to,
-          };
-          await this.metadataStore.renameCollection(
-            operation.from,
-            operation.to,
-            next,
-          );
-          break;
-        }
-        case 'alterCollection': {
-          const current = await this.getStoredCollection(operation.collection);
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(
-              current ?? { name: operation.collection },
-              operation.changes,
-            ),
-          );
-          break;
-        }
-        case 'addField': {
-          const current = await this.getStoredCollection(operation.collection);
-          await this.metadataStore.saveCollection(operation.collection, {
-            ...(current ?? { name: operation.collection }),
-            fields: [...(current?.fields ?? []), operation.field],
-          });
-          break;
-        }
-        case 'alterField': {
-          const current = await this.getStoredCollection(operation.collection);
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              alterFields: [
-                { name: operation.field, changes: operation.changes },
-              ],
-            }),
-          );
-          break;
-        }
-        case 'dropField': {
-          const current = await this.getStoredCollection(operation.collection);
-          if (current) {
-            await this.metadataStore.saveCollection(operation.collection, {
-              ...current,
-              fields: current.fields?.filter(
-                (field) => field.name !== operation.field,
-              ),
-            });
-          }
-          break;
-        }
-        case 'addIndex': {
-          const current = await this.getStoredCollection(operation.collection);
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              addIndexes: [operation.index],
-            }),
-          );
-          break;
-        }
-        case 'dropIndex': {
-          const current = await this.getStoredCollection(operation.collection);
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              dropIndexes: [operation.index],
-            }),
-          );
-          break;
-        }
-        case 'addConstraint': {
-          const current = await this.getStoredCollection(operation.collection);
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              addConstraints: [operation.constraint],
-            }),
-          );
-          break;
-        }
-        case 'dropConstraint': {
-          const current = await this.getStoredCollection(operation.collection);
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              dropConstraints: [operation.constraint],
-            }),
-          );
-          break;
-        }
-        case 'updateCollectionMetadata': {
-          const current = await this.getStoredCollection(operation.collection);
-          if (current) {
-            await this.metadataStore.saveCollection(
-              operation.collection,
-              current,
-            );
-          }
-          await this.metadataStore.patchCollection(
-            operation.collection,
-            operation.patch,
-          );
-          break;
-        }
-        case 'updateFieldMetadata': {
-          const current = await this.getStoredCollection(operation.collection);
-          if (current) {
-            await this.metadataStore.saveCollection(
-              operation.collection,
-              current,
-            );
-          }
-          await this.metadataStore.patchField(
-            operation.collection,
-            operation.field,
-            operation.patch,
-          );
-          break;
-        }
-        default:
-          break;
-      }
-    }
-  }
-
-  private async getStoredCollection(
-    name: string,
-  ): Promise<CollectionDefinition | undefined> {
-    const definition = await this.metadataStore.getCollection(name);
-    return definition
-      ? normalizeStoredCollection(definition, name, this.compiler)
-      : undefined;
   }
 }
 
@@ -1021,13 +852,6 @@ function createImpact(operations: CollectionOperation[]): BuilderImpact[] {
           level: 'destructive',
           operation: operation.type,
           message: `Dropping collection ${operation.collection} may remove the backing database object.`,
-        };
-      case 'updateCollectionMetadata':
-      case 'updateFieldMetadata':
-        return {
-          level: 'safe',
-          operation: operation.type,
-          message: 'Only collection metadata will be updated.',
         };
       default:
         return {
@@ -1204,33 +1028,9 @@ function assertMetadataFieldChanges(
         }
         break;
       }
-      case 'updateCollectionMetadata': {
-        const current = collections.get(operation.collection);
-        for (const field of Object.keys(operation.patch.fields ?? {})) {
-          assertCollectionMetadataField(operation.collection, current, field);
-        }
-        break;
-      }
-      case 'updateFieldMetadata':
-        assertCollectionMetadataField(
-          operation.collection,
-          collections.get(operation.collection),
-          operation.field,
-        );
-        break;
       default:
         break;
     }
-  }
-}
-
-function assertCollectionMetadataField(
-  collection: string,
-  definition: CollectionDefinition | undefined,
-  field: string,
-): void {
-  if (!definition?.fields?.some((item) => item.name === field)) {
-    throw new CollectionMetadataFieldNotFoundError(collection, field);
   }
 }
 
@@ -1342,120 +1142,6 @@ function assertNoPhysicalFieldMapping(
   }
 }
 
-function normalizeStoredCollection(
-  definition: CollectionDefinition,
-  name: string,
-  compiler: CollectionCompiler,
-): CollectionDefinition {
-  const differences = collectNamingDifferences(definition, name, compiler);
-  if (differences.length > 0) {
-    throw new CollectionNamingCompatibilityError(differences);
-  }
-
-  const legacy = definition as CollectionDefinition & {
-    tableName?: unknown;
-    naming?: NamingOptions;
-  };
-  const normalized: CollectionDefinition = { ...definition, name };
-  delete (normalized as CollectionDefinition & { tableName?: unknown })
-    .tableName;
-  normalized.naming = legacy.naming ? { ...legacy.naming } : undefined;
-  normalized.fields = definition.fields?.map((field) => {
-    const normalizedField = { ...field } as AnyFieldDefinition & {
-      columnName?: unknown;
-    };
-    delete normalizedField.columnName;
-    return normalizedField;
-  });
-  return normalized;
-}
-
-function collectNamingDifferences(
-  definition: CollectionDefinition,
-  name: string,
-  compiler: CollectionCompiler,
-): CollectionNamingDifference[] {
-  const differences: CollectionNamingDifference[] = [];
-  const legacy = definition as CollectionDefinition & {
-    tableName?: unknown;
-    naming?: NamingOptions;
-  };
-
-  const expectedTableName = compiler.effectiveTableName(name, definition);
-  const legacyTableName =
-    typeof legacy.tableName === 'string' ? legacy.tableName : expectedTableName;
-  if (legacyTableName !== expectedTableName) {
-    differences.push({
-      kind: 'tableName',
-      collection: name,
-      legacyValue: legacyTableName,
-      expectedValue: expectedTableName,
-    });
-  }
-
-  for (const field of definition.fields ?? []) {
-    const legacyField = field as AnyFieldDefinition & { columnName?: unknown };
-    const legacyColumnName = legacyPhysicalColumnName(
-      legacyField,
-      definition,
-      compiler,
-    );
-    if (!legacyColumnName) {
-      continue;
-    }
-    const expectedColumnName = deterministicPhysicalColumnName(
-      field,
-      definition,
-      compiler,
-    );
-    if (!expectedColumnName) {
-      continue;
-    }
-    if (legacyColumnName !== expectedColumnName) {
-      differences.push({
-        kind: 'columnName',
-        collection: name,
-        field: field.name,
-        legacyValue: legacyColumnName,
-        expectedValue: expectedColumnName,
-      });
-    }
-  }
-
-  return differences;
-}
-
-function deterministicPhysicalColumnName(
-  field: AnyFieldDefinition,
-  definition: CollectionDefinition,
-  compiler: CollectionCompiler,
-): string | undefined {
-  if (isRelationField(field)) {
-    if (field.type !== 'belongsTo' || field.foreignKey) {
-      return undefined;
-    }
-    return `${compiler.effectiveColumnName(field.name, definition)}_id`;
-  }
-  return compiler.effectiveColumnName(field.name, definition);
-}
-
-function legacyPhysicalColumnName(
-  field: AnyFieldDefinition & { columnName?: unknown },
-  definition: CollectionDefinition,
-  compiler: CollectionCompiler,
-): string | undefined {
-  if (typeof field.columnName === 'string') {
-    return field.columnName;
-  }
-  if (isRelationField(field)) {
-    if (field.type !== 'belongsTo' || field.foreignKey) {
-      return undefined;
-    }
-    return `${compiler.effectiveColumnName(field.name, definition)}_id`;
-  }
-  return compiler.effectiveColumnName(field.name, definition);
-}
-
 async function assertRenameOperations(
   operations: CollectionOperation[],
   context: CollectionCompilerContext,
@@ -1498,7 +1184,7 @@ function extractSupplementalMetadata(
 ) {
   const result = extractLegacyCollectionMetadata({ ...definition, name });
   if (!result.document) {
-    throw new LegacyCollectionMetadataTransitionError(name, result.diagnostics);
+    throw new CollectionMetadataExtractionError(name, result.diagnostics);
   }
   return result.document;
 }
@@ -1546,27 +1232,6 @@ function relationMetadataChanged(
   ].some((property) => Object.hasOwn(changes, property));
 }
 
-async function applyCollectionMetadataPatch(
-  service: CollectionMetadataService,
-  collection: string,
-  patch: CollectionMetadataPatch,
-): Promise<void> {
-  await service.updateCollection(collection, {
-    title: patch.title,
-    description: patch.description,
-  });
-  for (const [field, metadata] of Object.entries(patch.fields ?? {})) {
-    await service.updateField(collection, field, metadata);
-  }
-}
-
-function isMetadataOnlyOperation(operation: CollectionOperation): boolean {
-  return (
-    operation.type === 'updateCollectionMetadata' ||
-    operation.type === 'updateFieldMetadata'
-  );
-}
-
 function affectedCollections(operations: CollectionOperation[]): string[] {
   const names = new Set<string>();
   for (const operation of operations) {
@@ -1580,9 +1245,6 @@ function affectedCollections(operations: CollectionOperation[]): string[] {
       case 'renameCollection':
         names.add(operation.from);
         names.add(operation.to);
-        break;
-      case 'updateCollectionMetadata':
-      case 'updateFieldMetadata':
         break;
       default:
         names.add(operation.collection);
@@ -1643,9 +1305,6 @@ async function requiredMetadataWrite(
         ? 'put'
         : undefined;
     }
-    case 'updateCollectionMetadata':
-    case 'updateFieldMetadata':
-      return 'put';
     case 'addIndex':
     case 'dropIndex':
     case 'addConstraint':
@@ -1735,22 +1394,6 @@ function collectRenameDependencies(
     }
   }
   return dependencies;
-}
-
-function formatNamingCompatibilityError(
-  differences: CollectionNamingDifference[],
-): string {
-  const lines = differences.map((difference) => {
-    const path = difference.field
-      ? `${difference.collection}.${difference.field}`
-      : difference.collection;
-    return `- ${path} (${difference.kind}): legacy=${JSON.stringify(difference.legacyValue)}, expected=${JSON.stringify(difference.expectedValue)}`;
-  });
-  return [
-    'Stored collection metadata is incompatible with the configured naming rules.',
-    ...lines,
-    'The database and metadata were not modified. Add an explicit migration before retrying.',
-  ].join('\n');
 }
 
 function formatRenameDependencyError(

@@ -189,17 +189,6 @@ export interface CollectionAlterDefinition {
   dropConstraints?: string[];
 }
 
-export interface FieldMetadataPatch {
-  title?: string;
-  description?: string;
-}
-
-export interface CollectionMetadataPatch {
-  title?: string;
-  description?: string;
-  fields?: Record<string, FieldMetadataPatch>;
-}
-
 export type CollectionDefinitionInput =
   CollectionDefinition | ((collection: CollectionDefinitionBuilder) => void);
 
@@ -232,10 +221,6 @@ export interface BuilderExecOptions {
    * Use DatabaseManager.transaction() or DatabaseConnection.transaction() today.
    */
   transaction?: boolean;
-}
-
-export interface MetadataUpdateOptions {
-  strict?: boolean;
 }
 
 export interface RefreshMaterializedViewOptions extends BuilderExecOptions {
@@ -327,18 +312,7 @@ export type CollectionOperation =
       collection: string;
       constraint: ConstraintDefinition;
     }
-  | { type: 'dropConstraint'; collection: string; constraint: string }
-  | {
-      type: 'updateCollectionMetadata';
-      collection: string;
-      patch: CollectionMetadataPatch;
-    }
-  | {
-      type: 'updateFieldMetadata';
-      collection: string;
-      field: string;
-      patch: FieldMetadataPatch;
-    };
+  | { type: 'dropConstraint'; collection: string; constraint: string };
 
 export type SchemaOperation =
   | { type: 'createTable'; table: TableSchemaDefinition; ifNotExists?: boolean }

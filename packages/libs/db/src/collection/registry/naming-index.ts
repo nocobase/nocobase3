@@ -5,7 +5,7 @@ import type {
 } from '../resolver/types.js';
 import { CollectionResolutionError } from '../resolver/errors.js';
 import type {
-  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
   CollectionMetadataSummary,
 } from '../../metadata/document-store.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
@@ -27,7 +27,7 @@ export class CollectionNamingIndex implements CollectionResolutionContext {
   ) {}
 
   static async create(
-    store: CollectionMetadataDocumentStore,
+    store: CollectionMetadataStore,
     naming: NamingOptions = {},
     overrides: readonly CollectionMetadataSummary[] = [],
   ): Promise<CollectionNamingIndex> {

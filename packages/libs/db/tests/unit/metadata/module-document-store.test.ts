@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   CollectionMetadataValidationError,
-  ModuleCollectionMetadataDocumentStore,
+  ModuleCollectionMetadataStore,
 } from '../../../src/index.js';
 
-describe('ModuleCollectionMetadataDocumentStore', () => {
+describe('ModuleCollectionMetadataStore', () => {
   it('validates documents and exposes stable content revisions', async () => {
     const input = {
       version: 1 as const,
@@ -12,11 +12,11 @@ describe('ModuleCollectionMetadataDocumentStore', () => {
       title: 'Orders',
       fields: { amount: { title: 'Amount' } },
     };
-    const first = new ModuleCollectionMetadataDocumentStore({
+    const first = new ModuleCollectionMetadataStore({
       documents: [input],
       source: 'metadata/orders.ts',
     });
-    const second = new ModuleCollectionMetadataDocumentStore({
+    const second = new ModuleCollectionMetadataStore({
       documents: [structuredClone(input)],
     });
 
@@ -33,7 +33,7 @@ describe('ModuleCollectionMetadataDocumentStore', () => {
       'Amount',
     );
 
-    const reordered = new ModuleCollectionMetadataDocumentStore({
+    const reordered = new ModuleCollectionMetadataStore({
       documents: [
         {
           fields: { amount: { title: 'Amount' } },
@@ -47,14 +47,14 @@ describe('ModuleCollectionMetadataDocumentStore', () => {
   });
 
   it('rejects invalid and duplicate documents atomically', async () => {
-    const invalid = new ModuleCollectionMetadataDocumentStore({
+    const invalid = new ModuleCollectionMetadataStore({
       documents: [{ version: 2, name: 'orders' }],
     });
     await expect(invalid.initialize()).rejects.toBeInstanceOf(
       CollectionMetadataValidationError,
     );
 
-    const duplicate = new ModuleCollectionMetadataDocumentStore({
+    const duplicate = new ModuleCollectionMetadataStore({
       documents: [
         { version: 1, name: 'orders' },
         { version: 1, name: 'orders', title: 'Duplicate' },
@@ -66,7 +66,7 @@ describe('ModuleCollectionMetadataDocumentStore', () => {
   });
 
   it('lists summaries and points read-only errors at the source file', async () => {
-    const store = new ModuleCollectionMetadataDocumentStore({
+    const store = new ModuleCollectionMetadataStore({
       documents: [
         { version: 1, name: 'zebra', title: 'Zebra' },
         { version: 1, name: 'accounts', title: 'Accounts' },

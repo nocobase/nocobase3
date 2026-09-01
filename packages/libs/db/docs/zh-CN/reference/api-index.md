@@ -100,20 +100,15 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 - `dropIndex(collection, index, options?)`
 - `addConstraint(collection, constraint, options?)`
 - `dropConstraint(collection, constraint, options?)`
-- `updateCollectionMetadata(collection, patch, options?)`
-- `updateFieldMetadata(collection, field, patch, options?)`
 - `apply(operations, options?)`
 
 ## Metadata
 
-- `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
-- `CollectionMetadataStore`：元数据存储接口。
-- `CollectionMetadataDocumentStore`：迁移期的新 V1 文档 Store 接口，读写强制使用 revision。
-- `InMemoryCollectionMetadataDocumentStore`：用于测试和显式临时场景的内存 CAS 文档后端。
-- `DatabaseCollectionMetadataDocumentStore`：使用自包含内部表持久化 V1 文档的可写 CAS 后端。
-- `ModuleCollectionMetadataDocumentStore`：从已导入模块加载 V1 文档、使用内容 SHA revision 的只读后端。
-- `TransactionCollectionMetadataDocumentStore`：为非数据库文档 Store 提供事务内隔离、CAS 回放和失败补偿的 overlay。
-- `LegacyCollectionMetadataDocumentStore`：将旧完整定义 Store 暴露为只读 V1 文档源的过渡 adapter。
+- `CollectionMetadataStore`：唯一的 V1 补充 Metadata Store 接口，读写强制使用 revision。
+- `InMemoryCollectionMetadataStore`：用于测试和显式临时场景的内存 CAS 文档后端。
+- `DatabaseCollectionMetadataStore`：使用自包含内部表持久化 V1 文档的可写 CAS 后端。
+- `ModuleCollectionMetadataStore`：从已导入模块加载 V1 文档、使用内容 SHA revision 的只读后端。
+- `TransactionCollectionMetadataStore`：为非数据库文档 Store 提供事务内隔离、CAS 回放和失败补偿的 overlay。
 - `CollectionMetadataConflictError`：compare-and-swap 失败，稳定 code 为 `METADATA_CONFLICT`。
 - `CollectionMetadataService`：在文档 Store 之上执行 collection/field/relation patch、校验、CAS 和提交后失效。
 - `CollectionMetadataPatchError`：patch 或 update options 非法，稳定 code 为 `COLLECTION_METADATA_PATCH_INVALID`。

@@ -35,11 +35,8 @@ export interface DeleteCollectionMetadataOptions {
   readonly expectedRevision: string | number;
 }
 
-/**
- * The versioned supplemental-document Store contract. It has a transitional
- * name until the legacy full-Collection Store is removed.
- */
-export interface CollectionMetadataDocumentStore {
+/** The versioned supplemental Collection Metadata document Store contract. */
+export interface CollectionMetadataStore {
   readonly capabilities: CollectionMetadataStoreCapabilities;
 
   initialize(): Promise<void>;

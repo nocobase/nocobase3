@@ -1,15 +1,11 @@
 import type { NamingOptions } from '../collection/types.js';
-import type {
-  CollectionMetadataDocumentStore,
-  CollectionMetadataStore,
-} from '../metadata/index.js';
+import type { CollectionMetadataStore } from '../metadata/index.js';
 import type { DatabaseCapabilities } from '../schema/index.js';
 
 export interface DatabaseConfig {
   default?: string;
   connections: Record<string, ConnectionConfig>;
   metadataStore?: CollectionMetadataStore;
-  collectionMetadataStore?: CollectionMetadataDocumentStore;
 }
 
 export type DatabaseDialect =
@@ -21,7 +17,6 @@ export interface BaseConnectionConfig {
   naming?: NamingOptions;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
-  collectionMetadataStore?: CollectionMetadataDocumentStore;
   onCollectionMetadataInvalidationError?: (error: unknown) => void;
   schemaManagement?: SchemaManagementMode;
   debug?: boolean;

@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
 import {
   createKnexClient,
-  DatabaseCollectionMetadataDocumentStore,
+  DatabaseCollectionMetadataStore,
   resolveKnexConnectionConfig,
 } from '../../../src/index.js';
 
-describe('DatabaseCollectionMetadataDocumentStore', () => {
+describe('DatabaseCollectionMetadataStore', () => {
   const clients: Knex[] = [];
 
   afterEach(async () => {
@@ -24,7 +24,7 @@ describe('DatabaseCollectionMetadataDocumentStore', () => {
     );
     expect(created.revision).toBe(1);
 
-    const reloaded = new DatabaseCollectionMetadataDocumentStore({
+    const reloaded = new DatabaseCollectionMetadataStore({
       resolveClient: async () => client,
       tableName: 'app_metadata',
     });
@@ -133,7 +133,7 @@ describe('DatabaseCollectionMetadataDocumentStore', () => {
 
   function createStore(tableName?: string): {
     client: Knex;
-    store: DatabaseCollectionMetadataDocumentStore;
+    store: DatabaseCollectionMetadataStore;
   } {
     const client = createKnexClient(
       resolveKnexConnectionConfig({
@@ -144,7 +144,7 @@ describe('DatabaseCollectionMetadataDocumentStore', () => {
     clients.push(client);
     return {
       client,
-      store: new DatabaseCollectionMetadataDocumentStore({
+      store: new DatabaseCollectionMetadataStore({
         resolveClient: async () => client,
         tableName,
       }),

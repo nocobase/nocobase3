@@ -27,17 +27,8 @@ result.operations;
 
 ## schemaOperations
 
-编译后的数据库 schema operation。
-
-metadata-only 操作会返回空数组：
-
-```ts
-const result = await builder.updateFieldMetadata('orders', 'amount', {
-  title: 'Amount',
-});
-
-console.log(result.schemaOperations); // []
-```
+编译后的数据库 schema operation。纯 Metadata 更新使用 `connection.collectionMetadata`，不返回
+`BuilderResult`。
 
 ## sql
 

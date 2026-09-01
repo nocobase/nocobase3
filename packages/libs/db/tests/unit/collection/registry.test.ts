@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CollectionRegistry,
   CollectionRelationValidationError,
-  InMemoryCollectionMetadataDocumentStore,
+  InMemoryCollectionMetadataStore,
   type PhysicalCollectionIdentifier,
   type PhysicalCollectionPage,
   type PhysicalCollectionSchema,
@@ -14,7 +14,7 @@ describe('CollectionRegistry', () => {
     const inspector = new FakeInspector([physical('orders')]);
     const registry = new CollectionRegistry({
       inspector,
-      metadataStore: new InMemoryCollectionMetadataDocumentStore(),
+      metadataStore: new InMemoryCollectionMetadataStore(),
     });
 
     const [first, second] = await Promise.all([
@@ -45,7 +45,7 @@ describe('CollectionRegistry', () => {
     inspector.beforeGet = async () => gate;
     const registry = new CollectionRegistry({
       inspector,
-      metadataStore: new InMemoryCollectionMetadataDocumentStore(),
+      metadataStore: new InMemoryCollectionMetadataStore(),
     });
 
     const loading = registry.get('orders');
@@ -60,7 +60,7 @@ describe('CollectionRegistry', () => {
   });
 
   it('uses Metadata naming overrides and returns lightweight paginated summaries', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
     await store.put(
       {
         version: 1,
@@ -97,7 +97,7 @@ describe('CollectionRegistry', () => {
   });
 
   it('reports drift when saved Metadata points at a missing physical Collection', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
     await store.put(
       { version: 1, name: 'orders', title: 'Orders' },
       { expectedRevision: null },
@@ -116,7 +116,7 @@ describe('CollectionRegistry', () => {
   });
 
   it('scans full Collections explicitly and validates cyclic relation graphs', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
     await store.put(
       {
         version: 1,
@@ -161,7 +161,7 @@ describe('CollectionRegistry', () => {
   });
 
   it('aggregates cross-Collection target, targetKey, remote key, and through errors', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
     await store.put(
       {
         version: 1,

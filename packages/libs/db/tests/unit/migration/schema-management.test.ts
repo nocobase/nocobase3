@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createDatabaseManager,
   createMigrator,
+  ModuleCollectionMetadataStore,
   SchemaManagementNotAllowedError,
 } from '../../../src/index.js';
 
@@ -13,6 +14,7 @@ describe('Migrator schema management', () => {
           dialect: 'sqlite',
           filename: ':memory:',
           schemaManagement: 'external',
+          metadataStore: new ModuleCollectionMetadataStore({ documents: [] }),
         },
       },
     });

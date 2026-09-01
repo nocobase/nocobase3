@@ -22,9 +22,9 @@ describeIntegrationDatabases('collection rename', (context) => {
     await expect(
       context.db(context.table('appUsers')).select('email'),
     ).resolves.toEqual([{ email: 'ada@example.com' }]);
-    expect(await context.metadataStore.getCollection('appUsers')).toMatchObject(
-      { name: 'appUsers' },
-    );
+    await expect(
+      context.metadataStore.get('appUsers'),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects rename before DDL when dependent metadata exists', async () => {

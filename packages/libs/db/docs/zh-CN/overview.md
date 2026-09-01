@@ -44,7 +44,7 @@ Collection 提供一层稳定的应用抽象：
 - `Select AST`：计划中的 Repository 结果选择树，当前未实现。
 - `Repository Filter Builder`：计划中的应用层筛选条件 DSL，当前未实现。
 - `Sort AST`：计划中的 Repository 排序结构，当前未实现。
-- `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
+- `CollectionMetadataStore`：补充 Metadata 文档契约；managed Connection 默认使用持久化 Database 后端。
 
 ## 文档地图
 

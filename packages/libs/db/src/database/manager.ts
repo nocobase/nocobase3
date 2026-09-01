@@ -1,8 +1,4 @@
 import type { CollectionBuilder } from '../collection/builder/index.js';
-import {
-  InMemoryCollectionMetadataStore,
-  LegacyCollectionMetadataDocumentStore,
-} from '../metadata/index.js';
 import type { QueryAdapter } from '../query/index.js';
 import type { DatabaseConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
@@ -26,6 +22,17 @@ export interface DatabaseManager {
   disconnect(name?: string): Promise<void>;
   reconnect(name?: string): Promise<DatabaseConnection>;
   destroy(): Promise<void>;
+}
+
+export class CollectionMetadataStoreRequiredError extends Error {
+  readonly code = 'COLLECTION_METADATA_STORE_REQUIRED' as const;
+
+  constructor(readonly connection: string) {
+    super(
+      `External database connection "${connection}" requires an explicit Collection Metadata Store.`,
+    );
+    this.name = 'CollectionMetadataStoreRequiredError';
+  }
 }
 
 export function createDatabaseManager(config: DatabaseConfig): DatabaseManager {
@@ -59,19 +66,14 @@ export class DefaultDatabaseManager implements DatabaseManager {
     }
 
     const metadataStore =
-      connectionConfig.metadataStore ??
-      this.config.metadataStore ??
-      new InMemoryCollectionMetadataStore();
+      connectionConfig.metadataStore ?? this.config.metadataStore;
+    if (connectionConfig.schemaManagement === 'external' && !metadataStore) {
+      throw new CollectionMetadataStoreRequiredError(name);
+    }
     const connection = this.factory.create({
       name,
       config: connectionConfig,
       metadataStore,
-      collectionMetadataStore:
-        connectionConfig.collectionMetadataStore ??
-        this.config.collectionMetadataStore ??
-        new LegacyCollectionMetadataDocumentStore(metadataStore, {
-          naming: connectionConfig.naming,
-        }),
     });
     this.connections.set(name, connection);
     return connection;

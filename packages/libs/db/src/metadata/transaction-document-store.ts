@@ -1,5 +1,5 @@
 import type {
-  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
   CollectionMetadataPage,
   CollectionMetadataStoreCapabilities,
   DeleteCollectionMetadataOptions,
@@ -35,14 +35,14 @@ interface CommittedEntry {
   readonly current?: StoredCollectionMetadata;
 }
 
-export class TransactionCollectionMetadataDocumentStore implements CollectionMetadataDocumentStore {
+export class TransactionCollectionMetadataStore implements CollectionMetadataStore {
   readonly capabilities: CollectionMetadataStoreCapabilities;
 
   private readonly entries = new Map<string, TransactionEntry>();
   private committed: CommittedEntry[] = [];
   private revision = 0;
 
-  constructor(private readonly base: CollectionMetadataDocumentStore) {
+  constructor(private readonly base: CollectionMetadataStore) {
     this.capabilities = base.capabilities;
   }
 

@@ -116,13 +116,13 @@ for (const diagnostic of result.diagnostics) {
 
 ## 文档 Store
 
-过渡期的新 Store 接口名为 `CollectionMetadataDocumentStore`。它保存 V1 文档而不是完整
+过渡期的新 Store 接口名为 `CollectionMetadataStore`。它保存 V1 文档而不是完整
 `CollectionDefinition`，所有写入都要求 compare-and-swap：
 
 ```ts
-import { InMemoryCollectionMetadataDocumentStore } from '@nocobase/db';
+import { InMemoryCollectionMetadataStore } from '@nocobase/db';
 
-const store = new InMemoryCollectionMetadataDocumentStore();
+const store = new InMemoryCollectionMetadataStore();
 await store.initialize();
 
 const created = await store.put(metadata, {
@@ -146,10 +146,9 @@ await store.delete(updated.document.name, {
 
 已实现的后端包括：
 
-- `InMemoryCollectionMetadataDocumentStore`：用于测试或显式临时场景；
-- `DatabaseCollectionMetadataDocumentStore`：通过自包含内部表持久化文档，使用递增数字 revision 和数据库 CAS；
-- `ModuleCollectionMetadataDocumentStore`：加载已导入的 TypeScript 文档数组，只读，使用规范内容的 SHA-256 revision；
-- `LegacyCollectionMetadataDocumentStore`：把旧 Builder Store 暂时暴露为只读文档源，执行允许列表提取并阻断不安全转换。
+- `InMemoryCollectionMetadataStore`：用于测试或显式临时场景；
+- `DatabaseCollectionMetadataStore`：通过自包含内部表持久化文档，使用递增数字 revision 和数据库 CAS；
+- `ModuleCollectionMetadataStore`：加载已导入的 TypeScript 文档数组，只读，使用规范内容的 SHA-256 revision；
 
 Module Store 的 `put()` 和 `delete()` 固定抛出 `METADATA_STORE_READ_ONLY`。Writable JSON/YAML File
 Store 尚未实现，不能把 Module Store 当作运行时文件编辑器。

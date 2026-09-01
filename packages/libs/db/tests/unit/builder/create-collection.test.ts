@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionBuilder } from '../../../src/index.js';
-import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
 
 describe('CollectionBuilder createCollection', () => {
   it('creates a collection from fluent input', async () => {
@@ -82,9 +81,8 @@ describe('CollectionBuilder createCollection', () => {
     });
   });
 
-  it('creates a collection from object input and syncs metadata by default', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
-    const builder = new CollectionBuilder({ metadataStore });
+  it('creates a collection from object input', async () => {
+    const builder = new CollectionBuilder();
 
     const result = await builder.createCollection('orders', {
       title: 'Orders',
@@ -123,14 +121,6 @@ describe('CollectionBuilder createCollection', () => {
           },
         ],
       },
-    });
-    expect(await metadataStore.getCollection('orders')).toMatchObject({
-      name: 'orders',
-      title: 'Orders',
-      fields: [
-        { name: 'id', type: 'increments' },
-        { name: 'amount', title: 'Amount' },
-      ],
     });
   });
 

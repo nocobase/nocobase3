@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   CollectionMetadataConflictError,
   CollectionMetadataValidationError,
-  InMemoryCollectionMetadataDocumentStore,
+  InMemoryCollectionMetadataStore,
 } from '../../../src/index.js';
 
-describe('InMemoryCollectionMetadataDocumentStore', () => {
+describe('InMemoryCollectionMetadataStore', () => {
   it('validates, clones, creates, updates, and deletes with compare-and-swap', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
     await store.initialize();
     const input = {
       version: 1 as const,
@@ -45,7 +45,7 @@ describe('InMemoryCollectionMetadataDocumentStore', () => {
   });
 
   it('rejects stale updates and create-only writes when a document exists', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
     const created = await store.put(
       { version: 1, name: 'orders' },
       { expectedRevision: null },
@@ -67,7 +67,7 @@ describe('InMemoryCollectionMetadataDocumentStore', () => {
   });
 
   it('rejects invalid documents without changing the current revision', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
 
     await expect(
       store.put({ version: 1, name: 'orders', nullable: false } as never, {
@@ -83,7 +83,7 @@ describe('InMemoryCollectionMetadataDocumentStore', () => {
   });
 
   it('lists lightweight summaries in stable paginated name order', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
     await store.put(
       { version: 1, name: 'zebra', title: 'Zebra' },
       { expectedRevision: null },
@@ -117,7 +117,7 @@ describe('InMemoryCollectionMetadataDocumentStore', () => {
   });
 
   it('rejects invalid pagination options and cursors', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
 
     await expect(store.list({ limit: 0 })).rejects.toMatchObject({
       code: 'METADATA_STORE_INVALID_OPTIONS',
@@ -137,7 +137,7 @@ describe('InMemoryCollectionMetadataDocumentStore', () => {
   });
 
   it('rejects blind or malformed write options with a stable error', async () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
 
     await expect(
       store.put({ version: 1, name: 'orders' }, undefined as never),
@@ -160,7 +160,7 @@ describe('InMemoryCollectionMetadataDocumentStore', () => {
   });
 
   it('declares writable optimistic-concurrency capabilities', () => {
-    const store = new InMemoryCollectionMetadataDocumentStore();
+    const store = new InMemoryCollectionMetadataStore();
 
     expect(store.capabilities).toEqual({
       writable: true,

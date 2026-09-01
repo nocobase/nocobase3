@@ -87,12 +87,6 @@ console.log(result.impact);
 {
   type: ('dropConstraint', collection, constraint);
 }
-{
-  type: ('updateCollectionMetadata', collection, patch);
-}
-{
-  type: ('updateFieldMetadata', collection, field, patch);
-}
 ```
 
 ## destructive 操作
@@ -114,5 +108,5 @@ console.log(result.impact);
 - Agent 输出执行计划、diff 结果或批量 apply payload 时，优先输出 `CollectionOperation[]`。
 - destructive 操作必须先 dry-run。
 - file sync 场景应先生成 snapshot + diff，再转换成 operation，再调用 `apply()`。
-- `updateCollectionMetadata` 和 `updateFieldMetadata` 不应生成 schema operation。
+- 纯 Metadata 更新不属于 `CollectionOperation`，使用 `connection.collectionMetadata`。
 - `renameCollection` 总是同步重命名物理表和 Metadata；存在无法原子更新的依赖时会在 DDL 前拒绝。

@@ -3,7 +3,7 @@ import {
   CollectionMetadataConflictError,
   CollectionMetadataPatchError,
   CollectionMetadataService,
-  InMemoryCollectionMetadataDocumentStore,
+  InMemoryCollectionMetadataStore,
   type CollectionMetadataDocument,
   type CollectionMetadataDocumentValidator,
   type CollectionMetadataInvalidation,
@@ -212,7 +212,7 @@ describe('CollectionMetadataService', () => {
     );
     expect(fixture.invalidator.invalidate).toHaveBeenCalledWith({
       collections: ['orders', 'customers'],
-      namingIndex: false,
+      namingIndex: true,
     });
 
     const unchanged = await fixture.service.replaceDocument(created!.document);
@@ -223,7 +223,7 @@ describe('CollectionMetadataService', () => {
     await expect(fixture.store.get('orders')).resolves.toBeUndefined();
     expect(fixture.invalidator.invalidate).toHaveBeenLastCalledWith({
       collections: ['orders', 'customers'],
-      namingIndex: false,
+      namingIndex: true,
     });
   });
 
@@ -297,7 +297,7 @@ describe('CollectionMetadataService', () => {
 });
 
 interface ServiceFixture {
-  readonly store: InMemoryCollectionMetadataDocumentStore;
+  readonly store: InMemoryCollectionMetadataStore;
   readonly service: CollectionMetadataService;
   readonly validator: {
     validate: ReturnType<
@@ -318,7 +318,7 @@ interface ServiceFixture {
 }
 
 function createService(): ServiceFixture {
-  const store = new InMemoryCollectionMetadataDocumentStore();
+  const store = new InMemoryCollectionMetadataStore();
   const validator = {
     validate: vi.fn(async (_document: CollectionMetadataDocument) => {}),
   };

@@ -9,7 +9,7 @@ import {
   type CollectionResolutionResult,
 } from '../resolver/index.js';
 import type {
-  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
   CollectionMetadataInvalidation,
   CollectionMetadataInvalidator,
 } from '../../metadata/index.js';
@@ -32,9 +32,13 @@ import type {
 
 export interface CollectionRegistryOptions {
   readonly inspector: SchemaInspector;
-  readonly metadataStore: CollectionMetadataDocumentStore;
+  readonly metadataStore: CollectionMetadataStore;
   readonly naming?: NamingOptions;
   readonly resolver?: CollectionResolver;
+  readonly isInternalPhysicalCollection?: (identity: {
+    readonly tableName: string;
+    readonly schema: string;
+  }) => boolean;
 }
 
 export class CollectionRegistry
@@ -110,27 +114,38 @@ export class CollectionRegistry
     options: ListCollectionsOptions = {},
   ): Promise<CollectionSummaryPage> {
     await this.initialize();
-    const [page, index] = await Promise.all([
-      this.options.inspector.listPhysicalCollections(options),
-      this.namingIndex(),
-    ]);
+    const index = await this.namingIndex();
+    const limit = options.limit ?? 100;
     const seen = new Map<string, PhysicalCollectionSummary>();
-    const items = page.items.map((physical) => {
-      const identity = index.resolvePhysicalCollection(physical);
-      if (!identity) throw physicalNameError(physical);
-      const duplicate = seen.get(identity.name);
-      if (
-        duplicate &&
-        (duplicate.tableName !== physical.tableName ||
-          duplicate.schema !== physical.schema)
-      ) {
-        throw logicalNameConflict(identity.name, duplicate, physical);
+    const items: CollectionSummary[] = [];
+    let cursor = options.cursor;
+    let nextCursor: string | undefined;
+    do {
+      const page = await this.options.inspector.listPhysicalCollections({
+        ...options,
+        limit: limit - items.length,
+        cursor,
+      });
+      for (const physical of page.items) {
+        if (this.options.isInternalPhysicalCollection?.(physical)) continue;
+        const identity = index.resolvePhysicalCollection(physical);
+        if (!identity) throw physicalNameError(physical);
+        const duplicate = seen.get(identity.name);
+        if (
+          duplicate &&
+          (duplicate.tableName !== physical.tableName ||
+            duplicate.schema !== physical.schema)
+        ) {
+          throw logicalNameConflict(identity.name, duplicate, physical);
+        }
+        seen.set(identity.name, physical);
+        const metadata = index.metadata(identity.name);
+        items.push(summarize(physical, identity.name, metadata));
       }
-      seen.set(identity.name, physical);
-      const metadata = index.metadata(identity.name);
-      return summarize(physical, identity.name, metadata);
-    });
-    return page.nextCursor ? { items, nextCursor: page.nextCursor } : { items };
+      nextCursor = page.nextCursor;
+      cursor = nextCursor;
+    } while (items.length < limit && nextCursor);
+    return nextCursor ? { items, nextCursor } : { items };
   }
 
   async *scan(
@@ -142,6 +157,7 @@ export class CollectionRegistry
     for await (const physical of this.options.inspector.scanPhysicalCollections(
       options,
     )) {
+      if (this.options.isInternalPhysicalCollection?.(physical)) continue;
       const identity = index.resolvePhysicalCollection(physical);
       if (!identity) throw physicalNameError(physical);
       const duplicate = seen.get(identity.name);
@@ -217,6 +233,9 @@ export class CollectionRegistry
       }),
       this.options.metadataStore.get(name),
     ]);
+    if (physical && this.options.isInternalPhysicalCollection?.(physical)) {
+      return undefined;
+    }
     if (!physical) {
       if (stored) {
         throw new CollectionResolutionError([

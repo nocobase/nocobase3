@@ -1,5 +1,5 @@
 import type {
-  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
   CollectionMetadataPage,
   CollectionMetadataStoreCapabilities,
   DeleteCollectionMetadataOptions,
@@ -20,7 +20,7 @@ import type {
 } from './document.js';
 import { validateCollectionMetadataDocument } from './validation.js';
 
-export class InMemoryCollectionMetadataDocumentStore implements CollectionMetadataDocumentStore {
+export class InMemoryCollectionMetadataStore implements CollectionMetadataStore {
   readonly capabilities: CollectionMetadataStoreCapabilities = Object.freeze({
     writable: true,
     optimisticConcurrency: true,

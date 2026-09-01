@@ -6,7 +6,7 @@ description: 说明 Metadata Store 的职责边界、文档模型、一致性规
 # Metadata Store 设计
 
 > 带 revision 的文档 Store 契约和 In-memory 后端已经实现。过渡期公共名称为
-> `CollectionMetadataDocumentStore` 和 `InMemoryCollectionMetadataDocumentStore`；旧
+> `CollectionMetadataStore` 和 `InMemoryCollectionMetadataStore`；旧
 > `CollectionMetadataStore` 仍供 Builder 保存完整 `CollectionDefinition`。所有消费者迁移完成后，文档
 > Store 将接管最终名称并删除旧接口。
 
@@ -263,7 +263,7 @@ validateCollectionMetadataDocument(input);
 
 ## Legacy extraction
 
-旧 `CollectionMetadataStore` 暂时保存完整 `CollectionDefinition`。过渡期使用纯函数提取 V1 补充 Metadata：
+迁移历史配置或离线定义时，使用纯函数从旧完整 `CollectionDefinition` 提取 V1 补充 Metadata：
 
 ```ts
 const result = extractLegacyCollectionMetadata(definition, {
@@ -386,7 +386,7 @@ const externalOrders = await db
 持久化接口应面向带版本的 Metadata 文档，不包含 Collection Builder 的领域逻辑：
 
 ```ts
-export interface CollectionMetadataDocumentStore {
+export interface CollectionMetadataStore {
   readonly capabilities: CollectionMetadataStoreCapabilities;
 
   initialize(): Promise<void>;
@@ -406,8 +406,7 @@ export interface CollectionMetadataDocumentStore {
 }
 ```
 
-这里的 `Document` 是迁移期名称，不改变最终职责。它避免同一个发布阶段内让旧 Builder Store 与新补充文档
-Store 使用同名接口。
+该接口是唯一的 Collection Metadata Store 契约，只接受补充文档，不接受完整 `CollectionDefinition`。
 
 持久化结果带有 revision：
 
@@ -541,41 +540,11 @@ await connection.collectionMetadata.updateField('orders', 'amount', patch);
 主数据库和外部数据库的生命周期、Resolver 校验、Registry 失效、Agent Snapshot 和 rename 原子性见
 [Collection 解析生命周期](./collection-resolution.md)。
 
-## 从当前接口迁移
+## 最终接口边界
 
-当前实现提供以下方法：
-
-```ts
-getCollection(name);
-listCollections();
-saveCollection(name, definition);
-patchCollection(name, patch);
-patchField(collection, field, patch);
-renameCollection(from, to, definition);
-```
-
-它们当前保存完整的 `CollectionDefinition`。建议分阶段迁移：
-
-1. 定义带版本的补充 Metadata 文档类型。
-2. 增加提取逻辑，将补充 Metadata 与物理 Schema 定义分离。
-3. 引入带 revision 的文档 Store API。
-4. 将 patch 移到 `CollectionMetadataService`，由 `CollectionBuilder.renameCollection()` 协调完整 rename。
-5. 实现 `SchemaInspector` 和 `CollectionResolver`。
-6. Builder 读取改为使用解析后的 Collection。
-7. Builder 写入改为只保存补充 Metadata。
-8. 实现 `DatabaseCollectionMetadataStore`。
-9. 适配 in-memory 实现。
-10. 增加 `connection.collections.get()` 和分页 `list()`，并使用 Registry 缓存。
-11. 增加外部 Schema Snapshot 和 module/file 后端。
-12. 所有消费端迁移完成后，移除旧的完整定义 Store API。
-
-迁移期可用 `LegacyCollectionMetadataDocumentStore` 包装旧 Store：它通过 legacy extraction 暴露只读 V1 文档，
-使用内容 SHA-256 作为稳定 revision，并将 warning 交给 `onDiagnostic`。遇到阻断诊断时抛出
-`LEGACY_METADATA_TRANSITION_FAILED`；`put()` 和 `delete()` 固定抛出 `METADATA_STORE_READ_ONLY`。该 adapter
-不会反向写入旧 Store，也不会掩盖不安全迁移。
-
-转换旧 Store 记录前，兼容工具必须先检查现有数据。与确定性命名一致的物理细节可以移除；不兼容的
-`tableName`、`columnName`、类型或约束信息必须输出明确差异，由迁移人员处理，不能静默丢弃。
+旧的完整 `CollectionDefinition` Store 已移除。`CollectionMetadataStore` 只保存 V1 补充文档；
+`SchemaInspector` 读取物理事实；`CollectionResolver` 合并两者；`connection.collections` 是完整 Collection
+的统一读取入口。Legacy extraction 只用于显式迁移工具，不再作为运行时 fallback。
 
 ## 第一版不变式
 

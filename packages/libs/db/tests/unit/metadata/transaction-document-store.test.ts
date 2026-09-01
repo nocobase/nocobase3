@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  InMemoryCollectionMetadataDocumentStore,
-  ModuleCollectionMetadataDocumentStore,
-  TransactionCollectionMetadataDocumentStore,
+  InMemoryCollectionMetadataStore,
+  ModuleCollectionMetadataStore,
+  TransactionCollectionMetadataStore,
 } from '../../../src/index.js';
 
-describe('TransactionCollectionMetadataDocumentStore', () => {
+describe('TransactionCollectionMetadataStore', () => {
   it('isolates writes until commit and preserves compare-and-swap', async () => {
-    const base = new InMemoryCollectionMetadataDocumentStore();
-    const transaction = new TransactionCollectionMetadataDocumentStore(base);
+    const base = new InMemoryCollectionMetadataStore();
+    const transaction = new TransactionCollectionMetadataStore(base);
 
     const created = await transaction.put(
       { version: 1, name: 'orders', title: 'Orders' },
@@ -31,16 +31,16 @@ describe('TransactionCollectionMetadataDocumentStore', () => {
   });
 
   it('discards uncommitted state and can compensate a committed overlay', async () => {
-    const base = new InMemoryCollectionMetadataDocumentStore();
+    const base = new InMemoryCollectionMetadataStore();
     const original = await base.put(
       { version: 1, name: 'orders', title: 'Original' },
       { expectedRevision: null },
     );
-    const abandoned = new TransactionCollectionMetadataDocumentStore(base);
+    const abandoned = new TransactionCollectionMetadataStore(base);
     await abandoned.delete('orders', { expectedRevision: original.revision });
     await expect(base.get('orders')).resolves.toEqual(original);
 
-    const transaction = new TransactionCollectionMetadataDocumentStore(base);
+    const transaction = new TransactionCollectionMetadataStore(base);
     await transaction.put(
       { version: 1, name: 'orders', title: 'Changed' },
       { expectedRevision: original.revision },
@@ -56,8 +56,8 @@ describe('TransactionCollectionMetadataDocumentStore', () => {
   });
 
   it('preserves read-only backend capabilities', async () => {
-    const transaction = new TransactionCollectionMetadataDocumentStore(
-      new ModuleCollectionMetadataDocumentStore({ documents: [] }),
+    const transaction = new TransactionCollectionMetadataStore(
+      new ModuleCollectionMetadataStore({ documents: [] }),
     );
 
     await expect(

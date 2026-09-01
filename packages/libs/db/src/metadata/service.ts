@@ -1,6 +1,6 @@
 import type { NamingOptions } from '../collection/types.js';
 import { CollectionMetadataConflictError } from './document-store-errors.js';
-import type { CollectionMetadataDocumentStore } from './document-store.js';
+import type { CollectionMetadataStore } from './document-store.js';
 import type { CollectionMetadataStoreCapabilities } from './document-store.js';
 import type {
   CollectionMetadataDocument,
@@ -55,7 +55,7 @@ export interface CollectionMetadataInvalidator {
 }
 
 export interface CollectionMetadataServiceOptions {
-  readonly store: CollectionMetadataDocumentStore;
+  readonly store: CollectionMetadataStore;
   readonly validator: CollectionMetadataDocumentValidator;
   readonly invalidator: CollectionMetadataInvalidator;
   readonly onInvalidationError: (error: unknown) => void;
@@ -143,7 +143,13 @@ export class CollectionMetadataService {
         applyNullableProperty(document, 'title', patch.title);
         applyNullableProperty(document, 'description', patch.description);
       },
-      { collections: [name], namingIndex: patch.naming !== undefined },
+      {
+        collections: [name],
+        namingIndex:
+          patch.naming !== undefined ||
+          patch.title !== undefined ||
+          patch.description !== undefined,
+      },
     );
   }
 
@@ -510,7 +516,9 @@ function documentInvalidation(
       ...relations.flatMap((relation) => relationCollections(relation)),
     ]),
     namingIndex:
-      JSON.stringify(previous?.naming) !== JSON.stringify(next?.naming),
+      JSON.stringify(previous?.naming) !== JSON.stringify(next?.naming) ||
+      previous?.title !== next?.title ||
+      previous?.description !== next?.description,
   };
 }
 

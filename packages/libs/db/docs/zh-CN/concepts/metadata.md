@@ -38,28 +38,23 @@ Field 级别：
 如果已有数据库表结构不需要变化，只想补充元信息，应使用：
 
 ```ts
-await builder.updateCollectionMetadata('orders', {
+await connection.collectionMetadata.updateCollection('orders', {
   title: 'Orders',
   description: 'Customer purchase orders.',
-  fields: {
-    amount: {
-      title: 'Amount',
-      description: 'Total order amount before refunds.',
-    },
-  },
 });
 ```
 
 或者：
 
 ```ts
-await builder.updateFieldMetadata('orders', 'amount', {
+await connection.collectionMetadata.updateField('orders', 'amount', {
   title: 'Amount',
   description: 'Total order amount before refunds.',
 });
 ```
 
-这两类 API 不会生成 schema operation。
+这两类 API 直接更新补充 Metadata，不会生成 schema operation。Builder 只负责物理 Schema 变更，
+以及在创建或变更 Schema 时同步定义中携带的补充 Metadata。
 
 ## 和 db.comment 的关系
 
@@ -82,5 +77,6 @@ await builder.updateFieldMetadata('orders', 'amount', {
 ## Agent 注意事项
 
 - 只补充元信息时，不要调用 `alterCollection` 或 `alterField`。
-- `updateCollectionMetadata` 和 `updateFieldMetadata` 是 metadata-only 操作。
-- metadata-only 操作的 `schemaOperations` 应为空数组。
+- 纯 Metadata 更新使用 `connection.collectionMetadata`。
+- 物理 Schema 更新使用 `connection.builder`。
+- 完整 Collection 统一从 `connection.collections` 读取。

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { type DatabaseCapabilities } from '../../../src/schema/index.js';
 import { CollectionBuilder } from '../../../src/index.js';
 import { UnsupportedCapabilityError } from '../../../src/index.js';
-import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
 
 const sqliteCapabilities: DatabaseCapabilities = {
   schemas: false,
@@ -109,9 +108,7 @@ describe('CollectionBuilder capability planning', () => {
   });
 
   it('warns and skips unsafe materialized view operations in non-strict mode', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
-      metadataStore,
       schemaAdapter: {
         dialect: 'sqlite',
         capabilities: sqliteCapabilities,
@@ -135,13 +132,10 @@ describe('CollectionBuilder capability planning', () => {
       }),
     ]);
     expect(result.schemaOperations).toEqual([]);
-    expect(await metadataStore.getCollection('usersSnapshot')).toBeUndefined();
   });
 
   it('only skips metadata for unsupported view operations in mixed apply batches', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
-      metadataStore,
       schemaAdapter: {
         dialect: 'sqlite',
         capabilities: sqliteCapabilities,
@@ -186,10 +180,6 @@ describe('CollectionBuilder capability planning', () => {
         }),
       }),
     ]);
-    expect(await metadataStore.getCollection('usersView')).toMatchObject({
-      name: 'usersView',
-    });
-    expect(await metadataStore.getCollection('usersSnapshot')).toBeUndefined();
   });
 
   it('throws unsupported capability errors in strict apply mode', async () => {
@@ -343,9 +333,7 @@ describe('CollectionBuilder capability planning', () => {
   });
 
   it('skips unsupported views and does not sync their metadata', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
-      metadataStore,
       schemaAdapter: {
         dialect: 'minimal',
         capabilities: {
@@ -369,7 +357,6 @@ describe('CollectionBuilder capability planning', () => {
       }),
     ]);
     expect(result.schemaOperations).toEqual([]);
-    expect(await metadataStore.getCollection('usersView')).toBeUndefined();
   });
 
   it('warns and skips unsupported foreign keys and check constraints in alter operations', async () => {

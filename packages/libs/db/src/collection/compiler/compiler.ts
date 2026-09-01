@@ -218,9 +218,6 @@ export class CollectionCompiler {
             context,
           ),
         ];
-      case 'updateCollectionMetadata':
-      case 'updateFieldMetadata':
-        return [];
       default:
         return assertNever(operation);
     }

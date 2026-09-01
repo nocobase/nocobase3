@@ -2,7 +2,7 @@ import type { CollectionDefinition, NamingOptions } from '../types.js';
 import { CollectionResolver } from '../resolver/resolver.js';
 import { CollectionResolutionError } from '../resolver/errors.js';
 import type {
-  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
   CollectionMetadataDocumentValidator,
   CollectionMetadataValidationContext,
 } from '../../metadata/index.js';
@@ -15,7 +15,7 @@ import type { ConnectionCollections } from './types.js';
 
 export interface RegistryMetadataDocumentValidatorOptions {
   readonly inspector: SchemaInspector;
-  readonly metadataStore: CollectionMetadataDocumentStore;
+  readonly metadataStore: CollectionMetadataStore;
   readonly collections: ConnectionCollections;
   readonly naming?: NamingOptions;
   readonly resolver?: CollectionResolver;

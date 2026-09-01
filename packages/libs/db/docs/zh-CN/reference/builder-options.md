@@ -17,7 +17,7 @@ interface BuilderExecOptions {
 
 ## CollectionBuilderOptions
 
-创建 `CollectionBuilder` 时可以传入 schema adapter、metadata store 和命名配置：
+创建 `CollectionBuilder` 时可以传入 Schema adapter、Collection 读取入口、Metadata Service 和命名配置：
 
 ```ts
 interface CollectionBuilderOptions {
@@ -31,7 +31,6 @@ interface CollectionBuilderOptions {
 
 完整应用通过 `DatabaseConnection` 自动注入这些协作者：Builder 从 `collections` 读取物理 Schema 与补充
 Metadata 的解析结果，通过 `collectionMetadata` 只写补充文档，并通过 `schemaInvalidator` 清理解析缓存。
-迁移期仍接受已弃用的旧 `metadataStore` 选项，仅供旧完整定义 Store 兼容；新代码不应再依赖它。
 
 `naming` 用于默认逻辑名到物理名的映射：
 

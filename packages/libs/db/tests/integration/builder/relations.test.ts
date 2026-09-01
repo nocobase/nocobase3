@@ -48,6 +48,22 @@ describeIntegrationDatabases('relation fields', (context) => {
   });
 
   it('keeps inverse relations as metadata without creating local columns', async () => {
+    await context.builder.createCollection('profiles', (collection) => {
+      collection.increments('id');
+      collection.bigInt('customerId');
+    });
+    await context.builder.createCollection('orders', (collection) => {
+      collection.increments('id');
+      collection.bigInt('customerId');
+    });
+    await context.builder.createCollection('products', (collection) => {
+      collection.increments('id');
+    });
+    await context.builder.createCollection('orderProducts', (collection) => {
+      collection.increments('id');
+      collection.bigInt('customerId');
+      collection.bigInt('productId');
+    });
     await context.builder.createCollection('customers', (collection) => {
       collection.increments('id');
       collection.hasOne('profile', 'profiles').foreignKey('customerId');
@@ -69,14 +85,13 @@ describeIntegrationDatabases('relation fields', (context) => {
       await context.db.schema.hasColumn(context.table('customers'), 'products'),
     ).toBe(false);
 
-    const metadata = await context.metadataStore.getCollection('customers');
-    expect(metadata?.fields).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'profile', type: 'hasOne' }),
-        expect.objectContaining({ name: 'orders', type: 'hasMany' }),
-        expect.objectContaining({ name: 'products', type: 'belongsToMany' }),
-      ]),
-    );
+    const metadata = await context.metadataStore.get('customers');
+    expect(metadata?.document.relations).toMatchObject({
+      profile: { type: 'hasOne', target: 'profiles' },
+      orders: { type: 'hasMany', target: 'orders' },
+      products: { type: 'belongsToMany', target: 'products' },
+    });
+    expect(metadata?.document).not.toHaveProperty('fields');
   });
 
   it('uses deterministic physical columns for logical relation keys during alteration', async () => {

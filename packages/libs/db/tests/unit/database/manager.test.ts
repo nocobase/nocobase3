@@ -1,13 +1,14 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CollectionRenameAtomicityError,
-  CollectionNamingCompatibilityError,
-  DatabaseCollectionMetadataDocumentStore,
+  DatabaseCollectionMetadataStore,
   createDatabaseManager,
   defineDatabase,
-  InMemoryCollectionMetadataDocumentStore,
   InMemoryCollectionMetadataStore,
-  ModuleCollectionMetadataDocumentStore,
+  ModuleCollectionMetadataStore,
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
   SchemaManagementNotAllowedError,
@@ -54,10 +55,9 @@ describe('DatabaseManager', () => {
   });
 
   it('resolves Collections and updates supplemental Metadata through Connection entry points', async () => {
-    const collectionMetadataStore =
-      new InMemoryCollectionMetadataDocumentStore();
+    const metadataStore = new InMemoryCollectionMetadataStore();
     const db = createDatabaseManager({
-      collectionMetadataStore,
+      metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
       },
@@ -71,7 +71,7 @@ describe('DatabaseManager', () => {
         collection.decimal('amount').title('Amount before tax');
       });
 
-      await expect(collectionMetadataStore.get('orders')).resolves.toEqual({
+      await expect(metadataStore.get('orders')).resolves.toEqual({
         document: {
           version: 1,
           name: 'orders',
@@ -120,7 +120,7 @@ describe('DatabaseManager', () => {
           ]),
         },
       );
-      const afterAdd = await collectionMetadataStore.get('orders');
+      const afterAdd = await metadataStore.get('orders');
       expect(afterAdd?.document).toEqual({
         version: 1,
         name: 'orders',
@@ -135,10 +135,50 @@ describe('DatabaseManager', () => {
 
       await connection.builder.dropField('orders', 'status');
       expect(
-        (await collectionMetadataStore.get('orders'))?.document.fields,
+        (await metadataStore.get('orders'))?.document.fields,
       ).not.toHaveProperty('status');
     } finally {
       await db.destroy();
+    }
+  });
+
+  it('uses persistent Database Metadata by default and hides its internal table', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-db-metadata-'));
+    const filename = path.join(directory, 'database.sqlite');
+    const db = createDatabaseManager({
+      connections: {
+        sqlite: { dialect: 'sqlite', filename },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await connection.builder.createCollection('orders', (collection) => {
+        collection.title('Orders');
+        collection.increments('id');
+      });
+      const client = await connection.client<any>();
+      expect(
+        await client.schema.hasTable('__nocobase_collection_metadata'),
+      ).toBe(true);
+      await expect(connection.collections.list({ limit: 1 })).resolves.toEqual({
+        items: [expect.objectContaining({ name: 'orders', title: 'Orders' })],
+      });
+      const scanned: string[] = [];
+      for await (const collection of connection.collections.scan({
+        pageSize: 1,
+      })) {
+        scanned.push(collection.name!);
+      }
+      expect(scanned).toEqual(['orders']);
+
+      await db.reconnect();
+      await expect(
+        db.connection().collections.get('orders'),
+      ).resolves.toMatchObject({ name: 'orders', title: 'Orders' });
+    } finally {
+      await db.destroy();
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 
@@ -149,6 +189,7 @@ describe('DatabaseManager', () => {
           dialect: 'sqlite',
           filename: ':memory:',
           schemaManagement: 'external',
+          metadataStore: new ModuleCollectionMetadataStore({ documents: [] }),
         },
       },
     });
@@ -196,6 +237,22 @@ describe('DatabaseManager', () => {
     } finally {
       await db.destroy();
     }
+  });
+
+  it('requires an explicit persistent or read-only Metadata Store for external connections', () => {
+    const db = createDatabaseManager({
+      connections: {
+        external: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          schemaManagement: 'external',
+        },
+      },
+    });
+
+    expect(() => db.connection()).toThrow(
+      'requires an explicit Collection Metadata Store',
+    );
   });
 
   it('resolves named connections independently', async () => {
@@ -403,36 +460,6 @@ describe('DatabaseManager', () => {
     }
   });
 
-  it('blocks connect when stored collection naming is incompatible', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
-    const legacyDefinition = Object.assign(
-      {
-        name: 'orders',
-        fields: [{ name: 'id', type: 'increments' as const }],
-      },
-      { tableName: 'legacy_orders' },
-    );
-    await metadataStore.saveCollection('orders', legacyDefinition);
-    const db = createDatabaseManager({
-      metadataStore,
-      connections: {
-        sqlite: { dialect: 'sqlite', filename: ':memory:' },
-      },
-    });
-
-    try {
-      await expect(db.connect()).rejects.toBeInstanceOf(
-        CollectionNamingCompatibilityError,
-      );
-      expect(await metadataStore.getCollection('orders')).toHaveProperty(
-        'tableName',
-        'legacy_orders',
-      );
-    } finally {
-      await db.destroy();
-    }
-  });
-
   it('runs builder and query operations inside one transaction connection', async () => {
     const db = createDatabaseManager({
       connections: {
@@ -464,10 +491,9 @@ describe('DatabaseManager', () => {
   });
 
   it('publishes transactional Metadata and Registry invalidation only after commit', async () => {
-    const collectionMetadataStore =
-      new InMemoryCollectionMetadataDocumentStore();
+    const metadataStore = new InMemoryCollectionMetadataStore();
     const db = createDatabaseManager({
-      collectionMetadataStore,
+      metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
       },
@@ -492,9 +518,7 @@ describe('DatabaseManager', () => {
         }),
       ).rejects.toThrow('rollback');
       expect(invalidate).not.toHaveBeenCalled();
-      await expect(
-        collectionMetadataStore.get('orders'),
-      ).resolves.toBeUndefined();
+      await expect(metadataStore.get('orders')).resolves.toBeUndefined();
       await expect(
         connection.collections.get('orders'),
       ).resolves.not.toMatchObject({
@@ -516,9 +540,7 @@ describe('DatabaseManager', () => {
         });
       });
       expect(invalidate).toHaveBeenCalledOnce();
-      await expect(
-        collectionMetadataStore.get('orders'),
-      ).resolves.toMatchObject({
+      await expect(metadataStore.get('orders')).resolves.toMatchObject({
         document: { fields: { status: { title: 'Status' } } },
       });
       await expect(connection.collections.get('orders')).resolves.toMatchObject(
@@ -535,13 +557,11 @@ describe('DatabaseManager', () => {
 
   it('keeps Database Metadata writes in the physical Schema transaction', async () => {
     const state: { connection?: DatabaseConnection } = {};
-    const collectionMetadataStore = new DatabaseCollectionMetadataDocumentStore(
-      {
-        resolveClient: async () => state.connection!.client(),
-      },
-    );
+    const metadataStore = new DatabaseCollectionMetadataStore({
+      resolveClient: async () => state.connection!.client(),
+    });
     const db = createDatabaseManager({
-      collectionMetadataStore,
+      metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
       },
@@ -565,7 +585,7 @@ describe('DatabaseManager', () => {
       const client = await connection.client<any>();
       expect(await client.schema.hasTable('rolled_back_orders')).toBe(false);
       await expect(
-        collectionMetadataStore.get('rolledBackOrders'),
+        metadataStore.get('rolledBackOrders'),
       ).resolves.toBeUndefined();
 
       await connection.transaction(async (transaction) => {
@@ -578,19 +598,18 @@ describe('DatabaseManager', () => {
         );
       });
       expect(await client.schema.hasTable('committed_orders')).toBe(true);
-      await expect(
-        collectionMetadataStore.get('committedOrders'),
-      ).resolves.toMatchObject({ document: { title: 'Committed orders' } });
+      await expect(metadataStore.get('committedOrders')).resolves.toMatchObject(
+        { document: { title: 'Committed orders' } },
+      );
     } finally {
       await db.destroy();
     }
   });
 
   it('rejects a non-atomic rename before DDL when supplemental Metadata exists', async () => {
-    const collectionMetadataStore =
-      new InMemoryCollectionMetadataDocumentStore();
+    const metadataStore = new InMemoryCollectionMetadataStore();
     const db = createDatabaseManager({
-      collectionMetadataStore,
+      metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
       },
@@ -609,11 +628,9 @@ describe('DatabaseManager', () => {
       const client = await connection.client<any>();
       expect(await client.schema.hasTable('orders')).toBe(true);
       expect(await client.schema.hasTable('archived_orders')).toBe(false);
+      await expect(metadataStore.get('orders')).resolves.toBeDefined();
       await expect(
-        collectionMetadataStore.get('orders'),
-      ).resolves.toBeDefined();
-      await expect(
-        collectionMetadataStore.get('archivedOrders'),
+        metadataStore.get('archivedOrders'),
       ).resolves.toBeUndefined();
     } finally {
       await db.destroy();
@@ -621,10 +638,9 @@ describe('DatabaseManager', () => {
   });
 
   it('renames a deterministically named Collection when no Metadata document exists', async () => {
-    const collectionMetadataStore =
-      new InMemoryCollectionMetadataDocumentStore();
+    const metadataStore = new InMemoryCollectionMetadataStore();
     const db = createDatabaseManager({
-      collectionMetadataStore,
+      metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
       },
@@ -635,9 +651,7 @@ describe('DatabaseManager', () => {
       await connection.builder.createCollection('orders', (collection) => {
         collection.increments('id');
       });
-      await expect(
-        collectionMetadataStore.get('orders'),
-      ).resolves.toBeUndefined();
+      await expect(metadataStore.get('orders')).resolves.toBeUndefined();
 
       await connection.builder.renameCollection('orders', 'archivedOrders');
       const client = await connection.client<any>();
@@ -647,7 +661,7 @@ describe('DatabaseManager', () => {
         connection.collections.get('archivedOrders'),
       ).resolves.toMatchObject({ name: 'archivedOrders' });
       await expect(
-        collectionMetadataStore.get('archivedOrders'),
+        metadataStore.get('archivedOrders'),
       ).resolves.toBeUndefined();
     } finally {
       await db.destroy();
@@ -656,7 +670,7 @@ describe('DatabaseManager', () => {
 
   it('rejects supplemental writes to a read-only Store before DDL', async () => {
     const db = createDatabaseManager({
-      collectionMetadataStore: new ModuleCollectionMetadataDocumentStore({
+      metadataStore: new ModuleCollectionMetadataStore({
         documents: [],
         source: 'src/collection-metadata.ts',
       }),

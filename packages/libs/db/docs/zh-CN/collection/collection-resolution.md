@@ -6,7 +6,8 @@ description: 说明主数据库和外部数据库的 Schema 如何与补充 Meta
 # Collection 解析生命周期
 
 > `SchemaInspector`、`CollectionResolver`、`CollectionRegistry`、`connection.collections` 以及
-> 配置 V1 文档 Store 时的 Builder 集成已经实现。旧完整定义 Store 兼容路径仍待最终移除。
+> Builder、Metadata Service、Collection Registry 和 V1 Store 后端均已接入本生命周期；运行时不再保留
+> 旧完整定义 Store 兼容路径。
 
 完整 Collection 由物理事实和补充 Metadata 共同派生：
 

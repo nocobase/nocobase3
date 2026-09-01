@@ -33,11 +33,6 @@
 - `addConstraint`
 - `dropConstraint`
 
-元信息：
-
-- `updateCollectionMetadata`
-- `updateFieldMetadata`
-
 执行计划：
 
 - `apply`
@@ -46,7 +41,7 @@
 
 - [命名映射](./naming.md)
 - [方言能力与降级](./dialect-capabilities.md)
-- [metadata-only API](./metadata-only.md)
+- [Metadata-only 更新](./metadata-only.md)
 
 ## 三种写法
 
@@ -102,7 +97,7 @@ await builder.apply([
 
 - 只允许白名单 operation。
 - destructive 操作必须先 dry-run。
-- metadata-only 操作和 schema 操作分开提交。
+- Metadata Service 更新和 Schema 操作分开提交。
 - 每次执行前输出 `operations`、`schemaOperations`、`warnings`、`impact`。
 - 出现 `severity: 'unsafe'` 的 warning 时，应要求用户确认或改用 `strict: true` 阻止执行。
 - 目标数据库不明确时，不生成 `native`、`asRaw`、物化视图或方言敏感约束。

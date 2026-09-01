@@ -14,7 +14,6 @@ export class KnexConnectionAdapter implements ConnectionAdapter<ConnectionConfig
       context.name,
       context.config,
       context.metadataStore,
-      context.collectionMetadataStore,
     );
   }
 }

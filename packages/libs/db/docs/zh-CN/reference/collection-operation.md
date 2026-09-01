@@ -132,27 +132,13 @@ destructive 操作。
 }
 ```
 
-## metadata operations
+## Metadata 更新
 
-```ts
-{
-  type: 'updateCollectionMetadata';
-  collection: string;
-  patch: CollectionMetadataPatch;
-}
-
-{
-  type: 'updateFieldMetadata';
-  collection: string;
-  field: string;
-  patch: FieldMetadataPatch;
-}
-```
-
-metadata operation 不生成 schema operation。
+`CollectionOperation` 只表达物理 Schema 计划。纯 Metadata 更新使用
+`connection.collectionMetadata`，不混入 Builder 的执行计划。
 
 ## Agent 注意事项
 
 - Agent 输出执行计划、diff 结果或批量 apply payload 时，优先生成 `CollectionOperation[]`。
 - destructive operation 先 dry-run。
-- metadata-only operation 不应混入 schema 变更。
+- Metadata Service 更新不应混入 Schema 执行计划。

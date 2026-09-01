@@ -5,8 +5,8 @@ description: 说明 Database、Module、File 和 In-memory Metadata Store 的行
 
 # Metadata Store 后端
 
-> `DatabaseCollectionMetadataDocumentStore`、`ModuleCollectionMetadataDocumentStore` 和
-> `InMemoryCollectionMetadataDocumentStore` 已实现。多个命名 Store 的声明式配置仍是后续设计；
+> `DatabaseCollectionMetadataStore`、`ModuleCollectionMetadataStore` 和
+> `InMemoryCollectionMetadataStore` 已实现。多个命名 Store 的声明式配置仍是后续设计；
 > 当前数据库配置直接接收 Store 实例。
 
 所有后端都实现 [Metadata Store 设计](./metadata-store.md) 中的补充文档契约。后端只改变
@@ -18,7 +18,7 @@ description: 说明 Database、Module、File 和 In-memory Metadata Store 的行
 
 ## Database Metadata Store
 
-NocoBase 管理的主数据库可以使用 `DatabaseCollectionMetadataDocumentStore`。它通过底层 Knex
+NocoBase 管理的主数据库可以使用 `DatabaseCollectionMetadataStore`。它通过底层 Knex
 client 自行初始化内部表，不依赖 Collection Builder，并在一张表中为每个 Collection 保存一行：
 
 ```text
@@ -55,7 +55,7 @@ SQLite      document text
 循环依赖。该后端通过自包含的底层 Knex schema 路径初始化这张表。
 
 ```ts
-const store = new DatabaseCollectionMetadataDocumentStore({
+const store = new DatabaseCollectionMetadataStore({
   resolveClient: async () => connection.client(),
   tableName: '__nocobase_collection_metadata', // 可省略
   schema: 'public', // 可选
@@ -69,7 +69,7 @@ const store = new DatabaseCollectionMetadataDocumentStore({
 
 多个逻辑 Store 使用同一个数据库 Schema 时，内部表必须隔离。当前 class 的默认表名是
 `__nocobase_collection_metadata`，调用方可以通过 `tableName` 为内部系统表显式隔离。未来的命名 Store
-配置如果自动生成表名，应确定性地包含所属 Connection 的 `tablePrefix`：
+配置如果自动生成表名，应确定性地包含所属 Connection 的 `tablePrefix`。例如，未来声明式配置可能表示为：
 
 ```ts
 metadataStores: {
@@ -87,7 +87,7 @@ metadataStores: {
 
 ## Module Metadata Store
 
-外部数据库的 Metadata 默认使用纳入源码管理的 TypeScript 文件：
+外部数据库可以显式配置纳入源码管理的 TypeScript Metadata 文件：
 
 ```ts
 import { defineCollectionMetadata } from '@nocobase/db';
@@ -107,11 +107,11 @@ export default defineCollectionMetadata({
 });
 ```
 
-`ModuleCollectionMetadataDocumentStore` 接收模块已经导入的文档数组，并在初始化时对全部文档执行
+`ModuleCollectionMetadataStore` 接收模块已经导入的文档数组，并在初始化时对全部文档执行
 严格 V1 校验和重复名称检查：
 
 ```ts
-const store = new ModuleCollectionMetadataDocumentStore({
+const store = new ModuleCollectionMetadataStore({
   documents: [ordersMetadata, customersMetadata],
   source: 'src/collection-metadata.ts',
 });
@@ -172,37 +172,35 @@ mainRead  --+
 Metadata 文档内不保存 `connection`、`dataSourceKey` 或 `namespace`，因为 Store 实例本身已经是
 数据边界。
 
-命名配置可以显式表达共享关系：
+当前 API 通过复用同一个 Store 实例显式表达共享关系：
 
 ```ts
-const db = createDatabaseManager({
-  metadataStores: {
-    mainMetadata: {
-      type: 'database',
-      connection: 'mainWrite',
-    },
-    crmMetadata: {
-      type: 'module',
-      collections: crmCollectionMetadata,
-    },
-  },
+const mainMetadata = new DatabaseCollectionMetadataStore({
+  resolveClient: async () => mainConnection.client(),
+});
+const crmMetadata = new ModuleCollectionMetadataStore({
+  documents: crmCollectionMetadata,
+});
 
+const db = createDatabaseManager({
   connections: {
     mainWrite: {
       dialect: 'postgres',
-      metadataStore: 'mainMetadata',
+      metadataStore: mainMetadata,
     },
     mainRead: {
       dialect: 'postgres',
-      metadataStore: 'mainMetadata',
+      metadataStore: mainMetadata,
     },
     crm: {
       dialect: 'postgres',
-      metadataStore: 'crmMetadata',
+      metadataStore: crmMetadata,
     },
   },
 });
 ```
+
+`metadataStores` 命名注册表与字符串引用仍是后续设计，当前配置不接受这种声明式写法。
 
 共享 Store 的 Connection 必须使用兼容的命名配置，并指向兼容的物理 Schema。启动校验如果发现不兼容配置，
 应直接拒绝启动，而不是将同一逻辑 Metadata 文档解析为不同物理对象。

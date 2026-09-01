@@ -6,8 +6,7 @@ description: 说明补充 Metadata 的读取、更新、并发控制、校验和
 # Collection Metadata Service 设计
 
 > `CollectionMetadataService` 已挂到 `DatabaseConnection.collectionMetadata`，Metadata 写入会主动失效
-> Registry。配置了 V1 文档 Store 的 Connection Builder 已接入本 Service；旧 Store 兼容路径将在最终
-> 清理批次移除。
+> Registry。Builder 在物理 Schema 创建或变更时也通过本 Service 同步补充 Metadata。
 
 `CollectionMetadataService` 是 Metadata Store 之上的领域层。Store 只提供按 revision 读写文档的
 持久化能力；Service 负责 patch 语义、Schema 校验、relation 校验和 Registry 失效。
@@ -41,27 +40,27 @@ export interface CollectionMetadataService {
   updateCollection(
     name: string,
     patch: CollectionMetadataPropertiesPatch,
-    options?: UpdateMetadataOptions,
+    options?: UpdateCollectionMetadataOptions,
   ): Promise<StoredCollectionMetadata | undefined>;
 
   updateField(
     collection: string,
     field: string,
-    patch: FieldMetadataPatch,
-    options?: UpdateMetadataOptions,
+    patch: CollectionFieldMetadataPatch,
+    options?: UpdateCollectionMetadataOptions,
   ): Promise<StoredCollectionMetadata | undefined>;
 
   setRelation(
     collection: string,
     name: string,
     relation: RelationMetadata,
-    options?: UpdateMetadataOptions,
+    options?: UpdateCollectionMetadataOptions,
   ): Promise<StoredCollectionMetadata>;
 
   removeRelation(
     collection: string,
     name: string,
-    options?: UpdateMetadataOptions,
+    options?: UpdateCollectionMetadataOptions,
   ): Promise<StoredCollectionMetadata | undefined>;
 }
 ```
@@ -86,7 +85,7 @@ Service 的每次更新都执行：
 5. 写入成功后使受影响的 Registry 项失效。
 
 ```ts
-export interface UpdateMetadataOptions {
+export interface UpdateCollectionMetadataOptions {
   expectedRevision?: string | number | null;
 }
 ```
@@ -116,7 +115,7 @@ Module Metadata 后端可写；Module Store 的写入请求返回明确的 `META
 
 - Collection 或 Field Metadata 变更：使当前 Collection 失效；
 - relation 变更：使 source、target 和 through Collection 失效；
-- Collection 级 `naming` 变更：使 Naming Index 和当前 Collection 失效；
+- Collection 级 `naming`、`title` 或 `description` 变更：使 Naming Index 摘要和当前 Collection 失效；
 - 无法确定影响范围时：全量失效。
 
 必须先成功持久化，再失效 Registry。Registry 失效不应导致已成功的 Metadata 事务回滚；如果失效钩子
@@ -146,11 +145,11 @@ Service 的内部写入能力保存补充 Metadata。Migration 不得导入或�
 完成实际执行或回滚的 Migration batch 后，Migrator 会全量失效目标 Connection Registry。即使某个 migration
 通过 raw client/schema 绕过 Builder，也不会让 batch 前缓存继续存活；没有 pending migration 的空 batch 不失效。
 
-## 兼容当前 API
+## Builder 同步边界
 
-当前 Builder 中的 `updateCollectionMetadata()` 和 `updateFieldMetadata()` 已在 V1 路径委托给 Service。
-消费端迁移到 `connection.collectionMetadata` 后，Builder 只保留 Schema 职责，再移除这两个 Metadata-only
-快捷方法。
+Builder 不提供 Metadata-only 快捷方法。创建 Collection、添加 Field 或修改 relation 时，Builder 会在
+物理 Schema 操作成功后，通过 Service 的内部生命周期方法同步定义中携带的补充 Metadata。只修改
+`title`、`description` 或 relation Metadata 时，直接使用 `connection.collectionMetadata`。
 
 ## 相关文档
 

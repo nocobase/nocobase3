@@ -263,12 +263,11 @@ export class CollectionResolutionError extends Error {
 无法归一化的物理类型以 `type: 'native'` 和 `db.nativeType` 进入解析结果，不会仅因为类型未知而阻止读取。
 只有 Builder 试图执行不可移植的 Schema 修改时，才需要按方言能力拒绝操作。
 
-## 兼容当前 Metadata Store
+## Metadata 输入
 
-当前 Store 仍然返回完整 `CollectionDefinition`。迁移期 Resolver 只从中提取 Collection/Field 的
-`title`、`description`、relations 和 `naming`；物理 Field、index 和 constraint 仍以 Inspector 为准。
-
-Metadata Store 切换到 `CollectionMetadataDocument` 后，Resolver 的物理输入和完整输出不变。
+Resolver 只接收 `CollectionMetadataDocument` 中的 `title`、`description`、relations 和 `naming`；
+物理 Field、index 和 constraint 始终以 Inspector 为准。旧完整定义只能先通过显式 legacy extraction
+转换，运行时没有旧 Store fallback。
 
 ## 相关文档
 

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type {
-  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
   CollectionMetadataPage,
   CollectionMetadataStoreCapabilities,
   DeleteCollectionMetadataOptions,
@@ -22,12 +22,12 @@ import type {
 } from './document.js';
 import { validateCollectionMetadataDocument } from './validation.js';
 
-export interface ModuleCollectionMetadataDocumentStoreOptions {
+export interface ModuleCollectionMetadataStoreOptions {
   readonly documents: readonly unknown[];
   readonly source?: string;
 }
 
-export class ModuleCollectionMetadataDocumentStore implements CollectionMetadataDocumentStore {
+export class ModuleCollectionMetadataStore implements CollectionMetadataStore {
   readonly capabilities: CollectionMetadataStoreCapabilities = Object.freeze({
     writable: false,
     optimisticConcurrency: false,
@@ -36,9 +36,7 @@ export class ModuleCollectionMetadataDocumentStore implements CollectionMetadata
   private readonly documents = new Map<string, StoredCollectionMetadata>();
   private initialized = false;
 
-  constructor(
-    private readonly options: ModuleCollectionMetadataDocumentStoreOptions,
-  ) {}
+  constructor(private readonly options: ModuleCollectionMetadataStoreOptions) {}
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
