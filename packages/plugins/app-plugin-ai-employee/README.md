@@ -25,6 +25,7 @@ Plugin-owned Demo pages live under `client/dev` and are mounted with
 canonical Registry components but are not part of the application-owned Registry
 item and are excluded from production application builds.
 
-`pnpm build` compiles TypeScript, writes the development loader bridge used by the
-published Client Route, and copies non-TypeScript AI resources, including prompts
-and skill Markdown, to `dist/ai`.
+`pnpm build` compiles the plugin-owned development pages with the rest of the Client
+source and copies non-TypeScript AI resources, including prompts and skill Markdown,
+to `dist/ai`. `defineDevRoutes()` keeps these pages out of production application
+bundles.

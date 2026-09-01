@@ -82,8 +82,7 @@ describe('AI Employee Registry contract', () => {
     );
     for (const file of [
       'client/dev/ai-employee-page.tsx',
-      'client/dev/demo-pages.js',
-      'client/dev/demo-pages.d.ts',
+      'client/dev/demo-pages.tsx',
       'client/dev/demo/index.tsx',
       'client/dev/demo/floating.tsx',
       'client/dev/demo/shortcut.tsx',

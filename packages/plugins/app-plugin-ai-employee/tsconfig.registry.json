@@ -3,10 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": [
-    "registry/nocobase-ai/**/*.ts",
-    "registry/nocobase-ai/**/*.tsx",
-    "client/dev/**/*.ts",
-    "client/dev/**/*.tsx"
-  ]
+  "include": ["registry/nocobase-ai/**/*.ts", "registry/nocobase-ai/**/*.tsx"]
 }

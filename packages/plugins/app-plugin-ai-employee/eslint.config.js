@@ -4,7 +4,7 @@ export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
   ignores: [
     'dist/**',
-    // Registry and development showcase source use their dedicated browser typecheck.
+    // Registry and development showcases use the browser-source validation path.
     'registry/**',
     'client/dev/**',
     'tests/**',

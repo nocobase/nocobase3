@@ -127,7 +127,7 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-ai-resources.mjs && node ./scripts/write-dev-entrypoint.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-ai-resources.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
