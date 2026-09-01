@@ -73,6 +73,8 @@ orderItems.createdAt -> tbl_order_items.created_at
 
 `tablePrefix` 按原样拼接在转换后的 Collection 名称前，只作用于表、普通 View 和物化 View，不作用于 Field。
 
+前缀的继承、Query 边界和迁移要求见 [tablePrefix 表前缀](./table-prefix.md)。
+
 ## Collection Builder
 
 Builder 合并 Connection 和 Collection 的 naming：
@@ -127,22 +129,153 @@ underscored: false -> createdBy_id
 
 ## Query
 
-`db.query()` 是底层数据库 Query 接口，不读取 Collection Metadata。它只使用 Connection 的 `underscored`，且创建 Query naming strategy 时会忽略 `tablePrefix`。
+`db.query()` 是底层数据库 Query 接口，不读取 Collection Metadata。它使用 Connection 的 `underscored` 和 `tablePrefix`，但不读取 Collection 局部 naming 覆盖。
 
-| 配置来源                 | Builder | Query      |
-| ------------------------ | ------- | ---------- |
-| Connection `underscored` | 使用    | 使用       |
-| Collection `underscored` | 使用    | 不读取     |
-| Connection `tablePrefix` | 使用    | 不自动添加 |
-| Collection `tablePrefix` | 使用    | 不读取     |
+| 配置来源                 | Builder | Query  |
+| ------------------------ | ------- | ------ |
+| Connection `underscored` | 使用    | 使用   |
+| Collection `underscored` | 使用    | 不读取 |
+| Connection `tablePrefix` | 使用    | 使用   |
+| Collection `tablePrefix` | 使用    | 不读取 |
 
 默认 `underscored: true` 时：
 
 ```ts
-await db.query().selectFrom('tblOrderItems').select('createdAt').execute();
+await db.query().selectFrom('orderItems').select('createdAt').execute();
 ```
 
-Query 会使用物理 identifier `tbl_order_items.created_at`。如果 Connection 设置 `underscored: false`，同一段调用会保留 `tblOrderItems.createdAt`。
+如果 Connection 同时设置 `tablePrefix: 'tbl_'`，Query 会使用物理 identifier `tbl_order_items.created_at`。如果设置 `underscored: false`，同一段调用会使用 `tbl_orderItems.createdAt`。
+
+下面两个配置的差异只来自 `underscored`，`tablePrefix` 始终按原样拼接：
+
+```ts
+// 使用 tbl_order_items.order_no
+naming: {
+  underscored: true,
+  tablePrefix: 'tbl_',
+}
+
+// 使用 tbl_orderItems.orderNo
+naming: {
+  underscored: false,
+  tablePrefix: 'tbl_',
+}
+```
+
+关闭 `underscored` 不等于关闭 `tablePrefix`，关闭前缀也不会改变字段转换：
+
+| Connection naming                             | 表来源输入   | 字段输入  | 物理 identifier            |
+| --------------------------------------------- | ------------ | --------- | -------------------------- |
+| `{ underscored: true, tablePrefix: 'tbl_' }`  | `orderItems` | `orderNo` | `tbl_order_items.order_no` |
+| `{ underscored: false, tablePrefix: 'tbl_' }` | `orderItems` | `orderNo` | `tbl_orderItems.orderNo`   |
+| `{ underscored: true, tablePrefix: '' }`      | `orderItems` | `orderNo` | `order_items.order_no`     |
+| `{ underscored: false, tablePrefix: '' }`     | `orderItems` | `orderNo` | `orderItems.orderNo`       |
+
+`tablePrefix` 不会自动补充分隔符。例如 `tablePrefix: 'tbl'` 会产生 `tblorder_items`，需要 `tbl_order_items` 时必须显式配置为 `tbl_`。
+
+### Join 和 alias
+
+表来源使用 Collection 名转换，字段使用 Field 名转换，alias 只做 identifier 转换：
+
+```ts
+db.query()
+  .selectFrom('orderItems as orderRows')
+  .leftJoin('users as createdByUsers', (join) =>
+    join.onRef('orderRows.createdById', '=', 'createdByUsers.id'),
+  )
+  .select([
+    'orderRows.orderNo as orderNo',
+    'createdByUsers.displayName as createdByName',
+  ]);
+```
+
+使用 `underscored: true`、`tablePrefix: 'tbl_'` 时对应：
+
+```text
+tbl_order_items as order_rows
+tbl_users as created_by_users
+order_rows.created_by_id = created_by_users.id
+```
+
+alias 不会变成 `tbl_order_rows` 或 `tbl_created_by_users`。
+
+### 字段输入和结果 key
+
+`underscored` 会把 Query 中的 camelCase 字段 identifier 转成物理列名，但显式 `select()` 的结果 key 保留调用方写下的字段名。
+
+传入 `createdAt` 时：
+
+```ts
+const row = await db
+  .query()
+  .selectFrom('orderItems')
+  .select('createdAt')
+  .executeTakeFirst();
+```
+
+实际查询物理列 `created_at`，结果仍然是：
+
+```ts
+{
+  createdAt: '...';
+}
+```
+
+传入 `created_at` 时：
+
+```ts
+const row = await db
+  .query()
+  .selectFrom('orderItems')
+  .select('created_at')
+  .executeTakeFirst();
+```
+
+物理列和结果 key 都保持 `created_at`：
+
+```ts
+{
+  created_at: '...';
+}
+```
+
+对应规则是：
+
+| `select()` 输入 | 查询的物理列 | 返回结果 key |
+| --------------- | ------------ | ------------ |
+| `createdAt`     | `created_at` | `createdAt`  |
+| `created_at`    | `created_at` | `created_at` |
+
+显式 alias 最终决定返回结果 key：
+
+```ts
+select('createdAt as created_at'); // 返回 created_at
+select('created_at as createdAt'); // 返回 createdAt
+```
+
+`selectAll()` 没有逐个声明调用方期望的字段 key，因此行为不同：当 Connection 使用 `underscored: true` 时，数据库返回的未匹配列会自动转回 camelCase：
+
+```ts
+const row = await db
+  .query()
+  .selectFrom('orderItems')
+  .selectAll()
+  .executeTakeFirst();
+
+// 数据库列 created_at -> 结果 key createdAt
+```
+
+这层字段输入与结果 key 映射当前已经实现，并由 Query naming 集成测试覆盖。它不依赖 Collection Metadata，只依赖 Connection 的 `underscored` 配置。
+
+限定到表或 alias 的 wildcard 采用相同结果映射：
+
+```ts
+// 相对表限定符会解析到 tbl_order_items.*
+db.query().selectFrom('orderItems').select('orderItems.*');
+
+// alias 保持为 order_rows.*，不会添加 tbl_
+db.query().selectFrom('orderItems as orderRows').selectAll('orderRows');
+```
 
 如果某个 Collection 覆盖为 `underscored: false`，Query 不会自动发现这一点。调用方必须明确使用该 Collection 的物理 identifier，或者使用未来的 Collection-aware Repository。
 
@@ -168,5 +301,7 @@ underscored: false -> orderItems.createdAt
 - 未明确配置时，按 `underscored: true` 理解。
 - 不要通过 `tableName` 或 `columnName` 模拟 `underscored`。
 - 生成 Builder 代码前，同时检查 Connection 和目标 Collection 的 naming。
-- 生成底层 Query 时只依赖 Connection 的 `underscored`，并显式处理表前缀和 Collection 局部覆盖。
+- 生成底层 Query 时使用不带前缀的 Connection 相对表标识符；Query 会应用 Connection naming，但不读取 Collection 局部覆盖。
+- 显式 `select()` 的结果 key 以输入字段名或 alias 为准；不要假设所有结果都会自动转成 camelCase。
+- `selectAll()` 在 `underscored: true` 时会把未显式映射的下划线结果 key 转回 camelCase。
 - 修改已有数据库的 `underscored` 前，先生成可审查的 Migration，不要直接改生产配置。

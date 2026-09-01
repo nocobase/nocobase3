@@ -336,7 +336,8 @@ class KnexSelectQuery<
 
   async exists(): Promise<boolean> {
     const client = this.getClient();
-    const query = this.buildFilteredQuery(client)
+    const tableScope = this.createTableScope();
+    const query = this.buildFilteredQuery(client, tableScope)
       .select(client.raw('1 as value'))
       .limit(1);
     const row = await query.first();
@@ -412,19 +413,21 @@ class KnexSelectQuery<
     this.assertPortablePagination();
 
     const client = this.getClient();
-    const query = this.buildFilteredQuery(client);
+    const tableScope = this.createTableScope();
+    const query = this.buildFilteredQuery(client, tableScope);
     const resultMap = applySelections(query, this.state.selections, {
       client,
       naming: this.naming,
       getClient: this.getClient,
       clause: 'where',
+      tableScope,
     });
 
     if (this.state.distinct) {
       query.distinct();
     }
     for (const column of this.state.groupBy) {
-      query.groupBy(mapReference(column, this.naming));
+      query.groupBy(mapReference(column, this.naming, tableScope));
     }
     for (const expression of this.state.having) {
       applyExpressionNode(query, expression, {
@@ -432,10 +435,14 @@ class KnexSelectQuery<
         naming: this.naming,
         getClient: this.getClient,
         clause: 'having',
+        tableScope,
       });
     }
     for (const item of this.state.orderBy) {
-      query.orderBy(mapReference(item.column, this.naming), item.direction);
+      query.orderBy(
+        mapReference(item.column, this.naming, tableScope),
+        item.direction,
+      );
     }
     if (this.state.limit !== undefined) {
       query.limit(this.state.limit);
@@ -446,14 +453,18 @@ class KnexSelectQuery<
     return { query, resultMap };
   }
 
-  private buildFilteredQuery(client: Knex): Knex.QueryBuilder {
-    const query = client(mapTableExpression(this.tableName, this.naming));
+  private buildFilteredQuery(
+    client: Knex,
+    tableScope: TableScope,
+  ): Knex.QueryBuilder {
+    const query = client(mapTableSourceExpression(this.tableName, this.naming));
     for (const join of this.state.joins) {
       applyJoin(query, join, {
         client,
         naming: this.naming,
         getClient: this.getClient,
         clause: 'where',
+        tableScope,
       });
     }
     for (const expression of this.state.where) {
@@ -462,6 +473,7 @@ class KnexSelectQuery<
         naming: this.naming,
         getClient: this.getClient,
         clause: 'where',
+        tableScope,
       });
     }
     return query;
@@ -469,6 +481,13 @@ class KnexSelectQuery<
 
   private createExpressionBuilder(): ExpressionBuilder {
     return createExpressionBuilder(this.getClient, this.naming);
+  }
+
+  private createTableScope(): TableScope {
+    return createTableScope(
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      this.naming,
+    );
   }
 
   private assertPortablePagination(): void {
@@ -513,7 +532,7 @@ class KnexInsertQuery<
 
   private buildQuery(data: TRecord | readonly TRecord[]): Knex.QueryBuilder {
     return this.getClient()(
-      mapTableExpression(this.tableName, this.naming),
+      mapTableSourceExpression(this.tableName, this.naming),
     ).insert(mapData(data, this.naming) as any);
   }
 
@@ -619,16 +638,18 @@ class KnexUpdateQuery<
 
   private buildQuery(): Knex.QueryBuilder {
     const client = this.getClient();
+    const tableScope = createTableScope([this.tableName], this.naming);
     const data = this.requireSetData();
     this.assertWhereSafety('updateTable().execute()');
     const query = client(
-      mapTableExpression(this.tableName, this.naming),
+      mapTableSourceExpression(this.tableName, this.naming),
     ).update(mapData(data, this.naming) as any);
     applyWhereExpressions(query, this.state.where, {
       client,
       naming: this.naming,
       getClient: this.getClient,
       clause: 'where',
+      tableScope,
     });
     return query;
   }
@@ -728,15 +749,17 @@ class KnexDeleteQuery<
 
   private buildQuery(): Knex.QueryBuilder {
     const client = this.getClient();
+    const tableScope = createTableScope([this.tableName], this.naming);
     this.assertWhereSafety('deleteFrom().execute()');
     const query = client(
-      mapTableExpression(this.tableName, this.naming),
+      mapTableSourceExpression(this.tableName, this.naming),
     ).delete();
     applyWhereExpressions(query, this.state.where, {
       client,
       naming: this.naming,
       getClient: this.getClient,
       clause: 'where',
+      tableScope,
     });
     return query;
   }
@@ -853,17 +876,26 @@ class KnexSubqueryBuilder<
     );
   }
 
-  buildQuery(client = this.getClient()): Knex.QueryBuilder {
+  buildQuery(
+    client = this.getClient(),
+    parentScope?: TableScope,
+  ): Knex.QueryBuilder {
     if (this.state.offset !== undefined && this.state.orderBy.length === 0) {
       throw new Error('offset() requires orderBy() for portable pagination.');
     }
 
-    const query = client(mapTableExpression(this.tableName, this.naming));
+    const tableScope = createTableScope(
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      this.naming,
+      parentScope,
+    );
+    const query = client(mapTableSourceExpression(this.tableName, this.naming));
     applySelections(query, this.state.selections, {
       client,
       naming: this.naming,
       getClient: this.getClient,
       clause: 'where',
+      tableScope,
     });
     if (this.state.distinct) {
       query.distinct();
@@ -873,9 +905,13 @@ class KnexSubqueryBuilder<
       naming: this.naming,
       getClient: this.getClient,
       clause: 'where',
+      tableScope,
     });
     for (const item of this.state.orderBy) {
-      query.orderBy(mapReference(item.column, this.naming), item.direction);
+      query.orderBy(
+        mapReference(item.column, this.naming, tableScope),
+        item.direction,
+      );
     }
     if (this.state.limit !== undefined) {
       query.limit(this.state.limit);
@@ -1002,6 +1038,18 @@ interface ExpressionCompileContext {
   naming: NamingStrategy;
   getClient: () => Knex;
   clause: 'where' | 'having';
+  tableScope: TableScope;
+}
+
+interface TableScope {
+  readonly qualifiers: ReadonlyMap<string, string>;
+  readonly parent?: TableScope;
+}
+
+interface ResolvedTableSource {
+  readonly sql: string;
+  readonly logicalQualifier: string;
+  readonly sqlQualifier: string;
 }
 
 interface ResultMap {
@@ -1309,7 +1357,11 @@ function applySelections(
       resultMap.mapUnmatchedColumns = true;
       query.select(
         selection.table
-          ? `${mapTableExpression(selection.table, context.naming)}.*`
+          ? `${mapTableQualifier(
+              selection.table,
+              context.naming,
+              context.tableScope,
+            )}.*`
           : '*',
       );
       continue;
@@ -1328,7 +1380,11 @@ function applySelectionExpression(
   resultMap: ResultMap,
 ): void {
   if (typeof selection === 'string') {
-    const mapped = mapStringSelection(selection, context.naming);
+    const mapped = mapStringSelection(
+      selection,
+      context.naming,
+      context.tableScope,
+    );
     if (mapped.mapUnmatchedColumns) {
       resultMap.mapUnmatchedColumns = true;
     }
@@ -1488,7 +1544,7 @@ function applyBinaryExpression(
       bool,
       lhs,
       op,
-      mapReference(rhs.reference, context.naming),
+      mapReference(rhs.reference, context.naming, context.tableScope),
     );
     return;
   }
@@ -1500,7 +1556,7 @@ function applyBinaryExpression(
       bool,
       lhs,
       op,
-      rhs.query.buildQuery(context.client),
+      rhs.query.buildQuery(context.client, context.tableScope),
     );
     return;
   }
@@ -1561,7 +1617,7 @@ function applyExistsExpression(
     query,
     bool,
     method,
-    expression.query.buildQuery(context.client),
+    expression.query.buildQuery(context.client, context.tableScope),
   );
 }
 
@@ -1717,7 +1773,7 @@ function applyJoin(
   join: JoinItem,
   context: ExpressionCompileContext,
 ): void {
-  const table = mapTableExpression(join.table, context.naming);
+  const table = mapTableSourceExpression(join.table, context.naming);
   if (join.type === 'cross') {
     (query as any).crossJoin(table);
     return;
@@ -1867,7 +1923,7 @@ function applyJoinBinaryExpression(
       'on',
       lhs,
       op,
-      mapReference(rhs.reference, context.naming),
+      mapReference(rhs.reference, context.naming, context.tableScope),
     );
     return;
   }
@@ -1884,7 +1940,9 @@ function applyJoinBinaryExpression(
       'on',
       lhs,
       op,
-      context.client.raw('(?)', [rhs.query.buildQuery(context.client)] as any),
+      context.client.raw('(?)', [
+        rhs.query.buildQuery(context.client, context.tableScope),
+      ] as any),
     );
     return;
   }
@@ -1960,7 +2018,7 @@ function applyJoinExistsExpression(
     bool,
     'on',
     context.client.raw(`${not ? 'not ' : ''}exists (?)`, [
-      expression.query.buildQuery(context.client),
+      expression.query.buildQuery(context.client, context.tableScope),
     ] as any),
   );
 }
@@ -2002,7 +2060,11 @@ function compileOperand(
 ): string | Knex.Raw {
   switch (operand.type) {
     case 'ref':
-      return mapReference(operand.reference, context.naming);
+      return mapReference(
+        operand.reference,
+        context.naming,
+        context.tableScope,
+      );
     case 'expression':
       return expressionNodeToRaw(context, operand.expression);
     case 'value':
@@ -2022,7 +2084,7 @@ function expressionNodeToRaw(
   switch (expression.type) {
     case 'ref':
       return context.client.ref(
-        mapReference(expression.reference, context.naming),
+        mapReference(expression.reference, context.naming, context.tableScope),
       );
     case 'val':
       return context.client.raw('?', [expression.value] as any);
@@ -2030,7 +2092,7 @@ function expressionNodeToRaw(
       return aggregateNodeToRaw(context, expression);
     case 'subquery':
       return context.client.raw('(?)', [
-        expression.query.buildQuery(context.client),
+        expression.query.buildQuery(context.client, context.tableScope),
       ] as any);
     case 'parens':
       return context.client.raw('(?)', [
@@ -2053,7 +2115,7 @@ function expressionNodeToSelectRaw(
   }
   if (expression.type === 'subquery') {
     return context.client.raw('(?) as ??', [
-      expression.query.buildQuery(context.client),
+      expression.query.buildQuery(context.client, context.tableScope),
       physicalAlias,
     ] as any);
   }
@@ -2080,7 +2142,9 @@ function aggregateNodeToRaw(
       throw new Error(`${expression.fn}() expects a column reference.`);
     }
     sql = `${fn}(${expression.distinct ? 'distinct ' : ''}??)`;
-    bindings.push(mapReference(operand.reference, context.naming));
+    bindings.push(
+      mapReference(operand.reference, context.naming, context.tableScope),
+    );
   }
 
   if (physicalAlias) {
@@ -2112,6 +2176,7 @@ function normalizeStringList(input: string | readonly string[]): string[] {
 function mapStringSelection(
   selection: string,
   naming: NamingStrategy,
+  tableScope: TableScope,
 ): {
   selection: unknown;
   result?: { physical: string; logical: string };
@@ -2123,13 +2188,17 @@ function mapStringSelection(
 
   if (selection.endsWith('.*')) {
     return {
-      selection: `${mapReference(selection.slice(0, -2), naming)}.*`,
+      selection: `${mapTableQualifier(
+        selection.slice(0, -2),
+        naming,
+        tableScope,
+      )}.*`,
       mapUnmatchedColumns: true,
     };
   }
 
   const parsed = parseAliasedIdentifier(selection);
-  const physicalReference = mapReference(parsed.identifier, naming);
+  const physicalReference = mapReference(parsed.identifier, naming, tableScope);
   const logicalAlias = parsed.alias ?? lastReferenceSegment(parsed.identifier);
   const physicalAlias = mapIdentifier(logicalAlias, naming);
 
@@ -2147,26 +2216,102 @@ function logicalResultKeyForSelection(selection: string): string {
   return parsed.alias ?? lastReferenceSegment(parsed.identifier);
 }
 
-function mapTableExpression(
+function resolveTableSource(
+  tableExpression: string,
+  naming: NamingStrategy,
+): ResolvedTableSource {
+  const parsed = parseAliasedIdentifier(tableExpression);
+  if (parsed.identifier.includes('.')) {
+    throw new Error(
+      'Query table sources do not support schema-qualified identifiers. Use connection.client() for physical schema access.',
+    );
+  }
+  const physicalTable = naming.collectionToTableName(parsed.identifier);
+  const physicalAlias = parsed.alias
+    ? mapIdentifier(parsed.alias, naming)
+    : undefined;
+
+  return {
+    sql: physicalAlias ? `${physicalTable} as ${physicalAlias}` : physicalTable,
+    logicalQualifier: parsed.alias ?? parsed.identifier,
+    sqlQualifier: physicalAlias ?? physicalTable,
+  };
+}
+
+function mapTableSourceExpression(
   tableExpression: string,
   naming: NamingStrategy,
 ): string {
-  const parsed = parseAliasedIdentifier(tableExpression);
-  const tableName = mapReference(parsed.identifier, naming);
-  if (!parsed.alias) {
-    return tableName;
-  }
-  return `${tableName} as ${mapIdentifier(parsed.alias, naming)}`;
+  return resolveTableSource(tableExpression, naming).sql;
 }
 
-function mapReference(reference: string, naming: NamingStrategy): string {
+function createTableScope(
+  tableExpressions: readonly string[],
+  naming: NamingStrategy,
+  parent?: TableScope,
+): TableScope {
+  const qualifiers = new Map<string, string>();
+
+  for (const expression of tableExpressions) {
+    const source = resolveTableSource(expression, naming);
+    qualifiers.set(source.logicalQualifier, source.sqlQualifier);
+    qualifiers.set(
+      mapIdentifier(source.logicalQualifier, naming),
+      source.sqlQualifier,
+    );
+  }
+
+  return { qualifiers, parent };
+}
+
+function resolveTableQualifier(
+  qualifier: string,
+  scope: TableScope | undefined,
+): string | undefined {
+  let current = scope;
+  while (current) {
+    const resolved = current.qualifiers.get(qualifier);
+    if (resolved !== undefined) {
+      return resolved;
+    }
+    current = current.parent;
+  }
+  return undefined;
+}
+
+function mapTableQualifier(
+  qualifier: string,
+  naming: NamingStrategy,
+  scope: TableScope,
+): string {
+  return (
+    resolveTableQualifier(qualifier, scope) ?? mapIdentifier(qualifier, naming)
+  );
+}
+
+function mapReference(
+  reference: string,
+  naming: NamingStrategy,
+  tableScope?: TableScope,
+): string {
   if (reference === '*') {
     return reference;
   }
 
-  return reference
-    .split('.')
-    .map((part) => (part === '*' ? part : mapIdentifier(part, naming)))
+  const parts = reference.split('.');
+  const qualifier =
+    parts.length > 1 ? resolveTableQualifier(parts[0], tableScope) : undefined;
+
+  return parts
+    .map((part, index) => {
+      if (part === '*') {
+        return part;
+      }
+      if (index === 0 && qualifier !== undefined) {
+        return qualifier;
+      }
+      return mapIdentifier(part, naming);
+    })
     .join('.');
 }
 

@@ -165,7 +165,7 @@ underscored 算法本身也属于公开兼容契约，需要用测试固定缩�
 orderNo 到底是 order_no，还是被映射成 order_number？
 ```
 
-因为 Collection 可以覆盖 naming，只知道 Connection 配置的底层 Query 无法正确推导所有表名。Repository 或其他 Collection-aware Query 必须通过 Collection Registry 取得 effective naming；直接写物理 SQL、直接访问物理 Schema 的 API，以及明确使用物理 identifier 的底层 Query 不应自动添加前缀。
+因为 Collection 可以覆盖 naming，只知道 Connection 配置的底层 Query 无法正确推导所有表名。`db.query()` 自动应用 Connection naming，表来源参数使用不带前缀的相对标识符；Repository 或其他 Collection-aware Query 必须通过 Collection Registry 取得 effective naming。直接写物理 SQL 和直接访问物理 Schema 的 API 则继续使用完整物理名称，不进行自动转换。
 
 ## 对重命名的影响
 

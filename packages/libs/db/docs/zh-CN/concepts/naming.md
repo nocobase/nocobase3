@@ -24,7 +24,7 @@ orderItems.createdAt -> order_items.created_at
 
 `underscored` 默认是 `true`。Connection 提供默认命名配置，Collection 可以局部覆盖。Collection DSL 不支持自定义 `tableName`、`columnName` 或 `namingStrategy`。
 
-完整的转换算法、Connection/Builder/Query 行为矩阵和 Migration 要求见 [underscored 命名规则](./underscored.md)。
+完整的转换算法、Connection/Builder/Query 行为矩阵和 Migration 要求见 [underscored 命名规则](./underscored.md)。表前缀的继承、Query 边界和迁移要求见 [tablePrefix 表前缀](./table-prefix.md)。
 
 ## tablePrefix
 
@@ -61,6 +61,8 @@ await db.builder().createCollection('auditLogs', (collection) => {
 
 对应 `archive_auditLogs.createdAt`。使用 `tablePrefix: ''` 可以显式清除 Connection 前缀。前缀只作用于表、普通 View 和物化 View，不作用于列。
 
+完整规则见 [tablePrefix 表前缀](./table-prefix.md)。
+
 ## 逻辑引用
 
 以下位置都使用逻辑名称：
@@ -77,10 +79,11 @@ await db.builder().createCollection('auditLogs', (collection) => {
 `db.builder()` 读取 Collection Metadata，可以解析每个 Collection 的 `tablePrefix`。`db.query()` 是底层数据库 Query 接口，不读取 Collection Metadata：
 
 - 它使用 Connection 的 `underscored` 选项归一化 identifier；
-- 它不会自动应用 Connection 或 Collection 的 `tablePrefix`；
-- 查询带前缀的物理表时，需要显式写出前缀。
+- 它自动应用 Connection 的 `tablePrefix`；
+- 它不会读取 Collection 的 naming 覆盖；
+- 表来源参数使用不带 Connection 前缀的相对标识符。
 
-例如物理表是 `tbl_order_items`，Query 应写 `tblOrderItems` 或 `tbl_order_items`，不能只写 `orderItems`。
+例如 Connection 推导的物理表是 `tbl_order_items`，Query 应写 `orderItems`，不能写 `tbl_order_items`。
 
 ## 重命名和兼容性
 

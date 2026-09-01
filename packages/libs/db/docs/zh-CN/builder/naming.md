@@ -15,7 +15,7 @@ normalized(name) = effectiveNaming.underscored ? snake_case(name) : name
 
 `effectiveNaming` 合并 Connection 和 Collection 的 `naming`。`underscored` 默认是 `true`，`tablePrefix` 默认是空字符串。
 
-具体转换算法、缩写边界以及 Query 的不同处理方式见 [underscored 命名规则](../concepts/underscored.md)。
+具体转换算法、缩写边界以及 Query 的不同处理方式见 [underscored 命名规则](../concepts/underscored.md)。表前缀的继承和迁移边界见 [tablePrefix 表前缀](../concepts/table-prefix.md)。
 
 ## Connection 默认前缀
 
@@ -114,7 +114,7 @@ Builder 会在 DDL 前检查所有 Metadata。Relation target/through、Foreign 
 
 ## 与 Query 的边界
 
-`db.query()` 使用 Connection 的 `underscored` 配置，但不读取 Collection Metadata，因此不知道 Collection 覆盖的 naming，也不会自动加表前缀。详见 [Query 命名归一化](../query/naming.md)。
+`db.query()` 使用 Connection 的 `underscored` 和 `tablePrefix`，但不读取 Collection Metadata，因此不知道 Collection 覆盖的 naming。详见 [Query 命名归一化](../query/naming.md)。
 
 ## Agent 注意事项
 

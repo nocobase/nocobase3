@@ -172,17 +172,78 @@ describe('DatabaseManager', () => {
       });
       await db
         .query()
-        .insertInto('tbl_orderItems')
+        .insertInto('orderItems')
         .values({ orderNo: 'SO-001' })
         .execute();
+
+      const client = await db.connection().client<any>();
+      expect(await client.schema.hasTable('tbl_orderItems')).toBe(true);
+      expect(await client.schema.hasColumn('tbl_orderItems', 'orderNo')).toBe(
+        true,
+      );
+
+      const compiled = db
+        .query()
+        .selectFrom('orderItems')
+        .select('orderNo')
+        .compile();
+      expect(compiled.sql).toContain('tbl_orderItems');
+      expect(compiled.sql).toContain('orderNo');
+      expect(compiled.sql).not.toContain('order_no');
 
       await expect(
         db
           .query()
-          .selectFrom('tbl_orderItems')
+          .selectFrom('orderItems')
           .select('orderNo')
           .executeTakeFirst(),
       ).resolves.toEqual({ orderNo: 'SO-001' });
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('uses each connection table prefix without adding a separator', async () => {
+    const db = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          naming: { tablePrefix: 'main' },
+        },
+        analytics: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          naming: { tablePrefix: 'analytics_' },
+        },
+      },
+    });
+
+    try {
+      await db.builder('main').createCollection('orderItems', (collection) => {
+        collection.increments('id');
+      });
+      await db
+        .builder('analytics')
+        .createCollection('orderItems', (collection) => {
+          collection.increments('id');
+        });
+
+      const main = await db.connection('main').client<any>();
+      const analytics = await db.connection('analytics').client<any>();
+      expect(await main.schema.hasTable('mainorder_items')).toBe(true);
+      expect(await analytics.schema.hasTable('analytics_order_items')).toBe(
+        true,
+      );
+
+      expect(
+        db.query('main').selectFrom('orderItems').select('id').compile().sql,
+      ).toContain('mainorder_items');
+      expect(
+        db.query('analytics').selectFrom('orderItems').select('id').compile()
+          .sql,
+      ).toContain('analytics_order_items');
     } finally {
       await db.destroy();
     }

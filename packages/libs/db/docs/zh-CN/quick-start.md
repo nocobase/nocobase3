@@ -212,7 +212,7 @@ const rows = await db
 
 这里显式 alias 写的是小写下划线，所以结果 key 也是 `item_id`、`order_no`、`created_at`、`order_status`，不会再自动变成驼峰。
 
-`db.query()` 不会读取 Collection Metadata 中的 `tablePrefix`。例如：
+`db.query()` 自动应用 Connection 的 `tablePrefix`，但不会读取 Collection Metadata 中的局部覆盖。例如：
 
 ```ts
 await db.builder().createCollection('orderItems', (collection) => {
@@ -221,18 +221,18 @@ await db.builder().createCollection('orderItems', (collection) => {
 });
 ```
 
-数据库层查询应写物理名或可被 naming 归一化的 query identifier：
+假设 Connection 的 `tablePrefix` 也是 `archive_`，数据库层查询应写不带前缀的 Connection 相对表标识符：
 
 ```ts
 await db
   .query()
-  .selectFrom('archiveOrderItems')
+  .selectFrom('orderItems')
   .select('orderNo')
   .where('orderNo', '=', 'SO-001')
   .execute();
 ```
 
-不要期望 `db.query()` 自动理解：
+如果 Connection 的前缀不是 `archive_`，不要期望 `db.query()` 自动从 Collection Metadata 理解局部覆盖：
 
 ```ts
 orderItems -> archive_order_items

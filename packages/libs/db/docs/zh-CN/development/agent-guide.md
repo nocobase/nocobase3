@@ -81,8 +81,9 @@ Agent 的推荐 DSL 取决于输出载体：
 - 不要生成 `orOn()`、`orOnRef()`；join 的 OR 条件使用 `join.on((eb) => eb.or([...]))`。
 - 不要生成 raw SQL。
 - 不要把 `db.query()` 当成 Collection Repository。
-- 当前 `db.query()` 是数据库层 query identifier 接口，使用 Connection 的 `underscored` 配置，但不会读取 Collection 级 naming 或 `tablePrefix`。
-- 查询带前缀的物理表时显式写出前缀；需要 Collection-aware 解析时等待或实现 Repository。
+- `db.query()` 是数据库层 query identifier 接口，使用 Connection 的 `underscored` 和 `tablePrefix`，但不会读取 Collection 级 naming 覆盖。
+- Query 表来源参数使用不带 Connection 前缀的相对标识符；完整物理表访问使用底层 connection client。
+- 需要 Collection-aware 解析时等待或实现 Repository。
 
 ## Repository Select、Filter 和 Sort 规则
 

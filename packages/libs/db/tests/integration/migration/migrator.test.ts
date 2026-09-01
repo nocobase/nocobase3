@@ -310,8 +310,6 @@ describeIntegrationDatabases('migration runner', (context) => {
     const directory = await createTempDirectory();
     const tableName = context.table('failedHistory');
     const lockTableName = context.table('failedLock');
-    const dataTableName = context.table('migrationRows');
-
     await context.builder.createCollection('migrationRows', (collection) => {
       collection.increments('id');
       collection.string('status');
@@ -327,7 +325,7 @@ describeIntegrationDatabases('migration runner', (context) => {
 
         async up({ query }) {
           await query
-            .insertInto('${dataTableName}')
+            .insertInto('migrationRows')
             .values({ status: 'created' })
             .execute();
           throw new Error('migration failed on purpose');
@@ -335,7 +333,7 @@ describeIntegrationDatabases('migration runner', (context) => {
 
         async down({ query }) {
           await query
-            .deleteFrom('${dataTableName}')
+            .deleteFrom('migrationRows')
             .where('status', '=', 'created')
             .execute();
         },
@@ -357,7 +355,7 @@ describeIntegrationDatabases('migration runner', (context) => {
     await expect(
       context.database
         .query()
-        .selectFrom(dataTableName)
+        .selectFrom('migrationRows')
         .select('status')
         .execute(),
     ).resolves.toEqual([]);

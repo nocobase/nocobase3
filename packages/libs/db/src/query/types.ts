@@ -126,25 +126,26 @@ export type JoinCallback = (join: JoinBuilder) => JoinBuilder;
 export interface QueryAdapter {
   /**
    * Database-layer query builder.
-   * It accepts table/column query identifiers and does not read Collection metadata,
-   * so Collection-level tablePrefix overrides are not applied.
+   * Table sources are connection-relative identifiers and use Connection naming.
+   * It does not read Collection metadata, so Collection-level naming overrides
+   * are not applied.
    */
   selectFrom<TRecord extends Row = Row>(
     table: string,
   ): SelectQuery<TRecord, Row>;
   /**
    * Database-layer insert builder.
-   * It accepts table/column query identifiers and does not read Collection metadata.
+   * The table is a connection-relative identifier and uses Connection naming.
    */
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
   /**
    * Database-layer update builder.
-   * It accepts table/column query identifiers and does not read Collection metadata.
+   * The table is a connection-relative identifier and uses Connection naming.
    */
   updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
   /**
    * Database-layer delete builder.
-   * It accepts table/column query identifiers and does not read Collection metadata.
+   * The table is a connection-relative identifier and uses Connection naming.
    */
   deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
 }

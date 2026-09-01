@@ -69,7 +69,9 @@ const rows = await db
 
 ## 层级边界
 
-`db.query()` 不读取 Collection Metadata。它使用 Connection 的 `underscored` 配置转换 identifier，但不会理解 Collection 级 naming 覆盖，也不会自动应用 `tablePrefix`。
+`db.query()` 不读取 Collection Metadata。它使用 Connection 的 `underscored` 和 `tablePrefix` 转换 identifier，但不会理解 Collection 级 naming 覆盖。
+
+完整边界见 [tablePrefix 表前缀](../concepts/table-prefix.md)。
 
 ```ts
 await builder.createCollection('orders', (collection) => {
@@ -77,14 +79,10 @@ await builder.createCollection('orders', (collection) => {
   collection.string('orderNo');
 });
 
-await db
-  .query()
-  .selectFrom('appOrders')
-  .where('orderNo', '=', 'SO-001')
-  .execute();
+await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 ```
 
-上面的表和列会分别归一化为 `app_orders` 和 `order_no`。如果只写 `orders`，Query 不会从 Collection Metadata 得知 `app_` 前缀。
+如果 Connection 的 `tablePrefix` 是 `app_`，上面的表和列会分别归一化为 `app_orders` 和 `order_no`。示例中的 Collection 局部前缀恰好与 Connection 一致；如果它们不同，Query 仍只使用 Connection 配置，无法从 Collection Metadata 得知局部覆盖。
 
 Repository 规划使用 Filter Builder 表达应用层条件。`db.repository()` 当前尚未实现，不要把 Repository 规划示例复制到运行时代码；详见 [Repository 概览](../repository/overview.md) 和 [Filter Builder](../repository/filter-builder.md)。
 
@@ -107,4 +105,5 @@ Repository 规划使用 Filter Builder 表达应用层条件。`db.repository()`
 - 不要生成 `orWhere()`、`whereIn()`、`whereNull()` 等 Knex 风格快捷方法。
 - 不要生成 raw SQL。
 - 不要把 `QueryAdapter` 当 Repository 使用。
+- Query 表来源参数使用 Connection 相对标识符，不写 Connection 前缀。
 - 需要解析 Collection 级 `tablePrefix` 时，不要使用 `db.query()` 假装 Repository。

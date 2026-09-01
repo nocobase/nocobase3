@@ -60,7 +60,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       () => this.getClient(),
       new DefaultNamingStrategy({
         underscored: this.config.naming?.underscored,
-        tablePrefix: '',
+        tablePrefix: this.config.naming?.tablePrefix,
       }),
     );
     this.builder = new CollectionBuilder({
