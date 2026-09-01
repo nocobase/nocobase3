@@ -26,11 +26,7 @@ export function createAppClient(options: AppClientOptions = {}): AppClient {
       const response = await request(`${baseURL}/${path.replace(/^\/+/, '')}`, {
         ...init,
         credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-          ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-          ...init.headers,
-        },
+        headers: createRequestHeaders(init),
       });
       const text = await response.text();
       const payload = text ? parsePayload(text) : undefined;
@@ -44,6 +40,25 @@ export function createAppClient(options: AppClientOptions = {}): AppClient {
       return payload as T;
     },
   };
+}
+
+function createRequestHeaders(init: RequestInit): Headers {
+  const headers = new Headers(init.headers);
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+  if (
+    init.body != null &&
+    !isFormData(init.body) &&
+    !headers.has('Content-Type')
+  ) {
+    headers.set('Content-Type', 'application/json');
+  }
+  return headers;
+}
+
+function isFormData(body: BodyInit): body is FormData {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
 }
 
 /**
@@ -97,8 +112,22 @@ function parsePayload(value: string): unknown {
 }
 
 function readErrorMessage(payload: unknown): string {
-  if (payload && typeof payload === 'object' && 'message' in payload) {
-    return String(payload.message);
+  if (typeof payload === 'string' && payload.trim()) {
+    return payload;
+  }
+  if (payload && typeof payload === 'object') {
+    const detail = payload as { message?: unknown; error?: unknown };
+    const message = detail.message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+    const nested = detail.error;
+    if (nested && typeof nested === 'object') {
+      const nestedMessage = (nested as { message?: unknown }).message;
+      if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
+        return nestedMessage;
+      }
+    }
   }
   return 'NocoBase request failed.';
 }

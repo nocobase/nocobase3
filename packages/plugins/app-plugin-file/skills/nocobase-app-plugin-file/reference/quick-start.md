@@ -88,7 +88,7 @@ const authorizePurchaseOrderFile: FileRouteAuthorizer = async (
   file,
 ) => {
   const orderId = Number(context.req.param('orderId'));
-  await authorizePurchaseOrder(context, { orderId, action, file });
+  return authorizePurchaseOrder(context, { orderId, action, file });
 };
 
 export const purchaseOrderAttachmentRoutes: AppApiRouteContribution<Application> =
@@ -171,15 +171,23 @@ browser.
 In the owning application page or form, import the public Client API:
 
 ```tsx
+import { appApiClientToken, useService } from '@nocobase/app-client';
 import {
   createFilesClient,
   FileUploadField,
   type FileRecord,
 } from '@nocobase/app-plugin-file/client';
+import { useMemo, useState } from 'react';
 
-const client = createFilesClient({
-  endpoint: `/api/purchase-orders/${orderId}/attachments`,
-});
+const appClient = useService(appApiClientToken);
+const client = useMemo(
+  () =>
+    createFilesClient({
+      appClient,
+      endpoint: `purchase-orders/${encodeURIComponent(orderId)}/attachments`,
+    }),
+  [appClient, orderId],
+);
 
 const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
 
@@ -194,6 +202,11 @@ const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
   removeOnDelete
 />;
 ```
+
+`endpoint` is relative to the v3 Application's `/api` root. Do not include
+`/api`, the public base path, an origin, a query string, or a fragment. The
+injected `AppClient` owns Cookie authentication, deployment base paths, request
+headers, and multipart transport.
 
 Persist the parent record before constructing its scoped endpoint or enabling
 uploads. Initialize edit and read views with `await client.list()`. Treat

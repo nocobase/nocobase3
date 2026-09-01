@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
+import type { AppClient } from '@nocobase/app-client';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -37,8 +38,10 @@ describe('file plugin public contracts', () => {
   it('exposes stable server and client entry points', () => {
     const routeFactory: (options: CreateFileRouteOptions) => unknown =
       createFileRoute;
-    const clientFactory: (options: { endpoint: string }) => FilesClient =
-      createFilesClient;
+    const clientFactory: (options: {
+      appClient: AppClient;
+      endpoint: string;
+    }) => FilesClient = createFilesClient;
     const previewField = FilePreviewField;
     const storeImport: FileStore | undefined = undefined;
     const actionsAreFrozen: FrozenFileRouteActions = true;
@@ -77,6 +80,24 @@ describe('file plugin public contracts', () => {
     expect(clientApi).not.toHaveProperty('FILE_ROUTE_IDS');
     expect(clientApi).not.toHaveProperty('FILE_DEMO_AVATAR_MIME_TYPES');
     expect(clientApi).not.toHaveProperty('FILE_DEMO_ORDER_MIME_TYPES');
+  });
+
+  it('has no manifest or TypeScript source dependency on the Portal SDK', () => {
+    const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      readonly dependencies?: Readonly<Record<string, string>>;
+      readonly devDependencies?: Readonly<Record<string, string>>;
+      readonly peerDependencies?: Readonly<Record<string, string>>;
+    };
+    const tsconfig = readFileSync('tsconfig.json', 'utf8');
+
+    for (const dependencies of [
+      packageJson.dependencies,
+      packageJson.devDependencies,
+      packageJson.peerDependencies,
+    ]) {
+      expect(dependencies).not.toHaveProperty('@nocobase/app-portal-sdk');
+    }
+    expect(tsconfig).not.toContain('app-portal-sdk');
   });
 
   it('keeps application assembly APIs internal', () => {

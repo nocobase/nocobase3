@@ -100,7 +100,11 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     const records = await store.list(context);
     return context.json({
       data: records.map((record) =>
-        toClientRecord(record, rootContentPath(context, record.id)),
+        toClientRecord(
+          record,
+          rootContentPath(context, record.id),
+          options.publicBasePath,
+        ),
       ),
     });
   });
@@ -128,7 +132,13 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
           );
 
     return context.json(
-      { data: toClientRecord(record, rootContentPath(context, record.id)) },
+      {
+        data: toClientRecord(
+          record,
+          rootContentPath(context, record.id),
+          options.publicBasePath,
+        ),
+      },
       201,
     );
   });
@@ -139,7 +149,11 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     if (denied) return denied;
 
     return context.json({
-      data: toClientRecord(record, siblingContentPath(context, record.id)),
+      data: toClientRecord(
+        record,
+        siblingContentPath(context, record.id),
+        options.publicBasePath,
+      ),
     });
   });
 
@@ -151,7 +165,10 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     const contentPath = tokenContentPath(context, record.id);
     let access: FileAccessUrl;
     if (record.public) {
-      access = { url: contentPath, expiresAt: null };
+      access = {
+        url: resolvePublicContentPath(contentPath, options.publicBasePath),
+        expiresAt: null,
+      };
     } else {
       access = issueFileAccessUrl({
         tokenSecret: options.tokenSecret,
@@ -599,7 +616,8 @@ async function parseExpiresIn(context: Context): Promise<number | undefined> {
 
 function toClientRecord(
   record: FileRecord,
-  contentUrl: string,
+  contentPath: string,
+  publicBasePath: string,
 ): ClientFileRecord {
   return {
     id: record.id,
@@ -609,8 +627,21 @@ function toClientRecord(
     public: record.public,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
-    contentUrl,
+    contentUrl: resolvePublicContentPath(contentPath, publicBasePath),
   };
+}
+
+function resolvePublicContentPath(
+  contentPath: string,
+  publicBasePath: string,
+): string {
+  const normalized = publicBasePath.trim().replace(/^\/+|\/+$/gu, '');
+  if (!normalized) return contentPath;
+  const basePath = `/${normalized}`;
+  if (contentPath === basePath || contentPath.startsWith(`${basePath}/`)) {
+    return contentPath;
+  }
+  return joinPath(basePath, contentPath);
 }
 
 function rootContentPath(context: Context, id: string): string {
