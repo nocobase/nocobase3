@@ -189,6 +189,72 @@ describe('CollectionMetadataService', () => {
     });
   });
 
+  it('replaces complete supplemental documents without persisting physical facts', async () => {
+    const fixture = createService();
+    const created = await fixture.service.replaceDocument({
+      version: 1,
+      name: 'orders',
+      title: 'Orders',
+      fields: { amount: { title: 'Amount' } },
+      relations: {
+        customer: {
+          type: 'belongsTo',
+          target: 'customers',
+          foreignKey: 'customerId',
+        },
+      },
+    });
+
+    expect(created?.revision).toBe(1);
+    expect(fixture.validator.validate).toHaveBeenCalledWith(
+      created?.document,
+      expect.objectContaining({ operation: 'replaceDocument' }),
+    );
+    expect(fixture.invalidator.invalidate).toHaveBeenCalledWith({
+      collections: ['orders', 'customers'],
+      namingIndex: false,
+    });
+
+    const unchanged = await fixture.service.replaceDocument(created!.document);
+    expect(unchanged?.revision).toBe(1);
+    expect(fixture.validator.validate).toHaveBeenCalledTimes(1);
+
+    await fixture.service.removeDocument('orders');
+    await expect(fixture.store.get('orders')).resolves.toBeUndefined();
+    expect(fixture.invalidator.invalidate).toHaveBeenLastCalledWith({
+      collections: ['orders', 'customers'],
+      namingIndex: false,
+    });
+  });
+
+  it('removes both scalar and relation metadata for a dropped Field', async () => {
+    const fixture = createService();
+    await fixture.store.put(
+      {
+        version: 1,
+        name: 'orders',
+        title: 'Orders',
+        fields: { legacy: { title: 'Legacy' } },
+        relations: {
+          customer: { type: 'belongsTo', target: 'customers' },
+        },
+      },
+      { expectedRevision: null },
+    );
+
+    await fixture.service.removeField('orders', 'legacy');
+    const updated = await fixture.service.removeField('orders', 'customer');
+    expect(updated?.document).toEqual({
+      version: 1,
+      name: 'orders',
+      title: 'Orders',
+    });
+    expect(fixture.invalidator.invalidate).toHaveBeenLastCalledWith({
+      collections: ['orders', 'customers'],
+      namingIndex: false,
+    });
+  });
+
   it('does not write or invalidate when document validation fails', async () => {
     const fixture = createService();
     fixture.validator.validate.mockRejectedValueOnce(new Error('Schema drift'));

@@ -5,8 +5,8 @@ description: 说明主数据库和外部数据库的 Schema 如何与补充 Meta
 
 # Collection 解析生命周期
 
-> 本文描述目标设计。`SchemaInspector`、`CollectionResolver`、`CollectionRegistry` 和
-> `connection.collections` 尚未完全实现。
+> `SchemaInspector`、`CollectionResolver`、`CollectionRegistry`、`connection.collections` 以及
+> 配置 V1 文档 Store 时的 Builder 集成已经实现。旧完整定义 Store 兼容路径仍待最终移除。
 
 完整 Collection 由物理事实和补充 Metadata 共同派生：
 
@@ -59,6 +59,11 @@ await builder.createCollection('orders', (collection) => {
 
 如果 Collection 没有补充 Metadata，并且逻辑名称可以完全推导，Store 无需仅为了重复表示它的存在而保存
 空文档。
+
+Builder 在编译 alter/drop 等操作时通过 `connection.collections` 读取 Inspector 与 Metadata 合并后的完整
+定义。DDL 成功后，它按受影响的逻辑 Collection 精确失效 Registry。字段 title/description 和 relation
+进入补充文档；type、nullable、default、index 和 constraint 等物理事实不会复制进 Store。删除物理字段时，
+同名 field/relation Metadata 也会清除。
 
 ## 外部数据库
 
@@ -160,7 +165,8 @@ Store 层的 `delete(old) + put(new)` 不是原子 Collection rename。完整操
 4. 实现 Metadata Store 新文档接口、In-memory Store 和 Naming Index。
 5. 实现 `CollectionRegistry` 与 `connection.collections`。
 6. 实现 `CollectionMetadataService` 和跨 Collection relation 图校验。
-7. 接入 Builder、Migration、transaction 和 Metadata 写入后的自动 Registry 失效。
+7. 接入 Builder、Migration、transaction 和 Metadata 写入后的自动 Registry 失效（Builder 和 Metadata
+   写入已完成；Migration/transaction 提交传播仍待后续批次）。
 8. 实现 Database Store、Module Store、Schema Snapshot 和 Agent Snapshot。
 9. 所有消费端迁移完成后移除旧的完整 `CollectionDefinition` Store API。
 

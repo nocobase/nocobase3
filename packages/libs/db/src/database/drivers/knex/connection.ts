@@ -7,6 +7,7 @@ import {
 } from '../../../collection/registry/index.js';
 import {
   CollectionMetadataService,
+  LegacyCollectionMetadataDocumentStore,
   type CollectionMetadataDocumentStore,
   type CollectionMetadataStore,
 } from '../../../metadata/index.js';
@@ -95,11 +96,6 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         tablePrefix: this.config.naming?.tablePrefix,
       }),
     );
-    this.builder = new CollectionBuilder({
-      schemaAdapter: this.schema,
-      metadataStore,
-      naming: this.config.naming,
-    });
     const collections = new CollectionRegistry({
       inspector: this.schemaInspector,
       metadataStore: collectionMetadataStore,
@@ -117,6 +113,17 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       invalidator: collections,
       onInvalidationError: (error) =>
         this.reportCollectionMetadataInvalidationError(error),
+    });
+    this.builder = new CollectionBuilder({
+      schemaAdapter: this.schema,
+      metadataStore,
+      collections,
+      collectionMetadata:
+        collectionMetadataStore instanceof LegacyCollectionMetadataDocumentStore
+          ? undefined
+          : this.collectionMetadata,
+      schemaInvalidator: collections,
+      naming: this.config.naming,
     });
   }
 

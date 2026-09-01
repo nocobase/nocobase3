@@ -5,8 +5,8 @@ description: 说明解析后 Collection 的缓存、并发加载、失效规则�
 
 # Collection Registry 设计
 
-> `DatabaseConnection.collections`、Naming Index、Registry 和跨 Collection relation 图校验已经提供。
-> Builder/Migration 主动失效和持久化 Metadata 后端在后续批次完成。
+> `DatabaseConnection.collections`、Naming Index、Registry、跨 Collection relation 图校验以及 Builder
+> 主动失效已经提供。Migration batch 和 transaction commit 向外部 Registry 传播失效在后续批次完成。
 
 `CollectionRegistry` 是每个 `DatabaseConnection` 拥有的解析结果缓存。它协调 Inspector、Metadata Store
 和 Resolver，但不是新的事实来源。
@@ -129,9 +129,9 @@ Database Connection 自动使外部 Registry 失效，回滚时丢弃记录。�
 ## 当前实现边界
 
 当前提供惰性 `get()`、`getResolution()`、分页 `list()`、显式 `scan()`、并发去重、手动
-`invalidate()`/`refresh()` 和 `validateRelations()`。Metadata Service 写成功后会主动精确失效；Builder 和
-Migration 的主动失效钩子在迁移旧 Store API 时接入。这个阶段通过 Builder 修改 Schema 后，调用方仍需显式执行
-`connection.collections.invalidate()`。
+`invalidate()`/`refresh()` 和 `validateRelations()`。Metadata Service 写成功后会主动精确失效；Builder
+执行 create/alter/field/index/constraint/view 后也会失效受影响 Collection，drop/rename 使用全量失效以同步
+Naming Index。Migration batch 和 transaction commit 的外层 Registry 传播仍待接入。
 
 ## 相关文档
 

@@ -1,6 +1,7 @@
 import type { NamingOptions } from '../collection/types.js';
 import { CollectionMetadataConflictError } from './document-store-errors.js';
 import type { CollectionMetadataDocumentStore } from './document-store.js';
+import type { CollectionMetadataStoreCapabilities } from './document-store.js';
 import type {
   CollectionMetadataDocument,
   RelationMetadata,
@@ -28,7 +29,12 @@ export interface UpdateCollectionMetadataOptions {
 export interface CollectionMetadataValidationContext {
   readonly previous?: CollectionMetadataDocument;
   readonly operation:
-    'updateCollection' | 'updateField' | 'setRelation' | 'removeRelation';
+    | 'updateCollection'
+    | 'updateField'
+    | 'setRelation'
+    | 'removeRelation'
+    | 'replaceDocument'
+    | 'removeField';
 }
 
 export interface CollectionMetadataDocumentValidator {
@@ -60,9 +66,57 @@ export class CollectionMetadataService {
 
   constructor(private readonly options: CollectionMetadataServiceOptions) {}
 
+  get capabilities(): CollectionMetadataStoreCapabilities {
+    return this.options.store.capabilities;
+  }
+
   async get(name: string): Promise<StoredCollectionMetadata | undefined> {
     await this.initialize();
     return this.options.store.get(name);
+  }
+
+  async replaceDocument(
+    input: CollectionMetadataDocument,
+    options: UpdateCollectionMetadataOptions = {},
+  ): Promise<StoredCollectionMetadata | undefined> {
+    const document = validateCollectionMetadataDocument(input);
+    const current = await this.readCurrent(document.name, options);
+    const previous = current.stored?.document;
+    if (
+      sameDocument(document, previous ?? { version: 1, name: document.name })
+    ) {
+      return current.stored;
+    }
+    await this.options.validator.validate(document, {
+      previous,
+      operation: 'replaceDocument',
+    });
+    let stored: StoredCollectionMetadata | undefined;
+    if (isEmptyDocument(document)) {
+      if (current.stored) {
+        await this.options.store.delete(document.name, {
+          expectedRevision: current.stored.revision,
+        });
+      }
+    } else {
+      stored = await this.options.store.put(document, {
+        expectedRevision: current.stored?.revision ?? null,
+      });
+    }
+    this.invalidate(documentInvalidation(document.name, previous, document));
+    return stored;
+  }
+
+  async removeDocument(
+    name: string,
+    options: UpdateCollectionMetadataOptions = {},
+  ): Promise<void> {
+    const current = await this.readCurrent(name, options);
+    if (!current.stored) return;
+    await this.options.store.delete(name, {
+      expectedRevision: current.stored.revision,
+    });
+    this.invalidate(documentInvalidation(name, current.stored.document));
   }
 
   async updateCollection(
@@ -173,6 +227,49 @@ export class CollectionMetadataService {
         collections: unique([
           collection,
           ...(existing ? relationCollections(existing) : []),
+        ]),
+        namingIndex: false,
+      },
+    );
+  }
+
+  async removeField(
+    collection: string,
+    field: string,
+    options: UpdateCollectionMetadataOptions = {},
+  ): Promise<StoredCollectionMetadata | undefined> {
+    validateName(field, 'field');
+    const current = await this.readCurrent(collection, options);
+    const hasField = Boolean(
+      current.stored?.document.fields &&
+      Object.hasOwn(current.stored.document.fields, field),
+    );
+    const hasRelation = Boolean(
+      current.stored?.document.relations &&
+      Object.hasOwn(current.stored.document.relations, field),
+    );
+    if (!hasField && !hasRelation) return current.stored;
+    const previousRelation = getRecordEntry(
+      current.stored?.document.relations,
+      field,
+    );
+    return this.mutateCurrent(
+      collection,
+      'removeField',
+      current,
+      (document) => {
+        const fields = cloneRecord(document.fields);
+        const relations = cloneRecord(document.relations);
+        delete fields[field];
+        delete relations[field];
+        document.fields = Object.keys(fields).length > 0 ? fields : undefined;
+        document.relations =
+          Object.keys(relations).length > 0 ? relations : undefined;
+      },
+      {
+        collections: unique([
+          collection,
+          ...(previousRelation ? relationCollections(previousRelation) : []),
         ]),
         namingIndex: false,
       },
@@ -396,6 +493,25 @@ function relationCollections(relation: RelationMetadata): string[] {
       (value): value is string => value !== undefined,
     ),
   );
+}
+
+function documentInvalidation(
+  name: string,
+  previous?: CollectionMetadataDocument,
+  next?: CollectionMetadataDocument,
+): CollectionMetadataInvalidation {
+  const relations = [
+    ...Object.values(previous?.relations ?? {}),
+    ...Object.values(next?.relations ?? {}),
+  ];
+  return {
+    collections: unique([
+      name,
+      ...relations.flatMap((relation) => relationCollections(relation)),
+    ]),
+    namingIndex:
+      JSON.stringify(previous?.naming) !== JSON.stringify(next?.naming),
+  };
 }
 
 function unique(values: readonly string[]): string[] {

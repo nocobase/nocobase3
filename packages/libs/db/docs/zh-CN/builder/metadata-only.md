@@ -41,7 +41,7 @@ console.log(result.schemaOperations); // []
 ## 适用场景
 
 - 已有数据库表不需要改变。
-- 只需要补充 UI 标题、描述、组件信息。
+- 只需要补充业务标题或描述。
 - Agent 需要补充字段解释。
 - Collection Generator 从数据库元数据生成基础 Collection 后，需要人工或 Agent 补充应用层元信息。
 

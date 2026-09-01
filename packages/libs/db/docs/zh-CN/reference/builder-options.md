@@ -22,10 +22,16 @@ interface BuilderExecOptions {
 ```ts
 interface CollectionBuilderOptions {
   schemaAdapter?: SchemaAdapter;
-  metadataStore?: CollectionMetadataStore;
+  collections?: Pick<ConnectionCollections, 'get' | 'scan'>;
+  collectionMetadata?: CollectionMetadataService;
+  schemaInvalidator?: CollectionMetadataInvalidator;
   naming?: NamingOptions;
 }
 ```
+
+完整应用通过 `DatabaseConnection` 自动注入这些协作者：Builder 从 `collections` 读取物理 Schema 与补充
+Metadata 的解析结果，通过 `collectionMetadata` 只写补充文档，并通过 `schemaInvalidator` 清理解析缓存。
+迁移期仍接受已弃用的旧 `metadataStore` 选项，仅供旧完整定义 Store 兼容；新代码不应再依赖它。
 
 `naming` 用于默认逻辑名到物理名的映射：
 
@@ -99,7 +105,8 @@ await builder.createCollection('orders', definition, {
 });
 ```
 
-默认会同步 Collection metadata。`syncMetadata: false` 会跳过 metadata 保存或更新。
+默认会同步补充 Collection Metadata。`syncMetadata: false` 会跳过文档保存或更新，但 DDL 成功后仍然使
+Registry 中的旧物理结构失效。物理 field、index 和 constraint 不会因为默认同步而复制进 Metadata Store。
 
 ### strict
 

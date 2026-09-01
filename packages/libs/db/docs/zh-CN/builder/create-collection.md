@@ -79,7 +79,9 @@ await builder.createCollection('auditLogs', (collection) => {
 
 ## 与 metadata 的关系
 
-默认情况下，`createCollection` 会同步 Collection 元数据。可以通过 `syncMetadata: false` 禁止：
+默认情况下，`createCollection` 只同步补充 Metadata（Collection/Field 的 title、description、naming 和
+relations）。物理 type、nullable、default、index 和 constraint 以数据库为准，不写入 Store。可以通过
+`syncMetadata: false` 禁止补充文档同步：
 
 ```ts
 await builder.createCollection('orders', definition, {
@@ -93,7 +95,7 @@ await builder.createCollection('orders', definition, {
 
 ## Metadata 影响
 
-默认会保存 Collection 元数据，除非 `syncMetadata: false`。
+默认只保存可提取的补充 Metadata；没有补充信息时不创建空文档。`syncMetadata: false` 时不保存。
 
 ## Agent 注意事项
 

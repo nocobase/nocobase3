@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CollectionRenameAtomicityError,
   CollectionNamingCompatibilityError,
   createDatabaseManager,
   defineDatabase,
   InMemoryCollectionMetadataDocumentStore,
   InMemoryCollectionMetadataStore,
+  ModuleCollectionMetadataDocumentStore,
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
   SchemaManagementNotAllowedError,
@@ -62,8 +64,19 @@ describe('DatabaseManager', () => {
     try {
       const connection = db.connection();
       await connection.builder.createCollection('orders', (collection) => {
+        collection.title('Orders');
         collection.increments('id');
-        collection.decimal('amount');
+        collection.decimal('amount').title('Amount before tax');
+      });
+
+      await expect(collectionMetadataStore.get('orders')).resolves.toEqual({
+        document: {
+          version: 1,
+          name: 'orders',
+          title: 'Orders',
+          fields: { amount: { title: 'Amount before tax' } },
+        },
+        revision: 1,
       });
 
       const physical = await connection.collections.get('orders');
@@ -79,7 +92,7 @@ describe('DatabaseManager', () => {
         'amount',
         { title: 'Amount' },
       );
-      expect(stored?.revision).toBe(1);
+      expect(stored?.revision).toBe(2);
       await expect(connection.collections.get('orders')).resolves.toMatchObject(
         {
           fields: expect.arrayContaining([
@@ -92,6 +105,36 @@ describe('DatabaseManager', () => {
           expect.objectContaining({ name: 'orders', tableName: 'orders' }),
         ]),
       });
+
+      await connection.builder.addField('orders', {
+        name: 'status',
+        type: 'string',
+        title: 'Status',
+      });
+      await expect(connection.collections.get('orders')).resolves.toMatchObject(
+        {
+          fields: expect.arrayContaining([
+            expect.objectContaining({ name: 'status', title: 'Status' }),
+          ]),
+        },
+      );
+      const afterAdd = await collectionMetadataStore.get('orders');
+      expect(afterAdd?.document).toEqual({
+        version: 1,
+        name: 'orders',
+        title: 'Orders',
+        fields: {
+          amount: { title: 'Amount' },
+          status: { title: 'Status' },
+        },
+      });
+      expect(afterAdd?.document).not.toHaveProperty('indexes');
+      expect(afterAdd?.document.fields?.status).not.toHaveProperty('type');
+
+      await connection.builder.dropField('orders', 'status');
+      expect(
+        (await collectionMetadataStore.get('orders'))?.document.fields,
+      ).not.toHaveProperty('status');
     } finally {
       await db.destroy();
     }
@@ -413,6 +456,103 @@ describe('DatabaseManager', () => {
       await expect(
         db.query('sqlite').selectFrom('orders').select('status').execute(),
       ).resolves.toEqual([{ status: 'paid' }]);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('rejects a non-atomic rename before DDL when supplemental Metadata exists', async () => {
+    const collectionMetadataStore =
+      new InMemoryCollectionMetadataDocumentStore();
+    const db = createDatabaseManager({
+      collectionMetadataStore,
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await connection.builder.createCollection('orders', (collection) => {
+        collection.title('Orders');
+        collection.increments('id');
+      });
+
+      await expect(
+        connection.builder.renameCollection('orders', 'archivedOrders'),
+      ).rejects.toBeInstanceOf(CollectionRenameAtomicityError);
+      const client = await connection.client<any>();
+      expect(await client.schema.hasTable('orders')).toBe(true);
+      expect(await client.schema.hasTable('archived_orders')).toBe(false);
+      await expect(
+        collectionMetadataStore.get('orders'),
+      ).resolves.toBeDefined();
+      await expect(
+        collectionMetadataStore.get('archivedOrders'),
+      ).resolves.toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('renames a deterministically named Collection when no Metadata document exists', async () => {
+    const collectionMetadataStore =
+      new InMemoryCollectionMetadataDocumentStore();
+    const db = createDatabaseManager({
+      collectionMetadataStore,
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await connection.builder.createCollection('orders', (collection) => {
+        collection.increments('id');
+      });
+      await expect(
+        collectionMetadataStore.get('orders'),
+      ).resolves.toBeUndefined();
+
+      await connection.builder.renameCollection('orders', 'archivedOrders');
+      const client = await connection.client<any>();
+      expect(await client.schema.hasTable('orders')).toBe(false);
+      expect(await client.schema.hasTable('archived_orders')).toBe(true);
+      await expect(
+        connection.collections.get('archivedOrders'),
+      ).resolves.toMatchObject({ name: 'archivedOrders' });
+      await expect(
+        collectionMetadataStore.get('archivedOrders'),
+      ).resolves.toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('rejects supplemental writes to a read-only Store before DDL', async () => {
+    const db = createDatabaseManager({
+      collectionMetadataStore: new ModuleCollectionMetadataDocumentStore({
+        documents: [],
+        source: 'src/collection-metadata.ts',
+      }),
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await expect(
+        connection.builder.createCollection('orders', (collection) => {
+          collection.title('Orders');
+          collection.increments('id');
+        }),
+      ).rejects.toMatchObject({
+        code: 'METADATA_STORE_READ_ONLY',
+        operation: 'put',
+      });
+      const client = await connection.client<any>();
+      expect(await client.schema.hasTable('orders')).toBe(false);
     } finally {
       await db.destroy();
     }

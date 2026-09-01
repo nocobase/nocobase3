@@ -5,8 +5,9 @@ description: 说明补充 Metadata 的读取、更新、并发控制、校验和
 
 # Collection Metadata Service 设计
 
-> `CollectionMetadataService` 领域实现已经提供；当前尚未挂到 `DatabaseConnection.collectionMetadata`，
-> Builder 仍在兼容使用旧 Store。Connection 和 Registry 集成在后续批次完成。
+> `CollectionMetadataService` 已挂到 `DatabaseConnection.collectionMetadata`，Metadata 写入会主动失效
+> Registry。配置了 V1 文档 Store 的 Connection Builder 已接入本 Service；旧 Store 兼容路径将在最终
+> 清理批次移除。
 
 `CollectionMetadataService` 是 Metadata Store 之上的领域层。Store 只提供按 revision 读写文档的
 持久化能力；Service 负责 patch 语义、Schema 校验、relation 校验和 Registry 失效。
@@ -133,6 +134,10 @@ Service 通过 `CollectionMetadataInvalidator` 接收定向和全量失效能力
 完整 rename 由 `CollectionBuilder.renameCollection()` 统一协调，并通过 Service 的内部能力更新 Metadata。
 只有物理 Schema 和 Metadata 可以在同一原子事务中更新时才允许执行；否则在 DDL 前拒绝。
 
+当前单文档 Store 不提供跨名称原子 rename。只要原名称存在补充 Metadata，Builder 就在 DDL 前抛出
+`CollectionRenameAtomicityError`，稳定 code 为 `COLLECTION_RENAME_ATOMICITY_REQUIRED`。没有补充文档、
+可以完全按 Connection 命名规则推导的纯物理 rename 仍可执行。
+
 ## 与 Migration 的关系
 
 Migration 仍然是主数据库 Schema 变更的权威记录。Builder 执行 Migration 时，在同一事务内使用
@@ -140,7 +145,7 @@ Service 的内部写入能力保存补充 Metadata。Migration 不得导入或�
 
 ## 兼容当前 API
 
-当前 Builder 中的 `updateCollectionMetadata()` 和 `updateFieldMetadata()` 在迁移期可以委托给 Service。
+当前 Builder 中的 `updateCollectionMetadata()` 和 `updateFieldMetadata()` 已在 V1 路径委托给 Service。
 消费端迁移到 `connection.collectionMetadata` 后，Builder 只保留 Schema 职责，再移除这两个 Metadata-only
 快捷方法。
 
