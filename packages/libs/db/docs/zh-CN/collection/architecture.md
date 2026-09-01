@@ -7,6 +7,9 @@ description: 说明主数据库与外部数据库如何结合物理 Schema 和�
 
 > 本文是第一版架构设计。文中的 `connection.collections`、Database Metadata Store、File Metadata Store、Schema Inspector 和 Collection Resolver 属于目标设计，当前尚未全部实现。
 
+Metadata Store 的持久化边界、文档模型、后端行为和一致性规则，见
+[Metadata Store 设计](./metadata-store.md)。该文档是 Metadata Store 实现的规范性设计。
+
 ## 目标
 
 无论 Collection 来自主数据库还是外部数据库，运行时和 Agent 都应通过同一个入口获得完整的 `CollectionDefinition`：
@@ -31,7 +34,8 @@ Physical Schema + Collection Metadata
 
 补充 Metadata 主要包括：
 
-- Collection、Field 的逻辑名称与物理名称映射；
+- Collection 和 Field 的逻辑名称与确定性命名配置，不包含任意的 `tableName` 或
+  `columnName` 映射；
 - relations；
 - `title`、`description`；
 - `interface`、`uiSchema`；
@@ -76,9 +80,14 @@ External Database Schema
 - 有明确外键的关系可以自动推导；仅依靠字段名猜测的关系应先作为候选，再确认后写入文件。
 - 修改 File Metadata 不得修改外部数据库的物理 Schema。
 
-### File Metadata 中的物理 Schema 快照
+这里的 File Metadata 是广义架构分类。可编辑的 TypeScript 文件通过只读 Module Metadata Store
+加载；运行时可写的 JSON 或 YAML File Store 是独立后端，需要更严格的原子写入保证。
 
-File Metadata 可以配套保存 introspection 自动生成的物理 Schema 快照，方便运行时和 Agent 在本地理解完整结构，但外部数据库仍是物理 Schema 的事实来源。
+### File Metadata 旁的物理 Schema Snapshot
+
+外部数据源目录可以在可编辑 File Metadata 旁保存 introspection 生成的物理 Schema Snapshot，便于运行时和
+Agent 在本地理解结构。Schema Snapshot 是独立的生成产物，不属于 `CollectionMetadataStore`；外部数据库仍然是
+物理 Schema 事实的权威来源。
 
 文件中的两类信息必须明确分开：
 
@@ -139,6 +148,8 @@ collection-metadata/
 import { defineCollectionMetadata } from '@nocobase/db';
 
 export default defineCollectionMetadata({
+  version: 1,
+  name: 'orders',
   title: 'Orders',
   description: 'Customer purchase orders.',
 
@@ -229,15 +240,14 @@ connection.collections = read resolved collections
 4. 完整 Collection 由 Resolver 生成并由 Registry 提供。
 5. 统一读取入口是 `db.connection().collections`。
 6. 一个逻辑数据库对应一个 Metadata Store；多个 connection 可以共享它。
-7. File Metadata 可以携带物理 Schema 快照，但快照是生成结果，外部数据库仍是物理事实来源。
+7. File Metadata 旁可以存在物理 Schema Snapshot，但它是独立的生成产物；外部数据库仍然是物理事实的
+   权威来源。
 8. `collections.list()` 默认分页并返回轻量摘要；完整 Collection 通过 `get()` 懒加载，全量扫描必须显式执行。
 
-以下内容继续作为后续设计问题：
+Metadata 文档和 Store API 的细节见 [Metadata Store 设计](./metadata-store.md)。持久化实现和共享配置见
+[Metadata Store 后端](./metadata-store-backends.md)。Resolver、Registry、drift、Snapshot 和 rename 行为见
+[Collection 解析生命周期](./collection-resolution.md)。
 
-- Database Metadata Store 的具体表结构；
-- File Metadata 的文件格式和目录约定；
-- relation 自动推导、确认和冲突处理；
-- Schema 与 Metadata drift 的检测策略；
-- Registry 的失效和刷新机制；
-- Agent Snapshot 的生成命令和存放位置；
-- Metadata Store 的最终声明式配置格式。
+详细组件契约分别见 [Schema Inspector 设计](./schema-inspector.md)、
+[Collection Resolver 设计](./collection-resolver.md)、[Collection Registry 设计](./collection-registry.md) 和
+[Collection Metadata Service 设计](./metadata-service.md)。

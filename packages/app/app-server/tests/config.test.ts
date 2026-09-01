@@ -83,6 +83,30 @@ describe('app database manager', () => {
 
     expect(createAppDatabaseManager(config)).toBeDefined();
   });
+
+  it('creates an Oracle manager without opening a connection eagerly', () => {
+    const config: AppDatabaseConfig = {
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'oracle',
+          host: '127.0.0.1',
+          port: 1521,
+          serviceName: 'FREEPDB1',
+          username: 'nocobase',
+          password: 'nocobase',
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+
+    const database = createAppDatabaseManager(config);
+    expect(database?.connection().dialect).toBe('oracle');
+    expect(database?.connection().driver).toBe('oracledb');
+  });
 });
 
 describe('app database storage', () => {

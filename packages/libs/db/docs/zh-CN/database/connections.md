@@ -52,6 +52,26 @@ const db = createDatabaseManager({
 });
 ```
 
+## Oracle
+
+```ts
+const db = createDatabaseManager({
+  default: 'main',
+  connections: {
+    main: {
+      dialect: 'oracle',
+      host: '127.0.0.1',
+      port: 11521,
+      serviceName: 'FREEPDB1',
+      username: 'nocobase',
+      password: 'nocobase',
+    },
+  },
+});
+```
+
+底层使用 `oracledb` Thin mode，不需要 Oracle Instant Client。`serviceName` 是必填配置，不要用 `database` 代替。
+
 ## 多连接
 
 ```ts

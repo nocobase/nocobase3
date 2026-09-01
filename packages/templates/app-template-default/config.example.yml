@@ -72,6 +72,7 @@ database:
       dialect: sqlite
       database: database.sqlite
       debug: false
+      # For Oracle, use dialect: oracle and replace database with serviceName: FREEPDB1.
   migrations:
     autoRun: true
   seeds:

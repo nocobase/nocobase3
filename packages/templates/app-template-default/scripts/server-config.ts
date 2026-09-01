@@ -223,7 +223,15 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
     return summary;
   }
 
-  for (const key of ['host', 'port', 'database', 'username', 'schema', 'ssl']) {
+  for (const key of [
+    'host',
+    'port',
+    'database',
+    'serviceName',
+    'username',
+    'schema',
+    'ssl',
+  ]) {
     const value = connection[key];
     if (
       typeof value === 'string' ||

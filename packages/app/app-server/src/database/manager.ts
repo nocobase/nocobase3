@@ -59,6 +59,19 @@ function resolveConnections(
       },
     };
   }
+  if (main.dialect === 'oracle') {
+    return {
+      ...connections,
+      main: {
+        ...main,
+        host: main.host ?? '127.0.0.1',
+        port: main.port ?? 1521,
+        serviceName: main.serviceName || 'FREEPDB1',
+        username: main.username ?? 'nocobase',
+        password: main.password ?? '',
+      },
+    };
+  }
   const database = (main as ConnectionConfig & { database?: string }).database;
   if (!database || !paths) return connections;
   return {

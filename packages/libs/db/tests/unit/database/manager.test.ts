@@ -374,7 +374,7 @@ describe('DatabaseManager', () => {
       },
     });
     expect(() => invalidDialect.connection()).toThrow(
-      'Invalid database dialect "custom". Expected "sqlite", "postgres", or "mysql".',
+      'Invalid database dialect "custom". Expected "sqlite", "postgres", "mysql", or "oracle".',
     );
 
     const unsupportedUrl = createDatabaseManager({
@@ -512,6 +512,25 @@ describe('DatabaseManager', () => {
       database: 'orders',
       user: 'orders_user',
       password: 'secret',
+    });
+
+    expect(
+      resolveKnexConnectionConfig({
+        dialect: 'oracle',
+        host: '127.0.0.1',
+        port: 1521,
+        serviceName: 'FREEPDB1',
+        username: 'orders_user',
+        password: 'secret',
+        driverOptions: {
+          stmtCacheSize: 0,
+        },
+      }).connection,
+    ).toEqual({
+      stmtCacheSize: 0,
+      user: 'orders_user',
+      password: 'secret',
+      connectString: '127.0.0.1:1521/FREEPDB1',
     });
   });
 

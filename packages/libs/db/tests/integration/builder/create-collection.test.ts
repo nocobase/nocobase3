@@ -91,9 +91,13 @@ describeIntegrationDatabases('collection creation', (context) => {
       collection.string('eventName', { length: 128 }).notNull();
       collection.boolean('enabled').defaultTo(true);
       collection.json('payload');
-      collection.native('ipAddress', 'text', {
-        title: 'IP address',
-      });
+      collection.native(
+        'ipAddress',
+        context.spec.dialect === 'oracle' ? 'clob' : 'text',
+        {
+          title: 'IP address',
+        },
+      );
     });
 
     expect(await context.db.schema.hasTable(auditLogsTable)).toBe(true);
@@ -122,7 +126,7 @@ describeIntegrationDatabases('collection creation', (context) => {
 
     expect(
       await getColumnType(context, auditLogsTable, 'ip_address'),
-    ).toContain('text');
+    ).toContain(context.spec.dialect === 'oracle' ? 'clob' : 'text');
   });
 
   it('skips duplicate create and missing drop when idempotent options are enabled', async () => {

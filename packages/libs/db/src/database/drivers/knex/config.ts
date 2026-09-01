@@ -4,6 +4,7 @@ import type {
   DatabaseDialect,
   DatabaseDriver,
   MysqlConnectionConfig,
+  OracleConnectionConfig,
   PostgresConnectionConfig,
   SqliteConnectionConfig,
 } from '../../config.js';
@@ -21,6 +22,7 @@ const DEFAULT_DRIVER_BY_DIALECT = {
   sqlite: 'better-sqlite3',
   postgres: 'pg',
   mysql: 'mysql2',
+  oracle: 'oracledb',
 } as const satisfies Record<DatabaseDialect, DatabaseDriver>;
 
 export function resolveKnexConnectionConfig(
@@ -59,7 +61,7 @@ function defaultDriverForDialect(dialect: unknown): DatabaseDriver {
   const driver = DEFAULT_DRIVER_BY_DIALECT[dialect as DatabaseDialect];
   if (!driver) {
     throw new Error(
-      `Invalid database dialect "${String(dialect)}". Expected "sqlite", "postgres", or "mysql".`,
+      `Invalid database dialect "${String(dialect)}". Expected "sqlite", "postgres", "mysql", or "oracle".`,
     );
   }
   return driver;
@@ -73,6 +75,8 @@ function resolveKnexConnection(config: ConnectionConfig): unknown {
       return resolvePostgresConnection(config);
     case 'mysql':
       return resolveMysqlConnection(config);
+    case 'oracle':
+      return resolveOracleConnection(config);
     default:
       return assertNever(config);
   }
@@ -155,6 +159,39 @@ function resolveMysqlConnection(
     timezone: config.timezone,
     socketPath: config.socketPath,
     ssl: normalizeMysqlSsl(config.ssl),
+  });
+}
+
+function resolveOracleConnection(
+  config: OracleConnectionConfig,
+): Record<string, unknown> {
+  assertDriverOptions(config.driverOptions, [
+    'host',
+    'port',
+    'database',
+    'serviceName',
+    'user',
+    'username',
+    'password',
+    'connectString',
+    'externalAuth',
+    'pool',
+    'url',
+    'connectionString',
+    'uri',
+  ]);
+
+  const host = config.host ?? '127.0.0.1';
+  const port = config.port ?? 1521;
+  if (config.serviceName.trim() === '') {
+    throw new Error('Oracle database serviceName must be a non-empty string.');
+  }
+
+  return compactObject({
+    ...config.driverOptions,
+    user: config.username,
+    password: config.password,
+    connectString: `${host}:${port}/${config.serviceName}`,
   });
 }
 

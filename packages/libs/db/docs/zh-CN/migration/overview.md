@@ -119,7 +119,7 @@ interface MigrationContext {
 interface MigrationConnection {
   name: string;
   driver: 'better-sqlite3' | 'pg' | 'mysql2';
-  dialect: 'sqlite' | 'postgres' | 'mysql';
+  dialect: 'sqlite' | 'postgres' | 'mysql' | 'oracle';
   capabilities: DatabaseCapabilities;
   client<T = unknown>(): Promise<T>;
 }

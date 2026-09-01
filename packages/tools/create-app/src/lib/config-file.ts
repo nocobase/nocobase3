@@ -13,10 +13,13 @@ export interface BuildConfigFileOptions {
 export function buildConfigFile(options: BuildConfigFileOptions): string {
   const database = options.database;
   const secret = options.secret ?? generateAuthSecret();
-  const connection = [
-    `      dialect: ${database.dialect}`,
-    `      database: ${yamlString(database.database)}`,
-  ];
+  const connection = [`      dialect: ${database.dialect}`];
+
+  if (database.dialect === 'oracle') {
+    connection.push(`      serviceName: ${yamlString(database.serviceName)}`);
+  } else {
+    connection.push(`      database: ${yamlString(database.database)}`);
+  }
 
   if (database.dialect !== 'sqlite') {
     connection.push(

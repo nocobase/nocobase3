@@ -8,6 +8,7 @@ import type {
   DatabaseCapabilities,
   SchemaAdapter,
 } from '../../../schema/index.js';
+import type { SchemaInspector } from '../../../schema/inspector/index.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
 import type {
   ConnectionConfig,
@@ -20,12 +21,14 @@ import {
   resolveKnexConnectionConfig,
   type KnexConnectionConfig,
 } from './config.js';
+import { resolveKnexDatabaseDialectAdapter } from './dialect-adapters.js';
 
 export class KnexDatabaseConnection implements DatabaseConnection {
   readonly driver: DatabaseDriver;
   readonly dialect: DatabaseDialect;
   readonly capabilities: DatabaseCapabilities;
   readonly schema: SchemaAdapter;
+  readonly schemaInspector: SchemaInspector;
   readonly builder: CollectionBuilder;
   readonly query: QueryAdapter;
 
@@ -46,6 +49,13 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       this.dialect,
       this.config.capabilities,
     );
+    this.schemaInspector = resolveKnexDatabaseDialectAdapter(
+      this.dialect,
+    ).createSchemaInspector({
+      connectionName: this.name,
+      config: this.config,
+      resolveClient: () => this.resolveClient(),
+    });
     this.schema = new LazySchemaAdapter(
       () => this.resolveClient(),
       (client) =>

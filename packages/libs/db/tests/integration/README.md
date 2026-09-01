@@ -28,7 +28,13 @@ Start PostgreSQL and MySQL with Docker Compose:
 npm run test:db:up
 ```
 
-Run the same integration suite against SQLite, PostgreSQL, and MySQL:
+Oracle uses the larger `gvenzl/oracle-free:23-slim-faststart` image and starts separately:
+
+```bash
+npm run test:db:up:oracle
+```
+
+Run the same integration suite against SQLite, PostgreSQL, MySQL, and Oracle after all three containers are healthy:
 
 ```bash
 npm run test:integration:all
@@ -44,6 +50,7 @@ The database matrix is controlled by `INTEGRATION_DB_CONNECTIONS`, for example:
 
 ```bash
 INTEGRATION_DB_CONNECTIONS=postgres,mysql npm run test:integration
+INTEGRATION_DB_CONNECTIONS=oracle npm run test:integration
 ```
 
 Default Docker connection settings:
@@ -60,4 +67,10 @@ MYSQL_PORT=13306
 MYSQL_USER=nocobase
 MYSQL_PASSWORD=nocobase
 MYSQL_DATABASE=nocobase_collection_builder
+
+ORACLE_HOST=127.0.0.1
+ORACLE_PORT=11521
+ORACLE_USER=nocobase
+ORACLE_PASSWORD=nocobase
+ORACLE_SERVICE_NAME=FREEPDB1
 ```

@@ -17,7 +17,11 @@ export const PNPM_WORKSPACE_FILE = 'pnpm-workspace.yaml';
  * that same opaque error. The list mirrors the repository's own `pnpm-workspace.yaml`, so an app and the monorepo
  * build the same set.
  */
-export const ALLOWED_BUILDS: readonly string[] = ['better-sqlite3', 'esbuild'];
+export const ALLOWED_BUILDS: readonly string[] = [
+  'better-sqlite3',
+  'esbuild',
+  'oracledb',
+];
 
 /** YAML needs quotes around a scoped name, whose leading `@` would otherwise start a reserved indicator. */
 function formatEntry(name: string): string {

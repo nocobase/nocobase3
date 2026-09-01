@@ -4,18 +4,18 @@ Collection DSL 的目标是屏蔽常见数据库差异，但底层数据库能�
 
 ## 当前能力表
 
-| 能力                  | SQLite | PostgreSQL | MySQL  |
-| --------------------- | ------ | ---------- | ------ |
-| 表                    | 支持   | 支持       | 支持   |
-| 外键                  | 支持   | 支持       | 支持   |
-| 普通视图              | 支持   | 支持       | 支持   |
-| replace view          | 支持   | 支持       | 支持   |
-| 物化视图              | 不支持 | 支持       | 不支持 |
-| schema                | 不支持 | 支持       | 不支持 |
-| comment               | 有限   | 支持       | 支持   |
-| native type           | 有限   | 支持       | 支持   |
-| partial index         | 支持   | 支持       | 有限   |
-| deferrable constraint | 不支持 | 支持       | 不支持 |
+| 能力                  | SQLite | PostgreSQL | MySQL  | Oracle |
+| --------------------- | ------ | ---------- | ------ | ------ |
+| 表                    | 支持   | 支持       | 支持   | 支持   |
+| 外键                  | 支持   | 支持       | 支持   | 支持   |
+| 普通视图              | 支持   | 支持       | 支持   | 支持   |
+| replace view          | 支持   | 支持       | 支持   | 支持   |
+| 物化视图              | 不支持 | 支持       | 不支持 | 支持   |
+| schema                | 不支持 | 支持       | 不支持 | 支持   |
+| comment               | 有限   | 支持       | 支持   | 支持   |
+| native type           | 有限   | 支持       | 支持   | 支持   |
+| partial index         | 支持   | 支持       | 有限   | 不支持 |
+| deferrable constraint | 不支持 | 支持       | 不支持 | 支持   |
 
 ## 当前实现中的能力
 
@@ -73,6 +73,8 @@ Builder 会在执行前根据当前连接的 `capabilities` 生成 capability pl
 - materialized view 主要是 PostgreSQL 能力。
 - MySQL 外键字段类型需要和被引用字段严格兼容。
 - SQLite 对部分 schema alter 操作的支持和其他数据库不同，Knex 会做一定处理。
+- Oracle foreign key 不支持 `ON UPDATE`，且默认 restrict/no-action 行为不写显式子句。
+- Oracle 可以复用已有普通索引来支撑 unique constraint；约束仍存在时不能单独删除该物理索引。
 
 ## Agent 注意事项
 
@@ -80,4 +82,4 @@ Builder 会在执行前根据当前连接的 `capabilities` 生成 capability pl
 - 不要默认使用 `native`、`asRaw` 或 materialized view。
 - 针对目标数据库生成 SQL 前，应先查看 `connection.capabilities`。
 - 执行前应检查 `BuilderResult.warnings`，尤其是 `severity: 'unsafe'` 的 warning。
-- 集成测试应覆盖真实 SQLite、PostgreSQL、MySQL。
+- 集成测试应覆盖真实 SQLite、PostgreSQL、MySQL、Oracle。

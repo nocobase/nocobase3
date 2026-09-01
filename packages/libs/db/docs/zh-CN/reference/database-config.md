@@ -32,7 +32,10 @@ const db = createDatabaseManager({
 
 ```ts
 type ConnectionConfig =
-  SqliteConnectionConfig | PostgresConnectionConfig | MysqlConnectionConfig;
+  | SqliteConnectionConfig
+  | PostgresConnectionConfig
+  | MysqlConnectionConfig
+  | OracleConnectionConfig;
 ```
 
 公共配置：
@@ -56,6 +59,7 @@ interface BaseConnectionConfig {
 | `sqlite`   | `better-sqlite3` |
 | `postgres` | `pg`             |
 | `mysql`    | `mysql2`         |
+| `oracle`   | `oracledb`       |
 
 `driver` 如果显式填写，必须和 `dialect` 匹配。
 
@@ -116,6 +120,22 @@ type MysqlConnectionConfig = BaseConnectionConfig & {
 
 用户配置使用 `username`，内部会转换成底层 driver 需要的 `user`。
 
+Oracle：
+
+```ts
+type OracleConnectionConfig = BaseConnectionConfig & {
+  dialect: 'oracle';
+  driver?: 'oracledb';
+  host?: string;
+  port?: number;
+  serviceName: string;
+  username?: string;
+  password?: string;
+};
+```
+
+Oracle 使用 `serviceName`，内部组合为 `host:port/serviceName` 形式的 `connectString`。`oracledb` 6 默认使用 Thin mode，不要求安装 Oracle Instant Client。
+
 MySQL 的 `socketPath` 是另一种连接目标，可以和 `database`、`username`、`password` 一起使用，但不要和 `host`、`port` 混用。
 
 `driverOptions` 只放当前类型未覆盖的底层 driver 参数。常用连接参数必须平铺，不要放进 `driverOptions`。当前不提供连接 URL 配置方式，也不要在 `driverOptions` 里写 `connectionString` 或 `uri`。
@@ -138,6 +158,11 @@ type NamingOptions = {
 更完整规则见 [命名概念](../concepts/naming.md)。
 
 ## metadataStore
+
+> 本节说明当前基于 Store 实例的 API。目标命名 Store 配置，以及从完整
+> `CollectionDefinition` 记录迁移的方案，见
+> [Metadata Store 设计](../collection/metadata-store.md) 和
+> [Metadata Store 后端](../collection/metadata-store-backends.md)。当前配置类型尚未实现这些目标设计。
 
 `metadataStore` 可以放在 manager 级，也可以放在 connection 级：
 

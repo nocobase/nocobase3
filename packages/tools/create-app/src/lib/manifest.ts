@@ -9,12 +9,13 @@ export const DRIVER_VERSIONS: Readonly<Record<string, string>> = {
   'better-sqlite3': '^12.11.1',
   pg: '^8.23.0',
   mysql2: '^3.23.3',
+  oracledb: '^6.10.0',
 };
 
 /**
  * Adds the chosen driver to the generated project's `dependencies`.
  *
- * The template ships none of the three drivers — it depends on `knex` alone — so exactly one is added here, in
+ * The template ships none of the database drivers — it depends on `knex` alone — so exactly one is added here, in
  * `dependencies` rather than `devDependencies` because the server needs it at runtime.
  */
 export async function addDriverDependency(

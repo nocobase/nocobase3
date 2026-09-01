@@ -30,8 +30,8 @@ interface DatabaseManager {
 ```ts
 interface DatabaseConnection {
   name: string;
-  driver: 'better-sqlite3' | 'pg' | 'mysql2';
-  dialect: 'sqlite' | 'postgres' | 'mysql';
+  driver: 'better-sqlite3' | 'pg' | 'mysql2' | 'oracledb';
+  dialect: 'sqlite' | 'postgres' | 'mysql' | 'oracle';
   capabilities: DatabaseCapabilities;
 
   builder: CollectionBuilder;

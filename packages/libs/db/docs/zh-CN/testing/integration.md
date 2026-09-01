@@ -7,6 +7,7 @@
 - SQLite
 - PostgreSQL
 - MySQL
+- Oracle
 
 ## 默认测试
 
@@ -30,13 +31,18 @@ npm run test:coverage
 npm run test:db:up
 ```
 
-这会启动 Docker Compose 中的 PostgreSQL 和 MySQL。
+这会启动 Docker Compose 中的 PostgreSQL 和 MySQL。Oracle 镜像较大，单独启动：
+
+```bash
+npm run test:db:up:oracle
+```
 
 默认端口：
 
 ```text
 PostgreSQL: 127.0.0.1:15432
 MySQL:      127.0.0.1:13306
+Oracle:     127.0.0.1:11521/FREEPDB1
 ```
 
 ## 全矩阵测试
@@ -44,6 +50,8 @@ MySQL:      127.0.0.1:13306
 ```bash
 npm run test:integration:all
 ```
+
+`all` 包含 SQLite、PostgreSQL、MySQL 和 Oracle，因此运行前需要同时执行两个数据库启动命令。
 
 等价于：
 
@@ -57,7 +65,10 @@ INTEGRATION_DB_CONNECTIONS=all vitest run tests/integration
 INTEGRATION_DB_CONNECTIONS=postgres npm run test:integration
 INTEGRATION_DB_CONNECTIONS=mysql npm run test:integration
 INTEGRATION_DB_CONNECTIONS=postgres,mysql npm run test:integration
+INTEGRATION_DB_CONNECTIONS=oracle npm run test:integration
 ```
+
+也可以直接运行 `npm run test:integration:oracle`。Oracle 测试使用 `gvenzl/oracle-free:23-slim-faststart` 和 `oracledb` Thin mode，不需要 Oracle Instant Client。
 
 也可以使用 `DB_CONNECTION` 指定单个连接：
 
@@ -129,5 +140,5 @@ Query 真实测试覆盖：
 ## Agent 注意事项
 
 - 修改 Builder 编译或 adapter 行为后，应跑 `npm run test:integration:all`。
-- SQLite 通过不代表 PostgreSQL/MySQL 一定通过。
+- SQLite 通过不代表 PostgreSQL、MySQL 或 Oracle 一定通过。
 - 方言问题应优先通过真实集成测试验证。

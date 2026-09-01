@@ -32,3 +32,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    ports:
+      - '11521:1521'
+    environment:
+      ORACLE_PASSWORD: nocobase
+      APP_USER: nocobase
+      APP_USER_PASSWORD: nocobase
+    healthcheck:
+      test: ['CMD-SHELL', 'healthcheck.sh']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s

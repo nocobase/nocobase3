@@ -10,7 +10,7 @@
 - 用 Collection Builder 管理建表、改表、字段、约束、索引和视图。
 - 用 metadata-only API 补充应用层元信息，而不修改数据库结构。
 - 用 `CollectionOperation[]` 表达可解释、可 dry-run、适合 Agent apply/diff 的变更计划。
-- 用真实数据库集成测试验证 SQLite、PostgreSQL、MySQL 的行为。
+- 用真实数据库集成测试验证 SQLite、PostgreSQL、MySQL、Oracle 的行为。
 
 ## 快速开始
 
@@ -138,6 +138,13 @@ npm run test:integration
 
 ```bash
 npm run test:db:up
+```
+
+Oracle 单独启动：
+
+```bash
+npm run test:db:up:oracle
+npm run test:integration:oracle
 ```
 
 跑完整真实数据库矩阵：

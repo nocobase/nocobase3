@@ -8,7 +8,7 @@ export interface DatabaseConfig {
   metadataStore?: CollectionMetadataStore;
 }
 
-export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql';
+export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql' | 'oracle';
 
 export interface BaseConnectionConfig {
   naming?: NamingOptions;
@@ -41,8 +41,21 @@ export type MysqlConnectionConfig = BaseConnectionConfig & {
   ssl?: boolean | Record<string, unknown>;
 } & MysqlConnectionTargetConfig;
 
+export type OracleConnectionConfig = BaseConnectionConfig & {
+  dialect: 'oracle';
+  driver?: 'oracledb';
+  serviceName: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+};
+
 export type ConnectionConfig =
-  SqliteConnectionConfig | PostgresConnectionConfig | MysqlConnectionConfig;
+  | SqliteConnectionConfig
+  | PostgresConnectionConfig
+  | MysqlConnectionConfig
+  | OracleConnectionConfig;
 
 export type DatabaseDriver = NonNullable<ConnectionConfig['driver']>;
 

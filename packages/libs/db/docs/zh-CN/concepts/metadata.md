@@ -4,6 +4,13 @@ Metadata 是 Collection 的应用层元信息，用于帮助 UI、应用逻辑�
 
 Metadata Store、物理 Schema、完整 Collection 以及主数据库和外部数据库的目标关系，见 [Collection 架构](../collection/architecture.md)。
 
+目标持久化模型，以及补充 Metadata 与解析后完整 Collection 的准确边界，见
+[Metadata Store 设计](../collection/metadata-store.md)。
+
+后端选择和 Store 共享规则见
+[Metadata Store 后端](../collection/metadata-store-backends.md)。解析、校验、缓存和 Snapshot 规则见
+[Collection 解析生命周期](../collection/collection-resolution.md)。
+
 ## 应用层 metadata
 
 Collection 级别：

@@ -13,7 +13,7 @@ const rootPackagePath = path.join(rootDir, 'package.json');
 const distPackagePath = path.join(distDir, 'package.json');
 const vendorDir = path.join(distDir, 'vendor');
 const runtimeDirs = ['server', 'database', 'scripts'];
-const databaseRuntimeDrivers = ['better-sqlite3', 'pg', 'mysql2'];
+const databaseRuntimeDrivers = ['better-sqlite3', 'pg', 'mysql2', 'oracledb'];
 
 const toPosix = (value) => value.split(path.sep).join('/');
 

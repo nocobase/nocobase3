@@ -1,14 +1,15 @@
 /**
- * The three dialects the app template's `server/config/database.ts` understands. The values are exactly what
+ * The dialects the app template's server runtime understands. The values are exactly what
  * `DB_DIALECT` accepts — `postgres`, not `postgresql`, and `sqlite`, not `sqlite3` — because that file throws on
  * anything else. User-facing aliases are resolved separately by `parseDialect`.
  */
-export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql';
+export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql' | 'oracle';
 
 export const DATABASE_DIALECTS: readonly DatabaseDialect[] = [
   'postgres',
   'sqlite',
   'mysql',
+  'oracle',
 ];
 
 /**
@@ -19,13 +20,17 @@ export const DIALECT_DRIVERS: Readonly<Record<DatabaseDialect, string>> = {
   sqlite: 'better-sqlite3',
   postgres: 'pg',
   mysql: 'mysql2',
+  oracle: 'oracledb',
 };
 
 /**
- * Only `better-sqlite3` compiles a native addon, so it is the only driver whose install script has to be allowed. The
- * other two are pure JavaScript and install with no build step at all.
+ * These drivers run install scripts that pnpm 11 must explicitly allow. `oracledb` supports Thin mode without an
+ * Oracle Client installation, but still runs its package install script.
  */
-export const DRIVERS_NEEDING_BUILD: readonly string[] = ['better-sqlite3'];
+export const DRIVERS_NEEDING_BUILD: readonly string[] = [
+  'better-sqlite3',
+  'oracledb',
+];
 
 export interface DialectChoice {
   value: DatabaseDialect;
@@ -49,6 +54,11 @@ export const DIALECT_CHOICES: readonly DialectChoice[] = [
     label: 'MySQL',
     hint: 'installs mysql2',
   },
+  {
+    value: 'oracle',
+    label: 'Oracle',
+    hint: 'installs oracledb (Thin mode)',
+  },
 ];
 
 /**
@@ -66,6 +76,8 @@ const DIALECT_ALIASES: Readonly<Record<string, DatabaseDialect>> = {
   mysql: 'mysql',
   mysql2: 'mysql',
   mariadb: 'mysql',
+  oracle: 'oracle',
+  oracledb: 'oracle',
 };
 
 export function parseDialect(value: string): DatabaseDialect {
@@ -112,8 +124,20 @@ export interface MysqlDatabaseConfig {
   charset: string;
 }
 
+export interface OracleDatabaseConfig {
+  dialect: 'oracle';
+  host: string;
+  port: number;
+  serviceName: string;
+  username: string;
+  password: string;
+}
+
 export type DatabaseConfig =
-  SqliteDatabaseConfig | PostgresDatabaseConfig | MysqlDatabaseConfig;
+  | SqliteDatabaseConfig
+  | PostgresDatabaseConfig
+  | MysqlDatabaseConfig
+  | OracleDatabaseConfig;
 
 export const SQLITE_DEFAULT_DATABASE = 'database.sqlite';
 export const POSTGRES_DEFAULT_SCHEMA = 'public';
@@ -142,6 +166,17 @@ export function defaultDatabaseConfig(
       username: 'root',
       password: '',
       charset: MYSQL_DEFAULT_CHARSET,
+    };
+  }
+
+  if (dialect === 'oracle') {
+    return {
+      dialect,
+      host: '127.0.0.1',
+      port: 1521,
+      serviceName: 'FREEPDB1',
+      username: 'nocobase',
+      password: '',
     };
   }
 

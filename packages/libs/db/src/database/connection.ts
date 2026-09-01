@@ -1,6 +1,10 @@
 import type { CollectionBuilder } from '../collection/builder/index.js';
 import type { QueryAdapter } from '../query/index.js';
-import type { DatabaseCapabilities, SchemaAdapter } from '../schema/index.js';
+import type {
+  DatabaseCapabilities,
+  SchemaAdapter,
+  SchemaInspector,
+} from '../schema/index.js';
 import type { DatabaseDialect, DatabaseDriver } from './config.js';
 
 export interface DatabaseConnection {
@@ -14,6 +18,8 @@ export interface DatabaseConnection {
   /** Database-layer query builder. Uses Connection naming but not Collection-level overrides. */
   query: QueryAdapter;
   schema: SchemaAdapter;
+  /** Read-only physical database schema introspection. Uses physical names. */
+  schemaInspector: SchemaInspector;
 
   /** Escape hatch for the underlying adapter client. Prefer builder/query for portable code. */
   client<T = unknown>(): Promise<T>;

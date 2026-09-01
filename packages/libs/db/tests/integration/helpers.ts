@@ -12,7 +12,7 @@ import {
   truncateIdentifier,
 } from '../../src/index.js';
 
-export type IntegrationDialect = 'sqlite' | 'postgres' | 'mysql';
+export type IntegrationDialect = 'sqlite' | 'postgres' | 'mysql' | 'oracle';
 
 export interface IntegrationDatabaseSpec {
   name: string;
@@ -25,6 +25,7 @@ export interface IntegrationDatabaseSpec {
   username?: string;
   password?: string;
   charset?: string;
+  serviceName?: string;
   pool?: unknown;
 }
 
@@ -123,6 +124,13 @@ export async function listIndexes(
       );
       return rows.map((row) => ({ ...row, name: row.name ?? row.INDEX_NAME }));
     }
+    case 'oracle':
+      return rawRows(
+        await context.db.raw(
+          'select index_name as "name" from user_indexes where table_name = ?',
+          [tableName],
+        ),
+      );
     default:
       return assertNever(context.spec.dialect);
   }
@@ -181,6 +189,30 @@ export async function listForeignKeys(
         from: row.column_name ?? row.COLUMN_NAME,
         to: row.referenced_column ?? row.REFERENCED_COLUMN_NAME,
       }));
+    case 'oracle':
+      return rawRows(
+        await context.db.raw(
+          `
+          select
+            rc.table_name as "table",
+            cc.column_name as "from",
+            rcc.column_name as "to"
+          from user_constraints c
+          join user_cons_columns cc
+            on cc.constraint_name = c.constraint_name
+          join all_constraints rc
+            on rc.owner = c.r_owner
+            and rc.constraint_name = c.r_constraint_name
+          join all_cons_columns rcc
+            on rcc.owner = rc.owner
+            and rcc.constraint_name = rc.constraint_name
+            and rcc.position = cc.position
+          where c.constraint_type = 'R'
+            and c.table_name = ?
+        `,
+          [tableName],
+        ),
+      );
     default:
       return assertNever(context.spec.dialect);
   }
@@ -223,6 +255,17 @@ export async function listColumns(
         name: row.name ?? row.COLUMN_NAME,
         type: row.type ?? row.DATA_TYPE,
       }));
+    case 'oracle':
+      return rawRows(
+        await context.db.raw(
+          `
+          select column_name as "name", data_type as "type"
+          from user_tab_columns
+          where table_name = ?
+        `,
+          [tableName],
+        ),
+      );
     default:
       return assertNever(context.spec.dialect);
   }
@@ -247,7 +290,9 @@ export async function getColumnType(
 export async function expectForeignKeyViolation(
   action: Promise<unknown>,
 ): Promise<void> {
-  await expect(action).rejects.toThrow(/foreign key/i);
+  await expect(action).rejects.toThrow(
+    /foreign key|integrity constraint|ORA-02291/i,
+  );
 }
 
 export async function expectUniqueViolation(
@@ -263,7 +308,7 @@ function getIntegrationDatabaseSpecs(): IntegrationDatabaseSpec[] {
       'sqlite',
   );
   const connectionNames = requested.includes('all')
-    ? ['sqlite', 'postgres', 'mysql']
+    ? ['sqlite', 'postgres', 'mysql', 'oracle']
     : requested;
   return connectionNames.map(createIntegrationDatabaseSpec);
 }
@@ -303,6 +348,17 @@ function createIntegrationDatabaseSpec(name: string): IntegrationDatabaseSpec {
         password: process.env.MYSQL_PASSWORD ?? 'nocobase',
         database: process.env.MYSQL_DATABASE ?? 'nocobase_collection_builder',
       };
+    case 'oracle':
+      return {
+        name: 'oracle',
+        dialect: 'oracle',
+        driver: 'oracledb',
+        host: process.env.ORACLE_HOST ?? '127.0.0.1',
+        port: Number(process.env.ORACLE_PORT ?? 11521),
+        username: process.env.ORACLE_USER ?? 'nocobase',
+        password: process.env.ORACLE_PASSWORD ?? 'nocobase',
+        serviceName: process.env.ORACLE_SERVICE_NAME ?? 'FREEPDB1',
+      };
     default:
       throw new Error(`Unsupported integration database connection "${name}".`);
   }
@@ -338,6 +394,16 @@ function createConnectionConfig(
         username: spec.username,
         password: spec.password,
         charset: spec.charset,
+      };
+    case 'oracle':
+      return {
+        dialect: 'oracle',
+        driver: 'oracledb',
+        host: spec.host,
+        port: spec.port,
+        serviceName: spec.serviceName ?? 'FREEPDB1',
+        username: spec.username,
+        password: spec.password,
       };
     default:
       return assertNever(spec.dialect);
@@ -404,6 +470,39 @@ async function cleanupIntegrationObjects(
         await context.db.raw('set foreign_key_checks = 1');
       }
       break;
+    case 'oracle': {
+      const materializedViews = await listOracleObjects(
+        context,
+        'user_mviews',
+        'mview_name',
+      );
+      for (const view of materializedViews) {
+        await context.db.raw(
+          `drop materialized view ${quoteIdentifier(view, context.spec.dialect)}`,
+        );
+      }
+      for (const view of views) {
+        await context.db.raw(
+          `drop view ${quoteIdentifier(view, context.spec.dialect)}`,
+        );
+      }
+      for (const table of tables) {
+        await context.db.raw(
+          `drop table ${quoteIdentifier(table, context.spec.dialect)} cascade constraints purge`,
+        );
+      }
+      const sequences = await listOracleObjects(
+        context,
+        'user_sequences',
+        'sequence_name',
+      );
+      for (const sequence of sequences) {
+        await context.db.raw(
+          `drop sequence ${quoteIdentifier(sequence, context.spec.dialect)}`,
+        );
+      }
+      break;
+    }
     default:
       assertNever(context.spec.dialect);
   }
@@ -453,6 +552,18 @@ async function listObjects(
         ),
       ).map((row) => String(row.name ?? row.TABLE_NAME));
     }
+    case 'oracle': {
+      const source = objectType === 'table' ? 'user_tables' : 'user_views';
+      const column = objectType === 'table' ? 'table_name' : 'view_name';
+      return rawRows(
+        await context.db.raw(
+          `select ${column} as "name" from ${source} where ${column} like ?`,
+          [like],
+        ),
+      )
+        .map((row) => String(row.name ?? row.NAME))
+        .filter((name) => name.startsWith(`${context.prefix}_`));
+    }
     default:
       return assertNever(context.spec.dialect);
   }
@@ -469,6 +580,22 @@ function rawRows(result: unknown): Array<Record<string, any>> {
     return (result as { rows: Array<Record<string, any>> }).rows;
   }
   return [];
+}
+
+async function listOracleObjects(
+  context: IntegrationTestContext,
+  source: 'user_mviews' | 'user_sequences',
+  column: 'mview_name' | 'sequence_name',
+): Promise<string[]> {
+  const rows = rawRows(
+    await context.db.raw(
+      `select ${column} as "name" from ${source} where ${column} like ?`,
+      [`${context.prefix}_%`],
+    ),
+  );
+  return rows
+    .map((row) => String(row.name ?? row.NAME))
+    .filter((name) => name.startsWith(`${context.prefix}_`));
 }
 
 function createTestPrefix(): string {
@@ -496,6 +623,9 @@ function normalizeConnectionName(name: string): IntegrationDialect {
     case 'mysql':
     case 'mysql2':
       return 'mysql';
+    case 'oracle':
+    case 'oracledb':
+      return 'oracle';
     default:
       throw new Error(`Unsupported integration database connection "${name}".`);
   }
