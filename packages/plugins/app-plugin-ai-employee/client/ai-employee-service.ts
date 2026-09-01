@@ -1,7 +1,6 @@
-import {
-  NOCOBASE_AI_API_URL,
-  nocobaseClient,
-} from '@nocobase/app-portal-sdk/client';
+import type { AppClient } from '@nocobase/app-client';
+
+import { requestAIAction, requestAppAction } from './api-client.js';
 
 export interface AIEmployeeModelRef {
   llmService: string;
@@ -163,12 +162,14 @@ export function buildAIEmployeeUpdatePayload(
 
 export async function listAIEmployees(
   signal?: AbortSignal,
+  client?: AppClient,
 ): Promise<AIEmployeeRecord[]> {
-  const response = await nocobaseClient.action<unknown>('aiEmployees', 'list', {
-    apiUrl: NOCOBASE_AI_API_URL,
-    method: 'GET',
-    signal,
-  });
+  const response = await requestAIAction<unknown>(
+    'aiEmployees',
+    'list',
+    { method: 'GET', signal },
+    client,
+  );
   return normalizeArrayResponse<AIEmployeeRecord>(response).filter(
     (employee) => !employee.deprecated,
   );
@@ -177,13 +178,14 @@ export async function listAIEmployees(
 export async function getAIEmployee(
   username: string,
   signal?: AbortSignal,
+  client?: AppClient,
 ): Promise<AIEmployeeRecord> {
-  const response = await nocobaseClient.action<unknown>('aiEmployees', 'get', {
-    apiUrl: NOCOBASE_AI_API_URL,
-    method: 'GET',
-    query: { key: username },
-    signal,
-  });
+  const response = await requestAIAction<unknown>(
+    'aiEmployees',
+    'get',
+    { method: 'GET', query: { key: username }, signal },
+    client,
+  );
   const data = unwrapResponseData(response);
   if (!isRecord(data)) throw new Error('AI employee response is invalid.');
   return data as AIEmployeeRecord;
@@ -192,16 +194,17 @@ export async function getAIEmployee(
 export async function updateAIEmployee(
   employee: AIEmployeeRecord,
   editable: AIEmployeeEditableValues,
+  client?: AppClient,
 ): Promise<AIEmployeeRecord> {
-  const response = await nocobaseClient.action<unknown>(
+  const response = await requestAIAction<unknown>(
     'aiEmployees',
     'update',
     {
-      apiUrl: NOCOBASE_AI_API_URL,
       method: 'PUT',
       query: { key: employee.username },
       body: buildAIEmployeeUpdatePayload(employee, editable),
     },
+    client,
   );
   const data = unwrapResponseData(response);
   if (!isRecord(data)) {
@@ -212,11 +215,13 @@ export async function updateAIEmployee(
 
 export async function listEnabledModels(
   signal?: AbortSignal,
+  client?: AppClient,
 ): Promise<EnabledModelOption[]> {
-  const response = await nocobaseClient.action<unknown>(
+  const response = await requestAIAction<unknown>(
     'ai',
     'listAllEnabledModels',
-    { apiUrl: NOCOBASE_AI_API_URL, method: 'GET', signal },
+    { method: 'GET', signal },
+    client,
   );
   return normalizeArrayResponse<UnknownRecord>(response).flatMap((service) => {
     const llmService = String(service.llmService ?? service.name ?? '');
@@ -243,8 +248,9 @@ export async function listEnabledModels(
 
 export async function listEnabledKnowledgeBases(
   signal?: AbortSignal,
+  client?: AppClient,
 ): Promise<KnowledgeBaseOption[]> {
-  const response = await nocobaseClient.action<unknown>(
+  const response = await requestAppAction<unknown>(
     'aiKnowledgeBase',
     'list',
     {
@@ -252,6 +258,7 @@ export async function listEnabledKnowledgeBases(
       query: { paginate: false, 'filter[enabled]': true },
       signal,
     },
+    client,
   );
   return normalizeArrayResponse<UnknownRecord>(response).flatMap((item) =>
     typeof item.key === 'string'
@@ -269,13 +276,15 @@ export async function listEnabledKnowledgeBases(
 async function listMetadata(
   resource: 'aiSkills' | 'aiTools',
   signal?: AbortSignal,
+  client?: AppClient,
 ): Promise<AIMetadataItem[]> {
   try {
-    const response = await nocobaseClient.action<unknown>(resource, 'list', {
-      apiUrl: NOCOBASE_AI_API_URL,
-      method: 'GET',
-      signal,
-    });
+    const response = await requestAIAction<unknown>(
+      resource,
+      'list',
+      { method: 'GET', signal },
+      client,
+    );
     return normalizeArrayResponse<UnknownRecord>(response).flatMap((item) => {
       const definition = isRecord(item.definition) ? item.definition : item;
       const name = definition.name;
@@ -312,7 +321,11 @@ async function listMetadata(
   }
 }
 
-export const listAISkills = (signal?: AbortSignal): Promise<AIMetadataItem[]> =>
-  listMetadata('aiSkills', signal);
-export const listAITools = (signal?: AbortSignal): Promise<AIMetadataItem[]> =>
-  listMetadata('aiTools', signal);
+export const listAISkills = (
+  signal?: AbortSignal,
+  client?: AppClient,
+): Promise<AIMetadataItem[]> => listMetadata('aiSkills', signal, client);
+export const listAITools = (
+  signal?: AbortSignal,
+  client?: AppClient,
+): Promise<AIMetadataItem[]> => listMetadata('aiTools', signal, client);

@@ -18,6 +18,9 @@ describe('Plugin Skills example integration', () => {
           tone: 'info',
         } as T);
       },
+      stream(): Promise<ReadableStream<Uint8Array>> {
+        throw new Error('Not used by this test.');
+      },
     };
 
     await expect(loadSkillsExampleNotice(appClient)).resolves.toMatchObject({

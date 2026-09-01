@@ -33,7 +33,7 @@ const packageRoot = path.resolve(
   '..',
 );
 const repositoryRoot = path.resolve(packageRoot, '../../..');
-
+const portalSdkPackage = ['@nocobase/app', 'portal-sdk'].join('-');
 function read(relativePath: string): string {
   return fs.readFileSync(path.join(packageRoot, relativePath), 'utf8');
 }
@@ -49,6 +49,21 @@ function filesUnder(relativeRoot: string): readonly string[] {
 }
 
 describe('AI Employee Registry contract', () => {
+  it('does not declare the Portal SDK as a package dependency', () => {
+    const packageMetadata = JSON.parse(read('package.json')) as {
+      readonly dependencies?: Readonly<Record<string, string>>;
+      readonly devDependencies?: Readonly<Record<string, string>>;
+      readonly peerDependencies?: Readonly<Record<string, string>>;
+    };
+    for (const dependencies of [
+      packageMetadata.dependencies,
+      packageMetadata.devDependencies,
+      packageMetadata.peerDependencies,
+    ]) {
+      expect(dependencies).not.toHaveProperty(portalSdkPackage);
+    }
+  });
+
   const config = JSON.parse(read('registry.config.json')) as RegistryConfig;
 
   it('publishes one application-owned frontend item', () => {
@@ -97,10 +112,9 @@ describe('AI Employee Registry contract', () => {
     ]) {
       expect(source).not.toContain(banned);
     }
-    expect(source).toContain("from '@nocobase/app-portal-sdk/client'");
-    expect(source).toContain(
-      'apiUrl: resolveNocoBaseAIUrl(this.client.getApiUrl())',
-    );
+    expect(source).not.toContain(portalSdkPackage);
+    expect(source).toContain("from '@nocobase/app-client'");
+    expect(source).toContain('createRequestPath(`${resource}:${action}`');
   });
 
   it('keeps every relative import inside the item root', () => {

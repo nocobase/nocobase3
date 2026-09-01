@@ -1,9 +1,8 @@
 import {
-  nocobaseClient,
-  resolveNocoBaseAIUrl,
-  type NocoBaseClient,
-  type NocoBaseRequestOptions,
-} from '@nocobase/app-portal-sdk/client';
+  createAppClient,
+  resolveAppUrl,
+  type AppClient,
+} from '@nocobase/app-client';
 import type {
   AIChatMessage,
   AIConversation,
@@ -203,28 +202,66 @@ const toHistoryMessage = (
   };
 };
 
+type AIRequestOptions = {
+  readonly method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  readonly query?: Readonly<
+    Record<string, string | number | boolean | null | undefined>
+  >;
+  readonly body?: unknown;
+  readonly signal?: AbortSignal;
+};
+
+function createRequestPath(
+  endpoint: string,
+  query?: AIRequestOptions['query'],
+): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query ?? {})) {
+    if (value !== undefined && value !== null) search.set(key, String(value));
+  }
+  const suffix = search.toString();
+  return `ai/${endpoint}${suffix ? `?${suffix}` : ''}`;
+}
+
+function createRequestInit(options: AIRequestOptions): RequestInit {
+  const body =
+    options.body === undefined || options.body instanceof FormData
+      ? options.body
+      : JSON.stringify(options.body);
+  return {
+    method: options.method ?? (body === undefined ? 'GET' : 'POST'),
+    ...(body === undefined ? {} : { body }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  };
+}
+
+function resolveResourceUrl(value: string): string {
+  if (!value || /^[a-z][a-z\d+.-]*:/i.test(value)) return value;
+  return resolveAppUrl(value.replace(/^\/+/, ''));
+}
+
 export class NocoBaseAIService implements AIService {
-  constructor(private readonly client: NocoBaseClient = nocobaseClient) {}
+  constructor(private readonly client: AppClient = createAppClient()) {}
 
   private aiAction<T>(
     resource: string,
     action: string,
-    options: Omit<NocoBaseRequestOptions, 'accept'> = {},
+    options: AIRequestOptions = {},
   ): Promise<T> {
-    return this.client.action<T>(resource, action, {
-      ...options,
-      apiUrl: resolveNocoBaseAIUrl(this.client.getApiUrl()),
-    });
+    return this.client.request<T>(
+      createRequestPath(`${resource}:${action}`, options.query),
+      createRequestInit(options),
+    );
   }
 
   private aiStream(
     endpoint: string,
-    options: Omit<NocoBaseRequestOptions, 'accept' | 'unwrap'> = {},
+    options: AIRequestOptions = {},
   ): Promise<ReadableStream<Uint8Array>> {
-    return this.client.stream(endpoint, {
-      ...options,
-      apiUrl: resolveNocoBaseAIUrl(this.client.getApiUrl()),
-    });
+    return this.client.stream(
+      createRequestPath(endpoint, options.query),
+      createRequestInit(options),
+    );
   }
   async listEmployees() {
     const employees = await this.aiAction<AIEmployee[]>(
@@ -346,7 +383,7 @@ export class NocoBaseAIService implements AIService {
         return value.role !== 'tool' && value.role !== 'system';
       })
       .map((value, index) =>
-        toHistoryMessage(value, index, (url) => this.client.resolveUrl(url)),
+        toHistoryMessage(value, index, resolveResourceUrl),
       );
   }
 
@@ -387,16 +424,15 @@ export class NocoBaseAIService implements AIService {
       {
         body: formData,
         signal,
-        unwrap: 'deep-data',
       },
     );
     return {
       ...response,
       ...(typeof response.url === 'string'
-        ? { url: this.client.resolveUrl(response.url) }
+        ? { url: resolveResourceUrl(response.url) }
         : {}),
       ...(typeof response.preview === 'string'
-        ? { preview: this.client.resolveUrl(response.preview) }
+        ? { preview: resolveResourceUrl(response.preview) }
         : {}),
     };
   }

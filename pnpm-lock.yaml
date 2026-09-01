@@ -1325,9 +1325,6 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:*
         version: link:../app-plugin-authentication
-      '@nocobase/app-portal-sdk':
-        specifier: workspace:*
-        version: link:../../app/app-portal-sdk
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server

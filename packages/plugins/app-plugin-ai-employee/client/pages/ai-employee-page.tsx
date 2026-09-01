@@ -1,3 +1,4 @@
+import { appApiClientToken, useService } from '@nocobase/app-client';
 import {
   Check,
   ChevronDown,
@@ -452,6 +453,7 @@ function ModelMultiSelect({
 }
 
 export default function AIEmployeePage(): ReactElement {
+  const appClient = useService(appApiClientToken);
   const t = useT();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);
   const [selectedUsername, setSelectedUsername] = useState<string>();
@@ -483,11 +485,13 @@ export default function AIEmployeePage(): ReactElement {
     try {
       const [employeeRows, modelRows, knowledgeRows, skillRows, toolRows] =
         await Promise.all([
-          listAIEmployees(controller.signal),
-          listEnabledModels(controller.signal),
-          listEnabledKnowledgeBases(controller.signal).catch(() => []),
-          listAISkills(controller.signal),
-          listAITools(controller.signal),
+          listAIEmployees(controller.signal, appClient),
+          listEnabledModels(controller.signal, appClient),
+          listEnabledKnowledgeBases(controller.signal, appClient).catch(
+            () => [],
+          ),
+          listAISkills(controller.signal, appClient),
+          listAITools(controller.signal, appClient),
         ]);
       setEmployees(employeeRows);
       setModels(modelRows);
@@ -506,7 +510,7 @@ export default function AIEmployeePage(): ReactElement {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [appClient]);
 
   useEffect(() => {
     void load();
@@ -521,7 +525,7 @@ export default function AIEmployeePage(): ReactElement {
     const controller = new AbortController();
     setDetailLoading(true);
     setSaveError('');
-    void getAIEmployee(selectedUsername, controller.signal)
+    void getAIEmployee(selectedUsername, controller.signal, appClient)
       .then((employee) => {
         if (controller.signal.aborted) return;
         setSelected(employee);
@@ -543,7 +547,7 @@ export default function AIEmployeePage(): ReactElement {
         if (!controller.signal.aborted) setDetailLoading(false);
       });
     return () => controller.abort();
-  }, [selectedUsername]);
+  }, [appClient, selectedUsername]);
 
   const selectEmployee = (username: string): void => {
     if (username === selectedUsername) return;
@@ -574,7 +578,7 @@ export default function AIEmployeePage(): ReactElement {
     setSaveError('');
     setSaved(false);
     try {
-      const updated = await updateAIEmployee(selected, draft);
+      const updated = await updateAIEmployee(selected, draft, appClient);
       setSelected(updated);
       setDraft(buildEditableValues(updated));
       setEmployees((current) =>

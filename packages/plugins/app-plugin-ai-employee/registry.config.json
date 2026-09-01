@@ -12,7 +12,7 @@
         "@base-ui/react@^1.6.0",
         "@dicebear/core@^9.4.3",
         "@nocobase/ai-employee-avatars@^1.0.2",
-        "@nocobase/app-portal-sdk@^0.0.1-beta.1",
+        "@nocobase/app-client@^1.0.0-beta.5",
         "@nocobase/i18n@^0.0.2-beta.0",
         "ai@^5.0.0",
         "class-variance-authority@^0.7.1",

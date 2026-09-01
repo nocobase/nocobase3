@@ -16,18 +16,27 @@ export class AppRequestError extends Error {
 
 export interface AppClient {
   request<T = unknown>(path: string, init?: RequestInit): Promise<T>;
+  stream(path: string, init?: RequestInit): Promise<ReadableStream<Uint8Array>>;
 }
 
 export function createAppClient(options: AppClientOptions = {}): AppClient {
   const request = options.fetch ?? globalThis.fetch;
   const baseURL = (options.baseURL ?? resolveAppUrl('/api')).replace(/\/$/, '');
+
+  const execute = (
+    path: string,
+    init: RequestInit,
+    accept: string,
+  ): Promise<Response> =>
+    request(`${baseURL}/${path.replace(/^\/+/, '')}`, {
+      ...init,
+      credentials: 'include',
+      headers: createRequestHeaders(init, accept),
+    });
+
   return {
     async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-      const response = await request(`${baseURL}/${path.replace(/^\/+/, '')}`, {
-        ...init,
-        credentials: 'include',
-        headers: createRequestHeaders(init),
-      });
+      const response = await execute(path, init, 'application/json');
       const text = await response.text();
       const payload = text ? parsePayload(text) : undefined;
       if (!response.ok) {
@@ -39,13 +48,37 @@ export function createAppClient(options: AppClientOptions = {}): AppClient {
       }
       return payload as T;
     },
+
+    async stream(
+      path: string,
+      init: RequestInit = {},
+    ): Promise<ReadableStream<Uint8Array>> {
+      const response = await execute(path, init, 'text/event-stream');
+      if (!response.ok) {
+        const text = await response.text();
+        const payload = text ? parsePayload(text) : undefined;
+        throw new AppRequestError(
+          readErrorMessage(payload),
+          response.status,
+          payload,
+        );
+      }
+      if (!response.body) {
+        throw new AppRequestError(
+          'NocoBase streaming response has no body.',
+          response.status,
+          undefined,
+        );
+      }
+      return response.body;
+    },
   };
 }
 
-function createRequestHeaders(init: RequestInit): Headers {
+function createRequestHeaders(init: RequestInit, accept: string): Headers {
   const headers = new Headers(init.headers);
   if (!headers.has('Accept')) {
-    headers.set('Accept', 'application/json');
+    headers.set('Accept', accept);
   }
   if (
     init.body != null &&
