@@ -6,18 +6,6 @@ import type {
   FileUploadOptions,
 } from './types.js';
 
-import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
-import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
-
-declare global {
-  interface Window {
-    NOCOBASE_API_URL?: string;
-    APP_BASE_PATH?: string;
-    NOCOBASE_WS_PATH?: string;
-    NOCOBASE_WS_URL?: string;
-  }
-}
-
 export class FilesClientError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -38,83 +26,47 @@ export class FilesClientError extends Error {
 function normalizeEndpoint(endpoint: string): string {
   const value = endpoint.trim();
   if (!value) throw new FilesClientError('Files client endpoint is required.');
-  return value.replace(/\/+$/, '') || '/';
-}
-
-function resolveEndpoint(endpoint: string): string {
-  if (/^(?:https?:)?\/\//i.test(endpoint)) {
-    return resolveSameOriginEndpoint(endpoint);
-  }
-  if (/^[a-z][a-z\d+.-]*:/i.test(endpoint)) {
+  if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(value)) {
     throw new FilesClientError(
-      'Files client endpoint must use a same-origin HTTP(S) URL.',
+      'Files client endpoint must be relative to the application API root.',
     );
   }
-  return ensureSameOrigin(resolvePortalResourceUrl(endpoint));
-}
-
-function resolveSameOriginEndpoint(endpoint: string): string {
-  if (typeof window === 'undefined') {
+  if (/[?#]/u.test(value)) {
     throw new FilesClientError(
-      'Absolute Files client endpoints require a browser origin.',
+      'Files client endpoint must not contain a query string or fragment.',
     );
   }
-  return ensureSameOrigin(new URL(endpoint, window.location.origin).toString());
-}
-
-function ensureSameOrigin(endpoint: string): string {
-  if (typeof window === 'undefined') {
-    if (/^(?:https?:)?\/\//i.test(endpoint)) {
+  const normalized = value.replace(/^\/+|\/+$/gu, '');
+  if (!normalized) {
+    throw new FilesClientError('Files client endpoint is required.');
+  }
+  const segments = normalized.split('/');
+  for (const [index, segment] of segments.entries()) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
       throw new FilesClientError(
-        'Absolute Files client endpoints require a browser origin.',
+        'Files client endpoint contains invalid URL encoding.',
       );
     }
-    return endpoint;
+    if (!decoded || decoded === '.' || decoded === '..') {
+      throw new FilesClientError(
+        'Files client endpoint must not contain empty or relative path segments.',
+      );
+    }
+    if (decoded.includes('/') || decoded.includes('\\')) {
+      throw new FilesClientError(
+        'Files client endpoint must not contain encoded path separators.',
+      );
+    }
+    if (index === 0 && decoded === 'api') {
+      throw new FilesClientError(
+        'Files client endpoint is relative to /api and must not include the api prefix.',
+      );
+    }
   }
-  const resolved = new URL(endpoint, window.location.origin);
-  if (resolved.origin !== window.location.origin) {
-    throw new FilesClientError(
-      'Files client endpoint must use the current application origin.',
-    );
-  }
-  return resolved.toString();
-}
-
-function resolvePortalResourceUrl(path: string): string {
-  if (/^[a-z][a-z\d+.-]*:/i.test(path)) return path;
-  const resolved = resolvePortalUrl(path);
-  if (typeof window === 'undefined') return resolved;
-
-  const portalRoot = new URL(resolvePortalUrl('/'), window.location.origin);
-  const absolute = new URL(path, window.location.origin);
-  const portalBasePath = portalRoot.pathname.replace(/\/+$/, '');
-  if (
-    path.startsWith('/') &&
-    portalBasePath &&
-    (absolute.pathname === portalBasePath ||
-      absolute.pathname.startsWith(`${portalBasePath}/`))
-  ) {
-    return absolute.toString();
-  }
-  return new URL(resolved, window.location.origin).toString();
-}
-
-function resolveContentUrl(url: string): string {
-  return resolvePortalResourceUrl(url);
-}
-
-function resolveFileRecord(record: FileRecord): FileRecord {
-  return {
-    ...record,
-    contentUrl: resolveContentUrl(record.contentUrl),
-  };
-}
-
-function resolveAccessUrl(access: FileAccessUrl): FileAccessUrl {
-  return {
-    ...access,
-    url: resolveContentUrl(access.url),
-  };
+  return normalized;
 }
 
 function joinEndpoint(endpoint: string, suffix = ''): string {
@@ -172,10 +124,7 @@ function toClientError(error: unknown): FilesClientError {
 export function createFilesClient(
   options: CreateFilesClientOptions,
 ): FilesClient {
-  const endpoint = resolveEndpoint(normalizeEndpoint(options.endpoint)).replace(
-    /\/+$/,
-    '',
-  );
+  const endpoint = normalizeEndpoint(options.endpoint);
 
   async function request<T>(
     path: string,
@@ -187,70 +136,23 @@ export function createFilesClient(
     },
   ): Promise<T> {
     try {
-      const headers = nocobaseClient.getHeaders({
+      const payload = await options.appClient.request<unknown>(path, {
         method: requestOptions.method,
-        body: requestOptions.body,
-      });
-      const response = await fetch(path, {
-        method: requestOptions.method,
-        headers,
-        credentials: 'include',
         body:
           requestOptions.body === undefined
             ? undefined
-            : requestOptions.body instanceof FormData
+            : typeof FormData !== 'undefined' &&
+                requestOptions.body instanceof FormData
               ? requestOptions.body
               : JSON.stringify(requestOptions.body),
         signal: requestOptions.signal,
       });
-      const renewedToken = response.headers.get('x-new-token');
-      if (renewedToken) nocobaseClient.setToken(renewedToken);
-      const text = await response.text();
-      let payload: unknown;
-      try {
-        payload = text ? JSON.parse(text) : undefined;
-      } catch {
-        payload = text;
-      }
-      if (!response.ok) {
-        const detail =
-          payload && typeof payload === 'object'
-            ? (payload as {
-                code?: unknown;
-                message?: unknown;
-                error?: { code?: unknown; message?: unknown };
-              })
-            : undefined;
-        const nested = detail?.error;
-        const code =
-          typeof nested?.code === 'string'
-            ? nested.code
-            : typeof detail?.code === 'string'
-              ? detail.code
-              : undefined;
-        const serverMessage =
-          typeof payload === 'string'
-            ? payload
-            : typeof nested?.message === 'string'
-              ? nested.message
-              : typeof detail?.message === 'string'
-                ? detail.message
-                : `Files request failed (${response.status}).`;
-        throw new FilesClientError(serverMessage, {
-          status: response.status,
-          code,
-          serverMessage,
-        });
-      }
-      if (requestOptions.allowNoContent && response.status === 204) {
+      if (requestOptions.allowNoContent && payload === undefined) {
         return undefined as T;
       }
       if (!payload || typeof payload !== 'object' || !('data' in payload)) {
         throw new FilesClientError(
           'Files response is missing its data envelope.',
-          {
-            status: response.status,
-          },
         );
       }
       return (payload as { data: T }).data;
@@ -268,7 +170,7 @@ export function createFilesClient(
           method: 'GET',
         },
       );
-      return records.map(resolveFileRecord);
+      return records;
     },
     async upload(
       file: File,
@@ -284,7 +186,7 @@ export function createFilesClient(
         body,
         signal: uploadOptions?.signal,
       });
-      return resolveFileRecord(record);
+      return record;
     },
     async get(id: string): Promise<FileRecord> {
       const record = await request<FileRecord>(
@@ -293,7 +195,7 @@ export function createFilesClient(
           method: 'GET',
         },
       );
-      return resolveFileRecord(record);
+      return record;
     },
     async createAccessUrl(
       id: string,
@@ -307,7 +209,7 @@ export function createFilesClient(
           body,
         },
       );
-      return resolveAccessUrl(access);
+      return access;
     },
     async remove(id: string): Promise<void> {
       await request<void>(joinEndpoint(endpoint, encodeId(id)), {

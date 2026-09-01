@@ -118,7 +118,6 @@
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
-    "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
@@ -127,7 +126,6 @@
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
-    "@nocobase/app-portal-sdk": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",

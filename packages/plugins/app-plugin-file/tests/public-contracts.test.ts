@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
+import type { AppClient } from '@nocobase/app-client';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -37,8 +38,10 @@ describe('file plugin public contracts', () => {
   it('exposes stable server and client entry points', () => {
     const routeFactory: (options: CreateFileRouteOptions) => unknown =
       createFileRoute;
-    const clientFactory: (options: { endpoint: string }) => FilesClient =
-      createFilesClient;
+    const clientFactory: (options: {
+      appClient: AppClient;
+      endpoint: string;
+    }) => FilesClient = createFilesClient;
     const previewField = FilePreviewField;
     const storeImport: FileStore | undefined = undefined;
     const actionsAreFrozen: FrozenFileRouteActions = true;
