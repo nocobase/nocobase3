@@ -187,7 +187,7 @@ Hub process
 - Hub 与 Host共享本地 Release/config 文件；
 - 不承诺 HA、自动故障迁移或多副本。
 
-这里 App 管理记录和期望状态存储在 Hub DB。Host 重启后由 Hub 重新下发完整运行快照。
+这里 App 管理记录和期望状态存储在 Hub DB。Host 重启后由 Hub 重新下发完整 Deployment Set。
 
 ### 4.3 组合 C：单机进程隔离
 
@@ -447,7 +447,7 @@ Generic Runner/Host image
         +
 immutable App artifact
         +
-revisioned config reference
+config provider reference
 ```
 
 App artifact 至少包含：
@@ -475,7 +475,7 @@ Contract 的权威来源是 Release，不依赖运行中的 App。Hub 保存或�
 
 配置值有两种模式：
 
-1. **Hub-managed**：Hub 保存配置或 Secret 引用，Host 在部署时注入文件、环境变量、ConfigMap/Secret 或 Provider bootstrap；
+1. **Hub-managed**：Hub 保存配置来源并通过对应 Provider 读写。只有文件 Provider 会在 Deployment Set 中向 Host 提供文件路径；Host 不接收或写入配置内容；
 2. **Externally managed**：App 通过自定义 Config Provider 直接读取 Consul、Nacos、Vault、Git 等外部系统。
 
 配置读写不能依赖业务 App Runtime 成功启动，否则错误配置会造成无法启动、也无法修复的死锁。
@@ -483,6 +483,8 @@ Contract 的权威来源是 Release，不依赖运行中的 App。Hub 保存或�
 Hub 和 Host 无法预先理解用户任意实现的第三方 Provider。若 Hub 需要编辑某个第三方配置中心，必须安装明确的 control-plane adapter；否则 Hub 只显示来源、Contract、状态和外部管理入口。
 
 Runtime `ConfigProvider` 可以继续保持 read/reload 语义。可选 `WritableConfigProvider` 不应成为 Hub 管理配置的通用前提，也不应要求通过运行中的 App 调用。
+
+文件 Provider 的 Deployment Set 只包含 `{ provider: 'file', path? }`。`path` 省略时使用 Host 的 `app-volumes/<appId>/config`；非文件 Provider 不向 Host 下发配置字段，App 通过自身 Provider 读取配置。
 
 ## 11. 管理协议与 API
 
@@ -505,14 +507,15 @@ Host 对 Hub 提供统一能力：
 
 ```ts
 interface HostManagementService {
-  applyDeployment(spec: DeploymentSpec): Promise<OperationRef>;
-  removeDeployment(id: string): Promise<OperationRef>;
-  getDeploymentStatus(id: string): Promise<DeploymentStatus>;
-  getCapabilities(): Promise<HostCapabilities>;
+  applyDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult>;
+  getStatus(): Promise<HostStatus>;
+  restartApp(appId: string): Promise<HostStatus>;
 }
 ```
 
-单机使用 IPC，分离部署使用认证的内部 RPC。两种 transport 共享 DTO、幂等键、generation 和 Operation 语义。
+`HostDeploymentSet` 是 Hub 分配给一个 Host 的完整 Deployment 集合；`revision` 用于拒绝过期、重复冲突或乱序到达的集合。单机使用 IPC，分离部署使用认证的内部 RPC，两种 transport 共享同一套 DTO。
 
 ### 11.3 Host–App 接口
 
@@ -540,7 +543,7 @@ interface HostManagementService {
 Hub 保存产品期望状态，Host Control 创建 Kubernetes 资源，Kubernetes 保存并调和基础设施状态：
 
 ```text
-Hub Deployment generation
+Hub Deployment revision
         │ Host Control reconcile
         ▼
 Kubernetes resource generation
@@ -559,12 +562,14 @@ Hub、Hub DB、Host Control 和初始 Kubernetes identity 由 Helm、GitOps 或�
 
 ### 14.1 当前 App Host
 
-`packages/app-host` 当前：
+`packages/app/app-host` 当前：
 
 - 使用 Node `node:http`，不是 Hono；
-- standalone 模式通过 `DeploymentCatalog` 扫描 `APP_DEPLOYMENTS_DIR` 一级目录，并由 `StandaloneDeploymentReconciler` 将结果同步到运行时注册表；
+- standalone 模式通过 `DeploymentCatalog` 扫描 `APP_DEPLOYMENTS_DIR` 一级目录，并由 `StandaloneReconciler` 将结果同步到运行时注册表；
 - 发现含 `dist/server/embedded.js` 的 App；
 - `AppRuntimeRegistry` 的 Definition 和 Runtime 都是内存状态；
+- Host 自己管理 `@nocobase/logging` 生命周期；生产环境默认将结构化日志滚动写入 `storage/host/logs/`，App Runtime 事件通过 `appId` 等字段记录在 Host 日志中；
+- Host 自己定义 in-process App 的 `fetch` 和生命周期契约，WebSocket 契约及 `ws` Node adapter 由 `@nocobase/app-websocket` 提供；Host 不依赖 `@nocobase/app-server`；
 - 已提供 rescan、activate、deploy、reload、evict 等 HTTP API；
 - deploy 主要是 Runtime 重建和版本元数据更新，不是完整制品发布；
 - 只实现 `InProcessAppBackend`；
@@ -587,15 +592,15 @@ App 默认从显式 `configPath`、`APP_CONFIG_FILE` 或 App 根目录的 `confi
 3. Hub 接入 `AppHostSupervisor`；
 4. 定义 Host Management DTO 和进程内 service；
 5. 实现 IPC/loopback transport；
-6. Host 根据 Hub 运行快照构建 Runtime Registry；
+6. Host 根据 Hub 下发的 Deployment Set 构建 Runtime Registry；
 7. 目录扫描降级为显式 import/development 兼容入口。
 
 ### 阶段二：Release 与配置闭环
 
 1. 不可变 Release artifact、manifest 和 checksum；
 2. 构建期生成 Config Contract；
-3. Hub-managed config 和配置快照注入；
-4. generation、Operation、发布、回滚和状态上报；
+3. Hub 配置 Provider 管理和文件配置路径下发；
+4. revision、Operation、发布、回滚和状态上报；
 5. 保留 App standalone 的 file/custom Provider 能力。
 
 ### 阶段三：Kubernetes standalone Backend

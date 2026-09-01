@@ -67,6 +67,22 @@ describe('DeploymentCatalog', () => {
     ]);
   });
 
+  it('always points standalone apps at their volume config and storage', async () => {
+    const { deploymentsDir } = await createAppWorkspace([
+      'dist/server/embedded.js',
+    ]);
+    const volumesDir = path.join(deploymentsDir, '..', 'volumes');
+    const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
+
+    await expect(catalog.discover()).resolves.toMatchObject([
+      {
+        id: 'customer',
+        configPath: path.join(volumesDir, 'customer', 'config'),
+        dataDir: path.join(volumesDir, 'customer', 'storage'),
+      },
+    ]);
+  });
+
   it('discovers client assets as optional app artifacts', async () => {
     const { deploymentsDir, appDir } = await createAppWorkspace([
       'dist/client/index.html',

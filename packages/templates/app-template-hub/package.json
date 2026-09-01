@@ -74,6 +74,7 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-websocket": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",

@@ -9,56 +9,53 @@
 
 import type { ArtifactResolver } from '../artifact-resolver.ts';
 import type { AppRuntimeRegistry } from '../app-registry.ts';
-import type { AppHostMode } from '../host-mode.ts';
-import type { ConfigMaterializer } from './config-materializer.ts';
+import type { AppVolumeManager } from '../deployment/volume-manager.ts';
+import path from 'node:path';
 import type {
-  ApplyHostSnapshotResult,
-  HostDeploymentSnapshot,
+  ApplyDeploymentSetResult,
+  HostDeploymentSet,
   HostDeploymentSpec,
   HostDeploymentStatus,
   HostStatus,
 } from './types.ts';
 
-export interface HostDeploymentReconcilerOptions {
-  mode: AppHostMode;
+export interface ManagedReconcilerOptions {
   registry: AppRuntimeRegistry;
   artifactResolver: ArtifactResolver;
-  configMaterializer: ConfigMaterializer;
+  volumes: AppVolumeManager;
 }
 
-export class HostDeploymentReconciler {
-  private readonly mode: AppHostMode;
+export class ManagedReconciler {
   private readonly registry: AppRuntimeRegistry;
   private readonly artifactResolver: ArtifactResolver;
-  private readonly configMaterializer: ConfigMaterializer;
+  private readonly volumes: AppVolumeManager;
   private statuses = new Map<string, HostDeploymentStatus>();
-  private desiredGeneration = 0;
-  private reconciledGeneration = 0;
-  private lastSnapshotPayload: string | null = null;
-  private applyPromise: Promise<ApplyHostSnapshotResult> = Promise.resolve({
+  private desiredRevision = 0;
+  private reconciledRevision = 0;
+  private lastSetPayload: string | null = null;
+  private applyPromise: Promise<ApplyDeploymentSetResult> = Promise.resolve({
     accepted: false,
     status: {
       mode: 'managed',
       ready: false,
-      desiredGeneration: 0,
-      reconciledGeneration: 0,
+      desiredRevision: 0,
+      reconciledRevision: 0,
       deployments: [],
     },
   });
 
-  constructor(options: HostDeploymentReconcilerOptions) {
-    this.mode = options.mode;
+  constructor(options: ManagedReconcilerOptions) {
     this.registry = options.registry;
     this.artifactResolver = options.artifactResolver;
-    this.configMaterializer = options.configMaterializer;
+    this.volumes = options.volumes;
   }
 
-  applySnapshot(
-    snapshot: HostDeploymentSnapshot,
-  ): Promise<ApplyHostSnapshotResult> {
+  applyDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult> {
     const current = this.applyPromise
       .catch(() => undefined)
-      .then(() => this.applySnapshotUnlocked(snapshot));
+      .then(() => this.applyDeploymentSetUnlocked(deploymentSet));
     this.applyPromise = current;
     return current;
   }
@@ -80,28 +77,24 @@ export class HostDeploymentReconciler {
       })
       .sort((a, b) => a.id.localeCompare(b.id));
     return {
-      mode: this.mode,
+      mode: 'managed',
       ready:
-        this.mode === 'standalone' ||
-        (this.reconciledGeneration > 0 &&
-          deployments.every(
-            (deployment) =>
-              deployment.observedState !== 'failed' || deployment.app !== null,
-          )),
-      desiredGeneration: this.desiredGeneration,
-      reconciledGeneration: this.reconciledGeneration,
+        this.reconciledRevision > 0 &&
+        deployments.every(
+          (deployment) =>
+            deployment.observedState !== 'failed' || deployment.app !== null,
+        ),
+      desiredRevision: this.desiredRevision,
+      reconciledRevision: this.reconciledRevision,
       deployments,
     };
   }
 
-  private async applySnapshotUnlocked(
-    snapshot: HostDeploymentSnapshot,
-  ): Promise<ApplyHostSnapshotResult> {
-    if (this.mode !== 'managed') {
-      throw new Error('Deployment snapshots require managed host mode');
-    }
-    validateSnapshot(snapshot);
-    for (const spec of snapshot.deployments) {
+  private async applyDeploymentSetUnlocked(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult> {
+    validateDeploymentSet(deploymentSet);
+    for (const spec of deploymentSet.deployments) {
       const previous = this.statuses.get(spec.id);
       if (previous && previous.appId !== spec.appId) {
         throw new Error(
@@ -109,44 +102,46 @@ export class HostDeploymentReconciler {
         );
       }
     }
-    const snapshotPayload = JSON.stringify(snapshot);
-    if (snapshot.generation < this.desiredGeneration) {
+    const setPayload = JSON.stringify(deploymentSet);
+    if (deploymentSet.revision < this.desiredRevision) {
       return { accepted: false, status: this.getStatus() };
     }
 
     if (
-      snapshot.generation === this.desiredGeneration &&
-      this.lastSnapshotPayload !== snapshotPayload
+      deploymentSet.revision === this.desiredRevision &&
+      this.lastSetPayload !== setPayload
     ) {
       throw new Error(
-        `Snapshot generation ${snapshot.generation} cannot be changed`,
+        `Deployment set revision ${deploymentSet.revision} cannot be changed`,
       );
     }
 
-    const accepted = snapshot.generation > this.desiredGeneration;
+    const accepted = deploymentSet.revision > this.desiredRevision;
     if (accepted) {
-      this.desiredGeneration = snapshot.generation;
-      this.lastSnapshotPayload = snapshotPayload;
-      const desiredIds = new Set(snapshot.deployments.map((spec) => spec.id));
+      this.desiredRevision = deploymentSet.revision;
+      this.lastSetPayload = setPayload;
+      const desiredIds = new Set(
+        deploymentSet.deployments.map((spec) => spec.id),
+      );
       for (const [id, status] of this.statuses) {
         if (!desiredIds.has(id)) {
           await this.registry.unregister(status.appId, {
-            reason: `deployment ${id} removed from snapshot`,
+            reason: `deployment ${id} removed from deployment set`,
           });
           this.statuses.delete(id);
         }
       }
     }
 
-    for (const spec of snapshot.deployments) {
-      await this.reconcileDeployment(snapshot.generation, spec);
+    for (const spec of deploymentSet.deployments) {
+      await this.reconcileDeployment(deploymentSet.revision, spec);
     }
-    this.reconciledGeneration = snapshot.generation;
+    this.reconciledRevision = deploymentSet.revision;
     return { accepted, status: this.getStatus() };
   }
 
   private async reconcileDeployment(
-    generation: number,
+    revision: number,
     spec: HostDeploymentSpec,
   ): Promise<void> {
     if (spec.desiredState === 'stopped') {
@@ -158,8 +153,7 @@ export class HostDeploymentReconciler {
         appId: spec.appId,
         desiredState: spec.desiredState,
         observedState: 'stopped',
-        generation,
-        configRevision: spec.config?.revision,
+        revision,
         app: null,
         error: null,
       });
@@ -176,11 +170,9 @@ export class HostDeploymentReconciler {
       let result;
       try {
         const configPath = spec.config
-          ? await this.configMaterializer.materialize(spec.appId, spec.config)
-          : artifact.definition.configPath;
-        const dataDir = await this.configMaterializer.prepareStorageDir(
-          spec.appId,
-        );
+          ? (spec.config.path ?? this.volumes.configPath(spec.appId))
+          : undefined;
+        const dataDir = await this.volumes.prepareStorageDir(spec.appId);
         result = await this.registry.replaceDefinition(
           {
             ...artifact.definition,
@@ -191,12 +183,10 @@ export class HostDeploymentReconciler {
             isolation: spec.backend,
             dataDir,
             configPath,
-            configVersion:
-              spec.config?.revision ?? artifact.definition.configVersion,
           },
           {
             activate: (spec.activation ?? 'lazy') === 'eager',
-            reason: `deployment ${spec.id} generation ${generation}`,
+            reason: `deployment ${spec.id} revision ${revision}`,
           },
         );
         await artifact.commit();
@@ -209,8 +199,7 @@ export class HostDeploymentReconciler {
         appId: spec.appId,
         desiredState: spec.desiredState,
         observedState: result.app ? 'running' : 'registered',
-        generation,
-        configRevision: spec.config?.revision,
+        revision,
         app: result.app,
         error: null,
       });
@@ -220,8 +209,7 @@ export class HostDeploymentReconciler {
         appId: spec.appId,
         desiredState: spec.desiredState,
         observedState: 'failed',
-        generation,
-        configRevision: spec.config?.revision,
+        revision,
         app: this.registry.snapshot(spec.appId) ?? null,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -229,20 +217,23 @@ export class HostDeploymentReconciler {
   }
 }
 
-function validateSnapshot(snapshot: HostDeploymentSnapshot): void {
-  if (!snapshot || typeof snapshot !== 'object') {
-    throw new Error('Deployment snapshot must be an object');
+function validateDeploymentSet(deploymentSet: HostDeploymentSet): void {
+  if (!deploymentSet || typeof deploymentSet !== 'object') {
+    throw new Error('Deployment set must be an object');
   }
-  if (!Number.isSafeInteger(snapshot.generation) || snapshot.generation < 1) {
-    throw new Error('Snapshot generation must be a positive safe integer');
+  if (
+    !Number.isSafeInteger(deploymentSet.revision) ||
+    deploymentSet.revision < 1
+  ) {
+    throw new Error('Deployment set revision must be a positive safe integer');
   }
-  if (!Array.isArray(snapshot.deployments)) {
-    throw new Error('Snapshot deployments must be an array');
+  if (!Array.isArray(deploymentSet.deployments)) {
+    throw new Error('Deployment set deployments must be an array');
   }
   const deploymentIds = new Set<string>();
   const appIds = new Set<string>();
   const basePaths = new Set<string>();
-  for (const spec of snapshot.deployments) {
+  for (const spec of deploymentSet.deployments) {
     if (!spec || typeof spec !== 'object') {
       throw new Error('Deployment must be an object');
     }
@@ -293,9 +284,12 @@ function validateSnapshot(snapshot: HostDeploymentSnapshot): void {
       if (
         !spec.config ||
         typeof spec.config !== 'object' ||
-        typeof spec.config.revision !== 'string'
+        spec.config.provider !== 'file' ||
+        (spec.config.path !== undefined &&
+          (typeof spec.config.path !== 'string' ||
+            !path.isAbsolute(spec.config.path)))
       ) {
-        throw new Error(`Invalid config revision for deployment "${spec.id}"`);
+        throw new Error(`Invalid file config for deployment "${spec.id}"`);
       }
     }
     if (deploymentIds.has(spec.id)) {

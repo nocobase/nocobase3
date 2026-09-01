@@ -20,6 +20,7 @@ import type {
   AppServerReference,
   AppTier,
 } from '../app-types.ts';
+import { AppVolumeManager } from './volume-manager.ts';
 
 export interface DeploymentCatalogOptions {
   deploymentsDir?: string;
@@ -39,8 +40,6 @@ interface AppPackageJson {
     version?: string;
     healthPath?: string;
     resourcePolicy?: AppResourcePolicy;
-    configPath?: string;
-    config?: unknown;
   };
 }
 
@@ -50,12 +49,16 @@ const CLIENT_DIR_CANDIDATES = ['dist/client'];
 export class DeploymentCatalog {
   readonly deploymentsDir: string;
   readonly volumesDir: string;
+  readonly volumes: AppVolumeManager;
 
   constructor(options: DeploymentCatalogOptions = {}) {
     this.deploymentsDir = path.resolve(
       options.deploymentsDir ?? defaultDeploymentsDir(),
     );
-    this.volumesDir = path.resolve(options.volumesDir ?? defaultVolumesDir());
+    this.volumes = new AppVolumeManager(
+      options.volumesDir ?? defaultVolumesDir(),
+    );
+    this.volumesDir = this.volumes.volumesDir;
   }
 
   async discover(): Promise<AppDefinition[]> {
@@ -123,12 +126,8 @@ export class DeploymentCatalog {
       tier: packageJson?.app?.tier ?? 'warm',
       desiredVersion: version,
       rootDir,
-      dataDir: path.join(this.volumesDir, appId, 'storage'),
-      configPath:
-        packageJson?.app?.configPath ??
-        (await this.existingFile(
-          path.join(this.volumesDir, appId, 'config.yml'),
-        )),
+      dataDir: this.volumes.storageDir(appId),
+      configPath: this.volumes.configPath(appId),
       client,
       server,
       code: {
@@ -198,17 +197,6 @@ export class DeploymentCatalog {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null;
-      }
-      throw error;
-    }
-  }
-
-  private async existingFile(filePath: string): Promise<string | undefined> {
-    try {
-      return (await stat(filePath)).isFile() ? filePath : undefined;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return undefined;
       }
       throw error;
     }

@@ -8,18 +8,16 @@
  */
 
 import type { ChildProcess } from 'node:child_process';
-import type { HostManagementService } from './service.ts';
+import type { HostManagementService } from './manager.ts';
 import type {
-  ApplyHostSnapshotResult,
-  HostCapabilities,
-  HostDeploymentSnapshot,
+  ApplyDeploymentSetResult,
+  HostDeploymentSet,
   HostStatus,
 } from './types.ts';
 
 const IPC_CHANNEL = 'nocobase-app-host';
 
-type IpcMethod =
-  'hello' | 'applySnapshot' | 'getStatus' | 'restartApp' | 'getCapabilities';
+type IpcMethod = 'applyDeploymentSet' | 'getStatus' | 'restartApp';
 
 interface IpcRequest {
   channel: typeof IPC_CHANNEL;
@@ -56,14 +54,13 @@ export class IpcHostManagementClient implements HostManagementService {
     this.timeoutMs = options.timeoutMs ?? 30_000;
   }
 
-  hello(): Promise<HostCapabilities> {
-    return this.call<HostCapabilities>('hello');
-  }
-
-  applySnapshot(
-    snapshot: HostDeploymentSnapshot,
-  ): Promise<ApplyHostSnapshotResult> {
-    return this.call<ApplyHostSnapshotResult>('applySnapshot', snapshot);
+  applyDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult> {
+    return this.call<ApplyDeploymentSetResult>(
+      'applyDeploymentSet',
+      deploymentSet,
+    );
   }
 
   getStatus(): Promise<HostStatus> {
@@ -72,10 +69,6 @@ export class IpcHostManagementClient implements HostManagementService {
 
   restartApp(appId: string): Promise<HostStatus> {
     return this.call<HostStatus>('restartApp', { appId });
-  }
-
-  getCapabilities(): Promise<HostCapabilities> {
-    return this.call<HostCapabilities>('getCapabilities');
   }
 
   private call<T>(method: IpcMethod, payload?: unknown): Promise<T> {
@@ -178,16 +171,12 @@ export class IpcHostManagementServer {
     }
     let result: unknown;
     switch (request.method) {
-      case 'hello':
-      case 'getCapabilities':
-        result = await this.service.getCapabilities();
-        break;
       case 'getStatus':
         result = await this.service.getStatus();
         break;
-      case 'applySnapshot':
-        result = await this.service.applySnapshot(
-          request.payload as HostDeploymentSnapshot,
+      case 'applyDeploymentSet':
+        result = await this.service.applyDeploymentSet(
+          request.payload as HostDeploymentSet,
         );
         break;
       case 'restartApp':
@@ -223,11 +212,9 @@ function isIpcRequest(value: unknown): value is IpcRequest {
 
 function isIpcMethod(value: unknown): value is IpcMethod {
   return (
-    value === 'hello' ||
-    value === 'applySnapshot' ||
+    value === 'applyDeploymentSet' ||
     value === 'getStatus' ||
-    value === 'restartApp' ||
-    value === 'getCapabilities'
+    value === 'restartApp'
   );
 }
 

@@ -17,9 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { resolveAppHostMode, type AppHostMode } from './host-mode.ts';
 import {
   IpcHostManagementClient,
-  type ApplyHostSnapshotResult,
-  type HostCapabilities,
-  type HostDeploymentSnapshot,
+  type ApplyDeploymentSetResult,
+  type HostDeploymentSet,
   type HostManagementService,
 } from './management/index.ts';
 
@@ -125,7 +124,7 @@ export class AppHostSupervisor {
   private activeLeases = 0;
   private shuttingDown = false;
   private session: string | null = null;
-  private lastSnapshot: HostDeploymentSnapshot | null = null;
+  private lastDeploymentSet: HostDeploymentSet | null = null;
   private automaticRestartTimer: NodeJS.Timeout | null = null;
   private automaticRestartAttempts: number[] = [];
 
@@ -298,13 +297,13 @@ export class AppHostSupervisor {
     return await this.ensureStarted();
   }
 
-  async applySnapshot(
-    snapshot: HostDeploymentSnapshot,
-  ): Promise<ApplyHostSnapshotResult> {
+  async applyDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult> {
     const management = await this.getManagementClient();
-    const result = await management.applySnapshot(snapshot);
-    if (result.status.desiredGeneration === snapshot.generation) {
-      this.lastSnapshot = structuredClone(snapshot);
+    const result = await management.applyDeploymentSet(deploymentSet);
+    if (result.status.desiredRevision === deploymentSet.revision) {
+      this.lastDeploymentSet = structuredClone(deploymentSet);
     }
     return result;
   }
@@ -384,12 +383,8 @@ export class AppHostSupervisor {
 
     try {
       await this.waitForReady(targetUrl);
-      const capabilities = await management?.hello();
-      if (capabilities) {
-        this.validateCapabilities(capabilities, this.lastSnapshot);
-      }
-      if (management && this.lastSnapshot) {
-        await management.applySnapshot(this.lastSnapshot);
+      if (management && this.lastDeploymentSet) {
+        await management.applyDeploymentSet(this.lastDeploymentSet);
       }
       this.status = 'ready';
       return targetUrl;
@@ -420,30 +415,6 @@ export class AppHostSupervisor {
     this.managedChild = null;
     this.session = null;
     this.status = this.enabled ? 'stopped' : 'disabled';
-  }
-
-  private validateCapabilities(
-    capabilities: HostCapabilities,
-    snapshot: HostDeploymentSnapshot | null,
-  ): void {
-    if (capabilities.protocolVersion !== 1) {
-      throw new Error('Unsupported app-host protocol version');
-    }
-    if (capabilities.mode !== this.mode) {
-      throw new Error(
-        `App host mode mismatch: expected "${this.mode}", received "${capabilities.mode}"`,
-      );
-    }
-    if (!snapshot) {
-      return;
-    }
-    for (const deployment of snapshot.deployments) {
-      if (!capabilities.backends.includes(deployment.backend)) {
-        throw new Error(
-          `App host does not support backend "${deployment.backend}" required by deployment "${deployment.id}"`,
-        );
-      }
-    }
   }
 
   private scheduleAutomaticRestart(): void {

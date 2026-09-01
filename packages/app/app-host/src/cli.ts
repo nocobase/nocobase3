@@ -13,8 +13,8 @@ const shutdown = async (): Promise<void> => {
   }
 
   shuttingDown = true;
-  console.log('\nShutting down App host...');
   if (appHost) {
+    appHost.logger.info('Shutting down app host');
     await appHost.close('host shutdown');
   }
   process.exit(0);

@@ -16,6 +16,12 @@ import {
 import type { Duplex } from 'node:stream';
 import path from 'node:path';
 import { createDriveManager, type AppDriveDiskConfig } from '@nocobase/drive';
+import {
+  createLogging,
+  type Logger,
+  type Logging,
+  type LoggingConfig,
+} from '@nocobase/logging';
 import { AppRegistryError } from './errors.ts';
 import {
   applyFetchResponse,
@@ -27,20 +33,13 @@ import {
   DriveArtifactResolver,
   type ArtifactResolver,
 } from './artifact-resolver.ts';
-import {
-  AppModuleLoader,
-  DeploymentCatalog,
-  StandaloneDeploymentReconciler,
-} from './deployment/index.ts';
+import { AppModuleLoader, DeploymentCatalog } from './deployment/index.ts';
 import { loadAppHostConfig } from './host-config.ts';
 import { resolveAppHostMode, type AppHostMode } from './host-mode.ts';
 import { AppRuntimeRegistry } from './app-registry.ts';
 import type { AppActivationBackend } from './app-types.ts';
-import { writeAppSystemLog } from './app-system-log.ts';
 import {
-  ConfigMaterializer,
-  DefaultHostManagementService,
-  HostDeploymentReconciler,
+  HostManager,
   type HostManagementService,
   IpcHostManagementServer,
 } from './management/index.ts';
@@ -53,7 +52,7 @@ import {
   acceptWebSocketUpgrade,
   isWebSocketUpgrade,
   rejectWebSocketUpgrade,
-} from './websocket.ts';
+} from '@nocobase/app-websocket';
 
 export * from './errors.ts';
 export * from './events.ts';
@@ -64,10 +63,8 @@ export * from './in-process-backend.ts';
 export * from './deployment/index.ts';
 export * from './artifact-resolver.ts';
 export * from './app-registry.ts';
-export * from './app-runtime.ts';
-export * from './app-system-log.ts';
+export * from './in-process-app-handle.ts';
 export * from './static-client.ts';
-export * from './websocket.ts';
 export * from './app-types.ts';
 export * from './management/index.ts';
 
@@ -79,6 +76,7 @@ export interface AppHostOptions {
   appVolumesDir?: string;
   artifact?: AppDriveDiskConfig;
   artifactResolver?: ArtifactResolver;
+  logging?: LoggingConfig;
   backends?: AppActivationBackend[];
   maxActiveApps?: number;
   idleTtlMs?: number;
@@ -90,6 +88,8 @@ export interface AppHost {
   readonly deploymentCatalog: DeploymentCatalog;
   readonly artifactResolver: ArtifactResolver;
   readonly management: HostManagementService;
+  readonly logger: Logger;
+  readonly logging: Logging;
   readonly registry: AppRuntimeRegistry;
   readonly server: Server;
   start(): Promise<void>;
@@ -98,6 +98,14 @@ export interface AppHost {
 
 export function createAppHost(options: AppHostOptions = {}): AppHost {
   const mode = resolveAppHostMode(options.mode);
+  const logging = createLogging(
+    options.logging ?? {
+      default: 'host',
+      level: 'info',
+      base: { service: 'app-host' },
+    },
+  );
+  const logger = logging.getLogger();
   const deploymentCatalog = new DeploymentCatalog({
     deploymentsDir: options.appDeploymentsDir,
     volumesDir: options.appVolumesDir,
@@ -124,21 +132,14 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     maxActiveApps: options.maxActiveApps,
     idleTtlMs: options.idleTtlMs,
     evictionIntervalMs: options.evictionIntervalMs,
+    logger: logger.child({ component: 'app-runtime' }),
   });
-  const standaloneReconciler = new StandaloneDeploymentReconciler(
+  attachAppEventLogs(registry, logger);
+  const manager = new HostManager({
+    mode,
+    registry,
     deploymentCatalog,
-    registry,
-  );
-  const reconciler = new HostDeploymentReconciler({
-    mode,
-    registry,
     artifactResolver,
-    configMaterializer: new ConfigMaterializer(deploymentCatalog.volumesDir),
-  });
-  const management = new DefaultHostManagementService({
-    mode,
-    registry,
-    reconciler,
   });
 
   const handleRequest = async (
@@ -151,10 +152,9 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         req,
         path,
         mode,
-        management,
+        manager,
         registry,
         deploymentCatalog,
-        standaloneReconciler,
         artifactResolver,
       );
       if (managementResponse) {
@@ -197,10 +197,13 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       }
 
       try {
-        await handleError(error, res);
+        await handleError(error, res, logger);
       } catch (handleErrorError) {
         if (!isClientResponseClose(handleErrorError, res)) {
-          console.error(handleErrorError);
+          logger.error(
+            { err: handleErrorError },
+            'Failed to handle request error',
+          );
         }
 
         if (!res.destroyed) {
@@ -217,7 +220,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const server = createServer((req, res) => {
     const requestPromise = handleRequest(req, res);
     requestPromise.catch((error: unknown) => {
-      console.error(error);
+      logger.error({ err: error }, 'Unhandled request error');
       if (!res.destroyed) {
         res.destroy(error instanceof Error ? error : new Error(String(error)));
       }
@@ -227,7 +230,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   server.on('upgrade', (req, socket, head) => {
     const upgradePromise = dispatchAppWebSocket(req, socket, head, registry);
     upgradePromise.catch((error: unknown) => {
-      console.error(error);
+      logger.error({ err: error }, 'WebSocket upgrade failed');
       rejectWebSocketUpgrade(
         socket,
         error instanceof AppRegistryError ? error.status : 500,
@@ -239,14 +242,13 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     mode,
     deploymentCatalog,
     artifactResolver,
-    management,
+    logger,
+    logging,
+    management: manager,
     registry,
     server,
     async start() {
-      const discoveredApps =
-        mode === 'standalone' ? await standaloneReconciler.reconcile() : null;
-      attachAppEventLogs(registry);
-
+      const discoveredApps = await manager.initialize();
       await new Promise<void>((resolve) => {
         server.listen(
           options.port ?? 3000,
@@ -260,17 +262,15 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         typeof address === 'object' && address
           ? `${address.address}:${address.port}`
           : String(address);
-      console.log(`App host listening on http://${bind}`);
-      console.log(`App host mode: ${mode}`);
+      logger.info({ bind, mode }, 'App host started');
       if (mode === 'standalone') {
-        console.log(
-          `App deployments directory: ${deploymentCatalog.deploymentsDir}`,
-        );
-        console.log(
-          `Discovered ${discoveredApps?.registered.length ?? 0} app(s): ${
-            discoveredApps?.registered.map((app) => app.id).join(', ') ||
-            '(none)'
-          }`,
+        logger.info(
+          {
+            deploymentsDir: deploymentCatalog.deploymentsDir,
+            discoveredApps:
+              discoveredApps?.registered.map((app) => app.id) ?? [],
+          },
+          'Standalone deployments discovered',
         );
       }
     },
@@ -291,6 +291,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       });
 
       await registry.destroyAll(reason);
+      await logging.close();
     },
   };
 }
@@ -382,6 +383,7 @@ export async function startAppHostFromEnv(): Promise<AppHost> {
     maxActiveApps: config.maxActiveApps,
     idleTtlMs: config.idleTtlMs,
     evictionIntervalMs: config.evictionIntervalMs,
+    logging: config.logging,
   });
 
   if (host.mode === 'managed') {
@@ -397,7 +399,10 @@ export async function startAppHostFromEnv(): Promise<AppHost> {
         .close('hub IPC disconnected')
         .then(() => process.exit(0))
         .catch((error: unknown) => {
-          console.error(error);
+          host.logger.error(
+            { err: error },
+            'Failed to close disconnected host',
+          );
           process.exit(1);
         });
     });
@@ -407,47 +412,34 @@ export async function startAppHostFromEnv(): Promise<AppHost> {
   return host;
 }
 
-function attachAppEventLogs(registry: AppRuntimeRegistry): void {
+function attachAppEventLogs(
+  registry: AppRuntimeRegistry,
+  logger: Logger,
+): void {
   registry.events.on('app:createFailed', (event) => {
-    const definition = registry.definition(event.appId);
-    writeAppSystemLog({
-      level: 'error',
-      msg: 'Embedded App failed to initialize',
-      definition,
-      error: event.error,
-      fields: {
-        event: 'app:createFailed',
-        version: event.version,
-        state: event.state,
-        basePath: event.basePath,
-      },
-    });
-    console.error(
-      `[app] failed to create ${event.appId}@v${event.version} at ${event.basePath}`,
-      event.error,
+    logger.error(
+      { ...event, err: event.error, event: 'app:createFailed' },
+      'Embedded app failed to initialize',
     );
   });
 
   registry.events.on('app:created', (event) => {
-    console.log(
-      `[app] created ${event.appId}@v${event.version} at ${event.basePath}`,
-    );
+    logger.info({ ...event, event: 'app:created' }, 'App runtime created');
   });
 
   registry.events.on('app:draining', (event) => {
-    console.log(
-      `[app] draining ${event.appId}@v${event.version}; activeRequests=${event.activeRequests}`,
-    );
+    logger.info({ ...event, event: 'app:draining' }, 'App runtime draining');
   });
 
   registry.events.on('app:resourceDisposed', (event) => {
-    console.log(
-      `[app] disposed ${event.appId}@v${event.version}: ${event.resourceName}`,
+    logger.debug(
+      { ...event, event: 'app:resourceDisposed' },
+      'App runtime resource disposed',
     );
   });
 
   registry.events.on('app:destroyed', (event) => {
-    console.log(`[app] destroyed ${event.appId}@v${event.version}`);
+    logger.info({ ...event, event: 'app:destroyed' }, 'App runtime destroyed');
   });
 }
 
@@ -455,10 +447,9 @@ async function managementApi(
   req: IncomingMessage,
   path: string,
   mode: AppHostMode,
-  management: HostManagementService,
+  manager: HostManager,
   registry: AppRuntimeRegistry,
   deploymentCatalog: DeploymentCatalog,
-  standaloneReconciler: StandaloneDeploymentReconciler,
   artifactResolver: ArtifactResolver,
 ): Promise<Response | null> {
   const method = req.method ?? 'GET';
@@ -477,7 +468,7 @@ async function managementApi(
   }
 
   if (method === 'GET' && path === '/__ready') {
-    const status = await management.getStatus();
+    const status = await manager.getStatus();
     return jsonResponse(
       { status: status.ready ? 'ready' : 'not-ready' },
       status.ready ? {} : { status: 503 },
@@ -485,7 +476,7 @@ async function managementApi(
   }
 
   if (mode === 'managed' && method === 'GET' && path === '/__health') {
-    const status = await management.getStatus();
+    const status = await manager.getStatus();
     return jsonResponse(
       { status: status.ready ? 'ready' : 'not-ready' },
       status.ready ? {} : { status: 503 },
@@ -520,7 +511,7 @@ async function managementApi(
     return jsonResponse({
       ...registry.health(),
       mode,
-      management: await management.getStatus(),
+      management: await manager.getStatus(),
     });
   }
 
@@ -536,7 +527,7 @@ async function managementApi(
       return methodNotAllowed('POST');
     }
 
-    const sync = await standaloneReconciler.reconcile();
+    const sync = await manager.rescan();
     return jsonResponse({
       ...sync,
       active: registry.list(),
@@ -785,9 +776,13 @@ async function readJsonBody(
     : {};
 }
 
-async function handleError(error: unknown, res: ServerResponse): Promise<void> {
+async function handleError(
+  error: unknown,
+  res: ServerResponse,
+  logger: Logger,
+): Promise<void> {
   if (!(error instanceof AppRegistryError) || error.status >= 500) {
-    console.error(error);
+    logger.error({ err: error }, 'Request failed');
   }
 
   if (res.headersSent) {

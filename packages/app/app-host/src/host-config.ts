@@ -10,7 +10,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { Config, type ConfigMap, type ConfigValue } from '@nocobase/config';
+import { Config, type ConfigMap } from '@nocobase/config';
 import { jsonParser } from '@nocobase/config/parsers/json';
 import { yamlParser } from '@nocobase/config/parsers/yaml';
 import {
@@ -20,9 +20,13 @@ import {
   environmentProvider,
   type Environment,
 } from '@nocobase/config/providers/env';
-import { fileProvider } from '@nocobase/config/providers/file';
+import {
+  fileProvider,
+  type FileProviderOptions,
+} from '@nocobase/config/providers/file';
 import { objectProvider } from '@nocobase/config/providers/object';
 import type { AppDriveDiskConfig } from '@nocobase/drive';
+import type { LoggingConfig } from '@nocobase/logging';
 
 import type { AppHostMode } from './host-mode.ts';
 
@@ -33,6 +37,7 @@ export interface AppHostConfig {
     port: number;
   };
   artifact: AppDriveDiskConfig;
+  logging: LoggingConfig;
   appDeploymentsDir: string;
   appVolumesDir: string;
   maxActiveApps?: number;
@@ -44,7 +49,6 @@ export interface LoadAppHostConfigOptions {
   configPath?: string;
   rootDir?: string;
   environment?: Environment;
-  overrides?: Partial<AppHostConfig>;
 }
 
 const DEFAULT_CONFIG_BASENAME = 'config';
@@ -72,15 +76,15 @@ export async function loadAppHostConfig(
           location: path.join(rootDir, 'storage', 'app-artifacts'),
           visibility: 'private',
         },
+        logging: createDefaultHostLoggingConfig(rootDir, environment.NODE_ENV),
         appDeploymentsDir: path.join(rootDir, 'storage', 'app-deployments'),
         appVolumesDir: path.join(rootDir, 'storage', 'app-volumes'),
       },
     }),
   );
-  await config.load(
-    fileProvider(configPath, { optional: configuredPath === undefined }),
-    configParser(configPath),
-  );
+  await loadFile(config, configPath, {
+    optional: configuredPath === undefined,
+  });
   await config.load(
     environmentProvider(environment, {
       mappings: {
@@ -108,14 +112,11 @@ export async function loadAppHostConfig(
         APP_HOST_ARTIFACT_SECRET_ACCESS_KEY: envString(
           'host.artifact.credentials.secretAccessKey',
         ),
+        APP_HOST_LOG_LEVEL: envString('host.logging.level'),
       },
     }),
   );
-  if (options.overrides) {
-    await config.load(objectProvider({ host: toConfigMap(options.overrides) }));
-  }
-
-  return decodeAppHostConfig(config.get('host'), rootDir);
+  return decodeAppHostConfig(config, rootDir);
 }
 
 export function resolveAppHostConfigPath(configPath: string): string {
@@ -128,201 +129,140 @@ export function resolveAppHostConfigPath(configPath: string): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
-function configParser(configPath: string): ReturnType<typeof yamlParser> {
+async function loadFile(
+  config: Config,
+  configPath: string,
+  options: FileProviderOptions = {},
+): Promise<void> {
   const extension = path.extname(configPath).toLowerCase();
-  if (extension === '.yml' || extension === '.yaml') {
-    return yamlParser();
+  const parser =
+    extension === '.yml' || extension === '.yaml'
+      ? yamlParser()
+      : extension === '.json'
+        ? jsonParser()
+        : undefined;
+  if (!parser) {
+    throw new Error(
+      `Unsupported app-host config extension "${extension || '(none)'}". Expected .yml, .yaml, or .json.`,
+    );
   }
-  if (extension === '.json') {
-    return jsonParser();
-  }
-  throw new Error(
-    `Unsupported app-host config extension "${extension || '(none)'}". Expected .yml, .yaml, or .json.`,
-  );
+  await config.load(fileProvider(configPath, options), parser);
 }
 
-function decodeAppHostConfig(value: unknown, rootDir: string): AppHostConfig {
-  if (!isRecord(value)) {
-    throw new Error('Invalid app-host config: host must be an object');
-  }
-  const server = requireRecord(value.server, 'host.server');
-  const artifact = requireRecord(value.artifact, 'host.artifact');
-  const mode = value.mode;
+function decodeAppHostConfig(config: Config, rootDir: string): AppHostConfig {
+  const hostConfig = config.cut('host');
+  const mode = hostConfig.string('mode');
   if (mode !== 'standalone' && mode !== 'managed') {
     throw new Error(
       'Invalid app-host config: host.mode must be "standalone" or "managed"',
     );
   }
-  const host = requireString(server.host, 'host.server.host');
-  const port = requirePositiveInteger(server.port, 'host.server.port');
+  const host = required(hostConfig.string('server.host'), 'host.server.host');
+  const port = positiveInteger(hostConfig, 'server.port');
   const appDeploymentsDir = resolveConfigDirectory(
-    requireString(value.appDeploymentsDir, 'host.appDeploymentsDir'),
+    required(hostConfig.string('appDeploymentsDir'), 'host.appDeploymentsDir'),
     rootDir,
   );
   const appVolumesDir = resolveConfigDirectory(
-    requireString(value.appVolumesDir, 'host.appVolumesDir'),
+    required(hostConfig.string('appVolumesDir'), 'host.appVolumesDir'),
     rootDir,
   );
+  const artifactConfig = hostConfig.cut('artifact');
+  const artifactDriver = artifactConfig.string('driver');
+  if (artifactDriver !== 'fs' && artifactDriver !== 's3') {
+    throw new Error(
+      'Invalid app-host config: host.artifact.driver must be "fs" or "s3"',
+    );
+  }
+  const artifact = {
+    ...artifactConfig.raw(),
+    driver: artifactDriver,
+  } as AppDriveDiskConfig;
+  if (artifact.driver === 'fs') {
+    artifact.location = resolveConfigDirectory(artifact.location, rootDir);
+  }
 
   return {
     mode,
     server: { host, port },
-    artifact: decodeArtifactConfig(artifact, rootDir),
+    artifact,
+    logging: { ...hostConfig.cut('logging').raw() },
     appDeploymentsDir,
     appVolumesDir,
-    maxActiveApps: optionalPositiveInteger(
-      value.maxActiveApps,
-      'host.maxActiveApps',
-    ),
-    idleTtlMs: optionalNonNegativeInteger(value.idleTtlMs, 'host.idleTtlMs'),
+    maxActiveApps: optionalPositiveInteger(hostConfig, 'maxActiveApps'),
+    idleTtlMs: optionalNonNegativeInteger(hostConfig, 'idleTtlMs'),
     evictionIntervalMs: optionalNonNegativeInteger(
-      value.evictionIntervalMs,
-      'host.evictionIntervalMs',
+      hostConfig,
+      'evictionIntervalMs',
     ),
   };
 }
 
-function decodeArtifactConfig(
-  value: Record<string, unknown>,
+function createDefaultHostLoggingConfig(
   rootDir: string,
-): AppDriveDiskConfig {
-  if (value.driver === 'fs') {
+  nodeEnv: string | undefined,
+): ConfigMap {
+  const config: ConfigMap = {
+    default: 'host',
+    level: 'info',
+    base: { service: 'app-host' },
+  };
+  if (nodeEnv === 'production') {
     return {
-      driver: 'fs',
-      location: resolveConfigDirectory(
-        requireString(value.location, 'host.artifact.location'),
-        rootDir,
-      ),
-      visibility: decodeVisibility(value.visibility),
-      ...(typeof value.url === 'string' ? { url: value.url } : {}),
-    };
-  }
-  if (value.driver === 's3') {
-    const credentials = isRecord(value.credentials) ? value.credentials : {};
-    return {
-      driver: 's3',
-      bucket: requireString(value.bucket, 'host.artifact.bucket'),
-      region: requireString(value.region, 'host.artifact.region'),
-      endpoint: optionalString(value.endpoint, 'host.artifact.endpoint'),
-      cdnUrl: optionalString(value.cdnUrl, 'host.artifact.cdnUrl'),
-      forcePathStyle: requireBoolean(
-        value.forcePathStyle,
-        'host.artifact.forcePathStyle',
-      ),
-      supportsACL: requireBoolean(
-        value.supportsACL,
-        'host.artifact.supportsACL',
-      ),
-      encryption: optionalString(value.encryption, 'host.artifact.encryption'),
-      credentials: {
-        accessKeyId: optionalString(
-          credentials.accessKeyId,
-          'host.artifact.credentials.accessKeyId',
-        ),
-        secretAccessKey: optionalString(
-          credentials.secretAccessKey,
-          'host.artifact.credentials.secretAccessKey',
-        ),
+      ...config,
+      transport: {
+        target: 'pino-roll',
+        options: {
+          file: path.join(rootDir, 'storage', 'host', 'logs', '{logger}.log'),
+          frequency: 'daily',
+          dateFormat: 'yyyy_MM_dd',
+          mkdir: true,
+          limit: { count: 6, removeOtherLogFiles: true },
+        },
       },
-      visibility: decodeVisibility(value.visibility),
     };
   }
-  throw new Error(
-    'Invalid app-host config: host.artifact.driver must be "fs" or "s3"',
-  );
+  return config;
 }
 
 function resolveConfigDirectory(value: string, rootDir: string): string {
   return path.resolve(rootDir, value);
 }
 
-function decodeVisibility(value: unknown): 'public' | 'private' {
-  if (value === 'public' || value === 'private') return value;
-  throw new Error(
-    'Invalid app-host config: artifact visibility must be "public" or "private"',
-  );
-}
-
-function requireRecord(value: unknown, name: string): Record<string, unknown> {
-  if (!isRecord(value))
-    throw new Error(`Invalid app-host config: ${name} must be an object`);
-  return value;
-}
-
-function requireString(value: unknown, name: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(
-      `Invalid app-host config: ${name} must be a non-empty string`,
-    );
+function required<T>(value: T | undefined, name: string): T {
+  if (value === undefined || value === '') {
+    throw new Error(`Invalid app-host config: ${name} is required`);
   }
   return value;
 }
 
-function optionalString(value: unknown, name: string): string | undefined {
-  return value === undefined ? undefined : requireString(value, name);
-}
-
-function requireBoolean(value: unknown, name: string): boolean {
-  if (typeof value !== 'boolean')
-    throw new Error(`Invalid app-host config: ${name} must be a boolean`);
-  return value;
-}
-
-function requirePositiveInteger(value: unknown, name: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+function positiveInteger(config: Config, name: string): number {
+  const value = config.integer(name);
+  if (value === undefined || value <= 0) {
     throw new Error(
-      `Invalid app-host config: ${name} must be a positive integer`,
+      `Invalid app-host config: host.${name} must be a positive integer`,
     );
   }
-  return value as number;
+  return value;
 }
 
 function optionalPositiveInteger(
-  value: unknown,
+  config: Config,
   name: string,
 ): number | undefined {
-  return value === undefined ? undefined : requirePositiveInteger(value, name);
+  return config.has(name) ? positiveInteger(config, name) : undefined;
 }
 
 function optionalNonNegativeInteger(
-  value: unknown,
+  config: Config,
   name: string,
 ): number | undefined {
+  const value = config.integer(name);
   if (value === undefined) return undefined;
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+  if (value < 0) {
     throw new Error(
-      `Invalid app-host config: ${name} must be a non-negative integer`,
+      `Invalid app-host config: host.${name} must be a non-negative integer`,
     );
   }
-  return value as number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function toConfigMap(value: object): ConfigMap {
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, entry]) => entry !== undefined)
-      .map(([key, entry]) => [key, toConfigValue(entry)]),
-  );
-}
-
-function toConfigValue(value: unknown): ConfigValue {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(toConfigValue);
-  }
-  if (isRecord(value)) {
-    return toConfigMap(value);
-  }
-  throw new Error('App-host config overrides contain an unsupported value');
+  return value;
 }

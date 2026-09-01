@@ -14,10 +14,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { c as createTar } from 'tar';
 import {
-  ConfigMaterializer,
   createAppHost,
   type AppHost,
-  type HostDeploymentSnapshot,
+  type HostDeploymentSet,
   type ArtifactReference,
 } from '../dist/index.js';
 
@@ -44,17 +43,16 @@ describe('managed host reconciliation', () => {
     });
     hosts.push(host);
 
-    const firstSnapshot = snapshot(1, artifact, {
+    const firstDeploymentSet = deploymentSet(1, artifact, {
       activation: 'eager',
-      config: { revision: '1', value: { database: { dialect: 'sqlite' } } },
+      config: { provider: 'file' },
     });
-    const first = await host.management.applySnapshot(firstSnapshot);
+    const first = await host.management.applyDeploymentSet(firstDeploymentSet);
     expect(first.accepted).toBe(true);
     expect(first.status.deployments[0]).toMatchObject({
       appId: 'customer',
       observedState: 'running',
-      generation: 1,
-      configRevision: '1',
+      revision: 1,
     });
     expect(host.registry.isActive('customer')).toBe(true);
     expect(host.registry.definition('customer')?.rootDir).toContain(
@@ -64,31 +62,30 @@ describe('managed host reconciliation', () => {
       path.join(volumesDir, 'customer', 'storage'),
     );
     const configPath = host.registry.definition('customer')?.configPath;
-    expect(configPath).toBe(path.join(volumesDir, 'customer', 'config.yml'));
-    await expect(readFile(configPath!, 'utf8')).resolves.toContain('sqlite');
+    expect(configPath).toBe(path.join(volumesDir, 'customer', 'config'));
 
-    const repeated = await host.management.applySnapshot(firstSnapshot);
+    const repeated =
+      await host.management.applyDeploymentSet(firstDeploymentSet);
     expect(repeated.accepted).toBe(false);
     expect(host.registry.snapshot('customer')?.version).toBe(1);
 
-    const replaced = await host.management.applySnapshot(
-      snapshot(2, artifact, {
+    const sharedConfigPath = path.join(volumesDir, 'shared', 'customer');
+    const replaced = await host.management.applyDeploymentSet(
+      deploymentSet(2, artifact, {
         activation: 'lazy',
-        config: { revision: '2', value: { database: { dialect: 'postgres' } } },
+        config: { provider: 'file', path: sharedConfigPath },
       }),
     );
     expect(replaced.status.deployments[0]).toMatchObject({
       observedState: 'running',
-      configRevision: '2',
     });
-    await expect(readFile(configPath!, 'utf8')).resolves.toContain('postgres');
-    await expect(
-      readFile(path.join(deploymentsDir, 'customer', 'config.yml'), 'utf8'),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(host.registry.definition('customer')?.configPath).toBe(
+      sharedConfigPath,
+    );
     expect(host.registry.snapshot('customer')?.version).toBe(2);
 
-    const stopped = await host.management.applySnapshot(
-      snapshot(3, artifact, { desiredState: 'stopped' }),
+    const stopped = await host.management.applyDeploymentSet(
+      deploymentSet(3, artifact, { desiredState: 'stopped' }),
     );
     expect(stopped.status.deployments[0]?.observedState).toBe('stopped');
     expect(host.registry.has('customer')).toBe(false);
@@ -106,12 +103,12 @@ describe('managed host reconciliation', () => {
     });
     hosts.push(host);
 
-    await host.management.applySnapshot(
-      snapshot(1, artifact, { activation: 'eager' }),
+    await host.management.applyDeploymentSet(
+      deploymentSet(1, artifact, { activation: 'eager' }),
     );
     const activeVersion = host.registry.snapshot('customer')?.version;
-    const failed = await host.management.applySnapshot(
-      snapshot(2, artifact, {
+    const failed = await host.management.applyDeploymentSet(
+      deploymentSet(2, artifact, {
         activation: 'eager',
         artifact: { ...artifact, version: '9.9.9' },
       }),
@@ -119,13 +116,13 @@ describe('managed host reconciliation', () => {
 
     expect(failed.status.deployments[0]).toMatchObject({
       observedState: 'failed',
-      generation: 2,
+      revision: 2,
     });
     expect(failed.status.deployments[0]?.error).toContain('version mismatch');
     expect(host.registry.snapshot('customer')?.version).toBe(activeVersion);
   });
 
-  it('removes deployments omitted from a newer complete snapshot', async () => {
+  it('removes deployments omitted from a newer complete deployment set', async () => {
     const { deploymentsDir, volumesDir, artifact, artifactDir } =
       await createFixture();
     const host = createAppHost({
@@ -136,12 +133,12 @@ describe('managed host reconciliation', () => {
       evictionIntervalMs: 0,
     });
     hosts.push(host);
-    await host.management.applySnapshot(
-      snapshot(1, artifact, { activation: 'eager' }),
+    await host.management.applyDeploymentSet(
+      deploymentSet(1, artifact, { activation: 'eager' }),
     );
 
-    const result = await host.management.applySnapshot({
-      generation: 2,
+    const result = await host.management.applyDeploymentSet({
+      revision: 2,
       deployments: [],
     });
     expect(result.status.deployments).toEqual([]);
@@ -159,10 +156,44 @@ describe('managed host reconciliation', () => {
       evictionIntervalMs: 0,
     });
     hosts.push(host);
-    const result = await host.management.applySnapshot(snapshot(1, artifact));
+    const result = await host.management.applyDeploymentSet(
+      deploymentSet(1, artifact),
+    );
     expect(result.status.deployments[0]?.observedState).toBe('registered');
     expect(host.registry.has('customer')).toBe(true);
     expect(host.registry.isActive('customer')).toBe(false);
+    expect(host.registry.definition('customer')?.configPath).toBeUndefined();
+    await expect(host.management.restartApp('customer')).rejects.toThrow(
+      'App "customer" is not running',
+    );
+  });
+
+  it('restarts only a running deployment', async () => {
+    const { deploymentsDir, volumesDir, artifact, artifactDir } =
+      await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: deploymentsDir,
+      appVolumesDir: volumesDir,
+      artifact: fsArtifact(artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+
+    await host.management.applyDeploymentSet(
+      deploymentSet(1, artifact, { activation: 'eager' }),
+    );
+    const before = host.registry.snapshot('customer');
+    const status = await host.management.restartApp('customer');
+    const after = host.registry.snapshot('customer');
+
+    expect(before).toBeDefined();
+    expect(after).toBeDefined();
+    expect(after?.version).toBeGreaterThan(before?.version ?? 0);
+    expect(status.deployments[0]).toMatchObject({
+      appId: 'customer',
+      observedState: 'running',
+    });
   });
 
   it('routes a managed deployment by its configured base path', async () => {
@@ -179,8 +210,11 @@ describe('managed host reconciliation', () => {
     });
     hosts.push(host);
     await host.start();
-    await host.management.applySnapshot(
-      snapshot(1, artifact, { activation: 'eager', basePath: '/workspace' }),
+    await host.management.applyDeploymentSet(
+      deploymentSet(1, artifact, {
+        activation: 'eager',
+        basePath: '/workspace',
+      }),
     );
 
     const address = host.server.address();
@@ -194,7 +228,7 @@ describe('managed host reconciliation', () => {
     await expect(response.text()).resolves.toBe('ok');
   });
 
-  it('rejects changed payloads that reuse a generation', async () => {
+  it('rejects changed payloads that reuse a revision', async () => {
     const { deploymentsDir, volumesDir, artifact, artifactDir } =
       await createFixture();
     const host = createAppHost({
@@ -205,12 +239,12 @@ describe('managed host reconciliation', () => {
       evictionIntervalMs: 0,
     });
     hosts.push(host);
-    await host.management.applySnapshot(snapshot(1, artifact));
+    await host.management.applyDeploymentSet(deploymentSet(1, artifact));
     await expect(
-      host.management.applySnapshot(
-        snapshot(1, artifact, { activation: 'eager' }),
+      host.management.applyDeploymentSet(
+        deploymentSet(1, artifact, { activation: 'eager' }),
       ),
-    ).rejects.toThrow('generation 1 cannot be changed');
+    ).rejects.toThrow('revision 1 cannot be changed');
   });
 
   it('rejects capabilities that are declared but not implemented', async () => {
@@ -226,20 +260,27 @@ describe('managed host reconciliation', () => {
     hosts.push(host);
 
     await expect(
-      host.management.applySnapshot(
-        snapshot(1, artifact, {
+      host.management.applyDeploymentSet(
+        deploymentSet(1, artifact, {
           restartPolicy: 'always',
-        } as Partial<HostDeploymentSnapshot['deployments'][number]>),
+        } as Partial<HostDeploymentSet['deployments'][number]>),
       ),
     ).rejects.toThrow('Restart policy is not supported');
     await expect(
-      host.management.applySnapshot(
-        snapshot(1, artifact, {
+      host.management.applyDeploymentSet(
+        deploymentSet(1, artifact, {
           backend: 'worker',
-        } as unknown as Partial<HostDeploymentSnapshot['deployments'][number]>),
+        } as unknown as Partial<HostDeploymentSet['deployments'][number]>),
       ),
     ).rejects.toThrow('backend "worker" is not supported');
-    expect((await host.management.getStatus()).desiredGeneration).toBe(0);
+    await expect(
+      host.management.applyDeploymentSet(
+        deploymentSet(1, artifact, {
+          config: { provider: 'file', path: 'relative/config' },
+        }),
+      ),
+    ).rejects.toThrow('Invalid file config');
+    expect((await host.management.getStatus()).desiredRevision).toBe(0);
   });
 
   it('does not expose managed definitions on the application HTTP server', async () => {
@@ -268,7 +309,7 @@ describe('managed host reconciliation', () => {
     expect(healthResponse.status).toBe(503);
     expect(await healthResponse.json()).toEqual({ status: 'not-ready' });
 
-    await host.management.applySnapshot(snapshot(1, artifact));
+    await host.management.applyDeploymentSet(deploymentSet(1, artifact));
     const readyResponse = await fetch(`${baseUrl}/__ready`);
     expect(readyResponse.status).toBe(200);
     expect(await readyResponse.json()).toEqual({ status: 'ready' });
@@ -310,29 +351,13 @@ it('deploys a release artifact into app-deployments in standalone mode', async (
   );
 });
 
-it('keeps materialized config revisions immutable', async () => {
-  const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'nocobase-config-'));
-  tempDirs.push(volumesDir);
-  const materializer = new ConfigMaterializer(volumesDir);
-  await materializer.materialize('customer', {
-    revision: '1',
-    value: { enabled: true },
-  });
-  await expect(
-    materializer.materialize('customer', {
-      revision: '1',
-      value: { enabled: false },
-    }),
-  ).rejects.toThrow('is immutable');
-});
-
-function snapshot(
-  generation: number,
+function deploymentSet(
+  revision: number,
   artifact: ArtifactReference,
-  overrides: Partial<HostDeploymentSnapshot['deployments'][number]> = {},
-): HostDeploymentSnapshot {
+  overrides: Partial<HostDeploymentSet['deployments'][number]> = {},
+): HostDeploymentSet {
   return {
-    generation,
+    revision,
     deployments: [
       {
         id: 'customer',
@@ -373,6 +398,9 @@ async function createFixture(): Promise<{
     path.join(appRoot, 'dist', 'server', 'embedded.js'),
     'export function createServer() { return { fetch() { return new Response("ok"); } }; }',
   );
+  await writeFile(path.join(appRoot, 'config.yaml'), 'enabled: true\n');
+  await mkdir(path.join(appRoot, 'storage'), { recursive: true });
+  await writeFile(path.join(appRoot, 'storage', 'seed.txt'), 'seed\n');
   await mkdir(path.join(artifactDir, 'releases', 'customer'), {
     recursive: true,
   });

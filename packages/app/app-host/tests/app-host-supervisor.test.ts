@@ -49,16 +49,9 @@ describe('AppHostSupervisor', () => {
     });
     try {
       await supervisor.ensureStarted();
-      const management = await supervisor.getManagementClient();
-      const capabilities = await management.getCapabilities();
-      expect(capabilities).toMatchObject({
-        mode: 'managed',
-        protocolVersion: 1,
-        backends: ['in-process'],
-      });
 
-      const result = await supervisor.applySnapshot({
-        generation: 1,
+      const result = await supervisor.applyDeploymentSet({
+        revision: 1,
         deployments: [
           {
             id: 'demo',
@@ -80,8 +73,8 @@ describe('AppHostSupervisor', () => {
         await supervisor.getManagementClient()
       ).getStatus();
       expect(recovered).toMatchObject({
-        desiredGeneration: 1,
-        reconciledGeneration: 1,
+        desiredRevision: 1,
+        reconciledRevision: 1,
       });
       expect(recovered.deployments[0]).toMatchObject({
         appId: 'demo',
@@ -94,7 +87,7 @@ describe('AppHostSupervisor', () => {
     }
   });
 
-  it('restarts a crashed managed host and replays its snapshot', async () => {
+  it('restarts a crashed managed host and replays its deployment set', async () => {
     AppHostSupervisor.resetInstance();
     const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));
     const fixture = await createManagedFixture(volumesDir);
@@ -109,8 +102,8 @@ describe('AppHostSupervisor', () => {
       maxAutomaticRestarts: 3,
     });
     try {
-      await supervisor.applySnapshot({
-        generation: 1,
+      await supervisor.applyDeploymentSet({
+        revision: 1,
         deployments: [
           {
             id: 'demo',
@@ -139,8 +132,8 @@ describe('AppHostSupervisor', () => {
       ).getStatus();
       expect(recovered).toMatchObject({
         ready: true,
-        desiredGeneration: 1,
-        reconciledGeneration: 1,
+        desiredRevision: 1,
+        reconciledRevision: 1,
       });
     } finally {
       await supervisor.shutdown();

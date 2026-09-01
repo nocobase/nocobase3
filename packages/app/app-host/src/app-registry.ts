@@ -31,6 +31,7 @@ import type {
   ReplaceAppDefinitionOptions,
   ReplaceAppDefinitionResult,
 } from './app-types.ts';
+import type { Logger } from '@nocobase/logging';
 
 export interface ReloadAppOptions {
   reason?: string;
@@ -71,6 +72,7 @@ export interface AppRuntimeRegistryOptions {
   idleTtlMs?: number;
   evictionIntervalMs?: number;
   startEvictionLoop?: boolean;
+  logger?: Logger;
 }
 
 export interface RegistryMetrics {
@@ -100,6 +102,7 @@ export class AppRuntimeRegistry {
   private readonly maxActiveApps: number;
   private readonly idleTtlMs: number;
   private readonly evictionIntervalMs: number;
+  private readonly logger: Logger | undefined;
   private evictionLoop: NodeJS.Timeout | null = null;
   private metrics: RegistryMetrics = {
     activations: 0,
@@ -117,6 +120,7 @@ export class AppRuntimeRegistry {
   private versionSequence = 0;
 
   constructor(options: AppRuntimeRegistryOptions = {}) {
+    this.logger = options.logger;
     const configuredBackends = options.backends ?? [
       options.backend ?? new InProcessAppBackend(this.events),
     ];
@@ -230,9 +234,9 @@ export class AppRuntimeRegistry {
             timeoutMs: replaceOptions.destroyTimeoutMs,
           });
         } catch (error) {
-          console.error(
-            `Failed to destroy replaced app runtime "${id}"`,
-            error,
+          this.logger?.error(
+            { err: error, appId: id },
+            'Failed to destroy replaced app runtime',
           );
         }
       }
@@ -505,7 +509,7 @@ export class AppRuntimeRegistry {
 
     this.evictionLoop = setInterval(() => {
       this.evictIdle().catch((error) => {
-        console.error('Idle app eviction failed', error);
+        this.logger?.error({ err: error }, 'Idle app eviction failed');
       });
     }, this.evictionIntervalMs);
     this.evictionLoop.unref?.();

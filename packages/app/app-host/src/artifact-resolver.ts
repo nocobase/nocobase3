@@ -196,12 +196,6 @@ function assertSafeArchiveEntry(entryPath: string): boolean {
   ) {
     throw new Error(`Artifact archive contains an unsafe path "${entryPath}"`);
   }
-  const topLevel = normalized.replace(/^\.\//, '').split('/')[0];
-  if (topLevel === 'config.yml' || topLevel === 'storage') {
-    throw new Error(
-      `Artifact archive must not contain app volume entry "${entryPath}"`,
-    );
-  }
   return true;
 }
 

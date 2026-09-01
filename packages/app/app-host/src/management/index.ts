@@ -1,5 +1,4 @@
-export * from './config-materializer.ts';
 export * from './ipc.ts';
-export * from './reconciler.ts';
-export * from './service.ts';
+export * from './managed-reconciler.ts';
+export * from './manager.ts';
 export * from './types.ts';

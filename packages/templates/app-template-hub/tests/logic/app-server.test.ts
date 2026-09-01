@@ -52,7 +52,7 @@ import {
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-websocket';
 import {
   databaseManagerToken,
   type DatabaseManager,

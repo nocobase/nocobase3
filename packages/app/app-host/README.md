@@ -31,9 +31,16 @@ host:
     driver: fs
     location: ./storage/app-artifacts
     visibility: private
+  logging:
+    level: info
   appDeploymentsDir: ./storage/app-deployments
   appVolumesDir: ./storage/app-volumes
 ```
+
+The host owns its logging lifecycle. In production, the default rolling-file
+transport writes structured logs to `storage/host/logs/{logger}.log`; outside
+production, logs go to stdout. Set `host.logging` or `APP_HOST_LOG_LEVEL` to
+override the logging configuration.
 
 The directories have separate lifecycles:
 
@@ -41,7 +48,7 @@ The directories have separate lifecycles:
 storage/
   app-artifacts/             immutable release archives
   app-deployments/<appId>/   replaceable package.json and dist code
-  app-volumes/<appId>/       persistent config.yml and storage/
+  app-volumes/<appId>/       persistent config.yml/yaml/json and storage/
 ```
 
 ## Host modes
@@ -57,15 +64,16 @@ APP_HOST_MODE=standalone app-host
 from the local directory, and its application HTTP server does not expose the
 app management endpoints. Only minimal liveness and readiness probes remain on
 that server; management uses a private transport.
-The Hub supplies complete desired deployment snapshots over an authenticated
+The Hub supplies complete host deployment sets over an authenticated
 Node IPC channel. Each artifact reference identifies one immutable `.tar.gz`
 object by Drive key, version, app ID, and SHA-256 checksum. The host reads that
 object through its configured `@nocobase/drive` FS or S3 disk, verifies it,
-atomically deploys it to `app-deployments/<appId>`, materializes configuration
-at `app-volumes/<appId>/config.yml`, prepares writable storage at
-`app-volumes/<appId>/storage`, and reports reconciled state back to the Hub. A
-failed runtime replacement restores the previous deployed directory without
-replacing the app volume.
+atomically deploys it to `app-deployments/<appId>`, prepares writable storage
+at `app-volumes/<appId>/storage`, and reports reconciled state back to the Hub.
+For file configuration, the deployment set may select an absolute path or the default
+`app-volumes/<appId>/config` path. Non-file configuration providers are handled
+by the app and do not involve the host. A failed runtime replacement restores
+the previous deployed directory without replacing the app volume.
 
 ```bash
 APP_HOST_MODE=managed app-host
@@ -74,7 +82,7 @@ APP_HOST_MODE=managed app-host
 The mode is fixed for the lifetime of the host process. A managed host never
 falls back to standalone discovery when its Hub connection is unavailable.
 The spawning supervisor automatically restarts an unexpectedly exited managed
-host with bounded exponential backoff and replays its latest accepted snapshot.
+host with bounded exponential backoff and replays its latest accepted deployment set.
 The current runtime capability is `in-process`; Worker and Process backends can
 be registered through the backend router contract but are not advertised until
 their isolation runners are implemented.
@@ -155,6 +163,11 @@ Server artifacts should export `createServer(scope)`. The host still accepts
 The returned app object should expose `fetch(request)` and may expose
 `websocket(request)`. App-created resources should be released through
 `scope.registerDisposer(name, dispose)`.
+
+The host and App Server share this contract and its `ws`-backed Node adapter
+through `@nocobase/app-websocket`. The Host does not depend on
+`@nocobase/app-server`; compatible App servers are loaded through the
+structural `fetch` and optional `websocket` contract.
 
 The `lifecycle` fixture is a complete lifecycle example. It registers a
 `scope.onBeforeDestroy(...)` hook, registers a `scope.registerDisposer(...)`

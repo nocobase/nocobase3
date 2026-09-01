@@ -18,7 +18,7 @@ export interface StandaloneReconcileResult {
   removed: AppDefinition[];
 }
 
-export class StandaloneDeploymentReconciler {
+export class StandaloneReconciler {
   constructor(
     private readonly catalog: DeploymentCatalog,
     private readonly registry: AppRuntimeRegistry,

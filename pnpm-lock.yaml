@@ -84,6 +84,9 @@ catalogs:
     '@types/react-dom':
       specifier: ^19.1.0
       version: 19.2.4
+    '@types/ws':
+      specifier: ^8.18.1
+      version: 8.18.1
     '@vitejs/plugin-react':
       specifier: ^4.4.1
       version: 4.7.0
@@ -204,6 +207,9 @@ catalogs:
     vitest:
       specifier: ^4.1.10
       version: 4.1.10
+    ws:
+      specifier: ^8.21.3
+      version: 8.21.3
     yaml:
       specifier: ^2.9.0
       version: 2.9.0
@@ -303,15 +309,18 @@ importers:
 
   packages/app/app-host:
     dependencies:
-      '@nocobase/app-server':
+      '@nocobase/app-websocket':
         specifier: workspace:^
-        version: link:../app-server
+        version: link:../app-websocket
       '@nocobase/config':
         specifier: workspace:^
         version: link:../../libs/config
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../../libs/logging
       tar:
         specifier: ^7.4.3
         version: 7.5.22
@@ -376,6 +385,9 @@ importers:
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.1(hono@4.13.2)
+      '@nocobase/app-websocket':
+        specifier: workspace:^
+        version: link:../app-websocket
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
@@ -422,6 +434,34 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/app/app-websocket:
+    dependencies:
+      ws:
+        specifier: 'catalog:'
+        version: 8.21.3
+    devDependencies:
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/ws':
+        specifier: 'catalog:'
+        version: 8.18.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -2340,6 +2380,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/app-websocket':
+        specifier: workspace:^
+        version: link:../../app/app-websocket
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
@@ -2679,6 +2722,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/app-websocket':
+        specifier: workspace:^
+        version: link:../../app/app-websocket
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
@@ -5941,6 +5987,9 @@ packages:
 
   '@types/validate-npm-package-name@4.0.2':
     resolution: {integrity: sha512-lrpDziQipxCEeK5kWxvljWYhUvOiB2A9izZd9B2AFarYAkqZshb4lPbRs7zKEic6eGtH8V/2qJW+dPp9OtF6bw==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@types/yauzl@2.10.3':
     resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
@@ -13564,6 +13613,10 @@ snapshots:
   '@types/use-sync-external-store@0.0.6': {}
 
   '@types/validate-npm-package-name@4.0.2': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 24.13.3
 
   '@types/yauzl@2.10.3':
     dependencies:

@@ -9,7 +9,7 @@ import {
   createWebSocketUpgradeRequest,
   isWebSocketUpgrade,
   rejectWebSocketUpgrade,
-} from '../websocket.js';
+} from '@nocobase/app-websocket';
 
 export const DEFAULT_HTTP_DRAIN_TIMEOUT_MS: number = 30_000;
 export const DEFAULT_FORCE_EXIT_TIMEOUT_MS: number = 35_000;

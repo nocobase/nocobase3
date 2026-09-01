@@ -97,6 +97,28 @@ describe('loadAppHostConfig', () => {
       path.join(rootDir, 'storage/app-volumes'),
     );
   });
+
+  it('writes production logs under storage/host/logs by default', async () => {
+    const rootDir = await createTempDirectory();
+    const config = await loadAppHostConfig({
+      rootDir,
+      environment: { NODE_ENV: 'production' },
+    });
+
+    expect(config.logging).toMatchObject({
+      default: 'host',
+      level: 'info',
+      base: { service: 'app-host' },
+      transport: {
+        target: 'pino-roll',
+        options: {
+          file: path.join(rootDir, 'storage/host/logs/{logger}.log'),
+          frequency: 'daily',
+          mkdir: true,
+        },
+      },
+    });
+  });
 });
 
 async function createTempDirectory(): Promise<string> {

@@ -53,9 +53,10 @@
     "README.md"
   ],
   "dependencies": {
-    "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-websocket": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/drive": "workspace:^",
+    "@nocobase/logging": "workspace:^",
     "tar": "^7.4.3"
   },
   "scripts": {

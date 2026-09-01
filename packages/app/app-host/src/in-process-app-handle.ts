@@ -7,14 +7,13 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { addBasePathToRedirectResponse } from '@nocobase/app-server/support';
-
 import {
   AppEventBus,
   type AppEvent,
   type AppEventPayload,
   type AppState,
 } from './events.ts';
+import type { AppWebSocketAcceptResult } from '@nocobase/app-websocket';
 import type {
   ActiveAppHandle,
   AppFactory,
@@ -25,10 +24,10 @@ import type {
   AppRequestMetadata,
   AppScope,
   AppSnapshot,
-  AppWebSocketAcceptResult,
 } from './app-types.ts';
+import { addBasePathToRedirectResponse } from './redirects.ts';
 
-export interface AppRuntimeOptions {
+export interface InProcessAppHandleOptions {
   version: number;
   definition: AppDefinition;
   createApp: AppFactory;
@@ -40,7 +39,7 @@ interface RegisteredDisposer {
   dispose: AppDisposer;
 }
 
-export class AppRuntime implements AppScope, ActiveAppHandle {
+export class InProcessAppHandle implements AppScope, ActiveAppHandle {
   readonly id: string;
   readonly appName?: string;
   readonly version: number;
@@ -74,7 +73,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   state: AppState = 'creating';
   activeRequests = 0;
 
-  private constructor(options: Omit<AppRuntimeOptions, 'createApp'>) {
+  private constructor(options: Omit<InProcessAppHandleOptions, 'createApp'>) {
     this.id = options.definition.id;
     this.appName = options.definition.appName;
     this.version = options.version;
@@ -95,8 +94,10 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.globalEvents = options.globalEvents;
   }
 
-  static async create(options: AppRuntimeOptions): Promise<AppRuntime> {
-    const runtime = new AppRuntime(options);
+  static async create(
+    options: InProcessAppHandleOptions,
+  ): Promise<InProcessAppHandle> {
+    const runtime = new InProcessAppHandle(options);
 
     try {
       runtime.app = await options.createApp(runtime);

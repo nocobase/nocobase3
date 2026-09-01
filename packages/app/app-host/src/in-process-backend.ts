@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { AppRuntime } from './app-runtime.ts';
+import { InProcessAppHandle } from './in-process-app-handle.ts';
 import type {
   ActiveAppHandle,
   AppActivationBackend,
@@ -21,7 +21,7 @@ export class InProcessAppBackend implements AppActivationBackend {
   constructor(private readonly globalEvents: AppEventBus) {}
 
   async activate(request: AppActivationRequest): Promise<ActiveAppHandle> {
-    return AppRuntime.create({
+    return InProcessAppHandle.create({
       version: request.version,
       definition: request.definition,
       createApp: request.createApp,

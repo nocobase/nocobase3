@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AppRuntimeRegistry } from '../dist/app-registry.js';
 import {
   DeploymentCatalog,
-  StandaloneDeploymentReconciler,
+  StandaloneReconciler,
 } from '../dist/deployment/index.js';
 
 const tempDirs: string[] = [];
@@ -47,7 +47,7 @@ afterEach(async () => {
   );
 });
 
-describe('StandaloneDeploymentReconciler', () => {
+describe('StandaloneReconciler', () => {
   it('registers, updates, and removes deployments', async () => {
     const deploymentsDir = await mkdtemp(
       path.join(os.tmpdir(), 'nocobase-standalone-deployments-'),
@@ -56,7 +56,7 @@ describe('StandaloneDeploymentReconciler', () => {
     const appDir = await writeDeployment(deploymentsDir, 'customer', '1.0.0');
     const registry = new AppRuntimeRegistry({ startEvictionLoop: false });
     registries.push(registry);
-    const reconciler = new StandaloneDeploymentReconciler(
+    const reconciler = new StandaloneReconciler(
       new DeploymentCatalog({ deploymentsDir }),
       registry,
     );

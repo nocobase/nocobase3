@@ -8,15 +8,15 @@
  */
 
 import type { ArtifactReference } from '../artifact-resolver.ts';
-import type { AppBackendKind, AppSnapshot } from '../app-types.ts';
+import type { AppSnapshot } from '../app-types.ts';
 import type { AppHostMode } from '../host-mode.ts';
 
 export type DeploymentDesiredState = 'running' | 'stopped';
 export type AppActivationPolicy = 'lazy' | 'eager';
 
-export interface DeploymentConfigRevision {
-  revision: string;
-  value: unknown;
+export interface HostFileConfig {
+  provider: 'file';
+  path?: string;
 }
 
 export interface HostDeploymentSpec {
@@ -27,11 +27,11 @@ export interface HostDeploymentSpec {
   backend: 'in-process';
   activation?: AppActivationPolicy;
   basePath?: string;
-  config?: DeploymentConfigRevision;
+  config?: HostFileConfig;
 }
 
-export interface HostDeploymentSnapshot {
-  generation: number;
+export interface HostDeploymentSet {
+  revision: number;
   deployments: HostDeploymentSpec[];
 }
 
@@ -43,8 +43,7 @@ export interface HostDeploymentStatus {
   appId: string;
   desiredState: DeploymentDesiredState;
   observedState: DeploymentObservedState;
-  generation: number;
-  configRevision?: string;
+  revision: number;
   app: AppSnapshot | null;
   error: string | null;
 }
@@ -52,19 +51,12 @@ export interface HostDeploymentStatus {
 export interface HostStatus {
   mode: AppHostMode;
   ready: boolean;
-  desiredGeneration: number;
-  reconciledGeneration: number;
+  desiredRevision: number;
+  reconciledRevision: number;
   deployments: HostDeploymentStatus[];
 }
 
-export interface ApplyHostSnapshotResult {
+export interface ApplyDeploymentSetResult {
   accepted: boolean;
   status: HostStatus;
-}
-
-export interface HostCapabilities {
-  mode: AppHostMode;
-  protocolVersion: 1;
-  backends: Array<Exclude<AppBackendKind, 'external-service'>>;
-  activationPolicies: AppActivationPolicy[];
 }

@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 
 import type { ServiceResolver } from '@nocobase/service-provider';
-import type { AppWebSocketHandler } from '../websocket.js';
+import type { AppWebSocketHandler } from '@nocobase/app-websocket';
 import { realtimeServiceToken, type RealtimeConnection } from './types.js';
 
 export const REALTIME_WEBSOCKET_PATH: string = '/ws';
