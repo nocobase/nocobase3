@@ -5,7 +5,8 @@ description: 说明补充 Metadata 的读取、更新、并发控制、校验和
 
 # Collection Metadata Service 设计
 
-> 本文描述目标设计，当前 Metadata 更新仍由 Builder 和旧版 `CollectionMetadataStore` 完成。
+> `CollectionMetadataService` 领域实现已经提供；当前尚未挂到 `DatabaseConnection.collectionMetadata`，
+> Builder 仍在兼容使用旧 Store。Connection 和 Registry 集成在后续批次完成。
 
 `CollectionMetadataService` 是 Metadata Store 之上的领域层。Store 只提供按 revision 读写文档的
 持久化能力；Service 负责 patch 语义、Schema 校验、relation 校验和 Registry 失效。
@@ -40,14 +41,14 @@ export interface CollectionMetadataService {
     name: string,
     patch: CollectionMetadataPropertiesPatch,
     options?: UpdateMetadataOptions,
-  ): Promise<StoredCollectionMetadata>;
+  ): Promise<StoredCollectionMetadata | undefined>;
 
   updateField(
     collection: string,
     field: string,
     patch: FieldMetadataPatch,
     options?: UpdateMetadataOptions,
-  ): Promise<StoredCollectionMetadata>;
+  ): Promise<StoredCollectionMetadata | undefined>;
 
   setRelation(
     collection: string,
@@ -63,6 +64,9 @@ export interface CollectionMetadataService {
   ): Promise<StoredCollectionMetadata | undefined>;
 }
 ```
+
+清除最后一个补充属性后，Service 删除空文档并返回 `undefined`；它不会仅为了重复 Collection 存在性而保存
+`{ version: 1, name }`。
 
 Relation 使用明确的 set/remove 方法，不通过含糊的深层 merge 创建或删除。
 `updateField()` 只更新已存在物理 Field 的补充 Metadata；找不到对应 Field 时返回稳定错误，不能创建新字段。
@@ -90,6 +94,8 @@ export interface UpdateMetadataOptions {
 使用本次读取得到的 revision，仍然不会执行 blind write。发生冲突时抛出
 `METADATA_CONFLICT`，第一版不自动重试，避免在重试中覆盖新的业务意图。
 
+如果 patch 没有造成文档变化，Service 原样返回当前 stored document，不增加 revision、不重复校验，也不触发失效。
+
 ## 校验顺序
 
 写入前按以下顺序校验：
@@ -114,6 +120,10 @@ Module Metadata 后端可写；Module Store 的写入请求返回明确的 `META
 
 必须先成功持久化，再失效 Registry。Registry 失效不应导致已成功的 Metadata 事务回滚；如果失效钩子
 异常，应全量清理本地缓存并报告诊断信息。
+
+Service 通过 `CollectionMetadataInvalidator` 接收定向和全量失效能力。relation 替换会同时失效旧 target/through
+与新 target/through；Collection naming patch 还会标记 Naming Index 失效。定向失效抛错时，Service 尝试
+`invalidateAll()`，并通过必填的 `onInvalidationError` 回调报告 post-commit 错误。
 
 ## Rename 不是 Metadata-only 操作
 
