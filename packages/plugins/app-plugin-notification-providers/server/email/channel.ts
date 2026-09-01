@@ -1,9 +1,10 @@
-import type {
-  NotificationChannelDefinition,
-  NotificationContent,
-  NotificationProviderIdentity,
-  NotificationRecipient,
+import {
+  type NotificationChannelDefinition,
+  type NotificationContent,
+  type NotificationProviderIdentity,
+  type NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../i18n.js';
 
 import type {
   EmailChannelConfig,
@@ -36,30 +37,39 @@ export function createEmailChannelDefinition(
   return {
     type: 'email',
     test: {
-      label: 'Email',
+      label: notificationProviderText('test.channels.email', 'Email'),
       fields: [
         {
           name: 'recipient',
-          label: 'Recipient',
+          label: notificationProviderText('test.fields.recipient', 'Recipient'),
           type: 'email',
           required: true,
-          placeholder: 'name@example.com',
+          placeholder: notificationProviderText(
+            'test.placeholders.email',
+            'name@example.com',
+          ),
           maxLength: 320,
         },
         {
           name: 'title',
-          label: 'Title',
+          label: notificationProviderText('test.fields.title', 'Title'),
           type: 'text',
           required: true,
-          defaultValue: 'NocoBase notification test',
+          defaultValue: notificationProviderText(
+            'test.defaults.title',
+            'NocoBase notification test',
+          ),
           maxLength: 200,
         },
         {
           name: 'body',
-          label: 'Message',
+          label: notificationProviderText('test.fields.message', 'Message'),
           type: 'textarea',
           required: true,
-          defaultValue: 'This is a test notification from NocoBase.',
+          defaultValue: notificationProviderText(
+            'test.defaults.body',
+            'This is a test notification from NocoBase.',
+          ),
           maxLength: 2000,
         },
       ],

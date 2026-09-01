@@ -1,7 +1,8 @@
-import type {
-  NotificationProviderDefinition,
-  ProviderSendResult,
+import {
+  type NotificationProviderDefinition,
+  type ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../../i18n.js';
 
 import {
   providerErrorCode,
@@ -21,7 +22,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
 > {
   return {
     type: 'smtp',
-    label: 'SMTP',
+    label: notificationProviderText('test.providers.smtp', 'SMTP'),
     validateConfig: validateSmtpProviderConfig,
     async createProvider(_context, config) {
       validateSmtpProviderConfig(config);

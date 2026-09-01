@@ -1,4 +1,8 @@
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import { createLogger, type Logging } from '@nocobase/logging';
@@ -62,6 +66,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
       'registerJob',
     );
 
+    await provider.boot();
     await provider.start();
     await provider.shutdown();
 
@@ -69,6 +74,57 @@ describe('@nocobase/app-plugin-notification provider', () => {
     expect(start).not.toHaveBeenCalled();
     expect(registerJob).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
+    const authorization = container.resolve(authorizationToken);
+    expect(authorization.resources.add).toHaveBeenCalledOnce();
+    expect(authorization.permissionResources.register).toHaveBeenCalledWith({
+      plugin: 'notification',
+      resourceType: {
+        value: 'notification',
+        label: 'Notifications',
+        resources: [
+          {
+            value: 'test',
+            label: 'Test notifications',
+            actions: [{ value: 'send', label: 'Send' }],
+          },
+        ],
+        actions: [{ value: 'send', label: 'Send' }],
+      },
+    });
+    const add = authorization.resources.add as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const handler = add.mock.calls[0]?.[0] as {
+      authorize(
+        request: object,
+        context: object,
+      ): Promise<{ readonly effect: string }>;
+    };
+    await expect(
+      handler.authorize(
+        {
+          principal: { type: 'user', id: 'user-1' },
+          resource: { type: 'notification', id: 'test' },
+          action: 'send',
+        },
+        {
+          grants: {
+            resolve: () =>
+              Promise.resolve([
+                {
+                  source: { plugin: 'permission-sets', id: 'operators' },
+                  resource: { type: 'notification', id: 'test' },
+                  action: 'send',
+                },
+              ]),
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ effect: 'permit' });
+    expect(authorization.resources.remove).toHaveBeenCalledWith('notification');
+    expect(authorization.permissionResources.unregister).toHaveBeenCalledWith(
+      'notification',
+    );
   });
 
   it('fails fast when the required database dependency is missing', () => {
@@ -95,5 +151,9 @@ function createContainer(withDatabase: boolean): ServiceContainer {
   container.instance(queueManagerToken, {
     registerJob: vi.fn(),
   } as unknown as NocoBaseQueueManager);
+  container.instance(authorizationToken, {
+    resources: { add: vi.fn(), remove: vi.fn() },
+    permissionResources: { register: vi.fn(), unregister: vi.fn() },
+  } as unknown as AppAuthorization);
   return container;
 }

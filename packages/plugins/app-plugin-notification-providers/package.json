@@ -11,6 +11,7 @@
   "sideEffects": false,
   "files": [
     "dist",
+    "CHANGELOG.md",
     "docs",
     "README.md"
   ],
@@ -71,14 +72,21 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-plugin-notification": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "nodemailer": "^9.0.5",
     "resend": "^6.22.1"
   },
+  "peerDependencies": {
+    "@nocobase/app-plugin-notification": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/service-provider": "workspace:^"
+  },
   "devDependencies": {
+    "@nocobase/app-plugin-notification": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/i18n": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "@types/nodemailer": "^8.0.1",
     "eslint": "catalog:",

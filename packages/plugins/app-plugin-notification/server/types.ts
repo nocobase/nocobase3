@@ -1,6 +1,7 @@
 import type { Logger } from '@nocobase/logging';
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
+import { AppI18nError } from '@nocobase/i18n/server';
 import type { NotificationStore } from './store.js';
 import type { NotificationRegistry } from './registry.js';
 
@@ -25,26 +26,63 @@ export interface NotificationProviderIdentity {
   readonly type: string;
 }
 
+export const NOTIFICATION_NAMESPACE: string =
+  '@nocobase/app-plugin-notification';
+
+export interface NotificationI18nText {
+  readonly ns: string;
+  readonly key: string;
+  readonly defaultValue: string;
+}
+
+export function notificationI18nText(
+  key: string,
+  defaultValue: string,
+): NotificationI18nText {
+  return { ns: NOTIFICATION_NAMESPACE, key, defaultValue };
+}
+
+export function notificationTestError(
+  code: string,
+  key: string,
+  options: {
+    readonly status?: number;
+    readonly params?: Record<string, unknown>;
+    readonly cause?: unknown;
+  } = {},
+): AppI18nError {
+  return new AppI18nError(code, {
+    ns: NOTIFICATION_NAMESPACE,
+    key,
+    ...options,
+  });
+}
+
 export type NotificationTestFieldType = 'text' | 'email' | 'textarea';
 
-export interface NotificationTestFieldDescriptor {
+export interface NotificationTestFieldDescriptor<
+  TText = string | NotificationI18nText,
+> {
   readonly name: string;
-  readonly label: string;
+  readonly label: TText;
   readonly type: NotificationTestFieldType;
   readonly required?: boolean;
-  readonly placeholder?: string;
-  readonly defaultValue?: string;
+  readonly placeholder?: TText;
+  readonly defaultValue?: TText;
   readonly maxLength?: number;
 }
 
-export interface NotificationTestTargetDescriptor {
-  readonly channel: { readonly type: string; readonly label: string };
-  readonly provider: {
-    readonly name: string;
+export interface NotificationTestTargetDescriptor<
+  TText = string | NotificationI18nText,
+> {
+  readonly channel: {
     readonly type: string;
-    readonly label: string;
+    readonly label: TText;
   };
-  readonly fields: readonly NotificationTestFieldDescriptor[];
+  readonly provider: NotificationProviderIdentity & {
+    readonly label: TText;
+  };
+  readonly fields: readonly NotificationTestFieldDescriptor<TText>[];
 }
 
 export interface NotificationTestActor {
@@ -53,21 +91,22 @@ export interface NotificationTestActor {
 
 export interface NotificationTestSendRequest {
   readonly channel: string;
-  readonly providerName: string;
-  readonly providerType: string;
+  readonly provider: NotificationProviderIdentity;
   readonly values: Readonly<Record<string, string>>;
 }
 
-export interface NotificationTestSendInput {
+export type NotificationTestSendInput = Pick<
+  NotificationSendInput<NotificationChannelMap>,
+  'content'
+> & {
   readonly to: NotificationRecipient;
-  readonly content: NotificationContent;
   readonly channelOverride?: object;
-}
+};
 
 export interface NotificationTestAdapter<
   TConfig extends NotificationChannelConfig = NotificationChannelConfig,
 > {
-  readonly label: string;
+  readonly label: string | NotificationI18nText;
   readonly fields: readonly NotificationTestFieldDescriptor[];
   toSendInput(input: {
     readonly actor: NotificationTestActor;
@@ -275,7 +314,7 @@ export interface NotificationProviderDefinition<
   TPrepared = object,
 > {
   readonly type: TConfig['type'];
-  readonly label?: string;
+  readonly label?: string | NotificationI18nText;
   validateConfig?(config: TConfig): void;
   createProvider(
     context: NotificationProviderContext,

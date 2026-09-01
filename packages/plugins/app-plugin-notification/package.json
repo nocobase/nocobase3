@@ -42,7 +42,8 @@
     },
     "plugin": {
       "database": {
-        "migrations": "./database/migrations"
+        "migrations": "./database/migrations",
+        "seeds": "./database/seeds"
       }
     }
   },
@@ -74,6 +75,7 @@
   },
   "files": [
     "dist",
+    "CHANGELOG.md",
     "README.md",
     "docs",
     "skills",
@@ -98,25 +100,33 @@
   },
   "dependencies": {
     "@sinclair/typebox": "catalog:",
-    "@nocobase/db": "workspace:^",
-    "@nocobase/i18n": "workspace:^",
-    "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-plugin-authorization": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/logging": "workspace:^",
-    "@nocobase/queue": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "lucide-react": "^0.487.0"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/logging": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-plugin-authentication": "workspace:*",
+    "@nocobase/app-plugin-authorization": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
+    "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/i18n": "workspace:*",
+    "@nocobase/logging": "workspace:*",
+    "@nocobase/queue": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",

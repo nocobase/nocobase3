@@ -1,8 +1,9 @@
-import type {
-  NotificationProviderDefinition,
-  NotificationProviderErrorCategory,
-  ProviderSendResult,
+import {
+  type NotificationProviderDefinition,
+  type NotificationProviderErrorCategory,
+  type ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../../i18n.js';
 import type { ErrorResponse } from 'resend';
 
 import {
@@ -23,7 +24,7 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
 > {
   return {
     type: 'resend',
-    label: 'Resend',
+    label: notificationProviderText('test.providers.resend', 'Resend'),
     validateConfig: validateResendProviderConfig,
     async createProvider(_context, config) {
       validateResendProviderConfig(config);

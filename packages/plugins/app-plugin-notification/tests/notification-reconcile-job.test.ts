@@ -20,8 +20,8 @@ describe('NotificationReconcileJob', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(execute).toHaveBeenCalledOnce();
 
-    job.stop();
-    job.stop();
+    await job.stop();
+    await job.stop();
     await vi.advanceTimersByTimeAsync(30_000);
     expect(execute).toHaveBeenCalledOnce();
   });
@@ -43,12 +43,45 @@ describe('NotificationReconcileJob', () => {
 
     job.start();
     await vi.advanceTimersByTimeAsync(60_000);
-    job.stop();
+    await job.stop();
 
     expect(execute).toHaveBeenCalledTimes(2);
     expect(logError).toHaveBeenCalledWith(
       { event: 'notification.reconcile_failed', err: error },
       'Notification reconciliation failed.',
     );
+  });
+
+  it('does not overlap executions and waits for the active run to stop', async () => {
+    vi.useFakeTimers();
+    let complete: (() => void) | undefined;
+    const execute = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const job = new NotificationReconcileJob({
+      intervalMs: 30_000,
+      logger: createLogger({ level: 'silent' }),
+      execute,
+    });
+
+    job.start();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(execute).toHaveBeenCalledOnce();
+
+    let stopped = false;
+    const stopping = job.stop().then(() => {
+      stopped = true;
+    });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    complete?.();
+    await stopping;
+    expect(stopped).toBe(true);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(execute).toHaveBeenCalledOnce();
   });
 });

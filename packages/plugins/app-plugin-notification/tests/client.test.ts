@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 
-import { NotificationClient } from '../client/notification-client.js';
+import {
+  NotificationClient,
+  NotificationTestApiError,
+} from '../client/notification-client.js';
 import notificationPlugin from '../client/plugin.js';
 import routes from '../client/routes.js';
 
@@ -74,8 +77,7 @@ describe('@nocobase/app-plugin-notification client', () => {
     await expect(
       client.sendTest({
         channel: 'im',
-        providerName: 'feishu',
-        providerType: 'feishu-webhook',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
         values: { title: 'Test', body: 'Hello' },
       }),
     ).resolves.toEqual(result);
@@ -87,10 +89,38 @@ describe('@nocobase/app-plugin-notification client', () => {
       headers: { 'x-nocobase-notification-test': '1' },
       body: JSON.stringify({
         channel: 'im',
-        providerName: 'feishu',
-        providerType: 'feishu-webhook',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
         values: { title: 'Test', body: 'Hello' },
       }),
     });
+  });
+
+  it('surfaces the localized message from a structured test error', async () => {
+    const request = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Request failed'), {
+        status: 403,
+        payload: {
+          error: {
+            code: 'NOTIFICATION_TEST_FORBIDDEN',
+            message: '需要发送通知测试的权限。',
+            ns: '@nocobase/app-plugin-notification',
+            key: 'errors.testForbidden',
+          },
+        },
+      }),
+    );
+
+    await expect(
+      new NotificationClient({ request }).listTestTargets(),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: 'NotificationTestApiError',
+        code: 'NOTIFICATION_TEST_FORBIDDEN',
+        message: '需要发送通知测试的权限。',
+        status: 403,
+        ns: '@nocobase/app-plugin-notification',
+        key: 'errors.testForbidden',
+      } satisfies Partial<NotificationTestApiError>),
+    );
   });
 });

@@ -182,13 +182,13 @@ types without printing secrets:
 pnpm server:config
 ```
 
-After signing in, open
-`/main/api/notification-providers/test` (replace `/main` when
-`APP_BASE_PATH` differs). The page sends a real message through the durable
-Notification Manager and shows the resulting delivery status. Email tests use
-the address entered on the page, or `notification.test.emailRecipient` when it
-is configured; IM tests use the configured group Webhook. The page is disabled
-unless `notification.test.enabled` is explicitly set to `true` in `config.yml`.
+After signing in with the `notification:test` `send` permission, use the
+notification logs settings page to send a real message through the durable
+Notification Manager. The form is generated from safe Channel test metadata;
+Email tests require an address and IM tests use the configured logical target.
+The button is unavailable unless the protected targets endpoint is authorized,
+and testing is disabled unless `notification.test.enabled` is explicitly set
+to `true` in `config.yml`.
 
 Application code sends durable notifications through the injected
 `services.notification` manager:

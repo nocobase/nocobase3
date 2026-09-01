@@ -2,6 +2,7 @@ import type {
   NotificationChannelDefinition,
   NotificationProviderDefinition,
 } from './types.js';
+import { notificationI18nText } from './types.js';
 
 /** Collects notification definitions without creating runtime resources. */
 export class NotificationRegistry {
@@ -73,7 +74,12 @@ export class NotificationRegistry {
             provider: {
               name: providerConfig.name,
               type: providerConfig.type,
-              label: provider.label ?? providerConfig.type,
+              label:
+                provider.label ??
+                notificationI18nText(
+                  `test.providers.${providerConfig.type}`,
+                  providerConfig.type,
+                ),
             },
             fields: test.fields.map((field) => ({
               name: field.name,

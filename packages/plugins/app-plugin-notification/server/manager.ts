@@ -6,6 +6,7 @@ import { ChannelManager } from './channel-manager.js';
 import { createDeliveryJob, type DeliveryJobClass } from './delivery-job.js';
 import { NotificationLogs } from './logs.js';
 import { NotificationReconcileJob } from './notification-reconcile-job.js';
+import { notificationTestError } from './types.js';
 import {
   createNotificationRegistry,
   type NotificationRegistry,
@@ -106,7 +107,11 @@ export class NotificationManager<
     actor: NotificationTestActor,
   ): Promise<NotificationSendResult> {
     if (!this.options.config.test?.enabled) {
-      throw new Error('Notification testing is not enabled.');
+      throw notificationTestError(
+        'NOTIFICATION_TEST_DISABLED',
+        'errors.testDisabled',
+        { status: 404 },
+      );
     }
     const target = this.resolveTestTarget(request);
     const channelConfig = this.options.config.channels.find(
@@ -114,13 +119,16 @@ export class NotificationManager<
     );
     const providerConfig = channelConfig?.providers.find(
       (candidate) =>
-        candidate.name === request.providerName &&
-        candidate.type === request.providerType &&
+        candidate.name === request.provider.name &&
+        candidate.type === request.provider.type &&
         candidate.enabled !== false,
     );
     const definition = this.registry.channel(request.channel);
     if (!channelConfig || !providerConfig || !definition?.test) {
-      throw new Error('Notification test target is unavailable.');
+      throw notificationTestError(
+        'NOTIFICATION_TEST_TARGET_UNAVAILABLE',
+        'errors.testTargetUnavailable',
+      );
     }
     const converted = definition.test.toSendInput({
       actor,
@@ -165,24 +173,38 @@ export class NotificationManager<
     const target = this.listTestTargets().find(
       (candidate) =>
         candidate.channel.type === request.channel &&
-        candidate.provider.name === request.providerName &&
-        candidate.provider.type === request.providerType,
+        candidate.provider.name === request.provider.name &&
+        candidate.provider.type === request.provider.type,
     );
-    if (!target) throw new Error('Notification test target is unavailable.');
+    if (!target)
+      throw notificationTestError(
+        'NOTIFICATION_TEST_TARGET_UNAVAILABLE',
+        'errors.testTargetUnavailable',
+      );
     const fieldNames = new Set(target.fields.map((field) => field.name));
     for (const name of Object.keys(request.values)) {
       if (!fieldNames.has(name)) {
-        throw new Error(`Unknown notification test field "${name}".`);
+        throw notificationTestError(
+          'NOTIFICATION_TEST_UNKNOWN_FIELD',
+          'errors.testUnknownField',
+          { params: { name } },
+        );
       }
     }
     for (const field of target.fields) {
       const value = request.values[field.name]?.trim() ?? '';
       if (field.required && !value) {
-        throw new Error(`${field.label} is required.`);
+        throw notificationTestError(
+          'NOTIFICATION_TEST_REQUIRED_FIELD',
+          'errors.testRequiredField',
+          { params: { name: field.name } },
+        );
       }
       if (field.maxLength !== undefined && value.length > field.maxLength) {
-        throw new Error(
-          `${field.label} must be at most ${field.maxLength} characters.`,
+        throw notificationTestError(
+          'NOTIFICATION_TEST_FIELD_TOO_LONG',
+          'errors.testFieldTooLong',
+          { params: { name: field.name, maxLength: field.maxLength } },
         );
       }
     }
@@ -250,7 +272,7 @@ export class NotificationManager<
         'Notification Manager started.',
       );
     } catch (error) {
-      this.reconcileJob.stop();
+      await this.reconcileJob.stop();
       this.started = false;
       await this.channelManager.close();
       this.runtimePromises.clear();
@@ -424,7 +446,7 @@ export class NotificationManager<
   async close(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
     const wasActive = this.activated;
-    this.reconcileJob.stop();
+    await this.reconcileJob.stop();
     await this.channelManager.close();
     this.runtimePromises.clear();
     this.activated = false;

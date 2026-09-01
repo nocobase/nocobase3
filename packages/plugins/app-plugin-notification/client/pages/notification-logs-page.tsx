@@ -218,8 +218,10 @@ function TestNotificationDialog({
     void notification
       .sendTest({
         channel: selected.channel.type,
-        providerName: selected.provider.name,
-        providerType: selected.provider.type,
+        provider: {
+          name: selected.provider.name,
+          type: selected.provider.type,
+        },
         values,
       })
       .then(

@@ -1,9 +1,10 @@
 import { createHmac } from 'node:crypto';
 
-import type {
-  NotificationProviderDefinition,
-  ProviderSendResult,
+import {
+  type NotificationProviderDefinition,
+  type ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../../i18n.js';
 
 import { postJson, validateHttpUrl } from '../../http.js';
 import type { PreparedImMessage } from '../channel.js';
@@ -31,7 +32,10 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
 > {
   return {
     type: 'feishu-webhook',
-    label: 'Feishu webhook',
+    label: notificationProviderText(
+      'test.providers.feishuWebhook',
+      'Feishu webhook',
+    ),
     validateConfig: validateFeishuConfig,
     async createProvider(_context, config) {
       validateFeishuConfig(config);

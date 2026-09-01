@@ -145,8 +145,7 @@ describe('NotificationLogsPage', () => {
 
     expect(notification.sendTest).toHaveBeenCalledWith({
       channel: 'email',
-      providerName: 'smtp',
-      providerType: 'smtp',
+      provider: { name: 'smtp', type: 'smtp' },
       values: {
         recipient: 'recipient@example.com',
         title: 'NocoBase notification test',

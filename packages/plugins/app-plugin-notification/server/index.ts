@@ -8,4 +8,5 @@ export * from './manager.js';
 export * from './registry.js';
 export * from './router.js';
 export * from './store.js';
+export * from './test-contract.js';
 export * from './types.js';

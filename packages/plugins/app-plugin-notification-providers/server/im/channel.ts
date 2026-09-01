@@ -1,9 +1,10 @@
-import type {
-  NotificationChannelDefinition,
-  NotificationContent,
-  NotificationProviderIdentity,
-  NotificationRecipient,
+import {
+  type NotificationChannelDefinition,
+  type NotificationContent,
+  type NotificationProviderIdentity,
+  type NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../i18n.js';
 
 export interface ImRecipient {
   readonly provider: NotificationProviderIdentity;
@@ -62,22 +63,28 @@ export function createImChannelDefinition(
   return {
     type: 'im',
     test: {
-      label: 'IM',
+      label: notificationProviderText('test.channels.im', 'IM'),
       fields: [
         {
           name: 'title',
-          label: 'Title',
+          label: notificationProviderText('test.fields.title', 'Title'),
           type: 'text',
           required: true,
-          defaultValue: 'NocoBase notification test',
+          defaultValue: notificationProviderText(
+            'test.defaults.title',
+            'NocoBase notification test',
+          ),
           maxLength: 200,
         },
         {
           name: 'body',
-          label: 'Message',
+          label: notificationProviderText('test.fields.message', 'Message'),
           type: 'textarea',
           required: true,
-          defaultValue: 'This is a test notification from NocoBase.',
+          defaultValue: notificationProviderText(
+            'test.defaults.body',
+            'This is a test notification from NocoBase.',
+          ),
           maxLength: 2000,
         },
       ],

@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createNotificationManager } from '../server/manager.js';
 import { createNotificationRegistry } from '../server/registry.js';
-import type { NotificationConfig } from '../server/types.js';
+import {
+  notificationI18nText,
+  type NotificationConfig,
+} from '../server/types.js';
 import { FakeNotificationStore } from './helpers/fake-notification-store.js';
 
 describe('notification test sending', () => {
@@ -15,8 +18,14 @@ describe('notification test sending', () => {
       .registerChannel({
         type: 'email',
         test: {
-          label: 'Email',
-          fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
+          label: notificationI18nText('test.channels.email', 'Email'),
+          fields: [
+            {
+              name: 'recipient',
+              label: notificationI18nText('test.fields.recipient', 'Recipient'),
+              type: 'email',
+            },
+          ],
           toSendInput() {
             return {
               to: { type: 'email', address: 'safe@example.com' },
@@ -30,7 +39,7 @@ describe('notification test sending', () => {
       })
       .registerProvider('email', {
         type: 'smtp',
-        label: 'SMTP',
+        label: notificationI18nText('test.providers.smtp', 'SMTP'),
         async createProvider() {
           throw new Error('not used');
         },
@@ -56,9 +65,22 @@ describe('notification test sending', () => {
     } as unknown as NotificationConfig;
     expect(registry.testTargets(config)).toEqual([
       {
-        channel: { type: 'email', label: 'Email' },
-        provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
-        fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
+        channel: {
+          type: 'email',
+          label: notificationI18nText('test.channels.email', 'Email'),
+        },
+        provider: {
+          name: 'primary',
+          type: 'smtp',
+          label: notificationI18nText('test.providers.smtp', 'SMTP'),
+        },
+        fields: [
+          {
+            name: 'recipient',
+            label: notificationI18nText('test.fields.recipient', 'Recipient'),
+            type: 'email',
+          },
+        ],
       },
     ]);
   });
@@ -85,11 +107,11 @@ describe('notification test sending', () => {
       .registerChannel({
         type: 'email',
         test: {
-          label: 'Email',
+          label: notificationI18nText('test.channels.email', 'Email'),
           fields: [
             {
               name: 'recipient',
-              label: 'Recipient',
+              label: notificationI18nText('test.fields.recipient', 'Recipient'),
               type: 'email',
               required: true,
             },
@@ -120,8 +142,7 @@ describe('notification test sending', () => {
     await manager.sendTest(
       {
         channel: 'email',
-        providerName: 'primary',
-        providerType: 'smtp',
+        provider: { name: 'primary', type: 'smtp' },
         values: { recipient: 'safe@example.com' },
       },
       { userId: 'user-1' },

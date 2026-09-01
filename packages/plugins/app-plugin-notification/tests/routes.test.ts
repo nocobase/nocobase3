@@ -7,13 +7,20 @@ import {
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { I18nRuntime } from '@nocobase/i18n';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import { apiRoutes } from '../server/routes/index.js';
+import serverLocales from '../server/locales/index.js';
 import { notificationServiceToken } from '../server/tokens.js';
-import type { NotificationService } from '../server/types.js';
+import {
+  NOTIFICATION_NAMESPACE,
+  notificationI18nText,
+  type NotificationService,
+} from '../server/types.js';
 
 describe('@nocobase/app-plugin-notification routes', () => {
   it('keeps logs on their page access permission', async () => {
@@ -31,9 +38,22 @@ describe('@nocobase/app-plugin-notification routes', () => {
   it('lists only safe targets with the separate test permission', async () => {
     const targets = [
       {
-        channel: { type: 'email', label: 'Email' },
-        provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
-        fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
+        channel: {
+          type: 'email',
+          label: notificationI18nText('test.channels.email', 'Email'),
+        },
+        provider: {
+          name: 'primary',
+          type: 'smtp',
+          label: notificationI18nText('test.providers.smtp', 'SMTP'),
+        },
+        fields: [
+          {
+            name: 'recipient',
+            label: notificationI18nText('test.fields.recipient', 'Recipient'),
+            type: 'email',
+          },
+        ],
       },
     ] as const;
     const { router, can, listTestTargets } = await createRouter({ targets });
@@ -43,7 +63,15 @@ describe('@nocobase/app-plugin-notification routes', () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ data: targets });
+    await expect(response.json()).resolves.toEqual({
+      data: [
+        {
+          channel: { type: 'email', label: 'Email' },
+          provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
+          fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
+        },
+      ],
+    });
     expect(listTestTargets).toHaveBeenCalledOnce();
     expect(can).toHaveBeenCalledWith({
       resource: { type: 'notification', id: 'test' },
@@ -55,8 +83,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
     const { router, sendTest } = await createRouter();
     const input = {
       channel: 'email',
-      providerName: 'primary',
-      providerType: 'smtp',
+      provider: { name: 'primary', type: 'smtp' },
       values: { recipient: 'test@example.com' },
     };
 
@@ -71,6 +98,35 @@ describe('@nocobase/app-plugin-notification routes', () => {
 
     expect(response.status).toBe(202);
     expect(sendTest).toHaveBeenCalledWith(input, { userId: 'user-1' });
+  });
+
+  it('rejects legacy or extended test request shapes', async () => {
+    const { router, sendTest } = await createRouter();
+    const request = (body: object): Promise<Response> =>
+      router.request('/notifications/test/send', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-nocobase-notification-test': '1',
+        },
+        body: JSON.stringify(body),
+      });
+
+    const legacy = await request({
+      channel: 'email',
+      providerName: 'primary',
+      providerType: 'smtp',
+      values: { recipient: 'test@example.com' },
+    });
+    const extended = await request({
+      channel: 'email',
+      provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
+      values: { recipient: 'test@example.com' },
+    });
+
+    expect(legacy.status).toBe(400);
+    expect(extended.status).toBe(400);
+    expect(sendTest).not.toHaveBeenCalled();
   });
 
   it('restricts status lookup to the actor through the manager interface', async () => {
@@ -111,6 +167,24 @@ describe('@nocobase/app-plugin-notification routes', () => {
     ).toBe(403);
 
     const denied = await createRouter({ allowed: false });
+    await expect(
+      (
+        await denied.router.request('/notifications/test/targets', {
+          headers: {
+            'accept-language': 'zh-CN',
+            'x-nocobase-notification-test': '1',
+          },
+        })
+      ).json(),
+    ).resolves.toEqual({
+      error: {
+        code: 'NOTIFICATION_TEST_FORBIDDEN',
+        message: '需要发送通知测试的权限。',
+        ns: NOTIFICATION_NAMESPACE,
+        key: 'errors.testForbidden',
+      },
+    });
+
     expect(
       (
         await denied.router.request('/notifications/test/targets', {
@@ -184,8 +258,17 @@ async function createRouter(options: RouterOptions = {}): Promise<{
     router: new Hono(),
     container,
   } as unknown as AppPluginApplication);
+  const runtime = new I18nRuntime({
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
+  });
+  runtime.registerNamespace(NOTIFICATION_NAMESPACE, serverLocales);
+  await runtime.init();
+  const router = new Hono();
+  router.use('*', createI18nMiddleware(runtime));
+  router.route('/', contribution);
   return {
-    router: contribution,
+    router,
     can,
     listTestTargets,
     sendTest,

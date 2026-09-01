@@ -12,10 +12,21 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
+import {
+  getRequestTranslator,
+  isAppI18nError,
+  type Translator,
+} from '@nocobase/i18n/server';
 
 import { notificationConfig } from '../config.js';
 import { notificationServiceToken } from '../tokens.js';
+import { isNotificationTestSendRequest } from '../test-contract.js';
 import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
+import { notificationTestError } from '../types.js';
+import type {
+  NotificationI18nText,
+  NotificationTestTargetDescriptor,
+} from '../types.js';
 
 type NotificationRoutesEnv = {
   Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
@@ -49,35 +60,65 @@ export const apiRoutes: AppApiRouteContribution<
   logs.route('/', notification.router);
 
   const tests = new Hono<NotificationRoutesEnv>();
+  tests.onError((error, context) => {
+    if (!isAppI18nError(error)) throw error;
+    const t = getRequestTranslator(context, error.ns);
+    return context.json(
+      {
+        error: {
+          code: error.code,
+          message: t(error.key, error.params),
+          ns: error.ns,
+          key: error.key,
+          ...(error.params ? { params: error.params } : {}),
+        },
+      },
+      error.status as 400,
+    );
+  });
   tests.use('*', auth.required(), authorization.middleware());
   tests.use('*', async (context, next) => {
     if (!config.get(notificationConfig).test?.enabled) {
-      return context.json({ error: 'Not found.' }, 404);
+      throw notificationTestError(
+        'NOTIFICATION_TEST_DISABLED',
+        'errors.testDisabled',
+        { status: 404 },
+      );
     }
     if (context.req.header(TEST_HEADER) !== '1') {
-      return context.json({ error: 'Missing notification test header.' }, 403);
+      throw notificationTestError(
+        'NOTIFICATION_TEST_HEADER_REQUIRED',
+        'errors.testHeaderRequired',
+        { status: 403 },
+      );
     }
     const allowed = await context.get('authz').can({
       resource: { type: 'notification', id: 'test' },
       action: 'send',
     });
     if (!allowed) {
-      return context.json(
-        { error: 'Notification test send permission is required.' },
-        403,
+      throw notificationTestError(
+        'NOTIFICATION_TEST_FORBIDDEN',
+        'errors.testForbidden',
+        { status: 403 },
       );
     }
     await next();
   });
-  tests.get('/targets', (context) =>
-    context.json({ data: notification.listTestTargets() }),
-  );
+  tests.get('/targets', (context) => {
+    const t = getRequestTranslator(context);
+    return context.json({
+      data: notification
+        .listTestTargets()
+        .map((target) => localizeTestTarget(target, t)),
+    });
+  });
   tests.post('/send', async (context) => {
     const request = await readTestRequest(context.req.raw);
     if (!request) {
-      return context.json(
-        { error: 'Request body must contain a test target and field values.' },
-        400,
+      throw notificationTestError(
+        'NOTIFICATION_TEST_INVALID_REQUEST',
+        'errors.testInvalidRequest',
       );
     }
     try {
@@ -86,14 +127,11 @@ export const apiRoutes: AppApiRouteContribution<
       });
       return context.json({ data: result }, 202);
     } catch (error) {
-      return context.json(
-        {
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Notification test failed.',
-        },
-        400,
+      if (isAppI18nError(error)) throw error;
+      throw notificationTestError(
+        'NOTIFICATION_TEST_FAILED',
+        'errors.testFailed',
+        { cause: error },
       );
     }
   });
@@ -101,9 +139,14 @@ export const apiRoutes: AppApiRouteContribution<
     const details = await notification.getTestStatus(context.req.param('id'), {
       userId: context.get('auth')!.user.id,
     });
-    return details
-      ? context.json({ data: details })
-      : context.json({ error: 'Notification test not found.' }, 404);
+    if (!details) {
+      throw notificationTestError(
+        'NOTIFICATION_TEST_NOT_FOUND',
+        'errors.testNotFound',
+        { status: 404 },
+      );
+    }
+    return context.json({ data: details });
   });
 
   router.route('/notifications', logs);
@@ -121,29 +164,44 @@ async function readTestRequest(
   request: Request,
 ): Promise<import('../types.js').NotificationTestSendRequest | undefined> {
   const body: unknown = await request.json().catch(() => undefined);
-  if (!isRecord(body) || !isRecord(body.values)) return undefined;
-  if (
-    typeof body.channel !== 'string' ||
-    typeof body.providerName !== 'string' ||
-    typeof body.providerType !== 'string'
-  )
-    return undefined;
-  const values: Record<string, string> = Object.create(null) as Record<
-    string,
-    string
-  >;
-  for (const [name, value] of Object.entries(body.values)) {
-    if (typeof value !== 'string') return undefined;
-    values[name] = value;
-  }
+  return isNotificationTestSendRequest(body) ? body : undefined;
+}
+
+function localizeTestTarget(
+  target: NotificationTestTargetDescriptor,
+  t: Translator,
+): NotificationTestTargetDescriptor<string> {
   return {
-    channel: body.channel,
-    providerName: body.providerName,
-    providerType: body.providerType,
-    values,
+    channel: {
+      type: target.channel.type,
+      label: translateText(target.channel.label, t),
+    },
+    provider: {
+      name: target.provider.name,
+      type: target.provider.type,
+      label: translateText(target.provider.label, t),
+    },
+    fields: target.fields.map((field) => ({
+      name: field.name,
+      label: translateText(field.label, t),
+      type: field.type,
+      ...(field.required === undefined ? {} : { required: field.required }),
+      ...(field.placeholder === undefined
+        ? {}
+        : { placeholder: translateText(field.placeholder, t) }),
+      ...(field.defaultValue === undefined
+        ? {}
+        : { defaultValue: translateText(field.defaultValue, t) }),
+      ...(field.maxLength === undefined ? {} : { maxLength: field.maxLength }),
+    })),
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function translateText(
+  text: string | NotificationI18nText,
+  t: Translator,
+): string {
+  return typeof text === 'string'
+    ? text
+    : t(text.key, { ns: text.ns, defaultValue: text.defaultValue });
 }

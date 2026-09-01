@@ -1860,30 +1860,6 @@ importers:
 
   packages/plugins/app-plugin-notification:
     dependencies:
-      '@nocobase/app-plugin-authentication':
-        specifier: workspace:^
-        version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-authorization':
-        specifier: workspace:^
-        version: link:../app-plugin-authorization
-      '@nocobase/app-server':
-        specifier: workspace:^
-        version: link:../../app/app-server
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
-      '@nocobase/logging':
-        specifier: workspace:^
-        version: link:../../libs/logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../../libs/queue
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
@@ -1897,9 +1873,33 @@ importers:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:*
+        version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-authorization':
+        specifier: workspace:*
+        version: link:../app-plugin-authorization
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
+      '@nocobase/logging':
+        specifier: workspace:*
+        version: link:../../libs/logging
+      '@nocobase/queue':
+        specifier: workspace:*
+        version: link:../../libs/queue
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -1936,31 +1936,34 @@ importers:
 
   packages/plugins/app-plugin-notification-in-app:
     dependencies:
-      '@nocobase/app-plugin-authentication':
-        specifier: workspace:^
-        version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-notification':
-        specifier: workspace:^
-        version: link:../app-plugin-notification
-      '@nocobase/app-server':
-        specifier: workspace:^
-        version: link:../../app/app-server
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
-      '@nocobase/session':
-        specifier: workspace:^
-        version: link:../../libs/session
       hono:
         specifier: 'catalog:'
         version: 4.13.2
     devDependencies:
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:*
+        version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:*
+        version: link:../app-plugin-notification
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
+      '@nocobase/session':
+        specifier: workspace:*
+        version: link:../../libs/session
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -1982,9 +1985,6 @@ importers:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -2004,6 +2004,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@refinedev/core':
         specifier: 'catalog:'
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.1.0))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -2052,15 +2055,6 @@ importers:
 
   packages/plugins/app-plugin-notification-providers:
     dependencies:
-      '@nocobase/app-plugin-notification':
-        specifier: workspace:^
-        version: link:../app-plugin-notification
-      '@nocobase/app-server':
-        specifier: workspace:^
-        version: link:../../app/app-server
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       nodemailer:
         specifier: ^9.0.5
         version: 9.0.5
@@ -2068,9 +2062,21 @@ importers:
         specifier: ^6.22.1
         version: 6.24.0
     devDependencies:
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:*
+        version: link:../app-plugin-notification
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3

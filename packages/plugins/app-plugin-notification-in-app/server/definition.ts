@@ -1,9 +1,10 @@
-import type {
-  NotificationContent,
-  NotificationChannelDefinition,
-  NotificationProviderDefinition,
-  NotificationRecipient,
+import {
+  type NotificationContent,
+  type NotificationChannelDefinition,
+  type NotificationProviderDefinition,
+  type NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
+import { inAppNotificationText } from './i18n.js';
 import type { InAppStore } from './store.js';
 import type { InAppMessage, InAppRecipient } from './types.js';
 
@@ -40,29 +41,41 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
   return {
     type: 'in-app',
     test: {
-      label: 'In-app',
+      label: inAppNotificationText('test.channels.inApp', 'In-app'),
       fields: [
         {
           name: 'recipient',
-          label: 'Recipient user ID',
+          label: inAppNotificationText(
+            'test.fields.recipientUserId',
+            'Recipient user ID',
+          ),
           type: 'text',
-          placeholder: 'Defaults to the current user',
+          placeholder: inAppNotificationText(
+            'test.placeholders.currentUser',
+            'Defaults to the current user',
+          ),
           maxLength: 255,
         },
         {
           name: 'title',
-          label: 'Title',
+          label: inAppNotificationText('test.fields.title', 'Title'),
           type: 'text',
           required: true,
-          defaultValue: 'NocoBase notification test',
+          defaultValue: inAppNotificationText(
+            'test.defaults.title',
+            'NocoBase notification test',
+          ),
           maxLength: 200,
         },
         {
           name: 'body',
-          label: 'Message',
+          label: inAppNotificationText('test.fields.message', 'Message'),
           type: 'textarea',
           required: true,
-          defaultValue: 'This is a test notification from NocoBase.',
+          defaultValue: inAppNotificationText(
+            'test.defaults.body',
+            'This is a test notification from NocoBase.',
+          ),
           maxLength: 2000,
         },
       ],
@@ -127,7 +140,7 @@ export function createDatabaseProviderDefinition(options: {
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
-    label: 'Database',
+    label: inAppNotificationText('test.providers.database', 'Database'),
     async createProvider(context, config) {
       const { store } = options;
       return {
