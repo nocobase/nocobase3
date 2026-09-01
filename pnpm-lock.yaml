@@ -232,7 +232,7 @@ importers:
         version: link:packages/tools/cli
       eslint:
         specifier: 'catalog:'
-        version: 10.8.1(jiti@2.7.0)(supports-color@8.1.1)
+        version: 10.8.1(jiti@2.7.0)
       husky:
         specifier: 'catalog:'
         version: 9.1.7
@@ -834,7 +834,7 @@ importers:
         version: link:../logging
       axios:
         specifier: ^1.7.0
-        version: 1.19.0(supports-color@8.1.1)
+        version: 1.19.0
       d3-dsv:
         specifier: '2'
         version: 2.0.0
@@ -1182,7 +1182,7 @@ importers:
         version: link:../logging
       ioredis:
         specifier: 'catalog:'
-        version: 5.11.1
+        version: 5.11.1(supports-color@8.1.1)
       knex:
         specifier: 'catalog:'
         version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)
@@ -1231,13 +1231,13 @@ importers:
         version: 4.13.2
       ioredis:
         specifier: 'catalog:'
-        version: 5.11.1
+        version: 5.11.1(supports-color@8.1.1)
       jose:
         specifier: ^6.2.9
         version: 6.2.9
       unstorage:
         specifier: ^1.17.5
-        version: 1.17.5(idb-keyval@6.3.0)(ioredis@5.11.1)
+        version: 1.17.5(idb-keyval@6.3.0)(ioredis@5.11.1(supports-color@8.1.1))
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -1790,6 +1790,76 @@ importers:
       tw-animate-css:
         specifier: ^1.2.5
         version: 1.4.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/plugins/app-plugin-hub:
+    dependencies:
+      '@nocobase/app-host':
+        specifier: workspace:^
+        version: link:../../app/app-host
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:^
+        version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-authorization':
+        specifier: workspace:^
+        version: link:../app-plugin-authorization
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:^
+        version: link:../../libs/db
+      '@nocobase/drive':
+        specifier: workspace:^
+        version: link:../../libs/drive
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../../libs/service-provider
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
+      ajv:
+        specifier: 'catalog:'
+        version: 8.20.0
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      tar:
+        specifier: ^7.4.3
+        version: 7.5.22
+      yaml:
+        specifier: ^2.8.1
+        version: 2.9.0
+    devDependencies:
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../../app/app-client
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.1.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2677,6 +2747,9 @@ importers:
       '@nocobase/app-plugin-file':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-file
+      '@nocobase/app-plugin-hub':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-hub
       '@nocobase/app-plugin-i18n':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-i18n
@@ -2886,7 +2959,7 @@ importers:
         version: 8.6.0(react@19.1.0)
       eslint:
         specifier: 'catalog:'
-        version: 10.8.1(jiti@2.7.0)
+        version: 10.8.1(jiti@2.7.0)(supports-color@8.1.1)
       eventsource-parser:
         specifier: 3.1.0
         version: 3.1.0
@@ -11620,7 +11693,7 @@ snapshots:
       cron-parser: 5.10.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
-      ioredis: 5.11.1
+      ioredis: 5.11.1(supports-color@8.1.1)
       knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)
       kysely: 0.29.5
 
@@ -11631,7 +11704,7 @@ snapshots:
       cron-parser: 5.10.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
-      ioredis: 5.11.1
+      ioredis: 5.11.1(supports-color@8.1.1)
       knex: 3.3.0(better-sqlite3@13.0.3)(pg@8.23.0)
       kysely: 0.29.5
 
@@ -12310,7 +12383,7 @@ snapshots:
       better-sqlite3: 12.11.1
       d3-dsv: 2.0.0
       ignore: 7.0.6
-      ioredis: 5.11.1
+      ioredis: 5.11.1(supports-color@8.1.1)
       jsdom: 30.0.1(@noble/hashes@2.3.0)
       jsonwebtoken: 9.0.3
       lodash: 4.18.1
@@ -13001,7 +13074,7 @@ snapshots:
   '@refinedev/simple-rest@6.0.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.1.0))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))':
     dependencies:
       '@refinedev/core': 5.0.12(@tanstack/react-query@5.101.4(react@19.1.0))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      axios: 1.19.0(supports-color@8.1.1)
+      axios: 1.19.0
       query-string: 7.1.3
     transitivePeerDependencies:
       - debug
@@ -13845,7 +13918,7 @@ snapshots:
 
   adler-32@1.3.1: {}
 
-  agent-base@6.0.2(supports-color@8.1.1):
+  agent-base@6.0.2:
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
     transitivePeerDependencies:
@@ -13983,17 +14056,17 @@ snapshots:
     dependencies:
       follow-redirects: 1.16.0(debug@4.3.4)
       form-data: 4.0.6
-      https-proxy-agent: 5.0.1(supports-color@8.1.1)
+      https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
       - supports-color
 
-  axios@1.19.0(supports-color@8.1.1):
+  axios@1.19.0:
     dependencies:
       follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
-      https-proxy-agent: 5.0.1(supports-color@8.1.1)
+      https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
@@ -15670,9 +15743,9 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  https-proxy-agent@5.0.1(supports-color@8.1.1):
+  https-proxy-agent@5.0.1:
     dependencies:
-      agent-base: 6.0.2(supports-color@8.1.1)
+      agent-base: 6.0.2
       debug: 4.4.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
@@ -15796,7 +15869,7 @@ snapshots:
 
   interpret@2.2.0: {}
 
-  ioredis@5.11.1:
+  ioredis@5.11.1(supports-color@8.1.1):
     dependencies:
       '@ioredis/commands': 1.10.0
       cluster-key-slot: 1.1.1
@@ -18613,7 +18686,7 @@ snapshots:
 
   unpipe@1.0.0: {}
 
-  unstorage@1.17.5(idb-keyval@6.3.0)(ioredis@5.11.1):
+  unstorage@1.17.5(idb-keyval@6.3.0)(ioredis@5.11.1(supports-color@8.1.1)):
     dependencies:
       anymatch: 3.1.3
       chokidar: 5.0.0
@@ -18625,7 +18698,7 @@ snapshots:
       ufo: 1.6.4
     optionalDependencies:
       idb-keyval: 6.3.0
-      ioredis: 5.11.1
+      ioredis: 5.11.1(supports-color@8.1.1)
 
   update-browserslist-db@1.3.1(browserslist@4.28.8):
     dependencies:

@@ -3,6 +3,10 @@ export interface ProxyRequestOptions {
   unavailableMessage: string;
 }
 
+interface ProxyRequestInit extends RequestInit {
+  duplex?: 'half';
+}
+
 export async function proxyRequest(
   request: Request,
   targetUrl: URL,
@@ -14,7 +18,7 @@ export async function proxyRequest(
   removeHopByHopHeaders(headers);
 
   try {
-    const response = await fetch(targetUrl, {
+    const init: ProxyRequestInit = {
       method: request.method,
       headers,
       signal: request.signal,
@@ -24,7 +28,8 @@ export async function proxyRequest(
           : request.body,
       redirect: 'manual',
       duplex: 'half',
-    });
+    };
+    const response = await fetch(targetUrl, init);
 
     return new Response(response.body, {
       status: response.status,

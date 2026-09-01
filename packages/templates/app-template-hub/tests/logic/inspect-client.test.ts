@@ -134,6 +134,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-system-info:index',
         path: '/system-info',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub',
+        path: '/hub',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),

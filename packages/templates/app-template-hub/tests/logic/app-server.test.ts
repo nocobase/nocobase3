@@ -99,6 +99,7 @@ import {
 type AppConfig = object;
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
+process.env.HUB_HOST_ENABLED ??= 'false';
 
 interface CloseableResource {
   close(): Promise<void>;
@@ -1514,6 +1515,7 @@ function createEmbeddedPluginFixture(rootDir: string): void {
     '@nocobase/app-plugin-authorization',
     '@nocobase/app-plugin-database-example',
     '@nocobase/app-plugin-file',
+    '@nocobase/app-plugin-hub',
     '@nocobase/app-plugin-i18n',
     '@nocobase/app-plugin-install',
     '@nocobase/app-plugin-notification',

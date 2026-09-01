@@ -210,7 +210,17 @@ run('Build server workspace dependencies', 'pnpm', [
   '--filter',
   '@nocobase/app-server',
   '--filter',
+  '@nocobase/app-portal-sdk',
+  '--filter',
+  '@nocobase/app-websocket',
+  '--filter',
   '@nocobase/caching',
+  '--filter',
+  '@nocobase/authorization',
+  '--filter',
+  '@nocobase/ai-employee',
+  '--filter',
+  '@nocobase/config',
   '--filter',
   '@nocobase/drive',
   '--filter',
@@ -239,6 +249,13 @@ run('Build workflow artifacts', 'pnpm', [
   '--tsconfig',
   'tsconfig.node.json',
   './scripts/build-workflows.ts',
+]);
+run('Build config schema', 'pnpm', [
+  'exec',
+  'tsx',
+  '--tsconfig',
+  'tsconfig.node.json',
+  './scripts/build-config-schema.ts',
 ]);
 writeDistEnv();
 run('Generate server package', 'node', [
