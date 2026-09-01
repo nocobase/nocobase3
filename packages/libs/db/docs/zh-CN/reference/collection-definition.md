@@ -25,6 +25,9 @@ type CollectionKind = 'table' | 'view' | 'materializedView';
 
 默认可以理解为 `table`。
 
+Resolver 读取 `partitionedTable` 和 `foreignTable` 时也返回 `kind: 'table'`，并在
+`db.physicalKind` 中保留精确物理类型；这不代表 Builder 支持创建对应的方言对象。
+
 ## name
 
 Collection 的应用层名称。通常由 Builder API 的第一个参数提供，不需要在 definition 中重复写。
@@ -120,6 +123,20 @@ Collection 级命名配置，会覆盖 connection 级 `naming`：
   },
 }
 ```
+
+Resolver 从 Inspector 读取完整 View SQL 时使用：
+
+```ts
+{
+  view: {
+    asRaw: {
+      sql: 'select ...',
+    },
+  },
+}
+```
+
+该 SQL 是数据库物理事实，不属于 editable Collection Metadata。
 
 ## Agent 注意事项
 

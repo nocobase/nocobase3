@@ -81,6 +81,15 @@ type FieldType =
 }
 ```
 
+Resolver 从物理 Schema 生成 Field 时，还会在 `db` 中保留当前通用 DSL 没有独立属性的只读事实：
+
+- `db.defaultExpression`：数据库返回的原始 default 表达式；只有 Inspector 同时解析出值时才设置
+  `defaultValue`；
+- `db.generated`：generated/computed column 的表达式和 stored 标记；
+- `db.nativeTypeSchema`：原生类型所属 schema（数据库能够提供时）。
+
+这些属性来自 Inspector，不保存到 Collection Metadata，也不能把 generated column 重新解释成 virtual Field。
+
 ## RelationFieldDefinition
 
 ```ts

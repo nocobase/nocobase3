@@ -13,30 +13,50 @@ description: 说明物理 Schema、命名规则和补充 Metadata 如何合并�
 PhysicalCollectionSchema
   + NamingOptions
   + CollectionMetadataDocument
-  -> CollectionDefinition
+  -> CollectionResolutionResult
 ```
 
 它不执行 introspection，不写 Metadata Store，也不缓存结果。
 
-Resolver 还接收只读的 Naming Index 上下文，用于将 foreign key 引用的物理表和字段转换为目标 Collection
-自己的逻辑名称：
+第一版公共输入和输出契约为：
 
 ```ts
+export interface CollectionResolutionInput {
+  readonly physical: PhysicalCollectionSchema;
+  readonly metadata?: CollectionMetadataDocument;
+  readonly naming?: NamingOptions;
+  readonly context: CollectionResolutionContext;
+}
+
+export interface CollectionResolutionResult {
+  readonly collection: CollectionDefinition;
+  readonly inspection: PhysicalSchemaInspection;
+  readonly warnings: readonly CollectionResolutionWarning[];
+}
+
 export interface CollectionResolutionContext {
   resolvePhysicalCollection(
-    tableName: string,
-    schema?: string,
+    identity: PhysicalCollectionIdentity,
   ): CollectionNamingIdentity | undefined;
 }
 
 export interface CollectionNamingIdentity {
-  name: string;
-  naming: Required<NamingOptions>;
+  readonly name: string;
+  readonly naming: Required<NamingOptions>;
 }
 ```
 
-这避免用 source Collection 的命名规则错误解析 target 表。找不到显式 Metadata 时，Naming Index 使用
-Connection 默认规则生成 identity。
+`physical` 是 Inspector 的单个对象结果；`metadata` 缺失是合法情况；`naming` 是 Connection 默认值。
+Resolver 还接收只读 Naming Index 上下文，用于将 foreign key 引用的物理表和字段转换为目标
+Collection 自己的逻辑名称。这避免用 source Collection 的命名规则错误解析 target 表。找不到显式 Metadata
+时，Naming Index 使用 Connection 默认规则生成 identity。
+
+Resolver 返回 result 而不是裸 `CollectionDefinition`，因为 `partial`、`unsupported` 和 Inspector warning
+不能在进入 Registry 时丢失。`inspection` 原样保留 Inspector 的完整性信息；`warnings` 包含 Inspector warning
+和 Resolver 根据非 complete aspect 生成的稳定 warning。
+
+Resolver warning 使用 `COLLECTION_INSPECTION_PARTIAL`、`COLLECTION_INSPECTION_UNSUPPORTED` 或
+`COLLECTION_INSPECTION_WARNING`。提升 Inspector warning 时，Inspector 原始 code 保存在 `sourceCode`。
 
 ## 合并顺序
 
@@ -49,6 +69,7 @@ Connection 默认规则生成 identity。
 7. 执行冲突、drift 和 relation 校验。
 
 物理事实不会被 Metadata 覆盖。例如 Metadata 不能改变 `nullable`、物理类型、主键、索引和外键。
+输出 `collection.naming` 是合并后的完整 effective naming，保证脱离输入后仍能解释逻辑名与物理名的关系。
 
 ## 逻辑命名
 
@@ -59,7 +80,35 @@ Connection 默认规则生成 identity。
 冲突，不得静默猜测。
 
 反向命名不是天然双射。例如多个异常物理列名可能同时归一化成同一个逻辑名。Resolver 必须先转换全部字段，再检查
-逻辑名唯一性；冲突时停止解析。
+逻辑名唯一性；冲突时停止解析。每次反向推导还必须用同一个 effective naming 正向计算并与原物理名严格比较；
+不能完成 round trip 的名称报告 `COLLECTION_NAME_CONFLICT`。
+
+有 Metadata 时，`metadata.name` 和 effective naming 正向计算出的表名必须与 `physical.tableName` 一致；不一致是
+`COLLECTION_SCHEMA_DRIFT`，Resolver 不尝试 rename。没有 Metadata 时，Collection 逻辑名由物理表名反向推导。
+
+## 完整物理到运行时映射
+
+以下表是第一版实现规范。表中 `db.*` 是 `DbOptions` 或 `DialectOptions` 的只读 introspection 扩展，
+用于保留当前通用 DSL 没有独立顶层属性的物理细节；这些值不属于 editable Metadata。
+
+### Collection
+
+| Physical Schema                                | CollectionDefinition                                  |
+| ---------------------------------------------- | ----------------------------------------------------- |
+| `table`                                        | `kind: 'table'`                                       |
+| `partitionedTable`                             | `kind: 'table'`，并保存 `db.physicalKind`             |
+| `foreignTable`                                 | `kind: 'table'`，并保存 `db.physicalKind`             |
+| `view`                                         | `kind: 'view'`                                        |
+| `materializedView`                             | `kind: 'materializedView'`                            |
+| `schema`                                       | `db.schema`                                           |
+| physical Collection comment                    | `db.comment`                                          |
+| Metadata `title`、`description`                | 同名属性                                              |
+| Connection naming + Metadata collection naming | 完整的 effective `naming`                             |
+| 完整的 `viewDefinition`                        | `view.asRaw: { sql: viewDefinition }`                 |
+| 缺失或不完整的 View Definition                 | 不生成 `view.asRaw`，通过 inspection/warning 明确说明 |
+
+`partitionedTable` 和 `foreignTable` 映射为 `table` 是因为当前 Builder 的 `CollectionKind` 不承诺创建这两类
+方言对象；`db.physicalKind` 保留读取侧差异。Resolver 结果不能据此推导 DDL 能力。
 
 ## Field 解析
 
@@ -68,7 +117,7 @@ Connection 默认规则生成 identity。
 ```text
 Physical dataType      -> FieldDefinition.type
 Physical nullable      -> FieldDefinition.nullable
-Physical default       -> FieldDefinition.defaultValue / db.defaultExpression
+Physical default       -> FieldDefinition.defaultValue + db.defaultExpression
 Physical nativeType    -> FieldDefinition.db.nativeType
 Physical comment       -> FieldDefinition.db.comment
 ```
@@ -76,11 +125,63 @@ Physical comment       -> FieldDefinition.db.comment
 Metadata 只合并 `title` 和 `description`。`fields` 项找不到物理 Field 时是 Schema drift，
 不得将其隐式解释为虚拟字段。
 
+精确规则如下：
+
+| Physical column                            | FieldDefinition                                              |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `columnName`                               | 按 effective naming 反向推导后的 `name`                      |
+| `dataType`                                 | `type`；未知原生类型保持 `type: 'native'`                    |
+| `nullable`                                 | `nullable`                                                   |
+| `autoIncrement`                            | `autoIncrement`；不改写为 DSL 快捷类型 `increments`          |
+| `unsigned`、`length`、`precision`、`scale` | 同名属性                                                     |
+| `nativeType`、`nativeTypeSchema`           | `db.nativeType`、`db.nativeTypeSchema`                       |
+| `comment`                                  | `db.comment`                                                 |
+| default 含可解析 `value`                   | `defaultValue`，并始终在 `db.defaultExpression` 保留原表达式 |
+| default 只有表达式                         | 只写 `db.defaultExpression`，不猜测 `defaultValue`           |
+| generated/computed                         | `db.generated: { expression?, stored? }`                     |
+
+物理列按 `ordinalPosition` 排序后生成 fields。generated column 不会伪装成 default，也不会生成 virtual Field。
+单列主键同样不写 `FieldDefinition.primaryKey`；Resolver 对所有主键统一生成 constraint，避免单列和复合主键使用
+两套事实表示。
+
 ## Index 与 constraint
 
 Inspector 返回的物理列名必须转换为逻辑 Field 名。主键、unique、foreign key 和普通 index 保留原始字段
-顺序。普通 unique constraint 与 unique index 保持区别；表达式索引不能伪装成普通 Field index，原始表达式
-保存在 `expressions` 或明确的方言扩展中。
+顺序。映射规则为：
+
+| Physical object                                    | 运行时表示                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| primary key                                        | 一个 `PrimaryConstraintDefinition`；不同时设置 Field `primaryKey` |
+| unique constraint                                  | `UniqueConstraintDefinition`                                      |
+| foreign key                                        | `ForeignKeyConstraintDefinition`                                  |
+| check constraint                                   | `CheckConstraintDefinition.expression` 原始字符串                 |
+| 独立普通或 unique index                            | `IndexDefinition`；`db.unique` 保存 unique 标记                   |
+| `backsConstraint` index                            | 不再生成普通 index，避免和主键/unique constraint 重复             |
+| index column key                                   | 转换后的 `fields`；column key 的 order 同时进入 `order`           |
+| index expression key                               | 原始表达式进入 `expressions`                                      |
+| key 的完整交错顺序、每个 key 的 `order` 和 `nulls` | `db.keys`                                                         |
+| `includeColumns`                                   | 转换后的逻辑 Field 名进入 `db.includeFields`                      |
+| `method`                                           | `type`                                                            |
+| filtered index `predicate`                         | 原始字符串进入 `db.predicate`                                     |
+
+`fields` 和 `expressions` 分别便于现有消费者读取；`db.keys` 是混合 column/expression index 的无损顺序表示。
+原始 predicate 不进入结构化 `FilterExpression`，因为 Resolver 不解析或猜测 SQL 表达式。约束或 index
+引用不存在的本地物理列时报告 `COLLECTION_PHYSICAL_REFERENCE_INVALID`。
+
+foreign key 的 target Collection 必须由 `CollectionResolutionContext` 按 `{ schema, tableName }` 精确解析，
+再使用 target 自己的 naming 转换 referenced columns。缺少 target identity 或 referenced column 无法 round trip
+时报告 `COLLECTION_PHYSICAL_REFERENCE_INVALID`。方言 referential action 映射如下：
+
+| Physical action | ReferentialAction |
+| --------------- | ----------------- |
+| `cascade`       | `cascade`         |
+| `restrict`      | `restrict`        |
+| `setNull`       | `set null`        |
+| `setDefault`    | `set default`     |
+| `noAction`      | `no action`       |
+
+`deferrable: false` 映射为 `false`；可延迟且 `initiallyDeferred: true` 映射为 `deferred`，否则映射为
+`immediate`。
 
 Relation Metadata 表达应用关联，物理 foreign key 表达数据库约束，两者可以同时存在：
 
@@ -99,9 +200,12 @@ Relation 可能形成循环依赖，例如 `users.department -> departments` 和
 
 校验分为两阶段：
 
-1. Resolver 在解析单个 Collection 时完成本地结构校验，包括字段重名、`sourceKey` 和 `foreignKey` 是否存在。
+1. Resolver 在解析单个 Collection 时完成本地结构校验，包括字段重名、`sourceKey` 是否存在，以及
+   `belongsTo.foreignKey` 是否能定位本地物理 Field。`belongsTo.foreignKey` 缺失时按 relation 的确定性
+   foreign-key 名查找并在输出中补成逻辑 Field 名；找不到时报告 `COLLECTION_RELATION_INVALID`。
 2. `CollectionRelationValidator` 在 Metadata 写入、显式模型审计、`scan()` 或 `export()` 时完成跨 Collection
-   校验，包括 target 是否存在、`targetKey` 是否存在和 through Collection 是否有效。
+   校验，包括 target 是否存在、`targetKey` 是否存在、`hasOne`/`hasMany` 的 remote foreign key 和 through
+   Collection 是否有效。
 
 普通 `get()` 不递归解析整张关系图。跨 Collection 校验按图遍历，并通过 visited 状态处理循环关系。
 
@@ -112,14 +216,41 @@ Inspector 负责报告物理对象是 table、view 还是 materialized view，Re
 推导统一的记录写权限。记录 mutation 能力由数据库、Query 执行结果和上层权限模型负责；
 `schemaManagement` 仅控制 DDL 和 Migration，不能据此判断业务记录是否可写。
 
-## 校验结果
+## inspection 完整性策略
+
+`columns` 是生成 Collection fields 的最低必要事实。`inspection.aspects.columns` 为 `partial` 或
+`unsupported` 时，Resolver 抛出 `COLLECTION_SCHEMA_INCOMPLETE`，不返回看似完整的 Collection。
+
+其他 aspect 为 `partial` 或 `unsupported` 时，Resolver 保留已经确认的结果并返回 warning：
+
+- `primaryKey`、`uniqueConstraints`、`indexes`、`foreignKeys`、`checkConstraints` 不完整时，不补猜缺失对象；
+- `comments` 不完整时，只保留已取得的 comment；
+- `viewDefinition` 不完整时不生成 `view.asRaw`；
+- 每个非 complete aspect 至少生成一个 `COLLECTION_INSPECTION_PARTIAL` 或
+  `COLLECTION_INSPECTION_UNSUPPORTED` warning；Inspector 自己的 warning 也原样提升到 result。
+
+调用方可以正常展示或查询 partial 结果，但需要完整审计、Snapshot 或迁移规划时必须自行要求所有相关 aspect
+为 `complete`。Resolver 不把 warning 自动升级成跨方言的一刀切错误。
+
+## 校验错误
 
 第一版对单个 Collection 的本地结构默认严格校验，不完整结果不能静默进入 Registry。跨 Collection 错误由
-`CollectionRelationValidator` 汇总。错误应带稳定 code 和可定位 path，至少覆盖：
+`CollectionRelationValidator` 汇总。Resolver 聚合当前输入中所有可确认错误：
 
+```ts
+export class CollectionResolutionError extends Error {
+  readonly code = 'COLLECTION_RESOLUTION_FAILED';
+  readonly issues: readonly CollectionResolutionIssue[];
+}
+```
+
+每个 issue 有稳定 code、结构化 path 和 message。第一版 code 为：
+
+- `COLLECTION_SCHEMA_INCOMPLETE`；
 - `COLLECTION_SCHEMA_DRIFT`；
 - `COLLECTION_NAME_CONFLICT`；
 - `COLLECTION_FIELD_CONFLICT`；
+- `COLLECTION_PHYSICAL_REFERENCE_INVALID`；
 - `COLLECTION_RELATION_INVALID`；
 
 无法归一化的物理类型以 `type: 'native'` 和 `db.nativeType` 进入解析结果，不会仅因为类型未知而阻止读取。

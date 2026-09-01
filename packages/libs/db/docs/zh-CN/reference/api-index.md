@@ -113,6 +113,16 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 - `extractLegacyCollectionMetadata(input, options?)`：从旧 Collection 定义中按允许列表提取补充元数据和迁移诊断。
 - `CollectionMetadataValidationError`：Metadata 文档校验错误，通过 `issues` 暴露稳定的 code、path 和 message。
 
+## Collection Resolver（契约已提供，实现中）
+
+- `CollectionResolutionInput`：单次解析的物理 Schema、可选 Metadata、Connection naming 和 Naming Index 上下文。
+- `CollectionResolutionResult`：解析后的 Collection、原始 inspection 完整性和 warning。
+- `CollectionResolutionContext`：按物理 `{ schema, tableName }` 解析目标 Collection identity。
+- `CollectionResolutionError`：单 Collection 解析聚合错误，通过 `issues` 暴露稳定 code、path 和 message。
+
+当前批次提供可编码契约，正式 `CollectionResolver` 执行实现将在下一批次提供。详见
+[Collection Resolver 设计](../collection/collection-resolver.md)。
+
 ## Adapter
 
 - `SchemaAdapter`：schema operation 执行接口。

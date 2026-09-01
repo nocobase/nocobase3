@@ -25,7 +25,7 @@ export type FieldType =
 
 export type Deferrable = boolean | 'immediate' | 'deferred';
 export type ReferentialAction =
-  'cascade' | 'restrict' | 'set null' | 'no action';
+  'cascade' | 'restrict' | 'set null' | 'set default' | 'no action';
 export type FilterExpression = Record<string, unknown>;
 export type DialectOptions = Record<string, unknown>;
 export type RelationType = 'belongsTo' | 'hasOne' | 'hasMany' | 'belongsToMany';
