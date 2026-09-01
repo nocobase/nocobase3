@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,8 +59,11 @@ describe('client inspection', () => {
     expect(parseInspectAppClientArgs(['--type', 'locales']).type).toBe(
       'locales',
     );
+    expect(parseInspectAppClientArgs(['--type', 'dev-routes']).type).toBe(
+      'dev-routes',
+    );
     expect(() => parseInspectAppClientArgs(['--type', 'providers'])).toThrow(
-      '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
+      '--type must be all, config, service-providers, react-providers, routes, settings, dev-routes, or locales.',
     );
   });
 
@@ -304,6 +308,61 @@ describe('client inspection', () => {
     expect(inspection.routes).toEqual([]);
     expect(inspection.reactProviders).toEqual([]);
   });
+
+  /**
+   * The regression this guards against: `client:inspect` runs under tsx, but its own tests run under Vitest, which
+   * is built on Vite. A declaration module written for a bundler — `client/source-extensions.ts` calls
+   * `import.meta.glob()` — therefore loaded fine in the tests while the real command failed with
+   * `.glob is not a function`, and the difference in environment hid the break entirely.
+   *
+   * So this runs the actual command as a child process, the way a developer does.
+   */
+  it('runs as a command under tsx, where declarations need a bundler', async () => {
+    const appRoot = path.resolve(import.meta.dirname, '../..');
+    const { stdout, code } = await new Promise<{
+      stdout: string;
+      code: number | null;
+    }>((resolve, reject) => {
+      const child = spawn(
+        'pnpm',
+        [
+          'exec',
+          'tsx',
+          './scripts/inspect-client.mjs',
+          '--type',
+          'settings',
+          '--json',
+        ],
+        { cwd: appRoot, stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      let out = '';
+      let err = '';
+      child.stdout.on('data', (chunk) => (out += String(chunk)));
+      child.stderr.on('data', (chunk) => (err += String(chunk)));
+      child.on('error', reject);
+      // A hang is the failure mode here as much as a crash: the command has to exit on its own.
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(
+          new Error(
+            `client:inspect did not exit. stderr: ${err.slice(0, 500)}`,
+          ),
+        );
+      }, 120_000);
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        resolve({ stdout: out, code });
+      });
+    });
+
+    expect(code).toBe(0);
+    const payload = JSON.parse(stdout) as {
+      ok: boolean;
+      result: { settings: readonly { path: string }[] };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.result.settings.length).toBeGreaterThan(0);
+  }, 150_000);
 
   it('uses stable errors for missing and invalid Client composition', async () => {
     const missingRoot = await createInspectionApp();
