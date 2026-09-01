@@ -49,20 +49,26 @@ export const applicationsEnUS = {
   'applicationDetail.deployments.type.redeploy': 'Redeploy',
   'applicationDetail.deployments.type.rollback': 'Rollback',
   'applicationDetail.develop': 'Develop',
-  'applicationDetail.development.copied': 'Command copied',
-  'applicationDetail.development.copy': 'Copy command',
+  'applicationDetail.development.copied': 'Copied',
+  'applicationDetail.development.create.copy': 'Copy create APP commands',
+  'applicationDetail.development.create.description':
+    'Create an APP from the default template and start development.',
+  'applicationDetail.development.create.title': 'No local APP source',
+  'applicationDetail.development.deploy.copy': 'Copy deployment command',
+  'applicationDetail.development.deploy.description':
+    'Run this command in the APP source directory. It builds the APP, creates a Release, and deploys it to the current Hub application.',
+  'applicationDetail.development.deploy.nextDescription':
+    'After the first successful deployment, run',
+  'applicationDetail.development.deploy.nextSuffix': ' next time.',
+  'applicationDetail.development.deploy.title': 'Deploy to this Hub',
   'applicationDetail.development.description':
-    'These commands are local examples and never call a backend from this page.',
-  'applicationDetail.development.first.description':
-    'Build and publish the first deployable release.',
-  'applicationDetail.development.first.title': 'First deployment',
-  'applicationDetail.development.local.description':
-    'Connect your local project to this Hub application.',
-  'applicationDetail.development.local.title': 'Local development',
-  'applicationDetail.development.title': 'Development workflow',
-  'applicationDetail.development.update.description':
-    'Publish the next version after making local changes.',
-  'applicationDetail.development.update.title': 'Release update',
+    'Develop the APP locally, then deploy its build artifact to this Hub application.',
+  'applicationDetail.development.existing.copy': 'Copy existing APP commands',
+  'applicationDetail.development.existing.description':
+    'Enter the source directory, install dependencies, and start development.',
+  'applicationDetail.development.existing.title': 'Existing local APP source',
+  'applicationDetail.development.local.title': 'Development',
+  'applicationDetail.development.title': 'Quick setup',
   'applicationDetail.health.degraded': 'Degraded',
   'applicationDetail.health.healthy': 'Healthy',
   'applicationDetail.health.unknown': 'Unknown',
@@ -273,20 +279,26 @@ export const applicationsZhCN: ApplicationsResource = {
   'applicationDetail.deployments.type.redeploy': '重新部署',
   'applicationDetail.deployments.type.rollback': '回滚',
   'applicationDetail.develop': '开发',
-  'applicationDetail.development.copied': '命令已复制',
-  'applicationDetail.development.copy': '复制命令',
+  'applicationDetail.development.copied': '已复制',
+  'applicationDetail.development.create.copy': '复制创建 APP 命令',
+  'applicationDetail.development.create.description':
+    '从默认模板创建 APP，然后启动开发服务。',
+  'applicationDetail.development.create.title': '本地没有 APP 源码',
+  'applicationDetail.development.deploy.copy': '复制部署命令',
+  'applicationDetail.development.deploy.description':
+    '在 APP 源码目录中执行。该命令会构建 APP、创建 Release，并部署到当前 Hub APP。',
+  'applicationDetail.development.deploy.nextDescription':
+    '首次部署成功后，下次只需运行',
+  'applicationDetail.development.deploy.nextSuffix': '。',
+  'applicationDetail.development.deploy.title': '部署到当前 Hub',
   'applicationDetail.development.description':
-    '这些命令仅作为本地示例，此页面不会调用后端。',
-  'applicationDetail.development.first.description':
-    '构建并发布第一个可部署版本。',
-  'applicationDetail.development.first.title': '首次部署',
-  'applicationDetail.development.local.description':
-    '将本地项目连接到此 Hub 应用。',
-  'applicationDetail.development.local.title': '本地开发',
-  'applicationDetail.development.title': '开发流程',
-  'applicationDetail.development.update.description':
-    '完成本地修改后发布下一个版本。',
-  'applicationDetail.development.update.title': '更新版本',
+    '在本地开发 APP，然后将构建产物部署到当前 Hub APP。',
+  'applicationDetail.development.existing.copy': '复制已有 APP 命令',
+  'applicationDetail.development.existing.description':
+    '进入源码目录，安装依赖，然后启动开发服务。',
+  'applicationDetail.development.existing.title': '本地已有 APP 源码',
+  'applicationDetail.development.local.title': '开发',
+  'applicationDetail.development.title': '快速开始',
   'applicationDetail.health.degraded': '状态不佳',
   'applicationDetail.health.healthy': '健康',
   'applicationDetail.health.unknown': '未知',

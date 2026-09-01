@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
+import { resolveAppBase } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   Activity,
@@ -362,16 +363,7 @@ export default function ApplicationDetailPage(): ReactElement {
           />
         </TabsContent>
         <TabsContent value='development'>
-          <DevelopmentTab
-            application={application}
-            onCopied={() =>
-              setNotice(
-                t('applicationDetail.development.copied', {
-                  defaultValue: 'Command copied',
-                }),
-              )
-            }
-          />
+          <DevelopmentTab application={application} />
         </TabsContent>
         <TabsContent value='releases'>
           <ReleasesTab
@@ -763,97 +755,167 @@ function MetricCard({
 
 function DevelopmentTab({
   application,
-  onCopied,
 }: {
   readonly application: HubApplicationRecord;
-  readonly onCopied: () => void;
 }): ReactElement {
   const { t } = useTranslation();
-  const commands = [
-    {
-      title: t('applicationDetail.development.local.title', {
-        defaultValue: 'Local development',
-      }),
-      description: t('applicationDetail.development.local.description', {
-        defaultValue: 'Connect your local project to this Hub application.',
-      }),
-      command: `pnpm nocobase app:connect --app ${application.slug}`,
-    },
-    {
-      title: t('applicationDetail.development.first.title', {
-        defaultValue: 'First deployment',
-      }),
-      description: t('applicationDetail.development.first.description', {
-        defaultValue: 'Build and publish the first deployable release.',
-      }),
-      command: `pnpm nocobase release:create --app ${application.slug}`,
-    },
-    {
-      title: t('applicationDetail.development.update.title', {
-        defaultValue: 'Release update',
-      }),
-      description: t('applicationDetail.development.update.description', {
-        defaultValue: 'Publish the next version after making local changes.',
-      }),
-      command: `pnpm nocobase release:update --app ${application.slug}`,
-    },
-  ];
+  const hubUrl = resolveHubPublicUrl();
+  const createCommands = `pnpm config set @nocobase:registry https://npm.nocobase.ai/
+pnpm create @nocobase/app ${application.slug}
+cd ${application.slug}
+pnpm dev`;
+  const existingCommands = `cd <existing-app-directory>
+pnpm install
+pnpm dev`;
+  const firstDeploymentCommand = `pnpm run deploy --hub ${hubUrl} --app ${application.slug}`;
+
   return (
-    <div className='space-y-5 pt-5'>
-      <Card className='overflow-hidden'>
-        <CardHeader className='border-b bg-muted/25'>
-          <CardTitle>
-            {t('applicationDetail.development.title', {
-              defaultValue: 'Development workflow',
+    <article className='max-w-3xl px-1 py-2 sm:px-4'>
+      <header className='space-y-2 pb-7'>
+        <h2 className='text-2xl font-semibold tracking-tight'>
+          {t('applicationDetail.development.title', {
+            defaultValue: 'Quick setup',
+          })}
+        </h2>
+        <p className='text-sm leading-6 text-muted-foreground'>
+          {t('applicationDetail.development.description', {
+            defaultValue:
+              'Develop the APP locally, then deploy its build artifact to this Hub application.',
+          })}
+        </p>
+      </header>
+
+      <section className='space-y-7 border-t border-border/70 py-8'>
+        <h3 className='text-xl font-semibold tracking-tight'>
+          {t('applicationDetail.development.local.title', {
+            defaultValue: 'Development',
+          })}
+        </h3>
+
+        <div className='space-y-3'>
+          <h4 className='font-semibold'>
+            {t('applicationDetail.development.create.title', {
+              defaultValue: 'No local APP source',
             })}
-          </CardTitle>
-          <CardDescription>
-            {t('applicationDetail.development.description', {
+          </h4>
+          <p className='text-sm leading-6 text-muted-foreground'>
+            {t('applicationDetail.development.create.description', {
               defaultValue:
-                'These commands are local examples and never call a backend from this page.',
+                'Create an APP from the default template and start development.',
             })}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className='grid gap-4 pt-1 lg:grid-cols-3'>
-          {commands.map((item, index) => (
-            <div
-              key={item.title}
-              className='flex flex-col rounded-xl border bg-background p-4'
-            >
-              <div className='mb-4 flex items-center gap-3'>
-                <span className='grid size-7 place-items-center rounded-lg bg-primary/10 text-xs font-semibold text-primary'>
-                  {index + 1}
-                </span>
-                <h2 className='font-semibold'>{item.title}</h2>
-              </div>
-              <p className='mb-4 min-h-10 text-sm text-muted-foreground'>
-                {item.description}
-              </p>
-              <pre className='mb-3 overflow-x-auto rounded-lg bg-muted p-3 text-xs'>
-                <code>{item.command}</code>
-              </pre>
-              <Button
-                type='button'
-                variant='outline'
-                className='mt-auto'
-                aria-label={t('applicationDetail.development.copy', {
-                  defaultValue: 'Copy command',
-                })}
-                onClick={() => {
-                  void copyText(item.command).then(onCopied);
-                }}
-              >
-                <Copy aria-hidden='true' />
-                {t('applicationDetail.development.copy', {
-                  defaultValue: 'Copy command',
-                })}
-              </Button>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+          </p>
+          <DevelopmentCommandBlock
+            commands={createCommands}
+            copyLabel={t('applicationDetail.development.create.copy', {
+              defaultValue: 'Copy create APP commands',
+            })}
+          />
+        </div>
+
+        <div className='space-y-3'>
+          <h4 className='font-semibold'>
+            {t('applicationDetail.development.existing.title', {
+              defaultValue: 'Existing local APP source',
+            })}
+          </h4>
+          <p className='text-sm leading-6 text-muted-foreground'>
+            {t('applicationDetail.development.existing.description', {
+              defaultValue:
+                'Enter the source directory, install dependencies, and start development.',
+            })}
+          </p>
+          <DevelopmentCommandBlock
+            commands={existingCommands}
+            copyLabel={t('applicationDetail.development.existing.copy', {
+              defaultValue: 'Copy existing APP commands',
+            })}
+          />
+        </div>
+      </section>
+
+      <section className='space-y-4 border-t border-border/70 pt-8'>
+        <h3 className='text-xl font-semibold tracking-tight'>
+          {t('applicationDetail.development.deploy.title', {
+            defaultValue: 'Deploy to this Hub',
+          })}
+        </h3>
+        <p className='text-sm leading-6 text-muted-foreground'>
+          {t('applicationDetail.development.deploy.description', {
+            defaultValue:
+              'Run this command in the APP source directory. It builds the APP, creates a Release, and deploys it to the current Hub application.',
+          })}
+        </p>
+        <DevelopmentCommandBlock
+          commands={firstDeploymentCommand}
+          copyLabel={t('applicationDetail.development.deploy.copy', {
+            defaultValue: 'Copy deployment command',
+          })}
+        />
+        <p className='text-sm leading-6 text-muted-foreground'>
+          {t('applicationDetail.development.deploy.nextDescription', {
+            defaultValue: 'After the first successful deployment, run',
+          })}{' '}
+          <code className='rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground'>
+            pnpm run deploy
+          </code>
+          {t('applicationDetail.development.deploy.nextSuffix', {
+            defaultValue: ' next time.',
+          })}
+        </p>
+      </section>
+    </article>
+  );
+}
+
+function DevelopmentCommandBlock({
+  commands,
+  copyLabel,
+}: {
+  readonly commands: string;
+  readonly copyLabel: string;
+}): ReactElement {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className='relative rounded-lg border bg-muted/45 shadow-sm'>
+      <pre className='overflow-x-auto p-4 pr-12 font-mono text-xs leading-6'>
+        {commands}
+      </pre>
+      <Button
+        type='button'
+        variant='ghost'
+        size='icon-sm'
+        className='absolute top-2 right-2'
+        aria-label={
+          copied
+            ? t('applicationDetail.development.copied', {
+                defaultValue: 'Copied',
+              })
+            : copyLabel
+        }
+        title={copyLabel}
+        onClick={() => {
+          void copyText(commands).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1_500);
+          });
+        }}
+      >
+        {copied ? <Check aria-hidden='true' /> : <Copy aria-hidden='true' />}
+      </Button>
     </div>
   );
+}
+
+function resolveHubPublicUrl(): string {
+  const appBase = resolveAppBase();
+  if (typeof window === 'undefined') {
+    return appBase.replace(/\/$/u, '') || '/';
+  }
+  return new URL(appBase, window.location.origin)
+    .toString()
+    .replace(/\/$/u, '');
 }
 
 async function copyText(value: string): Promise<void> {

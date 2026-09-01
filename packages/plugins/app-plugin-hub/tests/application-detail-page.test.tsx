@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { I18nRuntime } from '@nocobase/i18n';
+import { I18nProvider, NamespaceScope } from '@nocobase/i18n/client';
 import { Link, MemoryRouter, Route, Routes } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HubApplicationsProvider } from '../client/components/hub-applications-provider.js';
+import locales from '../client/locales/index.js';
 import ApplicationDetailPage from '../client/pages/application-detail-page.js';
 
 function renderPage(entry = '/apps/crm'): ReturnType<typeof render> {
@@ -19,14 +22,25 @@ function renderPage(entry = '/apps/crm'): ReturnType<typeof render> {
 }
 
 describe('ApplicationDetailPage', () => {
-  it('provides every approved detail tab and copyable development commands', async () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'APP_BASE_PATH', {
+      configurable: true,
+      value: '/hub/',
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'APP_BASE_PATH');
+  });
+
+  it('provides the Hub quick setup workflow and copyable commands', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText },
     });
-    renderPage();
+    renderPage('/apps/warehouse?tab=development');
 
     for (const tab of [
       'Overview',
@@ -40,14 +54,84 @@ describe('ApplicationDetailPage', () => {
       expect(screen.getByRole('tab', { name: tab })).toBeVisible();
     }
 
-    await user.click(screen.getByRole('tab', { name: 'Development' }));
-    expect(screen.getByText('Local development')).toBeVisible();
-    expect(screen.getByText('First deployment')).toBeVisible();
-    expect(screen.getByText('Release update')).toBeVisible();
-    await user.click(
-      screen.getAllByRole('button', { name: 'Copy command' })[0],
+    expect(screen.getByRole('heading', { name: 'Quick setup' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Development' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'No local APP source' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Existing local APP source' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Deploy to this Hub' }),
+    ).toBeVisible();
+
+    const createCopyButton = screen.getByRole('button', {
+      name: 'Copy create APP commands',
+    });
+    await user.click(createCopyButton);
+    expect(writeText).toHaveBeenNthCalledWith(
+      1,
+      'pnpm config set @nocobase:registry https://npm.nocobase.ai/\n' +
+        'pnpm create @nocobase/app wms\n' +
+        'cd wms\n' +
+        'pnpm dev',
     );
-    expect(writeText).toHaveBeenCalledOnce();
+    expect(createCopyButton).toHaveAccessibleName('Copied');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Copy existing APP commands' }),
+    );
+    expect(writeText).toHaveBeenNthCalledWith(
+      2,
+      'cd <existing-app-directory>\npnpm install\npnpm dev',
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Copy deployment command' }),
+    );
+    expect(writeText).toHaveBeenNthCalledWith(
+      3,
+      `pnpm run deploy --hub ${window.location.origin}/hub --app wms`,
+    );
+    expect(screen.getByText('pnpm run deploy')).toBeVisible();
+  });
+
+  it('renders the quick setup workflow from the Chinese locale', async () => {
+    const runtime = new I18nRuntime({
+      defaultLocale: 'en-US',
+      locales: ['en-US', 'zh-CN'],
+    });
+    runtime.registerNamespace('@nocobase/app-plugin-hub', locales);
+    await runtime.init('zh-CN');
+
+    render(
+      <I18nProvider runtime={runtime}>
+        <NamespaceScope ns='@nocobase/app-plugin-hub'>
+          <MemoryRouter initialEntries={['/apps/warehouse?tab=development']}>
+            <HubApplicationsProvider>
+              <Routes>
+                <Route
+                  path='/apps/:appId'
+                  element={<ApplicationDetailPage />}
+                />
+              </Routes>
+            </HubApplicationsProvider>
+          </MemoryRouter>
+        </NamespaceScope>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: '快速开始' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: '本地没有 APP 源码' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: '本地已有 APP 源码' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: '部署到当前 Hub' }),
+    ).toBeVisible();
   });
 
   it('supports release and permission mutations inside the page', async () => {
