@@ -70,9 +70,50 @@ describe('settings centre', () => {
     expect(
       screen.queryByRole('link', { name: 'Settings' }),
     ).not.toBeInTheDocument();
+    // The other surface's entry stays: only the surface you are standing in withdraws its own.
+    expect(screen.getByRole('link', { name: 'Dev tools' })).toHaveAttribute(
+      'href',
+      '/dev',
+    );
     expect(
       screen.getAllByRole('link', { name: 'Back to app' })[0],
     ).toHaveAttribute('href', '/');
+  });
+
+  it('withdraws the dev entry inside the dev tools and offers settings instead', async () => {
+    const devRoute: AppClientRegisteredSetting = {
+      id: 'playground',
+      navigation: true,
+      packageName: '@nocobase/app-plugin-test',
+      pageLoader: async () => ({
+        default: (): ReactElement => <h2>Playground page</h2>,
+      }),
+      path: '/dev/playground',
+      source: 'plugin',
+      surface: 'dev',
+      title: 'Playground',
+    };
+
+    renderApp(
+      <AppRouter
+        clientDevRouteGroups={[]}
+        clientDevRoutes={[devRoute]}
+        clientRoutes={[]}
+        clientSettingGroups={[]}
+        clientSettings={[]}
+      />,
+      '/dev/playground',
+    );
+
+    expect(await screen.findByText('Playground page')).toBeVisible();
+    // Standing in the dev tools, the dev entry has nowhere to go; the settings entry is the way out.
+    expect(
+      screen.queryByRole('link', { name: 'Dev tools' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
   });
 
   it('renders the icon a setting declares, and copes with one that declares none', async () => {
@@ -339,6 +380,35 @@ function renderSettings(
             clientSettingGroups={groups}
             clientSettings={settings}
           />
+        </Refine>
+      </AppThemeProvider>
+    </MemoryRouter>,
+  );
+}
+
+/** Renders a router subtree the way renderSettings does, for a surface other than the settings centre. */
+function renderApp(element: ReactElement, initialEntry: string): void {
+  render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <AppThemeProvider>
+        <Refine
+          authProvider={createAuthProvider()}
+          dataProvider={{
+            getList: vi.fn(),
+            getMany: vi.fn(),
+            getOne: vi.fn(),
+            create: vi.fn(),
+            createMany: vi.fn(),
+            update: vi.fn(),
+            updateMany: vi.fn(),
+            deleteOne: vi.fn(),
+            deleteMany: vi.fn(),
+            getApiUrl: vi.fn(),
+            custom: vi.fn(),
+          }}
+          options={{ disableTelemetry: true }}
+        >
+          {element}
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>,

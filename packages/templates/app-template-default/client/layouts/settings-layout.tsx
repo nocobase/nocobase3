@@ -8,6 +8,7 @@ import type { ReactElement } from 'react';
 import { SurfaceLayout, type SurfaceCopy } from './surface-layout.js';
 
 const SETTINGS_COPY: SurfaceCopy = {
+  surface: 'settings',
   title: 'Settings',
   pathPrefix: '/settings',
   emptyTitle: 'No settings available',
