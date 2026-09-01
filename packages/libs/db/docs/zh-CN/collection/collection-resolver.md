@@ -5,7 +5,7 @@ description: 说明物理 Schema、命名规则和补充 Metadata 如何合并�
 
 # Collection Resolver 设计
 
-> 本文描述目标设计，当前 `@nocobase/db` 尚未提供正式的 `CollectionResolver`。
+> `@nocobase/db` 已提供本文第一版 `CollectionResolver`；跨 Collection 图校验和 Registry 集成在后续批次实现。
 
 `CollectionResolver` 是纯合并和校验层：
 
@@ -17,6 +17,13 @@ PhysicalCollectionSchema
 ```
 
 它不执行 introspection，不写 Metadata Store，也不缓存结果。
+
+可使用 class 或等价的纯函数入口：
+
+```ts
+const result = new CollectionResolver().resolve(input);
+const sameResult = resolveCollection(input);
+```
 
 第一版公共输入和输出契约为：
 
