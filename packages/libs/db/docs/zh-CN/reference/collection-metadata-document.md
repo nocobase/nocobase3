@@ -114,9 +114,9 @@ for (const diagnostic of result.diagnostics) {
 
 完整的存储边界、校验规则和 legacy extraction 允许列表见 [Metadata Store](../collection/metadata-store.md)。
 
-## 文档 Store
+## Metadata Store
 
-过渡期的新 Store 接口名为 `CollectionMetadataStore`。它保存 V1 文档而不是完整
+最终 Store 接口名为 `CollectionMetadataStore`。它只保存 V1 补充文档，不保存完整
 `CollectionDefinition`，所有写入都要求 compare-and-swap：
 
 ```ts

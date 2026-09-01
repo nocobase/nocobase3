@@ -206,11 +206,17 @@ mainRead  --+
 
 `CollectionResolver` 合并物理 Schema 和补充 Metadata，生成完整的 `CollectionDefinition`。
 
-`connection.collections` 暴露解析结果，建议至少提供：
+`connection.collections` 暴露解析结果，当前提供：
 
 ```ts
 await connection.collections.get('users');
+await connection.collections.getResolution('users');
 await connection.collections.list({ limit: 100, cursor });
+for await (const collection of connection.collections.scan()) {
+  // Explicit full-schema scan.
+}
+await connection.collections.refresh('users');
+await connection.collections.validateRelations('users');
 ```
 
 `get(name)` 按名称懒加载并解析一个完整 Collection。`list()` 不能隐式 introspect 和解析数据库中的全部 Collection；它应默认分页，只返回名称、物理表名和类型等轻量摘要。

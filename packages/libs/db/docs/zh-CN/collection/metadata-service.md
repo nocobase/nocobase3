@@ -31,7 +31,7 @@ connection.collections         读取解析后的完整 Collection
 这三个入口不可以相互隐藏。例如，修改 Field `title` 不应通过 Builder 伪装成 Schema alter；
 增加物理列也不能通过 Metadata Service 完成。
 
-## 目标 API
+## 当前公共 API
 
 ```ts
 export interface CollectionMetadataService {

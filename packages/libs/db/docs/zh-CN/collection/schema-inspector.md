@@ -713,14 +713,14 @@ export type SchemaInspectorErrorCode =
 
 当前不要求实现 SQLite attached database、MySQL 跨 database 扫描或 Oracle 跨 schema 扫描，但公共模型不能阻止以后添加这些能力。
 
-## 后续实现顺序
+## 后续扩展方向
 
-SQLite、PostgreSQL、MySQL、Oracle、SQL Server Inspector 及公共接口已经实现。后续建议按以下顺序继续：
+SQLite、PostgreSQL、MySQL、Oracle、SQL Server Inspector 及公共接口已经实现，并已作为
+`CollectionResolver` 的稳定输入。后续扩展不影响当前 M0–M7 完整链路：
 
 1. 持续补充权限、并发变化及各数据库版本差异测试；
-2. 以稳定的 `PhysicalCollectionSchema` 作为 Collection Resolver 输入；
-3. 按实际需求增加其他方言 Adapter；
-4. 在 Resolver 之上实现 Snapshot、drift 检查和 Agent 可读的 Collection 输出。
+2. 按实际需求增加其他方言 Adapter；
+3. 在 Resolver 之上增加可选的 Snapshot 与 Agent 导出工具。
 
 ## 参考边界
 

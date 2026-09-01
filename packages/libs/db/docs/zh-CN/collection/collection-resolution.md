@@ -156,21 +156,20 @@ Store 层的 `delete(old) + put(new)` 不是原子 Collection rename。完整操
 已保存 Metadata 与确定性命名规则冲突时，启动或升级校验必须输出准确差异并停止。系统不能自动 rename
 生产数据库对象，也不能静默重写 Metadata。
 
-## 建议实现顺序
+## M0–M7 实现状态
 
-设计确认后按以下依赖顺序实现，避免让下层反向依赖上层：
+本生命周期对应的 M0–M7 已全部落地：
 
-1. 定义 Physical Schema 类型、Metadata 文档类型和各公共错误类型。
-2. 实现 `SchemaInspector` 的 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 方言读取与集成测试。
-3. 实现 `CollectionResolver` 和本地结构校验。
-4. 实现 Metadata Store 新文档接口、In-memory Store 和 Naming Index。
-5. 实现 `CollectionRegistry` 与 `connection.collections`。
-6. 实现 `CollectionMetadataService` 和跨 Collection relation 图校验。
-7. 接入 Builder、Migration、transaction 和 Metadata 写入后的自动 Registry 失效（已完成）。
-8. 实现 Database Store、Module Store、Schema Snapshot 和 Agent Snapshot。
-9. 所有消费端迁移完成后移除旧的完整 `CollectionDefinition` Store API。
+1. Physical Schema、Metadata V1、稳定错误和 legacy extraction 已实现；
+2. 五种数据库的 `SchemaInspector` 已实现；
+3. `CollectionResolver`、本地校验和跨 Collection relation 图校验已实现；
+4. revision/CAS Store、Naming Index、Registry、Service 和 Connection API 已实现；
+5. Database、Module、In-memory 和 transaction Store 后端已实现；
+6. Builder、Migration 和 transaction 已接入 Metadata 同步与 Registry 失效；
+7. 旧完整 `CollectionDefinition` Store、legacy runtime adapter 和 Builder Metadata-only API 已移除。
 
-每一阶段都必须保留当前 API 的兼容测试，不能在解析链路尚未可用时提前移除 Builder 依赖的旧 Store。
+Schema Snapshot、Agent Snapshot、可写 JSON/YAML File Store 和声明式命名 Store 注册表是独立的后续能力，
+不属于本轮 M0–M7 的运行时交付范围，也不是当前解析链路的依赖。
 
 ## 相关文档
 
