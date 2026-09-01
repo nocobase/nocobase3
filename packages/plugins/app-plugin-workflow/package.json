@@ -10,7 +10,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "workflow": "./dist/bin/workflow.js"
+    "workflow": "./bin/workflow.ts"
   },
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -41,6 +41,9 @@
   },
   "publishConfig": {
     "access": "public",
+    "bin": {
+      "workflow": "./dist/bin/workflow.js"
+    },
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
