@@ -9,6 +9,7 @@ const inspectionTypes = [
   'react-providers',
   'routes',
   'settings',
+  'dev-routes',
   'locales',
 ];
 
@@ -23,7 +24,7 @@ Usage:
 
 Options:
   --type <type>      all, config, service-providers, react-providers, routes,
-                     settings, or locales (default: all)
+                     settings, dev-routes, or locales (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help`;
 
@@ -66,7 +67,7 @@ export function parseInspectAppClientArgs(args) {
       if (!inspectionTypes.includes(value)) {
         throw inspectionError(
           'CLIENT_INSPECT_ARGUMENT_INVALID',
-          '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
+          '--type must be all, config, service-providers, react-providers, routes, settings, dev-routes, or locales.',
         );
       }
       options.type = value;
@@ -217,6 +218,20 @@ export async function inspectAppClient({
     ...(setting.access ? { access: setting.access } : {}),
   }));
 
+  // Dev routes are always empty in a production build; inspection runs under Node, so it sees what a developer sees.
+  const devRoutes = resolved.devRoutes.map((devRoute, index) => ({
+    order: index + 1,
+    parent: 'dev',
+    id: devRoute.id,
+    title: devRoute.title,
+    packageName: devRoute.packageName,
+    path: devRoute.path,
+    source: devRoute.source,
+    entry: entryOf(devRoute.packageName, 'routes'),
+    ...(devRoute.groupId ? { groupId: devRoute.groupId } : {}),
+    ...(devRoute.access ? { access: devRoute.access } : {}),
+  }));
+
   return createInspectionResult({
     appPackageName,
     appRoot,
@@ -225,6 +240,7 @@ export async function inspectAppClient({
     reactProviders,
     routes: routeSnapshots,
     settings,
+    devRoutes,
     locales,
   });
 }
@@ -237,6 +253,7 @@ function createInspectionResult({
   reactProviders = [],
   routes = [],
   settings = [],
+  devRoutes = [],
   locales = [],
 }) {
   const issues = settings
@@ -254,6 +271,7 @@ function createInspectionResult({
     reactProviders,
     routes,
     settings,
+    devRoutes,
     locales,
     consistent: issues.length === 0,
     issues,
@@ -516,6 +534,9 @@ export function formatAppClientInspection(inspection, type = 'all') {
   if (type === 'all' || type === 'settings') {
     sections.push(formatSettings(inspection.settings));
   }
+  if (type === 'all' || type === 'dev-routes') {
+    sections.push(formatDevRoutes(inspection.devRoutes));
+  }
   if (type === 'all' || type === 'react-providers') {
     sections.push(formatReactProviders(inspection.reactProviders));
   }
@@ -543,6 +564,9 @@ export function selectAppClientInspection(inspection, type = 'all') {
       : {}),
     ...(type === 'all' || type === 'settings'
       ? { settings: inspection.settings }
+      : {}),
+    ...(type === 'all' || type === 'dev-routes'
+      ? { devRoutes: inspection.devRoutes }
       : {}),
     ...(type === 'all' || type === 'react-providers'
       ? { reactProviders: inspection.reactProviders }
@@ -632,6 +656,23 @@ function formatRoutes(routes) {
         ...(route.componentEntry
           ? [`    component entry: ${route.componentEntry}`]
           : []),
+      ].join('\n'),
+    )
+    .join('\n')}`;
+}
+
+function formatDevRoutes(devRoutes = []) {
+  if (devRoutes.length === 0) return 'Dev Routes\n  (none)';
+  return `Dev Routes\n${devRoutes
+    .map((devRoute) =>
+      [
+        `  ${devRoute.order}. ${devRoute.path}`,
+        `    parent: ${devRoute.parent}`,
+        `    id: ${devRoute.id}`,
+        `    title: ${devRoute.title}`,
+        ...(devRoute.groupId ? [`    group: ${devRoute.groupId}`] : []),
+        `    source: ${devRoute.source}`,
+        `    entry: ${devRoute.entry}`,
       ].join('\n'),
     )
     .join('\n')}`;

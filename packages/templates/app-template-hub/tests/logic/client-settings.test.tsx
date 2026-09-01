@@ -15,7 +15,7 @@ import { MemoryRouter, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
-import { buildNavEntries } from '../../client/settings/index.ts';
+import { buildNavEntries } from '../../client/layouts/index.ts';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 function WorkflowDetailTestPage(): ReactElement {
@@ -292,6 +292,7 @@ const AUTHORIZATION: AppClientRegisteredSettingGroup = {
     ),
   ],
   source: 'plugin',
+  surface: 'settings',
   title: 'Authorization',
 };
 
@@ -332,6 +333,8 @@ function renderSettings(
           options={{ disableTelemetry: true }}
         >
           <AppRouter
+            clientDevRouteGroups={[]}
+            clientDevRoutes={[]}
             clientRoutes={routes}
             clientSettingGroups={groups}
             clientSettings={settings}
@@ -373,6 +376,7 @@ function createSetting(
     path:
       groupId === undefined ? `/settings/${id}` : `/settings/${groupId}/${id}`,
     source: 'plugin',
+    surface: 'settings',
     title,
   };
 }

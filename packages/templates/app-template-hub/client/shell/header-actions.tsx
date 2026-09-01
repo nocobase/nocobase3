@@ -1,9 +1,12 @@
-import { Settings } from 'lucide-react';
+import { BookOpenCheck, Settings } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
 import { ThemeSettings } from '../theme/index.js';
 import { UserMenu } from './user-menu.js';
+
+const ACTION_LINK_CLASS =
+  'inline-flex size-10 items-center justify-center rounded-xl border border-border/70 bg-background/60 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface HeaderActionsProps {
   /**
@@ -19,10 +22,22 @@ export function HeaderActions({
 }: HeaderActionsProps): ReactElement {
   return (
     <div className='flex shrink-0 items-center gap-2'>
+      {/* The dev entry sits left of settings and exists only while developing: a production build evaluates this to
+          false and drops the link along with the whole dev surface it points at. */}
+      {import.meta.env.DEV ? (
+        <Link
+          aria-label='Dev tools'
+          className={ACTION_LINK_CLASS}
+          title='Dev tools'
+          to='/dev'
+        >
+          <BookOpenCheck className='size-5' />
+        </Link>
+      ) : null}
       {showSettings ? (
         <Link
           aria-label='Settings'
-          className='inline-flex size-10 items-center justify-center rounded-xl border border-border/70 bg-background/60 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
+          className={ACTION_LINK_CLASS}
           title='Settings'
           to='/settings'
         >

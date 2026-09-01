@@ -22,6 +22,12 @@ This directory is the active Default App browser client.
   must have no startup side effects.
 - Keep route rendering, auth grouping, loading, and error handling under
   `routing/`; do not declare product routes there.
+- Keep shared page-shell layouts under `layouts/`. The settings centre and the
+  dev tools are both the one `SurfaceLayout` with different copy; add a new
+  surface by adding copy, not by copying the layout.
+- Pages a plugin declares through `defineDevRoutes()` mount under `/dev` and are
+  absent from a production build, along with the dev entry in the header. Use it
+  for development tooling, not as a permission boundary.
 - Put application-only page composition and branding here.
 - Customize a plugin route through an option on the plugin's own registration
   in `plugins.ts`, a discovered `extensions/*/extension.ts` source extension,

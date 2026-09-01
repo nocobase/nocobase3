@@ -58,8 +58,11 @@ describe('client inspection', () => {
     expect(parseInspectAppClientArgs(['--type', 'locales']).type).toBe(
       'locales',
     );
+    expect(parseInspectAppClientArgs(['--type', 'dev-routes']).type).toBe(
+      'dev-routes',
+    );
     expect(() => parseInspectAppClientArgs(['--type', 'providers'])).toThrow(
-      '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
+      '--type must be all, config, service-providers, react-providers, routes, settings, dev-routes, or locales.',
     );
   });
 
