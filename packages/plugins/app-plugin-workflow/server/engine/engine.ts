@@ -181,11 +181,8 @@ export default class WorkflowEngine {
     workflow: WorkflowDefinition,
     execution: import('./types.js').WorkflowRun,
   ): Promise<string | null> {
-    if (
-      this.options.allowSourceRunModules === true &&
-      this.options.diagnosticSourceRoot
-    ) {
-      return path.join(this.options.diagnosticSourceRoot, workflow.key);
+    if (this.options.developmentResourceRoot) {
+      return path.join(this.options.developmentResourceRoot, workflow.key);
     }
     if (!execution.hash) return null;
     if (this.options.artifactStore) {
@@ -194,9 +191,8 @@ export default class WorkflowEngine {
         execution.hash,
       );
     }
-    if (this.options.allowSourceRunModules === true) {
+    if (this.options.sources)
       return this.sourceRootsByHash.get(execution.hash) ?? null;
-    }
     return null;
   }
 

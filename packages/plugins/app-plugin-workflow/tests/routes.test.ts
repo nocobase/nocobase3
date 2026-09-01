@@ -214,7 +214,6 @@ function createWorkflowApplication(
         sourceRoot: '/missing/source',
         distRoot: '/missing/dist',
         artifactDisk: 'private',
-        sourceResolverDiagnostic: false,
         production: false,
       },
     },

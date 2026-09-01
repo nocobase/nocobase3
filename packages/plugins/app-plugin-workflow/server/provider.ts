@@ -1,5 +1,4 @@
 import { driveConfig } from '@nocobase/app-server/drive';
-import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
@@ -22,7 +21,6 @@ export interface WorkflowProviderConfig {
     readonly sourceRoot: string;
     readonly distRoot: string;
     readonly artifactDisk: string;
-    readonly sourceResolverDiagnostic: boolean;
     readonly production: boolean;
   };
 }
@@ -53,9 +51,6 @@ export class WorkflowProvider<
           distRoot: workflow.distRoot,
           artifactDisk: resolveWorkflowArtifactDisk(workflow, drive),
           production: workflow.production,
-          sourceResolverDiagnostic: workflow.sourceResolverDiagnostic,
-          warn: (message: string): void =>
-            container.resolve(loggingToken).getLogger().warn(message),
         }),
     );
     this.app.container.singleton(workflowServiceToken, (container) =>

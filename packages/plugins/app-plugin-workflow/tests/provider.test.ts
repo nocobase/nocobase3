@@ -104,7 +104,6 @@ function createProvider(
         sourceRoot: '/tmp/nocobase-workflow-provider-test/source',
         distRoot: '/tmp/nocobase-workflow-provider-test/dist',
         artifactDisk: 'local',
-        sourceResolverDiagnostic: false,
         production: false,
       },
     }),

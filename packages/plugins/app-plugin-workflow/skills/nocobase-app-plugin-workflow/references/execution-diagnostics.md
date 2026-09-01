@@ -113,7 +113,7 @@ For an unexpected path:
 | no second run                    | same event key was intentionally deduplicated                                              |
 | stuck queueing                   | worker/runtime/queue not started, queue failure, retry/dead letter                         |
 | run node module error            | module omitted from artifact, bad relative specifier, missing named `run`, digest mismatch |
-| source check passes, build fails | inspect package scan/include, run path/import policy, bundling, and named `run` export     |
+| source check passes, build fails | inspect package scan and the default server build's package-relative output                |
 | run node serialization error     | BigInt, model/class instance, circular reference, function/symbol, non-finite number       |
 | condition type error             | expression produced non-boolean or mixed comparison types                                  |
 | unexpected empty arg             | missing path resolved to `undefined`; embedded template converted it to empty string       |

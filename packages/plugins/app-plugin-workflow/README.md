@@ -20,12 +20,16 @@ import { buildApplicationWorkflows } from '@nocobase/app-plugin-workflow/build';
 await buildApplicationWorkflows({
   sourceRoot: 'server/workflows',
   distRoot: 'dist/server/workflows',
+  resourceRoot: 'dist/server/workflows',
 });
 ```
 
-The application owns when this runs during development and production builds;
-the plugin owns workflow discovery, validation, compilation, and Artifact
-emission.
+In development, omit `resourceRoot` so artifacts retain the source package's
+relative `.ts` resources. In production, run the application's normal server
+build first and point `resourceRoot` at its compiled workflow tree. Artifacts
+then retain the same relative paths with `.js` resources. The plugin owns
+workflow discovery, validation, resource collection, and Artifact emission; it
+does not compile run modules separately or maintain a module-path manifest.
 
 The client contributes Workflows and Workflow runs under the application's
 Automation settings group. Their record detail routes stay inside the settings

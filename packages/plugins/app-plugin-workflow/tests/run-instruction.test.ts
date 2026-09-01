@@ -45,18 +45,12 @@ async function createArtifactRoot(
 ): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'run-resource-'));
   roots.push(root);
-  const run: Record<string, string> = {};
   for (const [specifier, code] of Object.entries(modules)) {
-    const output = `server/run/${specifier.slice(2).replaceAll('/', '-')}.cjs`;
-    run[specifier] = output;
-    const target = path.join(root, output);
+    const target = path.join(root, `${specifier}.js`);
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, code);
   }
-  await fs.writeFile(
-    path.join(root, 'workflow.json'),
-    JSON.stringify({ formatVersion: 1, key: 'test', server: { run } }),
-  );
+  await fs.writeFile(path.join(root, 'package.json'), '{"type":"module"}');
   return root;
 }
 
@@ -122,20 +116,12 @@ describe('run instruction', () => {
         nodes: [],
       };
       const built = buildWorkflowArtifact({
-        scanned: { key: 'pin-artifact', root: artifactRoot, entries: [] },
-        definition,
+        key: 'pin-artifact',
         flatIr: { ...definition, start: null, nodes: [] },
-        serverEntries: {
-          entry: {
-            source: './server/run.ts',
-            output: 'server/run/run.cjs',
-            exports: ['run'],
-          },
-        },
-        serverEntryFiles: new Map([
+        resourceFiles: new Map([
           [
-            'server/run/run.cjs',
-            `exports.run = () => ${JSON.stringify(version)};`,
+            'server/run.js',
+            `export function run(){ return ${JSON.stringify(version)}; }`,
           ],
         ]),
       });
@@ -225,7 +211,7 @@ describe('run instruction', () => {
       },
       {
         './server/record-step':
-          'exports.run = (args) => ({ orderId: args.orderId, values: [1, null, false] });',
+          'export const run = (args) => ({ orderId: args.orderId, values: [1, null, false] });',
       },
       { order: { id: 7 } },
     );
@@ -240,14 +226,14 @@ describe('run instruction', () => {
     const empty = await runSingleNode(
       'undefined-result',
       { module: './empty' },
-      { './empty': 'exports.run = () => undefined;' },
+      { './empty': 'export const run = () => undefined;' },
     );
     expect(empty.nodeRuns[0].result).toBeNull();
 
     const invalid = await runSingleNode(
       'invalid-result',
       { module: './invalid' },
-      { './invalid': 'exports.run = () => ({ total: 10n });' },
+      { './invalid': 'export const run = () => ({ total: 10n });' },
     );
     expect(invalid.status).toBe(EXECUTION_STATUS.ERROR);
     expect(invalid.nodeRuns[0].error).toMatch(/BigInt/);
@@ -259,7 +245,7 @@ describe('run instruction', () => {
       { module: './runtime' },
       {
         './runtime':
-          'exports.run = (_args, runtime) => ({ app: runtime.app.name, signal: runtime.signal instanceof AbortSignal, logger: typeof runtime.logger.info });',
+          'export const run = (_args, runtime) => ({ app: runtime.app.name, signal: runtime.signal instanceof AbortSignal, logger: typeof runtime.logger.info });',
       },
     );
     expect(nodeRuns[0].result).toEqual({
@@ -272,7 +258,7 @@ describe('run instruction', () => {
   it('keeps abort semantics while the module is awaiting', async () => {
     const resourceRoot = await createArtifactRoot({
       './slow':
-        'exports.run = (_args, runtime) => new Promise((resolve, reject) => { runtime.signal.addEventListener("abort", () => reject(runtime.signal.reason), { once: true }); setTimeout(resolve, 2000); });',
+        'export const run = (_args, runtime) => new Promise((resolve, reject) => { runtime.signal.addEventListener("abort", () => reject(runtime.signal.reason), { once: true }); setTimeout(resolve, 2000); });',
     });
     const workflow = await createTestWorkflow(database, {
       key: 'aborted',
@@ -296,7 +282,7 @@ describe('run instruction', () => {
 
   it('logs metadata without args or result values', async () => {
     const resourceRoot = await createArtifactRoot({
-      './safe': 'exports.run = () => ({ confidential: "result" });',
+      './safe': 'export const run = () => ({ confidential: "result" });',
     });
     const workflow = await createTestWorkflow(database, {
       key: 'safe-log',
@@ -404,7 +390,7 @@ describe('run instruction', () => {
     expect(execution.status).toBe(EXECUTION_STATUS.ERROR);
     expect(
       (await listNodeRuns(database, execution.id as number))[0].error,
-    ).toMatch(/no workflow package artifact/);
+    ).toMatch(/no workflow resource root/);
   });
 
   it('cannot suspend', () => {

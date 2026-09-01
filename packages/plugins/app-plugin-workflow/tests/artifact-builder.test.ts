@@ -25,13 +25,11 @@ const flatIr = { ...definition, start: null, nodes: [] };
 describe('workflow Artifact', () => {
   it('hashes only canonical workflow.json and server/client bytes, independent of host path and mtime', async () => {
     const first = buildWorkflowArtifact({
-      scanned: { key: 'stable', root: '/host/a', entries: [] },
-      definition,
+      key: 'stable',
       flatIr,
     });
     const second = buildWorkflowArtifact({
-      scanned: { key: 'stable', root: '/other/host', entries: [] },
-      definition,
+      key: 'stable',
       flatIr,
     });
     expect(second.digest).toBe(first.digest);
@@ -43,40 +41,37 @@ describe('workflow Artifact', () => {
     expect(
       computeWorkflowArtifactDigest([
         { path: 'workflow.json', content: await fs.readFile(file) },
+        {
+          path: 'package.json',
+          content: first.files.get('package.json')!,
+        },
       ]),
     ).toBe(first.digest);
   });
-  it('changes for Flat IR or any emitted server bytes and has one structured contract', () => {
+  it('changes for Flat IR or any resource bytes and preserves relative paths', () => {
     const base = buildWorkflowArtifact({
-      scanned: { key: 'x', root: '/x', entries: [] },
-      definition,
+      key: 'x',
       flatIr,
     });
     const changedIr = buildWorkflowArtifact({
-      scanned: { key: 'x', root: '/x', entries: [] },
-      definition,
+      key: 'x',
       flatIr: { ...flatIr, title: 'y' },
     });
     const changedServer = buildWorkflowArtifact({
-      scanned: { key: 'x', root: '/x', entries: [] },
-      definition,
+      key: 'x',
       flatIr,
-      serverEntries: {
-        one: {
-          source: './server/run.ts',
-          output: 'server/run/one.cjs',
-          exports: ['run'],
-        },
-      },
-      serverEntryFiles: new Map([['server/run/one.cjs', 'exports.run=()=>1']]),
+      resourceFiles: new Map([
+        ['server/run.js', 'export function run(){ return 1; }'],
+      ]),
     });
     expect(changedIr.digest).not.toBe(base.digest);
     expect(changedServer.digest).not.toBe(base.digest);
     expect([...changedServer.files.keys()].sort()).toEqual([
-      'server/run/one.cjs',
+      'package.json',
+      'server/run.js',
       'workflow.json',
     ]);
-    expect(changedServer.files.has('artifact-manifest.json')).toBe(false);
+    expect(changedServer.workflow).not.toHaveProperty('server');
   });
   it('preserves effective node result schemas in workflow.json', () => {
     const withResult = {
@@ -95,13 +90,12 @@ describe('workflow Artifact', () => {
       ],
     };
     const built = buildWorkflowArtifact({
-      scanned: { key: 'x', root: '/x', entries: [] },
-      definition,
+      key: 'x',
       flatIr: withResult,
     });
     expect(built.workflow.nodes[0].result).toEqual({ type: 'string' });
     expect(
-      JSON.parse(built.files.get('workflow.json')!).nodes[0].result,
+      JSON.parse(String(built.files.get('workflow.json'))).nodes[0].result,
     ).toEqual({ type: 'string' });
   });
 });

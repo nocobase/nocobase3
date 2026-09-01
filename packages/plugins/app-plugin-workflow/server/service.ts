@@ -32,8 +32,6 @@ export interface WorkflowServiceOptions {
   distRoot: string;
   artifactDisk: FsDriveDiskConfig;
   production: boolean;
-  sourceResolverDiagnostic: boolean;
-  warn?: (message: string) => void;
 }
 
 export class WorkflowService {
@@ -44,20 +42,6 @@ export class WorkflowService {
   private initializationPromise: Promise<void> | undefined;
 
   constructor(options: WorkflowServiceOptions) {
-    if (options.sourceResolverDiagnostic) {
-      if (options.production)
-        throw new Error(
-          'WORKFLOW_SOURCE_RESOLVER_DIAGNOSTIC is forbidden in production',
-        );
-      if (!options.sourceRoot)
-        throw new Error(
-          'Workflow SourceDir diagnostic requires an explicit sourceRoot',
-        );
-      options.warn?.(
-        'WARNING: Workflow SourceDir resolver diagnostic is enabled; Artifact execution remains the default.',
-      );
-    }
-
     this.database = options.database;
     this.store = new LocalWorkflowArtifactStore({
       storeRoot: options.artifactDisk.location,
@@ -70,11 +54,8 @@ export class WorkflowService {
         : { queueName: options.queueName }),
       app: options.app,
       artifactStore: this.store,
-      ...(options.sourceResolverDiagnostic && options.sourceRoot
-        ? {
-            allowSourceRunModules: true,
-            diagnosticSourceRoot: options.sourceRoot,
-          }
+      ...(!options.production && options.sourceRoot
+        ? { developmentResourceRoot: options.sourceRoot }
         : {}),
     });
     this.loader = new WorkflowLoader({

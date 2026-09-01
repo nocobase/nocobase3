@@ -2,7 +2,6 @@ export * from './artifact-builder.js';
 export * from './artifact-store.js';
 export * from './loader.js';
 export * from './package-scanner.js';
-export * from './server-entry-builder.js';
 export * from './source-check.js';
 export * from './source-compiler.js';
 export * from './source-issues.js';

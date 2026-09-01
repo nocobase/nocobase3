@@ -2,31 +2,23 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type {
-  WorkflowFlatIr,
-  WorkflowSourceAst,
-} from '../instructions/definition.js';
-import type { ScannedPackage } from './package-scanner.js';
-import type { WorkflowServerEntryManifest } from './server-entry-builder.js';
+import type { WorkflowFlatIr } from '../instructions/definition.js';
 
 export interface WorkflowArtifactDefinition extends WorkflowFlatIr {
   readonly formatVersion: 1;
   readonly key: string;
-  readonly server?: Readonly<{ run: Readonly<Record<string, string>> }>;
 }
 
 export interface WorkflowArtifactBuildInput {
-  scanned: ScannedPackage;
-  definition: WorkflowSourceAst;
+  key: string;
   flatIr: WorkflowFlatIr;
-  serverEntries?: Readonly<Record<string, WorkflowServerEntryManifest>>;
-  serverEntryFiles?: ReadonlyMap<string, string>;
+  resourceFiles?: ReadonlyMap<string, string | Uint8Array>;
 }
 
 export interface WorkflowArtifactBuildResult {
   digest: string;
   workflow: WorkflowArtifactDefinition;
-  files: ReadonlyMap<string, string>;
+  files: ReadonlyMap<string, string | Uint8Array>;
 }
 
 export interface WorkflowPackageBuildOptions {
@@ -34,7 +26,8 @@ export interface WorkflowPackageBuildOptions {
     string,
     import('../engine/types.js').WorkflowInstructionClass
   >;
-  bareImportAllowlist?: readonly string[];
+  /** Package root whose relative file layout is copied into the artifact. */
+  resourceRoot?: string;
 }
 
 export interface WorkflowArtifactDigestFile {
@@ -65,27 +58,15 @@ export function canonicalWorkflowJson(
 export function buildWorkflowArtifact(
   input: WorkflowArtifactBuildInput,
 ): WorkflowArtifactBuildResult {
-  const runEntries = Object.fromEntries(
-    Object.values(input.serverEntries ?? {})
-      .sort((left, right) =>
-        Buffer.from(left.source).compare(Buffer.from(right.source)),
-      )
-      .map((entry) => [
-        entry.source.replaceAll('\\', '/').replace(/\.[^./]+$/, ''),
-        entry.output,
-      ]),
-  );
   const workflow: WorkflowArtifactDefinition = {
     formatVersion: 1,
-    key: input.scanned.key,
+    key: input.key,
     ...input.flatIr,
-    ...(Object.keys(runEntries).length === 0
-      ? {}
-      : { server: { run: runEntries } }),
   };
-  const files = new Map<string, string>([
+  const files = new Map<string, string | Uint8Array>([
+    ...(input.resourceFiles ?? new Map<string, string | Uint8Array>()),
+    ['package.json', '{"type":"module"}\n'],
     ['workflow.json', canonicalWorkflowJson(workflow)],
-    ...(input.serverEntryFiles ?? new Map<string, string>()),
   ]);
   return {
     digest: computeWorkflowArtifactDigest(
@@ -106,14 +87,12 @@ export async function buildWorkflowPackage(
     { validateWorkflowSourceAst },
     { compileWorkflowSource },
     { WorkflowSourceCheckError },
-    { buildWorkflowServerEntries },
   ] = await Promise.all([
     import('./package-scanner.js'),
     import('./source-parser.js'),
     import('./source-validator.js'),
     import('./source-compiler.js'),
     import('./source-issues.js'),
-    import('./server-entry-builder.js'),
   ]);
   const scanned = await scanWorkflowPackage(packageRoot);
   const filePath = path.join(scanned.root, 'workflow.ts');
@@ -125,18 +104,37 @@ export async function buildWorkflowPackage(
   const flatIr = compileWorkflowSource(parsed.ast, filePath, {
     instructions: options.instructions,
   });
-  const server = await buildWorkflowServerEntries(scanned, flatIr, {
-    ...(options.bareImportAllowlist === undefined
-      ? {}
-      : { bareImportAllowlist: options.bareImportAllowlist }),
-  });
+  const resourceFiles = await readWorkflowResourceFiles(
+    options.resourceRoot ?? scanned.root,
+  );
   return buildWorkflowArtifact({
-    scanned,
-    definition: parsed.ast,
+    key: scanned.key,
     flatIr,
-    serverEntries: server.entries,
-    serverEntryFiles: server.files,
+    resourceFiles,
   });
+}
+
+async function readWorkflowResourceFiles(
+  resourceRoot: string,
+): Promise<ReadonlyMap<string, Uint8Array>> {
+  const { scanWorkflowPackage } = await import('./package-scanner.js');
+  const scanned = await scanWorkflowPackage(resourceRoot);
+  const files = new Map<string, Uint8Array>();
+  for (const entry of scanned.entries) {
+    if (
+      /^[a-f0-9]{64}\//.test(entry.path) ||
+      entry.path === 'workflow.json' ||
+      entry.path === 'package.json' ||
+      entry.path.endsWith('.d.ts') ||
+      entry.path.endsWith('.map')
+    )
+      continue;
+    files.set(
+      entry.path,
+      await fs.readFile(path.join(scanned.root, entry.path)),
+    );
+  }
+  return files;
 }
 
 export async function writeWorkflowArtifact(

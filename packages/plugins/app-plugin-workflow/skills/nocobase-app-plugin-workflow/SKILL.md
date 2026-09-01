@@ -77,9 +77,9 @@ Rules:
 3. For authoring, read [DSL Authoring](references/dsl-authoring.md) completely, place one package below the configured workflow source root, and keep its stable directory name as the workflow key.
 4. Declare the invocation `inputSchema` separately from administrator `parameters`. Design stable, globally unique node keys before writing nodes.
 5. Express order with arrays and branches only with `.branch({...})`. Put executable business work in `run` scripts and declare each dynamic result contract.
-6. Validate the DSL before any load or publication. Run the actual checker against the package; do not substitute a TypeScript-only check. This six-phase source check does not inspect or bundle `run` scripts.
+6. Validate the DSL before any load or publication. Run the actual checker against the package; do not substitute a TypeScript-only check. This six-phase source check does not inspect `run` scripts.
 7. Fix every reported phase in order: `typecheck`, `bundle`, `evaluate`, `schema`, `semantic`, then `compile`. Re-run until it passes.
-8. Build the complete package through the owning application's Workflow Artifact build, which separately scans the package and validates/bundles every `run` entry. Then load through the runtime path. Do not write definitions or nodes directly to the database.
+8. Build the complete package through the owning application's Workflow Artifact build. Development artifacts preserve package-relative TypeScript resources; production artifacts collect the JavaScript emitted by the application's normal server build at the same relative paths. Then load through the runtime path. Do not write definitions or nodes directly to the database.
 9. For invocation, use [Invocation and Service API](references/invocation-and-service-api.md) to enumerate Workflow DSL packages. If no key is given, match the business request against each `workflow.ts` `title` and `description`, then use the selected package's directory name as the stable trigger key. Read its `inputSchema`, construct conforming input, get the workflow runtime from the application runtime, and call `workflowRuntime.trigger(key, input, options)`; do not use an API or database for discovery.
 10. Read back the trigger receipt or run record. A service trigger returns `accepted` or `skipped`; only an accepted receipt has an `eventKey`. Poll/query by the persisted run only when asynchronous scheduling has created it.
 11. For inspection or failure, follow [Execution Diagnostics](references/execution-diagnostics.md): definition/revision, run, latest node runs, then selected node payload and structured server logs.
@@ -120,7 +120,7 @@ Rollback guidance:
 - Input Schema has object root and only supported keywords; representative allowed and denied contexts are checked.
 - Parameters, templates, JSON Logic variables, result schemas, and node-result visibility obey current contracts.
 - Node keys are valid, globally unique, stable, and branch keys belong to the node contract.
-- The source check passes, then the package Artifact build separately proves every `run.config.module` is included, package-relative, import-policy compliant, bundled, and exports named `run`.
+- The source check passes, then the package Artifact build preserves package-relative resources and paths. The `run` instruction validates module resolution and the named `run` export when it loads the module.
 - Every run-script result is JSON-storable and every referenced dynamic result has an accurate `result` schema.
 - The real workflow checker passes all six phases and compilation produces a reachable acyclic tree topology.
 - Every source or setting write has an immediate readback or rebuild/check result.

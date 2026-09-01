@@ -190,7 +190,7 @@ export const run: WorkflowRunFunction = async (
 };
 ```
 
-The comments are intentional integration seams; replace them with application-specific typed service calls. Do not introduce imports outside this Workflow package unless the application's Artifact builder explicitly allowlists the bare package import.
+The comments are intentional integration seams; replace them with application-specific typed service calls. Run modules are compiled by the application's normal server build, so their imports must resolve under that build's ordinary TypeScript and runtime dependency rules.
 
 ## Default application lifecycle
 
@@ -213,7 +213,7 @@ From `packages/templates/app-template-default` (or the corresponding initialized
 
    The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
 
-4. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and each mapped `server/run/*.cjs`. The digest is the deployed hash used by management concurrency checks.
+4. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and the package-relative run modules. Development artifacts contain `.ts`; production artifacts contain the default server build's `.js` at the same relative paths. The digest is the deployed hash used by management concurrency checks.
 5. Start the application/runtime and invoke by the DSL package directory key after obtaining the bound runtime. Do not assume Artifact build itself writes database definitions.
 6. If the Artifact has no synchronized id, first-enable with its deployed hash: `enable(hash)` or `POST /api/workflows/<hash>/enable`. Synchronized definitions use their database id.
 7. Read/update administrator input overrides only if needed, and read them back.
@@ -299,7 +299,7 @@ Condition has a built-in boolean result contract. It may therefore be referenced
 }
 ```
 
-`module` is a required, non-empty, static, extensionless package-relative specifier such as `./server/record-step`; it cannot contain a template. The source file keeps its normal `.ts` extension, while the immutable Artifact maps the specifier to its compiled output. `args` is recursively resolved immediately before execution.
+`module` is a required, non-empty, static, extensionless package-relative specifier such as `./server/record-step`; it cannot contain a template. The Artifact preserves that relative path: development resolves the source `.ts`, while production resolves the `.js` emitted by the application's normal server build. No module-path manifest is involved. `args` is recursively resolved immediately before execution.
 
 The script must provide named export `run`:
 
@@ -373,9 +373,9 @@ The checker performs, in order:
 5. `semantic`: registered types, unique/safe keys, branches, declared parameters, and visible result references.
 6. `compile`: flat IR topology must have one start, one owner per non-start node, no missing targets, cycles, or unreachable nodes.
 
-`check` does not scan the complete package or write the database. In particular, it does not prove that `config.module` exists or was included, validate a script's relative/bare imports, bundle the run entry, or verify its named `run` export. Its `bundle` phase bundles and evaluates `workflow.ts`, not the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
+`check` does not scan the complete package or write the database. In particular, it does not prove that `config.module` exists or verify its named `run` export. Its `bundle` phase bundles and evaluates `workflow.ts`, not the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
 
-The default app's separate Artifact build scans each direct Workflow package, applies secret/path limits, resolves run scripts inside the package, enforces local-import containment and the bare-import allowlist, bundles every entry, checks for named export `run`, and writes immutable Artifacts to its configured dist root. Runtime loading materializes new revisions; activation and enablement are separate management concerns.
+The default app's Artifact build scans each direct Workflow package and writes immutable Artifacts to its configured dist root. In development it copies the package's source resources. In production the normal server TypeScript build runs first, and the Artifact build collects that package-relative JavaScript output without rebundling or renaming modules. Runtime module loading enforces containment and checks the named `run` export. Runtime loading materializes new revisions; activation and enablement are separate management concerns.
 
 ### Deterministic definition builds
 
@@ -400,4 +400,4 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 - Every branch belongs to the node contract.
 - Every run script is static, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
-- The real six-phase checker passes, then the separate Artifact build proves package inclusion, import policy, and run bundling before load.
+- The real six-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.

@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 import { NODE_RUN_STATUS } from '../../engine/constants.js';
@@ -21,7 +20,6 @@ import {
   type WorkflowInstructionResult,
 } from '../base.js';
 import { logRunExecution } from '../../engine/inspector.js';
-import type { WorkflowArtifactDefinition } from '../../loader/artifact-builder.js';
 
 export type WorkflowRunJsonValue =
   | null
@@ -69,7 +67,6 @@ export type RunConfig = JsonObject & {
 };
 
 const TEMPLATE_PATTERN = /\{\{[^{}]*\}\}/;
-const requireRunModule: NodeJS.Require = createRequire(import.meta.url);
 const moduleCache = new Map<string, Promise<WorkflowRunModule>>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -313,26 +310,10 @@ async function loadRunModule(
 ): Promise<WorkflowRunModule> {
   if (!workflowResourceRoot) {
     throw new Error(
-      `Run node "${nodeKey}" has no workflow package artifact bound to it`,
+      `Run node "${nodeKey}" has no workflow resource root bound to it`,
     );
   }
-  const manifestPath = path.join(workflowResourceRoot, 'workflow.json');
-  let target: string;
-  try {
-    const manifest = JSON.parse(
-      await fs.readFile(manifestPath, 'utf8'),
-    ) as WorkflowArtifactDefinition;
-    const output = manifest.server?.run?.[specifier];
-    if (!output) {
-      throw new Error(
-        `Run module "${specifier}" is not present in the workflow artifact`,
-      );
-    }
-    target = resolveInsideRoot(workflowResourceRoot, output, specifier);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    target = await resolveSourceModule(workflowResourceRoot, specifier);
-  }
+  const target = await resolveWorkflowModule(workflowResourceRoot, specifier);
   const cached = moduleCache.get(target);
   if (cached) return cached;
   const pending = importRunModule(target, specifier);
@@ -353,12 +334,12 @@ function resolveInsideRoot(
   return target;
 }
 
-async function resolveSourceModule(
+async function resolveWorkflowModule(
   root: string,
   specifier: string,
 ): Promise<string> {
   const base = resolveInsideRoot(root, specifier, specifier);
-  for (const extension of ['.ts', '.js', '.mjs']) {
+  for (const extension of ['.js', '.mjs', '.ts']) {
     const target = `${base}${extension}`;
     try {
       const realRoot = await fs.realpath(root);
@@ -381,9 +362,10 @@ async function importRunModule(
   target: string,
   specifier: string,
 ): Promise<WorkflowRunModule> {
-  const loaded = target.endsWith('.cjs')
-    ? (requireRunModule(target) as Record<string, unknown>)
-    : ((await import(pathToFileURL(target).href)) as Record<string, unknown>);
+  const loaded = (await import(pathToFileURL(target).href)) as Record<
+    string,
+    unknown
+  >;
   if (typeof loaded.run !== 'function') {
     throw new Error(
       `Run module "${specifier}" must export a function named run`,

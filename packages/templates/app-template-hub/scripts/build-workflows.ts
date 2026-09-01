@@ -22,7 +22,12 @@ async function main(): Promise<void> {
   const distRoot: string =
     readOption('--dist-root') ??
     path.join(appRoot, 'dist', 'server', 'workflows');
-  const result = await buildApplicationWorkflows({ sourceRoot, distRoot });
+  const resourceRoot: string | undefined = readOption('--resource-root');
+  const result = await buildApplicationWorkflows({
+    sourceRoot,
+    distRoot,
+    ...(resourceRoot === undefined ? {} : { resourceRoot }),
+  });
   console.log(
     `[workflow-build] generated ${result.packages} Artifact(s) in ${distRoot}`,
   );

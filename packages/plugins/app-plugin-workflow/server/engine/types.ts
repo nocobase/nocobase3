@@ -156,10 +156,8 @@ export interface WorkflowEngineOptions {
   sources?: WorkflowEngineSourceOptions;
   /** Immutable production artifacts. When present, run nodes never read source directories. */
   artifactStore?: WorkflowArtifactStore;
-  /** Explicit development-only opt-in for executing package source. Default false. */
-  allowSourceRunModules?: boolean;
-  /** Source root used only by the explicit execution diagnostic; it is never scanned or published. */
-  diagnosticSourceRoot?: string;
+  /** Development-only root containing one source package per workflow key. */
+  developmentResourceRoot?: string;
 
   // --- T5: fields the assembly layer needs. All optional, so the meaning of
   // every field declared before this point is unchanged. ---
