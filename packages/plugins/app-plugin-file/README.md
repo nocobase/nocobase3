@@ -3,6 +3,9 @@
 File storage, scoped access routes, client APIs, and reusable file UI for
 NocoBase applications.
 
+The Client UI and Server API errors provide lazy-loaded `en-US` and `zh-CN`
+resources under the `@nocobase/app-plugin-file` namespace.
+
 Integration guidance is available in the bundled
 [`nocobase-app-plugin-file` Skill](skills/nocobase-app-plugin-file/SKILL.md).
 

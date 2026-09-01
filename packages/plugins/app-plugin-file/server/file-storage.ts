@@ -73,6 +73,7 @@ export async function openFileObject(
   } catch (cause) {
     throw new FileUnavailableError('File storage could not be read.', {
       cause,
+      i18nKey: 'errors.storageReadFailed',
     });
   }
   if (!exists) throw new FileObjectNotFoundError();
@@ -83,6 +84,7 @@ export async function openFileObject(
   } catch (cause) {
     throw new FileUnavailableError('File storage could not be read.', {
       cause,
+      i18nKey: 'errors.storageReadFailed',
     });
   }
 }
@@ -97,6 +99,7 @@ export async function removeFileObject(
   } catch (cause) {
     throw new FileUnavailableError('File storage could not be updated.', {
       cause,
+      i18nKey: 'errors.storageUpdateFailed',
     });
   }
 }
@@ -113,6 +116,7 @@ export async function ensureFileObject(
   } catch (cause) {
     throw new FileUnavailableError('File storage could not be read.', {
       cause,
+      i18nKey: 'errors.storageReadFailed',
     });
   }
   if (exists) return;
@@ -124,7 +128,9 @@ export async function ensureFileObject(
 function resolveDiskName(disk: string | undefined, fallback: string): string {
   const resolved = disk?.trim() || fallback.trim();
   if (!resolved) {
-    throw new FileUnavailableError('A file storage disk is not configured.');
+    throw new FileUnavailableError('A file storage disk is not configured.', {
+      i18nKey: 'errors.storageDiskNotConfigured',
+    });
   }
   return resolved;
 }
@@ -133,13 +139,20 @@ function resolveDisk(
   drive: NocoBaseDriveManager | undefined,
   diskName: string,
 ): NocoBaseDriveDisk {
-  if (!drive) throw new FileUnavailableError('File storage is not configured.');
+  if (!drive)
+    throw new FileUnavailableError('File storage is not configured.', {
+      i18nKey: 'errors.storageNotConfigured',
+    });
   try {
     return drive.use(diskName);
   } catch (cause) {
     throw new FileUnavailableError(
       `File storage disk "${diskName}" is unavailable.`,
-      { cause },
+      {
+        cause,
+        i18nKey: 'errors.storageDiskUnavailable',
+        i18nParams: { disk: diskName },
+      },
     );
   }
 }
@@ -154,6 +167,7 @@ function resolveContentSize(
   ) {
     throw new InvalidFileInputError(
       'File size must be a non-negative safe integer.',
+      { i18nKey: 'errors.fileSizeInvalid' },
     );
   }
 
@@ -166,6 +180,7 @@ function resolveContentSize(
   if (providedSize !== undefined) return providedSize;
   throw new InvalidFileInputError(
     'File size is required for streamed content.',
+    { i18nKey: 'errors.streamedFileSizeRequired' },
   );
 }
 
@@ -218,10 +233,13 @@ async function writeFileObject(
   } catch (cause) {
     throw new FileUnavailableError('File storage could not be updated.', {
       cause,
+      i18nKey: 'errors.storageUpdateFailed',
     });
   }
 
-  throw new InvalidFileInputError('Unsupported file content input.');
+  throw new InvalidFileInputError('Unsupported file content input.', {
+    i18nKey: 'errors.unsupportedContent',
+  });
 }
 
 function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {

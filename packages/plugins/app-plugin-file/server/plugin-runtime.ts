@@ -41,10 +41,16 @@ export function resolveFilePluginRuntime(
   config: AppConfigAccessor,
 ): FilePluginRuntimeResult {
   if (!container.has(databaseManagerToken)) {
-    return unavailable('File database storage is not configured.');
+    return unavailable(
+      'File database storage is not configured.',
+      'errors.databaseNotConfigured',
+    );
   }
   if (!container.has(driveManagerToken)) {
-    return unavailable('File storage is not configured.');
+    return unavailable(
+      'File storage is not configured.',
+      'errors.storageNotConfigured',
+    );
   }
   const database = container.resolve(databaseManagerToken);
   const drive = container.resolve(driveManagerToken);
@@ -53,7 +59,10 @@ export function resolveFilePluginRuntime(
   const app = config.get(appConfig);
   const tokenSecret = session?.secret;
   if (!tokenSecret) {
-    return unavailable('File access token signing is not configured.');
+    return unavailable(
+      'File access token signing is not configured.',
+      'errors.tokenSigningNotConfigured',
+    );
   }
   return Object.freeze({
     database,
@@ -70,9 +79,12 @@ export function isFilePluginRuntimeUnavailable(
   return Reflect.get(service, 'unavailable') === true;
 }
 
-function unavailable(message: string): UnavailableFilePluginRuntime {
+function unavailable(
+  message: string,
+  i18nKey: string,
+): UnavailableFilePluginRuntime {
   return Object.freeze({
     unavailable: true,
-    error: new FileUnavailableError(message),
+    error: new FileUnavailableError(message, { i18nKey }),
   });
 }

@@ -33,6 +33,7 @@ export function prepareFileDemoFixtures(
     }
     throw new FileUnavailableError('File Demo fixture initialization failed.', {
       cause,
+      i18nKey: 'errors.demoFixtureInitializationFailed',
     });
   });
   // The readiness promise is also observed by request middleware. Attach a

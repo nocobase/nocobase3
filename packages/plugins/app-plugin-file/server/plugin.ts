@@ -12,6 +12,7 @@ const filePlugin: AppServerPlugin<FileProviderApplication['config']> =
   defineServerPlugin<FileProviderApplication['config']>({
     packageName: '@nocobase/app-plugin-file',
     serviceProviders,
+    locales: () => import('./locales/index.js'),
     routes,
     database: {
       migrations: './database/migrations',

@@ -19,6 +19,7 @@ import {
   FILE_DEMO_PROFILE,
 } from '../demo/constants.js';
 import { prepareFileDemoFixtures } from '../demo/fixture-manager.js';
+import { translateFileError, translateFileMessage } from '../i18n.js';
 import {
   isFilePluginRuntimeUnavailable,
   type FilePluginConfig,
@@ -87,6 +88,7 @@ export function createFileDemoRoutes({
           table: FILE_DEMO_COLLECTIONS.profileAvatars,
           scope: (context) => ({
             profileId: parsePositiveIntegerPathParameter(
+              context,
               context.req.param('profileId'),
             ),
           }),
@@ -99,6 +101,7 @@ export function createFileDemoRoutes({
           table: FILE_DEMO_COLLECTIONS.orderAttachments,
           scope: (context) => ({
             orderId: parsePositiveIntegerPathParameter(
+              context,
               context.req.param('orderId'),
             ),
           }),
@@ -225,7 +228,14 @@ async function requireDemoAdministrator(
     {
       error: {
         code: 'FORBIDDEN',
-        message: `System administrator access is required for ${FILE_DEMO_MANAGEMENT_RESOURCE.type}:${FILE_DEMO_MANAGEMENT_RESOURCE.id}.`,
+        message: translateFileMessage(
+          context,
+          'errors.systemAdministratorRequired',
+          'System administrator access is required for {{resource}}.',
+          {
+            resource: `${FILE_DEMO_MANAGEMENT_RESOURCE.type}:${FILE_DEMO_MANAGEMENT_RESOURCE.id}`,
+          },
+        ),
       },
     },
     403,
@@ -249,15 +259,16 @@ async function waitForReadiness(
   try {
     await readiness();
     return undefined;
-  } catch (error) {
+  } catch {
     return context.json(
       {
         error: {
           code: 'FILE_UNAVAILABLE',
-          message:
-            error instanceof Error
-              ? error.message
-              : 'File Demo fixture initialization failed.',
+          message: translateFileMessage(
+            context,
+            'errors.demoFixtureInitializationFailed',
+            'File Demo fixture initialization failed.',
+          ),
         },
       },
       503,
@@ -284,17 +295,21 @@ function createUnavailableStore(
   };
 }
 
-function parsePositiveIntegerPathParameter(value: string | undefined): number {
+function parsePositiveIntegerPathParameter(
+  context: Context,
+  value: string | undefined,
+): number {
+  const message = translateFileMessage(
+    context,
+    'errors.pathParameterInvalid',
+    'File scope path parameter must be a positive integer.',
+  );
   if (!value || !/^\d+$/.test(value)) {
-    throw new HTTPException(400, {
-      message: 'File scope path parameter must be a positive integer.',
-    });
+    throw new HTTPException(400, { message });
   }
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new HTTPException(400, {
-      message: 'File scope path parameter must be a positive integer.',
-    });
+    throw new HTTPException(400, { message });
   }
   return parsed;
 }
@@ -307,7 +322,7 @@ function unavailableResponse(
     {
       error: {
         code: unavailable.error.code,
-        message: unavailable.error.message,
+        message: translateFileError(context, unavailable.error),
       },
     },
     503,

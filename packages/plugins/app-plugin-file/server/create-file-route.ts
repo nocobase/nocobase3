@@ -25,6 +25,11 @@ import {
 import { createDatabaseFileStore } from './database-file-store.js';
 import { normalizeFileName } from './filename.js';
 import {
+  translateFileError,
+  translateFileMessage,
+  type FileTranslationParams,
+} from './i18n.js';
+import {
   DEFAULT_FILE_ROUTE_VISIBILITY,
   type CreateFileRouteOptions,
   type FileRecord,
@@ -58,12 +63,22 @@ const DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 class FileRouteError extends Error {
   readonly code: string;
+  readonly key: string;
+  readonly params?: FileTranslationParams;
   readonly status: 400 | 403 | 404 | 413;
 
-  constructor(code: string, message: string, status: 400 | 403 | 404 | 413) {
+  constructor(
+    code: string,
+    key: string,
+    message: string,
+    status: 400 | 403 | 404 | 413,
+    params?: FileTranslationParams,
+  ) {
     super(message);
     this.name = 'FileRouteError';
     this.code = code;
+    this.key = key;
+    this.params = params;
     this.status = status;
   }
 }
@@ -157,6 +172,7 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
       if (!token) {
         throw new FileRouteError(
           'FILE_TOKEN_REQUIRED',
+          'errors.tokenRequired',
           'A file access token is required.',
           403,
         );
@@ -344,6 +360,7 @@ async function parseUploadForm(
   if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
     throw new FileRouteError(
       'FILE_REQUIRED',
+      'errors.multipartFileRequired',
       'A multipart file field is required.',
       400,
     );
@@ -358,6 +375,7 @@ async function parseUploadForm(
     if (error instanceof FileRouteError) throw error;
     throw new FileRouteError(
       'FILE_REQUIRED',
+      'errors.multipartFileInvalid',
       'A valid multipart file field is required.',
       400,
     );
@@ -432,6 +450,7 @@ function parseContentLength(value: string | null): number | undefined {
 function fileTooLarge(): FileRouteError {
   return new FileRouteError(
     'FILE_TOO_LARGE',
+    'errors.uploadTooLarge',
     'The uploaded file exceeds the configured size limit.',
     413,
   );
@@ -443,6 +462,7 @@ function resolveUploadFile(form: FormData): File {
   if (files.length !== 1 || !file || !isFileCompatible(file)) {
     throw new FileRouteError(
       'FILE_REQUIRED',
+      'errors.oneFileRequired',
       'Exactly one File-compatible file field is required.',
       400,
     );
@@ -469,6 +489,7 @@ function resolveVisibility(
   if (!visibility.allowClientOverride) {
     throw new FileRouteError(
       'FILE_INPUT_INVALID',
+      'errors.visibilityOverrideNotAllowed',
       'Client file visibility override is not allowed.',
       400,
     );
@@ -476,6 +497,7 @@ function resolveVisibility(
   if (values.length !== 1 || (values[0] !== 'true' && values[0] !== 'false')) {
     throw new FileRouteError(
       'FILE_INPUT_INVALID',
+      'errors.visibilityBoolean',
       'File visibility must be either true or false.',
       400,
     );
@@ -496,6 +518,7 @@ function validateUpload(
   if (mimeTypes && !mimeTypes.includes(mimeType)) {
     throw new FileRouteError(
       'FILE_TYPE_NOT_ALLOWED',
+      'errors.fileTypeNotAllowed',
       'The uploaded file type is not allowed.',
       400,
     );
@@ -530,7 +553,12 @@ async function findRecord(
 }
 
 function fileNotFound(): FileRouteError {
-  return new FileRouteError('FILE_NOT_FOUND', 'File was not found.', 404);
+  return new FileRouteError(
+    'FILE_NOT_FOUND',
+    'errors.fileNotFound',
+    'File was not found.',
+    404,
+  );
 }
 
 async function parseExpiresIn(context: Context): Promise<number | undefined> {
@@ -543,6 +571,7 @@ async function parseExpiresIn(context: Context): Promise<number | undefined> {
   } catch {
     throw new FileRouteError(
       'FILE_INPUT_INVALID',
+      'errors.tokenBodyInvalid',
       'Token request body must be valid JSON.',
       400,
     );
@@ -550,6 +579,7 @@ async function parseExpiresIn(context: Context): Promise<number | undefined> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new FileRouteError(
       'FILE_INPUT_INVALID',
+      'errors.tokenBodyObjectRequired',
       'Token request body must be an object.',
       400,
     );
@@ -559,6 +589,7 @@ async function parseExpiresIn(context: Context): Promise<number | undefined> {
   if (typeof expiresIn !== 'number') {
     throw new FileRouteError(
       'FILE_INPUT_INVALID',
+      'errors.tokenExpirationNumber',
       'Token expiration must be a number of seconds.',
       400,
     );
@@ -671,35 +702,62 @@ function isActiveContent(record: FileRecord): boolean {
 
 function mapKnownError(error: Error, context: Context): Response {
   if (error instanceof FileRouteError) {
-    return errorResponse(context, error.code, error.message, error.status);
+    return translatedErrorResponse(
+      context,
+      error.code,
+      error.key,
+      error.message,
+      error.status,
+      error.params,
+    );
   }
   if (error instanceof FileLimitReachedError) {
-    return errorResponse(context, error.code, error.message, 400);
+    return knownErrorResponse(context, error, 400);
   }
   if (error instanceof FileUnavailableError) {
-    return errorResponse(context, error.code, error.message, 503);
+    return knownErrorResponse(context, error, 503);
   }
   if (error instanceof InvalidFileTokenError) {
-    return errorResponse(context, error.code, error.message, 403);
+    return knownErrorResponse(context, error, 403);
   }
   if (error instanceof ExpiredFileTokenError) {
-    return errorResponse(context, error.code, error.message, 403);
+    return knownErrorResponse(context, error, 403);
   }
   if (error instanceof InvalidFileInputError) {
-    return errorResponse(context, error.code, error.message, 400);
+    return knownErrorResponse(context, error, 400);
   }
   if (error instanceof FileObjectNotFoundError) {
-    return errorResponse(context, 'FILE_NOT_FOUND', 'File was not found.', 404);
+    return translatedErrorResponse(
+      context,
+      'FILE_NOT_FOUND',
+      'errors.fileNotFound',
+      'File was not found.',
+      404,
+    );
   }
   throw error;
 }
 
-function errorResponse(
+function knownErrorResponse(
+  context: Context,
+  error: Error & { readonly code: string },
+  status: 400 | 403 | 503,
+): Response {
+  const body: FileErrorBody = {
+    error: { code: error.code, message: translateFileError(context, error) },
+  };
+  return context.json(body, status);
+}
+
+function translatedErrorResponse(
   context: Context,
   code: string,
-  message: string,
+  key: string,
+  defaultValue: string,
   status: 400 | 403 | 404 | 413 | 503,
+  params?: FileTranslationParams,
 ): Response {
+  const message = translateFileMessage(context, key, defaultValue, params);
   const body: FileErrorBody = { error: { code, message } };
   return context.json(body, status);
 }

@@ -9,6 +9,8 @@ import {
   createDatabaseManager,
   type DatabaseManager,
 } from '@nocobase/db';
+import type { I18nRuntime } from '@nocobase/i18n';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import {
   authenticationToken,
   type Auth,
@@ -45,8 +47,12 @@ import {
   type FilePluginConfig,
 } from '../server/plugin-runtime.js';
 import { FileProvider } from '../server/providers/index.js';
+import serverLocales from '../server/locales/index.js';
 import { filePluginRuntimeToken } from '../server/runtime-token.js';
 import { createFileDemoRoutes } from '../server/routes/index.js';
+import { createFileI18nRuntime } from './i18n.js';
+
+let i18n: I18nRuntime;
 
 interface RawDatabaseClient {
   raw(sql: string): Promise<unknown>;
@@ -60,6 +66,7 @@ describe('File Demo backend', () => {
   let deps: HostServices;
 
   beforeEach(async () => {
+    i18n = await createFileI18nRuntime(serverLocales);
     storageRoot = await mkdtemp(join(tmpdir(), 'nocobase-file-demo-'));
     database = createDatabaseManager({
       default: 'main',
@@ -509,6 +516,7 @@ function uploadBody(index: number): {
 
 function registerApp(config: FilePluginConfig, deps: HostServices): Hono {
   const app = new Hono();
+  app.use('*', createI18nMiddleware(i18n));
   const container = createContainer(config, deps);
   container.singleton(filePluginRuntimeToken, (resolver) =>
     resolveFilePluginRuntime(resolver, createConfigAccessor(config)),

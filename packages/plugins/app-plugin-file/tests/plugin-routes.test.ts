@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import type { I18nRuntime } from '@nocobase/i18n';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import {
   authenticationToken,
   type Auth,
@@ -55,9 +57,14 @@ import {
   resolveFilePluginRuntime,
   type FilePluginConfig,
 } from '../server/plugin-runtime.js';
+import filePlugin from '../server/plugin.js';
 import { FileProvider } from '../server/providers/index.js';
+import serverLocales from '../server/locales/index.js';
 import { filePluginRuntimeToken } from '../server/runtime-token.js';
 import { apiRoutes, createFileDemoRoutes } from '../server/routes/index.js';
+import { createFileI18nRuntime } from './i18n.js';
+
+let i18n: I18nRuntime;
 
 describe('file plugin route factory and registrar', () => {
   let database: DatabaseManager;
@@ -66,8 +73,8 @@ describe('file plugin route factory and registrar', () => {
   let logger: Logger;
   let config: FilePluginConfig;
   let deps: HostServices;
-
-  beforeEach(() => {
+  beforeEach(async () => {
+    i18n = await createFileI18nRuntime(serverLocales);
     database = createBootstrapDatabase();
     driveManager = {} as NocoBaseDriveManager;
     createFileRouteMock.mockReset().mockImplementation(createDelegatingRoute);
@@ -187,6 +194,33 @@ describe('file plugin route factory and registrar', () => {
     });
     expect(text).not.toMatch(/key|secret|token|disk|storage/i);
     expect(required).toHaveBeenCalledTimes(2);
+  });
+
+  it('declares Server locale resources and translates authorization errors', async () => {
+    await expect(filePlugin.locales?.()).resolves.toMatchObject({
+      default: {
+        'en-US': expect.any(Function),
+        'zh-CN': expect.any(Function),
+      },
+    });
+
+    const response = await createFactoryApp(config, {
+      ...deps,
+      authz: createAuthorization('member'),
+    }).request('/api/attachments/examples', {
+      headers: {
+        'accept-language': 'zh-CN',
+        'x-demo-auth': 'allowed',
+      },
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'FORBIDDEN',
+        message: '访问 file.demo:management 需要系统管理员权限。',
+      },
+    });
   });
 
   it('waits for the shared fixture readiness before serving Demo data', async () => {
@@ -367,6 +401,7 @@ describe('file plugin route factory and registrar', () => {
 
   it('mounts the Demo Router at the plugin convention path', async () => {
     const app = new Hono();
+    app.use('*', createI18nMiddleware(i18n));
     const container = createContainer(config, deps);
     const router = await apiRoutes.createRouter({
       appName: 'test',
@@ -386,6 +421,7 @@ describe('file plugin route factory and registrar', () => {
 
 function createFactoryApp(config: FilePluginConfig, deps: HostServices): Hono {
   const app = new Hono();
+  app.use('*', createI18nMiddleware(i18n));
   app.route(
     '/api/attachments',
     createFileDemoRoutes({ config, container: createContainer(config, deps) }),
