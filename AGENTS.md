@@ -136,7 +136,7 @@ Write in English:
 
 Chinese is fine for:
 
-- Documents under `docs/`
+- Documents under `internal-docs/`
 - Feishu notification titles and bodies, which only reach an internal group
 
 The distinction is the audience, not the file type. A comment inside a workflow is read by maintainers and stays English along with the rest of the code; the Feishu message that same workflow sends never leaves the team, so it stays Chinese.

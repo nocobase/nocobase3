@@ -9,7 +9,7 @@ import { loadTestConfig, runCommand } from './helpers.ts';
  * The command surface this package is expected to expose. The tests assert it exactly, so adding or renaming a command
  * is a deliberate edit here rather than something that drifts in unnoticed.
  *
- * The plugin commands are documented in docs/cli. The app and hub commands are not: their behaviour is still being
+ * The plugin commands are documented in internal-docs/cli. The app and hub commands are not: their behaviour is still being
  * settled, and documenting a moving target is worse than pointing at `--help`.
  */
 const APP_COMMANDS = [
