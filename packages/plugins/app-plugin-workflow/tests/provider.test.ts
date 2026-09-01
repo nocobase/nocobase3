@@ -8,10 +8,14 @@ import type {
   AppConfigToken,
 } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 
-import { WorkflowProvider } from '../server/providers/workflow.js';
-import { workflowServiceToken } from '../server/tokens.js';
+import { WorkflowProvider } from '../server/provider.js';
+import {
+  workflowServiceToken,
+  type WorkflowServiceContract,
+} from '../server/index.js';
+import { echoInstruction } from './fixtures/instructions.js';
 
 const providers: WorkflowProvider[] = [];
 const databases: ReturnType<typeof createDatabaseManager>[] = [];
@@ -44,6 +48,18 @@ describe('WorkflowProvider', () => {
     expect(second.container.resolve(workflowServiceToken)).toBeDefined();
     expect(first.container.resolve(workflowServiceToken)).not.toBe(
       second.container.resolve(workflowServiceToken),
+    );
+  });
+
+  it('registers an application instruction through the public workflow API', () => {
+    const { container, provider } = createProviderWithDependencies('app');
+    provider.register();
+    const workflow = container.resolve(workflowServiceToken);
+    expectTypeOf(workflow).toEqualTypeOf<WorkflowServiceContract>();
+
+    expect(() => workflow.registerInstruction(echoInstruction)).not.toThrow();
+    expect(() => workflow.registerInstruction(echoInstruction)).toThrow(
+      'Workflow instruction "echo" is already registered.',
     );
   });
 });

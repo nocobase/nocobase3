@@ -1,7 +1,7 @@
 import type { DatabaseManager } from '@nocobase/db';
 import { Hono } from 'hono';
 
-import type { WorkflowService } from '../runtime/runtime.js';
+import type { WorkflowService } from '../service.js';
 import { WorkflowRepository } from '../repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../repositories/workflow-run-repository.js';
 import { createNodeRunRoutes } from './node-runs.js';

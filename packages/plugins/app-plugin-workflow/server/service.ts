@@ -5,7 +5,7 @@ import {
   LocalWorkflowArtifactStore,
   WorkflowLoader,
   type WorkflowDistArtifact,
-} from '../loader/index.js';
+} from './loader/index.js';
 import {
   WorkflowEngine,
   assertInputSize,
@@ -19,10 +19,9 @@ import {
   WorkflowInvocationError,
   type WorkflowTriggerReceipt,
   validateInputValue,
-} from '../engine/index.js';
+} from './engine/index.js';
 import type { FsDriveDiskConfig } from '@nocobase/drive';
-import { appWorkflowInstructions } from './instructions.js';
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { WORKFLOW_COLLECTIONS } from './collections/names.js';
 
 export interface WorkflowServiceOptions {
   database: DatabaseManager;
@@ -34,7 +33,6 @@ export interface WorkflowServiceOptions {
   artifactDisk: FsDriveDiskConfig;
   production: boolean;
   sourceResolverDiagnostic: boolean;
-  instructions?: Map<string, WorkflowInstructionClass>;
   warn?: (message: string) => void;
 }
 
@@ -70,7 +68,6 @@ export class WorkflowService {
       ...(options.queueName === undefined
         ? {}
         : { queueName: options.queueName }),
-      instructions: options.instructions ?? appWorkflowInstructions,
       app: options.app,
       artifactStore: this.store,
       ...(options.sourceResolverDiagnostic && options.sourceRoot
@@ -86,6 +83,10 @@ export class WorkflowService {
       distRoot: options.distRoot,
       refreshEngine: (): Promise<void> => this.engine.refreshSourceResolvers(),
     });
+  }
+
+  registerInstruction(instruction: WorkflowInstructionClass): void {
+    this.engine.registerInstruction(instruction);
   }
 
   async trigger(
@@ -240,5 +241,3 @@ export type WorkflowServiceApi = Pick<
   | 'discoverArtifacts'
   | 'ensureArtifactMaterialized'
 >;
-
-export { appWorkflowInstructions } from './instructions.js';

@@ -17,7 +17,7 @@ import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
 } from '../server/loader/artifact-builder.js';
-import { WorkflowService } from '../server/runtime/runtime.js';
+import { WorkflowService } from '../server/service.js';
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
 import {
@@ -75,7 +75,7 @@ async function emit(distRoot: string, title: string): Promise<string> {
     key: 'run',
     title: 'Run',
     type: 'run',
-    config: { script: './server/run.ts' },
+    config: { module: './server/run' },
     upstreamKey: null,
     downstreamKey: null,
     branchKey: null,

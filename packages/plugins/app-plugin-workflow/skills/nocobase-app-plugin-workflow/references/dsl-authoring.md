@@ -78,7 +78,7 @@ export default defineWorkflow({
       key: 'calculateRisk',
       title: 'Calculate risk',
       config: {
-        script: './server/calculate-risk.ts',
+        module: './server/calculate-risk',
         args: {
           quotationId: '{{$input.quotationId}}',
           amount: '{{$input.amount}}',
@@ -106,7 +106,7 @@ export default defineWorkflow({
         RunInstruction.create({
           key: 'requestApproval',
           config: {
-            script: './server/request-approval.ts',
+            module: './server/request-approval',
             args: { quotationId: '{{$input.quotationId}}' },
           },
         }),
@@ -116,7 +116,7 @@ export default defineWorkflow({
     RunInstruction.create({
       key: 'recordDecision',
       config: {
-        script: './server/record-decision.ts',
+        module: './server/record-decision',
         args: { approved: '{{$nodeResults.needsApproval}}' },
       },
     }),
@@ -294,12 +294,12 @@ Condition has a built-in boolean result contract. It may therefore be referenced
 
 ```ts
 {
-  script: string;
+  module: string;
   args?: Record<string, JsonValue>;
 }
 ```
 
-`script` is required, non-empty, static, and cannot contain a template. It is resolved from the immutable workflow package artifact; keep it package-relative. `args` is recursively resolved immediately before execution.
+`module` is a required, non-empty, static, extensionless package-relative specifier such as `./server/record-step`; it cannot contain a template. The source file keeps its normal `.ts` extension, while the immutable Artifact maps the specifier to its compiled output. `args` is recursively resolved immediately before execution.
 
 The script must provide named export `run`:
 
@@ -373,7 +373,7 @@ The checker performs, in order:
 5. `semantic`: registered types, unique/safe keys, branches, declared parameters, and visible result references.
 6. `compile`: flat IR topology must have one start, one owner per non-start node, no missing targets, cycles, or unreachable nodes.
 
-`check` does not scan the complete package or write the database. In particular, it does not prove that `config.script` exists or was included, validate a script's relative/bare imports, bundle the run entry, or verify its named `run` export. Its `bundle` phase bundles and evaluates `workflow.ts`, not the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
+`check` does not scan the complete package or write the database. In particular, it does not prove that `config.module` exists or was included, validate a script's relative/bare imports, bundle the run entry, or verify its named `run` export. Its `bundle` phase bundles and evaluates `workflow.ts`, not the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
 
 The default app's separate Artifact build scans each direct Workflow package, applies secret/path limits, resolves run scripts inside the package, enforces local-import containment and the bare-import allowlist, bundles every entry, checks for named export `run`, and writes immutable Artifacts to its configured dist root. Runtime loading materializes new revisions; activation and enablement are separate management concerns.
 

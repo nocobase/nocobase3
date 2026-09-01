@@ -8,7 +8,6 @@ import type {
 import type { WorkflowInputSchema } from './invocation.js';
 import type { WorkflowArtifactStore } from '../loader/artifact-store.js';
 import type { WorkflowNodeOptions } from '../instructions/types.js';
-import type { WorkflowInstructionClass } from '../instructions/base.js';
 export {
   WorkflowInstruction,
   type WorkflowInstructionClass,
@@ -148,13 +147,6 @@ export interface WorkflowEngineSourceOptions {
 export interface WorkflowEngineOptions {
   database: DatabaseManager;
   connectionName?: string;
-  /**
-   * Instructions contributed by the application.
-   *
-   * `WorkflowEngine` layers this map on top of `coreInstructions`, so an entry
-   * here adds a node type or replaces a core one under the same key.
-   */
-  instructions: Map<string, WorkflowInstructionClass>;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;

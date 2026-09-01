@@ -3,7 +3,8 @@
 Provides the complete optional Workflow capability. Browser-safe graph helpers
 live in `client/`; server code is organized by responsibility under
 `server/collections`, `server/engine`, `server/instructions`, `server/loader`,
-`server/runtime`, `server/repositories`, and `server/routes`.
+`server/repositories`, and `server/routes`, with `server/service.ts` as the
+domain service entry.
 
 The package root is the workflow authoring entry (`defineWorkflow`, `condition`,
 and `run`). Application integration uses the deliberately small `./server`
@@ -36,6 +37,15 @@ Application-owned workflow source remains in the application package. The
 plugin itself owns and publishes its complete management UI; enabling the
 plugin is sufficient to register the Automation settings pages and their
 detail routes.
+
+Server plugins can contribute an instruction through the public Workflow
+service. Duplicate instruction types are rejected, while registration timing
+is intentionally unrestricted:
+
+```ts
+const workflow = app.container.resolve(workflowServiceToken);
+workflow.registerInstruction(CustomInstruction);
+```
 
 ## Development dependencies
 

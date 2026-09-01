@@ -38,8 +38,8 @@ Follow this order so evidence remains tied to the executed revision:
 5. Inspect `getRun(id).nodeRuns` for the latest attempt per node key and reconstruct the visible executed path.
 6. Call `nodeRuns(runId, nodeKey?)` when reruns or repeated attempts are possible; compare ids/timestamps/statuses in ascending order.
 7. Fetch `nodeRunPayload(runId, nodeRunId)` only for relevant attempts. Record result, error, log, and `truncated`.
-8. Correlate structured server logs by run/execution id, node id/key, artifact digest, and script. Run-node logs include duration and `success/error/aborted`.
-9. Compare the failing node's config, resolved parameters/input, expected result contract, timeout, and artifact script path.
+8. Correlate structured server logs by run/execution id, node id/key, artifact digest, and module. Run-node logs include duration and `success/error/aborted`.
+9. Compare the failing node's config, resolved parameters/input, expected result contract, timeout, and artifact module specifier.
 10. Separate root cause from propagated failure. A condition parent can fail because its selected branch child failed.
 11. Recommend a source fix, setting fix, retry with the same event identity, new business invocation, or compensation. Do not erase history.
 
@@ -112,7 +112,7 @@ For an unexpected path:
 | duplicate-looking trigger        | caller generated different event keys for the same event                                   |
 | no second run                    | same event key was intentionally deduplicated                                              |
 | stuck queueing                   | worker/runtime/queue not started, queue failure, retry/dead letter                         |
-| run node module error            | script omitted from artifact, bad relative path, missing named `run`, digest mismatch      |
+| run node module error            | module omitted from artifact, bad relative specifier, missing named `run`, digest mismatch |
 | source check passes, build fails | inspect package scan/include, run path/import policy, bundling, and named `run` export     |
 | run node serialization error     | BigInt, model/class instance, circular reference, function/symbol, non-finite number       |
 | condition type error             | expression produced non-boolean or mixed comparison types                                  |
@@ -129,7 +129,7 @@ Report at least:
 - Event key, run id, status name/value, reason, manual flag, and timestamps.
 - Input/input facts relevant to the decision, with sensitive values omitted.
 - Executed node keys in attempt order and the first failing leaf attempt.
-- Node type, script or condition expression, status, duration/timestamps, error, and log availability.
+- Node type, module or condition expression, status, duration/timestamps, error, and log availability.
 - Whether any result/error/log was redacted or truncated.
 - Trigger receipt status/reason; omit event key/run claims for a skipped receipt.
 - Root-cause category: source/compile, activation/config, invocation contract, queue/worker, artifact/module, business script, timeout/cancellation, or authorization/observability.

@@ -53,15 +53,15 @@ export async function buildWorkflowServerEntries(
   ir: WorkflowFlatIr,
   options: WorkflowServerEntryBuilderOptions = {},
 ): Promise<WorkflowServerEntryBuildResult> {
-  const scripts = [
+  const modules = [
     ...new Set(
       ir.nodes
         .filter((node) => node.type === 'run')
         .map((node) => {
-          const script = node.config.script;
-          if (typeof script !== 'string')
-            throw new Error(`Run node "${node.key}" script must be a string`);
-          return validateSourcePath(script);
+          const module = node.config.module;
+          if (typeof module !== 'string')
+            throw new Error(`Run node "${node.key}" module must be a string`);
+          return module;
         }),
     ),
   ].sort();
@@ -71,7 +71,8 @@ export async function buildWorkflowServerEntries(
   const allowed = new Set(options.bareImportAllowlist ?? []);
   const usedExternal = new Set<string>();
   const rootPrefix = `${scanned.root}${path.sep}`;
-  for (const source of scripts) {
+  for (const module of modules) {
+    const source = validateSourcePath(`${module}.ts`);
     if (!included.has(source))
       throw new Error(
         `Run script "${source}" is not included in the workflow package`,

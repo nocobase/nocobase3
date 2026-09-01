@@ -71,7 +71,7 @@ export function buildWorkflowArtifact(
         Buffer.from(left.source).compare(Buffer.from(right.source)),
       )
       .map((entry) => [
-        entry.source.replaceAll('\\', '/').replace(/^\.\//, ''),
+        entry.source.replaceAll('\\', '/').replace(/\.[^./]+$/, ''),
         entry.output,
       ]),
   );

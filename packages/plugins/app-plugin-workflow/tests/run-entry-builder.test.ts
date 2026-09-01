@@ -23,17 +23,17 @@ async function fixture(
   await fs.writeFile(path.join(root, 'server/run.ts'), script);
   return root;
 }
-function ir(scripts: string[]): WorkflowFlatIr {
+function ir(modules: string[]): WorkflowFlatIr {
   return {
     title: 'x',
     inputSchema: { type: 'object' },
-    start: scripts.length ? 'n0' : null,
-    nodes: scripts.map((script, index) => ({
+    start: modules.length ? 'n0' : null,
+    nodes: modules.map((module, index) => ({
       key: `n${index}`,
       type: 'run',
-      config: { script },
+      config: { module },
       upstreamKey: index ? `n${index - 1}` : null,
-      downstreamKey: index + 1 < scripts.length ? `n${index + 1}` : null,
+      downstreamKey: index + 1 < modules.length ? `n${index + 1}` : null,
       branchKey: null,
     })),
   };
@@ -49,22 +49,22 @@ describe('workflow run server entry builder', () => {
     );
     const built = await buildWorkflowServerEntries(
       await scanWorkflowPackage(root),
-      ir(['server/run.ts', 'server/run.ts']),
+      ir(['./server/run', './server/run']),
     );
     expect(Object.keys(built.entries)).toHaveLength(1);
     expect(Object.keys(built.entries)[0]).toMatch(/^run:[a-f0-9]{16}$/);
     expect([...built.files]).toHaveLength(1);
   });
   it.each([
-    '/absolute.ts',
-    '../escape.ts',
-    'https://host/run.ts',
+    '/absolute',
+    '../escape',
+    'https://host/run',
     'package-name',
-    'nul\0.ts',
-  ])('rejects unsafe entry %s', async (script) => {
+    'nul\0',
+  ])('rejects unsafe entry %s', async (module) => {
     const root = await fixture();
     await expect(
-      buildWorkflowServerEntries(await scanWorkflowPackage(root), ir([script])),
+      buildWorkflowServerEntries(await scanWorkflowPackage(root), ir([module])),
     ).rejects.toThrow();
   });
   it('rejects symlink escape, secret material and a missing run export', async () => {
@@ -72,7 +72,7 @@ describe('workflow run server entry builder', () => {
     await expect(
       buildWorkflowServerEntries(
         await scanWorkflowPackage(root),
-        ir(['server/run.ts']),
+        ir(['./server/run']),
       ),
     ).rejects.toThrow(/export a function named run/);
     await fs.writeFile(path.join(root, '.env'), 'SECRET=1');
@@ -83,7 +83,7 @@ describe('workflow run server entry builder', () => {
     await expect(
       buildWorkflowServerEntries(
         await scanWorkflowPackage(root),
-        ir(['server/run.ts']),
+        ir(['./server/run']),
       ),
     ).rejects.toThrow();
   });
@@ -94,7 +94,7 @@ describe('workflow run server entry builder', () => {
     await expect(
       buildWorkflowServerEntries(
         await scanWorkflowPackage(root),
-        ir(['server/run.ts']),
+        ir(['./server/run']),
       ),
     ).resolves.toMatchObject({ entries: expect.any(Object) });
     const outside = path.join(path.dirname(root), 'outside.ts');
@@ -106,7 +106,7 @@ describe('workflow run server entry builder', () => {
     await expect(
       buildWorkflowServerEntries(
         await scanWorkflowPackage(root),
-        ir(['server/run.ts']),
+        ir(['./server/run']),
       ),
     ).rejects.toThrow(/escapes workflow package/);
     await fs.symlink(outside, path.join(root, 'server/link.ts'));
@@ -116,7 +116,7 @@ describe('workflow run server entry builder', () => {
     );
     await expect(
       scanWorkflowPackage(root).then((scanned) =>
-        buildWorkflowServerEntries(scanned, ir(['server/run.ts'])),
+        buildWorkflowServerEntries(scanned, ir(['./server/run'])),
       ),
     ).rejects.toThrow(/escapes package root/);
     await fs.rm(outside, { force: true });
@@ -128,12 +128,12 @@ describe('workflow run server entry builder', () => {
     await expect(
       buildWorkflowServerEntries(
         await scanWorkflowPackage(root),
-        ir(['server/run.ts']),
+        ir(['./server/run']),
       ),
     ).rejects.toThrow(/allowlist/);
     const built = await buildWorkflowServerEntries(
       await scanWorkflowPackage(root),
-      ir(['server/run.ts']),
+      ir(['./server/run']),
       { bareImportAllowlist: ['allowed-package'] },
     );
     expect(built.externalPackages).toEqual(['allowed-package']);

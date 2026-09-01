@@ -120,7 +120,7 @@ Rollback guidance:
 - Input Schema has object root and only supported keywords; representative allowed and denied contexts are checked.
 - Parameters, templates, JSON Logic variables, result schemas, and node-result visibility obey current contracts.
 - Node keys are valid, globally unique, stable, and branch keys belong to the node contract.
-- The source check passes, then the package Artifact build separately proves every `run.config.script` is included, package-relative, import-policy compliant, bundled, and exports named `run`.
+- The source check passes, then the package Artifact build separately proves every `run.config.module` is included, package-relative, import-policy compliant, bundled, and exports named `run`.
 - Every run-script result is JSON-storable and every referenced dynamic result has an accurate `result` schema.
 - The real workflow checker passes all six phases and compilation produces a reachable acyclic tree topology.
 - Every source or setting write has an immediate readback or rebuild/check result.
