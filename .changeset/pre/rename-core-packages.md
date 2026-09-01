@@ -7,12 +7,12 @@
 
 Rename four packages, dropping the qualifiers they only carried to avoid names the v2 line had taken.
 
-| Before | After |
-| --- | --- |
-| `@nocobase/app-database` | `@nocobase/db` |
-| `@nocobase/app-i18n` | `@nocobase/i18n` |
+| Before                     | After                  |
+| -------------------------- | ---------------------- |
+| `@nocobase/app-database`   | `@nocobase/db`         |
+| `@nocobase/app-i18n`       | `@nocobase/i18n`       |
 | `@nocobase/app-server-kit` | `@nocobase/app-server` |
-| `@nocobase/id-generator` | `@nocobase/snowflake` |
+| `@nocobase/id-generator`   | `@nocobase/snowflake`  |
 
 There is no compatibility shim: the old names receive no further releases, and a dependency on one has to be repointed by hand. Each package keeps its version history, which is why the changelogs say which name the earlier releases went out under.
 
