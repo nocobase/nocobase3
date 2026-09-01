@@ -7,6 +7,8 @@ export * from './document-store.js';
 export * from './document-store-errors.js';
 export * from './in-memory-document-store.js';
 export * from './legacy-document-store.js';
+export * from './module-document-store.js';
+export * from './database-document-store.js';
 export * from './service.js';
 export * from './service-errors.js';
 export * from './store.js';

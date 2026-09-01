@@ -144,5 +144,17 @@ await store.delete(updated.document.name, {
 `list({ limit, cursor })` 按 Collection 名称稳定分页，只返回 revision、naming、title 和 description 等轻量
 摘要。默认 limit 为 100，最大为 1000。
 
-旧 Builder Store 可以通过 `LegacyCollectionMetadataDocumentStore` 暂时暴露为只读文档源。它执行允许列表
-提取，阻断不安全转换，且不会写回旧 Store。
+已实现的后端包括：
+
+- `InMemoryCollectionMetadataDocumentStore`：用于测试或显式临时场景；
+- `DatabaseCollectionMetadataDocumentStore`：通过自包含内部表持久化文档，使用递增数字 revision 和数据库 CAS；
+- `ModuleCollectionMetadataDocumentStore`：加载已导入的 TypeScript 文档数组，只读，使用规范内容的 SHA-256 revision；
+- `LegacyCollectionMetadataDocumentStore`：把旧 Builder Store 暂时暴露为只读文档源，执行允许列表提取并阻断不安全转换。
+
+Module Store 的 `put()` 和 `delete()` 固定抛出 `METADATA_STORE_READ_ONLY`。Writable JSON/YAML File
+Store 尚未实现，不能把 Module Store 当作运行时文件编辑器。
+
+Store 的 `capabilities.writable` 只表示补充 Metadata 文档是否支持写入。它与业务记录的写权限无关，
+也不取代 `schemaManagement` 对 DDL 和 Migration 的控制。
+
+各后端的构造方式和持久化边界见 [Metadata Store 后端](../collection/metadata-store-backends.md)。

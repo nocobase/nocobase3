@@ -110,6 +110,8 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 - `CollectionMetadataStore`：元数据存储接口。
 - `CollectionMetadataDocumentStore`：迁移期的新 V1 文档 Store 接口，读写强制使用 revision。
 - `InMemoryCollectionMetadataDocumentStore`：用于测试和显式临时场景的内存 CAS 文档后端。
+- `DatabaseCollectionMetadataDocumentStore`：使用自包含内部表持久化 V1 文档的可写 CAS 后端。
+- `ModuleCollectionMetadataDocumentStore`：从已导入模块加载 V1 文档、使用内容 SHA revision 的只读后端。
 - `LegacyCollectionMetadataDocumentStore`：将旧完整定义 Store 暴露为只读 V1 文档源的过渡 adapter。
 - `CollectionMetadataConflictError`：compare-and-swap 失败，稳定 code 为 `METADATA_CONFLICT`。
 - `CollectionMetadataService`：在文档 Store 之上执行 collection/field/relation patch、校验、CAS 和提交后失效。
@@ -118,6 +120,9 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 - `validateCollectionMetadataDocument(input)`：严格校验并返回独立的、规范化的 Metadata V1 文档。
 - `extractLegacyCollectionMetadata(input, options?)`：从旧 Collection 定义中按允许列表提取补充元数据和迁移诊断。
 - `CollectionMetadataValidationError`：Metadata 文档校验错误，通过 `issues` 暴露稳定的 code、path 和 message。
+
+`capabilities.writable` 只描述 Metadata 文档后端能否写入，不代表 Collection 记录可写，也不控制 DDL。
+Writable JSON/YAML File Store 尚未实现。
 
 ## Collection Resolver
 

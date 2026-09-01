@@ -42,8 +42,7 @@ export function paginateCollectionMetadata(
   options: ListCollectionMetadataOptions = {},
 ): CollectionMetadataPage {
   validateOptionsObject(options, ['limit', 'cursor']);
-  const limit = validateLimit(options.limit);
-  const after = decodeCursor(options.cursor);
+  const { limit, after } = resolveCollectionMetadataListOptions(options);
   const sorted = [...stored].sort((left, right) =>
     compareNames(left.document.name, right.document.name),
   );
@@ -53,6 +52,35 @@ export function paginateCollectionMetadata(
   const page = eligible.slice(0, limit + 1);
   const hasNext = page.length > limit;
   const items = page.slice(0, limit).map(summarizeStoredCollectionMetadata);
+  return pruneUndefined({
+    items,
+    nextCursor:
+      hasNext && items.length > 0
+        ? encodeCursor(items[items.length - 1].name)
+        : undefined,
+  });
+}
+
+export interface ResolvedCollectionMetadataListOptions {
+  readonly limit: number;
+  readonly after?: string;
+}
+
+export function resolveCollectionMetadataListOptions(
+  options: ListCollectionMetadataOptions = {},
+): ResolvedCollectionMetadataListOptions {
+  validateOptionsObject(options, ['limit', 'cursor']);
+  const limit = validateLimit(options.limit);
+  const after = decodeCursor(options.cursor);
+  return after ? { limit, after } : { limit };
+}
+
+export function createCollectionMetadataPage(
+  stored: readonly StoredCollectionMetadata[],
+  limit: number,
+): CollectionMetadataPage {
+  const hasNext = stored.length > limit;
+  const items = stored.slice(0, limit).map(summarizeStoredCollectionMetadata);
   return pruneUndefined({
     items,
     nextCursor:

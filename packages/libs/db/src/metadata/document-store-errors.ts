@@ -23,8 +23,15 @@ export class CollectionMetadataConflictError extends Error {
 export class CollectionMetadataStoreReadOnlyError extends Error {
   readonly code = 'METADATA_STORE_READ_ONLY' as const;
 
-  constructor(readonly operation: 'put' | 'delete') {
-    super(`Collection Metadata Store is read-only and cannot ${operation}.`);
+  constructor(
+    readonly operation: 'put' | 'delete',
+    readonly source?: string,
+  ) {
+    super(
+      source
+        ? `Collection Metadata Store is read-only; edit source "${source}" instead of calling ${operation}().`
+        : `Collection Metadata Store is read-only and cannot ${operation}.`,
+    );
     this.name = 'CollectionMetadataStoreReadOnlyError';
   }
 }
