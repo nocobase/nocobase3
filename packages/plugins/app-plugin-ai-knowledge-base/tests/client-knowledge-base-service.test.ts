@@ -117,7 +117,7 @@ test('directory, detail, document, retrieval, and segment reads use the server r
 test('multipart upload sends the knowledge base key in query and form data', async () => {
   const { calls, client } = recordingClient(({ action }) => {
     if (action === 'getUploadStorage')
-      return { data: { id: 9, type: 'local', rules: { size: 1024 } } };
+      return { data: { disk: 'local', type: 'local', rules: { size: 1024 } } };
     if (action === 'upload') return { data: document };
     return { data: [] };
   });
@@ -177,7 +177,7 @@ test('knowledge base management actions use flat create, update, delete, and ena
       return { data: [{ id: 'text-embedding-3-small' }] };
     if (action === 'listExternalVectorStoreProviders')
       return { data: ['ExternalProvider'] };
-    if (action === 'listStorages')
+    if (action === 'listStorageDisks')
       return { data: [{ value: 'default', label: 'Default' }] };
     if (action === 'destroy') return { data: { success: true } };
     return {
@@ -191,7 +191,7 @@ test('knowledge base management actions use flat create, update, delete, and ena
     name: ' Handbook ',
     knowledgeBaseType: 'LOCAL',
     enabled: true,
-    storageId: 'default',
+    disk: 'default',
     vectorDatabaseKey: 'vector',
     llmService: 'embedding-service',
     embeddingModel: 'text-embedding-3-small',
@@ -201,7 +201,7 @@ test('knowledge base management actions use flat create, update, delete, and ena
   await expect(service.listKnowledgeBaseManagementOptions()).resolves.toEqual({
     vectorDatabases: [{ value: 'vector', label: 'Vector' }],
     llmServices: [{ value: 'embedding-service', label: 'Embedding service' }],
-    storages: [{ value: '0', label: 'Default' }],
+    storages: [{ value: 'default', label: 'Default' }],
     externalProviders: [
       { value: 'ExternalProvider', label: 'ExternalProvider' },
     ],
@@ -221,7 +221,7 @@ test('knowledge base management actions use flat create, update, delete, and ena
         name: 'Handbook',
         knowledgeBaseType: 'LOCAL',
         enabled: true,
-        storageId: 'default',
+        disk: 'default',
         vectorDatabaseKey: 'vector',
         llmService: 'embedding-service',
         embeddingModel: 'text-embedding-3-small',

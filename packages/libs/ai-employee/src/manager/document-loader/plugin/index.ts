@@ -7,23 +7,23 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 import type { Caching } from '@nocobase/caching';
-import type { FileManager } from '../../file/index.js';
+import type { FileStorage } from '../../../file-storage/index.js';
 import { DocumentLoader } from './loader.js';
 import { SUPPORTED_DOCUMENT_EXTNAMES } from './constants.js';
 import { CachedDocumentLoader } from './cached.js';
 import { resolveExtname } from './utils.js';
 
 export class DocumentLoaders {
-  readonly raw: DocumentLoader;
+  readonly raw: DocumentLoader<any, any>;
   readonly cached: CachedDocumentLoader;
 
-  constructor(
+  public constructor(
     private readonly ctx: {
       caching?: Caching;
-      fileManager: FileManager;
+      fileStorage: FileStorage<any, any>;
     },
   ) {
-    this.raw = new DocumentLoader(this.ctx.fileManager);
+    this.raw = new DocumentLoader(this.ctx.fileStorage);
     this.cached = new CachedDocumentLoader(this.ctx.caching, {
       loader: this.raw,
       parserVersion: 'v1',

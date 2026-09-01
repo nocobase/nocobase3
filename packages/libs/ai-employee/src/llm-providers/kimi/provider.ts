@@ -117,7 +117,7 @@ export class KimiProvider extends LLMProvider {
   protected resolveDocumentLoader(
     runtime: AttachmentParseRuntime,
   ): AttachmentDocumentLoader {
-    const loader = new KimiDocumentLoader(runtime.fileManager, {
+    const loader = new KimiDocumentLoader(runtime.fileStorage, {
       apiKey: this.serviceOptions?.apiKey,
       baseURL: this.getResolvedBaseURL(),
     });

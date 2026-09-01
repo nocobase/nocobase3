@@ -61,6 +61,10 @@
       "types": "./server/plugin.ts",
       "import": "./server/plugin.ts"
     },
+    "./server/config": {
+      "types": "./server/config.ts",
+      "import": "./server/config.ts"
+    },
     "./server/tokens": {
       "types": "./server/tokens.ts",
       "import": "./server/tokens.ts"
@@ -105,6 +109,10 @@
       "./server/plugin": {
         "types": "./dist/server/plugin.d.ts",
         "import": "./dist/server/plugin.js"
+      },
+      "./server/config": {
+        "types": "./dist/server/config.d.ts",
+        "import": "./dist/server/config.js"
       },
       "./server/tokens": {
         "types": "./dist/server/tokens.d.ts",
@@ -156,9 +164,10 @@
     "langchain": "1.2.39",
     "lodash": "^4.17.21",
     "lucide-react": "^0.487.0",
-    "zod": "^3",
     "@ai-sdk/react": "^2.0.0",
     "@base-ui/react": "^1.6.0",
+    "@sinclair/typebox": "catalog:",
+    "ai": "^5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "echarts": "^5.5.0",
@@ -169,7 +178,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.2.0",
-    "ai": "^5.0.0"
+    "zod": "^3"
   },
   "devDependencies": {
     "@langchain/openai": "1.4.7",

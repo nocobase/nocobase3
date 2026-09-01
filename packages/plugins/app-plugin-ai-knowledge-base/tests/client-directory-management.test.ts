@@ -47,9 +47,9 @@ test('create and settings use a right-side half-width sheet', () => {
   expect(editor).toMatch(/newKnowledgeBase\(knowledgeBaseType/);
   expect(editor).toMatch(/knowledgeBaseTypeDetails/);
   expect(editor).toMatch(/Knowledge base type:/);
-  expect(editor).toMatch(/storageId: '0'/);
-  expect(editor).toMatch(/storageId: values\.storageId \?\? '0'/);
-  expect(editor).not.toMatch(/<Label>\{t\('File storage'\)\}<\/Label>/);
+  expect(editor).toMatch(/loaded\.storages\[0\]\?\.value/);
+  expect(editor).toMatch(/value=\{values\.disk\}/);
+  expect(editor).toMatch(/<Label>\{t\('File storage'\)\}<\/Label>/);
   expect(editor).not.toMatch(/md:grid-cols-2/);
   expect(editor).toMatch(/<EditableOptionInput/);
   expect(editor).toMatch(/<ComboboxInput/);

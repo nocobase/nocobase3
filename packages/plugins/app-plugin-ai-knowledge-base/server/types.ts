@@ -1,4 +1,4 @@
-import type { AIManager, FileManager } from '@nocobase/ai-employee';
+import type { AIManager, FileStorageFactory } from '@nocobase/ai-employee';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
@@ -18,7 +18,7 @@ export interface KnowledgeBaseRecord extends JsonRecord {
   name: string;
   description?: string;
   vectorStoreProvider: string;
-  storageId?: string;
+  disk: string;
   vectorStoreConfigKey?: string;
   vectorStoreProps?: Array<{ name?: string; key: string; value: unknown }>;
   segmentOptions: SegmentOptions;
@@ -35,14 +35,14 @@ export interface KnowledgeBaseDocumentRecord extends JsonRecord {
   id: string | number;
   key: string;
   title?: string;
-  filename?: string;
-  extname?: string;
-  size?: number;
-  mimetype?: string;
-  path?: string;
+  filename: string;
+  extname: string;
+  size: number;
+  mimetype: string;
+  path: string;
   url?: string;
   preview?: string;
-  storageId?: string;
+  disk: string;
   meta: JsonRecord;
   knowledgeBaseKey: string;
   indexStatus: string;
@@ -98,11 +98,12 @@ export interface SegmentShardRecord extends JsonRecord {
   segmentCount: number;
   contentHash: string;
   filename: string;
+  extname: string;
   path: string;
   url?: string;
   size: number;
   mimetype: string;
-  storageId?: string;
+  disk: string;
   meta: JsonRecord;
 }
 
@@ -133,12 +134,15 @@ export interface VectorStoreConfigRecord extends JsonRecord {
 export interface KnowledgeBasePluginDeps {
   ai: AIManager;
   database: DatabaseManager;
+  fileStorageFactory: FileStorageFactory;
+  allowedStorageDisks: readonly string[];
   queueManager: NocoBaseQueueManager;
 }
 
 export interface KnowledgeBasePluginRuntime {
   ai: AIManager;
   database: DatabaseConnection;
-  fileManager: FileManager;
+  fileStorageFactory: FileStorageFactory;
+  allowedStorageDisks: readonly string[];
   queueManager: NocoBaseQueueManager;
 }
