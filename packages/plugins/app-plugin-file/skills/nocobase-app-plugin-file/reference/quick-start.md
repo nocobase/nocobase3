@@ -88,7 +88,7 @@ const authorizePurchaseOrderFile: FileRouteAuthorizer = async (
   file,
 ) => {
   const orderId = Number(context.req.param('orderId'));
-  await authorizePurchaseOrder(context, { orderId, action, file });
+  return authorizePurchaseOrder(context, { orderId, action, file });
 };
 
 export const purchaseOrderAttachmentRoutes: AppApiRouteContribution<Application> =
