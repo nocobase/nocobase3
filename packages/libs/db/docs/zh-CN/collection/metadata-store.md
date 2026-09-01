@@ -5,8 +5,10 @@ description: 说明 Metadata Store 的职责边界、文档模型、一致性规
 
 # Metadata Store 设计
 
-> 本文描述目标架构。当前的 `CollectionMetadataStore` 仍然保存
-> `CollectionDefinition`，尚未实现本文中的全部 API。
+> 带 revision 的文档 Store 契约和 In-memory 后端已经实现。过渡期公共名称为
+> `CollectionMetadataDocumentStore` 和 `InMemoryCollectionMetadataDocumentStore`；旧
+> `CollectionMetadataStore` 仍供 Builder 保存完整 `CollectionDefinition`。所有消费者迁移完成后，文档
+> Store 将接管最终名称并删除旧接口。
 
 ## 最终决定
 
@@ -384,7 +386,7 @@ const externalOrders = await db
 持久化接口应面向带版本的 Metadata 文档，不包含 Collection Builder 的领域逻辑：
 
 ```ts
-export interface CollectionMetadataStore {
+export interface CollectionMetadataDocumentStore {
   readonly capabilities: CollectionMetadataStoreCapabilities;
 
   initialize(): Promise<void>;
@@ -403,6 +405,9 @@ export interface CollectionMetadataStore {
   delete(name: string, options: DeleteCollectionMetadataOptions): Promise<void>;
 }
 ```
+
+这里的 `Document` 是迁移期名称，不改变最终职责。它避免同一个发布阶段内让旧 Builder Store 与新补充文档
+Store 使用同名接口。
 
 持久化结果带有 revision：
 
@@ -563,6 +568,11 @@ renameCollection(from, to, definition);
 10. 增加 `connection.collections.get()` 和分页 `list()`，并使用 Registry 缓存。
 11. 增加外部 Schema Snapshot 和 module/file 后端。
 12. 所有消费端迁移完成后，移除旧的完整定义 Store API。
+
+迁移期可用 `LegacyCollectionMetadataDocumentStore` 包装旧 Store：它通过 legacy extraction 暴露只读 V1 文档，
+使用内容 SHA-256 作为稳定 revision，并将 warning 交给 `onDiagnostic`。遇到阻断诊断时抛出
+`LEGACY_METADATA_TRANSITION_FAILED`；`put()` 和 `delete()` 固定抛出 `METADATA_STORE_READ_ONLY`。该 adapter
+不会反向写入旧 Store，也不会掩盖不安全迁移。
 
 转换旧 Store 记录前，兼容工具必须先检查现有数据。与确定性命名一致的物理细节可以移除；不兼容的
 `tableName`、`columnName`、类型或约束信息必须输出明确差异，由迁移人员处理，不能静默丢弃。

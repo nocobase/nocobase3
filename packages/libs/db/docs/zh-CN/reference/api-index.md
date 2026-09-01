@@ -108,6 +108,10 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 
 - `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
 - `CollectionMetadataStore`：元数据存储接口。
+- `CollectionMetadataDocumentStore`：迁移期的新 V1 文档 Store 接口，读写强制使用 revision。
+- `InMemoryCollectionMetadataDocumentStore`：用于测试和显式临时场景的内存 CAS 文档后端。
+- `LegacyCollectionMetadataDocumentStore`：将旧完整定义 Store 暴露为只读 V1 文档源的过渡 adapter。
+- `CollectionMetadataConflictError`：compare-and-swap 失败，稳定 code 为 `METADATA_CONFLICT`。
 - `defineCollectionMetadata(document)`：为 Metadata V1 文档提供 TypeScript 类型辅助，不执行运行时校验。
 - `validateCollectionMetadataDocument(input)`：严格校验并返回独立的、规范化的 Metadata V1 文档。
 - `extractLegacyCollectionMetadata(input, options?)`：从旧 Collection 定义中按允许列表提取补充元数据和迁移诊断。

@@ -113,3 +113,36 @@ for (const diagnostic of result.diagnostics) {
 可安全丢弃的物理属性不会产生诊断；已移除的应用语义会产生 warning；虚拟字段、无效 relation、重复名称和不兼容的显式物理名称会产生阻断 error。只要存在 error，结果就不包含 `document`。
 
 完整的存储边界、校验规则和 legacy extraction 允许列表见 [Metadata Store](../collection/metadata-store.md)。
+
+## 文档 Store
+
+过渡期的新 Store 接口名为 `CollectionMetadataDocumentStore`。它保存 V1 文档而不是完整
+`CollectionDefinition`，所有写入都要求 compare-and-swap：
+
+```ts
+import { InMemoryCollectionMetadataDocumentStore } from '@nocobase/db';
+
+const store = new InMemoryCollectionMetadataDocumentStore();
+await store.initialize();
+
+const created = await store.put(metadata, {
+  expectedRevision: null,
+});
+
+const updated = await store.put(nextMetadata, {
+  expectedRevision: created.revision,
+});
+
+await store.delete(updated.document.name, {
+  expectedRevision: updated.revision,
+});
+```
+
+`expectedRevision: null` 只允许创建不存在的文档；更新和删除必须传入当前 revision。版本不一致抛出
+`CollectionMetadataConflictError`，其稳定 code 为 `METADATA_CONFLICT`。
+
+`list({ limit, cursor })` 按 Collection 名称稳定分页，只返回 revision、naming、title 和 description 等轻量
+摘要。默认 limit 为 100，最大为 1000。
+
+旧 Builder Store 可以通过 `LegacyCollectionMetadataDocumentStore` 暂时暴露为只读文档源。它执行允许列表
+提取，阻断不安全转换，且不会写回旧 Store。
