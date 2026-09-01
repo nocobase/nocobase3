@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createAppClient, resolveAppBase } from '../src/client.js';
+import {
+  AppRequestError,
+  createAppClient,
+  resolveAppBase,
+} from '../src/client.js';
 
 /**
  * What the bundler compiled into the module under test. Vite inlines `import.meta.env.BASE_URL` at transform time, so
@@ -112,4 +116,32 @@ describe('createAppClient', () => {
     expect(headers.get('Content-Type')).toBe('application/json');
     expect(headers.get('X-Request')).toBe('test');
   });
+
+  it.each([
+    [
+      'plain text',
+      'Upstream authentication failed.',
+      'Upstream authentication failed.',
+    ],
+    [
+      'a nested error envelope',
+      JSON.stringify({ error: { message: 'Access to this file is denied.' } }),
+      'Access to this file is denied.',
+    ],
+  ])(
+    'preserves %s response details in request errors',
+    async (_label, body, message) => {
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValue(new Response(body, { status: 403 }));
+      const client = createAppClient({ baseURL: '/main/api', fetch });
+
+      const error = await client
+        .request('files')
+        .catch((value: unknown) => value);
+
+      expect(error).toBeInstanceOf(AppRequestError);
+      expect(error).toMatchObject({ status: 403, message });
+    },
+  );
 });

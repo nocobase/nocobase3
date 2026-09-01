@@ -96,6 +96,8 @@ function toClientError(error: unknown): FilesClientError {
           })
         : undefined;
     const nested = detail?.error;
+    const textPayload =
+      typeof payload === 'string' && payload.trim() ? payload : undefined;
     const code =
       typeof value.code === 'string'
         ? value.code
@@ -105,13 +107,14 @@ function toClientError(error: unknown): FilesClientError {
             ? detail.code
             : undefined;
     const serverMessage =
-      typeof nested?.message === 'string'
+      textPayload ??
+      (typeof nested?.message === 'string'
         ? nested.message
         : typeof detail?.message === 'string'
           ? detail.message
           : typeof value.message === 'string'
             ? value.message
-            : 'Files request failed.';
+            : 'Files request failed.');
     return new FilesClientError(serverMessage, {
       status: typeof value.status === 'number' ? value.status : undefined,
       code,

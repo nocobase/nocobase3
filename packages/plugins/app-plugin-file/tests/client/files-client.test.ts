@@ -210,6 +210,44 @@ describe('createFilesClient', () => {
     });
   });
 
+  it('preserves plain-text server errors from the App client', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(
+        new Response('Upstream file authorization failed.', { status: 403 }),
+      );
+    const client = filesClient(fetch, 'files');
+
+    const error = await client.get('file-1').catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(FilesClientError);
+    expect(error).toMatchObject({
+      status: 403,
+      message: 'Upstream file authorization failed.',
+      serverMessage: 'Upstream file authorization failed.',
+    });
+  });
+
+  it('preserves a text payload from custom App client implementations', async () => {
+    const appClient: AppClient = {
+      request: vi.fn().mockRejectedValue({
+        status: 502,
+        message: 'Generic proxy error.',
+        payload: 'The file service is temporarily unavailable.',
+      }),
+    };
+    const client = createFilesClient({ appClient, endpoint: 'files' });
+
+    const error = await client.list().catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(FilesClientError);
+    expect(error).toMatchObject({
+      status: 502,
+      message: 'The file service is temporarily unavailable.',
+      serverMessage: 'The file service is temporarily unavailable.',
+    });
+  });
+
   it('contains no Portal SDK or legacy v2 protocol strings', async () => {
     const source = await readFile('client/files-client.ts', 'utf8');
     const legacyStoragePrefix = ['storage', 's:'].join('');

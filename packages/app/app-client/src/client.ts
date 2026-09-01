@@ -112,8 +112,22 @@ function parsePayload(value: string): unknown {
 }
 
 function readErrorMessage(payload: unknown): string {
-  if (payload && typeof payload === 'object' && 'message' in payload) {
-    return String(payload.message);
+  if (typeof payload === 'string' && payload.trim()) {
+    return payload;
+  }
+  if (payload && typeof payload === 'object') {
+    const detail = payload as { message?: unknown; error?: unknown };
+    const message = detail.message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+    const nested = detail.error;
+    if (nested && typeof nested === 'object') {
+      const nestedMessage = (nested as { message?: unknown }).message;
+      if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
+        return nestedMessage;
+      }
+    }
   }
   return 'NocoBase request failed.';
 }

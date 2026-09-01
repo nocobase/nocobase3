@@ -82,6 +82,24 @@ describe('file plugin public contracts', () => {
     expect(clientApi).not.toHaveProperty('FILE_DEMO_ORDER_MIME_TYPES');
   });
 
+  it('has no manifest or TypeScript source dependency on the Portal SDK', () => {
+    const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      readonly dependencies?: Readonly<Record<string, string>>;
+      readonly devDependencies?: Readonly<Record<string, string>>;
+      readonly peerDependencies?: Readonly<Record<string, string>>;
+    };
+    const tsconfig = readFileSync('tsconfig.json', 'utf8');
+
+    for (const dependencies of [
+      packageJson.dependencies,
+      packageJson.devDependencies,
+      packageJson.peerDependencies,
+    ]) {
+      expect(dependencies).not.toHaveProperty('@nocobase/app-portal-sdk');
+    }
+    expect(tsconfig).not.toContain('app-portal-sdk');
+  });
+
   it('keeps application assembly APIs internal', () => {
     expect(Object.keys(serverApi).sort()).toEqual([
       'DEFAULT_FILE_ROUTE_VISIBILITY',
