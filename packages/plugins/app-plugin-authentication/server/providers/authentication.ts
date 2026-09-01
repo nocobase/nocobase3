@@ -1,20 +1,17 @@
-import {
-  joinBasePath,
-  normalizeBasePath,
-} from '@nocobase/app-server-kit/support';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   ServiceProvider,
   type ServiceResolver,
 } from '@nocobase/service-provider';
-import { databaseManagerToken } from '@nocobase/app-database';
-import { cachingToken } from '@nocobase/app-server-kit/caching';
-import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
-import { appConfig } from '@nocobase/app-server-kit/config';
+import { databaseManagerToken } from '@nocobase/db';
+import { cachingToken } from '@nocobase/app-server/caching';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { appConfig } from '@nocobase/app-server/config';
 import {
   realtimePrincipalResolverToken,
   type RealtimePrincipal,
-} from '@nocobase/app-server-kit/realtime';
+} from '@nocobase/app-server/realtime';
 
 import {
   createAuthentication,

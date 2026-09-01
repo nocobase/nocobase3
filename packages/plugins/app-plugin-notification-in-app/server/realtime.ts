@@ -1,4 +1,4 @@
-import type { RealtimeUserTopic } from '@nocobase/app-server-kit/realtime';
+import type { RealtimeUserTopic } from '@nocobase/app-server/realtime';
 
 import type { InAppStore } from './store.js';
 

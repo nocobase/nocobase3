@@ -1,15 +1,12 @@
-import {
-  createDatabaseManager,
-  databaseManagerToken,
-} from '@nocobase/app-database';
+import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import { createLogging, createSilentLoggingConfig } from '@nocobase/logging';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
-import { loggingToken } from '@nocobase/app-server-kit/logging';
-import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+import { loggingToken } from '@nocobase/app-server/logging';
+import { queueManagerToken } from '@nocobase/app-server/queue';
 import type {
   AppConfigAccessor,
   AppConfigToken,
-} from '@nocobase/app-server-kit/config';
+} from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { afterEach, describe, expect, it } from 'vitest';
 

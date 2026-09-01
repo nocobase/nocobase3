@@ -7,7 +7,6 @@ export default createPortalConfig({
     'client-old/**',
     'public/r/**',
     'public/storage/**',
-    'registry/**',
     'storage/**',
   ],
 });

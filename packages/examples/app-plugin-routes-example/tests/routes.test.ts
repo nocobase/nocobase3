@@ -2,8 +2,8 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { createConfigPaths } from '@nocobase/app-server/config';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';

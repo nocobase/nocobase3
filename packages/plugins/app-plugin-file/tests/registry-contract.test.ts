@@ -183,7 +183,9 @@ describe('file plugin Registry contract', () => {
       },
     });
     expect(item?.dependencies).toContain('@nocobase/app-client@^1.0.0-beta.2');
-    expect(item?.dependencies).toContain('@nocobase/app-portal-sdk@^2.0.0');
+    expect(item?.dependencies).toContain(
+      '@nocobase/app-portal-sdk@^0.0.1-beta.1',
+    );
     expect(item?.dependencies).toContain('@nocobase/app-plugin-file@^0.0.1');
     expect(item?.meta.nocobase?.requiresPlugins).toEqual({
       '@nocobase/app-plugin-file': '>=0.0.1 <0.1.0',

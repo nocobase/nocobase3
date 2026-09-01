@@ -1,4 +1,4 @@
-import { createAppClient, type AppClient } from '@nocobase/app-sdk';
+import { createAppClient, type AppClient } from '@nocobase/app-client';
 
 let workflowClient: AppClient | undefined;
 

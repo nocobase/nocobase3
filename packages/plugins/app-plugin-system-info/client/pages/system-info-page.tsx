@@ -1,5 +1,5 @@
-import { createAppClient } from '@nocobase/app-sdk';
-import { useEffect, useState, type ReactElement } from 'react';
+import { appApiClientToken, useService } from '@nocobase/app-client';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 interface SystemInfoResponse {
   readonly packageName: string;
@@ -8,16 +8,18 @@ interface SystemInfoResponse {
   readonly serverTime: string;
 }
 
-const appClient = createAppClient();
-
-function requestPlugin(signal?: AbortSignal): Promise<SystemInfoResponse> {
-  return appClient.request<SystemInfoResponse>('system-info', { signal });
-}
-
 export default function SystemInfoPage(): ReactElement {
+  // The Application's own API client, so the route follows whatever `api.baseURL` the Application is configured with.
+  const appClient = useService(appApiClientToken);
   const [result, setResult] = useState<SystemInfoResponse>();
   const [error, setError] = useState<string>();
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const requestPlugin = useCallback(
+    (signal?: AbortSignal): Promise<SystemInfoResponse> =>
+      appClient.request<SystemInfoResponse>('system-info', { signal }),
+    [appClient],
+  );
 
   const refreshResult = (): void => {
     setIsLoading(true);
@@ -56,7 +58,7 @@ export default function SystemInfoPage(): ReactElement {
         }
       });
     return () => controller.abort();
-  }, []);
+  }, [requestPlugin]);
 
   return (
     <main className='mx-auto max-w-3xl space-y-6 px-6 py-10'>

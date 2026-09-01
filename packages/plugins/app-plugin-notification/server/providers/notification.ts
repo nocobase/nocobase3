@@ -1,8 +1,8 @@
-import { databaseManagerToken } from '@nocobase/app-database';
-import { loggingToken } from '@nocobase/app-server-kit/logging';
-import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+import { databaseManagerToken } from '@nocobase/db';
+import { loggingToken } from '@nocobase/app-server/logging';
+import { queueManagerToken } from '@nocobase/app-server/queue';
 import { ServiceProvider } from '@nocobase/service-provider';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 
 import { createNotificationManager } from '../manager.js';
 import { notificationServiceToken } from '../tokens.js';

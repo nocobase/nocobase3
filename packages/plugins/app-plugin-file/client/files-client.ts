@@ -12,7 +12,7 @@ import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 declare global {
   interface Window {
     NOCOBASE_API_URL?: string;
-    NOCOBASE_PORTAL_BASE?: string;
+    APP_BASE_PATH?: string;
     NOCOBASE_WS_PATH?: string;
     NOCOBASE_WS_URL?: string;
   }

@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { RestrictionRule } from './model.js';
 import type { RestrictionRuleStore } from './store.js';
 

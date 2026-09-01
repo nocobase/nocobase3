@@ -1,4 +1,4 @@
-import type { CollectionDefinitionBuilder } from '@nocobase/app-database';
+import type { CollectionDefinitionBuilder } from '@nocobase/db';
 
 export function defineWorkflowVersionStats(
   collection: CollectionDefinitionBuilder,

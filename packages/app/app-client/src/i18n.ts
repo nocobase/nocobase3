@@ -1,8 +1,4 @@
-import {
-  I18nRuntime,
-  type Locale,
-  type LocalesModule,
-} from '@nocobase/app-i18n';
+import { I18nRuntime, type Locale, type LocalesModule } from '@nocobase/i18n';
 
 import type { AppClientContributionSource } from './plugins.js';
 

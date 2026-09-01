@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 const createAppAuthorization = vi.hoisted(() =>

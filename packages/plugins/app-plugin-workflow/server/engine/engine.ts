@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import path from 'node:path';
 
 import Dispatcher from './dispatcher.js';
@@ -19,7 +19,7 @@ import {
 import WorkflowSourceLoader from '../loader/source-loader.js';
 import { createTimeoutReaper, type TimeoutReaper } from './timeout-reaper.js';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
-import type { Row } from '@nocobase/app-database';
+import type { Row } from '@nocobase/db';
 import type {
   JsonObject,
   WorkflowDefinition,

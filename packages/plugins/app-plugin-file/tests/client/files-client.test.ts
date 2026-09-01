@@ -30,7 +30,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 describe('createFilesClient', () => {
   beforeEach(() => {
     window.NOCOBASE_API_URL = '/nocobase/api/__app/main';
-    window.NOCOBASE_PORTAL_BASE = '/nocobase/';
+    window.APP_BASE_PATH = '/nocobase/';
     nocobaseClient.setToken('test-token');
   });
 
@@ -39,7 +39,7 @@ describe('createFilesClient', () => {
     vi.unstubAllGlobals();
     nocobaseClient.setToken(null);
     delete window.NOCOBASE_API_URL;
-    delete window.NOCOBASE_PORTAL_BASE;
+    delete window.APP_BASE_PATH;
   });
 
   it('normalizes the server base path and list/get data envelopes', async () => {

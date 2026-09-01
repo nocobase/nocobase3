@@ -3,7 +3,7 @@ import type {
   QueryAdapter,
   Row,
   SelectQuery,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 
 import type {
   DatabaseFileOrder,

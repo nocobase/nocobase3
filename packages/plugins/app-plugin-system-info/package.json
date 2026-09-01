@@ -77,18 +77,16 @@
   },
   "dependencies": {
     "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
     "react": "^19.0.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
-    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",

@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';

@@ -1,4 +1,4 @@
-import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginProviderConstructor } from '@nocobase/app-server/plugins';
 
 import type { NotificationProvidersPluginConfig } from '../bootstrap.js';
 import NotificationProvidersProvider from '../provider.js';

@@ -1,4 +1,4 @@
-import type { QueryAdapter, Row } from '@nocobase/app-database';
+import type { QueryAdapter, Row } from '@nocobase/db';
 import type { WorkflowFlatIr } from '../instructions/definition.js';
 
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';

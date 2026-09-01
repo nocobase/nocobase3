@@ -2,7 +2,7 @@
 
 Language switching for a NocoBase application.
 
-The mechanism — namespaces, resource loading, translation — lives in [`@nocobase/app-i18n`](../../libs/app-i18n/README.md) and works whether or not this plugin is installed. What this adds is the part a user operates: the endpoints that record which language to answer in, and the hook a picker is built on. An application without it still translates; it simply cannot change language at runtime.
+The mechanism — namespaces, resource loading, translation — lives in [`@nocobase/i18n`](../../libs/i18n/README.md) and works whether or not this plugin is installed. What this adds is the part a user operates: the endpoints that record which language to answer in, and the hook a picker is built on. An application without it still translates; it simply cannot change language at runtime.
 
 ## Registration
 

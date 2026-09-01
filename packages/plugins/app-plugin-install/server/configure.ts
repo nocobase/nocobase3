@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
-import type { ConfigPaths } from '@nocobase/app-server-kit/config';
+import type { ConfigPaths } from '@nocobase/app-server/config';
 
 export type InstallDatabaseDialect = 'sqlite' | 'postgres' | 'mysql';
 

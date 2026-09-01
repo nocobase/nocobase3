@@ -1,4 +1,4 @@
-import type { QueryAdapter, Row } from '@nocobase/app-database';
+import type { QueryAdapter, Row } from '@nocobase/db';
 
 import { FileUnavailableError } from '../errors.js';
 import { ensureFileObject } from '../file-storage.js';

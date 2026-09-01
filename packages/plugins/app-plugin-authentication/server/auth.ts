@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import {
   betterAuth,
   type BetterAuthOptions,
@@ -38,7 +38,9 @@ export class Auth {
     if (!config.secret || config.secret.trim().length === 0) {
       throw new Error('Authentication secret is required.');
     }
-    const plugins = config.plugins?.some((plugin) => plugin.id === 'username')
+    const plugins = (config.plugins ?? []).some(
+      (plugin) => Reflect.get(plugin, 'id') === 'username',
+    )
       ? config.plugins
       : [username({ displayUsername: false }), ...(config.plugins ?? [])];
     this.auth = betterAuth({

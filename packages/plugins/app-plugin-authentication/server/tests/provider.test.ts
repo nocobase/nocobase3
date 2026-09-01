@@ -1,19 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { type Caching } from '@nocobase/caching';
-import { cachingToken } from '@nocobase/app-server-kit/caching';
+import { cachingToken } from '@nocobase/app-server/caching';
 import {
   appConfig,
   AppConfig,
   createConfigPaths,
-} from '@nocobase/app-server-kit/config';
-import { idGeneratorToken } from '@nocobase/app-server-kit/id-generator';
-import { realtimePrincipalResolverToken } from '@nocobase/app-server-kit/realtime';
+} from '@nocobase/app-server/config';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { realtimePrincipalResolverToken } from '@nocobase/app-server/realtime';
 import { Hono } from 'hono';
 
 const authHandler = vi.hoisted(() =>

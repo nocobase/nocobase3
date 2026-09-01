@@ -5,7 +5,7 @@
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "client/App.css",
+    "css": "client/styles.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""
@@ -20,8 +20,5 @@
     "hooks": "@/hooks"
   },
   "menuColor": "default",
-  "menuAccent": "subtle",
-  "registries": {
-    "@nocobase": "http://localhost:5173/r/{name}.json"
-  }
+  "menuAccent": "subtle"
 }

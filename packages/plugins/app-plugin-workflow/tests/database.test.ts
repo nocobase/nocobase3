@@ -4,7 +4,7 @@ import {
   createDatabaseManager,
   validateMigrations,
   validateSeeds,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import type { Knex } from 'knex';
 import { describe, expect, it } from 'vitest';
 

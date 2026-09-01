@@ -1,7 +1,4 @@
-import {
-  createDatabaseManager,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 
 import migration from '../../database/migrations/202608190001_create_notification_tables.js';
 

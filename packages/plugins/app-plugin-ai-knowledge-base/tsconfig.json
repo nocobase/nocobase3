@@ -1,0 +1,22 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "jsx": "react-jsx",
+    "isolatedDeclarations": false,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "index.ts",
+    "client/**/*.ts",
+    "client/**/*.tsx",
+    "server/**/*.ts",
+    "database/**/*.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "../../app/app-portal-sdk/src/env.d.ts"
+  ],
+  "exclude": ["dist", "node_modules"]
+}

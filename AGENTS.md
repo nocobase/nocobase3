@@ -4,14 +4,14 @@
 
 Every published package lives under `packages/`, grouped into six directories by what the package is. The grouping is a convention for readers: pnpm resolves packages by name, so which directory a package sits in changes nothing about how it is depended on or filtered.
 
-| Directory             | What belongs here                                                                                                                  |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/libs/`      | Runtime libraries that solve one problem and know nothing about NocoBase applications, such as `caching`, `drive`, and `app-i18n`  |
-| `packages/app/`       | The application runtime itself — what an application is built out of, such as `app-server-kit`, `app-client`, and `app-portal-sdk` |
-| `packages/plugins/`   | Application plugins that ship as product features, such as `app-plugin-authentication`                                             |
-| `packages/examples/`  | Application plugins that exist to demonstrate a capability, such as `app-plugin-routes-example`                                    |
-| `packages/templates/` | Complete applications that `create-app` scaffolds from: `app-template-default` and `app-template-hub`                              |
-| `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `cli`, and `create-app`                |
+| Directory             | What belongs here                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/libs/`      | Runtime libraries that solve one problem and know nothing about NocoBase applications, such as `caching`, `drive`, and `i18n`  |
+| `packages/app/`       | The application runtime itself — what an application is built out of, such as `app-server`, `app-client`, and `app-portal-sdk` |
+| `packages/plugins/`   | Application plugins that ship as product features, such as `app-plugin-authentication`                                         |
+| `packages/examples/`  | Application plugins that exist to demonstrate a capability, such as `app-plugin-routes-example`                                |
+| `packages/templates/` | Complete applications that `create-app` scaffolds from: `app-template-default` and `app-template-hub`                          |
+| `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `cli`, and `create-app`            |
 
 `packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
 
@@ -41,7 +41,7 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 - Inherit Prettier through `"prettier": "@nocobase/dev-config/prettier"` in `package.json`.
 - Prefer `pnpm fix` after editing code. It always runs ESLint `--fix` before Prettier `--write`. `pnpm format:check` is a read-only incremental check.
 - Node tests use `createNodeVitestConfig`. React/jsdom tests use `createReactVitestConfig`. The React preset already installs jest-dom matchers and Testing Library cleanup.
-- Portal Vite configurations use `createPortalViteConfig` and inject the compatibility plugin from `@nocobase/app-portal-sdk/vite`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
+- Portal Vite configurations use `createPortalViteConfig`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
 - Keep Playwright configuration package-local for now; there is no shared Playwright preset.
 
 ### Dependencies and Runtime
@@ -57,15 +57,17 @@ Every package under `packages/` is published to npm, so none of them set `privat
 
 A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
 
-Package names must not collide with what the v2 line already publishes. `@nocobase/database`, `@nocobase/app-server`, and `@nocobase/portal-sdk` are taken, which is why the v3 packages are `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk`. Check npm before settling on a name.
+Check npm before settling on a package name. A name the v2 line still publishes under is off limits — `@nocobase/database` is releasing `3.0.0-alpha` versions as this is written, so `@nocobase/db` is the v3 database package.
+
+A name whose v2 releases have stopped may be reused, provided every version v3 publishes sorts above the last one published under the old name. `@nocobase/app-server` is the case to reason from: the abandoned package ends at `0.11.1-alpha.5`, so the v3 package starts at `1.0.0-beta.0` rather than continuing the `0.1.0-beta` line it had while it was called `@nocobase/app-server-kit`. Note that `0.1.0` sorts below `0.11.1`, which is exactly the mistake this rule exists to catch. Confirm the old package is genuinely dormant before taking its name; a name still in use cannot be claimed this way at any version.
 
 ### Test Layout
 
-Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/plugins/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/libs/app-database`, or `tests/logic` and `tests/components` in the Portal packages.
+Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/plugins/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/libs/db`, or `tests/logic` and `tests/components` in the Portal packages.
 
 Name test files `*.test.ts` or `*.test.tsx`. Vitest discovers them by filename rather than by directory, so a test placed outside `tests/` still runs and will not fail loudly; keeping the layout consistent is a convention the tooling does not enforce for you.
 
-Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/libs/app-database` does.
+Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/libs/db` does.
 
 ### Never Assert a Package's Own Version as a Literal
 
@@ -134,7 +136,7 @@ Write in English:
 
 Chinese is fine for:
 
-- Documents under `docs/`
+- Documents under `internal-docs/`
 - Feishu notification titles and bodies, which only reach an internal group
 
 The distinction is the audience, not the file type. A comment inside a workflow is read by maintainers and stays English along with the rest of the code; the Feishu message that same workflow sends never leaves the team, so it stays Chinese.
@@ -148,15 +150,14 @@ Every package that emits `.d.ts` files (`declaration: true`) enables both `isola
 | Configuration                                                  | Purpose                    |
 | -------------------------------------------------------------- | -------------------------- |
 | `packages/app/app-portal-sdk/tsconfig.json`                    | Portal SDK                 |
-| `packages/app/app-sdk/tsconfig.json`                           | Browser app SDK            |
 | `packages/plugins/app-plugin-authentication/tsconfig.json`     | Authentication library     |
 | `packages/libs/authorization/tsconfig.json`                    | Authorization library      |
-| `packages/libs/app-database/tsconfig.json`                     | Database package           |
+| `packages/libs/db/tsconfig.json`                               | Database package           |
 | `packages/app/app-host/tsconfig.json`                          | Application host           |
-| `packages/app/app-server-kit/tsconfig.json`                    | Application server library |
+| `packages/app/app-server/tsconfig.json`                        | Application server library |
 | `packages/libs/caching/tsconfig.json`                          | Caching library            |
 | `packages/libs/drive/tsconfig.json`                            | File storage library       |
-| `packages/libs/id-generator/tsconfig.json`                     | ID generator library       |
+| `packages/libs/snowflake/tsconfig.json`                        | Snowflake ID library       |
 | `packages/libs/logging/tsconfig.json`                          | Logging library            |
 | `packages/libs/queue/tsconfig.json`                            | Queue library              |
 | `packages/libs/session/tsconfig.json`                          | Session library            |

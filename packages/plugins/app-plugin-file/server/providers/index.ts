@@ -1,7 +1,7 @@
 import type {
   AppPluginApplication,
   AppPluginProviderConstructor,
-} from '@nocobase/app-server-kit/plugins';
+} from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { resolveFilePluginRuntime } from '../plugin-runtime.js';

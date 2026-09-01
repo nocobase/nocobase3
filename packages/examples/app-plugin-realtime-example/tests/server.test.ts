@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { realtimeServiceToken } from '@nocobase/app-server-kit/realtime';
+import { realtimeServiceToken } from '@nocobase/app-server/realtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 import { RealtimeExampleProvider } from '../server/providers/realtime-example.js';

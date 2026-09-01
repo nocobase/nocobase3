@@ -20,7 +20,7 @@ describe('assetUrl', () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: {
-        NOCOBASE_PORTAL_BASE: '/app-template-default/',
+        APP_BASE_PATH: '/app-template-default/',
       },
     });
 

@@ -5,7 +5,7 @@ import { createAuthProvider } from '../auth-provider.js';
 
 describe('authentication provider password reset flow', () => {
   beforeEach(() => {
-    Object.assign(window, { NOCOBASE_PORTAL_BASE: '/main/' });
+    Object.assign(window, { APP_BASE_PATH: '/main/' });
     window.history.replaceState({}, '', '/main/');
   });
 

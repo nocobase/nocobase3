@@ -127,7 +127,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-database": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

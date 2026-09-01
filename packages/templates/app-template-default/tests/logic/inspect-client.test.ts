@@ -157,7 +157,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-template-default', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
-      { packageName: '@nocobase/app-plugin-data-provider', order: 4 },
+      { packageName: '@nocobase/app-plugin-i18n', order: 4 },
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
@@ -180,7 +180,8 @@ describe('client inspection', () => {
         }),
       ]),
     );
-    expect(inspection.settings.slice(0, 4).map(({ id }) => id)).toEqual([
+    expect(inspection.settings.slice(0, 5).map(({ id }) => id)).toEqual([
+      'ai',
       'permission-sets',
       'default-access',
       'sharing-rules',

@@ -1,7 +1,7 @@
 # NocoBase Default App Template
 
 The reference full-stack application for the new NocoBase App architecture. It
-uses `@nocobase/app-server-kit` on the backend and a React + Refine + shadcn client
+uses `@nocobase/app-server` on the backend and a React + Refine + shadcn client
 from `@nocobase/app-client`.
 
 ## Quick start
@@ -54,7 +54,7 @@ pnpm plugin:unregister audit-log --app app-template-default
 pnpm plugin:remove audit-log
 ```
 
-See [Plugin development quick start](../../../docs/development/plugin-development/quick-start.md)
+See [Plugin development quick start](../../../internal-docs/development/plugin-development/quick-start.md)
 for the server, database, Client ServiceProvider, React Provider, routes, and
 configuration protocols.
 

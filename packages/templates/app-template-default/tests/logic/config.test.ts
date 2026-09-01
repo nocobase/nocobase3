@@ -2,16 +2,16 @@
 
 import { fileURLToPath } from 'node:url';
 
-import { appConfig } from '@nocobase/app-server-kit/config';
-import { databaseConfig } from '@nocobase/app-server-kit/database';
-import { resolveStandaloneAppRuntime } from '@nocobase/app-server-kit/node';
+import { appConfig } from '@nocobase/app-server/config';
+import { databaseConfig } from '@nocobase/app-server/database';
+import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import {
   cachingConfig,
   driveConfig,
   loggingConfig,
   queueConfig,
   sessionConfig,
-} from '@nocobase/app-server-kit';
+} from '@nocobase/app-server';
 import { describe, expect, it } from 'vitest';
 
 import appRuntime from '../../server/runtime.ts';
@@ -31,6 +31,13 @@ describe('application config', () => {
     expect(runtime.appConfig.get(driveConfig).default).toBe('local');
     expect(runtime.appConfig.get(loggingConfig).default).toBe('system');
     expect(runtime.appConfig.get(queueConfig).default).toBe('sync');
+    expect(runtime.appConfig.get(queueConfig).jobs?.locations).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /app-plugin-ai-knowledge-base\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+        ),
+      ]),
+    );
     expect(runtime.appConfig.get(sessionConfig).default).toBe('memory');
   });
 

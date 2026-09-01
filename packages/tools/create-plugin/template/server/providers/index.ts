@@ -1,4 +1,4 @@
-import type { AppPluginProviderConstructor } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginProviderConstructor } from '@nocobase/app-server/plugins';
 
 import { __NOCOBASE_SYMBOL_NAME__Provider } from './__NOCOBASE_SHORT_NAME__.js';
 

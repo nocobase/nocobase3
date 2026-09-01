@@ -1,4 +1,4 @@
-import { resolveAppUrl } from '@nocobase/app-sdk';
+import { resolveAppUrl } from '@nocobase/app-client';
 import type { AuthProvider } from '@refinedev/core';
 import type { AuthClient } from './auth-client.js';
 

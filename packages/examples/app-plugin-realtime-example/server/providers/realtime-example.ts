@@ -1,5 +1,5 @@
-import { realtimeServiceToken } from '@nocobase/app-server-kit/realtime';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { realtimeServiceToken } from '@nocobase/app-server/realtime';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import {

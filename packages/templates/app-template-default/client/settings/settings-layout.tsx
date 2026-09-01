@@ -3,7 +3,7 @@ import type {
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
 } from '@nocobase/app-client/plugins';
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 import { ArrowLeft, ChevronRight, PanelLeft, X } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import {

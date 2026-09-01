@@ -66,10 +66,10 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-database": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
-    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
     "hono": "catalog:"

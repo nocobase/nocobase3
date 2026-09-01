@@ -1,4 +1,4 @@
-import { createAppClient } from '@nocobase/app-sdk';
+import { appApiClientToken, useService } from '@nocobase/app-client';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import { Button } from '../components/ui/button.js';
@@ -10,9 +10,9 @@ interface RoutesExampleResponse {
   scope: 'api';
 }
 
-const appClient = createAppClient();
-
 export default function RoutesExamplePage(): ReactElement {
+  // The Application's own API client, so the route follows whatever `api.baseURL` the Application is configured with.
+  const appClient = useService(appApiClientToken);
   const { description } = useRoutesExample();
   const [result, setResult] = useState<RoutesExampleResponse>();
   const [error, setError] = useState<string>();
@@ -34,7 +34,7 @@ export default function RoutesExamplePage(): ReactElement {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [appClient]);
 
   useEffect(() => {
     let active = true;
@@ -64,7 +64,7 @@ export default function RoutesExamplePage(): ReactElement {
     return () => {
       active = false;
     };
-  }, []);
+  }, [appClient]);
 
   return (
     <section className='mx-auto flex w-full max-w-3xl flex-col px-6 py-10'>

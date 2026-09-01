@@ -6,7 +6,7 @@
 ## 创建 Auth
 
 ```ts
-import { databaseManagerToken } from '@nocobase/app-database';
+import { databaseManagerToken } from '@nocobase/db';
 import { createAuthentication } from '@nocobase/app-plugin-authentication';
 
 const database = services.resolve(databaseManagerToken);

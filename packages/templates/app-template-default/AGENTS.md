@@ -1,7 +1,7 @@
 # Default App Development Guidelines
 
 This package is the reference application for the new `@nocobase/app-client`
-and `@nocobase/app-server-kit` architecture. Follow the repository root
+and `@nocobase/app-server` architecture. Follow the repository root
 `AGENTS.md` first, then these package-specific rules.
 
 ## Use the current client architecture
@@ -42,7 +42,7 @@ pnpm plugin:inspect <name> --json
 pnpm plugin:unregister <name>
 ```
 
-The editing itself is one implementation in `@nocobase/nb3-cli`, shared by both. See [docs/cli](../../../docs/cli/README.md).
+The editing itself is one implementation in `@nocobase/nb3-cli`, shared by both. See [internal-docs/cli](../../../internal-docs/cli/README.md).
 
 The entire `.agents/` directory is ignored local synchronization output and
 must not be committed or used as a source of truth. Directories under
@@ -82,8 +82,8 @@ a fully custom form. Do not call Better Auth endpoints directly from page
 components or duplicate session state. See
 `client/extensions/nocobase-auth-ui/README.md` for the edit map.
 The upstream recipe is published by
-`@nocobase/app-plugin-authentication/registry/auth-ui`; do not restore a second
-canonical copy under this package's `registry/` directory.
+`@nocobase/app-plugin-authentication/registry/auth-ui`; this package owns no
+Registry of its own, so do not add one to hold a second canonical copy.
 
 ## Write user-facing text through i18n
 
@@ -93,7 +93,7 @@ The application's own copy lives in `client/locales/`. `en-US.ts` states the wor
 
 ```ts
 // client/locales/en-US.ts
-import type { LocaleResource } from '@nocobase/app-i18n';
+import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   actions: { save: 'Save' },
@@ -114,7 +114,7 @@ const zhCN: AppResource = {
 Translate in a component with no namespace — the application's own is the default here:
 
 ```tsx
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 
 const { t } = useTranslation();
 t('actions.save');
@@ -125,7 +125,7 @@ Two things are worth knowing:
 - A plugin's own strings live in that plugin, not here. To reword one, add an `overrides` block to the application's locale file keyed by the plugin's package name; do not edit the plugin.
 - A string rendered where i18n may not be mounted — a component a focused test renders on its own — should pass `defaultValue` so it stays readable: `t('actions.save', { defaultValue: 'Save' })`.
 
-`pnpm i18n:check` at the repository root reports keys a locale is missing. Full reference: [app-i18n README](../../libs/app-i18n/README.md).
+`pnpm i18n:check` at the repository root reports keys a locale is missing. Full reference: [i18n README](../../libs/i18n/README.md).
 
 ## Keep the client inspectable
 

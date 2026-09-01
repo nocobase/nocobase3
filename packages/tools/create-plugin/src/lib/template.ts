@@ -382,10 +382,9 @@ async function renderManifest(
 
   const dependencies: Record<string, string> = {};
   if (capabilities.client.locales || capabilities.server.locales)
-    dependencies['@nocobase/app-i18n'] = 'workspace:^';
-  if (serverPlugin) dependencies['@nocobase/app-server-kit'] = 'workspace:^';
-  if (capabilities.database)
-    dependencies['@nocobase/app-database'] = 'workspace:^';
+    dependencies['@nocobase/i18n'] = 'workspace:^';
+  if (serverPlugin) dependencies['@nocobase/app-server'] = 'workspace:^';
+  if (capabilities.database) dependencies['@nocobase/db'] = 'workspace:^';
   if (
     capabilities.server.serviceProviders ||
     capabilities.client.serviceProviders
@@ -563,7 +562,7 @@ function renderServerPlugin(
   ]
     .filter(Boolean)
     .join('\n');
-  return `import { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server-kit/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
+  return `import { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
 }
 
 function renderPluginTest(

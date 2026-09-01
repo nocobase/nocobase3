@@ -1,7 +1,7 @@
 import type { FormEvent, ReactElement } from 'react';
 import { useState } from 'react';
 
-import { resolveAppUrl } from '@nocobase/app-sdk';
+import { resolveAppUrl } from '@nocobase/app-client';
 
 import { Button } from '../components/ui/button.js';
 import { Checkbox } from '../components/ui/checkbox.js';

@@ -15,7 +15,8 @@ types contributed by an application plugin:
 - `client/components/` contains React Provider component implementations;
 - `client/contexts/` contains shared React contexts and their hooks;
 - `client/pages/routes-example-page.tsx` is loaded only when that page route is
-  visited and calls the server route through `@nocobase/app-sdk`.
+  visited and calls the server route through the Application's API client,
+  resolved from `@nocobase/app-client`.
 
 The plugin owns its required shadcn primitives under `client/components/ui`.
 Add more with `pnpm exec shadcn add <name>`, then retain explicit exported
@@ -36,7 +37,7 @@ contribution factories, and their tests execute the real `createRouter()`
 functions with a test container. Complex domains may instead extract a focused
 factory that returns its own `Hono`; do not add a helper that mutates a caller's
 router only to make tests easier. See the Server and Client Route best-practice
-pages under `docs/development/plugin-development/` for the complete patterns.
+pages under `internal-docs/development/plugin-development/` for the complete patterns.
 
 Enable the plugin in an App package with:
 

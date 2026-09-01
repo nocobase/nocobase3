@@ -1,10 +1,10 @@
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
-} from '@nocobase/app-server-kit/router';
-import { queueManagerToken } from '@nocobase/app-server-kit/queue';
+} from '@nocobase/app-server/router';
+import { queueManagerToken } from '@nocobase/app-server/queue';
 import { Hono } from 'hono';
 
 import QueueExampleJob, {

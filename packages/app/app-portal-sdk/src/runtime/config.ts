@@ -1,5 +1,5 @@
 const getWindowValue = (
-  key: 'NOCOBASE_PORTAL_BASE' | 'NOCOBASE_API_URL',
+  key: 'APP_BASE_PATH' | 'NOCOBASE_API_URL',
 ): string | undefined => {
   if (typeof window === 'undefined') return undefined;
   const value = window[key];
@@ -14,7 +14,7 @@ export const normalizePortalBase = (base?: string): string => {
 
 export const getPortalBase = (): string =>
   normalizePortalBase(
-    getWindowValue('NOCOBASE_PORTAL_BASE') ?? import.meta.env?.BASE_URL,
+    getWindowValue('APP_BASE_PATH') ?? import.meta.env?.BASE_URL,
   );
 
 export const getRuntimeApiUrl = (): string | undefined =>

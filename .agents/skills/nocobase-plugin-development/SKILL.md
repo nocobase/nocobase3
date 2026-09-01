@@ -1,13 +1,13 @@
 ---
 name: nocobase-plugin-development
-description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/plugins/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/tools/create-plugin, packages/app/app-client, and packages/app/app-server-kit. Do not use for legacy NocoBase v2 plugin workspaces.'
+description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/plugins/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/tools/create-plugin, packages/app/app-client, and packages/app/app-server. Do not use for legacy NocoBase v2 plugin workspaces.'
 ---
 
 # NocoBase Plugin Development
 
 Use this Skill only for the v3 plugin architecture in the current source
 workspace. It is a routing and safety layer; the detailed, versioned guidance
-lives under `docs/development/plugin-development/`.
+lives under `internal-docs/development/plugin-development/`.
 
 ## Verify the workspace
 
@@ -16,7 +16,7 @@ Before changing files, confirm the workspace contains:
 ```text
 packages/tools/create-plugin/
 packages/app/app-client/
-packages/app/app-server-kit/
+packages/app/app-server/
 pnpm-workspace.yaml
 ```
 
@@ -27,7 +27,7 @@ the legacy `Plugin` class, do not apply this Skill. That is a different plugin
 protocol.
 
 Always read the repository `AGENTS.md` first, then read
-`docs/development/plugin-development/README.md`. Read only the relevant topic page
+`internal-docs/development/plugin-development/README.md`. Read only the relevant topic page
 for the current task:
 
 | Task                                   | Read                                                 |

@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-sdk';
+import type { AppClient } from '@nocobase/app-client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createAuthClient } from '../auth-client.js';

@@ -8,7 +8,7 @@
       "title": "NocoBase Notification Logs UI",
       "description": "Application-owned delivery and provider attempt log components backed by the NocoBase notification API.",
       "dependencies": [
-        "@nocobase/app-portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^0.0.1-beta.1",
         "lucide-react@^0.487.0"
       ],
       "registryDependencies": ["alert", "badge", "button", "card", "table"],

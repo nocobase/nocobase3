@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
-import { InputPassword } from '@/components/auth/input-password';
+import { InputPassword } from '@/extensions/password/input-password';
 
 describe('InputPassword', () => {
   it('reveals and hides the password without changing its value', async () => {

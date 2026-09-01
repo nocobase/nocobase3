@@ -1,4 +1,4 @@
-import { defineMigration } from '@nocobase/app-database';
+import { defineMigration } from '@nocobase/db';
 
 export default defineMigration({
   name: '202608200001_create_workflow_collections',

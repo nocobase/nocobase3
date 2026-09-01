@@ -1,4 +1,4 @@
-import { resolveAppUrl } from '@nocobase/app-sdk';
+import { resolveAppUrl } from '@nocobase/app-client';
 import type { ReactElement } from 'react';
 
 export function AuthBrand(): ReactElement {

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useTranslation } from '@nocobase/app-i18n/client';
+import { useTranslation } from '@nocobase/i18n/client';
 
 import type {
   NotificationDeliveryDetails,

@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "isolatedDeclarations": false
+  },
+  "exclude": []
+}

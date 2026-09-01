@@ -1,4 +1,4 @@
-import { defineSeed, type SeedDefinition } from '@nocobase/app-database';
+import { defineSeed, type SeedDefinition } from '@nocobase/db';
 
 const seed: SeedDefinition = defineSeed({
   name: '202608220002_database_example_create_welcome_message',

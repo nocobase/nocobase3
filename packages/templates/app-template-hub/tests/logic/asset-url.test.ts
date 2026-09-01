@@ -20,15 +20,21 @@ describe('assetUrl', () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: {
-        NOCOBASE_PORTAL_BASE: '/hub/',
+        APP_BASE_PATH: '/app-template-hub/',
       },
     });
 
-    expect(assetUrl('logo.png')).toBe('/hub/assets/logo.png');
-    expect(assetUrl('/logo.png')).toBe('/hub/assets/logo.png');
-    expect(assetUrl('assets/logo.png')).toBe('/hub/assets/logo.png');
-    expect(assetUrl('/assets/logo.png')).toBe('/hub/assets/logo.png');
-    expect(assetUrl('/hub/assets/logo.png')).toBe('/hub/assets/logo.png');
+    expect(assetUrl('logo.png')).toBe('/app-template-hub/assets/logo.png');
+    expect(assetUrl('/logo.png')).toBe('/app-template-hub/assets/logo.png');
+    expect(assetUrl('assets/logo.png')).toBe(
+      '/app-template-hub/assets/logo.png',
+    );
+    expect(assetUrl('/assets/logo.png')).toBe(
+      '/app-template-hub/assets/logo.png',
+    );
+    expect(assetUrl('/app-template-hub/assets/logo.png')).toBe(
+      '/app-template-hub/assets/logo.png',
+    );
   });
 
   it('keeps external URLs unchanged', () => {

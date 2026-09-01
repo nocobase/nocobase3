@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { AuthorizationGrantService } from './grants.js';
 import type { ResourceHandlerRegistry } from './registry.js';
 import type { AuthorizationMiddleware } from './middleware.js';

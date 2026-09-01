@@ -1,11 +1,11 @@
-import { databaseManagerToken } from '@nocobase/app-database';
+import { databaseManagerToken } from '@nocobase/db';
 import { notificationServiceToken } from '@nocobase/app-plugin-notification';
 import { ServiceProvider } from '@nocobase/service-provider';
-import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   realtimeServiceToken,
   type RealtimeUserTopic,
-} from '@nocobase/app-server-kit/realtime';
+} from '@nocobase/app-server/realtime';
 
 import {
   createDatabaseProviderDefinition,

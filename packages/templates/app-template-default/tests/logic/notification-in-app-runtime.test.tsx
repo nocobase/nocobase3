@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import type { AppClient, RealtimeListener } from '@nocobase/app-sdk';
+import type { AppClient, RealtimeListener } from '@nocobase/app-client';
 import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 

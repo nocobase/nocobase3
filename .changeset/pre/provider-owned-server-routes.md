@@ -10,7 +10,7 @@
 '@nocobase/app-plugin-routes-example': patch
 '@nocobase/app-plugin-service-provider-example': patch
 '@nocobase/app-plugin-workflow': patch
-'@nocobase/app-server-kit': minor
+'@nocobase/app-server': minor
 '@nocobase/app-template-default': minor
 '@nocobase/logging': minor
 '@nocobase/queue': minor

@@ -1,4 +1,4 @@
-import { createAppClient, type AppClient } from '@nocobase/app-sdk';
+import { createAppClient, type AppClient } from '@nocobase/app-client';
 
 import { NotificationClient } from './notification-client.js';
 

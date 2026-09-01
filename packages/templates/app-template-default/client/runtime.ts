@@ -32,11 +32,6 @@ const appRuntime = defineAppRuntime({
         'Default App requires an enabled client plugin that registers an auth provider.',
       );
     }
-    if (!app.refineConfig.dataProvider) {
-      throw new Error(
-        'Default App requires an enabled client plugin that registers a data provider.',
-      );
-    }
     if (
       !app.runtime.routes.some(
         (route) =>

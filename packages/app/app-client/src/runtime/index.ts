@@ -1,4 +1,4 @@
-import type { I18nRuntime } from '@nocobase/app-i18n';
+import type { I18nRuntime } from '@nocobase/i18n';
 
 import type { ClientApplication } from '../application.js';
 import type { AppClientConfig, AppClientConfigFactory } from '../config.js';

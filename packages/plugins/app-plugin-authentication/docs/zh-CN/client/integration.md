@@ -7,7 +7,7 @@ Database、Hono 或 Better Auth 服务端实现。
 
 ```ts
 import { createAuthClient } from '@nocobase/app-plugin-authentication/client';
-import { createAppClient } from '@nocobase/app-sdk';
+import { createAppClient } from '@nocobase/app-client';
 
 const appClient = createAppClient();
 const authClient = createAuthClient({ client: appClient });

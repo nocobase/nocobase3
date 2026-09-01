@@ -19,6 +19,10 @@
     "./runtime": {
       "types": "./src/runtime/index.ts",
       "import": "./src/runtime/index.ts"
+    },
+    "./realtime": {
+      "types": "./src/realtime/index.ts",
+      "import": "./src/realtime/index.ts"
     }
   },
   "publishConfig": {
@@ -34,6 +38,10 @@
       "./runtime": {
         "types": "./dist/runtime/index.d.ts",
         "import": "./dist/runtime/index.js"
+      },
+      "./realtime": {
+        "types": "./dist/realtime/index.d.ts",
+        "import": "./dist/realtime/index.js"
       }
     },
     "access": "public"
@@ -54,8 +62,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
-    "@nocobase/app-i18n": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "@refinedev/react-router": "^2.0.0",
     "react": "^19.0.0",
@@ -66,8 +73,7 @@
     "@nocobase/service-provider": "workspace:^"
   },
   "devDependencies": {
-    "@nocobase/app-i18n": "workspace:*",
-    "@nocobase/app-sdk": "workspace:*",
+    "@nocobase/i18n": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@refinedev/core": "catalog:",

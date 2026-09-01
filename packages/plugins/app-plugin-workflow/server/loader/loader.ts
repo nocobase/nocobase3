@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/db';
 import type { WorkflowId } from '../engine/index.js';
 
 import type { WorkflowArtifactStore } from './artifact-store.js';

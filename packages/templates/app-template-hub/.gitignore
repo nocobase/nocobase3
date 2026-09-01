@@ -15,15 +15,18 @@ dist-ssr
 /.extension-state/
 /src/extensions/
 /registry.json
-/public/r/
+/public/storage
 /coverage/
 /playwright-report/
 /test-results/
 /.pnpm-store/
+/storage/
+/.agents/
 
-# Environment variables
-.env
-.env.local
+# Local application configuration
+/config.yml
+
+# E2E credentials
 .env.e2e
 .env.e2e.local
 

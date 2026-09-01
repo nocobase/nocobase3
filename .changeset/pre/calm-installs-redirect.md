@@ -1,5 +1,5 @@
 ---
-'@nocobase/app-server-kit': patch
+'@nocobase/app-server': patch
 '@nocobase/app-host': patch
 ---
 

@@ -287,7 +287,7 @@ migration。
 在 `database/migrations/` 中创建对应表：
 
 ```ts
-import { defineMigration } from '@nocobase/app-database';
+import { defineMigration } from '@nocobase/db';
 
 export default defineMigration({
   name: '202608210001_create_ticket_accounts',
@@ -393,7 +393,7 @@ POST /api/auth/sign-in/ticket
 封装一个小 client：
 
 ```ts
-import type { AppClient } from '@nocobase/app-sdk';
+import type { AppClient } from '@nocobase/app-client';
 
 export class TicketAuthClient {
   constructor(private readonly client: AppClient) {}

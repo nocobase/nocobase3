@@ -1,7 +1,4 @@
-import {
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/app-database';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   notificationServiceToken,
   type NotificationService,
@@ -16,7 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   realtimeServiceToken,
   type RealtimeService,
-} from '@nocobase/app-server-kit/realtime';
+} from '@nocobase/app-server/realtime';
 
 import { InAppNotificationProvider } from '../server/providers/in-app-notification.js';
 import { inAppNotificationStoreToken } from '../server/tokens.js';

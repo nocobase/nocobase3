@@ -2,7 +2,7 @@ import spawn from 'cross-spawn';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadStandaloneAppEnv } from '@nocobase/app-server-kit/node';
+import { loadStandaloneAppEnv } from '@nocobase/app-server/node';
 
 import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
 import { resolveConfigWatch } from './dev-config-watch.mjs';

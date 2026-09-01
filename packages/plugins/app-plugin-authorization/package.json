@@ -85,10 +85,9 @@
   },
   "dependencies": {
     "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-server-kit": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
     "@nocobase/authorization": "workspace:^",
-    "@nocobase/app-database": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "lucide-react": "^0.487.0"

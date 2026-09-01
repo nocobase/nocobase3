@@ -4,11 +4,11 @@ import {
   defineStandaloneServer,
   type StandaloneServer as CoreStandaloneServer,
   type StandaloneServerOptions as CoreStandaloneServerOptions,
-} from '@nocobase/app-server-kit/node';
+} from '@nocobase/app-server/node';
 
 import { createServer } from './embedded.js';
 import appRuntime from './runtime.js';
-import { nodeServerConfig as serverConfig } from '@nocobase/app-server-kit/node';
+import { nodeServerConfig as serverConfig } from '@nocobase/app-server/node';
 
 const standalone = defineStandaloneServer({
   rootDir: path.resolve(import.meta.dirname, '..'),

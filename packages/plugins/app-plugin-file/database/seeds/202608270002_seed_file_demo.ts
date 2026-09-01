@@ -3,7 +3,7 @@ import {
   type QueryAdapter,
   type Row,
   type SeedDefinition,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 
 // Tests keep these published-source literals aligned with server Demo constants.
 const COLLECTIONS = Object.freeze({

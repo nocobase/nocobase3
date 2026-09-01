@@ -2,7 +2,7 @@ import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
-} from '@nocobase/app-database';
+} from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202608190001_create_notification_tables.js';

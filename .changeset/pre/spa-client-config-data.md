@@ -1,6 +1,6 @@
 ---
 '@nocobase/app-client': patch
-'@nocobase/app-server-kit': minor
+'@nocobase/app-server': minor
 '@nocobase/app-template-default': patch
 ---
 
