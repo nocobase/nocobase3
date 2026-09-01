@@ -108,6 +108,10 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 
 - `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
 - `CollectionMetadataStore`：元数据存储接口。
+- `defineCollectionMetadata(document)`：为 Metadata V1 文档提供 TypeScript 类型辅助，不执行运行时校验。
+- `validateCollectionMetadataDocument(input)`：严格校验并返回独立的、规范化的 Metadata V1 文档。
+- `extractLegacyCollectionMetadata(input, options?)`：从旧 Collection 定义中按允许列表提取补充元数据和迁移诊断。
+- `CollectionMetadataValidationError`：Metadata 文档校验错误，通过 `issues` 暴露稳定的 code、path 和 message。
 
 ## Adapter
 
@@ -129,6 +133,7 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 - [Repository Filter AST（规划中）](../repository/filter-ast.md)
 - [Repository Sort AST（规划中）](../repository/sort-ast.md)
 - [CollectionDefinition](./collection-definition.md)
+- [Collection Metadata Document](./collection-metadata-document.md)
 - [FieldDefinition](./field-definition.md)
 - [CollectionOperation](./collection-operation.md)
 - [BuilderExecOptions](./builder-options.md)

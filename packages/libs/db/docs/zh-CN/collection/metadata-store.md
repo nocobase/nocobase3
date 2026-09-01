@@ -203,6 +203,114 @@ relations       应用层关联定义
 relations 最终可以转换到运行时 `CollectionDefinition.fields` 中，但持久化格式应保留其明确意图。
 两个区域之间出现同名项时必须报错，不能通过隐式优先级处理。
 
+### V1 文档校验规则
+
+`CollectionMetadataDocument` 是持久化契约，不是宽松配置对象。第一版使用严格校验：
+
+- 输入和所有嵌套结构必须是普通对象，不能是数组、class 实例或 `null`；
+- `version` 必须严格等于数字 `1`；
+- `name`、Field key、Relation key 和 Relation 的名称引用必须是非空字符串，且不能带首尾空白；
+- `title` 和 `description` 存在时必须是字符串，持久化文档不接受 `null`；
+- `fields` 和 `relations` 的名称不能重复；
+- `naming.underscored` 必须是 boolean，`naming.tablePrefix` 必须是 string，空前缀合法；
+- 第一版拒绝未知属性，避免将拼写错误或已经移除的属性静默持久化；
+- 校验不得修改输入，成功时返回独立的规范化副本。
+
+结构校验不访问数据库，因此不检查物理 Field、relation target、target key 或 through Collection 是否存在。
+这些依赖物理 Schema 或其他 Collection 的规则由 Resolver 和 Metadata Service 负责。
+
+校验失败使用一个聚合错误返回全部可确认问题：
+
+```ts
+export interface CollectionMetadataIssue {
+  code: CollectionMetadataIssueCode;
+  path: readonly (string | number)[];
+  message: string;
+}
+
+export class CollectionMetadataValidationError extends Error {
+  readonly code = 'COLLECTION_METADATA_INVALID';
+  readonly issues: readonly CollectionMetadataIssue[];
+}
+```
+
+`path` 从文档根开始，例如 `['relations', 'customer', 'target']`。纯文档问题至少区分不支持的版本、
+缺少必填值、类型错误、未知属性、名称冲突和非法 relation；依赖物理 Schema 的
+`COLLECTION_METADATA_FIELD_NOT_FOUND` 和 `COLLECTION_SCHEMA_DRIFT` 不属于这一层。
+
+### define helper 与运行时校验
+
+`defineCollectionMetadata()` 只提供 TypeScript 定义辅助并原样返回输入，不做运行时校验：
+
+```ts
+export default defineCollectionMetadata({
+  version: 1,
+  name: 'orders',
+  title: 'Orders',
+});
+```
+
+所有 Store 后端在接受外部输入或加载持久化内容时仍必须调用：
+
+```ts
+validateCollectionMetadataDocument(input);
+```
+
+因此 TypeScript Module、JSON/YAML 文件和 Database Store 共享同一套运行时规则。使用 define helper
+不代表文档可信，也不能绕过 Store 边界的校验。
+
+## Legacy extraction
+
+旧 `CollectionMetadataStore` 暂时保存完整 `CollectionDefinition`。过渡期使用纯函数提取 V1 补充 Metadata：
+
+```ts
+const result = extractLegacyCollectionMetadata(definition, {
+  naming: connectionNaming,
+});
+```
+
+提取函数不访问 Inspector、不写 Store，也不检查物理 Field 是否存在。允许列表如下：
+
+| 旧定义                                       | V1 文档              |
+| -------------------------------------------- | -------------------- |
+| Collection `name`                            | `document.name`      |
+| Collection `naming`                          | `document.naming`    |
+| Collection `title`、`description`            | 同名属性             |
+| 普通 Field `title`、`description`            | `fields[field.name]` |
+| Relation `name`                              | `relations` 的 key   |
+| Relation `type`、`target`                    | 同名属性             |
+| Relation `sourceKey`、`targetKey`            | 同名属性             |
+| Relation `foreignKey`、`otherKey`、`through` | 同名属性             |
+| Relation `title`、`description`              | 同名属性             |
+
+物理 Field 类型、nullable、default、主键、自增、unique、index、长度、精度、scale、`db`、Collection
+constraint、index 和 View 定义都不提取，也不为这些正常丢弃项生成 warning。它们由 Inspector 从数据库重新读取。
+
+提取结果带诊断：
+
+```ts
+export interface LegacyMetadataExtractionDiagnostic {
+  severity: 'warning' | 'error';
+  code: LegacyMetadataExtractionDiagnosticCode;
+  path: readonly (string | number)[];
+  message: string;
+}
+
+export interface LegacyMetadataExtractionResult {
+  document?: CollectionMetadataDocument;
+  diagnostics: readonly LegacyMetadataExtractionDiagnostic[];
+}
+```
+
+- 旧 `interface`、`uiSchema` 和 Collection `writable` 属于已经移除的应用语义，返回 warning；
+- 缺少名称、非法 relation、fields/relations 重名、旧 virtual field 和不兼容的 `tableName`/`columnName`
+  映射返回 error；
+- 存在 error 时不返回可直接持久化的 `document`；
+- 兼容的旧物理名称映射可以安全删除，不产生诊断；是否兼容按传入的 Connection naming 与 Collection
+  naming 合并后确定性计算。
+
+旧属性只在 extraction 的内部 legacy 输入边界识别，不会重新加入公共 `CollectionDefinition`。
+
 ## 物理 Schema Snapshot 是独立产物
 
 自动生成的物理 Schema Snapshot 不是 Collection Metadata：
