@@ -94,32 +94,32 @@ describe('createPlugin', () => {
     [
       'database',
       ['./package.json', './server'],
-      ['@nocobase/app-server', '@nocobase/db'],
       [],
+      ['@nocobase/app-server', '@nocobase/db'],
     ],
     [
       'server.service-providers',
       ['./package.json', './server', './server/tokens'],
-      ['@nocobase/app-server', '@nocobase/service-provider'],
       [],
+      ['@nocobase/app-server', '@nocobase/service-provider'],
     ],
     [
       'server.routes',
       ['./package.json', './server'],
-      ['@nocobase/app-server', 'hono'],
-      [],
+      ['hono'],
+      ['@nocobase/app-server'],
     ],
     [
       'server.jobs',
       ['./package.json', './server'],
-      ['@nocobase/app-server', '@nocobase/queue'],
       [],
+      ['@nocobase/app-server', '@nocobase/queue'],
     ],
     [
       'server.locales',
       ['./package.json', './server'],
-      ['@nocobase/app-server', '@nocobase/i18n'],
       [],
+      ['@nocobase/app-server', '@nocobase/i18n'],
     ],
     [
       'client.routes',
@@ -147,14 +147,14 @@ describe('createPlugin', () => {
     [
       'client.service-providers',
       ['./client', './client/plugin', './client/providers', './package.json'],
-      ['@nocobase/service-provider'],
-      ['@nocobase/app-client'],
+      [],
+      ['@nocobase/app-client', '@nocobase/service-provider'],
     ],
     [
       'client.locales',
       ['./client', './client/plugin', './package.json'],
-      ['@nocobase/i18n'],
-      ['@nocobase/app-client'],
+      [],
+      ['@nocobase/app-client', '@nocobase/i18n'],
     ],
     ['registry', ['./package.json'], [], ['react']],
     ['skills', ['./package.json'], [], []],
@@ -170,6 +170,7 @@ describe('createPlugin', () => {
       ) as {
         dependencies?: Record<string, string>;
         exports: Record<string, unknown>;
+        devDependencies?: Record<string, string>;
         peerDependencies?: Record<string, string>;
         publishConfig: { exports: Record<string, unknown> };
       };
@@ -184,6 +185,12 @@ describe('createPlugin', () => {
       expect(Object.keys(manifest.peerDependencies ?? {}).sort()).toEqual(
         peerDependencyNames,
       );
+
+      // A workspace peer that has no devDependency cannot resolve while the plugin is developed on its own.
+      for (const packageName of Object.keys(manifest.peerDependencies ?? {})) {
+        if (!packageName.startsWith('@nocobase/')) continue;
+        expect(manifest.devDependencies ?? {}).toHaveProperty(packageName);
+      }
     },
   );
 
@@ -396,6 +403,7 @@ describe('createPlugin', () => {
     ) as {
       dependencies?: Record<string, string>;
       exports?: Record<string, unknown>;
+      peerDependencies?: Record<string, string>;
     };
     const plugin = await readFile(
       path.join(result.targetDirectory, 'server/plugin.ts'),
@@ -407,9 +415,9 @@ describe('createPlugin', () => {
     expect(plugin).toContain('routes,');
     expect(plugin).not.toContain('providers,');
     expect(plugin).not.toContain('database:');
-    expect(manifest.dependencies).toEqual({
+    expect(manifest.dependencies).toEqual({ hono: 'catalog:' });
+    expect(manifest.peerDependencies).toEqual({
       '@nocobase/app-server': 'workspace:^',
-      hono: 'catalog:',
     });
     expect(manifest.exports).toHaveProperty('./server');
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
@@ -470,6 +478,7 @@ describe('createPlugin', () => {
     ) as {
       dependencies?: Record<string, string>;
       files?: string[];
+      peerDependencies?: Record<string, string>;
       scripts?: Record<string, string>;
     };
     expect(result.files).toContain(
@@ -480,13 +489,13 @@ describe('createPlugin', () => {
       'skills/nocobase-app-plugin-audit-log/SKILL.md',
     );
     expect(result.files).toContain('registry.config.json');
-    expect(manifest.dependencies).toMatchObject({
+    expect(manifest.dependencies).toMatchObject({ hono: 'catalog:' });
+    expect(manifest.peerDependencies).toMatchObject({
+      '@nocobase/app-server': 'workspace:^',
       '@nocobase/db': 'workspace:^',
       '@nocobase/i18n': 'workspace:^',
-      '@nocobase/app-server': 'workspace:^',
       '@nocobase/queue': 'workspace:^',
       '@nocobase/service-provider': 'workspace:^',
-      hono: 'catalog:',
     });
     expect(manifest.files).toEqual(
       expect.arrayContaining(['database', 'skills', 'registry', 'public/r']),

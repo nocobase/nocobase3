@@ -122,6 +122,40 @@ When another native dependency needs the same treatment, add it to `DRIVERS_NEED
 
 A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's npm configuration suppresses install scripts globally and outranks `allowBuilds`, so a correct `allowBuilds` still yields an uncompiled addon. `pnpm install` cannot repair this — the package is already in the store, so pnpm skips it and reports success without building. `pnpm rebuild <package>` does, and works without changing the developer's configuration. `create-app` verifies the driver by loading it and runs that rebuild automatically.
 
+## Depending on Identity-Sensitive Packages
+
+A plugin declares the runtime it plugs into as a `peerDependency`, never as a `dependency`. `pnpm peers:check` enforces this and runs in CI.
+
+Several workspace packages carry state whose correctness depends on there being exactly one copy of the module in the process:
+
+| Package                      | What breaks when a second copy exists                                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@nocobase/service-provider` | `ServiceContainer` keys its `Map` by the token object itself, so two `createServiceToken` calls with the same name produce two keys that never match |
+| `@nocobase/app-server`       | Exports the tokens every server plugin resolves against, such as `queueManagerToken` and `driveManagerToken`                                         |
+| `@nocobase/db`               | Exports `databaseManagerToken` and migration identity                                                                                                |
+| `@nocobase/app-client`       | Exports React contexts and `appApiClientToken`                                                                                                       |
+| `@nocobase/app-portal-sdk`   | Exports `nocobaseClient`, a module-level singleton holding session state                                                                             |
+| `@nocobase/i18n`             | Exports the React contexts backing the i18n runtime                                                                                                  |
+| `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                               |
+| any `@nocobase/app-plugin-*` | Plugins export tokens for one another, such as `authenticationToken` and `notificationServiceToken`                                                  |
+
+A second copy fails in a way that is expensive to diagnose. Nothing warns at install time, the build succeeds, and the application starts; the symptom appears at runtime as `Service "..." is not registered` for a service that is demonstrably registered, or as a React context reading `undefined` under a provider that is demonstrably mounted. It surfaces only in an installed application, because the monorepo links every consumer to one directory through the `workspace:` protocol and cannot produce a second copy at all.
+
+Declare each of these as a peer alongside a devDependency on the same package. The peer range is what the application satisfies; the devDependency is what lets the plugin resolve the package while it is typechecked and tested on its own:
+
+```json
+{
+  "peerDependencies": { "@nocobase/app-server": "workspace:^" },
+  "devDependencies": { "@nocobase/app-server": "workspace:*" }
+}
+```
+
+The rule applies to plugins, which are guests in an application someone else assembled. It does not apply to `packages/app` and `packages/libs`, which compose the runtime and are what puts the single copy in place, nor to `packages/templates`, which are applications and therefore the side that satisfies a peer range.
+
+A library that exports only classes and factories holds no state a second copy could split. `@nocobase/drive`, `@nocobase/caching`, `@nocobase/logging`, `@nocobase/session`, and `@nocobase/snowflake` stay ordinary dependencies. When adding a package to `IDENTITY_SENSITIVE_PACKAGES` in `scripts/check-peer-deps.mjs`, record what breaks without it rather than only its name — the entry is the reason the rule can be applied to a package nobody has seen before.
+
+`pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. Keep `packages/tools/create-plugin/src/lib/template.ts` aligned when the list changes.
+
 ## Language
 
 Anything a person outside the team can read is written in English. Anything only the team reads may be written in Chinese.
