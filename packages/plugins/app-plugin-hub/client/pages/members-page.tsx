@@ -707,7 +707,6 @@ function MemberAccessDialog({
                   className='rounded-xl border bg-muted/15 p-3'
                 >
                   <RoleCheckboxGroup
-                    hideTitle
                     title={application.name}
                     roles={BUILT_IN_ROLES.filter((role) =>
                       role.scopes.includes('application'),
@@ -759,24 +758,17 @@ function RoleCheckboxGroup({
   selected,
   onChange,
   ariaPrefix,
-  hideTitle = false,
 }: {
   title: string;
   roles: BuiltInRole[];
   selected: RoleKey[];
   onChange: (roles: RoleKey[]) => void;
   ariaPrefix: string;
-  hideTitle?: boolean;
 }): ReactElement {
   const roleLabel = useRoleLabel();
   return (
-    <fieldset
-      aria-label={hideTitle ? title : undefined}
-      className={hideTitle ? undefined : 'space-y-2'}
-    >
-      {hideTitle ? null : (
-        <legend className='text-sm font-medium'>{title}</legend>
-      )}
+    <fieldset className='space-y-2'>
+      <legend className='text-sm font-medium'>{title}</legend>
       <div className='flex flex-wrap gap-x-5 gap-y-3'>
         {roles.map((role) => (
           <label key={role.key} className='flex items-center gap-2'>
