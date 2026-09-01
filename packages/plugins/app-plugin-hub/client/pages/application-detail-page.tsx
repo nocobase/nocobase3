@@ -75,6 +75,7 @@ import {
   createActivity,
   createDeployment,
 } from '../domain/applications-data.js';
+import { DEPLOYMENT_FIXTURES, formatDuration } from '../domain/operations.js';
 import type {
   ApplicationRuntimeState,
   HubApplicationAccess,
@@ -1084,13 +1085,13 @@ function DeploymentsTab({
                 })}
               </TableHead>
               <TableHead>
-                {t('applicationDetail.deployments.type', {
-                  defaultValue: 'Type',
+                {t('applicationDetail.deployments.release', {
+                  defaultValue: 'Version',
                 })}
               </TableHead>
               <TableHead>
-                {t('applicationDetail.deployments.release', {
-                  defaultValue: 'Version',
+                {t('applicationDetail.deployments.type', {
+                  defaultValue: 'Type',
                 })}
               </TableHead>
               <TableHead>
@@ -1099,13 +1100,13 @@ function DeploymentsTab({
                 })}
               </TableHead>
               <TableHead>
-                {t('applicationDetail.deployments.actor', {
-                  defaultValue: 'Initiated by',
+                {t('applicationDetail.deployments.started', {
+                  defaultValue: 'Start time',
                 })}
               </TableHead>
               <TableHead>
-                {t('applicationDetail.deployments.started', {
-                  defaultValue: 'Start time',
+                {t('applicationDetail.deployments.actor', {
+                  defaultValue: 'Initiated by',
                 })}
               </TableHead>
               <TableHead className='pr-4 text-right'>
@@ -1116,69 +1117,81 @@ function DeploymentsTab({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {application.deployments.map((deployment) => (
-              <TableRow key={deployment.id}>
-                <TableCell className='pl-4 font-medium'>
-                  <Link
-                    className='underline-offset-4 hover:underline'
-                    to={`/deployments/${encodeURIComponent(deployment.id)}`}
-                  >
-                    {deployment.id}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  {t(`applicationDetail.deployments.type.${deployment.type}`, {
-                    defaultValue:
-                      deployment.type === 'deploy'
-                        ? 'Deploy'
-                        : deployment.type === 'rollback'
-                          ? 'Rollback'
-                          : 'Redeploy',
-                  })}
-                </TableCell>
-                <TableCell className='font-mono text-xs'>
-                  {deployment.version}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      deployment.status === 'succeeded'
-                        ? 'default'
-                        : deployment.status === 'failed'
-                          ? 'destructive'
-                          : 'secondary'
-                    }
-                  >
-                    {deployment.status === 'succeeded' ? (
-                      <Check aria-hidden='true' />
-                    ) : null}
+            {application.deployments.map((deployment) => {
+              const reference = DEPLOYMENT_FIXTURES.find(
+                (candidate) =>
+                  candidate.displayId === deployment.id &&
+                  candidate.applicationId === `app-${application.slug}`,
+              );
+              const startedAt = reference?.startedAt ?? deployment.createdAt;
+              return (
+                <TableRow key={deployment.id}>
+                  <TableCell className='pl-4 font-medium'>
+                    <Link
+                      className='underline-offset-4 hover:underline'
+                      to={`/deployments/${encodeURIComponent(deployment.id)}`}
+                    >
+                      {deployment.id}
+                    </Link>
+                  </TableCell>
+                  <TableCell className='font-mono text-xs whitespace-nowrap'>
+                    {reference?.previousRelease ?? '—'} →{' '}
+                    {reference?.targetRelease ?? deployment.version}
+                  </TableCell>
+                  <TableCell>
                     {t(
-                      `applicationDetail.deployments.status.${deployment.status}`,
+                      `applicationDetail.deployments.type.${deployment.type}`,
                       {
                         defaultValue:
-                          deployment.status === 'succeeded'
-                            ? 'Succeeded'
-                            : deployment.status === 'failed'
-                              ? 'Failed'
-                              : deployment.status === 'running'
-                                ? 'Running'
-                                : 'Queued',
+                          deployment.type === 'deploy'
+                            ? 'Deploy'
+                            : deployment.type === 'rollback'
+                              ? 'Rollback'
+                              : 'Redeploy',
                       },
                     )}
-                  </Badge>
-                </TableCell>
-                <TableCell>{deployment.actor}</TableCell>
-                <TableCell>
-                  {formatDate(deployment.createdAt, locale)}
-                </TableCell>
-                <TableCell className='pr-4 text-right'>
-                  {t('applicationDetail.deployments.durationSeconds', {
-                    defaultValue: '0 s',
-                    count: 0,
-                  })}
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        deployment.status === 'succeeded'
+                          ? 'default'
+                          : deployment.status === 'failed'
+                            ? 'destructive'
+                            : 'secondary'
+                      }
+                    >
+                      {deployment.status === 'succeeded' ? (
+                        <Check aria-hidden='true' />
+                      ) : null}
+                      {t(
+                        `applicationDetail.deployments.status.${deployment.status}`,
+                        {
+                          defaultValue:
+                            deployment.status === 'succeeded'
+                              ? 'Succeeded'
+                              : deployment.status === 'failed'
+                                ? 'Failed'
+                                : deployment.status === 'running'
+                                  ? 'Running'
+                                  : 'Queued',
+                        },
+                      )}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatDate(startedAt, locale)}</TableCell>
+                  <TableCell>
+                    {reference?.requestedBy ?? deployment.actor}
+                  </TableCell>
+                  <TableCell className='pr-4 text-right'>
+                    {formatDuration(
+                      startedAt,
+                      reference?.finishedAt ?? startedAt,
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
         {application.deployments.length === 0 ? (

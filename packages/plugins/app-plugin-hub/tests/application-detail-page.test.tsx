@@ -201,14 +201,19 @@ describe('ApplicationDetailPage', () => {
       screen.getAllByRole('columnheader').map((header) => header.textContent),
     ).toEqual([
       'Deployment',
-      'Type',
       'Version',
+      'Type',
       'Status',
-      'Initiated by',
       'Start time',
+      'Initiated by',
       'Duration',
     ]);
-    expect(screen.queryByText('Original version')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('columnheader', { name: 'Application' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('1.3.2 → 1.4.0')).toBeVisible();
+    expect(screen.getByText('Avery Chen')).toBeVisible();
+    expect(screen.getByText('2m 33s')).toBeVisible();
   });
 
   it('keeps locally generated deployment ids unique after remounting the route', async () => {
