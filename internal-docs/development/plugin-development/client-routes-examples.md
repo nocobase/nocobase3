@@ -1,6 +1,6 @@
 ---
 title: Client Route 最佳实践示例
-description: NocoBase v3 插件中 App Route、Settings Route、导航策略、惰性页面、组件覆盖和分层测试的示例。
+description: NocoBase v3 插件中 App Route、Settings Route、Dev Route、导航策略、惰性页面、组件覆盖和分层测试的示例。
 ---
 
 # Client Route 最佳实践示例
@@ -9,14 +9,15 @@ NocoBase v3 插件只通过一个 `client/routes.ts` entry 提供 Client Routes�
 
 - `defineAppRoutes()` 声明普通浏览器页面；
 - `defineSettingsRoutes()` 声明内置 Settings Route 下的页面；
-- 两类 contribution 可以从同一个 entry 以数组导出；
+- `defineDevRoutes()` 声明内置 Dev Route 下的开发期页面，生产构建中不存在；
+- 三类 contribution 可以从同一个 entry 以数组导出；
 - 页面通过 `componentLoader()` 惰性加载；
 - Client `auth` 和 `access` 保护导航与页面加载，不能替代 Server 安全边界。
 
 完整的四类 Route 选择见[Route 插件开发](./routes.md)。Client ServiceProvider、React Provider、
 options 和 wiring 见[Client 模块选择](./client.md)。
 
-## 先选择 App Route 还是 Settings Route
+## 先选择 App Route、Settings Route 还是 Dev Route
 
 | 场景                        | API                      | 源码中的 path | 最终 App 内路径       |
 | --------------------------- | ------------------------ | ------------- | --------------------- |
@@ -24,9 +25,11 @@ options 和 wiring 见[Client 模块选择](./client.md)。
 | 登录、注册或密码重置页面    | `defineAppRoutes()`      | `/login`      | `/login`              |
 | 插件设置或管理页面          | `defineSettingsRoutes()` | `/orders`     | `/settings/orders`    |
 | Settings 分组下的一个子页面 | `defineSettingsRoutes()` | `/general`    | `/settings/x/general` |
+| 只在开发期使用的调试页面    | `defineDevRoutes()`      | `/orders`     | `/dev/orders`         |
 
-Route path 是 App 内部路径。不要写 `/main` 或其他部署 public base path；Settings
-page 的 path 也不要重复 `/settings`。宿主负责在部署时恢复 public base path。
+Route path 是 App 内部路径。不要写 `/main` 或其他部署 public base path；Settings page 的 path 也不要重复 `/settings`，Dev page 的 path 也不要重复 `/dev`。宿主负责在部署时恢复 public base path。
+
+Settings 和 Dev 是两个各自独立的 path space，同一个相对 path 可以同时出现在两者中，分别解析为 `/settings/orders` 和 `/dev/orders`。
 
 ## 最小 App Route
 
@@ -133,6 +136,30 @@ export default defineClientPlugin({
   routes,
 });
 ```
+
+## Dev Route
+
+只在开发期使用的调试、诊断或试验页面用 `defineDevRoutes()` 声明。它的签名与 `defineSettingsRoutes()` 完全一致，同样支持分组、`navigation` 和 `access`，页面挂在 `/dev` 下：
+
+```ts
+import {
+  defineDevRoutes,
+  type AppClientDevRoutesContribution,
+} from '@nocobase/app-client/plugins';
+
+const devRoutes: AppClientDevRoutesContribution = defineDevRoutes([
+  {
+    name: 'orders',
+    path: '/orders',
+    navigation: { title: 'Orders playground' },
+    componentLoader: () => import('./pages/orders-dev-page.js'),
+  },
+]);
+```
+
+与 Settings 的唯一区别是：**生产构建里这组 Route 完全不存在**。守卫写在 `defineDevRoutes()` 内部而不是调用处，因此插件作者像写 Settings 一样无条件调用即可，不存在漏写守卫的可能。生产构建时 Vite 会把 `import.meta.env.PROD` 替换为 `true`，参数所在分支随之不可达，页面组件以及只被这些页面 import 的模块都会被 tree-shake 掉，不会进入构建产物。
+
+因此 Dev Route 适合放调试面板、内部数据查看器、mock 开关这类不该出现在部署产物中的东西。它不是权限机制的替代品：任何需要在生产环境按角色控制的页面，仍然应该是带 `access` 的 Settings Route，并由 Server 端强制执行。
 
 ## Settings 分组
 

@@ -22,6 +22,11 @@ export type {
   WorkflowArtifactDigestFile,
 } from '../server/loader/artifact-builder.js';
 export { checkWorkflowPackage } from '../server/loader/source-check.js';
+export { WorkflowSourceCheckError } from '../server/loader/source-issues.js';
+export type {
+  WorkflowSourceIssue,
+  WorkflowSourcePhase,
+} from '../server/loader/source-issues.js';
 
 export interface ApplicationWorkflowBuildSummary {
   packages: number;

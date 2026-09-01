@@ -37,7 +37,7 @@ contribution factories, and their tests execute the real `createRouter()`
 functions with a test container. Complex domains may instead extract a focused
 factory that returns its own `Hono`; do not add a helper that mutates a caller's
 router only to make tests easier. See the Server and Client Route best-practice
-pages under `docs/development/plugin-development/` for the complete patterns.
+pages under `internal-docs/development/plugin-development/` for the complete patterns.
 
 Enable the plugin in an App package with:
 

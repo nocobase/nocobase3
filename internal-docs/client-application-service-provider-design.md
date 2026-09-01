@@ -1559,7 +1559,7 @@ packages/plugins/app-plugin-*
 ```text
 packages/tools/create-plugin
 packages/templates/app-template-default/scripts
-docs/development/plugin-development
+internal-docs/development/plugin-development
 相关 AGENTS.md
 Plugin Skills
 ```

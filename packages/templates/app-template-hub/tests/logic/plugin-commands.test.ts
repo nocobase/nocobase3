@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-// docs/cli/README.md tells users to install and remove plugins by running these scripts inside their app. Nothing at
+// internal-docs/cli/README.md tells users to install and remove plugins by running these scripts inside their app. Nothing at
 // runtime depends on them, so dropping one — a bad merge resolution did exactly that once — breaks the documented
 // workflow silently: the app still builds, starts, and passes every other test. These assertions are the alarm.
 import { existsSync, readFileSync } from 'node:fs';
@@ -23,7 +23,7 @@ const appPackage = JSON.parse(
 
 const scripts = appPackage.scripts ?? {};
 
-/** The command surface documented in docs/cli/README.md, mapped to what it must run. */
+/** The command surface documented in internal-docs/cli/README.md, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:register': 'nb3 app plugin register',
   'plugin:inspect': 'nb3 app plugin inspect',

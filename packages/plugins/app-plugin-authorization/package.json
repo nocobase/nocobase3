@@ -84,21 +84,25 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
     "@nocobase/authorization": "workspace:^",
-    "@nocobase/db": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "lucide-react": "^0.487.0"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "react": "^19.0.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-plugin-authentication": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
+    "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

@@ -40,18 +40,24 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/queue": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/queue": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^"
   }
 }

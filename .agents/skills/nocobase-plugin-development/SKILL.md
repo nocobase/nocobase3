@@ -7,7 +7,7 @@ description: 'Develop and maintain NocoBase v3 application plugins in a source w
 
 Use this Skill only for the v3 plugin architecture in the current source
 workspace. It is a routing and safety layer; the detailed, versioned guidance
-lives under `docs/development/plugin-development/`.
+lives under `internal-docs/development/plugin-development/`.
 
 ## Verify the workspace
 
@@ -27,7 +27,7 @@ the legacy `Plugin` class, do not apply this Skill. That is a different plugin
 protocol.
 
 Always read the repository `AGENTS.md` first, then read
-`docs/development/plugin-development/README.md`. Read only the relevant topic page
+`internal-docs/development/plugin-development/README.md`. Read only the relevant topic page
 for the current task:
 
 | Task                                   | Read                                                 |

@@ -95,12 +95,12 @@ export const databaseConfig: AppConfigDefinition<
       migrations: {
         directory: paths.database('migrations'),
         packageName: appPackageName,
-        autoRun: false,
+        autoRun: true,
       },
       seeds: {
         directory: paths.database('seeds'),
         packageName: appPackageName,
-        autoRun: false,
+        autoRun: true,
       },
     };
     return createAppPluginDatabaseConfig(database, plugins).database;

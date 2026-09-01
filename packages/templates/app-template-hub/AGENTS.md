@@ -42,7 +42,7 @@ pnpm plugin:inspect <name> --json
 pnpm plugin:unregister <name>
 ```
 
-The editing itself is one implementation in `@nocobase/nb3-cli`, shared by both. See [docs/cli](../../../docs/cli/README.md).
+The editing itself is one implementation in `@nocobase/nb3-cli`, shared by both. See [internal-docs/cli](../../../internal-docs/cli/README.md).
 
 The entire `.agents/` directory is ignored local synchronization output and
 must not be committed or used as a source of truth. Directories under

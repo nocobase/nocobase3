@@ -15,6 +15,8 @@ import {
   type AppClientReactProviderDefinition,
   type AppClientReactProviders,
   type AppClientRegisteredReactProvider,
+  type AppClientRegisteredDevRoute,
+  type AppClientRegisteredDevRouteGroup,
   type AppClientRegisteredRoute,
   type AppClientRegisteredServiceProvider,
   type AppClientRegisteredSetting,
@@ -64,6 +66,9 @@ export interface ResolvedAppRuntime {
   readonly routes: readonly AppClientRegisteredRoute[];
   readonly settings: readonly AppClientRegisteredSetting[];
   readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
+  /** Dev pages. Empty in a production build, where every dev contribution resolved to no routes. */
+  readonly devRoutes: readonly AppClientRegisteredDevRoute[];
+  readonly devRouteGroups: readonly AppClientRegisteredDevRouteGroup[];
   readonly validate?: AppRuntimeValidator;
 }
 
@@ -143,6 +148,8 @@ export async function resolveAppRuntime(
     ]),
     settings: contributions.settings,
     settingGroups: contributions.settingGroups,
+    devRoutes: contributions.devRoutes,
+    devRouteGroups: contributions.devRouteGroups,
     validate: definition.validate,
   });
 }

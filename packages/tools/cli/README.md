@@ -4,7 +4,7 @@ NocoBase 3 内部开发命令行工具，命令名为 `nb3`。
 
 这不是给最终用户全局安装的 CLI。它作为 devDependency 随 App 分发，由 App 的 `package.json` scripts 调用，例如 `pnpm plugin:update` 实际执行 `nb3 app plugin update`。
 
-命令文档见 [docs/cli](../../../docs/cli/README.md)。
+命令文档见 [internal-docs/cli](../../../internal-docs/cli/README.md)。
 
 ## 当前状态
 

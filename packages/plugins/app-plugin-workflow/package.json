@@ -10,7 +10,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "workflow": "./dist/bin/workflow.js"
+    "workflow": "./bin/workflow.ts"
   },
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -41,6 +41,9 @@
   },
   "publishConfig": {
     "access": "public",
+    "bin": {
+      "workflow": "./dist/bin/workflow.js"
+    },
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
@@ -85,16 +88,10 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@sinclair/typebox": "catalog:",
-    "@nocobase/db": "workspace:^",
-    "@nocobase/i18n": "workspace:^",
-    "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
+    "@base-ui/react": "^1.6.0",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "@nocobase/queue": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
-    "@base-ui/react": "^1.6.0",
+    "@sinclair/typebox": "catalog:",
     "@xyflow/react": "^12.11.3",
     "elkjs": "^0.10.2",
     "esbuild": "^0.25.12",
@@ -103,26 +100,38 @@
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
     "react-router": "^7.0.2"
   },
   "devDependencies": {
+    "@boringnode/queue": "^0.7.1",
     "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-plugin-authentication": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
+    "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/i18n": "workspace:*",
+    "@nocobase/queue": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@refinedev/core": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "better-sqlite3": "^13.0.3",
     "eslint": "catalog:",
+    "knex": "^3.1.0",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-router": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "yaml": "^2.8.1",
-    "@boringnode/queue": "^0.7.1",
-    "better-sqlite3": "^13.0.3",
-    "knex": "^3.1.0"
+    "yaml": "^2.8.1"
   }
 }

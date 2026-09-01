@@ -202,30 +202,36 @@ fs.rmSync(distDir, { recursive: true, force: true });
 run('Typecheck client', 'pnpm', ['exec', 'tsc']);
 run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
 run('Build client', 'pnpm', ['exec', 'refine', 'build']);
-run('Build server workspace dependencies', 'pnpm', [
-  '--filter',
-  '@nocobase/db',
-  '--filter',
-  '@nocobase/i18n',
-  '--filter',
-  '@nocobase/app-server',
-  '--filter',
-  '@nocobase/caching',
-  '--filter',
-  '@nocobase/drive',
-  '--filter',
-  '@nocobase/snowflake',
-  '--filter',
-  '@nocobase/logging',
-  '--filter',
-  '@nocobase/queue',
-  '--filter',
-  '@nocobase/service-provider',
-  '--filter',
-  '@nocobase/session',
-  ...workspacePluginNames.flatMap((packageName) => ['--filter', packageName]),
-  'build',
-]);
+// Both templates build this same set of plugins, and `pnpm -r build` runs the two templates concurrently. Each
+// plugin's build clears its `dist` before tsc refills it, so one template can observe the other's empty `dist` and
+// fail with a misleading "Missing .../dist". The recursive build already orders plugins before templates — every one
+// of them is a declared dependency — so this step is only needed when a template is built on its own.
+if (process.env.NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD !== '1') {
+  run('Build server workspace dependencies', 'pnpm', [
+    '--filter',
+    '@nocobase/db',
+    '--filter',
+    '@nocobase/i18n',
+    '--filter',
+    '@nocobase/app-server',
+    '--filter',
+    '@nocobase/caching',
+    '--filter',
+    '@nocobase/drive',
+    '--filter',
+    '@nocobase/snowflake',
+    '--filter',
+    '@nocobase/logging',
+    '--filter',
+    '@nocobase/queue',
+    '--filter',
+    '@nocobase/service-provider',
+    '--filter',
+    '@nocobase/session',
+    ...workspacePluginNames.flatMap((packageName) => ['--filter', packageName]),
+    'build',
+  ]);
+}
 run('Build server', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.server.json']);
 run('Rewrite server path aliases', 'pnpm', [
   'exec',

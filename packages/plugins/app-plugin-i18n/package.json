@@ -67,13 +67,11 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
-  "dependencies": {
-    "@nocobase/i18n": "workspace:^",
-    "@nocobase/service-provider": "workspace:^"
-  },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "react": "catalog:"
   },
@@ -81,6 +79,7 @@
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/i18n": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
