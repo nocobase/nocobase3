@@ -4,6 +4,8 @@ export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
   ignores: [
     'dist/**',
+    // Registry source is compiled and linted after installation by the consuming application.
+    'registry/**',
     'tests/**',
     'server/agent/**',
     'server/ai-employees/**',
