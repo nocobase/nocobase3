@@ -1,5 +1,5 @@
 ---
-'@nocobase/app-plugin-file': patch
+'@nocobase/app-plugin-file': minor
 ---
 
-Add English and Chinese translations for the File plugin's reusable Client UI, built-in Demo page, and Server API errors.
+Translate the File plugin's reusable Client UI and Server API errors. Remove the built-in File Demo, including its Client page, Server API, seed data, Registry page, and database schema. Guide App Agents to compose file-backed business features directly in application source.

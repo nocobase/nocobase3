@@ -3,6 +3,11 @@
 File storage, scoped access routes, client APIs, and reusable file UI for
 NocoBase applications.
 
+The plugin does not install business file tables, business API routes, or
+application pages. Each application owns its file relations, migrations,
+authorization policy, Server Route composition, and Client page or form, and
+builds them with the plugin's public factories and components.
+
 The Client UI and Server API errors provide lazy-loaded `en-US` and `zh-CN`
 resources under the `@nocobase/app-plugin-file` namespace.
 

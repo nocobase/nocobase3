@@ -39,14 +39,6 @@ export interface StoredFileObject {
   readonly size: number;
 }
 
-export interface EnsureFileObjectInput {
-  readonly disk?: string;
-  readonly key: string;
-  readonly mimeType: string;
-  readonly content: FileContentSource;
-  readonly size?: number;
-}
-
 export async function putFileObject(
   options: FileStorageOptions,
   input: PutFileObjectInput,
@@ -102,27 +94,6 @@ export async function removeFileObject(
       i18nKey: 'errors.storageUpdateFailed',
     });
   }
-}
-
-export async function ensureFileObject(
-  options: FileStorageOptions,
-  input: EnsureFileObjectInput,
-): Promise<void> {
-  const diskName = resolveDiskName(input.disk, options.defaultDisk);
-  const disk = resolveDisk(options.drive, diskName);
-  let exists: boolean;
-  try {
-    exists = await disk.exists(input.key);
-  } catch (cause) {
-    throw new FileUnavailableError('File storage could not be read.', {
-      cause,
-      i18nKey: 'errors.storageReadFailed',
-    });
-  }
-  if (exists) return;
-
-  const size = resolveContentSize(input.content, input.size);
-  await writeFileObject(disk, input.key, input.content, input.mimeType, size);
 }
 
 function resolveDiskName(disk: string | undefined, fallback: string): string {

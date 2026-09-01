@@ -8,8 +8,6 @@ const enUS = {
     contentPathRootRelative: 'File content path must be root-relative.',
     currentTimeInvalid:
       'Current time must be a non-negative integer in epoch seconds.',
-    databaseNotConfigured: 'File database storage is not configured.',
-    demoFixtureInitializationFailed: 'File Demo fixture initialization failed.',
     fileIdRequired: 'A file ID is required.',
     fileLimitReached: 'The configured file count limit has been reached.',
     fileNotFound: 'File was not found.',
@@ -19,8 +17,6 @@ const enUS = {
     multipartFileInvalid: 'A valid multipart file field is required.',
     multipartFileRequired: 'A multipart file field is required.',
     oneFileRequired: 'Exactly one File-compatible file field is required.',
-    pathParameterInvalid:
-      'File scope path parameter must be a positive integer.',
     serviceUnavailable: 'File service is unavailable.',
     storageDiskNotConfigured: 'A file storage disk is not configured.',
     storageDiskUnavailable: 'File storage disk "{{disk}}" is unavailable.',
@@ -29,8 +25,6 @@ const enUS = {
     storageReadFailed: 'File storage could not be read.',
     storageUpdateFailed: 'File storage could not be updated.',
     streamedFileSizeRequired: 'File size is required for streamed content.',
-    systemAdministratorRequired:
-      'System administrator access is required for {{resource}}.',
     tokenAudienceRequired: 'A file token audience is required.',
     tokenBodyInvalid: 'Token request body must be valid JSON.',
     tokenBodyObjectRequired: 'Token request body must be an object.',
