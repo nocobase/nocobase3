@@ -1,0 +1,90 @@
+{
+  "name": "@nocobase/app-host",
+  "version": "0.0.1-beta.2",
+  "description": "Standalone runtime host for NocoBase apps.",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./supervisor": {
+      "types": "./dist/supervisor.d.ts",
+      "import": "./dist/supervisor.js"
+    },
+    "./catalog": {
+      "types": "./dist/deployment/catalog.d.ts",
+      "import": "./dist/deployment/catalog.js"
+    },
+    "./deployment": {
+      "types": "./dist/deployment/index.d.ts",
+      "import": "./dist/deployment/index.js"
+    },
+    "./registry": {
+      "types": "./dist/app-registry.d.ts",
+      "import": "./dist/app-registry.js"
+    },
+    "./artifacts": {
+      "types": "./dist/artifact-resolver.d.ts",
+      "import": "./dist/artifact-resolver.js"
+    },
+    "./management": {
+      "types": "./dist/management/index.d.ts",
+      "import": "./dist/management/index.js"
+    },
+    "./types": {
+      "types": "./dist/app-types.d.ts",
+      "import": "./dist/app-types.js"
+    }
+  },
+  "bin": {
+    "app-host": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md"
+  ],
+  "dependencies": {
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/config": "workspace:^",
+    "@nocobase/drive": "workspace:^",
+    "tar": "^7.4.3"
+  },
+  "scripts": {
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
+    "dev": "pnpm build && tsx ./dist/cli.js",
+    "start": "tsx ./dist/cli.js",
+    "prepack": "pnpm build",
+    "pretest": "pnpm build",
+    "test": "vitest run",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-host.tgz\" && pnpm exec publint . && pnpm exec attw \"$PACK_DIR/nocobase-app-host.tgz\" --profile esm-only"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "koa": "^3.2.1",
+    "prettier": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

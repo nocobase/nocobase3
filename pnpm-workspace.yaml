@@ -1,8 +1,10 @@
 packages:
-  - packages/*
-  - examples/*
-  - examples/*/apps/*
-  - examples/*/packages/*
+  - packages/*/*
+
+# Commands with --dry-run must not trigger an implicit install before their
+# own code can enforce read-only behavior. Dependency changes are synchronized
+# explicitly with CI=true pnpm install --no-frozen-lockfile.
+verifyDepsBeforeRun: false
 
 catalog:
   '@sinclair/typebox': ^0.34.52
@@ -41,6 +43,7 @@ catalog:
   better-auth: ^1.7.1
   better-sqlite3: ^12.11.1
   bloom-filters: ^3.0.4
+  cron: ^4.4.0
   eslint: ^10.0.0
   eslint-config-prettier: ^10.1.8
   eslint-plugin-react-hooks: ^7.1.1
@@ -76,9 +79,9 @@ catalog:
   yaml: ^2.9.0
 
 allowBuilds:
-  '@nocobase/app-portal-sdk': true
   better-sqlite3: true
   esbuild: true
+  tesseract.js: false
 
 minimumReleaseAgeExclude:
   - '@publint/pack@0.1.7'

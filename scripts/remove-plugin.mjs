@@ -15,12 +15,12 @@ import { fileURLToPath } from 'node:url';
 import {
   createClientPluginsEditor,
   readClientPlugins,
-} from '../packages/cli/src/lib/client-plugins.ts';
+} from '../packages/tools/cli/src/lib/client-plugins.ts';
 import {
   createServerPluginsEditor,
   readServerPlugins,
-} from '../packages/cli/src/lib/server-plugins.ts';
-import { normalizePluginName } from '../packages/create-plugin/src/lib/names.ts';
+} from '../packages/tools/cli/src/lib/server-plugins.ts';
+import { normalizePluginName } from '../packages/tools/create-plugin/src/lib/names.ts';
 
 const packagePrefix = '@nocobase/app-plugin-';
 const directoryPrefix = 'app-plugin-';
@@ -43,7 +43,7 @@ const skippedDirectoryNames = new Set([
   'node_modules',
 ]);
 
-const help = `Remove a NocoBase plugin package from packages/.
+const help = `Remove a NocoBase plugin package from packages/plugins/.
 
 Usage:
   pnpm plugin:remove <name> [options]
@@ -55,6 +55,7 @@ Arguments:
 Options:
   --no-install  Do not synchronize pnpm-lock.yaml after removal
   --dry-run     Validate and print the target without removing it
+  --json        Print one machine-readable JSON result
   -h, --help    Show this help
 
 Removal is refused while another workspace package references the plugin in a
@@ -66,6 +67,7 @@ export function parseRemovePluginArgs(args) {
     dryRun: false,
     help: false,
     install: true,
+    json: false,
     name: undefined,
   };
   const positionals = [];
@@ -81,6 +83,10 @@ export function parseRemovePluginArgs(args) {
     }
     if (argument === '--no-install') {
       options.install = false;
+      continue;
+    }
+    if (argument === '--json') {
+      options.json = true;
       continue;
     }
     if (argument.startsWith('-')) {
@@ -112,7 +118,8 @@ export async function removePlugin({
   const packageName = `${packagePrefix}${shortName}`;
   const directoryName = `${directoryPrefix}${shortName}`;
   const resolvedRepoRoot = path.resolve(repoRoot);
-  const packagesDirectory = path.join(resolvedRepoRoot, 'packages');
+  // Plugins are scaffolded into `packages/plugins/`, so that is the only directory removal targets.
+  const packagesDirectory = path.join(resolvedRepoRoot, 'packages', 'plugins');
   const targetDirectory = path.join(packagesDirectory, directoryName);
 
   await access(packagesDirectory, constants.W_OK);
@@ -124,7 +131,7 @@ export async function removePlugin({
     targetDirectory,
   });
   if (references.length > 0) {
-    throw new Error(formatReferenceError(packageName, references));
+    throw new PluginStillReferencedError(packageName, references);
   }
 
   const result = {
@@ -181,6 +188,15 @@ export async function removePlugin({
   return result;
 }
 
+export class PluginStillReferencedError extends Error {
+  constructor(packageName, references) {
+    super(formatReferenceError(packageName, references));
+    this.name = 'PluginStillReferencedError';
+    this.packageName = packageName;
+    this.references = references;
+  }
+}
+
 async function validatePluginTarget(targetDirectory, packageName) {
   let targetStats;
   try {
@@ -214,14 +230,14 @@ async function findWorkspaceReferences({
   repoRoot,
   targetDirectory,
 }) {
+  // `packages/` now holds every workspace package, examples included, and the walk below is recursive, so one root
+  // covers all of them.
   const packageJsonPaths = [path.join(repoRoot, 'package.json')];
-  for (const directory of ['packages', 'examples']) {
-    const root = path.join(repoRoot, directory);
-    if (await pathExists(root)) {
-      packageJsonPaths.push(
-        ...(await findPackageJsonFiles(root, targetDirectory)),
-      );
-    }
+  const packagesRoot = path.join(repoRoot, 'packages');
+  if (await pathExists(packagesRoot)) {
+    packageJsonPaths.push(
+      ...(await findPackageJsonFiles(packagesRoot, targetDirectory)),
+    );
   }
 
   const references = [];
@@ -435,15 +451,42 @@ function isNodeError(error, code) {
   return error !== null && typeof error === 'object' && error.code === code;
 }
 
-async function main() {
+export async function main(
+  args = process.argv.slice(2),
+  repoRoot = defaultRepoRoot,
+) {
+  const json = args.includes('--json');
   try {
-    const options = parseRemovePluginArgs(process.argv.slice(2));
+    const options = parseRemovePluginArgs(args);
     if (options.help) {
       console.log(help);
       return;
     }
 
-    const result = await removePlugin(options);
+    const result = await removePlugin({ ...options, repoRoot });
+    if (options.json) {
+      console.log(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            ok: true,
+            operation: 'plugin:remove',
+            status: 'success',
+            result: {
+              mode: options.dryRun ? 'dry-run' : 'remove',
+              ...result,
+              commands:
+                options.dryRun && options.install
+                  ? ['CI=true pnpm install --no-frozen-lockfile']
+                  : [],
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
     if (options.dryRun) {
       console.log(
         `Would remove ${result.packageName} from ${result.targetDirectory}`,
@@ -458,10 +501,58 @@ async function main() {
       );
     }
   } catch (error) {
+    if (json) {
+      const referenced = error instanceof PluginStillReferencedError;
+      console.error(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            ok: false,
+            operation: 'plugin:remove',
+            status: 'failure',
+            error: {
+              code: referenced
+                ? 'PLUGIN_STILL_REFERENCED'
+                : String(error?.message ?? error).startsWith(
+                      'Plugin does not exist:',
+                    )
+                  ? 'PLUGIN_NOT_FOUND'
+                  : 'PLUGIN_REMOVE_FAILED',
+              message: error instanceof Error ? error.message : String(error),
+              ...(referenced
+                ? { details: { references: error.references } }
+                : {}),
+              suggestions: referenced
+                ? unregisterSuggestions(error.packageName, error.references)
+                : ['Run plugin:remove --help and correct the request.'],
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      process.exitCode = 1;
+      return;
+    }
     console.error(error instanceof Error ? error.message : error);
     console.error('Run pnpm plugin:remove --help for usage.');
     process.exitCode = 1;
   }
+}
+
+function unregisterSuggestions(packageName, references) {
+  const shortName = packageName.slice(packagePrefix.length);
+  const suggestions = new Map();
+  for (const { packageJsonPath } of references) {
+    const app = path.posix.basename(path.posix.dirname(packageJsonPath));
+    if (app === '.') continue;
+    const suggestion = {
+      command: 'pnpm',
+      args: ['plugin:unregister', shortName, '--app', app],
+    };
+    suggestions.set(JSON.stringify(suggestion), suggestion);
+  }
+  return [...suggestions.values()];
 }
 
 const invokedPath = process.argv[1] && path.resolve(process.argv[1]);

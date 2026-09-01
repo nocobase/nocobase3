@@ -302,3 +302,26 @@ jobs:
 
             待发布的 package：
         run: ./scripts/feishu-notify.sh
+
+      # 兜底通知，理由同 release-beta：上面几条只覆盖合并阶段的失败，早于它们的
+      # 任何一步——检查、安装、构建、测试、退出 pre 模式——失败时一条都不会发。
+      #
+      # 排除两条合并失败：它们已经单独通知过，随后的 exit 1 会让 failure() 为真。
+      - name: Notify failure
+        if: >-
+          failure() && !inputs.dry_run
+          && steps.merge_main.outputs.merged != 'false'
+          && steps.merge_develop.outputs.merged != 'false'
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: NocoBase 3 转正流程失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 流程中断
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            `develop` 合入 `main` 的流程中断，没有发布到 npm。
+
+            失败发生在合并之前，分支状态没有变化，修好之后重新触发即可。
+        run: ./scripts/feishu-notify.sh

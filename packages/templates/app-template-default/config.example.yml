@@ -1,0 +1,83 @@
+# Copy this file to config.yml before starting the application.
+
+# app:
+#   Public origin used for callbacks and redirects in production.
+#   publicOrigin: https://apps.example.com
+
+# Values under client are public and embedded in the SPA HTML.
+client:
+  app:
+    title: NocoBase
+
+auth:
+  # Generate a unique secret, for example with: openssl rand -hex 32
+  # secret: replace-with-a-unique-secret
+  emailAndPassword:
+    enabled: true
+    autoSignIn: false
+  session:
+    storeSessionInDatabase: true
+
+# session:
+#   # Use the same generated value as auth.secret, or another unique secret.
+#   secret: replace-with-a-unique-secret
+
+notification:
+  channels:
+    - type: in-app
+      enabled: true
+      providers:
+        - type: database
+          name: primary
+
+    # Uncomment and configure this channel to send email notifications.
+    # - type: email
+    #   enabled: true
+    #   providers:
+    #     - type: smtp
+    #       name: smtp
+    #       host: smtp.example.com
+    #       port: 587
+    #       secure: false
+    #       auth:
+    #         user: mailer@example.com
+    #         pass: replace-with-the-smtp-password
+    #       from: NocoBase <mailer@example.com>
+    #
+    #     - type: resend
+    #       name: resend
+    #       apiKey: replace-with-the-resend-api-key
+    #       from: NocoBase <notifications@example.com>
+
+    # Uncomment and configure this channel to send IM notifications.
+    # - type: im
+    #   enabled: true
+    #   providers:
+    #     - type: feishu-webhook
+    #       name: feishu
+    #       target: default
+    #       webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
+    #       secret: replace-with-the-feishu-secret
+    #
+    #     - type: dingtalk-webhook
+    #       name: dingtalk
+    #       target: default
+    #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
+    #       secret: replace-with-the-dingtalk-secret
+
+database:
+  default: main
+  connections:
+    main:
+      dialect: sqlite
+      database: database.sqlite
+      debug: false
+  migrations:
+    autoRun: true
+  seeds:
+    autoRun: true
+
+snowflake:
+  # Assign a unique worker ID to each concurrently running instance.
+  workerId: 0
+  epoch: 1605024000

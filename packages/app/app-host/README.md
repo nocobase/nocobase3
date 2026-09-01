@@ -1,0 +1,170 @@
+# @nocobase/app-host
+
+Standalone runtime host for NocoBase apps.
+
+From the repository root:
+
+```bash
+pnpm --filter @nocobase/app-host build
+APP_DEPLOYMENTS_DIR="$PWD/packages/app/app-host/fixtures/app-dist" pnpm --filter @nocobase/app-host start
+```
+
+The workspace start scripts use `tsx` because internal package exports resolve
+to TypeScript source during monorepo development. Published package exports
+resolve to compiled JavaScript instead.
+
+By default the host listens on `127.0.0.1:3000` and discovers deployed apps
+from `./storage/app-deployments` in the current working directory.
+
+The CLI loads the `host` namespace once at startup. It accepts `.yml`, `.yaml`,
+and `.json` files. Set `APP_HOST_CONFIG_PATH` to an explicit file or extensionless
+path; otherwise the host discovers `config.yml`, `config.yaml`, or `config.json`
+in that order. Environment variables override file values.
+
+```yaml
+host:
+  mode: standalone
+  server:
+    host: 127.0.0.1
+    port: 3000
+  artifact:
+    driver: fs
+    location: ./storage/app-artifacts
+    visibility: private
+  appDeploymentsDir: ./storage/app-deployments
+  appVolumesDir: ./storage/app-volumes
+```
+
+The directories have separate lifecycles:
+
+```text
+storage/
+  app-artifacts/             immutable release archives
+  app-deployments/<appId>/   replaceable package.json and dist code
+  app-volumes/<appId>/       persistent config.yml and storage/
+```
+
+## Host modes
+
+The host defaults to `standalone` mode. It discovers local app definitions and
+activates an app lazily when its first request arrives.
+
+```bash
+APP_HOST_MODE=standalone app-host
+```
+
+`managed` mode is intended for a Hub-controlled host. It does not register apps
+from the local directory, and its application HTTP server does not expose the
+app management endpoints. Only minimal liveness and readiness probes remain on
+that server; management uses a private transport.
+The Hub supplies complete desired deployment snapshots over an authenticated
+Node IPC channel. Each artifact reference identifies one immutable `.tar.gz`
+object by Drive key, version, app ID, and SHA-256 checksum. The host reads that
+object through its configured `@nocobase/drive` FS or S3 disk, verifies it,
+atomically deploys it to `app-deployments/<appId>`, materializes configuration
+at `app-volumes/<appId>/config.yml`, prepares writable storage at
+`app-volumes/<appId>/storage`, and reports reconciled state back to the Hub. A
+failed runtime replacement restores the previous deployed directory without
+replacing the app volume.
+
+```bash
+APP_HOST_MODE=managed app-host
+```
+
+The mode is fixed for the lifetime of the host process. A managed host never
+falls back to standalone discovery when its Hub connection is unavailable.
+The spawning supervisor automatically restarts an unexpectedly exited managed
+host with bounded exponential backoff and replays its latest accepted snapshot.
+The current runtime capability is `in-process`; Worker and Process backends can
+be registered through the backend router contract but are not advertised until
+their isolation runners are implemented.
+
+The package fixture shows the supported single-level deployment layout:
+
+```text
+packages/app/app-host/fixtures/app-dist/
+  demo/
+    package.json
+    dist/client/index.html
+    dist/client/assets/...
+    dist/server/embedded.js
+
+  service/
+    package.json
+    dist/server/embedded.js
+
+  koa/
+    package.json
+    dist/server/embedded.js
+    dist/server/koa-fetch-adapter.js
+
+  lifecycle/
+    package.json
+    dist/client/index.html
+    dist/client/assets/...
+    dist/server/embedded.js
+
+  ws-demo/
+    package.json
+    dist/client/index.html
+    dist/client/assets/...
+    dist/server/embedded.js
+```
+
+The public URL is also a single level:
+
+```text
+http://127.0.0.1:3000/demo/
+http://127.0.0.1:3000/demo/assets/demo.js
+http://127.0.0.1:3000/demo/api/info
+http://127.0.0.1:3000/service/healthz
+http://127.0.0.1:3000/koa/api/info
+http://127.0.0.1:3000/koa/redirect
+http://127.0.0.1:3000/koa/stream
+http://127.0.0.1:3000/lifecycle/
+http://127.0.0.1:3000/lifecycle/api/lifecycle
+http://127.0.0.1:3000/ws-demo/
+http://127.0.0.1:3000/ws-demo/api/info
+ws://<host>/ws-demo/ws
+```
+
+`dist/server/embedded.js` is the standard app runtime entrypoint and is required
+for discovery. `dist/client/assets/**` is the optional static asset directory
+that can be served by Nginx, CDN, object storage, or the host fallback.
+
+Route ownership is intentionally narrow:
+
+```text
+/<app>/assets/*  -> dist/client/assets/*
+/<app>/*         -> dist/server/embedded.js
+```
+
+The server receives the path after the `/<app>` mount point, so
+`/demo/api/info` is dispatched as `/api/info` and `/demo/dashboard` is dispatched
+as `/dashboard`.
+
+`dist/client/index.html` is not a host fallback artifact. If an app wants to
+serve a SPA shell, its `dist/server/embedded.js` should read and return that
+HTML. This keeps HTML, API, SSR, redirects, auth callbacks, and ordinary server
+routes under the app's own runtime.
+
+Server artifacts should export `createServer(scope)`. The host still accepts
+`createApp(scope)`, `default(scope)`, `createApp()`, and the old
+`createApi(scope)` export during the v3 transition.
+
+The returned app object should expose `fetch(request)` and may expose
+`websocket(request)`. App-created resources should be released through
+`scope.registerDisposer(name, dispose)`.
+
+The `lifecycle` fixture is a complete lifecycle example. It registers a
+`scope.onBeforeDestroy(...)` hook, registers a `scope.registerDisposer(...)`
+cleanup function, and implements the actual `dispose()` logic.
+
+The `ws-demo` fixture exposes a WebSocket clock stream. Its client derives the
+public URL from the current page origin, so `ws://<host>/ws-demo/ws` maps to
+`/ws` inside the embedded app.
+
+The `koa` fixture adapts a real `koa.callback()` to the host's Fetch contract
+through an ephemeral loopback HTTP server. It demonstrates Koa middleware,
+request bodies, redirects, cookies, streaming responses, and lifecycle cleanup.
+See `fixtures/app-dist/README.md` for the adapter's HTTP-only boundary.

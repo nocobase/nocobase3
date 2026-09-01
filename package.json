@@ -23,11 +23,11 @@
     "preformat:check": "pnpm dev-config:build",
     "format:check": "node ./scripts/format-changed.mjs --check",
     "i18n:check": "node ./scripts/i18n-check.mjs",
-    "plugin:create": "node ./packages/create-plugin/bin/run.js",
+    "plugin:create": "node ./packages/tools/create-plugin/bin/run.js",
     "plugin:register": "nb3 app plugin register --workspace-root .",
+    "plugin:inspect": "nb3 app plugin inspect --workspace-root .",
     "plugin:unregister": "nb3 app plugin unregister --workspace-root .",
     "plugin:remove": "node ./scripts/remove-plugin.mjs",
-    "plugin:skills:sync": "nb3 app plugin skills sync --workspace-root .",
     "registry": "node ./scripts/registry.mjs",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm pack:check",
     "fix": "pnpm lint:fix && pnpm format",
@@ -41,10 +41,10 @@
     "app:start": "pnpm --filter @nocobase/app-template-default start",
     "template:dev": "pnpm --filter @nocobase/app-template-default dev",
     "app:build": "pnpm --filter @nocobase/app-template-default build",
-    "hub:dev": "pnpm --filter @nocobase/hub dev",
-    "hub:build": "pnpm --filter @nocobase/hub build",
-    "hub:start": "pnpm --filter @nocobase/hub start",
-    "app-host:dev": "APP_DIST_DIR=\"$PWD/packages/app-host/fixtures/app-dist\" pnpm --filter @nocobase/app-host dev",
+    "hub:dev": "pnpm --filter @nocobase/app-template-hub dev",
+    "hub:build": "pnpm --filter @nocobase/app-template-hub build",
+    "hub:start": "pnpm --filter @nocobase/app-template-hub start",
+    "app-host:dev": "APP_DIST_DIR=\"$PWD/packages/app/app-host/fixtures/app-dist\" pnpm --filter @nocobase/app-host dev",
     "app-host:build": "pnpm --filter @nocobase/app-host build",
     "sdk:test": "pnpm --filter @nocobase/app-portal-sdk test"
   },
@@ -60,12 +60,5 @@
     "publint": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
-  },
-  "lint-staged": {
-    "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}": [
-      "eslint --fix --no-warn-ignored --max-warnings 0",
-      "prettier --write"
-    ],
-    "*.{json,json5,jsonc,md,mdx,yml,yaml,css,scss,less,html}": "prettier --write"
   }
 }

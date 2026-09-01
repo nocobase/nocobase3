@@ -1,0 +1,6 @@
+interface:
+  display_name: 'NocoBase AI Knowledge Base App Development'
+  short_description: 'Build generated NocoBase Apps with knowledge bases, documents, retrieval, and PGVector.'
+  default_prompt: 'Use $nocobase-app-plugin-ai-knowledge-base to implement or verify an application-side AI Knowledge Base integration in <appRoot> using only public package exports and authenticated APIs.'
+policy:
+  allow_implicit_invocation: true

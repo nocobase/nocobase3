@@ -10,4 +10,4 @@ pnpm changeset
 
 纯文档、测试或不影响发布产物的改动不需要 changeset。
 
-完整流程见 [docs/branch-and-release.md](../docs/branch-and-release.md)。
+完整流程见 [internal-docs/branch-and-release.md](../internal-docs/branch-and-release.md)。

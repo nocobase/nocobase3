@@ -1,0 +1,33 @@
+{
+  "name": "nocobase-authentication",
+  "homepage": "https://www.nocobase.com",
+  "items": [
+    {
+      "name": "auth-ui",
+      "type": "registry:block",
+      "title": "NocoBase Authentication UI",
+      "description": "Application-owned authentication forms, branding, layout and page composition backed by the authentication plugin.",
+      "dependencies": [
+        "@nocobase/app-client@^0.1.0",
+        "@nocobase/app-plugin-authentication@^0.1.0",
+        "lucide-react@^0.487.0"
+      ],
+      "registryDependencies": ["button", "input", "label"],
+      "docs": "Requires @nocobase/app-plugin-authentication. Installed forms and pages are application-owned, call the plugin's stable headless actions, and override only the plugin route component loaders. Review upgrades with a three-way merge.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-authentication": ">=0.1.0 <0.2.0"
+          }
+        }
+      },
+      "source": {
+        "root": "registry/auth-ui",
+        "target": "client/extensions/nocobase-auth-ui",
+        "include": ["."]
+      }
+    }
+  ]
+}

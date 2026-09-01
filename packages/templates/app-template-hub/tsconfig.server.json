@@ -1,0 +1,12 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "paths": {
+      "@/jobs/*.js": ["./server/jobs/*.ts"],
+      "@/jobs/*": ["./server/jobs/*"]
+    }
+  },
+  "include": ["server/**/*.ts", "scripts/migrate.ts", "scripts/seed.ts"]
+}

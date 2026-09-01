@@ -1,0 +1,257 @@
+# NocoBase Hub Template
+
+The reference full-stack application for the new NocoBase App architecture. It
+uses `@nocobase/app-server` on the backend and a React + Refine + shadcn client
+from `@nocobase/app-client`.
+
+## Quick start
+
+From the repository root:
+
+```bash
+pnpm install
+cp packages/templates/app-template-hub/config.example.yml \
+  packages/templates/app-template-hub/config.yml
+pnpm app:dev
+```
+
+The example config mounts the application at `/main`. Use the URL printed
+by the development command as the source of truth for host and port.
+
+The key settings are:
+
+```env
+APP_BASE_PATH=/main
+# APP_PUBLIC_ORIGIN=https://apps.example.com
+```
+
+`APP_BASE_PATH` is the public application mount path.
+`APP_PUBLIC_ORIGIN` is the optional external HTTP origin used for callbacks
+and redirects. It must not include `APP_BASE_PATH`; the runtime combines them.
+The browser API base URL is derived as `<APP_BASE_PATH>/api` and is served by
+the application's local API router.
+
+## App plugins
+
+The App loads enabled packages listed in `package.json` under
+`nocobase.plugins`. A plugin also appears in `devDependencies` so its server and
+client entries can be resolved during development and build.
+
+Create and register a plugin from the repository root:
+
+```bash
+pnpm plugin:create audit-log \
+  --with client.routes \
+  --with server.service-providers \
+  --with server.routes
+pnpm plugin:register audit-log --app app-template-hub
+```
+
+Remove the application registration before deleting the package:
+
+```bash
+pnpm plugin:unregister audit-log --app app-template-hub
+pnpm plugin:remove audit-log
+```
+
+See [Plugin development quick start](../../../internal-docs/development/plugin-development/quick-start.md)
+for the server, database, Client ServiceProvider, React Provider, routes, and
+configuration protocols.
+
+## Current client architecture
+
+The active browser source is `client/`:
+
+```text
+client/
+├── service-provider.ts     application ServiceProvider defaults
+├── routes.ts               application-owned route declarations
+├── react-providers.ts       application React Provider declarations
+├── route-overrides.ts      application component replacements
+├── routing/                route placement, lazy loading, and error UI
+├── auth/                    application authentication presentation
+├── pages/                   application-owned pages
+├── shell/                   authenticated application shell
+├── theme/                   app-wide theme and selector
+├── app.ts                   final AppClient composition
+├── index.tsx                async startup entry
+└── runtime.ts               Client Runtime definition
+```
+
+`client-old/` is a temporary, untracked migration archive. It is not current
+application source and must never be imported, staged, or used as a routing or
+provider architecture reference.
+
+Enabled client plugins contribute independently:
+
+- `client/serviceProviders`: Client services, Refine capabilities and lifecycle;
+- `client/reactProviders`: synchronous React Context and tree Providers;
+- `client/routes`: inspectable route path/auth metadata and lazy page loaders;
+- `client/locales`: static manifests with lazy language messages.
+
+The Hub contributes through the same protocol, wired by
+`client/runtime.ts`. Its ServiceProvider runs during `app.start()`. Its `/`
+home route is declared in `client/routes.ts`, while `client/routing/` only
+renders the resolved routes.
+
+React Providers are composed outer-to-inner in fixed layer order:
+`root -> application -> extension`. The app Theme Provider uses `root`;
+application React Providers otherwise default to `application`, and plugin React Providers
+use `extension`. `before` and `after` can refine order only within the same
+layer.
+
+Inspect the final client composition with:
+
+```bash
+pnpm app:client:inspect --app app-template-hub
+pnpm app:client:inspect --app app-template-hub --json
+pnpm app:client:inspect --app app-template-hub --type service-providers
+```
+
+The output shows ServiceProvider order, route ownership and final component
+source, and React Provider source/layer/order.
+
+## Authentication UI
+
+`@nocobase/app-plugin-authentication` owns the AuthProvider, session behavior,
+redirects, and the guest routes `/login`, `/register`, `/forgot-password`, and
+`/reset-password`. It also provides default fallback pages.
+
+The Hub customizes only those routes' lazy page components in the
+installed `client/extensions/nocobase-auth-ui/` Registry source. `AuthLink` is
+imported from the stable `@nocobase/app-plugin-authentication/client/ui`
+subpath; the final password forms are application-owned Registry source and
+call the plugin's stable `client/actions` hooks. It does not duplicate guest
+routes or call Better Auth endpoints directly from page components.
+
+See
+[client/extensions/nocobase-auth-ui/README.md](client/extensions/nocobase-auth-ui/README.md)
+for the task-oriented edit map. Password reset still requires deployment-side
+configuration of Better Auth's `emailAndPassword.sendResetPassword` callback
+and a real mail transport.
+
+The upstream recipe and its Registry configuration are published by the
+authentication package at `registry/auth-ui` and `registry.config.json`. The
+The Hub Template commits only the materialized, application-owned snapshot.
+Build the authentication Registry payload from the repository root with:
+
+```bash
+pnpm registry build --package @nocobase/app-plugin-authentication
+```
+
+To initialize extensions in a new output tree, materialize them there:
+
+```bash
+pnpm registry materialize \
+  --package @nocobase/app-plugin-authentication \
+  --item auth-ui \
+  --output-root /path/to/new-template
+```
+
+Materialization refuses an existing target so it cannot silently overwrite
+application edits. Updating an installed Registry item must use an explicit
+three-way merge.
+
+## Notification Providers
+
+The server registers the built-in Email and IM definitions from
+`@nocobase/app-plugin-notification-providers`. External delivery stays disabled
+until its channels and credentials are configured in `config.yml`. Start from
+the commented examples in [`config.example.yml`](config.example.yml):
+
+```yaml
+notification:
+  channels:
+    - type: email
+      enabled: true
+      providers:
+        - type: smtp
+          name: smtp
+          host: smtp.example.com
+          port: 587
+          from: NocoBase <notifications@example.com>
+```
+
+SMTP and Resend are enabled independently and can be configured together.
+
+Add `feishu-webhook` and/or `dingtalk-webhook` providers to an enabled `im`
+channel to enable IM delivery. You can inspect the resolved Provider names and
+types without printing secrets:
+
+```bash
+pnpm server:config
+```
+
+After signing in, open
+`/main/api/notification-providers/test` (replace `/main` when
+`APP_BASE_PATH` differs). The page sends a real message through the durable
+Notification Manager and shows the resulting delivery status. Email tests use
+the address entered on the page, or `notification.test.emailRecipient` when it
+is configured; IM tests use the configured group Webhook. The page is disabled
+unless `notification.test.enabled` is explicitly set to `true` in `config.yml`.
+
+Application code sends durable notifications through the injected
+`services.notification` manager:
+
+```ts
+await services.notification?.send({
+  to: { type: 'email', address: 'alice@example.com' },
+  channels: ['email'],
+  content: {
+    title: 'NocoBase notification',
+    body: 'The notification runtime is ready.',
+  },
+});
+```
+
+Use `{ type: 'target', id: 'default' }` as the logical IM target. Provider
+routing defaults to `single`; select one configured Provider with
+`routing.im.providers.provider: 'feishu'`. Use `strategy: 'all'` only when the
+message should fan out to every enabled Provider. The full
+configuration and integration guide lives in
+[`@nocobase/app-plugin-notification-providers` documentation](../../plugins/app-plugin-notification-providers/docs/zh-CN/configuration.md).
+
+## Workflow Management UI
+
+`@nocobase/app-plugin-workflow` owns the Workflow runtime, management API,
+stable client route identities, and fallback pages. It also publishes the
+canonical `workflow-management` Registry recipe. The The Hub Template commits
+the materialized snapshot under
+`client/extensions/nocobase-workflow-management`; that application-owned copy
+overrides only the plugin route components.
+
+Build or materialize the canonical recipe with:
+
+```bash
+pnpm registry build --package @nocobase/app-plugin-workflow
+pnpm registry materialize \
+  --package @nocobase/app-plugin-workflow \
+  --item workflow-management \
+  --output-root /path/to/new-template
+```
+
+As with the authentication UI, updates to an installed Workflow Management
+snapshot require an explicit three-way merge.
+
+## Theme
+
+`client/theme` wraps application and plugin pages. The top-right selector
+supports System, Light, and Dark modes. Plugin pages should use semantic
+Tailwind classes such as `bg-background`, `text-foreground`, and
+`border-border` so they follow the selected theme.
+
+## Development and validation
+
+```bash
+pnpm --filter @nocobase/app-template-hub lint
+pnpm --filter @nocobase/app-template-hub typecheck
+pnpm --filter @nocobase/app-template-hub test
+pnpm --filter @nocobase/app-template-hub build
+```
+
+Unit and integration tests live under `tests/logic`. Browser flows that require
+real authentication, APIs, ACL, files, or server data belong under `e2e`.
+
+## License
+
+MIT

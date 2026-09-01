@@ -323,6 +323,30 @@ jobs:
             本次发布的 package：
         run: ./scripts/feishu-notify.sh
 
+      # 兜底通知。上面几条只覆盖流程走到最后才暴露的失败，早于它们的任何一步
+      # ——安装、构建、测试、changeset version、publish——失败时一条通知都不会发，
+      # 发版就这么静默挂掉，只有主动去翻 Actions 才看得见。
+      #
+      # 排除合回失败：那条已经单独通知过，而它随后的 exit 1 会让 failure() 为真，
+      # 不排除就会为同一件事连发两条。
+      - name: Notify failure
+        if: >-
+          failure() && !inputs.dry_run
+          && steps.merge.outputs.merged != 'false'
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: NocoBase 3 预览版发布失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 发版中断
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            预览版发版流程中断，npm 上没有产生这批版本。
+
+            失败发生在发布之前，仓库状态没有变化，修好之后重新触发即可。
+        run: ./scripts/feishu-notify.sh
+
   # npm 已经发布成功，tag 也推上去了，这里只是把这批发布渲染成 GitHub Release。
   # 独立 job：它失败不该影响已经完成的发布，重跑或手动 dispatch 都能补上。
   github-release:
