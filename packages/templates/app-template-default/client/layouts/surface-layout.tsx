@@ -3,6 +3,7 @@ import type {
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
 } from '@nocobase/app-client/plugins';
+import { useTranslation } from '@nocobase/i18n/client';
 import { ArrowLeft, ChevronRight, PanelLeft, X } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import {
@@ -20,29 +21,46 @@ import { Button } from '@/components/ui/button';
 
 import { describeSettingPage } from '../routing/client-page.js';
 import { ClientPage, ClientRoute } from '../routing/client-route.js';
-import { AppBrand, HeaderActions } from '../shell/index.js';
+import { AppBrand, HeaderActions, type HeaderSurface } from '../shell/index.js';
 import {
-  useSettingsAccess,
-  type SettingsNavEntry,
-} from './use-settings-access.js';
+  useSurfaceAccess,
+  type SurfaceNavEntry,
+} from './use-surface-access.js';
 
-export interface SettingsLayoutProps {
+/** What distinguishes one surface from another. Everything else about the two is identical. */
+export interface SurfaceCopy {
+  /** Which surface this is. The header drops this surface's own entry, since it is already the destination. */
+  readonly surface: HeaderSurface;
+  /** Labels the navigation landmark and the loading state, such as `Settings` or `Dev tools`. */
+  readonly title: string;
+  /** The path this surface mounts at, used to strip the prefix from nested route paths. */
+  readonly pathPrefix: string;
+  readonly emptyTitle: string;
+  readonly emptyDescription: string;
+}
+
+export interface SurfaceLayoutProps {
+  readonly copy: SurfaceCopy;
   readonly settings: readonly AppClientRegisteredSetting[];
   readonly groups: readonly AppClientRegisteredSettingGroup[];
-  /** Authenticated plugin routes nested below a setting page, such as a record detail page. */
+  /** Authenticated plugin routes nested below a page, such as a record detail page. */
   readonly routes?: readonly AppClientRegisteredRoute[];
 }
 
 /**
- * The settings centre: a left rail of every page the user may open, and the selected page on the right. It replaces
- * the application shell rather than nesting inside it, so settings are a place you enter and leave rather than
+ * A navigable surface: a left rail of every page the user may open, and the selected page on the right. It replaces
+ * the application shell rather than nesting inside it, so a surface is a place you enter and leave rather than
  * another branch of the product navigation.
+ *
+ * The settings centre and the dev tools are the same component with different copy, which is what keeps the two
+ * feeling like one product rather than two.
  */
-export function SettingsLayout({
+export function SurfaceLayout({
+  copy,
   groups,
   routes = [],
   settings,
-}: SettingsLayoutProps): ReactElement {
+}: SurfaceLayoutProps): ReactElement {
   const location = useLocation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
@@ -50,7 +68,7 @@ export function SettingsLayout({
     groups: navEntries,
     settings: visible,
     loading,
-  } = useSettingsAccess(settings, groups);
+  } = useSurfaceAccess(settings, groups);
   const activeRoute = routes.find((route) =>
     matchPath({ path: route.path, end: true }, location.pathname),
   );
@@ -62,16 +80,16 @@ export function SettingsLayout({
   );
 
   if (loading) {
-    return <Loading className='min-h-svh' label='Loading settings' />;
+    return <Loading className='min-h-svh' label={`Loading ${copy.title}`} />;
   }
 
   // The index redirect and an unknown or forbidden path both land on the first page the user can actually open, so
-  // the settings centre never renders an empty right pane.
+  // the surface never renders an empty right pane.
   if (!active) {
     return visible[0] ? (
       <Navigate to={visible[0].path} replace />
     ) : (
-      <SettingsEmpty />
+      <SurfaceEmpty copy={copy} />
     );
   }
 
@@ -86,7 +104,7 @@ export function SettingsLayout({
         />
       ) : null}
       <aside
-        aria-label='Settings navigation'
+        aria-label={`${copy.title} navigation`}
         className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card text-card-foreground transition-[width,transform] duration-200 md:static md:z-auto md:flex md:translate-x-0 ${desktopSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div
@@ -109,12 +127,12 @@ export function SettingsLayout({
           </Button>
         </div>
         <nav
-          aria-label='Settings'
+          aria-label={copy.title}
           className={`flex-1 space-y-1 overflow-x-hidden overflow-y-auto py-4 ${desktopSidebarCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
         >
           {navEntries.map((entry) =>
             entry.kind === 'group' ? (
-              <SettingsGroupNav
+              <SurfaceGroupNav
                 activePath={active.path}
                 collapsed={desktopSidebarCollapsed}
                 group={entry.group}
@@ -122,7 +140,7 @@ export function SettingsLayout({
                 onNavigate={() => setMobileSidebarOpen(false)}
               />
             ) : (
-              <SettingsLink
+              <SurfaceLink
                 activePath={active.path}
                 collapsed={desktopSidebarCollapsed}
                 key={entry.setting.path}
@@ -170,15 +188,18 @@ export function SettingsLayout({
               <span className='truncate'>Back to app</span>
             </Link>
           </div>
-          <HeaderActions showSettings={false} />
+          <HeaderActions surface={copy.surface} />
         </header>
         <main className='min-w-0 flex-1'>
-          <SettingsMobileNav active={active} entries={navEntries} />
+          <SurfaceMobileNav active={active} copy={copy} entries={navEntries} />
           {activeRoute ? (
             <Routes>
               <Route
                 element={<ClientRoute route={activeRoute} />}
-                path={activeRoute.path.replace(/^\/settings\//, '')}
+                path={activeRoute.path.replace(
+                  new RegExp(`^${copy.pathPrefix}/`),
+                  '',
+                )}
               />
             </Routes>
           ) : (
@@ -190,7 +211,7 @@ export function SettingsLayout({
   );
 }
 
-interface SettingsGroupNavProps {
+interface SurfaceGroupNavProps {
   readonly activePath: string;
   readonly collapsed: boolean;
   readonly group: AppClientRegisteredSettingGroup;
@@ -198,12 +219,14 @@ interface SettingsGroupNavProps {
 }
 
 /** A group renders as the same disclosure the product sidebar uses, open when it holds the current page. */
-function SettingsGroupNav({
+function SurfaceGroupNav({
   activePath,
   collapsed,
   group,
   onNavigate,
-}: SettingsGroupNavProps): ReactElement {
+}: SurfaceGroupNavProps): ReactElement {
+  const { t } = useTranslation(group.packageName);
+  const title = t(group.title, { defaultValue: group.title });
   const GroupIcon = group.icon;
 
   return (
@@ -213,16 +236,16 @@ function SettingsGroupNav({
     >
       <summary
         className={`flex cursor-pointer list-none items-center rounded-lg px-3 py-2 text-sm font-medium outline-none hover:bg-muted [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'}`}
-        title={collapsed ? group.title : undefined}
+        title={collapsed ? title : undefined}
       >
         <span className='flex min-w-0 items-center gap-3'>
           {GroupIcon ? (
-            <SettingsIcon>
+            <SurfaceIcon>
               <GroupIcon className='size-4' />
-            </SettingsIcon>
+            </SurfaceIcon>
           ) : null}
           <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
-            {group.title}
+            {title}
           </span>
         </span>
         <ChevronRight
@@ -233,7 +256,7 @@ function SettingsGroupNav({
         className={`mt-1 ml-3 space-y-1 border-l border-border pl-2 ${collapsed ? 'md:hidden' : ''}`}
       >
         {group.settings.map((setting) => (
-          <SettingsLink
+          <SurfaceLink
             activePath={activePath}
             collapsed={collapsed}
             key={setting.path}
@@ -246,19 +269,21 @@ function SettingsGroupNav({
   );
 }
 
-interface SettingsLinkProps {
+interface SurfaceLinkProps {
   readonly activePath: string;
   readonly collapsed: boolean;
   readonly onNavigate: () => void;
   readonly setting: AppClientRegisteredSetting;
 }
 
-function SettingsLink({
+function SurfaceLink({
   activePath,
   collapsed,
   onNavigate,
   setting,
-}: SettingsLinkProps): ReactElement {
+}: SurfaceLinkProps): ReactElement {
+  const { t } = useTranslation(setting.packageName);
+  const title = t(setting.title, { defaultValue: setting.title });
   const isSelected = setting.path === activePath;
   const Icon = setting.icon;
 
@@ -267,23 +292,23 @@ function SettingsLink({
       aria-current={isSelected ? 'page' : undefined}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${collapsed ? 'md:justify-center md:px-2' : ''} ${isSelected ? 'bg-primary/10 font-medium text-primary' : 'text-card-foreground hover:bg-muted'}`}
       onClick={onNavigate}
-      title={collapsed ? setting.title : undefined}
+      title={collapsed ? title : undefined}
       to={setting.path}
     >
       {Icon ? (
-        <SettingsIcon>
+        <SurfaceIcon>
           <Icon className='size-4' />
-        </SettingsIcon>
+        </SurfaceIcon>
       ) : null}
       <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
-        {setting.title}
+        {title}
       </span>
     </Link>
   );
 }
 
 /** The application sizes every icon, so entries line up whatever a plugin passes. */
-function SettingsIcon({
+function SurfaceIcon({
   children,
 }: {
   readonly children: ReactElement;
@@ -295,26 +320,30 @@ function SettingsIcon({
   );
 }
 
-interface SettingsMobileNavProps {
+interface SurfaceMobileNavProps {
   readonly active: AppClientRegisteredSetting;
-  readonly entries: readonly SettingsNavEntry[];
+  readonly copy: SurfaceCopy;
+  readonly entries: readonly SurfaceNavEntry[];
 }
 
 /** The rail collapses to a select on small screens, where a 64-wide sidebar would leave no room for the page. */
-function SettingsMobileNav({
+function SurfaceMobileNav({
   active,
+  copy,
   entries,
-}: SettingsMobileNavProps): ReactElement {
+}: SurfaceMobileNavProps): ReactElement {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const selectId = `${copy.pathPrefix.replace(/^\//, '')}-page`;
 
   return (
     <div className='flex items-center gap-3 border-b border-border/70 px-4 py-3 md:hidden'>
-      <label className='sr-only' htmlFor='settings-page'>
-        Settings page
+      <label className='sr-only' htmlFor={selectId}>
+        {copy.title} page
       </label>
       <select
         className='h-9 min-w-0 flex-1 rounded-xl border border-border/70 bg-background px-3 text-sm'
-        id='settings-page'
+        id={selectId}
         onChange={(event) => {
           void navigate(event.target.value);
         }}
@@ -322,16 +351,28 @@ function SettingsMobileNav({
       >
         {entries.map((entry) =>
           entry.kind === 'group' ? (
-            <optgroup key={entry.group.id} label={entry.group.title}>
+            <optgroup
+              key={entry.group.id}
+              label={t(entry.group.title, {
+                defaultValue: entry.group.title,
+                ns: entry.group.packageName,
+              })}
+            >
               {entry.group.settings.map((setting) => (
                 <option key={setting.path} value={setting.path}>
-                  {setting.title}
+                  {t(setting.title, {
+                    defaultValue: setting.title,
+                    ns: setting.packageName,
+                  })}
                 </option>
               ))}
             </optgroup>
           ) : (
             <option key={entry.setting.path} value={entry.setting.path}>
-              {entry.setting.title}
+              {t(entry.setting.title, {
+                defaultValue: entry.setting.title,
+                ns: entry.setting.packageName,
+              })}
             </option>
           ),
         )}
@@ -340,14 +381,12 @@ function SettingsMobileNav({
   );
 }
 
-function SettingsEmpty(): ReactElement {
+function SurfaceEmpty({ copy }: { readonly copy: SurfaceCopy }): ReactElement {
   return (
     <main className='grid min-h-svh place-items-center px-6'>
       <section className='w-full max-w-lg space-y-3 text-center'>
-        <h1 className='text-xl font-semibold'>No settings available</h1>
-        <p className='text-sm text-muted-foreground'>
-          No enabled plugin contributes a settings page you have access to.
-        </p>
+        <h1 className='text-xl font-semibold'>{copy.emptyTitle}</h1>
+        <p className='text-sm text-muted-foreground'>{copy.emptyDescription}</p>
         <Link
           className='inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline'
           to='/'

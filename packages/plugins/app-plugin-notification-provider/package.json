@@ -74,6 +74,7 @@
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -83,12 +84,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "sonner": "^2.0.3",
-    "@nocobase/service-provider": "workspace:^",
     "tailwind-merge": "^3.2.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@refinedev/core": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
