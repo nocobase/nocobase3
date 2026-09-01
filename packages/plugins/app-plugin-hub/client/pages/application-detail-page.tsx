@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Download,
   ExternalLink,
   PackageCheck,
   Play,
@@ -35,6 +36,7 @@ import { Badge } from '../components/ui/badge.js';
 import { Button } from '../components/ui/button.js';
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -77,8 +79,11 @@ import {
 } from '../domain/applications-data.js';
 import {
   DEPLOYMENT_FIXTURES,
+  deploymentCsv,
+  downloadCsv,
   formatDuration,
   type AuditRecord,
+  type DeploymentRecord,
 } from '../domain/operations.js';
 import type {
   ApplicationRuntimeState,
@@ -1077,9 +1082,71 @@ function DeploymentsTab({
 }): ReactElement {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? i18n.language;
+  const exportRecords = useMemo<readonly DeploymentRecord[]>(
+    () =>
+      application.deployments.map((deployment) => {
+        const reference = DEPLOYMENT_FIXTURES.find(
+          (candidate) =>
+            candidate.displayId === deployment.id &&
+            candidate.applicationId === `app-${application.slug}`,
+        );
+        return (
+          reference ?? {
+            id: deployment.id,
+            displayId: deployment.id,
+            applicationId: `app-${application.slug}`,
+            applicationName: application.name,
+            type: deployment.type,
+            status:
+              deployment.status === 'running'
+                ? 'activating'
+                : deployment.status,
+            environment: application.environment,
+            previousRelease: null,
+            targetRelease: deployment.version,
+            requestedBy: deployment.actor,
+            createdAt: deployment.createdAt,
+            startedAt: deployment.createdAt,
+            finishedAt:
+              deployment.status === 'succeeded' ||
+              deployment.status === 'failed'
+                ? deployment.createdAt
+                : null,
+          }
+        );
+      }),
+    [application],
+  );
   return (
-    <Card className='mt-5 py-0'>
-      <CardContent className='px-0'>
+    <Card className='mt-5 gap-5 overflow-visible bg-transparent py-0 shadow-none ring-0'>
+      <CardHeader className='p-0'>
+        <CardTitle className='text-lg font-semibold'>
+          {t('applicationDetail.deployments.title', {
+            defaultValue: 'Deployment history',
+          })}
+        </CardTitle>
+        <CardDescription>
+          {t('applicationDetail.deployments.description', {
+            defaultValue: 'All deployment activity for this application.',
+          })}
+        </CardDescription>
+        <CardAction className='self-end'>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() =>
+              downloadCsv(
+                `${application.slug}-deployments.csv`,
+                deploymentCsv(exportRecords),
+              )
+            }
+          >
+            <Download aria-hidden='true' />
+            {t('common.exportCsv', { defaultValue: 'Export CSV' })}
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className='overflow-hidden rounded-xl bg-card px-0 shadow-sm ring-1 ring-border/80'>
         <Table className='min-w-[880px]'>
           <TableHeader>
             <TableRow>
