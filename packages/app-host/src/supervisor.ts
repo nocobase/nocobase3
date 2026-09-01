@@ -8,11 +8,20 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveAppHostMode, type AppHostMode } from './host-mode.ts';
+import {
+  IpcHostManagementClient,
+  type ApplyHostSnapshotResult,
+  type HostCapabilities,
+  type HostDeploymentSnapshot,
+  type HostManagementService,
+} from './management/index.ts';
 
 export type AppHostSupervisorStatus =
   | 'disabled'
@@ -26,9 +35,12 @@ export type AppHostSupervisorStatus =
 export type AppHostDriver = 'disabled' | 'external' | 'node' | 'tsx';
 
 export interface AppHostSupervisorOptions {
+  mode?: AppHostMode;
   enabled?: boolean;
   targetUrl?: string;
-  appDistDir?: string;
+  appDeploymentsDir?: string;
+  appVolumesDir?: string;
+  configPath?: string;
   host?: string;
   port?: number;
   driver?: AppHostDriver;
@@ -36,15 +48,22 @@ export interface AppHostSupervisorOptions {
   startTimeoutMs?: number;
   shutdownTimeoutMs?: number;
   healthPath?: string;
+  autoRestart?: boolean;
+  maxAutomaticRestarts?: number;
+  automaticRestartWindowMs?: number;
+  automaticRestartBaseDelayMs?: number;
 }
 
 export interface AppHostSupervisorInfo {
+  mode: AppHostMode;
   driver: AppHostDriver;
   status: AppHostSupervisorStatus;
   targetUrl?: string;
   pid?: number;
   activeLeases: number;
-  appDistDir?: string;
+  appDeploymentsDir?: string;
+  appVolumesDir?: string;
+  configPath?: string;
   entrypoint?: string;
 }
 
@@ -55,6 +74,7 @@ export interface AppHostLease {
 
 interface ManagedChild {
   child: ChildProcess;
+  management?: IpcHostManagementClient;
   entrypoint?: string;
   port: number;
   targetUrl: URL;
@@ -70,7 +90,10 @@ interface AppHostLaunchOptions {
 const DEFAULT_APP_HOST_PORT = 13010;
 const DEFAULT_START_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 30 * 1000;
-const DEFAULT_HEALTH_PATH = '/__health';
+const DEFAULT_HEALTH_PATH = '/__live';
+const DEFAULT_MAX_AUTOMATIC_RESTARTS = 5;
+const DEFAULT_AUTOMATIC_RESTART_WINDOW_MS = 60_000;
+const DEFAULT_AUTOMATIC_RESTART_BASE_DELAY_MS = 250;
 const APP_HOST_CHILD_DENIED_NODE_OPTIONS = [
   '--preserve-symlinks',
   '--preserve-symlinks-main',
@@ -80,28 +103,43 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 export class AppHostSupervisor {
   private static instance: AppHostSupervisor | null = null;
   private readonly enabled: boolean;
+  private readonly mode: AppHostMode;
   private readonly driver: AppHostDriver;
   private readonly externalUrl?: URL;
-  private readonly appDistDir?: string;
+  private readonly appDeploymentsDir?: string;
+  private readonly appVolumesDir?: string;
+  private readonly configPath?: string;
   private readonly host: string;
   private readonly configuredPort?: number;
   private readonly startTimeoutMs: number;
   private readonly shutdownTimeoutMs: number;
   private readonly healthPath: string;
+  private readonly autoRestart: boolean;
+  private readonly maxAutomaticRestarts: number;
+  private readonly automaticRestartWindowMs: number;
+  private readonly automaticRestartBaseDelayMs: number;
   private status: AppHostSupervisorStatus;
   private managedChild: ManagedChild | null = null;
   private startPromise: Promise<URL> | null = null;
   private stopPromise: Promise<void> | null = null;
   private activeLeases = 0;
   private shuttingDown = false;
+  private session: string | null = null;
+  private lastSnapshot: HostDeploymentSnapshot | null = null;
+  private automaticRestartTimer: NodeJS.Timeout | null = null;
+  private automaticRestartAttempts: number[] = [];
 
   private constructor(options: AppHostSupervisorOptions = {}) {
+    this.mode = resolveAppHostMode(options.mode ?? process.env.APP_HOST_MODE);
     this.enabled = options.enabled ?? process.env.APP_HOST_ENABLED !== 'false';
     this.externalUrl = normalizeUrl(
       options.targetUrl ?? process.env.APP_HOST_URL,
     );
     this.driver = this.resolveDriver(options);
-    this.appDistDir = options.appDistDir ?? process.env.APP_DIST_DIR;
+    this.appDeploymentsDir =
+      options.appDeploymentsDir ?? process.env.APP_DEPLOYMENTS_DIR;
+    this.appVolumesDir = options.appVolumesDir ?? process.env.APP_VOLUMES_DIR;
+    this.configPath = options.configPath ?? process.env.APP_HOST_CONFIG_PATH;
     this.host = options.host ?? process.env.APP_HOST_BIND ?? '127.0.0.1';
     this.configuredPort = options.port ?? numberFromEnv('APP_HOST_PORT');
     this.startTimeoutMs =
@@ -116,6 +154,20 @@ export class AppHostSupervisor {
       options.healthPath ??
       process.env.APP_HOST_HEALTH_PATH ??
       DEFAULT_HEALTH_PATH;
+    this.autoRestart =
+      options.autoRestart ?? process.env.APP_HOST_AUTO_RESTART !== 'false';
+    this.maxAutomaticRestarts =
+      options.maxAutomaticRestarts ??
+      numberFromEnv('APP_HOST_MAX_AUTOMATIC_RESTARTS') ??
+      DEFAULT_MAX_AUTOMATIC_RESTARTS;
+    this.automaticRestartWindowMs =
+      options.automaticRestartWindowMs ??
+      numberFromEnv('APP_HOST_AUTOMATIC_RESTART_WINDOW_MS') ??
+      DEFAULT_AUTOMATIC_RESTART_WINDOW_MS;
+    this.automaticRestartBaseDelayMs =
+      options.automaticRestartBaseDelayMs ??
+      numberFromEnv('APP_HOST_AUTOMATIC_RESTART_BASE_DELAY_MS') ??
+      DEFAULT_AUTOMATIC_RESTART_BASE_DELAY_MS;
     this.status =
       !this.enabled || this.driver === 'disabled'
         ? 'disabled'
@@ -161,13 +213,16 @@ export class AppHostSupervisor {
 
   getInfo(): AppHostSupervisorInfo {
     return {
+      mode: this.mode,
       driver: this.driver,
       status: this.status,
       targetUrl:
         this.externalUrl?.toString() ?? this.managedChild?.targetUrl.toString(),
       pid: this.managedChild?.child.pid,
       activeLeases: this.activeLeases,
-      appDistDir: this.appDistDir,
+      appDeploymentsDir: this.appDeploymentsDir,
+      appVolumesDir: this.appVolumesDir,
+      configPath: this.configPath,
       entrypoint: this.managedChild?.entrypoint,
     };
   }
@@ -193,6 +248,8 @@ export class AppHostSupervisor {
       return this.externalUrl;
     }
 
+    this.clearAutomaticRestartTimer();
+
     if (this.managedChild && this.status === 'ready') {
       return this.managedChild.targetUrl;
     }
@@ -210,6 +267,7 @@ export class AppHostSupervisor {
   }
 
   async stop(reason = 'app-host stopped'): Promise<void> {
+    this.clearAutomaticRestartTimer();
     if (this.externalUrl || !this.enabled || !this.managedChild) {
       return;
     }
@@ -240,6 +298,32 @@ export class AppHostSupervisor {
     return await this.ensureStarted();
   }
 
+  async applySnapshot(
+    snapshot: HostDeploymentSnapshot,
+  ): Promise<ApplyHostSnapshotResult> {
+    const management = await this.getManagementClient();
+    const result = await management.applySnapshot(snapshot);
+    if (result.status.desiredGeneration === snapshot.generation) {
+      this.lastSnapshot = structuredClone(snapshot);
+    }
+    return result;
+  }
+
+  async getManagementClient(): Promise<HostManagementService> {
+    if (this.mode !== 'managed') {
+      throw new Error('App host management client requires managed mode');
+    }
+    if (this.externalUrl) {
+      throw new Error('Remote app host management transport is not configured');
+    }
+    await this.ensureStarted();
+    const client = this.managedChild?.management;
+    if (!client) {
+      throw new Error('App host IPC management client is not available');
+    }
+    return client;
+  }
+
   async shutdown(): Promise<void> {
     if (this.shuttingDown) {
       return;
@@ -257,16 +341,26 @@ export class AppHostSupervisor {
     this.status = 'starting';
     const port = await this.resolvePort();
     const targetUrl = new URL(`http://${this.host}:${port}`);
+    this.session = this.mode === 'managed' ? randomUUID() : null;
     const launchOptions = this.resolveLaunchOptions(port);
 
     const child = spawn(launchOptions.command, launchOptions.args, {
       cwd: process.cwd(),
       env: launchOptions.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio:
+        this.mode === 'managed'
+          ? ['ignore', 'pipe', 'pipe', 'ipc']
+          : ['ignore', 'pipe', 'pipe'],
     });
+
+    const management =
+      this.mode === 'managed' && this.session
+        ? new IpcHostManagementClient(child, { session: this.session })
+        : undefined;
 
     this.managedChild = {
       child,
+      management,
       entrypoint: launchOptions.entrypoint,
       port,
       targetUrl,
@@ -275,17 +369,28 @@ export class AppHostSupervisor {
     this.pipeChildLogs(child);
     child.once('exit', (code, signal) => {
       const wasStopping = this.status === 'stopping' || this.shuttingDown;
+      const wasReady = this.status === 'ready';
       this.managedChild = null;
       this.status = wasStopping ? 'stopped' : 'failed';
       if (!wasStopping) {
         console.error(
           `app-host exited unexpectedly; code=${code ?? 'null'} signal=${signal ?? 'null'}`,
         );
+        if (wasReady) {
+          this.scheduleAutomaticRestart();
+        }
       }
     });
 
     try {
       await this.waitForReady(targetUrl);
+      const capabilities = await management?.hello();
+      if (capabilities) {
+        this.validateCapabilities(capabilities, this.lastSnapshot);
+      }
+      if (management && this.lastSnapshot) {
+        await management.applySnapshot(this.lastSnapshot);
+      }
       this.status = 'ready';
       return targetUrl;
     } catch (error) {
@@ -313,7 +418,79 @@ export class AppHostSupervisor {
     });
 
     this.managedChild = null;
+    this.session = null;
     this.status = this.enabled ? 'stopped' : 'disabled';
+  }
+
+  private validateCapabilities(
+    capabilities: HostCapabilities,
+    snapshot: HostDeploymentSnapshot | null,
+  ): void {
+    if (capabilities.protocolVersion !== 1) {
+      throw new Error('Unsupported app-host protocol version');
+    }
+    if (capabilities.mode !== this.mode) {
+      throw new Error(
+        `App host mode mismatch: expected "${this.mode}", received "${capabilities.mode}"`,
+      );
+    }
+    if (!snapshot) {
+      return;
+    }
+    for (const deployment of snapshot.deployments) {
+      if (!capabilities.backends.includes(deployment.backend)) {
+        throw new Error(
+          `App host does not support backend "${deployment.backend}" required by deployment "${deployment.id}"`,
+        );
+      }
+    }
+  }
+
+  private scheduleAutomaticRestart(): void {
+    if (
+      !this.autoRestart ||
+      this.mode !== 'managed' ||
+      this.externalUrl ||
+      this.shuttingDown ||
+      this.automaticRestartTimer
+    ) {
+      return;
+    }
+    const now = Date.now();
+    this.automaticRestartAttempts = this.automaticRestartAttempts.filter(
+      (attemptedAt) => now - attemptedAt < this.automaticRestartWindowMs,
+    );
+    if (this.automaticRestartAttempts.length >= this.maxAutomaticRestarts) {
+      console.error(
+        `app-host automatic restart limit reached (${this.maxAutomaticRestarts} attempts in ${this.automaticRestartWindowMs}ms)`,
+      );
+      return;
+    }
+    const attempt = this.automaticRestartAttempts.length + 1;
+    this.automaticRestartAttempts.push(now);
+    const delay = Math.min(
+      this.automaticRestartBaseDelayMs * 2 ** (attempt - 1),
+      10_000,
+    );
+    console.warn(
+      `Restarting app-host automatically in ${delay}ms (attempt ${attempt}/${this.maxAutomaticRestarts})`,
+    );
+    this.automaticRestartTimer = setTimeout(() => {
+      this.automaticRestartTimer = null;
+      this.ensureStarted().catch((error: unknown) => {
+        console.error('Failed to restart app-host automatically', error);
+        this.scheduleAutomaticRestart();
+      });
+    }, delay);
+    this.automaticRestartTimer.unref?.();
+  }
+
+  private clearAutomaticRestartTimer(): void {
+    if (!this.automaticRestartTimer) {
+      return;
+    }
+    clearTimeout(this.automaticRestartTimer);
+    this.automaticRestartTimer = null;
   }
 
   private release(): void {
@@ -346,7 +523,11 @@ export class AppHostSupervisor {
       PORT: `${port}`,
       APP_HOST_PORT: `${port}`,
       APP_HOST_BIND: this.host,
-      APP_DIST_DIR: this.appDistDir,
+      APP_HOST_MODE: this.mode,
+      APP_HOST_SESSION: this.session ?? undefined,
+      APP_DEPLOYMENTS_DIR: this.appDeploymentsDir,
+      APP_VOLUMES_DIR: this.appVolumesDir,
+      APP_HOST_CONFIG_PATH: this.configPath,
     };
     const nodeOptions = sanitizeAppHostChildNodeOptions(env.NODE_OPTIONS);
 
@@ -392,7 +573,10 @@ export class AppHostSupervisor {
 
     const tsconfig =
       process.env.APP_HOST_TSCONFIG ?? process.env.SERVER_TSCONFIG_PATH;
-    const args = [tsxCli, 'watch', '--clear-screen=false'];
+    const args =
+      this.mode === 'managed'
+        ? [tsxCli]
+        : [tsxCli, 'watch', '--clear-screen=false'];
     if (tsconfig) {
       args.push('--tsconfig', tsconfig);
     }
@@ -471,9 +655,14 @@ function resolveTsxAppHostEntrypoint(): string | null {
     return path.resolve(process.cwd(), explicit);
   }
 
-  const source = path.resolve(currentDir, 'cli.ts');
-  if (existsSync(source)) {
-    return source;
+  const candidates = [
+    path.resolve(currentDir, 'cli.ts'),
+    path.resolve(currentDir, '..', 'src', 'cli.ts'),
+  ];
+  for (const source of candidates) {
+    if (existsSync(source)) {
+      return source;
+    }
   }
 
   return null;

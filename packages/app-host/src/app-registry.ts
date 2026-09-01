@@ -28,6 +28,8 @@ import type {
   AppDestroyOptions,
   AppRequestMetadata,
   AppSnapshot,
+  ReplaceAppDefinitionOptions,
+  ReplaceAppDefinitionResult,
 } from './app-types.ts';
 
 export interface ReloadAppOptions {
@@ -61,6 +63,7 @@ export interface RegistryHealth {
 
 export interface AppRuntimeRegistryOptions {
   backend?: AppActivationBackend;
+  backends?: AppActivationBackend[];
   resolveFactory?: (
     definition: AppDefinition,
   ) => Promise<AppFactory> | AppFactory;
@@ -90,7 +93,7 @@ export class AppRuntimeRegistry {
   private readonly definitions = new Map<string, AppDefinition>();
   private readonly runtimes = new Map<string, ActiveAppHandle>();
   private readonly operations = new Map<string, Promise<unknown>>();
-  private readonly backend: AppActivationBackend;
+  private readonly backends: ReadonlyMap<string, AppActivationBackend>;
   private readonly resolveFactory: (
     definition: AppDefinition,
   ) => Promise<AppFactory> | AppFactory;
@@ -114,7 +117,12 @@ export class AppRuntimeRegistry {
   private versionSequence = 0;
 
   constructor(options: AppRuntimeRegistryOptions = {}) {
-    this.backend = options.backend ?? new InProcessAppBackend(this.events);
+    const configuredBackends = options.backends ?? [
+      options.backend ?? new InProcessAppBackend(this.events),
+    ];
+    this.backends = new Map(
+      configuredBackends.map((backend) => [backend.kind, backend]),
+    );
     this.resolveFactory =
       options.resolveFactory ??
       (() => {
@@ -159,6 +167,10 @@ export class AppRuntimeRegistry {
     });
   }
 
+  async registerDefinition(definition: AppDefinition): Promise<AppDefinition> {
+    return this.register(definition.id, definition);
+  }
+
   async updateDefinition(
     id: string,
     options: CreateAppDefinitionOptions = {},
@@ -168,6 +180,68 @@ export class AppRuntimeRegistry {
       const definition = this.createDefinition(id, options);
       this.definitions.set(id, definition);
       return definition;
+    });
+  }
+
+  async replaceDefinition(
+    definition: AppDefinition,
+    replaceOptions: ReplaceAppDefinitionOptions = {},
+  ): Promise<ReplaceAppDefinitionResult> {
+    const id = definition.id;
+    return this.withAppLock(id, async () => {
+      const currentDefinition = this.definitions.get(id);
+      const currentRuntime = this.runtimes.get(id);
+      const nextDefinition = this.createDefinition(id, definition);
+      const changed =
+        !currentDefinition ||
+        !definitionsEqual(currentDefinition, nextDefinition);
+
+      if (!changed) {
+        const app =
+          replaceOptions.activate && !currentRuntime
+            ? await this.ensureActiveUnlocked(id)
+            : (currentRuntime?.snapshot() ?? null);
+        return { definition: currentDefinition, app, changed: false };
+      }
+
+      if (!currentRuntime && !replaceOptions.activate) {
+        this.definitions.set(id, nextDefinition);
+        return { definition: nextDefinition, app: null, changed: true };
+      }
+
+      if (!currentRuntime) {
+        await this.evictForCapacity();
+      }
+
+      let newRuntime: ActiveAppHandle;
+      try {
+        newRuntime = await this.activateDefinition(nextDefinition);
+      } catch (error) {
+        throw new AppReloadFailedError(id, error);
+      }
+
+      this.definitions.set(id, nextDefinition);
+      this.runtimes.set(id, newRuntime);
+
+      if (currentRuntime) {
+        try {
+          await currentRuntime.destroy({
+            reason: replaceOptions.reason ?? 'app definition replaced',
+            timeoutMs: replaceOptions.destroyTimeoutMs,
+          });
+        } catch (error) {
+          console.error(
+            `Failed to destroy replaced app runtime "${id}"`,
+            error,
+          );
+        }
+      }
+
+      return {
+        definition: nextDefinition,
+        app: newRuntime.snapshot(),
+        changed: true,
+      };
     });
   }
 
@@ -388,6 +462,10 @@ export class AppRuntimeRegistry {
     return [...this.runtimes.values()].map((runtime) => runtime.snapshot());
   }
 
+  backendKinds(): AppDefinition['backend'][] {
+    return [...this.backends.keys()] as AppDefinition['backend'][];
+  }
+
   capacity(): RegistryHealth['capacity'] {
     return {
       maxActiveApps: this.maxActiveApps,
@@ -505,7 +583,13 @@ export class AppRuntimeRegistry {
     const startedAt = Date.now();
     try {
       const createApp = await this.resolveFactory(definition);
-      const runtime = await this.backend.activate({
+      const backend = this.backends.get(definition.backend);
+      if (!backend) {
+        throw new Error(
+          `App backend "${definition.backend}" is not available on this host`,
+        );
+      }
+      const runtime = await backend.activate({
         definition,
         version,
         createApp,
@@ -694,4 +778,8 @@ function sortByLastAccessed(a: AppSnapshot, b: AppSnapshot): number {
     ? Date.parse(b.lastAccessedAt)
     : Date.parse(b.createdAt);
   return aTime - bTime;
+}
+
+function definitionsEqual(a: AppDefinition, b: AppDefinition): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }

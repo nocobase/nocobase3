@@ -11,7 +11,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DirectoryAppCatalog } from '../dist/app-catalog.js';
+import { DeploymentCatalog } from '../dist/deployment/catalog.js';
 
 const tempDirs: string[] = [];
 
@@ -19,12 +19,12 @@ async function createAppWorkspace(
   files: string[],
   packageJson: string | null = '{"name":"customer-app","version":"1.0.0"}\n',
 ) {
-  const appsDir = await mkdtemp(
-    path.join(os.tmpdir(), 'nocobase-app-catalog-'),
+  const deploymentsDir = await mkdtemp(
+    path.join(os.tmpdir(), 'nocobase-deployment-catalog-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
-  const appDir = path.join(appsDir, 'customer');
+  const appDir = path.join(deploymentsDir, 'customer');
   await mkdir(appDir, { recursive: true });
   if (packageJson) {
     await writeFile(path.join(appDir, 'package.json'), packageJson);
@@ -36,7 +36,7 @@ async function createAppWorkspace(
     await writeFile(target, 'export const marker = true;\n');
   }
 
-  return { appsDir, appDir };
+  return { deploymentsDir, appDir };
 }
 
 afterEach(async () => {
@@ -45,13 +45,13 @@ afterEach(async () => {
   );
 });
 
-describe('DirectoryAppCatalog', () => {
+describe('DeploymentCatalog', () => {
   it('discovers an app from dist/server/embedded.js', async () => {
-    const { appsDir, appDir } = await createAppWorkspace(
+    const { deploymentsDir, appDir } = await createAppWorkspace(
       ['dist/server/embedded.js'],
       null,
     );
-    const catalog = new DirectoryAppCatalog({ appsDir });
+    const catalog = new DeploymentCatalog({ deploymentsDir });
 
     await expect(catalog.discover()).resolves.toMatchObject([
       {
@@ -68,12 +68,12 @@ describe('DirectoryAppCatalog', () => {
   });
 
   it('discovers client assets as optional app artifacts', async () => {
-    const { appsDir, appDir } = await createAppWorkspace([
+    const { deploymentsDir, appDir } = await createAppWorkspace([
       'dist/client/index.html',
       'dist/client/assets/app.js',
       'dist/server/embedded.js',
     ]);
-    const catalog = new DirectoryAppCatalog({ appsDir });
+    const catalog = new DeploymentCatalog({ deploymentsDir });
 
     await expect(catalog.discover()).resolves.toMatchObject([
       {
@@ -92,22 +92,22 @@ describe('DirectoryAppCatalog', () => {
   });
 
   it('does not discover a client-only app', async () => {
-    const { appsDir } = await createAppWorkspace([
+    const { deploymentsDir } = await createAppWorkspace([
       'dist/client/index.html',
       'dist/client/assets/app.js',
     ]);
-    const catalog = new DirectoryAppCatalog({ appsDir });
+    const catalog = new DeploymentCatalog({ deploymentsDir });
 
     await expect(catalog.discover()).resolves.toEqual([]);
   });
 
   it('uses the standard dist server entrypoint when package app metadata is omitted', async () => {
-    const { appsDir, appDir } = await createAppWorkspace([
+    const { deploymentsDir, appDir } = await createAppWorkspace([
       'dist/client/index.html',
       'dist/server/embedded.js',
       'server/app.ts',
     ]);
-    const catalog = new DirectoryAppCatalog({ appsDir });
+    const catalog = new DeploymentCatalog({ deploymentsDir });
 
     await expect(catalog.discover()).resolves.toMatchObject([
       {
@@ -121,18 +121,18 @@ describe('DirectoryAppCatalog', () => {
   });
 
   it('does not treat source server files as app-dist server artifacts', async () => {
-    const { appsDir } = await createAppWorkspace([
+    const { deploymentsDir } = await createAppWorkspace([
       'dist/client/index.html',
       'server/index.ts',
       'server/app.ts',
     ]);
-    const catalog = new DirectoryAppCatalog({ appsDir });
+    const catalog = new DeploymentCatalog({ deploymentsDir });
 
     await expect(catalog.discover()).resolves.toEqual([]);
   });
 
   it('uses the directory path as app identity when package app metadata is stale', async () => {
-    const { appsDir } = await createAppWorkspace(
+    const { deploymentsDir } = await createAppWorkspace(
       ['dist/client/index.html', 'dist/server/embedded.js'],
       JSON.stringify(
         {
@@ -146,7 +146,7 @@ describe('DirectoryAppCatalog', () => {
         2,
       ),
     );
-    const catalog = new DirectoryAppCatalog({ appsDir });
+    const catalog = new DeploymentCatalog({ deploymentsDir });
 
     await expect(catalog.discover()).resolves.toMatchObject([
       {
@@ -161,12 +161,12 @@ describe('DirectoryAppCatalog', () => {
   });
 
   it('ignores nested app directories', async () => {
-    const appsDir = await mkdtemp(
-      path.join(os.tmpdir(), 'nocobase-app-catalog-'),
+    const deploymentsDir = await mkdtemp(
+      path.join(os.tmpdir(), 'nocobase-deployment-catalog-'),
     );
-    tempDirs.push(appsDir);
+    tempDirs.push(deploymentsDir);
 
-    const nestedAppDir = path.join(appsDir, 'main', 'customer');
+    const nestedAppDir = path.join(deploymentsDir, 'main', 'customer');
     await mkdir(path.join(nestedAppDir, 'dist', 'server'), { recursive: true });
     await writeFile(
       path.join(nestedAppDir, 'package.json'),
@@ -177,7 +177,7 @@ describe('DirectoryAppCatalog', () => {
       'export const marker = true;\n',
     );
 
-    const catalog = new DirectoryAppCatalog({ appsDir });
+    const catalog = new DeploymentCatalog({ deploymentsDir });
 
     await expect(catalog.discover()).resolves.toEqual([]);
   });

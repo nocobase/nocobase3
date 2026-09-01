@@ -562,7 +562,7 @@ Hub、Hub DB、Host Control 和初始 Kubernetes identity 由 Helm、GitOps 或�
 `packages/app-host` 当前：
 
 - 使用 Node `node:http`，不是 Hono；
-- 通过 `DirectoryAppCatalog` 扫描 `APP_DIST_DIR` 一级目录；
+- standalone 模式通过 `DeploymentCatalog` 扫描 `APP_DEPLOYMENTS_DIR` 一级目录，并由 `StandaloneDeploymentReconciler` 将结果同步到运行时注册表；
 - 发现含 `dist/server/embedded.js` 的 App；
 - `AppRuntimeRegistry` 的 Definition 和 Runtime 都是内存状态；
 - 已提供 rescan、activate、deploy、reload、evict 等 HTTP API；

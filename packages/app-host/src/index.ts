@@ -14,6 +14,8 @@ import {
   type ServerResponse,
 } from 'node:http';
 import type { Duplex } from 'node:stream';
+import path from 'node:path';
+import { createDriveManager, type AppDriveDiskConfig } from '@nocobase/drive';
 import { AppRegistryError } from './errors.ts';
 import {
   applyFetchResponse,
@@ -21,9 +23,27 @@ import {
   requestPath,
   toFetchRequest,
 } from './http-adapter.ts';
-import { DirectoryAppCatalog } from './app-catalog.ts';
+import {
+  DriveArtifactResolver,
+  type ArtifactResolver,
+} from './artifact-resolver.ts';
+import {
+  AppModuleLoader,
+  DeploymentCatalog,
+  StandaloneDeploymentReconciler,
+} from './deployment/index.ts';
+import { loadAppHostConfig } from './host-config.ts';
+import { resolveAppHostMode, type AppHostMode } from './host-mode.ts';
 import { AppRuntimeRegistry } from './app-registry.ts';
+import type { AppActivationBackend } from './app-types.ts';
 import { writeAppSystemLog } from './app-system-log.ts';
+import {
+  ConfigMaterializer,
+  DefaultHostManagementService,
+  HostDeploymentReconciler,
+  type HostManagementService,
+  IpcHostManagementServer,
+} from './management/index.ts';
 import {
   getPathInsideApp,
   isAppAssetPath,
@@ -38,26 +58,38 @@ import {
 export * from './errors.ts';
 export * from './events.ts';
 export * from './http-adapter.ts';
+export * from './host-mode.ts';
+export * from './host-config.ts';
 export * from './in-process-backend.ts';
-export * from './app-catalog.ts';
+export * from './deployment/index.ts';
+export * from './artifact-resolver.ts';
 export * from './app-registry.ts';
 export * from './app-runtime.ts';
 export * from './app-system-log.ts';
 export * from './static-client.ts';
 export * from './websocket.ts';
 export * from './app-types.ts';
+export * from './management/index.ts';
 
 export interface AppHostOptions {
+  mode?: AppHostMode;
   port?: number;
   host?: string;
-  appDistDir?: string;
+  appDeploymentsDir?: string;
+  appVolumesDir?: string;
+  artifact?: AppDriveDiskConfig;
+  artifactResolver?: ArtifactResolver;
+  backends?: AppActivationBackend[];
   maxActiveApps?: number;
   idleTtlMs?: number;
   evictionIntervalMs?: number;
 }
 
 export interface AppHost {
-  readonly appCatalog: DirectoryAppCatalog;
+  readonly mode: AppHostMode;
+  readonly deploymentCatalog: DeploymentCatalog;
+  readonly artifactResolver: ArtifactResolver;
+  readonly management: HostManagementService;
   readonly registry: AppRuntimeRegistry;
   readonly server: Server;
   start(): Promise<void>;
@@ -65,14 +97,48 @@ export interface AppHost {
 }
 
 export function createAppHost(options: AppHostOptions = {}): AppHost {
-  const appCatalog = new DirectoryAppCatalog({
-    appsDir: options.appDistDir,
+  const mode = resolveAppHostMode(options.mode);
+  const deploymentCatalog = new DeploymentCatalog({
+    deploymentsDir: options.appDeploymentsDir,
+    volumesDir: options.appVolumesDir,
   });
+  const moduleLoader = new AppModuleLoader();
+  const artifact = options.artifact ?? {
+    driver: 'fs',
+    location: path.resolve(process.cwd(), 'storage', 'app-artifacts'),
+    visibility: 'private',
+  };
+  const drive = createDriveManager({
+    default: 'artifact',
+    disks: { artifact },
+    links: {},
+  });
+  const artifactResolver =
+    options.artifactResolver ??
+    new DriveArtifactResolver(drive.use('artifact'), deploymentCatalog, {
+      appDeploymentsDir: deploymentCatalog.deploymentsDir,
+    });
   const registry = new AppRuntimeRegistry({
-    resolveFactory: (definition) => appCatalog.resolveFactory(definition),
+    resolveFactory: (definition) => moduleLoader.resolveFactory(definition),
+    backends: options.backends,
     maxActiveApps: options.maxActiveApps,
     idleTtlMs: options.idleTtlMs,
     evictionIntervalMs: options.evictionIntervalMs,
+  });
+  const standaloneReconciler = new StandaloneDeploymentReconciler(
+    deploymentCatalog,
+    registry,
+  );
+  const reconciler = new HostDeploymentReconciler({
+    mode,
+    registry,
+    artifactResolver,
+    configMaterializer: new ConfigMaterializer(deploymentCatalog.volumesDir),
+  });
+  const management = new DefaultHostManagementService({
+    mode,
+    registry,
+    reconciler,
   });
 
   const handleRequest = async (
@@ -84,8 +150,12 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       const managementResponse = await managementApi(
         req,
         path,
+        mode,
+        management,
         registry,
-        appCatalog,
+        deploymentCatalog,
+        standaloneReconciler,
+        artifactResolver,
       );
       if (managementResponse) {
         await applyFetchResponse(res, managementResponse);
@@ -166,11 +236,15 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   });
 
   return {
-    appCatalog,
+    mode,
+    deploymentCatalog,
+    artifactResolver,
+    management,
     registry,
     server,
     async start() {
-      const discoveredApps = await appCatalog.registerDiscovered(registry);
+      const discoveredApps =
+        mode === 'standalone' ? await standaloneReconciler.reconcile() : null;
       attachAppEventLogs(registry);
 
       await new Promise<void>((resolve) => {
@@ -187,12 +261,18 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
           ? `${address.address}:${address.port}`
           : String(address);
       console.log(`App host listening on http://${bind}`);
-      console.log(`App dist directory: ${appCatalog.appsDir}`);
-      console.log(
-        `Discovered ${discoveredApps.length} app(s): ${
-          discoveredApps.map((app) => app.id).join(', ') || '(none)'
-        }`,
-      );
+      console.log(`App host mode: ${mode}`);
+      if (mode === 'standalone') {
+        console.log(
+          `App deployments directory: ${deploymentCatalog.deploymentsDir}`,
+        );
+        console.log(
+          `Discovered ${discoveredApps?.registered.length ?? 0} app(s): ${
+            discoveredApps?.registered.map((app) => app.id).join(', ') ||
+            '(none)'
+          }`,
+        );
+      }
     },
     async close(reason = 'host shutdown') {
       await new Promise<void>((resolve, reject) => {
@@ -291,14 +371,37 @@ async function dispatchAppWebSocket(
 }
 
 export async function startAppHostFromEnv(): Promise<AppHost> {
+  const config = await loadAppHostConfig();
   const host = createAppHost({
-    port: numberFromEnv('PORT') ?? numberFromEnv('APP_HOST_PORT') ?? 3000,
-    host: process.env.APP_HOST_BIND ?? process.env.HOST ?? '127.0.0.1',
-    appDistDir: process.env.APP_DIST_DIR,
-    maxActiveApps: numberFromEnv('MAX_ACTIVE_APPS'),
-    idleTtlMs: numberFromEnv('APP_IDLE_TTL_MS'),
-    evictionIntervalMs: numberFromEnv('APP_EVICTION_INTERVAL_MS'),
+    mode: config.mode,
+    port: config.server.port,
+    host: config.server.host,
+    appDeploymentsDir: config.appDeploymentsDir,
+    appVolumesDir: config.appVolumesDir,
+    artifact: config.artifact,
+    maxActiveApps: config.maxActiveApps,
+    idleTtlMs: config.idleTtlMs,
+    evictionIntervalMs: config.evictionIntervalMs,
   });
+
+  if (host.mode === 'managed') {
+    const session = process.env.APP_HOST_SESSION;
+    if (!session) {
+      throw new Error('Managed app host requires APP_HOST_SESSION');
+    }
+    const ipcServer = new IpcHostManagementServer(host.management, session);
+    ipcServer.attach();
+    process.once('disconnect', () => {
+      ipcServer.close();
+      host
+        .close('hub IPC disconnected')
+        .then(() => process.exit(0))
+        .catch((error: unknown) => {
+          console.error(error);
+          process.exit(1);
+        });
+    });
+  }
 
   await host.start();
   return host;
@@ -351,21 +454,56 @@ function attachAppEventLogs(registry: AppRuntimeRegistry): void {
 async function managementApi(
   req: IncomingMessage,
   path: string,
+  mode: AppHostMode,
+  management: HostManagementService,
   registry: AppRuntimeRegistry,
-  appCatalog: DirectoryAppCatalog,
+  deploymentCatalog: DeploymentCatalog,
+  standaloneReconciler: StandaloneDeploymentReconciler,
+  artifactResolver: ArtifactResolver,
 ): Promise<Response | null> {
   const method = req.method ?? 'GET';
 
+  if (
+    mode === 'managed' &&
+    path !== '/__live' &&
+    path !== '/__ready' &&
+    path !== '/__health'
+  ) {
+    return null;
+  }
+
+  if (method === 'GET' && path === '/__live') {
+    return jsonResponse({ status: 'ok' });
+  }
+
+  if (method === 'GET' && path === '/__ready') {
+    const status = await management.getStatus();
+    return jsonResponse(
+      { status: status.ready ? 'ready' : 'not-ready' },
+      status.ready ? {} : { status: 503 },
+    );
+  }
+
+  if (mode === 'managed' && method === 'GET' && path === '/__health') {
+    const status = await management.getStatus();
+    return jsonResponse(
+      { status: status.ready ? 'ready' : 'not-ready' },
+      status.ready ? {} : { status: 503 },
+    );
+  }
+
   if (method === 'GET' && path === '/') {
     return jsonResponse({
-      message: 'Node HTTP app host with directory-discovered apps',
+      message: 'Node HTTP app host',
+      mode,
       packages: {
         appHost: '@nocobase/app-host',
-        appDistDir: appCatalog.appsDir,
+        appDeploymentsDir: deploymentCatalog.deploymentsDir,
+        appVolumesDir: deploymentCatalog.volumesDir,
       },
       examples: [
-        'add app-dist/acme/dist/server/embedded.js, then call POST /__apps/rescan',
-        'put hashed static files under app-dist/acme/dist/client/assets for /acme/assets/*',
+        'add app-deployments/acme/dist/server/embedded.js, then call POST /__apps/rescan',
+        'put hashed static files under app-deployments/acme/dist/client/assets for /acme/assets/*',
         'curl -X POST http://localhost:3000/__apps/rescan',
         'curl -X POST http://localhost:3000/__apps/acme/activate',
         'curl -X POST http://localhost:3000/__apps/acme/deploy',
@@ -379,7 +517,11 @@ async function managementApi(
   }
 
   if (method === 'GET' && path === '/__health') {
-    return jsonResponse(registry.health());
+    return jsonResponse({
+      ...registry.health(),
+      mode,
+      management: await management.getStatus(),
+    });
   }
 
   if (method === 'GET' && path === '/__apps') {
@@ -394,7 +536,7 @@ async function managementApi(
       return methodNotAllowed('POST');
     }
 
-    const sync = await appCatalog.syncDiscovered(registry);
+    const sync = await standaloneReconciler.reconcile();
     return jsonResponse({
       ...sync,
       active: registry.list(),
@@ -430,22 +572,37 @@ async function managementApi(
 
     if (action === 'deploy') {
       const input = await readJsonBody(req);
-      return jsonResponse({
-        deployment: await registry.deploy(id, {
-          version:
-            typeof input.version === 'string' ? input.version : undefined,
-          strategy:
-            input.strategy === 'restart' || input.strategy === 'blue-green'
-              ? input.strategy
-              : undefined,
-          destroyTimeoutMs: numberFromValue(input.destroyTimeoutMs),
-          waitForReady:
-            typeof input.waitForReady === 'boolean'
-              ? input.waitForReady
-              : undefined,
-          reason: 'deploy API',
-        }),
-      });
+      const reference = input.artifact;
+      if (!isArtifactReference(reference) || reference.appId !== id) {
+        return jsonResponse(
+          {
+            error: 'Deploy requires an artifact reference matching the app ID',
+          },
+          { status: 400 },
+        );
+      }
+      const artifact = await artifactResolver.resolve(reference);
+      try {
+        const current = registry.definition(id);
+        const replacement = await registry.replaceDefinition(
+          {
+            ...artifact.definition,
+            basePath: current?.basePath ?? artifact.definition.basePath,
+            dataDir: current?.dataDir ?? artifact.definition.dataDir,
+            configPath: current?.configPath ?? artifact.definition.configPath,
+          },
+          {
+            activate: true,
+            reason: 'deploy API',
+            destroyTimeoutMs: numberFromValue(input.destroyTimeoutMs),
+          },
+        );
+        await artifact.commit();
+        return jsonResponse({ deployment: replacement });
+      } catch (error) {
+        await artifact.rollback();
+        throw error;
+      }
     }
 
     if (action === 'evict') {
@@ -474,7 +631,7 @@ async function managementApi(
     return jsonResponse(
       {
         error:
-          'App creation through API is disabled. Add app-dist/<app>/dist/server/embedded.js and call POST /__apps/rescan.',
+          'App creation through API is disabled. Add app-deployments/<app>/dist/server/embedded.js and call POST /__apps/rescan.',
       },
       {
         status: 405,
@@ -493,10 +650,35 @@ async function managementApi(
   return methodNotAllowed('GET, DELETE');
 }
 
+function isArtifactReference(
+  value: unknown,
+): value is import('./artifact-resolver.ts').ArtifactReference {
+  if (!value || typeof value !== 'object') return false;
+  const reference = value as Record<string, unknown>;
+  return (
+    typeof reference.key === 'string' &&
+    typeof reference.appId === 'string' &&
+    typeof reference.version === 'string' &&
+    typeof reference.checksum === 'string'
+  );
+}
+
 function resolveAppId(
   path: string,
   registry: AppRuntimeRegistry,
 ): string | null {
+  const matchingDefinition = registry
+    .listDefinitions()
+    .sort((a, b) => b.basePath.length - a.basePath.length)
+    .find(
+      (definition) =>
+        path === definition.basePath ||
+        path.startsWith(`${definition.basePath}/`),
+    );
+  if (matchingDefinition) {
+    return matchingDefinition.id;
+  }
+
   const match = parseAppPath(path);
   if (!match) {
     return null;
@@ -633,14 +815,4 @@ function numberFromValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value)
     ? value
     : undefined;
-}
-
-function numberFromEnv(name: string): number | undefined {
-  const value = process.env[name];
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }

@@ -68,7 +68,7 @@ export interface AppCodeReference {
   version: string;
   rootDir: string;
   entrypoint: string;
-  checksum?: string;
+  fingerprint?: string;
 }
 
 export interface AppClientReference {
@@ -238,4 +238,16 @@ export interface AppDeploymentResult {
   activeVersion: string;
   changed: boolean;
   app: AppSnapshot;
+}
+
+export interface ReplaceAppDefinitionOptions {
+  activate?: boolean;
+  reason?: string;
+  destroyTimeoutMs?: number;
+}
+
+export interface ReplaceAppDefinitionResult {
+  definition: AppDefinition;
+  app: AppSnapshot | null;
+  changed: boolean;
 }

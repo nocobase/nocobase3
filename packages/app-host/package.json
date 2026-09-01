@@ -20,12 +20,24 @@
       "import": "./dist/supervisor.js"
     },
     "./catalog": {
-      "types": "./dist/app-catalog.d.ts",
-      "import": "./dist/app-catalog.js"
+      "types": "./dist/deployment/catalog.d.ts",
+      "import": "./dist/deployment/catalog.js"
+    },
+    "./deployment": {
+      "types": "./dist/deployment/index.d.ts",
+      "import": "./dist/deployment/index.js"
     },
     "./registry": {
       "types": "./dist/app-registry.d.ts",
       "import": "./dist/app-registry.js"
+    },
+    "./artifacts": {
+      "types": "./dist/artifact-resolver.d.ts",
+      "import": "./dist/artifact-resolver.js"
+    },
+    "./management": {
+      "types": "./dist/management/index.d.ts",
+      "import": "./dist/management/index.js"
     },
     "./types": {
       "types": "./dist/app-types.d.ts",
@@ -41,7 +53,10 @@
     "README.md"
   ],
   "dependencies": {
-    "@nocobase/app-server-kit": "workspace:^"
+    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/config": "workspace:^",
+    "@nocobase/drive": "workspace:^",
+    "tar": "^7.4.3"
   },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
