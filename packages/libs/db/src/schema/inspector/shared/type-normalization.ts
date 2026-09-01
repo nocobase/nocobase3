@@ -6,11 +6,24 @@ import type {
 import { optionalString } from './result.js';
 
 export function normalizePhysicalDataType(
-  dialect: 'sqlite' | 'postgres' | 'mysql' | 'oracle',
+  dialect: 'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql',
   nativeType: string,
 ): PhysicalDataType {
   const type = nativeType.trim().toLowerCase();
   const base = type.replace(/\(.*/, '').trim();
+
+  if (dialect === 'mssql') {
+    if (base === 'bit') return 'boolean';
+    if (base === 'uniqueidentifier') return 'uuid';
+    if (base === 'timestamp' || base === 'rowversion') return 'blob';
+    if (base === 'image') return 'blob';
+    if (base === 'ntext') return 'text';
+    if (base === 'smalldatetime' || base === 'datetimeoffset') {
+      return 'datetime';
+    }
+    if (base === 'money' || base === 'smallmoney') return 'decimal';
+    if (base === 'float') return 'double';
+  }
 
   if (/^(smallint|integer|int|int2|int4|mediumint|tinyint)/.test(base)) {
     return 'integer';

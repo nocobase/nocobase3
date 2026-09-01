@@ -55,5 +55,15 @@ export function resolveDatabaseCapabilities(
     });
   }
 
+  if (dialect === 'mssql') {
+    Object.assign(base, {
+      schemas: true,
+      replaceView: true,
+      partialIndexes: true,
+      nativeTypes: true,
+      comments: true,
+    });
+  }
+
   return { ...base, ...overrides };
 }

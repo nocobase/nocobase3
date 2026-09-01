@@ -340,7 +340,11 @@ export class KnexSchemaAdapter implements SchemaAdapter {
             constraint.onDelete === 'cascade' ||
             constraint.onDelete === 'set null')
         ) {
-          foreign.onDelete(constraint.onDelete.toUpperCase());
+          foreign.onDelete(
+            this.dialect === 'mssql' && constraint.onDelete === 'restrict'
+              ? 'NO ACTION'
+              : constraint.onDelete.toUpperCase(),
+          );
         }
         if (constraint.onUpdate && this.dialect !== 'oracle') {
           foreign.onUpdate(constraint.onUpdate.toUpperCase());
@@ -392,10 +396,76 @@ export class KnexSchemaAdapter implements SchemaAdapter {
   }
 
   private buildPredicate(predicate: FilterExpression): Knex.QueryBuilder {
+    if (this.dialect === 'mssql') {
+      return buildMssqlPredicate(this.knex, predicate);
+    }
     const query = this.knex.queryBuilder();
     applyFilter(query, predicate);
     return query;
   }
+}
+
+function buildMssqlPredicate(
+  knex: Knex,
+  filter: FilterExpression,
+): Knex.QueryBuilder {
+  const query = knex.queryBuilder();
+  for (const [field, expression] of Object.entries(filter)) {
+    const identifier = knex.ref(field).toQuery();
+    if (isOperatorExpression(expression)) {
+      for (const [operator, value] of Object.entries(expression)) {
+        query.whereRaw(mssqlPredicate(identifier, operator, value));
+      }
+    } else {
+      query.whereRaw(mssqlPredicate(identifier, '$eq', expression));
+    }
+  }
+  return query;
+}
+
+function mssqlPredicate(
+  identifier: string,
+  operator: string,
+  value: unknown,
+): string {
+  switch (operator) {
+    case '$gt':
+      return `${identifier} > ${mssqlLiteral(value)}`;
+    case '$gte':
+      return `${identifier} >= ${mssqlLiteral(value)}`;
+    case '$lt':
+      return `${identifier} < ${mssqlLiteral(value)}`;
+    case '$lte':
+      return `${identifier} <= ${mssqlLiteral(value)}`;
+    case '$ne':
+      return value === null
+        ? `${identifier} is not null`
+        : `${identifier} <> ${mssqlLiteral(value)}`;
+    case '$notNull':
+      return `${identifier} is not null`;
+    case '$is':
+    case '$eq':
+    default:
+      return value === null
+        ? `${identifier} is null`
+        : `${identifier} = ${mssqlLiteral(value)}`;
+  }
+}
+
+function mssqlLiteral(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return value ? '1' : '0';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'bigint') return String(value);
+  if (value instanceof Date) {
+    return `N'${value.toISOString().replaceAll("'", "''")}'`;
+  }
+  if (typeof value === 'string') {
+    return `N'${value.replaceAll("'", "''")}'`;
+  }
+  throw new Error(
+    `MSSQL filtered index predicate value must be a scalar, received ${typeof value}.`,
+  );
 }
 
 function normalizeDeferrable(

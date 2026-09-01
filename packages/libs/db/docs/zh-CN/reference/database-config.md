@@ -35,7 +35,8 @@ type ConnectionConfig =
   | SqliteConnectionConfig
   | PostgresConnectionConfig
   | MysqlConnectionConfig
-  | OracleConnectionConfig;
+  | OracleConnectionConfig
+  | MssqlConnectionConfig;
 ```
 
 公共配置：
@@ -60,6 +61,7 @@ interface BaseConnectionConfig {
 | `postgres` | `pg`             |
 | `mysql`    | `mysql2`         |
 | `oracle`   | `oracledb`       |
+| `mssql`    | `tedious`        |
 
 `driver` 如果显式填写，必须和 `dialect` 匹配。
 
@@ -135,6 +137,24 @@ type OracleConnectionConfig = BaseConnectionConfig & {
 ```
 
 Oracle 使用 `serviceName`，内部组合为 `host:port/serviceName` 形式的 `connectString`。`oracledb` 6 默认使用 Thin mode，不要求安装 Oracle Instant Client。
+
+SQL Server：
+
+```ts
+type MssqlConnectionConfig = BaseConnectionConfig & {
+  dialect: 'mssql';
+  driver?: 'tedious';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  encrypt?: boolean;
+  trustServerCertificate?: boolean;
+};
+```
+
+SQL Server 底层使用 Knex 的 `mssql` dialect 和 `tedious` driver。`encrypt` 控制传输加密；本地自签名测试环境可以设置 `trustServerCertificate: true`，生产环境应优先使用受信任证书。
 
 MySQL 的 `socketPath` 是另一种连接目标，可以和 `database`、`username`、`password` 一起使用，但不要和 `host`、`port` 混用。
 

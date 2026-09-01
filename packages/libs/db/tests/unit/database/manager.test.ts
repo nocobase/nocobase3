@@ -374,7 +374,7 @@ describe('DatabaseManager', () => {
       },
     });
     expect(() => invalidDialect.connection()).toThrow(
-      'Invalid database dialect "custom". Expected "sqlite", "postgres", "mysql", or "oracle".',
+      'Invalid database dialect "custom". Expected "sqlite", "postgres", "mysql", "oracle", or "mssql".',
     );
 
     const unsupportedUrl = createDatabaseManager({
@@ -532,6 +532,30 @@ describe('DatabaseManager', () => {
       password: 'secret',
       connectString: '127.0.0.1:1521/FREEPDB1',
     });
+
+    const mssql = resolveKnexConnectionConfig({
+      dialect: 'mssql',
+      host: '127.0.0.1',
+      port: 1433,
+      database: 'orders',
+      username: 'sa',
+      password: 'secret',
+      encrypt: true,
+      trustServerCertificate: true,
+    });
+    expect(mssql).toMatchObject({
+      driver: 'tedious',
+      knexClient: 'mssql',
+    });
+    expect(mssql.connection).toEqual({
+      server: '127.0.0.1',
+      port: 1433,
+      database: 'orders',
+      user: 'sa',
+      password: 'secret',
+      encrypt: true,
+      options: { trustServerCertificate: true },
+    });
   });
 
   it('normalizes capabilities for supported dialects and overrides', () => {
@@ -540,6 +564,15 @@ describe('DatabaseManager', () => {
       materializedViews: true,
       refreshMaterializedViews: true,
       deferrableConstraints: true,
+      partialIndexes: true,
+      nativeTypes: true,
+      comments: true,
+    });
+    expect(resolveDatabaseCapabilities('mssql')).toMatchObject({
+      schemas: true,
+      views: true,
+      replaceView: true,
+      materializedViews: false,
       partialIndexes: true,
       nativeTypes: true,
       comments: true,

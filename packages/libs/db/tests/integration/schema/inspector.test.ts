@@ -59,7 +59,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
       nullable: false,
       length: 40,
     });
-    if (context.spec.dialect !== 'sqlite') {
+    if (context.spec.dialect !== 'sqlite' && context.spec.dialect !== 'mssql') {
       expect(result?.uniqueConstraints).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -85,7 +85,11 @@ describeIntegrationDatabases('schema inspector', (context) => {
             tableName: context.table('customers'),
           }),
           referencedColumns: ['id'],
-          onDelete: context.spec.dialect === 'oracle' ? 'noAction' : 'restrict',
+          onDelete:
+            context.spec.dialect === 'oracle' ||
+            context.spec.dialect === 'mssql'
+              ? 'noAction'
+              : 'restrict',
           onUpdate: context.spec.dialect === 'oracle' ? 'noAction' : 'cascade',
         }),
       ]),
@@ -285,6 +289,31 @@ describeIntegrationDatabases('schema inspector', (context) => {
           `comment on column "${tableName}"."email" is 'Original email'`,
         );
         break;
+      case 'mssql':
+        await context.db.raw(`
+          create table [${tableName}] (
+            [id] bigint identity(1,1) primary key,
+            [flag] bit not null,
+            [amount] decimal(12, 2),
+            [email] nvarchar(255),
+            [created_at] datetime2(3),
+            [normalized_email] as lower([email]) persisted,
+            check ([flag] in (0, 1))
+          )
+        `);
+        await context.db.raw(`
+          create index [${indexName}]
+          on [${tableName}] ([email] desc)
+          include ([created_at])
+          where [email] is not null
+        `);
+        await context.db.raw(
+          `exec sys.sp_addextendedproperty N'MS_Description', N'Advanced schema rows', N'Schema', N'dbo', N'Table', N'${tableName}'`,
+        );
+        await context.db.raw(
+          `exec sys.sp_addextendedproperty N'MS_Description', N'Original email', N'Schema', N'dbo', N'Table', N'${tableName}', N'Column', N'email'`,
+        );
+        break;
     }
 
     const result = await context.database
@@ -383,7 +412,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
       });
       expect(result?.checkConstraints).not.toHaveLength(0);
       expect(result?.inspection.aspects.checkConstraints).toBe('complete');
-    } else {
+    } else if (context.spec.dialect === 'oracle') {
       expect(result?.comment).toBe('Advanced schema rows');
       expect(
         result?.columns.find((column) => column.columnName === 'email')
@@ -430,6 +459,46 @@ describeIntegrationDatabases('schema inspector', (context) => {
           .find((index) => index.name === indexName)
           ?.keys[0]?.expression?.toLowerCase(),
       ).toContain('lower');
+      expect(result?.checkConstraints).not.toHaveLength(0);
+      expect(result?.inspection.aspects.comments).toBe('complete');
+    } else {
+      expect(result?.comment).toBe('Advanced schema rows');
+      expect(
+        result?.columns.find((column) => column.columnName === 'email')
+          ?.comment,
+      ).toBe('Original email');
+      expect(
+        result?.columns.find((column) => column.columnName === 'id'),
+      ).toMatchObject({
+        dataType: 'bigInt',
+        autoIncrement: true,
+        nativeType: 'bigint',
+      });
+      expect(
+        result?.columns.find((column) => column.columnName === 'flag'),
+      ).toMatchObject({ dataType: 'boolean', nativeType: 'bit' });
+      expect(
+        result?.columns.find(
+          (column) => column.columnName === 'normalized_email',
+        ),
+      ).toMatchObject({
+        generated: {
+          expression: expect.stringContaining('lower'),
+          stored: true,
+        },
+      });
+      expect(result?.indexes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: indexName,
+            keys: [
+              expect.objectContaining({ columnName: 'email', order: 'desc' }),
+            ],
+            includeColumns: ['created_at'],
+            predicate: expect.stringContaining('email'),
+          }),
+        ]),
+      );
       expect(result?.checkConstraints).not.toHaveLength(0);
       expect(result?.inspection.aspects.comments).toBe('complete');
     }
@@ -486,5 +555,57 @@ describeIntegrationDatabases('schema inspector', (context) => {
         `drop materialized view if exists "${materializedView}"`,
       );
     }
+  });
+
+  it('distinguishes SQL Server unique constraints from filtered unique indexes', async () => {
+    if (context.spec.dialect !== 'mssql') return;
+
+    const constraintName = context.identifier('uq_accounts_tenant_code');
+    const indexName = context.identifier('uq_accounts_active_email');
+    await context.builder.createCollection('accounts', (collection) => {
+      collection.increments('id');
+      collection.integer('tenantId').notNull();
+      collection.string('code').notNull();
+      collection.string('email');
+      collection.boolean('active').defaultTo(true);
+      collection.unique(['tenantId', 'code'], {
+        name: constraintName,
+        mode: 'constraint',
+      });
+      collection.unique(['email'], {
+        name: indexName,
+        mode: 'index',
+        predicate: { active: true },
+      });
+    });
+
+    const result = await context.database
+      .connection()
+      .schemaInspector.getPhysicalCollection({
+        tableName: context.table('accounts'),
+      });
+
+    expect(result?.uniqueConstraints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: constraintName,
+          columns: ['tenant_id', 'code'],
+        }),
+      ]),
+    );
+    expect(result?.indexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: constraintName,
+          backsConstraint: { kind: 'unique', name: constraintName },
+        }),
+        expect.objectContaining({
+          name: indexName,
+          unique: true,
+          predicate: expect.stringContaining('active'),
+          backsConstraint: undefined,
+        }),
+      ]),
+    );
   });
 });

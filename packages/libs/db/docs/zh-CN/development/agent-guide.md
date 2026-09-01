@@ -116,7 +116,7 @@ Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 当前是规�
 - 新增 Query 行为时，优先补 `tests/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
 - `tests/integration` 是真实数据库连接测试，不是 SQLite 专属。
 - 修改 Builder 编译或 adapter 行为后，应跑 `npm run test:integration:all`。
-- SQLite 通过不代表 PostgreSQL、MySQL 或 Oracle 一定通过。
+- SQLite 通过不代表 PostgreSQL、MySQL、Oracle 或 SQL Server 一定通过。
 
 ## 文档规则
 

@@ -72,6 +72,21 @@ function resolveConnections(
       },
     };
   }
+  if (main.dialect === 'mssql') {
+    return {
+      ...connections,
+      main: {
+        host: '127.0.0.1',
+        port: 1433,
+        database: 'app',
+        username: 'sa',
+        password: '',
+        encrypt: false,
+        trustServerCertificate: false,
+        ...main,
+      },
+    };
+  }
   const database = (main as ConnectionConfig & { database?: string }).database;
   if (!database || !paths) return connections;
   return {

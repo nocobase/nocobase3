@@ -159,7 +159,7 @@ tests/
 
 `tests/unit/` 测纯逻辑和编译结果，可以使用 recording adapter 或内存实现，但不应该依赖真实数据库状态。
 
-`tests/integration/` 测真实数据库连接，不是 SQLite 专属。默认跑 SQLite；PostgreSQL、MySQL 和 Oracle 可以通过 `INTEGRATION_DB_CONNECTIONS` 显式选择，Oracle 也提供独立脚本。
+`tests/integration/` 测真实数据库连接，不是 SQLite 专属。默认跑 SQLite；PostgreSQL、MySQL、Oracle 和 SQL Server 可以通过 `INTEGRATION_DB_CONNECTIONS` 显式选择，Oracle 和 SQL Server 也提供独立脚本。
 
 `tests/integration/builder/` 覆盖 Collection Builder 到真实 DDL 的行为。
 

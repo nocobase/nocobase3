@@ -1,6 +1,6 @@
 ---
 title: Schema Inspector 示例
-description: 通过 SQLite、PostgreSQL、MySQL 和 Oracle 示例说明物理 Schema 读取、分页、扫描和检查完整性。
+description: 通过 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 示例说明物理 Schema 读取、分页、扫描和检查完整性。
 ---
 
 # Schema Inspector 示例
@@ -40,6 +40,61 @@ Oracle 返回当前 user 的 schema，例如：
 ```
 
 当前 Oracle Inspector 不跨 schema 扫描；请求其他 schema 会返回明确的 invalid options 错误。
+
+SQL Server 会返回当前数据库中可见的用户 schema，并将登录用户的默认 schema 标记为 `default: true`：
+
+```ts
+[
+  { name: 'dbo', default: true },
+  { name: 'sales', default: false },
+];
+```
+
+## 读取 SQL Server Table
+
+```ts
+const orders = await connection.schemaInspector.getPhysicalCollection({
+  schema: 'dbo',
+  tableName: 'orders',
+});
+```
+
+SQL Server 的 identity、computed persisted column、filtered index 和 included column 会保留为结构化信息：
+
+```ts
+{
+  schema: 'dbo',
+  tableName: 'orders',
+  kind: 'table',
+  columns: [
+    {
+      columnName: 'id',
+      dataType: 'bigInt',
+      nativeType: 'bigint',
+      autoIncrement: true,
+    },
+    {
+      columnName: 'normalized_email',
+      nativeType: 'nvarchar(255)',
+      generated: {
+        expression: '(lower([email]))',
+        stored: true,
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'idx_orders_email',
+      keys: [{ columnName: 'email', order: 'desc' }],
+      includeColumns: ['created_at'],
+      predicate: '([email] IS NOT NULL)',
+      unique: false,
+    },
+  ],
+}
+```
+
+`nvarchar(max)` 本身不证明字段是 JSON。Inspector 不根据应用习惯猜测物理语义；JSON relation 或业务含义应由 Metadata 和 Resolver 补充。
 
 ## 读取 Oracle Table
 

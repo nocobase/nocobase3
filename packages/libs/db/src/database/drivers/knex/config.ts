@@ -4,6 +4,7 @@ import type {
   DatabaseDialect,
   DatabaseDriver,
   MysqlConnectionConfig,
+  MssqlConnectionConfig,
   OracleConnectionConfig,
   PostgresConnectionConfig,
   SqliteConnectionConfig,
@@ -12,18 +13,29 @@ import type {
 export interface KnexConnectionConfig extends BaseConnectionConfig {
   dialect: DatabaseDialect;
   driver: DatabaseDriver;
-  knexClient: DatabaseDriver;
+  knexClient: KnexClientName;
   connection?: unknown;
   useNullAsDefault?: boolean;
   searchPath?: string[];
 }
+
+export type KnexClientName = DatabaseDriver | 'mssql';
 
 const DEFAULT_DRIVER_BY_DIALECT = {
   sqlite: 'better-sqlite3',
   postgres: 'pg',
   mysql: 'mysql2',
   oracle: 'oracledb',
+  mssql: 'tedious',
 } as const satisfies Record<DatabaseDialect, DatabaseDriver>;
+
+const KNEX_CLIENT_BY_DIALECT = {
+  sqlite: 'better-sqlite3',
+  postgres: 'pg',
+  mysql: 'mysql2',
+  oracle: 'oracledb',
+  mssql: 'mssql',
+} as const satisfies Record<DatabaseDialect, KnexClientName>;
 
 export function resolveKnexConnectionConfig(
   config: ConnectionConfig,
@@ -34,7 +46,7 @@ export function resolveKnexConnectionConfig(
   return {
     ...config,
     driver,
-    knexClient: driver,
+    knexClient: KNEX_CLIENT_BY_DIALECT[config.dialect],
     connection: resolveKnexConnection(config),
     useNullAsDefault: config.dialect === 'sqlite' ? true : undefined,
     searchPath:
@@ -61,7 +73,7 @@ function defaultDriverForDialect(dialect: unknown): DatabaseDriver {
   const driver = DEFAULT_DRIVER_BY_DIALECT[dialect as DatabaseDialect];
   if (!driver) {
     throw new Error(
-      `Invalid database dialect "${String(dialect)}". Expected "sqlite", "postgres", "mysql", or "oracle".`,
+      `Invalid database dialect "${String(dialect)}". Expected "sqlite", "postgres", "mysql", "oracle", or "mssql".`,
     );
   }
   return driver;
@@ -77,6 +89,8 @@ function resolveKnexConnection(config: ConnectionConfig): unknown {
       return resolveMysqlConnection(config);
     case 'oracle':
       return resolveOracleConnection(config);
+    case 'mssql':
+      return resolveMssqlConnection(config);
     default:
       return assertNever(config);
   }
@@ -192,6 +206,41 @@ function resolveOracleConnection(
     user: config.username,
     password: config.password,
     connectString: `${host}:${port}/${config.serviceName}`,
+  });
+}
+
+function resolveMssqlConnection(
+  config: MssqlConnectionConfig,
+): Record<string, unknown> {
+  assertDriverOptions(config.driverOptions, [
+    'host',
+    'server',
+    'port',
+    'database',
+    'user',
+    'userName',
+    'username',
+    'password',
+    'encrypt',
+    'trustServerCertificate',
+    'options',
+    'pool',
+    'url',
+    'connectionString',
+    'uri',
+  ]);
+
+  return compactObject({
+    ...config.driverOptions,
+    server: config.host ?? '127.0.0.1',
+    port: config.port ?? 1433,
+    database: config.database,
+    user: config.username,
+    password: config.password,
+    encrypt: config.encrypt ?? false,
+    options: {
+      trustServerCertificate: config.trustServerCertificate ?? false,
+    },
   });
 }
 

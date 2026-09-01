@@ -8,7 +8,8 @@ export interface DatabaseConfig {
   metadataStore?: CollectionMetadataStore;
 }
 
-export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql' | 'oracle';
+export type DatabaseDialect =
+  'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
 
 export interface BaseConnectionConfig {
   naming?: NamingOptions;
@@ -51,11 +52,24 @@ export type OracleConnectionConfig = BaseConnectionConfig & {
   password?: string;
 };
 
+export type MssqlConnectionConfig = BaseConnectionConfig & {
+  dialect: 'mssql';
+  driver?: 'tedious';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  encrypt?: boolean;
+  trustServerCertificate?: boolean;
+};
+
 export type ConnectionConfig =
   | SqliteConnectionConfig
   | PostgresConnectionConfig
   | MysqlConnectionConfig
-  | OracleConnectionConfig;
+  | OracleConnectionConfig
+  | MssqlConnectionConfig;
 
 export type DatabaseDriver = NonNullable<ConnectionConfig['driver']>;
 

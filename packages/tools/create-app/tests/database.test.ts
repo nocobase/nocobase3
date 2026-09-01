@@ -14,6 +14,7 @@ describe('parseDialect', () => {
     expect(parseDialect('sqlite')).toBe('sqlite');
     expect(parseDialect('mysql')).toBe('mysql');
     expect(parseDialect('oracle')).toBe('oracle');
+    expect(parseDialect('mssql')).toBe('mssql');
   });
 
   /**
@@ -27,6 +28,9 @@ describe('parseDialect', () => {
     expect(parseDialect('mysql2')).toBe('mysql');
     expect(parseDialect('mariadb')).toBe('mysql');
     expect(parseDialect('oracledb')).toBe('oracle');
+    expect(parseDialect('sqlserver')).toBe('mssql');
+    expect(parseDialect('sql-server')).toBe('mssql');
+    expect(parseDialect('tedious')).toBe('mssql');
   });
 
   it('ignores surrounding whitespace and case', () => {
@@ -35,8 +39,8 @@ describe('parseDialect', () => {
   });
 
   it('rejects anything else, listing what is accepted', () => {
-    expect(() => parseDialect('sqlserver')).toThrow(/Unknown database type/u);
-    expect(() => parseDialect('sqlserver')).toThrow(/postgres/u);
+    expect(() => parseDialect('db2')).toThrow(/Unknown database type/u);
+    expect(() => parseDialect('db2')).toThrow(/postgres/u);
   });
 });
 
@@ -46,6 +50,7 @@ describe('driverFor', () => {
     expect(driverFor('postgres')).toBe('pg');
     expect(driverFor('mysql')).toBe('mysql2');
     expect(driverFor('oracle')).toBe('oracledb');
+    expect(driverFor('mssql')).toBe('tedious');
   });
 
   it('covers every dialect', () => {
@@ -65,6 +70,7 @@ describe('driverNeedsBuild', () => {
     expect(driverNeedsBuild('pg')).toBe(false);
     expect(driverNeedsBuild('mysql2')).toBe(false);
     expect(driverNeedsBuild('oracledb')).toBe(true);
+    expect(driverNeedsBuild('tedious')).toBe(false);
   });
 });
 
@@ -111,6 +117,19 @@ describe('defaultDatabaseConfig', () => {
       password: '',
     });
   });
+
+  it('provides an MSSQL connection', () => {
+    expect(defaultDatabaseConfig('mssql')).toEqual({
+      dialect: 'mssql',
+      host: '127.0.0.1',
+      port: 1433,
+      database: 'app',
+      username: 'sa',
+      password: '',
+      encrypt: false,
+      trustServerCertificate: false,
+    });
+  });
 });
 
 describe('needsConnectionDetails', () => {
@@ -119,5 +138,6 @@ describe('needsConnectionDetails', () => {
     expect(needsConnectionDetails('postgres')).toBe(true);
     expect(needsConnectionDetails('mysql')).toBe(true);
     expect(needsConnectionDetails('oracle')).toBe(true);
+    expect(needsConnectionDetails('mssql')).toBe(true);
   });
 });

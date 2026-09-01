@@ -262,24 +262,42 @@ export abstract class BaseSchemaInspector implements SchemaInspector {
     action: () => Promise<T>,
     identifier?: PhysicalCollectionIdentifier,
   ): Promise<T> {
-    try {
-      return await action();
-    } catch (error) {
-      if (error instanceof SchemaInspectorError) {
-        throw error;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await action();
+      } catch (error) {
+        if (this.dialect === 'mssql' && isMssqlDeadlock(error) && attempt < 4) {
+          await delay(25 * attempt);
+          continue;
+        }
+        if (error instanceof SchemaInspectorError) {
+          throw error;
+        }
+        throw new SchemaInspectorError('Database schema inspection failed.', {
+          code: isPermissionError(error)
+            ? 'SCHEMA_INSPECTION_PERMISSION_DENIED'
+            : 'SCHEMA_INSPECTION_FAILED',
+          connectionName: this.connectionName,
+          dialect: this.dialect,
+          schema: identifier?.schema,
+          tableName: identifier?.tableName,
+          cause: error,
+        });
       }
-      throw new SchemaInspectorError('Database schema inspection failed.', {
-        code: isPermissionError(error)
-          ? 'SCHEMA_INSPECTION_PERMISSION_DENIED'
-          : 'SCHEMA_INSPECTION_FAILED',
-        connectionName: this.connectionName,
-        dialect: this.dialect,
-        schema: identifier?.schema,
-        tableName: identifier?.tableName,
-        cause: error,
-      });
     }
   }
+}
+
+function isMssqlDeadlock(error: unknown): boolean {
+  return (
+    Boolean(error) &&
+    typeof error === 'object' &&
+    Number((error as Record<string, unknown>).number) === 1205
+  );
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function cursorFilter(
@@ -297,14 +315,17 @@ function isPermissionError(error: unknown): boolean {
     return false;
   }
   const record = error as Record<string, unknown>;
-  const code = scalarString(record.code ?? record.sqlState);
+  const code = scalarString(record.number ?? record.code ?? record.sqlState);
   const message = scalarString(record.message);
   return (
     code === '42501' ||
     code === 'SQLITE_AUTH' ||
     code === 'ER_TABLEACCESS_DENIED_ERROR' ||
     code === 'ER_DBACCESS_DENIED_ERROR' ||
-    /permission denied|access denied|not authorized/i.test(message)
+    code === '229' ||
+    code === '916' ||
+    code === '15151' ||
+    /permission (?:was )?denied|access denied|not authorized/i.test(message)
   );
 }
 

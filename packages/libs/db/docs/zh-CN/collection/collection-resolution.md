@@ -156,7 +156,7 @@ Store 层的 `delete(old) + put(new)` 不是原子 Collection rename。完整操
 设计确认后按以下依赖顺序实现，避免让下层反向依赖上层：
 
 1. 定义 Physical Schema 类型、Metadata 文档类型和各公共错误类型。
-2. 实现 `SchemaInspector` 的 SQLite、PostgreSQL、MySQL 和 Oracle 方言读取与集成测试。
+2. 实现 `SchemaInspector` 的 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 方言读取与集成测试。
 3. 实现 `CollectionResolver` 和本地结构校验。
 4. 实现 Metadata Store 新文档接口、In-memory Store 和 Naming Index。
 5. 实现 `CollectionRegistry` 与 `connection.collections`。

@@ -1,6 +1,6 @@
 ---
 title: Schema Inspector 设计
-description: 定义如何通过数据库方言读取 Collection 解析所需的 SQLite、PostgreSQL、MySQL 和 Oracle 物理 Schema。
+description: 定义如何通过数据库方言读取 Collection 解析所需的 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 物理 Schema。
 ---
 
 # Schema Inspector 设计
@@ -16,7 +16,7 @@ DatabaseConnection
   -> PhysicalCollectionSchema
 ```
 
-当前支持 SQLite、PostgreSQL、MySQL 和 Oracle。MSSQL 等后续数据库通过新的方言实现接入，不在公共接口中增加方言判断。
+当前支持 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server。后续数据库继续通过新的方言实现接入，不在公共接口中增加方言判断。
 
 本文中的“完整”是指完整覆盖 Collection 解析所需且已声明支持的方面，不表示无损导出数据库全部目录。第一版不读取
 trigger、stored procedure、grant、partition rule、storage parameter 等与运行时 Collection 模型无关的对象，
@@ -27,7 +27,7 @@ trigger、stored procedure、grant、partition rule、storage parameter 等与�
 `SchemaInspector` 需要满足以下目标：
 
 - 保留数据库中的物理名称、原生类型、索引和约束，不把物理事实改写成应用语义；
-- 对 SQLite、PostgreSQL、MySQL 和 Oracle 暴露相同的读取接口；
+- 对 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 暴露相同的读取接口；
 - 完整表达复合主键、复合外键、复合 unique constraint 和复合 index；
 - 区分 table、partitioned table、foreign table、view 和 materialized view；
 - 显式说明某类信息是完整、部分可用还是不支持；
@@ -94,7 +94,8 @@ export interface DatabaseConnection {
 当前 `DatabaseDialect` 是配置中的字符串标识：
 
 ```ts
-export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql' | 'oracle';
+export type DatabaseDialect =
+  'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
 ```
 
 目标设计保留这个易读的配置值，并使用 `DatabaseDialectAdapter` 承载方言行为。该接口作为方言扩展点公开，
@@ -625,6 +626,28 @@ src/schema/inspector/
 - 列表的 kind、prefix、cursor 和 limit 过滤在 SQL 层完成，不能先加载当前 schema 的所有对象再分页；
 - `DBMS_XMLGEN` 不可用时，列 default 可以标记为 `partial`；连接失败和其他目录查询错误必须继续抛出。
 
+### SQL Server
+
+主要数据来源：
+
+- `sys.schemas`、`sys.objects`、`sys.tables`、`sys.views`；
+- `sys.columns`、`sys.types`、`sys.identity_columns`、`sys.computed_columns`；
+- `sys.key_constraints`、`sys.foreign_keys`、`sys.foreign_key_columns`、`sys.check_constraints`；
+- `sys.indexes`、`sys.index_columns`；
+- `sys.default_constraints`、`sys.extended_properties`、`sys.sql_modules`。
+
+实现要求：
+
+- 默认 schema 使用当前登录用户的 `SCHEMA_NAME()`，通常是 `dbo`；
+- identity、computed column 和 persisted 状态必须分别保留；
+- filtered index 映射到 `predicate`，included column 映射到 `includeColumns`；
+- 区分 unique constraint 和普通 unique index，并通过 `backsConstraint` 保留关系；
+- `MS_Description` extended property 映射为 table/column comment；
+- `bit`、`uniqueidentifier`、`datetime2`、`nvarchar(max)` 等类型保留原始 `nativeType`；
+- 不把任意 `nvarchar(max)` 猜测成 JSON；没有明确物理证据时保持为字符串或原生类型；
+- `RESTRICT` 在 SQL Server 中表现为 `NO ACTION`，Inspector 返回实际物理语义；
+- SQL Server 系统 catalog 读取遇到错误 1205 deadlock 时做有限重试，其他错误仍必须抛出。
+
 ## 命名边界
 
 Inspector 的输入和输出都是物理名称：
@@ -670,13 +693,13 @@ export type SchemaInspectorErrorCode =
 - Cursor 必须包含版本信息，未来调整编码格式时可以明确拒绝旧 Cursor；
 - 列表排序和复合 key/index 字段顺序必须确定，便于 Snapshot、diff 和 Agent 使用；
 - Snapshot 生成器负责记录生成时间、dialect 和 fingerprint，Inspector 本身不持久化结果；
-- Schema 在读取期间发生变化时，Inspector 不自动重试或合并两个版本的结构。
+- Schema 在读取期间发生变化时，Inspector 不合并两个版本的结构；只允许对 SQL Server catalog 的瞬时 deadlock 做有限重试。
 
 ## 第一版验收范围
 
 实现完成至少需要覆盖以下测试：
 
-- SQLite、PostgreSQL、MySQL、Oracle 的 table、view、字段和注释能力；
+- SQLite、PostgreSQL、MySQL、Oracle、SQL Server 的 table、view、字段和注释能力；
 - PostgreSQL materialized view、partitioned table 和 foreign table；
 - 单字段与复合 primary key、unique constraint、foreign key；
 - 普通、unique、复合、表达式和部分 index，在不支持的方言中验证状态；
@@ -688,15 +711,15 @@ export type SchemaInspectorErrorCode =
 - 大量 table 的列表不会隐式加载全部字段和约束；
 - 事务 Connection 复用事务客户端，普通 Connection 不创建额外连接池。
 
-当前不要求实现 MSSQL、SQLite attached database、MySQL 跨 database 扫描或 Oracle 跨 schema 扫描，但公共模型不能阻止以后添加这些能力。
+当前不要求实现 SQLite attached database、MySQL 跨 database 扫描或 Oracle 跨 schema 扫描，但公共模型不能阻止以后添加这些能力。
 
 ## 后续实现顺序
 
-SQLite、PostgreSQL、MySQL、Oracle Inspector 及公共接口已经实现。后续建议按以下顺序继续：
+SQLite、PostgreSQL、MySQL、Oracle、SQL Server Inspector 及公共接口已经实现。后续建议按以下顺序继续：
 
 1. 持续补充权限、并发变化及各数据库版本差异测试；
 2. 以稳定的 `PhysicalCollectionSchema` 作为 Collection Resolver 输入；
-3. 按实际需求增加 MSSQL 或其他方言 Adapter；
+3. 按实际需求增加其他方言 Adapter；
 4. 在 Resolver 之上实现 Snapshot、drift 检查和 Agent 可读的 Collection 输出。
 
 ## 参考边界

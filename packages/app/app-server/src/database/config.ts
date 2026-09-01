@@ -29,6 +29,7 @@ export const databaseConfig: AppConfigDefinition<
               Type.Literal('postgres'),
               Type.Literal('mysql'),
               Type.Literal('oracle'),
+              Type.Literal('mssql'),
             ]),
             filename: Type.Optional(Type.String()),
             host: Type.Optional(Type.String()),
@@ -49,6 +50,8 @@ export const databaseConfig: AppConfigDefinition<
                 Type.Record(Type.String(), Type.Unknown()),
               ]),
             ),
+            encrypt: Type.Optional(Type.Boolean()),
+            trustServerCertificate: Type.Optional(Type.Boolean()),
             managed: Type.Optional(Type.Boolean()),
             debug: Type.Optional(Type.Boolean()),
             driverOptions: Type.Optional(
@@ -117,6 +120,10 @@ export const databaseConfig: AppConfigDefinition<
     DB_PASSWORD: envString('connections.main.password'),
     DB_CHARSET: envString('connections.main.charset'),
     DB_SSL: envBoolean('connections.main.ssl'),
+    DB_ENCRYPT: envBoolean('connections.main.encrypt'),
+    DB_TRUST_SERVER_CERTIFICATE: envBoolean(
+      'connections.main.trustServerCertificate',
+    ),
     DB_SCHEMA: envStrings('connections.main.schema'),
     DB_DEBUG: envBoolean('connections.main.debug'),
     DB_MIGRATIONS_AUTO_RUN: envBoolean('migrations.autoRun'),

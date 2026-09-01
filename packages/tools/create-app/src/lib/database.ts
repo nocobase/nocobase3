@@ -3,13 +3,15 @@
  * `DB_DIALECT` accepts — `postgres`, not `postgresql`, and `sqlite`, not `sqlite3` — because that file throws on
  * anything else. User-facing aliases are resolved separately by `parseDialect`.
  */
-export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql' | 'oracle';
+export type DatabaseDialect =
+  'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
 
 export const DATABASE_DIALECTS: readonly DatabaseDialect[] = [
   'postgres',
   'sqlite',
   'mysql',
   'oracle',
+  'mssql',
 ];
 
 /**
@@ -21,6 +23,7 @@ export const DIALECT_DRIVERS: Readonly<Record<DatabaseDialect, string>> = {
   postgres: 'pg',
   mysql: 'mysql2',
   oracle: 'oracledb',
+  mssql: 'tedious',
 };
 
 /**
@@ -59,6 +62,11 @@ export const DIALECT_CHOICES: readonly DialectChoice[] = [
     label: 'Oracle',
     hint: 'installs oracledb (Thin mode)',
   },
+  {
+    value: 'mssql',
+    label: 'Microsoft SQL Server',
+    hint: 'installs tedious',
+  },
 ];
 
 /**
@@ -78,6 +86,10 @@ const DIALECT_ALIASES: Readonly<Record<string, DatabaseDialect>> = {
   mariadb: 'mysql',
   oracle: 'oracle',
   oracledb: 'oracle',
+  mssql: 'mssql',
+  sqlserver: 'mssql',
+  'sql-server': 'mssql',
+  tedious: 'mssql',
 };
 
 export function parseDialect(value: string): DatabaseDialect {
@@ -133,11 +145,23 @@ export interface OracleDatabaseConfig {
   password: string;
 }
 
+export interface MssqlDatabaseConfig {
+  dialect: 'mssql';
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+}
+
 export type DatabaseConfig =
   | SqliteDatabaseConfig
   | PostgresDatabaseConfig
   | MysqlDatabaseConfig
-  | OracleDatabaseConfig;
+  | OracleDatabaseConfig
+  | MssqlDatabaseConfig;
 
 export const SQLITE_DEFAULT_DATABASE = 'database.sqlite';
 export const POSTGRES_DEFAULT_SCHEMA = 'public';
@@ -177,6 +201,19 @@ export function defaultDatabaseConfig(
       serviceName: 'FREEPDB1',
       username: 'nocobase',
       password: '',
+    };
+  }
+
+  if (dialect === 'mssql') {
+    return {
+      dialect,
+      host: '127.0.0.1',
+      port: 1433,
+      database: 'app',
+      username: 'sa',
+      password: '',
+      encrypt: false,
+      trustServerCertificate: false,
     };
   }
 

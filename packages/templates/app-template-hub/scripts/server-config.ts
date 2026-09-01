@@ -231,6 +231,8 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
     'username',
     'schema',
     'ssl',
+    'encrypt',
+    'trustServerCertificate',
   ]) {
     const value = connection[key];
     if (

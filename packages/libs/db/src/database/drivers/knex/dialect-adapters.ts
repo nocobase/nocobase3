@@ -6,6 +6,7 @@ import type {
   SchemaInspectorFactoryContext,
 } from '../../../schema/inspector/index.js';
 import { MysqlSchemaInspector } from '../../../schema/inspector/dialects/mysql.js';
+import { MssqlSchemaInspector } from '../../../schema/inspector/dialects/mssql.js';
 import { OracleSchemaInspector } from '../../../schema/inspector/dialects/oracle.js';
 import { PostgresSchemaInspector } from '../../../schema/inspector/dialects/postgres.js';
 import { SqliteSchemaInspector } from '../../../schema/inspector/dialects/sqlite.js';
@@ -63,6 +64,14 @@ const KNEX_DIALECT_ADAPTERS: Readonly<
     'oracle',
     (context) =>
       new OracleSchemaInspector({
+        connectionName: context.connectionName,
+        resolveClient: () => context.resolveClient(),
+      }),
+  ),
+  mssql: new KnexDatabaseDialectAdapter(
+    'mssql',
+    (context) =>
+      new MssqlSchemaInspector({
         connectionName: context.connectionName,
         resolveClient: () => context.resolveClient(),
       }),

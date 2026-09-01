@@ -2141,7 +2141,12 @@ function aggregateNodeToRaw(
     if (!operand || operand.type !== 'ref') {
       throw new Error(`${expression.fn}() expects a column reference.`);
     }
-    sql = `${fn}(${expression.distinct ? 'distinct ' : ''}??)`;
+    const castMssqlAverage =
+      expression.fn === 'avg' &&
+      context.client.client.config.client === 'mssql';
+    sql = castMssqlAverage
+      ? `${fn}(${expression.distinct ? 'distinct ' : ''}cast(?? as float))`
+      : `${fn}(${expression.distinct ? 'distinct ' : ''}??)`;
     bindings.push(
       mapReference(operand.reference, context.naming, context.tableScope),
     );

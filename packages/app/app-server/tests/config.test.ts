@@ -107,6 +107,32 @@ describe('app database manager', () => {
     expect(database?.connection().dialect).toBe('oracle');
     expect(database?.connection().driver).toBe('oracledb');
   });
+
+  it('creates an MSSQL manager without opening a connection eagerly', () => {
+    const config: AppDatabaseConfig = {
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'mssql',
+          host: '127.0.0.1',
+          port: 1433,
+          database: 'nocobase',
+          username: 'sa',
+          password: 'secret',
+          encrypt: false,
+          trustServerCertificate: true,
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+
+    const database = createAppDatabaseManager(config);
+    expect(database?.connection().dialect).toBe('mssql');
+    expect(database?.connection().driver).toBe('tedious');
+  });
 });
 
 describe('app database storage', () => {

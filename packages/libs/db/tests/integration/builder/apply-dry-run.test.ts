@@ -23,7 +23,7 @@ describeIntegrationDatabases('apply and dryRun', (context) => {
     expect(await context.db.schema.hasTable(context.table('orders'))).toBe(
       false,
     );
-    expect(result.sql?.join('\n')).toContain('create table');
+    expect(result.sql?.join('\n').toLowerCase()).toContain('create table');
     expect(result.sql?.join('\n')).toContain(context.table('orders'));
   });
 

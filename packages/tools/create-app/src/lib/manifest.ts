@@ -10,6 +10,7 @@ export const DRIVER_VERSIONS: Readonly<Record<string, string>> = {
   pg: '^8.23.0',
   mysql2: '^3.23.3',
   oracledb: '^6.10.0',
+  tedious: '^20.0.0',
 };
 
 /**

@@ -72,6 +72,28 @@ const db = createDatabaseManager({
 
 底层使用 `oracledb` Thin mode，不需要 Oracle Instant Client。`serviceName` 是必填配置，不要用 `database` 代替。
 
+## SQL Server
+
+```ts
+const db = createDatabaseManager({
+  default: 'main',
+  connections: {
+    main: {
+      dialect: 'mssql',
+      host: '127.0.0.1',
+      port: 1433,
+      database: 'nocobase',
+      username: 'sa',
+      password: process.env.DB_PASSWORD,
+      encrypt: true,
+      trustServerCertificate: false,
+    },
+  },
+});
+```
+
+底层使用 Knex 的 `mssql` dialect 和 `tedious` driver。本地 Docker 使用自签名证书时可以设置 `encrypt: false`、`trustServerCertificate: true`；生产环境不要把信任自签名证书作为默认配置。
+
 ## 多连接
 
 ```ts

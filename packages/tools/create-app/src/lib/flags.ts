@@ -22,7 +22,7 @@ export const CREATE_ARGS = {
 
 export const CREATE_FLAGS = {
   'db-dialect': Flags.string({
-    description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, sqlite3, and oracledb are accepted. Prompted for when omitted.`,
+    description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, sqlite3, oracledb, sqlserver, and tedious are accepted. Prompted for when omitted.`,
   }),
   install: Flags.boolean({
     allowNo: true,
@@ -106,6 +106,6 @@ export function formatHelp(binary: string): string {
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
     '  Database connection settings are written to config.yml with defaults.',
-    '  For postgres, mysql, and oracle, edit that file before starting the app.',
+    '  For postgres, mysql, oracle, and mssql, edit that file before starting the app.',
   ].join('\n');
 }

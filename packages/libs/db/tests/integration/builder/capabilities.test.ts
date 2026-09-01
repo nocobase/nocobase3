@@ -10,7 +10,9 @@ describeIntegrationDatabases('capability warnings', (context) => {
       'capabilityEvents',
       (collection) => {
         if (context.spec.dialect !== 'oracle') {
-          collection.dbSchema('public');
+          collection.dbSchema(
+            context.spec.dialect === 'mssql' ? 'dbo' : 'public',
+          );
         }
         collection.increments('id');
         collection.native(
@@ -44,6 +46,10 @@ describeIntegrationDatabases('capability warnings', (context) => {
       context.spec.dialect === 'oracle'
     ) {
       expect(result.warnings).toEqual([]);
+    } else if (context.spec.dialect === 'mssql') {
+      expect(result.warnings?.map((warning) => warning.code)).toEqual([
+        'UNSUPPORTED_DEFERRABLE_CONSTRAINT',
+      ]);
     } else {
       expect(result.warnings?.map((warning) => warning.code)).toEqual(
         expect.arrayContaining([

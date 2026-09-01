@@ -65,6 +65,34 @@ class FailingSchemaInspector extends BaseSchemaInspector {
   }
 }
 
+class DeadlockingMssqlSchemaInspector extends BaseSchemaInspector {
+  attempts = 0;
+
+  constructor(private readonly failures: number) {
+    super('mssql', 'mssql');
+  }
+
+  protected async inspectSchemas(): Promise<PhysicalSchemaInfo[]> {
+    this.attempts += 1;
+    if (this.attempts <= this.failures) {
+      throw Object.assign(new Error('deadlock victim'), { number: 1205 });
+    }
+    return [{ name: 'dbo', default: true }];
+  }
+
+  protected async inspectCollection(
+    _identifier: PhysicalCollectionIdentifier,
+  ): Promise<PhysicalCollectionSchema | undefined> {
+    return undefined;
+  }
+
+  protected async inspectCollectionSummaries(): Promise<
+    PhysicalCollectionSummary[]
+  > {
+    return [];
+  }
+}
+
 describe('SchemaInspector cursor helpers', () => {
   it('round-trips an opaque cursor and compares its filter', () => {
     const filter = {
@@ -187,6 +215,21 @@ describe('BaseSchemaInspector option validation', () => {
 });
 
 describe('BaseSchemaInspector error normalization', () => {
+  it('retries transient SQL Server catalog deadlocks with a finite limit', async () => {
+    const recovered = new DeadlockingMssqlSchemaInspector(2);
+    await expect(recovered.listSchemas()).resolves.toEqual([
+      { name: 'dbo', default: true },
+    ]);
+    expect(recovered.attempts).toBe(3);
+
+    const exhausted = new DeadlockingMssqlSchemaInspector(4);
+    await expect(exhausted.listSchemas()).rejects.toMatchObject({
+      code: 'SCHEMA_INSPECTION_FAILED',
+      dialect: 'mssql',
+    });
+    expect(exhausted.attempts).toBe(4);
+  });
+
   it('preserves permission failures as structured errors', async () => {
     const cause = Object.assign(new Error('permission denied for schema'), {
       code: '42501',
@@ -234,6 +277,11 @@ describe('SchemaInspector type normalization', () => {
     ).toBe('time');
     expect(normalizePhysicalDataType('postgres', 'inet')).toBe('native');
     expect(normalizePhysicalDataType('sqlite', '')).toBe('native');
+    expect(normalizePhysicalDataType('mssql', 'bit')).toBe('boolean');
+    expect(normalizePhysicalDataType('mssql', 'uniqueidentifier')).toBe('uuid');
+    expect(normalizePhysicalDataType('mssql', 'datetime2(3)')).toBe('datetime');
+    expect(normalizePhysicalDataType('mssql', 'rowversion')).toBe('blob');
+    expect(normalizePhysicalDataType('mssql', 'nvarchar(max)')).toBe('string');
   });
 
   it('preserves default expressions while parsing safe literals', () => {

@@ -58,4 +58,25 @@ describe('buildConfigFile', () => {
     expect(config).toContain('serviceName: "FREEPDB1"');
     expect(config).not.toMatch(/^\s{6}database:/mu);
   });
+
+  it('builds MSSQL-specific TLS config', () => {
+    const config = buildConfigFile({
+      secret: 'test-secret',
+      database: {
+        dialect: 'mssql',
+        host: 'localhost',
+        port: 1433,
+        database: 'nocobase',
+        username: 'sa',
+        password: 'password',
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    });
+
+    expect(config).toContain('dialect: mssql');
+    expect(config).toContain('database: "nocobase"');
+    expect(config).toContain('encrypt: false');
+    expect(config).toContain('trustServerCertificate: true');
+  });
 });
