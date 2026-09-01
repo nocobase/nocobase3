@@ -8,7 +8,6 @@ import {
   Copy,
   Download,
   ExternalLink,
-  KeyRound,
   PackageCheck,
   Play,
   Plus,
@@ -98,9 +97,7 @@ type DetailAction =
       readonly kind: 'release';
       readonly action: 'deploy' | 'rollback' | 'redeploy';
       readonly version: string;
-    }
-  | { readonly kind: 'secret' }
-  | { readonly kind: 'archive'; readonly archive: boolean };
+    };
 
 const DETAIL_TABS: readonly DetailTab[] = [
   'overview',
@@ -250,44 +247,6 @@ export default function ApplicationDetailPage(): ReactElement {
                 ? 'Rollback completed'
                 : 'Release redeployed',
         }),
-      );
-    } else if (pendingAction.kind === 'secret') {
-      const activity = createActivity(
-        'runtimeSecret.rotated',
-        'Runtime secret was rotated in this browser session.',
-      );
-      updateApplication((draft) => {
-        draft.runtimeSecretRotatedAt = new Date().toISOString();
-        draft.activity.unshift(activity);
-      });
-      setNotice(
-        t('applicationDetail.settings.secret.rotated', {
-          defaultValue: 'Runtime secret rotated',
-        }),
-      );
-    } else {
-      const activity = createActivity(
-        pendingAction.archive ? 'application.archived' : 'application.restored',
-        pendingAction.archive
-          ? 'Application was archived in this browser session.'
-          : 'Application was restored in this browser session.',
-      );
-      updateApplication((draft) => {
-        draft.archived = pendingAction.archive;
-        if (pendingAction.archive) {
-          draft.runtimeState = 'stopped';
-          draft.health = 'unknown';
-        }
-        draft.activity.unshift(activity);
-      });
-      setNotice(
-        pendingAction.archive
-          ? t('applicationDetail.settings.archive.success', {
-              defaultValue: 'Application archived',
-            })
-          : t('applicationDetail.settings.restore.success', {
-              defaultValue: 'Application restored',
-            }),
       );
     }
     setPendingAction(undefined);
@@ -504,13 +463,6 @@ export default function ApplicationDetailPage(): ReactElement {
                 }),
               );
             }}
-            onRuntimeAction={(action) =>
-              setPendingAction({ kind: 'runtime', action })
-            }
-            onRotateSecret={() => setPendingAction({ kind: 'secret' })}
-            onArchive={(archive) =>
-              setPendingAction({ kind: 'archive', archive })
-            }
           />
         </TabsContent>
       </Tabs>
@@ -1436,23 +1388,16 @@ function PermissionsTab({
 function SettingsTab({
   application,
   onSave,
-  onRuntimeAction,
-  onRotateSecret,
-  onArchive,
 }: {
   readonly application: HubApplicationRecord;
   readonly onSave: (name: string, description: string) => void;
-  readonly onRuntimeAction: (action: 'start' | 'stop' | 'restart') => void;
-  readonly onRotateSecret: () => void;
-  readonly onArchive: (archive: boolean) => void;
 }): ReactElement {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
   const [name, setName] = useState(application.name);
   const [description, setDescription] = useState(application.description);
   return (
-    <div className='grid gap-5 pt-5 xl:grid-cols-2'>
-      <Card>
+    <div className='pt-5'>
+      <Card className='max-w-3xl'>
         <CardHeader>
           <CardTitle>
             {t('applicationDetail.settings.profile.title', {
@@ -1518,117 +1463,6 @@ function SettingsTab({
           </form>
         </CardContent>
       </Card>
-
-      <div className='space-y-5'>
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {t('applicationDetail.settings.runtime.title', {
-                defaultValue: 'Runtime controls',
-              })}
-            </CardTitle>
-            <CardDescription>
-              {t('applicationDetail.settings.runtime.description', {
-                defaultValue:
-                  'Control the local runtime simulation for this page.',
-              })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='flex flex-wrap gap-2'>
-            {application.archived ? null : application.runtimeState ===
-              'running' ? (
-              <>
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => onRuntimeAction('restart')}
-                >
-                  <RefreshCw aria-hidden='true' />
-                  {t('applicationDetail.runtime.restart', {
-                    defaultValue: 'Restart',
-                  })}
-                </Button>
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => onRuntimeAction('stop')}
-                >
-                  <Square aria-hidden='true' />
-                  {t('applicationDetail.runtime.stop', {
-                    defaultValue: 'Stop',
-                  })}
-                </Button>
-              </>
-            ) : application.currentRelease ? (
-              <Button type='button' onClick={() => onRuntimeAction('start')}>
-                <Play aria-hidden='true' />
-                {t('applicationDetail.runtime.start', {
-                  defaultValue: 'Start',
-                })}
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {t('applicationDetail.settings.secret.title', {
-                defaultValue: 'Runtime secret',
-              })}
-            </CardTitle>
-            <CardDescription>
-              {t('applicationDetail.settings.secret.description', {
-                defaultValue:
-                  'Rotate the credential used by local development tools.',
-              })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='space-y-3'>
-            <p className='text-xs text-muted-foreground'>
-              {t('applicationDetail.settings.secret.lastRotated', {
-                defaultValue: 'Last rotated {{date}}',
-                date: formatDate(application.runtimeSecretRotatedAt, locale),
-              })}
-            </p>
-            <Button type='button' variant='outline' onClick={onRotateSecret}>
-              <KeyRound aria-hidden='true' />
-              {t('applicationDetail.settings.secret.rotate', {
-                defaultValue: 'Rotate runtime secret',
-              })}
-            </Button>
-          </CardContent>
-        </Card>
-        <Card className='border-destructive/30'>
-          <CardHeader>
-            <CardTitle>
-              {t('applicationDetail.settings.danger.title', {
-                defaultValue: 'Lifecycle',
-              })}
-            </CardTitle>
-            <CardDescription>
-              {t('applicationDetail.settings.danger.description', {
-                defaultValue:
-                  'Archived applications remain available for restoration.',
-              })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              type='button'
-              variant={application.archived ? 'outline' : 'destructive'}
-              onClick={() => onArchive(!application.archived)}
-            >
-              {application.archived
-                ? t('applicationDetail.settings.restore', {
-                    defaultValue: 'Restore application',
-                  })
-                : t('applicationDetail.settings.archive', {
-                    defaultValue: 'Archive application',
-                  })}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
@@ -1887,28 +1721,6 @@ function ConfirmDetailAction({
             ? 'Confirm rollback'
             : 'Confirm redeployment',
     });
-  } else if (action?.kind === 'secret') {
-    title = t('applicationDetail.confirm.secretTitle', {
-      defaultValue: 'Rotate runtime secret?',
-    });
-    confirm = t('applicationDetail.confirm.rotation', {
-      defaultValue: 'Confirm rotation',
-    });
-  } else if (action?.kind === 'archive') {
-    title = action.archive
-      ? t('applicationDetail.confirm.archiveTitle', {
-          defaultValue: 'Archive application?',
-        })
-      : t('applicationDetail.confirm.restoreTitle', {
-          defaultValue: 'Restore application?',
-        });
-    confirm = action.archive
-      ? t('applicationDetail.confirm.archive', {
-          defaultValue: 'Confirm archive',
-        })
-      : t('applicationDetail.confirm.restore', {
-          defaultValue: 'Confirm restore',
-        });
   }
   return (
     <AlertDialog

@@ -50,7 +50,7 @@ describe('ApplicationDetailPage', () => {
     expect(writeText).toHaveBeenCalledOnce();
   });
 
-  it('supports release, permission, and settings mutations inside the page', async () => {
+  it('supports release and permission mutations inside the page', async () => {
     const user = userEvent.setup();
     renderPage('/apps/analytics?tab=releases');
 
@@ -63,13 +63,6 @@ describe('ApplicationDetailPage', () => {
     await user.selectOptions(screen.getByLabelText('Role'), 'operator');
     await user.click(screen.getByRole('button', { name: 'Add access' }));
     expect(screen.getByText('Lin Chen')).toBeVisible();
-
-    await user.click(screen.getByRole('tab', { name: 'Settings' }));
-    await user.click(
-      screen.getByRole('button', { name: 'Rotate runtime secret' }),
-    );
-    await user.click(screen.getByRole('button', { name: 'Confirm rotation' }));
-    expect(screen.getByText('Runtime secret rotated')).toBeVisible();
   });
 
   it('links application deployments to the registered detail route', async () => {
@@ -92,37 +85,6 @@ describe('ApplicationDetailPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Deployment destination' }),
     ).toBeVisible();
-  });
-
-  it('prevents runtime, development, and deployment actions while archived', async () => {
-    const user = userEvent.setup();
-    renderPage('/apps/warehouse?tab=settings');
-
-    await user.click(
-      screen.getByRole('button', { name: 'Archive application' }),
-    );
-    await user.click(screen.getByRole('button', { name: 'Confirm archive' }));
-
-    expect(screen.getByText('Archived')).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: 'Develop' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /^(Start|Stop|Restart)$/ }),
-    ).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('tab', { name: 'Releases' }));
-    expect(
-      screen.queryByRole('button', { name: /^(Deploy|Redeploy|Roll back)$/ }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Pin version 2.9.0' }),
-    ).toBeVisible();
-
-    await user.click(screen.getByRole('tab', { name: 'Deployments' }));
-    expect(
-      screen.queryByRole('button', { name: 'Redeploy' }),
-    ).not.toBeInTheDocument();
   });
 
   it('keeps locally generated deployment ids unique after remounting the route', async () => {
