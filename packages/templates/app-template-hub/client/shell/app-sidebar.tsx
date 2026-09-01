@@ -38,7 +38,7 @@ export function AppSidebar({
         aria-label={t('navigation.label', {
           defaultValue: 'Application navigation',
         })}
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card text-card-foreground transition-[width,transform] duration-200 md:static md:z-auto md:flex md:translate-x-0 ${desktopCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card text-card-foreground transition-[width,transform] duration-200 md:sticky md:top-0 md:bottom-auto md:z-auto md:flex md:h-svh md:translate-x-0 ${desktopCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div
           className={`flex h-16 shrink-0 items-center justify-between overflow-hidden border-b border-border/70 px-5 ${desktopCollapsed ? 'md:justify-center md:px-0' : ''}`}

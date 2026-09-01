@@ -65,6 +65,16 @@ describe('application shell', () => {
     expect(sidebar).toHaveClass('md:w-64');
   });
 
+  it('keeps the desktop navigation pinned while the page scrolls', async () => {
+    renderApplication('/', createAuthProvider(true));
+
+    expect(
+      await screen.findByRole('complementary', {
+        name: 'Application navigation',
+      }),
+    ).toHaveClass('md:sticky', 'md:top-0', 'md:h-svh');
+  });
+
   it('opens and closes the mobile navigation without changing the route', async () => {
     renderApplication('/', createAuthProvider(true));
     await screen.findByRole('navigation', { name: 'Application navigation' });
