@@ -5,18 +5,23 @@ import {
   ChatInline,
   useAIPageElement,
   useAIPageElementPicker,
-} from '../components/index.js';
+} from '../../../registry/nocobase-ai/components/index.js';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '../shared/ui/accordion.js';
-import { Badge } from '../shared/ui/badge.js';
-import { Button } from '../shared/ui/button.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
-import { Checkbox } from '../shared/ui/checkbox.js';
-import { Input } from '../shared/ui/input.js';
+} from '../../../registry/nocobase-ai/shared/ui/accordion.js';
+import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
+import { Button } from '../../../registry/nocobase-ai/shared/ui/button.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
+import { Checkbox } from '../../../registry/nocobase-ai/shared/ui/checkbox.js';
+import { Input } from '../../../registry/nocobase-ai/shared/ui/input.js';
 import {
   Select,
   SelectContent,
@@ -24,9 +29,9 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from '../shared/ui/select.js';
-import { Switch } from '../shared/ui/switch.js';
-import { Textarea } from '../shared/ui/textarea.js';
+} from '../../../registry/nocobase-ai/shared/ui/select.js';
+import { Switch } from '../../../registry/nocobase-ai/shared/ui/switch.js';
+import { Textarea } from '../../../registry/nocobase-ai/shared/ui/textarea.js';
 import {
   AIChatProvider,
   AIPageContextScope,
@@ -37,12 +42,12 @@ import {
   type AIEmployeeTask,
   type AIEmployeeTasks,
   type AIWorkContextItem,
-} from '../providers/index.js';
+} from '../../../registry/nocobase-ai/providers/index.js';
 import { MousePointer2, Plus, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PromptCard } from './prompt-card.js';
 import { AIConfigurationGate } from './configuration-gate.js';
-import { useAITranslate } from '../locales/use-ai-translate.js';
+import { useAITranslate } from '../../../registry/nocobase-ai/locales/use-ai-translate.js';
 
 const analyzeTicketTask: AIEmployeeTask = {
   title: 'Analyze this ticket',

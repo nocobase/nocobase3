@@ -3,18 +3,18 @@ import {
   AIChatWindow,
   ChatSurface,
   ChatSurfaceActions,
-} from '../components/index.js';
-import { Badge } from '../shared/ui/badge.js';
-import { Card } from '../shared/ui/card.js';
+} from '../../../registry/nocobase-ai/components/index.js';
+import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
+import { Card } from '../../../registry/nocobase-ai/shared/ui/card.js';
 import {
   AIChatProvider,
   useAIChatController,
   useAIChatControllerState,
-} from '../providers/index.js';
+} from '../../../registry/nocobase-ai/providers/index.js';
 import { PromptCard } from './prompt-card.js';
 import { AIConfigurationGate } from './configuration-gate.js';
 import { useState, type CSSProperties } from 'react';
-import { useAITranslate } from '../locales/use-ai-translate.js';
+import { useAITranslate } from '../../../registry/nocobase-ai/locales/use-ai-translate.js';
 
 const floatingPrompt = `Add the standard NocoBase AI floating chat entry to the application layout.
 

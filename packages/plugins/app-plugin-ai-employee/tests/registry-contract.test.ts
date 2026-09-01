@@ -65,29 +65,30 @@ describe('AI Employee Registry contract', () => {
     }
   });
 
-  it('publishes resolvable Registry development entrypoints', () => {
+  it('keeps plugin-owned Demo pages outside public package exports', () => {
     const packageMetadata = JSON.parse(read('package.json')) as {
       readonly publishConfig?: {
-        readonly exports?: Readonly<
-          Record<string, { readonly import?: string; readonly types?: string }>
-        >;
+        readonly exports?: Readonly<Record<string, unknown>>;
       };
     };
-    expect(packageMetadata.publishConfig?.exports).toMatchObject({
-      './registry/nocobase-ai/dev-page': {
-        import: './registry/nocobase-ai/dev-page.js',
-        types: './registry/nocobase-ai/dev-page.d.ts',
-      },
-      './registry/nocobase-ai/demo-pages': {
-        import: './registry/nocobase-ai/demo-pages.js',
-        types: './registry/nocobase-ai/demo-pages.d.ts',
-      },
-    });
+    expect(packageMetadata.publishConfig?.exports).not.toHaveProperty(
+      './client/dev/demo-pages',
+    );
+    expect(packageMetadata.publishConfig?.exports).not.toHaveProperty(
+      './registry/nocobase-ai/dev-page',
+    );
+    expect(packageMetadata.publishConfig?.exports).not.toHaveProperty(
+      './registry/nocobase-ai/demo-pages',
+    );
     for (const file of [
-      'registry/nocobase-ai/dev-page.js',
-      'registry/nocobase-ai/dev-page.d.ts',
-      'registry/nocobase-ai/demo-pages.js',
-      'registry/nocobase-ai/demo-pages.d.ts',
+      'client/dev/ai-employee-page.tsx',
+      'client/dev/demo-pages.js',
+      'client/dev/demo-pages.d.ts',
+      'client/dev/demo/index.tsx',
+      'client/dev/demo/floating.tsx',
+      'client/dev/demo/shortcut.tsx',
+      'client/dev/demo/page-context.tsx',
+      'client/dev/demo/tool-cards.tsx',
     ]) {
       expect(fs.existsSync(path.join(packageRoot, file))).toBe(true);
     }
@@ -116,17 +117,15 @@ describe('AI Employee Registry contract', () => {
     });
   });
 
-  it('contains the complete browser UI and Demo tree without copied Server implementation', () => {
+  it('contains only the application-owned browser UI without plugin Demo sources', () => {
     const item = config.items[0];
     if (!item) throw new Error('Missing nocobase-ai Registry item.');
     const files = filesUnder(item.source.root);
     expect(files).toContain('registry/nocobase-ai/index.ts');
-    expect(files).toContain('registry/nocobase-ai/dev/ai-employee-page.tsx');
-    expect(files).toContain('registry/nocobase-ai/demo/index.tsx');
-    expect(files).toContain('registry/nocobase-ai/demo/floating.tsx');
-    expect(files).toContain('registry/nocobase-ai/demo/shortcut.tsx');
-    expect(files).toContain('registry/nocobase-ai/demo/page-context.tsx');
-    expect(files).toContain('registry/nocobase-ai/demo/tool-cards.tsx');
+    expect(files.some((file) => file.includes('/demo/'))).toBe(false);
+    expect(files.some((file) => file.includes('/dev/'))).toBe(false);
+    expect(files.some((file) => file.endsWith('demo-pages.js'))).toBe(false);
+    expect(files.some((file) => file.endsWith('dev-page.js'))).toBe(false);
     expect(files.some((file) => file.endsWith('extension.tsx'))).toBe(false);
 
     const source = files.map(read).join('\n');
@@ -193,12 +192,14 @@ describe('AI Employee Registry contract', () => {
       );
       expect(
         fs.existsSync(
-          path.join(
-            temporaryRoot,
-            'client/extensions/nocobase-ai/dev/ai-employee-page.tsx',
-          ),
+          path.join(temporaryRoot, 'client/extensions/nocobase-ai/dev'),
         ),
-      ).toBe(true);
+      ).toBe(false);
+      expect(
+        fs.existsSync(
+          path.join(temporaryRoot, 'client/extensions/nocobase-ai/demo'),
+        ),
+      ).toBe(false);
       expect(
         fs.existsSync(
           path.join(temporaryRoot, 'client/extensions/nocobase-ai/index.ts'),

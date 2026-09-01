@@ -53,18 +53,3 @@ discovery, conversations, history, uploads, streaming, decisions, and resume.
 - Tool approval, editing, resume, sub-agent, chart, workflow, suggestion, and
   report renderers
 - English and Simplified Chinese UI copy
-
-## Development previews
-
-The owning plugin mounts the preserved Demo pages under one `AI Components`
-development menu group:
-
-- `/dev/ai-components/chat`
-- `/dev/ai-components/floating`
-- `/dev/ai-components/tasks`
-- `/dev/ai-components/context`
-- `/dev/ai-components/tools`
-
-Each page loads this canonical Registry source directly, so Demo behavior stays
-aligned with the materialized application copy. `defineDevRoutes()` removes the
-whole group and its Registry imports from production builds.

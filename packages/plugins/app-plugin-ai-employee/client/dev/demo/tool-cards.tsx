@@ -1,22 +1,27 @@
 import {
   ToolCallCard,
   type ToolCallPart,
-} from '../components/chat/tool-call-card.js';
-import { PromptOutput } from '../shared/prompt-output.js';
-import { Badge } from '../shared/ui/badge.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
-import { Input } from '../shared/ui/input.js';
+} from '../../../registry/nocobase-ai/components/chat/tool-call-card.js';
+import { PromptOutput } from '../../../registry/nocobase-ai/shared/prompt-output.js';
+import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
+import { Input } from '../../../registry/nocobase-ai/shared/ui/input.js';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../shared/ui/select.js';
-import { Switch } from '../shared/ui/switch.js';
-import { Textarea } from '../shared/ui/textarea.js';
+} from '../../../registry/nocobase-ai/shared/ui/select.js';
+import { Switch } from '../../../registry/nocobase-ai/shared/ui/switch.js';
+import { Textarea } from '../../../registry/nocobase-ai/shared/ui/textarea.js';
 import { useState } from 'react';
-import { useAITranslate } from '../locales/use-ai-translate.js';
+import { useAITranslate } from '../../../registry/nocobase-ai/locales/use-ai-translate.js';
 
 const tools = {
   suggestions: {
@@ -401,7 +406,7 @@ Implementation requirements:
 - Do not render a separate raw Output section.
 - Preserve the actual message order: reasoning, assistant text, then the Tool Card in the position used by the NocoBase message renderer.
 - Use shadcn/Base UI components only; do not add Ant Design, Radix, or Zustand.
-- Add a fixed ToolCallPart example to registry/nocobase-ai/demo/tool-cards.tsx so every state and action can be reviewed without calling the backend.
+- Add a fixed ToolCallPart example to client/dev/demo/tool-cards.tsx so every state and action can be reviewed without calling the backend.
 - Export any public renderer types or components from registry/nocobase-ai/components/index.ts when application code needs them.
 
 Verification:

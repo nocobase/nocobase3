@@ -8,10 +8,6 @@ import { Bot } from 'lucide-react';
 
 import { createAISettings } from './ai-settings.js';
 
-interface ImportMetaWithBundlerEnv {
-  readonly env?: { readonly PROD?: boolean };
-}
-
 function createAIEmployeeDemoLoader(
   exportName:
     | 'AIChatDemoPage'
@@ -21,11 +17,7 @@ function createAIEmployeeDemoLoader(
     | 'ToolCardsDemoPage',
 ): AppClientRouteComponentLoader {
   return async () => {
-    if ((import.meta as ImportMetaWithBundlerEnv).env?.PROD) {
-      throw new Error('AI Employee Dev Routes are unavailable in production.');
-    }
-    const pages =
-      await import('@nocobase/app-plugin-ai-employee/registry/nocobase-ai/demo-pages');
+    const pages = await import('./dev/demo-pages.js');
     return { default: pages[exportName] };
   };
 }

@@ -1,17 +1,22 @@
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
-import { Input } from '../shared/ui/input.js';
-import { Label } from '../shared/ui/label.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
+import { Input } from '../../../registry/nocobase-ai/shared/ui/input.js';
+import { Label } from '../../../registry/nocobase-ai/shared/ui/label.js';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../shared/ui/select.js';
-import { Switch } from '../shared/ui/switch.js';
-import { Textarea } from '../shared/ui/textarea.js';
+} from '../../../registry/nocobase-ai/shared/ui/select.js';
+import { Switch } from '../../../registry/nocobase-ai/shared/ui/switch.js';
+import { Textarea } from '../../../registry/nocobase-ai/shared/ui/textarea.js';
 import { useMemo, useState } from 'react';
-import { useAI } from '../providers/index.js';
+import { useAI } from '../../../registry/nocobase-ai/providers/index.js';
 import { PromptCard } from './prompt-card.js';
 
 type ContextPattern = 'shortcut' | 'preset' | 'scope' | 'manual';

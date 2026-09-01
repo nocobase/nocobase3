@@ -4,22 +4,30 @@ import {
   useAIPageElement,
   useAIPageElementPicker,
   type AIChatComposerAction,
-} from '../components/index.js';
-import { Badge } from '../shared/ui/badge.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
-import { Input } from '../shared/ui/input.js';
-import { Label } from '../shared/ui/label.js';
+} from '../../../registry/nocobase-ai/components/index.js';
+import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
+import { Input } from '../../../registry/nocobase-ai/shared/ui/input.js';
+import { Label } from '../../../registry/nocobase-ai/shared/ui/label.js';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../shared/ui/select.js';
-import { AIChatProvider, useAIChatBase } from '../providers/index.js';
+} from '../../../registry/nocobase-ai/shared/ui/select.js';
+import {
+  AIChatProvider,
+  useAIChatBase,
+} from '../../../registry/nocobase-ai/providers/index.js';
 import { Globe2, MousePointer2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useAITranslate } from '../locales/use-ai-translate.js';
+import { useAITranslate } from '../../../registry/nocobase-ai/locales/use-ai-translate.js';
 
 export function PageElementShowcase() {
   return (

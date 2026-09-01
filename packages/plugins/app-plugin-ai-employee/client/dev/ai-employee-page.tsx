@@ -1,13 +1,16 @@
 import { Bot, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
-import { Button } from '../shared/ui/button.js';
+import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
 import {
   AIChatWindow,
   ChatPage,
   NocoBaseAIRootProvider,
-} from '../components/index.js';
-import { AIChatProvider, useAI } from '../providers/index.js';
+} from '../../registry/nocobase-ai/components/index.js';
+import {
+  AIChatProvider,
+  useAI,
+} from '../../registry/nocobase-ai/providers/index.js';
 
 export default function AIEmployeeDevPage(): ReactElement {
   const [revision, setRevision] = useState(0);

@@ -1,4 +1,4 @@
-import { PromptOutput } from '../shared/prompt-output.js';
+import { PromptOutput } from '../../../registry/nocobase-ai/shared/prompt-output.js';
 
 export function PromptCard({
   title,

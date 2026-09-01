@@ -4,8 +4,9 @@ export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
   ignores: [
     'dist/**',
-    // Registry source is compiled and linted after installation by the consuming application.
+    // Registry and development showcase source use their dedicated browser typecheck.
     'registry/**',
+    'client/dev/**',
     'tests/**',
     'server/agent/**',
     'server/ai-employees/**',

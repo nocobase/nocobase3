@@ -3,11 +3,19 @@ import {
   AIChatMessageList,
   ChatInline,
   type AIChatComposerAction,
-} from '../components/index.js';
-import { AIChatProvider, type AIChatMessage } from '../providers/index.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
-import { Badge } from '../shared/ui/badge.js';
-import { Button } from '../shared/ui/button.js';
+} from '../../../registry/nocobase-ai/components/index.js';
+import {
+  AIChatProvider,
+  type AIChatMessage,
+} from '../../../registry/nocobase-ai/providers/index.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
+import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
+import { Button } from '../../../registry/nocobase-ai/shared/ui/button.js';
 import { ArrowUp, Globe2, Menu, Paperclip, PlusCircle } from 'lucide-react';
 
 const showcaseMessages = [

@@ -1,15 +1,19 @@
 import type { ReactNode } from 'react';
 import { CircleAlert } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '../shared/ui/alert.js';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '../../../registry/nocobase-ai/shared/ui/alert.js';
 import {
   AIProvider,
   useAI,
   type AIEmployee,
   type AIModel,
-} from '../providers/index.js';
-import type { AIService } from '../services/index.js';
-import { useAITranslate } from '../locales/use-ai-translate.js';
+} from '../../../registry/nocobase-ai/providers/index.js';
+import type { AIService } from '../../../registry/nocobase-ai/services/index.js';
+import { useAITranslate } from '../../../registry/nocobase-ai/locales/use-ai-translate.js';
 
 const previewEmployees: AIEmployee[] = [
   {

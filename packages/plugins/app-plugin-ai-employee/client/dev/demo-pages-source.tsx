@@ -1,11 +1,11 @@
 import type { ComponentType, ReactElement } from 'react';
 
-import { AIChatPage } from '../demo/index.js';
-import { FloatingChatPage } from '../demo/floating.js';
-import { PageContextPage } from '../demo/page-context.js';
-import { ShortcutPage } from '../demo/shortcut.js';
-import { ToolCardsPage } from '../demo/tool-cards.js';
-import { NocoBaseAIRootProvider } from '../components/index.js';
+import { AIChatPage } from './demo/index.js';
+import { FloatingChatPage } from './demo/floating.js';
+import { PageContextPage } from './demo/page-context.js';
+import { ShortcutPage } from './demo/shortcut.js';
+import { ToolCardsPage } from './demo/tool-cards.js';
+import { NocoBaseAIRootProvider } from '../../registry/nocobase-ai/components/index.js';
 
 function withDemoRoot(Page: ComponentType): () => ReactElement {
   return function AIEmployeeDemoPage(): ReactElement {

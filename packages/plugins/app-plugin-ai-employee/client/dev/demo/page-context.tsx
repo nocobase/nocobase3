@@ -5,21 +5,26 @@ import {
   useAIForm,
   useAIPageElement,
   useAIPageElementHandle,
-} from '../components/index.js';
-import { applyReactHookFormValues } from '../adapters/react-hook-form.js';
-import { Badge } from '../shared/ui/badge.js';
-import { Button } from '../shared/ui/button.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
-import { Input } from '../shared/ui/input.js';
-import { Label } from '../shared/ui/label.js';
+} from '../../../registry/nocobase-ai/components/index.js';
+import { applyReactHookFormValues } from '../../../registry/nocobase-ai/adapters/react-hook-form.js';
+import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
+import { Button } from '../../../registry/nocobase-ai/shared/ui/button.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
+import { Input } from '../../../registry/nocobase-ai/shared/ui/input.js';
+import { Label } from '../../../registry/nocobase-ai/shared/ui/label.js';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../shared/ui/select.js';
-import { Textarea } from '../shared/ui/textarea.js';
+} from '../../../registry/nocobase-ai/shared/ui/select.js';
+import { Textarea } from '../../../registry/nocobase-ai/shared/ui/textarea.js';
 import {
   AIChatProvider,
   AIPageContextScope,
@@ -28,13 +33,13 @@ import {
   type AIEmployeeTask,
   type AIEmployeeTasks,
   type AIWorkContextItem,
-} from '../providers/index.js';
+} from '../../../registry/nocobase-ai/providers/index.js';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { AIConfigurationGate } from './configuration-gate.js';
 import { PageContextPromptGenerator } from './page-context-prompt-generator.js';
 import { PageElementShowcase } from './page-element-showcase.js';
-import { useAITranslate } from '../locales/use-ai-translate.js';
+import { useAITranslate } from '../../../registry/nocobase-ai/locales/use-ai-translate.js';
 
 const isBusinessEmployee = (employee: { username: string }) =>
   !['nathan', 'dara'].includes(employee.username.toLowerCase());

@@ -5,9 +5,9 @@ import {
   useAIPageElementPicker,
   type AIChatComposerAction,
   type AIChatWindowProps,
-} from '../components/index.js';
-import { Badge } from '../shared/ui/badge.js';
-import { Card } from '../shared/ui/card.js';
+} from '../../../registry/nocobase-ai/components/index.js';
+import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
+import { Card } from '../../../registry/nocobase-ai/shared/ui/card.js';
 import {
   Table,
   TableBody,
@@ -15,15 +15,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../shared/ui/table.js';
-import { AIChatProvider, useAIChatBase } from '../providers/index.js';
+} from '../../../registry/nocobase-ai/shared/ui/table.js';
+import {
+  AIChatProvider,
+  useAIChatBase,
+} from '../../../registry/nocobase-ai/providers/index.js';
 import { Globe2, MousePointer2 } from 'lucide-react';
 import { useMemo, useState, type CSSProperties } from 'react';
 import { ContainerShowcase, type ChatContainer } from './container-showcase.js';
 import { InteractionShowcase } from './interaction-showcase.js';
 import { AIConfigurationGate } from './configuration-gate.js';
 import { PromptGenerator } from './prompt-generator.js';
-import { useAITranslate } from '../locales/use-ai-translate.js';
+import { useAITranslate } from '../../../registry/nocobase-ai/locales/use-ai-translate.js';
 
 const propRows = [
   [

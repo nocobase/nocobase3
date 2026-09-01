@@ -5,19 +5,27 @@ import {
   ChatPage,
   useAIPageElementPicker,
   type AIChatComposerAction,
-} from '../components/index.js';
-import { PromptOutput } from '../shared/prompt-output.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
-import { Input } from '../shared/ui/input.js';
+} from '../../../registry/nocobase-ai/components/index.js';
+import { PromptOutput } from '../../../registry/nocobase-ai/shared/prompt-output.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
+import { Input } from '../../../registry/nocobase-ai/shared/ui/input.js';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../shared/ui/select.js';
-import { Switch } from '../shared/ui/switch.js';
-import { AIChatProvider, useAIChatBase } from '../providers/index.js';
+} from '../../../registry/nocobase-ai/shared/ui/select.js';
+import { Switch } from '../../../registry/nocobase-ai/shared/ui/switch.js';
+import {
+  AIChatProvider,
+  useAIChatBase,
+} from '../../../registry/nocobase-ai/providers/index.js';
 import { Globe2, MousePointer2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ChatContainer } from './container-showcase.js';

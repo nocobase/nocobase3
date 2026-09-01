@@ -3,9 +3,14 @@ import {
   ChatInline,
   ChatPage,
   type AIChatWindowProps,
-} from '../components/index.js';
-import { Button } from '../shared/ui/button.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../shared/ui/card.js';
+} from '../../../registry/nocobase-ai/components/index.js';
+import { Button } from '../../../registry/nocobase-ai/shared/ui/button.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../../registry/nocobase-ai/shared/ui/card.js';
 import {
   AppWindow,
   Columns3,
