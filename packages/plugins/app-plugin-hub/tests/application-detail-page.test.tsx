@@ -171,10 +171,27 @@ describe('ApplicationDetailPage', () => {
     ).toBeVisible();
   });
 
+  it('renders deployment history with the compact deployment columns', () => {
+    renderPage('/apps/warehouse?tab=deployments');
+
+    expect(
+      screen.getAllByRole('columnheader').map((header) => header.textContent),
+    ).toEqual([
+      'Deployment',
+      'Type',
+      'Version',
+      'Status',
+      'Initiated by',
+      'Start time',
+      'Duration',
+    ]);
+    expect(screen.queryByText('Original version')).not.toBeInTheDocument();
+  });
+
   it('keeps locally generated deployment ids unique after remounting the route', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={['/apps/warehouse?tab=deployments']}>
+      <MemoryRouter initialEntries={['/apps/warehouse?tab=releases']}>
         <HubApplicationsProvider>
           <Routes>
             <Route
@@ -189,9 +206,7 @@ describe('ApplicationDetailPage', () => {
             <Route
               path='/away'
               element={
-                <Link to='/apps/warehouse?tab=deployments'>
-                  Return to details
-                </Link>
+                <Link to='/apps/warehouse?tab=releases'>Return to details</Link>
               }
             />
           </Routes>
@@ -209,6 +224,8 @@ describe('ApplicationDetailPage', () => {
     await user.click(
       screen.getByRole('button', { name: 'Confirm redeployment' }),
     );
+
+    await user.click(screen.getByRole('tab', { name: 'Deployments' }));
 
     const localDeploymentIds = screen
       .getAllByText(/^DEP-LOCAL-/)
