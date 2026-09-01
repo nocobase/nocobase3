@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { ChannelManager } from './channel-manager.js';
 import { createDeliveryJob, type DeliveryJobClass } from './delivery-job.js';
 import { NotificationLogs } from './logs.js';
+import { NotificationReconcileJob } from './notification-reconcile-job.js';
 import {
   createNotificationRegistry,
   type NotificationRegistry,
@@ -55,11 +56,11 @@ export class NotificationManager<
   private readonly channelManager: ChannelManager;
 
   private readonly queueJob: DeliveryJobClass;
+  private readonly reconcileJob: NotificationReconcileJob;
   private readonly runtimePromises = new Map<string, Promise<void>>();
   private activated = false;
   private started = false;
   private startPromise?: Promise<void>;
-  private reconcileTimer?: ReturnType<typeof setInterval>;
 
   constructor(private readonly options: NotificationManagerOptions<TChannels>) {
     this.registry = options.registry ?? createNotificationRegistry();
@@ -76,6 +77,11 @@ export class NotificationManager<
       resolveRuntime: async (type): Promise<void> => this.ensureRuntime(type),
     });
     this.queueJob = createDeliveryJob(this.channelManager);
+    this.reconcileJob = new NotificationReconcileJob({
+      intervalMs: options.reconcileIntervalMs ?? 30_000,
+      logger: options.logger,
+      execute: async (): Promise<void> => this.reconcile(),
+    });
   }
 
   activate(): void {
@@ -87,7 +93,7 @@ export class NotificationManager<
     this.registry.validate(this.options.config);
     this.options.queue.registerJob(this.queueJob);
     this.activated = true;
-    this.startReconciler();
+    this.reconcileJob.start();
   }
 
   listTestTargets(): readonly NotificationTestTargetDescriptor[] {
@@ -244,8 +250,7 @@ export class NotificationManager<
         'Notification Manager started.',
       );
     } catch (error) {
-      if (this.reconcileTimer) clearInterval(this.reconcileTimer);
-      this.reconcileTimer = undefined;
+      this.reconcileJob.stop();
       this.started = false;
       await this.channelManager.close();
       this.runtimePromises.clear();
@@ -419,8 +424,7 @@ export class NotificationManager<
   async close(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
     const wasActive = this.activated;
-    if (this.reconcileTimer) clearInterval(this.reconcileTimer);
-    this.reconcileTimer = undefined;
+    this.reconcileJob.stop();
     await this.channelManager.close();
     this.runtimePromises.clear();
     this.activated = false;
@@ -470,19 +474,6 @@ export class NotificationManager<
         'Notification deliveries reconciled.',
       );
     }
-  }
-
-  private startReconciler(): void {
-    const interval = this.options.reconcileIntervalMs ?? 30_000;
-    this.reconcileTimer = setInterval((): void => {
-      void this.reconcile().catch((error: unknown) => {
-        this.options.logger.error(
-          { event: 'notification.reconcile_failed', err: error },
-          'Notification reconciliation failed.',
-        );
-      });
-    }, interval);
-    this.reconcileTimer.unref?.();
   }
 
   private ensureRuntime(type: string): Promise<void> {
