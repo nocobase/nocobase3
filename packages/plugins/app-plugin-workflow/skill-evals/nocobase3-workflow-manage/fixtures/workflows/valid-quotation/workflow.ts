@@ -22,7 +22,7 @@ export default defineWorkflow({
     RunInstruction.create({
       key: 'calculateRisk',
       config: {
-        script: './server/calculate-risk.ts',
+        module: './server/calculate-risk',
         args: { amount: '{{$input.amount}}' },
       },
       result: {
@@ -46,14 +46,14 @@ export default defineWorkflow({
       yes: [
         RunInstruction.create({
           key: 'requestApproval',
-          config: { script: './server/request-approval.ts' },
+          config: { module: './server/request-approval' },
         }),
       ],
       no: [],
     }),
     RunInstruction.create({
       key: 'recordDecision',
-      config: { script: './server/record-decision.ts' },
+      config: { module: './server/record-decision' },
     }),
   ],
 });

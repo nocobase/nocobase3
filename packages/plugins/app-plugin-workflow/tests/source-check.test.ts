@@ -37,7 +37,7 @@ describe('workflow check', () => {
   it.each([
     [
       'wrong config value type',
-      `export default defineWorkflow({ title: 'x', nodes: [RunInstruction.create({ key: 'run', config: { script: 1 } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [RunInstruction.create({ key: 'run', config: { module: 1 } })] });`,
       'TS2322',
     ],
     [
@@ -47,7 +47,7 @@ describe('workflow check', () => {
     ],
     [
       'branch on non-branch node',
-      `export default defineWorkflow({ title: 'x', nodes: [RunInstruction.create({ key: 'run', config: { script: './x.ts' } }).branch({})] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [RunInstruction.create({ key: 'run', config: { module: './x' } }).branch({})] });`,
       'TS2339',
     ],
     [
@@ -69,7 +69,7 @@ describe('workflow check', () => {
 
   it('runs typecheck, bundle, evaluate, schema, semantic, and compile without writing a database', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [RunInstruction.create({ key: 'inside', config: { script: './inside.ts' } })] }), RunInstruction.create({ key: 'after', config: { script: './after.ts' } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [RunInstruction.create({ key: 'inside', config: { module: './inside' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
     );
     await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
       ir: {

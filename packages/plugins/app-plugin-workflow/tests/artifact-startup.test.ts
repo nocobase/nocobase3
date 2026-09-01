@@ -17,7 +17,7 @@ import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
 } from '../server/loader/artifact-builder.js';
-import { WorkflowService } from '../server/runtime/runtime.js';
+import { WorkflowService } from '../server/service.js';
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
 import {
@@ -75,7 +75,7 @@ async function emit(distRoot: string, title: string): Promise<string> {
     key: 'run',
     title: 'Run',
     type: 'run',
-    config: { script: './server/run.ts' },
+    config: { module: './server/run' },
     upstreamKey: null,
     downstreamKey: null,
     branchKey: null,
@@ -88,29 +88,22 @@ async function emit(distRoot: string, title: string): Promise<string> {
     nodes: [node],
   };
   const built = buildWorkflowArtifact({
-    scanned: { key: 'sample', root: '/ci/source', entries: [] },
-    definition: {
-      title,
-      inputSchema: flatIr.inputSchema,
-      parameters: flatIr.parameters,
-      nodes: [],
-    },
+    key: 'sample',
     flatIr,
-    serverEntries: {
-      one: {
-        source: './server/run.ts',
-        output: 'server/run/one.cjs',
-        exports: ['run'],
-      },
-    },
-    serverEntryFiles: new Map([
-      ['server/run/one.cjs', `exports.run=()=>(${JSON.stringify(title)})`],
+    resourceFiles: new Map([
+      [
+        'server/run.js',
+        `export function run(){ return ${JSON.stringify(title)}; }`,
+      ],
     ]),
   });
   await writeWorkflowArtifact(built, distRoot);
   return built.digest;
 }
-function createService(f: Awaited<ReturnType<typeof fixture>>) {
+function createService(
+  f: Awaited<ReturnType<typeof fixture>>,
+  production: boolean = true,
+) {
   return new WorkflowService({
     database: f.database,
     queue: f.queue,
@@ -121,11 +114,41 @@ function createService(f: Awaited<ReturnType<typeof fixture>>) {
       location: f.storeRoot,
       visibility: 'private',
     },
-    production: true,
-    sourceResolverDiagnostic: false,
+    production,
   });
 }
 describe('application workflow Artifact lazy synchronization', () => {
+  it('loads TypeScript resources directly from the workflow package in development', async () => {
+    const f = await fixture();
+    const digest = await emit(f.distRoot, 'artifact');
+    const sourcePackage = path.join(f.root, 'server/workflows/sample/server');
+    await fs.mkdir(sourcePackage, { recursive: true });
+    await fs.writeFile(
+      path.join(sourcePackage, 'run.ts'),
+      'export function run() { return "source"; }',
+    );
+    const service = createService(f, false);
+    const repository = new WorkflowRepository(f.database, service);
+    await repository.enable(digest);
+
+    await service.trigger('sample', {}, { eventKey: 'development-source' });
+
+    const run = await f.database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.runs)
+      .select('id')
+      .where('eventKey', '=', 'development-source')
+      .executeTakeFirstOrThrow<Row>();
+    const nodeRun = await f.database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
+      .select('result')
+      .where('workflowRunId', '=', run.id)
+      .executeTakeFirstOrThrow<Row>();
+    expect(JSON.parse(String(nodeRun.result))).toBe('source');
+    await service.dispose();
+  });
+
   it('materializes parameter settings as the first disabled current revision', async () => {
     const f = await fixture();
     const hash = await emit(f.distRoot, 'parameters');
@@ -312,20 +335,5 @@ describe('application workflow Artifact lazy synchronization', () => {
       /exactly one digest/,
     );
     await multiple.dispose();
-    expect(
-      () =>
-        new WorkflowService({
-          database: f.database,
-          queue: f.queue,
-          distRoot: f.distRoot,
-          artifactDisk: {
-            driver: 'fs',
-            location: f.storeRoot,
-            visibility: 'private',
-          },
-          production: true,
-          sourceResolverDiagnostic: true,
-        }),
-    ).toThrow(/forbidden in production/);
   });
 });

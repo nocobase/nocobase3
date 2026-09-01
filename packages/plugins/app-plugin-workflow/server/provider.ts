@@ -1,14 +1,16 @@
-import { databaseManagerToken } from '@nocobase/db';
-import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
-import { loggingToken } from '@nocobase/app-server/logging';
+import { driveConfig } from '@nocobase/app-server/drive';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { databaseManagerToken } from '@nocobase/db';
+import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
 import { ServiceProvider } from '@nocobase/service-provider';
-import { driveConfig } from '@nocobase/app-server/drive';
 
-import { WorkflowService } from '../runtime/runtime.js';
-import { workflowServiceToken } from '../tokens.js';
-import { workflowConfig } from '../config.js';
+import { workflowConfig } from './config.js';
+import { WorkflowService } from './service.js';
+import {
+  internalWorkflowServiceToken,
+  workflowServiceToken,
+} from './tokens.js';
 
 export interface WorkflowProviderConfig {
   readonly app: {
@@ -19,7 +21,6 @@ export interface WorkflowProviderConfig {
     readonly sourceRoot: string;
     readonly distRoot: string;
     readonly artifactDisk: string;
-    readonly sourceResolverDiagnostic: boolean;
     readonly production: boolean;
   };
 }
@@ -39,7 +40,7 @@ export class WorkflowProvider<
     const drive = this.app.config.get(driveConfig);
 
     this.app.container.singleton(
-      workflowServiceToken,
+      internalWorkflowServiceToken,
       (container) =>
         new WorkflowService({
           database: container.resolve(databaseManagerToken),
@@ -50,15 +51,17 @@ export class WorkflowProvider<
           distRoot: workflow.distRoot,
           artifactDisk: resolveWorkflowArtifactDisk(workflow, drive),
           production: workflow.production,
-          sourceResolverDiagnostic: workflow.sourceResolverDiagnostic,
-          warn: (message: string): void =>
-            container.resolve(loggingToken).getLogger().warn(message),
         }),
+    );
+    this.app.container.singleton(workflowServiceToken, (container) =>
+      container.resolve(internalWorkflowServiceToken),
     );
   }
 
   public override async shutdown(): Promise<void> {
-    await this.app.container.resolveIfCreated(workflowServiceToken)?.dispose();
+    await this.app.container
+      .resolveIfCreated(internalWorkflowServiceToken)
+      ?.dispose();
   }
 }
 

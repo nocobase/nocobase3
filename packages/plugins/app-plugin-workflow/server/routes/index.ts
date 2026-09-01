@@ -9,8 +9,8 @@ import { Hono } from 'hono';
 
 import { AppServiceError } from '../errors.js';
 import { WorkflowInvocationError } from '../engine/index.js';
-import type { WorkflowProviderConfig } from '../providers/workflow.js';
-import { workflowServiceToken } from '../tokens.js';
+import type { WorkflowProviderConfig } from '../provider.js';
+import { internalWorkflowServiceToken } from '../tokens.js';
 import { createWorkflowRoutes } from './workflow.js';
 
 const workflowRoutePaths = [
@@ -38,13 +38,13 @@ export const apiRoutes: AppApiRouteContribution<
   }
   if (
     container.has(databaseManagerToken) &&
-    container.has(workflowServiceToken)
+    container.has(internalWorkflowServiceToken)
   ) {
     router.route(
       '/',
       createWorkflowRoutes(
         container.resolve(databaseManagerToken),
-        container.resolve(workflowServiceToken),
+        container.resolve(internalWorkflowServiceToken),
       ),
     );
   } else {
