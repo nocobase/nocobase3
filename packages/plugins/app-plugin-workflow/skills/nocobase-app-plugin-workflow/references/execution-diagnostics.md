@@ -99,6 +99,7 @@ For an unexpected path:
 - A `null` log means no captured log after redaction.
 - If `truncated` is true, use correlated structured server logs or reproduce safely with smaller diagnostic data. Do not weaken redaction or copy secrets into a new log.
 - Node Run summary currently reports `branchKey: null`; reconstruct branch topology from the definition and condition result rather than relying on that summary field.
+- A terminal Workflow Run may contain a `PENDING` condition ancestor when a `terminate` node ended execution from inside its selected branch. Treat the persisted `terminate` Node Run and terminal Workflow Run status as intentional early termination, not as a stuck execution.
 
 ## Common symptoms
 

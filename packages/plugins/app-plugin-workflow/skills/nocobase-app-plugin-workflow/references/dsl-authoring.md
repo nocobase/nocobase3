@@ -10,6 +10,7 @@
 - [Administrator parameters](#administrator-parameters)
 - [Topology and keys](#topology-and-keys)
 - [Condition nodes](#condition-nodes)
+- [Terminate nodes](#terminate-nodes)
 - [Run nodes and scripts](#run-nodes-and-scripts)
 - [Variables and templates](#variables-and-templates)
 - [Node result schemas](#node-result-schemas)
@@ -27,10 +28,11 @@ import {
   ConditionInstruction,
   defineWorkflow,
   RunInstruction,
+  TerminateInstruction,
 } from '@nocobase/app-plugin-workflow';
 ```
 
-Only use Instruction classes exported by an installed plugin and registered in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction` and `RunInstruction`.
+Only use Instruction classes exported by an installed plugin and registered in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
 
 ## Complete current example
 
@@ -287,6 +289,33 @@ Supported JSON Logic operators are exactly:
 Variable roots are exactly `input`, `parameters`, and `nodeResults`. Forbidden property segments are `__proto__`, `prototype`, and `constructor`. Limits are depth 32, total nodes 256, array length 64, and variable path length 256. Operator arity is validated; comparisons use same-type numeric or string ordering. The only branches are `yes` and `no`.
 
 Condition has a built-in boolean result contract. It may therefore be referenced later as `$nodeResults.<conditionKey>` unless explicitly disabled with `result: null`.
+
+## Terminate nodes
+
+`TerminateInstruction.create()` terminates the complete Workflow Run immediately after its own Node Run is persisted. It does not execute later nodes in the same block, return from the current branch, or run a branching parent's common successor.
+
+Its config accepts only optional `outcome`, which is `success` by default and may be `success` or `failure`:
+
+```ts
+ConditionInstruction.create({
+  key: 'canContinue',
+  config: { expression: { '===': [{ var: 'input.approved' }, true] } },
+}).branch({
+  yes: [],
+  no: [
+    TerminateInstruction.create({
+      key: 'stopRejected',
+      config: { outcome: 'success' },
+    }),
+  ],
+}),
+RunInstruction.create({
+  key: 'continueProcessing',
+  config: { module: './server/continue-processing' },
+}),
+```
+
+When `approved` is false, `stopRejected` resolves the Workflow Run and `continueProcessing` is not executed. Use `outcome: 'failure'` only when the early outcome is a business failure rather than an expected successful stop. A `terminate` node has no result contract and cannot have branches.
 
 ## Run nodes and scripts
 

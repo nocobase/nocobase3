@@ -11,7 +11,7 @@ import {
   type Node,
   type NodeProps,
 } from '@xyflow/react';
-import { Flag, GitBranch, Terminal, Zap } from 'lucide-react';
+import { CircleStop, Flag, GitBranch, Terminal, Zap } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import {
   applyLayoutResult,
@@ -33,19 +33,42 @@ interface CanvasNodeData extends Record<string, unknown> {
   onViewStartInput?: () => void;
 }
 function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>) {
+  if (data.kind === 'branch-anchor') {
+    return (
+      <div
+        className={`workflow-flow-branch-anchor ${data.status}`}
+        aria-label='Empty branch'
+      >
+        <Handle
+          type='target'
+          position={Position.Left}
+          className='workflow-flow-handle'
+        />
+        <Handle
+          type='source'
+          position={Position.Right}
+          className='workflow-flow-handle'
+        />
+      </div>
+    );
+  }
   const boundary = data.kind === 'start' || data.kind === 'end';
   const condition = data.nodeType === 'condition';
+  const terminateInstruction = data.nodeType === 'terminate';
+  const instructionClass = data.nodeType ? `instruction-${data.nodeType}` : '';
   const Icon =
     data.kind === 'start'
       ? Zap
       : data.kind === 'end'
         ? Flag
-        : condition
-          ? GitBranch
-          : Terminal;
+        : terminateInstruction
+          ? CircleStop
+          : condition
+            ? GitBranch
+            : Terminal;
   return (
     <div
-      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${data.nodeType ?? ''} ${data.status}`}
+      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${instructionClass} ${data.status}`}
     >
       {data.kind !== 'start' ? (
         <Handle
@@ -61,7 +84,7 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>) {
         <strong>{data.title}</strong>
         {data.description ? <small>{data.description}</small> : null}
       </span>
-      {data.kind === 'end' ? null : condition ? (
+      {data.kind === 'end' || terminateInstruction ? null : condition ? (
         <>
           <Handle
             type='source'
@@ -151,7 +174,7 @@ export function WorkflowCanvas({
           onViewStartInput,
         },
         draggable: false,
-        selectable: node.kind !== 'end',
+        selectable: node.kind !== 'end' && node.kind !== 'branch-anchor',
         width: node.width,
         height: node.height,
         className:
@@ -251,7 +274,8 @@ export function WorkflowCanvas({
             onNodeClick={
               interactive
                 ? (_, node) => {
-                    if (node.id === 'end') return;
+                    if (node.id === 'end' || node.data.kind === 'branch-anchor')
+                      return;
                     const graphNode = graph.nodes.find(
                       (item) => item.id === node.id,
                     );

@@ -74,11 +74,11 @@
   box-shadow: 0 11px 24px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
-.workflow-flow-node.condition {
+.workflow-flow-node.instruction-condition {
   border-color: var(--border);
   background: var(--card);
 }
-.workflow-flow-node.condition:hover {
+.workflow-flow-node.instruction-condition:hover {
   border-color: var(--foreground);
 }
 .workflow-flow-node.boundary {
@@ -130,8 +130,9 @@
   height: 18px;
   stroke-width: 2;
 }
-.workflow-flow-node.run .workflow-flow-icon,
-.workflow-flow-node.condition .workflow-flow-icon {
+.workflow-flow-node.instruction-run .workflow-flow-icon,
+.workflow-flow-node.instruction-condition .workflow-flow-icon,
+.workflow-flow-node.instruction-terminate .workflow-flow-icon {
   background: var(--workflow-emphasis);
   color: var(--primary-foreground);
 }
@@ -180,11 +181,21 @@
   background: var(--muted-foreground) !important;
   box-shadow: 0 0 0 1px var(--border);
 }
-.workflow-flow-node.condition .workflow-flow-handle {
+.workflow-flow-node.instruction-condition .workflow-flow-handle {
   background: var(--muted-foreground) !important;
 }
 .workflow-flow-node.boundary .workflow-flow-handle {
   background: currentColor !important;
+}
+.workflow-flow-branch-anchor {
+  width: 24px;
+  height: 24px;
+  border: 2px dashed var(--workflow-edge-muted);
+  border-radius: 999px;
+  background: var(--background);
+}
+.workflow-flow-branch-anchor.resolved {
+  border-color: var(--workflow-success-soft);
 }
 .workflow-selected .workflow-flow-node {
   box-shadow:
