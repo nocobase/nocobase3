@@ -5,8 +5,8 @@ description: 说明解析后 Collection 的缓存、并发加载、失效规则�
 
 # Collection Registry 设计
 
-> `DatabaseConnection.collections`、Naming Index、Registry、跨 Collection relation 图校验以及 Builder
-> 主动失效已经提供。Migration batch 和 transaction commit 向外部 Registry 传播失效在后续批次完成。
+> `DatabaseConnection.collections`、Naming Index、Registry、跨 Collection relation 图校验、Builder 主动
+> 失效、transaction commit 传播和 Migration batch 失效已经提供。
 
 `CollectionRegistry` 是每个 `DatabaseConnection` 拥有的解析结果缓存。它协调 Inspector、Metadata Store
 和 Resolver，但不是新的事实来源。
@@ -126,12 +126,20 @@ Connection 的长期 Registry。标准 Builder 和 Metadata Service 操作记录
 Database Connection 自动使外部 Registry 失效，回滚时丢弃记录。只有通过 raw SQL 绕过这些入口时，调用方才
 需要显式 `invalidate()`；无法安全判定范围时全量失效。
 
+Database Metadata Store 在 transaction Connection 中绑定同一个底层 transaction client，因此物理 Schema、
+Metadata 文档和业务数据一起 commit/rollback。其他可写 Store 使用隔离 overlay：事务内可读自己的写入，提交前
+外层不可见；commit 前以原 revision 回放 CAS，数据库提交失败时执行补偿恢复。只读 Store 保持只读 capability。
+
+事务内只有 Builder/Metadata 实际产生变更时才记录失效。纯 Query transaction 不清缓存；rollback 不触碰外层
+Registry。drop/rename 等无法安全缩小范围的操作记录全量失效。
+
 ## 当前实现边界
 
 当前提供惰性 `get()`、`getResolution()`、分页 `list()`、显式 `scan()`、并发去重、手动
 `invalidate()`/`refresh()` 和 `validateRelations()`。Metadata Service 写成功后会主动精确失效；Builder
 执行 create/alter/field/index/constraint/view 后也会失效受影响 Collection，drop/rename 使用全量失效以同步
-Naming Index。Migration batch 和 transaction commit 的外层 Registry 传播仍待接入。
+Naming Index。transaction commit 将事务内记录的精确范围回放到外层 Registry；Migration batch 只要实际执行
+或回滚了 migration，就在 batch 完成后全量失效，以覆盖绕过 Builder 的 raw schema/client 操作。
 
 ## 相关文档
 

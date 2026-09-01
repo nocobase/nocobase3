@@ -7,8 +7,12 @@ import {
 } from '../../../collection/registry/index.js';
 import {
   CollectionMetadataService,
+  DatabaseCollectionMetadataDocumentStore,
   LegacyCollectionMetadataDocumentStore,
+  TransactionCollectionMetadataDocumentStore,
   type CollectionMetadataDocumentStore,
+  type CollectionMetadataInvalidation,
+  type CollectionMetadataInvalidator,
   type CollectionMetadataStore,
 } from '../../../metadata/index.js';
 import { DefaultNamingStrategy } from '../../../naming/index.js';
@@ -56,6 +60,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     private readonly metadataStore: CollectionMetadataStore,
     private readonly collectionMetadataStore: CollectionMetadataDocumentStore,
     knexInstance?: Knex,
+    transactionInvalidations?: TransactionInvalidationCollector,
   ) {
     this.knexInstance = knexInstance;
     this.config = resolveKnexConnectionConfig(sourceConfig);
@@ -102,6 +107,12 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       naming: this.config.naming,
     });
     this.collections = collections;
+    const invalidator = transactionInvalidations
+      ? new TransactionCollectionInvalidator(
+          collections,
+          transactionInvalidations,
+        )
+      : collections;
     this.collectionMetadata = new CollectionMetadataService({
       store: collectionMetadataStore,
       validator: new RegistryMetadataDocumentValidator({
@@ -110,7 +121,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         collections,
         naming: this.config.naming,
       }),
-      invalidator: collections,
+      invalidator,
       onInvalidationError: (error) =>
         this.reportCollectionMetadataInvalidationError(error),
     });
@@ -122,7 +133,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         collectionMetadataStore instanceof LegacyCollectionMetadataDocumentStore
           ? undefined
           : this.collectionMetadata,
-      schemaInvalidator: collections,
+      schemaInvalidator: invalidator,
       naming: this.config.naming,
     });
   }
@@ -158,16 +169,37 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T> {
     const client = await this.resolveClient();
-    return client.transaction(async (trx) => {
-      const connection = new KnexDatabaseConnection(
-        this.name,
-        this.sourceConfig,
-        this.metadataStore,
-        this.collectionMetadataStore,
-        trx,
-      );
-      return fn(connection);
-    });
+    let stagedMetadata: TransactionCollectionMetadataDocumentStore | undefined;
+    const invalidations = new TransactionInvalidationCollector();
+    let result: T;
+    try {
+      result = await client.transaction(async (trx) => {
+        const collectionMetadataStore =
+          this.collectionMetadataStore instanceof
+          DatabaseCollectionMetadataDocumentStore
+            ? this.collectionMetadataStore.withClient(async () => trx)
+            : (stagedMetadata = new TransactionCollectionMetadataDocumentStore(
+                this.collectionMetadataStore,
+              ));
+        const connection = new KnexDatabaseConnection(
+          this.name,
+          this.sourceConfig,
+          this.metadataStore,
+          collectionMetadataStore,
+          trx,
+          invalidations,
+        );
+        const transactionResult = await fn(connection);
+        await stagedMetadata?.commit();
+        return transactionResult;
+      });
+    } catch (error) {
+      await stagedMetadata?.rollbackCommitted();
+      invalidations.clear();
+      throw error;
+    }
+    invalidations.apply(this.collections as CollectionRegistry);
+    return result;
   }
 
   private getClient(): Knex {
@@ -190,6 +222,60 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       error instanceof Error ? error : new Error(String(error)),
       { code: 'COLLECTION_METADATA_INVALIDATION_FAILED' },
     );
+  }
+}
+
+class TransactionInvalidationCollector {
+  private all = false;
+  private namingIndex = false;
+  private readonly collections = new Set<string>();
+
+  record(change?: CollectionMetadataInvalidation): void {
+    if (!change) {
+      this.all = true;
+      this.collections.clear();
+      return;
+    }
+    if (this.all) return;
+    for (const collection of change.collections) {
+      this.collections.add(collection);
+    }
+    this.namingIndex ||= change.namingIndex;
+  }
+
+  apply(target: CollectionMetadataInvalidator): void {
+    if (this.all) {
+      target.invalidateAll();
+    } else if (this.collections.size > 0 || this.namingIndex) {
+      target.invalidate({
+        collections: [...this.collections],
+        namingIndex: this.namingIndex,
+      });
+    }
+    this.clear();
+  }
+
+  clear(): void {
+    this.all = false;
+    this.namingIndex = false;
+    this.collections.clear();
+  }
+}
+
+class TransactionCollectionInvalidator implements CollectionMetadataInvalidator {
+  constructor(
+    private readonly local: CollectionMetadataInvalidator,
+    private readonly transaction: TransactionInvalidationCollector,
+  ) {}
+
+  invalidate(change: CollectionMetadataInvalidation): void {
+    this.local.invalidate(change);
+    this.transaction.record(change);
+  }
+
+  invalidateAll(): void {
+    this.local.invalidateAll();
+    this.transaction.record();
   }
 }
 

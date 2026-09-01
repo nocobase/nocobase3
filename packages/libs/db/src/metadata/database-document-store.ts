@@ -52,6 +52,15 @@ export class DatabaseCollectionMetadataDocumentStore implements CollectionMetada
     private readonly options: DatabaseCollectionMetadataDocumentStoreOptions,
   ) {}
 
+  withClient(
+    resolveClient: () => Promise<Knex>,
+  ): DatabaseCollectionMetadataDocumentStore {
+    return new DatabaseCollectionMetadataDocumentStore({
+      ...this.options,
+      resolveClient,
+    });
+  }
+
   async initialize(): Promise<void> {
     if (!this.initializationPromise) {
       const initializing = this.createTable();

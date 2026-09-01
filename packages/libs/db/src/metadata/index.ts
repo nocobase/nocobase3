@@ -9,6 +9,7 @@ export * from './in-memory-document-store.js';
 export * from './legacy-document-store.js';
 export * from './module-document-store.js';
 export * from './database-document-store.js';
+export * from './transaction-document-store.js';
 export * from './service.js';
 export * from './service-errors.js';
 export * from './store.js';

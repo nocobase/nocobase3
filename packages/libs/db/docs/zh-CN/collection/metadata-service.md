@@ -143,6 +143,9 @@ Service 通过 `CollectionMetadataInvalidator` 接收定向和全量失效能力
 Migration 仍然是主数据库 Schema 变更的权威记录。Builder 执行 Migration 时，在同一事务内使用
 Service 的内部写入能力保存补充 Metadata。Migration 不得导入或遍历随运行时演化的 Metadata 定义。
 
+完成实际执行或回滚的 Migration batch 后，Migrator 会全量失效目标 Connection Registry。即使某个 migration
+通过 raw client/schema 绕过 Builder，也不会让 batch 前缓存继续存活；没有 pending migration 的空 batch 不失效。
+
 ## 兼容当前 API
 
 当前 Builder 中的 `updateCollectionMetadata()` 和 `updateFieldMetadata()` 已在 V1 路径委托给 Service。

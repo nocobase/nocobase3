@@ -165,8 +165,7 @@ Store 层的 `delete(old) + put(new)` 不是原子 Collection rename。完整操
 4. 实现 Metadata Store 新文档接口、In-memory Store 和 Naming Index。
 5. 实现 `CollectionRegistry` 与 `connection.collections`。
 6. 实现 `CollectionMetadataService` 和跨 Collection relation 图校验。
-7. 接入 Builder、Migration、transaction 和 Metadata 写入后的自动 Registry 失效（Builder 和 Metadata
-   写入已完成；Migration/transaction 提交传播仍待后续批次）。
+7. 接入 Builder、Migration、transaction 和 Metadata 写入后的自动 Registry 失效（已完成）。
 8. 实现 Database Store、Module Store、Schema Snapshot 和 Agent Snapshot。
 9. 所有消费端迁移完成后移除旧的完整 `CollectionDefinition` Store API。
 

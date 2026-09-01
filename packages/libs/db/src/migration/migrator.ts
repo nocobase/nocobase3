@@ -44,7 +44,7 @@ class DefaultMigrator implements Migrator {
     const migrations = await loadMigrations(this.options);
     const migrationConnection = createMigrationContext(connection).connection;
 
-    return withMigrationLock(
+    const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
@@ -84,6 +84,8 @@ class DefaultMigrator implements Migrator {
         return { batch, executed, skipped };
       },
     );
+    if (result.executed.length > 0) connection.collections.invalidate();
+    return result;
   }
 
   async rollback(): Promise<MigrationRollbackResult> {
@@ -100,7 +102,7 @@ class DefaultMigrator implements Migrator {
     const migrations = await loadMigrations(this.options);
     const migrationConnection = createMigrationContext(connection).connection;
 
-    return withMigrationLock(
+    const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
@@ -152,6 +154,8 @@ class DefaultMigrator implements Migrator {
         return { batch, rolledBack };
       },
     );
+    if (result.rolledBack.length > 0) connection.collections.invalidate();
+    return result;
   }
 
   private async runUpMigration(

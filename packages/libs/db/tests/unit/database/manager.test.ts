@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CollectionRenameAtomicityError,
   CollectionNamingCompatibilityError,
+  DatabaseCollectionMetadataDocumentStore,
   createDatabaseManager,
   defineDatabase,
   InMemoryCollectionMetadataDocumentStore,
@@ -10,6 +11,7 @@ import {
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
   SchemaManagementNotAllowedError,
+  type DatabaseConnection,
 } from '../../../src/index.js';
 
 describe('DatabaseManager', () => {
@@ -456,6 +458,129 @@ describe('DatabaseManager', () => {
       await expect(
         db.query('sqlite').selectFrom('orders').select('status').execute(),
       ).resolves.toEqual([{ status: 'paid' }]);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('publishes transactional Metadata and Registry invalidation only after commit', async () => {
+    const collectionMetadataStore =
+      new InMemoryCollectionMetadataDocumentStore();
+    const db = createDatabaseManager({
+      collectionMetadataStore,
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await connection.builder.createCollection('orders', (collection) => {
+        collection.increments('id');
+      });
+      await connection.collections.get('orders');
+      const invalidate = vi.spyOn(connection.collections, 'invalidate');
+
+      await expect(
+        connection.transaction(async (transaction) => {
+          await transaction.builder.addField('orders', {
+            name: 'rolledBackStatus',
+            type: 'string',
+            title: 'Rolled back status',
+          });
+          throw new Error('rollback');
+        }),
+      ).rejects.toThrow('rollback');
+      expect(invalidate).not.toHaveBeenCalled();
+      await expect(
+        collectionMetadataStore.get('orders'),
+      ).resolves.toBeUndefined();
+      await expect(
+        connection.collections.get('orders'),
+      ).resolves.not.toMatchObject({
+        fields: expect.arrayContaining([
+          expect.objectContaining({ name: 'rolledBackStatus' }),
+        ]),
+      });
+
+      await connection.transaction(async (transaction) => {
+        await transaction.query.selectFrom('orders').select('id').execute();
+      });
+      expect(invalidate).not.toHaveBeenCalled();
+
+      await connection.transaction(async (transaction) => {
+        await transaction.builder.addField('orders', {
+          name: 'status',
+          type: 'string',
+          title: 'Status',
+        });
+      });
+      expect(invalidate).toHaveBeenCalledOnce();
+      await expect(
+        collectionMetadataStore.get('orders'),
+      ).resolves.toMatchObject({
+        document: { fields: { status: { title: 'Status' } } },
+      });
+      await expect(connection.collections.get('orders')).resolves.toMatchObject(
+        {
+          fields: expect.arrayContaining([
+            expect.objectContaining({ name: 'status', title: 'Status' }),
+          ]),
+        },
+      );
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('keeps Database Metadata writes in the physical Schema transaction', async () => {
+    const state: { connection?: DatabaseConnection } = {};
+    const collectionMetadataStore = new DatabaseCollectionMetadataDocumentStore(
+      {
+        resolveClient: async () => state.connection!.client(),
+      },
+    );
+    const db = createDatabaseManager({
+      collectionMetadataStore,
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+    const connection = db.connection();
+    state.connection = connection;
+
+    try {
+      await expect(
+        connection.transaction(async (transaction) => {
+          await transaction.builder.createCollection(
+            'rolledBackOrders',
+            (collection) => {
+              collection.title('Rolled back orders');
+              collection.increments('id');
+            },
+          );
+          throw new Error('rollback database metadata');
+        }),
+      ).rejects.toThrow('rollback database metadata');
+      const client = await connection.client<any>();
+      expect(await client.schema.hasTable('rolled_back_orders')).toBe(false);
+      await expect(
+        collectionMetadataStore.get('rolledBackOrders'),
+      ).resolves.toBeUndefined();
+
+      await connection.transaction(async (transaction) => {
+        await transaction.builder.createCollection(
+          'committedOrders',
+          (collection) => {
+            collection.title('Committed orders');
+            collection.increments('id');
+          },
+        );
+      });
+      expect(await client.schema.hasTable('committed_orders')).toBe(true);
+      await expect(
+        collectionMetadataStore.get('committedOrders'),
+      ).resolves.toMatchObject({ document: { title: 'Committed orders' } });
     } finally {
       await db.destroy();
     }

@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createMigrator, loadMigrations } from '../../../src/index.js';
 import { describeIntegrationDatabases } from '../helpers.js';
 
@@ -51,6 +51,10 @@ describeIntegrationDatabases('migration runner', (context) => {
       tableName,
       lockTableName,
     });
+    const invalidate = vi.spyOn(
+      context.database.connection().collections,
+      'invalidate',
+    );
 
     await expect(migrator.latest()).resolves.toMatchObject({
       batch: 1,
@@ -60,12 +64,15 @@ describeIntegrationDatabases('migration runner', (context) => {
     expect(
       await context.db.schema.hasTable(context.table('migrationUsers')),
     ).toBe(true);
+    expect(invalidate).toHaveBeenCalled();
 
+    invalidate.mockClear();
     await expect(migrator.latest()).resolves.toMatchObject({
       batch: 1,
       executed: [],
       skipped: ['202608180001_create_migration_users'],
     });
+    expect(invalidate).not.toHaveBeenCalled();
 
     const history = await context
       .db(tableName)
