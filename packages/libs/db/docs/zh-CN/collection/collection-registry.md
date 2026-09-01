@@ -5,7 +5,8 @@ description: 说明解析后 Collection 的缓存、并发加载、失效规则�
 
 # Collection Registry 设计
 
-> 本文描述目标设计，当前 `DatabaseConnection` 尚未提供正式的 `collections` 入口。
+> `DatabaseConnection.collections`、Naming Index、Registry 和跨 Collection relation 图校验已经提供。
+> Builder/Migration 主动失效和持久化 Metadata 后端在后续批次完成。
 
 `CollectionRegistry` 是每个 `DatabaseConnection` 拥有的解析结果缓存。它协调 Inspector、Metadata Store
 和 Resolver，但不是新的事实来源。
@@ -26,6 +27,8 @@ connection.collections
 export interface ConnectionCollections {
   get(name: string): Promise<CollectionDefinition | undefined>;
 
+  getResolution(name: string): Promise<CollectionResolutionResult | undefined>;
+
   list(options?: ListCollectionsOptions): Promise<CollectionSummaryPage>;
 
   scan(options?: ScanCollectionsOptions): AsyncIterable<CollectionDefinition>;
@@ -33,8 +36,13 @@ export interface ConnectionCollections {
   invalidate(name?: string): void;
 
   refresh(name: string): Promise<CollectionDefinition | undefined>;
+
+  validateRelations(name?: string): Promise<void>;
 }
 ```
+
+`getResolution()` 用于需要 inspection/warnings 的审计和 Agent 场景；普通 `get()` 只返回完整
+`CollectionDefinition`。返回对象是缓存的独立副本，调用方修改它不会污染后续读取。
 
 `get(name)` 的 name 始终是逻辑 Collection 名。`list()` 默认每页 100 条，最大 1000 条，只返回：
 
@@ -62,6 +70,9 @@ Promise，避免重复 introspection。
 
 成功结果可以缓存；失败 Promise 和暂时性连接错误不能长期缓存。表不存在的 `undefined` 结果第一版不做负缓存，
 避免创建表后仍返回旧结果。
+
+失效与 in-flight load 通过 generation token 协调：失效之前启动、之后才完成的旧读取可以返回给原调用方，
+但不会重新写回已经失效的 cache。
 
 ## 失效规则
 
@@ -115,10 +126,11 @@ Connection 的长期 Registry。标准 Builder 和 Metadata Service 操作记录
 Database Connection 自动使外部 Registry 失效，回滚时丢弃记录。只有通过 raw SQL 绕过这些入口时，调用方才
 需要显式 `invalidate()`；无法安全判定范围时全量失效。
 
-## 当前第一批实现
+## 当前实现边界
 
-第一批先提供惰性 `get()`、分页 `list()`、`scan()`、并发去重和手动 `invalidate()`。Builder 和 Metadata
-Store 的主动失效钩子在后续迁移旧 Store API 时接入。这个阶段在 Schema 变更后，调用方需显式执行
+当前提供惰性 `get()`、`getResolution()`、分页 `list()`、显式 `scan()`、并发去重、手动
+`invalidate()`/`refresh()` 和 `validateRelations()`。Metadata Service 写成功后会主动精确失效；Builder 和
+Migration 的主动失效钩子在迁移旧 Store API 时接入。这个阶段通过 Builder 修改 Schema 后，调用方仍需显式执行
 `connection.collections.invalidate()`。
 
 ## 相关文档

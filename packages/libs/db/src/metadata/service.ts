@@ -56,9 +56,12 @@ export interface CollectionMetadataServiceOptions {
 }
 
 export class CollectionMetadataService {
+  private initializationPromise?: Promise<void>;
+
   constructor(private readonly options: CollectionMetadataServiceOptions) {}
 
   async get(name: string): Promise<StoredCollectionMetadata | undefined> {
+    await this.initialize();
     return this.options.store.get(name);
   }
 
@@ -229,6 +232,7 @@ export class CollectionMetadataService {
     name: string,
     options: UpdateCollectionMetadataOptions,
   ): Promise<CurrentMetadata> {
+    await this.initialize();
     validateName(name, 'collection');
     validateUpdateOptions(options);
     const stored = await this.options.store.get(name);
@@ -257,6 +261,17 @@ export class CollectionMetadataService {
       }
       this.options.onInvalidationError(error);
     }
+  }
+
+  private async initialize(): Promise<void> {
+    if (!this.initializationPromise) {
+      const initializing = this.options.store.initialize();
+      this.initializationPromise = initializing.catch((error: unknown) => {
+        this.initializationPromise = undefined;
+        throw error;
+      });
+    }
+    await this.initializationPromise;
   }
 }
 

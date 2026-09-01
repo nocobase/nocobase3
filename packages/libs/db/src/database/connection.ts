@@ -1,4 +1,6 @@
 import type { CollectionBuilder } from '../collection/builder/index.js';
+import type { ConnectionCollections } from '../collection/registry/index.js';
+import type { CollectionMetadataService } from '../metadata/index.js';
 import type { QueryAdapter } from '../query/index.js';
 import type {
   DatabaseCapabilities,
@@ -20,6 +22,10 @@ export interface DatabaseConnection {
 
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder: CollectionBuilder;
+  /** Resolved physical Schema plus supplemental Collection metadata. */
+  collections: ConnectionCollections;
+  /** Supplemental Collection metadata read and update service. */
+  collectionMetadata: CollectionMetadataService;
   /** Database-layer query builder. Uses Connection naming but not Collection-level overrides. */
   query: QueryAdapter;
   schema: SchemaAdapter;

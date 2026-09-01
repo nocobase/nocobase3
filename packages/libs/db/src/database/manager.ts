@@ -1,5 +1,8 @@
 import type { CollectionBuilder } from '../collection/builder/index.js';
-import { InMemoryCollectionMetadataStore } from '../metadata/index.js';
+import {
+  InMemoryCollectionMetadataStore,
+  LegacyCollectionMetadataDocumentStore,
+} from '../metadata/index.js';
 import type { QueryAdapter } from '../query/index.js';
 import type { DatabaseConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
@@ -55,13 +58,20 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error(`Database connection "${name}" is not configured.`);
     }
 
+    const metadataStore =
+      connectionConfig.metadataStore ??
+      this.config.metadataStore ??
+      new InMemoryCollectionMetadataStore();
     const connection = this.factory.create({
       name,
       config: connectionConfig,
-      metadataStore:
-        connectionConfig.metadataStore ??
-        this.config.metadataStore ??
-        new InMemoryCollectionMetadataStore(),
+      metadataStore,
+      collectionMetadataStore:
+        connectionConfig.collectionMetadataStore ??
+        this.config.collectionMetadataStore ??
+        new LegacyCollectionMetadataDocumentStore(metadataStore, {
+          naming: connectionConfig.naming,
+        }),
     });
     this.connections.set(name, connection);
     return connection;

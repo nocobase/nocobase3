@@ -130,6 +130,19 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 
 详见 [Collection Resolver 设计](../collection/collection-resolver.md)。
 
+## Collection Registry
+
+- `connection.collections.get(name)`：按逻辑名称惰性读取完整 `CollectionDefinition`。
+- `connection.collections.getResolution(name)`：读取带 inspection 和 warnings 的完整解析结果。
+- `connection.collections.list(options?)`：分页读取轻量 Collection 摘要，不解析 fields。
+- `connection.collections.scan(options?)`：显式全量 introspection 与解析。
+- `connection.collections.invalidate(name?)`：清理单项或全部解析缓存。
+- `connection.collections.refresh(name)`：清理单项并立即重读。
+- `connection.collections.validateRelations(name?)`：对一个可达关系图或全部 Collection 执行跨 Collection 校验。
+- `connection.collectionMetadata`：Connection 上的 `CollectionMetadataService`。
+
+详见 [Collection Registry 设计](../collection/collection-registry.md)。
+
 ## Adapter
 
 - `SchemaAdapter`：schema operation 执行接口。

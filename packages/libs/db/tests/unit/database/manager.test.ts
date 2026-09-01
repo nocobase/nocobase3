@@ -3,6 +3,7 @@ import {
   CollectionNamingCompatibilityError,
   createDatabaseManager,
   defineDatabase,
+  InMemoryCollectionMetadataDocumentStore,
   InMemoryCollectionMetadataStore,
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
@@ -33,6 +34,8 @@ describe('DatabaseManager', () => {
       expect(connection.capabilities.materializedViews).toBe(false);
       expect(db.builder()).toBe(connection.builder);
       expect(db.query()).toBe(connection.query);
+      expect(connection.collections).toBeDefined();
+      expect(connection.collectionMetadata).toBeDefined();
 
       await db.builder().createCollection('orders', (collection) => {
         collection.increments('id');
@@ -41,6 +44,54 @@ describe('DatabaseManager', () => {
 
       const client = await connection.client<any>();
       expect(await client.schema.hasTable('orders')).toBe(true);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('resolves Collections and updates supplemental Metadata through Connection entry points', async () => {
+    const collectionMetadataStore =
+      new InMemoryCollectionMetadataDocumentStore();
+    const db = createDatabaseManager({
+      collectionMetadataStore,
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await connection.builder.createCollection('orders', (collection) => {
+        collection.increments('id');
+        collection.decimal('amount');
+      });
+
+      const physical = await connection.collections.get('orders');
+      expect(physical).toMatchObject({
+        name: 'orders',
+        fields: expect.arrayContaining([
+          expect.objectContaining({ name: 'amount' }),
+        ]),
+      });
+
+      const stored = await connection.collectionMetadata.updateField(
+        'orders',
+        'amount',
+        { title: 'Amount' },
+      );
+      expect(stored?.revision).toBe(1);
+      await expect(connection.collections.get('orders')).resolves.toMatchObject(
+        {
+          fields: expect.arrayContaining([
+            expect.objectContaining({ name: 'amount', title: 'Amount' }),
+          ]),
+        },
+      );
+      await expect(connection.collections.list()).resolves.toMatchObject({
+        items: expect.arrayContaining([
+          expect.objectContaining({ name: 'orders', tableName: 'orders' }),
+        ]),
+      });
     } finally {
       await db.destroy();
     }

@@ -1,4 +1,7 @@
-import type { CollectionMetadataStore } from '../metadata/index.js';
+import type {
+  CollectionMetadataDocumentStore,
+  CollectionMetadataStore,
+} from '../metadata/index.js';
 import type { ConnectionConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 
@@ -16,6 +19,7 @@ export interface ConnectionAdapterContext<
   name: string;
   config: TConfig;
   metadataStore: CollectionMetadataStore;
+  collectionMetadataStore: CollectionMetadataDocumentStore;
 }
 
 export interface ConnectionFactory {

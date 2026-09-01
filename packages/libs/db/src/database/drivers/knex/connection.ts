@@ -1,6 +1,15 @@
 import type { Knex } from 'knex';
 import { CollectionBuilder } from '../../../collection/builder/index.js';
-import type { CollectionMetadataStore } from '../../../metadata/index.js';
+import {
+  CollectionRegistry,
+  RegistryMetadataDocumentValidator,
+  type ConnectionCollections,
+} from '../../../collection/registry/index.js';
+import {
+  CollectionMetadataService,
+  type CollectionMetadataDocumentStore,
+  type CollectionMetadataStore,
+} from '../../../metadata/index.js';
 import { DefaultNamingStrategy } from '../../../naming/index.js';
 import { KnexQueryAdapter, type QueryAdapter } from '../../../query/index.js';
 import { KnexSchemaAdapter } from '../../../schema/adapters/knex/index.js';
@@ -33,6 +42,8 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   readonly schema: SchemaAdapter;
   readonly schemaInspector: SchemaInspector;
   readonly builder: CollectionBuilder;
+  readonly collections: ConnectionCollections;
+  readonly collectionMetadata: CollectionMetadataService;
   readonly query: QueryAdapter;
 
   private knexInstance?: Knex;
@@ -42,6 +53,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     readonly name: string,
     private readonly sourceConfig: ConnectionConfig,
     private readonly metadataStore: CollectionMetadataStore,
+    private readonly collectionMetadataStore: CollectionMetadataDocumentStore,
     knexInstance?: Knex,
   ) {
     this.knexInstance = knexInstance;
@@ -88,10 +100,29 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       metadataStore,
       naming: this.config.naming,
     });
+    const collections = new CollectionRegistry({
+      inspector: this.schemaInspector,
+      metadataStore: collectionMetadataStore,
+      naming: this.config.naming,
+    });
+    this.collections = collections;
+    this.collectionMetadata = new CollectionMetadataService({
+      store: collectionMetadataStore,
+      validator: new RegistryMetadataDocumentValidator({
+        inspector: this.schemaInspector,
+        metadataStore: collectionMetadataStore,
+        collections,
+        naming: this.config.naming,
+      }),
+      invalidator: collections,
+      onInvalidationError: (error) =>
+        this.reportCollectionMetadataInvalidationError(error),
+    });
   }
 
   async connect(): Promise<this> {
     this.getClient();
+    await (this.collections as CollectionRegistry).initialize();
     await this.builder.validateMetadataCompatibility();
     return this;
   }
@@ -101,6 +132,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   }
 
   async disconnect(): Promise<void> {
+    this.collections.invalidate();
     const client = this.knexInstance;
     if (!client) {
       return;
@@ -124,6 +156,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         this.name,
         this.sourceConfig,
         this.metadataStore,
+        this.collectionMetadataStore,
         trx,
       );
       return fn(connection);
@@ -139,6 +172,17 @@ export class KnexDatabaseConnection implements DatabaseConnection {
 
   private async resolveClient(): Promise<Knex> {
     return this.getClient();
+  }
+
+  private reportCollectionMetadataInvalidationError(error: unknown): void {
+    if (this.sourceConfig.onCollectionMetadataInvalidationError) {
+      this.sourceConfig.onCollectionMetadataInvalidationError(error);
+      return;
+    }
+    process.emitWarning(
+      error instanceof Error ? error : new Error(String(error)),
+      { code: 'COLLECTION_METADATA_INVALIDATION_FAILED' },
+    );
   }
 }
 

@@ -7,6 +7,7 @@ interface DatabaseConfig {
   default?: string;
   connections: Record<string, ConnectionConfig>;
   metadataStore?: CollectionMetadataStore;
+  collectionMetadataStore?: CollectionMetadataDocumentStore;
 }
 ```
 
@@ -46,6 +47,8 @@ interface BaseConnectionConfig {
   naming?: NamingOptions;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
+  collectionMetadataStore?: CollectionMetadataDocumentStore;
+  onCollectionMetadataInvalidationError?: (error: unknown) => void;
   schemaManagement?: 'managed' | 'external';
   debug?: boolean;
   pool?: unknown;
@@ -215,6 +218,31 @@ const db = createDatabaseManager({
 ```
 
 connection 级 `metadataStore` 优先于 manager 级 `metadataStore`。
+
+## collectionMetadataStore
+
+`collectionMetadataStore` 是迁移期的新 V1 补充文档 Store，可放在 manager 或 connection 级；connection 级优先：
+
+```ts
+const collectionMetadataStore = new InMemoryCollectionMetadataDocumentStore();
+
+const db = createDatabaseManager({
+  collectionMetadataStore,
+  connections: {
+    main: {
+      dialect: 'sqlite',
+      filename: ':memory:',
+    },
+  },
+});
+```
+
+配置后可以使用 `connection.collections` 读取解析后的完整 Collection，并通过
+`connection.collectionMetadata` 更新补充 Metadata。若未配置，新读取链路会用
+`LegacyCollectionMetadataDocumentStore` 包装旧 `metadataStore`，因此可以读取但不能通过新 Service 写入。
+
+`onCollectionMetadataInvalidationError` 只报告 Metadata 已成功提交之后的缓存失效异常；默认通过 Node warning
+报告。该异常不会回滚已经持久化的文档。
 
 ## defineDatabase
 
