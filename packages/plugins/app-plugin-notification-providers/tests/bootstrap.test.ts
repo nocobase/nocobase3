@@ -5,6 +5,8 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { registerBuiltInNotificationProviders } from '../server/bootstrap.js';
+import NotificationProvidersProvider from '../server/provider.js';
+import { ServiceContainer } from '@nocobase/service-provider';
 
 describe('@nocobase/app-plugin-notification-providers bootstrap', () => {
   it('registers its Email and IM definitions', () => {
@@ -27,7 +29,13 @@ describe('@nocobase/app-plugin-notification-providers bootstrap', () => {
     );
   });
 
-  it('allows the core notification service to be absent', () => {
-    expect(() => registerBuiltInNotificationProviders(undefined)).not.toThrow();
+  it('fails fast when the required core service is absent', async () => {
+    const provider = new NotificationProvidersProvider({
+      container: new ServiceContainer(),
+    });
+
+    await expect(provider.boot()).rejects.toThrow(
+      'Built-in notification Providers require the notification core service.',
+    );
   });
 });

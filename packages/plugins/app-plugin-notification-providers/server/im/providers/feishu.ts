@@ -31,10 +31,10 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
 > {
   return {
     type: 'feishu-webhook',
+    label: 'Feishu webhook',
+    validateConfig: validateFeishuConfig,
     async createProvider(_context, config) {
-      validateHttpUrl(config.webhookUrl, {
-        allowedHosts: ['open.feishu.cn', 'open.larksuite.com'],
-      });
+      validateFeishuConfig(config);
       return {
         name: config.name,
         type: 'feishu-webhook',
@@ -75,4 +75,10 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
       };
     },
   };
+}
+
+function validateFeishuConfig(config: FeishuWebhookProviderConfig): void {
+  validateHttpUrl(config.webhookUrl, {
+    allowedHosts: ['open.feishu.cn', 'open.larksuite.com'],
+  });
 }

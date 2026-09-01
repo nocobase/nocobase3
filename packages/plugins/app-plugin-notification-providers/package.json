@@ -71,12 +71,9 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "hono": "catalog:",
     "nodemailer": "^9.0.5",
     "resend": "^6.22.1"
   },

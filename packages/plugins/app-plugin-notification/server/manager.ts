@@ -25,6 +25,9 @@ import type {
   NotificationRecipient,
   NotificationSendInput,
   NotificationSendResult,
+  NotificationTestActor,
+  NotificationTestSendRequest,
+  NotificationTestTargetDescriptor,
 } from './types.js';
 
 interface ExpandedRecipientTarget {
@@ -81,9 +84,103 @@ export class NotificationManager<
       !this.options.config.channels.some((config) => config.enabled)
     )
       return;
+    this.registry.validate(this.options.config);
     this.options.queue.registerJob(this.queueJob);
     this.activated = true;
     this.startReconciler();
+  }
+
+  listTestTargets(): readonly NotificationTestTargetDescriptor[] {
+    if (!this.options.config.test?.enabled) return [];
+    return this.registry.testTargets(this.options.config);
+  }
+
+  async sendTest(
+    request: NotificationTestSendRequest,
+    actor: NotificationTestActor,
+  ): Promise<NotificationSendResult> {
+    if (!this.options.config.test?.enabled) {
+      throw new Error('Notification testing is not enabled.');
+    }
+    const target = this.resolveTestTarget(request);
+    const channelConfig = this.options.config.channels.find(
+      (candidate) => candidate.type === request.channel && candidate.enabled,
+    );
+    const providerConfig = channelConfig?.providers.find(
+      (candidate) =>
+        candidate.name === request.providerName &&
+        candidate.type === request.providerType &&
+        candidate.enabled !== false,
+    );
+    const definition = this.registry.channel(request.channel);
+    if (!channelConfig || !providerConfig || !definition?.test) {
+      throw new Error('Notification test target is unavailable.');
+    }
+    const converted = definition.test.toSendInput({
+      actor,
+      values: request.values,
+      channelConfig,
+      providerConfig,
+    });
+    const channel = target.channel.type as keyof TChannels & string;
+    const routing = {
+      [channel]: { providers: { provider: target.provider.name } },
+    } as NotificationSendInput<TChannels>['routing'];
+    const channelOverrides = converted.channelOverride
+      ? ({
+          [channel]: converted.channelOverride,
+        } as NotificationSendInput<TChannels>['channelOverrides'])
+      : undefined;
+    return this.send({
+      to: converted.to,
+      channels: [channel],
+      routing,
+      content: converted.content,
+      channelOverrides,
+      source: { type: 'notification-test', referenceId: actor.userId },
+    });
+  }
+
+  async getTestStatus(
+    notificationId: string,
+    actor: NotificationTestActor,
+  ): Promise<import('./logs.js').NotificationLogDetails | undefined> {
+    if (!this.options.config.test?.enabled) return undefined;
+    const details = await this.logs.get(notificationId);
+    return details?.log.sourceType === 'notification-test' &&
+      details.log.sourceReferenceId === actor.userId
+      ? details
+      : undefined;
+  }
+
+  private resolveTestTarget(
+    request: NotificationTestSendRequest,
+  ): NotificationTestTargetDescriptor {
+    const target = this.listTestTargets().find(
+      (candidate) =>
+        candidate.channel.type === request.channel &&
+        candidate.provider.name === request.providerName &&
+        candidate.provider.type === request.providerType,
+    );
+    if (!target) throw new Error('Notification test target is unavailable.');
+    const fieldNames = new Set(target.fields.map((field) => field.name));
+    for (const name of Object.keys(request.values)) {
+      if (!fieldNames.has(name)) {
+        throw new Error(`Unknown notification test field "${name}".`);
+      }
+    }
+    for (const field of target.fields) {
+      const value = request.values[field.name]?.trim() ?? '';
+      if (field.required && !value) {
+        throw new Error(`${field.label} is required.`);
+      }
+      if (field.maxLength !== undefined && value.length > field.maxLength) {
+        throw new Error(
+          `${field.label} must be at most ${field.maxLength} characters.`,
+        );
+      }
+    }
+    return target;
   }
 
   async start(): Promise<void> {

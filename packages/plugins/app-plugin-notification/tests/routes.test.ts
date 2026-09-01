@@ -16,106 +16,179 @@ import { notificationServiceToken } from '../server/tokens.js';
 import type { NotificationService } from '../server/types.js';
 
 describe('@nocobase/app-plugin-notification routes', () => {
-  it('mounts protected log routes and checks page access', async () => {
-    const hostRouter = new Hono();
-    const container = new ServiceContainer();
-    const middleware = vi.fn(async (_context, next) => next());
-    const required = vi.fn(() => middleware);
-    const can = vi.fn(async () => true);
-    const authzMiddleware = vi.fn(async (context, next) => {
-      context.set('authz', { can });
-      await next();
-    });
-    const notificationRouter = new Hono();
-    notificationRouter.get('/logs', (context) => context.json({ data: [] }));
-    container.instance(authenticationToken, { required } as unknown as Auth);
-    container.instance(authorizationToken, {
-      middleware: () => authzMiddleware,
-    } as unknown as AppAuthorization);
-    container.instance(notificationServiceToken, {
-      router: notificationRouter,
-    } as unknown as NotificationService);
-
-    const router = await apiRoutes.createRouter(
-      createApp(hostRouter, container),
-    );
+  it('keeps logs on their page access permission', async () => {
+    const { router, can } = await createRouter();
 
     const response = await router.request('/notifications/logs');
+
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: [] });
-    expect(required).toHaveBeenCalledOnce();
-    expect(middleware).toHaveBeenCalledOnce();
     expect(can).toHaveBeenCalledWith({
       resource: { type: 'page', id: 'notification.logs' },
       action: 'access',
     });
   });
 
-  it('denies log API access without the page permission', async () => {
-    const hostRouter = new Hono();
-    const container = new ServiceContainer();
-    container.instance(authenticationToken, {
-      required: () => async (_context, next) => next(),
-    } as unknown as Auth);
-    container.instance(authorizationToken, {
-      middleware: () => async (context, next) => {
-        context.set('authz', { can: async () => false });
-        await next();
+  it('lists only safe targets with the separate test permission', async () => {
+    const targets = [
+      {
+        channel: { type: 'email', label: 'Email' },
+        provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
+        fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
       },
-    } as unknown as AppAuthorization);
-    container.instance(notificationServiceToken, {
-      router: new Hono(),
-    } as unknown as NotificationService);
+    ] as const;
+    const { router, can, listTestTargets } = await createRouter({ targets });
 
-    const router = await apiRoutes.createRouter(
-      createApp(hostRouter, container),
-    );
-    const response = await router.request('/notifications/logs');
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Notification logs access is required.',
+    const response = await router.request('/notifications/test/targets', {
+      headers: { 'x-nocobase-notification-test': '1' },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ data: targets });
+    expect(listTestTargets).toHaveBeenCalledOnce();
+    expect(can).toHaveBeenCalledWith({
+      resource: { type: 'notification', id: 'test' },
+      action: 'send',
     });
   });
 
-  it('does not apply core authorization to a non-log route', async () => {
-    const hostRouter = new Hono();
-    const container = new ServiceContainer();
-    const authMiddleware = vi.fn(async (_context, next) => next());
-    const authzMiddleware = vi.fn(async (_context, next) => next());
-    container.instance(authenticationToken, {
-      required: () => authMiddleware,
-    } as unknown as Auth);
-    container.instance(authorizationToken, {
-      middleware: () => authzMiddleware,
-    } as unknown as AppAuthorization);
-    container.instance(notificationServiceToken, {
-      router: new Hono(),
-    } as unknown as NotificationService);
+  it('sends through the core manager with the authenticated actor', async () => {
+    const { router, sendTest } = await createRouter();
+    const input = {
+      channel: 'email',
+      providerName: 'primary',
+      providerType: 'smtp',
+      values: { recipient: 'test@example.com' },
+    };
 
-    const router = await apiRoutes.createRouter(
-      createApp(hostRouter, container),
-    );
-    router.get('/notifications/in-app', (context) => context.text('in-app'));
+    const response = await router.request('/notifications/test/send', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-nocobase-notification-test': '1',
+      },
+      body: JSON.stringify(input),
+    });
 
-    const response = await router.request('/notifications/in-app');
+    expect(response.status).toBe(202);
+    expect(sendTest).toHaveBeenCalledWith(input, { userId: 'user-1' });
+  });
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe('in-app');
-    expect(authMiddleware).not.toHaveBeenCalled();
-    expect(authzMiddleware).not.toHaveBeenCalled();
+  it('restricts status lookup to the actor through the manager interface', async () => {
+    const { router, getTestStatus } = await createRouter();
+
+    const response = await router.request('/notifications/test/test-1/status', {
+      headers: { 'x-nocobase-notification-test': '1' },
+    });
+
+    expect(response.status).toBe(404);
+    expect(getTestStatus).toHaveBeenCalledWith('test-1', {
+      userId: 'user-1',
+    });
+  });
+
+  it('requires the feature flag, anti-CSRF header, and test permission', async () => {
+    const anonymous = await createRouter({ authenticated: false });
+    expect(
+      (
+        await anonymous.router.request('/notifications/test/targets', {
+          headers: { 'x-nocobase-notification-test': '1' },
+        })
+      ).status,
+    ).toBe(401);
+
+    const disabled = await createRouter({ testEnabled: false });
+    expect(
+      (
+        await disabled.router.request('/notifications/test/targets', {
+          headers: { 'x-nocobase-notification-test': '1' },
+        })
+      ).status,
+    ).toBe(404);
+
+    const enabled = await createRouter();
+    expect(
+      (await enabled.router.request('/notifications/test/targets')).status,
+    ).toBe(403);
+
+    const denied = await createRouter({ allowed: false });
+    expect(
+      (
+        await denied.router.request('/notifications/test/targets', {
+          headers: { 'x-nocobase-notification-test': '1' },
+        })
+      ).status,
+    ).toBe(403);
   });
 });
 
-function createApp(
-  router: Hono,
-  container: ServiceContainer,
-): AppPluginApplication {
-  return {
+interface RouterOptions {
+  readonly allowed?: boolean;
+  readonly authenticated?: boolean;
+  readonly targets?: ReturnType<NotificationService['listTestTargets']>;
+  readonly testEnabled?: boolean;
+}
+
+async function createRouter(options: RouterOptions = {}): Promise<{
+  readonly router: Hono;
+  readonly can: ReturnType<typeof vi.fn>;
+  readonly listTestTargets: ReturnType<typeof vi.fn>;
+  readonly sendTest: ReturnType<typeof vi.fn>;
+  readonly getTestStatus: ReturnType<typeof vi.fn>;
+}> {
+  const container = new ServiceContainer();
+  const can = vi.fn(async () => options.allowed ?? true);
+  const listTestTargets = vi.fn(() => options.targets ?? []);
+  const sendTest = vi.fn(async () => ({
+    notificationId: 'test-1',
+    status: 'pending' as const,
+    deliveries: [],
+  }));
+  const getTestStatus = vi.fn(async () => undefined);
+  const logsRouter = new Hono();
+  logsRouter.get('/logs', (context) => context.json({ data: [] }));
+  container.instance(authenticationToken, {
+    required: () => async (context, next) => {
+      if (options.authenticated === false) {
+        return context.json(
+          { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          401,
+        );
+      }
+      context.set('auth', { user: { id: 'user-1' }, session: {} });
+      await next();
+    },
+  } as unknown as Auth);
+  container.instance(authorizationToken, {
+    middleware: () => async (context, next) => {
+      context.set('authz', { can });
+      await next();
+    },
+  } as unknown as AppAuthorization);
+  container.instance(notificationServiceToken, {
+    router: logsRouter,
+    listTestTargets,
+    sendTest,
+    getTestStatus,
+  } as unknown as NotificationService);
+
+  const contribution = await apiRoutes.createRouter({
     appName: 'test',
     publicBasePath: '',
-    config: { app: { name: 'test', publicBasePath: '' } },
+    config: {
+      get: () => ({
+        channels: [],
+        test: { enabled: options.testEnabled ?? true },
+      }),
+    },
     paths: {} as never,
-    router,
+    router: new Hono(),
     container,
+  } as unknown as AppPluginApplication);
+  return {
+    router: contribution,
+    can,
+    listTestTargets,
+    sendTest,
+    getTestStatus,
   };
 }

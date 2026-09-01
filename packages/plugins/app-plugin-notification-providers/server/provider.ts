@@ -13,7 +13,11 @@ export default class NotificationProvidersProvider<
   public readonly name: string = '@nocobase/app-plugin-notification-providers';
 
   public override async boot(): Promise<void> {
-    if (!this.app.container.has(notificationServiceToken)) return;
+    if (!this.app.container.has(notificationServiceToken)) {
+      throw new Error(
+        'Built-in notification Providers require the notification core service.',
+      );
+    }
     registerBuiltInNotificationProviders(
       this.app.container.resolve(notificationServiceToken),
     );

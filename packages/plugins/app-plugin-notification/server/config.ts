@@ -29,7 +29,6 @@ export const notificationConfig: AppConfigDefinition<NotificationConfig> =
       test: Type.Optional(
         Type.Object({
           enabled: Type.Boolean(),
-          emailRecipient: Type.Optional(Type.String()),
         }),
       ),
     }),

@@ -8,11 +8,15 @@ user-isolated inbox API.
 
 The package exports its Server plugin and public Server contracts from both the
 package root and `/server`. Register it in the target App's Server plugin list
-after `@nocobase/app-plugin-notification`. It has no Client runtime entry.
+after `@nocobase/app-plugin-notification` when durable notification delivery is
+needed. It has no Client runtime entry. The inbox store and routes require only
+the database and authentication services, so they remain available in a host
+that does not install the core notification manager.
 
 The plugin registers:
 
 - the `in-app` Channel and database Provider;
+- a test adapter whose optional recipient defaults to the authenticated user;
 - the `notificationInAppItems` migration;
 - authenticated inbox routes under `/api/notifications/in-app`.
 

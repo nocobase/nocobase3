@@ -39,6 +39,46 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
 > {
   return {
     type: 'in-app',
+    test: {
+      label: 'In-app',
+      fields: [
+        {
+          name: 'recipient',
+          label: 'Recipient user ID',
+          type: 'text',
+          placeholder: 'Defaults to the current user',
+          maxLength: 255,
+        },
+        {
+          name: 'title',
+          label: 'Title',
+          type: 'text',
+          required: true,
+          defaultValue: 'NocoBase notification test',
+          maxLength: 200,
+        },
+        {
+          name: 'body',
+          label: 'Message',
+          type: 'textarea',
+          required: true,
+          defaultValue: 'This is a test notification from NocoBase.',
+          maxLength: 2000,
+        },
+      ],
+      toSendInput({ actor, values }) {
+        const title = values.title?.trim();
+        const body = values.body?.trim();
+        if (!title || !body) throw new Error('Title and Message are required.');
+        return {
+          to: {
+            type: 'user',
+            id: values.recipient?.trim() || actor.userId,
+          },
+          content: { title, body },
+        };
+      },
+    },
     async createChannel() {
       return {
         type: 'in-app',
@@ -87,6 +127,7 @@ export function createDatabaseProviderDefinition(options: {
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
+    label: 'Database',
     async createProvider(context, config) {
       const { store } = options;
       return {

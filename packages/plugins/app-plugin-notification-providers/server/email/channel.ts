@@ -35,6 +35,45 @@ export function createEmailChannelDefinition(
 > {
   return {
     type: 'email',
+    test: {
+      label: 'Email',
+      fields: [
+        {
+          name: 'recipient',
+          label: 'Recipient',
+          type: 'email',
+          required: true,
+          placeholder: 'name@example.com',
+          maxLength: 320,
+        },
+        {
+          name: 'title',
+          label: 'Title',
+          type: 'text',
+          required: true,
+          defaultValue: 'NocoBase notification test',
+          maxLength: 200,
+        },
+        {
+          name: 'body',
+          label: 'Message',
+          type: 'textarea',
+          required: true,
+          defaultValue: 'This is a test notification from NocoBase.',
+          maxLength: 2000,
+        },
+      ],
+      toSendInput({ values }) {
+        const address = values.recipient?.trim();
+        if (!address || !isEmail(address)) {
+          throw new Error('Recipient must be a valid email address.');
+        }
+        return {
+          to: { type: 'email', address },
+          content: requiredContent(values),
+        };
+      },
+    },
     async createChannel() {
       return {
         type: 'email',
@@ -77,4 +116,17 @@ export function createEmailChannelDefinition(
       };
     },
   };
+}
+
+function requiredContent(
+  values: Readonly<Record<string, string>>,
+): NotificationContent {
+  const title = values.title?.trim();
+  const body = values.body?.trim();
+  if (!title || !body) throw new Error('Title and Message are required.');
+  return { title, body };
+}
+
+function isEmail(value: string): boolean {
+  return value.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(value);
 }

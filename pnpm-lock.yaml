@@ -2052,12 +2052,6 @@ importers:
 
   packages/plugins/app-plugin-notification-providers:
     dependencies:
-      '@nocobase/app-plugin-authentication':
-        specifier: workspace:^
-        version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-authorization':
-        specifier: workspace:^
-        version: link:../app-plugin-authorization
       '@nocobase/app-plugin-notification':
         specifier: workspace:^
         version: link:../app-plugin-notification
@@ -2067,9 +2061,6 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       nodemailer:
         specifier: ^9.0.5
         version: 9.0.5

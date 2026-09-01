@@ -26,7 +26,16 @@ export class NotificationProvider<
   public readonly name: string = '@nocobase/app-plugin-notification';
 
   public override register(): void {
-    if (!this.app.container.has(databaseManagerToken)) return;
+    if (!this.app.container.has(databaseManagerToken))
+      throw new Error(
+        'Notification core requires the database manager dependency.',
+      );
+    if (!this.app.container.has(queueManagerToken))
+      throw new Error(
+        'Notification core requires the queue manager dependency.',
+      );
+    if (!this.app.container.has(loggingToken))
+      throw new Error('Notification core requires the logging dependency.');
     this.app.container.singleton(notificationServiceToken, (container) =>
       createNotificationManager<NotificationChannelMap>({
         database: container.resolve(databaseManagerToken),
@@ -40,7 +49,6 @@ export class NotificationProvider<
   }
 
   public override async start(): Promise<void> {
-    if (!this.app.container.has(notificationServiceToken)) return;
     // Install mode starts providers before notification tables are migrated.
     this.app.container.resolve(notificationServiceToken).activate();
   }

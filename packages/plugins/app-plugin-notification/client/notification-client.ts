@@ -51,27 +51,37 @@ export interface NotificationLogDetails {
   readonly deliveries: readonly NotificationDeliveryDetails[];
 }
 
-export interface NotificationTestProvider {
-  readonly channel: string;
+export interface NotificationTestField {
+  readonly name: string;
+  readonly label: string;
+  readonly type: 'text' | 'email' | 'textarea';
+  readonly required?: boolean;
+  readonly placeholder?: string;
+  readonly defaultValue?: string;
+  readonly maxLength?: number;
+}
+
+export interface NotificationTestTarget {
+  readonly channel: { readonly type: string; readonly label: string };
   readonly provider: {
     readonly name: string;
     readonly type: string;
+    readonly label: string;
   };
+  readonly fields: readonly NotificationTestField[];
 }
 
-export interface NotificationTestInput extends NotificationTestProvider {
-  readonly recipient?: string;
-  readonly title?: string;
-  readonly body?: string;
+export interface NotificationTestInput {
+  readonly channel: string;
+  readonly providerName: string;
+  readonly providerType: string;
+  readonly values: Readonly<Record<string, string>>;
 }
 
 export interface NotificationTestResult {
   readonly notificationId: string;
   readonly status: NotificationStatus;
-  readonly provider: {
-    readonly name: string;
-    readonly type: string;
-  };
+  readonly deliveries: readonly unknown[];
 }
 
 interface DataResponse<T> {
@@ -89,40 +99,44 @@ export class NotificationClient {
       .then((response) => response.data);
   }
 
-  listTestProviders(): Promise<readonly NotificationTestProvider[]> {
+  listTestTargets(): Promise<readonly NotificationTestTarget[]> {
     return this.client
-      .request<DataResponse<readonly NotificationTestProvider[]>>(
-        'notification-providers/test/config',
+      .request<DataResponse<readonly NotificationTestTarget[]>>(
+        'notifications/test/targets',
+        { headers: { 'x-nocobase-notification-test': '1' } },
       )
       .then((response) => response.data)
-      .catch(rethrowProviderTestError);
+      .catch(rethrowNotificationTestError);
   }
 
   sendTest(input: NotificationTestInput): Promise<NotificationTestResult> {
     return this.client
       .request<DataResponse<NotificationTestResult>>(
-        'notification-providers/test/send',
+        'notifications/test/send',
         {
           method: 'POST',
-          headers: { 'x-nocobase-provider-test': '1' },
-          body: JSON.stringify({
-            channel: input.channel,
-            providerName: input.provider.name,
-            providerType: input.provider.type,
-            recipient: input.recipient,
-            title: input.title,
-            body: input.body,
-          }),
+          headers: { 'x-nocobase-notification-test': '1' },
+          body: JSON.stringify(input),
         },
       )
       .then((response) => response.data)
-      .catch(rethrowProviderTestError);
+      .catch(rethrowNotificationTestError);
+  }
+
+  getTestStatus(id: string): Promise<NotificationLogDetails> {
+    return this.client
+      .request<DataResponse<NotificationLogDetails>>(
+        `notifications/test/${encodeURIComponent(id)}/status`,
+        { headers: { 'x-nocobase-notification-test': '1' } },
+      )
+      .then((response) => response.data)
+      .catch(rethrowNotificationTestError);
   }
 }
 
-function rethrowProviderTestError(cause: unknown): never {
+function rethrowNotificationTestError(cause: unknown): never {
   if (cause instanceof Error && 'status' in cause && cause.status === 404) {
-    throw new Error('Provider testing is not enabled for this application.', {
+    throw new Error('Notification testing is not available.', {
       cause,
     });
   }

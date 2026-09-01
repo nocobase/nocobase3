@@ -15,7 +15,13 @@ describe('@nocobase/app-plugin-notification provider', () => {
     const provider = new NotificationProvider({
       config: {
         get: () => ({
-          channels: [{ type: 'email', enabled: true, providers: [] }],
+          channels: [
+            {
+              type: 'email',
+              enabled: true,
+              providers: [{ type: 'fake', name: 'primary' }],
+            },
+          ],
         }),
       },
       container,
@@ -24,6 +30,30 @@ describe('@nocobase/app-plugin-notification provider', () => {
     provider.register();
     expect(container.has(notificationServiceToken)).toBe(true);
     const notification = container.resolve(notificationServiceToken);
+    notification.registry
+      .registerChannel({
+        type: 'email',
+        async createChannel() {
+          return {
+            type: 'email',
+            async prepare(input): Promise<object> {
+              return input.message;
+            },
+          };
+        },
+      })
+      .registerProvider('email', {
+        type: 'fake',
+        async createProvider(_context, config) {
+          return {
+            name: config.name,
+            type: config.type,
+            async send() {
+              return { status: 'accepted' } as const;
+            },
+          };
+        },
+      });
     const activate = vi.spyOn(notification, 'activate');
     const start = vi.spyOn(notification, 'start');
     const close = vi.spyOn(notification, 'close');
@@ -41,18 +71,16 @@ describe('@nocobase/app-plugin-notification provider', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it('does not register the service without a database', async () => {
+  it('fails fast when the required database dependency is missing', () => {
     const container = createContainer(false);
     const provider = new NotificationProvider({
       config: { get: () => ({ channels: [] }) },
       container,
     });
 
-    provider.register();
-    await provider.start();
-    await provider.shutdown();
-
-    expect(container.has(notificationServiceToken)).toBe(false);
+    expect(() => provider.register()).toThrow(
+      'Notification core requires the database manager dependency.',
+    );
   });
 });
 

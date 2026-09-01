@@ -1,5 +1,14 @@
 # @nocobase/app-plugin-notification-providers
 
+## Unreleased
+
+### Minor Changes
+
+- Contribute Email and IM test adapters and server-only Provider configuration
+  validation to the notification core. Remove the package-owned test routes and
+  embedded test page so Provider credentials never cross the public descriptor
+  seam.
+
 ## 0.2.0-beta.1
 
 ### Minor Changes

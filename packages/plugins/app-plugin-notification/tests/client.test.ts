@@ -49,50 +49,48 @@ describe('@nocobase/app-plugin-notification client', () => {
     expect(request).toHaveBeenCalledWith('notifications/logs');
   });
 
-  it('loads configured test Providers and sends through the test route', async () => {
-    const provider = {
-      channel: 'im',
-      provider: { name: 'feishu', type: 'feishu-webhook' },
+  it('loads safe test targets and sends through the core test route', async () => {
+    const target = {
+      channel: { type: 'im', label: 'IM' },
+      provider: {
+        name: 'feishu',
+        type: 'feishu-webhook',
+        label: 'Feishu webhook',
+      },
+      fields: [],
     };
     const result = {
       notificationId: 'notification-1',
       status: 'pending',
-      provider: provider.provider,
+      deliveries: [],
     };
     const request = vi
       .fn()
-      .mockResolvedValueOnce({ data: [provider] })
+      .mockResolvedValueOnce({ data: [target] })
       .mockResolvedValueOnce({ data: result });
     const client = new NotificationClient({ request });
 
-    await expect(client.listTestProviders()).resolves.toEqual([provider]);
+    await expect(client.listTestTargets()).resolves.toEqual([target]);
     await expect(
       client.sendTest({
-        ...provider,
-        recipient: 'user-2',
-        title: 'Test',
-        body: 'Hello',
+        channel: 'im',
+        providerName: 'feishu',
+        providerType: 'feishu-webhook',
+        values: { title: 'Test', body: 'Hello' },
       }),
     ).resolves.toEqual(result);
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      'notification-providers/test/config',
-    );
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'notification-providers/test/send',
-      {
-        method: 'POST',
-        headers: { 'x-nocobase-provider-test': '1' },
-        body: JSON.stringify({
-          channel: 'im',
-          providerName: 'feishu',
-          providerType: 'feishu-webhook',
-          recipient: 'user-2',
-          title: 'Test',
-          body: 'Hello',
-        }),
-      },
-    );
+    expect(request).toHaveBeenNthCalledWith(1, 'notifications/test/targets', {
+      headers: { 'x-nocobase-notification-test': '1' },
+    });
+    expect(request).toHaveBeenNthCalledWith(2, 'notifications/test/send', {
+      method: 'POST',
+      headers: { 'x-nocobase-notification-test': '1' },
+      body: JSON.stringify({
+        channel: 'im',
+        providerName: 'feishu',
+        providerType: 'feishu-webhook',
+        values: { title: 'Test', body: 'Hello' },
+      }),
+    });
   });
 });

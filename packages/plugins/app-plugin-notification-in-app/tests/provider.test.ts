@@ -42,24 +42,25 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
     );
   });
 
-  it('does nothing when the core notification service is unavailable', async () => {
-    const provider = new InAppNotificationProvider({
-      container: new ServiceContainer(),
-      router: new Hono(),
-    });
-    provider.register();
-    await expect(provider.boot()).resolves.toBeUndefined();
-  });
-
-  it('rejects a missing database when the core service exists', async () => {
+  it('keeps the inbox store available when the core manager is absent', async () => {
     const container = new ServiceContainer();
-    container.instance(notificationServiceToken, {} as NotificationService);
+    container.instance(databaseManagerToken, {} as DatabaseManager);
     const provider = new InAppNotificationProvider({
       container,
       router: new Hono(),
     });
     provider.register();
-    await expect(provider.boot()).rejects.toThrow(
+    await expect(provider.boot()).resolves.toBeUndefined();
+    expect(container.has(inAppNotificationStoreToken)).toBe(true);
+  });
+
+  it('fails fast when its required database dependency is missing', () => {
+    const container = new ServiceContainer();
+    const provider = new InAppNotificationProvider({
+      container,
+      router: new Hono(),
+    });
+    expect(() => provider.register()).toThrow(
       'In-app notifications require the application database dependency.',
     );
   });

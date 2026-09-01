@@ -31,10 +31,10 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
 > {
   return {
     type: 'dingtalk-webhook',
+    label: 'DingTalk webhook',
+    validateConfig: validateDingTalkConfig,
     async createProvider(_context, config) {
-      validateHttpUrl(config.webhookUrl, {
-        allowedHosts: ['oapi.dingtalk.com'],
-      });
+      validateDingTalkConfig(config);
       return {
         name: config.name,
         type: 'dingtalk-webhook',
@@ -75,4 +75,10 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
       };
     },
   };
+}
+
+function validateDingTalkConfig(config: DingTalkWebhookProviderConfig): void {
+  validateHttpUrl(config.webhookUrl, {
+    allowedHosts: ['oapi.dingtalk.com'],
+  });
 }

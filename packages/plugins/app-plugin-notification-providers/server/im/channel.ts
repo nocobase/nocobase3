@@ -61,6 +61,36 @@ export function createImChannelDefinition(
 > {
   return {
     type: 'im',
+    test: {
+      label: 'IM',
+      fields: [
+        {
+          name: 'title',
+          label: 'Title',
+          type: 'text',
+          required: true,
+          defaultValue: 'NocoBase notification test',
+          maxLength: 200,
+        },
+        {
+          name: 'body',
+          label: 'Message',
+          type: 'textarea',
+          required: true,
+          defaultValue: 'This is a test notification from NocoBase.',
+          maxLength: 2000,
+        },
+      ],
+      toSendInput({ values, providerConfig }) {
+        const title = values.title?.trim();
+        const body = values.body?.trim();
+        if (!title || !body) throw new Error('Title and Message are required.');
+        return {
+          to: { type: 'target', id: normalizeTarget(providerConfig.target) },
+          content: { title, body },
+        };
+      },
+    },
     async createChannel(_context, config) {
       const providerTargets = new Map(
         config.providers.map((provider) => [

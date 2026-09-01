@@ -19,7 +19,11 @@ export class InAppNotificationProvider<
   public readonly name: string = '@nocobase/app-plugin-notification-in-app';
 
   public override register(): void {
-    if (!this.app.container.has(databaseManagerToken)) return;
+    if (!this.app.container.has(databaseManagerToken)) {
+      throw new Error(
+        'In-app notifications require the application database dependency.',
+      );
+    }
     this.app.container.singleton(inAppNotificationStoreToken, (container) =>
       createInAppStore(container.resolve(databaseManagerToken)),
     );
@@ -28,12 +32,6 @@ export class InAppNotificationProvider<
   public override async boot(): Promise<void> {
     const { container } = this.app;
     if (!container.has(notificationServiceToken)) return;
-    if (!container.has(inAppNotificationStoreToken)) {
-      throw new Error(
-        'In-app notifications require the application database dependency.',
-      );
-    }
-
     const notification = container.resolve(notificationServiceToken);
     const store = container.resolve(inAppNotificationStoreToken);
     notification.registry
