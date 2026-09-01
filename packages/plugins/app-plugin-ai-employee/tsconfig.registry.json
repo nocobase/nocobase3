@@ -4,9 +4,5 @@
     "noEmit": true,
     "rootDir": "registry/nocobase-ai"
   },
-  "include": [
-    "registry/nocobase-ai/**/*.ts",
-    "registry/nocobase-ai/**/*.tsx",
-    "../../app/app-portal-sdk/src/env.d.ts"
-  ]
+  "include": ["registry/nocobase-ai/**/*.ts", "registry/nocobase-ai/**/*.tsx"]
 }

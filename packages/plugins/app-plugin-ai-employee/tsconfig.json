@@ -14,8 +14,7 @@
     "client/**/*.tsx",
     "ai/**/*.ts",
     "server/**/*.ts",
-    "database/**/*.ts",
-    "../../app/app-portal-sdk/src/env.d.ts"
+    "database/**/*.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }

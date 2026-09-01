@@ -49,6 +49,7 @@ function filesUnder(relativeRoot: string): readonly string[] {
 }
 
 describe('AI Employee Registry contract', () => {
+  const config = JSON.parse(read('registry.config.json')) as RegistryConfig;
   it('does not declare the Portal SDK as a package dependency', () => {
     const packageMetadata = JSON.parse(read('package.json')) as {
       readonly dependencies?: Readonly<Record<string, string>>;
@@ -64,7 +65,33 @@ describe('AI Employee Registry contract', () => {
     }
   });
 
-  const config = JSON.parse(read('registry.config.json')) as RegistryConfig;
+  it('publishes resolvable Registry development entrypoints', () => {
+    const packageMetadata = JSON.parse(read('package.json')) as {
+      readonly publishConfig?: {
+        readonly exports?: Readonly<
+          Record<string, { readonly import?: string; readonly types?: string }>
+        >;
+      };
+    };
+    expect(packageMetadata.publishConfig?.exports).toMatchObject({
+      './registry/nocobase-ai/dev-page': {
+        import: './registry/nocobase-ai/dev-page.js',
+        types: './registry/nocobase-ai/dev-page.d.ts',
+      },
+      './registry/nocobase-ai/demo-pages': {
+        import: './registry/nocobase-ai/demo-pages.js',
+        types: './registry/nocobase-ai/demo-pages.d.ts',
+      },
+    });
+    for (const file of [
+      'registry/nocobase-ai/dev-page.js',
+      'registry/nocobase-ai/dev-page.d.ts',
+      'registry/nocobase-ai/demo-pages.js',
+      'registry/nocobase-ai/demo-pages.d.ts',
+    ]) {
+      expect(fs.existsSync(path.join(packageRoot, file))).toBe(true);
+    }
+  });
 
   it('publishes one application-owned frontend item', () => {
     expect(config.items).toHaveLength(1);

@@ -66,12 +66,12 @@
       "import": "./server/tokens.ts"
     },
     "./registry/nocobase-ai/dev-page": {
-      "types": "./client/registry-dev-page.d.ts",
-      "import": "./registry/nocobase-ai/dev/ai-employee-page.tsx"
+      "types": "./registry/nocobase-ai/dev-page.d.ts",
+      "import": "./registry/nocobase-ai/dev-page.js"
     },
     "./registry/nocobase-ai/demo-pages": {
-      "types": "./client/registry-demo-pages.d.ts",
-      "import": "./registry/nocobase-ai/dev/demo-pages.tsx"
+      "types": "./registry/nocobase-ai/demo-pages.d.ts",
+      "import": "./registry/nocobase-ai/demo-pages.js"
     }
   },
   "publishConfig": {
@@ -119,12 +119,12 @@
         "import": "./dist/server/tokens.js"
       },
       "./registry/nocobase-ai/dev-page": {
-        "types": "./client/registry-dev-page.d.ts",
-        "import": "./registry/nocobase-ai/dev/ai-employee-page.tsx"
+        "types": "./registry/nocobase-ai/dev-page.d.ts",
+        "import": "./registry/nocobase-ai/dev-page.js"
       },
       "./registry/nocobase-ai/demo-pages": {
-        "types": "./client/registry-demo-pages.d.ts",
-        "import": "./registry/nocobase-ai/dev/demo-pages.tsx"
+        "types": "./registry/nocobase-ai/demo-pages.d.ts",
+        "import": "./registry/nocobase-ai/demo-pages.js"
       }
     }
   },
