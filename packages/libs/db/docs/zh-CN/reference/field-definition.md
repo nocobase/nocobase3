@@ -18,8 +18,6 @@ interface FieldDefinition {
   precision?: number;
   scale?: number;
   unsigned?: boolean;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
   db?: DbOptions;
 }
 ```
@@ -67,8 +65,6 @@ type FieldType =
 
 - `title`
 - `description`
-- `interface`
-- `uiSchema`
 
 这些信息用于应用和 Agent，不等同于数据库结构。
 

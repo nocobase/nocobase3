@@ -45,7 +45,7 @@ Connection 默认规则生成 identity。
 3. 将物理 `tableName` 和 `columnName` 转换为逻辑名，并通过 Naming Index 解析外键 target。
 4. 从物理 Schema 生成 Field、index 和 constraint。
 5. 将 `fields` 中的补充 Metadata 合并到物理 Field。
-6. 增加 `relations` 和 `virtualFields`。
+6. 增加 `relations`。
 7. 执行冲突、drift 和 relation 校验。
 
 物理事实不会被 Metadata 覆盖。例如 Metadata 不能改变 `nullable`、物理类型、主键、索引和外键。
@@ -73,8 +73,8 @@ Physical nativeType    -> FieldDefinition.db.nativeType
 Physical comment       -> FieldDefinition.db.comment
 ```
 
-Metadata 只合并 `title`、`description`、`interface` 和 `uiSchema`。普通 `fields` 项找不到物理 Field
-时是 Schema drift。没有物理列的应用字段必须明确放在 `virtualFields`。
+Metadata 只合并 `title` 和 `description`。`fields` 项找不到物理 Field 时是 Schema drift，
+不得将其隐式解释为虚拟字段。
 
 ## Index 与 constraint
 
@@ -105,13 +105,12 @@ Relation 可能形成循环依赖，例如 `users.department -> departments` 和
 
 普通 `get()` 不递归解析整张关系图。跨 Collection 校验按图遍历，并通过 visited 状态处理循环关系。
 
-## View 与可写性
+## View 与写入能力
 
-- 物理 table 默认可写；
-- view 和 materialized view 默认只读；
-- 只读 Connection 上的所有 Collection 都只读；
-- Metadata 中的 `writable: false` 可以进一步限制写入；
-- Metadata 不能将物理只读对象改成可写。
+Inspector 负责报告物理对象是 table、view 还是 materialized view，Resolver 将其保留为
+`CollectionDefinition.kind`。第一版不在 Collection Metadata 中保存 `writable`，也不由 Resolver
+推导统一的记录写权限。记录 mutation 能力由数据库、Query 执行结果和上层权限模型负责；
+`schemaManagement` 仅控制 DDL 和 Migration，不能据此判断业务记录是否可写。
 
 ## 校验结果
 
@@ -128,8 +127,8 @@ Relation 可能形成循环依赖，例如 `users.department -> departments` 和
 
 ## 兼容当前 Metadata Store
 
-当前 Store 仍然返回完整 `CollectionDefinition`。迁移期 Resolver 只从中提取 Collection/Field 展示信息、
-relations、virtual fields、`writable` 和 `naming`；物理 Field、index 和 constraint 仍以 Inspector 为准。
+当前 Store 仍然返回完整 `CollectionDefinition`。迁移期 Resolver 只从中提取 Collection/Field 的
+`title`、`description`、relations 和 `naming`；物理 Field、index 和 constraint 仍以 Inspector 为准。
 
 Metadata Store 切换到 `CollectionMetadataDocument` 后，Resolver 的物理输入和完整输出不变。
 

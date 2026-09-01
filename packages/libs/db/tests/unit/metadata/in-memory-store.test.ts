@@ -54,4 +54,22 @@ describe('InMemoryCollectionMetadataStore', () => {
       fields: [{ type: 'increments' }],
     });
   });
+
+  it('rejects metadata patches for fields that are not in the collection', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.saveCollection('orders', {
+      fields: [{ name: 'orderNo', type: 'string' }],
+    });
+
+    await expect(
+      store.patchField('orders', 'missingField', { title: 'Missing field' }),
+    ).rejects.toMatchObject({
+      code: 'COLLECTION_METADATA_FIELD_NOT_FOUND',
+      collection: 'orders',
+      field: 'missingField',
+    });
+    await expect(store.getCollection('orders')).resolves.toMatchObject({
+      fields: [{ name: 'orderNo', type: 'string' }],
+    });
+  });
 });

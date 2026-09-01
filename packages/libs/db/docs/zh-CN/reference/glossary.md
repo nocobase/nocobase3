@@ -17,7 +17,7 @@
 | `naming.tablePrefix`      | 推导表名或视图名时添加的前缀，不作用于列名。                                                        |
 | 逻辑名                    | 应用层名称，例如 Collection 名和 Field 名。                                                         |
 | 物理名                    | 数据库对象名称，例如 table、view、column 名。                                                       |
-| Metadata                  | 应用层元信息，例如 title、description、interface、uiSchema。                                        |
+| Metadata                  | 数据库无法完整表达的应用层补充语义，例如 title、description 和 relation。                           |
 | `db.comment`              | 数据库层 comment，不等同于应用层 description。                                                      |
 | Constraint                | 数据完整性约束，例如 primary、unique、foreign key。                                                 |
 | Index                     | 查询性能索引。                                                                                      |

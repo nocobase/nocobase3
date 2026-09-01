@@ -3,7 +3,10 @@ import type {
   CollectionMetadataPatch,
   FieldMetadataPatch,
 } from '../collection/types.js';
-import type { CollectionMetadataStore } from './store.js';
+import {
+  CollectionMetadataFieldNotFoundError,
+  type CollectionMetadataStore,
+} from './store.js';
 
 export class InMemoryCollectionMetadataStore implements CollectionMetadataStore {
   private readonly collections = new Map<string, CollectionDefinition>();
@@ -50,7 +53,7 @@ export class InMemoryCollectionMetadataStore implements CollectionMetadataStore 
       if (index >= 0) {
         fields[index] = { ...fields[index], ...fieldPatch };
       } else {
-        fields.push({ name: fieldName, type: 'virtual', ...fieldPatch });
+        throw new CollectionMetadataFieldNotFoundError(name, fieldName);
       }
     }
 

@@ -64,6 +64,7 @@ SQLite 和 MySQL 不支持 PostgreSQL 风格的 materialized view。当前真实
 - 优先使用结构化 `view.as(...)`。
 - `asRaw` 需要 Agent 明确知道目标数据库方言。
 - 不要假设所有数据库支持 materialized view。
-- view collection 默认 `writable: false`。
+- `kind: 'view'` 或 `kind: 'materializedView'` 只描述数据库对象类型；Collection definition 不保存
+  `writable`。记录 mutation 能力由数据库和上层权限控制。
 - `view.as(...)` 引用已有 Collection 时，会使用目标 Collection 自己的 effective naming。
 - Raw SQL View 无法可靠分析依赖，因此当前会保守阻止其他 Collection rename。

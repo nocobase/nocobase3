@@ -38,8 +38,7 @@ Physical Schema + Collection Metadata
   `columnName` 映射；
 - relations；
 - `title`、`description`；
-- `interface`、`uiSchema`；
-- 虚拟字段及其他 NocoBase 应用层语义。
+- 其他经过明确设计、且数据库不能表达的应用层语义。
 
 表、列、物理类型、索引和约束等物理事实仍以数据库 Schema 为准。
 
@@ -79,6 +78,10 @@ External Database Schema
 - File Metadata 可以由工具或 AI 初次生成，再由 Agent 或开发者直接补充 relations。
 - 有明确外键的关系可以自动推导；仅依靠字段名猜测的关系应先作为候选，再确认后写入文件。
 - 修改 File Metadata 不得修改外部数据库的物理 Schema。
+
+Connection 通过 `schemaManagement: 'external'` 明确声明这个边界。该模式会拒绝 Builder 和
+`connection.schema.execute()` 的真实 DDL，也会在读取 Migration 文件或创建 Migration 历史表之前拒绝
+Migration。Builder 的 dry-run 和 SQL 预览仍然可用，普通 Query API 的记录查询和增删改也不受该配置控制。
 
 这里的 File Metadata 是广义架构分类。可编辑的 TypeScript 文件通过只读 Module Metadata Store
 加载；运行时可写的 JSON 或 YAML File Store 是独立后端，需要更严格的原子写入保证。
@@ -157,7 +160,6 @@ export default defineCollectionMetadata({
     orderNo: {
       title: 'Order number',
       description: 'Unique business order number.',
-      interface: 'input',
     },
     customerId: {
       title: 'Customer ID',
@@ -176,7 +178,7 @@ export default defineCollectionMetadata({
 });
 ```
 
-Collection 的 `title`、`description`，Field 的 `title`、`description`、`interface`、`uiSchema`，以及 relations 都属于 `*.metadata.ts`；物理表、列、类型、索引和约束属于 `*.schema.json`。
+Collection 和 Field 的 `title`、`description`，以及 relations 都属于 `*.metadata.ts`；物理表、列、类型、索引和约束属于 `*.schema.json`。
 
 `*.metadata.ts` 不保存 `tableName` 或 `columnName` 自定义映射。Collection 的物理名称由 Connection 和 Collection 的 `underscored`、`tablePrefix` 确定性生成；Schema 快照中的 `tableName` 和 `columns[].name` 只是 introspection 记录的物理事实。
 
@@ -230,6 +232,10 @@ connection.collections = read resolved collections
 
 外部数据库即使允许查询或修改业务数据，也不代表 NocoBase 拥有其 Schema。对外部 connection 执行 Builder DDL 时，应明确拒绝并引导使用 introspection 和 File Metadata。
 
+`schemaManagement` 只表达 Schema 所有权，不表达记录写权限。`'managed'` 允许 NocoBase 执行 Builder DDL
+和 Migration，`'external'` 禁止这些 Schema 变更；两种模式都可以使用 Query API 读写记录。底层
+`connection.client()` 是显式逃生口，会绕过 Schema guard，调用者必须自行承担直接执行 DDL 的责任。
+
 ## 第一版边界
 
 第一版先固定以下原则：
@@ -243,6 +249,7 @@ connection.collections = read resolved collections
 7. File Metadata 旁可以存在物理 Schema Snapshot，但它是独立的生成产物；外部数据库仍然是物理事实的
    权威来源。
 8. `collections.list()` 默认分页并返回轻量摘要；完整 Collection 通过 `get()` 懒加载，全量扫描必须显式执行。
+9. Connection 使用 `schemaManagement` 声明 Schema 所有权；它不承担业务记录权限控制。
 
 Metadata 文档和 Store API 的细节见 [Metadata Store 设计](./metadata-store.md)。持久化实现和共享配置见
 [Metadata Store 后端](./metadata-store-backends.md)。Resolver、Registry、drift、Snapshot 和 rename 行为见

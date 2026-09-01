@@ -23,7 +23,6 @@ describe('CollectionBuilder view collections', () => {
       name: 'usersView',
       definition: {
         kind: 'view',
-        writable: false,
         title: 'Adult users',
         description: 'Users older than 18.',
       },
@@ -62,7 +61,6 @@ describe('CollectionBuilder view collections', () => {
       type: 'replaceViewCollection',
       definition: {
         kind: 'view',
-        writable: false,
         view: {
           asRaw: {
             sql: 'select first_name from users where age > ?',
@@ -103,7 +101,6 @@ describe('CollectionBuilder view collections', () => {
       type: 'createMaterializedViewCollection',
       definition: {
         kind: 'materializedView',
-        writable: false,
         view: {
           refresh: {
             strategy: 'manual',

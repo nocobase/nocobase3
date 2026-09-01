@@ -6,6 +6,7 @@ import {
   InMemoryCollectionMetadataStore,
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
+  SchemaManagementNotAllowedError,
 } from '../../../src/index.js';
 
 describe('DatabaseManager', () => {
@@ -27,6 +28,7 @@ describe('DatabaseManager', () => {
       expect(connection.name).toBe('main');
       expect(connection.driver).toBe('better-sqlite3');
       expect(connection.dialect).toBe('sqlite');
+      expect(connection.schemaManagement).toBe('managed');
       expect(connection.capabilities.views).toBe(true);
       expect(connection.capabilities.materializedViews).toBe(false);
       expect(db.builder()).toBe(connection.builder);
@@ -39,6 +41,62 @@ describe('DatabaseManager', () => {
 
       const client = await connection.client<any>();
       expect(await client.schema.hasTable('orders')).toBe(true);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('blocks schema changes but allows record mutations for external connections', async () => {
+    const db = createDatabaseManager({
+      connections: {
+        external: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          schemaManagement: 'external',
+        },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      expect(connection.schemaManagement).toBe('external');
+
+      const preview = await connection.builder.createCollection(
+        'orders',
+        (collection) => {
+          collection.increments('id');
+          collection.string('status');
+        },
+        { dryRun: true, previewSql: true },
+      );
+      expect(preview.schemaOperations).toHaveLength(1);
+
+      await expect(
+        connection.builder.createCollection('orders', (collection) => {
+          collection.increments('id');
+          collection.string('status');
+        }),
+      ).rejects.toBeInstanceOf(SchemaManagementNotAllowedError);
+      await expect(
+        connection.schema.execute([{ type: 'dropTable', tableName: 'orders' }]),
+      ).rejects.toMatchObject({
+        code: 'SCHEMA_MANAGEMENT_NOT_ALLOWED',
+        connection: 'external',
+        operation: 'dropTable',
+      });
+
+      const client = await connection.client<any>();
+      await client.schema.createTable('orders', (table: any) => {
+        table.increments('id');
+        table.string('status');
+      });
+      await connection.query
+        .insertInto('orders')
+        .values({ status: 'paid' })
+        .execute();
+      await expect(
+        connection.query.selectFrom('orders').select('status').execute(),
+      ).resolves.toEqual([{ status: 'paid' }]);
     } finally {
       await db.destroy();
     }
@@ -434,18 +492,25 @@ describe('DatabaseManager', () => {
   });
 
   it('normalizes flattened configs into knex connection options', () => {
+    const sqlite = resolveKnexConnectionConfig({
+      dialect: 'sqlite',
+      filename: ':memory:',
+      driverOptions: {
+        verbose: true,
+      },
+    });
+    expect(sqlite.schemaManagement).toBe('managed');
+    expect(sqlite.connection).toEqual({
+      filename: ':memory:',
+      verbose: true,
+    });
     expect(
       resolveKnexConnectionConfig({
         dialect: 'sqlite',
         filename: ':memory:',
-        driverOptions: {
-          verbose: true,
-        },
-      }).connection,
-    ).toEqual({
-      filename: ':memory:',
-      verbose: true,
-    });
+        schemaManagement: 'external',
+      }).schemaManagement,
+    ).toBe('external');
 
     expect(
       resolveKnexConnectionConfig({

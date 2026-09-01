@@ -14,8 +14,10 @@ import type {
   ConnectionConfig,
   DatabaseDialect,
   DatabaseDriver,
+  SchemaManagementMode,
 } from '../../config.js';
 import type { DatabaseConnection } from '../../connection.js';
+import { SchemaManagementSchemaAdapter } from '../../schema-management.js';
 import { createKnexClient } from './client.js';
 import {
   resolveKnexConnectionConfig,
@@ -26,6 +28,7 @@ import { resolveKnexDatabaseDialectAdapter } from './dialect-adapters.js';
 export class KnexDatabaseConnection implements DatabaseConnection {
   readonly driver: DatabaseDriver;
   readonly dialect: DatabaseDialect;
+  readonly schemaManagement: SchemaManagementMode;
   readonly capabilities: DatabaseCapabilities;
   readonly schema: SchemaAdapter;
   readonly schemaInspector: SchemaInspector;
@@ -45,6 +48,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     this.config = resolveKnexConnectionConfig(sourceConfig);
     this.driver = this.config.driver;
     this.dialect = this.config.dialect;
+    this.schemaManagement = this.config.schemaManagement;
     this.capabilities = resolveDatabaseCapabilities(
       this.dialect,
       this.config.capabilities,
@@ -56,15 +60,21 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       config: this.config,
       resolveClient: () => this.resolveClient(),
     });
-    this.schema = new LazySchemaAdapter(
-      () => this.resolveClient(),
-      (client) =>
-        new KnexSchemaAdapter(client, {
-          dialect: this.dialect,
-          capabilities: this.capabilities,
-        }),
-      this.dialect,
-      this.capabilities,
+    this.schema = new SchemaManagementSchemaAdapter(
+      new LazySchemaAdapter(
+        () => this.resolveClient(),
+        (client) =>
+          new KnexSchemaAdapter(client, {
+            dialect: this.dialect,
+            capabilities: this.capabilities,
+          }),
+        this.dialect,
+        this.capabilities,
+      ),
+      {
+        connectionName: this.name,
+        mode: this.schemaManagement,
+      },
     );
     this.query = new KnexQueryAdapter(
       () => this.getClient(),

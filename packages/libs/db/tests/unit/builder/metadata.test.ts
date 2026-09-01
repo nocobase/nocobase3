@@ -1,14 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   CollectionBuilder,
+  CollectionMetadataFieldNotFoundError,
   CollectionNamingCompatibilityError,
   InMemoryCollectionMetadataStore,
+  type SchemaAdapter,
 } from '../../../src/index.js';
 
 describe('CollectionBuilder metadata APIs', () => {
   it('updates collection metadata without schema operations', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({ metadataStore });
+
+    await builder.createCollection('orders', {
+      fields: [{ name: 'amount', type: 'decimal' }],
+    });
 
     const result = await builder.updateCollectionMetadata('orders', {
       title: 'Orders',
@@ -70,6 +76,44 @@ describe('CollectionBuilder metadata APIs', () => {
         },
       ],
     });
+  });
+
+  it('rejects metadata updates for fields that are not in the collection', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const builder = new CollectionBuilder({ metadataStore });
+    await builder.createCollection('orders', {
+      fields: [{ name: 'orderNo', type: 'string' }],
+    });
+
+    await expect(
+      builder.updateFieldMetadata('orders', 'missingField', {
+        title: 'Missing field',
+      }),
+    ).rejects.toBeInstanceOf(CollectionMetadataFieldNotFoundError);
+    await expect(metadataStore.getCollection('orders')).resolves.toMatchObject({
+      fields: [{ name: 'orderNo', type: 'string' }],
+    });
+  });
+
+  it('rejects missing altered fields before executing schema changes', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const executed: Parameters<SchemaAdapter['execute']>[0][] = [];
+    const builder = new CollectionBuilder({
+      metadataStore,
+      schemaAdapter: {
+        execute: async (operations): Promise<void> => {
+          executed.push(operations);
+        },
+      },
+    });
+    await metadataStore.saveCollection('orders', {
+      fields: [{ name: 'orderNo', type: 'string' }],
+    });
+
+    await expect(
+      builder.alterField('orders', 'missingField', { nullable: false }),
+    ).rejects.toBeInstanceOf(CollectionMetadataFieldNotFoundError);
+    expect(executed).toEqual([]);
   });
 
   it('syncs metadata for schema-changing field, index, and constraint operations', async () => {

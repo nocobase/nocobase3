@@ -52,7 +52,9 @@ export const databaseConfig: AppConfigDefinition<
             ),
             encrypt: Type.Optional(Type.Boolean()),
             trustServerCertificate: Type.Optional(Type.Boolean()),
-            managed: Type.Optional(Type.Boolean()),
+            schemaManagement: Type.Optional(
+              Type.Union([Type.Literal('managed'), Type.Literal('external')]),
+            ),
             debug: Type.Optional(Type.Boolean()),
             driverOptions: Type.Optional(
               Type.Record(Type.String(), Type.Unknown()),
@@ -94,6 +96,7 @@ export const databaseConfig: AppConfigDefinition<
         main: {
           dialect: 'sqlite',
           filename: paths.storage('database.sqlite'),
+          schemaManagement: 'managed',
           debug: false,
         },
       },
@@ -125,6 +128,7 @@ export const databaseConfig: AppConfigDefinition<
       'connections.main.trustServerCertificate',
     ),
     DB_SCHEMA: envStrings('connections.main.schema'),
+    DB_SCHEMA_MANAGEMENT: envString('connections.main.schemaManagement'),
     DB_DEBUG: envBoolean('connections.main.debug'),
     DB_MIGRATIONS_AUTO_RUN: envBoolean('migrations.autoRun'),
     DB_MIGRATIONS_TABLE: envString('migrations.tableName'),

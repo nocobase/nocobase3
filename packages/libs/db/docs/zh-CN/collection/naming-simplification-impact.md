@@ -278,8 +278,7 @@ Metadata Store 不再保存 `tableName` 或 `columnName`，但可以保存 Colle
 
 - `title`、`description`；
 - relations；
-- `interface`、`uiSchema`；
-- 虚拟字段及其他应用层信息。
+- 其他经过明确设计的应用层信息。
 
 物理 Schema 快照仍可以出现 `tableName` 和物理列名，但这些字段属于 introspection 结果，不属于可编辑 Collection mapping。
 

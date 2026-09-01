@@ -7,12 +7,14 @@ import type {
   MssqlConnectionConfig,
   OracleConnectionConfig,
   PostgresConnectionConfig,
+  SchemaManagementMode,
   SqliteConnectionConfig,
 } from '../../config.js';
 
 export interface KnexConnectionConfig extends BaseConnectionConfig {
   dialect: DatabaseDialect;
   driver: DatabaseDriver;
+  schemaManagement: SchemaManagementMode;
   knexClient: KnexClientName;
   connection?: unknown;
   useNullAsDefault?: boolean;
@@ -46,6 +48,7 @@ export function resolveKnexConnectionConfig(
   return {
     ...config,
     driver,
+    schemaManagement: config.schemaManagement ?? 'managed',
     knexClient: KNEX_CLIENT_BY_DIALECT[config.dialect],
     connection: resolveKnexConnection(config),
     useNullAsDefault: config.dialect === 'sqlite' ? true : undefined,

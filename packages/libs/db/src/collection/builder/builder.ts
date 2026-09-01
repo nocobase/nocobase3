@@ -13,6 +13,7 @@ import {
   FluentViewCollectionDefinitionBuilder,
 } from '../fluent/index.js';
 import {
+  CollectionMetadataFieldNotFoundError,
   InMemoryCollectionMetadataStore,
   type CollectionMetadataStore,
 } from '../../metadata/index.js';
@@ -169,7 +170,6 @@ export class CollectionBuilder {
     const definition = {
       ...normalizeViewInput(input),
       kind: 'view' as const,
-      writable: false,
     };
     return this.apply(
       [{ type: 'createViewCollection', name, definition }],
@@ -185,7 +185,6 @@ export class CollectionBuilder {
     const definition = {
       ...normalizeViewInput(input),
       kind: 'view' as const,
-      writable: false,
     };
     return this.apply(
       [{ type: 'replaceViewCollection', name, definition }],
@@ -201,7 +200,6 @@ export class CollectionBuilder {
     const definition = {
       ...normalizeViewInput(input),
       kind: 'materializedView' as const,
-      writable: false,
     };
     return this.apply(
       [{ type: 'createMaterializedViewCollection', name, definition }],
@@ -365,17 +363,21 @@ export class CollectionBuilder {
     ];
 
     if (!options.dryRun) {
+      const metadataOperations =
+        options.syncMetadata !== false
+          ? filterMetadataOperations(
+              this.compiler,
+              effectiveOperations,
+              schemaOperations,
+              compilerContext,
+            )
+          : undefined;
+      if (metadataOperations) {
+        assertMetadataFieldChanges(metadataOperations, compilerContext);
+      }
       await this.schemaAdapter.execute(schemaOperations);
-      if (options.syncMetadata !== false) {
-        await this.applyMetadataChanges(
-          filterMetadataOperations(
-            this.compiler,
-            effectiveOperations,
-            schemaOperations,
-            compilerContext,
-          ),
-          compilerContext,
-        );
+      if (metadataOperations) {
+        await this.applyMetadataChanges(metadataOperations, compilerContext);
       }
     }
 
@@ -852,7 +854,10 @@ function applyAlterMetadata(
         ...field.changes,
       } as AnyFieldDefinition;
     } else {
-      fields.push({ name: field.name, type: 'virtual', ...field.changes });
+      throw new CollectionMetadataFieldNotFoundError(
+        current.name ?? '(unknown collection)',
+        field.name,
+      );
     }
   }
   fields = fields.filter(
@@ -880,6 +885,115 @@ function applyAlterMetadata(
     indexes,
     constraints,
   };
+}
+
+function assertMetadataFieldChanges(
+  operations: CollectionOperation[],
+  context: CollectionCompilerContext,
+): void {
+  const collections = new Map<string, CollectionDefinition>();
+  for (const [name, definition] of Object.entries(context.collections ?? {})) {
+    if (definition) {
+      collections.set(name, definition);
+    }
+  }
+
+  for (const operation of operations) {
+    switch (operation.type) {
+      case 'createCollection':
+      case 'createViewCollection':
+      case 'replaceViewCollection':
+      case 'createMaterializedViewCollection':
+        collections.set(operation.name, {
+          ...operation.definition,
+          name: operation.name,
+        });
+        break;
+      case 'dropCollection':
+        collections.delete(operation.collection);
+        break;
+      case 'renameCollection': {
+        const current = collections.get(operation.from) ?? {
+          name: operation.from,
+        };
+        collections.delete(operation.from);
+        collections.set(operation.to, { ...current, name: operation.to });
+        break;
+      }
+      case 'alterCollection': {
+        const current = collections.get(operation.collection) ?? {
+          name: operation.collection,
+        };
+        collections.set(
+          operation.collection,
+          applyAlterMetadata(current, operation.changes),
+        );
+        break;
+      }
+      case 'addField': {
+        const current = collections.get(operation.collection) ?? {
+          name: operation.collection,
+        };
+        collections.set(operation.collection, {
+          ...current,
+          fields: [...(current.fields ?? []), operation.field],
+        });
+        break;
+      }
+      case 'alterField': {
+        const current = collections.get(operation.collection) ?? {
+          name: operation.collection,
+        };
+        collections.set(
+          operation.collection,
+          applyAlterMetadata(current, {
+            alterFields: [
+              { name: operation.field, changes: operation.changes },
+            ],
+          }),
+        );
+        break;
+      }
+      case 'dropField': {
+        const current = collections.get(operation.collection);
+        if (current) {
+          collections.set(operation.collection, {
+            ...current,
+            fields: current.fields?.filter(
+              (field) => field.name !== operation.field,
+            ),
+          });
+        }
+        break;
+      }
+      case 'updateCollectionMetadata': {
+        const current = collections.get(operation.collection);
+        for (const field of Object.keys(operation.patch.fields ?? {})) {
+          assertCollectionMetadataField(operation.collection, current, field);
+        }
+        break;
+      }
+      case 'updateFieldMetadata':
+        assertCollectionMetadataField(
+          operation.collection,
+          collections.get(operation.collection),
+          operation.field,
+        );
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+function assertCollectionMetadataField(
+  collection: string,
+  definition: CollectionDefinition | undefined,
+  field: string,
+): void {
+  if (!definition?.fields?.some((item) => item.name === field)) {
+    throw new CollectionMetadataFieldNotFoundError(collection, field);
+  }
 }
 
 function collectReferencedCollections(

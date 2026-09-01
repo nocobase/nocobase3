@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { AppConfig } from '../src/config/index.js';
+import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   ServiceContainer,
@@ -33,6 +33,7 @@ import {
   type AppDatabaseConfig,
   type DatabaseProviderApplication,
 } from '../src/database/index.js';
+import type { ResolvedAppRuntimeConfigContext } from '../src/runtime/index.js';
 
 const tempDirs: string[] = [];
 
@@ -141,6 +142,32 @@ describe('DatabaseProvider', () => {
 
     expect(createDatabaseSeederMock).not.toHaveBeenCalled();
     expect(database.destroy).toHaveBeenCalledOnce();
+  });
+});
+
+describe('database config', () => {
+  it('defaults to managed schema ownership and accepts the external env override', async () => {
+    const paths = createConfigPaths({ rootDir: process.cwd() });
+    const context = {
+      paths,
+      plugins: { appPackageName: 'test-app', plugins: [] },
+      appPackageName: 'test-app',
+    } as ResolvedAppRuntimeConfigContext;
+    const defaults = new AppConfig([databaseConfig], { context });
+    const external = new AppConfig([databaseConfig], {
+      context,
+      environment: { DB_SCHEMA_MANAGEMENT: 'external' },
+    });
+
+    await defaults.loadAll();
+    await external.loadAll();
+
+    expect(defaults.get(databaseConfig).connections.main.schemaManagement).toBe(
+      'managed',
+    );
+    expect(external.get(databaseConfig).connections.main.schemaManagement).toBe(
+      'external',
+    );
   });
 });
 

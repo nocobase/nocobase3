@@ -59,24 +59,21 @@ Collection 级 Metadata 可以包含：
 - 必要时使用的逻辑 Collection 名称；
 - `title` 和 `description`；
 - Collection 级确定性 `naming` 配置；
-- 应用层 `writable` 限制；
 - 其他明确定义的 NocoBase 应用语义。
 
-应用层 `writable` 只能进一步限制物理上可写的对象，不能将 View 或只读 Connection
-变成物理可写对象。
+Collection Metadata 不定义记录写权限。数据库对象类型由 Inspector 报告，记录 INSERT、UPDATE、DELETE
+是否允许应由数据库、权限层或后续单独设计的能力模型决定；Connection 的 `schemaManagement` 也只控制
+Schema DDL 和 Migration。
 
 Field 级 Metadata 可以包含：
 
 - 必要时使用的逻辑 Field 名称；
 - `title` 和 `description`；
-- `interface`；
-- `uiSchema`；
 - 其他不会重新定义物理列的展示或应用语义。
 
 Metadata Store 还保存数据库无法完整表达的信息：
 
 - relations；
-- 虚拟字段；
 - relation 的展示 Metadata；
 - 由工具或 Agent 推导并经确认的语义映射。
 
@@ -117,10 +114,8 @@ Collection 级 `naming` 仍然允许使用，因为它是确定性命名规则�
 | 数据库对象 comment                              | Physical Schema                        |
 | 逻辑 Collection 和 Field 名称                   | 确定性命名规则，必要时由 Metadata 补充 |
 | Collection 和 Field 的 `title` 或 `description` | Metadata Store                         |
-| `interface` 和 `uiSchema`                       | Metadata Store                         |
 | 应用层 relation                                 | Metadata Store，并与 Schema 校验       |
 | 物理外键约束                                    | Physical Schema                        |
-| 虚拟字段                                        | Metadata Store                         |
 | 完整的运行时 `CollectionDefinition`             | Collection Resolver                    |
 
 ## Metadata 文档模型
@@ -134,10 +129,8 @@ export interface CollectionMetadataDocument {
   naming?: NamingOptions;
   title?: string;
   description?: string;
-  writable?: boolean;
   fields?: Record<string, FieldMetadata>;
   relations?: Record<string, RelationMetadata>;
-  virtualFields?: Record<string, VirtualFieldMetadata>;
 }
 ```
 
@@ -147,8 +140,6 @@ export interface CollectionMetadataDocument {
 export interface FieldMetadata {
   title?: string;
   description?: string;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
 }
 
 export interface RelationMetadata {
@@ -161,17 +152,6 @@ export interface RelationMetadata {
   through?: string;
   title?: string;
   description?: string;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
-}
-
-export interface VirtualFieldMetadata {
-  type: 'virtual';
-  title?: string;
-  description?: string;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
-  config?: Record<string, unknown>;
 }
 ```
 
@@ -192,7 +172,6 @@ export interface VirtualFieldMetadata {
     orderNo: {
       title: 'Order number',
       description: 'Unique business order number.',
-      interface: 'input',
     },
     customerId: {
       title: 'Customer ID',
@@ -208,29 +187,21 @@ export interface VirtualFieldMetadata {
       title: 'Customer',
     },
   },
-
-  virtualFields: {
-    displayLabel: {
-      type: 'virtual',
-      title: 'Display label',
-      interface: 'formula',
-    },
-  },
 }
 ```
 
-### 分开保存 fields、relations 和 virtualFields
+### 分开保存 fields 和 relations
 
-持久化文档将三种概念明确分开：
+持久化文档将两种概念明确分开：
 
 ```text
 fields          物理字段的补充 Metadata
 relations       应用层关联定义
-virtualFields   没有对应物理列的字段
 ```
 
-Resolver 最终可以将它们转换到运行时 `CollectionDefinition.fields` 中，但持久化格式应保留
-各自明确的意图。三个区域之间出现同名项时必须报错，不能通过隐式优先级处理。
+`fields` 中的每一项都必须能对应物理 Field；找不到时报告 Schema drift，不得隐式创建虚拟字段。
+relations 最终可以转换到运行时 `CollectionDefinition.fields` 中，但持久化格式应保留其明确意图。
+两个区域之间出现同名项时必须报错，不能通过隐式优先级处理。
 
 ## 物理 Schema Snapshot 是独立产物
 
@@ -281,14 +252,12 @@ Physical column: order_no varchar not null
 Metadata:
   logical field: orderNo
   title: Order number
-  interface: input
 
 Resolved Collection field:
   name: orderNo
   type: string
   nullable: false
   title: Order number
-  interface: input
 ```
 
 应用和 Agent 通过 Connection 读取解析后的完整结果：
@@ -370,6 +339,9 @@ export interface DeleteCollectionMetadataOptions {
   expectedRevision: string | number;
 }
 ```
+
+这里的 `capabilities.writable` 只表示 Metadata 文档后端能否被运行时代码写入，与 Collection
+记录能否 INSERT、UPDATE、DELETE 无关，也与 Connection 的 `schemaManagement` 无关。
 
 更新时使用乐观并发控制：
 

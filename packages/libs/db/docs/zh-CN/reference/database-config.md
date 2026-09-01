@@ -46,7 +46,7 @@ interface BaseConnectionConfig {
   naming?: NamingOptions;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
-  managed?: boolean;
+  schemaManagement?: 'managed' | 'external';
   debug?: boolean;
   pool?: unknown;
   driverOptions?: Record<string, unknown>;
@@ -64,6 +64,18 @@ interface BaseConnectionConfig {
 | `mssql`    | `tedious`        |
 
 `driver` 如果显式填写，必须和 `dialect` 匹配。
+
+### schemaManagement
+
+`schemaManagement` 声明 NocoBase 是否拥有这个 Connection 的物理 Schema，默认值是 `'managed'`：
+
+- `'managed'`：允许通过 Builder/Schema Adapter 执行 DDL，也允许运行 Migration。
+- `'external'`：真实 DDL 和 Migration 会以 `SCHEMA_MANAGEMENT_NOT_ALLOWED` 拒绝；Builder dry-run 和 SQL
+  预览仍然可用。
+
+该配置不控制业务记录权限。外部 Schema 仍可通过 Query API 查询、插入、更新或删除记录，最终是否允许由
+数据库权限和上层 ACL 决定。`connection.client()` 是底层逃生口，不经过 Schema guard；直接用它执行 DDL
+时，调用者自行负责遵守 Schema 所有权边界。
 
 SQLite：
 

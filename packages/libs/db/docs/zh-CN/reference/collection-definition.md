@@ -9,7 +9,6 @@ interface CollectionDefinition {
   naming?: NamingOptions;
   title?: string;
   description?: string;
-  writable?: boolean;
   db?: DbOptions;
   fields?: AnyFieldDefinition[];
   constraints?: ConstraintDefinition[];
@@ -61,10 +60,6 @@ Collection 级命名配置，会覆盖 connection 级 `naming`：
 ## title 和 description
 
 应用层元信息，用于 UI、Agent 和业务解释。
-
-## writable
-
-表示 Collection 是否可写。View collection 默认不可写。
 
 ## db
 
@@ -130,6 +125,7 @@ Collection 级命名配置，会覆盖 connection 级 `naming`：
 
 - Object DSL 中 `CollectionDefinition` 是最适合 HTTP、CLI、`collection.json` 和跨进程序列化的结构。
 - 不要把 `title` 和 `description` 当数据库 comment。
+- `CollectionDefinition` 不承载统一的记录写权限；`kind` 只描述物理对象类型。
 - `constraints` 和 `indexes` 要分开建模。
 - 不要生成 `tableName` 或 `columnName`；物理名称由逻辑名确定性推导。
 - `renameCollection(from, to)` 会同步重命名物理表；有无法原子更新的依赖时会在 DDL 前拒绝。

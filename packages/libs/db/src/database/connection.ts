@@ -5,12 +5,17 @@ import type {
   SchemaAdapter,
   SchemaInspector,
 } from '../schema/index.js';
-import type { DatabaseDialect, DatabaseDriver } from './config.js';
+import type {
+  DatabaseDialect,
+  DatabaseDriver,
+  SchemaManagementMode,
+} from './config.js';
 
 export interface DatabaseConnection {
   name: string;
   driver: DatabaseDriver;
   dialect: DatabaseDialect;
+  schemaManagement: SchemaManagementMode;
   capabilities: DatabaseCapabilities;
 
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */

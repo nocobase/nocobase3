@@ -61,24 +61,11 @@ export interface CollectionMetadataService {
     name: string,
     options?: UpdateMetadataOptions,
   ): Promise<StoredCollectionMetadata | undefined>;
-
-  setVirtualField(
-    collection: string,
-    name: string,
-    field: VirtualFieldMetadata,
-    options?: UpdateMetadataOptions,
-  ): Promise<StoredCollectionMetadata>;
-
-  removeVirtualField(
-    collection: string,
-    name: string,
-    options?: UpdateMetadataOptions,
-  ): Promise<StoredCollectionMetadata | undefined>;
 }
 ```
 
-Relation 和 virtual field 使用明确的 set/remove 方法，不通过含糊的深层 merge 创建或删除。
-`updateField()` 只更新已存在物理 Field 的补充 Metadata，不会创建虚拟字段。
+Relation 使用明确的 set/remove 方法，不通过含糊的深层 merge 创建或删除。
+`updateField()` 只更新已存在物理 Field 的补充 Metadata；找不到对应 Field 时返回稳定错误，不能创建新字段。
 
 Patch 中的 `undefined` 表示不修改，`null` 表示显式清除可选属性。Service 持久化前移除 `null`，
 文档中不保存无意义的空值。
@@ -110,7 +97,7 @@ export interface UpdateMetadataOptions {
 1. Metadata 文档版本和结构合法；
 2. Collection 命名规则可确定地定位物理对象；
 3. `fields` 中的每个项都存在对应物理 Field；
-4. relations 和 virtual fields 与物理 Field 不重名；
+4. relations 与物理 Field 不重名；
 5. relation 的本地 key 存在；
 6. `CollectionRelationValidator` 检查 target、target key 和 through Collection。
 

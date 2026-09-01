@@ -32,6 +32,7 @@ interface DatabaseConnection {
   name: string;
   driver: 'better-sqlite3' | 'pg' | 'mysql2' | 'oracledb' | 'tedious';
   dialect: 'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
+  schemaManagement: 'managed' | 'external';
   capabilities: DatabaseCapabilities;
 
   builder: CollectionBuilder;
@@ -72,6 +73,15 @@ const query = db.query();
 const knex = await db.connection().client();
 ```
 
+`client()` 不经过 `schemaManagement` 的 Schema guard。它是有意保留的底层逃生口，直接使用它执行 DDL
+时必须由调用者自行保证 Connection 的 Schema 所有权。
+
+## Schema 管理边界
+
+`schemaManagement` 默认是 `'managed'`。`'external'` Connection 会拒绝 Builder/Schema Adapter 的
+真实 DDL 和 Migration，但允许 dry-run、SQL 预览以及 Query API 的记录读写。该属性不等同于只读连接或
+Collection 记录权限。
+
 ## transaction
 
 ```ts
@@ -93,6 +103,7 @@ await db.transaction(async (connection) => {
 ## Agent 注意事项
 
 - 普通 schema 变更使用 `db.builder()`。
+- 外部 Schema 使用 `schemaManagement: 'external'`，不要在该 Connection 上运行 Migration。
 - 需要底层 adapter client 能力时才使用 `db.connection().client()`。
 - transaction 内应使用回调参数里的 `connection`，不要回到外层 `db`。
 - 完成测试或脚本后调用 `db.destroy()`。

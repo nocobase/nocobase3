@@ -30,10 +30,6 @@ Field 级别：
   type: 'decimal',
   title: 'Amount',
   description: 'Total order amount before refunds.',
-  interface: 'number',
-  uiSchema: {
-    'x-component': 'InputNumber',
-  },
 }
 ```
 

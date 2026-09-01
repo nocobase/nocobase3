@@ -89,12 +89,11 @@ Agent 或开发者确认后再写入补充 Metadata。修改外部 Metadata 永�
 Metadata 不能将物理 `varchar` 列改成 integer，也不能修改物理可空性。Resolver 应执行以下校验：
 
 - 已存在物理 Field 的 Metadata 与该 Field 合并；
-- `virtualFields` 项可以不存在对应物理列；
 - 普通 `fields` 项如果找不到物理 Field，应报告 Schema drift；
 - relation 引用的本地 key 不存在时应报校验错误；
 - 单个 Collection 解析只校验 relation 的本地 key；target、target key 和 through Collection 由显式的
   `CollectionRelationValidator` 图校验处理；
-- fields、relations 和 virtualFields 中的重复名称必须拒绝；
+- fields 和 relations 中的重复名称必须拒绝；
 - introspection 遇到无法唯一确定的反向命名时应报告问题，不能猜测。
 
 ## Connection Collections API

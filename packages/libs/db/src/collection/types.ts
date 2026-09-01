@@ -56,8 +56,6 @@ export interface FieldBase {
   precision?: number;
   scale?: number;
   unsigned?: boolean;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
   db?: DbOptions;
 }
 
@@ -172,7 +170,6 @@ export interface CollectionDefinition {
   naming?: NamingOptions;
   title?: string;
   description?: string;
-  writable?: boolean;
   db?: DbOptions;
   fields?: AnyFieldDefinition[];
   constraints?: ConstraintDefinition[];
@@ -195,8 +192,6 @@ export interface CollectionAlterDefinition {
 export interface FieldMetadataPatch {
   title?: string;
   description?: string;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
 }
 
 export interface CollectionMetadataPatch {

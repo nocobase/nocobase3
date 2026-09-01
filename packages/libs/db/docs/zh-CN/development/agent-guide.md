@@ -19,7 +19,7 @@ Agent 的推荐 DSL 取决于输出载体：
 - 只有表前缀不同时才配置 `naming.tablePrefix`。
 - 关系参数引用 Collection 或 Field 的 `name`，不要把 `foreignKey()`、`targetKey()`、`through()` 当作物理名配置。
 - 重要 index、constraint 建议显式命名；未命名时 Builder 会生成稳定名称，过长会截断加哈希。
-- 只补充 `title`、`description`、`uiSchema` 等应用元信息时，使用 metadata-only API，不要调用 `createCollection` 或 `alterCollection`。
+- 只补充 `title`、`description` 等应用元信息时，使用 metadata-only API，不要调用 `createCollection` 或 `alterCollection`。
 
 ## 数据库配置规则
 
@@ -36,7 +36,9 @@ Agent 的推荐 DSL 取决于输出载体：
 - `driverOptions` 只放非常规底层参数，不放常用连接参数。
 - 判断数据库类型使用 `connection.dialect`，不要使用 `connection.driver`。
 - 只有 driver-specific 逻辑才读取 `connection.driver`。
+- 外部 Schema 配置 `schemaManagement: 'external'`；它禁止 DDL 和 Migration，但不禁止 Query API 的记录读写。
 - `connection.client()` 返回当前 adapter client；默认 Knex adapter 下返回 Knex 实例。
+- `connection.client()` 会绕过 Schema guard，不能用它规避 `schemaManagement: 'external'`。
 
 ## Migration 规则
 

@@ -1,3 +1,4 @@
+import { assertManagedSchema } from '../database/schema-management.js';
 import { createMigrationContext } from './context.js';
 import {
   DEFAULT_MIGRATION_TABLE,
@@ -32,6 +33,13 @@ class DefaultMigrator implements Migrator {
   async latest(): Promise<MigrationRunResult> {
     const connection = this.options.database.connection(
       this.options.connection,
+    );
+    assertManagedSchema(
+      {
+        connectionName: connection.name,
+        mode: connection.schemaManagement,
+      },
+      'migration.latest',
     );
     const migrations = await loadMigrations(this.options);
     const migrationConnection = createMigrationContext(connection).connection;
@@ -81,6 +89,13 @@ class DefaultMigrator implements Migrator {
   async rollback(): Promise<MigrationRollbackResult> {
     const connection = this.options.database.connection(
       this.options.connection,
+    );
+    assertManagedSchema(
+      {
+        connectionName: connection.name,
+        mode: connection.schemaManagement,
+      },
+      'migration.rollback',
     );
     const migrations = await loadMigrations(this.options);
     const migrationConnection = createMigrationContext(connection).connection;

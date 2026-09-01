@@ -11,11 +11,13 @@ export interface DatabaseConfig {
 export type DatabaseDialect =
   'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
 
+export type SchemaManagementMode = 'managed' | 'external';
+
 export interface BaseConnectionConfig {
   naming?: NamingOptions;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
-  managed?: boolean;
+  schemaManagement?: SchemaManagementMode;
   debug?: boolean;
   pool?: unknown;
   driverOptions?: Record<string, unknown>;
