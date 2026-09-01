@@ -35,7 +35,6 @@ import { Badge } from '../components/ui/badge.js';
 import { Button } from '../components/ui/button.js';
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -368,25 +367,6 @@ export default function ApplicationDetailPage(): ReactElement {
         <TabsContent value='releases'>
           <ReleasesTab
             application={application}
-            onPin={(releaseId) => {
-              const willPin = !application.releases.find(
-                (release) => release.id === releaseId,
-              )?.pinned;
-              const changed = application.releases.find(
-                (release) => release.id === releaseId,
-              );
-              const activity = createActivity(
-                willPin ? 'release.pinned' : 'release.unpinned',
-                `${changed?.version ?? ''} pin setting was updated.`,
-              );
-              updateApplication((draft) => {
-                draft.releases = draft.releases.map((release) => ({
-                  ...release,
-                  pinned: release.id === releaseId ? willPin : release.pinned,
-                }));
-                draft.activity.unshift(activity);
-              });
-            }}
             onDetails={setSelectedRelease}
             onReleaseAction={(action, version) =>
               setPendingAction({ kind: 'release', action, version })
@@ -454,8 +434,31 @@ export default function ApplicationDetailPage(): ReactElement {
       </Tabs>
 
       <ReleaseDetailsDialog
-        release={selectedRelease}
+        release={
+          selectedRelease
+            ? application.releases.find(
+                (release) => release.id === selectedRelease.id,
+              )
+            : undefined
+        }
         onClose={() => setSelectedRelease(undefined)}
+        onPin={(releaseId) => {
+          const changed = application.releases.find(
+            (release) => release.id === releaseId,
+          );
+          const willPin = !changed?.pinned;
+          const activity = createActivity(
+            willPin ? 'release.pinned' : 'release.unpinned',
+            `${changed?.version ?? ''} pin setting was updated.`,
+          );
+          updateApplication((draft) => {
+            draft.releases = draft.releases.map((release) => ({
+              ...release,
+              pinned: release.id === releaseId ? willPin : release.pinned,
+            }));
+            draft.activity.unshift(activity);
+          });
+        }}
       />
       <AuthorizationDialog
         open={authorizationOpen}
@@ -929,13 +932,11 @@ async function copyText(value: string): Promise<void> {
 
 function ReleasesTab({
   application,
-  onPin,
   onDetails,
   onReleaseAction,
   actionsEnabled,
 }: {
   readonly application: HubApplicationRecord;
-  readonly onPin: (releaseId: string) => void;
   readonly onDetails: (release: HubApplicationRelease) => void;
   readonly onReleaseAction: (
     action: 'deploy' | 'rollback' | 'redeploy',
@@ -946,135 +947,121 @@ function ReleasesTab({
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? i18n.language;
   return (
-    <div className='space-y-4 pt-5'>
-      <div>
-        <div>
-          <h2 className='text-lg font-semibold'>
-            {t('applicationDetail.releases.title', {
-              defaultValue: 'Release history',
-            })}
-          </h2>
-          <p className='text-sm text-muted-foreground'>
-            {t('applicationDetail.releases.description', {
-              defaultValue:
-                'Inspect, pin, deploy, roll back, or redeploy a release.',
-            })}
-          </p>
-        </div>
-      </div>
-      <div className='grid gap-4 lg:grid-cols-2'>
-        {application.releases.map((release) => {
-          const releaseAction = release.active
-            ? 'redeploy'
-            : release.version === application.latestRelease
-              ? 'deploy'
-              : 'rollback';
-          return (
-            <Card key={release.id}>
-              <CardHeader>
-                <div className='flex flex-wrap items-center gap-2'>
-                  <CardTitle className='font-mono'>{release.version}</CardTitle>
-                  {release.active ? (
+    <Card className='mt-5 py-0'>
+      <CardContent className='px-0'>
+        <Table className='min-w-[720px]'>
+          <TableHeader>
+            <TableRow>
+              <TableHead className='pl-4'>
+                {t('applicationDetail.releases.version', {
+                  defaultValue: 'Version',
+                })}
+              </TableHead>
+              <TableHead>
+                {t('applicationDetail.releases.verification', {
+                  defaultValue: 'Verification',
+                })}
+              </TableHead>
+              <TableHead>
+                {t('applicationDetail.releases.sizeColumn', {
+                  defaultValue: 'Size',
+                })}
+              </TableHead>
+              <TableHead>
+                {t('applicationDetail.releases.publisher', {
+                  defaultValue: 'Published by',
+                })}
+              </TableHead>
+              <TableHead>
+                {t('applicationDetail.releases.created', {
+                  defaultValue: 'Created',
+                })}
+              </TableHead>
+              <TableHead className='text-right'>
+                {t('applicationDetail.releases.actions', {
+                  defaultValue: 'Action',
+                })}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {application.releases.map((release) => {
+              const releaseAction = release.active
+                ? 'redeploy'
+                : release.version === application.latestRelease
+                  ? 'deploy'
+                  : 'rollback';
+              return (
+                <TableRow key={release.id}>
+                  <TableCell className='pl-4 font-medium'>
+                    <div className='flex items-center gap-2'>
+                      <Button
+                        type='button'
+                        variant='link'
+                        className='h-auto p-0 font-mono font-medium'
+                        aria-label={t(
+                          'applicationDetail.releases.detailsAria',
+                          {
+                            defaultValue: `View version ${release.version} details`,
+                            version: release.version,
+                          },
+                        )}
+                        onClick={() => onDetails(release)}
+                      >
+                        {release.version}
+                      </Button>
+                      {release.active ? (
+                        <Badge variant='outline'>
+                          {t('applicationDetail.releases.active', {
+                            defaultValue: 'Current',
+                          })}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <Badge>
-                      {t('applicationDetail.releases.active', {
-                        defaultValue: 'Active',
+                      {t('applicationDetail.releases.verified', {
+                        defaultValue: 'Verified',
                       })}
                     </Badge>
-                  ) : null}
-                  {release.pinned ? (
-                    <Badge variant='secondary'>
-                      {t('applicationDetail.releases.pinned', {
-                        defaultValue: 'Pinned',
-                      })}
-                    </Badge>
-                  ) : null}
-                </div>
-                <CardDescription>{release.notes}</CardDescription>
-                <CardAction>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant='ghost'
-                    aria-label={t('applicationDetail.releases.pinAria', {
-                      defaultValue: `${release.pinned ? 'Unpin' : 'Pin'} version ${release.version}`,
-                      action: release.pinned ? 'Unpin' : 'Pin',
-                      version: release.version,
-                    })}
-                    onClick={() => onPin(release.id)}
-                  >
-                    <PackageCheck aria-hidden='true' />
-                    {release.pinned
-                      ? t('applicationDetail.releases.unpin', {
-                          defaultValue: 'Unpin',
-                        })
-                      : t('applicationDetail.releases.pin', {
-                          defaultValue: 'Pin',
-                        })}
-                  </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent>
-                <dl className='grid grid-cols-2 gap-4 text-sm'>
-                  <ApplicationFact
-                    label={t('applicationDetail.releases.commit', {
-                      defaultValue: 'Commit',
-                    })}
-                    value={release.commit}
-                  />
-                  <ApplicationFact
-                    label={t('applicationDetail.releases.size', {
-                      defaultValue: 'Bundle size',
-                    })}
-                    value={release.size}
-                  />
-                  <ApplicationFact
-                    label={t('applicationDetail.releases.publisher', {
-                      defaultValue: 'Published by',
-                    })}
-                    value={release.createdBy}
-                  />
-                  <ApplicationFact
-                    label={t('applicationDetail.releases.date', {
-                      defaultValue: 'Published',
-                    })}
-                    value={formatDate(release.createdAt, locale)}
-                  />
-                </dl>
-              </CardContent>
-              <CardFooter className='flex flex-wrap gap-2'>
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => onDetails(release)}
-                >
-                  {t('applicationDetail.releases.details', {
-                    defaultValue: 'View details',
-                  })}
-                </Button>
-                {actionsEnabled ? (
-                  <Button
-                    type='button'
-                    onClick={() =>
-                      onReleaseAction(releaseAction, release.version)
-                    }
-                  >
-                    <Rocket aria-hidden='true' />
-                    {t(`applicationDetail.releases.${releaseAction}`, {
-                      defaultValue:
-                        releaseAction === 'deploy'
-                          ? 'Deploy'
-                          : releaseAction === 'rollback'
-                            ? 'Roll back'
-                            : 'Redeploy',
-                    })}
-                  </Button>
-                ) : null}
-              </CardFooter>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
+                  </TableCell>
+                  <TableCell>{release.size}</TableCell>
+                  <TableCell>{release.createdBy}</TableCell>
+                  <TableCell>{formatDate(release.createdAt, locale)}</TableCell>
+                  <TableCell className='text-right'>
+                    {actionsEnabled ? (
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        onClick={() =>
+                          onReleaseAction(releaseAction, release.version)
+                        }
+                      >
+                        {t(
+                          releaseAction === 'rollback'
+                            ? 'applicationDetail.releases.deployOrRollback'
+                            : `applicationDetail.releases.${releaseAction}`,
+                          {
+                            defaultValue:
+                              releaseAction === 'deploy'
+                                ? 'Deploy'
+                                : releaseAction === 'rollback'
+                                  ? 'Deploy / roll back'
+                                  : 'Redeploy',
+                          },
+                        )}
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1531,9 +1518,11 @@ function SettingsTab({
 function ReleaseDetailsDialog({
   release,
   onClose,
+  onPin,
 }: {
   readonly release: HubApplicationRelease | undefined;
   readonly onClose: () => void;
+  readonly onPin: (releaseId: string) => void;
 }): ReactElement {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -1594,6 +1583,27 @@ function ReleaseDetailsDialog({
           </div>
         ) : null}
         <DialogFooter>
+          {release ? (
+            <Button
+              type='button'
+              variant='outline'
+              aria-label={t('applicationDetail.releases.pinAria', {
+                defaultValue: `${release.pinned ? 'Unpin' : 'Pin'} version ${release.version}`,
+                action: release.pinned ? 'Unpin' : 'Pin',
+                version: release.version,
+              })}
+              onClick={() => onPin(release.id)}
+            >
+              <PackageCheck aria-hidden='true' />
+              {release.pinned
+                ? t('applicationDetail.releases.unpin', {
+                    defaultValue: 'Unpin',
+                  })
+                : t('applicationDetail.releases.pin', {
+                    defaultValue: 'Pin',
+                  })}
+            </Button>
+          ) : null}
           <Button type='button' variant='outline' onClick={onClose}>
             {t('common.close', { defaultValue: 'Close' })}
           </Button>

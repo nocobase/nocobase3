@@ -138,8 +138,31 @@ describe('ApplicationDetailPage', () => {
     const user = userEvent.setup();
     renderPage('/apps/analytics?tab=releases');
 
-    await user.click(screen.getByRole('button', { name: 'Pin version 1.4.0' }));
-    expect(screen.getAllByText('Pinned')).toHaveLength(2);
+    for (const column of [
+      'Version',
+      'Verification',
+      'Size',
+      'Published by',
+      'Created',
+      'Action',
+    ]) {
+      expect(screen.getByRole('columnheader', { name: column })).toBeVisible();
+    }
+    expect(screen.getAllByText('Verified')).toHaveLength(2);
+    expect(screen.getAllByText('Maya Liu')).toHaveLength(2);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'View version 1.4.0 details',
+      }),
+    );
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Pin version 1.4.0',
+      }),
+    );
+    expect(screen.getByText('Unpin')).toBeVisible();
+    await user.click(screen.getAllByRole('button', { name: 'Close' })[0]);
 
     await user.click(screen.getByRole('tab', { name: 'Permissions' }));
     await user.click(screen.getByRole('button', { name: 'Add authorization' }));
