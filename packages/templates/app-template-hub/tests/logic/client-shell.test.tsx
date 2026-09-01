@@ -22,16 +22,15 @@ describe('application shell', () => {
     }));
   });
 
-  it('wraps authenticated application pages with navigation and user controls', async () => {
+  it('wraps authenticated application pages without a home menu item', async () => {
     renderApplication('/', createAuthProvider(true));
 
     expect(
       await screen.findByRole('navigation', { name: 'Application navigation' }),
     ).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(
+      screen.queryByRole('link', { name: 'Home' }),
+    ).not.toBeInTheDocument();
     // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),

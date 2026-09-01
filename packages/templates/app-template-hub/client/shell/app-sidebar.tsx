@@ -1,13 +1,12 @@
 import { useTranslation } from '@nocobase/i18n/client';
-import { useCan, useMenu, type TreeMenuItem } from '@refinedev/core';
-import { ChevronRight, Home, List, ShieldCheck, X } from 'lucide-react';
+import { useMenu, type TreeMenuItem } from '@refinedev/core';
+import { ChevronRight, List, ShieldCheck, X } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { Link } from 'react-router';
 
 import { Button } from '@/components/ui/button';
 
 import { AppBrand } from './app-brand.js';
-import { HOME_NAVIGATION_ITEM } from './navigation.js';
 
 export interface AppSidebarProps {
   readonly desktopCollapsed: boolean;
@@ -22,7 +21,6 @@ export function AppSidebar({
 }: AppSidebarProps): ReactElement {
   const { menuItems, selectedKey } = useMenu();
   const { t } = useTranslation();
-  const { data: homeAccess } = useCan({ resource: 'home', action: 'access' });
 
   return (
     <>
@@ -69,18 +67,6 @@ export function AppSidebar({
           })}
           className={`flex-1 space-y-1 overflow-x-hidden overflow-y-auto py-3 ${desktopCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
         >
-          {homeAccess?.can === true ? (
-            <NavigationLink
-              collapsed={desktopCollapsed}
-              icon={<Home />}
-              isSelected={
-                selectedKey === HOME_NAVIGATION_ITEM.key || selectedKey === '/'
-              }
-              label={t('navigation.home', { defaultValue: 'Home' })}
-              onNavigate={onCloseMobile}
-              route={HOME_NAVIGATION_ITEM.route}
-            />
-          ) : null}
           {menuItems.map((item) => (
             <NavigationTree
               collapsed={desktopCollapsed}
