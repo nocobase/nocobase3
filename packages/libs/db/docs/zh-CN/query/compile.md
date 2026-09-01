@@ -14,7 +14,7 @@ compiled.sql;
 compiled.parameters;
 ```
 
-在 `underscored: true` 下，`compile()` 输出的是归一化后的物理 identifier：
+启用 `underscored` 时，`compile()` 输出归一化后的物理 identifier：
 
 ```text
 orderNo -> order_no

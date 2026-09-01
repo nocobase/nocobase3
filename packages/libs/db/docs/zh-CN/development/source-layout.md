@@ -103,7 +103,7 @@ Package 的 migration 文件通常位于 package 自己的 `database/migrations/
 
 `metadata/` 是 Collection metadata 存储接口与默认内存实现。
 
-`naming/` 是逻辑名和数据库 identifier 之间的命名策略，例如 `underscored`、`tablePrefix`、索引名和外键名生成。
+`naming/` 是逻辑名和数据库 identifier 之间的确定性命名实现，包括可配置 `underscored`、`tablePrefix`、索引名和外键名生成。
 
 ## 测试目录
 

@@ -105,6 +105,70 @@ collection-metadata/
 
 `orders.schema.json` 保存 introspection 结果，可以删除并重新生成；`orders.metadata.ts` 保存 relations 等补充信息，重新生成 Schema 快照时不得覆盖。两者由 Collection Resolver 合并为完整的 `orders` Collection。
 
+自动生成的 `orders.schema.json` 只记录物理事实：
+
+```json
+{
+  "tableName": "orders",
+  "columns": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "primaryKey": true,
+      "nullable": false
+    },
+    {
+      "name": "order_no",
+      "type": "varchar",
+      "nullable": false
+    },
+    {
+      "name": "customer_id",
+      "type": "bigint",
+      "nullable": false
+    }
+  ],
+  "indexes": [],
+  "constraints": []
+}
+```
+
+可编辑的 `orders.metadata.ts` 保存应用层语义：
+
+```ts
+import { defineCollectionMetadata } from '@nocobase/db';
+
+export default defineCollectionMetadata({
+  title: 'Orders',
+  description: 'Customer purchase orders.',
+
+  fields: {
+    orderNo: {
+      title: 'Order number',
+      description: 'Unique business order number.',
+      interface: 'input',
+    },
+    customerId: {
+      title: 'Customer ID',
+    },
+  },
+
+  relations: {
+    customer: {
+      type: 'belongsTo',
+      target: 'customers',
+      foreignKey: 'customerId',
+      targetKey: 'id',
+      title: 'Customer',
+    },
+  },
+});
+```
+
+Collection 的 `title`、`description`，Field 的 `title`、`description`、`interface`、`uiSchema`，以及 relations 都属于 `*.metadata.ts`；物理表、列、类型、索引和约束属于 `*.schema.json`。
+
+`*.metadata.ts` 不保存 `tableName` 或 `columnName` 自定义映射。Collection 的物理名称由 Connection 和 Collection 的 `underscored`、`tablePrefix` 确定性生成；Schema 快照中的 `tableName` 和 `columns[].name` 只是 introspection 记录的物理事实。
+
 ## Metadata Store 与 connection
 
 一个 Metadata Store 对应一个逻辑数据库的 Metadata 空间：
@@ -133,8 +197,12 @@ mainRead  --+
 
 ```ts
 await connection.collections.get('users');
-await connection.collections.list();
+await connection.collections.list({ limit: 100, cursor });
 ```
+
+`get(name)` 按名称懒加载并解析一个完整 Collection。`list()` 不能隐式 introspect 和解析数据库中的全部 Collection；它应默认分页，只返回名称、物理表名和类型等轻量摘要。
+
+需要为 Agent 生成全部文件、检查 drift 或导出模型时，应使用名称明确的 `scan()`、`export()` 等显式重操作，而不是改变普通 `list()` 的轻量语义。即使 Registry 已有缓存，也不能依赖缓存掩盖首次全量扫描的成本。
 
 完整 Collection 可以缓存在内存 `CollectionRegistry` 中。Registry 是可失效、可重建的派生结果，不是新的事实来源。
 
@@ -162,6 +230,7 @@ connection.collections = read resolved collections
 5. 统一读取入口是 `db.connection().collections`。
 6. 一个逻辑数据库对应一个 Metadata Store；多个 connection 可以共享它。
 7. File Metadata 可以携带物理 Schema 快照，但快照是生成结果，外部数据库仍是物理事实来源。
+8. `collections.list()` 默认分页并返回轻量摘要；完整 Collection 通过 `get()` 懒加载，全量扫描必须显式执行。
 
 以下内容继续作为后续设计问题：
 

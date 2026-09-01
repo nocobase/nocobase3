@@ -14,8 +14,9 @@ Agent 的推荐 DSL 取决于输出载体：
 
 - 写 Builder schema 代码时使用逻辑名。
 - 写当前可运行代码时不要调用 `db.repository()` 或 `connection.repository()`；Repository 是规划接口，尚未实现。
-- 只有确实需要绑定物理数据库对象时才写 `tableName` 或 `columnName`。
-- `tableName`、`columnName` 是物理名，不要再参与命名转换。
+- 表名和列名按 effective naming 确定性生成；不要写 `tableName`、`columnName` 或自定义 naming strategy。
+- 默认使用 `underscored: true`；需要保留 camelCase 物理名时可在 Connection 或 Collection 配置 `underscored: false`。
+- 只有表前缀不同时才配置 `naming.tablePrefix`。
 - 关系参数引用 Collection 或 Field 的 `name`，不要把 `foreignKey()`、`targetKey()`、`through()` 当作物理名配置。
 - 重要 index、constraint 建议显式命名；未命名时 Builder 会生成稳定名称，过长会截断加哈希。
 - 只补充 `title`、`description`、`uiSchema` 等应用元信息时，使用 metadata-only API，不要调用 `createCollection` 或 `alterCollection`。
@@ -80,8 +81,8 @@ Agent 的推荐 DSL 取决于输出载体：
 - 不要生成 `orOn()`、`orOnRef()`；join 的 OR 条件使用 `join.on((eb) => eb.or([...]))`。
 - 不要生成 raw SQL。
 - 不要把 `db.query()` 当成 Collection Repository。
-- 需要 `field.name -> columnName` 的查询映射时，等待或实现 Repository，而不是让 `db.query()` 读取 Collection metadata。
-- 当前 `db.query()` 是数据库层 query identifier 接口；遇到 `tableName` 或 `columnName` 覆盖时，查询代码必须显式使用物理名或可被 naming 归一化的 identifier。
+- 当前 `db.query()` 是数据库层 query identifier 接口，使用 Connection 的 `underscored` 配置，但不会读取 Collection 级 naming 或 `tablePrefix`。
+- 查询带前缀的物理表时显式写出前缀；需要 Collection-aware 解析时等待或实现 Repository。
 
 ## Repository Select、Filter 和 Sort 规则
 

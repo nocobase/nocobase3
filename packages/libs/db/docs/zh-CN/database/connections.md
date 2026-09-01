@@ -105,7 +105,7 @@ orderItems -> tbl_order_items
 createdAt -> created_at
 ```
 
-Collection 可以用 `collection.naming(...)` 覆盖 connection 级配置，也可以用 `tableName`、`columnName` 显式指定物理名。
+Collection 可以用 `collection.naming({ underscored, tablePrefix })` 覆盖 Connection 命名配置。`underscored` 默认是 `true`；`tablePrefix: ''` 表示清除继承的前缀。不能显式指定任意物理名。
 
 更完整的概念见 [命名概念](../concepts/naming.md)，Builder 编译规则见 [Builder 命名映射](../builder/naming.md)。
 

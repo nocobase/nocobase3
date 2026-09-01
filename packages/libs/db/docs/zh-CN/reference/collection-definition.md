@@ -6,7 +6,6 @@
 interface CollectionDefinition {
   kind?: CollectionKind;
   name?: string;
-  tableName?: string;
   naming?: NamingOptions;
   title?: string;
   description?: string;
@@ -42,17 +41,7 @@ Collection Builder 的配置默认都使用 logical name，底层对接数据库
 - `view.as.from` 是逻辑 Collection 名。
 - `view.as.select` 和 `view.as.filter` 是逻辑字段名。
 
-不要在这些引用位置写 `tableName` 或 `columnName`。
-
-## tableName
-
-物理数据库表名或视图名覆盖。`tableName` 是显式物理名，优先级高于 `naming`，按原样使用。
-
-```ts
-{
-  tableName: 'audit_logs';
-}
-```
+这些位置不能写物理表名或物理列名。
 
 ## naming
 
@@ -67,7 +56,7 @@ Collection 级命名配置，会覆盖 connection 级 `naming`：
 }
 ```
 
-通常应优先在 connection 上配置统一命名规则。只有单个 Collection 需要特殊命名时，才使用 Collection 级 `naming`。
+通常应优先在 Connection 上配置统一规则。只有单个 Collection 需要不同的 `underscored` 或 `tablePrefix` 时，才使用 Collection 级 `naming`。Collection DSL 不支持任意物理表名；物理表名由 effective naming 和逻辑名称确定性生成。
 
 ## title 和 description
 
@@ -142,5 +131,6 @@ Collection 级命名配置，会覆盖 connection 级 `naming`：
 - Object DSL 中 `CollectionDefinition` 是最适合 HTTP、CLI、`collection.json` 和跨进程序列化的结构。
 - 不要把 `title` 和 `description` 当数据库 comment。
 - `constraints` 和 `indexes` 要分开建模。
-- `tableName` 是物理名状态，不是 rename 操作意图；重命名物理表应使用 `renameTableTo`。
+- 不要生成 `tableName` 或 `columnName`；物理名称由逻辑名确定性推导。
+- `renameCollection(from, to)` 会同步重命名物理表；有无法原子更新的依赖时会在 DDL 前拒绝。
 - 命名规则详见 [命名概念](../concepts/naming.md) 和 [Builder 命名映射](../builder/naming.md)。

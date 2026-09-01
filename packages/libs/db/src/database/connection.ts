@@ -11,7 +11,7 @@ export interface DatabaseConnection {
 
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder: CollectionBuilder;
-  /** Database-layer query builder. Does not read Collection metadata or columnName mappings. */
+  /** Database-layer query builder. Does not read Collection metadata or collection table prefixes. */
   query: QueryAdapter;
   schema: SchemaAdapter;
 

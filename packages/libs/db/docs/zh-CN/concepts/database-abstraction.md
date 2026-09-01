@@ -56,7 +56,7 @@ CollectionBuilder -> SchemaAdapter -> KnexSchemaAdapter -> Knex
 
 ## QueryAdapter
 
-`QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM。它工作在数据库物理名层，可以做 `underscored` 归一化，但不读取 Collection metadata。
+`QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM。它工作在数据库物理名层，使用 Connection 的 underscored 配置，但不读取 Collection Metadata。
 
 ## Repository
 
@@ -74,4 +74,4 @@ Filter Builder / Filter AST 表达筛选条件，并通过 Sort AST 表达排序
 - 当前可以直接使用 `db.builder()` 做 schema 变更。
 - `db.query()` 只用于基础查询，复杂 Repository 设计尚未实现。
 - 适配 Kysely 或其他底层实现时，应优先扩展 adapter，而不是改 Collection DSL。
-- 需要 `field.name -> columnName` 查询映射时，应由未来 Repository 负责。
+- 需要解析 Collection 级 `tablePrefix` 时，应由未来 Repository 或 Collection Registry 负责。

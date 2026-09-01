@@ -126,13 +126,13 @@ describeIntegrationDatabases('query naming', (context) => {
     });
   });
 
-  it('keeps query naming separate from collection metadata mappings', async () => {
-    const tableName = context.identifier('legacy_query_orders');
+  it('keeps low-level query table names separate from collection table prefixes', async () => {
+    const tableName = `${context.prefix}_legacy_query_orders`;
 
     await context.builder.createCollection('queryOrders', (collection) => {
-      collection.tableName(tableName);
+      collection.naming({ tablePrefix: `${context.prefix}_legacy_` });
       collection.increments('id');
-      collection.string('orderNo').columnName('order_number');
+      collection.string('orderNo');
       collection.datetime('createdAt');
     });
 
@@ -140,7 +140,7 @@ describeIntegrationDatabases('query naming', (context) => {
       .query()
       .insertInto(tableName)
       .values({
-        order_number: 'SO-001',
+        orderNo: 'SO-001',
         createdAt: '2026-08-14 10:00:00',
       })
       .execute();
@@ -149,11 +149,11 @@ describeIntegrationDatabases('query naming', (context) => {
       context.database
         .query()
         .selectFrom(tableName)
-        .select(['order_number', 'createdAt'])
-        .where('order_number', '=', 'SO-001')
+        .select(['orderNo', 'createdAt'])
+        .where('orderNo', '=', 'SO-001')
         .executeTakeFirst(),
     ).resolves.toMatchObject({
-      order_number: 'SO-001',
+      orderNo: 'SO-001',
       createdAt: expect.anything(),
     });
 
@@ -162,10 +162,10 @@ describeIntegrationDatabases('query naming', (context) => {
         .query()
         .selectFrom(tableName)
         .selectAll()
-        .where('order_number', '=', 'SO-001')
+        .where('orderNo', '=', 'SO-001')
         .executeTakeFirst(),
     ).resolves.toMatchObject({
-      orderNumber: 'SO-001',
+      orderNo: 'SO-001',
       createdAt: expect.anything(),
     });
   });

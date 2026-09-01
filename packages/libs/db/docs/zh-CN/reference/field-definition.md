@@ -6,7 +6,6 @@ FieldDefinition 描述 Collection 字段。
 interface FieldDefinition {
   name: string;
   type: FieldType;
-  columnName?: string;
   title?: string;
   description?: string;
   nullable?: boolean;
@@ -51,18 +50,18 @@ type FieldType =
   | string;
 ```
 
-## name 和 columnName
+## name 和物理列名
 
-- `name` 是应用层字段名。
-- `columnName` 是数据库物理列名覆盖，优先级高于命名策略，并按原样使用。
+`name` 是应用层逻辑字段名。物理列名根据 Collection 的 `naming.underscored` 推导；默认转为 snake_case，`underscored: false` 时保持原样。不支持字段级 `columnName` 或 `naming`。
 
 ```ts
 {
   name: 'eventName',
   type: 'string',
-  columnName: 'event_name',
 }
 ```
+
+上面的物理列名是 `event_name`。
 
 ## 应用层元信息
 
@@ -115,7 +114,7 @@ interface RelationFieldDefinition {
 - `sourceKey` 引用 source Collection 的字段 `name`。
 - `targetKey` 引用 target Collection 的字段 `name`。
 
-关系字段不支持 `columnName`。物理外键列名应配置在本地外键字段上，再通过 `foreignKey` 引用该字段。
+关系字段也不支持自定义物理列名。`foreignKey` 始终引用逻辑字段名，并按固定规则转换为物理列名。
 
 ## Agent 注意事项
 
@@ -123,7 +122,6 @@ interface RelationFieldDefinition {
 - `belongsTo` 会创建本地外键列。
 - `hasOne`、`hasMany`、`belongsToMany` 默认不创建本地物理列。
 - 需要跨数据库时，优先使用通用 FieldType。
-- 字段级例外使用 `columnName`，不要再设计字段级 `naming`。
+- 不要生成字段级物理名称映射。
 - 关系参数使用逻辑名，不要把物理名写进 `foreignKey`、`targetKey`、`through` 等参数。
-- 关系字段不配置 `columnName`；需要物理外键列名时，显式定义本地外键字段。
-- `db.query()` 不会读取 `columnName`；需要元数据感知查询时应使用未来的 Repository。
+- 需要本地外键字段时可以显式定义它，但其物理名称仍由逻辑字段名推导。

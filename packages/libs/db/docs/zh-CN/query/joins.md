@@ -70,7 +70,7 @@ left join customers as c
 
 ## 命名归一化
 
-在 `underscored: true` 下，表别名和字段引用也会参与归一化：
+启用 `underscored` 时，表别名和字段引用也参与命名归一化：
 
 ```ts
 await db

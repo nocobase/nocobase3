@@ -24,7 +24,6 @@ interface CollectionBuilderOptions {
   schemaAdapter?: SchemaAdapter;
   metadataStore?: CollectionMetadataStore;
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
 }
 ```
 
@@ -64,8 +63,10 @@ interface NamingOptions {
 }
 ```
 
-- `underscored: true`：把推导出的表名和列名转成小写下划线。
+- `underscored`：是否把逻辑表名和字段名转换为小写下划线，默认 `true`。
 - `tablePrefix`：只作用于推导出的表名或视图名，不作用于列名。
+
+Collection 可以用自己的 `naming` 覆盖 Connection 或 Builder 默认值；`tablePrefix: ''` 表示清除继承的前缀。
 
 ## 当前已验证选项
 

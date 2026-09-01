@@ -12,7 +12,6 @@ describeIntegrationDatabases('capability warnings', (context) => {
         collection.dbSchema('public');
         collection.increments('id');
         collection.native('ipAddress', 'text', {
-          columnName: 'ip_address',
           db: {
             comment: 'Client IP address',
           },

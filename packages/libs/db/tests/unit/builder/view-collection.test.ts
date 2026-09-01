@@ -8,10 +8,9 @@ describe('CollectionBuilder view collections', () => {
     const result = await builder.createViewCollection(
       'usersView',
       (view) => {
-        view.tableName('users_view');
         view.title('Adult users');
         view.description('Users older than 18.');
-        view.string('firstName', { columnName: 'first_name' });
+        view.string('firstName');
         view.as((query) =>
           query.from('users').select('firstName').where('age', '>', 18),
         );
@@ -25,7 +24,6 @@ describe('CollectionBuilder view collections', () => {
       definition: {
         kind: 'view',
         writable: false,
-        tableName: 'users_view',
         title: 'Adult users',
         description: 'Users older than 18.',
       },
@@ -54,8 +52,7 @@ describe('CollectionBuilder view collections', () => {
     const result = await builder.replaceViewCollection(
       'usersView',
       (view) => {
-        view.tableName('users_view');
-        view.string('firstName', { columnName: 'first_name' });
+        view.string('firstName');
         view.asRaw('select first_name from users where age > ?', [18]);
       },
       { dryRun: true },
@@ -92,8 +89,7 @@ describe('CollectionBuilder view collections', () => {
     const createResult = await builder.createMaterializedViewCollection(
       'usersSnapshot',
       (view) => {
-        view.tableName('users_snapshot');
-        view.string('firstName', { columnName: 'first_name' });
+        view.string('firstName');
         view.as((query) =>
           query.from('users').select('firstName').where('age', '>', 18),
         );

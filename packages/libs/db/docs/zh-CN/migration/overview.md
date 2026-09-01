@@ -175,7 +175,7 @@ export default defineMigration({
 });
 ```
 
-`builder` 会把 Collection DSL 编译成数据库 schema operation，并同步 Collection metadata。写 migration 时优先使用逻辑名，例如 `orders`、`orderNo`、`createdAt`。只有确实需要绑定已有物理表或列时，才写 `tableName` 或 `columnName`。
+`builder` 会把 Collection DSL 编译成数据库 schema operation，并同步 Collection Metadata。写 Migration 时使用逻辑名，例如 `orders`、`orderNo`、`createdAt`；物理名称由 effective naming 的 `underscored` 和 `tablePrefix` 确定性生成。操作不规则既有物理对象时，应使用明确的底层 Schema Migration，而不是向 Collection Metadata 写任意名称映射。
 
 ## 数据变更
 

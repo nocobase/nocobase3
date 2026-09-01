@@ -6,12 +6,10 @@ Collection 是应用层数据模型抽象，不是数据库表的简单别名。
 
 ```ts
 await builder.createCollection('auditLogs', {
-  tableName: 'audit_logs',
   fields: [
     {
       name: 'eventName',
       type: 'string',
-      columnName: 'event_name',
     },
   ],
 });
@@ -20,18 +18,17 @@ await builder.createCollection('auditLogs', {
 这个定义中：
 
 - `auditLogs` 是 Collection 名称。
-- `audit_logs` 是数据库物理表名。
+- `audit_logs` 是确定性生成的数据库物理表名。
 - `eventName` 是应用层字段名。
-- `event_name` 是数据库物理列名。
+- `event_name` 是确定性生成的数据库物理列名。
 
-如果没有显式设置 `tableName` 或 `columnName`，命名策略会推导物理名。默认策略会把 camelCase 转成 snake_case。
+Builder 默认把 camelCase 逻辑名转换为 snake_case；`underscored: false` 时保留原名。Collection DSL 不支持任意 `tableName` 或 `columnName` 映射。
 
-更完整的优先级：
+表前缀的优先级：
 
-1. 显式 `tableName`、`columnName`。
-2. Collection 级 `naming`。
-3. connection 级 `naming`。
-4. 默认命名策略。
+1. Collection 级 `naming.tablePrefix`。
+2. Connection 级 `naming.tablePrefix`。
+3. 默认空前缀。
 
 详见 [命名概念](./naming.md) 和 [Builder 命名映射](../builder/naming.md)。
 
@@ -79,7 +76,7 @@ const collection = {
 ## Agent 注意事项
 
 - 不要把 Collection 直接等同于数据库 table。
-- 不要把 field 直接等同于数据库 column。
+- Field 仍包含应用元信息，不应只理解为数据库 column；但其物理列名由逻辑字段名确定性生成。
 - 需要改变数据库结构时使用 Builder schema API。
 - 只补充应用元信息时使用 metadata-only API。
 - 已有数据库生成 Collection 属于 Generator 场景，当前原型还没有实现。

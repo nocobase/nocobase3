@@ -40,7 +40,6 @@ type ConnectionConfig =
 ```ts
 interface BaseConnectionConfig {
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
   managed?: boolean;
@@ -131,6 +130,8 @@ type NamingOptions = {
   tablePrefix?: string;
 };
 ```
+
+`underscored` 控制是否把逻辑名转换为小写下划线，默认 `true`；`tablePrefix` 是 Connection 上的默认表前缀。Collection 可以局部覆盖两项配置，但不支持注入自定义 `namingStrategy`。
 
 `naming` 是 connection 级默认命名配置。Collection 可以通过 `collection.naming(...)` 覆盖。
 

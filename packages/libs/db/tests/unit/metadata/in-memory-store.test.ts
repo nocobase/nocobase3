@@ -27,13 +27,11 @@ describe('InMemoryCollectionMetadataStore', () => {
   it('renames, removes, and ignores missing collections', async () => {
     const store = new InMemoryCollectionMetadataStore();
 
-    await store.renameCollection('missing', 'renamed');
-    expect(await store.getCollection('renamed')).toBeUndefined();
-
     await store.saveCollection('orders', {
       fields: [{ name: 'id', type: 'increments' }],
     });
-    await store.renameCollection('orders', 'salesOrders');
+    const orders = await store.getCollection('orders');
+    await store.renameCollection('orders', 'salesOrders', orders!);
     expect(await store.getCollection('orders')).toBeUndefined();
     expect(await store.getCollection('salesOrders')).toMatchObject({
       name: 'salesOrders',
@@ -41,5 +39,19 @@ describe('InMemoryCollectionMetadataStore', () => {
 
     await store.removeCollection('salesOrders');
     expect(await store.getCollection('salesOrders')).toBeUndefined();
+  });
+
+  it('lists cloned collection definitions', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.saveCollection('orders', {
+      fields: [{ name: 'id', type: 'increments' }],
+    });
+
+    const collections = await store.listCollections();
+    expect(collections).toEqual([expect.objectContaining({ name: 'orders' })]);
+    collections[0].fields![0].type = 'text';
+    await expect(store.getCollection('orders')).resolves.toMatchObject({
+      fields: [{ type: 'increments' }],
+    });
   });
 });

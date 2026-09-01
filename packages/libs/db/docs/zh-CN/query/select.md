@@ -53,7 +53,7 @@ const rows = await db
 const rows = await db.query().selectFrom('orders').selectAll().execute();
 ```
 
-如果启用了 `underscored: true`，`selectAll()` 会把未显式命名的下划线字段映射回驼峰。更完整的结果 key 规则见 [命名归一化](./naming.md)。
+`selectAll()` 会把未显式命名的下划线字段映射回驼峰。更完整的结果 key 规则见 [命名归一化](./naming.md)。
 
 ## 终止方法
 

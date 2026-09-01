@@ -79,12 +79,11 @@ describeIntegrationDatabases('relation fields', (context) => {
     );
   });
 
-  it('uses logical relation keys with explicit physical columns during alteration', async () => {
-    const usersTable = context.identifier('app_users');
+  it('uses deterministic physical columns for logical relation keys during alteration', async () => {
+    const usersTable = context.table('users');
 
     await context.builder.createCollection('users', (collection) => {
-      collection.tableName(usersTable);
-      collection.integer('userId').columnName('user_pk');
+      collection.integer('userId');
       collection.primary('userId');
     });
     await context.builder.createCollection('orders', (collection) => {
@@ -92,7 +91,7 @@ describeIntegrationDatabases('relation fields', (context) => {
     });
 
     await context.builder.alterCollection('orders', (collection) => {
-      collection.integer('createdById').columnName('creator_id');
+      collection.integer('createdById');
       collection
         .belongsTo('createdBy', 'users')
         .foreignKey('createdById')
@@ -101,28 +100,25 @@ describeIntegrationDatabases('relation fields', (context) => {
     });
 
     expect(
-      await context.db.schema.hasColumn(context.table('orders'), 'creator_id'),
-    ).toBe(true);
-    expect(
       await context.db.schema.hasColumn(
         context.table('orders'),
         'created_by_id',
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(await listForeignKeys(context, context.table('orders'))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           table: usersTable,
-          from: 'creator_id',
-          to: 'user_pk',
+          from: 'created_by_id',
+          to: 'user_id',
         }),
       ]),
     );
 
-    await context.db(usersTable).insert({ user_pk: 1 });
-    await context.db(context.table('orders')).insert({ creator_id: 1 });
+    await context.db(usersTable).insert({ user_id: 1 });
+    await context.db(context.table('orders')).insert({ created_by_id: 1 });
     await expectForeignKeyViolation(
-      context.db(context.table('orders')).insert({ creator_id: 999 }),
+      context.db(context.table('orders')).insert({ created_by_id: 999 }),
     );
   });
 });

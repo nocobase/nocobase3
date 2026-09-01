@@ -55,7 +55,7 @@ export function describeIntegrationDatabases(
 export function useIntegrationDatabase(
   spec: IntegrationDatabaseSpec,
 ): IntegrationTestContext {
-  const naming = new DefaultNamingStrategy({ underscored: true });
+  const naming = new DefaultNamingStrategy();
   const context = {
     spec,
     table: (collection: string) => context.identifier(collection),
@@ -76,7 +76,6 @@ export function useIntegrationDatabase(
           ...createConnectionConfig(spec),
           pool: spec.pool,
           naming: {
-            underscored: true,
             tablePrefix: `${context.prefix}_`,
           },
         },

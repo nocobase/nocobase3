@@ -83,19 +83,15 @@ describeIntegrationDatabases('collection creation', (context) => {
     ]);
   });
 
-  it('creates scalar fields with defaults, native types, and database column names', async () => {
-    const auditLogsTable = context.identifier('audit_logs');
+  it('creates scalar fields with defaults, native types, and deterministic database column names', async () => {
+    const auditLogsTable = context.table('auditLogs');
 
     await context.builder.createCollection('auditLogs', (collection) => {
-      collection.tableName(auditLogsTable);
       collection.increments('id');
-      collection
-        .string('eventName', { columnName: 'event_name', length: 128 })
-        .notNull();
+      collection.string('eventName', { length: 128 }).notNull();
       collection.boolean('enabled').defaultTo(true);
       collection.json('payload');
       collection.native('ipAddress', 'text', {
-        columnName: 'ip_address',
         title: 'IP address',
       });
     });

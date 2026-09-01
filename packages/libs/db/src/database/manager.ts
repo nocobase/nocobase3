@@ -10,7 +10,7 @@ export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder(name?: string): CollectionBuilder;
-  /** Database-layer query builder. Does not read Collection metadata or columnName mappings. */
+  /** Database-layer query builder. Does not read Collection metadata or collection table prefixes. */
   query(name?: string): QueryAdapter;
 
   connect(name?: string): Promise<DatabaseConnection>;

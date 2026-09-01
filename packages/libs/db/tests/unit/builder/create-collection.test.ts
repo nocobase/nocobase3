@@ -10,7 +10,7 @@ describe('CollectionBuilder createCollection', () => {
       'orders',
       (collection) => {
         collection.dbSchema('public');
-        collection.tableName('sales_orders');
+        collection.naming({ tablePrefix: 'sales_' });
         collection.title('Orders');
         collection.description('Customer purchase orders.');
         collection.bigInt('id').primary().autoIncrement();
@@ -29,7 +29,7 @@ describe('CollectionBuilder createCollection', () => {
         name: 'orders',
         definition: {
           db: { schema: 'public' },
-          tableName: 'sales_orders',
+          naming: { tablePrefix: 'sales_' },
           title: 'Orders',
           description: 'Customer purchase orders.',
           fields: [

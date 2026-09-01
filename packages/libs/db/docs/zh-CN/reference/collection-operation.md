@@ -42,16 +42,10 @@ destructive 操作。
   type: 'renameCollection';
   from: string;
   to: string;
-  renameTable?: boolean;
-  renameTableTo?: string;
 }
 ```
 
-默认只重命名 Collection metadata，不重命名物理表。
-
-`renameTable: true` 表示按命名规则重命名物理表。
-
-`renameTableTo` 表示重命名到指定物理表名。
+该操作总是按确定性命名规则同步重命名物理表和 Metadata，不支持指定任意目标物理表名。存在不能原子更新的 Relation、Foreign Key 或 View 依赖时，操作会在 DDL 前拒绝。
 
 ## view operations
 

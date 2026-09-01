@@ -67,12 +67,12 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       schemaAdapter: this.schema,
       metadataStore,
       naming: this.config.naming,
-      namingStrategy: this.config.namingStrategy,
     });
   }
 
   async connect(): Promise<this> {
     this.getClient();
+    await this.builder.validateMetadataCompatibility();
     return this;
   }
 

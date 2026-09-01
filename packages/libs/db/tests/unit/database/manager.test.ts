@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CollectionNamingCompatibilityError,
   createDatabaseManager,
   defineDatabase,
+  InMemoryCollectionMetadataStore,
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
 } from '../../../src/index.js';
@@ -130,7 +132,6 @@ describe('DatabaseManager', () => {
           dialect: 'sqlite',
           filename: ':memory:',
           naming: {
-            underscored: true,
             tablePrefix: 'tbl_',
           },
         },
@@ -147,6 +148,70 @@ describe('DatabaseManager', () => {
       expect(await client.schema.hasTable('tbl_order_items')).toBe(true);
       expect(await client.schema.hasColumn('tbl_order_items', 'order_no')).toBe(
         true,
+      );
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('passes underscored: false to builders and queries', async () => {
+    const db = createDatabaseManager({
+      connections: {
+        sqlite: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          naming: { underscored: false, tablePrefix: 'tbl_' },
+        },
+      },
+    });
+
+    try {
+      await db.builder().createCollection('orderItems', (collection) => {
+        collection.increments('id');
+        collection.string('orderNo');
+      });
+      await db
+        .query()
+        .insertInto('tbl_orderItems')
+        .values({ orderNo: 'SO-001' })
+        .execute();
+
+      await expect(
+        db
+          .query()
+          .selectFrom('tbl_orderItems')
+          .select('orderNo')
+          .executeTakeFirst(),
+      ).resolves.toEqual({ orderNo: 'SO-001' });
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('blocks connect when stored collection naming is incompatible', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const legacyDefinition = Object.assign(
+      {
+        name: 'orders',
+        fields: [{ name: 'id', type: 'increments' as const }],
+      },
+      { tableName: 'legacy_orders' },
+    );
+    await metadataStore.saveCollection('orders', legacyDefinition);
+    const db = createDatabaseManager({
+      metadataStore,
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      await expect(db.connect()).rejects.toBeInstanceOf(
+        CollectionNamingCompatibilityError,
+      );
+      expect(await metadataStore.getCollection('orders')).toHaveProperty(
+        'tableName',
+        'legacy_orders',
       );
     } finally {
       await db.destroy();

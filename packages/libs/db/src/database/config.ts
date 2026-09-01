@@ -1,6 +1,5 @@
 import type { NamingOptions } from '../collection/types.js';
 import type { CollectionMetadataStore } from '../metadata/index.js';
-import type { NamingStrategy } from '../naming/index.js';
 import type { DatabaseCapabilities } from '../schema/index.js';
 
 export interface DatabaseConfig {
@@ -13,7 +12,6 @@ export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql';
 
 export interface BaseConnectionConfig {
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
   managed?: boolean;

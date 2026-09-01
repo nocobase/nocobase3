@@ -25,9 +25,9 @@ Database Schema -> Inspector -> Collection Generator -> Collection DSL
 Collection 提供一层稳定的应用抽象：
 
 - `collection.name` 是应用层名称。
-- `collection.tableName` 是物理表或视图名覆盖。
 - `field.name` 是应用层字段名。
-- `field.columnName` 是物理列名覆盖。
+- 物理表名由可选 `tablePrefix` 和 Collection 逻辑名确定性生成。
+- 物理列名由 Field 逻辑名确定性生成。
 - `title`、`description` 是应用层元信息。
 - `db.comment`、`db.nativeType` 是数据库层配置。
 
@@ -73,7 +73,7 @@ Agent 的推荐 DSL 取决于输出载体：
 - Migration context 顶层只有 `builder`、`query`、`connection`；不公开 `schema`，adapter client 只通过 `connection.client()` 兜底。
 - 调用 HTTP API、CLI，或生成 `collection.json` 这类可序列化配置时，优先使用 Object DSL。
 - 做 file sync、snapshot diff、执行计划审计或批量 apply 时，优先使用 `CollectionOperation[]`。
-- `db.query()` 只做物理查询名的轻量归一化，不读取 Collection metadata。
+- `db.query()` 使用 Connection 的 `underscored` 配置，但不读取 Collection Metadata，也不自动应用 Collection 表前缀。
 - 未来写 Repository 数据访问代码时，结果字段和 relation 使用 Select AST，排序使用
   Sort AST。
 - 未来写 Repository 数据访问代码时，筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder。

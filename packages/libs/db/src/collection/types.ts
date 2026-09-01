@@ -63,7 +63,6 @@ export interface FieldBase {
 
 export interface FieldDefinition extends FieldBase {
   type: FieldType;
-  columnName?: string;
   target?: never;
   sourceKey?: never;
   targetKey?: never;
@@ -78,7 +77,6 @@ export interface FieldDefinition extends FieldBase {
 
 export type RelationFieldDefinition = FieldBase & {
   type: RelationType;
-  columnName?: never;
   target: string;
   sourceKey?: string;
   targetKey?: string;
@@ -171,7 +169,6 @@ export interface ViewOptions {
 export interface CollectionDefinition {
   kind?: CollectionKind;
   name?: string;
-  tableName?: string;
   naming?: NamingOptions;
   title?: string;
   description?: string;
@@ -299,8 +296,6 @@ export type CollectionOperation =
       type: 'renameCollection';
       from: string;
       to: string;
-      renameTable?: boolean;
-      renameTableTo?: string;
     }
   | {
       type: 'createViewCollection';
@@ -437,8 +432,6 @@ export type PhysicalConstraintDefinition =
   | CheckConstraintDefinition;
 
 export interface CollectionDefinitionBuilder {
-  tableName(name: string): this;
-  mapToTable(name: string): this;
   naming(options: NamingOptions): this;
   dbSchema(schema: string): this;
   title(title: string): this;
@@ -562,8 +555,6 @@ export interface FieldDefinitionBuilder {
   defaultTo(value: unknown): this;
   unique(options?: Omit<UniqueConstraintDefinition, 'type' | 'fields'>): this;
   index(options?: Omit<IndexDefinition, 'fields'>): this;
-  columnName(name: string): this;
-  mapToColumn(name: string): this;
   title(title: string): this;
   description(description: string): this;
   dbComment(comment: string): this;

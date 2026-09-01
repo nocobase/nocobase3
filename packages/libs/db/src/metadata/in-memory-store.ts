@@ -12,6 +12,12 @@ export class InMemoryCollectionMetadataStore implements CollectionMetadataStore 
     return clone(this.collections.get(name));
   }
 
+  async listCollections(): Promise<CollectionDefinition[]> {
+    return [...this.collections.values()].map((definition) =>
+      clone(definition),
+    );
+  }
+
   async saveCollection(
     name: string,
     definition: CollectionDefinition,
@@ -23,11 +29,11 @@ export class InMemoryCollectionMetadataStore implements CollectionMetadataStore 
     this.collections.delete(name);
   }
 
-  async renameCollection(from: string, to: string): Promise<void> {
-    const definition = this.collections.get(from);
-    if (!definition) {
-      return;
-    }
+  async renameCollection(
+    from: string,
+    to: string,
+    definition: CollectionDefinition,
+  ): Promise<void> {
     this.collections.delete(from);
     this.collections.set(to, clone({ ...definition, name: to }));
   }

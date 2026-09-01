@@ -127,7 +127,7 @@ export interface QueryAdapter {
   /**
    * Database-layer query builder.
    * It accepts table/column query identifiers and does not read Collection metadata,
-   * so collection.tableName() and field.columnName() mappings are not applied.
+   * so Collection-level tablePrefix overrides are not applied.
    */
   selectFrom<TRecord extends Row = Row>(
     table: string,

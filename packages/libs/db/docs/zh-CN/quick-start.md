@@ -26,9 +26,6 @@ const db = createDatabaseManager({
     main: {
       dialect: 'sqlite',
       filename: ':memory:',
-      naming: {
-        underscored: true,
-      },
     },
   },
 });
@@ -56,34 +53,26 @@ await db.builder().createCollection('orders', (collection) => {
 });
 ```
 
-如果 connection 配置了：
-
-```ts
-naming: {
-  underscored: true,
-}
-```
-
-那么 Builder 会把 Collection 逻辑名编译到数据库物理名：
+Builder 固定把 Collection 逻辑名编译到数据库物理名：
 
 ```text
 orders.createdAt -> orders.created_at
 orders.orderNo -> orders.order_no
 ```
 
-如果需要绑定已有物理表或列，可以显式写：
+如果单个 Collection 需要表前缀，可以写：
 
 ```ts
 await db.builder().createCollection('orderItems', (collection) => {
-  collection.tableName('tbl_order_item');
+  collection.naming({ tablePrefix: 'archive_' });
 
   collection.increments('id');
-  collection.string('orderNo').columnName('order_number');
+  collection.string('orderNo');
   collection.datetime('createdAt');
 });
 ```
 
-这里 `orderItems`、`orderNo`、`createdAt` 是 Collection / Field 的逻辑名；`tbl_order_item`、`order_number` 是物理名覆盖。
+对应的物理名称是 `archive_order_items.order_no` 和 `archive_order_items.created_at`。Collection DSL 不支持任意 `tableName` 或 `columnName` 映射。
 
 ## 使用 db.query()
 
@@ -161,7 +150,7 @@ const rows = await db
   .execute();
 ```
 
-在 `underscored: true` 下，`db.query()` 会对 table 和 column query identifier 做轻量归一化：
+默认 `underscored: true` 时，`db.query()` 会对 table 和 column query identifier 做归一化：
 
 ```text
 orderNo -> order_no
@@ -223,12 +212,12 @@ const rows = await db
 
 这里显式 alias 写的是小写下划线，所以结果 key 也是 `item_id`、`order_no`、`created_at`、`order_status`，不会再自动变成驼峰。
 
-`db.query()` 不会读取 `tableName`、`columnName` metadata。例如：
+`db.query()` 不会读取 Collection Metadata 中的 `tablePrefix`。例如：
 
 ```ts
 await db.builder().createCollection('orderItems', (collection) => {
-  collection.tableName('tbl_order_item');
-  collection.string('orderNo').columnName('order_number');
+  collection.naming({ tablePrefix: 'archive_' });
+  collection.string('orderNo');
 });
 ```
 
@@ -237,17 +226,16 @@ await db.builder().createCollection('orderItems', (collection) => {
 ```ts
 await db
   .query()
-  .selectFrom('tbl_order_item')
-  .select('order_number')
-  .where('order_number', '=', 'SO-001')
+  .selectFrom('archiveOrderItems')
+  .select('orderNo')
+  .where('orderNo', '=', 'SO-001')
   .execute();
 ```
 
 不要期望 `db.query()` 自动理解：
 
 ```ts
-orderItems -> tbl_order_item
-orderNo -> order_number
+orderItems -> archive_order_items
 ```
 
 这部分属于未来 Repository。当前代码中没有 `db.repository()` 或 `connection.repository()`，不要把 Repository 规划示例复制到运行时代码。
@@ -255,9 +243,9 @@ orderNo -> order_number
 Repository 实现后会理解：
 
 ```text
-collection.name: orderItems -> tableName: tbl_order_item
-field.name: orderNo -> columnName: order_number
-field.name: createdAt -> naming -> created_at
+collection.name: orderItems -> archive_order_items
+field.name: orderNo -> order_no
+field.name: createdAt -> created_at
 ```
 
 并返回应用层字段：
@@ -325,9 +313,6 @@ const db = createDatabaseManager({
     analytics: {
       dialect: 'sqlite',
       filename: ':memory:',
-      naming: {
-        underscored: true,
-      },
     },
   },
 });
