@@ -32,6 +32,10 @@ const registeredClientPackages = clientPlugins.plugins.map(
 );
 
 describe('client plugin registry consistency', () => {
+  it('registers the Hub client plugin', () => {
+    expect(registeredClientPackages).toContain('@nocobase/app-plugin-hub');
+  });
+
   it('registers every client plugin in nocobase.plugins as enabled', () => {
     const missing = registeredClientPackages.filter(
       (packageName) => registry[packageName]?.enabled !== true,

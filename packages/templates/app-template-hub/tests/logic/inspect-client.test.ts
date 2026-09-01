@@ -134,6 +134,36 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-system-info:index',
         path: '/system-info',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub.applications',
+        path: '/apps',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub.application-detail',
+        path: '/apps/:appId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub.deployments',
+        path: '/deployments',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub.deployment-detail',
+        path: '/deployments/:deploymentId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub.audit',
+        path: '/audit',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub.members',
+        path: '/members',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
@@ -146,6 +176,10 @@ describe('client inspection', () => {
       {
         id: '@nocobase/app-plugin-routes-example:routes-example',
         order: 3,
+      },
+      {
+        id: '@nocobase/app-plugin-hub:hub-applications',
+        order: 4,
       },
     ]);
     expect(
@@ -161,6 +195,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
+      { packageName: '@nocobase/app-plugin-hub', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -176,6 +211,10 @@ describe('client inspection', () => {
         },
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-workflow',
+          source: 'plugin',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-hub',
           source: 'plugin',
         }),
       ]),

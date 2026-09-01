@@ -1,0 +1,11 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/client-library.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./client/*"]
+    },
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["client/**/*.ts", "client/**/*.tsx"]
+}
