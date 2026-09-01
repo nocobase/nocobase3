@@ -403,7 +403,7 @@ export const applicationsZhCN: ApplicationsResource = {
   'applicationDetail.settings.secret.rotated': '运行密钥已轮换',
   'applicationDetail.settings.secret.title': '运行密钥',
   'applicationDetail.tabs.activity': '操作记录',
-  'applicationDetail.tabs.deployments': '部署',
+  'applicationDetail.tabs.deployments': '部署记录',
   'applicationDetail.tabs.development': '开发',
   'applicationDetail.tabs.label': '应用内容',
   'applicationDetail.tabs.overview': '概览',
