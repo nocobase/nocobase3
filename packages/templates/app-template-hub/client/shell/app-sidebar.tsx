@@ -218,42 +218,35 @@ function SidebarFooter({
 }: {
   readonly collapsed: boolean;
 }): ReactElement {
-  const templateName =
-    typeof __PORTAL_TEMPLATE_NAME__ === 'string'
-      ? __PORTAL_TEMPLATE_NAME__
-      : 'Default Template';
+  const { t } = useTranslation();
   const templateVersion =
     typeof __PORTAL_TEMPLATE_VERSION__ === 'string'
       ? __PORTAL_TEMPLATE_VERSION__
       : '0.0.0';
-  const templateLabel = `${templateName} v${templateVersion}`;
+  const title = t('sidebarFooter.title', { defaultValue: 'NocoBase Hub' });
+  const version = t('sidebarFooter.version', {
+    defaultValue: 'Version {{version}}',
+    version: templateVersion,
+  });
 
   return (
     <footer className='shrink-0 border-t border-border/70'>
       <div
         className={`flex min-h-20 items-center gap-3 px-5 py-3 ${collapsed ? 'md:min-h-16 md:justify-center md:px-2' : ''}`}
-        title={templateLabel}
+        title={`${title} · ${version}`}
       >
         <ShieldCheck className='size-4 shrink-0 text-muted-foreground' />
         <div
           className={`min-w-0 text-xs leading-4 ${collapsed ? 'md:hidden' : ''}`}
         >
-          <div className='font-semibold text-card-foreground'>
-            AI builds freely.
-          </div>
+          <div className='font-semibold text-card-foreground'>{title}</div>
           <div className='text-muted-foreground'>
-            <a
-              className='font-medium text-card-foreground hover:underline'
-              href='https://www.nocobase.com'
-              rel='noopener noreferrer'
-              target='_blank'
-            >
-              NocoBase
-            </a>{' '}
-            keeps it reliable.
+            {t('sidebarFooter.description', {
+              defaultValue: 'Manage app versions, deployments, and runtime.',
+            })}
           </div>
           <div className='mt-1 font-mono text-[10px] text-muted-foreground/70'>
-            {templateLabel}
+            {version}
           </div>
         </div>
       </div>

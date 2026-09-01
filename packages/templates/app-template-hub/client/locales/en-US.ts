@@ -23,6 +23,11 @@ const enUS = {
     collapse: 'Collapse navigation',
     label: 'Application navigation',
   },
+  sidebarFooter: {
+    title: 'NocoBase Hub',
+    description: 'Manage app versions, deployments, and runtime.',
+    version: 'Version {{version}}',
+  },
 };
 
 /**

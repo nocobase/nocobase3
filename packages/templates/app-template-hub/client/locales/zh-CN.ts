@@ -23,6 +23,11 @@ const zhCN: AppResource = {
     collapse: '收起导航',
     label: '应用导航',
   },
+  sidebarFooter: {
+    title: 'NocoBase Hub',
+    description: '管理 APP 的版本、部署与运行。',
+    version: '版本 {{version}}',
+  },
 };
 
 export default zhCN;
