@@ -88,6 +88,11 @@ describe('AuditPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Audit log' })).toBeVisible();
+    expect(
+      screen.getByRole('columnheader', { name: 'Target object' }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Object type')).toBeVisible();
+    expect(screen.getByLabelText('Object ID')).toBeVisible();
     await user.selectOptions(screen.getByLabelText('Result'), 'success');
     expect(screen.getByText('application.started')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
@@ -98,6 +103,31 @@ describe('AuditPage', () => {
       screen.getByRole('dialog', { name: 'Audit event details' }),
     ).toBeVisible();
     expect(screen.getByText('Client metadata')).toBeVisible();
+  });
+
+  it('uses clear target-object terminology in Chinese', async () => {
+    const runtime = new I18nRuntime({
+      defaultLocale: 'en-US',
+      locales: ['en-US', 'zh-CN'],
+    });
+    runtime.registerNamespace('@nocobase/app-plugin-hub', locales);
+    await runtime.init('zh-CN');
+
+    render(
+      <I18nProvider runtime={runtime}>
+        <NamespaceScope ns='@nocobase/app-plugin-hub'>
+          <MemoryRouter>
+            <AuditPage />
+          </MemoryRouter>
+        </NamespaceScope>
+      </I18nProvider>,
+    );
+
+    expect(
+      screen.getByRole('columnheader', { name: '操作对象' }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('对象类型')).toBeVisible();
+    expect(screen.getByLabelText('对象 ID')).toBeVisible();
   });
 });
 

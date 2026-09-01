@@ -109,7 +109,7 @@ export default function AuditPage(): ReactElement {
             <p className='mt-1 text-sm text-muted-foreground'>
               {t('audit.description', {
                 defaultValue:
-                  'Trace who changed Hub resources, which client initiated the action, and whether it succeeded.',
+                  'Trace who changed Hub objects, which client initiated the action, and whether it succeeded.',
               })}
             </p>
           </div>
@@ -133,7 +133,7 @@ export default function AuditPage(): ReactElement {
             <CardDescription>
               {t('audit.filters.description', {
                 defaultValue:
-                  'Narrow activity by identity, application, action, resource, and time.',
+                  'Narrow activity by identity, application, action, object, and time.',
               })}
             </CardDescription>
           </CardHeader>
@@ -156,7 +156,7 @@ export default function AuditPage(): ReactElement {
                     updateFilter('search', event.target.value)
                   }
                   placeholder={t('audit.filters.searchPlaceholder', {
-                    defaultValue: 'Actor, action, resource, or request',
+                    defaultValue: 'Actor, action, object, or request',
                   })}
                 />
               </label>
@@ -240,7 +240,7 @@ export default function AuditPage(): ReactElement {
               <TextFilter
                 id='audit-resource'
                 label={t('audit.filters.resource', {
-                  defaultValue: 'Resource',
+                  defaultValue: 'Object type',
                 })}
                 value={filters.resource}
                 onChange={(value) => updateFilter('resource', value)}
@@ -248,7 +248,7 @@ export default function AuditPage(): ReactElement {
               <TextFilter
                 id='audit-resource-id'
                 label={t('audit.filters.resourceId', {
-                  defaultValue: 'Resource ID',
+                  defaultValue: 'Object ID',
                 })}
                 value={filters.resourceId}
                 onChange={(value) => updateFilter('resourceId', value)}
@@ -317,7 +317,7 @@ export default function AuditPage(): ReactElement {
                     </TableHead>
                     <TableHead>
                       {t('audit.columns.resource', {
-                        defaultValue: 'Resource',
+                        defaultValue: 'Target object',
                       })}
                     </TableHead>
                     <TableHead>
@@ -425,7 +425,7 @@ function AuditDetailDialog({
           <DialogDescription>
             {t('audit.details.description', {
               defaultValue:
-                'Identity, request context, affected resource, and a redacted event payload.',
+                'Identity, request context, affected object, and a redacted event payload.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -465,7 +465,7 @@ function AuditDetailDialog({
               />
               <Detail
                 label={t('audit.details.resource', {
-                  defaultValue: 'Resource',
+                  defaultValue: 'Target object',
                 })}
                 value={resourceLabel(selected.resource, t)}
                 secondary={selected.resourceId ?? '—'}
