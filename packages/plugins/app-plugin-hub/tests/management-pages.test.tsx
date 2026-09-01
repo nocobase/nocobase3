@@ -230,6 +230,11 @@ describe('MembersPage', () => {
     expect(
       screen.getByRole('dialog', { name: 'Access for Morgan Lee' }),
     ).toBeVisible();
+    expect(screen.queryByText('Warehouse Management')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Customer Relationship Management'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Analytics Workspace')).not.toBeInTheDocument();
     expect(
       screen.getByRole('checkbox', {
         name: 'Warehouse Management role Developer',
