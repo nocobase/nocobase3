@@ -395,13 +395,7 @@ export default function ApplicationDetailPage(): ReactElement {
           />
         </TabsContent>
         <TabsContent value='deployments'>
-          <DeploymentsTab
-            application={application}
-            onRedeploy={(version) =>
-              setPendingAction({ kind: 'release', action: 'redeploy', version })
-            }
-            actionsEnabled={!application.archived}
-          />
+          <DeploymentsTab application={application} />
         </TabsContent>
         <TabsContent value='activity'>
           <ActivityTab application={application} />
@@ -1086,45 +1080,30 @@ function ReleasesTab({
 
 function DeploymentsTab({
   application,
-  onRedeploy,
-  actionsEnabled,
 }: {
   readonly application: HubApplicationRecord;
-  readonly onRedeploy: (version: string) => void;
-  readonly actionsEnabled: boolean;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   return (
     <Card className='mt-5 py-0'>
-      <CardHeader className='border-b py-4'>
-        <CardTitle>
-          {t('applicationDetail.deployments.title', {
-            defaultValue: 'Deployment history',
-          })}
-        </CardTitle>
-        <CardDescription>
-          {t('applicationDetail.deployments.description', {
-            defaultValue: 'Every deployment recorded for this application.',
-          })}
-        </CardDescription>
-      </CardHeader>
       <CardContent className='px-0'>
-        <Table>
+        <Table className='min-w-[880px]'>
           <TableHeader>
             <TableRow>
-              <TableHead>
+              <TableHead className='pl-4'>
                 {t('applicationDetail.deployments.id', {
                   defaultValue: 'Deployment',
                 })}
               </TableHead>
               <TableHead>
-                {t('applicationDetail.deployments.release', {
-                  defaultValue: 'Release',
+                {t('applicationDetail.deployments.type', {
+                  defaultValue: 'Type',
                 })}
               </TableHead>
               <TableHead>
-                {t('applicationDetail.deployments.type', {
-                  defaultValue: 'Type',
+                {t('applicationDetail.deployments.release', {
+                  defaultValue: 'Version',
                 })}
               </TableHead>
               <TableHead>
@@ -1137,9 +1116,14 @@ function DeploymentsTab({
                   defaultValue: 'Initiated by',
                 })}
               </TableHead>
-              <TableHead className='text-right'>
-                {t('applicationDetail.deployments.actions', {
-                  defaultValue: 'Actions',
+              <TableHead>
+                {t('applicationDetail.deployments.started', {
+                  defaultValue: 'Start time',
+                })}
+              </TableHead>
+              <TableHead className='pr-4 text-right'>
+                {t('applicationDetail.deployments.duration', {
+                  defaultValue: 'Duration',
                 })}
               </TableHead>
             </TableRow>
@@ -1147,16 +1131,13 @@ function DeploymentsTab({
           <TableBody>
             {application.deployments.map((deployment) => (
               <TableRow key={deployment.id}>
-                <TableCell className='font-medium'>
+                <TableCell className='pl-4 font-medium'>
                   <Link
                     className='underline-offset-4 hover:underline'
                     to={`/deployments/${encodeURIComponent(deployment.id)}`}
                   >
                     {deployment.id}
                   </Link>
-                </TableCell>
-                <TableCell className='font-mono text-xs'>
-                  {deployment.version}
                 </TableCell>
                 <TableCell>
                   {t(`applicationDetail.deployments.type.${deployment.type}`, {
@@ -1168,28 +1149,46 @@ function DeploymentsTab({
                           : 'Redeploy',
                   })}
                 </TableCell>
+                <TableCell className='font-mono text-xs'>
+                  {deployment.version}
+                </TableCell>
                 <TableCell>
-                  <Badge variant='secondary'>
-                    {t('applicationDetail.deployments.succeeded', {
-                      defaultValue: 'Succeeded',
-                    })}
+                  <Badge
+                    variant={
+                      deployment.status === 'succeeded'
+                        ? 'default'
+                        : deployment.status === 'failed'
+                          ? 'destructive'
+                          : 'secondary'
+                    }
+                  >
+                    {deployment.status === 'succeeded' ? (
+                      <Check aria-hidden='true' />
+                    ) : null}
+                    {t(
+                      `applicationDetail.deployments.status.${deployment.status}`,
+                      {
+                        defaultValue:
+                          deployment.status === 'succeeded'
+                            ? 'Succeeded'
+                            : deployment.status === 'failed'
+                              ? 'Failed'
+                              : deployment.status === 'running'
+                                ? 'Running'
+                                : 'Queued',
+                      },
+                    )}
                   </Badge>
                 </TableCell>
                 <TableCell>{deployment.actor}</TableCell>
-                <TableCell className='text-right'>
-                  {actionsEnabled ? (
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='outline'
-                      onClick={() => onRedeploy(deployment.version)}
-                    >
-                      <RefreshCw aria-hidden='true' />
-                      {t('applicationDetail.deployments.redeploy', {
-                        defaultValue: 'Redeploy',
-                      })}
-                    </Button>
-                  ) : null}
+                <TableCell>
+                  {formatDate(deployment.createdAt, locale)}
+                </TableCell>
+                <TableCell className='pr-4 text-right'>
+                  {t('applicationDetail.deployments.durationSeconds', {
+                    defaultValue: '0 s',
+                    count: 0,
+                  })}
                 </TableCell>
               </TableRow>
             ))}
