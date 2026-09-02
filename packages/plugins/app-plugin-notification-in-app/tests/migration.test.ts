@@ -59,19 +59,18 @@ describe('in-app notification database migration', () => {
       ]),
     );
     await expect(
-      metadataStore.getCollection('notificationInAppItems'),
+      database.connection().collections.get('notificationInAppItems'),
     ).resolves.toMatchObject({
       fields: expect.arrayContaining([
         expect.objectContaining({ name: 'deliveryId' }),
         expect.objectContaining({ name: 'readAt' }),
       ]),
       indexes: expect.arrayContaining([
-        expect.objectContaining({ name: 'notification_in_app_user_idx' }),
-      ]),
-      constraints: expect.arrayContaining([
         expect.objectContaining({
           name: 'notification_in_app_delivery_unique',
+          db: expect.objectContaining({ unique: true }),
         }),
+        expect.objectContaining({ name: 'notification_in_app_user_idx' }),
       ]),
     });
 
@@ -107,7 +106,7 @@ describe('in-app notification database migration', () => {
       client.schema.hasTable('notification_in_app_items'),
     ).resolves.toBe(false);
     await expect(
-      metadataStore.getCollection('notificationInAppItems'),
+      database.connection().collections.get('notificationInAppItems'),
     ).resolves.toBeUndefined();
   });
 });
