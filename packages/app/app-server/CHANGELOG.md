@@ -1,5 +1,58 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.5
+
+### Patch Changes
+
+- 15c7197: Publish the `./i18n` subpath. `exports` declared it but `publishConfig.exports` did not, so it resolved from source in this repository and was absent from the published package. A generated application failed to start on `pnpm dev` with `ERR_PACKAGE_PATH_NOT_EXPORTED` for `./i18n`, imported by its own `server/app.ts`.
+
+  `pnpm pack:check` now compares `exports` against `publishConfig.exports` and rejects a subpath present in one and missing from the other, in either direction. This class of defect is invisible in the workspace — every consumer resolves through the source map — and only appears once the package is installed from a registry.
+
+  A generated application no longer stops its first install with `ERR_PNPM_IGNORED_BUILDS`. `tesseract.js` reaches the dependency tree through `officeparser` and its `postinstall` only prints a donation notice, so `allowBuilds` now records it as a deliberate `false` rather than leaving it undecided; entries accordingly carry their own value instead of always being written as `true`. The generated `pnpm-workspace.yaml` also sets `strictDepBuilds: false`, so a transitive dependency introduced later reports a skipped install script as a warning rather than failing the install of a project that is otherwise fine. The repository's own `pnpm-workspace.yaml` takes the same setting.
+
+## 1.0.0-beta.4
+
+### Major Changes
+
+- 174eab5: Consolidate the browser packages into `@nocobase/app-client`.
+
+  `@nocobase/app-sdk` is gone; its API client now lives in `@nocobase/app-client` and is imported from there. `@nocobase/app-portal-sdk` is deprecated and keeps only what still has consumers: `NocoBaseClient` and the runtime configuration it reads, which exist to reach a v2 NocoBase server, and the route surface containers under `/routing`. Its ACL, auth, data, extension, i18n, and system-settings modules are removed, as is the route tree that `/routing` used to export alongside the surfaces.
+
+  `@nocobase/app-client` gains `resolveAppBase()`, which reports the path the application is mounted at.
+
+  Four plugins built their API client at import time instead of resolving it from the application's service container, so they could not see `api.baseURL` from the application configuration. They now resolve it, which means an application that configures a base URL gets one client rather than two that disagree.
+
+  The injected browser global `NOCOBASE_PORTAL_BASE` is renamed to `APP_BASE_PATH`. Its value has always been the `APP_BASE_PATH` environment variable, and the old name grouped it with the settings that address a v2 NocoBase server. Those keep their names. A client and the server that serves it must be upgraded together.
+
+  `@nocobase/app-plugin-data-provider` is removed. It forwarded the Portal data provider, and applications built on the current client runtime do not use it.
+
+  The Hub template is rebuilt from the default template and now runs the same client and server stack as every other v3 application. Its `/api/apps` endpoint and its v2 API proxy are gone, so a hub's `.env` no longer configures them.
+
+  The Portal SDK's template compatibility check is removed with the rest: it had been disabled behind a constant, and its install script cost every generated project a `pnpm-workspace.yaml` `allowBuilds` entry it did not need. `createPortalViteConfig` no longer takes the plugin that injected it.
+
+- 174eab5: Rename four packages, dropping the qualifiers they only carried to avoid names the v2 line had taken.
+
+  | Before                     | After                  |
+  | -------------------------- | ---------------------- |
+  | `@nocobase/app-database`   | `@nocobase/db`         |
+  | `@nocobase/app-i18n`       | `@nocobase/i18n`       |
+  | `@nocobase/app-server-kit` | `@nocobase/app-server` |
+  | `@nocobase/id-generator`   | `@nocobase/snowflake`  |
+
+  There is no compatibility shim: the old names receive no further releases, and a dependency on one has to be repointed by hand. Each package keeps its version history, which is why the changelogs say which name the earlier releases went out under.
+
+  `@nocobase/app-server` reclaims a name the v2 line abandoned at `0.11.1-alpha.5`, so it starts at `1.0.0-beta.0` rather than continuing its own `0.1.0-beta` line — `0.1.0` sorts below `0.11.1`, and npm would have rejected the publish. The other three take names that were never published.
+
+  `@nocobase/snowflake` also now matches what it implements; its only source file was already called `snowflake.ts`.
+
+### Patch Changes
+
+- Updated dependencies [174eab5]
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.1
+  - @nocobase/snowflake@1.0.0-beta.3
+  - @nocobase/queue@0.1.0-beta.3
+
 The versions below were published as `@nocobase/app-server-kit`, the name this package carried until it was renamed to
 `@nocobase/app-server`. They are kept because they describe this same codebase; the `@nocobase/app-server-kit` releases they
 name are not, and never will be, versions of `@nocobase/app-server`.

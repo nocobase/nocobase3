@@ -1,3 +1,7 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { NODE_RUN_STATUS } from '../../engine/constants.js';
 import { createNodeExpression } from '../definition.js';
 import type {
@@ -15,7 +19,6 @@ import {
   type WorkflowInstructionContext,
   type WorkflowInstructionResult,
 } from '../base.js';
-import { getWorkflowRunArtifactMetadata } from '../../loader/artifact-resolver.js';
 import { logRunExecution } from '../../engine/inspector.js';
 
 export type WorkflowRunJsonValue =
@@ -58,42 +61,13 @@ export interface WorkflowRunModule {
   run: WorkflowRunFunction;
 }
 
-export interface WorkflowRunModuleRequest {
-  /**
-   * Package digest the run belongs to. Today this is `workflow.hash`; once
-   * `workflowRuns.hash` exists it becomes the digest frozen at run creation, so
-   * a historical run keeps loading the artifact it started with.
-   */
-  hash: string | null;
-  workflowKey: string;
-  nodeKey: string;
-  sourcePath: string;
-}
-
-/**
- * The seam that decides *where a module comes from*.
- *
- * The instruction body never touches the file system: it hands the resolver a
- * package digest plus the declared relative path and gets back a module. M1
- * ships only the dev-only `SourceDirResolver`; M5 replaces it with an artifact
- * resolver without touching the instruction.
- */
-export interface WorkflowRunModuleResolver {
-  resolve(request: WorkflowRunModuleRequest): Promise<WorkflowRunModule>;
-}
-
-export interface RunInstructionOptions {
-  resolver: WorkflowRunModuleResolver;
-  /** The application instance handed to every script as `runtime.app`; see `WorkflowRunRuntime.app`. */
-  app: unknown;
-}
-
 export type RunConfig = JsonObject & {
-  script: string;
+  module: string;
   args?: JsonObject;
 };
 
 const TEMPLATE_PATTERN = /\{\{[^{}]*\}\}/;
+const moduleCache = new Map<string, Promise<WorkflowRunModule>>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -107,24 +81,47 @@ function runConfigIssues(config: unknown): ConfigIssue[] {
   const record = config as JsonObject;
   const errors: ConfigIssue[] = [];
   for (const key of Object.keys(record)) {
-    if (key !== 'script' && key !== 'args') {
+    if (key !== 'module' && key !== 'args') {
       errors.push({
         path: `config.${key}`,
         message: `run config does not accept field "${key}"`,
       });
     }
   }
-  if (typeof record.script !== 'string' || !record.script.trim()) {
+  if (typeof record.module !== 'string' || !record.module.trim()) {
     errors.push({
-      path: 'config.script',
-      message: 'run config script must be a non-empty string',
+      path: 'config.module',
+      message: 'run config module must be a non-empty string',
     });
-  } else if (TEMPLATE_PATTERN.test(record.script)) {
+  } else if (TEMPLATE_PATTERN.test(record.module)) {
     // The entry of a published version has to be static and auditable.
     errors.push({
-      path: 'config.script',
-      message: 'run config script must not contain a variable template',
+      path: 'config.module',
+      message: 'run config module must not contain a variable template',
     });
+  } else {
+    const specifier = record.module;
+    const segments = specifier.startsWith('./')
+      ? specifier.slice(2).split('/')
+      : [];
+    if (
+      segments.length === 0 ||
+      segments.some(
+        (segment) =>
+          !segment ||
+          segment === '.' ||
+          segment === '..' ||
+          segment.includes('\\'),
+      ) ||
+      path.posix.extname(specifier) !== '' ||
+      /[?#\0]/.test(specifier)
+    ) {
+      errors.push({
+        path: 'config.module',
+        message:
+          'run config module must be an extensionless package-relative specifier starting with "./"',
+      });
+    }
   }
   if (record.args !== undefined && !isRecord(record.args)) {
     errors.push({
@@ -153,7 +150,7 @@ function readRunConfig(config: JsonObject): RunConfig {
     );
   }
   return {
-    script: String(config.script),
+    module: String(config.module),
     ...(config.args === undefined ? {} : { args: config.args as JsonObject }),
   };
 }
@@ -235,21 +232,16 @@ export function assertWorkflowRunResult(
 /**
  * `run` — executes a server script that ships with the workflow package.
  *
- * The instruction owns config validation, argument resolution, result
- * validation and the mapping of exceptions onto nodeRun statuses. It deliberately
- * does not resolve paths, compile TypeScript, or let a script drive the state
- * machine: a script returning `{ status: 'failed' }` is ordinary business data,
- * never a nodeRun status. There is no `resume()` — a run node can never be PENDING.
+ * The instruction owns module lookup within the Processor-bound workflow
+ * resources, config and result validation, argument resolution, and exception
+ * mapping. It does not compile TypeScript or let a module drive the state
+ * machine: returning `{ status: 'failed' }` is ordinary business data, never a
+ * nodeRun status. There is no `resume()` — a run node can never be PENDING.
  */
 export class RunInstruction extends WorkflowInstruction<RunConfig> {
   static readonly type: 'run' = 'run';
   static readonly branches: null = null;
   static readonly result: null = null;
-  static readonly options: RunInstructionOptions = {
-    resolver: unboundResolver(),
-    app: undefined,
-  };
-
   constructor(context: WorkflowInstructionContext) {
     super({ ...context, node: context.node as WorkflowNode<RunConfig> });
   }
@@ -266,20 +258,16 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
     const config = readRunConfig(this.config);
     const args = this.processor.getParsedValue(config.args ?? {}, this.node.id);
     const signal = this.signal;
-    const options = (this.constructor as typeof RunInstruction).options;
-
-    const module = await options.resolver.resolve({
-      hash: this.processor.execution.hash,
-      workflowKey: this.processor.workflow.key,
-      nodeKey: this.node.key,
-      sourcePath: config.script,
-    });
-    const artifact = getWorkflowRunArtifactMetadata(module);
+    const module = await loadRunModule(
+      this.processor.workflowResourceRoot,
+      config.module,
+      this.node.key,
+    );
     const startedAt = performance.now();
     let result: unknown;
     try {
       result = await module.run(args, {
-        app: options.app,
+        app: this.processor.app,
         signal,
         logger: this.processor.logger,
       });
@@ -288,9 +276,8 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
         executionId: this.processor.execution.id,
         nodeId: this.node.id,
         nodeKey: this.node.key,
-        artifactDigest:
-          artifact?.artifactDigest ?? this.processor.execution.hash,
-        script: config.script,
+        artifactDigest: this.processor.execution.hash,
+        module: config.module,
         durationMs: performance.now() - startedAt,
         status: 'success',
       });
@@ -300,9 +287,8 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
         executionId: this.processor.execution.id,
         nodeId: this.node.id,
         nodeKey: this.node.key,
-        artifactDigest:
-          artifact?.artifactDigest ?? this.processor.execution.hash,
-        script: config.script,
+        artifactDigest: this.processor.execution.hash,
+        module: config.module,
         durationMs: performance.now() - startedAt,
         status: signal.aborted ? 'aborted' : 'error',
       });
@@ -317,19 +303,73 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
   }
 }
 
-function unboundResolver(): WorkflowRunModuleResolver {
-  return {
-    resolve: (request: WorkflowRunModuleRequest): Promise<WorkflowRunModule> =>
-      Promise.reject(
-        new Error(`No resolver configured for run node "${request.nodeKey}"`),
-      ),
-  };
+async function loadRunModule(
+  workflowResourceRoot: string | null,
+  specifier: string,
+  nodeKey: string,
+): Promise<WorkflowRunModule> {
+  if (!workflowResourceRoot) {
+    throw new Error(
+      `Run node "${nodeKey}" has no workflow resource root bound to it`,
+    );
+  }
+  const target = await resolveWorkflowModule(workflowResourceRoot, specifier);
+  const cached = moduleCache.get(target);
+  if (cached) return cached;
+  const pending = importRunModule(target, specifier);
+  moduleCache.set(target, pending);
+  return pending;
 }
 
-export function createRunInstruction(
-  options: RunInstructionOptions,
-): typeof RunInstruction {
-  return class ConfiguredRunInstruction extends RunInstruction {
-    static readonly options: RunInstructionOptions = options;
-  };
+function resolveInsideRoot(
+  root: string,
+  relativePath: string,
+  specifier: string,
+): string {
+  const target = path.resolve(root, relativePath);
+  const relative = path.relative(root, target);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Run module "${specifier}" resolves outside its artifact`);
+  }
+  return target;
+}
+
+async function resolveWorkflowModule(
+  root: string,
+  specifier: string,
+): Promise<string> {
+  const base = resolveInsideRoot(root, specifier, specifier);
+  for (const extension of ['.js', '.mjs', '.ts']) {
+    const target = `${base}${extension}`;
+    try {
+      const realRoot = await fs.realpath(root);
+      const realTarget = await fs.realpath(target);
+      const relative = path.relative(realRoot, realTarget);
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(
+          `Run module "${specifier}" resolves outside its workflow resources`,
+        );
+      }
+      return realTarget;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  throw new Error(`Run module "${specifier}" was not found`);
+}
+
+async function importRunModule(
+  target: string,
+  specifier: string,
+): Promise<WorkflowRunModule> {
+  const loaded = (await import(pathToFileURL(target).href)) as Record<
+    string,
+    unknown
+  >;
+  if (typeof loaded.run !== 'function') {
+    throw new Error(
+      `Run module "${specifier}" must export a function named run`,
+    );
+  }
+  return { run: loaded.run as WorkflowRunFunction };
 }

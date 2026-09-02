@@ -1,11 +1,7 @@
 export * from './base.js';
 import type { WorkflowInstructionClass } from './base.js';
-import { unboundRunModuleResolver } from '../loader/module-resolver.js';
 import { ConditionInstruction } from './condition/instruction.js';
-import {
-  createRunInstruction,
-  RunInstruction as BaseRunInstruction,
-} from './run/instruction.js';
+import { RunInstruction } from './run/instruction.js';
 
 export const INSTRUCTION_TYPES: {
   readonly condition: 'condition';
@@ -17,11 +13,6 @@ export const INSTRUCTION_TYPES: {
 
 export type InstructionType =
   (typeof INSTRUCTION_TYPES)[keyof typeof INSTRUCTION_TYPES];
-
-export const RunInstruction: typeof BaseRunInstruction = createRunInstruction({
-  resolver: unboundRunModuleResolver,
-  app: undefined,
-});
 
 export const coreInstructions: ReadonlyMap<string, WorkflowInstructionClass> =
   new Map<string, WorkflowInstructionClass>([
@@ -41,18 +32,15 @@ export type {
 
 export {
   assertWorkflowRunResult,
-  createRunInstruction,
+  RunInstruction,
   validateRunConfig,
 } from './run/instruction.js';
 export type {
   RunConfig,
-  RunInstructionOptions,
   WorkflowRunArgs,
   WorkflowRunFunction,
   WorkflowRunJsonValue,
   WorkflowRunModule,
-  WorkflowRunModuleRequest,
-  WorkflowRunModuleResolver,
   WorkflowRunRuntime,
 } from './run/instruction.js';
 export * from './condition/json-logic/index.js';

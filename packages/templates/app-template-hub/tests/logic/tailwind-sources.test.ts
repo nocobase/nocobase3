@@ -110,6 +110,34 @@ describe('tailwind content sources', () => {
     }
   });
 
+  it('scans canonical Registry source exposed by a plugin', () => {
+    const store = mkdtempSync(path.join(tmpdir(), 'nb3-tailwind-registry-'));
+    try {
+      const registry = path.join(
+        store,
+        'store/app-plugin-fixture/registry/example',
+      );
+      mkdirSync(registry, { recursive: true });
+      writeFileSync(
+        path.join(registry, 'demo.tsx'),
+        'export const cls = "xl:grid-cols-5";',
+      );
+
+      const scope = path.join(store, 'node_modules/@nocobase');
+      mkdirSync(scope, { recursive: true });
+      symlinkSync(
+        path.join(store, 'store/app-plugin-fixture'),
+        path.join(scope, 'app-plugin-fixture'),
+      );
+
+      const files = contentFilesIn(store);
+
+      expect(files).toContain(path.join(realpathSync(registry), 'demo.tsx'));
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+    }
+  });
+
   it('is wired into the stylesheet, without the wildcard sources it replaced', () => {
     const styles = readFileSync(
       path.join(appRoot, 'client/styles.css'),

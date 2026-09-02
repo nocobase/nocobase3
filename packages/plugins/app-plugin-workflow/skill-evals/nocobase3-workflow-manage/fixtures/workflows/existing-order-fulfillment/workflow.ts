@@ -18,7 +18,7 @@ export default defineWorkflow({
     RunInstruction.create({
       key: 'loadOrder',
       config: {
-        script: './server/load-order.ts',
+        module: './server/load-order',
         args: { orderId: '{{$input.orderId}}' },
       },
       result: {
@@ -38,7 +38,7 @@ export default defineWorkflow({
         RunInstruction.create({
           key: 'reserveInventory',
           config: {
-            script: './server/reserve-inventory.ts',
+            module: './server/reserve-inventory',
             args: { orderId: '{{$input.orderId}}' },
           },
         }),
@@ -47,7 +47,7 @@ export default defineWorkflow({
         RunInstruction.create({
           key: 'markBackorder',
           config: {
-            script: './server/mark-backorder.ts',
+            module: './server/mark-backorder',
             args: { orderId: '{{$input.orderId}}' },
           },
         }),
@@ -56,7 +56,7 @@ export default defineWorkflow({
     RunInstruction.create({
       key: 'recordOutcome',
       config: {
-        script: './server/record-outcome.ts',
+        module: './server/record-outcome',
         args: { orderId: '{{$input.orderId}}' },
       },
     }),

@@ -26,7 +26,7 @@ This Skill is published with `@nocobase/app-plugin-notification`. Keep it synchr
 - Configure and use the built-in `in-app`, `email`, and `im` Channels.
 - Send notifications through `notificationServiceToken` and select Providers deliberately.
 - Inspect Notification, Delivery, and Attempt records and diagnose queue or Provider failures.
-- Implement custom Channel or Provider definitions through the public registry contracts.
+- Implement custom Channel or Provider definitions through `notificationExtensionRegistryToken` and the public registry contracts.
 
 # Non-Goals
 
@@ -121,7 +121,7 @@ Rollback guidance:
 - Provider routing uses names from enabled configuration and `all` fan-out is intentional.
 - Every real send records its Notification id and reads back Delivery/Attempt status.
 - `accepted`, `failed` with `nextRunAt`, and `unknown` are interpreted according to the runtime contract.
-- Log and test routes enforce authentication and the `page:notification.logs` `access` permission where supplied by the plugin.
+- Log routes enforce authentication and `page:notification.logs` `access`; test routes separately enforce authentication, `notification:test` `send`, the feature flag, and the anti-CSRF header.
 - Package lint, typecheck, tests, and build pass for every changed notification package.
 
 # Minimal Test Scenarios

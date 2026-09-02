@@ -22,17 +22,11 @@ async function artifact(
     nodes: [],
   };
   const built = buildWorkflowArtifact({
-    scanned: { key: 'x', root: base, entries: [] },
-    definition,
+    key: 'x',
     flatIr: { ...definition, start: null, nodes: [] },
-    serverEntries: {
-      one: {
-        source: './run.ts',
-        output: 'server/run/one.cjs',
-        exports: ['run'],
-      },
-    },
-    serverEntryFiles: new Map([['server/run/one.cjs', 'exports.run=()=>1']]),
+    resourceFiles: new Map([
+      ['server/run.js', 'export function run(){ return 1; }'],
+    ]),
   });
   for (const [file, content] of built.files) {
     const target = path.join(source, file);
@@ -63,10 +57,7 @@ describe('local workflow Artifact Store', () => {
     const base = await fs.mkdtemp(path.join(os.tmpdir(), 'artifact-store-'));
     roots.push(base);
     const built = await artifact(base);
-    await fs.writeFile(
-      path.join(built.source, 'server/run/one.cjs'),
-      'tampered',
-    );
+    await fs.writeFile(path.join(built.source, 'server/run.js'), 'tampered');
     const store = new LocalWorkflowArtifactStore({
       storeRoot: path.join(base, 'private'),
     });

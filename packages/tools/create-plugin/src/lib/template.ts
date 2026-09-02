@@ -380,23 +380,19 @@ async function renderManifest(
       'pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build';
   }
 
+  // Dependency keys are added in capability order, which varies with what the user selected. Sorting keeps the same
+  // set of capabilities producing a byte-identical manifest.
+  const sortByKey = (entries: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(
+      Object.entries(entries).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    );
+
   const dependencies: Record<string, string> = {};
-  if (capabilities.client.locales || capabilities.server.locales)
-    dependencies['@nocobase/i18n'] = 'workspace:^';
-  if (serverPlugin) dependencies['@nocobase/app-server'] = 'workspace:^';
-  if (capabilities.database) dependencies['@nocobase/db'] = 'workspace:^';
-  if (
-    capabilities.server.serviceProviders ||
-    capabilities.client.serviceProviders
-  )
-    dependencies['@nocobase/service-provider'] = 'workspace:^';
   if (capabilities.server.routes) dependencies.hono = 'catalog:';
-  if (capabilities.server.jobs) dependencies['@nocobase/queue'] = 'workspace:^';
 
   const peerDependencies: Record<string, string> = {};
-  if (clientPlugin) peerDependencies['@nocobase/app-client'] = 'workspace:^';
-  if (react) peerDependencies.react = '^19.0.0';
-
   const devDependencies: Record<string, string> = {
     '@nocobase/dev-config': 'workspace:*',
     eslint: 'catalog:',
@@ -404,8 +400,30 @@ async function renderManifest(
     typescript: 'catalog:',
     vitest: 'catalog:',
   };
+
+  // A plugin is loaded into an application that already provides the runtime, so anything carrying process-wide state
+  // — service tokens, React contexts, the queue's job registry — is declared as a peer and never installed by the
+  // plugin itself. The matching devDependency pins this repository's copy for development and tests, which the wide
+  // peer range deliberately does not. See AGENTS.md, "Depending on Identity-Sensitive Packages".
+  const addRuntimePeer = (packageName: string): void => {
+    peerDependencies[packageName] = 'workspace:^';
+    devDependencies[packageName] = 'workspace:*';
+  };
+
+  if (capabilities.client.locales || capabilities.server.locales)
+    addRuntimePeer('@nocobase/i18n');
+  if (serverPlugin) addRuntimePeer('@nocobase/app-server');
+  if (capabilities.database) addRuntimePeer('@nocobase/db');
+  if (
+    capabilities.server.serviceProviders ||
+    capabilities.client.serviceProviders
+  )
+    addRuntimePeer('@nocobase/service-provider');
+  if (capabilities.server.jobs) addRuntimePeer('@nocobase/queue');
+  if (clientPlugin) addRuntimePeer('@nocobase/app-client');
+  if (react) peerDependencies.react = '^19.0.0';
+
   if (serverPlugin || !browserCode) devDependencies['@types/node'] = 'catalog:';
-  if (clientPlugin) devDependencies['@nocobase/app-client'] = 'workspace:*';
   if (react) {
     devDependencies['@types/react'] = 'catalog:';
     devDependencies.react = 'catalog:';
@@ -447,9 +465,13 @@ async function renderManifest(
       : {}),
     publishConfig: { access: 'public', exports: publishExports },
     scripts,
-    ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
-    ...(Object.keys(peerDependencies).length > 0 ? { peerDependencies } : {}),
-    devDependencies,
+    ...(Object.keys(dependencies).length > 0
+      ? { dependencies: sortByKey(dependencies) }
+      : {}),
+    ...(Object.keys(peerDependencies).length > 0
+      ? { peerDependencies: sortByKey(peerDependencies) }
+      : {}),
+    devDependencies: sortByKey(devDependencies),
   };
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }

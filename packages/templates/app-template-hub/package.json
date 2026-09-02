@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-hub",
   "displayName": "NocoBase Hub",
-  "version": "0.1.0-beta.0",
+  "version": "1.0.0-beta.3",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "0.1.0-beta.10",
+    "defaultTemplateVersion": "1.0.0-beta.3",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -198,7 +198,9 @@
     "config.example.yml",
     "README.MD",
     "MIGRATION.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    "CLAUDE.md",
+    "skills"
   ],
   "publishConfig": {
     "access": "public"

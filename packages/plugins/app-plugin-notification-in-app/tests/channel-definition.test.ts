@@ -11,6 +11,25 @@ import {
 import { MemoryInAppStore } from '../server/store.js';
 
 describe('In-app Channel common input', () => {
+  it('defaults test delivery to the authenticated user', () => {
+    const adapter = createInAppChannelDefinition().test;
+    expect(
+      adapter?.toSendInput({
+        actor: { userId: 'user-1' },
+        values: { title: 'Test', body: 'Hello' },
+        channelConfig: {
+          type: 'in-app',
+          enabled: true,
+          providers: [],
+        },
+        providerConfig: { type: 'database', name: 'primary' },
+      }),
+    ).toEqual({
+      to: { type: 'user', id: 'user-1' },
+      content: { title: 'Test', body: 'Hello' },
+    });
+  });
+
   it('resolves user recipients and renders content with overrides', async () => {
     const definition = createInAppChannelDefinition();
     const channel = await definition.createChannel(

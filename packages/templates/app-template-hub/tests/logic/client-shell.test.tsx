@@ -128,6 +128,8 @@ function renderApplication(
           options={{ disableTelemetry: true }}
         >
           <AppRouter
+            clientDevRouteGroups={[]}
+            clientDevRoutes={[]}
             clientRoutes={clientRoutes}
             clientSettingGroups={[]}
             clientSettings={[]}

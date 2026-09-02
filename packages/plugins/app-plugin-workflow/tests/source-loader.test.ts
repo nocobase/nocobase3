@@ -27,8 +27,8 @@ function workflowSource(title: string, defaultValue: number = 100): string {
 export default defineWorkflow({ title: ${JSON.stringify(title)},
   parameters: { limit: { type: 'number', default: 100 }, threshold: { type: 'number', default: ${defaultValue} }, flag: { type: 'boolean', default: true }, label: { type: 'string', default: 'default' } },
   nodes: [
-    ConditionInstruction.create({ key: 'condition', config: { expression: { '>': [{ var: 'parameters.limit' }, 0] } } }).branch({ yes: [RunInstruction.create({ key: 'branchAction', config: { script: './server/action.ts' } })], no: [] }),
-    RunInstruction.create({ key: 'finalAction', config: { script: './server/final.ts' } }),
+    ConditionInstruction.create({ key: 'condition', config: { expression: { '>': [{ var: 'parameters.limit' }, 0] } } }).branch({ yes: [RunInstruction.create({ key: 'branchAction', config: { module: './server/action' } })], no: [] }),
+    RunInstruction.create({ key: 'finalAction', config: { module: './server/final' } }),
   ] });`;
 }
 
@@ -130,12 +130,9 @@ describe('workflow TypeScript source loader', () => {
     const trace: string[] = [];
     const runtime = new WorkflowEngine({
       database,
-      instructions: new Map([
-        ['condition', ConditionInstruction],
-        ['run', createTraceInstruction(trace)],
-      ]),
       timeoutReaper: false,
     });
+    runtime.instructions.set('run', createTraceInstruction(trace));
     await runtime.initialize();
     if (!definition)
       throw new Error('Expected the materialized workflow definition');

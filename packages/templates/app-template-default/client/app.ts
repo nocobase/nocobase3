@@ -30,6 +30,8 @@ export function createApp(runtime: ResolvedAppRuntime): ClientApplication {
           clientRoutes: runtime.routes,
           clientSettings: runtime.settings,
           clientSettingGroups: runtime.settingGroups,
+          clientDevRoutes: runtime.devRoutes,
+          clientDevRouteGroups: runtime.devRouteGroups,
         }),
       }),
   });

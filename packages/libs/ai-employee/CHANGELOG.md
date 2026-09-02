@@ -1,5 +1,12 @@
 # @nocobase/ai-employee
 
+## 0.1.1-beta.0
+
+### Patch Changes
+
+- Updated dependencies [174eab5]
+  - @nocobase/db@1.0.0-beta.2
+
 ## 0.1.0
 
 ### Minor Changes

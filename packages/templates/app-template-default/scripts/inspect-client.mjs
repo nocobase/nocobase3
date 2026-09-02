@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 const inspectionTypes = [
   'all',
@@ -9,6 +8,7 @@ const inspectionTypes = [
   'react-providers',
   'routes',
   'settings',
+  'dev-routes',
   'locales',
 ];
 
@@ -23,7 +23,7 @@ Usage:
 
 Options:
   --type <type>      all, config, service-providers, react-providers, routes,
-                     settings, or locales (default: all)
+                     settings, dev-routes, or locales (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help`;
 
@@ -66,7 +66,7 @@ export function parseInspectAppClientArgs(args) {
       if (!inspectionTypes.includes(value)) {
         throw inspectionError(
           'CLIENT_INSPECT_ARGUMENT_INVALID',
-          '--type must be all, config, service-providers, react-providers, routes, settings, or locales.',
+          '--type must be all, config, service-providers, react-providers, routes, settings, dev-routes, or locales.',
         );
       }
       options.type = value;
@@ -89,9 +89,33 @@ export async function inspectAppClient({
   const appPackageName = JSON.parse(readFileSync(packageJsonPath, 'utf8')).name;
   const { applyClientRouteComponentOverrides, resolveAppClientContributions } =
     await import('@nocobase/app-client/plugins');
+  const loader = await createDeclarationLoader(appRoot);
+  try {
+    return await inspectLoadedAppClient({
+      appRoot,
+      appPackageName,
+      type,
+      loadModule: loader.load,
+      applyClientRouteComponentOverrides,
+      resolveAppClientContributions,
+    });
+  } finally {
+    // Always closed: an inspection that threw must not leave the process holding a server open.
+    await loader.close();
+  }
+}
+
+async function inspectLoadedAppClient({
+  appRoot,
+  appPackageName,
+  type,
+  loadModule,
+  applyClientRouteComponentOverrides,
+  resolveAppClientContributions,
+}) {
   const [application, clientPlugins] = await Promise.all([
-    loadApplicationRuntime(appRoot, appPackageName),
-    loadClientPlugins(appRoot),
+    loadApplicationRuntime(appRoot, appPackageName, loadModule),
+    loadClientPlugins(appRoot, loadModule),
   ]);
   const locales = localeSnapshots(
     appPackageName,
@@ -141,13 +165,16 @@ export async function inspectAppClient({
     );
   }
 
-  const sourceExtensions = await loadApplicationSourceExtensions(appRoot);
+  const sourceExtensions = await loadApplicationSourceExtensions(
+    appRoot,
+    loadModule,
+  );
   const overrides = [
     ...clientPlugins.routeComponentOverrides.map((override) => ({
       ...override,
       origin: 'plugins-entry',
     })),
-    ...(await loadApplicationRouteComponentOverrides(appRoot)).map(
+    ...(await loadApplicationRouteComponentOverrides(appRoot, loadModule)).map(
       (override) => ({ ...override, origin: 'route-overrides' }),
     ),
     ...sourceExtensions.flatMap((extension) =>
@@ -217,6 +244,20 @@ export async function inspectAppClient({
     ...(setting.access ? { access: setting.access } : {}),
   }));
 
+  // Dev routes are always empty in a production build; inspection runs under Node, so it sees what a developer sees.
+  const devRoutes = resolved.devRoutes.map((devRoute, index) => ({
+    order: index + 1,
+    parent: 'dev',
+    id: devRoute.id,
+    title: devRoute.title,
+    packageName: devRoute.packageName,
+    path: devRoute.path,
+    source: devRoute.source,
+    entry: entryOf(devRoute.packageName, 'routes'),
+    ...(devRoute.groupId ? { groupId: devRoute.groupId } : {}),
+    ...(devRoute.access ? { access: devRoute.access } : {}),
+  }));
+
   return createInspectionResult({
     appPackageName,
     appRoot,
@@ -225,6 +266,7 @@ export async function inspectAppClient({
     reactProviders,
     routes: routeSnapshots,
     settings,
+    devRoutes,
     locales,
   });
 }
@@ -237,6 +279,7 @@ function createInspectionResult({
   reactProviders = [],
   routes = [],
   settings = [],
+  devRoutes = [],
   locales = [],
 }) {
   const issues = settings
@@ -254,6 +297,7 @@ function createInspectionResult({
     reactProviders,
     routes,
     settings,
+    devRoutes,
     locales,
     consistent: issues.length === 0,
     issues,
@@ -361,7 +405,83 @@ function describeOptions(options) {
   );
 }
 
-async function loadClientPlugins(appRoot) {
+/**
+ * Loads the application's client declaration modules the way the application itself is built: through Vite.
+ *
+ * These modules are written for a bundler. `client/source-extensions.ts` calls `import.meta.glob()`, which only a
+ * bundler implements — importing it under plain Node throws `.glob is not a function`, which is what a direct
+ * `import()` of `client/runtime.ts` used to do once that file began importing source extensions. Going through Vite
+ * also means aliases such as `@/` and compile-time `define` constants resolve exactly as they do in a real build,
+ * rather than being a second approximation the inspector has to maintain.
+ *
+ * The server is configured to do nothing but transform modules on demand: no HMR, no websocket, no file watching,
+ * and no dependency pre-bundling. Each of those otherwise leaves a handle open that keeps this process alive after
+ * the inspection has printed its result, which for a CLI means it appears to hang rather than exit.
+ */
+async function createDeclarationLoader(appRoot) {
+  // The annotations plugin installs a file watcher this inspection has no use for, and that watcher keeps the
+  // process alive after close(). Inspection reads declarations only, so it is switched off for this process.
+  process.env.AGENT_ANNOTATIONS_ENABLED = 'false';
+
+  let createServer;
+  try {
+    ({ createServer } = await import('vite'));
+  } catch (error) {
+    throw inspectionError(
+      'CLIENT_INSPECT_VITE_UNAVAILABLE',
+      `Failed to load Vite, which client inspection uses to read client declaration modules: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      error,
+    );
+  }
+
+  const configFile = ['ts', 'js', 'mjs']
+    .map((extension) => path.join(appRoot, `vite.config.${extension}`))
+    .find((candidate) => existsSync(candidate));
+
+  let server;
+  try {
+    server = await createServer({
+      // The application's own configuration, so aliases and define constants match a real build. An application
+      // without one still resolves `@/`, which every template relies on.
+      ...(configFile ? { configFile } : { configFile: false }),
+      root: appRoot,
+      appType: 'custom',
+      logLevel: 'silent',
+      optimizeDeps: { noDiscovery: true, include: [] },
+      server: {
+        middlewareMode: true,
+        watch: null,
+        hmr: false,
+        ws: false,
+        preTransformRequests: false,
+      },
+      ...(configFile
+        ? {}
+        : {
+            resolve: {
+              alias: [{ find: '@', replacement: path.join(appRoot, 'client') }],
+            },
+          }),
+    });
+  } catch (error) {
+    throw inspectionError(
+      'CLIENT_INSPECT_VITE_FAILED',
+      `Failed to start the Vite environment client inspection reads declarations through: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      error,
+    );
+  }
+
+  return {
+    load: (entry) => server.ssrLoadModule(entry),
+    close: () => server.close(),
+  };
+}
+
+async function loadClientPlugins(appRoot, loadModule) {
   const entry = await findApplicationEntry(appRoot, 'plugins');
   if (!entry) {
     throw inspectionError(
@@ -370,7 +490,7 @@ async function loadClientPlugins(appRoot) {
     );
   }
   try {
-    const module = await import(pathToFileURL(entry).href);
+    const module = await loadModule(entry);
     const declared = module.default;
     if (!declared || !Array.isArray(declared.plugins)) {
       throw inspectionError(
@@ -393,7 +513,7 @@ async function loadClientPlugins(appRoot) {
   }
 }
 
-async function loadApplicationRuntime(appRoot, packageName) {
+async function loadApplicationRuntime(appRoot, packageName, loadModule) {
   const entry = await findApplicationEntry(appRoot, 'runtime');
   if (!entry) {
     throw inspectionError(
@@ -402,7 +522,7 @@ async function loadApplicationRuntime(appRoot, packageName) {
     );
   }
   try {
-    const module = await import(pathToFileURL(entry).href);
+    const module = await loadModule(entry);
     const runtime = module.default;
     if (!runtime || typeof runtime !== 'object') {
       throw inspectionError(
@@ -428,7 +548,7 @@ async function loadApplicationRuntime(appRoot, packageName) {
   }
 }
 
-async function loadApplicationRouteComponentOverrides(appRoot) {
+async function loadApplicationRouteComponentOverrides(appRoot, loadModule) {
   const entry = ['ts', 'tsx', 'js']
     .map((extension) =>
       path.join(appRoot, `client/route-overrides.${extension}`),
@@ -436,7 +556,7 @@ async function loadApplicationRouteComponentOverrides(appRoot) {
     .find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
   if (!entry) return [];
   try {
-    const module = await import(pathToFileURL(entry).href);
+    const module = await loadModule(entry);
     if (!Array.isArray(module.default)) {
       throw inspectionError(
         'CLIENT_ROUTE_OVERRIDES_INVALID',
@@ -455,7 +575,7 @@ async function loadApplicationRouteComponentOverrides(appRoot) {
   }
 }
 
-async function loadApplicationSourceExtensions(appRoot) {
+async function loadApplicationSourceExtensions(appRoot, loadModule) {
   const extensionsRoot = path.join(appRoot, 'client/extensions');
   if (!existsSync(extensionsRoot) || !statSync(extensionsRoot).isDirectory()) {
     return [];
@@ -473,7 +593,7 @@ async function loadApplicationSourceExtensions(appRoot) {
   const extensions = [];
   for (const entry of entries) {
     try {
-      const module = await import(pathToFileURL(entry).href);
+      const module = await loadModule(entry);
       if (!module.default || typeof module.default !== 'object') {
         throw inspectionError(
           'CLIENT_SOURCE_EXTENSION_INVALID',
@@ -516,6 +636,9 @@ export function formatAppClientInspection(inspection, type = 'all') {
   if (type === 'all' || type === 'settings') {
     sections.push(formatSettings(inspection.settings));
   }
+  if (type === 'all' || type === 'dev-routes') {
+    sections.push(formatDevRoutes(inspection.devRoutes));
+  }
   if (type === 'all' || type === 'react-providers') {
     sections.push(formatReactProviders(inspection.reactProviders));
   }
@@ -543,6 +666,9 @@ export function selectAppClientInspection(inspection, type = 'all') {
       : {}),
     ...(type === 'all' || type === 'settings'
       ? { settings: inspection.settings }
+      : {}),
+    ...(type === 'all' || type === 'dev-routes'
+      ? { devRoutes: inspection.devRoutes }
       : {}),
     ...(type === 'all' || type === 'react-providers'
       ? { reactProviders: inspection.reactProviders }
@@ -632,6 +758,23 @@ function formatRoutes(routes) {
         ...(route.componentEntry
           ? [`    component entry: ${route.componentEntry}`]
           : []),
+      ].join('\n'),
+    )
+    .join('\n')}`;
+}
+
+function formatDevRoutes(devRoutes = []) {
+  if (devRoutes.length === 0) return 'Dev Routes\n  (none)';
+  return `Dev Routes\n${devRoutes
+    .map((devRoute) =>
+      [
+        `  ${devRoute.order}. ${devRoute.path}`,
+        `    parent: ${devRoute.parent}`,
+        `    id: ${devRoute.id}`,
+        `    title: ${devRoute.title}`,
+        ...(devRoute.groupId ? [`    group: ${devRoute.groupId}`] : []),
+        `    source: ${devRoute.source}`,
+        `    entry: ${devRoute.entry}`,
       ].join('\n'),
     )
     .join('\n')}`;

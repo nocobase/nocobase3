@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-queue-example",
   "displayName": "Queue Example App Plugin",
   "description": "Example app plugin with a convention-based queue job and route.",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -40,18 +40,24 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/queue": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/queue": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^"
   }
 }
