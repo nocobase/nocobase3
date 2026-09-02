@@ -1,4 +1,8 @@
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import { createLogger, type Logging } from '@nocobase/logging';
@@ -7,7 +11,11 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NotificationProvider } from '../server/providers/notification.js';
-import { notificationServiceToken } from '../server/tokens.js';
+import { notificationRuntimeToken } from '../server/runtime.js';
+import {
+  notificationExtensionRegistryToken,
+  notificationServiceToken,
+} from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-notification provider', () => {
   it('registers, activates, and closes the core manager', async () => {
@@ -15,7 +23,13 @@ describe('@nocobase/app-plugin-notification provider', () => {
     const provider = new NotificationProvider({
       config: {
         get: () => ({
-          channels: [{ type: 'email', enabled: true, providers: [] }],
+          channels: [
+            {
+              type: 'email',
+              enabled: true,
+              providers: [{ type: 'fake', name: 'primary' }],
+            },
+          ],
         }),
       },
       container,
@@ -23,7 +37,34 @@ describe('@nocobase/app-plugin-notification provider', () => {
 
     provider.register();
     expect(container.has(notificationServiceToken)).toBe(true);
-    const notification = container.resolve(notificationServiceToken);
+    expect(container.has(notificationExtensionRegistryToken)).toBe(true);
+    const registry = container.resolve(notificationExtensionRegistryToken);
+    registry
+      .registerChannel({
+        type: 'email',
+        async createChannel() {
+          return {
+            type: 'email',
+            async prepare(input): Promise<object> {
+              return input.message;
+            },
+          };
+        },
+      })
+      .registerProvider('email', {
+        type: 'fake',
+        async createProvider(_context, config) {
+          return {
+            name: config.name,
+            type: config.type,
+            async send() {
+              return { status: 'accepted' } as const;
+            },
+          };
+        },
+      });
+    const notification = container.resolve(notificationRuntimeToken);
+    expect(container.resolve(notificationServiceToken)).toBe(notification);
     const activate = vi.spyOn(notification, 'activate');
     const start = vi.spyOn(notification, 'start');
     const close = vi.spyOn(notification, 'close');
@@ -32,6 +73,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
       'registerJob',
     );
 
+    await provider.boot();
     await provider.start();
     await provider.shutdown();
 
@@ -39,20 +81,50 @@ describe('@nocobase/app-plugin-notification provider', () => {
     expect(start).not.toHaveBeenCalled();
     expect(registerJob).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
+    const authorization = container.resolve(authorizationToken);
+    expect(authorization.resources.add).toHaveBeenCalledOnce();
+    const add = authorization.resources.add as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const handler = add.mock.calls[0]?.[0] as {
+      authorize(
+        request: object,
+        context: object,
+      ): Promise<{ readonly effect: string }>;
+    };
+    await expect(
+      handler.authorize(
+        {
+          principal: { type: 'user', id: 'user-1' },
+          resource: { type: 'notification', id: 'test' },
+          action: 'send',
+        },
+        {
+          grants: {
+            resolve: () =>
+              Promise.resolve([
+                {
+                  source: { plugin: 'permission-sets', id: 'operators' },
+                  resource: { type: 'notification', id: 'test' },
+                  action: 'send',
+                },
+              ]),
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ effect: 'permit' });
   });
 
-  it('does not register the service without a database', async () => {
+  it('fails fast when the required database dependency is missing', () => {
     const container = createContainer(false);
     const provider = new NotificationProvider({
       config: { get: () => ({ channels: [] }) },
       container,
     });
 
-    provider.register();
-    await provider.start();
-    await provider.shutdown();
-
-    expect(container.has(notificationServiceToken)).toBe(false);
+    expect(() => provider.register()).toThrow(
+      'Notification core requires the database manager dependency.',
+    );
   });
 });
 
@@ -67,5 +139,8 @@ function createContainer(withDatabase: boolean): ServiceContainer {
   container.instance(queueManagerToken, {
     registerJob: vi.fn(),
   } as unknown as NocoBaseQueueManager);
+  container.instance(authorizationToken, {
+    resources: { add: vi.fn() },
+  } as unknown as AppAuthorization);
   return container;
 }

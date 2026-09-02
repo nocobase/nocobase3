@@ -14,6 +14,7 @@ import {
   defineAppClientRenderConfig,
   normalizeAppClientBasename,
 } from '../src/config.js';
+import { defineAppRoutes, defineClientPlugins } from '../src/plugins.js';
 import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
 
 function RouterConsumer(): ReactElement {
@@ -39,7 +40,7 @@ async function createTestApplication(
       packageName: '@example/app',
       config: createAppClientConfig,
       serviceProviders: [TestProvider],
-      plugins: [],
+      plugins: defineClientPlugins([]),
     }),
   );
   const app = new ClientApplication({ runtime, createRenderConfig });
@@ -108,6 +109,80 @@ describe('app client', () => {
     await app.shutdown();
   });
 
+  it('requires an auth provider when a route requires authentication', async () => {
+    const runtime = await resolveAppRuntime(
+      defineAppRuntime({
+        packageName: '@example/app',
+        config: createAppClientConfig,
+        routes: defineAppRoutes([
+          {
+            name: 'home',
+            path: '/',
+            auth: 'required',
+            componentLoader: async () => ({ default: RouterConsumer }),
+          },
+          {
+            name: 'login',
+            path: '/login',
+            auth: 'guest',
+            componentLoader: async () => ({ default: RouterConsumer }),
+          },
+        ]),
+        plugins: defineClientPlugins([]),
+      }),
+    );
+    const app = new ClientApplication({
+      runtime,
+      createRenderConfig: () => ({ routes: null }),
+    });
+
+    await expect(app.start()).rejects.toThrow(
+      'Client Application routes requiring authentication need an auth provider.',
+    );
+  });
+
+  it('requires a guest login route when authenticated routes are enabled', async () => {
+    class AuthProviderService extends ServiceProvider<ClientApplication> {
+      public readonly name: string = '@example/auth';
+
+      public override boot(): Promise<void> {
+        this.app.refine.setAuthProvider({
+          check: vi.fn(),
+          getIdentity: vi.fn(),
+          login: vi.fn(),
+          logout: vi.fn(),
+          onError: vi.fn(),
+        });
+        return Promise.resolve();
+      }
+    }
+
+    const runtime = await resolveAppRuntime(
+      defineAppRuntime({
+        packageName: '@example/app',
+        config: createAppClientConfig,
+        serviceProviders: [AuthProviderService],
+        routes: defineAppRoutes([
+          {
+            name: 'home',
+            path: '/',
+            auth: 'required',
+            componentLoader: async () => ({ default: RouterConsumer }),
+          },
+        ]),
+        plugins: defineClientPlugins([]),
+      }),
+    );
+    const app = new ClientApplication({
+      runtime,
+      createRenderConfig: () => ({ routes: null }),
+    });
+
+    await expect(app.start()).rejects.toThrow(
+      'Client Application routes requiring authentication need a guest /login route.',
+    );
+  });
+
   it('requires startup before rendering and shuts providers down in reverse order', async () => {
     const calls: string[] = [];
     const createProvider = (name: string) =>
@@ -143,7 +218,7 @@ describe('app client', () => {
         packageName: '@example/app',
         config: createAppClientConfig,
         serviceProviders: [createProvider('first'), createProvider('second')],
-        plugins: [],
+        plugins: defineClientPlugins([]),
       }),
     );
     const app = new ClientApplication({

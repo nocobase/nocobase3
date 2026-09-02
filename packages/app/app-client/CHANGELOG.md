@@ -1,5 +1,23 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.8
+
+### Major Changes
+
+- 66dba5d: Pass the complete client plugin composition to `defineAppRuntime()`.
+
+  The runtime now resolves plugin route component overrides from the same `AppClientPlugins` object as every other plugin contribution, while application route overrides remain a separate declaration.
+
+  The Client Application now validates the auth provider and guest login route required by authenticated routes internally, keeping those details out of application composition roots.
+
+## 1.0.0-beta.7
+
+### Patch Changes
+
+- 68a4e26: Support FormData requests in the v3 App client without overriding the browser's multipart boundary, and preserve actionable messages from plain-text and nested error responses.
+
+  Remove the File plugin's Portal SDK dependency and v2 authentication behavior. `createFilesClient()` now requires the owning application's v3 `AppClient`, accepts endpoints relative to the application `/api` root, and relies exclusively on Cookie authentication.
+
 ## 1.0.0-beta.6
 
 ### Major Changes

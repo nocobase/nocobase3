@@ -5,6 +5,7 @@ import { ClientApplication } from '@nocobase/app-client';
 import {
   createAppClientConfig,
   defineAppClientRenderConfig,
+  defineClientPlugins,
 } from '@nocobase/app-client';
 import {
   defineAppRuntime,
@@ -34,7 +35,7 @@ describe('app client runtime', () => {
         serviceProviders: [Provider],
         reactProviders: [],
         routes: [],
-        plugins: [],
+        plugins: defineClientPlugins([]),
       }),
     );
 
@@ -67,7 +68,7 @@ describe('app client runtime', () => {
         packageName: '@example/app',
         config: createAppClientConfig,
         serviceProviders: [Provider],
-        plugins: [],
+        plugins: defineClientPlugins([]),
       }),
     );
     const app = new ClientApplication({

@@ -1,5 +1,14 @@
 # @nocobase/app-plugin-notification-in-app
 
+## Unreleased
+
+### Minor Changes
+
+- Add the in-app test adapter with authenticated-user defaulting, keep the inbox
+  API available when the core notification Server plugin is not registered,
+  and fail fast when the required database service is missing. The package
+  still requires the core package for its shared extension contracts.
+
 ## 0.2.0-beta.3
 
 ### Minor Changes

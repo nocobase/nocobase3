@@ -505,7 +505,7 @@ describe('LLM provider baseURL guard', () => {
         mimetype: 'image/png',
         path: '',
         url: '.env',
-        storageId: null,
+        disk: undefined,
       } as unknown as AIFileAttachment,
       {} as never,
     );
@@ -516,9 +516,9 @@ describe('LLM provider baseURL guard', () => {
     });
   });
 
-  it('encodes attachment models through file manager streams', async () => {
-    const fileManager = {
-      getFileStream: async () => ({
+  it('encodes attachment models through file storage streams', async () => {
+    const fileStorage = {
+      openMetadata: async () => ({
         stream: Readable.from([Buffer.from('hello')]),
       }),
     };
@@ -530,10 +530,10 @@ describe('LLM provider baseURL guard', () => {
         title: 'image',
         filename: 'image.png',
         mimetype: 'image/png',
-        path: '',
-        storageId: 1,
+        path: 'ai-files/1-image.png',
+        disk: 'local',
       } as unknown as AIFileAttachment,
-      { fileManager, documentLoader: {} as never, getHeader: () => '' },
+      { fileStorage, documentLoader: {} as never, getHeader: () => '' },
     );
 
     expect(parsed).toMatchObject({
@@ -546,12 +546,7 @@ describe('LLM provider baseURL guard', () => {
     });
   });
 
-  it('accepts external attachments without a local storage id', async () => {
-    const fileManager = {
-      getFileStream: async () => ({
-        stream: Readable.from([Buffer.from('remote')]),
-      }),
-    };
+  it('rejects external attachments without storage metadata', async () => {
     const provider = new TestLLMProvider({});
 
     const parsed = await provider.parseAttachment(
@@ -560,23 +555,17 @@ describe('LLM provider baseURL guard', () => {
         title: 'remote image',
         filename: 'remote.png',
         mimetype: 'image/png',
-        path: '',
-        storageId: null,
         source: {
           dataSourceKey: 'external',
           collectionName: 'attachments',
         },
       } as unknown as AIFileAttachment,
-      { fileManager, documentLoader: {} as never, getHeader: () => '' },
+      {} as never,
     );
 
     expect(parsed).toMatchObject({
-      placement: 'contentBlocks',
-      content: {
-        image_url: {
-          url: 'data:image/png;base64,cmVtb3Rl',
-        },
-      },
+      placement: 'system',
+      content: expect.stringContaining('cannot be parsed'),
     });
   });
 });

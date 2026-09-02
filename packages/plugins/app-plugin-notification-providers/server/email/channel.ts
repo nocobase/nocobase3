@@ -1,9 +1,10 @@
-import type {
-  NotificationChannelDefinition,
-  NotificationContent,
-  NotificationProviderIdentity,
-  NotificationRecipient,
+import {
+  type NotificationChannelDefinition,
+  type NotificationContent,
+  type NotificationProviderIdentity,
+  type NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../i18n.js';
 
 import type {
   EmailChannelConfig,
@@ -35,6 +36,54 @@ export function createEmailChannelDefinition(
 > {
   return {
     type: 'email',
+    test: {
+      label: notificationProviderText('test.channels.email', 'Email'),
+      fields: [
+        {
+          name: 'recipient',
+          label: notificationProviderText('test.fields.recipient', 'Recipient'),
+          type: 'email',
+          required: true,
+          placeholder: notificationProviderText(
+            'test.placeholders.email',
+            'name@example.com',
+          ),
+          maxLength: 320,
+        },
+        {
+          name: 'title',
+          label: notificationProviderText('test.fields.title', 'Title'),
+          type: 'text',
+          required: true,
+          defaultValue: notificationProviderText(
+            'test.defaults.title',
+            'NocoBase notification test',
+          ),
+          maxLength: 200,
+        },
+        {
+          name: 'body',
+          label: notificationProviderText('test.fields.message', 'Message'),
+          type: 'textarea',
+          required: true,
+          defaultValue: notificationProviderText(
+            'test.defaults.body',
+            'This is a test notification from NocoBase.',
+          ),
+          maxLength: 2000,
+        },
+      ],
+      toSendInput({ values }) {
+        const address = values.recipient?.trim();
+        if (!address || !isEmail(address)) {
+          throw new Error('Recipient must be a valid email address.');
+        }
+        return {
+          to: { type: 'email', address },
+          content: requiredContent(values),
+        };
+      },
+    },
     async createChannel() {
       return {
         type: 'email',
@@ -77,4 +126,17 @@ export function createEmailChannelDefinition(
       };
     },
   };
+}
+
+function requiredContent(
+  values: Readonly<Record<string, string>>,
+): NotificationContent {
+  const title = values.title?.trim();
+  const body = values.body?.trim();
+  if (!title || !body) throw new Error('Title and Message are required.');
+  return { title, body };
+}
+
+function isEmail(value: string): boolean {
+  return value.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(value);
 }

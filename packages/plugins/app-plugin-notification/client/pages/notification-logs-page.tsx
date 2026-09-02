@@ -6,7 +6,7 @@ import type {
   NotificationDeliveryDetails,
   NotificationLogDetails,
   NotificationStatus,
-  NotificationTestProvider,
+  NotificationTestTarget,
 } from '../notification-client.js';
 import { getNotificationClient } from '../runtime.js';
 
@@ -19,6 +19,8 @@ export default function NotificationLogsPage(): ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [testOpen, setTestOpen] = useState(false);
+  const [testTargets, setTestTargets] =
+    useState<readonly NotificationTestTarget[]>();
 
   const refresh = (): void => {
     setLoading(true);
@@ -53,6 +55,21 @@ export default function NotificationLogsPage(): ReactElement {
       active = false;
     };
   }, [revision, t]);
+
+  useEffect(() => {
+    let active = true;
+    void notification.listTestTargets().then(
+      (targets) => {
+        if (active) setTestTargets(targets);
+      },
+      () => {
+        if (active) setTestTargets(undefined);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const totals = useMemo(
     () => ({
@@ -93,15 +110,17 @@ export default function NotificationLogsPage(): ReactElement {
                 ? t('logs.refreshing', { defaultValue: 'Refreshing…' })
                 : t('logs.refresh', { defaultValue: 'Refresh' })}
             </button>
-            <button
-              className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
-              onClick={() => setTestOpen(true)}
-              type='button'
-            >
-              {t('logs.sendTest', {
-                defaultValue: 'Send test notification',
-              })}
-            </button>
+            {testTargets && testTargets.length > 0 ? (
+              <button
+                className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
+                onClick={() => setTestOpen(true)}
+                type='button'
+              >
+                {t('logs.sendTest', {
+                  defaultValue: 'Send test notification',
+                })}
+              </button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -161,6 +180,7 @@ export default function NotificationLogsPage(): ReactElement {
       </div>
       {testOpen ? (
         <TestNotificationDialog
+          targets={testTargets ?? []}
           onClose={() => setTestOpen(false)}
           onSent={refresh}
         />
@@ -170,62 +190,24 @@ export default function NotificationLogsPage(): ReactElement {
 }
 
 function TestNotificationDialog({
+  targets,
   onClose,
   onSent,
 }: {
+  readonly targets: readonly NotificationTestTarget[];
   readonly onClose: () => void;
   readonly onSent: () => void;
 }): ReactElement {
   const { t } = useTranslation();
-  const [providers, setProviders] = useState<
-    readonly NotificationTestProvider[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<NotificationTestProvider>();
+  const [selected, setSelected] = useState<NotificationTestTarget>();
+  const [values, setValues] = useState<Readonly<Record<string, string>>>({});
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
-  const [recipient, setRecipient] = useState('');
-  const [title, setTitle] = useState(() =>
-    t('test.defaultTitle', { defaultValue: 'NocoBase notification test' }),
-  );
-  const [body, setBody] = useState(() =>
-    t('test.defaultBody', {
-      defaultValue: 'This is a test notification from Hub.',
-    }),
-  );
-
-  useEffect(() => {
-    let active = true;
-    void notification
-      .listTestProviders()
-      .then(
-        (items) => {
-          if (active) setProviders(items);
-        },
-        (cause: unknown) => {
-          if (active)
-            setError(
-              errorMessage(
-                cause,
-                t('errors.requestFailed', {
-                  defaultValue: 'Notification request failed.',
-                }),
-              ),
-            );
-        },
-      )
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [t]);
 
   const channels = useMemo(
-    () => [...new Set(providers.map((item) => item.channel))],
-    [providers],
+    () => [...new Set(targets.map((item) => item.channel.type))],
+    [targets],
   );
 
   const send = (): void => {
@@ -235,10 +217,12 @@ function TestNotificationDialog({
     setSuccess(undefined);
     void notification
       .sendTest({
-        ...selected,
-        recipient: recipient.trim() || undefined,
-        title: title.trim(),
-        body: body.trim(),
+        channel: selected.channel.type,
+        provider: {
+          name: selected.provider.name,
+          type: selected.provider.type,
+        },
+        values,
       })
       .then(
         (result) => {
@@ -303,13 +287,7 @@ function TestNotificationDialog({
         </div>
 
         <div className='space-y-4 px-5 py-5'>
-          {loading ? (
-            <span className='text-sm text-muted-foreground'>
-              {t('test.loadingProviders', {
-                defaultValue: 'Loading configured Providers…',
-              })}
-            </span>
-          ) : providers.length === 0 && !error ? (
+          {targets.length === 0 && !error ? (
             <span className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>
               {t('test.noProviders', {
                 defaultValue: 'No enabled Providers are configured.',
@@ -328,11 +306,21 @@ function TestNotificationDialog({
                 disabled={sending}
                 onChange={(event) => {
                   setSelected(
-                    providers.find(
+                    targets.find(
                       (item) => providerKey(item) === event.target.value,
                     ),
                   );
-                  setRecipient('');
+                  const target = targets.find(
+                    (item) => providerKey(item) === event.target.value,
+                  );
+                  setValues(
+                    Object.fromEntries(
+                      (target?.fields ?? []).map((field) => [
+                        field.name,
+                        field.defaultValue ?? '',
+                      ]),
+                    ),
+                  );
                 }}
                 value={selected ? providerKey(selected) : ''}
               >
@@ -342,9 +330,15 @@ function TestNotificationDialog({
                   })}
                 </option>
                 {channels.map((channel) => (
-                  <optgroup key={channel} label={channelLabel(channel)}>
-                    {providers
-                      .filter((item) => item.channel === channel)
+                  <optgroup
+                    key={channel}
+                    label={
+                      targets.find((item) => item.channel.type === channel)
+                        ?.channel.label ?? channel
+                    }
+                  >
+                    {targets
+                      .filter((item) => item.channel.type === channel)
                       .map((item) => (
                         <option
                           key={providerKey(item)}
@@ -359,59 +353,48 @@ function TestNotificationDialog({
             </label>
           )}
 
-          {selected && selected.channel !== 'im' ? (
-            <label className='grid gap-1.5 text-sm font-medium'>
-              {t('test.recipient', { defaultValue: 'Recipient' })}
-              <input
-                aria-label={t('test.recipient', { defaultValue: 'Recipient' })}
-                className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
-                disabled={sending}
-                onChange={(event) => setRecipient(event.target.value)}
-                placeholder={
-                  selected.channel === 'email'
-                    ? 'name@example.com'
-                    : t('test.userIdPlaceholder', {
-                        defaultValue: 'User ID',
-                      })
-                }
-                required
-                type={selected.channel === 'email' ? 'email' : 'text'}
-                value={recipient}
-              />
-              <span className='text-xs font-normal text-muted-foreground'>
-                {selected.channel === 'email'
-                  ? t('test.emailHelp', {
-                      defaultValue:
-                        'The email address that should receive this test.',
-                    })
-                  : t('test.userHelp', {
-                      defaultValue:
-                        'The user ID that should receive this in-app message.',
-                    })}
-              </span>
+          {selected?.fields.map((field) => (
+            <label
+              className='grid gap-1.5 text-sm font-medium'
+              key={field.name}
+            >
+              {field.label}
+              {field.type === 'textarea' ? (
+                <textarea
+                  aria-label={field.label}
+                  className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
+                  disabled={sending}
+                  maxLength={field.maxLength}
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      [field.name]: event.target.value,
+                    }))
+                  }
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  value={values[field.name] ?? ''}
+                />
+              ) : (
+                <input
+                  aria-label={field.label}
+                  className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
+                  disabled={sending}
+                  maxLength={field.maxLength}
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      [field.name]: event.target.value,
+                    }))
+                  }
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  type={field.type}
+                  value={values[field.name] ?? ''}
+                />
+              )}
             </label>
-          ) : null}
-
-          <label className='grid gap-1.5 text-sm font-medium'>
-            {t('test.messageTitle', { defaultValue: 'Title' })}
-            <input
-              className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
-              disabled={sending}
-              maxLength={200}
-              onChange={(event) => setTitle(event.target.value)}
-              value={title}
-            />
-          </label>
-          <label className='grid gap-1.5 text-sm font-medium'>
-            {t('test.message', { defaultValue: 'Message' })}
-            <textarea
-              className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
-              disabled={sending}
-              maxLength={2000}
-              onChange={(event) => setBody(event.target.value)}
-              value={body}
-            />
-          </label>
+          ))}
 
           {error ? (
             <div className='rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
@@ -438,9 +421,9 @@ function TestNotificationDialog({
             disabled={
               sending ||
               !selected ||
-              !title.trim() ||
-              !body.trim() ||
-              !testRecipientIsValid(selected.channel, recipient)
+              selected.fields.some(
+                (field) => field.required && !values[field.name]?.trim(),
+              )
             }
             onClick={send}
             type='button'
@@ -455,28 +438,12 @@ function TestNotificationDialog({
   );
 }
 
-function providerKey(item: NotificationTestProvider): string {
-  return `${item.channel}:${item.provider.name}:${item.provider.type}`;
+function providerKey(item: NotificationTestTarget): string {
+  return `${item.channel.type}:${item.provider.name}:${item.provider.type}`;
 }
 
-function providerLabel(item: NotificationTestProvider): string {
-  return `${item.provider.name} (${item.provider.type})`;
-}
-
-function channelLabel(channel: string): string {
-  return channel
-    .split('-')
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(' ');
-}
-
-function testRecipientIsValid(channel: string, recipient: string): boolean {
-  if (channel === 'im') return true;
-  const value = recipient.trim();
-  if (channel === 'email') {
-    return value.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(value);
-  }
-  return value.length > 0 && value.length <= 255;
+function providerLabel(item: NotificationTestTarget): string {
+  return `${item.provider.name} (${item.provider.label})`;
 }
 
 function Metric({

@@ -68,6 +68,38 @@ export function validatePackageManifest(manifest, directory) {
     errors.push('files must be a non-empty array of strings');
   }
 
+  // A subpath present in `exports` but absent from `publishConfig.exports` resolves in this repository, where source
+  // exports are used, and fails only once the package is installed from a registry: Node reports
+  // ERR_PACKAGE_PATH_NOT_EXPORTED for a subpath the source tree clearly has. `@nocobase/app-server` shipped without
+  // `./i18n` exactly this way, and a generated application could not start.
+  const sourceExports = manifest.exports;
+  const publishExports = manifest.publishConfig?.exports;
+
+  if (
+    sourceExports &&
+    publishExports &&
+    typeof sourceExports === 'object' &&
+    typeof publishExports === 'object'
+  ) {
+    const missing = Object.keys(sourceExports).filter(
+      (subpath) => !(subpath in publishExports),
+    );
+    const extra = Object.keys(publishExports).filter(
+      (subpath) => !(subpath in sourceExports),
+    );
+
+    if (missing.length > 0) {
+      errors.push(
+        `publishConfig.exports is missing ${missing.join(', ')}, which exports declares`,
+      );
+    }
+    if (extra.length > 0) {
+      errors.push(
+        `publishConfig.exports declares ${extra.join(', ')}, which exports does not`,
+      );
+    }
+  }
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid publish metadata in ${path.join(directory, 'package.json')}:\n${errors

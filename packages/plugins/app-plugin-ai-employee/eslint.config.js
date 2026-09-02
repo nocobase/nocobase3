@@ -4,6 +4,9 @@ export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
   ignores: [
     'dist/**',
+    // Registry and development showcases use the browser-source validation path.
+    'registry/**',
+    'client/dev/**',
     'tests/**',
     'server/agent/**',
     'server/ai-employees/**',

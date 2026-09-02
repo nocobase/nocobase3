@@ -49,7 +49,7 @@ type KnowledgeBase = {
   vectorStoreProvider?: string;
   vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
-  storageId?: string;
+  disk?: string;
   llmService?: string;
   embeddingModel?: string;
   vectorStoreProps?: Array<{ name?: string; key: string; value: unknown }>;
@@ -200,7 +200,7 @@ type KnowledgeBaseMutation = {
   vectorStoreProvider?: string;
   vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
-  storageId?: string;
+  disk?: string;
   llmService?: string;
   embeddingModel?: string;
   vectorStoreProps?: Array<{ name?: string; key: string; value: unknown }>;

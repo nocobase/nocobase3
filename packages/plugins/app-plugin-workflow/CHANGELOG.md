@@ -1,5 +1,17 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.5
+
+### Minor Changes
+
+- 4736903: Narrow the Workflow server entry to its registration definition and supported cross-plugin contracts, keep implementation details package-internal, and load extensionless run module specifiers from package-relative resources produced by the application's default server build without an artifact manifest mapping.
+
+### Patch Changes
+
+- Updated dependencies [68a4e26]
+  - @nocobase/app-client@1.0.0-beta.7
+  - @nocobase/app-plugin-authentication@0.1.0-beta.5
+
 ## 0.1.0-beta.4
 
 ### Minor Changes

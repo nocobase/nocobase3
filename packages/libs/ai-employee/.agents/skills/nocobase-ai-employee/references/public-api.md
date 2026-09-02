@@ -161,7 +161,8 @@ Application integration plugins may use:
 
 - `AIFeatureManager`, `AIFeatures`, `EEFeatures`
 - knowledge base and vector feature interfaces
-- `FileManager`, `DriveFileManager`, `MemoryFileManager`
+- `FileMetadata`, `FileMetadataRepository`, `FileStorage`, `FileStorageFactory`
+- `DriveFileStorage`, `DriveFileStorageFactory`, `fileStorageFactoryToken`
 - document loader contracts
 
 These are useful when an App plugin contributes an optional capability to the shared AI runtime.
