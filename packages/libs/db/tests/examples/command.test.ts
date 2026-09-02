@@ -2,12 +2,16 @@ import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { runExampleCommand } from '../../examples/command.js';
 
 const execFileAsync = promisify(execFile);
 
 describe.sequential('@nocobase/db examples command', () => {
+  beforeAll(async () => {
+    await mkdir('examples/tmp', { recursive: true });
+  });
+
   it('lists the available examples', async () => {
     const result = await runExample('list');
 
