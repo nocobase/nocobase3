@@ -205,7 +205,7 @@ Register an App provider first:
 ai.llmProviderManager.registerLLMProvider('company', companyProviderOptions);
 ```
 
-Then preferably configure `<appRoot>/storage/ai/models.json`. It is the runtime-editable authoritative manifest and does not require rebuilding/repacking. Use `<appRoot>/ai/models.json` only for packaged defaults/fresh deployments, or register a computed service programmatically:
+Then configure declarative services in `<appRoot>/config.yml` under `ai.llmServices`. Reload application config after edits. Use direct manager registration only when the service definition is computed programmatically rather than declarative:
 
 ```ts
 await ai.llmServiceManager.registerLLMService({
