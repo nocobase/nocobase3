@@ -25,7 +25,7 @@ describe('LLMServiceConfigSynchronizer', () => {
             apiKey: '${AI_CONFIG_TEST_KEY}',
             nested: { missing: '${AI_CONFIG_MISSING}' },
           },
-          enabledModels: ['gpt-4.1'],
+          enabledModels: [{ label: 'GPT-4.1', value: 'gpt-4.1' }],
         },
       ]);
 
@@ -35,7 +35,7 @@ describe('LLMServiceConfigSynchronizer', () => {
         options: { apiKey: 'secret-value', nested: { missing: '' } },
         enabledModels: {
           mode: 'custom',
-          models: [{ label: 'gpt-4.1', value: 'gpt-4.1' }],
+          models: [{ label: 'GPT-4.1', value: 'gpt-4.1' }],
         },
       });
     } finally {
@@ -69,14 +69,16 @@ describe('LLMServiceConfigSynchronizer', () => {
         title: 'Configured title',
         provider: 'openai',
         options: { apiKey: 'configured' },
-        enabledModels: ['configured-model'],
+        enabledModels: [
+          { label: 'Configured model', value: 'configured-model' },
+        ],
         enabled: true,
         sort: 10,
       },
       {
         name: 'new',
         provider: 'deepseek',
-        enabledModels: ['new-model'],
+        enabledModels: [{ label: 'New model', value: 'new-model' }],
         enabled: false,
       },
     ]);
@@ -112,7 +114,7 @@ describe('LLMServiceConfigSynchronizer', () => {
       enabled: false,
       enabledModels: {
         mode: 'custom',
-        models: [{ label: 'new-model', value: 'new-model' }],
+        models: [{ label: 'New model', value: 'new-model' }],
       },
     });
     await expect(

@@ -253,21 +253,12 @@ The registered server name is the module filename. After programmatic MCP change
 Preferred file: `<appRoot>/config.yml` under `ai.llmServices`.
 
 ```ts
-type LLMServiceOptions = {
+type AIEmployeeLLMServiceConfig = {
   name: string;
   title?: string;
   provider: string;
   options?: Record<string, unknown>;
-  enabledModels?:
-    | string[]
-    | null
-    | {
-        mode: 'recommended' | 'provider' | 'custom';
-        models: Array<{
-          label: string;
-          value: string;
-        }>;
-      };
+  enabledModels?: Array<{ label: string; value: string }>;
   modelOptions?: Record<string, unknown>;
   enabled?: boolean;
   sort?: number;
@@ -297,10 +288,8 @@ ai:
         apiKey: ${OPENAI_API_KEY}
         baseURL: ${OPENAI_BASE_URL}
       enabledModels:
-        mode: custom
-        models:
-          - label: GPT-4.1
-            value: gpt-4.1
+        - label: GPT-4.1
+          value: gpt-4.1
       modelOptions:
         temperature: 0.3
       enabled: true
@@ -309,13 +298,7 @@ ai:
 
 After editing `config.yml`, invoke the application config reload mechanism. The live subscription reconciles the new snapshot without a process restart or AI resource rescan.
 
-`enabledModels` modes:
-
-- `recommended`: manager uses the package's recommended model registry.
-- `provider`: uses the explicit `models` array supplied for provider-selected models.
-- `custom`: uses the explicit `models` array supplied by the App.
-- Legacy `string[]`: normalized to `custom` with identical labels/values.
-- `null` or omitted: normalized to `recommended`.
+`enabledModels` is always an array of `{ label, value }` entries in application config. The plugin converts it internally to `{ mode: 'custom', models }`. Omit the field to use manager defaults for a new service.
 
 ## AIManager Shape
 

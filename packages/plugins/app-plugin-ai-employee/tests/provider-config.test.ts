@@ -76,7 +76,9 @@ describe('AIEmployeeProvider application config', () => {
               title: 'Configured title',
               provider: 'openai',
               options: { apiKey: 'configured' },
-              enabledModels: ['configured-model'],
+              enabledModels: [
+                { label: 'Configured model', value: 'configured-model' },
+              ],
               enabled: false,
               sort: 10,
             },
@@ -112,7 +114,7 @@ describe('AIEmployeeProvider application config', () => {
           title: 'Initial OpenAI',
           provider: 'openai',
           options: { apiKey: 'initial' },
-          enabledModels: ['initial-model'],
+          enabledModels: [{ label: 'Initial model', value: 'initial-model' }],
           enabled: false,
         },
       ],
@@ -146,7 +148,9 @@ describe('AIEmployeeProvider application config', () => {
           provider: 'openai',
           options: { apiKey: 'reloaded' },
           enabled: false,
-          enabledModels: ['configured-model'],
+          enabledModels: [
+            { label: 'Configured model', value: 'configured-model' },
+          ],
         },
         { name: 'deepseek', provider: 'deepseek' },
       ],
@@ -180,7 +184,7 @@ describe('AIEmployeeProvider application config', () => {
           name: 'openai',
           provider: 'openai',
           enabled: false,
-          enabledModels: ['first-model'],
+          enabledModels: [{ label: 'First model', value: 'first-model' }],
         },
       ],
     };
@@ -201,7 +205,7 @@ describe('AIEmployeeProvider application config', () => {
           name: 'openai',
           provider: 'openai',
           enabled: true,
-          enabledModels: ['second-model'],
+          enabledModels: [{ label: 'Second model', value: 'second-model' }],
         },
       ],
     };
@@ -211,7 +215,7 @@ describe('AIEmployeeProvider application config', () => {
       enabled: 1,
       enabledModels: {
         mode: 'custom',
-        models: [{ label: 'second-model', value: 'second-model' }],
+        models: [{ label: 'Second model', value: 'second-model' }],
       },
     });
   });

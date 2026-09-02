@@ -161,28 +161,19 @@ Use `stdio` with `command`/`args`, or `sse`/`http` with `url`. Do not commit bea
 Each entry in `config.yml` `ai.llmServices` is:
 
 ```ts
-type LLMServiceOptions = {
+type AIEmployeeLLMServiceConfig = {
   name: string; // unique service key
   title?: string; // display title
   provider: string; // registered provider key
   options?: Record<string, unknown>; // provider credentials/config
-  enabledModels?:
-    | string[] // normalized to custom {label,value} entries
-    | {
-        mode: 'recommended' | 'provider' | 'custom';
-        models: {
-          label: string;
-          value: string;
-        }[];
-      }
-    | null;
+  enabledModels?: Array<{ label: string; value: string }>; // implicit custom mode
   modelOptions?: Record<string, unknown>;
   enabled?: boolean;
   sort?: number;
 };
 ```
 
-The `ai.llmServices` array is authoritative and defaults to empty. Duplicate names or invalid entries reject the snapshot before repository mutation. Environment placeholders use `${NAME}` and are expanded recursively after validation; a missing variable becomes an empty string. Existing names preserve repository `enabled` and `enabledModels`; new names use config values or manager defaults. Reload application config after editing.
+The `ai.llmServices` array is authoritative and defaults to empty. Configured `enabledModels` entries are converted internally to `{ mode: 'custom', models }`. Duplicate names or invalid entries reject the snapshot before repository mutation. Environment placeholders use `${NAME}` and are expanded recursively after validation; a missing variable becomes an empty string. Existing names preserve repository `enabled` and `enabledModels`; new names use config values or manager defaults. Reload application config after editing.
 
 Frontend model values are:
 

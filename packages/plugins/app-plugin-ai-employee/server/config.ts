@@ -12,7 +12,17 @@ export interface AIStorageConfig {
   readonly disk?: readonly string[];
 }
 
-export type AIEmployeeLLMServiceConfig = LLMServiceOptions;
+export interface AIEmployeeEnabledModelConfig {
+  readonly label: string;
+  readonly value: string;
+}
+
+export type AIEmployeeLLMServiceConfig = Omit<
+  LLMServiceOptions,
+  'enabledModels'
+> & {
+  readonly enabledModels?: readonly AIEmployeeEnabledModelConfig[];
+};
 
 export interface AIApplicationConfig {
   readonly storage?: AIStorageConfig;
@@ -43,21 +53,7 @@ const enabledModelItemSchema = Type.Object(
   { additionalProperties: false },
 );
 
-const enabledModelsSchema = Type.Union([
-  Type.Array(Type.String()),
-  Type.Object(
-    {
-      mode: Type.Union([
-        Type.Literal('recommended'),
-        Type.Literal('provider'),
-        Type.Literal('custom'),
-      ]),
-      models: Type.Array(enabledModelItemSchema),
-    },
-    { additionalProperties: false },
-  ),
-  Type.Null(),
-]);
+const enabledModelsSchema = Type.Array(enabledModelItemSchema);
 
 const llmServiceSchema = Type.Object(
   {

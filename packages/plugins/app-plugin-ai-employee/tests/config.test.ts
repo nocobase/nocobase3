@@ -50,7 +50,7 @@ describe('AI application config', () => {
     });
   });
 
-  it('accepts complete services, supported enabled-model forms, and nested provider options', async () => {
+  it('accepts complete services, custom model entries, and nested provider options', async () => {
     const config = await loadAIConfig({
       ai: {
         futureOption: { enabled: true },
@@ -60,20 +60,15 @@ describe('AI application config', () => {
             title: 'OpenAI',
             provider: 'openai',
             options: { credentials: { apiKey: '${OPENAI_API_KEY}' } },
-            enabledModels: ['gpt-4.1'],
+            enabledModels: [{ label: 'GPT-4.1', value: 'gpt-4.1' }],
             modelOptions: { responseFormat: { type: 'json_schema' } },
             enabled: true,
             sort: 10,
           },
           {
-            name: 'provider-models',
+            name: 'custom-model',
             provider: 'openai',
-            enabledModels: { mode: 'provider', models: [] },
-          },
-          {
-            name: 'all-models',
-            provider: 'openai',
-            enabledModels: null,
+            enabledModels: [{ label: 'Custom model', value: 'custom-model' }],
           },
         ],
       },
@@ -86,8 +81,7 @@ describe('AI application config', () => {
           options: { credentials: { apiKey: '${OPENAI_API_KEY}' } },
           modelOptions: { responseFormat: { type: 'json_schema' } },
         },
-        { enabledModels: { mode: 'provider', models: [] } },
-        { enabledModels: null },
+        { enabledModels: [{ label: 'Custom model', value: 'custom-model' }] },
       ],
     });
   });
@@ -102,6 +96,30 @@ describe('AI application config', () => {
         },
       },
       /sort/,
+    ],
+    [
+      {
+        ai: {
+          llmServices: [
+            {
+              name: 'openai',
+              provider: 'openai',
+              enabledModels: { mode: 'custom', models: [] },
+            },
+          ],
+        },
+      },
+      /enabledModels/,
+    ],
+    [
+      {
+        ai: {
+          llmServices: [
+            { name: 'openai', provider: 'openai', enabledModels: ['gpt-4.1'] },
+          ],
+        },
+      },
+      /enabledModels/,
     ],
   ])('rejects invalid service definitions', async (value, message) => {
     await expect(loadAIConfig(value)).rejects.toThrow(message);

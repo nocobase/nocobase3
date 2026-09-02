@@ -157,10 +157,8 @@ ai:
         apiKey: ${COMPANY_LLM_API_KEY}
         baseURL: ${COMPANY_LLM_BASE_URL}
       enabledModels:
-        mode: custom
-        models:
-          - label: Company Chat
-            value: company-chat
+        - label: Company Chat
+          value: company-chat
       enabled: true
 ```
 

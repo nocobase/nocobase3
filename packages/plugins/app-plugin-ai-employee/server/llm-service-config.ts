@@ -139,9 +139,10 @@ function expandEnvironmentValue(value: unknown): unknown {
 }
 
 function normalizeConfiguredEnabledModels(
-  value: LLMServiceOptions['enabledModels'],
+  value: AIEmployeeLLMServiceConfig['enabledModels'],
 ): EnabledModelsConfig | undefined {
-  return value === undefined ? undefined : normalizeEnabledModelsConfig(value);
+  if (value === undefined) return undefined;
+  return normalizeEnabledModelsConfig({ mode: 'custom', models: [...value] });
 }
 
 function assertLLMServiceConfig(
@@ -174,29 +175,17 @@ function assertLLMServiceConfig(
 }
 
 function assertEnabledModels(value: unknown, path: string): void {
-  if (value === undefined || value === null) return;
-  if (Array.isArray(value)) {
-    if (value.every((model) => typeof model === 'string')) return;
-    throw new Error(`Invalid ${path}: expected an array of strings.`);
-  }
-  if (!isRecord(value)) {
-    throw new Error(
-      `Invalid ${path}: expected an enabled-model configuration.`,
-    );
-  }
-  if (!['recommended', 'provider', 'custom'].includes(String(value.mode))) {
-    throw new Error(`Invalid ${path}.mode: unsupported mode.`);
-  }
+  if (value === undefined) return;
   if (
-    !Array.isArray(value.models) ||
-    !value.models.every(
+    !Array.isArray(value) ||
+    !value.every(
       (model) =>
         isRecord(model) &&
         typeof model.label === 'string' &&
         typeof model.value === 'string',
     )
   ) {
-    throw new Error(`Invalid ${path}.models: expected label/value entries.`);
+    throw new Error(`Invalid ${path}: expected label/value entries.`);
   }
 }
 

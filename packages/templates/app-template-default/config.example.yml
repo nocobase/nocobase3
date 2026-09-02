@@ -75,10 +75,8 @@ notification:
 #       options:
 #         apiKey: ${OPENAI_API_KEY}
 #       enabledModels:
-#         mode: custom
-#         models:
-#           - label: GPT-4.1
-#             value: gpt-4.1
+#         - label: GPT-4.1
+#           value: gpt-4.1
 #       enabled: true
 #       sort: 10
 

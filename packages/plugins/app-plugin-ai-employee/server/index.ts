@@ -2,6 +2,7 @@ export { default as bootstrap } from './bootstrap.js';
 export { aiEmployeeConfig } from './config.js';
 export type {
   AIEmployeeConfig,
+  AIEmployeeEnabledModelConfig,
   AIEmployeeEnabledModelsConfig,
   AIEmployeeLLMServiceConfig,
 } from './config.js';

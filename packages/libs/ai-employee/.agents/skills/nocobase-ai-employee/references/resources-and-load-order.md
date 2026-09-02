@@ -54,17 +54,15 @@ ai:
         apiKey: ${OPENAI_API_KEY}
         baseURL: ${OPENAI_BASE_URL}
       enabledModels:
-        mode: custom
-        models:
-          - label: GPT-4.1
-            value: gpt-4.1
+        - label: GPT-4.1
+          value: gpt-4.1
       modelOptions:
         temperature: 0.3
       enabled: true
       sort: 10
 ```
 
-Required fields are non-empty `name` and `provider`. `${ENV_NAME}` expands recursively after App config validation; missing variables become empty strings. `enabledModels` accepts `string[]`, `null`, or `{ mode, models }`, where mode is `recommended`, `provider`, or `custom`.
+Required fields are non-empty `name` and `provider`. `${ENV_NAME}` expands recursively after App config validation; missing variables become empty strings. `enabledModels` accepts an array of `{ label, value }` entries and is converted internally to custom mode. Omit it to use manager defaults for a new service.
 
 The configured service-name set is authoritative. A missing or empty `llmServices` array removes all configured services. Existing names preserve repository-managed `enabled` and `enabledModels`; newly added names use config values or manager defaults. Additions and updates are persisted before stale names are deleted.
 
