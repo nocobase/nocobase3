@@ -58,7 +58,8 @@ Sort AST 区分直接字段、to-one relation field 和 to-many relation aggrega
 Migration 入口：
 
 - `defineMigration(definition)`：唯一合法的 migration 文件定义方式。
-- `createMigrator(options)`：创建 migration runner。
+- `database.createMigrator(options)`：创建绑定当前 Database Manager 的 migration runner。
+- `createMigrator({ database, ...options })`：底层 migration runner 工厂。
 - `migrator.latest()`：执行所有 pending migrations。
 - `migrator.rollback()`：回滚最近一批 migrations。
 - `validateMigrations(options)`：校验 migration 文件格式和名称一致性。
@@ -74,7 +75,8 @@ Migration context 顶层只暴露 `builder`、`query` 和 `connection`。不在�
 Seed 入口：
 
 - `defineSeed(definition)`：定义一次性安装数据初始化。
-- `createSeeder(options)`：创建 seed runner。
+- `database.createSeeder(options)`：创建绑定当前 Database Manager 的 seed runner。
+- `createSeeder({ database, ...options })`：底层 seed runner 工厂。
 - `seeder.run()`：执行 pending seeds。
 - `loadSeeds(options)`：加载并校验 seed sources。
 - `validateSeeds(options)`：只校验 seed 文件。

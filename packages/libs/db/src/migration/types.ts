@@ -60,6 +60,8 @@ export interface CreateMigratorOptions extends LoadMigrationsOptions {
   readonly lockTableName?: string;
 }
 
+export type DatabaseMigratorOptions = Omit<CreateMigratorOptions, 'database'>;
+
 export interface MigrationRunResult {
   readonly batch: number;
   readonly executed: string[];

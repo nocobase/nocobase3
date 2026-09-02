@@ -245,13 +245,10 @@ export default defineMigration({
 
 ## 运行
 
-通过 `createMigrator()` 创建 runner：
+通过 Database Manager 创建 runner：
 
 ```ts
-import { createMigrator } from '@nocobase/db';
-
-const migrator = createMigrator({
-  database,
+const migrator = database.createMigrator({
   connection: 'main',
   directory: './database/migrations',
 });
@@ -262,8 +259,7 @@ await migrator.latest();
 插件系统需要加载多个 package 时，使用 `sources`：
 
 ```ts
-const migrator = createMigrator({
-  database,
+const migrator = database.createMigrator({
   connection: 'main',
   sources: [
     {
@@ -280,7 +276,9 @@ const migrator = createMigrator({
 
 旧的 `directory` 写法仍然有效，未指定 `packageName` 时记录为 `app`。同一 runner 中所有来源的 migration `name` 必须全局唯一；不能因为属于不同 package 就使用相同的 name。
 
-`database` 只用于 runner 找到目标连接。Migration 文件里不会收到 `database`。
+`database.createMigrator()` 会把 Database Manager 绑定到 runner。底层也保留
+`createMigrator({ database, ...options })` 工厂。`database` 只用于 runner 找到目标连接，
+Migration 文件里不会收到 `database`。
 
 `latest()` 会：
 

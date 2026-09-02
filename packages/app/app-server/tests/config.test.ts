@@ -433,6 +433,8 @@ function createMockDatabaseManager(client: unknown = {}): DatabaseManager {
     }) as DatabaseManager['connection'],
     builder: vi.fn() as DatabaseManager['builder'],
     query: vi.fn() as DatabaseManager['query'],
+    createMigrator: vi.fn() as DatabaseManager['createMigrator'],
+    createSeeder: vi.fn() as DatabaseManager['createSeeder'],
     connect: vi.fn() as DatabaseManager['connect'],
     transaction: vi.fn() as DatabaseManager['transaction'],
     disconnect: vi.fn() as DatabaseManager['disconnect'],

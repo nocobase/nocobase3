@@ -55,8 +55,7 @@ Seed 不暴露 `builder`。需要建表、改字段、增加索引时先写 migr
 单目录：
 
 ```ts
-const seeder = createSeeder({
-  database,
+const seeder = database.createSeeder({
   connection: 'main',
   directory: './database/seeds',
   packageName: '@nocobase/plugin-users',
@@ -68,8 +67,7 @@ await seeder.run();
 多个 package：
 
 ```ts
-const seeder = createSeeder({
-  database,
+const seeder = database.createSeeder({
   connection: 'main',
   sources: [
     {
@@ -85,6 +83,9 @@ const seeder = createSeeder({
 
 await seeder.run();
 ```
+
+`database.createSeeder()` 会把 Database Manager 绑定到 runner。底层仍保留
+`createSeeder({ database, ...options })` 工厂。
 
 上层安装器应先执行 migrations，再执行 seeds。数据库包不扫描插件，也不解析插件依赖；插件安装顺序由插件系统负责。
 

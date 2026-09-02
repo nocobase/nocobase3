@@ -43,8 +43,7 @@ describeIntegrationDatabases('migration runner', (context) => {
     `,
     );
 
-    const migrator = createMigrator({
-      database: context.database,
+    const migrator = context.database.createMigrator({
       connection: context.spec.name,
       directory,
       packageName: '@nocobase/plugin-users',

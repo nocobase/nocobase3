@@ -37,8 +37,7 @@ describeIntegrationDatabases('seed runner', (context) => {
       'seedEvents',
     );
 
-    const seeder = createSeeder({
-      database: context.database,
+    const seeder = context.database.createSeeder({
       connection: context.spec.name,
       sources: [
         { packageName: '@nocobase/plugin-alpha', directory: firstDirectory },
