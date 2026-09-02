@@ -55,10 +55,7 @@ export function createDatabaseRoutes(
     const [resolution, metadata, physicalSchema] = await Promise.all([
       item.connection.collections.getResolution(name),
       item.connection.collectionMetadata.get(name),
-      item.connection.schemaInspector.getPhysicalCollection({
-        tableName: summary.tableName,
-        schema: summary.schema,
-      }),
+      item.connection.collections.getPhysical(name),
     ]);
     return context.json({
       data: {

@@ -204,6 +204,9 @@ export interface PhysicalCollectionIdentity {
 `PhysicalCollectionIdentifier` 是查询参数，允许省略 schema；`PhysicalCollectionIdentity` 是 Inspector 已解析的
 物理身份，schema 必填。两者的 `tableName` 都是物理名称，不接受逻辑 Collection 名。
 
+如果调用方持有的是逻辑 Collection 名，应使用 `connection.collections.getPhysical(name)`。该入口先应用有效的
+Connection 和 Collection naming（包括动态 `tablePrefix`），再调用 Inspector 读取真实物理结构。
+
 如果省略 `schema`：
 
 - PostgreSQL 按 Connection 配置的 search path 解析第一个匹配对象；

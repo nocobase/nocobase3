@@ -140,6 +140,7 @@ Writable JSON/YAML File Store 尚未实现。
 ## Collection Registry
 
 - `connection.collections.get(name)`：按逻辑名称惰性读取完整 `CollectionDefinition`。
+- `connection.collections.getPhysical(name)`：按逻辑名称解析并读取当前 `PhysicalCollectionSchema`。
 - `connection.collections.getResolution(name)`：读取带 inspection 和 warnings 的完整解析结果。
 - `connection.collections.list(options?)`：分页读取轻量 Collection 摘要，不解析 fields。
 - `connection.collections.scan(options?)`：显式全量 introspection 与解析。

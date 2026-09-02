@@ -347,7 +347,7 @@ it('installs all current migrations', async () => {
 ```ts
 connection.builder.hasCollection('users');
 connection.collections.get('users');
-connection.schemaInspector.getPhysicalCollection({ tableName: 'users' });
+connection.collections.getPhysical('users');
 database.query();
 ```
 
@@ -355,16 +355,15 @@ database.query();
 
 - `builder.hasCollection()`：按逻辑 Collection 名确认对象是否存在；
 - `collections.get()`：验证物理 Schema 与补充 Metadata 合并后的 Collection；
-- `schemaInspector.getPhysicalCollection()`：按物理名称验证真实的表、字段、主键、索引、
+- `collections.getPhysical()`：按逻辑 Collection 名解析动态表前缀，并验证真实的表、字段、主键、索引、
   unique constraint、foreign key 和 check constraint；
 - `query()`：验证 migration 处理后的业务数据。
 
-验证物理 Schema 时，一般不要直接取得底层 client。使用只读的 Schema Inspector：
+验证托管 Collection 的物理 Schema 时，一般不要直接取得底层 client，也不要自行拼接动态 `tablePrefix`。使用
+`collections.getPhysical()`：
 
 ```ts
-const users = await connection.schemaInspector.getPhysicalCollection({
-  tableName: 'users',
-});
+const users = await connection.collections.getPhysical('users');
 
 expect(users).toMatchObject({
   kind: 'table',
@@ -382,6 +381,10 @@ expect(users).toMatchObject({
   ]),
 });
 ```
+
+`getPhysical()` 的参数是逻辑 Collection 名，返回结果中的 `tableName` 是已经解析 Connection 和 Collection naming
+后的真实物理名称。只有检查非托管表、view 或已经取得物理名称的底层对象时，才直接使用
+`schemaInspector.getPhysicalCollection({ tableName, schema })`。
 
 Schema Inspector 使用物理表名和列名；Resolved Collections 使用逻辑 Collection 名和 Field
 名。只有 Schema Inspector 尚未暴露、且 migration 明确依赖的方言特有信息，才考虑用

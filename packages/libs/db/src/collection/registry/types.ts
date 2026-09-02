@@ -2,6 +2,7 @@ import type { CollectionDefinition, CollectionKind } from '../types.js';
 import type { CollectionResolutionResult } from '../resolver/types.js';
 import type {
   ListPhysicalCollectionsOptions,
+  PhysicalCollectionSchema,
   ScanPhysicalCollectionsOptions,
 } from '../../schema/inspector/types.js';
 
@@ -25,6 +26,12 @@ export interface CollectionSummaryPage {
 
 export interface ConnectionCollections {
   get(name: string): Promise<CollectionDefinition | undefined>;
+  /**
+   * Reads the physical database schema backing a logical Collection name.
+   * Use schemaInspector.getPhysicalCollection() when the input is already a
+   * physical table name.
+   */
+  getPhysical(name: string): Promise<PhysicalCollectionSchema | undefined>;
   getResolution(name: string): Promise<CollectionResolutionResult | undefined>;
   list(options?: ListCollectionsOptions): Promise<CollectionSummaryPage>;
   scan(options?: ScanCollectionsOptions): AsyncIterable<CollectionDefinition>;

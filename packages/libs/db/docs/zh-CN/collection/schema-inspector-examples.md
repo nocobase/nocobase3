@@ -767,6 +767,14 @@ orderItems.createdAt
 const orderItems = await connection.collections.get('orderItems');
 ```
 
+需要验证托管 Collection 的原始物理 Schema 时，仍然传入逻辑名称，由 Registry 解析动态前缀和 Collection 级
+naming：
+
+```ts
+const physicalOrderItems =
+  await connection.collections.getPhysical('orderItems');
+```
+
 只有外部数据库接入、Schema Snapshot、drift 检查或数据库结构审计等底层工具需要直接使用
 `connection.schemaInspector`。
 

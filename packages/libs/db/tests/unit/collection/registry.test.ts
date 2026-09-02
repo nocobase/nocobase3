@@ -84,6 +84,10 @@ describe('CollectionRegistry', () => {
       title: 'Orders',
       naming: { tablePrefix: 'legacy_' },
     });
+    await expect(registry.getPhysical('orders')).resolves.toMatchObject({
+      tableName: 'legacy_orders',
+      schema: 'public',
+    });
     expect(await registry.list({ limit: 10 })).toEqual({
       items: [
         {
@@ -158,6 +162,68 @@ describe('CollectionRegistry', () => {
         expect.objectContaining({ code: 'COLLECTION_SCHEMA_DRIFT' }),
       ]),
     });
+    await expect(registry.getPhysical('orders')).rejects.toMatchObject({
+      code: 'COLLECTION_RESOLUTION_FAILED',
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'COLLECTION_SCHEMA_DRIFT' }),
+      ]),
+    });
+  });
+
+  it('reads fresh physical schemas by logical name', async () => {
+    const inspector = new FakeInspector([physical('app_orders')]);
+    const registry = new CollectionRegistry({
+      inspector,
+      metadataStore: new InMemoryCollectionMetadataStore(),
+      naming: { tablePrefix: 'app_' },
+    });
+
+    const first = await registry.getPhysical('orders');
+    inspector.schemas.set(
+      'app_orders',
+      physical('app_orders', ['id', 'status']),
+    );
+    const second = await registry.getPhysical('orders');
+
+    expect(first?.tableName).toBe('app_orders');
+    expect(second?.columns.map((column) => column.columnName)).toEqual([
+      'id',
+      'status',
+    ]);
+    expect(inspector.getCalls).toBe(2);
+    await expect(registry.getPhysical('missing')).resolves.toBeUndefined();
+  });
+
+  it('preserves logical naming conflict and internal collection boundaries', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.put(
+      {
+        version: 1,
+        name: 'orders',
+        naming: { tablePrefix: 'legacy_' },
+      },
+      { expectedRevision: null },
+    );
+    const inspector = new FakeInspector([
+      physical('legacy_orders'),
+      physical('app_orders'),
+      physical('app_internal'),
+    ]);
+    const registry = new CollectionRegistry({
+      inspector,
+      metadataStore: store,
+      naming: { tablePrefix: 'app_' },
+      isInternalPhysicalCollection: ({ tableName }) =>
+        tableName === 'app_internal',
+    });
+
+    await expect(registry.getPhysical('orders')).rejects.toMatchObject({
+      code: 'COLLECTION_RESOLUTION_FAILED',
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'COLLECTION_NAME_CONFLICT' }),
+      ]),
+    });
+    await expect(registry.getPhysical('internal')).resolves.toBeUndefined();
   });
 
   it('scans full Collections explicitly and validates cyclic relation graphs', async () => {

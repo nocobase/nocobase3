@@ -12,6 +12,7 @@ import type {
   CollectionMetadataStore,
   CollectionMetadataInvalidation,
   CollectionMetadataInvalidator,
+  StoredCollectionMetadata,
 } from '../../metadata/index.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
 import type { SchemaInspector } from '../../schema/inspector/inspector.js';
@@ -39,6 +40,11 @@ export interface CollectionRegistryOptions {
     readonly tableName: string;
     readonly schema: string;
   }) => boolean;
+}
+
+interface LogicalCollectionInspection {
+  readonly physical: PhysicalCollectionSchema;
+  readonly stored?: StoredCollectionMetadata;
 }
 
 export class CollectionRegistry
@@ -77,6 +83,15 @@ export class CollectionRegistry
 
   async get(name: string): Promise<CollectionDefinition | undefined> {
     return (await this.getResolution(name))?.collection;
+  }
+
+  async getPhysical(
+    name: string,
+  ): Promise<PhysicalCollectionSchema | undefined> {
+    validateName(name);
+    const index = await this.namingIndex();
+    const inspected = await this.inspectLogicalCollection(name, index);
+    return inspected ? structuredClone(inspected.physical) : undefined;
   }
 
   async getResolution(
@@ -233,6 +248,20 @@ export class CollectionRegistry
     name: string,
   ): Promise<CollectionResolutionResult | undefined> {
     const index = await this.namingIndex();
+    const inspected = await this.inspectLogicalCollection(name, index);
+    if (!inspected) return undefined;
+    return this.resolver.resolve({
+      physical: inspected.physical,
+      metadata: inspected.stored?.document,
+      naming: this.options.naming,
+      context: index,
+    });
+  }
+
+  private async inspectLogicalCollection(
+    name: string,
+    index: CollectionNamingIndex,
+  ): Promise<LogicalCollectionInspection | undefined> {
     const identity = index.resolveLogicalCollection(name);
     const [physical, stored] = await Promise.all([
       this.options.inspector.getPhysicalCollection({
@@ -268,12 +297,7 @@ export class CollectionRegistry
         }
       }
     }
-    return this.resolver.resolve({
-      physical,
-      metadata: stored?.document,
-      naming: this.options.naming,
-      context: index,
-    });
+    return { physical, stored };
   }
 
   private namingIndex(): Promise<CollectionNamingIndex> {

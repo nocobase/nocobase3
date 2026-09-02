@@ -27,6 +27,8 @@ connection.collections
 export interface ConnectionCollections {
   get(name: string): Promise<CollectionDefinition | undefined>;
 
+  getPhysical(name: string): Promise<PhysicalCollectionSchema | undefined>;
+
   getResolution(name: string): Promise<CollectionResolutionResult | undefined>;
 
   list(options?: ListCollectionsOptions): Promise<CollectionSummaryPage>;
@@ -42,9 +44,15 @@ export interface ConnectionCollections {
 ```
 
 `getResolution()` 用于需要 inspection/warnings 的审计和 Agent 场景；普通 `get()` 只返回完整
-`CollectionDefinition`。返回对象是缓存的独立副本，调用方修改它不会污染后续读取。
+`CollectionDefinition`。`getPhysical()` 接受逻辑 Collection 名，使用有效的 Connection 和 Collection naming
+解析真实表名，再返回未经 Resolver 转换的 `PhysicalCollectionSchema`。已经知道物理表名或读取非托管对象时，直接
+使用 `schemaInspector.getPhysicalCollection()`。
 
-`get(name)` 的 name 始终是逻辑 Collection 名。`list()` 默认每页 100 条，最大 1000 条，只返回：
+`get()` 和 `getResolution()` 使用 Registry 缓存；`getPhysical()` 每次重新读取当前物理 Schema，适合 migration、
+rollback 和 Schema drift 断言。返回对象是独立副本，调用方修改它不会污染后续读取。
+
+`get(name)`、`getPhysical(name)` 和 `getResolution(name)` 的 name 始终是逻辑 Collection 名。`list()` 默认每页
+100 条，最大 1000 条，只返回：
 
 ```ts
 export interface CollectionSummary {
@@ -135,7 +143,8 @@ Registry。drop/rename 等无法安全缩小范围的操作记录全量失效。
 
 ## 当前实现边界
 
-当前提供惰性 `get()`、`getResolution()`、分页 `list()`、显式 `scan()`、并发去重、手动
+当前提供惰性 `get()`、按逻辑名称读取物理 Schema 的 `getPhysical()`、`getResolution()`、分页 `list()`、显式
+`scan()`、并发去重、手动
 `invalidate()`/`refresh()` 和 `validateRelations()`。Metadata Service 写成功后会主动精确失效；Builder
 执行 create/alter/field/index/constraint/view 后也会失效受影响 Collection，drop/rename 使用全量失效以同步
 Naming Index。transaction commit 将事务内记录的精确范围回放到外层 Registry；Migration batch 只要实际执行

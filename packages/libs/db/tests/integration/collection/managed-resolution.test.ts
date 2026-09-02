@@ -21,10 +21,8 @@ describeIntegrationDatabases('managed Collection resolution', (context) => {
     }
 
     const orders = await connection.collections.get('orders');
-    const physicalOrders =
-      await connection.schemaInspector.getPhysicalCollection({
-        tableName: context.table('orders'),
-      });
+    const physicalOrders = await connection.collections.getPhysical('orders');
+    expect(physicalOrders?.tableName).toBe(context.table('orders'));
     const physicalAmount = physicalOrders?.columns.find(
       (column) => column.columnName === 'amount',
     );
@@ -82,10 +80,7 @@ describeIntegrationDatabases('managed Collection resolution', (context) => {
     });
 
     const after = await connection.collections.get('orders');
-    const physicalOrders =
-      await connection.schemaInspector.getPhysicalCollection({
-        tableName: context.table('orders'),
-      });
+    const physicalOrders = await connection.collections.getPhysical('orders');
     const physicalAmount = physicalOrders?.columns.find(
       (column) => column.columnName === 'amount',
     );
