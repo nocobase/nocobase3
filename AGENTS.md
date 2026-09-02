@@ -247,6 +247,8 @@ The distinction is the audience, not the file type. A comment inside a workflow 
 
 The workflow files under `.github/workflows/` still carry Chinese comments written before this rule existed. Translate the ones you touch; there is no need to convert the rest in a single pass.
 
+`internal-docs/` is also excluded from Prettier in the root `.prettierignore`. It is prose written for the team to read and argue with, not an artefact, and reflowing a hand-written Chinese paragraph or realigning a table it wrote by hand buys nothing while filling a review with diff unrelated to the change. Write it however reads best.
+
 ## TypeScript Requirements for Library Development
 
 Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:

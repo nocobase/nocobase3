@@ -22,6 +22,10 @@ docs/theme/components/NavScreen/
 docs/theme/components/Search/
 docs/theme/components/HomeHero/
 
+# 内部文档只在团队内部读，是拿来讨论和记录的散文，不是产物。Prettier 会按自己的规则重排表格对齐、
+# 折行和列表缩进，对着人写的中文段落做这些没有收益，反而会在 review 里制造和内容无关的 diff。
+internal-docs/
+
 # changeset 文件由 changesets 生成和消费，格式由它自己决定。
 # 项目的 singleQuote 会把 `"@nocobase/core": minor` 改成单引号，
 # 与 changesets 实际生成的格式不符。
