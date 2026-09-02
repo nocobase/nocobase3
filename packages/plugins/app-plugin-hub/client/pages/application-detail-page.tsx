@@ -271,25 +271,25 @@ export default function ApplicationDetailPage(): ReactElement {
   };
 
   return (
-    <main className='mx-auto w-full max-w-[1500px] space-y-6 p-4 sm:p-6 lg:p-8'>
-      <header className='relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm sm:p-7'>
-        <div className='pointer-events-none absolute -top-28 -right-20 size-72 rounded-full bg-primary/10 blur-3xl' />
-        <div className='relative space-y-5'>
-          <Button
-            type='button'
-            size='sm'
-            variant='ghost'
-            onClick={() => void navigate('/apps')}
-          >
-            <ArrowLeft aria-hidden='true' />
-            {t('applicationDetail.back', {
-              defaultValue: 'Back to applications',
-            })}
-          </Button>
-          <div className='flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between'>
-            <div className='min-w-0 space-y-2'>
+    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+      <header className='border-b bg-background px-4 py-7 sm:px-6'>
+        <div className='mx-auto flex w-full max-w-7xl flex-col gap-5 sm:flex-row sm:items-end sm:justify-between'>
+          <div className='min-w-0 max-w-3xl'>
+            <Button
+              type='button'
+              size='sm'
+              variant='ghost'
+              className='-ml-2 text-muted-foreground'
+              onClick={() => void navigate('/apps')}
+            >
+              <ArrowLeft aria-hidden='true' />
+              {t('applicationDetail.back', {
+                defaultValue: 'Back to applications',
+              })}
+            </Button>
+            <div className='mt-2'>
               <div className='flex flex-wrap items-center gap-2'>
-                <h1 className='text-2xl font-semibold tracking-tight sm:text-3xl'>
+                <h1 className='text-2xl font-semibold tracking-tight'>
                   {application.name}
                 </h1>
                 <RuntimeBadge state={application.runtimeState} />
@@ -301,197 +301,205 @@ export default function ApplicationDetailPage(): ReactElement {
                   </Badge>
                 ) : null}
               </div>
-              <p className='font-mono text-xs text-muted-foreground'>
+              <p className='mt-1 font-mono text-xs text-muted-foreground'>
                 {application.slug}
               </p>
-              <p className='max-w-2xl text-sm leading-6 text-muted-foreground'>
+              <p className='mt-1 text-sm text-muted-foreground'>
                 {application.description}
               </p>
             </div>
-            <div className='flex flex-wrap gap-2'>
-              <Button type='button' variant='outline' onClick={openDemo}>
-                <ExternalLink aria-hidden='true' />
-                {t('applicationDetail.open', {
-                  defaultValue: 'Open application',
-                })}
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Button type='button' variant='outline' onClick={openDemo}>
+              <ExternalLink aria-hidden='true' />
+              {t('applicationDetail.open', {
+                defaultValue: 'Open application',
+              })}
+            </Button>
+            {!application.archived ? (
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => setSearchParams({ tab: 'development' })}
+              >
+                <SquareTerminal aria-hidden='true' />
+                {t('applicationDetail.develop', { defaultValue: 'Develop' })}
               </Button>
-              {!application.archived ? (
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => setSearchParams({ tab: 'development' })}
-                >
-                  <SquareTerminal aria-hidden='true' />
-                  {t('applicationDetail.develop', { defaultValue: 'Develop' })}
-                </Button>
-              ) : null}
-            </div>
+            ) : null}
           </div>
         </div>
       </header>
 
-      {notice ? (
-        <Alert className='border-primary/25 bg-primary/5'>
-          <Check aria-hidden='true' />
-          <AlertTitle>
-            {t('applicationDetail.notice.title', { defaultValue: 'Done' })}
-          </AlertTitle>
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      ) : null}
+      <div className='mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6'>
+        {notice ? (
+          <Alert className='border-primary/25 bg-primary/5'>
+            <Check aria-hidden='true' />
+            <AlertTitle>
+              {t('applicationDetail.notice.title', { defaultValue: 'Done' })}
+            </AlertTitle>
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => {
-          const nextTab = value as DetailTab;
-          setSearchParams(nextTab === 'overview' ? {} : { tab: nextTab });
-        }}
-      >
-        <TabsList
-          variant='line'
-          className='w-full justify-start rounded-none border-b bg-transparent p-0'
-          aria-label={t('applicationDetail.tabs.label', {
-            defaultValue: 'Application sections',
-          })}
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            const nextTab = value as DetailTab;
+            setSearchParams(nextTab === 'overview' ? {} : { tab: nextTab });
+          }}
         >
-          {availableTabs.map((tab) => (
-            <TabsTrigger key={tab} value={tab} className='h-10 flex-none px-3'>
-              {tabLabel(t, tab)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+          <TabsList
+            variant='line'
+            className='w-full justify-start rounded-none border-b bg-transparent p-0'
+            aria-label={t('applicationDetail.tabs.label', {
+              defaultValue: 'Application sections',
+            })}
+          >
+            {availableTabs.map((tab) => (
+              <TabsTrigger
+                key={tab}
+                value={tab}
+                className='h-10 flex-none px-3'
+              >
+                {tabLabel(t, tab)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        <TabsContent value='overview'>
-          <OverviewTab
-            application={application}
-            onOpen={openDemo}
-            onRuntimeAction={(action) =>
-              setPendingAction({ kind: 'runtime', action })
-            }
-            onTab={(tab) => setSearchParams({ tab })}
-          />
-        </TabsContent>
-        <TabsContent value='development'>
-          <DevelopmentTab application={application} />
-        </TabsContent>
-        <TabsContent value='releases'>
-          <ReleasesTab
-            application={application}
-            onDetails={setSelectedRelease}
-            onReleaseAction={(action, version) =>
-              setPendingAction({ kind: 'release', action, version })
-            }
-            actionsEnabled={!application.archived}
-          />
-        </TabsContent>
-        <TabsContent value='deployments'>
-          <DeploymentsTab application={application} />
-        </TabsContent>
-        <TabsContent value='activity'>
-          <ActivityTab application={application} />
-        </TabsContent>
-        <TabsContent value='permissions'>
-          <PermissionsTab
-            application={application}
-            onAdd={() => setAuthorizationOpen(true)}
-            onRoleChange={(accessId, role) => {
-              const activity = createActivity(
-                'permission.updated',
-                'Application authorization role was updated.',
-              );
-              updateApplication((draft) => {
-                draft.access = draft.access.map((access) =>
-                  access.id === accessId ? { ...access, role } : access,
+          <TabsContent value='overview'>
+            <OverviewTab
+              application={application}
+              onOpen={openDemo}
+              onRuntimeAction={(action) =>
+                setPendingAction({ kind: 'runtime', action })
+              }
+              onTab={(tab) => setSearchParams({ tab })}
+            />
+          </TabsContent>
+          <TabsContent value='development'>
+            <DevelopmentTab application={application} />
+          </TabsContent>
+          <TabsContent value='releases'>
+            <ReleasesTab
+              application={application}
+              onDetails={setSelectedRelease}
+              onReleaseAction={(action, version) =>
+                setPendingAction({ kind: 'release', action, version })
+              }
+              actionsEnabled={!application.archived}
+            />
+          </TabsContent>
+          <TabsContent value='deployments'>
+            <DeploymentsTab application={application} />
+          </TabsContent>
+          <TabsContent value='activity'>
+            <ActivityTab application={application} />
+          </TabsContent>
+          <TabsContent value='permissions'>
+            <PermissionsTab
+              application={application}
+              onAdd={() => setAuthorizationOpen(true)}
+              onRoleChange={(accessId, role) => {
+                const activity = createActivity(
+                  'permission.updated',
+                  'Application authorization role was updated.',
                 );
-                draft.activity.unshift(activity);
-              });
-            }}
-            onRemove={(accessId) => {
-              const activity = createActivity(
-                'permission.removed',
-                'Application authorization was removed.',
-              );
-              updateApplication((draft) => {
-                draft.access = draft.access.filter(
-                  (access) => access.id !== accessId,
+                updateApplication((draft) => {
+                  draft.access = draft.access.map((access) =>
+                    access.id === accessId ? { ...access, role } : access,
+                  );
+                  draft.activity.unshift(activity);
+                });
+              }}
+              onRemove={(accessId) => {
+                const activity = createActivity(
+                  'permission.removed',
+                  'Application authorization was removed.',
                 );
-                draft.activity.unshift(activity);
-              });
-            }}
-          />
-        </TabsContent>
-        <TabsContent value='settings'>
-          <SettingsTab
-            application={application}
-            onSave={(name, description) => {
-              const activity = createActivity(
-                'application.updated',
-                'Application profile was updated.',
-              );
-              updateApplication((draft) => {
-                draft.name = name;
-                draft.description = description;
-                draft.activity.unshift(activity);
-              });
-              setNotice(
-                t('applicationDetail.settings.profile.saved', {
-                  defaultValue: 'Application details saved',
-                }),
-              );
-            }}
-          />
-        </TabsContent>
-      </Tabs>
+                updateApplication((draft) => {
+                  draft.access = draft.access.filter(
+                    (access) => access.id !== accessId,
+                  );
+                  draft.activity.unshift(activity);
+                });
+              }}
+            />
+          </TabsContent>
+          <TabsContent value='settings'>
+            <SettingsTab
+              application={application}
+              onSave={(name, description) => {
+                const activity = createActivity(
+                  'application.updated',
+                  'Application profile was updated.',
+                );
+                updateApplication((draft) => {
+                  draft.name = name;
+                  draft.description = description;
+                  draft.activity.unshift(activity);
+                });
+                setNotice(
+                  t('applicationDetail.settings.profile.saved', {
+                    defaultValue: 'Application details saved',
+                  }),
+                );
+              }}
+            />
+          </TabsContent>
+        </Tabs>
 
-      <ReleaseDetailsDialog
-        release={
-          selectedRelease
-            ? application.releases.find(
-                (release) => release.id === selectedRelease.id,
-              )
-            : undefined
-        }
-        onClose={() => setSelectedRelease(undefined)}
-        onPin={(releaseId) => {
-          const changed = application.releases.find(
-            (release) => release.id === releaseId,
-          );
-          const willPin = !changed?.pinned;
-          const activity = createActivity(
-            willPin ? 'release.pinned' : 'release.unpinned',
-            `${changed?.version ?? ''} pin setting was updated.`,
-          );
-          updateApplication((draft) => {
-            draft.releases = draft.releases.map((release) => ({
-              ...release,
-              pinned: release.id === releaseId ? willPin : release.pinned,
-            }));
-            draft.activity.unshift(activity);
-          });
-        }}
-      />
-      <AuthorizationDialog
-        open={authorizationOpen}
-        existingMemberIds={application.access.map((access) => access.memberId)}
-        onOpenChange={setAuthorizationOpen}
-        onAdd={(access) => {
-          const activity = createActivity(
-            'permission.assigned',
-            `${access.memberName} received application access.`,
-          );
-          updateApplication((draft) => {
-            draft.access.push(access);
-            draft.activity.unshift(activity);
-          });
-          setAuthorizationOpen(false);
-        }}
-      />
-      <ConfirmDetailAction
-        action={pendingAction}
-        applicationName={application.name}
-        onCancel={() => setPendingAction(undefined)}
-        onConfirm={confirmAction}
-      />
+        <ReleaseDetailsDialog
+          release={
+            selectedRelease
+              ? application.releases.find(
+                  (release) => release.id === selectedRelease.id,
+                )
+              : undefined
+          }
+          onClose={() => setSelectedRelease(undefined)}
+          onPin={(releaseId) => {
+            const changed = application.releases.find(
+              (release) => release.id === releaseId,
+            );
+            const willPin = !changed?.pinned;
+            const activity = createActivity(
+              willPin ? 'release.pinned' : 'release.unpinned',
+              `${changed?.version ?? ''} pin setting was updated.`,
+            );
+            updateApplication((draft) => {
+              draft.releases = draft.releases.map((release) => ({
+                ...release,
+                pinned: release.id === releaseId ? willPin : release.pinned,
+              }));
+              draft.activity.unshift(activity);
+            });
+          }}
+        />
+        <AuthorizationDialog
+          open={authorizationOpen}
+          existingMemberIds={application.access.map(
+            (access) => access.memberId,
+          )}
+          onOpenChange={setAuthorizationOpen}
+          onAdd={(access) => {
+            const activity = createActivity(
+              'permission.assigned',
+              `${access.memberName} received application access.`,
+            );
+            updateApplication((draft) => {
+              draft.access.push(access);
+              draft.activity.unshift(activity);
+            });
+            setAuthorizationOpen(false);
+          }}
+        />
+        <ConfirmDetailAction
+          action={pendingAction}
+          applicationName={application.name}
+          onCancel={() => setPendingAction(undefined)}
+          onConfirm={confirmAction}
+        />
+      </div>
     </main>
   );
 }
