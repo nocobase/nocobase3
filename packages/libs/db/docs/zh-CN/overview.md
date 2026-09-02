@@ -1,5 +1,5 @@
 ---
-title: @nocobase/db 概览
+title: '@nocobase/db 概览'
 description: 从 DatabaseManager 进入 Builder、Query、Collections、Transaction、Migration、Seed 和 Collection Metadata。
 ---
 
