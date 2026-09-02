@@ -8,10 +8,11 @@ import {
 } from '../i18n.js';
 import {
   applyClientRouteComponentOverrides,
+  defineClientPlugins,
   defineClientReactProviders,
   resolveAppClientContributions,
   type AppClientLocales,
-  type AppClientPluginRegistration,
+  type AppClientPlugins,
   type AppClientReactProviderDefinition,
   type AppClientReactProviders,
   type AppClientRegisteredReactProvider,
@@ -47,7 +48,7 @@ export interface AppRuntimeDefinition {
   readonly routes?: AppClientRoutes;
   readonly locales?: AppClientLocales;
   readonly basename?: string;
-  readonly plugins: readonly AppClientPluginRegistration[];
+  readonly plugins: AppClientPlugins;
   readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
   readonly sourceExtensions?: readonly AppClientSourceExtension[];
   readonly validate?: AppRuntimeValidator;
@@ -77,7 +78,7 @@ export function defineAppRuntime(
 ): AppRuntimeDefinition {
   return Object.freeze({
     ...definition,
-    plugins: Object.freeze([...definition.plugins]),
+    plugins: defineClientPlugins(definition.plugins.plugins),
     serviceProviders: freezeOptionalList(definition.serviceProviders),
     reactProviders: freezeOptionalList(definition.reactProviders),
     routes: freezeRouteDeclarations(definition.routes),
@@ -100,11 +101,11 @@ export async function resolveAppRuntime(
         ? readAppClientRuntimeConfig()
         : options.rawConfig,
     configs: Object.freeze(
-      definition.plugins.flatMap((plugin) => plugin.config),
+      definition.plugins.plugins.flatMap((plugin) => plugin.config),
     ),
   });
   const applicationContribution = createApplicationContribution(definition);
-  const pluginContributions = definition.plugins.map((plugin) => ({
+  const pluginContributions = definition.plugins.plugins.map((plugin) => ({
     packageName: plugin.packageName,
     source: 'plugin' as const,
     routes: plugin.routes,
@@ -132,7 +133,7 @@ export async function resolveAppRuntime(
         resolveServiceProviders(definition.serviceProviders),
         {},
       ),
-      ...definition.plugins.flatMap((plugin) =>
+      ...definition.plugins.plugins.flatMap((plugin) =>
         registerServiceProviders(
           plugin.packageName,
           'plugin',
@@ -143,6 +144,7 @@ export async function resolveAppRuntime(
     ]),
     reactProviders: contributions.reactProviders,
     routes: applyClientRouteComponentOverrides(contributions.routes, [
+      ...definition.plugins.routeComponentOverrides,
       ...(definition.routeComponentOverrides ?? []),
       ...extensionOverrides,
     ]),
@@ -181,7 +183,7 @@ function collectLocaleContributions(
       locales: definition.locales,
     });
   }
-  for (const plugin of definition.plugins) {
+  for (const plugin of definition.plugins.plugins) {
     if (plugin.locales) {
       contributions.push({
         packageName: plugin.packageName,
