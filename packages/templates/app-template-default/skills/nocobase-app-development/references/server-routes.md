@@ -85,6 +85,34 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
 
 Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions.
 
+### When the answer is not yes or no
+
+`can()` answers whether the caller may perform the action at all. Many real requirements are narrower than that: _a salesperson may only see the customers they own_. There the answer is neither yes nor no — it is "yes, for these rows, and these fields".
+
+`authorize()` returns that. Its decision carries `conditions` describing the row filter and the readable and writable field sets, which you pass into the query:
+
+```ts
+const decision = await context.get('authz').authorize({
+  resource: { type: 'database.collection', id: 'main.customers' },
+  action: 'read',
+});
+
+if (
+  decision.effect !== 'conditional' ||
+  decision.conditions?.type !== 'database'
+) {
+  return context.json({ code: 'FORBIDDEN' }, 403);
+}
+
+return context.json({ data: await customers.list(decision.conditions) });
+```
+
+**Apply the conditions inside the query, in the same `WHERE` clause as everything else.** Fetching rows and filtering them in memory afterwards is not an implementation detail — it is a data leak whenever a bug, an early return, or a later refactor skips the filter, and it sends rows the caller may not see across the process boundary in the first place. The same applies to `update` and `delete`: the returned filter goes in the `WHERE` alongside the record id, so a record the caller does not own simply does not match.
+
+Honour the field sets too. `conditions.fields.output` limits what you may return, and `conditions.fields.input` limits what you may write.
+
+This is a summary. Registering a collection with its actions, fields, and owner attribute, configuring Permission Sets, and compiling a `DatabaseFilter` into a query builder are all covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`.
+
 ## Scope middleware to paths you own
 
 Use the explicit path, or an isolated sub-router mounted at your prefix as above. A `router.use('*', ...)` on the top-level router leaks into contributions mounted later and is the way an unrelated endpoint accidentally becomes protected — or, worse, the way yours accidentally is not.
@@ -160,6 +188,7 @@ The path is relative to `/api`. Do not build the URL by hand or use bare `fetch`
 
 - An anonymous request returns `401`.
 - An authenticated request without permission returns `403`.
+- A caller restricted to their own records cannot read, update, or delete someone else's — verified by request, not by reading the code.
 - A permitted request returns the expected payload.
 - Middleware does not leak into other routes.
 - A public route rejects missing and invalid signatures, and handles duplicate delivery.

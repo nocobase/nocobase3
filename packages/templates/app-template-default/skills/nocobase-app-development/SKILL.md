@@ -29,6 +29,21 @@ If instead you find `client/plugin.ts`, `server/plugin.ts`, or a `defineServerPl
 
 Build the feature in the application. Do not run a plugin generator, create a `packages/plugins/` directory, or write a `defineServerPlugin()` declaration for this application's own feature. Create a plugin only when the user explicitly asks for an independently published, reusable package.
 
+## Check the installed plugins first
+
+This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
+
+| The requirement sounds like                              | Read the Skill for                    |
+| -------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication` |
+| Uploads, attachments, file fields                        | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                   | `@nocobase/app-plugin-i18n`           |
+
+Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
+
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.
@@ -41,7 +56,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
 | Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
 | Make text translatable, add a locale, reword a plugin's string                   | [internationalization](references/i18n.md)                       |
-| Add a reusable service, share it across routes, run background work              | [services and jobs](references/services-and-jobs.md)             |
+| Add a reusable service, share it across routes, run background or scheduled work | [services and jobs](references/services-and-jobs.md)             |
 | Write tests, choose a test layer, verify before finishing                        | [testing and verification](references/testing.md)                |
 
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.

@@ -8,16 +8,16 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 `skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
 
-| Task                                   | Reference                               |
-| -------------------------------------- | --------------------------------------- |
-| Add a page, route, or navigation entry | `references/client-pages-and-routes.md` |
-| Build or style UI                      | `references/components-and-styling.md`  |
-| Add an HTTP endpoint                   | `references/server-routes.md`           |
-| Read or write data                     | `references/database-and-data.md`       |
-| Change the schema                      | `references/migrations.md`              |
-| Add translatable text                  | `references/i18n.md`                    |
-| Add a service or background job        | `references/services-and-jobs.md`       |
-| Write tests and verify                 | `references/testing.md`                 |
+| Task                                             | Reference                               |
+| ------------------------------------------------ | --------------------------------------- |
+| Add a page, route, or navigation entry           | `references/client-pages-and-routes.md` |
+| Build or style UI                                | `references/components-and-styling.md`  |
+| Add an HTTP endpoint                             | `references/server-routes.md`           |
+| Read or write data                               | `references/database-and-data.md`       |
+| Change the schema                                | `references/migrations.md`              |
+| Add translatable text                            | `references/i18n.md`                    |
+| Add a service, background job, or scheduled task | `references/services-and-jobs.md`       |
+| Write tests and verify                           | `references/testing.md`                 |
 
 Read the one page your task needs, not the whole directory.
 
@@ -178,7 +178,24 @@ Let `pnpm plugin:register` and `pnpm plugin:unregister` add and remove entries. 
 
 To customize a plugin's page, pass an option on its registration, add a source extension under `client/extensions/*/extension.ts`, or add an entry to `client/route-overrides.ts`. Do not redeclare the plugin's route — a duplicate `/login` is a conflict, not a customization. An override replaces only `componentLoader`; route identity, path, and auth mode stay with the plugin. One route takes one override across all three mechanisms.
 
-A plugin's `skills/` directory documents what it offers the application. Registration copies these into `.agents/skills/`, which is generated output: it is gitignored, and every synchronized directory is replaced wholesale on the next sync. Never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
+### Read a plugin's Skill before building what it already does
+
+**You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
+
+| The requirement sounds like                                                                       | Read the Skill for                    |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
+| Uploads, attachments, file fields, previews                                                       | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
+
+Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
+
+Building a permission system, a notification sender, or a job scheduler by hand when a registered plugin already provides one is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit.
+
+`.agents/skills/` itself is generated output: gitignored, and every synchronized directory is replaced wholesale on the next sync, so never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
 
 ## Before you finish
 

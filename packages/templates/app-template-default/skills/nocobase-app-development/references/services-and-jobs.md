@@ -125,9 +125,49 @@ By default the job factory supplies `database` and `logger`, not the service con
 
 The default queue connection is `sync`, which runs jobs inline — convenient in development, and the reason a job that appears to work locally may behave differently against a real queue.
 
+## Work that runs on a schedule
+
+A job runs when something dispatches it. Work that has to happen _because time passed_ — scan for records overdue today, send a nightly digest, expire stale sessions — needs a scheduler, and `@nocobase/cron` provides one.
+
+There is no container token for it: create a manager in a provider, and tie its lifecycle to the provider's.
+
+```ts
+import { createCronJobManager, type CronJobManager } from '@nocobase/cron';
+
+export default class OverdueScanProvider extends ServiceProvider<Application> {
+  public readonly name: string = 'app/overdue-scan-provider';
+
+  private readonly cron: CronJobManager = createCronJobManager();
+
+  public override async start(): Promise<void> {
+    this.cron.addJob({
+      cronTime: '0 8 * * *',
+      onTick: async () => {
+        // Keep this thin: resolve the service and call it.
+      },
+    });
+    this.cron.start();
+  }
+
+  public override async shutdown(): Promise<void> {
+    this.cron.close();
+  }
+}
+```
+
+`start()` and `shutdown()` are the right hooks — a manager created in `register()` would outlive nothing and never be released. `addJob` accepts the options of the `cron` package, including `timeZone`, which matters as soon as "8am" means a particular office's morning.
+
+Keep the tick thin. It should resolve a service and call one method, so the behavior stays testable without waiting for a schedule; test that method directly and let the schedule only decide when it runs.
+
+Two things to decide before shipping one:
+
+- **More than one instance.** Every replica runs its own scheduler, so a nightly digest scheduled in three replicas sends three digests. Guard with a lock, a claim on the row being processed, or by dispatching to a queue whose deduplication you control.
+- **Long or heavy work.** A tick that runs for minutes holds the process. Prefer a tick that dispatches a job and returns, which also gets you the queue's retry behavior.
+
 ## Verify
 
 - The service resolves from the token and behaves correctly in isolation.
 - Provider lifecycle releases in `shutdown()` what `start()` acquired.
 - The job runs with a realistic payload, and running it twice is harmless.
 - A failure retries or terminates as intended.
+- A scheduled tick's work is tested directly, and running it on more than one instance does not duplicate its effect.
