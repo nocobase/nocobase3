@@ -113,6 +113,30 @@ export class CollectionNamingIndex implements CollectionResolutionContext {
     return { name, naming: this.naming };
   }
 
+  physicalTableNamePrefixes(requested?: readonly string[]): readonly string[] {
+    const managed = [
+      ...new Set([
+        this.naming.tablePrefix,
+        ...[...this.byName.values()].map(
+          (identity) => identity.naming.tablePrefix,
+        ),
+      ]),
+    ];
+    if (requested === undefined) return managed.sort();
+
+    const intersection = new Set<string>();
+    for (const managedPrefix of managed) {
+      for (const requestedPrefix of requested) {
+        if (managedPrefix.startsWith(requestedPrefix)) {
+          intersection.add(managedPrefix);
+        } else if (requestedPrefix.startsWith(managedPrefix)) {
+          intersection.add(requestedPrefix);
+        }
+      }
+    }
+    return [...intersection].sort();
+  }
+
   metadata(name: string): CollectionMetadataSummary | undefined {
     return this.byName.get(name)?.metadata;
   }

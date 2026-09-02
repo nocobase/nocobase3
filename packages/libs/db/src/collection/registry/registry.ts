@@ -116,6 +116,9 @@ export class CollectionRegistry
     await this.initialize();
     const index = await this.namingIndex();
     const limit = options.limit ?? 100;
+    const tableNamePrefixes = index.physicalTableNamePrefixes(
+      options.tableNamePrefixes,
+    );
     const seen = new Map<string, PhysicalCollectionSummary>();
     const items: CollectionSummary[] = [];
     let cursor = options.cursor;
@@ -123,6 +126,7 @@ export class CollectionRegistry
     do {
       const page = await this.options.inspector.listPhysicalCollections({
         ...options,
+        tableNamePrefixes,
         limit: limit - items.length,
         cursor,
       });
@@ -153,9 +157,12 @@ export class CollectionRegistry
   ): AsyncIterable<CollectionDefinition> {
     await this.initialize();
     const index = await this.namingIndex();
+    const tableNamePrefixes = index.physicalTableNamePrefixes(
+      options.tableNamePrefixes,
+    );
     const seen = new Map<string, PhysicalCollectionSchema>();
     for await (const physical of this.options.inspector.scanPhysicalCollections(
-      options,
+      { ...options, tableNamePrefixes },
     )) {
       if (this.options.isInternalPhysicalCollection?.(physical)) continue;
       const identity = index.resolvePhysicalCollection(physical);

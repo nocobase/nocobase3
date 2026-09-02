@@ -3,9 +3,11 @@ import {
   CollectionRegistry,
   CollectionRelationValidationError,
   InMemoryCollectionMetadataStore,
+  type ListPhysicalCollectionsOptions,
   type PhysicalCollectionIdentifier,
   type PhysicalCollectionPage,
   type PhysicalCollectionSchema,
+  type ScanPhysicalCollectionsOptions,
   type SchemaInspector,
 } from '../../../src/index.js';
 
@@ -94,6 +96,49 @@ describe('CollectionRegistry', () => {
         },
       ],
     });
+  });
+
+  it('limits listing and scanning to effective table prefixes', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.put(
+      {
+        version: 1,
+        name: 'events',
+        naming: { tablePrefix: 'archive_' },
+      },
+      { expectedRevision: null },
+    );
+    const inspector = new FakeInspector([
+      physical('app_orders'),
+      physical('archive_events'),
+      physical('other_customers'),
+    ]);
+    const registry = new CollectionRegistry({
+      inspector,
+      metadataStore: store,
+      naming: { tablePrefix: 'app_' },
+    });
+
+    await expect(registry.list()).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ name: 'orders' }),
+        expect.objectContaining({ name: 'events' }),
+      ],
+    });
+    expect(inspector.listOptions?.tableNamePrefixes).toEqual([
+      'app_',
+      'archive_',
+    ]);
+
+    const names: string[] = [];
+    for await (const collection of registry.scan()) {
+      names.push(collection.name!);
+    }
+    expect(names).toEqual(['orders', 'events']);
+    expect(inspector.scanOptions?.tableNamePrefixes).toEqual([
+      'app_',
+      'archive_',
+    ]);
   });
 
   it('reports drift when saved Metadata points at a missing physical Collection', async () => {
@@ -213,6 +258,8 @@ class FakeInspector implements SchemaInspector {
   readonly schemas = new Map<string, PhysicalCollectionSchema>();
   getCalls = 0;
   beforeGet?: () => Promise<void>;
+  listOptions?: ListPhysicalCollectionsOptions;
+  scanOptions?: ScanPhysicalCollectionsOptions;
 
   constructor(schemas: readonly PhysicalCollectionSchema[]) {
     for (const schema of schemas) this.schemas.set(schema.tableName, schema);
@@ -230,19 +277,43 @@ class FakeInspector implements SchemaInspector {
     return structuredClone(this.schemas.get(identifier.tableName));
   }
 
-  async listPhysicalCollections(): Promise<PhysicalCollectionPage> {
+  async listPhysicalCollections(
+    options: ListPhysicalCollectionsOptions = {},
+  ): Promise<PhysicalCollectionPage> {
+    this.listOptions = options;
     return {
-      items: [...this.schemas.values()].map(({ schema, tableName, kind }) => ({
-        schema,
-        tableName,
-        kind,
-      })),
+      items: [...this.schemas.values()]
+        .filter((schema) =>
+          matchesPrefixes(schema.tableName, options.tableNamePrefixes),
+        )
+        .map(({ schema, tableName, kind }) => ({
+          schema,
+          tableName,
+          kind,
+        })),
     };
   }
 
-  async *scanPhysicalCollections(): AsyncIterable<PhysicalCollectionSchema> {
-    for (const schema of this.schemas.values()) yield structuredClone(schema);
+  async *scanPhysicalCollections(
+    options: ScanPhysicalCollectionsOptions = {},
+  ): AsyncIterable<PhysicalCollectionSchema> {
+    this.scanOptions = options;
+    for (const schema of this.schemas.values()) {
+      if (matchesPrefixes(schema.tableName, options.tableNamePrefixes)) {
+        yield structuredClone(schema);
+      }
+    }
   }
+}
+
+function matchesPrefixes(
+  tableName: string,
+  prefixes: readonly string[] | undefined,
+): boolean {
+  return (
+    prefixes === undefined ||
+    prefixes.some((prefix) => tableName.startsWith(prefix))
+  );
 }
 
 function physical(
