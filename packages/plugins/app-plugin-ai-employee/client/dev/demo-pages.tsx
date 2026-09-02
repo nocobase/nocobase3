@@ -1,3 +1,5 @@
+/// <reference path="../../types/client-dev-node-resolution.d.ts" />
+
 import type { ComponentType, ReactElement } from 'react';
 
 import { AIChatPage } from './demo/index.js';

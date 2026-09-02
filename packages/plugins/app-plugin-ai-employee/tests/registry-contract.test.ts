@@ -91,6 +91,9 @@ describe('AI Employee Registry contract', () => {
     ]) {
       expect(fs.existsSync(path.join(packageRoot, file))).toBe(true);
     }
+    expect(read('client/dev/demo-pages.tsx')).toContain(
+      '/// <reference path="../../types/client-dev-node-resolution.d.ts" />',
+    );
   });
 
   it('publishes one application-owned frontend item', () => {
