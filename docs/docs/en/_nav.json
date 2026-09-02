@@ -8,19 +8,19 @@
     "link": "/tutorials/"
   },
   {
-    "text": "Guide",
-    "link": "/guide/"
+    "text": "Building apps",
+    "link": "/app/"
   },
   {
-    "text": "Development",
-    "link": "/development/"
+    "text": "Plugins",
+    "link": "/plugins/"
   },
   {
-    "text": "API",
-    "link": "/api/"
+    "text": "Deployment",
+    "link": "/deployment/"
   },
   {
-    "text": "Home",
+    "text": "Website",
     "link": "https://www.nocobase.com/"
   }
 ]
