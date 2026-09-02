@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 
-import { NotificationClient } from '../client/notification-client.js';
+import {
+  NotificationClient,
+  NotificationTestApiError,
+} from '../client/notification-client.js';
 import notificationPlugin from '../client/plugin.js';
 import routes from '../client/routes.js';
 
@@ -49,50 +52,75 @@ describe('@nocobase/app-plugin-notification client', () => {
     expect(request).toHaveBeenCalledWith('notifications/logs');
   });
 
-  it('loads configured test Providers and sends through the test route', async () => {
-    const provider = {
-      channel: 'im',
-      provider: { name: 'feishu', type: 'feishu-webhook' },
+  it('loads safe test targets and sends through the core test route', async () => {
+    const target = {
+      channel: { type: 'im', label: 'IM' },
+      provider: {
+        name: 'feishu',
+        type: 'feishu-webhook',
+        label: 'Feishu webhook',
+      },
+      fields: [],
     };
     const result = {
       notificationId: 'notification-1',
       status: 'pending',
-      provider: provider.provider,
+      deliveries: [],
     };
     const request = vi
       .fn()
-      .mockResolvedValueOnce({ data: [provider] })
+      .mockResolvedValueOnce({ data: [target] })
       .mockResolvedValueOnce({ data: result });
     const client = new NotificationClient({ request });
 
-    await expect(client.listTestProviders()).resolves.toEqual([provider]);
+    await expect(client.listTestTargets()).resolves.toEqual([target]);
     await expect(
       client.sendTest({
-        ...provider,
-        recipient: 'user-2',
-        title: 'Test',
-        body: 'Hello',
+        channel: 'im',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
+        values: { title: 'Test', body: 'Hello' },
       }),
     ).resolves.toEqual(result);
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      'notification-providers/test/config',
+    expect(request).toHaveBeenNthCalledWith(1, 'notifications/test/targets', {
+      headers: { 'x-nocobase-notification-test': '1' },
+    });
+    expect(request).toHaveBeenNthCalledWith(2, 'notifications/test/send', {
+      method: 'POST',
+      headers: { 'x-nocobase-notification-test': '1' },
+      body: JSON.stringify({
+        channel: 'im',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
+        values: { title: 'Test', body: 'Hello' },
+      }),
+    });
+  });
+
+  it('surfaces the localized message from a structured test error', async () => {
+    const request = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Request failed'), {
+        status: 403,
+        payload: {
+          error: {
+            code: 'NOTIFICATION_TEST_FORBIDDEN',
+            message: '需要发送通知测试的权限。',
+            ns: '@nocobase/app-plugin-notification',
+            key: 'errors.testForbidden',
+          },
+        },
+      }),
     );
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'notification-providers/test/send',
-      {
-        method: 'POST',
-        headers: { 'x-nocobase-provider-test': '1' },
-        body: JSON.stringify({
-          channel: 'im',
-          providerName: 'feishu',
-          providerType: 'feishu-webhook',
-          recipient: 'user-2',
-          title: 'Test',
-          body: 'Hello',
-        }),
-      },
+
+    await expect(
+      new NotificationClient({ request }).listTestTargets(),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: 'NotificationTestApiError',
+        code: 'NOTIFICATION_TEST_FORBIDDEN',
+        message: '需要发送通知测试的权限。',
+        status: 403,
+        ns: '@nocobase/app-plugin-notification',
+        key: 'errors.testForbidden',
+      } satisfies Partial<NotificationTestApiError>),
     );
   });
 });

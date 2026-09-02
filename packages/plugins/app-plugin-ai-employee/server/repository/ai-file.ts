@@ -18,7 +18,7 @@ export type AIFileEntity = {
   path?: string;
   url?: string;
   preview?: string;
-  storageId?: string | number;
+  disk?: string;
   meta?: Record<string, unknown>;
   createdById?: string | number | bigint;
   createdAt?: Date | string;
@@ -27,10 +27,9 @@ export type AIFileEntity = {
 
 export type AIFileAttachment = Omit<
   AIFileEntity,
-  'id' | 'storageId' | 'createdById' | 'createdAt' | 'updatedAt'
+  'id' | 'createdById' | 'createdAt' | 'updatedAt'
 > & {
   id?: string | number;
-  storageId?: string | number;
   source?: AIFileSource;
 };
 

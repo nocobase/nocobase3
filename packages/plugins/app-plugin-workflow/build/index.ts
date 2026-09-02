@@ -36,6 +36,8 @@ export interface ApplicationWorkflowBuildSummary {
 export interface ApplicationWorkflowBuildOptions {
   sourceRoot: string;
   distRoot: string;
+  /** Root containing the default build's package-relative runtime output. */
+  resourceRoot?: string;
   instructions?: ReadonlyMap<string, WorkflowInstructionClass>;
 }
 
@@ -55,23 +57,22 @@ export async function buildApplicationWorkflows(
     }
   }
 
-  await fs.mkdir(distRoot, { recursive: true });
-  for (const entry of await fs.readdir(distRoot, { withFileTypes: true })) {
-    await fs.rm(path.join(distRoot, entry.name), {
-      recursive: true,
-      force: true,
-    });
-  }
-
   const instructions: Map<string, WorkflowInstructionClass> = new Map(
     options.instructions ?? coreInstructions,
   );
-  const artifacts: string[] = [];
+  const builtPackages = [];
   for (const packageName of packageNames.sort()) {
     const packageRoot = path.join(sourceRoot, packageName);
     try {
-      const built = await buildWorkflowPackage(packageRoot, { instructions });
-      artifacts.push(await writeWorkflowArtifact(built, distRoot));
+      builtPackages.push(
+        await buildWorkflowPackage(packageRoot, {
+          instructions,
+          resourceRoot: path.join(
+            options.resourceRoot ?? sourceRoot,
+            packageName,
+          ),
+        }),
+      );
     } catch (error) {
       throw new Error(
         `Workflow package "${packageName}" at "${packageRoot}" failed to build: ${error instanceof Error ? error.message : String(error)}`,
@@ -79,6 +80,17 @@ export async function buildApplicationWorkflows(
       );
     }
   }
+
+  await fs.mkdir(distRoot, { recursive: true });
+  for (const entry of await fs.readdir(distRoot, { withFileTypes: true })) {
+    await fs.rm(path.join(distRoot, entry.name), {
+      recursive: true,
+      force: true,
+    });
+  }
+  const artifacts: string[] = [];
+  for (const built of builtPackages)
+    artifacts.push(await writeWorkflowArtifact(built, distRoot));
 
   return { packages: packageNames.length, artifacts };
 }

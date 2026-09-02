@@ -653,7 +653,7 @@ abstract class LLMProvider {
   parseAttachment(
     attachment: AIFileAttachment,
     runtime: {
-      fileManager: FileManager;
+      fileStorage: FileStorage;
       documentLoader: {
         load(
           attachment: AIFileAttachment,

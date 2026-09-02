@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
-import type { WorkflowServiceApi } from '../server/runtime/runtime.js';
+import type { WorkflowServiceApi } from '../server/service.js';
 import type { WorkflowDistArtifact } from '../server/loader/index.js';
 import {
   createTestDatabase,

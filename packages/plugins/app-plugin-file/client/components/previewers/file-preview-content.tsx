@@ -1,7 +1,9 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { FILE_PLUGIN_NS } from '../../../shared/namespace.js';
 import {
   resolveOfficeEmbedUrl,
   type FilePreviewKind,
@@ -29,6 +31,7 @@ export function FilePreviewContent({
   error,
   onDownload,
 }: FilePreviewContentProps): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
   if (kind === 'office') {
     return (
       <OfficePreview
@@ -41,7 +44,11 @@ export function FilePreviewContent({
   }
   if (error) return <div role='alert'>{error}</div>;
   if (!url && kind !== 'unsupported') {
-    return <div role='status'>Loading preview...</div>;
+    return (
+      <div role='status'>
+        {t('preview.loading', { defaultValue: 'Loading preview...' })}
+      </div>
+    );
   }
   switch (kind) {
     case 'image':
@@ -65,7 +72,7 @@ export function FilePreviewContent({
     case 'text':
       return (
         <pre className='max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-sm'>
-          {text ?? 'Loading preview...'}
+          {text ?? t('preview.loading', { defaultValue: 'Loading preview...' })}
         </pre>
       );
     default:
@@ -74,7 +81,13 @@ export function FilePreviewContent({
 }
 
 function MarkdownPreview({ text }: { readonly text?: string }): ReactElement {
-  if (text === undefined) return <div role='status'>Loading preview...</div>;
+  const { t } = useTranslation(FILE_PLUGIN_NS);
+  if (text === undefined)
+    return (
+      <div role='status'>
+        {t('preview.loading', { defaultValue: 'Loading preview...' })}
+      </div>
+    );
   return (
     <article className='prose max-h-[70vh] max-w-none overflow-auto rounded-md bg-muted/30 p-4'>
       <ReactMarkdown
@@ -105,6 +118,7 @@ function OfficePreview({
   readonly error?: string;
   readonly onDownload?: () => void;
 }): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -124,7 +138,12 @@ function OfficePreview({
     );
     return () => window.clearTimeout(timeout);
   }, [embedUrl, loaded]);
-  if (!url && !error) return <div role='status'>Loading preview...</div>;
+  if (!url && !error)
+    return (
+      <div role='status'>
+        {t('preview.loading', { defaultValue: 'Loading preview...' })}
+      </div>
+    );
   if (!embedUrl || failed) {
     return (
       <DownloadFallback
@@ -132,8 +151,13 @@ function OfficePreview({
         message={
           error ??
           (failed
-            ? 'Office Online could not load this file.'
-            : 'Office Online requires an internet-accessible absolute file URL.')
+            ? t('preview.officeLoadFailed', {
+                defaultValue: 'Office Online could not load this file.',
+              })
+            : t('preview.officePublicUrlRequired', {
+                defaultValue:
+                  'Office Online requires an internet-accessible absolute file URL.',
+              }))
         }
         onDownload={onDownload}
       />
@@ -152,22 +176,28 @@ function OfficePreview({
 
 function DownloadFallback({
   file,
-  message = 'Preview is unavailable for this file type.',
+  message,
   onDownload,
 }: {
   readonly file: FileRecord;
   readonly message?: string;
   readonly onDownload?: () => void;
 }): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
+  const resolvedMessage =
+    message ??
+    t('preview.unavailable', {
+      defaultValue: 'Preview is unavailable for this file type.',
+    });
   return (
     <div className='flex flex-col items-center gap-3 py-8'>
       <div className='h-24 w-24'>
         <FileThumbnail file={file} />
       </div>
-      <p>{message}</p>
+      <p>{resolvedMessage}</p>
       {onDownload ? (
         <button type='button' onClick={onDownload}>
-          Download file
+          {t('preview.downloadFile', { defaultValue: 'Download file' })}
         </button>
       ) : null}
     </div>

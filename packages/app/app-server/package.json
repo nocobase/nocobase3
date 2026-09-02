@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-server",
-  "version": "0.1.0-beta.3",
+  "version": "1.0.0-beta.5",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -163,6 +163,10 @@
       "./support": {
         "types": "./dist/support/index.d.ts",
         "import": "./dist/support/index.js"
+      },
+      "./i18n": {
+        "types": "./dist/i18n/index.d.ts",
+        "import": "./dist/i18n/index.js"
       }
     },
     "access": "public"

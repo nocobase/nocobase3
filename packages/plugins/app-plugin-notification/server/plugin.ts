@@ -12,10 +12,12 @@ const notificationPlugin: AppServerPlugin<NotificationProviderApplicationConfig>
   defineServerPlugin<NotificationProviderApplicationConfig>({
     packageName: '@nocobase/app-plugin-notification',
     config: notificationConfig,
+    locales: () => import('./locales/index.js'),
     serviceProviders,
     routes,
     database: {
       migrations: './database/migrations',
+      seeds: './database/seeds',
     },
   });
 

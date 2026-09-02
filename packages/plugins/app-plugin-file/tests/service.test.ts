@@ -16,7 +16,6 @@ import {
   verifyFileAccessToken,
 } from '../server/file-access.js';
 import {
-  ensureFileObject,
   openFileObject,
   putFileObject,
   removeFileObject,
@@ -321,25 +320,6 @@ describe('file storage and access helpers', () => {
         contentPath: '/api/files/file-1/content',
       }),
     ).toThrow(FileUnavailableError);
-  });
-
-  it('does not rewrite an existing deterministic fixture object', async () => {
-    const disk = drive.use('local');
-    const put = vi.spyOn(disk, 'put');
-
-    await ensureFileObject(createStorage(drive), {
-      key: 'files/demo.txt',
-      mimeType: 'text/plain',
-      content: 'first',
-    });
-    await ensureFileObject(createStorage(drive), {
-      key: 'files/demo.txt',
-      mimeType: 'text/plain',
-      content: 'second',
-    });
-
-    expect(put).toHaveBeenCalledOnce();
-    expect(await disk.get('files/demo.txt')).toBe('first');
   });
 });
 

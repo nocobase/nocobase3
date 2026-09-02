@@ -1316,7 +1316,6 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       sourceRoot: path.resolve(process.cwd(), 'server/workflows'),
       distRoot: path.resolve(process.cwd(), 'dist/server/workflows'),
       artifactDisk: 'local',
-      sourceResolverDiagnostic: false,
       production: false,
     },
     snowflake: {

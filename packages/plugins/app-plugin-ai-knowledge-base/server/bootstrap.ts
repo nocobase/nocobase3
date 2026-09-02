@@ -1,6 +1,5 @@
 import type { AppPluginServerContext } from '@nocobase/app-server/plugins';
-import type { AIManager, FileManager } from '@nocobase/ai-employee';
-import { DriveFileManager, MemoryFileManager } from '@nocobase/ai-employee';
+import type { AIManager } from '@nocobase/ai-employee';
 import { KnowledgeBaseService } from './service.js';
 import {
   KnowledgeBaseFeatureService,
@@ -10,25 +9,18 @@ import {
 import type { KnowledgeBasePluginDeps } from './types.js';
 
 type BootstrapContext = AppPluginServerContext<
-  KnowledgeBasePluginDeps & {
-    ai: AIManager;
-    driveManager?: unknown;
-  },
+  KnowledgeBasePluginDeps & { ai: AIManager },
   unknown
 >;
 
 export default function bootstrap(context: BootstrapContext): void {
-  const deps = context.deps as KnowledgeBasePluginDeps & {
-    driveManager?: import('@nocobase/drive').NocoBaseDriveManager;
-  };
-  const fileManager: FileManager = deps.driveManager
-    ? new DriveFileManager(deps.driveManager, undefined, 'ai-knowledge-base')
-    : new MemoryFileManager();
+  const deps = context.deps;
   const vectorProvider = new PGVectorProvider();
   const service = new KnowledgeBaseService(
     deps.database.connection(),
     deps.ai,
-    fileManager,
+    deps.fileStorageFactory,
+    deps.allowedStorageDisks,
     deps.queueManager,
     vectorProvider,
   );

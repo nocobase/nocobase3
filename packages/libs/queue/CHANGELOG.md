@@ -1,5 +1,12 @@
 # @nocobase/queue
 
+## 0.1.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [174eab5]
+  - @nocobase/db@1.0.0-beta.2
+
 ## 0.1.0-beta.2
 
 ### Minor Changes

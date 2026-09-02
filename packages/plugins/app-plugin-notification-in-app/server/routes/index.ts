@@ -1,5 +1,4 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import { notificationServiceToken } from '@nocobase/app-plugin-notification';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
@@ -13,8 +12,6 @@ import { inAppNotificationStoreToken } from '../tokens.js';
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono();
-    if (!container.has(notificationServiceToken)) return router;
-    if (!container.has(inAppNotificationStoreToken)) return router;
     const store = container.resolve(inAppNotificationStoreToken);
     const auth = container.resolve(authenticationToken);
 

@@ -1,7 +1,8 @@
-import type {
-  NotificationProviderDefinition,
-  ProviderSendResult,
+import {
+  type NotificationProviderDefinition,
+  type ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../../i18n.js';
 
 import {
   providerErrorCode,
@@ -21,7 +22,10 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
 > {
   return {
     type: 'smtp',
+    label: notificationProviderText('test.providers.smtp', 'SMTP'),
+    validateConfig: validateSmtpProviderConfig,
     async createProvider(_context, config) {
+      validateSmtpProviderConfig(config);
       const { default: nodemailer } = await import('nodemailer');
       const transporter = nodemailer.createTransport({
         host: config.host,
@@ -84,6 +88,12 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
       };
     },
   };
+}
+
+function validateSmtpProviderConfig(config: SmtpProviderConfig): void {
+  if (!config.host.trim()) throw new Error('SMTP host is required.');
+  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535)
+    throw new Error('SMTP port must be an integer between 1 and 65535.');
 }
 
 function smtpDisposition(

@@ -18,5 +18,14 @@ helpers. The dependency is one-way; the core package does not import this plugin
 - `database/collections` defines the AI Employee collection layout, and
   `database/migrations` creates it through the App migration system.
 
-`pnpm build` compiles TypeScript and copies non-TypeScript AI resources, including
-prompts and skill Markdown, to `dist/ai`.
+## Development showcases
+
+Plugin-owned Demo pages live under `client/dev` and are mounted with
+`defineDevRoutes()` under the `/dev/ai-components` menu group. They exercise the
+canonical Registry components but are not part of the application-owned Registry
+item and are excluded from production application builds.
+
+`pnpm build` compiles the plugin-owned development pages with the rest of the Client
+source and copies non-TypeScript AI resources, including prompts and skill Markdown,
+to `dist/ai`. `defineDevRoutes()` keeps these pages out of production application
+bundles.

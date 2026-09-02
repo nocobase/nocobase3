@@ -5,7 +5,7 @@ description: 面向 AI Agent 的 NocoBase v3 四类 Route 开发、权限边界�
 
 # Route 插件开发
 
-Route 是一个跨 Client 和 Server 的能力专题。NocoBase v3 提供四种 Route API：
+Route 是一个跨 Client 和 Server 的能力专题。NocoBase v3 提供五种 Route API：
 
 | 需求                                | API                      | 运行位置 | 典型路径           |
 | ----------------------------------- | ------------------------ | -------- | ------------------ |
@@ -13,21 +13,22 @@ Route 是一个跨 Client 和 Server 的能力专题。NocoBase v3 提供四种 
 | App 业务 API                        | `defineApiRoutes()`      | Server   | `/api/orders`      |
 | 普通业务页面                        | `defineAppRoutes()`      | Client   | `/orders`          |
 | Settings、管理或诊断页面            | `defineSettingsRoutes()` | Client   | `/settings/orders` |
+| 只在开发期存在的调试页面            | `defineDevRoutes()`      | Client   | `/dev/orders`      |
 
 先按需求选择 Route，再分别实现自己的路径、声明、安全边界和测试。不要从文件名或目录猜测 Route 类型。
 
-| 已选择的 Route                                | 继续阅读                                                 |
-| --------------------------------------------- | -------------------------------------------------------- |
-| `defineRootRoutes()`、`defineApiRoutes()`     | [Server Route 最佳实践示例](./server-routes-examples.md) |
-| `defineAppRoutes()`、`defineSettingsRoutes()` | [Client Route 最佳实践示例](./client-routes-examples.md) |
+| 已选择的 Route                                                     | 继续阅读                                                 |
+| ------------------------------------------------------------------ | -------------------------------------------------------- |
+| `defineRootRoutes()`、`defineApiRoutes()`                          | [Server Route 最佳实践示例](./server-routes-examples.md) |
+| `defineAppRoutes()`、`defineSettingsRoutes()`、`defineDevRoutes()` | [Client Route 最佳实践示例](./client-routes-examples.md) |
 
 ## Server 和 Client 的边界
 
-Server Route 看 `scope`：`root` 或 `api`。Client Route 看 `parent`：`app` 或 `settings`。
+Server Route 看 `scope`：`root` 或 `api`。Client Route 看 `parent`：`app`、`settings` 或 `dev`。
 
 ```text
 Browser navigation
-  → defineAppRoutes() / defineSettingsRoutes()
+  → defineAppRoutes() / defineSettingsRoutes() / defineDevRoutes()
   → componentLoader()
   → App SDK / fetch
   → defineRootRoutes() / defineApiRoutes()
@@ -35,7 +36,7 @@ Browser navigation
   → HTTP response
 ```
 
-四类 Route 不会因为名称相同而自动配对。Client 的 `auth` 或 Settings 的 `access` 只保护浏览器侧导航，不能替代 Server security。每个 Server Route 都必须明确拥有并测试自己的安全策略，不能依赖其他 contribution 或当前 composition order。登录用户 Route 按需求安装 authentication 和 authorization；有意公开的 webhook/callback 必须记录公开原因，并实现和测试签名、state、时间戳、重放保护、幂等或协议要求的其他边界。
+这些 Route 不会因为名称相同而自动配对。Client 的 `auth` 或 Settings 的 `access` 只保护浏览器侧导航，不能替代 Server security。每个 Server Route 都必须明确拥有并测试自己的安全策略，不能依赖其他 contribution 或当前 composition order。登录用户 Route 按需求安装 authentication 和 authorization；有意公开的 webhook/callback 必须记录公开原因，并实现和测试签名、state、时间戳、重放保护、幂等或协议要求的其他边界。
 
 ## 四类 Route
 
@@ -54,6 +55,12 @@ API Route 挂载到 `/api` scope，代码中的路径不重复写 `/api`。`/api
 ### `defineSettingsRoutes()`
 
 Settings 页面仍然属于 Client `routes` entry，不存在独立 settings loader。路径相对于内置 Settings Route，不要在 path 中重复 `/settings`。敏感页面应声明 `navigation` 和 `access`；access 被拒绝时页面不会进入可用导航，也不会加载页面组件。
+
+### `defineDevRoutes()`
+
+签名与 `defineSettingsRoutes()` 一致，页面挂在内置 Dev Route 下，path 不要重复 `/dev`。区别只有一个：生产构建中这组 Route 完全不存在，页面组件及其独占依赖都不会进入构建产物。守卫在 `defineDevRoutes()` 内部，调用方无条件调用即可。
+
+它按构建产物划分边界，不是权限机制。需要在生产环境按角色控制的页面用带 `access` 的 Settings Route，并由 Server 强制执行。
 
 ## 选择内部实现结构
 
@@ -99,7 +106,7 @@ Inspector 仅在需要时辅助观察装配，不构成第三层行为验证。�
 
 ## 推荐参考
 
-`packages/examples/app-plugin-routes-example` 是前后端 Route 的规范示例，覆盖 Root/API/App/Settings 四类 Route，并展示独立的安全和导航边界。不要把它当作通用插件模板复制；只复制与当前需求对应的 Route 和测试结构。
+`packages/examples/app-plugin-routes-example` 是前后端 Route 的规范示例，覆盖 Root/API/App/Settings/Dev 五类 Route，并展示独立的安全和导航边界。不要把它当作通用插件模板复制；只复制与当前需求对应的 Route 和测试结构。
 
 - Root/API 的实现和测试模式见 [Server Route 最佳实践示例](./server-routes-examples.md)；
 - App/Settings 的实现和测试模式见 [Client Route 最佳实践示例](./client-routes-examples.md)。
@@ -119,7 +126,7 @@ Inspector 仅在需要时辅助观察装配，不构成第三层行为验证。�
 - 每个 Server Route 的安全策略明确并经过行为测试；
 - 需要登录或权限时，由自己的 contribution 安装 authentication/authorization；
 - 有意公开的 Route 记录公开原因并测试协议特定边界；
-- App/Settings Route 的 auth/access 明确；
+- App/Settings/Dev Route 的 auth/access 明确；
 - Client 页面保持 lazy loading；
 - Server/Client declaration、exports 和 App composition 一致；
 - 相关行为测试通过；发生 composition 变化时，按需查看的 Inspector 快照没有相关装配问题；

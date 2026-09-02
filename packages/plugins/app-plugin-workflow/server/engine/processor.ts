@@ -38,6 +38,8 @@ export interface ProcessorOptions {
   workflow: WorkflowDefinition;
   execution: WorkflowRun;
   instructions: Map<string, WorkflowInstructionClass>;
+  workflowResourceRoot: string | null;
+  app?: unknown;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
@@ -83,6 +85,8 @@ export default class Processor {
   readonly database: DatabaseManager;
   readonly workflow: WorkflowDefinition;
   readonly execution: WorkflowRun;
+  readonly workflowResourceRoot: string | null;
+  readonly app: unknown;
   readonly nodes: WorkflowNode[] = [];
   readonly nodesMap: Map<string, WorkflowNode> = new Map();
   readonly abortController: AbortController = new AbortController();
@@ -107,6 +111,8 @@ export default class Processor {
     this.connectionName = options.connectionName;
     this.workflow = options.workflow;
     this.execution = options.execution;
+    this.workflowResourceRoot = options.workflowResourceRoot;
+    this.app = options.app;
     this.instructions = options.instructions;
     this.logger = options.logger ?? noopWorkflowLogger;
     this.environment = options.environment;

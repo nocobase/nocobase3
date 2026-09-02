@@ -23,8 +23,7 @@ async function artifact(
     nodes: [],
   };
   const built = buildWorkflowArtifact({
-    scanned: { key, root, entries: [] },
-    definition,
+    key,
     flatIr: { ...definition, start: null, nodes: [] },
   });
   const directory = path.join(root, key, built.digest);

@@ -1,9 +1,10 @@
-import type {
-  NotificationContent,
-  NotificationChannelDefinition,
-  NotificationProviderDefinition,
-  NotificationRecipient,
+import {
+  type NotificationContent,
+  type NotificationChannelDefinition,
+  type NotificationProviderDefinition,
+  type NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
+import { inAppNotificationText } from './i18n.js';
 import type { InAppStore } from './store.js';
 import type { InAppMessage, InAppRecipient } from './types.js';
 
@@ -39,6 +40,58 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
 > {
   return {
     type: 'in-app',
+    test: {
+      label: inAppNotificationText('test.channels.inApp', 'In-app'),
+      fields: [
+        {
+          name: 'recipient',
+          label: inAppNotificationText(
+            'test.fields.recipientUserId',
+            'Recipient user ID',
+          ),
+          type: 'text',
+          placeholder: inAppNotificationText(
+            'test.placeholders.currentUser',
+            'Defaults to the current user',
+          ),
+          maxLength: 255,
+        },
+        {
+          name: 'title',
+          label: inAppNotificationText('test.fields.title', 'Title'),
+          type: 'text',
+          required: true,
+          defaultValue: inAppNotificationText(
+            'test.defaults.title',
+            'NocoBase notification test',
+          ),
+          maxLength: 200,
+        },
+        {
+          name: 'body',
+          label: inAppNotificationText('test.fields.message', 'Message'),
+          type: 'textarea',
+          required: true,
+          defaultValue: inAppNotificationText(
+            'test.defaults.body',
+            'This is a test notification from NocoBase.',
+          ),
+          maxLength: 2000,
+        },
+      ],
+      toSendInput({ actor, values }) {
+        const title = values.title?.trim();
+        const body = values.body?.trim();
+        if (!title || !body) throw new Error('Title and Message are required.');
+        return {
+          to: {
+            type: 'user',
+            id: values.recipient?.trim() || actor.userId,
+          },
+          content: { title, body },
+        };
+      },
+    },
     async createChannel() {
       return {
         type: 'in-app',
@@ -87,6 +140,7 @@ export function createDatabaseProviderDefinition(options: {
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
+    label: inAppNotificationText('test.providers.database', 'Database'),
     async createProvider(context, config) {
       const { store } = options;
       return {

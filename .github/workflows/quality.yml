@@ -101,12 +101,15 @@ jobs:
           - name: Typecheck
             script: typecheck
             pack_check: false
+            peers_check: true
           - name: Test
             script: test
             pack_check: false
+            peers_check: false
           - name: Build
             script: build
             pack_check: true
+            peers_check: false
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -127,6 +130,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Runs before the matrix script because a misdeclared dependency is decided by reading manifests, and reporting it
+      # in seconds is more useful than reporting it after a full typecheck.
+      - name: Check peer dependencies
+        if: ${{ matrix.peers_check }}
+        run: pnpm peers:check
 
       - name: ${{ matrix.name }}
         run: pnpm ${{ matrix.script }}

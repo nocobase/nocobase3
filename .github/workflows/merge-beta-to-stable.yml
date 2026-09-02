@@ -147,7 +147,7 @@ jobs:
 
       - name: Build and test
         run: |
-          pnpm -r --if-present build
+          pnpm build
           pnpm -r --if-present test
 
       - name: Stop here on dry run

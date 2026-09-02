@@ -13,23 +13,18 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { ConfigPaths } from '@nocobase/app-server/config';
-import type { NocoBaseDriveManager } from '@nocobase/drive';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { Caching } from '@nocobase/caching';
 import type { DatabaseManager } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { Env, MiddlewareHandler } from 'hono';
 import type { CurrentUser } from './context.js';
-import {
-  AIManager,
-  type FileManager,
-  DriveFileManager,
-  MemoryFileManager,
-} from '@nocobase/ai-employee';
+import { AIManager, type FileStorageFactory } from '@nocobase/ai-employee';
 import { CollectionRepositoryFactory } from './repository/database/factory.js';
 import { AIEmployeeService } from './service/ai-employee-service.js';
 import { ModelService } from './service/model-service.js';
 import { AIFileService } from './service/file-service.js';
+import { AIFileMetadataRepository } from './file-storage/ai-file-metadata-repository.js';
 import { AIToolService } from './service/ai-tool-service.js';
 import { AISkillService } from './service/ai-skill-service.js';
 import { LLMService } from './service/llm-service.js';
@@ -69,7 +64,8 @@ export interface AppDeps {
   database: DatabaseManager;
   auth: Auth;
   caching: Caching;
-  driveManager?: NocoBaseDriveManager;
+  fileStorageFactory: FileStorageFactory;
+  aiStorageDisk: string;
   idGenerator: IdGeneratorService;
   logging: Logging;
 }
@@ -191,9 +187,12 @@ export function createPluginRuntime(
   }
   const repositories = pluginRepositories;
   const snowflake = options.deps.idGenerator;
-  const fileManager: FileManager = options.deps.driveManager
-    ? new DriveFileManager(options.deps.driveManager)
-    : new MemoryFileManager();
+  const metadataRepository = new AIFileMetadataRepository(repositories.aiFiles);
+  const fileStorage = options.deps.fileStorageFactory.create({
+    disk: options.deps.aiStorageDisk,
+    prefix: 'ai-files',
+    metadataRepository,
+  });
   const ai = options.deps.ai;
   const ctx = {
     ai,
@@ -203,12 +202,12 @@ export function createPluginRuntime(
     logger,
     caching: options.deps.caching,
     snowflake,
-    fileManager,
+    fileStorage,
     i18nNamespace: packageMetadata.name,
     ...createRequestFields({ id: 'system', roles: ['root'], isRoot: true }),
     employeeService: new AIEmployeeService(),
     modelService: new ModelService(),
-    fileService: new AIFileService(fileManager, snowflake, AI_API_BASE_PATH),
+    fileService: new AIFileService(fileStorage, snowflake, AI_API_BASE_PATH),
     toolService: new AIToolService(),
     skillService: new AISkillService(),
     llmService: new LLMService(),
