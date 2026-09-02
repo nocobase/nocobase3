@@ -79,6 +79,9 @@ catalog:
   vitest: ^4.1.10
   yaml: ^2.9.0
 
+# Which dependencies may run install scripts: true compiles a native addon, false skips a script
+# nothing here needs. tesseract.js arrives through officeparser and its postinstall only prints a
+# donation notice. A package left out entirely stops the install with ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
   better-sqlite3: true
   esbuild: true
@@ -87,6 +90,12 @@ allowBuilds:
   # unicons regenerates its own fonts; the .woff2 files ship in the published package, so compiling the native addon
   # at install time produces nothing anything reads.
   ttf2woff2: false
+
+# Reports a dependency whose install script was skipped as a warning instead of failing the install.
+# allowBuilds decides the packages known today; this keeps a newly introduced transitive dependency
+# from breaking every install until someone adds its entry.
+# See https://pnpm.io/settings/build#strictdepbuilds.
+strictDepBuilds: false
 
 minimumReleaseAgeExclude:
   - '@publint/pack@0.1.7'
