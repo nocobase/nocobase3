@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import routes from '../../client/routes.js';
 
 describe('client routes', () => {
-  it('defines App and Settings Routes through one Client entry', async () => {
+  it('defines App, Settings, and Dev Routes through one Client entry', async () => {
     const [appContribution, settingsContribution] = routes;
     if (
       appContribution?.parent !== 'app' ||
@@ -32,6 +32,29 @@ describe('client routes', () => {
       'default',
     );
     await expect(settingsRoute?.componentLoader()).resolves.toHaveProperty(
+      'default',
+    );
+  });
+
+  it('declares a dev page that a production build would drop', async () => {
+    // Tests run under Node, where `import.meta.env` is undefined. That is a development context, so the routes are
+    // present here; the production behaviour is covered by the template build test.
+    const devContribution = routes.find(
+      (contribution) => contribution.parent === 'dev',
+    );
+    if (devContribution?.parent !== 'dev') {
+      throw new Error('Missing Routes example Dev Route contribution.');
+    }
+
+    const [devRoute] = devContribution.routes;
+
+    expect(devRoute).toMatchObject({
+      name: 'routes-example',
+      path: '/routes-example',
+      navigation: { title: 'Routes example' },
+      componentLoader: expect.any(Function),
+    });
+    await expect(devRoute?.componentLoader()).resolves.toHaveProperty(
       'default',
     );
   });

@@ -18,7 +18,7 @@ import {
   activateWorkflowSource,
   type WorkflowDistArtifact,
 } from '../loader/index.js';
-import type { WorkflowServiceApi } from '../runtime/runtime.js';
+import type { WorkflowServiceApi } from '../service.js';
 import { BadRequestError } from '../errors.js';
 import {
   asWorkflowId,

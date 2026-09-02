@@ -19,7 +19,7 @@ import {
 } from '@nocobase/i18n/server';
 
 import { notificationConfig } from '../config.js';
-import { notificationServiceToken } from '../tokens.js';
+import { notificationRuntimeToken } from '../runtime.js';
 import { isNotificationTestSendRequest } from '../test-contract.js';
 import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
 import { notificationTestError } from '../types.js';
@@ -38,7 +38,7 @@ export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<NotificationProviderApplicationConfig>
 > = defineApiRoutes(({ config, container }) => {
   const router = new Hono();
-  const notification = container.resolve(notificationServiceToken);
+  const notification = container.resolve(notificationRuntimeToken);
   const auth = container.resolve(authenticationToken);
   const authorization = container.resolve(authorizationToken);
 

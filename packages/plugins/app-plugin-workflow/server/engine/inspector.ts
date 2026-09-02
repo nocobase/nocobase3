@@ -3,7 +3,7 @@ import type { WorkflowLogger, WorkflowNode } from './types.js';
 export interface RunNodeInspectorProjection {
   type: string;
   title: string;
-  script: string;
+  module: string;
   artifactShortId: string;
   sourceManaged: true;
   argsKeys: string[];
@@ -14,7 +14,7 @@ export interface RunExecutionLogFields {
   nodeId: string | number;
   nodeKey: string;
   artifactDigest: string | null;
-  script: string;
+  module: string;
   durationMs: number;
   status: 'success' | 'error' | 'aborted';
 }
@@ -27,7 +27,7 @@ export function projectRunNodeInspector(
   return {
     type: node.type,
     title: node.title ?? node.key,
-    script: String(node.config.script ?? ''),
+    module: String(node.config.module ?? ''),
     artifactShortId: artifactDigest.slice(0, 12),
     sourceManaged: true,
     argsKeys:

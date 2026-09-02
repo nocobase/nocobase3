@@ -1,5 +1,7 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
 
+import { FILE_PLUGIN_NS } from '../../shared/namespace.js';
 import type { FilePreviewFieldProps } from '../types.js';
 import { FilePreviewDialog } from './file-preview-dialog.js';
 import { FileThumbnail } from './file-thumbnail.js';
@@ -12,10 +14,19 @@ export function FilePreviewField({
   showFilenames = false,
   onError,
 }: FilePreviewFieldProps): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
   const [open, setOpen] = useState(false);
   const [initialIndex, setInitialIndex] = useState(0);
   if (!files.length)
-    return <>{emptyState ?? <span role='status'>No files.</span>}</>;
+    return (
+      <>
+        {emptyState ?? (
+          <span role='status'>
+            {t('common.states.noFiles', { defaultValue: 'No files.' })}
+          </span>
+        )}
+      </>
+    );
   return (
     <>
       <div data-slot='file-preview-field' className='flex flex-wrap gap-2'>
@@ -24,7 +35,10 @@ export function FilePreviewField({
             <button
               type='button'
               className='h-12 w-12 overflow-hidden rounded-md'
-              aria-label={`${labels?.preview ?? 'Preview'}: ${file.filename}`}
+              aria-label={`${
+                labels?.preview ??
+                t('common.actions.preview', { defaultValue: 'Preview' })
+              }: ${file.filename}`}
               onClick={() => {
                 setInitialIndex(index);
                 setOpen(true);

@@ -5,8 +5,39 @@
 ### Minor Changes
 
 - Add the in-app test adapter with authenticated-user defaulting, keep the inbox
-  API independent of the core notification manager, and fail fast when the
-  required database service is missing.
+  API available when the core notification Server plugin is not registered,
+  and fail fast when the required database service is missing. The package
+  still requires the core package for its shared extension contracts.
+
+## 0.2.0-beta.3
+
+### Minor Changes
+
+- 1527426: Declare identity-sensitive runtime packages as peer dependencies of every plugin.
+
+  A plugin used to list `@nocobase/app-server`, `@nocobase/db`, `@nocobase/service-provider`, `@nocobase/i18n`, `@nocobase/queue`, `@nocobase/app-portal-sdk`, and the plugins it builds on among its `dependencies`. Each of these carries state that only works while exactly one copy of the module exists in the process: `ServiceContainer` keys its bindings by the token object itself, React contexts match only the provider created from the same module, and `@nocobase/queue` registers job classes into a global `Locator`. A `dependencies` range lets a package manager install a second copy to satisfy it, which splits that state.
+
+  The monorepo could never show the problem, because `workspace:` links every consumer to one directory. It appears once a plugin is installed from a registry into an application, and it appears at runtime rather than at install time: a service that is registered reports `Service "..." is not registered`, or a context reads `undefined` under a mounted provider.
+
+  Each of these packages is now a peer dependency paired with a devDependency. The peer is the published contract that makes the installing application provide the single copy; the devDependency pins this repository's copy for development and tests, which the deliberately wide peer range does not. Applications built from the templates are unaffected — they already install every one of these packages directly, which is what satisfies the new peer ranges.
+
+  `pnpm plugin:create` generates the same shape, and `pnpm peers:check` enforces it in CI.
+
+### Patch Changes
+
+- 174eab5: Correct the `@nocobase/app-portal-sdk` range these Registry recipes declare. It named `^2.0.0`, a version the v3 package never had, so installing one of these recipes into an application could not resolve the dependency it needs for its v2 API calls.
+- c64802c: Harden notification packaging, Provider error redaction, in-app pagination and input validation, migration coverage, Agent Skill safety, localization, and production demo-route defaults.
+- Updated dependencies [174eab5]
+- Updated dependencies [c64802c]
+- Updated dependencies [1527426]
+- Updated dependencies [174eab5]
+- Updated dependencies [174eab5]
+- Updated dependencies [c64802c]
+  - @nocobase/app-server@1.0.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.5
+  - @nocobase/app-plugin-notification@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/service-provider@0.0.2-beta.1
 
 ## 0.2.0-beta.2
 

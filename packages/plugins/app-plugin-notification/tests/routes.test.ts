@@ -15,11 +15,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { apiRoutes } from '../server/routes/index.js';
 import serverLocales from '../server/locales/index.js';
-import { notificationServiceToken } from '../server/tokens.js';
+import {
+  notificationRuntimeToken,
+  type NotificationRuntime,
+} from '../server/runtime.js';
 import {
   NOTIFICATION_NAMESPACE,
   notificationI18nText,
-  type NotificationService,
 } from '../server/types.js';
 
 describe('@nocobase/app-plugin-notification routes', () => {
@@ -198,7 +200,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
 interface RouterOptions {
   readonly allowed?: boolean;
   readonly authenticated?: boolean;
-  readonly targets?: ReturnType<NotificationService['listTestTargets']>;
+  readonly targets?: ReturnType<NotificationRuntime['listTestTargets']>;
   readonly testEnabled?: boolean;
 }
 
@@ -238,12 +240,12 @@ async function createRouter(options: RouterOptions = {}): Promise<{
       await next();
     },
   } as unknown as AppAuthorization);
-  container.instance(notificationServiceToken, {
+  container.instance(notificationRuntimeToken, {
     router: logsRouter,
     listTestTargets,
     sendTest,
     getTestStatus,
-  } as unknown as NotificationService);
+  } as unknown as NotificationRuntime);
 
   const contribution = await apiRoutes.createRouter({
     appName: 'test',

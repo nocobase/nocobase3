@@ -3,15 +3,11 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
-import routes from './routes.js';
+import locales from './locales/index.js';
 
-export interface FileClientOptions {
-  readonly placeholder?: never;
-}
-
-const file: AppClientPluginFactory<FileClientOptions> = defineClientPlugin({
+const file: AppClientPluginFactory = defineClientPlugin({
   packageName: '@nocobase/app-plugin-file',
-  routes,
+  locales,
 });
 
 export default file;

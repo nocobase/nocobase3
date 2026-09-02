@@ -1,65 +1,104 @@
-# Quick start
+# Quick start for an application
 
-This is the shortest end-to-end path for adding attachments to a business
-module. The [data model guide](data-model.md) explains the table contract, and
-the [Route API guide](route-api.md) lists the fixed HTTP surface and access
-rules.
+This is the shortest App-owned path for adding attachments to a business
+record. The [data model guide](data-model.md) defines the file-table contract,
+and the [Route API guide](route-api.md) defines the stable HTTP surface.
 
-All code below is a partial example. Follow the current application template
-for ordinary plugin layout and Route registration; this guide only calls out
-file integration decisions that are easy to get wrong.
+The locations below follow applications such as `app-template-default`. Adapt
+names to the target App's existing structure, but keep the ownership in the
+application unless the user explicitly requests a reusable published plugin.
 
-## 1. Confirm the host context
+## 1. Inspect the target application
 
-Enable `@nocobase/app-plugin-file` in the application. The business plugin
-resolves the existing database, Drive, authentication, and authorization
-services from the Application's shared container. Read `appConfig` and
-`driveConfig` with `config.get(...)`. For private-token signing, use the
-effective secret from `container.resolve(sessionManagerToken).config.secret`,
-not the optional raw `sessionConfig.secret` value.
+Before editing, confirm the App's composition roots and local instructions:
 
-Put the Route contribution in the business plugin's `server/routes/index.ts`.
-Its default export is the `routes` array that `server/plugin.ts` passes to
-`defineServerPlugin(...)`. Omitting that import and property leaves the Route
-unregistered.
+```text
+database/migrations/    App-owned schema history
+server/routes/index.ts  App-owned Server Route array
+server/runtime.ts       Imports the App Route array
+client/routes.ts        App-owned page contributions
+client/pages/           App-owned pages and forms
+client/locales/         App-owned user-facing text
+tests/logic/ or e2e/    App behavior tests
+```
 
-Do not add another file service, dependency injection mechanism, or a second
-DatabaseManager/Drive manager. Registry installation does not install
-this server code or a migration.
+Confirm `@nocobase/app-plugin-file` is installed and registered in the App. The
+plugin registration supplies reusable public code and locale resources; it does
+not create a business table, API endpoint, or page.
 
-## 2. Create the migration
+Do not create a new business plugin for this workflow. Do not edit the File
+plugin's source or the App's synchronized `.agents/skills/` copy.
 
-For a new module, create the business table and a separate standard file table.
-For an existing business table, alter it to add the inverse relation and create
-only the file table. A one-to-many table uses an indexed owner key; a one-to-one
-table uses a unique owner key. Declare every field, relation, index, and
-constraint directly in the migration; see [data model](data-model.md).
+## 2. Add the App migration
 
-Use a reverse-order `down` migration. Register the logical inverse relation on
-the business table with `hasMany('attachments', 'purchaseOrderAttachments')`.
+Create the business relation in the application's `database/migrations/`
+directory. For a new feature, create the parent collection and a separate
+standard file collection. For an existing parent, alter it to add the inverse
+relation and create only the file collection.
 
-## 3. Create a scoped Route
+A one-to-many attachment collection uses an indexed owner key. A one-to-one
+file field uses a unique owner key. Declare every field, relation, index, and
+constraint directly in the migration; do not import a runtime collection
+definition. Use a reverse-order `down` migration when the operation is
+reversible.
 
-Keep the table name in server code and derive the owner from a validated Route
-parameter. Use `authenticationToken` and `AuthEnv` from
-`@nocobase/app-plugin-authentication`, `authorizationToken` and
-`AuthorizationEnv` from `@nocobase/app-plugin-authorization`, and
-`MiddlewareHandler` from `hono`. This is an assembly fragment, not a standalone
-module:
+For example, an App-owned `purchaseOrderAttachments` collection should contain
+the standard fields from [data model](data-model.md), an indexed `orderId`, a
+`belongsTo` relation to `purchaseOrders`, and `UNIQUE (disk, key)`. The parent
+collection owns the inverse `hasMany('attachments',
+'purchaseOrderAttachments')` relation.
+
+## 3. Add the App Server Route
+
+Create an application source file such as
+`server/routes/purchase-order-attachments.ts`. Import only public package
+entries:
 
 ```ts
+import type { Application } from '@nocobase/app-server/application';
+import { appConfig } from '@nocobase/app-server/config';
+import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import { sessionManagerToken } from '@nocobase/app-server/session';
+import {
+  defineApiRoutes,
+  type AppApiRouteContribution,
+} from '@nocobase/app-server/router';
+import {
+  authenticationToken,
+  type AuthEnv,
+} from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
+import {
+  createFileRoute,
+  type FileRouteAuthorizer,
+} from '@nocobase/app-plugin-file/server';
+import { databaseManagerToken } from '@nocobase/db';
+import { Hono, type MiddlewareHandler } from 'hono';
+
 type Env = {
   Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
 };
 
-export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
-  defineApiRoutes(({ config, container }) => {
+const authorizePurchaseOrderFile: FileRouteAuthorizer = async (
+  context,
+  action,
+  file,
+) => {
+  const orderId = Number(context.req.param('orderId'));
+  return authorizePurchaseOrder(context, { orderId, action, file });
+};
+
+export const purchaseOrderAttachmentRoutes: AppApiRouteContribution<Application> =
+  defineApiRoutes((app) => {
     const router = new Hono<Env>();
-    const authentication = container.resolve(authenticationToken);
-    const authorization = container.resolve(authorizationToken);
-    const app = config.get(appConfig);
-    const drive = config.get(driveConfig);
-    const session = container.resolve(sessionManagerToken).config;
+    const authentication = app.container.resolve(authenticationToken);
+    const authorization = app.container.resolve(authorizationToken);
+    const drive = app.config.get(driveConfig);
+    const appSettings = app.config.get(appConfig);
+    const session = app.container.resolve(sessionManagerToken).config;
     const authenticate =
       authentication.required() as unknown as MiddlewareHandler<Env>;
     const resolveAuthorization =
@@ -72,7 +111,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     router.route(
       '/purchase-orders/:orderId/attachments',
       createFileRoute({
-        database: container.resolve(databaseManagerToken),
+        database: app.container.resolve(databaseManagerToken),
         table: 'purchaseOrderAttachments',
         scope: (context) => {
           const orderId = Number(context.req.param('orderId'));
@@ -81,9 +120,9 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           }
           return { orderId };
         },
-        drive: container.resolve(driveManagerToken),
+        drive: app.container.resolve(driveManagerToken),
         defaultDisk: drive.default,
-        publicBasePath: app.publicBasePath,
+        publicBasePath: appSettings.publicBasePath,
         tokenSecret: session.secret,
         audience: 'purchase-order-attachments',
         auth: requireManagement,
@@ -94,36 +133,63 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     );
     return router;
   });
-
-const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
-  apiRoutes,
-];
-
-export default routes;
 ```
 
-Use the owning packages for the remaining imports. The inner Hono path omits
-the `/api` prefix added by the Application, and the contribution must be
-included in the plugin's `routes` array passed to `defineServerPlugin(...)`.
+`authorizePurchaseOrder()` above is application-owned domain code, not a File
+plugin API. It must validate the parent record and map every
+`FileRouteAction` to the App's existing authorization model. If authorization
+returns record conditions, apply them while loading the parent; do not reduce a
+conditional decision to a plain permit. Returning a denial Response or throwing
+the App's standard authorization error must stop the file operation.
 
-`authorizePurchaseOrderFile` is the business-specific extension point. The
-business module must define it as a `FileRouteAuthorizer`; it must call the
-existing business authorization boundary and deliberately map every
-`FileRouteAction`. Do not invent a second file ACL or an unregistered resource
-type. If the parent uses database authorization, check it through its
-authorized service/query and apply the returned record conditions. Do not
-treat a `conditional` database decision as a plain `permit`.
+Pass the combined authentication and authorization middleware through
+`createFileRoute()`'s `auth` option. The factory applies it to management
+operations while preserving the content endpoint's Public or Private-token
+decision. Do not put a wildcard login middleware around the whole child router;
+that would incorrectly require a session for Public content and valid token
+URLs. The same App Route contribution still owns and tests the complete
+security boundary.
 
-## 4. Connect the client
+Import this contribution in the application's `server/routes/index.ts` and add
+it to the existing routes array:
 
-The following is the client integration fragment; `orderId`, `attachments`,
-and form state belong to the business module. Persist the parent record first;
-only then construct this client and enable uploads:
+```ts
+import { purchaseOrderAttachmentRoutes } from './purchase-order-attachments.js';
+
+const routes = [
+  // Existing App routes.
+  purchaseOrderAttachmentRoutes,
+];
+```
+
+Do not add `/api` to the child path; `defineApiRoutes()` supplies it. Do not
+accept the table, scope field, disk, storage key, or token secret from the
+browser.
+
+## 4. Connect the App Client
+
+In the owning application page or form, import the public Client API:
 
 ```tsx
-const client = createFilesClient({
-  endpoint: `/api/purchase-orders/${orderId}/attachments`,
-});
+import { appApiClientToken, useService } from '@nocobase/app-client';
+import {
+  createFilesClient,
+  FileUploadField,
+  type FileRecord,
+} from '@nocobase/app-plugin-file/client';
+import { useMemo, useState } from 'react';
+
+const appClient = useService(appApiClientToken);
+const client = useMemo(
+  () =>
+    createFilesClient({
+      appClient,
+      endpoint: `purchase-orders/${encodeURIComponent(orderId)}/attachments`,
+    }),
+  [appClient, orderId],
+);
+
+const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
 
 <FileUploadField
   client={client}
@@ -137,13 +203,37 @@ const client = createFilesClient({
 />;
 ```
 
-Initialize `attachments` from `await client.list()` in edit/read views. The
-business form owns the relation and submission state; treat `uploading` and
-`error` as submission blockers. `removeOnDelete` calls the server DELETE
-endpoint; omit it only when the business workflow performs deletion itself.
+`endpoint` is relative to the v3 Application's `/api` root. Do not include
+`/api`, the public base path, an origin, a query string, or a fragment. The
+injected `AppClient` owns Cookie authentication, deployment base paths, request
+headers, and multipart transport.
 
-## 5. Validate
+Persist the parent record before constructing its scoped endpoint or enabling
+uploads. Initialize edit and read views with `await client.list()`. Treat
+`uploading` and `error` status as form-submission blockers. Use `FileList`,
+`FilePreviewField`, or `FilePreviewDialog` in application-owned read views as
+needed.
 
-Run the migration and focused business tests for allowed and denied
-authorization, scope isolation, Public access, Private Token access, MIME and
-size limits, deletion, and the relation's database constraint.
+If the workflow needs a new page, default-export it from `client/pages/` and
+add a lazy entry to the App's existing `client/routes.ts`. Do not add a Client
+Route to the File plugin. Put application labels, validation messages, and page
+copy in the App's `client/locales/`; the reusable File components keep their
+own plugin namespace.
+
+## 5. Validate the application workflow
+
+Run the App migration and focused application tests. Cover:
+
+- the physical file schema, relation, owner index or unique constraint, and
+  `UNIQUE (disk, key)`;
+- invalid owner IDs and cross-owner scope isolation;
+- anonymous, authenticated-but-denied, and permitted management requests;
+- Public content and Private token access, including expiry and wrong audience;
+- MIME, size, and file-count limits;
+- delete behavior and object cleanup;
+- controlled Client upload state, reload with `client.list()`, and previews;
+- the real App page-to-API workflow under its configured public base path.
+
+Run the target application's focused lint, typecheck, tests, and build. Use
+Client or Server inspectors only when Route or plugin composition changed or is
+unexpectedly unavailable; inspectors do not prove behavior or security.

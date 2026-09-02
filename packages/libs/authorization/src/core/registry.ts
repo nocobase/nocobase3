@@ -61,10 +61,6 @@ export class ResourceHandlerRegistry {
     return this.handlers.get(resourceType);
   }
 
-  remove(resourceType: string): void {
-    this.handlers.delete(resourceType);
-  }
-
   list(): string[] {
     return [...this.handlers.keys()].sort();
   }

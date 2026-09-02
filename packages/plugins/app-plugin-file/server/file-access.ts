@@ -56,6 +56,7 @@ function resolveTokenSecret(secret: string | undefined): string {
   if (!secret) {
     throw new FileUnavailableError(
       'File access token signing is not configured.',
+      { i18nKey: 'errors.tokenSigningNotConfigured' },
     );
   }
   return secret;
@@ -66,14 +67,21 @@ function resolvePublicPath(
   publicBasePath: string,
 ): string {
   if (!contentPath.trim().startsWith('/')) {
-    throw new InvalidFileInputError('File content path must be root-relative.');
+    throw new InvalidFileInputError(
+      'File content path must be root-relative.',
+      {
+        i18nKey: 'errors.contentPathRootRelative',
+      },
+    );
   }
 
   let url: URL;
   try {
     url = new URL(contentPath, 'http://files.local');
   } catch {
-    throw new InvalidFileInputError('File content path is invalid.');
+    throw new InvalidFileInputError('File content path is invalid.', {
+      i18nKey: 'errors.contentPathInvalid',
+    });
   }
   if (
     url.origin !== 'http://files.local' ||
@@ -82,6 +90,7 @@ function resolvePublicPath(
   ) {
     throw new InvalidFileInputError(
       'File content path must be a root-relative path without a query or fragment.',
+      { i18nKey: 'errors.contentPathQueryFragment' },
     );
   }
 

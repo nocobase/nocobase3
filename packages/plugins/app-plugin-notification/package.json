@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification",
   "displayName": "Notification App Plugin",
   "description": "Provides the application notification runtime, storage, delivery, and logs.",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -75,7 +75,6 @@
   },
   "files": [
     "dist",
-    "CHANGELOG.md",
     "README.md",
     "docs",
     "skills",
@@ -99,6 +98,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/logging": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:",
     "lucide-react": "^0.487.0"
@@ -110,7 +110,6 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
-    "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "react": "^19.0.0",
@@ -124,7 +123,6 @@
     "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/i18n": "workspace:*",
-    "@nocobase/logging": "workspace:*",
     "@nocobase/queue": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@testing-library/jest-dom": "catalog:",

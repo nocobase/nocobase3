@@ -9,9 +9,12 @@ user-isolated inbox API.
 The package exports its Server plugin and public Server contracts from both the
 package root and `/server`. Register it in the target App's Server plugin list
 after `@nocobase/app-plugin-notification` when durable notification delivery is
-needed. It has no Client runtime entry. The inbox store and routes require only
-the database and authentication services, so they remain available in a host
-that does not install the core notification manager.
+needed. It has no Client runtime entry. The package keeps
+`@nocobase/app-plugin-notification` as a peer because it imports the shared
+notification contracts. Registering the core Server plugin is optional: the
+inbox store and routes require only the database and authentication services,
+so they remain available when that Server plugin is not registered. Only the
+Channel and Provider contribution is skipped in that case.
 
 The plugin registers:
 

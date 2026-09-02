@@ -11,7 +11,11 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NotificationProvider } from '../server/providers/notification.js';
-import { notificationServiceToken } from '../server/tokens.js';
+import { notificationRuntimeToken } from '../server/runtime.js';
+import {
+  notificationExtensionRegistryToken,
+  notificationServiceToken,
+} from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-notification provider', () => {
   it('registers, activates, and closes the core manager', async () => {
@@ -33,8 +37,9 @@ describe('@nocobase/app-plugin-notification provider', () => {
 
     provider.register();
     expect(container.has(notificationServiceToken)).toBe(true);
-    const notification = container.resolve(notificationServiceToken);
-    notification.registry
+    expect(container.has(notificationExtensionRegistryToken)).toBe(true);
+    const registry = container.resolve(notificationExtensionRegistryToken);
+    registry
       .registerChannel({
         type: 'email',
         async createChannel() {
@@ -58,6 +63,8 @@ describe('@nocobase/app-plugin-notification provider', () => {
           };
         },
       });
+    const notification = container.resolve(notificationRuntimeToken);
+    expect(container.resolve(notificationServiceToken)).toBe(notification);
     const activate = vi.spyOn(notification, 'activate');
     const start = vi.spyOn(notification, 'start');
     const close = vi.spyOn(notification, 'close');
@@ -76,21 +83,6 @@ describe('@nocobase/app-plugin-notification provider', () => {
     expect(close).toHaveBeenCalledOnce();
     const authorization = container.resolve(authorizationToken);
     expect(authorization.resources.add).toHaveBeenCalledOnce();
-    expect(authorization.permissionResources.register).toHaveBeenCalledWith({
-      plugin: 'notification',
-      resourceType: {
-        value: 'notification',
-        label: 'Notifications',
-        resources: [
-          {
-            value: 'test',
-            label: 'Test notifications',
-            actions: [{ value: 'send', label: 'Send' }],
-          },
-        ],
-        actions: [{ value: 'send', label: 'Send' }],
-      },
-    });
     const add = authorization.resources.add as unknown as ReturnType<
       typeof vi.fn
     >;
@@ -121,10 +113,6 @@ describe('@nocobase/app-plugin-notification provider', () => {
         },
       ),
     ).resolves.toMatchObject({ effect: 'permit' });
-    expect(authorization.resources.remove).toHaveBeenCalledWith('notification');
-    expect(authorization.permissionResources.unregister).toHaveBeenCalledWith(
-      'notification',
-    );
   });
 
   it('fails fast when the required database dependency is missing', () => {
@@ -152,8 +140,7 @@ function createContainer(withDatabase: boolean): ServiceContainer {
     registerJob: vi.fn(),
   } as unknown as NocoBaseQueueManager);
   container.instance(authorizationToken, {
-    resources: { add: vi.fn(), remove: vi.fn() },
-    permissionResources: { register: vi.fn(), unregister: vi.fn() },
+    resources: { add: vi.fn() },
   } as unknown as AppAuthorization);
   return container;
 }

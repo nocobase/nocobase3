@@ -26,7 +26,7 @@ This Skill is published with `@nocobase/app-plugin-notification`. Keep it synchr
 - Configure and use the built-in `in-app`, `email`, and `im` Channels.
 - Send notifications through `notificationServiceToken` and select Providers deliberately.
 - Inspect Notification, Delivery, and Attempt records and diagnose queue or Provider failures.
-- Implement custom Channel or Provider definitions through the public registry contracts.
+- Implement custom Channel or Provider definitions through `notificationExtensionRegistryToken` and the public registry contracts.
 
 # Non-Goals
 

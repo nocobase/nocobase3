@@ -26,10 +26,19 @@ Implement a `NotificationChannelDefinition<TConfig, TRecipient, TMessage, TPrepa
 Register the Channel once, then register every Provider definition under that Channel type before the first runtime creation:
 
 ```ts
-notification.registry
+import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
+
+const notificationRegistry = app.container.resolve(
+  notificationExtensionRegistryToken,
+);
+notificationRegistry
   .registerChannel(createSmsChannelDefinition())
   .registerProvider('sms', createExampleSmsProviderDefinition());
 ```
+
+Extension plugins use `notificationExtensionRegistryToken`; they do not
+resolve `notificationServiceToken` or depend on the manager lifecycle and
+route surface.
 
 Duplicate Channel types and duplicate Provider types within a Channel are rejected. At runtime, Provider names from configuration must be unique within the Channel.
 

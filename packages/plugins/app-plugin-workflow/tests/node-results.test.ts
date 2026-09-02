@@ -58,7 +58,7 @@ describe('workflow node result schemas', () => {
         }),
         RunInstruction.create({
           key: 'undeclared',
-          config: { script: './x.ts' },
+          config: { module: './x' },
         }),
       ],
     });
@@ -87,7 +87,7 @@ describe('workflow node result schemas', () => {
         RunInstruction.create({
           key: 'first',
           result: objectResult,
-          config: { script: './x.ts' },
+          config: { module: './x' },
         }),
         ConditionInstruction.create({
           key: 'owner',
@@ -100,7 +100,7 @@ describe('workflow node result schemas', () => {
               key: 'inside',
               result: objectResult,
               config: {
-                script: './x.ts',
+                module: './x',
                 args: {
                   owner: '{{$nodeResults.owner}}',
                   first: '{{$nodeResults.first.nested.name}}',
@@ -115,7 +115,7 @@ describe('workflow node result schemas', () => {
                 RunInstruction.create({
                   key: 'nested',
                   config: {
-                    script: './x.ts',
+                    module: './x',
                     args: {
                       inherited: '{{$nodeResults.inside.value}}',
                       owner: '{{$nodeResults.nestedOwner}}',
@@ -127,7 +127,7 @@ describe('workflow node result schemas', () => {
             RunInstruction.create({
               key: 'laterInside',
               config: {
-                script: './x.ts',
+                module: './x',
                 args: {
                   value: '{{$nodeResults.inside.value}}',
                   hiddenNested: '{{$nodeResults.nested.value}}',
@@ -139,7 +139,7 @@ describe('workflow node result schemas', () => {
             RunInstruction.create({
               key: 'sibling',
               config: {
-                script: './x.ts',
+                module: './x',
                 args: { invalid: '{{$nodeResults.inside.value}}' },
               },
             }),
@@ -148,7 +148,7 @@ describe('workflow node result schemas', () => {
         RunInstruction.create({
           key: 'after',
           config: {
-            script: './x.ts',
+            module: './x',
             args: {
               leaked: '{{$nodeResults.inside.value}}',
               future: '{{$nodeResults.last.value}}',
@@ -159,7 +159,7 @@ describe('workflow node result schemas', () => {
           key: 'last',
           result: objectResult,
           config: {
-            script: './x.ts',
+            module: './x',
             args: { self: '{{$nodeResults.last.value}}' },
           },
         }),

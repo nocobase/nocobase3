@@ -8,8 +8,9 @@ page.
 ## Public entries
 
 - `@nocobase/app-plugin-notification` and `/server` expose the Server plugin,
-  public notification contracts, `notificationServiceToken`, and registry
-  definitions.
+  public notification contracts, the narrow `notificationServiceToken` for
+  sending, `notificationExtensionRegistryToken` for Channel/Provider
+  contributions, and registry definitions.
 - `@nocobase/app-plugin-notification/client` exposes the Client plugin factory.
 - `/client/bootstrap` and `/client/routes` expose the individual Client
   contributions for advanced composition.
@@ -17,6 +18,8 @@ page.
 Applications should resolve the shared `notificationServiceToken` from their
 Server container. Do not construct a second notification manager or call a
 Provider directly, because that bypasses persistence, retry, and logs.
+Extension plugins resolve `notificationExtensionRegistryToken` instead; the
+manager lifecycle and test-route surface are internal to the core plugin.
 
 ## Runtime requirements
 

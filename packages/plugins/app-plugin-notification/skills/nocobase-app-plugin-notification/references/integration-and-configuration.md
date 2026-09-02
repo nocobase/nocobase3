@@ -2,7 +2,7 @@
 
 ## Prefer plugin composition
 
-For a normal NocoBase application, enable the core plugin plus the Channel packages the application needs. Their server plugins contribute migrations, Service Providers, and routes. The core Provider resolves the existing database, queue, and logger from the shared Application container and registers `notificationServiceToken`.
+For a normal NocoBase application, enable the core plugin plus the Channel packages the application needs. Their server plugins contribute migrations, Service Providers, and routes. The core Provider resolves the existing database, queue, and logger from the shared Application container and registers the narrow `notificationServiceToken` for business sending plus `notificationExtensionRegistryToken` for Channel and Provider contributions.
 
 Apply the owning application's migration command after changing enabled plugins. The core package creates Notification, Delivery, and Attempt tables; the in-app package creates the personal inbox table.
 

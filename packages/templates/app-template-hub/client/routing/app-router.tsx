@@ -1,5 +1,7 @@
 import { Authenticated } from '@refinedev/core';
 import type {
+  AppClientRegisteredDevRoute,
+  AppClientRegisteredDevRouteGroup,
   AppClientRegisteredRoute,
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
@@ -16,19 +18,32 @@ import { StandalonePageLayout } from './standalone-page-layout.js';
 // The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
 // it. Loading it lazily keeps it out of the entry chunk, the same way every page it hosts stays out.
 const SettingsLayout = lazy(async () => ({
-  default: (await import('../settings/index.js')).SettingsLayout,
+  default: (await import('../layouts/settings-layout.js')).SettingsLayout,
 }));
+
+// The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
+// branch lets a production build prove the module is unreachable and drop it, along with every dev page and any
+// module only those pages import.
+const DevLayout = import.meta.env.DEV
+  ? lazy(async () => ({
+      default: (await import('../layouts/dev-layout.js')).DevLayout,
+    }))
+  : undefined;
 
 export interface AppRouterProps {
   readonly clientRoutes: readonly AppClientRegisteredRoute[];
   readonly clientSettings: readonly AppClientRegisteredSetting[];
   readonly clientSettingGroups: readonly AppClientRegisteredSettingGroup[];
+  readonly clientDevRoutes: readonly AppClientRegisteredDevRoute[];
+  readonly clientDevRouteGroups: readonly AppClientRegisteredDevRouteGroup[];
 }
 
 export function AppRouter({
   clientRoutes,
   clientSettings,
   clientSettingGroups,
+  clientDevRoutes,
+  clientDevRouteGroups,
 }: AppRouterProps): ReactElement {
   const settingsRoutes = useMemo(
     () =>
@@ -38,13 +53,22 @@ export function AppRouter({
       ),
     [clientRoutes],
   );
+  const devRoutes = useMemo(
+    () =>
+      clientRoutes.filter(
+        (route) => route.auth === 'required' && route.path.startsWith('/dev/'),
+      ),
+    [clientRoutes],
+  );
   const routeGroups = useMemo(
     () => ({
       guest: clientRoutes.filter((route) => route.auth === 'guest'),
       optional: clientRoutes.filter((route) => route.auth === 'optional'),
       required: clientRoutes.filter(
         (route) =>
-          route.auth === 'required' && !route.path.startsWith('/settings/'),
+          route.auth === 'required' &&
+          !route.path.startsWith('/settings/') &&
+          !route.path.startsWith('/dev/'),
       ),
     }),
     [clientRoutes],
@@ -87,6 +111,24 @@ export function AppRouter({
             </Suspense>
           }
         />
+        {import.meta.env.DEV && DevLayout ? (
+          <Route
+            path='/dev/*'
+            element={
+              <Suspense
+                fallback={
+                  <Loading className='min-h-svh' label='Loading dev tools' />
+                }
+              >
+                <DevLayout
+                  devRoutes={clientDevRoutes}
+                  groups={clientDevRouteGroups}
+                  routes={devRoutes}
+                />
+              </Suspense>
+            }
+          />
+        ) : null}
       </Route>
 
       <Route

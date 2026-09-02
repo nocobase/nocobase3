@@ -316,9 +316,6 @@ function permissionSetOptions(authz: AppAuthorization): object {
         ],
         actions: [{ value: 'access', label: 'Access' }],
       },
-      ...authz.permissionResources
-        .list()
-        .map((contribution) => contribution.resourceType),
       administrationOptions(),
       databaseResourceOptions(authz),
     ],

@@ -1,11 +1,12 @@
 import type {
   NotificationChannelDefinition,
+  NotificationExtensionRegistry,
   NotificationProviderDefinition,
 } from './types.js';
 import { notificationI18nText } from './types.js';
 
 /** Collects notification definitions without creating runtime resources. */
-export class NotificationRegistry {
+export class NotificationRegistry implements NotificationExtensionRegistry {
   private readonly channelDefinitions = new Map<
     string,
     NotificationChannelDefinition

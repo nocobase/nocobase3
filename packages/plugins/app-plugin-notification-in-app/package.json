@@ -1,8 +1,8 @@
 {
   "name": "@nocobase/app-plugin-notification-in-app",
   "displayName": "In-app Notification App Plugin",
-  "description": "Provides the in-app notification Channel and database Provider.",
-  "version": "0.2.0-beta.2",
+  "description": "Provides an authenticated in-app inbox and contributes its notification Channel when the core Server plugin is registered.",
+  "version": "0.2.0-beta.3",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -11,7 +11,6 @@
   "sideEffects": false,
   "files": [
     "dist",
-    "CHANGELOG.md",
     "README.md",
     "registry",
     "registry.config.json",
@@ -67,16 +66,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/session": "workspace:^",
     "hono": "catalog:"
-  },
-  "peerDependencies": {
-    "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-plugin-notification": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/db": "workspace:^",
-    "@nocobase/i18n": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
-    "@nocobase/session": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/app-plugin-authentication": "workspace:*",
@@ -86,11 +77,18 @@
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/i18n": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
-    "@nocobase/session": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/service-provider": "workspace:^"
   }
 }

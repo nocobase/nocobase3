@@ -1,4 +1,4 @@
-import type { NotificationService } from '@nocobase/app-plugin-notification';
+import type { NotificationExtensionRegistry } from '@nocobase/app-plugin-notification';
 
 import {
   createEmailChannelDefinition,
@@ -12,9 +12,9 @@ import {
 } from './im/index.js';
 
 export function registerBuiltInNotificationProviders(
-  notification: Pick<NotificationService, 'registry'>,
+  registry: NotificationExtensionRegistry,
 ): void {
-  notification.registry
+  registry
     .registerChannel(createEmailChannelDefinition())
     .registerProvider('email', createSmtpProviderDefinition())
     .registerProvider('email', createResendProviderDefinition())

@@ -1,7 +1,7 @@
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
-  notificationServiceToken,
-  type NotificationService,
+  notificationExtensionRegistryToken,
+  type NotificationExtensionRegistry,
 } from '@nocobase/app-plugin-notification';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
@@ -20,9 +20,9 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
     const registerChannel = vi.fn(() => ({ registerProvider }));
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, {} as DatabaseManager);
-    container.instance(notificationServiceToken, {
-      registry: { registerChannel },
-    } as unknown as NotificationService);
+    container.instance(notificationExtensionRegistryToken, {
+      registerChannel,
+    } as unknown as NotificationExtensionRegistry);
     container.instance(authenticationToken, {} as Auth);
     const provider = new InAppNotificationProvider({
       container,
@@ -42,7 +42,7 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
     );
   });
 
-  it('keeps the inbox store available when the core manager is absent', async () => {
+  it('keeps the inbox store available when the core Server plugin is not registered', async () => {
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, {} as DatabaseManager);
     const provider = new InAppNotificationProvider({

@@ -24,6 +24,7 @@ describe('@nocobase/app-plugin-notification Agent Skill contract', () => {
     expect(packageJson.files).toContain('skills');
     expect(skill).toContain('name: nocobase-app-plugin-notification');
     expect(skill).toContain('notificationServiceToken');
+    expect(skill).toContain('notificationExtensionRegistryToken');
     expect(skill).toContain('references/delivery-diagnostics.md');
     expect(skill).toMatch(/missing required input/i);
     expect(skill).toMatch(/high-impact actions/i);

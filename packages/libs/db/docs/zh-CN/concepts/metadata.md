@@ -2,6 +2,8 @@
 
 Metadata 是 Collection 的应用层元信息，用于帮助 UI、应用逻辑和 Agent 理解数据模型。Metadata 和数据库结构变更要分开处理。
 
+Metadata Store、物理 Schema、完整 Collection 以及主数据库和外部数据库的目标关系，见 [Collection 架构](../collection/architecture.md)。
+
 ## 应用层 metadata
 
 Collection 级别：

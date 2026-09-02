@@ -1,10 +1,11 @@
 # Route API
 
 `createFileRoute()` returns a Hono Router with exactly six relative endpoints.
-Mount it inside a `defineApiRoutes()` contribution below a business path such
-as `/orders/:orderId/attachments`. The Application adds the `/api` prefix.
+Mount it inside an application-owned `defineApiRoutes()` contribution below a
+business path such as `/orders/:orderId/attachments`. The Application adds the
+`/api` prefix.
 
-This is the stable public route factory for business modules.
+This is the stable public route factory for application business features.
 
 | Method   | Relative path  | Action                      | Authentication        |
 | -------- | -------------- | --------------------------- | --------------------- |
@@ -26,10 +27,11 @@ Use the assembly pattern in [quick start](quick-start.md). Do not write `/api`
 in `router.route(...)`; the Application adds that prefix for every
 `defineApiRoutes()` contribution.
 
-`auth` handles login state. `authorize` is optional, but a business module
-should use it to delegate `list`, `upload`, `read`, `issue-token`, and `delete`
-to the existing authorization system. The callback receives the Hono context,
-the exact `FileRouteAction`, and a record for record-specific actions.
+`auth` handles login and authorization middleware for management operations.
+`authorize` is optional, but an application business feature should use it to
+delegate `list`, `upload`, `read`, `issue-token`, and `delete` to the App's
+existing domain authorization. The callback receives the Hono context, the
+exact `FileRouteAction`, and a record for record-specific actions.
 
 Choose either `database` plus `table`/optional `scope`/`order`, or a custom
 `store`; the two forms are mutually exclusive. `defaultDisk`,
@@ -43,9 +45,9 @@ storage or Private Token operations are attempted. Keep Drive credentials and
 the Token secret in server-only configuration; they are never request fields.
 
 Do not create another ACL. For a database collection, register the collection
-and use the existing authorization `authorize()` result and its field/record
-conditions at the business boundary. The file Route cannot apply conditions to
-the parent business record: authorize that parent through its normal
+and use the App's existing authorization result and its field/record conditions
+at the business boundary. The file Route cannot apply conditions to the parent
+business record: authorize that parent through the application's normal
 service/query before allowing the file operation. A plain guard is appropriate
 only when a yes/no decision is sufficient.
 

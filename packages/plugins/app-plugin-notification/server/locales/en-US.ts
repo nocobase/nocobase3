@@ -1,30 +1,6 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
-  test: {
-    channels: { email: 'Email', im: 'IM', inApp: 'In-app' },
-    providers: {
-      smtp: 'SMTP',
-      resend: 'Resend',
-      feishuWebhook: 'Feishu webhook',
-      dingtalkWebhook: 'DingTalk webhook',
-      database: 'Database',
-    },
-    fields: {
-      recipient: 'Recipient',
-      recipientUserId: 'Recipient user ID',
-      title: 'Title',
-      message: 'Message',
-    },
-    placeholders: {
-      email: 'name@example.com',
-      currentUser: 'Defaults to the current user',
-    },
-    defaults: {
-      title: 'NocoBase notification test',
-      body: 'This is a test notification from NocoBase.',
-    },
-  },
   errors: {
     testDisabled: 'Notification testing is not available.',
     testHeaderRequired: 'The notification test request header is required.',

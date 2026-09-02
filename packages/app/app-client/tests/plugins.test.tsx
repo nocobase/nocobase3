@@ -8,9 +8,11 @@ import {
   defineClientPlugins,
   defineClientReactProviders,
   defineClientRouteComponentOverrides,
+  defineDevRoutes,
   defineSettingsRoutes,
   defineClientSourceExtension,
   resolveAppClientContributions,
+  type AppClientDevRoutePageDefinition,
   type AppClientPluginFactory,
   type AppClientSettingsRoutePageDefinition,
 } from '../src/plugins.js';
@@ -910,5 +912,173 @@ describe('client settings', () => {
     expect(defineClientPlugins([plugin()]).plugins[0].routes).toEqual([
       settings,
     ]);
+  });
+});
+
+describe('client dev routes', () => {
+  const page = async () => ({ default: () => null });
+
+  it('mounts pages under /dev and marks them as the dev surface', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        routes: defineDevRoutes([
+          {
+            name: 'playground',
+            path: '/playground',
+            navigation: { title: 'Playground' },
+            componentLoader: page,
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.devRoutes).toMatchObject([
+      {
+        id: 'playground',
+        path: '/dev/playground',
+        source: 'plugin',
+        surface: 'dev',
+        title: 'Playground',
+      },
+    ]);
+    // Dev pages are their own surface: they never leak into the settings centre.
+    expect(resolved.settings).toEqual([]);
+    expect(resolved.settingGroups).toEqual([]);
+  });
+
+  it("registers a group's dev pages under its id and keeps the declaration order", () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        routes: defineDevRoutes([
+          {
+            name: 'inspect',
+            path: '/inspect',
+            navigation: { title: 'Inspect' },
+            children: [
+              {
+                name: 'routes',
+                path: '/routes',
+                navigation: { title: 'Routes' },
+                componentLoader: page,
+              },
+              {
+                name: 'cache',
+                path: '/cache',
+                navigation: { title: 'Cache' },
+                componentLoader: page,
+              },
+            ],
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.devRoutes.map((route) => route.path)).toEqual([
+      '/dev/inspect/routes',
+      '/dev/inspect/cache',
+    ]);
+    expect(resolved.devRouteGroups).toMatchObject([
+      { id: 'inspect', surface: 'dev', title: 'Inspect' },
+    ]);
+  });
+
+  it('lets a dev route and a setting share a relative path', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        routes: [
+          defineSettingsRoutes([
+            {
+              name: 'shared',
+              path: '/shared',
+              navigation: { title: 'Shared' },
+              componentLoader: page,
+            },
+          ]),
+          defineDevRoutes([
+            {
+              name: 'shared',
+              path: '/shared',
+              navigation: { title: 'Shared' },
+              componentLoader: page,
+            },
+          ]),
+        ],
+      },
+    ]);
+
+    expect(resolved.settings[0].path).toBe('/settings/shared');
+    expect(resolved.devRoutes[0].path).toBe('/dev/shared');
+  });
+
+  it('reports a duplicate dev route as a dev route rather than as a setting', () => {
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-example',
+          routes: defineDevRoutes([
+            {
+              name: 'tools',
+              path: '/tools',
+              navigation: { title: 'Tools' },
+              componentLoader: page,
+            },
+            {
+              name: 'tools',
+              path: '/tools',
+              navigation: { title: 'Tools again' },
+              componentLoader: page,
+            },
+          ]),
+        },
+      ]),
+    ).toThrow(/Client dev route "\/dev\/tools"/u);
+  });
+
+  it('rejects a dev route whose componentLoader is missing', () => {
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-example',
+          routes: defineDevRoutes([
+            {
+              name: 'broken',
+              path: '/broken',
+              navigation: { title: 'Broken' },
+            } as AppClientDevRoutePageDefinition,
+          ]),
+        },
+      ]),
+    ).toThrow('Client dev route "broken"');
+  });
+
+  it('carries static Dev Route contributions into registration', () => {
+    const devRoutes = defineDevRoutes([]);
+    const plugin = defineClientPlugin({
+      packageName: '@nocobase/app-plugin-example',
+      routes: devRoutes,
+    });
+
+    expect(plugin().routes).toEqual([devRoutes]);
+    expect(defineClientPlugins([plugin()]).plugins[0].routes).toEqual([
+      devRoutes,
+    ]);
+  });
+
+  it('keeps the declared routes outside a production build', () => {
+    // Vitest runs under Node, where `import.meta.env` is undefined. That is a development context, so the guard must
+    // let the routes through rather than treating the missing value as production.
+    expect(
+      defineDevRoutes([
+        {
+          name: 'playground',
+          path: '/playground',
+          navigation: { title: 'Playground' },
+          componentLoader: page,
+        },
+      ]).routes,
+    ).toHaveLength(1);
   });
 });

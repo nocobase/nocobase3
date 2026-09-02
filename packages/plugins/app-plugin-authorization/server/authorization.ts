@@ -21,7 +21,6 @@ import {
   restrictionRules,
   type RestrictionRulesAuthorizationApi,
 } from '@nocobase/authorization/restriction-rules';
-import { PermissionResourceRegistry } from './permission-resources.js';
 import {
   sharingRules,
   type SharingRulesAuthorizationApi,
@@ -65,9 +64,7 @@ export type AppAuthorization = Authorization &
   DefaultAccessAuthorizationApi &
   SharingRulesAuthorizationApi &
   RestrictionRulesAuthorizationApi &
-  AppAuthorizationAdministrationPluginApi & {
-    readonly permissionResources: PermissionResourceRegistry;
-  };
+  AppAuthorizationAdministrationPluginApi;
 
 export interface CreateAppAuthorizationOptions {
   connection?: DatabaseConnection;
@@ -76,7 +73,6 @@ export interface CreateAppAuthorizationOptions {
 export function createAppAuthorization(
   options: CreateAppAuthorizationOptions,
 ): AppAuthorization {
-  const permissionResources = new PermissionResourceRegistry();
   let resolveCollection: (
     name: string,
   ) => { name: string; fields: readonly string[] } | undefined = () =>
@@ -94,10 +90,6 @@ export function createAppAuthorization(
       applicationAdministration(options.connection, (name) =>
         resolveCollection(name),
       ),
-      {
-        id: 'application-permission-resources',
-        authorizationApi: { permissionResources },
-      },
     ],
   });
   resolveCollection = (name) => authz.database.collections.get(name);

@@ -47,10 +47,7 @@ import {
 const QUEUE_TABLE = 'queue_jobs';
 const SCHEDULES_TABLE = 'queue_schedules';
 
-type RuntimeOverrides = Omit<
-  Partial<WorkflowEngineOptions>,
-  'database' | 'instructions'
->;
+type RuntimeOverrides = Omit<Partial<WorkflowEngineOptions>, 'database'>;
 
 function equals(path: string, right: unknown): JsonObject {
   return { expression: { '===': [{ var: path }, right] } };
@@ -90,9 +87,11 @@ describe('workflow runtime', () => {
   ): WorkflowEngine {
     const runtime = new WorkflowEngine({
       database,
-      instructions,
       ...overrides,
     });
+    for (const instruction of instructions.values()) {
+      runtime.registerInstruction(instruction);
+    }
     runtimes.push(runtime);
     return runtime;
   }
@@ -268,14 +267,25 @@ describe('workflow runtime', () => {
         parameters: { limit: 3 },
       });
     });
-    it('registers core instructions and lets the caller override them', () => {
+    it('registers core and application instructions', () => {
       const runtime = buildRuntime(new Map([['echo', echoInstruction]]));
       expect(runtime.instructions.get('condition')).toBe(ConditionInstruction);
       expect(runtime.instructions.get('echo')).toBe(echoInstruction);
-      const overriding = buildRuntime(
-        new Map([['condition', echoInstruction]]),
+    });
+
+    it('registers application instructions', async () => {
+      const runtime = buildRuntime(new Map());
+
+      runtime.registerInstruction(echoInstruction);
+      expect(runtime.instructions.get('echo')).toBe(echoInstruction);
+      expect(() => runtime.registerInstruction(echoInstruction)).toThrow(
+        'Workflow instruction "echo" is already registered.',
       );
-      expect(overriding.instructions.get('condition')).toBe(echoInstruction);
+
+      await runtime.initialize();
+      const slowInstruction = createSlowInstruction(1);
+      expect(() => runtime.registerInstruction(slowInstruction)).not.toThrow();
+      expect(runtime.instructions.get('slow')).toBe(slowInstruction);
     });
 
     it('drains in-flight work when disposed', async () => {

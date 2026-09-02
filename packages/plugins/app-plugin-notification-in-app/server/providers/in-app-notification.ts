@@ -1,5 +1,5 @@
 import { databaseManagerToken } from '@nocobase/db';
-import { notificationServiceToken } from '@nocobase/app-plugin-notification';
+import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 
@@ -31,10 +31,10 @@ export class InAppNotificationProvider<
 
   public override async boot(): Promise<void> {
     const { container } = this.app;
-    if (!container.has(notificationServiceToken)) return;
-    const notification = container.resolve(notificationServiceToken);
+    if (!container.has(notificationExtensionRegistryToken)) return;
+    const registry = container.resolve(notificationExtensionRegistryToken);
     const store = container.resolve(inAppNotificationStoreToken);
-    notification.registry
+    registry
       .registerChannel(createInAppChannelDefinition())
       .registerProvider('in-app', createDatabaseProviderDefinition({ store }));
   }

@@ -1,8 +1,8 @@
 # Copy this file to config.yml before starting the application.
 
-app:
-  # Public origin used for callbacks and redirects in production.
-  # publicOrigin: https://apps.example.com
+# app:
+#   Public origin used for callbacks and redirects in production.
+#   publicOrigin: https://apps.example.com
 
 # Values under client are public and embedded in the SPA HTML.
 client:

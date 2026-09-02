@@ -12,8 +12,21 @@ export interface NotificationChannelSchema {
 
 export type NotificationChannelMap = Record<string, NotificationChannelSchema>;
 
-export type NotificationService =
-  import('./manager.js').NotificationManager<NotificationChannelMap>;
+export interface NotificationService {
+  send(
+    input: NotificationSendInput<NotificationChannelMap>,
+  ): Promise<NotificationSendResult>;
+}
+
+export interface NotificationExtensionRegistry {
+  registerChannel(
+    definition: NotificationChannelDefinition,
+  ): NotificationExtensionRegistry;
+  registerProvider(
+    channelType: string,
+    definition: NotificationProviderDefinition,
+  ): NotificationExtensionRegistry;
+}
 
 export interface NotificationContent {
   readonly title?: string;
