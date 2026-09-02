@@ -5,13 +5,13 @@ description: 说明 Database、Module、File 和 In-memory Metadata Store 的行
 
 # Metadata Store 后端
 
-> **文档类型：深入设计。** Store 选择和公共合同见 [Metadata Store 与后端](../collection-metadata/metadata-store.md)；本页保留各后端实现决策。
+> **文档类型：内部实现。** Store 选择和公共合同见 [Metadata Store 与后端](../../collection-metadata/metadata-store.md)；本页保留各后端实现决策。
 
 > `DatabaseCollectionMetadataStore`、`ModuleCollectionMetadataStore` 和
 > `InMemoryCollectionMetadataStore` 已实现。多个命名 Store 的声明式配置仍是后续设计；
 > 当前数据库配置直接接收 Store 实例。
 
-所有后端都实现 [Metadata Store 设计](./metadata-store.md) 中的补充文档契约。后端只改变
+所有后端都实现 [Metadata Store 设计](./store.md) 中的补充文档契约。后端只改变
 持久化方式和 capability，不改变 Metadata 文档的语义。
 
 架构中的 **File Metadata** 是一个广义概念，指保存在源码管理或普通文件中的 Metadata。第一版通过
@@ -209,6 +209,6 @@ const db = createDatabaseManager({
 
 ## 相关文档
 
-- [Metadata Store 设计](./metadata-store.md)
-- [Collection 解析生命周期](./collection-resolution.md)
-- [数据库配置](../reference/database-config.md)
+- [Metadata Store 设计](./store.md)
+- [Collection 解析生命周期](../collection/resolution-lifecycle.md)
+- [数据库配置](../../reference/database-config.md)

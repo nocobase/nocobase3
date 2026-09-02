@@ -102,7 +102,7 @@ await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 
 如果 Connection 的 `tablePrefix` 是 `app_`，上面的表和列会分别归一化为 `app_orders` 和 `order_no`。示例中的 Collection 局部前缀恰好与 Connection 一致；如果它们不同，Query 仍只使用 Connection 配置，无法从 Collection Metadata 得知局部覆盖。
 
-Repository 规划使用 Filter Builder 表达应用层条件。`db.repository()` 当前尚未实现，不要把 Repository 规划示例复制到运行时代码；详见 [Repository 概览](../repository/overview.md) 和 [Filter Builder](../repository/filter-builder.md)。
+Repository 提案使用 Filter Builder 表达应用层条件。`db.repository()` 当前尚未实现，不要把提案示例复制到运行时代码；详见 [Repository 提案](../proposals/repository/overview.md) 和 [Filter Builder 提案](../proposals/repository/filter-builder.md)。
 
 ## 当前边界
 

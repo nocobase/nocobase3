@@ -5,7 +5,7 @@ description: 说明补充 Metadata 的读取、更新、并发控制、校验和
 
 # Collection Metadata Service 设计
 
-> **文档类型：深入设计。** 公共用法见 [`connection.collectionMetadata`](../collection-metadata/collection-metadata-service.md)；本页解释校验、CAS、事务和缓存失效。
+> **文档类型：内部实现。** 公共用法见 [`connection.collectionMetadata`](../../collection-metadata/collection-metadata-service.md)；本页解释校验、CAS、事务和缓存失效。
 
 > `CollectionMetadataService` 已挂到 `DatabaseConnection.collectionMetadata`，Metadata 写入会主动失效
 > Registry。Builder 在物理 Schema 创建或变更时也通过本 Service 同步补充 Metadata。
@@ -155,7 +155,7 @@ Builder 不提供 Metadata-only 快捷方法。创建 Collection、添加 Field 
 
 ## 相关文档
 
-- [Metadata Store 设计](./metadata-store.md)
-- [Collection Resolver 设计](./collection-resolver.md)
-- [Collection Registry 设计](./collection-registry.md)
-- [Collection 解析生命周期](./collection-resolution.md)
+- [Metadata Store 设计](./store.md)
+- [Collection Resolver 设计](../collection/resolver.md)
+- [Collection Registry 设计](../collection/registry.md)
+- [Collection 解析生命周期](../collection/resolution-lifecycle.md)

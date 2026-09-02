@@ -74,4 +74,4 @@ Builder、Migration 和 Metadata Service 会在成功更新后失效相关缓存
 - 修改 Schema：使用 Builder，业务变更放入 Migration。
 - 检查物理数据库对象：使用 [Schema Inspector](../schema-inspector/overview.md)。
 - 更新补充 Metadata：使用 [Collection Metadata Service](../collection-metadata/collection-metadata-service.md)。
-- 了解内部解析和缓存设计：[Collection 架构](../collection/architecture.md)和 [Registry 设计](../collection/collection-registry.md)。
+- 了解内部解析和缓存实现：[Collection 架构](../internals/collection/architecture.md)和 [Registry](../internals/collection/registry.md)。

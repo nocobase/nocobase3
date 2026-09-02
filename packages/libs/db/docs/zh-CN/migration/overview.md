@@ -69,5 +69,5 @@ await migrator.latest();
 - [定义 Migration](./define-migration.md)
 - [创建和运行 Migrator](./create-migrator.md)
 - [Migration 测试](./testing.md)
-- [Migration 维护清单](./maintenance.md)
+- [Migration 维护清单](../development/migration-maintenance.md)
 - [Agent Schema 实现流程](../agent/implement-schema-change.md)

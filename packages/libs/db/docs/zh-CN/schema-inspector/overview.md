@@ -90,4 +90,4 @@ for await (const collection of inspector.scanPhysicalCollections({
 | 创建或修改对象                      | `connection.builder`            |
 | 更新 title、description 或 relation | `connection.collectionMetadata` |
 
-详细的物理模型、方言差异和示例仍见：[Schema Inspector 设计](../collection/schema-inspector.md)和[示例](../collection/schema-inspector-examples.md)。
+详细的物理模型和方言差异见 [Schema Inspector 内部实现](../internals/schema-inspector/architecture.md)，可运行用法见[示例](./examples.md)。

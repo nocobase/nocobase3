@@ -71,7 +71,7 @@ const collection = {
 
 未来 Repository 会读取 Collection metadata，并用 Filter Builder / Filter AST 表达应用层筛选条件。字段类型、关系类型、命名策略和应用层元信息都会影响 Repository filter 的校验和编译。
 
-详细设计见 [Repository 概览](../repository/overview.md) 和 [Filter Builder](../repository/filter-builder.md)。Collection 如何由物理 Schema 和补充 Metadata 解析得到，见 [Collection 架构](../collection/architecture.md)。
+未来设计见 [Repository 提案](../proposals/repository/overview.md) 和 [Filter Builder 提案](../proposals/repository/filter-builder.md)。Collection 如何由物理 Schema 和补充 Metadata 解析得到，见 [Collection 内部架构](../internals/collection/architecture.md)。
 
 ## Agent 注意事项
 

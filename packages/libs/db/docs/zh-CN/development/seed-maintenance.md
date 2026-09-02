@@ -1,4 +1,11 @@
+---
+title: Seed 维护清单
+description: 面向 DB 包维护者和 Agent 的 Seed 接口、顺序、事务、历史记录与测试检查清单。
+---
+
 # Seed 维护清单
+
+本页面向维护 `@nocobase/db` Seed 模块的贡献者和 Agent。业务代码的公开入口见 [Seed 概览](../seed/overview.md)。
 
 ## 公开 API
 

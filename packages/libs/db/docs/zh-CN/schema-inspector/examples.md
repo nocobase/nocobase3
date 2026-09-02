@@ -5,9 +5,9 @@ description: 通过 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 示例�
 
 # Schema Inspector 示例
 
-> **文档类型：完整示例集。** 先阅读 [`connection.schemaInspector`](../schema-inspector/overview.md) 了解当前 API 和名称语义，再按数据库方言查阅本页。
+> **文档类型：当前 API 示例。** 先阅读 [`connection.schemaInspector`](./overview.md) 了解当前 API 和名称语义，再按数据库方言查阅本页。
 
-> 本文使用 [Schema Inspector 设计](./schema-inspector.md) 中已经实现的第一版接口。不同数据库版本返回的
+> 本文使用 [Schema Inspector 内部实现](../internals/schema-inspector/architecture.md) 中已经实现的接口。不同数据库版本返回的
 > 原生表达式文本可能略有差异，调用方应以结构化字段为主，不应依赖表达式字符串的排版。
 
 `SchemaInspector` 面向物理数据库结构。示例中的 `tableName`、`columnName` 和
@@ -782,7 +782,7 @@ const physicalOrderItems =
 
 ## 相关文档
 
-- [Schema Inspector 设计](./schema-inspector.md)
-- [Collection Resolver 设计](./collection-resolver.md)
-- [Collection Registry 设计](./collection-registry.md)
-- [Collection 解析生命周期](./collection-resolution.md)
+- [Schema Inspector 内部实现](../internals/schema-inspector/architecture.md)
+- [Collection Resolver 内部实现](../internals/collection/resolver.md)
+- [Collection Registry 内部实现](../internals/collection/registry.md)
+- [Collection 解析生命周期](../internals/collection/resolution-lifecycle.md)

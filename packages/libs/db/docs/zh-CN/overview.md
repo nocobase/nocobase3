@@ -53,9 +53,18 @@ createDatabaseManager(config)
 5. [Migration](./migration/overview.md) 和 [Seed](./seed/overview.md)
 6. [API 索引](./reference/api-index.md)
 
+## 文档可信级别
+
+| 目录                                  | 用途                         | Agent 能否用于生成业务代码          |
+| ------------------------------------- | ---------------------------- | ----------------------------------- |
+| `database/`、`builder/`、`query/` 等  | 当前公开 API 与任务说明      | 可以，以 API 索引和类型声明交叉验证 |
+| [`internals/`](./internals/README.md) | 当前底层实现和维护者设计     | 仅用于维护或诊断，不要绕过公开入口  |
+| [`proposals/`](./proposals/README.md) | 尚未实现或导出的未来设计提案 | 不可以                              |
+| [`archive/`](./archive/README.md)     | 已被取代的历史材料           | 不可以，示例也不保证能编译或运行    |
+
 ## 当前边界
 
-- Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 是规划设计，当前不可调用。
+- Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 是[未来提案](./proposals/README.md)，当前不可调用。
 - Builder 使用 Collection/Field 逻辑名。
 - Query 使用 Connection 级查询标识符，不读取 Collection Metadata。
 - Schema Inspector 使用物理数据库 identity。

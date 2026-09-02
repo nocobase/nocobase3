@@ -56,4 +56,4 @@ if (current) {
 - Collection rename 不是 Metadata-only 操作；使用 `builder.renameCollection()`。
 - Metadata 写入成功后，后续 `connection.collections.get()` 会重新解析受影响 Collection。
 
-详细方法和一致性设计见[Metadata Service 设计](../collection/metadata-service.md)。
+详细方法和一致性设计见[Metadata Service 内部实现](../internals/metadata/service.md)。

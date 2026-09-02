@@ -1,8 +1,11 @@
+---
+title: Filter AST 提案
+description: 尚未实现或导出的 Repository Filter AST 设计；仅供设计讨论，不可用于生成生产代码。
+---
+
 # Filter AST
 
-> **状态：规划中。** Filter AST 当前尚未实现或导出，只用于 Repository 设计讨论，不要生成到运行时代码。
-
-> 状态：规划设计，暂未实现。
+> **状态：提案。运行时可用性：未实现。导出 API：无。** 本页只用于 Repository 设计讨论，不要据此生成生产代码。
 
 Filter AST 是 Repository Filter Builder 的结构化结果。它用于在代码、HTTP、CLI、file sync、权限配置和未来持久化场景之间传递同一套筛选条件。
 

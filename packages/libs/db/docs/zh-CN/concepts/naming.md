@@ -100,4 +100,4 @@ await db.builder().createCollection('auditLogs', (collection) => {
 
 - Builder 编译规则见 [Builder 命名](../builder/naming.md)。
 - Query 结果 key 和 alias 规则见 [Query 命名归一化](../query/naming.md)。
-- 迁移影响见 [Collection 物理名称简化影响分析](../collection/naming-simplification-impact.md)。
+- 设计演进见归档的 [Collection 确定性物理命名设计历史](../archive/design-history/deterministic-collection-naming.md)。

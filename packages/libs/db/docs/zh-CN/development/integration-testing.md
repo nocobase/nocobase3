@@ -1,4 +1,9 @@
-# 集成测试
+---
+title: DB 包集成测试
+description: 说明 @nocobase/db 的 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 集成测试环境与命令。
+---
+
+# DB 包集成测试
 
 `tests/integration` 是真实数据库连接测试，不是 mock，也不是 SQLite 专属目录。
 

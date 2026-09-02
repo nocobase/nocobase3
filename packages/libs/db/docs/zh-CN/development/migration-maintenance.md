@@ -1,6 +1,11 @@
+---
+title: Migration 维护清单
+description: 面向 DB 包维护者和 Agent 的 Migration 接口、不变性、事务与测试检查清单。
+---
+
 # Migration 维护清单
 
-这份清单面向维护者和 Agent，用于保持 migration 模块的接口、校验、事务和测试规则一致。维护 migration 相关代码或文档时，以本页和 [Migration](./overview.md) 为准。
+这份清单面向维护者和 Agent，用于保持 migration 模块的接口、校验、事务和测试规则一致。维护 migration 相关代码或文档时，以本页和 [Migration](../migration/overview.md) 为准。
 
 ## 公开 API
 
@@ -204,7 +209,7 @@ interface MigrationRollbackResult {
 
 ## 测试清单
 
-插件和应用 migration 的推荐测试模式见 [Migration 测试](./testing.md)。本节只维护 DB 包自身
+插件和应用 migration 的推荐测试模式见 [Migration 测试](../migration/testing.md)。本节只维护 DB 包自身
 对 migration 定义、loader 和 runner 的覆盖要求。
 
 单元测试覆盖：

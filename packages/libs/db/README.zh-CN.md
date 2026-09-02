@@ -19,6 +19,8 @@
 - [Collection Metadata](./docs/zh-CN/collection-metadata/overview.md)
 - [API 索引](./docs/zh-CN/reference/api-index.md)
 
+维护 `@nocobase/db` 底层实现时再进入[内部实现文档](./docs/zh-CN/internals/README.md)。[未来提案](./docs/zh-CN/proposals/README.md)和尚未删除但具有追溯价值的[历史归档](./docs/zh-CN/archive/README.md)都不是当前 API 合同，不能据此生成生产代码。
+
 ## 创建数据库入口
 
 ```ts
@@ -67,6 +69,6 @@ pnpm --filter @nocobase/db test:integration
 
 ## 当前边界
 
-- Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 仍是规划设计，当前不可调用。
+- Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 是未来提案，当前不可调用。
 - QueryAdapter 是数据库层查询接口，不读取 Collection Metadata。
 - `connection.client()` 是底层 adapter 逃生口，不是常规数据库入口。

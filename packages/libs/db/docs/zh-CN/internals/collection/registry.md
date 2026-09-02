@@ -5,7 +5,7 @@ description: 说明解析后 Collection 的缓存、并发加载、失效规则�
 
 # Collection Registry 设计
 
-> **文档类型：内部设计。** 调用当前公共 API 时先阅读 [`connection.collections`](../collections/overview.md)。本页解释缓存、并发加载和失效实现。
+> **文档类型：内部实现。** 调用当前公共 API 时先阅读 [`connection.collections`](../../collections/overview.md)。本页解释缓存、并发加载和失效实现。
 
 > `DatabaseConnection.collections`、Naming Index、Registry、跨 Collection relation 图校验、Builder 主动
 > 失效、transaction commit 传播和 Migration batch 失效已经提供。
@@ -154,7 +154,7 @@ Naming Index。transaction commit 将事务内记录的精确范围回放到外�
 
 ## 相关文档
 
-- [Schema Inspector 设计](./schema-inspector.md)
-- [Collection Resolver 设计](./collection-resolver.md)
-- [Collection 解析生命周期](./collection-resolution.md)
-- [Metadata Store 设计](./metadata-store.md)
+- [Schema Inspector 设计](../schema-inspector/architecture.md)
+- [Collection Resolver 设计](./resolver.md)
+- [Collection 解析生命周期](./resolution-lifecycle.md)
+- [Metadata Store 设计](../metadata/store.md)

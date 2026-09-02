@@ -59,5 +59,5 @@ await seeder.run();
 
 - [定义 Seed](./define-seed.md)
 - [创建和运行 Seeder](./create-seeder.md)
-- [Seed 维护清单](./maintenance.md)
+- [Seed 维护清单](../development/seed-maintenance.md)
 - [Agent Seed 实现流程](../agent/implement-seed-data.md)

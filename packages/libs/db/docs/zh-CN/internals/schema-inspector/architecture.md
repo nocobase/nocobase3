@@ -5,7 +5,7 @@ description: 定义如何通过数据库方言读取 Collection 解析所需的 
 
 # Schema Inspector 设计
 
-> **文档类型：深入设计。** 公共用法和准确入口见 [`connection.schemaInspector`](../schema-inspector/overview.md)；本页保留物理模型、方言实现和错误约定。
+> **文档类型：内部实现。** 公共用法和准确入口见 [`connection.schemaInspector`](../../schema-inspector/overview.md)；本页保留物理模型、方言实现和错误约定。
 
 > 本文描述 `@nocobase/db` 第一版 `SchemaInspector` 的接口、语义和能力边界。
 
@@ -100,7 +100,7 @@ export type DatabaseDialect =
   'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
 ```
 
-目标设计保留这个易读的配置值，并使用 `DatabaseDialectAdapter` 承载方言行为。该接口作为方言扩展点公开，
+当前实现保留这个易读的配置值，并使用 `DatabaseDialectAdapter` 承载方言行为。该接口作为方言扩展点公开，
 应用代码通常不需要直接使用：
 
 ```ts
@@ -721,7 +721,7 @@ export type SchemaInspectorErrorCode =
 ## 后续扩展方向
 
 SQLite、PostgreSQL、MySQL、Oracle、SQL Server Inspector 及公共接口已经实现，并已作为
-`CollectionResolver` 的稳定输入。后续扩展不影响当前 M0–M7 完整链路：
+`CollectionResolver` 的稳定输入。后续扩展不影响当前完整链路：
 
 1. 持续补充权限、并发变化及各数据库版本差异测试；
 2. 按实际需求增加其他方言 Adapter；
@@ -737,9 +737,9 @@ NocoBase 不直接采用这两个项目的公共接口，也不把它们作为�
 
 ## 相关文档
 
-- [Schema Inspector 示例](./schema-inspector-examples.md)
-- [Collection 架构](./architecture.md)
-- [Collection Resolver 设计](./collection-resolver.md)
-- [Collection Registry 设计](./collection-registry.md)
-- [Metadata Store 设计](./metadata-store.md)
-- [Collection 解析生命周期](./collection-resolution.md)
+- [Schema Inspector 示例](../../schema-inspector/examples.md)
+- [Collection 架构](../collection/architecture.md)
+- [Collection Resolver 设计](../collection/resolver.md)
+- [Collection Registry 设计](../collection/registry.md)
+- [Metadata Store 设计](../metadata/store.md)
+- [Collection 解析生命周期](../collection/resolution-lifecycle.md)

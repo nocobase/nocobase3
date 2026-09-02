@@ -5,12 +5,12 @@ description: 说明主数据库与外部数据库如何结合物理 Schema 和�
 
 # Collection 架构
 
-> **文档类型：内部设计。** 编写业务代码时先阅读 [`connection.collections`](../collections/overview.md) 和 [Collection Metadata 概览](../collection-metadata/overview.md)。本页保留架构背景和设计决策。
+> **文档类型：内部实现。** 编写业务代码时先阅读 [`connection.collections`](../../collections/overview.md) 和 [Collection Metadata 概览](../../collection-metadata/overview.md)。本页保留架构背景和设计决策。
 
-> 本文记录第一版架构形成过程。当前公共能力以 [`connection.collections`](../collections/overview.md)、[`connection.schemaInspector`](../schema-inspector/overview.md) 和 [Collection Metadata 概览](../collection-metadata/overview.md)为准；Writable JSON/YAML File Store 尚未实现。
+> 当前公共能力以 [`connection.collections`](../../collections/overview.md)、[`connection.schemaInspector`](../../schema-inspector/overview.md) 和 [Collection Metadata 概览](../../collection-metadata/overview.md)为准；Writable JSON/YAML File Store 尚未实现。
 
 Metadata Store 的持久化边界、文档模型、后端行为和一致性规则，见
-[Metadata Store 设计](./metadata-store.md)。该文档是 Metadata Store 实现的规范性设计。
+[Metadata Store 设计](../metadata/store.md)。该文档是 Metadata Store 实现的规范性设计。
 
 ## 目标
 
@@ -259,10 +259,10 @@ connection.collections = read resolved collections
 8. `collections.list()` 默认分页并返回轻量摘要；完整 Collection 通过 `get()` 懒加载，全量扫描必须显式执行。
 9. Connection 使用 `schemaManagement` 声明 Schema 所有权；它不承担业务记录权限控制。
 
-Metadata 文档和 Store API 的细节见 [Metadata Store 设计](./metadata-store.md)。持久化实现和共享配置见
-[Metadata Store 后端](./metadata-store-backends.md)。Resolver、Registry、drift、Snapshot 和 rename 行为见
-[Collection 解析生命周期](./collection-resolution.md)。
+Metadata 文档和 Store API 的细节见 [Metadata Store 设计](../metadata/store.md)。持久化实现和共享配置见
+[Metadata Store 后端](../metadata/store-backends.md)。Resolver、Registry、drift、Snapshot 和 rename 行为见
+[Collection 解析生命周期](./resolution-lifecycle.md)。
 
-详细组件契约分别见 [Schema Inspector 设计](./schema-inspector.md)、
-[Collection Resolver 设计](./collection-resolver.md)、[Collection Registry 设计](./collection-registry.md) 和
-[Collection Metadata Service 设计](./metadata-service.md)。
+详细组件契约分别见 [Schema Inspector 设计](../schema-inspector/architecture.md)、
+[Collection Resolver 设计](./resolver.md)、[Collection Registry 设计](./registry.md) 和
+[Collection Metadata Service 设计](../metadata/service.md)。

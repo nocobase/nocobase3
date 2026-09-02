@@ -112,7 +112,7 @@ for (const diagnostic of result.diagnostics) {
 
 可安全丢弃的物理属性不会产生诊断；已移除的应用语义会产生 warning；虚拟字段、无效 relation、重复名称和不兼容的显式物理名称会产生阻断 error。只要存在 error，结果就不包含 `document`。
 
-完整的存储边界、校验规则和 legacy extraction 允许列表见 [Metadata Store](../collection/metadata-store.md)。
+完整的存储边界、校验规则和 legacy extraction 允许列表见 [Metadata Store 内部实现](../internals/metadata/store.md)。
 
 ## Metadata Store
 
@@ -156,4 +156,4 @@ Store 尚未实现，不能把 Module Store 当作运行时文件编辑器。
 Store 的 `capabilities.writable` 只表示补充 Metadata 文档是否支持写入。它与业务记录的写权限无关，
 也不取代 `schemaManagement` 对 DDL 和 Migration 的控制。
 
-各后端的构造方式和持久化边界见 [Metadata Store 后端](../collection/metadata-store-backends.md)。
+各后端的构造方式和持久化边界见 [Metadata Store 后端实现](../internals/metadata/store-backends.md)。

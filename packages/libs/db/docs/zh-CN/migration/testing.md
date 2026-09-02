@@ -389,8 +389,8 @@ expect(users).toMatchObject({
 Schema Inspector 使用物理表名和列名；Resolved Collections 使用逻辑 Collection 名和 Field
 名。只有 Schema Inspector 尚未暴露、且 migration 明确依赖的方言特有信息，才考虑用
 `connection.client()` 做最后的只读验证。不要为了方便断言而直接使用底层 client 执行 DDL。
-Schema Inspector 的返回结构和更多示例见 [Schema Inspector](../collection/schema-inspector.md) 和
-[Schema Inspector 示例](../collection/schema-inspector-examples.md)。
+Schema Inspector 的返回结构和更多示例见 [Schema Inspector 内部实现](../internals/schema-inspector/architecture.md) 和
+[Schema Inspector 示例](../schema-inspector/examples.md)。
 
 不要只断言 runner 没有抛出异常；测试必须验证 migration 承诺的实际结果。
 
@@ -408,7 +408,7 @@ SQLite 适合快速验证基本流程，但不能证明所有数据库方言都�
 即使 migration 内部确实使用了 raw SQL 或 `connection.client()`，测试也应优先通过
 `schemaInspector` 验证执行后的物理 Schema。
 
-数据库服务、连接环境和完整矩阵命令见[集成测试](../testing/integration.md)。
+数据库服务、连接环境和完整矩阵命令见[DB 包集成测试](../development/integration-testing.md)。
 
 ## 最小测试清单
 

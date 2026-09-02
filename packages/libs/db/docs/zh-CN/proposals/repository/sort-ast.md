@@ -1,8 +1,11 @@
+---
+title: Sort AST 提案
+description: 尚未实现或导出的 Repository Sort AST 设计；仅供设计讨论，不可用于生成生产代码。
+---
+
 # Sort AST
 
-> **状态：规划中。** Sort AST 当前尚未实现或导出，只用于 Repository 设计讨论，不要生成到运行时代码。
-
-> 状态：规划设计，暂未实现。
+> **状态：提案。运行时可用性：未实现。导出 API：无。** 本页只用于 Repository 设计讨论，不要据此生成生产代码。
 
 Sort AST 是 Repository 排序意图的结构化表示。它用于 TypeScript、HTTP、CLI、file sync
 和未来持久化配置，明确区分：

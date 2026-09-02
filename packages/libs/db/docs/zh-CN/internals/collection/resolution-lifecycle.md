@@ -5,7 +5,7 @@ description: 说明主数据库和外部数据库的 Schema 如何与补充 Meta
 
 # Collection 解析生命周期
 
-> **文档类型：深入设计。** 业务代码入口见 [`connection.collections`](../collections/overview.md)；本页解释 Managed/External 来源、解析与缓存生命周期。
+> **文档类型：内部实现。** 业务代码入口见 [`connection.collections`](../../collections/overview.md)；本页解释 Managed/External 来源、解析与缓存生命周期。
 
 > `SchemaInspector`、`CollectionResolver`、`CollectionRegistry`、`connection.collections` 以及
 > Builder、Metadata Service、Collection Registry 和 V1 Store 后端均已接入本生命周期；运行时不再保留
@@ -158,9 +158,9 @@ Store 层的 `delete(old) + put(new)` 不是原子 Collection rename。完整操
 已保存 Metadata 与确定性命名规则冲突时，启动或升级校验必须输出准确差异并停止。系统不能自动 rename
 生产数据库对象，也不能静默重写 Metadata。
 
-## M0–M7 实现状态
+## 当前实现状态
 
-本生命周期对应的 M0–M7 已全部落地：
+本生命周期描述的能力已全部落地：
 
 1. Physical Schema、Metadata V1、稳定错误和 legacy extraction 已实现；
 2. 五种数据库的 `SchemaInspector` 已实现；
@@ -171,14 +171,14 @@ Store 层的 `delete(old) + put(new)` 不是原子 Collection rename。完整操
 7. 旧完整 `CollectionDefinition` Store、legacy runtime adapter 和 Builder Metadata-only API 已移除。
 
 Schema Snapshot、Agent Snapshot、可写 JSON/YAML File Store 和声明式命名 Store 注册表是独立的后续能力，
-不属于本轮 M0–M7 的运行时交付范围，也不是当前解析链路的依赖。
+不属于当前解析链路的运行时能力，也不是该链路的依赖。
 
 ## 相关文档
 
 - [Collection 架构](./architecture.md)
-- [Schema Inspector 设计](./schema-inspector.md)
-- [Collection Resolver 设计](./collection-resolver.md)
-- [Collection Registry 设计](./collection-registry.md)
-- [Metadata Store 设计](./metadata-store.md)
-- [Metadata Store 后端](./metadata-store-backends.md)
-- [Collection Metadata Service 设计](./metadata-service.md)
+- [Schema Inspector 设计](../schema-inspector/architecture.md)
+- [Collection Resolver 设计](./resolver.md)
+- [Collection Registry 设计](./registry.md)
+- [Metadata Store 设计](../metadata/store.md)
+- [Metadata Store 后端](../metadata/store-backends.md)
+- [Collection Metadata Service 设计](../metadata/service.md)

@@ -60,4 +60,4 @@ Connection 级配置优先于 Manager 级配置。External Connection 没有可�
 - In-memory Store：可写、进程内 revision，适合测试。
 - Transaction Store：为非数据库 Store 提供事务隔离、CAS 回放和失败补偿。
 
-详细内部设计见[Metadata Store 设计](../collection/metadata-store.md)和[后端设计](../collection/metadata-store-backends.md)。
+详细内部实现见[Metadata Store](../internals/metadata/store.md)和[后端实现](../internals/metadata/store-backends.md)。

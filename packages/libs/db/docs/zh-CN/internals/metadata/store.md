@@ -5,7 +5,7 @@ description: 说明 Metadata Store 的职责边界、文档模型、一致性规
 
 # Metadata Store 设计
 
-> **文档类型：内部设计。** 使用入口见 [Collection Metadata 概览](../collection-metadata/overview.md)；本页保留文档模型和一致性设计。
+> **文档类型：内部实现。** 使用入口见 [Collection Metadata 概览](../../collection-metadata/overview.md)；本页保留文档模型和一致性设计。
 
 > 带 revision 的文档 Store 契约和 In-memory 后端已经实现。过渡期公共名称为
 > `CollectionMetadataStore` 和 `InMemoryCollectionMetadataStore`；旧
@@ -533,14 +533,14 @@ await connection.collectionMetadata.updateField('orders', 'amount', patch);
 
 因此，底层 Store 不需要单独的 `patchCollection()`、`patchField()` 或 `renameCollection()`。确定性
 命名下的 Collection rename 不是 Metadata-only 操作，由 `CollectionBuilder.renameCollection()` 统一协调。
-完整的公共 API、并发和校验规则见 [Collection Metadata Service 设计](./metadata-service.md)。
+完整的公共 API、并发和校验规则见 [Collection Metadata Service 设计](./service.md)。
 
 ## 后端与 Collection 解析
 
-持久化后端和 Store 共享规则见 [Metadata Store 后端](./metadata-store-backends.md)。
+持久化后端和 Store 共享规则见 [Metadata Store 后端](./store-backends.md)。
 
 主数据库和外部数据库的生命周期、Resolver 校验、Registry 失效、Agent Snapshot 和 rename 原子性见
-[Collection 解析生命周期](./collection-resolution.md)。
+[Collection 解析生命周期](../collection/resolution-lifecycle.md)。
 
 ## 最终接口边界
 
@@ -565,10 +565,10 @@ await connection.collectionMetadata.updateField('orders', 'amount', patch);
 
 ## 相关文档
 
-- [Collection 架构](./architecture.md)
-- [Metadata Store 后端](./metadata-store-backends.md)
-- [Collection Metadata Service 设计](./metadata-service.md)
-- [Collection 解析生命周期](./collection-resolution.md)
-- [Metadata 概念](../concepts/metadata.md)
-- [数据库配置](../reference/database-config.md)
-- [命名简化影响](./naming-simplification-impact.md)
+- [Collection 架构](../collection/architecture.md)
+- [Metadata Store 后端](./store-backends.md)
+- [Collection Metadata Service 设计](./service.md)
+- [Collection 解析生命周期](../collection/resolution-lifecycle.md)
+- [Metadata 概念](../../concepts/metadata.md)
+- [数据库配置](../../reference/database-config.md)
+- [命名简化影响（历史）](../../archive/design-history/deterministic-collection-naming.md)
