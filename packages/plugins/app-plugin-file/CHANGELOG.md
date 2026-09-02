@@ -1,5 +1,18 @@
 # @nocobase/app-plugin-file
 
+## 0.1.0-beta.4
+
+### Minor Changes
+
+- 68a4e26: Support FormData requests in the v3 App client without overriding the browser's multipart boundary, and preserve actionable messages from plain-text and nested error responses.
+
+  Remove the File plugin's Portal SDK dependency and v2 authentication behavior. `createFilesClient()` now requires the owning application's v3 `AppClient`, accepts endpoints relative to the application `/api` root, and relies exclusively on Cookie authentication.
+
+### Patch Changes
+
+- Updated dependencies [68a4e26]
+  - @nocobase/app-client@1.0.0-beta.7
+
 ## 0.1.0-beta.3
 
 ### Minor Changes
