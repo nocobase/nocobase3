@@ -1,186 +1,149 @@
-# NocoBase Default App Template
+# NocoBase 3 Application
 
-The reference full-stack application for the new NocoBase App architecture. It
-uses `@nocobase/app-server` on the backend and a React + Refine + shadcn client
-from `@nocobase/app-client`.
+A full-stack NocoBase 3 application. The server runs on `@nocobase/app-server` and the browser client is React with Refine, shadcn/ui, and Tailwind CSS.
 
-## Quick start
+You own everything in this directory. Add pages, API routes, database tables, and business logic directly here — this is your application's source code, not a framework you extend from the outside.
 
-From the repository root:
+## Getting started
 
-```bash
-pnpm install
-cp packages/templates/app-template-default/config.example.yml \
-  packages/templates/app-template-default/config.yml
-pnpm app:dev
-```
-
-The example config mounts the application at `/main`. Use the URL printed
-by the development command as the source of truth for host and port.
-
-The key settings are:
-
-```env
-APP_BASE_PATH=/main
-# APP_PUBLIC_ORIGIN=https://apps.example.com
-```
-
-`APP_BASE_PATH` is the public application mount path.
-`APP_PUBLIC_ORIGIN` is the optional external HTTP origin used for callbacks
-and redirects. It must not include `APP_BASE_PATH`; the runtime combines them.
-The browser API base URL is derived as `<APP_BASE_PATH>/api` and is served by
-the application's local API router.
-
-## App plugins
-
-The App loads enabled packages listed in `package.json` under
-`nocobase.plugins`. A plugin also appears in `devDependencies` so its server and
-client entries can be resolved during development and build.
-
-Create and register a plugin from the repository root:
+Start the development server:
 
 ```bash
-pnpm plugin:create audit-log \
-  --with client.routes \
-  --with server.service-providers \
-  --with server.routes
-pnpm plugin:register audit-log --app app-template-default
+pnpm dev
 ```
 
-Remove the application registration before deleting the package:
+`pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
+
+### Review your configuration
+
+`config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
+
+- **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
+- **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
+- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
+
+`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it, and run `pnpm server:config` to see what the application resolved.
+
+To run against a production build instead:
 
 ```bash
-pnpm plugin:unregister audit-log --app app-template-default
-pnpm plugin:remove audit-log
+pnpm build
+pnpm start
 ```
 
-See [Plugin development quick start](../../../internal-docs/development/plugin-development/quick-start.md)
-for the server, database, Client ServiceProvider, React Provider, routes, and
-configuration protocols.
-
-## Current client architecture
-
-The active browser source is `client/`:
+## Project structure
 
 ```text
-client/
-├── service-provider.ts     application ServiceProvider defaults
-├── routes.ts               application-owned route declarations
-├── react-providers.ts       application React Provider declarations
-├── route-overrides.ts      application component replacements
-├── routing/                route placement, lazy loading, and error UI
-├── auth/                    application authentication presentation
-├── pages/                   application-owned pages
-├── shell/                   authenticated application shell
-├── theme/                   app-wide theme and selector
-├── app.ts                   final AppClient composition
-├── index.tsx                async startup entry
-└── runtime.ts               Client Runtime definition
+client/                  Browser application
+├── routes.ts            Your page routes
+├── pages/               Your page components
+├── components/          Your components
+│   └── ui/              shadcn/ui primitives
+├── layouts/             Settings and dev tool shells
+├── shell/               Authenticated app shell: header, sidebar, user menu
+├── routing/             Route rendering, access checks, loading and error UI
+├── locales/             Your translated strings
+├── theme/               App-wide theme and light/dark selector
+├── extensions/          Application-owned copies of plugin-published UI
+├── plugins.ts           Which plugins the browser loads
+├── react-providers.ts   Your React context providers
+├── service-provider.ts  Your client startup logic
+└── runtime.ts           Composition root tying the above together
+
+server/                  API server
+├── routes/              Your HTTP endpoints
+├── providers/           Your services and their lifecycle
+├── config/              Application configuration composition
+├── plugins.ts           Which plugins the server loads
+├── app.ts               Application assembly
+├── runtime.ts           Composition root
+├── standalone.ts        Node entry point
+└── embedded.ts          Entry point when a host process mounts it
+
+database/
+├── migrations/          Your schema history
+└── seeds/               Your required initial data
+
+tests/                   Unit and integration tests
+e2e/                     Browser tests needing a real server
+config.yml               Your configuration, generated at setup; gitignored
+config.example.yml       Documented configuration template
+skills/                  In-depth development guides for AI agents
 ```
 
-`client-old/` is a temporary, untracked migration archive. It is not current
-application source and must never be imported, staged, or used as a routing or
-provider architecture reference.
+The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are composition roots: they list what the application is made of. Reading them tells you what is loaded and in what order.
 
-Enabled client plugins contribute independently:
+## Scripts
 
-- `client/serviceProviders`: Client services, Refine capabilities and lifecycle;
-- `client/reactProviders`: synchronous React Context and tree Providers;
-- `client/routes`: inspectable route path/auth metadata and lazy page loaders;
-- `client/locales`: static manifests with lazy language messages.
+### Everyday development
 
-The Default App contributes through the same protocol, wired by
-`client/runtime.ts`. Its ServiceProvider runs during `app.start()`. Its `/`
-home route is declared in `client/routes.ts`, while `client/routing/` only
-renders the resolved routes.
+| Script       | What it does                                      |
+| ------------ | ------------------------------------------------- |
+| `pnpm dev`   | Start the API server and client with hot reload   |
+| `pnpm build` | Build the client and server into `dist/`          |
+| `pnpm start` | Run the built server; requires `pnpm build` first |
 
-React Providers are composed outer-to-inner in fixed layer order:
-`root -> application -> extension`. The app Theme Provider uses `root`;
-application React Providers otherwise default to `application`, and plugin React Providers
-use `extension`. `before` and `after` can refine order only within the same
-layer.
+### Database
 
-Inspect the final client composition with:
+| Script         | What it does                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm migrate` | Apply pending migrations from your `database/migrations/` and from every registered plugin |
+| `pnpm seed`    | Run seeds from `database/seeds/` and from registered plugins                               |
 
-```bash
-pnpm app:client:inspect --app app-template-default
-pnpm app:client:inspect --app app-template-default --json
-pnpm app:client:inspect --app app-template-default --type service-providers
-```
+Migrations also run automatically on startup while `database.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
-The output shows ServiceProvider order, route ownership and final component
-source, and React Provider source/layer/order.
+### Checks
 
-## Authentication UI
+| Script               | What it does                                                 |
+| -------------------- | ------------------------------------------------------------ |
+| `pnpm test`          | Run the test suite once                                      |
+| `pnpm test:watch`    | Re-run tests as files change                                 |
+| `pnpm test:coverage` | Run tests and write a coverage report                        |
+| `pnpm typecheck`     | Typecheck the client, tooling, and server                    |
+| `pnpm lint`          | Report lint problems                                         |
+| `pnpm fix`           | Fix lint problems, then format                               |
+| `pnpm check`         | Everything above plus a build; what to run before committing |
 
-`@nocobase/app-plugin-authentication` owns the AuthProvider, session behavior,
-redirects, and the guest routes `/login`, `/register`, `/forgot-password`, and
-`/reset-password`. It also provides default fallback pages.
+### Plugins
 
-The Default App customizes only those routes' lazy page components in the
-installed `client/extensions/nocobase-auth-ui/` Registry source. `AuthLink` is
-imported from the stable `@nocobase/app-plugin-authentication/client/ui`
-subpath; the final password forms are application-owned Registry source and
-call the plugin's stable `client/actions` hooks. It does not duplicate guest
-routes or call Better Auth endpoints directly from page components.
+Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-See
-[client/extensions/nocobase-auth-ui/README.md](client/extensions/nocobase-auth-ui/README.md)
-for the task-oriented edit map. Password reset still requires deployment-side
-configuration of Better Auth's `emailAndPassword.sendResetPassword` callback
-and a real mail transport.
+| Script                          | What it does                                              |
+| ------------------------------- | --------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server   |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                            |
+| `pnpm plugin:update`            | Upgrade registered plugins and re-sync their agent skills |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only           |
+| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`        |
 
-The upstream recipe and its Registry configuration are published by the
-authentication package at `registry/auth-ui` and `registry.config.json`. The
-Default Template commits only the materialized, application-owned snapshot.
-Build the authentication Registry payload from the repository root with:
+Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
 
-```bash
-pnpm registry build --package @nocobase/app-plugin-authentication
-```
+### Diagnostics
 
-To initialize extensions in a new output tree, materialize them there:
+| Script                | What it does                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `pnpm server:config`  | Print resolved configuration: paths, database, queue, providers. Secrets are redacted |
+| `pnpm client:inspect` | Print the resolved client composition: routes, providers, and which file owns each    |
+| `pnpm server:inspect` | Print the resolved server composition                                                 |
 
-```bash
-pnpm registry materialize \
-  --package @nocobase/app-plugin-authentication \
-  --item auth-ui \
-  --output-root /path/to/new-template
-```
+These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
-Materialization refuses an existing target so it cannot silently overwrite
-application edits. Updating an installed Registry item must use an explicit
-three-way merge.
+## Configuration
 
-## Notification Providers
+`config.yml` is the single source of configuration, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents every available option, including sections the generated file leaves out.
 
-The server registers the built-in Email and IM definitions from
-`@nocobase/app-plugin-notification-providers`. External delivery stays disabled
-until its channels and credentials are configured in `config.yml`. Start from
-the commented examples in [`config.example.yml`](config.example.yml):
+Two settings decide where the application is reachable:
 
-```yaml
-notification:
-  channels:
-    - type: email
-      enabled: true
-      providers:
-        - type: smtp
-          name: smtp
-          host: smtp.example.com
-          port: 587
-          from: NocoBase <notifications@example.com>
-```
+- `APP_BASE_PATH` is the public path the application is mounted at, `/main` by default. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
+- `APP_PUBLIC_ORIGIN` is the external origin used to build callback and redirect URLs. Set it in production. It must not repeat the base path — the runtime joins the two.
 
-SMTP and Resend are enabled independently and can be configured together.
+Run `pnpm server:config` to see what the application actually resolved, which is faster than reasoning about precedence between the file, environment variables, and defaults.
 
-Add `feishu-webhook` and/or `dingtalk-webhook` providers to an enabled `im`
-channel to enable IM delivery. You can inspect the resolved Provider names and
-types without printing secrets:
+## Testing
 
-```bash
-pnpm server:config
-```
+Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
+
+### Notification testing
 
 After signing in with the `notification:test` `send` permission, use the
 notification logs settings page to send a real message through the durable
@@ -190,67 +153,9 @@ The button is unavailable unless the protected targets endpoint is authorized,
 and testing is disabled unless `notification.test.enabled` is explicitly set
 to `true` in `config.yml`.
 
-Application code sends durable notifications through the injected
-`services.notification` manager:
+## Working with an AI agent
 
-```ts
-await services.notification?.send({
-  to: { type: 'email', address: 'alice@example.com' },
-  channels: ['email'],
-  content: {
-    title: 'NocoBase notification',
-    body: 'The notification runtime is ready.',
-  },
-});
-```
-
-Use `{ type: 'target', id: 'default' }` as the logical IM target. Provider
-routing defaults to `single`; select one configured Provider with
-`routing.im.providers.provider: 'feishu'`. Use `strategy: 'all'` only when the
-message should fan out to every enabled Provider. The full
-configuration and integration guide lives in
-[`@nocobase/app-plugin-notification-providers` documentation](../../plugins/app-plugin-notification-providers/docs/zh-CN/configuration.md).
-
-## Workflow Management UI
-
-`@nocobase/app-plugin-workflow` owns the Workflow runtime, management API,
-stable client route identities, and fallback pages. It also publishes the
-canonical `workflow-management` Registry recipe. The Default Template commits
-the materialized snapshot under
-`client/extensions/nocobase-workflow-management`; that application-owned copy
-overrides only the plugin route components.
-
-Build or materialize the canonical recipe with:
-
-```bash
-pnpm registry build --package @nocobase/app-plugin-workflow
-pnpm registry materialize \
-  --package @nocobase/app-plugin-workflow \
-  --item workflow-management \
-  --output-root /path/to/new-template
-```
-
-As with the authentication UI, updates to an installed Workflow Management
-snapshot require an explicit three-way merge.
-
-## Theme
-
-`client/theme` wraps application and plugin pages. The top-right selector
-supports System, Light, and Dark modes. Plugin pages should use semantic
-Tailwind classes such as `bg-background`, `text-foreground`, and
-`border-border` so they follow the selected theme.
-
-## Development and validation
-
-```bash
-pnpm --filter @nocobase/app-template-default lint
-pnpm --filter @nocobase/app-template-default typecheck
-pnpm --filter @nocobase/app-template-default test
-pnpm --filter @nocobase/app-template-default build
-```
-
-Unit and integration tests live under `tests/logic`. Browser flows that require
-real authentication, APIs, ACL, files, or server data belong under `e2e`.
+`AGENTS.md` describes how to build features here, and `skills/` holds the in-depth references it links to. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keeping these accurate as your application grows is what keeps agent-written code consistent with the rest of it.
 
 ## License
 

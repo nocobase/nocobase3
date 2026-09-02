@@ -89,6 +89,7 @@ Client 的基础装配声明使用静态 import；真正需要按需加载的页
 ```ts
 import { createAppConfig } from './config/index.js';
 import { locales } from './locales/index.js';
+import plugins from './plugins.js';
 import { reactProviders } from './react-providers/index.js';
 import { routes } from './routes/index.js';
 import { serviceProviders } from './providers/index.js';
@@ -100,7 +101,7 @@ const appRuntime = defineAppRuntime({
   reactProviders,
   routes,
   locales,
-  plugins: clientPlugins.plugins,
+  plugins,
 });
 ```
 
@@ -392,6 +393,7 @@ Client App Runtime：
 
 ```ts
 import { config } from './config/index.js';
+import plugins from './plugins.js';
 import { reactProviders } from './react-providers/index.js';
 import { routes } from './routes/index.js';
 import { serviceProviders } from './providers/index.js';
@@ -402,7 +404,7 @@ defineAppRuntime({
   serviceProviders,
   reactProviders,
   routes,
-  plugins: clientPlugins.plugins,
+  plugins,
 });
 ```
 

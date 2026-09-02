@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-portal-sdk",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "Stable runtime and extension APIs for NocoBase Portal applications.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",

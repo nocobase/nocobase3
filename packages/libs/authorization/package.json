@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/authorization",
-  "version": "0.0.1-beta.2",
+  "version": "0.0.1-beta.3",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -112,8 +112,7 @@
     "access": "public"
   },
   "files": [
-    "dist",
-    "skills"
+    "dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

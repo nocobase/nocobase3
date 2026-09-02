@@ -1,103 +1,30 @@
-# Server Development Guide
+# Server Instructions
 
-Use this guide when changing the default app server. The template is an
-explicit composition root; reusable runtime and HTTP mechanics belong in
-`@nocobase/app-server`, while domain behavior belongs in its owning package
-or app plugin.
+This directory is the application's API server. Read the application's root `AGENTS.md` first; `skills/nocobase-app-development/references/` holds the detail behind it.
 
-## Mental Model
+Add domain APIs here, in this application. Do not create a plugin package for a feature this application owns — plugins are for capabilities shared across several applications, and only when the user explicitly asks for one.
 
-- `app.ts` creates the NocoBase `Application` and declares its ServiceProviders in
-  dependency order. Hono is only the Router service exposed as `app.router`.
-- `runtime.ts` declares config factories, explicit server plugins, serviceProviders,
-  and routes through `defineAppRuntime()`. The application package name comes
-  from `rootDir/package.json`, and generic standalone mount defaults belong in
-  `@nocobase/app-server/node`.
-- `config/*` owns application-specific defaults, environment mapping, and the
-  final composition of package-owned config sections. Generic Scope, path,
-  plugin, and config resolution belongs in `@nocobase/app-server`.
-- `embedded.ts` is the app-host entry. It resolves config, creates the
-  application, binds shutdown to the host scope, starts ServiceProviders, and returns
-  the ready application.
-- `standalone.ts` adapts the same embedded entry to Node HTTP. Generic Node
-  standalone scopes, environment-file loading, serving, WebSocket upgrades,
-  process signals, draining, and forced shutdown live in
-  `@nocobase/app-server/node`.
-- Shared scope paths, routing, cancellation, mount adapters, and application
-  lifecycle helpers live in `@nocobase/app-server/runtime`.
-- Plugin server behavior is explicitly registered through `server/plugins.ts`.
-  Each package exports one `server/index.ts` entry. ServiceProviders own service
-  lifecycle; each route contribution creates and returns its own Hono router.
+## What lives where
 
-The template must not grow demo APIs, generic repositories, or compatibility
-layers for the removed `deps`, `services`, `bootstrap.ts`, and separately
-loaded route protocols. Put new domain APIs in a plugin package.
+- `routes/` holds your HTTP endpoints and the array `routes/index.ts` exports.
+- `providers/` holds your services, their tokens, and their lifecycle.
+- `config/` composes application configuration: defaults, environment mapping, and package-owned config sections.
+- `runtime.ts` is the composition root, declaring config, plugins, service providers, and routes.
+- `app.ts` assembles the application and its core providers and middleware.
+- `standalone.ts` is the Node entry point; `embedded.ts` is the entry point when a host process mounts this application. Both resolve the same runtime.
+- `plugins.ts` lists the plugins the server loads. Let `pnpm plugin:register` and `pnpm plugin:unregister` edit it.
+- `jobs/` holds background jobs, discovered automatically.
 
-Standalone entrypoints convert their own `import.meta.dirname` to `rootDir`
-and pass it into scope/config creation. Scope factories must not infer paths
-from the location of their implementation module. Explicit `paths` override
-the template layout derived from `rootDir`.
+## Rules
 
-## Runtime Contract
+- **Every route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing. Install `auth.required()` on the paths you own, and add an explicit `resource`/`action` check when permission is needed. Never depend on middleware from another route or on registration order.
+- Scope middleware to paths you own or to an isolated sub-router mounted at your prefix. A `router.use('*', ...)` on the top-level router leaks into contributions mounted later.
+- A deliberately public webhook still verifies a signature, timestamp, or one-time state. Record why it is public and test that invalid requests are rejected.
+- Route paths are application-local. Do not repeat `/api`, and never write the deployment base path such as `/main` — the mount adapter strips and restores it.
+- Keep HTTP in the route and domain logic in a service. A service does not read a Hono context, return status codes, or decide retry behavior.
+- Bind services to tokens in a provider's `register()`. Import a token from where it is defined; two `createServiceToken` calls with the same name are two different keys.
+- Declaration modules are imported by `server:inspect`. Nothing at module top level may connect to a database, start a worker, or execute a route factory. Long-lived resources belong in `start()` and are released in `shutdown()`.
+- Read configuration through the typed config, not `process.env`, inside providers and routes.
+- Schema changes are migrations in `../database/migrations/`, spelled out explicitly and never importing an evolving definition.
 
-Standalone and embedded modes both enter through `createServer(scope)`.
-`resolveAppRuntime(appRuntime, scope)` resolves routing, paths, plugins, and the
-runtime-ready application config before `createApp()` assembles the application;
-`startApplicationInScope()` binds cleanup and starts its Provider lifecycle.
-
-Node-only server entrypoints use `defineStandaloneServer()` from
-`@nocobase/app-server/node` to bind their root directory, Runtime
-Definition, and shared `createServer(scope)` factory. The resulting create and
-start operations own standalone Scope creation, Vite overrides, public-path
-mounting, Node listen configuration, and lifecycle cleanup. Config-only
-entrypoints and database tasks use `resolveStandaloneAppRuntime()`, initialize
-the runtime `appConfig`, and read the required typed config token. Use
-`createStandaloneRuntimeScope()` only when direct Scope
-lifecycle access is required. Do not add template-local Scope or config-loading
-facades around these APIs.
-
-| Mode       | Public base path | App-local incoming path            | Public API URL         |
-| ---------- | ---------------- | ---------------------------------- | ---------------------- |
-| standalone | `APP_BASE_PATH`  | `/settings` from `/<app>/settings` | `<base-path>/api`      |
-| embedded   | `scope.basePath` | `/settings` after host stripping   | `<scope.basePath>/api` |
-
-Do not prefix app-local routes with the public mount path. The mount adapter is
-responsible for stripping and restoring that path.
-
-## Adding Server Behavior
-
-1. Prefer a focused app plugin with one `server/index.ts` entry.
-2. Register typed services in Provider `register()` and add HTTP contributions
-   to the single `routes` array with `defineApiRoutes()` or `defineRootRoutes()`.
-   Each factory creates and returns its own Hono router. API route paths are
-   relative because the Application adds the `/api` prefix automatically.
-3. Resolve cross-package dependencies through exported ServiceTokens.
-4. Keep long-lived start/stop behavior in `start()` and `shutdown()`.
-5. Add tests under the package root `tests/` directory.
-
-Every plugin Route owns a path-scoped authentication and authorization
-boundary. Do not use a wildcard middleware that leaks into later mounted
-contributions, and do not depend on earlier App or plugin middleware.
-
-Application config stays explicit under `config/*`. Package-owned config
-normalizers and composition helpers should be reused rather than copied into
-the template. Do not read `process.env` in ServiceProviders or routes.
-
-## Validation
-
-Run at least:
-
-```bash
-pnpm lint
-pnpm format:check
-pnpm typecheck
-pnpm test
-pnpm build
-```
-
-Use `pnpm server:config` to inspect resolved standalone values when debugging
-paths, proxy targets, database sources, or SPA behavior.
-Use `pnpm server:inspect --json` for the imported Server plugin declaration
-snapshot and resolved contribution locations. Keep declaration modules free of
-runtime startup side effects, check `issues`, and verify runtime behavior with
-behavior tests.
+Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. `pnpm server:config` prints resolved paths, database, and provider configuration; `pnpm server:inspect --json` prints the composition snapshot. Both report wiring, not correctness — cover behavior with tests.
