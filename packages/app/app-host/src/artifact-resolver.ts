@@ -8,10 +8,10 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
+import { finished, pipeline } from 'node:stream/promises';
 
 import type { NocoBaseDriveDisk } from '@nocobase/drive';
 import { x as extractTar } from 'tar';
@@ -39,10 +39,12 @@ export interface ArtifactResolver {
 
 export interface DriveArtifactResolverOptions {
   appDeploymentsDir: string;
+  localArtifactDir?: string;
 }
 
 export class DriveArtifactResolver implements ArtifactResolver {
   readonly appDeploymentsDir: string;
+  readonly localArtifactDir?: string;
 
   constructor(
     readonly disk: NocoBaseDriveDisk,
@@ -50,6 +52,9 @@ export class DriveArtifactResolver implements ArtifactResolver {
     options: DriveArtifactResolverOptions,
   ) {
     this.appDeploymentsDir = path.resolve(options.appDeploymentsDir);
+    this.localArtifactDir = options.localArtifactDir
+      ? path.resolve(options.localArtifactDir)
+      : undefined;
   }
 
   async resolve(reference: ArtifactReference): Promise<ResolvedArtifact> {
@@ -74,11 +79,10 @@ export class DriveArtifactResolver implements ArtifactResolver {
     let installed = false;
 
     try {
-      const actualChecksum = await downloadArtifact(
-        this.disk,
-        reference.key,
-        archivePath,
-      );
+      const localPath = this.localArtifactPath(reference.key);
+      const actualChecksum = localPath
+        ? await hashLocalArtifact(localPath)
+        : await downloadArtifact(this.disk, reference.key, archivePath);
       if (actualChecksum !== reference.checksum) {
         throw new Error(
           `Artifact checksum mismatch for app "${reference.appId}": expected "${reference.checksum}", received "${actualChecksum}"`,
@@ -88,7 +92,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
       await extractTar({
         cwd: stagingDir,
-        file: archivePath,
+        file: localPath ?? archivePath,
         gzip: true,
         preservePaths: false,
         strict: true,
@@ -148,6 +152,18 @@ export class DriveArtifactResolver implements ArtifactResolver {
       await rm(stagingDir, { recursive: true, force: true });
     }
   }
+
+  private localArtifactPath(key: string): string | undefined {
+    if (!this.localArtifactDir) return undefined;
+    const filePath = path.resolve(this.localArtifactDir, key);
+    const relative = path.relative(this.localArtifactDir, filePath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error(
+        'Artifact key resolves outside the local artifact directory',
+      );
+    }
+    return filePath;
+  }
 }
 
 async function downloadArtifact(
@@ -162,6 +178,14 @@ async function downloadArtifact(
     source,
     createWriteStream(destination, { flags: 'wx', mode: 0o600 }),
   );
+  return hash.digest('hex');
+}
+
+async function hashLocalArtifact(source: string): Promise<string> {
+  const hash = createHash('sha256');
+  const sourceStream = createReadStream(source);
+  sourceStream.on('data', (chunk: Buffer | string) => hash.update(chunk));
+  await finished(sourceStream);
   return hash.digest('hex');
 }
 

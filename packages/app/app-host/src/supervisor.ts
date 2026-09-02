@@ -45,6 +45,7 @@ export interface AppHostSupervisorOptions {
   driver?: AppHostDriver;
   prestart?: boolean;
   startTimeoutMs?: number;
+  ipcTimeoutMs?: number;
   shutdownTimeoutMs?: number;
   healthPath?: string;
   autoRestart?: boolean;
@@ -88,6 +89,7 @@ interface AppHostLaunchOptions {
 
 const DEFAULT_APP_HOST_PORT = 13010;
 const DEFAULT_START_TIMEOUT_MS = 30 * 1000;
+const DEFAULT_IPC_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_HEALTH_PATH = '/__live';
 const DEFAULT_MAX_AUTOMATIC_RESTARTS = 5;
@@ -111,6 +113,7 @@ export class AppHostSupervisor {
   private readonly host: string;
   private readonly configuredPort?: number;
   private readonly startTimeoutMs: number;
+  private readonly ipcTimeoutMs: number;
   private readonly shutdownTimeoutMs: number;
   private readonly healthPath: string;
   private readonly autoRestart: boolean;
@@ -145,6 +148,10 @@ export class AppHostSupervisor {
       options.startTimeoutMs ??
       numberFromEnv('APP_HOST_START_TIMEOUT_MS') ??
       DEFAULT_START_TIMEOUT_MS;
+    this.ipcTimeoutMs =
+      options.ipcTimeoutMs ??
+      numberFromEnv('APP_HOST_IPC_TIMEOUT_MS') ??
+      DEFAULT_IPC_TIMEOUT_MS;
     this.shutdownTimeoutMs =
       options.shutdownTimeoutMs ??
       numberFromEnv('APP_HOST_SHUTDOWN_TIMEOUT_MS') ??
@@ -354,7 +361,10 @@ export class AppHostSupervisor {
 
     const management =
       this.mode === 'managed' && this.session
-        ? new IpcHostManagementClient(child, { session: this.session })
+        ? new IpcHostManagementClient(child, {
+            session: this.session,
+            timeoutMs: this.ipcTimeoutMs,
+          })
         : undefined;
 
     this.managedChild = {

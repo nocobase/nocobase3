@@ -125,6 +125,8 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     options.artifactResolver ??
     new DriveArtifactResolver(drive.use('artifact'), deploymentCatalog, {
       appDeploymentsDir: deploymentCatalog.deploymentsDir,
+      localArtifactDir:
+        artifact.driver === 'fs' ? artifact.location : undefined,
     });
   const registry = new AppRuntimeRegistry({
     resolveFactory: (definition) => moduleLoader.resolveFactory(definition),
