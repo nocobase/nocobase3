@@ -7,6 +7,8 @@ description: 面向编写 NocoBase 业务代码的 AI Agent，提供任务路由
 
 本组文档帮助 Agent 先选对实现层，再生成可编译、可测试的代码。不要从 API 名称猜实现方式；先根据业务任务阅读[任务路由](./task-router.md)。
 
+如果尚未理解 Collection、Metadata 或名称层级，先阅读[核心概念](../concepts/README.md)。概念文档解释边界，具体实现仍以本组任务指南和正式 API 文档为准。
+
 ## 核心对象
 
 ```text
@@ -36,7 +38,7 @@ createDatabaseManager(config)
 1. 持久化业务 Schema 变更写成新的 Migration；不要在应用启动时临时修改 Schema。
 2. Migration 的结构变更使用 `builder`，数据变更使用 `query`；Seed 只初始化数据。
 3. 事务内只使用回调参数里的 `connection`，不要回到外层 `db`。
-4. Builder 和 Collections 使用 Collection 逻辑名；Schema Inspector 使用物理数据库 identity。
+4. Builder 和 Collections 使用 Collection 逻辑名；Query 使用 Connection 相对查询标识符；Schema Inspector 使用物理数据库 identity。完整对照见[命名概念](../concepts/naming/overview.md)。
 5. Repository 尚未实现；不要生成 `db.repository()` 或 `connection.repository()`。
 
 ## 按任务继续

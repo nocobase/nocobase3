@@ -5,7 +5,7 @@ description: 通过 db.builder() 或 connection.builder 使用逻辑名称管理
 
 # Collection Builder API 总览
 
-`CollectionBuilder` 是当前原型的核心。它负责把 Collection DSL 转换为数据库 schema operation，并通过 `SchemaAdapter` 应用到底层数据库。
+`CollectionBuilder` 是当前公开的 Collection Schema 变更入口。它负责把 Collection DSL 转换为数据库 schema operation，并通过 `SchemaAdapter` 应用到底层数据库。
 
 ## Agent 契约
 

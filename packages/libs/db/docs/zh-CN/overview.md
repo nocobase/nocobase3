@@ -47,16 +47,18 @@ createDatabaseManager(config)
 ## 阅读路径
 
 1. [快速开始](./quick-start.md)
-2. [Database 概览](./database/overview.md)
-3. [Builder](./builder/overview.md) 或 [Query](./query/overview.md)
-4. [Collections](./collections/overview.md)、[Schema Inspector](./schema-inspector/overview.md) 或 [Collection Metadata](./collection-metadata/overview.md)
-5. [Migration](./migration/overview.md) 和 [Seed](./seed/overview.md)
-6. [API 索引](./reference/api-index.md)
+2. [核心概念](./concepts/README.md)
+3. [Database 概览](./database/overview.md)
+4. [Builder](./builder/overview.md) 或 [Query](./query/overview.md)
+5. [Collections](./collections/overview.md)、[Schema Inspector](./schema-inspector/overview.md) 或 [Collection Metadata](./collection-metadata/overview.md)
+6. [Migration](./migration/overview.md) 和 [Seed](./seed/overview.md)
+7. [API 索引](./reference/api-index.md)
 
 ## 文档可信级别
 
 | 目录                                  | 用途                         | Agent 能否用于生成业务代码          |
 | ------------------------------------- | ---------------------------- | ----------------------------------- |
+| [`concepts/`](./concepts/README.md)   | 当前稳定概念和 API 边界      | 可以，但不替代具体 API 文档         |
 | `database/`、`builder/`、`query/` 等  | 当前公开 API 与任务说明      | 可以，以 API 索引和类型声明交叉验证 |
 | [`internals/`](./internals/README.md) | 当前底层实现和维护者设计     | 仅用于维护或诊断，不要绕过公开入口  |
 | [`proposals/`](./proposals/README.md) | 尚未实现或导出的未来设计提案 | 不可以                              |

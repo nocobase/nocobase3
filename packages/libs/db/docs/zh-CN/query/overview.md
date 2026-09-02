@@ -89,7 +89,7 @@ const rows = await db
 
 `db.query()` 不读取 Collection Metadata。它使用 Connection 的 `underscored` 和 `tablePrefix` 转换 identifier，但不会理解 Collection 级 naming 覆盖。
 
-完整边界见 [tablePrefix 表前缀](../concepts/table-prefix.md)。
+完整边界见 [`tablePrefix` 表前缀](../concepts/naming/table-prefix.md)。
 
 ```ts
 await builder.createCollection('orders', (collection) => {

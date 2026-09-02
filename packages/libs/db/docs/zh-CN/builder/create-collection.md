@@ -101,6 +101,6 @@ await builder.createCollection('orders', definition, {
 
 - Agent 写 migration 文件或 TypeScript 代码时，优先使用 Fluent DSL。
 - Agent 调用 HTTP API、CLI，或生成 `collection.json` 时，优先使用 Object DSL。
-- 如果只是补充标题、描述等元信息，不要使用 `createCollection`，应使用 metadata-only API。
+- 如果只是补充标题、描述等元信息，不要使用 `createCollection`，应使用 `connection.collectionMetadata`。
 - `type: 'increments'` 会在 schema 编译阶段被视为自增主键字段。
 - 不要生成 `tableName`、`columnName` 或任意物理名称映射。

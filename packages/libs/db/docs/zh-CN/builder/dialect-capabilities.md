@@ -37,7 +37,7 @@ Builder 会在执行前根据当前连接的 `capabilities` 生成 capability pl
 
 - `comment`：跳过数据库 comment，应用层 `title` / `description` 仍保存。
 - `deferrable constraint`：创建普通 constraint，不带 deferrable 行为。
-- `native type`：在当前原型中降级为通用类型；`type: 'native'` 默认降级为 `text`。
+- `native type`：当前实现会降级为通用类型；`type: 'native'` 默认降级为 `text`。
 - 普通 `partial index`：不支持时移除 predicate，创建普通 index。
 - 默认 schema，例如 `public`：不支持 schema 的数据库会忽略 schema。
 

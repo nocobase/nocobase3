@@ -57,7 +57,7 @@ description: 根据业务目标选择 @nocobase/db API、代码落点、必读�
 
 - 是否选对了代码位置，而不只是选对了 API？
 - 是否区分 Manager 方法和 Connection 属性？
-- 是否区分逻辑名、Connection 查询标识符和物理 identity？
+- 是否按[命名概念](../concepts/naming/overview.md)区分逻辑名、Connection 相对查询标识符和物理 identity？
 - 是否保持事务 Connection 贯穿整个回调？
 - 是否没有使用规划中或底层未导出的接口？
 - 是否按[验证指南](./verification.md)运行了对应检查？

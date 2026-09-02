@@ -15,7 +15,7 @@ normalized(name) = effectiveNaming.underscored ? snake_case(name) : name
 
 `effectiveNaming` 合并 Connection 和 Collection 的 `naming`。`underscored` 默认是 `true`，`tablePrefix` 默认是空字符串。
 
-具体转换算法、缩写边界以及 Query 的不同处理方式见 [underscored 命名规则](../concepts/underscored.md)。表前缀的继承和迁移边界见 [tablePrefix 表前缀](../concepts/table-prefix.md)。
+具体转换算法和缩写边界见 [`underscored` 命名规则](../concepts/naming/underscored.md)。表前缀的继承和迁移边界见 [`tablePrefix` 表前缀](../concepts/naming/table-prefix.md)。
 
 ## Connection 默认前缀
 
@@ -99,20 +99,16 @@ await db.builder().renameCollection('orderItems', 'archivedOrderItems');
 
 当前只支持 Table Collection。View 或 Materialized View Collection 会在 DDL 前抛出 `COLLECTION_RENAME_UNSUPPORTED_KIND`。
 
-此操作总是同时重命名：
+此操作同时重命名：
 
 ```text
 orderItems -> archivedOrderItems
 order_items -> archived_order_items
 ```
 
-若 Collection 使用 `archive_` 前缀，则物理名称从 `archive_order_items` 变为 `archive_archived_order_items`。API 不再接受 `renameTable` 或 `renameTableTo`。
+若 Collection 使用 `archive_` 前缀，则物理名称从 `archive_order_items` 变为 `archive_archived_order_items`。
 
 Builder 会在 DDL 前检查所有 Metadata。Relation target/through、Foreign Key、结构化 View 或 Raw SQL View 等依赖存在且不能原子更新时，会抛出 `COLLECTION_RENAME_HAS_DEPENDENCIES`，数据库和 Metadata 均保持不变。
-
-## 旧 Metadata
-
-连接时会验证旧 `tableName` 和 `columnName`。只有旧物理名称与当前 effective naming 一致时才允许继续；不一致会抛出 `COLLECTION_NAMING_INCOMPATIBLE`，要求先提供显式 Migration。
 
 ## 与 Query 的边界
 
@@ -126,4 +122,3 @@ Builder 会在 DDL 前检查所有 Metadata。Relation target/through、Foreign 
 - 不要生成 `tableName`、`columnName` 或自定义 naming strategy。
 - Relation、Index、Constraint 和结构化 View 中也使用逻辑名。
 - Collection rename 有依赖时先处理依赖，不能绕过安全检查。
-- 不要根据兼容性错误自动修改生产数据库。

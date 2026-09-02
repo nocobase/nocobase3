@@ -1,52 +1,52 @@
-# Metadata 元信息
+---
+title: Metadata 概念
+description: 区分数据库物理事实、补充 Collection Metadata 和解析后的 CollectionDefinition，并说明各自的公开入口。
+---
 
-Metadata 是 Collection 的应用层元信息，用于帮助 UI、应用逻辑和 Agent 理解数据模型。Metadata 和数据库结构变更要分开处理。
+# Metadata 概念
 
-先阅读 [Collection Metadata 概览](../collection-metadata/overview.md)。运行时更新使用 [`connection.collectionMetadata`](../collection-metadata/collection-metadata-service.md)，完整 Collection 从 [`connection.collections`](../collections/overview.md) 读取。
+Collection Metadata 保存数据库物理 Schema 无法完整表达的应用语义。它用于帮助 UI、业务逻辑和 Agent 理解数据模型，但不替代数据库表、字段或约束。
 
-Metadata Store、物理 Schema、完整 Collection 以及主数据库和外部数据库的内部实现，见 [Collection 架构](../internals/collection/architecture.md)。
+## Metadata 在解析链路中的位置
 
-目标持久化模型，以及补充 Metadata 与解析后完整 Collection 的准确边界，见
-[Metadata Store 内部实现](../internals/metadata/store.md)。
-
-后端选择和 Store 共享规则见
-[Metadata Store 后端](../internals/metadata/store-backends.md)。解析、校验、缓存和 Snapshot 规则见
-[Collection 解析生命周期](../internals/collection/resolution-lifecycle.md)。
-
-## 应用层 metadata
-
-Collection 级别：
-
-```ts
-{
-  title: 'Orders',
-  description: 'Customer purchase orders.'
-}
+```text
+connection.schemaInspector      读取物理 Schema
+          +
+metadataStore                   保存补充 Metadata 文档
+          ↓
+connection.collections          解析、校验和缓存
+          ↓
+CollectionDefinition            完整运行时模型
 ```
 
-Field 级别：
+`metadataStore` 是 Manager 或 Connection 的配置项，不是 `DatabaseConnection` 的公开属性。运行时更新通过 `connection.collectionMetadata` 完成。
 
-```ts
-{
-  name: 'amount',
-  type: 'decimal',
-  title: 'Amount',
-  description: 'Total order amount before refunds.',
-}
-```
+## 什么属于补充 Metadata
 
-## metadata-only 更新
+典型内容包括：
 
-如果已有数据库表结构不需要变化，只想补充元信息，应使用：
+- Collection 的 `title` 和 `description`；
+- Field 的 `title` 和 `description`；
+- 应用层 Relation；
+- Collection 局部 naming 配置。
 
-```ts
-await connection.collectionMetadata.updateCollection('orders', {
-  title: 'Orders',
-  description: 'Customer purchase orders.',
-});
-```
+下面这些属于物理数据库事实，不应在补充 Metadata 中复制为另一套 Schema：
 
-或者：
+- 物理表、列和 View；
+- 列类型、Nullability 和默认值；
+- Index、Unique、Foreign Key 等数据库约束；
+- 数据库对象 comment。
+
+## Schema 变更与 Metadata 更新
+
+| 任务                                   | 使用入口                        | 是否执行 DDL          |
+| -------------------------------------- | ------------------------------- | --------------------- |
+| 新建或修改表、字段、Index、Constraint  | `connection.builder`            | 是                    |
+| 在 Schema 变更中同时同步标题等补充信息 | `connection.builder`            | 是，同时更新 Metadata |
+| 只更新标题、描述或应用 Relation        | `connection.collectionMetadata` | 否                    |
+| 读取合并后的完整模型                   | `connection.collections`        | 否                    |
+
+例如，只补充说明时直接更新 Metadata：
 
 ```ts
 await connection.collectionMetadata.updateField('orders', 'amount', {
@@ -55,30 +55,56 @@ await connection.collectionMetadata.updateField('orders', 'amount', {
 });
 ```
 
-这两类 API 直接更新补充 Metadata，不会生成 schema operation。Builder 只负责物理 Schema 变更，
-以及在创建或变更 Schema 时同步定义中携带的补充 Metadata。
+不要为这类变更调用 `alterCollection()` 或 `alterField()`。
 
-## 和 db.comment 的关系
+## 静态 Metadata
 
-`title`、`description` 是应用层元信息。`db.comment` 是数据库层 comment。
+源码管理的外部数据库 Metadata 使用 `defineCollectionMetadata()` 提供类型检查：
+
+```ts
+import { defineCollectionMetadata } from '@nocobase/db';
+
+export default defineCollectionMetadata({
+  version: 1,
+  name: 'orders',
+  title: 'Orders',
+  fields: {
+    amount: { title: 'Amount' },
+  },
+});
+```
+
+`defineCollectionMetadata()` 不连接数据库，也不执行运行时校验。Store 加载或写入文档时才执行严格校验。
+
+## Metadata 与数据库 comment
+
+`title` 和 `description` 是应用语义，`db.comment` 是数据库对象 comment：
 
 ```ts
 {
   name: 'amount',
   type: 'decimal',
-  title: 'Amount',
-  description: 'Displayed in the application.',
+  title: 'Amount shown in the UI',
   db: {
-    comment: 'Stored as database column comment when supported.',
+    comment: 'Total amount before refunds',
   },
 }
 ```
 
-不要为了补充 UI 或 Agent 说明而修改数据库 comment。只有在确实需要写入数据库对象 comment 时，才使用 `db.comment`。
+不要为了给 UI 或 Agent 补充说明而修改数据库 comment。
 
-## Agent 注意事项
+## Agent 规则
 
-- 只补充元信息时，不要调用 `alterCollection` 或 `alterField`。
-- 纯 Metadata 更新使用 `connection.collectionMetadata`。
-- 物理 Schema 更新使用 `connection.builder`。
-- 完整 Collection 统一从 `connection.collections` 读取。
+- 先判断任务改变的是物理 Schema、补充语义，还是两者都改变。
+- 纯 Metadata 更新使用 `connection.collectionMetadata`，不要生成 Schema operation。
+- 完整 Collection 从 `connection.collections` 读取，不要把 Store 文档当成完整模型。
+- 不要在 Metadata 中生成 `tableName`、`columnName` 或物理 Schema 的副本。
+- 需要选择 Store 或调用具体更新方法时，转到正式的 Collection Metadata 文档。
+
+## 继续阅读
+
+- [Collection Metadata 概览](../collection-metadata/overview.md)
+- [Collection Metadata Service](../collection-metadata/collection-metadata-service.md)
+- [Metadata Store 与后端](../collection-metadata/metadata-store.md)
+- [Collection Metadata Document](../reference/collection-metadata-document.md)
+- [Collections：读取完整 Collection](../collections/overview.md)

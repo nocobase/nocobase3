@@ -5,7 +5,7 @@ description: 分析保留 underscored 与 tablePrefix 命名配置，并移除 C
 
 # Collection 物理名称简化影响分析
 
-> **文档类型：历史归档。** 本页不是当前 API 合同，示例也不保证可编译。当前命名契约见 [命名概念](../../concepts/naming.md)、[Builder 命名](../../builder/naming.md)和 [Query 命名](../../query/naming.md)。不要从本页的方案讨论生成生产代码。
+> **文档类型：历史归档。** 本页不是当前 API 合同，示例也不保证可编译。当前命名契约见 [命名概念](../../concepts/naming/overview.md)、[Builder 命名](../../builder/naming.md)和 [Query 命名](../../query/naming.md)。不要从本页的方案讨论生成生产代码。
 
 > 本文记录本次改造的设计依据、兼容边界和后续仍需完善的事项。核心公开 API、确定性命名、重命名保护与旧 Metadata 校验已经实现。
 

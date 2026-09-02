@@ -188,7 +188,7 @@ type NamingOptions = {
 
 `naming` 是 connection 级默认命名配置。Collection 可以通过 `collection.naming(...)` 覆盖。
 
-更完整规则见 [命名概念](../concepts/naming.md)。
+更完整规则见 [命名概念](../concepts/naming/overview.md)。
 
 ## metadataStore
 

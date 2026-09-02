@@ -6,6 +6,7 @@
 
 - [整体概览](./docs/zh-CN/overview.md)
 - [快速开始](./docs/zh-CN/quick-start.md)
+- [核心概念](./docs/zh-CN/concepts/README.md)
 - [AI Agent 数据库开发入口](./docs/zh-CN/agent/index.md)
 - [Agent 任务路由](./docs/zh-CN/agent/task-router.md)
 - [DatabaseManager](./docs/zh-CN/database/database-manager.md)
