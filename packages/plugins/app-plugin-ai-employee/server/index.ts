@@ -1,4 +1,16 @@
 export { default as bootstrap } from './bootstrap.js';
+export { aiEmployeeConfig } from './config.js';
+export type {
+  AIEmployeeConfig,
+  AIEmployeeEnabledModelsConfig,
+  AIEmployeeLLMServiceConfig,
+} from './config.js';
+export {
+  expandEnvironmentReferences,
+  LLMServiceConfigSynchronizer,
+  normalizeLLMServiceConfig,
+} from './llm-service-config.js';
+export type { LLMServiceSyncSummary } from './llm-service-config.js';
 export { default as registerRoutes } from './routes/index.js';
 export {
   createPluginContextMiddleware,

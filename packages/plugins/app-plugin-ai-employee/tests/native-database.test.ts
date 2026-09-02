@@ -169,7 +169,7 @@ describe('native AI employee persistence', () => {
     });
   });
 
-  it('round-trips array-backed JSON fields used by LLM service manifests', async () => {
+  it('round-trips array-backed JSON fields used by LLM service configuration', async () => {
     const database = await createDatabase();
     const repositories = new CollectionRepositoryFactory(database.connection());
     await repositories.llmServices.create({

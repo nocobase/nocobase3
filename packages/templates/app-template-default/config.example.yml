@@ -65,6 +65,23 @@ notification:
     #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
     #       secret: replace-with-the-dingtalk-secret
 
+# Declarative LLM services are loaded from application config.
+# Reload application config after editing; no process restart or AI resource rescan is required.
+# ai:
+#   llmServices:
+#     - name: openai
+#       title: OpenAI
+#       provider: openai
+#       options:
+#         apiKey: ${OPENAI_API_KEY}
+#       enabledModels:
+#         mode: custom
+#         models:
+#           - label: GPT-4.1
+#             value: gpt-4.1
+#       enabled: true
+#       sort: 10
+
 database:
   default: main
   connections:

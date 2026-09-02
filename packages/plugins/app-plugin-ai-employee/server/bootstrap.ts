@@ -7,6 +7,7 @@ import type { DatabaseManager } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { Logging } from '@nocobase/logging';
 import { initializePluginRuntimeResources } from './runtime.js';
+import type { AIEmployeeConfig } from './config.js';
 
 export interface AIEmployeePluginDeps {
   ai: AIManager;
@@ -21,7 +22,12 @@ export interface AIEmployeePluginDeps {
 }
 
 export default function bootstrap({
+  config,
   deps,
-}: AppPluginServerContext<AIEmployeePluginDeps>): void {
-  initializePluginRuntimeResources(deps);
+}: AppPluginServerContext<
+  AIEmployeePluginDeps,
+  unknown,
+  AIEmployeeConfig
+>): void {
+  initializePluginRuntimeResources(deps, { llmServices: config.llmServices });
 }

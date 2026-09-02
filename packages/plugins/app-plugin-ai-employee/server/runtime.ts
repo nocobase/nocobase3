@@ -32,7 +32,6 @@ import { AIMCPServerService } from './service/ai-mcp-server-service.js';
 import { AIConversationService } from './service/ai-conversation-service.js';
 import {
   AIEmployeeLoader,
-  LLMServiceLoader,
   MCPLoader,
   SkillsLoader,
   ToolsLoader,
@@ -47,6 +46,7 @@ import { DocumentLoaders } from '@nocobase/ai-employee';
 import type { Logger, Logging } from '@nocobase/logging';
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 import { AI_API_BASE_PATH } from './routes/contracts.js';
+import { LLMServiceConfigSynchronizer } from './llm-service-config.js';
 let pluginRepositories: CollectionRepositoryFactory | undefined;
 let pluginReady: Promise<void> = Promise.resolve();
 
@@ -77,6 +77,8 @@ export type CreatePluginRuntimeOptions = {
 
 export type InitializePluginRuntimeResourcesOptions = {
   loadResources?: boolean;
+  llmServices?: readonly import('./config.js').AIEmployeeLLMServiceConfig[];
+  llmServiceSynchronizer?: import('./llm-service-config.js').LLMServiceConfigSynchronizer;
 };
 
 export type ResourceLoadSummary = {
@@ -91,33 +93,18 @@ export type ResourceLoadOptions = {
   ai: AIManager;
   logger: Logger;
   aiDirectory: string;
-  modelsDirectory?: string;
-  loadLLMServices?: boolean;
   overrideTools?: boolean;
 };
 
 export async function loadResources(
   options: ResourceLoadOptions,
 ): Promise<ResourceLoadSummary> {
-  const {
-    ai,
-    logger,
-    aiDirectory,
-    modelsDirectory = aiDirectory,
-    loadLLMServices = true,
-    overrideTools = false,
-  } = options;
+  const { ai, logger, aiDirectory, overrideTools = false } = options;
   const scan = (sub: string, pattern: string[]) => ({
     basePath: path.join(aiDirectory, sub),
     pattern,
   });
 
-  if (loadLLMServices) {
-    await new LLMServiceLoader(ai, {
-      directory: modelsDirectory,
-      logger,
-    }).load();
-  }
   await new ToolsLoader(ai, {
     overrideExisting: overrideTools,
     scan: scan('.', [
@@ -236,35 +223,30 @@ export function initializePluginRuntimeResources(
     database.connection(),
     () => String(idGenerator.generate()),
   );
+  const llmServiceSynchronizer =
+    options.llmServiceSynchronizer ??
+    new LLMServiceConfigSynchronizer(ai.llmServiceManager, logger);
   pluginRepositories = repositories;
   const packageAIDirectory = resolveAIDirectory(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'ai'),
   );
   const appAIDirectory = resolveAIDirectory(paths.root('ai'));
-  const storageAIDirectory = paths.storage('ai');
   pluginReady = (async () => {
     await ai.employeeManager.switchRepository(repositories.aiEmployees);
     if (options.loadResources === false) return;
+    await llmServiceSynchronizer.enqueue(options.llmServices);
+    await ai.llmServiceManager.switchRepository(repositories.llmServices);
     await loadResources({
       ai,
       logger,
       aiDirectory: packageAIDirectory,
-      loadLLMServices: false,
     });
     const summary = await loadResources({
       ai,
       logger,
       aiDirectory: appAIDirectory,
-      modelsDirectory: resolveModelsDirectory(appAIDirectory, appAIDirectory),
       overrideTools: true,
     });
-    await new LLMServiceLoader(ai, {
-      directory: storageAIDirectory,
-      logger,
-      preserveUserState: false,
-      replaceExisting: true,
-    }).load();
-    await ai.llmServiceManager.switchRepository(repositories.llmServices);
     logger.info?.(
       { aiDirectory: appAIDirectory, summary },
       'AI employee runtime initialized',
@@ -349,14 +331,4 @@ function resolveAIDirectory(explicit?: string): string {
   )
     return dist;
   return source;
-}
-
-function resolveModelsDirectory(
-  explicit: string | undefined,
-  resolvedAIDirectory: string,
-): string {
-  const source = path.resolve(explicit ?? path.resolve(process.cwd(), 'ai'));
-  return fs.existsSync(path.join(source, 'models.json'))
-    ? source
-    : resolvedAIDirectory;
 }

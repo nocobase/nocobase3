@@ -16,37 +16,15 @@ This file explains placement and order. Before copying any example, read [Exact 
 
 ## Application Tree
 
-Create and maintain employees, tools, skills, and MCP definitions under `<appRoot>/ai/`, where `<appRoot>` is the generated App source directory created by `pnpm create @nocobase/app`. Do not place App customization inside dependency package source or copy the AI plugin's builtin tree.
-
-Prefer `<appRoot>/storage/ai/models.json` for LLM service configuration. Keep `<appRoot>/ai/models.json` as the packaged/source-controlled default manifest.
-
-An App extends AI resources with this source tree:
+Create and maintain employees, tools, skills, and MCP definitions under `<appRoot>/ai/`. Declarative LLM services do not live in this resource tree; configure them in `<appRoot>/config.yml` under `ai.llmServices`.
 
 ```text
+config.yml                 # ai.llmServices
 ai/
-├── models.json
 ├── tools/
-│   ├── search.ts
-│   └── grouped-tool/
-│       ├── index.ts
-│       └── description.md
 ├── mcp/
-│   └── internal.ts
 ├── skills/
-│   └── reporting/
-│       ├── SKILLS.md
-│       └── tools/
-│           └── query.ts
 └── employees/
-    ├── analyst.ts
-    └── coordinator/
-        ├── index.ts
-        ├── prompt.md
-        ├── tools/
-        │   └── delegate.ts
-        └── skills/
-            └── orchestration/
-                └── SKILLS.md
 ```
 
 ## Overall Load Order
@@ -54,54 +32,43 @@ ai/
 The enabled AI employee App plugin initializes resources in this order:
 
 1. Switch employee storage from the initial memory repository to the plugin repository.
-2. Load **package-owned AI resources**; skip package `models.json`.
-3. Load **App source resources** from `<appRoot>/ai`, including the packaged/default `ai/models.json`; App tools use `overrideExisting: true`.
-4. Load `<appRoot>/storage/ai/models.json` with `preserveUserState: false` and `replaceExisting: true`. When present, this later storage manifest is authoritative for the LLM service set.
-5. Switch LLM-service storage to the persistent plugin repository.
+2. Subscribe to the `ai` application-config namespace.
+3. Validate and synchronize the initial `ai.llmServices` snapshot into the in-memory LLM repository.
+4. Switch LLM-service storage to the persistent plugin repository. Matching database records preserve `enabled` and `enabledModels`; database-only services are removed.
+5. Load package-owned and App-owned employee, tool, skill, and MCP resources.
+6. Reconcile every later `ai` config reload into the active database repository.
 
-Inside each `loadResources(...)` call the order is:
-
-1. LLM services (when enabled)
-2. tools
-3. MCP definitions
-4. skills
-5. employees
-6. MCP client rebuild
-
-This sequence is intentional: skills and employees may name tools already loaded; employees may name skills already loaded. Do not reorder without integration tests.
+Inside each `loadResources(...)` call the order is tools, MCP definitions, skills, employees, then MCP client rebuild. LLM service configuration is intentionally outside resource loading.
 
 ## LLM Services
 
-Prefer `<appRoot>/storage/ai/models.json` for runtime-editable LLM service configuration. The file is loaded after the packaged/source-controlled `<appRoot>/ai/models.json`; when it exists, it is authoritative and replaces the service set. Edit this storage file to change providers, credentials references, enabled models, and service flags without rebuilding/repacking the App. Restart/reload the App after editing.
+`config.yml` is the only declarative LLM service source:
 
-Keep `<appRoot>/ai/models.json` as the source-controlled default/fallback used for fresh deployments or when the storage manifest does not exist. It is not the preferred location for iterative runtime configuration. The format is a fixed JSON array, not one file per service.
-
-```json
-[
-  {
-    "name": "company-openai",
-    "title": "Company OpenAI",
-    "provider": "openai",
-    "options": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "baseURL": "${OPENAI_BASE_URL}"
-    },
-    "enabledModels": {
-      "mode": "custom",
-      "models": [{ "label": "GPT", "value": "gpt-4.1" }]
-    },
-    "modelOptions": { "temperature": 0.3 },
-    "enabled": true,
-    "sort": 10
-  }
-]
+```yaml
+ai:
+  llmServices:
+    - name: company-openai
+      title: Company OpenAI
+      provider: openai
+      options:
+        apiKey: ${OPENAI_API_KEY}
+        baseURL: ${OPENAI_BASE_URL}
+      enabledModels:
+        mode: custom
+        models:
+          - label: GPT-4.1
+            value: gpt-4.1
+      modelOptions:
+        temperature: 0.3
+      enabled: true
+      sort: 10
 ```
 
-Required fields: non-empty `name` and `provider`. `${ENV_NAME}` expands recursively in strings, arrays, and objects; missing variables become empty strings.
+Required fields are non-empty `name` and `provider`. `${ENV_NAME}` expands recursively after App config validation; missing variables become empty strings. `enabledModels` accepts `string[]`, `null`, or `{ mode, models }`, where mode is `recommended`, `provider`, or `custom`.
 
-`enabledModels` accepts a legacy string array or `{ mode, models }`, where mode is `recommended`, `provider`, or `custom`.
+The configured service-name set is authoritative. A missing or empty `llmServices` array removes all configured services. Existing names preserve repository-managed `enabled` and `enabledModels`; newly added names use config values or manager defaults. Additions and updates are persisted before stale names are deleted.
 
-`replaceExisting` deletes services absent from a successfully loaded manifest. Use it only for authoritative synchronization.
+After editing `config.yml`, run the application's config reload mechanism. Once reload succeeds, no process restart and no AI resource-directory rescan are required.
 
 ## Tools
 
@@ -201,10 +168,10 @@ The unique key is `username`. `prompt.md` replaces `systemPrompt`. Local skill d
 - Skills: `registerSkills` merges current and new values; the later App registration wins for supplied fields.
 - MCP: `registerMCP` updates an existing entry by filename key.
 - Employees: later registration updates the built-in employee by `username` while preserving user-managed fields according to manager conversion rules.
-- LLM services: App `ai/models.json` supplies packaged defaults; `storage/ai/models.json` loads later with replacement semantics and is authoritative when present. Services absent from a successfully loaded storage manifest are removed before persistence switches to the database-backed repository.
+- LLM services: `ai.llmServices` is an authoritative application-config snapshot. Matching names update structural fields while preserving database `enabled` and `enabledModels`; absent names are deleted after additions and updates complete.
 
 Use an identical key only when replacement is intentional.
 
 ## Production Resolution
 
-Package and App AI source trees are compiled/copied beside runtime modules. The runtime resolves the App source AI directory and separately checks the App source directory for `models.json`, then loads `storage/ai/models.json` as the later runtime override. The storage manifest is therefore the preferred operator-editable location and avoids a rebuild/repack cycle.
+Employee, tool, skill, and MCP resources continue to resolve from package and App AI source trees. LLM services resolve only from the validated App config accessor. After editing `config.yml`, invoke application config reload; no build, process restart, or resource-directory rescan is needed.
