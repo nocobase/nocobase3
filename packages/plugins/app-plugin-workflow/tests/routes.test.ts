@@ -7,7 +7,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { WorkflowProviderConfig } from '../server/providers/workflow.js';
+import type { WorkflowProviderConfig } from '../server/provider.js';
 import { createNodeRunRoutes } from '../server/routes/node-runs.js';
 import { apiRoutes } from '../server/routes/index.js';
 import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
@@ -214,7 +214,6 @@ function createWorkflowApplication(
         sourceRoot: '/missing/source',
         distRoot: '/missing/dist',
         artifactDisk: 'private',
-        sourceResolverDiagnostic: false,
         production: false,
       },
     },

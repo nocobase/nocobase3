@@ -44,7 +44,11 @@ export function issueFileToken(
 ): IssuedFileToken {
   assertSigningInput(options.secret, options.audience, options.fileId);
   const ttl = resolveTtl(options.expiresIn);
-  const now = resolveEpochSeconds(options.now, 'Current time');
+  const now = resolveEpochSeconds(
+    options.now,
+    'Current time',
+    'errors.currentTimeInvalid',
+  );
   const payload: FileTokenPayload = {
     version: 1,
     audience: options.audience,
@@ -105,13 +109,19 @@ function assertSigningInput(
   fileId: string,
 ): void {
   if (!secret) {
-    throw new InvalidFileInputError('A file token secret is required.');
+    throw new InvalidFileInputError('A file token secret is required.', {
+      i18nKey: 'errors.tokenSecretRequired',
+    });
   }
   if (!audience.trim()) {
-    throw new InvalidFileInputError('A file token audience is required.');
+    throw new InvalidFileInputError('A file token audience is required.', {
+      i18nKey: 'errors.tokenAudienceRequired',
+    });
   }
   if (!fileId.trim()) {
-    throw new InvalidFileInputError('A file ID is required.');
+    throw new InvalidFileInputError('A file ID is required.', {
+      i18nKey: 'errors.fileIdRequired',
+    });
   }
 }
 
@@ -125,16 +135,25 @@ function resolveTtl(value: number | undefined): number {
   ) {
     throw new InvalidFileInputError(
       `File token TTL must be an integer between 1 and ${MAX_FILE_TOKEN_TTL_SECONDS} seconds.`,
+      {
+        i18nKey: 'errors.tokenTtlInvalid',
+        i18nParams: { max: MAX_FILE_TOKEN_TTL_SECONDS },
+      },
     );
   }
   return ttl;
 }
 
-function resolveEpochSeconds(value: number | undefined, label: string): number {
+function resolveEpochSeconds(
+  value: number | undefined,
+  label: string,
+  i18nKey: string,
+): number {
   const seconds = value ?? Math.floor(Date.now() / 1000);
   if (!Number.isFinite(seconds) || !Number.isInteger(seconds) || seconds < 0) {
     throw new InvalidFileInputError(
       `${label} must be a non-negative integer in epoch seconds.`,
+      { i18nKey },
     );
   }
   return seconds;
@@ -142,7 +161,11 @@ function resolveEpochSeconds(value: number | undefined, label: string): number {
 
 function resolveVerificationTime(value: number | undefined): number {
   try {
-    return resolveEpochSeconds(value, 'Verification time');
+    return resolveEpochSeconds(
+      value,
+      'Verification time',
+      'errors.verificationTimeInvalid',
+    );
   } catch {
     throw new InvalidFileTokenError();
   }

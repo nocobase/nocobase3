@@ -35,6 +35,11 @@ export interface DispatcherOptions {
   database: DatabaseManager;
   connectionName?: string;
   instructions: Map<string, WorkflowInstructionClass>;
+  resolveWorkflowResourceRoot?: (
+    workflow: WorkflowDefinition,
+    execution: WorkflowRun,
+  ) => Promise<string | null>;
+  app?: unknown;
   queue?: WorkflowQueue;
   logger?:
     | WorkflowLogger
@@ -346,12 +351,19 @@ export default class Dispatcher {
   private async process(plan: ExecutionPlan): Promise<Processor> {
     const logger = this.getLogger(plan.workflow.id);
     return this.withExecutionLock(plan.execution.id, async () => {
+      const workflowResourceRoot =
+        (await this.options.resolveWorkflowResourceRoot?.(
+          plan.workflow,
+          plan.execution,
+        )) ?? null;
       const processor = new Processor({
         database: this.options.database,
         connectionName: this.options.connectionName,
         workflow: plan.workflow,
         execution: plan.execution,
         instructions: this.options.instructions,
+        workflowResourceRoot,
+        app: this.options.app,
         logger,
         environment: this.options.environment,
         functions: this.options.functions,

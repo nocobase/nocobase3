@@ -1,5 +1,13 @@
 # @nocobase/app-host
 
+## 0.0.1-beta.3
+
+### Patch Changes
+
+- Updated dependencies [174eab5]
+- Updated dependencies [174eab5]
+  - @nocobase/app-server@1.0.0-beta.4
+
 ## 0.0.1-beta.2
 
 ### Patch Changes

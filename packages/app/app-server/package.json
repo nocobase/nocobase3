@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-server",
-  "version": "0.1.0-beta.3",
+  "version": "1.0.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -171,6 +171,10 @@
       "./websocket": {
         "types": "./dist/websocket.d.ts",
         "import": "./dist/websocket.js"
+      },
+      "./i18n": {
+        "types": "./dist/i18n/index.d.ts",
+        "import": "./dist/i18n/index.js"
       }
     },
     "access": "public"
