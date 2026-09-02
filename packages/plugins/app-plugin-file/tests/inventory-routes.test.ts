@@ -12,12 +12,15 @@ import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/db';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFileRoute } from '../server/create-file-route.js';
+import serverLocales from '../server/locales/index.js';
 import { inventoryApiRoutes } from '../server/routes/inventory.js';
+import { createFileI18nRuntime } from './i18n.js';
 
 const TABLE = 'routeInventoryFiles';
 
@@ -59,35 +62,21 @@ describe('file inventory routes', () => {
         updatedAt: now,
       })
       .execute();
-    createFileRoute({
-      database,
-      table: TABLE,
-      defaultDisk: 'local',
-      publicBasePath: '',
-      audience: 'route-inventory-files',
-      auth: async (_context, next) => next(),
-    });
+    registerSource(database, TABLE);
   });
 
   afterEach(async () => {
     await database.destroy();
+    vi.restoreAllMocks();
   });
 
   it('reads registrations at request time and protects both endpoints', async () => {
     const can = vi.fn(async () => true);
-    const router = await inventoryApiRoutes.createRouter(
-      createApplication(database, can),
-    );
-    createFileRoute({
-      database,
-      table: 'registeredAfterInventoryRouter',
-      defaultDisk: 'local',
-      publicBasePath: '',
-      audience: 'late-file-route',
-      auth: async (_context, next) => next(),
-    });
+    const app = await createInventoryApp({ database, can });
+    registerSource(database, 'registeredAfterInventoryRouter');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const sources = await router.request('/files/inventory/sources');
+    const sources = await app.request('/files/inventory/sources');
     expect(sources.status).toBe(200);
     await expect(sources.json()).resolves.toEqual({
       data: [
@@ -100,7 +89,7 @@ describe('file inventory routes', () => {
       ],
     });
 
-    const files = await router.request(
+    const files = await app.request(
       `/files/inventory/sources/${TABLE}/files?page=1&pageSize=10`,
     );
     expect(files.status).toBe(200);
@@ -116,57 +105,164 @@ describe('file inventory routes', () => {
     });
   });
 
-  it('rejects users without inventory access', async () => {
-    const router = await inventoryApiRoutes.createRouter(
-      createApplication(database, async () => false),
-    );
-    const response = await router.request('/files/inventory/sources');
+  it('returns the standard error envelope for denied access', async () => {
+    const app = await createInventoryApp({
+      database,
+      can: async () => false,
+    });
+    const response = await app.request('/files/inventory/sources');
+
     expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'FORBIDDEN',
+        message: 'File inventory access is required.',
+      },
+    });
   });
 
-  it('validates source ids and pagination', async () => {
-    const router = await inventoryApiRoutes.createRouter(
-      createApplication(database, async () => true),
+  it('validates source ids, pagination, and safe offsets', async () => {
+    const app = await createInventoryApp({ database });
+
+    const missing = await app.request(
+      '/files/inventory/sources/unknown/files?page=1&pageSize=10',
     );
-    expect(
-      (
-        await router.request(
-          '/files/inventory/sources/unknown/files?page=1&pageSize=10',
-        )
-      ).status,
-    ).toBe(404);
-    expect(
-      (
-        await router.request(
-          `/files/inventory/sources/${TABLE}/files?page=0&pageSize=10`,
-        )
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await router.request(
-          `/files/inventory/sources/${TABLE}/files?page=1&pageSize=101`,
-        )
-      ).status,
-    ).toBe(400);
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { code: 'FILE_SOURCE_NOT_FOUND' },
+    });
+
+    for (const path of [
+      `/files/inventory/sources/${TABLE}/files?page=0&pageSize=10`,
+      `/files/inventory/sources/${TABLE}/files?page=1&pageSize=101`,
+      `/files/inventory/sources/${TABLE}/files?page=9007199254740991&pageSize=100`,
+    ]) {
+      const response = await app.request(path);
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'INVALID_FILE_INVENTORY_PAGINATION' },
+      });
+    }
+  });
+
+  it('translates errors from the request locale', async () => {
+    const app = await createInventoryApp({ database });
+    const response = await app.request(
+      '/files/inventory/sources/unknown/files',
+      { headers: { 'accept-language': 'zh-CN' } },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'FILE_SOURCE_NOT_FOUND',
+        message: '未找到已注册的文件来源。',
+      },
+    });
+  });
+
+  it('hides database failures behind a localized 503 envelope', async () => {
+    const app = await createInventoryApp({ database });
+    await database.builder().dropCollection(TABLE);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const response = await app.request(
+      `/files/inventory/sources/${TABLE}/files`,
+      { headers: { 'accept-language': 'zh-CN' } },
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'FILE_SOURCE_UNAVAILABLE',
+        message: '已注册的文件数据表不可用。',
+      },
+    });
+  });
+
+  it('returns no sources when the application has no database', async () => {
+    const app = await createInventoryApp();
+    const response = await app.request('/files/inventory/sources');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ data: [] });
+  });
+
+  it('fails route creation when authentication is unavailable', () => {
+    expect(() =>
+      inventoryApiRoutes.createRouter(
+        createApplication({ database, authorization: true }),
+      ),
+    ).toThrow(/authentication.*not registered/iu);
+  });
+
+  it('fails route creation when authorization is unavailable', () => {
+    expect(() =>
+      inventoryApiRoutes.createRouter(
+        createApplication({ database, authentication: true }),
+      ),
+    ).toThrow(/authorization.*not registered/iu);
   });
 });
 
-function createApplication(
-  database: DatabaseManager,
-  can: (input: unknown) => Promise<boolean>,
-): AppPluginApplication {
+function registerSource(database: DatabaseManager, table: string): void {
+  createFileRoute({
+    database,
+    table,
+    defaultDisk: 'local',
+    publicBasePath: '',
+    audience: `${table}-files`,
+    auth: async (_context, next) => next(),
+  });
+}
+
+async function createInventoryApp(
+  options: {
+    readonly database?: DatabaseManager;
+    readonly can?: (input: unknown) => Promise<boolean>;
+  } = {},
+): Promise<Hono> {
+  const runtime = await createFileI18nRuntime(serverLocales);
+  const app = new Hono();
+  app.use('*', createI18nMiddleware(runtime));
+  app.route(
+    '/',
+    await inventoryApiRoutes.createRouter(
+      createApplication({
+        database: options.database,
+        can: options.can,
+        authentication: true,
+        authorization: true,
+      }),
+    ),
+  );
+  return app;
+}
+
+function createApplication(options: {
+  readonly database?: DatabaseManager;
+  readonly can?: (input: unknown) => Promise<boolean>;
+  readonly authentication?: boolean;
+  readonly authorization?: boolean;
+}): AppPluginApplication {
   const container = new ServiceContainer();
-  container.instance(databaseManagerToken, database);
-  container.instance(authenticationToken, {
-    required: () => async (_context, next) => next(),
-  } as unknown as Auth);
-  container.instance(authorizationToken, {
-    middleware: () => async (context, next) => {
-      context.set('authz', { can });
-      await next();
-    },
-  } as unknown as AppAuthorization);
+  if (options.database) {
+    container.instance(databaseManagerToken, options.database);
+  }
+  if (options.authentication) {
+    container.instance(authenticationToken, {
+      required: () => async (_context, next) => next(),
+    } as unknown as Auth);
+  }
+  if (options.authorization) {
+    container.instance(authorizationToken, {
+      middleware: () => async (context, next) => {
+        context.set('authz', {
+          can: options.can ?? (async () => true),
+        });
+        await next();
+      },
+    } as unknown as AppAuthorization);
+  }
   return {
     appName: 'main',
     publicBasePath: '',

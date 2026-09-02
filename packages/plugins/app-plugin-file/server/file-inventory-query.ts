@@ -5,6 +5,12 @@ import type {
   FileInventoryItem,
   FileInventorySourceSummary,
 } from '../shared/inventory.js';
+import {
+  DATABASE_FILE_COLUMNS,
+  normalizeDatabaseFileSize,
+  normalizeDatabaseFileVisibility,
+  serializeDatabaseDate,
+} from './database-file-record.js';
 import type { RegisteredDatabaseFileSource } from './file-source-registry.js';
 
 interface FileInventoryRow extends Row {
@@ -27,18 +33,6 @@ export interface FileInventoryPageOptions {
   readonly pageSize: number;
 }
 
-const VALIDATION_COLUMNS: readonly string[] = Object.freeze([
-  'id',
-  'disk',
-  'key',
-  'filename',
-  'mimeType',
-  'size',
-  'public',
-  'createdAt',
-  'updatedAt',
-]);
-
 const INVENTORY_COLUMNS: readonly string[] = Object.freeze([
   'id',
   'disk',
@@ -50,8 +44,6 @@ const INVENTORY_COLUMNS: readonly string[] = Object.freeze([
   'updatedAt',
 ]);
 
-const SOURCE_UNAVAILABLE_MESSAGE = 'The registered file table is unavailable.';
-
 export async function summarizeDatabaseFileSource(
   database: DatabaseManager,
   source: RegisteredDatabaseFileSource,
@@ -60,29 +52,26 @@ export async function summarizeDatabaseFileSource(
     await database
       .query()
       .selectFrom(source.table)
-      .select(VALIDATION_COLUMNS)
-      .limit(1)
+      .select(DATABASE_FILE_COLUMNS)
+      .limit(0)
       .execute();
     const count = await countRows(database, source.table);
     return {
       id: source.id,
       table: source.table,
-      audiences: source.audiences,
-      registrations: source.registrations,
-      scoped: source.scoped,
       count,
       status: 'available',
     };
-  } catch {
+  } catch (error) {
+    console.error('File inventory source summary failed.', {
+      table: source.table,
+      error,
+    });
     return {
       id: source.id,
       table: source.table,
-      audiences: source.audiences,
-      registrations: source.registrations,
-      scoped: source.scoped,
       count: null,
       status: 'unavailable',
-      error: SOURCE_UNAVAILABLE_MESSAGE,
     };
   }
 }
@@ -92,8 +81,11 @@ export async function listDatabaseFileSourceItems(
   source: RegisteredDatabaseFileSource,
   options: FileInventoryPageOptions,
 ): Promise<FileInventoryFilesResponse> {
-  const total = await countRows(database, source.table);
   const offset = (options.page - 1) * options.pageSize;
+  if (!Number.isSafeInteger(offset)) {
+    throw new RangeError('File inventory offset is outside the safe range.');
+  }
+  const total = await countRows(database, source.table);
   const rows = await database
     .query()
     .selectFrom<FileInventoryRow>(source.table)
@@ -114,10 +106,6 @@ export async function listDatabaseFileSourceItems(
   };
 }
 
-export function fileSourceUnavailableMessage(): string {
-  return SOURCE_UNAVAILABLE_MESSAGE;
-}
-
 async function countRows(
   database: DatabaseManager,
   table: string,
@@ -127,7 +115,7 @@ async function countRows(
     .selectFrom(table)
     .select((expression) => [expression.fn.countAll().as('count')])
     .executeTakeFirst<CountRow>();
-  return toSafeCount(row?.count ?? 0);
+  return normalizeSafeCount(row?.count ?? 0);
 }
 
 function toInventoryItem(row: FileInventoryRow): FileInventoryItem {
@@ -136,32 +124,17 @@ function toInventoryItem(row: FileInventoryRow): FileInventoryItem {
     disk: row.disk,
     filename: row.filename,
     mimeType: row.mimeType,
-    size: toSafeInteger(row.size, 'File size'),
-    public: toBoolean(row.public),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    size: normalizeDatabaseFileSize(row.size),
+    public: normalizeDatabaseFileVisibility(row.public),
+    createdAt: serializeDatabaseDate(row.createdAt),
+    updatedAt: serializeDatabaseDate(row.updatedAt),
   };
 }
 
-function toSafeCount(value: number | string | bigint): number {
-  return toSafeInteger(value, 'File record count');
-}
-
-function toSafeInteger(value: unknown, label: string): number {
-  let normalized: number;
-  if (typeof value === 'bigint') normalized = Number(value);
-  else if (typeof value === 'string' && /^\d+$/u.test(value)) {
-    normalized = Number(value);
-  } else if (typeof value === 'number') normalized = value;
-  else throw new TypeError(`${label} returned by the database is not numeric.`);
+function normalizeSafeCount(value: number | string | bigint): number {
+  const normalized = Number(value);
   if (!Number.isSafeInteger(normalized) || normalized < 0) {
-    throw new RangeError(`${label} is outside the safe API number range.`);
+    throw new RangeError('File record count is outside the safe API range.');
   }
   return normalized;
-}
-
-function toBoolean(value: unknown): boolean {
-  if (value === true || value === 1 || value === '1') return true;
-  if (value === false || value === 0 || value === '0') return false;
-  throw new TypeError('File visibility returned by the database is invalid.');
 }

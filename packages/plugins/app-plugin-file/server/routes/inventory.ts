@@ -9,14 +9,14 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { databaseManagerToken } from '@nocobase/db';
-import { Hono } from 'hono';
+import { Hono, type Context, type Env, type Input } from 'hono';
 
 import {
   FILE_INVENTORY_RESOURCE,
+  type FileInventoryErrorResponse,
   type FileInventorySourcesResponse,
 } from '../../shared/inventory.js';
 import {
-  fileSourceUnavailableMessage,
   listDatabaseFileSourceItems,
   summarizeDatabaseFileSource,
 } from '../file-inventory-query.js';
@@ -24,18 +24,19 @@ import {
   findRegisteredDatabaseFileSource,
   listRegisteredDatabaseFileSources,
 } from '../file-source-registry.js';
+import { translateFileMessage } from '../i18n.js';
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 
 export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes((app) => {
-    const router = new Hono();
-    if (!hasInventoryDependencies(app)) return router;
-
-    const database = app.container.resolve(databaseManagerToken);
     const authentication = app.container.resolve(authenticationToken);
     const authorization = app.container.resolve(authorizationToken);
+    const database = app.container.has(databaseManagerToken)
+      ? app.container.resolve(databaseManagerToken)
+      : undefined;
+    const router = new Hono();
     const routes = new Hono<AuthorizationEnv>();
 
     routes.use('*', authentication.required(), authorization.middleware());
@@ -45,8 +46,11 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         action: 'access',
       });
       if (!allowed) {
-        return context.json(
-          { code: 'FORBIDDEN', message: 'File inventory access is required.' },
+        return inventoryError(
+          context,
+          'FORBIDDEN',
+          'errors.inventoryAccessRequired',
+          'File inventory access is required.',
           403,
         );
       }
@@ -54,10 +58,11 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
 
     routes.get('/sources', async (context) => {
-      const sources = listRegisteredDatabaseFileSources(
-        database,
-        app.publicBasePath,
-      );
+      if (!database) {
+        const response: FileInventorySourcesResponse = { data: [] };
+        return context.json(response);
+      }
+      const sources = listRegisteredDatabaseFileSources(database);
       const data = await Promise.all(
         sources.map((source) => summarizeDatabaseFileSource(database, source)),
       );
@@ -66,17 +71,25 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
 
     routes.get('/sources/:sourceId/files', async (context) => {
+      if (!database) {
+        return inventoryError(
+          context,
+          'FILE_SOURCE_NOT_FOUND',
+          'errors.inventorySourceNotFound',
+          'The registered file source was not found.',
+          404,
+        );
+      }
       const source = findRegisteredDatabaseFileSource(
         database,
-        app.publicBasePath,
         context.req.param('sourceId'),
       );
       if (!source) {
-        return context.json(
-          {
-            code: 'FILE_SOURCE_NOT_FOUND',
-            message: 'The registered file source was not found.',
-          },
+        return inventoryError(
+          context,
+          'FILE_SOURCE_NOT_FOUND',
+          'errors.inventorySourceNotFound',
+          'The registered file source was not found.',
           404,
         );
       }
@@ -86,8 +99,19 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         DEFAULT_PAGE_SIZE,
         MAX_PAGE_SIZE,
       );
-      if (page === null) return invalidPagination('page');
-      if (pageSize === null) return invalidPagination('pageSize');
+      if (
+        page === null ||
+        pageSize === null ||
+        !Number.isSafeInteger((page - 1) * pageSize)
+      ) {
+        return inventoryError(
+          context,
+          'INVALID_FILE_INVENTORY_PAGINATION',
+          'errors.inventoryPaginationInvalid',
+          'File inventory pagination is invalid.',
+          400,
+        );
+      }
       try {
         return context.json(
           await listDatabaseFileSourceItems(database, source, {
@@ -95,12 +119,16 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             pageSize,
           }),
         );
-      } catch {
-        return context.json(
-          {
-            code: 'FILE_SOURCE_UNAVAILABLE',
-            message: fileSourceUnavailableMessage(),
-          },
+      } catch (error) {
+        console.error('File inventory source listing failed.', {
+          table: source.table,
+          error,
+        });
+        return inventoryError(
+          context,
+          'FILE_SOURCE_UNAVAILABLE',
+          'errors.inventorySourceUnavailable',
+          'The registered file table is unavailable.',
           503,
         );
       }
@@ -109,18 +137,6 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     router.route('/files/inventory', routes);
     return router;
   });
-
-function hasInventoryDependencies(
-  app: AppPluginApplication,
-): app is AppPluginApplication & {
-  readonly container: AppPluginApplication['container'];
-} {
-  return (
-    app.container.has(databaseManagerToken) &&
-    app.container.has(authenticationToken) &&
-    app.container.has(authorizationToken)
-  );
-}
 
 function parsePositiveInteger(
   value: string | undefined,
@@ -136,12 +152,22 @@ function parsePositiveInteger(
   return parsed;
 }
 
-function invalidPagination(name: string): Response {
-  return Response.json(
-    {
-      code: 'INVALID_FILE_INVENTORY_PAGINATION',
-      message: `File inventory ${name} is invalid.`,
+function inventoryError<
+  TEnv extends Env,
+  TPath extends string,
+  TInput extends Input,
+>(
+  context: Context<TEnv, TPath, TInput>,
+  code: string,
+  key: string,
+  defaultValue: string,
+  status: 400 | 403 | 404 | 503,
+): Response {
+  const response: FileInventoryErrorResponse = {
+    error: {
+      code,
+      message: translateFileMessage(context, key, defaultValue),
     },
-    { status: 400 },
-  );
+  };
+  return context.json(response, status);
 }

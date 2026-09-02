@@ -53,9 +53,6 @@ const zhCN: FileClientResource = {
       loading: '正在加载来源...',
       empty: '暂无已注册的数据库文件来源。',
       recordCount: '{{count}} 个文件',
-      registrations: '{{count}} 个路由',
-      scoped: '有范围限制',
-      unscoped: '无范围限制',
       unavailable: '来源不可用',
     },
     files: {
@@ -81,6 +78,7 @@ const zhCN: FileClientResource = {
     errors: {
       loadSources: '无法加载文件来源。',
       loadFiles: '无法加载此来源中的文件。',
+      sourceUnavailable: '无法读取已注册的文件数据表。',
       sourcesUnavailable: '文件来源不可用',
     },
   },

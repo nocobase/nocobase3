@@ -1,5 +1,5 @@
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   listDatabaseFileSourceItems,
@@ -73,24 +73,36 @@ describe('file inventory query', () => {
       totalPages: 2,
     });
     expect(result.data).toEqual([
-      expect.objectContaining({ id: 'file-1', size: 10, public: false }),
+      expect.objectContaining({
+        id: 'file-1',
+        size: 10,
+        public: false,
+        createdAt: '2026-09-01T00:00:00.000Z',
+      }),
     ]);
     expect(result.data[0]).not.toHaveProperty('key');
     expect(result.data[0]).not.toHaveProperty('businessField');
   });
 
   it('marks one missing source unavailable without throwing', async () => {
-    await expect(
-      summarizeDatabaseFileSource(database, {
-        ...source(),
-        id: 'missingFiles',
-        table: 'missingFiles',
-      }),
-    ).resolves.toMatchObject({
+    const error = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const summary = await summarizeDatabaseFileSource(database, {
+      ...source(),
+      id: 'missingFiles',
+      table: 'missingFiles',
+    });
+    expect(summary).toMatchObject({
       count: null,
       status: 'unavailable',
-      error: 'The registered file table is unavailable.',
     });
+    expect(summary).not.toHaveProperty('error');
+    expect(error).toHaveBeenCalledWith(
+      'File inventory source summary failed.',
+      expect.objectContaining({ table: 'missingFiles' }),
+    );
+    error.mockRestore();
   });
 });
 
@@ -98,9 +110,5 @@ function source(): RegisteredDatabaseFileSource {
   return {
     id: TABLE,
     table: TABLE,
-    publicBasePath: '',
-    audiences: ['inventory-files'],
-    registrations: 1,
-    scoped: true,
   };
 }

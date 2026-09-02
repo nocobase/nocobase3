@@ -91,9 +91,6 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     registerDatabaseFileSource({
       database: options.database,
       table: options.table,
-      publicBasePath: options.publicBasePath,
-      audience: options.audience,
-      scoped: options.scope !== undefined,
     });
   }
   const routes = new Hono();

@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
 } from 'react';
@@ -44,11 +45,14 @@ export default function FileInventoryPage(): ReactElement {
   const [sourcesError, setSourcesError] = useState<string>();
   const [filesError, setFilesError] = useState<string>();
   const [revision, setRevision] = useState(0);
+  const selectedIdRef = useRef<string | undefined>(undefined);
 
   const selectedSource = useMemo(
     () => sources.find((source) => source.id === selectedId),
     [selectedId, sources],
   );
+  const selectedSourceId = selectedSource?.id;
+  const selectedSourceStatus = selectedSource?.status;
   const totalFiles = useMemo(
     () =>
       sources.reduce(
@@ -80,16 +84,26 @@ export default function FileInventoryPage(): ReactElement {
     void loadSources(controller.signal)
       .then((response) => {
         setSources(response.data);
-        setFilesLoading(response.data.length > 0);
-        setSelectedId((current) => {
-          if (
-            current &&
-            response.data.some((source) => source.id === current)
-          ) {
-            return current;
-          }
-          return response.data[0]?.id;
-        });
+        const current = selectedIdRef.current;
+        const next =
+          current && response.data.some((source) => source.id === current)
+            ? current
+            : response.data[0]?.id;
+        if (next !== current) {
+          const nextSource = response.data.find((source) => source.id === next);
+          selectedIdRef.current = next;
+          setSelectedId(next);
+          setPage(1);
+          setFiles([]);
+          setFileMeta({
+            page: 1,
+            pageSize: PAGE_SIZE,
+            total: 0,
+            totalPages: 0,
+          });
+          setFilesLoading(nextSource?.status === 'available');
+          setFilesError(undefined);
+        }
         setSourcesError(undefined);
       })
       .catch((error: unknown) => {
@@ -111,11 +125,11 @@ export default function FileInventoryPage(): ReactElement {
   }, [loadSources, revision, t]);
 
   useEffect(() => {
-    if (!selectedSource || selectedSource.status !== 'available') return;
+    if (!selectedSourceId || selectedSourceStatus !== 'available') return;
     const controller = new AbortController();
     void appClient
       .request<FileInventoryFilesResponse>(
-        `files/inventory/sources/${encodeURIComponent(selectedSource.id)}/files?page=${page}&pageSize=${PAGE_SIZE}`,
+        `files/inventory/sources/${encodeURIComponent(selectedSourceId)}/files?page=${page}&pageSize=${PAGE_SIZE}`,
         { signal: controller.signal },
       )
       .then((response) => {
@@ -139,10 +153,12 @@ export default function FileInventoryPage(): ReactElement {
         if (!controller.signal.aborted) setFilesLoading(false);
       });
     return () => controller.abort();
-  }, [appClient, page, revision, selectedSource, t]);
+  }, [appClient, page, revision, selectedSourceId, selectedSourceStatus, t]);
 
   const selectSource = (sourceId: string): void => {
+    if (sourceId === selectedIdRef.current) return;
     const source = sources.find((item) => item.id === sourceId);
+    selectedIdRef.current = sourceId;
     setSelectedId(sourceId);
     setPage(1);
     setFiles([]);
@@ -254,48 +270,14 @@ export default function FileInventoryPage(): ReactElement {
           <div className='min-w-0'>
             {selectedSource ? (
               <>
-                <div className='flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between'>
-                  <div className='min-w-0'>
-                    <div className='flex items-center gap-2'>
-                      <Database
-                        aria-hidden='true'
-                        className='size-4 shrink-0'
-                      />
-                      <h2
-                        className='truncate font-semibold'
-                        title={selectedSource.table}
-                      >
-                        {selectedSource.table}
-                      </h2>
-                    </div>
-                    <div className='mt-1 flex flex-wrap gap-1.5'>
-                      {selectedSource.audiences.map((audience) => (
-                        <code
-                          key={audience}
-                          className='rounded border bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground'
-                        >
-                          {audience}
-                        </code>
-                      ))}
-                    </div>
-                  </div>
-                  <div className='flex shrink-0 gap-4 text-xs text-muted-foreground'>
-                    <span>
-                      {t('inventory.sources.registrations', {
-                        defaultValue: '{{count}} routes',
-                        count: selectedSource.registrations,
-                      })}
-                    </span>
-                    <span>
-                      {selectedSource.scoped
-                        ? t('inventory.sources.scoped', {
-                            defaultValue: 'Scoped',
-                          })
-                        : t('inventory.sources.unscoped', {
-                            defaultValue: 'Unscoped',
-                          })}
-                    </span>
-                  </div>
+                <div className='flex items-center gap-2 border-b px-5 py-4'>
+                  <Database aria-hidden='true' className='size-4 shrink-0' />
+                  <h2
+                    className='truncate font-semibold'
+                    title={selectedSource.table}
+                  >
+                    {selectedSource.table}
+                  </h2>
                 </div>
 
                 {selectedSource.status === 'unavailable' ? (
@@ -304,13 +286,10 @@ export default function FileInventoryPage(): ReactElement {
                       title={t('inventory.sources.unavailable', {
                         defaultValue: 'Source unavailable',
                       })}
-                      message={
-                        selectedSource.error ??
-                        t('inventory.errors.loadFiles', {
-                          defaultValue:
-                            'Unable to load files from this source.',
-                        })
-                      }
+                      message={t('inventory.errors.sourceUnavailable', {
+                        defaultValue:
+                          'The registered file table cannot be read.',
+                      })}
                     />
                   </div>
                 ) : filesError ? (
@@ -384,6 +363,7 @@ function SourceButton({
       className={`flex min-h-14 w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
         selected ? 'bg-muted font-medium' : 'hover:bg-muted/60'
       }`}
+      aria-current={selected ? 'page' : undefined}
       onClick={() => onSelect(source.id)}
       type='button'
     >

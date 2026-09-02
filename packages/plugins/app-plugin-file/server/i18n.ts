@@ -1,12 +1,16 @@
 import { getRequestTranslator } from '@nocobase/i18n/server';
-import type { Context } from 'hono';
+import type { Context, Env, Input } from 'hono';
 
 import { FILE_PLUGIN_NS } from '../shared/namespace.js';
 
 export type FileTranslationParams = Readonly<Record<string, unknown>>;
 
-export function translateFileMessage(
-  context: Context,
+export function translateFileMessage<
+  TEnv extends Env,
+  TPath extends string,
+  TInput extends Input,
+>(
+  context: Context<TEnv, TPath, TInput>,
   key: string,
   defaultValue: string,
   params?: FileTranslationParams,
@@ -15,8 +19,12 @@ export function translateFileMessage(
   return t(key, { defaultValue, ...params });
 }
 
-export function translateFileError(
-  context: Context,
+export function translateFileError<
+  TEnv extends Env,
+  TPath extends string,
+  TInput extends Input,
+>(
+  context: Context<TEnv, TPath, TInput>,
   error: Error & {
     readonly code?: string;
     readonly i18nKey?: string;

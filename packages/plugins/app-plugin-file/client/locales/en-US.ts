@@ -53,9 +53,6 @@ const enUS = {
       loading: 'Loading sources...',
       empty: 'No database file sources are registered.',
       recordCount: '{{count}} files',
-      registrations: '{{count}} routes',
-      scoped: 'Scoped',
-      unscoped: 'Unscoped',
       unavailable: 'Source unavailable',
     },
     files: {
@@ -81,6 +78,7 @@ const enUS = {
     errors: {
       loadSources: 'Unable to load file sources.',
       loadFiles: 'Unable to load files from this source.',
+      sourceUnavailable: 'The registered file table cannot be read.',
       sourcesUnavailable: 'File sources unavailable',
     },
   },

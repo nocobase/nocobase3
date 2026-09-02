@@ -23,35 +23,24 @@ describe('file source registry', () => {
     await database.destroy();
   });
 
-  it('groups registrations by database, base path, and table', () => {
+  it('groups registrations by database and table', () => {
     registerDatabaseFileSource({
       database,
       table: 'orderAttachments',
-      publicBasePath: '/main/',
-      audience: 'active-orders',
-      scoped: true,
     });
     registerDatabaseFileSource({
       database,
       table: 'orderAttachments',
-      publicBasePath: 'main',
-      audience: 'archived-orders',
-      scoped: false,
     });
 
-    expect(listRegisteredDatabaseFileSources(database, '/main')).toEqual([
+    expect(listRegisteredDatabaseFileSources(database)).toEqual([
       {
         id: 'orderAttachments',
         table: 'orderAttachments',
-        publicBasePath: '/main',
-        audiences: ['active-orders', 'archived-orders'],
-        registrations: 2,
-        scoped: true,
       },
     ]);
     expect(
-      findRegisteredDatabaseFileSource(database, '/main', 'orderAttachments'),
-    ).toMatchObject({ registrations: 2 });
-    expect(listRegisteredDatabaseFileSources(database, '/other')).toEqual([]);
+      findRegisteredDatabaseFileSource(database, 'orderAttachments'),
+    ).toEqual({ id: 'orderAttachments', table: 'orderAttachments' });
   });
 });
