@@ -132,31 +132,42 @@ npm run build
 
 ```bash
 npm run test:integration
+# 或使用显式名称
+npm run test:integration:sqlite
 ```
 
-启动 PostgreSQL 和 MySQL：
+单独启动并测试 PostgreSQL：
 
 ```bash
-npm run test:db:up
+npm run test:db:up:postgres
+npm run test:integration:postgres
 ```
 
-Oracle 单独启动：
+单独启动并测试 MySQL：
+
+```bash
+npm run test:db:up:mysql
+npm run test:integration:mysql
+```
+
+单独启动并测试 Oracle：
 
 ```bash
 npm run test:db:up:oracle
 npm run test:integration:oracle
 ```
 
-SQL Server 单独启动：
+单独启动并测试 SQL Server：
 
 ```bash
 npm run test:db:up:mssql
 npm run test:integration:mssql
 ```
 
-跑完整真实数据库矩阵：
+启动并测试包括 SQLite 在内的完整数据库矩阵：
 
 ```bash
+npm run test:db:up:all
 npm run test:integration:all
 ```
 

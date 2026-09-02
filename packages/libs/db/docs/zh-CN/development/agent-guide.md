@@ -147,7 +147,7 @@ npm run build
 完整真实数据库矩阵：
 
 ```bash
-npm run test:db:up
+npm run test:db:up:all
 npm run test:integration:all
 npm run test:db:down
 ```

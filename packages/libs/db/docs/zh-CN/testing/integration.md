@@ -16,6 +16,7 @@
 
 ```bash
 npm run test:integration
+npm run test:integration:sqlite
 ```
 
 ## 覆盖率
@@ -28,16 +29,23 @@ npm run test:coverage
 
 ## 启动真实数据库
 
-```bash
-npm run test:db:up
-```
-
-这会启动 Docker Compose 中的 PostgreSQL 和 MySQL。Oracle 和 SQL Server 镜像较大，单独启动：
+每个数据库都有对应的启动和测试命令：
 
 ```bash
+npm run test:db:up:postgres
+npm run test:integration:postgres
+
+npm run test:db:up:mysql
+npm run test:integration:mysql
+
 npm run test:db:up:oracle
+npm run test:integration:oracle
+
 npm run test:db:up:mssql
+npm run test:integration:mssql
 ```
+
+所有启动命令都会等待数据库通过 Docker Compose healthcheck 后再返回。Oracle 和 SQL Server 镜像较大，启动时间更长。
 
 默认端口：
 
@@ -51,6 +59,7 @@ SQL Server: 127.0.0.1:11433
 ## 全矩阵测试
 
 ```bash
+npm run test:db:up:all
 npm run test:integration:all
 ```
 
@@ -64,22 +73,21 @@ INTEGRATION_DB_CONNECTIONS=all vitest run tests/integration
 
 ## 指定数据库
 
+优先使用 `test:integration:<database>` 命令。临时组合多个数据库时，可以直接向 Vitest 传递连接矩阵：
+
 ```bash
-INTEGRATION_DB_CONNECTIONS=postgres npm run test:integration
-INTEGRATION_DB_CONNECTIONS=mysql npm run test:integration
-INTEGRATION_DB_CONNECTIONS=postgres,mysql npm run test:integration
-INTEGRATION_DB_CONNECTIONS=oracle npm run test:integration
-INTEGRATION_DB_CONNECTIONS=mssql npm run test:integration
+INTEGRATION_DB_CONNECTIONS=postgres,mysql pnpm exec vitest run tests/integration
+INTEGRATION_DB_CONNECTIONS=oracle,mssql pnpm exec vitest run tests/integration
 ```
 
-也可以直接运行 `npm run test:integration:oracle`。Oracle 测试使用 `gvenzl/oracle-free:23-slim-faststart` 和 `oracledb` Thin mode，不需要 Oracle Instant Client。
+Oracle 测试使用 `gvenzl/oracle-free:23-slim-faststart` 和 `oracledb` Thin mode，不需要 Oracle Instant Client。
 
 SQL Server 可以直接运行 `npm run test:integration:mssql`。测试使用 `mcr.microsoft.com/mssql/server:2022-latest` 和 `tedious`；Apple Silicon 通过 `linux/amd64` 模拟运行，因此启动时间会更长。`mssql-init` 会创建独立的 `nocobase_collection_builder` 测试数据库。
 
-也可以使用 `DB_CONNECTION` 指定单个连接：
+底层 helper 也支持使用 `DB_CONNECTION` 指定单个连接：
 
 ```bash
-DB_CONNECTION=postgres npm run test:integration
+DB_CONNECTION=postgres pnpm exec vitest run tests/integration
 ```
 
 ## 清理数据库

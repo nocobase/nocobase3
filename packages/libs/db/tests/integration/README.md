@@ -35,23 +35,41 @@ By default, the integration suite uses an in-memory SQLite database:
 
 ```bash
 npm run test:integration
+npm run test:integration:sqlite
 ```
 
-Start PostgreSQL and MySQL with Docker Compose:
+Start and test PostgreSQL:
 
 ```bash
-npm run test:db:up
+npm run test:db:up:postgres
+npm run test:integration:postgres
 ```
 
-Oracle uses the larger `gvenzl/oracle-free:23-slim-faststart` image and starts separately:
+Start and test MySQL:
+
+```bash
+npm run test:db:up:mysql
+npm run test:integration:mysql
+```
+
+Oracle uses the larger `gvenzl/oracle-free:23-slim-faststart` image:
 
 ```bash
 npm run test:db:up:oracle
+npm run test:integration:oracle
 ```
 
-Run the same integration suite against SQLite, PostgreSQL, MySQL, and Oracle after all three containers are healthy:
+Start and test SQL Server:
 
 ```bash
+npm run test:db:up:mssql
+npm run test:integration:mssql
+```
+
+Start the complete Docker database matrix and run the integration suite against SQLite, PostgreSQL, MySQL, Oracle, and SQL Server:
+
+```bash
+npm run test:db:up:all
 npm run test:integration:all
 ```
 
@@ -61,11 +79,11 @@ Stop and remove the test databases:
 npm run test:db:down
 ```
 
-The database matrix is controlled by `INTEGRATION_DB_CONNECTIONS`, for example:
+For an ad hoc database combination, set `INTEGRATION_DB_CONNECTIONS` on a direct Vitest invocation:
 
 ```bash
-INTEGRATION_DB_CONNECTIONS=postgres,mysql npm run test:integration
-INTEGRATION_DB_CONNECTIONS=oracle npm run test:integration
+INTEGRATION_DB_CONNECTIONS=postgres,mysql pnpm exec vitest run tests/integration
+INTEGRATION_DB_CONNECTIONS=oracle pnpm exec vitest run tests/integration
 ```
 
 Default Docker connection settings:
@@ -88,4 +106,10 @@ ORACLE_PORT=11521
 ORACLE_USER=nocobase
 ORACLE_PASSWORD=nocobase
 ORACLE_SERVICE_NAME=FREEPDB1
+
+MSSQL_HOST=127.0.0.1
+MSSQL_PORT=11433
+MSSQL_USER=sa
+MSSQL_PASSWORD=NocoBase_Mssql_2026
+MSSQL_DATABASE=nocobase_collection_builder
 ```
