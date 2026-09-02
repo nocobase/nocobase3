@@ -24,6 +24,12 @@ describe('deployment pages', () => {
     await user.selectOptions(screen.getByLabelText('Status'), 'succeeded');
     expect(screen.getByText('DEP-1042')).toBeVisible();
     expect(screen.queryByText('DEP-1041')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Requested by')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Find a deployment' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByText('DEP-1041')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
     expect(screen.getByLabelText('Sort deployments')).toBeVisible();
   });
@@ -91,8 +97,12 @@ describe('AuditPage', () => {
     expect(
       screen.getByRole('columnheader', { name: 'Target object' }),
     ).toBeVisible();
-    expect(screen.getByLabelText('Object type')).toBeVisible();
-    expect(screen.getByLabelText('Object ID')).toBeVisible();
+    expect(screen.queryByLabelText('Actor')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Object type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Object ID')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Explore activity' }),
+    ).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Result'), 'success');
     expect(screen.getByText('application.started')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
@@ -126,8 +136,8 @@ describe('AuditPage', () => {
     expect(
       screen.getByRole('columnheader', { name: '操作对象' }),
     ).toBeVisible();
-    expect(screen.getByLabelText('对象类型')).toBeVisible();
-    expect(screen.getByLabelText('对象 ID')).toBeVisible();
+    expect(screen.queryByLabelText('对象类型')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('对象 ID')).not.toBeInTheDocument();
   });
 });
 

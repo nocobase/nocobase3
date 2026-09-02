@@ -12,13 +12,7 @@ import { Link } from 'react-router';
 
 import { Badge } from '../components/ui/badge.js';
 import { Button } from '../components/ui/button.js';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card.js';
+import { Card, CardContent } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
 import {
   NativeSelect,
@@ -116,19 +110,6 @@ export default function DeploymentsPage(): ReactElement {
 
       <div className='mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6'>
         <Card>
-          <CardHeader className='border-b'>
-            <CardTitle>
-              {t('deployments.filters.title', {
-                defaultValue: 'Find a deployment',
-              })}
-            </CardTitle>
-            <CardDescription>
-              {t('deployments.filters.description', {
-                defaultValue:
-                  'Combine status, application, operator, and time filters.',
-              })}
-            </CardDescription>
-          </CardHeader>
           <CardContent className='space-y-4'>
             <div className='grid gap-3 lg:grid-cols-[minmax(15rem,1fr)_repeat(4,minmax(9rem,auto))]'>
               <label className='relative block'>
@@ -258,15 +239,7 @@ export default function DeploymentsPage(): ReactElement {
                 </NativeSelectOption>
               </FilterSelect>
             </div>
-            <div className='grid gap-3 border-t pt-4 sm:grid-cols-3'>
-              <TextFilter
-                id='deployment-requested-by'
-                label={t('deployments.filters.requestedBy', {
-                  defaultValue: 'Requested by',
-                })}
-                value={filters.requestedBy}
-                onChange={(value) => updateFilter('requestedBy', value)}
-              />
+            <div className='grid gap-3 border-t pt-4 sm:grid-cols-2'>
               <DateFilter
                 id='deployment-from'
                 label={t('deployments.filters.from', { defaultValue: 'From' })}
@@ -279,6 +252,20 @@ export default function DeploymentsPage(): ReactElement {
                 value={filters.to}
                 onChange={(value) => updateFilter('to', value)}
               />
+            </div>
+            <div className='flex justify-end border-t pt-4'>
+              <Button
+                type='button'
+                variant='ghost'
+                onClick={() => {
+                  setFilters(INITIAL_FILTERS);
+                  setPage(1);
+                }}
+              >
+                {t('deployments.filters.clear', {
+                  defaultValue: 'Clear filters',
+                })}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -491,29 +478,6 @@ function FilterSelect({
     >
       {children}
     </NativeSelect>
-  );
-}
-
-function TextFilter({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-}): ReactElement {
-  return (
-    <label htmlFor={id} className='space-y-1.5 text-xs font-medium'>
-      <span>{label}</span>
-      <Input
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
   );
 }
 

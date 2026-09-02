@@ -24,13 +24,7 @@ import {
 } from '../domain/operations.js';
 import { Badge } from './ui/badge.js';
 import { Button } from './ui/button.js';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from './ui/card.js';
+import { Card, CardContent } from './ui/card.js';
 import {
   Dialog,
   DialogContent,
@@ -174,17 +168,6 @@ export function AuditLogView({
     >
       {showFilters ? (
         <Card>
-          <CardHeader className='border-b'>
-            <CardTitle>
-              {t('audit.filters.title', { defaultValue: 'Explore activity' })}
-            </CardTitle>
-            <CardDescription>
-              {t('audit.filters.description', {
-                defaultValue:
-                  'Narrow activity by identity, application, action, object, and time.',
-              })}
-            </CardDescription>
-          </CardHeader>
           <CardContent className='space-y-4'>
             <div className='grid gap-3 lg:grid-cols-[minmax(15rem,1fr)_repeat(4,minmax(9rem,auto))]'>
               <label className='relative block'>
@@ -280,29 +263,7 @@ export function AuditLogView({
                 ))}
               </FilterSelect>
             </div>
-            <div className='grid gap-3 border-t pt-4 sm:grid-cols-2 xl:grid-cols-5'>
-              <TextFilter
-                id={`${auditId}-actor`}
-                label={t('audit.filters.actor', { defaultValue: 'Actor' })}
-                value={filters.actor}
-                onChange={(value) => updateFilter('actor', value)}
-              />
-              <TextFilter
-                id={`${auditId}-resource`}
-                label={t('audit.filters.resource', {
-                  defaultValue: 'Object type',
-                })}
-                value={filters.resource}
-                onChange={(value) => updateFilter('resource', value)}
-              />
-              <TextFilter
-                id={`${auditId}-resource-id`}
-                label={t('audit.filters.resourceId', {
-                  defaultValue: 'Object ID',
-                })}
-                value={filters.resourceId}
-                onChange={(value) => updateFilter('resourceId', value)}
-              />
+            <div className='grid gap-3 border-t pt-4 sm:grid-cols-2'>
               <DateFilter
                 id={`${auditId}-from`}
                 label={t('audit.filters.from', { defaultValue: 'From' })}
@@ -640,29 +601,6 @@ function FilterSelect({
     >
       {children}
     </NativeSelect>
-  );
-}
-
-function TextFilter({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-}): ReactElement {
-  return (
-    <label htmlFor={id} className='space-y-1.5 text-xs font-medium'>
-      <span>{label}</span>
-      <Input
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
   );
 }
 

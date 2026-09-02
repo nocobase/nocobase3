@@ -185,6 +185,7 @@ export const operationsEnUS = {
   'deployments.filters.allStatuses': 'All statuses',
   'deployments.filters.allTypes': 'All types',
   'deployments.filters.application': 'Application',
+  'deployments.filters.clear': 'Clear filters',
   'deployments.filters.description':
     'Combine status, application, operator, and time filters.',
   'deployments.filters.from': 'From',
@@ -399,6 +400,7 @@ export const operationsZhCN: OperationsResource = {
   'deployments.filters.allStatuses': '全部状态',
   'deployments.filters.allTypes': '全部类型',
   'deployments.filters.application': '应用',
+  'deployments.filters.clear': '清除筛选',
   'deployments.filters.description':
     '可组合使用状态、应用、发起人和时间筛选条件。',
   'deployments.filters.from': '开始日期',
