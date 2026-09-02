@@ -63,7 +63,17 @@ pnpm --filter @nocobase/docs lint
 pnpm --filter @nocobase/docs format
 ```
 
-`theme/components/{Nav,NavHamburger,NavScreen,Search,HomeHero}` are vendored from Rspress's ejectable theme and excluded from both tools, in `.prettierignore` and in `VENDORED_FROM_RSPRESS` in `eslint.config.mjs`. They are kept byte-for-byte so that a Rspress upgrade is a diff against the new upstream copy; formatting or lint-fixing them destroys that. Fix a problem in one of them upstream and re-copy. `Search/SearchPanel.tsx` and `Search/SuggestItem.tsx` do carry deliberate local changes, each with a header naming them.
+`theme/components/{Nav,NavHamburger,NavScreen,Search,HomeHero}` are vendored from Rspress's ejectable theme and excluded from both tools. They are kept byte-for-byte so that a Rspress upgrade is a diff against the new upstream copy; formatting or lint-fixing them destroys that. Fix a problem in one of them upstream and re-copy. `Search/SearchPanel.tsx` and `Search/SuggestItem.tsx` do carry deliberate local changes, each with a header naming them.
+
+The exclusion is spelled out in three places, and adding a sixth vendored directory means editing all three:
+
+| Where                                        | Covers                                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------------------- |
+| `eslint.config.mjs`, `VENDORED_FROM_RSPRESS` | ESLint, wherever it runs from                                                     |
+| `.prettierignore`                            | Prettier run inside this directory                                                |
+| the repository root `.prettierignore`        | Prettier run from the repository root — the pre-commit hook and `pnpm format:all` |
+
+The pre-commit hook runs this package's own ESLint because `lint-staged.config.mjs` at the repository root lists `docs` in `SELF_LINTING_DIRECTORIES`. Without that entry it would run the root ESLint, which matches nothing here and would exit zero without checking anything.
 
 ## eject `rspress components`
 
