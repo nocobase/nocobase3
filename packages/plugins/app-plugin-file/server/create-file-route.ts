@@ -23,6 +23,7 @@ import {
   type StoredFileObject,
 } from './file-storage.js';
 import { createDatabaseFileStore } from './database-file-store.js';
+import { registerDatabaseFileSource } from './file-source-registry.js';
 import { normalizeFileName } from './filename.js';
 import {
   translateFileError,
@@ -86,6 +87,15 @@ class FileRouteError extends Error {
 export function createFileRoute(options: CreateFileRouteOptions): Hono {
   const store = resolveFileStore(options);
   assertMaxFiles(options.limits?.maxFiles);
+  if (!options.store) {
+    registerDatabaseFileSource({
+      database: options.database,
+      table: options.table,
+      publicBasePath: options.publicBasePath,
+      audience: options.audience,
+      scoped: options.scope !== undefined,
+    });
+  }
   const routes = new Hono();
   const visibility = options.visibility ?? DEFAULT_FILE_ROUTE_VISIBILITY;
   const maxFileSize = options.limits?.maxSize ?? DEFAULT_MAX_FILE_SIZE;

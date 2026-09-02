@@ -39,6 +39,51 @@ const zhCN: FileClientResource = {
   list: {
     noExtension: '无扩展名',
   },
+  inventory: {
+    nav: '文件',
+    title: '文件',
+    refresh: '刷新',
+    metrics: {
+      sources: '文件来源',
+      records: '文件记录',
+      unavailable: '不可用',
+    },
+    sources: {
+      title: '来源',
+      loading: '正在加载来源...',
+      empty: '暂无已注册的数据库文件来源。',
+      recordCount: '{{count}} 个文件',
+      registrations: '{{count}} 个路由',
+      scoped: '有范围限制',
+      unscoped: '无范围限制',
+      unavailable: '来源不可用',
+    },
+    files: {
+      loading: '正在加载文件...',
+      empty: '暂无文件记录。',
+      noSource: '未选择文件来源。',
+      unavailable: '文件不可用',
+      columns: {
+        file: '文件',
+        disk: '存储盘',
+        size: '大小',
+        visibility: '可见性',
+        created: '创建时间',
+        updated: '更新时间',
+      },
+    },
+    pagination: {
+      total: '{{count}} 条文件记录',
+      page: '{{page}} / {{totalPages}}',
+      previous: '上一页',
+      next: '下一页',
+    },
+    errors: {
+      loadSources: '无法加载文件来源。',
+      loadFiles: '无法加载此来源中的文件。',
+      sourcesUnavailable: '文件来源不可用',
+    },
+  },
   preview: {
     downloadFile: '下载文件',
     loading: '正在加载预览...',

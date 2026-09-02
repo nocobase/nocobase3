@@ -30,6 +30,7 @@ Application owns
 
 @nocobase/app-plugin-file owns
   createFileRoute() and the standard HTTP contract
+  the administrator-only read-only inventory for standard database file routes
   createFilesClient() and FilesClient types
   reusable upload, list, thumbnail, and preview components
   storage, filename, token, and preview mechanics
@@ -68,6 +69,11 @@ or application pages. Never depend on `/file-demo`, `/api/attachments`,
 - Each application Route owns authentication and authorization. Map every
   `FileRouteAction` to the App's existing business policy and authorize the
   parent record before allowing file operations.
+- Every standard `database + table` file Route is automatically visible in the
+  File plugin's Settings inventory. The inventory is a separate administrator
+  audit boundary and intentionally reads the whole registered table without
+  executing the business Route's scope resolver. Custom `FileStore` routes are
+  not included.
 - `FileUploadField` removes only local controlled state by default. Use
   `removeOnDelete` for immediate Server deletion or let the App workflow call
   `client.remove()` deliberately.

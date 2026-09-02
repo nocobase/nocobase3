@@ -61,10 +61,21 @@ describe('file plugin public contracts', () => {
     expect(Object.isFrozen(DEFAULT_FILE_ROUTE_VISIBILITY)).toBe(true);
   });
 
-  it('contributes locales without built-in business UI, API routes, or database schema', () => {
+  it('contributes the inventory routes and locales without business schema', () => {
     expect(fileClientPlugin()).toMatchObject({
       packageName: '@nocobase/app-plugin-file',
-      routes: [],
+      routes: [
+        {
+          parent: 'settings',
+          routes: [
+            {
+              name: 'files',
+              path: '/files',
+              access: { resource: 'file.inventory', action: 'access' },
+            },
+          ],
+        },
+      ],
       locales: {
         'en-US': expect.any(Function),
         'zh-CN': expect.any(Function),
@@ -73,7 +84,7 @@ describe('file plugin public contracts', () => {
     expect(fileServerPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-file',
       serviceProviders: [],
-      routes: [],
+      routes: [{ scope: 'api', createRouter: expect.any(Function) }],
       locales: expect.any(Function),
     });
     expect(fileServerPlugin.database).toBeUndefined();
