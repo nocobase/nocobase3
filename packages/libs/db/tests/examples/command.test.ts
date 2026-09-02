@@ -1,11 +1,13 @@
 import { execFile } from 'node:child_process';
-import { readdir } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
+import { runExampleCommand } from '../../examples/command.js';
 
 const execFileAsync = promisify(execFile);
 
-describe('@nocobase/db examples command', () => {
+describe.sequential('@nocobase/db examples command', () => {
   it('lists the available examples', async () => {
     const result = await runExample('list');
 
@@ -16,41 +18,77 @@ describe('@nocobase/db examples command', () => {
   });
 
   it('runs the managed Collection lifecycle', async () => {
-    const result = await runExample('managed');
+    const existingResults = await readdir('examples/tmp');
+    const result = await runExample('managed', '--cleanup');
 
     expect(result.stderr).toBe('');
     expect(result.stdout).toContain('Applied migration');
     expect(result.stdout).toContain('Loaded Database Metadata revision');
     expect(result.stdout).toContain('Resolved orders');
     expect(result.stdout).toContain('Reopened the database');
-    await expectExampleTempDirectoryEmpty();
+    await expect(readdir('examples/tmp')).resolves.toEqual(existingResults);
   });
 
   it('runs the external Module Metadata lifecycle', async () => {
-    const result = await runExample('external');
+    const existingResults = await readdir('examples/tmp');
+    const result = await runExample('external', '--cleanup');
 
     expect(result.stderr).toBe('');
     expect(result.stdout).toContain('Created external CRM physical Schema');
     expect(result.stdout).toContain('Module Metadata');
     expect(result.stdout).toContain('Inserted and selected records');
     expect(result.stdout).toContain('write protection');
-    await expectExampleTempDirectoryEmpty();
+    await expect(readdir('examples/tmp')).resolves.toEqual(existingResults);
+  });
+
+  it('retains results by default', async () => {
+    const result = await runExample('external');
+    const databasePath = result.stdout
+      .split('\n')
+      .find((line) => line.startsWith('Database retained at: '))
+      ?.slice('Database retained at: '.length)
+      .trim();
+
+    try {
+      expect(databasePath).toBeTruthy();
+      await expect(access(databasePath!)).resolves.toBeUndefined();
+    } finally {
+      if (databasePath) {
+        await rm(path.dirname(databasePath), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('cleans retained results from an isolated directory', async () => {
+    await mkdir('examples/tmp', { recursive: true });
+    const testRoot = await mkdtemp('examples/tmp/command-test-');
+    const output: string[] = [];
+    try {
+      await mkdir(path.join(testRoot, 'managed-result'));
+      await mkdir(path.join(testRoot, 'external-result'));
+
+      await runExampleCommand(['clean'], {
+        write: (message) => output.push(message),
+        tempDirectoryRoot: testRoot,
+      });
+
+      expect(output).toContain('Removed 2 retained example result(s).');
+      await expect(readdir(testRoot)).resolves.toEqual([]);
+    } finally {
+      await rm(testRoot, { recursive: true, force: true });
+    }
   });
 });
 
 async function runExample(
-  name: 'list' | 'managed' | 'external',
+  ...args: readonly string[]
 ): Promise<{ stdout: string; stderr: string }> {
   return execFileAsync(
     process.execPath,
-    ['--import', 'tsx', 'examples/command.ts', name],
+    ['--import', 'tsx', 'examples/command.ts', ...args],
     {
       cwd: process.cwd(),
       encoding: 'utf8',
     },
   );
-}
-
-async function expectExampleTempDirectoryEmpty(): Promise<void> {
-  await expect(readdir('examples/tmp')).resolves.toEqual([]);
 }

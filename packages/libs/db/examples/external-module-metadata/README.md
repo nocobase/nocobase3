@@ -18,6 +18,14 @@ Run it from the repository root:
 pnpm --filter @nocobase/db example external
 ```
 
+The result is retained under `examples/tmp/`, and the command prints its
+absolute SQLite filename. To remove this run's result when the example
+finishes, use cleanup mode:
+
+```bash
+pnpm --filter @nocobase/db example external --cleanup
+```
+
 External Schema management prevents Builder and Migration DDL. It does not
 prevent QueryAdapter from reading and writing records. Module Metadata is
 source-controlled and therefore read-only at runtime.

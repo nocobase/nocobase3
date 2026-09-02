@@ -40,6 +40,8 @@ export interface ManagedCollectionLifecycleResult {
     readonly collectionTitle?: string;
     readonly totalAmountTitle?: string;
   };
+  readonly databasePath: string;
+  readonly retained: boolean;
   readonly rolledBack: readonly string[];
 }
 
@@ -47,7 +49,10 @@ export async function runManagedCollectionLifecycle(
   options: RunExampleOptions = {},
 ): Promise<ManagedCollectionLifecycleResult> {
   const write = options.write ?? (() => undefined);
-  const directory = await createExampleTempDirectory('managed-');
+  const directory = await createExampleTempDirectory(
+    'managed-',
+    options.tempDirectoryRoot,
+  );
   const filename = path.join(directory, 'example.sqlite');
   let database: DatabaseManager | undefined;
 
@@ -57,11 +62,11 @@ export async function runManagedCollectionLifecycle(
     database = createManagedDatabase(filename);
     const migrator = createManagedMigrator(database);
     const migrationResult = await migrator.latest();
-    write(`[1/8] Applied migration: ${migrationResult.executed.join(', ')}`);
+    write(`[1/7] Applied migration: ${migrationResult.executed.join(', ')}`);
 
     const seeder = createManagedSeeder(database);
     const seedResult = await seeder.run();
-    write(`[2/8] Applied seed: ${seedResult.executed.join(', ')}`);
+    write(`[2/7] Applied seed: ${seedResult.executed.join(', ')}`);
 
     const connection = database.connection();
     const initialMetadata = await connection.collectionMetadata.get('orders');
@@ -69,7 +74,7 @@ export async function runManagedCollectionLifecycle(
       throw new Error('Managed example did not create orders Metadata.');
     }
     write(
-      `[3/8] Loaded Database Metadata revision ${String(initialMetadata.revision)}`,
+      `[3/7] Loaded Database Metadata revision ${String(initialMetadata.revision)}`,
     );
 
     const initialCollection = await connection.collections.get('orders');
@@ -77,7 +82,7 @@ export async function runManagedCollectionLifecycle(
       throw new Error('Managed example did not resolve the orders Collection.');
     }
     await connection.collections.validateRelations('orders');
-    write('[4/8] Resolved orders and validated its relation graph');
+    write('[4/7] Resolved orders and validated its relation graph');
 
     const updatedMetadata = await connection.collectionMetadata.updateField(
       'orders',
@@ -93,7 +98,7 @@ export async function runManagedCollectionLifecycle(
     }
     const updatedCollection = await connection.collections.get('orders');
     write(
-      `[5/8] Updated Metadata revision ${String(initialMetadata.revision)} -> ${String(updatedMetadata.revision)}`,
+      `[5/7] Updated Metadata revision ${String(initialMetadata.revision)} -> ${String(updatedMetadata.revision)}`,
     );
 
     class ExpectedRollback extends Error {}
@@ -114,7 +119,7 @@ export async function runManagedCollectionLifecycle(
     }
     const titleAfterRollback = (await connection.collections.refresh('orders'))
       ?.title;
-    write('[6/8] Rolled back a transactional Metadata update');
+    write('[6/7] Rolled back a transactional Metadata update');
 
     await database.destroy();
     database = createManagedDatabase(filename);
@@ -131,15 +136,21 @@ export async function runManagedCollectionLifecycle(
     if (!persistedMetadata || !reopenedCollection) {
       throw new Error('Managed example did not persist its Collection state.');
     }
-    write('[7/8] Reopened the database and verified persisted state');
+    write('[7/7] Reopened the database and verified persisted state');
 
-    const rollbackResult = await createManagedMigrator(database).rollback();
-    if (await reopenedConnection.collections.get('orders')) {
-      throw new Error('Managed example Migration rollback left orders behind.');
+    let rolledBack: readonly string[] = [];
+    if (options.cleanup) {
+      const rollbackResult = await createManagedMigrator(database).rollback();
+      if (await reopenedConnection.collections.get('orders')) {
+        throw new Error(
+          'Managed example Migration rollback left orders behind.',
+        );
+      }
+      rolledBack = rollbackResult.rolledBack;
+      write(`Cleaned up migration: ${rollbackResult.rolledBack.join(', ')}`);
+    } else {
+      write(`Database retained at: ${filename}`);
     }
-    write(
-      `[8/8] Rolled back migration: ${rollbackResult.rolledBack.join(', ')}`,
-    );
     const totalAmount = updatedCollection?.fields?.find(
       (field) => field.name === 'totalAmount',
     );
@@ -180,11 +191,15 @@ export async function runManagedCollectionLifecycle(
         collectionTitle: reopenedCollection.title,
         totalAmountTitle: reopenedTotalAmount?.title,
       },
-      rolledBack: rollbackResult.rolledBack,
+      databasePath: filename,
+      retained: !options.cleanup,
+      rolledBack,
     };
   } finally {
     await database?.destroy();
-    await rm(directory, { recursive: true, force: true });
+    if (options.cleanup) {
+      await rm(directory, { recursive: true, force: true });
+    }
   }
 }
 

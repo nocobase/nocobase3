@@ -32,13 +32,18 @@ export interface ExternalModuleMetadataResult {
     readonly schema?: string;
     readonly metadata?: string;
   };
+  readonly databasePath: string;
+  readonly retained: boolean;
 }
 
 export async function runExternalModuleMetadata(
   options: RunExampleOptions = {},
 ): Promise<ExternalModuleMetadataResult> {
   const write = options.write ?? (() => undefined);
-  const directory = await createExampleTempDirectory('external-');
+  const directory = await createExampleTempDirectory(
+    'external-',
+    options.tempDirectoryRoot,
+  );
   const filename = path.join(directory, 'external.sqlite');
   let setupClient: Knex | undefined;
   let database: DatabaseManager | undefined;
@@ -121,6 +126,9 @@ export async function runExternalModuleMetadata(
       ),
     };
     write('[5/5] Verified Schema and Module Metadata write protection');
+    if (!options.cleanup) {
+      write(`Database retained at: ${filename}`);
+    }
 
     const relationNames = (orders.fields ?? [])
       .filter(
@@ -145,11 +153,15 @@ export async function runExternalModuleMetadata(
         status: selectedOrder.status,
       },
       rejectedOperations,
+      databasePath: filename,
+      retained: !options.cleanup,
     };
   } finally {
     await setupClient?.destroy();
     await database?.destroy();
-    await rm(directory, { recursive: true, force: true });
+    if (options.cleanup) {
+      await rm(directory, { recursive: true, force: true });
+    }
   }
 }
 
