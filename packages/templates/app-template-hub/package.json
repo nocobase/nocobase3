@@ -198,7 +198,9 @@
     "config.example.yml",
     "README.MD",
     "MIGRATION.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    "CLAUDE.md",
+    "skills"
   ],
   "publishConfig": {
     "access": "public"

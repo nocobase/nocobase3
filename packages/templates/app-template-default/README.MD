@@ -58,7 +58,7 @@ server/                  API server
 ├── app.ts               Application assembly
 ├── runtime.ts           Composition root
 ├── standalone.ts        Node entry point
-└── embedded.ts          Entry point when hosted by a Hub
+└── embedded.ts          Entry point when a host process mounts it
 
 database/
 ├── migrations/          Your schema history

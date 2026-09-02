@@ -8,5 +8,10 @@
       "@/jobs/*": ["./server/jobs/*"]
     }
   },
-  "include": ["server/**/*.ts", "scripts/migrate.ts", "scripts/seed.ts"]
+  "include": [
+    "server/**/*.ts",
+    "database/**/*.ts",
+    "scripts/migrate.ts",
+    "scripts/seed.ts"
+  ]
 }
