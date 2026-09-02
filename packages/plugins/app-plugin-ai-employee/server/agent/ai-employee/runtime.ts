@@ -669,7 +669,7 @@ If information is missing, clearly state it in the summary.</Important>`;
         if (attachments?.length) {
           for (const attachment of attachments) {
             const parsed = await provider.parseAttachment(attachment as any, {
-              fileManager: this.ctx.fileManager,
+              fileStorage: this.ctx.fileStorage,
               documentLoader: this.ctx.documentLoaders.cached,
               caching: this.ctx.caching,
               getHeader: (name: string) => this.ctx.get(name),

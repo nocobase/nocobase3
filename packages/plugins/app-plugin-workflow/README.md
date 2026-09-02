@@ -7,7 +7,7 @@ live in `client/`; server code is organized by responsibility under
 domain service entry.
 
 The package root is the workflow authoring entry (`defineWorkflow`, `condition`,
-and `run`). Application integration uses the deliberately small `./server`
+`terminate`, and `run`). Application integration uses the deliberately small `./server`
 entry, application build tooling uses `./build`, and browser management UI uses
 `./client`. Runtime loading and synchronization modules are package-internal.
 

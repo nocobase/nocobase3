@@ -18,6 +18,8 @@ export interface WorkflowInstructionResult {
   meta?: unknown;
   log?: string;
   nextKey?: string | null;
+  /** Indicates that this result finishes the workflow after the node run is persisted. */
+  terminated?: true;
 }
 
 export interface WorkflowInstructionContext<

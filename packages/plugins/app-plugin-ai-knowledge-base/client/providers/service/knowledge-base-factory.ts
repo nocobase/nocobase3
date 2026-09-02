@@ -13,7 +13,6 @@ import type {
   KnowledgeBaseSegment,
   KnowledgeBaseSegmentOptions,
   KnowledgeBaseSegmentQuestion,
-  RecordId,
   UploadConstraints,
   UploadResult,
   ZipFilenameEncodingOption,
@@ -43,7 +42,11 @@ type NocoBaseKnowledgeBaseClient = {
   ): Promise<T>;
 };
 type UnknownRecord = Record<string, unknown>;
-type UploadStorage = { id: RecordId; type?: string; maxFileSizeBytes?: number };
+type UploadStorage = {
+  disk: string;
+  type?: string;
+  maxFileSizeBytes?: number;
+};
 
 const supportedExtensions = ['.doc', '.docx', '.md', '.pdf', '.txt', '.zip'];
 
@@ -118,7 +121,7 @@ function toKnowledgeBase(value: unknown): KnowledgeBase {
     ...(text(item.vectorDatabaseKey)
       ? { vectorDatabaseKey: text(item.vectorDatabaseKey) }
       : {}),
-    ...(text(item.storageId) ? { storageId: text(item.storageId) } : {}),
+    ...(text(item.disk) ? { disk: text(item.disk) } : {}),
     ...(text(item.llmService) ? { llmService: text(item.llmService) } : {}),
     ...(text(item.embeddingModel)
       ? { embeddingModel: text(item.embeddingModel) }
@@ -348,7 +351,7 @@ const storageFromPayload = (payload: unknown): UploadStorage => {
   const storage = isRecord(value) ? value : {};
   const rules = isRecord(storage.rules) ? storage.rules : {};
   return {
-    id: required(recordId(storage.id), 'uploadStorage.id'),
+    disk: required(text(storage.disk), 'uploadStorage.disk'),
     ...(text(storage.type) ? { type: text(storage.type) } : {}),
     ...(number(rules.size) !== undefined
       ? { maxFileSizeBytes: number(rules.size) }
@@ -396,7 +399,7 @@ export function normalizeKnowledgeBaseMutation(
     }
   };
   for (const field of [
-    'storageId',
+    'disk',
     'vectorDatabaseKey',
     'vectorStoreConfigKey',
     'llmService',
@@ -504,22 +507,24 @@ export function createKnowledgeBaseService(
         query: { 'filterByTk[]': [id] },
       }),
     async listKnowledgeBaseManagementOptions() {
-      const [vectorsPayload, servicesPayload, externalProvidersPayload] =
-        await Promise.all([
-          action(client, 'aiVectorDatabases', 'listEnabled', { method: 'GET' }),
-          action(client, 'ai', 'listLLMServices', {
-            method: 'GET',
-            query: { model: 'EMBEDDING' },
-          }),
-          action(
-            client,
-            'aiKnowledgeBase',
-            'listExternalVectorStoreProviders',
-            {
-              method: 'GET',
-            },
-          ).catch(() => undefined),
-        ]);
+      const [
+        vectorsPayload,
+        servicesPayload,
+        storageDisksPayload,
+        externalProvidersPayload,
+      ] = await Promise.all([
+        action(client, 'aiVectorDatabases', 'listEnabled', { method: 'GET' }),
+        action(client, 'ai', 'listLLMServices', {
+          method: 'GET',
+          query: { model: 'EMBEDDING' },
+        }),
+        action(client, 'aiKnowledgeBase', 'listStorageDisks', {
+          method: 'GET',
+        }),
+        action(client, 'aiKnowledgeBase', 'listExternalVectorStoreProviders', {
+          method: 'GET',
+        }).catch(() => undefined),
+      ]);
       const serviceValues = responseData(servicesPayload);
       const llmServices = (
         Array.isArray(serviceValues) ? serviceValues : []
@@ -537,9 +542,13 @@ export function createKnowledgeBaseService(
         const option = toManagementOption(value, ['key']);
         return option ? [option] : [];
       });
-      const storages: KnowledgeBaseManagementOption[] = [
-        { value: '0', label: 'Default' },
-      ];
+      const storageValues = responseData(storageDisksPayload);
+      const storages = (
+        Array.isArray(storageValues) ? storageValues : []
+      ).flatMap((value): KnowledgeBaseManagementOption[] => {
+        const option = toManagementOption(value, ['value']);
+        return option ? [option] : [];
+      });
       const externalProviderValues = responseData(externalProvidersPayload);
       const externalProviders = (
         Array.isArray(externalProviderValues) ? externalProviderValues : []
@@ -856,7 +865,7 @@ export function createKnowledgeBaseService(
               name: request.file.name,
               size: request.file.size,
               type: request.file.type,
-              storageId: storage.id,
+              disk: storage.disk,
               storageType: storage.type,
             },
           }),
@@ -881,16 +890,13 @@ export function createKnowledgeBaseService(
           query: { knowledgeBaseKey: request.knowledgeBaseKey },
           body: {
             title: text(fileInfo.title) || request.file.name,
-            filename: required(
-              text(fileInfo.key),
-              'presignedUpload.fileInfo.key',
-            ),
+            filename: request.file.name,
             extname: text(fileInfo.extname) || extensionOf(request.file),
-            path: '',
+            path: required(text(fileInfo.key), 'presignedUpload.fileInfo.key'),
             size: number(fileInfo.size) ?? request.file.size,
             url: required(text(fileInfo.url), 'presignedUpload.fileInfo.url'),
             mimetype: text(fileInfo.mimetype) || request.file.type,
-            storageId: storage.id,
+            disk: storage.disk,
             meta: {},
             ...(request.zipFilenameEncodings?.length
               ? { zipFilenameEncoding: request.zipFilenameEncodings }

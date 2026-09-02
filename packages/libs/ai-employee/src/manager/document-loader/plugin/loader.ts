@@ -7,7 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { FileManager } from '../../file/index.js';
+import type { FileMetadata, FileStorage } from '../../../file-storage/index.js';
+import { toFileMetadata } from '../../../file-storage/index.js';
 import { Document } from '@langchain/core/documents';
 import { SUPPORTED_DOCUMENT_EXTNAMES } from './constants.js';
 import { ParseableFile } from './types.js';
@@ -19,18 +20,25 @@ import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-export class DocumentLoader {
-  constructor(private readonly fileManager: FileManager) {}
+export class DocumentLoader<
+  TEntity extends ParseableFile = ParseableFile,
+  TCreateContext = void,
+> {
+  public constructor(
+    private readonly fileStorage: FileStorage<TEntity, TCreateContext>,
+  ) {}
 
-  async load(file: ParseableFile, options?: any): Promise<Document[]> {
+  public async load(
+    file: ParseableFile,
+    _options?: unknown,
+  ): Promise<Document[]> {
     const extname = resolveExtname(file);
     if (!SUPPORTED_DOCUMENT_EXTNAMES.includes(extname)) {
       return [];
     }
 
-    const { stream, contentType } = await this.fileManager.getFileStream(
-      file as any,
-      options,
+    const { stream, contentType } = await this.fileStorage.openMetadata(
+      toFileMetadata(file) as FileMetadata<TEntity>,
     );
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), 'nocobase-document-loader-'),
@@ -46,5 +54,12 @@ export class DocumentLoader {
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
+  }
+
+  public loadMetadata(
+    metadata: FileMetadata<TEntity>,
+    options?: unknown,
+  ): Promise<Document[]> {
+    return this.load(metadata.entity, options);
   }
 }

@@ -12,6 +12,7 @@ describe('client ServiceProvider', () => {
   it('registers the authentication provider with the app runtime', async () => {
     const appClient: AppClient = {
       request: vi.fn<AppClient['request']>(),
+      stream: vi.fn<AppClient['stream']>(),
     };
     const setAuthProvider = vi.fn();
     const refine: AppClientRefineRegistry = {

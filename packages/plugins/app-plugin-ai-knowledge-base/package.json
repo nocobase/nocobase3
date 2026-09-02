@@ -121,7 +121,6 @@
     "@langchain/core": "1.1.49",
     "@langchain/textsplitters": "1.0.1",
     "@nocobase/ai-employee": "workspace:^",
-    "@nocobase/drive": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "catalog:",

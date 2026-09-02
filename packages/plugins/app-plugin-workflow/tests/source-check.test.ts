@@ -20,7 +20,7 @@ async function sourceFile(body: string): Promise<string> {
   const file = path.join(directory, 'workflow.ts');
   await fs.writeFile(
     file,
-    `import { ConditionInstruction, defineWorkflow, RunInstruction } from ${JSON.stringify(authoringEntry)};\n${body}`,
+    `import { ConditionInstruction, defineWorkflow, RunInstruction, TerminateInstruction } from ${JSON.stringify(authoringEntry)};\n${body}`,
   );
   return file;
 }
@@ -75,6 +75,18 @@ describe('workflow check', () => {
       ir: {
         start: 'c',
         nodes: [{ key: 'c' }, { key: 'inside' }, { key: 'after' }],
+      },
+    });
+  });
+
+  it('accepts a terminate instruction inside a condition branch', async () => {
+    const file = await sourceFile(
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [TerminateInstruction.create({ key: 'stop', config: { outcome: 'success' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
+    );
+    await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
+      ir: {
+        start: 'c',
+        nodes: [{ key: 'c' }, { key: 'stop' }, { key: 'after' }],
       },
     });
   });

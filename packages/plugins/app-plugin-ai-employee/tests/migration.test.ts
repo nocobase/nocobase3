@@ -12,6 +12,8 @@ const directory = fileURLToPath(
 );
 const migrationName = '202608260002_create_ai_employee';
 const migrationFileName = `${migrationName}.ts`;
+const storageMigrationName =
+  '202608310001_replace_ai_file_storage_id_with_disk';
 const collectionNames = [
   'aiEmployees',
   'aiMcpClients',
@@ -43,13 +45,18 @@ describe('AI employee migration', () => {
       directory,
     });
 
-    expect(migrations).toHaveLength(1);
+    expect(migrations).toHaveLength(2);
     expect(migrations[0]).toMatchObject({
       packageName: '@nocobase/app-plugin-ai-employee',
       fileName: migrationFileName,
       name: migrationName,
     });
-    expect(migrations[0].migration.down).toEqual(expect.any(Function));
+    expect(migrations[1]).toMatchObject({
+      packageName: '@nocobase/app-plugin-ai-employee',
+      fileName: `${storageMigrationName}.ts`,
+      name: storageMigrationName,
+    });
+    expect(migrations[1].migration.down).toEqual(expect.any(Function));
   });
 
   it('creates all AI employee collections and drops them in reverse dependency order', async () => {

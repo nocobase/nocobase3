@@ -1,105 +1,61 @@
-import type { Context } from '../context.js';
-import { Buffer } from 'node:buffer';
-import path from 'node:path';
-import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { FileManager } from '@nocobase/ai-employee';
+import { Readable } from 'node:stream';
 
-type UploadResult = {
+import type { FileStorage, FileMetadata } from '@nocobase/ai-employee';
+import type { IdGeneratorService } from '@nocobase/snowflake';
+
+import type { Context } from '../context.js';
+import type { AIFileEntity } from '../repository/ai-file.js';
+import type { AIFileMetadataCreateContext } from '../file-storage/ai-file-metadata-repository.js';
+
+export type AIFileUploadResult = {
   id: number | string;
   filename: string;
   size: number;
-  mimetype?: string;
-  extname?: string;
+  mimetype: string;
+  extname: string;
+  disk: string;
+  path: string;
   url?: string;
-  preview?: string;
-  storageId?: number;
-  data?: Record<string, unknown>;
+  preview: string;
+  data: Record<string, unknown>;
   source: { collectionName: 'aiFiles' };
 };
 
-/** `aiFiles` service backed by the configured FileManager. */
+/** `aiFiles` service backed by metadata-aware file storage. */
 export class AIFileService {
-  constructor(
-    private readonly fileManager: FileManager,
+  public constructor(
+    private readonly fileStorage: FileStorage<
+      AIFileEntity,
+      AIFileMetadataCreateContext
+    >,
     private readonly snowflake: IdGeneratorService,
     private readonly apiBasePath: string,
   ) {}
 
-  private async saveFile(
-    ctx: Context,
-    file: File,
-    storageId: number,
-  ): Promise<UploadResult> {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const filename = path.basename(file.name || 'file');
-    const extname = path.extname(filename).toLowerCase();
-    const id = this.snowflake.generate();
-    const stored = await this.fileManager.put(
-      String(id),
-      buffer,
-      filename,
-      file.type || undefined,
-    );
-
-    const repo = ctx.repositories.aiFiles;
-    const previewUrl = this.createPreviewUrl(id);
-    const values = {
-      id: String(id),
-      filename,
-      size: buffer.length,
-      mimetype: file.type || 'application/octet-stream',
-      extname,
-      path: stored.key,
-      storageId,
-      createdById: ctx.currentUser.id,
-      createdAt: new Date(),
-    };
-    try {
-      const record = await ctx.database.transaction((connection) =>
-        repo.create({ values }, { connection }),
-      );
-      return {
-        id: String((record as any).id ?? id),
-        filename,
-        size: buffer.length,
-        mimetype: (record as any).mimetype,
-        extname,
-        url: previewUrl,
-        preview: previewUrl,
-        source: { collectionName: 'aiFiles' },
-        storageId,
-        data: {
-          ...(record as any),
-          url: previewUrl,
-          preview: previewUrl,
-          source: { collectionName: 'aiFiles' },
-        },
-      };
-    } catch (error) {
-      await this.fileManager.delete(stored.key).catch(() => undefined);
-      throw error;
-    }
-  }
-
-  async create(ctx: Context, file: File): Promise<UploadResult> {
-    const repo = ctx.repositories.aiFiles;
-    const indexRow = await repo.find({
-      filter: { createdById: ctx.currentUser.id },
-      sort: ['-id'],
-      limit: 1,
+  public async create(ctx: Context, file: File): Promise<AIFileUploadResult> {
+    const id = String(this.snowflake.generate());
+    const metadata = await this.fileStorage.write({
+      id,
+      objectId: id,
+      filename: file.name || 'file',
+      content: file.stream(),
+      size: file.size,
+      mimeType: file.type || 'application/octet-stream',
+      metadataContext: { createdById: ctx.currentUser.id },
     });
-    const storageId = Number(indexRow[0]?.storageId ?? 1);
-    return this.saveFile(ctx, file, storageId);
+    return this.toUploadResult(metadata);
   }
 
-  private createPreviewUrl(id: string | number): string {
-    return `${this.apiBasePath}/aiFiles:preview?id=${id}`;
-  }
+  public async preview(ctx: Context, id: string): Promise<Response> {
+    let opened;
+    try {
+      opened = await this.fileStorage.open(id);
+    } catch {
+      return new Response('file content not found', { status: 404 });
+    }
+    if (!opened) return new Response('file not found', { status: 404 });
 
-  async preview(ctx: Context, id: string): Promise<Response> {
-    const repo = ctx.repositories.aiFiles;
-    const record = await repo.findOne({ filter: { id } });
-    if (!record) return new Response('file not found', { status: 404 });
+    const record = opened.metadata.entity;
     if (
       record.createdById != null &&
       String(record.createdById) !== String(ctx.currentUser.id) &&
@@ -108,17 +64,42 @@ export class AIFileService {
       return new Response('forbidden', { status: 403 });
     }
 
-    const key = record.path || String(id);
-    try {
-      const bytes = await this.fileManager.getBytes(key);
-      return new Response(Buffer.from(bytes), {
+    return new Response(
+      Readable.toWeb(opened.stream as Readable) as ReadableStream<Uint8Array>,
+      {
         headers: {
-          'Content-Type': record.mimetype ?? 'application/octet-stream',
-          'Content-Disposition': `inline; filename="${encodeURIComponent(record.filename ?? 'file')}"`,
+          'Content-Type': opened.contentType,
+          'Content-Disposition': `inline; filename="${encodeURIComponent(opened.metadata.filename)}"`,
         },
-      });
-    } catch {
-      return new Response('file content not found', { status: 404 });
-    }
+      },
+    );
+  }
+
+  private createPreviewUrl(id: string | number): string {
+    return `${this.apiBasePath}/aiFiles:preview?id=${id}`;
+  }
+
+  private toUploadResult(
+    metadata: FileMetadata<AIFileEntity>,
+  ): AIFileUploadResult {
+    const preview = this.createPreviewUrl(metadata.id);
+    return {
+      id: metadata.id,
+      filename: metadata.filename,
+      size: metadata.size,
+      mimetype: metadata.mimeType,
+      extname: metadata.extname,
+      disk: metadata.disk,
+      path: metadata.key,
+      url: preview,
+      preview,
+      source: { collectionName: 'aiFiles' },
+      data: {
+        ...metadata.entity,
+        url: preview,
+        preview,
+        source: { collectionName: 'aiFiles' },
+      },
+    };
   }
 }

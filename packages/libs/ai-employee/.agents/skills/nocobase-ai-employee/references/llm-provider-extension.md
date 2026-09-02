@@ -145,26 +145,24 @@ The key `company` is the public application registry key. Registration uses `Map
 
 ## LLM Service Configuration
 
-The provider registration alone is not enough. Prefer configuring the service in `<appRoot>/storage/ai/models.json`. This runtime manifest is loaded after the packaged `<appRoot>/ai/models.json`, so operators can change service/provider/model configuration without rebuilding or repacking the App. Restart/reload the App to apply changes. Keep `<appRoot>/ai/models.json` only as the source-controlled default for fresh deployments:
+Provider registration alone is not enough. Configure a declarative service in `<appRoot>/config.yml` under `ai.llmServices`; the `provider` value must match the registered key exactly:
 
-```json
-[
-  {
-    "name": "company-production",
-    "title": "Company Production",
-    "provider": "company",
-    "options": {
-      "apiKey": "${COMPANY_LLM_API_KEY}",
-      "baseURL": "${COMPANY_LLM_BASE_URL}"
-    },
-    "enabledModels": {
-      "mode": "custom",
-      "models": [{ "label": "Company Chat", "value": "company-chat" }]
-    },
-    "enabled": true
-  }
-]
+```yaml
+ai:
+  llmServices:
+    - name: company-production
+      title: Company Production
+      provider: company
+      options:
+        apiKey: ${COMPANY_LLM_API_KEY}
+        baseURL: ${COMPANY_LLM_BASE_URL}
+      enabledModels:
+        - label: Company Chat
+          value: company-chat
+      enabled: true
 ```
+
+After editing the config, invoke application config reload. The service set is reconciled live without rebuilding, repacking, restarting, or rescanning AI resources.
 
 The service `provider` must exactly equal the plugin bootstrap registry key.
 
@@ -195,7 +193,7 @@ Follow the nearest built-in provider using the same protocol as a reference, but
 
 ## Security and Testing
 
-- Keep credentials in environment variables referenced by `models.json` or injected service options.
+- Keep credentials in environment variables referenced by `config.yml` `ai.llmServices` or injected service options.
 - Never log service options containing credentials.
 - Use base URL helpers inherited from `LLMProvider`; do not bypass URL whitelist checks.
 - Build provider API URLs with `getResolvedBaseURL()` or `buildRequestURL()`.

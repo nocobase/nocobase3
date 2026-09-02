@@ -47,7 +47,7 @@ export default defineAIEmployee({
 });
 ```
 
-Skills and LLM services are configured through `SKILLS.md` and `models.json`, so they have no equivalent definition helper.
+Skills use `SKILLS.md`. Declarative LLM services use the application plugin's exported `aiEmployeeConfig` contract at `config.yml` `ai.llmServices`; the framework-neutral core package intentionally has no config-definition helper.
 
 ## Shared Manager Type
 
@@ -123,7 +123,7 @@ Use for runtime connection registration, testing, rebuilding, listing tools, and
 - `LLMServiceQuery`
 - enabled-model configuration types
 
-Use when a service must be registered programmatically instead of through `ai/models.json`.
+Use when a service must be registered programmatically instead of through `config.yml` `ai.llmServices`.
 
 ### LLM providers
 
@@ -161,7 +161,8 @@ Application integration plugins may use:
 
 - `AIFeatureManager`, `AIFeatures`, `EEFeatures`
 - knowledge base and vector feature interfaces
-- `FileManager`, `DriveFileManager`, `MemoryFileManager`
+- `FileMetadata`, `FileMetadataRepository`, `FileStorage`, `FileStorageFactory`
+- `DriveFileStorage`, `DriveFileStorageFactory`, `fileStorageFactoryToken`
 - document loader contracts
 
 These are useful when an App plugin contributes an optional capability to the shared AI runtime.
@@ -186,7 +187,7 @@ The package also exports low-level factories, loaders, repositories, memory adap
 Do not normally call these from application customization:
 
 - `createAIManager` or `new AIManager(...)`
-- `AIEmployeeLoader`, `ToolsLoader`, `SkillsLoader`, `MCPLoader`, `LLMServiceLoader`
+- `AIEmployeeLoader`, `ToolsLoader`, `SkillsLoader`, `MCPLoader`
 - repository switch methods
 - `MemoryRepositoryFactory`
 - directory scanners
