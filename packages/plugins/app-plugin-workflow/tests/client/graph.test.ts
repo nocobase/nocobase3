@@ -14,6 +14,27 @@ function definition(nodes: WorkflowSourceAst['nodes']): WorkflowSourceAst {
 }
 
 describe('workflow client graph', () => {
+  it('preserves node descriptions for canvas node details', () => {
+    const graph = projectWorkflowGraph(
+      definition([
+        {
+          key: 'notify',
+          title: 'Notify owner',
+          description: 'Send the final result to the record owner.',
+          type: 'run',
+          config: {},
+        },
+      ]),
+    );
+
+    expect(graph.nodes.find((node) => node.id === 'node:notify')).toMatchObject(
+      {
+        title: 'Notify owner',
+        description: 'Send the final result to the record owner.',
+      },
+    );
+  });
+
   it('projects a linear definition with stable boundary IDs', () => {
     const graph = projectWorkflowGraph(
       definition([
@@ -219,6 +240,46 @@ describe('workflow client graph', () => {
       nodes: expect.any(Array),
       edges: expect.any(Array),
     });
+  });
+
+  it('describes condition branches as fixed left-to-right layout ports', () => {
+    const graph = projectWorkflowGraph(
+      definition([
+        {
+          key: 'gate',
+          type: 'condition',
+          config: {},
+          branches: {
+            yes: [{ key: 'yesTask', type: 'run', config: {} }],
+            no: [{ key: 'noTask', type: 'run', config: {} }],
+          },
+        },
+      ]),
+    );
+    const input = createLayoutInput(graph);
+    expect(input.nodes.find((node) => node.id === 'node:gate')?.ports).toEqual([
+      { id: 'node:gate:input', side: 'NORTH', index: 0 },
+      { id: 'node:gate:branch:no', side: 'SOUTH', index: 1 },
+      { id: 'node:gate:branch:yes', side: 'SOUTH', index: 0 },
+    ]);
+    expect(
+      input.edges.find((edge) => edge.id.includes(':yes:'))?.sourcePort,
+    ).toBe('node:gate:branch:yes');
+    expect(
+      input.edges.find((edge) => edge.id.includes(':no:'))?.sourcePort,
+    ).toBe('node:gate:branch:no');
+    expect(
+      input.edges.every((edge) => edge.targetPort.endsWith(':input')),
+    ).toBe(true);
+    expect(
+      createLayoutInput(graph, 'RIGHT').nodes.find(
+        (node) => node.id === 'node:gate',
+      )?.ports,
+    ).toEqual([
+      { id: 'node:gate:input', side: 'WEST', index: 0 },
+      { id: 'node:gate:branch:no', side: 'EAST', index: 0 },
+      { id: 'node:gate:branch:yes', side: 'EAST', index: 1 },
+    ]);
   });
 
   it('infers the selected empty condition branch without inventing persisted evidence', () => {

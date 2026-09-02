@@ -208,7 +208,9 @@ function normalizeWorkflowParameters(
 function useAsync<T>(load: () => Promise<T>): {
   value: T | null;
   error: string | null;
+  reload: () => void;
 } {
+  const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<{
     load: () => Promise<T>;
     value: T | null;
@@ -216,8 +218,12 @@ function useAsync<T>(load: () => Promise<T>): {
   }>(() => ({ load, value: null, error: null }));
   useEffect(() => {
     let active = true;
+    const requestedRevision = revision;
     void load().then(
-      (next) => active && setResult({ load, value: next, error: null }),
+      (next) =>
+        active &&
+        requestedRevision === revision &&
+        setResult({ load, value: next, error: null }),
       (cause: unknown) =>
         active &&
         setResult({
@@ -229,8 +235,11 @@ function useAsync<T>(load: () => Promise<T>): {
     return () => {
       active = false;
     };
-  }, [load]);
-  return result.load === load ? result : { value: null, error: null };
+  }, [load, revision]);
+  return {
+    ...(result.load === load ? result : { value: null, error: null }),
+    reload: () => setRevision((current) => current + 1),
+  };
 }
 
 function InputDialog({
@@ -308,7 +317,7 @@ function ManualRunDialog({
 }: {
   workflow: WorkflowDetailRecord;
   onClose: () => void;
-  onExecuted?: () => void;
+  onExecuted: (run: WorkflowRunRecord) => void;
 }): React.ReactElement {
   const { open } = useNotification();
   const workflowId = workflow.id ?? workflow.hash;
@@ -332,9 +341,9 @@ function ManualRunDialog({
     ) as Record<string, string | number | boolean>;
     void workflowApi
       .execute(workflowId, input, createWorkflowEventKey())
-      .then(() => {
+      .then((execution) => {
         onClose();
-        onExecuted?.();
+        onExecuted(execution);
       })
       .catch((cause: unknown) =>
         open?.({
@@ -475,15 +484,42 @@ function ExecutionDialog({
     </Dialog>
   );
 }
+
+export interface NodeDescriptionDialogProps {
+  description: string | null;
+  title: string;
+  onClose: () => void;
+}
+
+export function NodeDescriptionDialog({
+  description,
+  title,
+  onClose,
+}: NodeDescriptionDialogProps): React.ReactElement {
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent size='md'>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <section className='workflow-node-description-dialog'>
+          <h3>Description</h3>
+          <p>{description?.trim() || 'No node description provided.'}</p>
+        </section>
+      </DialogContent>
+    </Dialog>
+  );
+}
 function WorkflowRow({
   item,
   onChange,
-  onExecuted,
+  onReload,
 }: {
   item: WorkflowListRecord;
   onChange: (item: WorkflowListRecord) => void;
-  onExecuted: () => void;
+  onReload: () => void;
 }): React.ReactElement | null {
+  const navigate = useNavigate();
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
   const [settings, setSettings] = useState<WorkflowDetailRecord | null>(null);
   const [manual, setManual] = useState<WorkflowDetailRecord | null>(null);
@@ -502,7 +538,7 @@ function WorkflowRow({
         }
         return workflowApi
           .execute(identifier, {}, createWorkflowEventKey())
-          .then(onExecuted);
+          .then((run) => navigate(workflowRunPath(run.id)));
       })
       .catch((cause: unknown) =>
         open?.({
@@ -544,7 +580,10 @@ function WorkflowRow({
                 const update = enabled
                   ? workflowApi.enable(identifier)
                   : workflowApi.status(identifier, false);
-                void update.then(onChange);
+                void update.then((next) => {
+                  onChange(next);
+                  onReload();
+                });
               }}
             />
           </label>
@@ -593,7 +632,7 @@ function WorkflowRow({
         <ManualRunDialog
           workflow={manual}
           onClose={() => setManual(null)}
-          onExecuted={onExecuted}
+          onExecuted={(run) => void navigate(workflowRunPath(run.id))}
         />
       ) : null}
     </>
@@ -644,7 +683,7 @@ export function WorkflowListPage(): React.ReactElement {
             <WorkflowRow
               key={item.id ?? item.hash ?? item.key}
               item={item}
-              onExecuted={load}
+              onReload={load}
               onChange={(next) =>
                 setItems(
                   (current) =>
@@ -678,28 +717,30 @@ export function WorkflowDetailPage(): React.ReactElement {
     loading: boolean;
   }>(() => ({ workflowId: '', items: null, loading: false }));
   const [dialog, setDialog] = useState<'parameters' | 'manual' | null>(null);
+  const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
-  const [enabledState, setEnabledState] = useState<{
-    workflowId: string;
-    value: boolean;
-  }>(() => ({ workflowId: '', value: false }));
   const workflow = loaded.value;
-  if (!workflow) return <main>{loaded.error ?? 'Loading workflow…'}</main>;
+  const source = useMemo(
+    () => (workflow ? definition(workflow) : null),
+    [workflow],
+  );
+  if (!workflow || !source)
+    return <main>{loaded.error ?? 'Loading workflow…'}</main>;
   const identifier = workflow.id ?? workflow.hash;
   if (!identifier)
     return (
       <main>Workflow has neither a synchronized id nor an artifact hash.</main>
     );
-  const enabled =
-    enabledState.workflowId === identifier
-      ? enabledState.value
-      : workflow.enabled;
+  const enabled = workflow.enabled;
   const hasInput =
     Object.keys(contextProperties(workflow.inputSchema)).length > 0;
   const revisions =
     revisionState.workflowId === workflowId ? revisionState.items : null;
   const revisionsLoading =
     revisionState.workflowId === workflowId && revisionState.loading;
+  const selectedNode = workflow.nodes.find(
+    (node) => node.key === selectedNodeKey,
+  );
   const loadRevisions = (): void => {
     if (revisions || revisionsLoading) return;
     setRevisionState({ workflowId, items: null, loading: true });
@@ -764,18 +805,22 @@ export function WorkflowDetailPage(): React.ReactElement {
               <WorkflowStatusSwitch
                 checked={enabled}
                 label={`${enabled ? 'Disable' : 'Enable'} ${workflow.title ?? workflow.key}`}
-                onCheckedChange={(checked) =>
+                onCheckedChange={(checked) => {
                   void (
                     checked
                       ? workflowApi.enable(identifier)
                       : workflowApi.status(identifier, false)
-                  ).then((next) =>
-                    setEnabledState({
-                      workflowId: next.id ?? next.hash ?? identifier,
-                      value: next.enabled,
-                    }),
-                  )
-                }
+                  ).then((next) => {
+                    const nextIdentifier = next.id ?? next.hash ?? identifier;
+                    if (nextIdentifier !== workflowId) {
+                      void navigate(workflowPath(nextIdentifier), {
+                        replace: true,
+                      });
+                      return;
+                    }
+                    loaded.reload();
+                  });
+                }}
               />
             </label>
             <DropdownMenu>
@@ -805,11 +850,9 @@ export function WorkflowDetailPage(): React.ReactElement {
                   onClick={() =>
                     hasInput
                       ? setDialog('manual')
-                      : void workflowApi.execute(
-                          identifier,
-                          {},
-                          createWorkflowEventKey(),
-                        )
+                      : void workflowApi
+                          .execute(identifier, {}, createWorkflowEventKey())
+                          .then((run) => navigate(workflowRunPath(run.id)))
                   }
                 >
                   Run manually
@@ -818,13 +861,28 @@ export function WorkflowDetailPage(): React.ReactElement {
             </DropdownMenu>
           </div>
         </header>
-        <WorkflowCanvas definition={definition(workflow)} />
+        <WorkflowCanvas
+          definition={source}
+          selectedNodeKey={selectedNodeKey}
+          onSelectNode={setSelectedNodeKey}
+        />
       </section>
+      {selectedNode ? (
+        <NodeDescriptionDialog
+          title={selectedNode.title ?? selectedNode.key}
+          description={selectedNode.description}
+          onClose={() => setSelectedNodeKey(null)}
+        />
+      ) : null}
       {dialog === 'parameters' ? (
         <InputDialog workflow={workflow} onClose={() => setDialog(null)} />
       ) : null}
       {dialog === 'manual' ? (
-        <ManualRunDialog workflow={workflow} onClose={() => setDialog(null)} />
+        <ManualRunDialog
+          workflow={workflow}
+          onClose={() => setDialog(null)}
+          onExecuted={(run) => void navigate(workflowRunPath(run.id))}
+        />
       ) : null}
       {runs ? (
         <ExecutionDialog
@@ -933,9 +991,11 @@ export function WorkflowRunDetailPage(): React.ReactElement {
     return <main>{state.error ?? workflow.error ?? 'Loading run…'}</main>;
   const nodes = run.nodeRuns ?? [];
   const graph = projectWorkflowGraph(source);
-  const title =
-    workflow.value.nodes.find((item) => item.key === nodeRun?.nodeKey)?.title ??
-    nodeRun?.nodeKey;
+  const selectedNode = workflow.value.nodes.find(
+    (item) => item.key === nodeRun?.nodeKey,
+  );
+  const title = selectedNode?.title ?? nodeRun?.nodeKey;
+  const description = selectedNode?.description ?? null;
   return (
     <main className='workflow-page'>
       <Link to={WORKFLOW_SETTING_PATHS.workflowRuns}>← Runs</Link>
@@ -972,6 +1032,7 @@ export function WorkflowRunDetailPage(): React.ReactElement {
           runId={run.id}
           nodeRun={nodeRun}
           nodeTitle={title}
+          nodeDescription={description}
           onClose={() => setNodeRun(null)}
         />
       ) : null}

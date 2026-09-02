@@ -122,12 +122,14 @@ export interface WorkflowRunResultDialogProps {
   runId: string;
   nodeRun: WorkflowNodeRunRecord;
   nodeTitle?: string;
+  nodeDescription?: string | null;
   onClose: () => void;
 }
 export function WorkflowRunResultDialog({
   runId,
   nodeRun,
   nodeTitle,
+  nodeDescription,
   onClose,
 }: WorkflowRunResultDialogProps): ReactElement {
   return (
@@ -136,6 +138,7 @@ export function WorkflowRunResultDialog({
       runId={runId}
       nodeRun={nodeRun}
       nodeTitle={nodeTitle}
+      nodeDescription={nodeDescription}
       onClose={onClose}
     />
   );
@@ -144,6 +147,7 @@ function WorkflowRunResultDialogContent({
   runId,
   nodeRun,
   nodeTitle,
+  nodeDescription,
   onClose,
 }: WorkflowRunResultDialogProps) {
   const [attemptId, setAttemptId] = useState(nodeRun.id);
@@ -251,6 +255,12 @@ function WorkflowRunResultDialogContent({
               ))}
             </select>
           </label>
+        ) : null}
+        {nodeDescription?.trim() ? (
+          <details className='workflow-node-description-disclosure'>
+            <summary>Description</summary>
+            <p>{nodeDescription}</p>
+          </details>
         ) : null}
         {error ? (
           <p role='alert'>{error}</p>
