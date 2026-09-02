@@ -147,6 +147,7 @@ export default function FileInventoryPage(): ReactElement {
       .catch((error: unknown) => {
         if (isCurrentRequest()) {
           setFiles([]);
+          setFileMeta({ pageSize: PAGE_SIZE, hasNextPage: false });
           setFilesError(
             errorMessage(
               error,

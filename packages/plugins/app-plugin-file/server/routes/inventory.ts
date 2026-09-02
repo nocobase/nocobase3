@@ -1,5 +1,11 @@
-import type { AuthEnv } from '@nocobase/app-plugin-authentication';
-import type { AuthorizationEnv } from '@nocobase/app-plugin-authorization';
+import {
+  authenticationToken,
+  type AuthEnv,
+} from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
@@ -29,29 +35,9 @@ type InventoryRoutesEnv = {
 };
 
 export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
-  defineApiRoutes(async (app) => {
-    const authenticationModule = await loadOptionalModule(
-      () => import('@nocobase/app-plugin-authentication'),
-      '@nocobase/app-plugin-authentication',
-    );
-    if (
-      !authenticationModule ||
-      !app.container.has(authenticationModule.authenticationToken)
-    ) {
-      return new Hono();
-    }
-    const authentication = app.container.resolve(
-      authenticationModule.authenticationToken,
-    );
-    const authorizationModule = await loadOptionalModule(
-      () => import('@nocobase/app-plugin-authorization'),
-      '@nocobase/app-plugin-authorization',
-    );
-    const authorization =
-      authorizationModule &&
-      app.container.has(authorizationModule.authorizationToken)
-        ? app.container.resolve(authorizationModule.authorizationToken)
-        : undefined;
+  defineApiRoutes((app) => {
+    const authentication = app.container.resolve(authenticationToken);
+    const authorization = app.container.resolve(authorizationToken);
     const database = app.container.has(databaseManagerToken)
       ? app.container.resolve(databaseManagerToken)
       : undefined;
@@ -59,25 +45,23 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const routes = new Hono<InventoryRoutesEnv>();
 
     routes.use('*', authentication.required());
-    if (authorization) {
-      routes.use('*', authorization.middleware());
-      routes.use('*', async (context, next) => {
-        const allowed = await context.get('authz').can({
-          resource: { type: 'page', id: FILE_INVENTORY_RESOURCE },
-          action: 'access',
-        });
-        if (!allowed) {
-          return inventoryError(
-            context,
-            'FILE_INVENTORY_FORBIDDEN',
-            'errors.inventoryForbidden',
-            'File inventory access is required.',
-            403,
-          );
-        }
-        await next();
+    routes.use('*', authorization.middleware());
+    routes.use('*', async (context, next) => {
+      const allowed = await context.get('authz').can({
+        resource: { type: 'page', id: FILE_INVENTORY_RESOURCE },
+        action: 'access',
       });
-    }
+      if (!allowed) {
+        return inventoryError(
+          context,
+          'FILE_INVENTORY_FORBIDDEN',
+          'errors.inventoryForbidden',
+          'File inventory access is required.',
+          403,
+        );
+      }
+      await next();
+    });
 
     routes.get('/sources', async (context) => {
       if (!database) {
@@ -173,32 +157,6 @@ function parseCursor(value: string | undefined): string | null | undefined {
   if (value === undefined) return undefined;
   if (value.length === 0 || value.length > MAX_CURSOR_LENGTH) return null;
   return value;
-}
-
-async function loadOptionalModule<Module>(
-  loader: () => Promise<Module>,
-  packageName: string,
-): Promise<Module | undefined> {
-  try {
-    return await loader();
-  } catch (error) {
-    if (isMissingOptionalModule(error, packageName)) return undefined;
-    throw error;
-  }
-}
-
-function isMissingOptionalModule(error: unknown, packageName: string): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as {
-    readonly code?: unknown;
-    readonly message?: unknown;
-  };
-  const { code, message } = candidate;
-  return (
-    (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') &&
-    typeof message === 'string' &&
-    message.includes(packageName)
-  );
 }
 
 function inventoryError<

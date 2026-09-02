@@ -126,14 +126,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
-  "peerDependenciesMeta": {
-    "@nocobase/app-plugin-authentication": {
-      "optional": true
-    },
-    "@nocobase/app-plugin-authorization": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-authentication": "workspace:*",

@@ -151,6 +151,31 @@ describe('file inventory page', () => {
     expect(screen.getByText('Page 1')).toBeVisible();
     expect(firstPageLoads).toBe(2);
   });
+
+  it('disables forward pagination after a page request fails', async () => {
+    request.mockImplementation(async (path: string) => {
+      if (path === 'files/inventory/sources') return sourcesResponse('alpha');
+      if (path.includes('/alpha/files?pageSize=25&cursor=page-1.pdf')) {
+        throw new Error('Second page failed');
+      }
+      if (
+        path.includes('/alpha/files?pageSize=25') &&
+        !path.includes('cursor=')
+      ) {
+        return filesResponse('page-1.pdf', 1, true);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    await renderPage();
+
+    expect(await screen.findByText('page-1.pdf')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(await screen.findByText('Second page failed')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+    expect(request).toHaveBeenCalledTimes(3);
+  });
 });
 
 async function renderPage(locale: 'en-US' | 'zh-CN' = 'en-US'): Promise<void> {

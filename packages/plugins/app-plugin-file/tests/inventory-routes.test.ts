@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFileRoute } from '../server/create-file-route.js';
 import serverLocales from '../server/locales/index.js';
 import { inventoryApiRoutes } from '../server/routes/inventory.js';
+import { FILE_INVENTORY_RESOURCE } from '../shared/inventory.js';
 import { createFileI18nRuntime } from './i18n.js';
 
 const TABLE = 'routeInventoryFiles';
@@ -173,10 +174,16 @@ describe('file inventory routes', () => {
     expect((await app.request('/files/inventory/sources')).status).toBe(401);
   });
 
-  it('requires file inventory access when authorization is available', async () => {
+  it('allows the system administrator wildcard page grant', async () => {
+    const app = await createInventoryApp({ database, pageGrant: '*' });
+
+    expect((await app.request('/files/inventory/sources')).status).toBe(200);
+  });
+
+  it('requires file inventory page access', async () => {
     const app = await createInventoryApp({
       database,
-      denyAuthorization: true,
+      pageGrant: 'home',
     });
 
     const response = await app.request('/files/inventory/sources');
@@ -187,20 +194,34 @@ describe('file inventory routes', () => {
     });
   });
 
-  it('allows authenticated access when authorization is unavailable', async () => {
-    const app = await createInventoryApp({ database, authorization: false });
-
-    expect((await app.request('/files/inventory/sources')).status).toBe(200);
-  });
-
-  it('skips inventory routes when authentication is unavailable', async () => {
-    const router = await inventoryApiRoutes.createRouter(
-      createApplication({ database }),
-    );
-
-    expect((await router.request('/files/inventory/sources')).status).toBe(404);
+  it('requires Authentication and Authorization services at composition time', () => {
+    expect(() =>
+      inventoryApiRoutes.createRouter(
+        createApplication({ database, authorization: true }),
+      ),
+    ).toThrow('Service "@nocobase/app/authentication" is not registered.');
+    expect(() =>
+      inventoryApiRoutes.createRouter(
+        createApplication({ database, authentication: true }),
+      ),
+    ).toThrow('Service "@nocobase/app/authorization" is not registered.');
   });
 });
+
+type PageGrant = '*' | 'home';
+type PageAccessRequest = {
+  readonly resource: { readonly type: string; readonly id: string };
+  readonly action: string;
+};
+
+function hasPageAccess(grant: PageGrant, request: PageAccessRequest): boolean {
+  return (
+    request.resource.type === 'page' &&
+    request.resource.id === FILE_INVENTORY_RESOURCE &&
+    request.action === 'access' &&
+    (grant === '*' || request.resource.id === grant)
+  );
+}
 
 function registerSource(database: DatabaseManager, table: string): void {
   createFileRoute({
@@ -216,9 +237,8 @@ function registerSource(database: DatabaseManager, table: string): void {
 async function createInventoryApp(
   options: {
     readonly database?: DatabaseManager;
-    readonly authorization?: boolean;
+    readonly pageGrant?: PageGrant;
     readonly denyAuthentication?: boolean;
-    readonly denyAuthorization?: boolean;
   } = {},
 ): Promise<Hono> {
   const runtime = await createFileI18nRuntime(serverLocales);
@@ -230,9 +250,9 @@ async function createInventoryApp(
       createApplication({
         database: options.database,
         authentication: true,
-        authorization: options.authorization ?? true,
+        authorization: true,
+        pageGrant: options.pageGrant,
         denyAuthentication: options.denyAuthentication,
-        denyAuthorization: options.denyAuthorization,
       }),
     ),
   );
@@ -243,8 +263,8 @@ function createApplication(options: {
   readonly database?: DatabaseManager;
   readonly authentication?: boolean;
   readonly authorization?: boolean;
+  readonly pageGrant?: PageGrant;
   readonly denyAuthentication?: boolean;
-  readonly denyAuthorization?: boolean;
 }): AppPluginApplication {
   const container = new ServiceContainer();
   if (options.database) {
@@ -261,10 +281,12 @@ function createApplication(options: {
     } as unknown as Auth);
   }
   if (options.authorization) {
+    const pageGrant = options.pageGrant ?? '*';
     container.instance(authorizationToken, {
       middleware: () => async (context, next) => {
         context.set('authz', {
-          can: async () => !options.denyAuthorization,
+          can: async (request: PageAccessRequest) =>
+            hasPageAccess(pageGrant, request),
         });
         await next();
       },
