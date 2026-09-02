@@ -29,6 +29,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "example": "tsx ./examples/command.ts",
+    "playground": "tsx ./playground/command.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:db:up": "docker compose up -d postgres mysql",
@@ -41,11 +42,12 @@
     "test:integration:mssql": "INTEGRATION_DB_CONNECTIONS=mssql vitest run tests/integration",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:examples": "tsc -p examples/tsconfig.json --noEmit",
+    "typecheck:playground": "tsc -p playground/tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm typecheck:examples && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm typecheck:examples && pnpm typecheck:playground && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
@@ -53,11 +55,13 @@
     "knex": "catalog:"
   },
   "devDependencies": {
+    "@hono/node-server": "catalog:",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "better-sqlite3": "catalog:",
     "eslint": "catalog:",
+    "hono": "catalog:",
     "mysql2": "^3.23.3",
     "oracledb": "catalog:",
     "pg": "^8.23.0",
