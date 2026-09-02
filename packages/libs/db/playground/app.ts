@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { readFile } from 'node:fs/promises';
 import {
   createPlaygroundDatabase,
   type CreatePlaygroundDatabaseOptions,
@@ -25,6 +26,23 @@ export async function createDatabasePlayground(
   const database = await createPlaygroundDatabase(options);
   const app = new Hono();
   const orderService = new OrderService(database.main, database.crm);
+  const [html, javascript, stylesheet] = await Promise.all([
+    readFile(new URL('./web/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('./web/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('./web/style.css', import.meta.url), 'utf8'),
+  ]);
+
+  app.get('/', (context) => context.html(html));
+  app.get('/app.js', (context) =>
+    context.body(javascript, 200, {
+      'content-type': 'text/javascript; charset=UTF-8',
+    }),
+  );
+  app.get('/style.css', (context) =>
+    context.body(stylesheet, 200, {
+      'content-type': 'text/css; charset=UTF-8',
+    }),
+  );
 
   app.get('/api/health', (context) =>
     context.json({

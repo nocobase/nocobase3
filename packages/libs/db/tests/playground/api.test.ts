@@ -33,6 +33,19 @@ describe.sequential('@nocobase/db playground API', () => {
     expect(await apiData<unknown[]>(customers)).toHaveLength(3);
   });
 
+  it('serves the browser playground assets', async () => {
+    const html = await playground.app.request('/');
+    const javascript = await playground.app.request('/app.js');
+    const stylesheet = await playground.app.request('/style.css');
+
+    expect(html.status).toBe(200);
+    expect(html.headers.get('content-type')).toContain('text/html');
+    expect(await html.text()).toContain('@nocobase/db playground');
+    expect(javascript.headers.get('content-type')).toContain('text/javascript');
+    expect(await javascript.text()).toContain('/api/database/connections');
+    expect(stylesheet.headers.get('content-type')).toContain('text/css');
+  });
+
   it('creates an order across the external CRM and managed transaction', async () => {
     const response = await request('/api/orders', {
       method: 'POST',

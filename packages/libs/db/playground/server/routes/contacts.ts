@@ -30,6 +30,16 @@ export function createContactRoutes(crm: DatabaseConnection): Hono {
     return context.json({ data: rows });
   });
 
+  routes.get('/:id', async (context) => {
+    const contact = await crm.query
+      .selectFrom('contacts')
+      .selectAll()
+      .where('id', '=', idInput(context.req.param('id')))
+      .executeTakeFirst();
+    if (!contact) throw contactNotFound();
+    return context.json({ data: contact });
+  });
+
   routes.post('/', async (context) => {
     const input = objectInput(await context.req.json());
     const customerId = positiveIntegerInput(input, 'customerId');

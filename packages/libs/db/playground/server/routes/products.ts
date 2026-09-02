@@ -21,6 +21,12 @@ export function createProductRoutes(main: DatabaseConnection): Hono {
     return context.json({ data: rows });
   });
 
+  routes.get('/:id', async (context) =>
+    context.json({
+      data: await getProduct(main, idInput(context.req.param('id'))),
+    }),
+  );
+
   routes.post('/', async (context) => {
     const input = objectInput(await context.req.json());
     const price = nonNegativeNumber(input, 'price');
