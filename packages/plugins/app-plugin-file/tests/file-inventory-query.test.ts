@@ -5,6 +5,7 @@ import {
   listDatabaseFileSourceItems,
   summarizeDatabaseFileSource,
 } from '../server/file-inventory-query.js';
+import { serializeDatabaseDate } from '../server/database-file-record.js';
 import type { RegisteredDatabaseFileSource } from '../server/file-source-registry.js';
 
 const TABLE = 'inventoryFiles';
@@ -103,6 +104,12 @@ describe('file inventory query', () => {
       expect.objectContaining({ table: 'missingFiles' }),
     );
     error.mockRestore();
+  });
+
+  it('preserves database date strings without timezone reinterpretation', () => {
+    expect(serializeDatabaseDate('2026-09-02 10:00:00')).toBe(
+      '2026-09-02 10:00:00',
+    );
   });
 });
 

@@ -1,6 +1,6 @@
 import type { AppClient } from '@nocobase/app-client';
 import { I18nProvider, NamespaceScope } from '@nocobase/i18n/client';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -109,6 +109,59 @@ describe('file inventory page', () => {
     ).not.toBeInTheDocument();
     expect(request).toHaveBeenCalledTimes(1);
   });
+
+  it('ignores a stale file response after selecting another source', async () => {
+    const alpha = deferred<FileInventoryFilesResponse>();
+    request.mockImplementation(async (path: string) => {
+      if (path === 'files/inventory/sources') {
+        return {
+          data: [
+            { id: 'alpha', table: 'alpha', count: 1, status: 'available' },
+            { id: 'beta', table: 'beta', count: 1, status: 'available' },
+          ],
+        } satisfies FileInventorySourcesResponse;
+      }
+      if (path.includes('/alpha/files')) return alpha.promise;
+      if (path.includes('/beta/files')) return filesResponse('beta.pdf');
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    await renderPage();
+
+    await screen.findByRole('button', { name: /beta/i });
+    await user.click(screen.getByRole('button', { name: /beta/i }));
+    expect(await screen.findByText('beta.pdf')).toBeVisible();
+    await act(async () => alpha.resolve(filesResponse('alpha.pdf')));
+
+    expect(screen.getByText('beta.pdf')).toBeVisible();
+    expect(screen.queryByText('alpha.pdf')).not.toBeInTheDocument();
+  });
+
+  it('returns to the last valid page when the result set shrinks', async () => {
+    let firstPageLoads = 0;
+    request.mockImplementation(async (path: string) => {
+      if (path === 'files/inventory/sources') return sourcesResponse('alpha');
+      if (path.includes('/alpha/files?page=2')) {
+        return { data: [], meta: pageMeta(2, 1, 1) };
+      }
+      if (path.includes('/alpha/files?page=1')) {
+        firstPageLoads += 1;
+        return firstPageLoads === 1
+          ? filesResponse('before-shrink.pdf', 1, 2)
+          : filesResponse('after-shrink.pdf');
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    await renderPage();
+
+    expect(await screen.findByText('before-shrink.pdf')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(await screen.findByText('after-shrink.pdf')).toBeVisible();
+    expect(screen.getByText('1 / 1')).toBeVisible();
+    expect(firstPageLoads).toBe(2);
+  });
 });
 
 async function renderPage(locale: 'en-US' | 'zh-CN' = 'en-US'): Promise<void> {
@@ -147,11 +200,25 @@ function filesResponse(
         updatedAt: '2026-09-02T01:00:00.000Z',
       },
     ],
-    meta: {
-      page,
-      pageSize: 25,
-      total: totalPages,
-      totalPages,
-    },
+    meta: pageMeta(page, totalPages, totalPages),
   };
+}
+
+function pageMeta(
+  page: number,
+  total: number,
+  totalPages: number,
+): FileInventoryFilesResponse['meta'] {
+  return { page, pageSize: 25, total, totalPages };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
 }

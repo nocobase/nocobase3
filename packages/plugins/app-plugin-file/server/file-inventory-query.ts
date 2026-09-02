@@ -20,8 +20,8 @@ interface FileInventoryRow extends Row {
   mimeType: string;
   size: unknown;
   public: unknown;
-  createdAt: Date | string;
-  updatedAt: Date | string;
+  createdAt: unknown;
+  updatedAt: unknown;
 }
 
 interface CountRow extends Row {
@@ -86,6 +86,18 @@ export async function listDatabaseFileSourceItems(
     throw new RangeError('File inventory offset is outside the safe range.');
   }
   const total = await countRows(database, source.table);
+  const totalPages = Math.ceil(total / options.pageSize);
+  if (offset >= total) {
+    return {
+      data: [],
+      meta: {
+        page: options.page,
+        pageSize: options.pageSize,
+        total,
+        totalPages,
+      },
+    };
+  }
   const rows = await database
     .query()
     .selectFrom<FileInventoryRow>(source.table)
@@ -101,7 +113,7 @@ export async function listDatabaseFileSourceItems(
       page: options.page,
       pageSize: options.pageSize,
       total,
-      totalPages: Math.ceil(total / options.pageSize),
+      totalPages,
     },
   };
 }

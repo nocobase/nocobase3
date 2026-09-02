@@ -64,9 +64,7 @@ export default function FileInventoryPage(): ReactElement {
 
   const refresh = (): void => {
     setSourcesLoading(true);
-    setFilesLoading(true);
     setSourcesError(undefined);
-    setFilesError(undefined);
     setRevision((value) => value + 1);
   };
 
@@ -83,6 +81,7 @@ export default function FileInventoryPage(): ReactElement {
     const controller = new AbortController();
     void loadSources(controller.signal)
       .then((response) => {
+        if (controller.signal.aborted) return;
         setSources(response.data);
         const current = selectedIdRef.current;
         const next =
@@ -127,17 +126,32 @@ export default function FileInventoryPage(): ReactElement {
   useEffect(() => {
     if (!selectedSourceId || selectedSourceStatus !== 'available') return;
     const controller = new AbortController();
+    const requestSourceId = selectedSourceId;
+    const isCurrentRequest = (): boolean =>
+      !controller.signal.aborted && selectedIdRef.current === requestSourceId;
+    void Promise.resolve().then(() => {
+      if (!isCurrentRequest()) return;
+      setFilesLoading(true);
+      setFilesError(undefined);
+    });
     void appClient
       .request<FileInventoryFilesResponse>(
         `files/inventory/sources/${encodeURIComponent(selectedSourceId)}/files?page=${page}&pageSize=${PAGE_SIZE}`,
         { signal: controller.signal },
       )
       .then((response) => {
+        if (!isCurrentRequest()) return;
+        const lastPage = Math.max(response.meta.totalPages, 1);
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
         setFiles(response.data);
         setFileMeta(response.meta);
+        setFilesError(undefined);
       })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
+        if (isCurrentRequest()) {
           setFiles([]);
           setFilesError(
             errorMessage(
@@ -150,26 +164,21 @@ export default function FileInventoryPage(): ReactElement {
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) setFilesLoading(false);
+        if (isCurrentRequest()) setFilesLoading(false);
       });
     return () => controller.abort();
   }, [appClient, page, revision, selectedSourceId, selectedSourceStatus, t]);
 
   const selectSource = (sourceId: string): void => {
     if (sourceId === selectedIdRef.current) return;
-    const source = sources.find((item) => item.id === sourceId);
     selectedIdRef.current = sourceId;
     setSelectedId(sourceId);
     setPage(1);
     setFiles([]);
     setFileMeta({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 0 });
-    setFilesLoading(source?.status === 'available');
-    setFilesError(undefined);
   };
 
   const changePage = (nextPage: number): void => {
-    setFilesLoading(true);
-    setFilesError(undefined);
     setPage(nextPage);
   };
 

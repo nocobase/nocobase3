@@ -66,10 +66,17 @@ export function normalizeDatabaseFileVisibility(value: unknown): boolean {
   throw new TypeError('File visibility returned by the database is invalid.');
 }
 
-export function serializeDatabaseDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.valueOf())) {
-    throw new TypeError('File date returned by the database is invalid.');
+export function serializeDatabaseDate(value: unknown): string {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.valueOf())) {
+      throw new TypeError('File date returned by the database is invalid.');
+    }
+    return value.toISOString();
   }
-  return date.toISOString();
+  if (typeof value === 'string' && value.trim()) return value;
+  if (typeof value === 'number') {
+    const date = new Date(value);
+    if (!Number.isNaN(date.valueOf())) return date.toISOString();
+  }
+  throw new TypeError('File date returned by the database is invalid.');
 }
