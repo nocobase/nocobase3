@@ -39,6 +39,7 @@ import { defineAppRuntime } from '@nocobase/app-client/runtime';
 
 import locales from './locales/index.js';
 import plugins from './plugins.js';
+import routeComponentOverrides from './route-overrides.js';
 import serviceProviders from './providers/index.js';
 import reactProviders from './react-providers/index.js';
 import routes from './routes.js';
@@ -50,10 +51,14 @@ export default defineAppRuntime({
   reactProviders,
   routes,
   locales,
-  plugins: plugins.plugins,
-  routeComponentOverrides: plugins.routeComponentOverrides,
+  plugins,
+  routeComponentOverrides,
 });
 ```
+
+`plugins` is the complete value returned by `defineClientPlugins()`. Runtime
+resolution collects its route component overrides automatically;
+`routeComponentOverrides` contains only overrides owned by the application.
 
 Static import makes the composition plan available to runtime resolution and
 inspection. It does not register a service, execute lifecycle hooks, render a
@@ -152,7 +157,7 @@ The lifecycle order inside `app.start()` is:
 register all
 → boot all
 → finalize Refine and render configuration
-→ validate Runtime
+→ validate authenticated-route prerequisites and Runtime
 → start all
 → ready all
 ```

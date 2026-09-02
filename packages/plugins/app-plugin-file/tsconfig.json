@@ -9,12 +9,6 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": [
-    "database/**/*.ts",
-    "server/**/*.ts",
-    "client/**/*.ts",
-    "client/**/*.tsx",
-    "../../app/app-portal-sdk/src/env.d.ts"
-  ],
+  "include": ["server/**/*.ts", "client/**/*.ts", "client/**/*.tsx"],
   "exclude": ["tests", "registry"]
 }

@@ -2,6 +2,7 @@ import { File as NodeFile } from 'node:buffer';
 
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import {
   afterAll,
   beforeAll,
@@ -37,12 +38,15 @@ import {
   putFileObject,
   removeFileObject,
 } from '../server/file-storage.js';
+import serverLocales from '../server/locales/index.js';
 import type {
   CreateFileRouteOptions,
   FileRecord,
   FileStore,
   NewFileRecord,
 } from '../server/types.js';
+import { createFileI18nRuntime } from './i18n.js';
+import type { I18nRuntime } from '@nocobase/i18n';
 
 const MOUNT_PATH = '/base/api/orders/7/files';
 
@@ -53,13 +57,15 @@ describe('createFileRoute', () => {
   let records: FileRecord[];
   let store: FileStore;
   let authCalls: number;
+  let i18n: I18nRuntime;
   const put = vi.mocked(putFileObject);
   const open = vi.mocked(openFileObject);
   const removeObject = vi.mocked(removeFileObject);
   const issueAccessUrl = vi.mocked(issueFileAccessUrl);
   const verifyAccessToken = vi.mocked(verifyFileAccessToken);
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    i18n = await createFileI18nRuntime(serverLocales);
     records = [fileRecord()];
     authCalls = 0;
     store = {
@@ -425,7 +431,9 @@ describe('createFileRoute', () => {
       auth: allowingAuth(),
       limits: { maxFiles: 1 },
     });
-    const app = new Hono().route('/base/api/orders/:owner/files', route);
+    const app = new Hono();
+    app.use('*', createI18nMiddleware(i18n));
+    app.route('/base/api/orders/:owner/files', route);
 
     const first = app.request('/base/api/orders/1/files', {
       method: 'POST',
@@ -840,11 +848,23 @@ describe('createFileRoute', () => {
     });
   });
 
+  it('translates API errors from the request locale', async () => {
+    const response = await createApp().request(`${MOUNT_PATH}/missing`, {
+      headers: { 'accept-language': 'zh-CN' },
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'FILE_NOT_FOUND', message: '未找到文件。' },
+    });
+  });
+
   function createApp(
     overrides: Partial<CreateFileRouteOptions> = {},
     onError?: (error: Error) => Response,
   ): Hono {
     const app = new Hono();
+    app.use('*', createI18nMiddleware(i18n));
     if (onError) app.onError(onError);
     app.route(
       MOUNT_PATH,

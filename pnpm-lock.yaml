@@ -1667,15 +1667,6 @@ importers:
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
-      '@nocobase/logging':
-        specifier: workspace:^
-        version: link:../../libs/logging
-      '@nocobase/session':
-        specifier: workspace:^
-        version: link:../../libs/session
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1698,15 +1689,6 @@ importers:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
-      '@nocobase/app-plugin-authentication':
-        specifier: workspace:*
-        version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-authorization':
-        specifier: workspace:*
-        version: link:../app-plugin-authorization
-      '@nocobase/app-portal-sdk':
-        specifier: workspace:*
-        version: link:../../app/app-portal-sdk
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
@@ -1716,9 +1698,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
-      '@nocobase/service-provider':
+      '@nocobase/i18n':
         specifier: workspace:*
-        version: link:../../libs/service-provider
+        version: link:../../libs/i18n
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)

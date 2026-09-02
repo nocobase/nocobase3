@@ -1,7 +1,9 @@
 import { Dialog } from '@base-ui/react/dialog';
+import { useTranslation } from '@nocobase/i18n/client';
 import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 
+import { FILE_PLUGIN_NS } from '../../shared/namespace.js';
 import {
   fileUrlCredentials,
   publicDownloadUrl,
@@ -64,9 +66,29 @@ function OpenFilePreviewDialog({
   labels,
   onError,
 }: OpenFilePreviewDialogProps): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
   const [index, setIndex] = useState(initialIndex);
   const file = files[index];
   if (!file) throw new Error('A preview file is required.');
+  const publicLabel = t('common.visibility.public', {
+    defaultValue: 'Public',
+  });
+  const privateLabel = t('common.visibility.private', {
+    defaultValue: 'Private',
+  });
+  const previousFileLabel = t('common.actions.previousFile', {
+    defaultValue: 'Previous file',
+  });
+  const nextFileLabel = t('common.actions.nextFile', {
+    defaultValue: 'Next file',
+  });
+  const closeLabel = t('common.actions.close', { defaultValue: 'Close' });
+  const urlNotAllowed = t('errors.urlNotAllowed', {
+    defaultValue: 'File URL is not allowed.',
+  });
+  const downloadFailed = t('errors.downloadFailed', {
+    defaultValue: 'File download failed.',
+  });
 
   return (
     <Dialog.Root open onOpenChange={onOpenChange}>
@@ -79,7 +101,7 @@ function OpenFilePreviewDialog({
                 {file.filename}
               </Dialog.Title>
               <p className='text-sm text-muted-foreground'>
-                {file.public ? 'Public' : 'Private'} · {file.mimeType}
+                {file.public ? publicLabel : privateLabel} · {file.mimeType}
               </p>
             </div>
             <div className='flex gap-1'>
@@ -87,8 +109,8 @@ function OpenFilePreviewDialog({
                 <>
                   <button
                     type='button'
-                    aria-label='Previous file'
-                    title='Previous file'
+                    aria-label={previousFileLabel}
+                    title={previousFileLabel}
                     onClick={() =>
                       setIndex(
                         (value) => (value - 1 + files.length) % files.length,
@@ -99,8 +121,8 @@ function OpenFilePreviewDialog({
                   </button>
                   <button
                     type='button'
-                    aria-label='Next file'
-                    title='Next file'
+                    aria-label={nextFileLabel}
+                    title={nextFileLabel}
                     onClick={() =>
                       setIndex((value) => (value + 1) % files.length)
                     }
@@ -113,13 +135,22 @@ function OpenFilePreviewDialog({
                 <DownloadButton
                   client={client}
                   file={file}
-                  label={labels?.download ?? 'Download'}
+                  label={
+                    labels?.download ??
+                    t('common.actions.download', { defaultValue: 'Download' })
+                  }
+                  urlNotAllowed={urlNotAllowed}
+                  downloadFailed={downloadFailed}
                   onError={onError}
                 />
               ) : null}
               <Dialog.Close
                 render={
-                  <button type='button' aria-label='Close' title='Close' />
+                  <button
+                    type='button'
+                    aria-label={closeLabel}
+                    title={closeLabel}
+                  />
                 }
               >
                 <X aria-hidden='true' />
@@ -133,8 +164,9 @@ function OpenFilePreviewDialog({
             onDownload={
               download
                 ? () =>
-                    void downloadFile(client, file).catch((error: unknown) =>
-                      reportDownloadError(onError, error),
+                    void downloadFile(client, file, urlNotAllowed).catch(
+                      (error: unknown) =>
+                        reportDownloadError(onError, error, downloadFailed),
                     )
                 : undefined
             }
@@ -149,11 +181,15 @@ function DownloadButton({
   client,
   file,
   label,
+  urlNotAllowed,
+  downloadFailed,
   onError,
 }: {
   client: FilePreviewDialogProps['client'];
   file: FileRecord;
   label: string;
+  urlNotAllowed: string;
+  downloadFailed: string;
   onError?: (error: Error) => void;
 }): ReactElement {
   return (
@@ -162,8 +198,8 @@ function DownloadButton({
       aria-label={`${label}: ${file.filename}`}
       title={label}
       onClick={() =>
-        void downloadFile(client, file).catch((error: unknown) =>
-          reportDownloadError(onError, error),
+        void downloadFile(client, file, urlNotAllowed).catch((error: unknown) =>
+          reportDownloadError(onError, error, downloadFailed),
         )
       }
     >
@@ -175,12 +211,13 @@ function DownloadButton({
 async function downloadFile(
   client: FilePreviewDialogProps['client'],
   file: FileRecord,
+  urlNotAllowed: string,
 ): Promise<void> {
   const raw = file.public
     ? publicDownloadUrl(file.contentUrl)
     : (await client.createAccessUrl(file.id)).url;
   const url = raw ? resolveSafeFileUrl(raw) : undefined;
-  if (!url) throw new Error('File URL is not allowed.');
+  if (!url) throw new Error(urlNotAllowed);
   const link = document.createElement('a');
   link.href = url;
   link.download = file.filename;
@@ -191,10 +228,9 @@ async function downloadFile(
 function reportDownloadError(
   onError: ((error: Error) => void) | undefined,
   error: unknown,
+  downloadFailed: string,
 ): void {
-  onError?.(
-    error instanceof Error ? error : new Error('File download failed.'),
-  );
+  onError?.(error instanceof Error ? error : new Error(downloadFailed));
 }
 
 function PreviewBody({
@@ -206,6 +242,7 @@ function PreviewBody({
   file: FileRecord;
   onDownload?: () => void;
 }): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
   const initialUrl = file.public
     ? resolveSafeFileUrl(file.contentUrl)
     : undefined;
@@ -214,7 +251,11 @@ function PreviewBody({
   );
   const [text, setText] = useState<string>();
   const [error, setError] = useState<string | undefined>(() =>
-    file.public && !initialUrl ? 'File URL is not allowed.' : undefined,
+    file.public && !initialUrl
+      ? t('errors.urlNotAllowed', {
+          defaultValue: 'File URL is not allowed.',
+        })
+      : undefined,
   );
   const kind: FilePreviewKind = useMemo(
     () => resolveFilePreviewKind(file),
@@ -230,20 +271,27 @@ function PreviewBody({
         if (!active) return;
         const url = resolveSafeFileUrl(access.url);
         if (url) setAccessUrl(url);
-        else setError('File URL is not allowed.');
+        else
+          setError(
+            t('errors.urlNotAllowed', {
+              defaultValue: 'File URL is not allowed.',
+            }),
+          );
       })
       .catch((cause: unknown) => {
         if (active)
           setError(
             cause instanceof Error
               ? cause.message
-              : 'Unable to create a file access URL.',
+              : t('errors.createAccessUrlFailed', {
+                  defaultValue: 'Unable to create a file access URL.',
+                }),
           );
       });
     return () => {
       active = false;
     };
-  }, [client, file]);
+  }, [client, file, t]);
 
   useEffect(() => {
     if (!accessUrl || !['text', 'markdown'].includes(kind)) return undefined;
@@ -254,7 +302,12 @@ function PreviewBody({
     })
       .then((response) => {
         if (!response.ok)
-          throw new Error(`Preview request failed (${response.status}).`);
+          throw new Error(
+            t('errors.previewRequestFailed', {
+              defaultValue: `Preview request failed (${response.status}).`,
+              status: response.status,
+            }),
+          );
         return response.text();
       })
       .then((value) => setText(value))
@@ -263,12 +316,14 @@ function PreviewBody({
           setError(
             cause instanceof Error
               ? cause.message
-              : 'Unable to load the file preview.',
+              : t('errors.loadPreviewFailed', {
+                  defaultValue: 'Unable to load the file preview.',
+                }),
           );
         }
       });
     return () => controller.abort();
-  }, [accessUrl, file, kind]);
+  }, [accessUrl, file, kind, t]);
 
   return (
     <FilePreviewContent

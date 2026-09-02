@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { LoaderCircle, RotateCcw, Trash2, UploadCloud, X } from 'lucide-react';
 import {
   useEffect,
@@ -8,6 +9,7 @@ import {
   type ReactElement,
 } from 'react';
 
+import { FILE_PLUGIN_NS } from '../../shared/namespace.js';
 import type { FileUploadFieldProps } from '../types.js';
 import { FileThumbnail } from './file-thumbnail.js';
 
@@ -58,6 +60,7 @@ export function FileUploadField({
   removeOnDelete = false,
   labels,
 }: FileUploadFieldProps): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
   const [items, setItems] = useState<UploadItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const controlledValueRef = useRef(value);
@@ -70,9 +73,21 @@ export function FileUploadField({
   const mountedRef = useRef(true);
   const [dragging, setDragging] = useState(false);
   const chooseLabel =
-    labels?.choose ?? (multiple ? 'Choose files' : 'Choose file');
-  const removeLabel = labels?.remove ?? 'Remove';
-  const retryLabel = labels?.retry ?? 'Retry';
+    labels?.choose ??
+    (multiple
+      ? t('upload.chooseFiles', { defaultValue: 'Choose files' })
+      : t('upload.chooseFile', { defaultValue: 'Choose file' }));
+  const removeLabel =
+    labels?.remove ?? t('common.actions.remove', { defaultValue: 'Remove' });
+  const retryLabel =
+    labels?.retry ?? t('common.actions.retry', { defaultValue: 'Retry' });
+  const cancelLabel = t('common.actions.cancel', { defaultValue: 'Cancel' });
+  const doneLabel = t('common.states.done', { defaultValue: 'Done' });
+  const failedLabel = t('common.states.failed', { defaultValue: 'Failed' });
+  const pendingLabel = t('common.states.pending', { defaultValue: 'Pending' });
+  const uploadingLabel = t('common.states.uploading', {
+    defaultValue: 'Uploading',
+  });
   const effectiveMax = multiple ? (maxFiles ?? Infinity) : 1;
 
   useEffect(() => {
@@ -162,7 +177,13 @@ export function FileUploadField({
       }
       if (!mountedRef.current) return;
       const uploadError =
-        error instanceof Error ? error : new Error('File upload failed.');
+        error instanceof Error
+          ? error
+          : new Error(
+              t('errors.uploadFailed', {
+                defaultValue: 'File upload failed.',
+              }),
+            );
       setItems((current) =>
         current.map((candidate) =>
           candidate.key === item.key
@@ -180,17 +201,30 @@ export function FileUploadField({
       ? effectiveMax - value.length - items.length
       : 1 - items.length;
     if (files.length > available) {
-      report('The maximum number of files has been reached.');
+      report(
+        t('errors.maxFilesReached', {
+          defaultValue: 'The maximum number of files has been reached.',
+        }),
+      );
       return;
     }
     const acceptedFiles: File[] = [];
     for (const file of files) {
       if (maxSize !== undefined && file.size > maxSize) {
-        report(`File size exceeds ${formatSize(maxSize)}.`);
+        report(
+          t('errors.sizeExceeded', {
+            defaultValue: `File size exceeds ${formatSize(maxSize)}.`,
+            size: formatSize(maxSize),
+          }),
+        );
         continue;
       }
       if (!accepted(file, accept)) {
-        report('File type is not allowed.');
+        report(
+          t('errors.fileTypeNotAllowed', {
+            defaultValue: 'File type is not allowed.',
+          }),
+        );
         continue;
       }
       acceptedFiles.push(file);
@@ -213,7 +247,13 @@ export function FileUploadField({
         await client.remove(record.id);
       } catch (error) {
         onError?.(
-          error instanceof Error ? error : new Error('File removal failed.'),
+          error instanceof Error
+            ? error
+            : new Error(
+                t('errors.removeFailed', {
+                  defaultValue: 'File removal failed.',
+                }),
+              ),
         );
         return;
       }
@@ -267,7 +307,7 @@ export function FileUploadField({
               {record.filename}
             </div>
             <div className='text-xs text-muted-foreground'>
-              {formatSize(record.size)} · Done
+              {formatSize(record.size)} · {doneLabel}
             </div>
             <div className='mt-2 flex gap-1'>
               <button
@@ -285,7 +325,10 @@ export function FileUploadField({
           <div key={item.key} className='w-36 rounded-md border p-2'>
             <div className='flex h-20 items-center justify-center overflow-hidden rounded-sm bg-muted/30'>
               {item.status === 'uploading' ? (
-                <LoaderCircle className='animate-spin' aria-label='Uploading' />
+                <LoaderCircle
+                  className='animate-spin'
+                  aria-label={uploadingLabel}
+                />
               ) : (
                 <UploadCloud aria-hidden='true' />
               )}
@@ -295,12 +338,12 @@ export function FileUploadField({
             </div>
             <div className='text-xs text-muted-foreground'>
               {item.status === 'pending'
-                ? 'Pending'
+                ? pendingLabel
                 : item.status === 'uploading'
-                  ? 'Uploading'
+                  ? uploadingLabel
                   : item.status === 'error'
-                    ? (item.error?.message ?? 'Failed')
-                    : 'Failed'}
+                    ? (item.error?.message ?? failedLabel)
+                    : failedLabel}
             </div>
             <div className='mt-2 flex gap-1'>
               {item.status === 'error' ? (
@@ -315,7 +358,7 @@ export function FileUploadField({
               ) : null}
               <button
                 type='button'
-                aria-label={`Cancel: ${item.file.name}`}
+                aria-label={`${cancelLabel}: ${item.file.name}`}
                 onClick={() => cancelItem(item)}
                 disabled={disabled}
               >
@@ -351,8 +394,17 @@ export function FileUploadField({
       </div>
       <div className='sr-only' aria-live='polite'>
         {[
-          ...value.map((record) => `${record.filename}: done`),
-          ...items.map((item) => `${item.file.name}: ${item.status}`),
+          ...value.map((record) => `${record.filename}: ${doneLabel}`),
+          ...items.map(
+            (item) =>
+              `${item.file.name}: ${
+                item.status === 'pending'
+                  ? pendingLabel
+                  : item.status === 'uploading'
+                    ? uploadingLabel
+                    : failedLabel
+              }`,
+          ),
         ].join('. ')}
       </div>
     </div>

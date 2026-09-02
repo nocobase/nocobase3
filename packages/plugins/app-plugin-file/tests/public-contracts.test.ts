@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 
+import type { AppClient } from '@nocobase/app-client';
 import { describe, expect, it } from 'vitest';
 
 import {
   createFileRoute,
   DEFAULT_FILE_ROUTE_VISIBILITY,
+  default as fileServerPlugin,
   type CreateFileRouteOptions,
   type FileRouteAction,
   type FileStore,
@@ -12,15 +14,14 @@ import {
 import * as serverApi from '@nocobase/app-plugin-file/server';
 import {
   createFilesClient,
+  default as fileClientPlugin,
   FilePreviewField,
-  FILE_DEMO_AVATAR_MIME_TYPES,
-  FILE_DEMO_ORDER_MIME_TYPES,
-  FILE_ROUTE_IDS,
   isSafeImagePreview,
   resolveFilePreviewKind,
   resolveOfficeEmbedUrl,
   type FilesClient,
 } from '@nocobase/app-plugin-file/client';
+import * as clientApi from '@nocobase/app-plugin-file/client';
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -37,8 +38,10 @@ describe('file plugin public contracts', () => {
   it('exposes stable server and client entry points', () => {
     const routeFactory: (options: CreateFileRouteOptions) => unknown =
       createFileRoute;
-    const clientFactory: (options: { endpoint: string }) => FilesClient =
-      createFilesClient;
+    const clientFactory: (options: {
+      appClient: AppClient;
+      endpoint: string;
+    }) => FilesClient = createFilesClient;
     const previewField = FilePreviewField;
     const storeImport: FileStore | undefined = undefined;
     const actionsAreFrozen: FrozenFileRouteActions = true;
@@ -46,22 +49,6 @@ describe('file plugin public contracts', () => {
     expect(routeFactory).toBeTypeOf('function');
     expect(clientFactory).toBeTypeOf('function');
     expect(previewField).toBeTypeOf('function');
-    expect(FILE_DEMO_ORDER_MIME_TYPES).toEqual(
-      expect.arrayContaining([
-        ...FILE_DEMO_AVATAR_MIME_TYPES,
-        'text/markdown',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'application/vnd.oasis.opendocument.text',
-        'application/vnd.oasis.opendocument.spreadsheet',
-        'application/vnd.oasis.opendocument.presentation',
-        'application/vnd.oasis.opendocument.text-template',
-      ]),
-    );
     expect(isSafeImagePreview).toBeTypeOf('function');
     expect(resolveFilePreviewKind).toBeTypeOf('function');
     expect(resolveOfficeEmbedUrl).toBeTypeOf('function');
@@ -74,12 +61,46 @@ describe('file plugin public contracts', () => {
     expect(Object.isFrozen(DEFAULT_FILE_ROUTE_VISIBILITY)).toBe(true);
   });
 
-  it('freezes the demo route id', () => {
-    expect(FILE_ROUTE_IDS.demo).toBe('@nocobase/app-plugin-file:demo');
-    expect(Object.isFrozen(FILE_ROUTE_IDS)).toBe(true);
+  it('contributes locales without built-in business UI, API routes, or database schema', () => {
+    expect(fileClientPlugin()).toMatchObject({
+      packageName: '@nocobase/app-plugin-file',
+      routes: [],
+      locales: {
+        'en-US': expect.any(Function),
+        'zh-CN': expect.any(Function),
+      },
+    });
+    expect(fileServerPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-file',
+      serviceProviders: [],
+      routes: [],
+      locales: expect.any(Function),
+    });
+    expect(fileServerPlugin.database).toBeUndefined();
+    expect(clientApi).not.toHaveProperty('FILE_ROUTE_IDS');
+    expect(clientApi).not.toHaveProperty('FILE_DEMO_AVATAR_MIME_TYPES');
+    expect(clientApi).not.toHaveProperty('FILE_DEMO_ORDER_MIME_TYPES');
   });
 
-  it('keeps plugin assembly APIs internal', () => {
+  it('has no manifest or TypeScript source dependency on the Portal SDK', () => {
+    const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      readonly dependencies?: Readonly<Record<string, string>>;
+      readonly devDependencies?: Readonly<Record<string, string>>;
+      readonly peerDependencies?: Readonly<Record<string, string>>;
+    };
+    const tsconfig = readFileSync('tsconfig.json', 'utf8');
+
+    for (const dependencies of [
+      packageJson.dependencies,
+      packageJson.devDependencies,
+      packageJson.peerDependencies,
+    ]) {
+      expect(dependencies).not.toHaveProperty('@nocobase/app-portal-sdk');
+    }
+    expect(tsconfig).not.toContain('app-portal-sdk');
+  });
+
+  it('keeps application assembly APIs internal', () => {
     expect(Object.keys(serverApi).sort()).toEqual([
       'DEFAULT_FILE_ROUTE_VISIBILITY',
       'createFileRoute',
@@ -104,10 +125,13 @@ describe('file plugin public contracts', () => {
       };
     };
     const skillPath = 'skills/nocobase-app-plugin-file/SKILL.md';
+    const quickStartPath =
+      'skills/nocobase-app-plugin-file/reference/quick-start.md';
     const bootstrapEntry = ['./client', 'bootstrap'].join('/');
     const providersEntry = ['./client', 'providers'].join('/');
 
     expect(packageJson.files).toContain('skills');
+    expect(packageJson.files).not.toContain('database');
     expect(packageJson.exports).not.toHaveProperty(`./${skillPath}`);
     expect(packageJson.publishConfig.exports).not.toHaveProperty(
       `./${skillPath}`,
@@ -126,14 +150,27 @@ describe('file plugin public contracts', () => {
     expect(packageJson.publishConfig.exports).toHaveProperty('./client/plugin');
     expect(packageJson.exports).toHaveProperty('./server');
     expect(packageJson.publishConfig.exports).toHaveProperty('./server');
+    expect(packageJson.exports).not.toHaveProperty('./client/routes');
+    expect(packageJson.exports).not.toHaveProperty('./client/route-contracts');
+    expect(packageJson.publishConfig.exports).not.toHaveProperty(
+      './client/routes',
+    );
+    expect(packageJson.publishConfig.exports).not.toHaveProperty(
+      './client/route-contracts',
+    );
     expect(existsSync(skillPath)).toBe(true);
-    expect(readFileSync(skillPath, 'utf8')).toContain(
-      'name: nocobase-app-plugin-file',
+    const skill = readFileSync(skillPath, 'utf8');
+    const quickStart = readFileSync(quickStartPath, 'utf8');
+    expect(skill).toContain('name: nocobase-app-plugin-file');
+    expect(skill).toContain('application source');
+    expect(quickStart).toContain('database/migrations/');
+    expect(quickStart).toContain('server/routes/index.ts');
+    expect(quickStart).toContain('client/routes.ts');
+    expect(`${skill}\n${quickStart}`).not.toMatch(
+      /The business plugin|business plugin's|AppPluginApplication|passed to defineServerPlugin/u,
     );
     expect(packageJson.files).not.toContain('docs');
     expect(existsSync('docs')).toBe(false);
-    expect(
-      existsSync('skills/nocobase-app-plugin-file/reference/quick-start.md'),
-    ).toBe(true);
+    expect(existsSync(quickStartPath)).toBe(true);
   });
 });

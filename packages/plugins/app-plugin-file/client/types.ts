@@ -1,3 +1,4 @@
+import type { AppClient } from '@nocobase/app-client';
 import type { ReactNode } from 'react';
 
 export interface FileRecord {
@@ -32,6 +33,7 @@ export interface FilesClient {
 }
 
 export interface CreateFilesClientOptions {
+  readonly appClient: AppClient;
   readonly endpoint: string;
 }
 

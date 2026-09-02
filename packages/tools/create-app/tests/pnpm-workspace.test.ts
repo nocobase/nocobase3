@@ -34,11 +34,27 @@ async function readWorkspace(directory: string): Promise<string> {
   return readFile(path.join(directory, PNPM_WORKSPACE_FILE), 'utf8');
 }
 
+function names(): string[] {
+  return ALLOWED_BUILDS.map((entry) => entry.name);
+}
+
 describe('ALLOWED_BUILDS', () => {
   it('covers the packages a generated app needs to build', () => {
-    expect(ALLOWED_BUILDS).toContain('better-sqlite3');
-    expect(ALLOWED_BUILDS).toContain('oracledb');
-    expect(ALLOWED_BUILDS).toContain('esbuild');
+    expect(names()).toContain('better-sqlite3');
+    expect(names()).toContain('oracledb');
+    expect(names()).toContain('esbuild');
+  });
+
+  /**
+   * A package left out entirely is what produces `ERR_PNPM_IGNORED_BUILDS` on a first install. `tesseract.js` arrives
+   * through `officeparser` and its postinstall only prints a donation notice, so it is recorded as a deliberate skip
+   * rather than allowed to run.
+   */
+  it('records a deliberate skip rather than omitting the package', () => {
+    expect(names()).toContain('tesseract.js');
+    expect(
+      ALLOWED_BUILDS.find((entry) => entry.name === 'tesseract.js')?.allowed,
+    ).toBe(false);
   });
 });
 
@@ -49,16 +65,24 @@ describe('buildAllowBuildsYaml', () => {
     expect(yaml).toContain('allowBuilds:');
     expect(yaml.match(/allowBuilds:/gu)).toHaveLength(1);
 
-    for (const name of ALLOWED_BUILDS) {
+    for (const name of names()) {
       expect(yaml).toContain(name);
     }
   });
 
+  /** `false` is a decision, not an omission: it silences the approve-builds prompt without running the script. */
+  it('writes each entry with its own value', () => {
+    const yaml = buildAllowBuildsYaml();
+
+    expect(yaml).toContain('  better-sqlite3: true');
+    expect(yaml).toContain('  tesseract.js: false');
+  });
+
   /** A leading `@` starts a reserved indicator in YAML, so a scoped name has to be quoted to parse. */
   it('quotes scoped names', () => {
-    expect(buildAllowBuildsYaml(['@scope/native-addon'])).toContain(
-      "  '@scope/native-addon': true",
-    );
+    expect(
+      buildAllowBuildsYaml([{ name: '@scope/native-addon', allowed: true }]),
+    ).toContain("  '@scope/native-addon': true");
     expect(buildAllowBuildsYaml()).toContain('  better-sqlite3: true');
     expect(buildAllowBuildsYaml()).toContain('  oracledb: true');
   });
@@ -78,6 +102,15 @@ describe('buildWorkspaceYaml', () => {
     const yaml = buildWorkspaceYaml();
 
     expect(yaml).toContain('trustLockfile: true');
+  });
+
+  /**
+   * `allowBuilds` decides the packages known when the app is generated. A dependency added later that brings its own
+   * install script would otherwise stop the install with a red error, which is the wrong first impression for a
+   * project that is otherwise fine.
+   */
+  it('reports a skipped install script as a warning rather than an error', () => {
+    expect(buildWorkspaceYaml()).toContain('strictDepBuilds: false');
   });
 
   it('explains each setting it writes', () => {
@@ -117,7 +150,7 @@ describe('ensureAllowBuilds', () => {
 
     const contents = await readWorkspace(directory);
 
-    for (const name of ALLOWED_BUILDS) {
+    for (const name of names()) {
       expect(contents).toContain(name);
     }
   });
@@ -234,7 +267,9 @@ describe('ensureAllowBuilds', () => {
       'allowBuilds:\n  "@scope/native-addon": true\n',
       'utf8',
     );
-    await ensureAllowBuilds(directory, ['@scope/native-addon']);
+    await ensureAllowBuilds(directory, [
+      { name: '@scope/native-addon', allowed: true },
+    ]);
 
     const contents = await readWorkspace(directory);
 

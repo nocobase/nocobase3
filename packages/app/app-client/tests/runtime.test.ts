@@ -12,6 +12,7 @@ import { createAppClientConfig, defineAppClientConfig } from '../src/config.js';
 import {
   defineAppRoutes,
   defineClientPlugin,
+  defineClientPlugins,
   defineClientReactProviders,
 } from '../src/plugins.js';
 import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
@@ -28,7 +29,7 @@ describe('app runtime', () => {
       packageName: '@example/app',
       config: createAppClientConfig,
       serviceProviders,
-      plugins: [],
+      plugins: defineClientPlugins([]),
       routeComponentOverrides: [],
       sourceExtensions: [],
     });
@@ -36,6 +37,10 @@ describe('app runtime', () => {
     expect(serviceProviders).not.toHaveBeenCalled();
     expect(Object.isFrozen(definition)).toBe(true);
     expect(Object.isFrozen(definition.plugins)).toBe(true);
+    expect(Object.isFrozen(definition.plugins.plugins)).toBe(true);
+    expect(Object.isFrozen(definition.plugins.routeComponentOverrides)).toBe(
+      true,
+    );
     expect(Object.isFrozen(definition.routeComponentOverrides)).toBe(true);
     expect(Object.isFrozen(definition.sourceExtensions)).toBe(true);
   });
@@ -45,6 +50,8 @@ describe('app runtime', () => {
       public readonly name: string = '@example/plugin/provider';
     }
     const Page: ComponentType = () => null;
+    const OverridePage: ComponentType = () => null;
+    const ApplicationOverridePage: ComponentType = () => null;
     const plugin = defineClientPlugin({
       packageName: '@example/plugin',
       config: defineAppClientConfig({
@@ -55,6 +62,12 @@ describe('app runtime', () => {
       reactProviders: defineClientReactProviders([
         { name: 'feature', component: Wrapper },
       ]),
+      routeComponentOverrides: () => [
+        {
+          routeId: '@example/app:home',
+          componentLoader: async () => ({ default: OverridePage }),
+        },
+      ],
     });
     const definition = defineAppRuntime({
       packageName: '@example/app',
@@ -66,8 +79,19 @@ describe('app runtime', () => {
           path: '/',
           componentLoader: async () => ({ default: Page }),
         },
+        {
+          name: 'about',
+          path: '/about',
+          componentLoader: async () => ({ default: Page }),
+        },
       ]),
-      plugins: [plugin()],
+      plugins: defineClientPlugins([plugin()]),
+      routeComponentOverrides: [
+        {
+          routeId: '@example/app:about',
+          componentLoader: async () => ({ default: ApplicationOverridePage }),
+        },
+      ],
     });
 
     const runtime = await resolveAppRuntime(definition, {
@@ -92,6 +116,12 @@ describe('app runtime', () => {
       path: '/',
       source: 'application',
     });
+    await expect(runtime.routes[0].componentLoader()).resolves.toEqual({
+      default: OverridePage,
+    });
+    await expect(runtime.routes[1].componentLoader()).resolves.toEqual({
+      default: ApplicationOverridePage,
+    });
     expect(Object.isFrozen(runtime)).toBe(true);
   });
 
@@ -101,7 +131,7 @@ describe('app runtime', () => {
       defineAppRuntime({
         packageName: '@example/app',
         config: createAppClientConfig,
-        plugins: [],
+        plugins: defineClientPlugins([]),
         validate,
       }),
     );

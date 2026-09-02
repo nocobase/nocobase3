@@ -17,14 +17,14 @@ describe('run inspector and safe logs', () => {
       downstreamKey: null,
       type: 'run',
       config: {
-        script: './server/run.ts',
+        module: './server/run',
         args: { password: 'secret', count: 1 },
       },
       options: {},
     } satisfies WorkflowNode;
     const projection = projectRunNodeInspector(node, 'a'.repeat(64));
     expect(projection).toMatchObject({
-      script: './server/run.ts',
+      module: './server/run',
       artifactShortId: 'aaaaaaaaaaaa',
       sourceManaged: true,
       argsKeys: ['count', 'password'],
@@ -32,7 +32,7 @@ describe('run inspector and safe logs', () => {
     expect(JSON.stringify(projection)).not.toContain('secret');
     expect(JSON.stringify(projection)).not.toContain('entryDigest');
   });
-  it('logs fixed identifiers, Artifact digest, script, timing and status only', () => {
+  it('logs fixed identifiers, Artifact digest, module, timing and status only', () => {
     const info = vi.fn();
     const logger: WorkflowLogger = {
       debug: vi.fn(),
@@ -46,7 +46,7 @@ describe('run inspector and safe logs', () => {
       nodeId: 3,
       nodeKey: 'run',
       artifactDigest: 'a',
-      script: './run.ts',
+      module: './run',
       durationMs: 5,
       status: 'success' as const,
     };
