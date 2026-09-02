@@ -3,6 +3,7 @@ export * from './types/index.js';
 export * from './repository/index.js';
 export * from './create-ai-manager.js';
 export * from './manager/index.js';
+export * from './file-storage/index.js';
 export * from './loader/index.js';
 export * from './features/index.js';
 

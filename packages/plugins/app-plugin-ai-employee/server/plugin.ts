@@ -5,9 +5,11 @@ import {
 
 import serviceProviders from './providers/index.js';
 import routes from './routes/plugin.js';
+import { aiConfig } from './config.js';
 
 const aiEmployeePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-ai-employee',
+  config: aiConfig,
   serviceProviders,
   routes,
   database: {

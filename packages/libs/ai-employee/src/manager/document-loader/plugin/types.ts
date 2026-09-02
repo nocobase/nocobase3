@@ -32,7 +32,8 @@ export type ParseableFile = {
   filename: string;
   extname?: string;
   mimetype?: string;
-  storageId?: number;
+  disk?: string;
+  path?: string;
   meta?: Record<string, any>;
   size?: number;
   source?: {

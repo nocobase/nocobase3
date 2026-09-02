@@ -88,7 +88,7 @@ ID required. Returns document plus `accessAbility:"readWrite"`; 404 if absent.
 Two forms:
 
 1. `multipart/form-data`: `file` required; `knowledgeBaseKey` required in query or form. Optional repeated `zipFilenameEncoding[]` is accepted by the client but not consumed by current server extraction. The route passes file name, MIME, bytes, and authenticated actor ID.
-2. `application/json`: query or body `knowledgeBaseKey`; flat finalized-file fields such as `title`, `filename`, `extname`, `path`, `size`, `url`, `mimetype`, `storageId`, `meta`, and optional key. This is the presigned-upload finalize contract.
+2. `application/json`: query or body `knowledgeBaseKey`; flat finalized-file fields such as `title`, `filename`, `extname`, `path`, `size`, `url`, `mimetype`, `disk`, `meta`, and optional key. This is the presigned-upload finalize contract.
 
 Only LOCAL direct upload is explicitly enforced. Current JSON finalize does not repeat that LOCAL check. Supported lowercase extensions after normalization: `.doc`, `.docx`, `.md`, `.pdf`, `.txt`, `.zip`. Direct ZIP extracts supported non-ZIP entries and returns only the first created document. Both paths create PENDING documents and dispatch queue work before returning. Current response is a document; compatible clients also support `{taskId,message?}`.
 

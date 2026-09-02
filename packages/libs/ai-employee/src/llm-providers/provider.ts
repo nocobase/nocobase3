@@ -22,7 +22,8 @@ import { encodeReadableStream } from '../utils/streams.js';
 import { parseResponseMessage, stripToolCallTags } from '../utils/messages.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
-import type { FileManager } from '../manager/file/index.js';
+import type { FileStorage } from '../file-storage/index.js';
+import { toFileMetadata } from '../file-storage/index.js';
 import type { Caching } from '@nocobase/caching';
 import '@langchain/core/utils/stream';
 import { LLMResult } from '@langchain/core/outputs';
@@ -80,7 +81,7 @@ export interface AttachmentDocumentLoader {
 }
 
 export interface AttachmentParseRuntime {
-  fileManager: FileManager;
+  fileStorage: FileStorage<any, any>;
   documentLoader: AttachmentDocumentLoader;
   caching?: Caching;
   getHeader?(name: string): string | undefined;
@@ -309,14 +310,7 @@ export abstract class LLMProvider {
     attachment: AIFileAttachment,
     runtime: AttachmentParseRuntime,
   ): Promise<ParsedAttachmentResult> {
-    const dataSourceKey = attachment?.source?.dataSourceKey;
-    const isExternalAttachment = Boolean(
-      dataSourceKey && dataSourceKey !== 'main',
-    );
-    if (
-      (!attachment?.storageId && !isExternalAttachment) ||
-      !attachment?.filename
-    ) {
+    if (!attachment?.disk || !attachment.path || !attachment?.filename) {
       return {
         placement: 'system',
         content:
@@ -357,22 +351,8 @@ export abstract class LLMProvider {
     attachment: AIFileAttachment,
     runtime: AttachmentParseRuntime,
   ): Promise<string> {
-    const referer = runtime.getHeader?.('referer') || '';
-    const userAgent = runtime.getHeader?.('user-agent') || '';
-    const options =
-      referer || userAgent
-        ? {
-            requestOptions: {
-              headers: {
-                Referer: referer,
-                'User-Agent': userAgent,
-              },
-            },
-          }
-        : undefined;
-    const { stream } = await runtime.fileManager.getFileStream(
-      attachment,
-      options,
+    const { stream } = await runtime.fileStorage.openMetadata(
+      toFileMetadata(attachment),
     );
     return await encodeReadableStream(stream);
   }

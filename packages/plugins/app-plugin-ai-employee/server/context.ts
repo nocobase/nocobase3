@@ -3,13 +3,15 @@ import type {
   AIManager,
   AIMessageInput,
   DocumentLoaders,
-  FileManager,
+  FileStorage,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { Caching } from '@nocobase/caching';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { WorkContextHandler } from './agent/ai-employee/work-context/index.js';
 import type { KnowledgeBaseManager } from './agent/ai-employee/ai-knowledge-base.js';
+import type { AIFileEntity } from './repository/ai-file.js';
+import type { AIFileMetadataCreateContext } from './file-storage/ai-file-metadata-repository.js';
 
 export type CurrentUser = {
   id: string | number;
@@ -52,7 +54,7 @@ export interface Context<TRepositories = any> {
   repositories: TRepositories;
   logger: any;
   caching: Caching;
-  fileManager: FileManager;
+  fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
   snowflake: IdGeneratorService;
   currentUser: CurrentUser;
   employeeService: any;

@@ -86,7 +86,7 @@ function newKnowledgeBase(
     description: '',
     knowledgeBaseType,
     ...(knowledgeBaseType === 'LOCAL'
-      ? { storageId: '0', segmentOptions: defaultSegmentOptions }
+      ? { segmentOptions: defaultSegmentOptions }
       : {}),
     enabled: true,
   };
@@ -99,7 +99,7 @@ function editKnowledgeBase(record: KnowledgeBase): KnowledgeBaseMutation {
     description: record.description ?? '',
     knowledgeBaseType: record.knowledgeBaseType,
     enabled: record.enabled,
-    storageId: record.storageId,
+    disk: record.disk,
     vectorDatabaseKey: record.vectorDatabaseKey ?? record.vectorStoreConfigKey,
     vectorStoreConfigKey: record.vectorStoreConfigKey,
     llmService: record.llmService,
@@ -228,7 +228,14 @@ export function KnowledgeBaseEditorSheet({
     setLoadingOptions(true);
     void service
       .listKnowledgeBaseManagementOptions()
-      .then(setOptions)
+      .then((loaded) => {
+        setOptions(loaded);
+        setValues((current) =>
+          current.knowledgeBaseType === 'LOCAL' && !current.disk
+            ? { ...current, disk: loaded.storages[0]?.value }
+            : current,
+        );
+      })
       .catch((cause: unknown) =>
         setError(cause instanceof Error ? cause.message : String(cause)),
       )
@@ -262,6 +269,9 @@ export function KnowledgeBaseEditorSheet({
         if (!values.vectorDatabaseKey)
           throw new Error(t('Select a vector database.'));
         if (!values.llmService) throw new Error(t('Select an LLM service.'));
+        if (values.knowledgeBaseType === 'LOCAL' && !values.disk) {
+          throw new Error(t('Select a file storage disk.'));
+        }
       } else if (!values.vectorStoreProvider) {
         throw new Error(t('Select an external vector-store provider.'));
       }
@@ -272,7 +282,7 @@ export function KnowledgeBaseEditorSheet({
         'knowledgeBaseType',
         'enabled',
       ]);
-      if (values.knowledgeBaseType === 'LOCAL') visible.add('storageId');
+      if (values.knowledgeBaseType === 'LOCAL') visible.add('disk');
       if (values.knowledgeBaseType !== 'EXTERNAL') {
         visible.add('vectorDatabaseKey');
         visible.add('llmService');
@@ -309,7 +319,6 @@ export function KnowledgeBaseEditorSheet({
       const payload = normalizeKnowledgeBaseMutation(
         {
           ...values,
-          ...(local ? { storageId: values.storageId ?? '0' } : {}),
           ...(external ? { vectorStoreProps: parsedExternalProps } : {}),
         },
         record,
@@ -392,11 +401,20 @@ export function KnowledgeBaseEditorSheet({
             />
           </div>
           {local ? (
-            <input
-              type='hidden'
-              name='storageId'
-              value={values.storageId ?? '0'}
-            />
+            <div className='grid gap-2'>
+              <Label>{t('File storage')}</Label>
+              <OptionSelect
+                value={values.disk}
+                options={options.storages}
+                placeholder={
+                  loadingOptions ? t('Loading…') : t('Select file storage')
+                }
+                disabled={loadingOptions || !!record}
+                onChange={(disk) =>
+                  setValues((current) => ({ ...current, disk }))
+                }
+              />
+            </div>
           ) : null}
           {!external ? (
             <>
