@@ -1,8 +1,4 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import {
-  authorizationToken,
-  type AuthorizationEnv,
-} from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
@@ -11,15 +7,11 @@ import {
 import { databaseManagerToken } from '@nocobase/db';
 import { Hono, type Context, type Env, type Input } from 'hono';
 
-import {
-  FILE_INVENTORY_RESOURCE,
-  type FileInventoryErrorResponse,
-  type FileInventorySourcesResponse,
+import type {
+  FileInventoryErrorResponse,
+  FileInventorySourcesResponse,
 } from '../../shared/inventory.js';
-import {
-  listDatabaseFileSourceItems,
-  summarizeDatabaseFileSource,
-} from '../file-inventory-query.js';
+import { listDatabaseFileSourceItems } from '../file-inventory-query.js';
 import {
   findRegisteredDatabaseFileSource,
   listRegisteredDatabaseFileSources,
@@ -32,41 +24,22 @@ const MAX_PAGE_SIZE = 100;
 export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes((app) => {
     const authentication = app.container.resolve(authenticationToken);
-    const authorization = app.container.resolve(authorizationToken);
     const database = app.container.has(databaseManagerToken)
       ? app.container.resolve(databaseManagerToken)
       : undefined;
     const router = new Hono();
-    const routes = new Hono<AuthorizationEnv>();
+    const routes = new Hono();
 
-    routes.use('*', authentication.required(), authorization.middleware());
-    routes.use('*', async (context, next) => {
-      const allowed = await context.get('authz').can({
-        resource: { type: 'page', id: FILE_INVENTORY_RESOURCE },
-        action: 'access',
-      });
-      if (!allowed) {
-        return inventoryError(
-          context,
-          'FORBIDDEN',
-          'errors.inventoryAccessRequired',
-          'File inventory access is required.',
-          403,
-        );
-      }
-      await next();
-    });
+    routes.use('*', authentication.required());
 
     routes.get('/sources', async (context) => {
       if (!database) {
         const response: FileInventorySourcesResponse = { data: [] };
         return context.json(response);
       }
-      const sources = listRegisteredDatabaseFileSources(database);
-      const data = await Promise.all(
-        sources.map((source) => summarizeDatabaseFileSource(database, source)),
-      );
-      const response: FileInventorySourcesResponse = { data };
+      const response: FileInventorySourcesResponse = {
+        data: listRegisteredDatabaseFileSources(database),
+      };
       return context.json(response);
     });
 
@@ -161,7 +134,7 @@ function inventoryError<
   code: string,
   key: string,
   defaultValue: string,
-  status: 400 | 403 | 404 | 503,
+  status: 400 | 404 | 503,
 ): Response {
   const response: FileInventoryErrorResponse = {
     error: {

@@ -1,12 +1,6 @@
-export const FILE_INVENTORY_RESOURCE: string = 'file.inventory';
-
-export type FileInventorySourceStatus = 'available' | 'unavailable';
-
-export interface FileInventorySourceSummary {
+export interface FileInventorySource {
   readonly id: string;
   readonly table: string;
-  readonly count: number | null;
-  readonly status: FileInventorySourceStatus;
 }
 
 export interface FileInventoryItem {
@@ -28,7 +22,7 @@ export interface FileInventoryErrorResponse {
 }
 
 export interface FileInventorySourcesResponse {
-  readonly data: readonly FileInventorySourceSummary[];
+  readonly data: readonly FileInventorySource[];
 }
 
 export interface FileInventoryFilesResponse {
@@ -36,7 +30,6 @@ export interface FileInventoryFilesResponse {
   readonly meta: {
     readonly page: number;
     readonly pageSize: number;
-    readonly total: number;
-    readonly totalPages: number;
+    readonly hasNextPage: boolean;
   };
 }

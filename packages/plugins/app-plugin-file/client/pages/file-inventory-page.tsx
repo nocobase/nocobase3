@@ -19,8 +19,8 @@ import {
 import type {
   FileInventoryFilesResponse,
   FileInventoryItem,
+  FileInventorySource,
   FileInventorySourcesResponse,
-  FileInventorySourceSummary,
 } from '../../shared/inventory.js';
 
 const PAGE_SIZE = 25;
@@ -28,17 +28,14 @@ const PAGE_SIZE = 25;
 export default function FileInventoryPage(): ReactElement {
   const { t } = useTranslation();
   const appClient = useService(appApiClientToken);
-  const [sources, setSources] = useState<readonly FileInventorySourceSummary[]>(
-    [],
-  );
+  const [sources, setSources] = useState<readonly FileInventorySource[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [page, setPage] = useState(1);
   const [files, setFiles] = useState<readonly FileInventoryItem[]>([]);
   const [fileMeta, setFileMeta] = useState<FileInventoryFilesResponse['meta']>({
     page: 1,
     pageSize: PAGE_SIZE,
-    total: 0,
-    totalPages: 0,
+    hasNextPage: false,
   });
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -52,15 +49,6 @@ export default function FileInventoryPage(): ReactElement {
     [selectedId, sources],
   );
   const selectedSourceId = selectedSource?.id;
-  const selectedSourceStatus = selectedSource?.status;
-  const totalFiles = useMemo(
-    () =>
-      sources.reduce(
-        (total, source) => total + (source.count === null ? 0 : source.count),
-        0,
-      ),
-    [sources],
-  );
 
   const refresh = (): void => {
     setSourcesLoading(true);
@@ -97,10 +85,9 @@ export default function FileInventoryPage(): ReactElement {
           setFileMeta({
             page: 1,
             pageSize: PAGE_SIZE,
-            total: 0,
-            totalPages: 0,
+            hasNextPage: false,
           });
-          setFilesLoading(nextSource?.status === 'available');
+          setFilesLoading(Boolean(nextSource));
           setFilesError(undefined);
         }
         setSourcesError(undefined);
@@ -124,7 +111,7 @@ export default function FileInventoryPage(): ReactElement {
   }, [loadSources, revision, t]);
 
   useEffect(() => {
-    if (!selectedSourceId || selectedSourceStatus !== 'available') return;
+    if (!selectedSourceId) return;
     const controller = new AbortController();
     const requestSourceId = selectedSourceId;
     const isCurrentRequest = (): boolean =>
@@ -141,9 +128,8 @@ export default function FileInventoryPage(): ReactElement {
       )
       .then((response) => {
         if (!isCurrentRequest()) return;
-        const lastPage = Math.max(response.meta.totalPages, 1);
-        if (page > lastPage) {
-          setPage(lastPage);
+        if (page > 1 && response.data.length === 0) {
+          setPage((current) => Math.max(1, current - 1));
           return;
         }
         setFiles(response.data);
@@ -167,7 +153,7 @@ export default function FileInventoryPage(): ReactElement {
         if (isCurrentRequest()) setFilesLoading(false);
       });
     return () => controller.abort();
-  }, [appClient, page, revision, selectedSourceId, selectedSourceStatus, t]);
+  }, [appClient, page, revision, selectedSourceId, t]);
 
   const selectSource = (sourceId: string): void => {
     if (sourceId === selectedIdRef.current) return;
@@ -175,7 +161,7 @@ export default function FileInventoryPage(): ReactElement {
     setSelectedId(sourceId);
     setPage(1);
     setFiles([]);
-    setFileMeta({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 0 });
+    setFileMeta({ page: 1, pageSize: PAGE_SIZE, hasNextPage: false });
   };
 
   const changePage = (nextPage: number): void => {
@@ -208,30 +194,6 @@ export default function FileInventoryPage(): ReactElement {
       </header>
 
       <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
-        <div className='flex flex-wrap gap-x-8 gap-y-2 border-b pb-5'>
-          <Metric
-            label={t('inventory.metrics.sources', {
-              defaultValue: 'File sources',
-            })}
-            value={sources.length}
-          />
-          <Metric
-            label={t('inventory.metrics.records', {
-              defaultValue: 'File records',
-            })}
-            value={totalFiles}
-          />
-          <Metric
-            label={t('inventory.metrics.unavailable', {
-              defaultValue: 'Unavailable',
-            })}
-            value={
-              sources.filter((source) => source.status === 'unavailable').length
-            }
-            warning
-          />
-        </div>
-
         {sourcesError ? (
           <ErrorNotice
             title={t('inventory.errors.sourcesUnavailable', {
@@ -289,19 +251,7 @@ export default function FileInventoryPage(): ReactElement {
                   </h2>
                 </div>
 
-                {selectedSource.status === 'unavailable' ? (
-                  <div className='p-5'>
-                    <ErrorNotice
-                      title={t('inventory.sources.unavailable', {
-                        defaultValue: 'Source unavailable',
-                      })}
-                      message={t('inventory.errors.sourceUnavailable', {
-                        defaultValue:
-                          'The registered file table cannot be read.',
-                      })}
-                    />
-                  </div>
-                ) : filesError ? (
+                {filesError ? (
                   <div className='p-5'>
                     <ErrorNotice
                       title={t('inventory.files.unavailable', {
@@ -314,13 +264,11 @@ export default function FileInventoryPage(): ReactElement {
                   <FilesTable files={files} loading={filesLoading} />
                 )}
 
-                {selectedSource.status === 'available' ? (
-                  <Pagination
-                    meta={fileMeta}
-                    loading={filesLoading}
-                    onPageChange={changePage}
-                  />
-                ) : null}
+                <Pagination
+                  meta={fileMeta}
+                  loading={filesLoading}
+                  onPageChange={changePage}
+                />
               </>
             ) : (
               <div className='grid min-h-[32rem] place-items-center px-6 text-center text-sm text-muted-foreground'>
@@ -336,37 +284,15 @@ export default function FileInventoryPage(): ReactElement {
   );
 }
 
-function Metric({
-  label,
-  value,
-  warning = false,
-}: {
-  readonly label: string;
-  readonly value: number;
-  readonly warning?: boolean;
-}): ReactElement {
-  return (
-    <div className='min-w-28'>
-      <div
-        className={`text-2xl font-semibold tabular-nums ${warning && value > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}
-      >
-        {value.toLocaleString()}
-      </div>
-      <div className='text-xs text-muted-foreground'>{label}</div>
-    </div>
-  );
-}
-
 function SourceButton({
   source,
   selected,
   onSelect,
 }: {
-  readonly source: FileInventorySourceSummary;
+  readonly source: FileInventorySource;
   readonly selected: boolean;
   readonly onSelect: (sourceId: string) => void;
 }): ReactElement {
-  const { t } = useTranslation();
   return (
     <button
       className={`flex min-h-14 w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
@@ -376,30 +302,13 @@ function SourceButton({
       onClick={() => onSelect(source.id)}
       type='button'
     >
-      {source.status === 'unavailable' ? (
-        <AlertTriangle
-          aria-hidden='true'
-          className='size-4 shrink-0 text-amber-600'
-        />
-      ) : (
-        <Database
-          aria-hidden='true'
-          className='size-4 shrink-0 text-muted-foreground'
-        />
-      )}
+      <Database
+        aria-hidden='true'
+        className='size-4 shrink-0 text-muted-foreground'
+      />
       <span className='min-w-0 flex-1'>
         <span className='block truncate text-sm' title={source.table}>
           {source.table}
-        </span>
-        <span className='block truncate text-xs text-muted-foreground'>
-          {source.status === 'available'
-            ? t('inventory.sources.recordCount', {
-                defaultValue: '{{count}} files',
-                count: source.count ?? 0,
-              })
-            : t('inventory.sources.unavailable', {
-                defaultValue: 'Source unavailable',
-              })}
         </span>
       </span>
     </button>
@@ -516,19 +425,12 @@ function Pagination({
 }): ReactElement {
   const { t } = useTranslation();
   return (
-    <div className='flex min-h-14 items-center justify-between gap-4 border-t px-4 py-2'>
-      <span className='text-xs text-muted-foreground'>
-        {t('inventory.pagination.total', {
-          defaultValue: '{{count}} file records',
-          count: meta.total,
-        })}
-      </span>
+    <div className='flex min-h-14 items-center justify-end gap-4 border-t px-4 py-2'>
       <div className='flex items-center gap-2'>
         <span className='min-w-20 text-center text-xs tabular-nums text-muted-foreground'>
           {t('inventory.pagination.page', {
-            defaultValue: '{{page}} / {{totalPages}}',
+            defaultValue: 'Page {{page}}',
             page: meta.page,
-            totalPages: Math.max(meta.totalPages, 1),
           })}
         </span>
         <button
@@ -550,7 +452,7 @@ function Pagination({
             defaultValue: 'Next page',
           })}
           className='grid size-8 place-items-center rounded-md border hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
-          disabled={loading || meta.page >= meta.totalPages}
+          disabled={loading || !meta.hasNextPage}
           onClick={() => onPageChange(meta.page + 1)}
           title={t('inventory.pagination.next', {
             defaultValue: 'Next page',

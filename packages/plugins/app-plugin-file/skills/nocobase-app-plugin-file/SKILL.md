@@ -70,10 +70,9 @@ or application pages. Never depend on `/file-demo`, `/api/attachments`,
   `FileRouteAction` to the App's existing business policy and authorize the
   parent record before allowing file operations.
 - Every standard `database + table` file Route is automatically visible in the
-  File plugin's Settings inventory. The inventory has its own `file.inventory`
-  page access permission and intentionally reads the whole registered table
-  without executing the business Route's scope resolver. Custom `FileStore`
-  routes are not included.
+  authenticated, read-only File Settings inventory. The inventory reads the
+  whole registered table without executing the business Route's scope resolver.
+  Custom `FileStore` routes are not included.
 - `FileUploadField` removes only local controlled state by default. Use
   `removeOnDelete` for immediate Server deletion or let the App workflow call
   `client.remove()` deliberately.

@@ -1710,9 +1710,6 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:*
         version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-authorization':
-        specifier: workspace:*
-        version: link:../app-plugin-authorization
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server

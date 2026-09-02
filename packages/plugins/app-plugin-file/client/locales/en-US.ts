@@ -43,17 +43,10 @@ const enUS = {
     nav: 'Files',
     title: 'Files',
     refresh: 'Refresh',
-    metrics: {
-      sources: 'File sources',
-      records: 'File records',
-      unavailable: 'Unavailable',
-    },
     sources: {
       title: 'Sources',
       loading: 'Loading sources...',
       empty: 'No database file sources are registered.',
-      recordCount: '{{count}} files',
-      unavailable: 'Source unavailable',
     },
     files: {
       loading: 'Loading files...',
@@ -70,15 +63,13 @@ const enUS = {
       },
     },
     pagination: {
-      total: '{{count}} file records',
-      page: '{{page}} / {{totalPages}}',
+      page: 'Page {{page}}',
       previous: 'Previous page',
       next: 'Next page',
     },
     errors: {
       loadSources: 'Unable to load file sources.',
       loadFiles: 'Unable to load files from this source.',
-      sourceUnavailable: 'The registered file table cannot be read.',
       sourcesUnavailable: 'File sources unavailable',
     },
   },

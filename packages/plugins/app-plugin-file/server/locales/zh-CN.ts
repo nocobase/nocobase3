@@ -13,7 +13,6 @@ const zhCN: FileServerResource = {
     fileSizeInvalid: '文件大小必须是非负安全整数。',
     fileTypeNotAllowed: '不允许上传此文件类型。',
     inputInvalid: '文件输入无效。',
-    inventoryAccessRequired: '需要文件清单访问权限。',
     inventoryPaginationInvalid: '文件清单分页参数无效。',
     inventorySourceNotFound: '未找到已注册的文件来源。',
     inventorySourceUnavailable: '已注册的文件数据表不可用。',

@@ -1,10 +1,7 @@
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  listDatabaseFileSourceItems,
-  summarizeDatabaseFileSource,
-} from '../server/file-inventory-query.js';
+import { listDatabaseFileSourceItems } from '../server/file-inventory-query.js';
 import { serializeDatabaseDate } from '../server/database-file-record.js';
 import type { RegisteredDatabaseFileSource } from '../server/file-source-registry.js';
 
@@ -58,20 +55,22 @@ describe('file inventory query', () => {
     await database.destroy();
   });
 
-  it('counts and paginates only the standard client-safe fields', async () => {
-    await expect(
-      summarizeDatabaseFileSource(database, source()),
-    ).resolves.toMatchObject({ count: 3, status: 'available' });
+  it('paginates only the standard client-safe fields', async () => {
+    const firstPage = await listDatabaseFileSourceItems(database, source(), {
+      page: 1,
+      pageSize: 2,
+    });
     const result = await listDatabaseFileSourceItems(database, source(), {
       page: 2,
       pageSize: 2,
     });
 
+    expect(firstPage.meta.hasNextPage).toBe(true);
+    expect(firstPage.data).toHaveLength(2);
     expect(result.meta).toEqual({
       page: 2,
       pageSize: 2,
-      total: 3,
-      totalPages: 2,
+      hasNextPage: false,
     });
     expect(result.data).toEqual([
       expect.objectContaining({
@@ -83,27 +82,6 @@ describe('file inventory query', () => {
     ]);
     expect(result.data[0]).not.toHaveProperty('key');
     expect(result.data[0]).not.toHaveProperty('businessField');
-  });
-
-  it('marks one missing source unavailable without throwing', async () => {
-    const error = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
-    const summary = await summarizeDatabaseFileSource(database, {
-      ...source(),
-      id: 'missingFiles',
-      table: 'missingFiles',
-    });
-    expect(summary).toMatchObject({
-      count: null,
-      status: 'unavailable',
-    });
-    expect(summary).not.toHaveProperty('error');
-    expect(error).toHaveBeenCalledWith(
-      'File inventory source summary failed.',
-      expect.objectContaining({ table: 'missingFiles' }),
-    );
-    error.mockRestore();
   });
 
   it('preserves database date strings without timezone reinterpretation', () => {

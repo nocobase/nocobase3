@@ -58,10 +58,10 @@ describe('file inventory page', () => {
           : sourcesResponse('beta');
       }
       if (path.includes('/alpha/files?page=1')) {
-        return filesResponse('alpha-page-1.pdf', 1, 2);
+        return filesResponse('alpha-page-1.pdf', 1, true);
       }
       if (path.includes('/alpha/files?page=2')) {
-        return filesResponse('alpha-page-2.pdf', 2, 2);
+        return filesResponse('alpha-page-2.pdf', 2);
       }
       if (path.includes('/beta/files?page=1')) {
         return filesResponse('beta-page-1.pdf');
@@ -88,36 +88,14 @@ describe('file inventory page', () => {
     ).toBe(false);
   });
 
-  it('renders unavailable-source copy from the client locale', async () => {
-    request.mockResolvedValue({
-      data: [
-        {
-          id: 'broken',
-          table: 'broken',
-          count: null,
-          status: 'unavailable',
-        },
-      ],
-    } satisfies FileInventorySourcesResponse);
-    await renderPage('zh-CN');
-
-    expect(
-      await screen.findByText('无法读取已注册的文件数据表。'),
-    ).toBeVisible();
-    expect(
-      screen.queryByText('The registered file table cannot be read.'),
-    ).not.toBeInTheDocument();
-    expect(request).toHaveBeenCalledTimes(1);
-  });
-
   it('ignores a stale file response after selecting another source', async () => {
     const alpha = deferred<FileInventoryFilesResponse>();
     request.mockImplementation(async (path: string) => {
       if (path === 'files/inventory/sources') {
         return {
           data: [
-            { id: 'alpha', table: 'alpha', count: 1, status: 'available' },
-            { id: 'beta', table: 'beta', count: 1, status: 'available' },
+            { id: 'alpha', table: 'alpha' },
+            { id: 'beta', table: 'beta' },
           ],
         } satisfies FileInventorySourcesResponse;
       }
@@ -142,12 +120,12 @@ describe('file inventory page', () => {
     request.mockImplementation(async (path: string) => {
       if (path === 'files/inventory/sources') return sourcesResponse('alpha');
       if (path.includes('/alpha/files?page=2')) {
-        return { data: [], meta: pageMeta(2, 1, 1) };
+        return { data: [], meta: pageMeta(2) };
       }
       if (path.includes('/alpha/files?page=1')) {
         firstPageLoads += 1;
         return firstPageLoads === 1
-          ? filesResponse('before-shrink.pdf', 1, 2)
+          ? filesResponse('before-shrink.pdf', 1, true)
           : filesResponse('after-shrink.pdf');
       }
       throw new Error(`Unexpected request: ${path}`);
@@ -159,7 +137,7 @@ describe('file inventory page', () => {
     await user.click(screen.getByRole('button', { name: 'Next page' }));
 
     expect(await screen.findByText('after-shrink.pdf')).toBeVisible();
-    expect(screen.getByText('1 / 1')).toBeVisible();
+    expect(screen.getByText('Page 1')).toBeVisible();
     expect(firstPageLoads).toBe(2);
   });
 });
@@ -178,14 +156,14 @@ async function renderPage(locale: 'en-US' | 'zh-CN' = 'en-US'): Promise<void> {
 
 function sourcesResponse(id: string): FileInventorySourcesResponse {
   return {
-    data: [{ id, table: id, count: 1, status: 'available' }],
+    data: [{ id, table: id }],
   };
 }
 
 function filesResponse(
   filename: string,
   page: number = 1,
-  totalPages: number = 1,
+  hasNextPage: boolean = false,
 ): FileInventoryFilesResponse {
   return {
     data: [
@@ -200,16 +178,15 @@ function filesResponse(
         updatedAt: '2026-09-02T01:00:00.000Z',
       },
     ],
-    meta: pageMeta(page, totalPages, totalPages),
+    meta: pageMeta(page, hasNextPage),
   };
 }
 
 function pageMeta(
   page: number,
-  total: number,
-  totalPages: number,
+  hasNextPage: boolean = false,
 ): FileInventoryFilesResponse['meta'] {
-  return { page, pageSize: 25, total, totalPages };
+  return { page, pageSize: 25, hasNextPage };
 }
 
 function deferred<T>(): {

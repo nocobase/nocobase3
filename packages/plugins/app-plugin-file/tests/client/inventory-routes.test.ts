@@ -11,7 +11,6 @@ describe('file inventory client routes', () => {
           name: 'files',
           path: '/files',
           navigation: { title: 'inventory.nav' },
-          access: { resource: 'file.inventory', action: 'access' },
         },
       ],
     });

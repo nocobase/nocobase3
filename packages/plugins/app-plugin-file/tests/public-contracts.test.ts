@@ -71,7 +71,6 @@ describe('file plugin public contracts', () => {
             {
               name: 'files',
               path: '/files',
-              access: { resource: 'file.inventory', action: 'access' },
             },
           ],
         },
