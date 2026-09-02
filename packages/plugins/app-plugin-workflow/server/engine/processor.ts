@@ -714,6 +714,11 @@ export default class Processor {
         await this.exit(true);
         return undefined;
       }
+      if (result.terminated === true && !isTerminalNodeStatus(result.status)) {
+        throw new Error(
+          `Instruction "${node.type}" requested workflow termination with non-terminal status ${result.status}`,
+        );
+      }
     } catch (error) {
       this.logger.error(
         `Instruction "${node.type}" failed for node "${node.key}"`,
@@ -739,6 +744,11 @@ export default class Processor {
 
     if (this.abortSignal.aborted) {
       await this.exit(NODE_RUN_STATUS.ABORTED, savedNodeRun.result);
+      return savedNodeRun;
+    }
+
+    if (result.terminated === true) {
+      await this.exit(savedNodeRun.status, savedNodeRun.result);
       return savedNodeRun;
     }
 

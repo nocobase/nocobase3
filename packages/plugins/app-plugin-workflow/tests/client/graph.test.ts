@@ -14,6 +14,27 @@ function definition(nodes: WorkflowSourceAst['nodes']): WorkflowSourceAst {
 }
 
 describe('workflow client graph', () => {
+  it('preserves node descriptions for canvas node details', () => {
+    const graph = projectWorkflowGraph(
+      definition([
+        {
+          key: 'notify',
+          title: 'Notify owner',
+          description: 'Send the final result to the record owner.',
+          type: 'run',
+          config: {},
+        },
+      ]),
+    );
+
+    expect(graph.nodes.find((node) => node.id === 'node:notify')).toMatchObject(
+      {
+        title: 'Notify owner',
+        description: 'Send the final result to the record owner.',
+      },
+    );
+  });
+
   it('projects a linear definition with stable boundary IDs', () => {
     const graph = projectWorkflowGraph(
       definition([
@@ -34,7 +55,7 @@ describe('workflow client graph', () => {
     ]);
   });
 
-  it('keeps condition empty branches and connects a common successor', () => {
+  it('projects each empty branch through its own anchor before the common successor', () => {
     const graph = projectWorkflowGraph(
       definition([
         {
@@ -46,12 +67,8 @@ describe('workflow client graph', () => {
         { key: 'after', type: 'run', config: {} },
       ]),
     );
-    expect(graph.nodes.map((node) => node.id)).not.toEqual(
-      expect.arrayContaining([
-        'branch:gate:yes',
-        'branch:gate:no',
-        'merge:gate',
-      ]),
+    expect(graph.nodes.map((node) => node.id)).toEqual(
+      expect.arrayContaining(['branch:gate:no']),
     );
     expect(graph.edges).toEqual(
       expect.arrayContaining([
@@ -63,12 +80,94 @@ describe('workflow client graph', () => {
         }),
         expect.objectContaining({
           source: 'node:gate',
-          target: 'node:after',
+          target: 'branch:gate:no',
           branchKey: 'no',
           label: 'no',
         }),
+        expect.objectContaining({
+          source: 'branch:gate:no',
+          target: 'node:after',
+          kind: 'main',
+        }),
       ]),
     );
+  });
+
+  it('keeps two empty branches visually distinct before they rejoin', () => {
+    const graph = projectWorkflowGraph(
+      definition([
+        {
+          key: 'gate',
+          type: 'condition',
+          config: {},
+          branches: { yes: [], no: [] },
+        },
+        { key: 'after', type: 'run', config: {} },
+      ]),
+    );
+    expect(graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node:gate',
+          target: 'branch:gate:yes',
+          branchKey: 'yes',
+        }),
+        expect.objectContaining({
+          source: 'branch:gate:yes',
+          target: 'node:after',
+        }),
+        expect.objectContaining({
+          source: 'node:gate',
+          target: 'branch:gate:no',
+          branchKey: 'no',
+        }),
+        expect.objectContaining({
+          source: 'branch:gate:no',
+          target: 'node:after',
+        }),
+      ]),
+    );
+  });
+
+  it('projects a terminate instruction as terminal even inside a branch', () => {
+    const graph = projectWorkflowGraph(
+      definition([
+        {
+          key: 'gate',
+          type: 'condition',
+          config: {},
+          branches: {
+            no: [{ key: 'stop', type: 'terminate', config: {} }],
+          },
+        },
+        { key: 'after', type: 'run', config: {} },
+      ]),
+    );
+    expect(graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node:gate',
+          target: 'node:stop',
+          branchKey: 'no',
+        }),
+        expect.objectContaining({ source: 'node:stop', target: 'end' }),
+      ]),
+    );
+    expect(
+      graph.edges.some(
+        (edge) => edge.source === 'node:stop' && edge.target === 'node:after',
+      ),
+    ).toBe(false);
+    expect(graph.nodes.find((node) => node.id === 'node:stop')).toMatchObject({
+      title: 'Terminate',
+      nodeType: 'terminate',
+      kind: 'workflow-node',
+    });
+    expect(graph.nodes.find((node) => node.id === 'end')).toMatchObject({
+      title: 'End',
+      nodeType: null,
+      kind: 'end',
+    });
   });
 
   it('projects nested branches and falls back for unknown nodes', () => {
@@ -143,6 +242,46 @@ describe('workflow client graph', () => {
     });
   });
 
+  it('describes condition branches as fixed left-to-right layout ports', () => {
+    const graph = projectWorkflowGraph(
+      definition([
+        {
+          key: 'gate',
+          type: 'condition',
+          config: {},
+          branches: {
+            yes: [{ key: 'yesTask', type: 'run', config: {} }],
+            no: [{ key: 'noTask', type: 'run', config: {} }],
+          },
+        },
+      ]),
+    );
+    const input = createLayoutInput(graph);
+    expect(input.nodes.find((node) => node.id === 'node:gate')?.ports).toEqual([
+      { id: 'node:gate:input', side: 'NORTH', index: 0 },
+      { id: 'node:gate:branch:no', side: 'SOUTH', index: 1 },
+      { id: 'node:gate:branch:yes', side: 'SOUTH', index: 0 },
+    ]);
+    expect(
+      input.edges.find((edge) => edge.id.includes(':yes:'))?.sourcePort,
+    ).toBe('node:gate:branch:yes');
+    expect(
+      input.edges.find((edge) => edge.id.includes(':no:'))?.sourcePort,
+    ).toBe('node:gate:branch:no');
+    expect(
+      input.edges.every((edge) => edge.targetPort.endsWith(':input')),
+    ).toBe(true);
+    expect(
+      createLayoutInput(graph, 'RIGHT').nodes.find(
+        (node) => node.id === 'node:gate',
+      )?.ports,
+    ).toEqual([
+      { id: 'node:gate:input', side: 'WEST', index: 0 },
+      { id: 'node:gate:branch:no', side: 'EAST', index: 0 },
+      { id: 'node:gate:branch:yes', side: 'EAST', index: 1 },
+    ]);
+  });
+
   it('infers the selected empty condition branch without inventing persisted evidence', () => {
     const graph = projectWorkflowGraph(
       definition([
@@ -177,6 +316,15 @@ describe('workflow client graph', () => {
       (edge) => edge.source === 'node:after' && edge.target === 'end',
     );
     expect(noEdge && overlay.edgeEvidence.get(noEdge.id)).toBe('inferred');
+    const noExitEdge = graph.edges.find(
+      (edge) =>
+        edge.source === 'branch:gate:no' && edge.target === 'node:after',
+    );
+    expect(noExitEdge && overlay.edgeEvidence.get(noExitEdge.id)).toBe(
+      'inferred',
+    );
+    expect(overlay.nodeStatus.get('branch:gate:no')).toBe('resolved');
+    expect(overlay.nodeStatus.get('branch:gate:yes')).toBe('unvisited');
     expect(yesEdge && overlay.traversedEdgeIds.has(yesEdge.id)).toBe(false);
     expect(endEdge && overlay.traversedEdgeIds.has(endEdge.id)).toBe(true);
     expect(overlay.nodeStatus.get('end')).toBe('resolved');

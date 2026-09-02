@@ -479,9 +479,10 @@ describe('validateConditionConfig', () => {
 });
 
 describe('instruction registry', () => {
-  it('exposes condition and run as core instructions', () => {
+  it('exposes the built-in instructions through the core registry', () => {
     expect(coreInstructions.get('condition')).toBe(ConditionInstruction);
     expect(ConditionInstruction.branching).toBe(true);
+    expect(coreInstructions.has('terminate')).toBe(true);
     expect(coreInstructions.get('run')).toBe(RunInstruction);
   });
 

@@ -1,22 +1,38 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
 } from '@xyflow/react';
-import { Flag, GitBranch, Terminal, Zap } from 'lucide-react';
+import {
+  CircleStop,
+  Columns3,
+  Flag,
+  GitBranch,
+  Rows3,
+  Terminal,
+  Zap,
+} from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import {
   applyLayoutResult,
   createLayoutInput,
   projectWorkflowGraph,
+} from '@nocobase/app-plugin-workflow/client';
+import type {
+  WorkflowLayoutDirection,
+  WorkflowLayoutPoint,
 } from '@nocobase/app-plugin-workflow/client';
 import { layoutWithElk } from './graph/elk-layout.js';
 import type { WorkflowCanvasProps, WorkflowNodeRunRecord } from './types.js';
@@ -24,33 +40,66 @@ import './workflow-canvas.css';
 
 interface CanvasNodeData extends Record<string, unknown> {
   title: string;
-  description: string | null;
   nodeType: string | null;
   kind: string;
   status: string;
+  direction: WorkflowLayoutDirection;
   attempts: readonly WorkflowNodeRunRecord[];
   onViewNodeRun?: (nodeRun: WorkflowNodeRunRecord) => void;
   onViewStartInput?: () => void;
 }
-function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>) {
+interface CanvasEdgeData extends Record<string, unknown> {
+  readonly points: readonly WorkflowLayoutPoint[];
+  readonly labelColor: string;
+}
+
+const EMPTY_NODE_RUNS: readonly WorkflowNodeRunRecord[] = [];
+
+function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
+  const vertical = data.direction === 'DOWN';
+  const targetPosition = vertical ? Position.Top : Position.Left;
+  const sourcePosition = vertical ? Position.Bottom : Position.Right;
+  if (data.kind === 'branch-anchor') {
+    return (
+      <div
+        className={`workflow-flow-branch-anchor ${data.status}`}
+        aria-label='Empty branch'
+      >
+        <Handle
+          type='target'
+          position={targetPosition}
+          className='workflow-flow-handle'
+        />
+        <Handle
+          type='source'
+          position={sourcePosition}
+          className='workflow-flow-handle'
+        />
+      </div>
+    );
+  }
   const boundary = data.kind === 'start' || data.kind === 'end';
   const condition = data.nodeType === 'condition';
+  const terminateInstruction = data.nodeType === 'terminate';
+  const instructionClass = data.nodeType ? `instruction-${data.nodeType}` : '';
   const Icon =
     data.kind === 'start'
       ? Zap
       : data.kind === 'end'
         ? Flag
-        : condition
-          ? GitBranch
-          : Terminal;
+        : terminateInstruction
+          ? CircleStop
+          : condition
+            ? GitBranch
+            : Terminal;
   return (
     <div
-      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${data.nodeType ?? ''} ${data.status}`}
+      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${instructionClass} ${data.status}`}
     >
       {data.kind !== 'start' ? (
         <Handle
           type='target'
-          position={Position.Left}
+          position={targetPosition}
           className='workflow-flow-handle'
         />
       ) : null}
@@ -59,29 +108,28 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>) {
       </span>
       <span className='workflow-flow-copy'>
         <strong>{data.title}</strong>
-        {data.description ? <small>{data.description}</small> : null}
       </span>
-      {data.kind === 'end' ? null : condition ? (
+      {data.kind === 'end' || terminateInstruction ? null : condition ? (
         <>
           <Handle
             type='source'
             id='no'
-            position={Position.Right}
-            style={{ top: '35%' }}
+            position={sourcePosition}
+            style={vertical ? { left: '33.333%' } : { top: '33.333%' }}
             className='workflow-flow-handle workflow-flow-branch-handle no'
           />
           <Handle
             type='source'
             id='yes'
-            position={Position.Right}
-            style={{ top: '65%' }}
+            position={sourcePosition}
+            style={vertical ? { left: '66.667%' } : { top: '66.667%' }}
             className='workflow-flow-handle workflow-flow-branch-handle yes'
           />
         </>
       ) : (
         <Handle
           type='source'
-          position={Position.Right}
+          position={sourcePosition}
           className='workflow-flow-handle'
         />
       )}
@@ -90,48 +138,143 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>) {
 }
 const nodeTypes = { workflow: CanvasNode };
 
+function pointAlongPath(points: CanvasEdgeData['points']): {
+  x: number;
+  y: number;
+} {
+  if (points.length === 0) return { x: 0, y: 0 };
+  const lengths = points
+    .slice(1)
+    .map((point, index) =>
+      Math.hypot(point.x - points[index].x, point.y - points[index].y),
+    );
+  const midpoint = lengths.reduce((sum, length) => sum + length, 0) / 2;
+  let traversed = 0;
+  for (let index = 0; index < lengths.length; index += 1) {
+    const next = traversed + lengths[index];
+    if (next >= midpoint) {
+      const ratio =
+        lengths[index] === 0 ? 0 : (midpoint - traversed) / lengths[index];
+      return {
+        x: points[index].x + (points[index + 1].x - points[index].x) * ratio,
+        y: points[index].y + (points[index + 1].y - points[index].y) * ratio,
+      };
+    }
+    traversed = next;
+  }
+  return points.at(-1) ?? { x: 0, y: 0 };
+}
+
+function RoutedWorkflowEdge({
+  data,
+  label,
+  markerEnd,
+  sourceX,
+  sourceY,
+  style,
+  targetX,
+  targetY,
+}: EdgeProps<Edge<CanvasEdgeData>>): ReactElement {
+  const points =
+    data?.points && data.points.length >= 2
+      ? data.points
+      : [
+          { x: sourceX, y: sourceY },
+          { x: targetX, y: targetY },
+        ];
+  const path = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
+  const labelPoint = pointAlongPath(points);
+  return (
+    <>
+      <BaseEdge path={path} markerEnd={markerEnd} style={style} />
+      {label == null ? null : (
+        <EdgeLabelRenderer>
+          <div
+            className='workflow-flow-edge-label nodrag nopan'
+            style={{
+              color: data?.labelColor,
+              transform: `translate(-50%, -50%) translate(${labelPoint.x}px, ${labelPoint.y}px)`,
+            }}
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const edgeTypes = { workflow: RoutedWorkflowEdge };
+
 export function WorkflowCanvas({
   definition,
   overlay,
-  nodeRuns = [],
+  nodeRuns = EMPTY_NODE_RUNS,
   selectedNodeKey,
   onSelectNode,
   onViewNodeRun,
   onViewStartInput,
 }: WorkflowCanvasProps): ReactElement {
   const graph = useMemo(() => projectWorkflowGraph(definition), [definition]);
+  const [direction, setDirection] = useState<WorkflowLayoutDirection>('DOWN');
   const [layout, setLayout] = useState<{
     graph: typeof graph;
+    direction: WorkflowLayoutDirection;
     positions: ReadonlyMap<string, { id: string; x: number; y: number }>;
-  }>(() => ({ graph, positions: new Map() }));
-  const [fittedGraph, setFittedGraph] = useState<typeof graph | null>(null);
+    routes: readonly {
+      readonly id: string;
+      readonly points: readonly { readonly x: number; readonly y: number }[];
+    }[];
+  }>(() => ({ graph, direction, positions: new Map(), routes: [] }));
+  const [fittedLayout, setFittedLayout] = useState<{
+    graph: typeof graph;
+    direction: WorkflowLayoutDirection;
+  } | null>(null);
   useEffect(() => {
     let active = true;
-    void layoutWithElk(createLayoutInput(graph)).then((result) => {
+    void layoutWithElk(createLayoutInput(graph, direction)).then((result) => {
       if (active)
         setLayout({
           graph,
+          direction,
           positions: applyLayoutResult(graph, result).positions,
+          routes: result.routes,
         });
     });
     return () => {
       active = false;
     };
-  }, [graph]);
+  }, [direction, graph]);
   const positions = useMemo<
     ReadonlyMap<string, { id: string; x: number; y: number }>
   >(
-    () => (layout.graph === graph ? layout.positions : new Map()),
-    [graph, layout],
+    () =>
+      layout.graph === graph && layout.direction === direction
+        ? layout.positions
+        : new Map(),
+    [direction, graph, layout],
   );
-  const viewportReady = fittedGraph === graph;
+  const routes = useMemo<ReadonlyMap<string, readonly WorkflowLayoutPoint[]>>(
+    () =>
+      layout.graph === graph && layout.direction === direction
+        ? new Map(
+            layout.routes.map((route) => [route.id, route.points] as const),
+          )
+        : new Map(),
+    [direction, graph, layout],
+  );
+  const viewportReady =
+    fittedLayout?.graph === graph && fittedLayout.direction === direction;
   const attemptsByNode = useMemo(() => {
     const result = new Map<string, WorkflowNodeRunRecord[]>();
     for (const run of nodeRuns)
       result.set(run.nodeKey, [...(result.get(run.nodeKey) ?? []), run]);
     return result;
   }, [nodeRuns]);
-  const ready = positions.size === graph.nodes.length;
+  const ready =
+    positions.size === graph.nodes.length && routes.size === graph.edges.length;
   const nodes = useMemo<Node<CanvasNodeData>[]>(
     () =>
       graph.nodes.map((node) => ({
@@ -140,10 +283,10 @@ export function WorkflowCanvas({
         position: positions.get(node.id) ?? { x: 0, y: 0 },
         data: {
           title: node.title,
-          description: node.description,
           nodeType: node.nodeType,
           kind: node.kind,
           status: overlay?.nodeStatus.get(node.id) ?? 'unvisited',
+          direction,
           attempts: node.workflowNodeKey
             ? (attemptsByNode.get(node.workflowNodeKey) ?? [])
             : [],
@@ -151,7 +294,7 @@ export function WorkflowCanvas({
           onViewStartInput,
         },
         draggable: false,
-        selectable: node.kind !== 'end',
+        selectable: node.kind !== 'end' && node.kind !== 'branch-anchor',
         width: node.width,
         height: node.height,
         className:
@@ -161,6 +304,7 @@ export function WorkflowCanvas({
       })),
     [
       attemptsByNode,
+      direction,
       graph,
       onViewNodeRun,
       onViewStartInput,
@@ -179,16 +323,14 @@ export function WorkflowCanvas({
           target: edge.target,
           sourceHandle:
             edge.kind === 'branch' ? (edge.branchKey ?? undefined) : undefined,
-          type: 'default',
-          label: edge.label ?? undefined,
-          labelStyle: {
-            fill: traversed ? 'var(--foreground)' : 'var(--muted-foreground)',
-            fontSize: 12,
-            fontWeight: 650,
+          type: 'workflow',
+          data: {
+            points: routes.get(edge.id) ?? [],
+            labelColor: traversed
+              ? 'var(--foreground)'
+              : 'var(--muted-foreground)',
           },
-          labelBgStyle: { fill: 'var(--background)', fillOpacity: 0.96 },
-          labelBgPadding: [7, 4],
-          labelBgBorderRadius: 8,
+          label: edge.label ?? undefined,
           markerEnd: {
             type: MarkerType.ArrowClosed,
             width: 18,
@@ -206,7 +348,7 @@ export function WorkflowCanvas({
           },
         };
       }),
-    [graph, overlay],
+    [graph, overlay, routes],
   );
   const minimapColor = (node: Node<CanvasNodeData>): string =>
     node.data.status === 'resolved'
@@ -230,12 +372,17 @@ export function WorkflowCanvas({
             : node.data.kind === 'start' || node.data.kind === 'end'
               ? 'var(--workflow-emphasis-soft)'
               : 'var(--border)';
-  const interactive = Boolean(onViewNodeRun || onViewStartInput);
+  const runInteractive = Boolean(onViewNodeRun || onViewStartInput);
+  const interactive = Boolean(onSelectNode || runInteractive);
   return (
     <div
       className='workflow-canvas'
       aria-label={
-        interactive ? 'Workflow run canvas' : 'Read-only workflow canvas'
+        runInteractive
+          ? 'Workflow run canvas'
+          : onSelectNode
+            ? 'Workflow canvas'
+            : 'Read-only workflow canvas'
       }
     >
       {ready ? (
@@ -244,6 +391,7 @@ export function WorkflowCanvas({
             className={`workflow-canvas-viewport${viewportReady ? ' ready' : ''}`}
             nodes={nodes}
             edges={edges}
+            edgeTypes={edgeTypes}
             nodeTypes={nodeTypes}
             nodesDraggable={false}
             nodesConnectable={false}
@@ -251,7 +399,8 @@ export function WorkflowCanvas({
             onNodeClick={
               interactive
                 ? (_, node) => {
-                    if (node.id === 'end') return;
+                    if (node.id === 'end' || node.data.kind === 'branch-anchor')
+                      return;
                     const graphNode = graph.nodes.find(
                       (item) => item.id === node.id,
                     );
@@ -272,13 +421,35 @@ export function WorkflowCanvas({
               window.requestAnimationFrame(() => {
                 void instance
                   .fitView({ padding: 0.22, minZoom: 0.35, maxZoom: 1.15 })
-                  .then(() => setFittedGraph(graph));
+                  .then(() => setFittedLayout({ graph, direction }));
               });
             }}
             minZoom={0.2}
             maxZoom={1.5}
           >
             <Background color='var(--border)' gap={24} size={1} />
+            <Panel position='top-right' className='workflow-layout-toggle'>
+              <button
+                type='button'
+                className={direction === 'RIGHT' ? 'active' : undefined}
+                aria-label='Horizontal layout'
+                aria-pressed={direction === 'RIGHT'}
+                title='Horizontal layout'
+                onClick={() => setDirection('RIGHT')}
+              >
+                <Columns3 aria-hidden='true' />
+              </button>
+              <button
+                type='button'
+                className={direction === 'DOWN' ? 'active' : undefined}
+                aria-label='Vertical layout'
+                aria-pressed={direction === 'DOWN'}
+                title='Vertical layout'
+                onClick={() => setDirection('DOWN')}
+              >
+                <Rows3 aria-hidden='true' />
+              </button>
+            </Panel>
             <MiniMap
               nodeColor={minimapColor}
               nodeStrokeColor={minimapStroke}

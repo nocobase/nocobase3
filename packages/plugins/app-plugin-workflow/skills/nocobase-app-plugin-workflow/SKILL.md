@@ -4,8 +4,8 @@ description: 'Use when agents need to define, validate, invoke, inspect, or diag
 argument-hint: '[action: explain|define|validate|invoke|inspect|diagnose] [workflow-key-or-path]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: workflow
-version: 1.1.3
-last-reviewed: 2026-08-27
+version: 1.2.0
+last-reviewed: 2026-09-01
 risk-level: medium
 metadata:
   domain-owner: '@nocobase/app-plugin-workflow'
@@ -55,7 +55,7 @@ classes, and registered node contracts.
 
 Rules:
 
-- Read current source contracts before authoring. The workflow plugin currently exports `ConditionInstruction` and `RunInstruction`; another application may register more.
+- Read current source contracts before authoring. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`; another application may register more.
 - If the process, target, or required input cannot be resolved safely, stop mutation and ask.
 - If the user says "you decide", choose code for a single atomic operation and Workflow for a durable, auditable, multi-step process; use `inspect` before changing an existing target.
 - Never infer database ids from keys. Resolve them through the service/API when an id-based operation is required.
