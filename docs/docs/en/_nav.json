@@ -1,0 +1,26 @@
+[
+  {
+    "text": "Start",
+    "link": "/get-started/"
+  },
+  {
+    "text": "Tutorials",
+    "link": "/tutorials/"
+  },
+  {
+    "text": "Guide",
+    "link": "/guide/"
+  },
+  {
+    "text": "Development",
+    "link": "/development/"
+  },
+  {
+    "text": "API",
+    "link": "/api/"
+  },
+  {
+    "text": "Home",
+    "link": "https://www.nocobase.com/"
+  }
+]

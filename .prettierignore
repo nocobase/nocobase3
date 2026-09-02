@@ -12,6 +12,10 @@ packages/templates/app-template-default/client-old/
 packages/templates/app-template-default/registry/
 packages/tools/create-plugin/template/
 
+# 文档站沿用 v2 的独立工具链（biome + 自己的 .prettierrc），由 docs/ 自己的 prettier/biome 负责，
+# 根仓库的 dev-config 预设不要再格式化一遍。
+docs/
+
 # changeset 文件由 changesets 生成和消费，格式由它自己决定。
 # 项目的 singleQuote 会把 `"@nocobase/core": minor` 改成单引号，
 # 与 changesets 实际生成的格式不符。

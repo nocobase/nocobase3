@@ -15,6 +15,8 @@ Every published package lives under `packages/`, grouped into six directories by
 
 `packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
 
+`docs/` is the seventh workspace member and the one exception to the table above. It is the documentation site rather than something an application depends on, so it sits at the repository root rather than under `packages/`, and it is the only workspace package that sets `private: true`. That placement is what keeps it out of `pnpm pack:check`, which discovers publishable packages by descending into `packages/<category>/` and would otherwise reject it for being private. See the "Documentation Site" section below before changing anything under it.
+
 ## Selecting and Using Shared Development Configuration
 
 All new packages must use `@nocobase/dev-config` by default. Do not copy a complete tsconfig, ESLint, Prettier, Vitest, or Vite configuration from an existing package. See `packages/tools/dev-config/README.md` for the full English documentation; each configuration directory also has its own README.
@@ -187,6 +189,40 @@ The rule applies to plugins, which are guests in an application someone else ass
 It does not apply to `packages/app` and `packages/libs`. They compose the runtime and are what puts the single copy in place — `app-server` depending on `@nocobase/db` is precisely how the one copy comes to exist. Nor does it apply to `packages/templates`, which are applications, and therefore the side that satisfies a peer range rather than declaring one. A new group under `packages/` needs a deliberate decision about which side of this line it sits on before it is added to `CHECKED_GROUPS`.
 
 `pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
+
+## Documentation Site
+
+`docs/` is a Rspress site copied from the v2 repository so that its custom theme, plugins, and checking scripts stay comparable with what they were ported from. It is a workspace member (`pnpm --filter @nocobase/docs <script>`), but it deliberately does not follow the shared-configuration rules the packages under `packages/` follow.
+
+### Vendored theme components are excluded from both tools
+
+`theme/components/{Nav,NavHamburger,NavScreen,Search,HomeHero}` are copied from Rspress's ejectable theme and kept byte-for-byte. Diffing them against the new upstream copy is the whole of a Rspress upgrade, which only works while they are unmodified.
+
+Both tools skip them: the paths are listed in `.prettierignore` and in `VENDORED_FROM_RSPRESS` in `eslint.config.mjs`, which feeds the config's `ignores`. Formatting them would rewrite every one on the first run; linting them reports on code this repository does not own, where the only actionable response is the edit that destroys the diff. Fix a real problem in one of these files by fixing it upstream and re-copying, not by patching the copy. Everything outside those five directories is this repository's own code, is formatted and linted normally, and is held to zero errors.
+
+When a copied file needs a deliberate local change, keep it and give it a header naming exactly what was changed and why — `Search/SearchPanel.tsx` and `Search/SuggestItem.tsx` are the two that carry one today. The directory stays excluded either way; the header is what tells the next person which differences are intentional.
+
+### Formatting and linting for everything else
+
+Prettier is the repository baseline, `@nocobase/dev-config/prettier`, referenced from `package.json` the same way every other package references it. The root `.prettierignore` excludes `docs/` so this package formats its own files once, rather than twice with two different resolutions of the same settings.
+
+ESLint is this package's own flat config rather than a `dev-config` factory, because what it lints is a Rspress theme and a set of Node build scripts, neither of which the factories are shaped for. `pnpm lint` at the repository root runs each package's own `lint` script, so `docs` is covered by it; the root `eslint.config.js` never applies its rules here.
+
+The upstream copy of this site also carried Biome. It was dropped: its formatter duplicated Prettier over the same files with different settings, and the lint rules that were earning their place — hook dependency lists, conditionally called hooks, missing keys in rendered lists — are now covered by `eslint-plugin-react-hooks`. Removing it was a simplification only because that plugin came in with it.
+
+### Dependencies
+
+pnpm resolves strictly, so a dependency has to be declared even when the upstream copy relied on the flat `node_modules` a Yarn install produced. `clsx`, `body-scroll-lock`, and `js-yaml` are all imported by code that never declared them and are listed in this package as a result. When a copied file fails to resolve an import that works upstream, the cause is usually this and the fix is a declaration, not a change to the file.
+
+React is the other divergence. The upstream copy pins React 18 through a `resolutions` field, which pnpm does not read at all, and Rspress 2.x depends on React 19 itself. This package uses React 19 and does not carry the pin; translating it would mean a root `pnpm.overrides` entry, which applies repository-wide and would drag every other package down to 18.
+
+### Content and languages
+
+Only the framework was copied — `docs/docs/` holds the pages this repository writes for itself. The framework carries translations for ten languages (`cn en ja es pt de fr ru id vi`) in `rspress.config.ts` and `theme/locales.ts`, but a language is only built if it has a directory under `docs/docs/`. Today that is `cn` and `en`. Adding a language means creating the directory; the translations are already there.
+
+`cn` is the baseline the structural checks in `check.sh` compare every other language against, so a page added to another language without its `cn` counterpart fails the tree and meta alignment checks.
+
+Dead-link checking runs during build, but only over links in Markdown bodies. The home page's hero actions and feature cards live in frontmatter, so a route named there can be missing without failing the build — those need checking by hand.
 
 ## Language
 

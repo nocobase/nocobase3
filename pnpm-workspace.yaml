@@ -1,5 +1,6 @@
 packages:
   - packages/*/*
+  - docs
 
 # Commands with --dry-run must not trigger an implicit install before their
 # own code can enforce read-only behavior. Dependency changes are synchronized
@@ -82,6 +83,7 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   tesseract.js: false
+  ttf2woff2: set this to true or false
 
 minimumReleaseAgeExclude:
   - '@publint/pack@0.1.7'
