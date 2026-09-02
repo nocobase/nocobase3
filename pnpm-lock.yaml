@@ -1974,6 +1974,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider
@@ -2068,9 +2071,6 @@ importers:
 
   packages/plugins/app-plugin-notification-providers:
     dependencies:
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       nodemailer:
         specifier: ^9.0.5
         version: 9.0.5
@@ -2078,12 +2078,6 @@ importers:
         specifier: ^6.22.1
         version: 6.24.0
     devDependencies:
-      '@nocobase/app-plugin-authentication':
-        specifier: workspace:*
-        version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-authorization':
-        specifier: workspace:*
-        version: link:../app-plugin-authorization
       '@nocobase/app-plugin-notification':
         specifier: workspace:*
         version: link:../app-plugin-notification
@@ -2093,6 +2087,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider

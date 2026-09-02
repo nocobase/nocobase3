@@ -1,4 +1,10 @@
 import type { AppClient } from '@nocobase/app-client';
+import type {
+  NotificationSendResult,
+  NotificationTestFieldDescriptor,
+  NotificationTestSendRequest,
+  NotificationTestTargetDescriptor,
+} from '../server/types.js';
 
 export type NotificationStatus =
   | 'pending'
@@ -51,31 +57,57 @@ export interface NotificationLogDetails {
   readonly deliveries: readonly NotificationDeliveryDetails[];
 }
 
-export interface NotificationTestProvider {
-  readonly channel: string;
-  readonly provider: {
-    readonly name: string;
-    readonly type: string;
-  };
-}
+export type NotificationTestField = NotificationTestFieldDescriptor<string>;
 
-export interface NotificationTestInput extends NotificationTestProvider {
-  readonly recipient?: string;
-  readonly title?: string;
-  readonly body?: string;
-}
+export type NotificationTestTarget = NotificationTestTargetDescriptor<string>;
 
-export interface NotificationTestResult {
-  readonly notificationId: string;
-  readonly status: NotificationStatus;
-  readonly provider: {
-    readonly name: string;
-    readonly type: string;
-  };
-}
+export type NotificationTestInput = NotificationTestSendRequest;
+
+export type NotificationTestResult = NotificationSendResult;
 
 interface DataResponse<T> {
   readonly data: T;
+}
+
+interface ErrorResponse {
+  readonly error?: string | NotificationTestErrorPayload;
+  readonly message?: string;
+}
+
+interface NotificationTestErrorPayload {
+  readonly code?: string;
+  readonly message?: string;
+  readonly ns?: string;
+  readonly key?: string;
+  readonly params?: Readonly<Record<string, unknown>>;
+}
+
+export class NotificationTestApiError extends Error {
+  public readonly code: string;
+  public readonly status?: number;
+  public readonly ns?: string;
+  public readonly key?: string;
+  public readonly params?: Readonly<Record<string, unknown>>;
+
+  public constructor(
+    input: {
+      readonly code: string;
+      readonly message: string;
+      readonly status?: number;
+      readonly ns?: string;
+      readonly key?: string;
+      readonly params?: Readonly<Record<string, unknown>>;
+    },
+    cause: unknown,
+  ) {
+    super(input.message, { cause });
+    this.name = 'NotificationTestApiError';
+    this.code = input.code;
+    this.status = input.status;
+    this.ns = input.ns;
+    this.key = input.key;
+    this.params = input.params;
+  }
 }
 
 export class NotificationClient {
@@ -89,52 +121,82 @@ export class NotificationClient {
       .then((response) => response.data);
   }
 
-  listTestProviders(): Promise<readonly NotificationTestProvider[]> {
+  listTestTargets(): Promise<readonly NotificationTestTarget[]> {
     return this.client
-      .request<DataResponse<readonly NotificationTestProvider[]>>(
-        'notification-providers/test/config',
+      .request<DataResponse<readonly NotificationTestTarget[]>>(
+        'notifications/test/targets',
+        { headers: { 'x-nocobase-notification-test': '1' } },
       )
       .then((response) => response.data)
-      .catch(rethrowProviderTestError);
+      .catch(rethrowNotificationTestError);
   }
 
   sendTest(input: NotificationTestInput): Promise<NotificationTestResult> {
     return this.client
       .request<DataResponse<NotificationTestResult>>(
-        'notification-providers/test/send',
+        'notifications/test/send',
         {
           method: 'POST',
-          headers: { 'x-nocobase-provider-test': '1' },
-          body: JSON.stringify({
-            channel: input.channel,
-            providerName: input.provider.name,
-            providerType: input.provider.type,
-            recipient: input.recipient,
-            title: input.title,
-            body: input.body,
-          }),
+          headers: { 'x-nocobase-notification-test': '1' },
+          body: JSON.stringify(input),
         },
       )
       .then((response) => response.data)
-      .catch(rethrowProviderTestError);
+      .catch(rethrowNotificationTestError);
+  }
+
+  getTestStatus(id: string): Promise<NotificationLogDetails> {
+    return this.client
+      .request<DataResponse<NotificationLogDetails>>(
+        `notifications/test/${encodeURIComponent(id)}/status`,
+        { headers: { 'x-nocobase-notification-test': '1' } },
+      )
+      .then((response) => response.data)
+      .catch(rethrowNotificationTestError);
   }
 }
 
-function rethrowProviderTestError(cause: unknown): never {
-  if (cause instanceof Error && 'status' in cause && cause.status === 404) {
-    throw new Error('Provider testing is not enabled for this application.', {
-      cause,
-    });
+function rethrowNotificationTestError(cause: unknown): never {
+  if (cause instanceof Error && 'payload' in cause && isRecord(cause.payload)) {
+    const payload = cause.payload as ErrorResponse;
+    if (isRecord(payload.error)) {
+      const error = payload.error as NotificationTestErrorPayload;
+      if (error.code && error.message) {
+        throw new NotificationTestApiError(
+          {
+            code: error.code,
+            message: error.message,
+            status: errorStatus(cause),
+            ns: error.ns,
+            key: error.key,
+            params: error.params,
+          },
+          cause,
+        );
+      }
+    }
+    const message =
+      typeof payload.error === 'string'
+        ? payload.error
+        : (payload.error?.message ?? payload.message);
+    if (message) throw new Error(message, { cause });
   }
-  if (
-    cause instanceof Error &&
-    'payload' in cause &&
-    isRecord(cause.payload) &&
-    typeof cause.payload.error === 'string'
-  ) {
-    throw new Error(cause.payload.error, { cause });
+  if (errorStatus(cause) === 404) {
+    throw new NotificationTestApiError(
+      {
+        code: 'NOTIFICATION_TEST_UNAVAILABLE',
+        message: 'Notification testing is not available.',
+        status: 404,
+      },
+      cause,
+    );
   }
   throw cause;
+}
+
+function errorStatus(cause: unknown): number | undefined {
+  if (!isRecord(cause)) return undefined;
+  return typeof cause.status === 'number' ? cause.status : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

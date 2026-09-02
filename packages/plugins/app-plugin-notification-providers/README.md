@@ -1,7 +1,7 @@
 # Notification Providers App Plugin
 
 `@nocobase/app-plugin-notification-providers` provides built-in Email and IM
-notification definitions and an authenticated test page.
+notification definitions and their core test-send adapters.
 
 | Channel | Provider type      | Configuration helper                    | Definition factory                          |
 | ------- | ------------------ | --------------------------------------- | ------------------------------------------- |
@@ -18,18 +18,12 @@ definitions explicitly as shown below.
 
 ## Test configured Providers
 
-The plugin exposes `/api/notification-providers/test`. The route requires an
-authenticated user and is available only when `notification.test.enabled` is
-`true`. It sends through the regular Notification Manager, so each test creates
-Notification, Delivery, and Attempt records.
-
-In-app and Email tests accept an explicit recipient user ID or email address.
-For backward compatibility, an omitted in-app recipient defaults to the current
-authenticated user and an omitted Email recipient uses
-`notification.test.emailRecipient`. IM tests send to the group owned by the
-selected Provider Webhook. The default application template maps these settings
-from `notification.test` in `config.yml`. The page is disabled unless
-`notification.test.enabled` is explicitly set to `true`.
+The core notification plugin owns the protected test API and dynamic form.
+This package contributes safe Email and IM input fields plus conversion into
+the normal `NotificationManager.send()` input. Email requires an explicit test
+address; IM resolves the selected Provider's logical target on the server.
+Provider configuration, Webhook URLs, API keys, and secrets are never returned
+in public target descriptors.
 
 ## Register definitions
 
