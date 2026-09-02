@@ -30,6 +30,7 @@ import type {
   CollectionCreateInput,
   CollectionDefinition,
   CollectionDefinitionInput,
+  CollectionKind,
   CollectionOperation,
   ConstraintDefinition,
   FieldAlterInput,
@@ -116,6 +117,21 @@ export class CollectionRenameAtomicityError extends Error {
       `Cannot rename collection "${from}" to "${to}" because supplemental Metadata exists and the configured Store cannot atomically rename it with the physical Schema.`,
     );
     this.name = 'CollectionRenameAtomicityError';
+  }
+}
+
+export class CollectionRenameUnsupportedKindError extends Error {
+  readonly code = 'COLLECTION_RENAME_UNSUPPORTED_KIND' as const;
+
+  constructor(
+    readonly from: string,
+    readonly to: string,
+    readonly kind: Exclude<CollectionKind, 'table'>,
+  ) {
+    super(
+      `Cannot rename ${kind} collection "${from}" to "${to}" because renameCollection currently supports table collections only.`,
+    );
+    this.name = 'CollectionRenameUnsupportedKindError';
   }
 }
 
@@ -1173,12 +1189,22 @@ async function assertRenameOperations(
     if (operation.type !== 'renameCollection') {
       continue;
     }
-    if (!context.collections?.[operation.from]) {
+    const collections = context.collections ?? {};
+    const source = collections[operation.from];
+    if (!source) {
       throw new Error(
         `Cannot rename collection "${operation.from}" because its metadata does not exist.`,
       );
     }
-    if (context.collections[operation.to]) {
+    const kind = source.kind ?? 'table';
+    if (kind !== 'table') {
+      throw new CollectionRenameUnsupportedKindError(
+        operation.from,
+        operation.to,
+        kind,
+      );
+    }
+    if (collections[operation.to]) {
       throw new Error(
         `Cannot rename collection "${operation.from}" to "${operation.to}" because the target collection already exists.`,
       );
@@ -1186,10 +1212,7 @@ async function assertRenameOperations(
     if (metadata && (await metadata.get(operation.from))) {
       throw new CollectionRenameAtomicityError(operation.from, operation.to);
     }
-    const dependencies = collectRenameDependencies(
-      operation.from,
-      context.collections,
-    );
+    const dependencies = collectRenameDependencies(operation.from, collections);
     if (dependencies.length > 0) {
       throw new CollectionRenameDependencyError(
         operation.from,

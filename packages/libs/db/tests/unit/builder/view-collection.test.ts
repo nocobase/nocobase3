@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionBuilder } from '../../../src/index.js';
+import { RecordingSchemaAdapter } from './helpers.js';
 
 describe('CollectionBuilder view collections', () => {
   it('creates view collections from structured query DSL', async () => {
@@ -144,4 +145,42 @@ describe('CollectionBuilder view collections', () => {
       },
     ]);
   });
+
+  it.each([
+    {
+      kind: 'view',
+      create: (builder: CollectionBuilder) =>
+        builder.createViewCollection('usersView', (view) => {
+          view.string('firstName');
+          view.as((query) => query.from('users').select('firstName'));
+        }),
+    },
+    {
+      kind: 'materializedView',
+      create: (builder: CollectionBuilder) =>
+        builder.createMaterializedViewCollection('usersView', (view) => {
+          view.string('firstName');
+          view.as((query) => query.from('users').select('firstName'));
+        }),
+    },
+  ])(
+    'rejects renaming $kind collections before DDL',
+    async ({ kind, create }) => {
+      const schemaAdapter = new RecordingSchemaAdapter();
+      const builder = new CollectionBuilder({ schemaAdapter });
+      await create(builder);
+      schemaAdapter.executed = [];
+
+      await expect(
+        builder.renameCollection('usersView', 'activeUsers'),
+      ).rejects.toMatchObject({
+        name: 'CollectionRenameUnsupportedKindError',
+        code: 'COLLECTION_RENAME_UNSUPPORTED_KIND',
+        from: 'usersView',
+        to: 'activeUsers',
+        kind,
+      });
+      expect(schemaAdapter.executed).toEqual([]);
+    },
+  );
 });
