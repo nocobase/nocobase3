@@ -36,6 +36,22 @@
   );
 }
 .workflow-canvas {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: var(--border);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-stroke-color: var(--border);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--card-foreground);
+  --xy-controls-button-color-hover: var(--accent-foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: none;
+  --xy-selection-background-color: color-mix(
+    in oklab,
+    var(--accent) 72%,
+    transparent
+  );
+  --xy-selection-border: 1px dotted var(--ring);
   width: 100%;
   height: 560px;
   position: relative;
@@ -279,6 +295,12 @@
   border-radius: 10px;
   overflow: hidden;
   box-shadow: none;
+}
+.workflow-canvas .react-flow__controls-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .workflow-canvas-viewport {
   opacity: 0;
@@ -851,24 +873,46 @@
 }
 .workflow-node-description-disclosure {
   margin: 8px 0 18px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
 }
 .workflow-node-description-disclosure summary {
-  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 0;
+  list-style: none;
   color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+}
+.workflow-node-description-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+.workflow-node-description-disclosure summary::before {
+  width: 10px;
+  content: '›';
+  flex: 0 0 10px;
+  line-height: 1;
+  text-align: center;
+  transition: transform 120ms ease;
+}
+.workflow-node-description-disclosure[open] summary::before {
+  transform: rotate(90deg);
+}
+.workflow-node-description-disclosure summary:hover {
+  color: var(--foreground);
 }
 .workflow-node-description-disclosure summary:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 .workflow-node-description-disclosure p {
-  margin: 0;
-  padding: 0 11px 11px;
+  margin: 6px 0 0;
+  /* Match the summary text after its 10px marker and 6px gap. */
+  padding-left: 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
   line-height: 1.55;
   white-space: pre-wrap;
 }
