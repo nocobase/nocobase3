@@ -82,8 +82,24 @@ export class CollectionRelationValidator {
         );
         continue;
       }
-      const targetKey = relation.targetKey ?? 'id';
-      if (!scalarField(target.fields, targetKey)) {
+      const sourceKey =
+        relation.type === 'belongsTo'
+          ? relation.sourceKey
+          : (relation.sourceKey ?? 'id');
+      if (sourceKey && !scalarField(collection.fields, sourceKey)) {
+        issues.push(
+          issue(
+            collectionName,
+            [...path, 'sourceKey'],
+            `Relation sourceKey "${sourceKey}" does not exist on Collection "${collectionName}".`,
+          ),
+        );
+      }
+      const targetKey =
+        relation.type === 'belongsTo' || relation.type === 'belongsToMany'
+          ? (relation.targetKey ?? 'id')
+          : relation.targetKey;
+      if (targetKey && !scalarField(target.fields, targetKey)) {
         issues.push(
           issue(
             collectionName,

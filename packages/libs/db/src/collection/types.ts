@@ -192,6 +192,11 @@ export interface CollectionAlterDefinition {
 export type CollectionDefinitionInput =
   CollectionDefinition | ((collection: CollectionDefinitionBuilder) => void);
 
+export interface CollectionCreateInput {
+  readonly name: string;
+  readonly definition: CollectionDefinitionInput;
+}
+
 export type CollectionAlterInput =
   CollectionAlterDefinition | ((collection: CollectionAlterBuilder) => void);
 

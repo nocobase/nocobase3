@@ -129,6 +129,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         metadataStore: this.metadataStore,
         collections,
         naming: this.config.naming,
+        deferRelationValidation: Boolean(transactionInvalidations),
       }),
       invalidator,
       onInvalidationError: (error) =>
@@ -192,6 +193,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           invalidations,
         );
         const transactionResult = await fn(connection);
+        await invalidations.validateRelations(connection.collections);
         await stagedMetadata?.commit();
         return transactionResult;
       });
@@ -232,13 +234,17 @@ class TransactionInvalidationCollector {
   private namingIndex = false;
   private readonly collections = new Set<string>();
 
+  async validateRelations(collections: ConnectionCollections): Promise<void> {
+    for (const collection of this.collections) {
+      await collections.validateRelations(collection);
+    }
+  }
+
   record(change?: CollectionMetadataInvalidation): void {
     if (!change) {
       this.all = true;
-      this.collections.clear();
       return;
     }
-    if (this.all) return;
     for (const collection of change.collections) {
       this.collections.add(collection);
     }

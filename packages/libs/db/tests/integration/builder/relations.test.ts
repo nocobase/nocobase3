@@ -7,6 +7,81 @@ import {
 } from '../helpers.js';
 
 describeIntegrationDatabases('relation fields', (context) => {
+  it('creates collections with cyclic logical relations in one batch', async () => {
+    await context.builder.createCollections([
+      {
+        name: 'authors',
+        definition: (collection) => {
+          collection.increments('id');
+          collection.hasMany('books', 'books').foreignKey('authorId');
+        },
+      },
+      {
+        name: 'books',
+        definition: (collection) => {
+          collection.increments('id');
+          collection.bigInt('authorId');
+          collection
+            .belongsTo('author', 'authors')
+            .foreignKey('authorId')
+            .constraints(false);
+        },
+      },
+    ]);
+
+    await expect(
+      context.database.connection().collections.validateRelations(),
+    ).resolves.toBeUndefined();
+    await expect(context.metadataStore.get('authors')).resolves.toMatchObject({
+      document: {
+        relations: { books: { target: 'books' } },
+      },
+    });
+    await expect(context.metadataStore.get('books')).resolves.toMatchObject({
+      document: {
+        relations: { author: { target: 'authors' } },
+      },
+    });
+  });
+
+  it('validates sequential relation writes against the completed transaction graph', async () => {
+    await context.database.transaction(async (connection) => {
+      await connection.builder.createCollection('teams', (collection) => {
+        collection.increments('id');
+        collection.hasMany('members', 'members').foreignKey('teamId');
+      });
+      await connection.builder.createCollection('members', (collection) => {
+        collection.increments('id');
+        collection.bigInt('teamId');
+        collection
+          .belongsTo('team', 'teams')
+          .foreignKey('teamId')
+          .constraints(false);
+      });
+    });
+
+    await expect(
+      context.database.connection().collections.validateRelations(),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a transaction whose completed relation graph is invalid', async () => {
+    await expect(
+      context.database.transaction(async (connection) => {
+        await connection.builder.createCollection('articles', (collection) => {
+          collection.increments('id');
+          collection.hasMany('comments', 'missingComments');
+        });
+      }),
+    ).rejects.toMatchObject({
+      code: 'COLLECTION_RELATION_VALIDATION_FAILED',
+    });
+
+    await expect(
+      context.metadataStore.get('articles'),
+    ).resolves.toBeUndefined();
+  });
+
   it('enforces belongsTo foreign key constraints when requested', async () => {
     await context.builder.createCollection('customers', (collection) => {
       collection.increments('id');

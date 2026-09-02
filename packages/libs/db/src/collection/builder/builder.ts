@@ -27,6 +27,7 @@ import type {
   BuilderResult,
   CollectionAlterDefinition,
   CollectionAlterInput,
+  CollectionCreateInput,
   CollectionDefinition,
   CollectionDefinitionInput,
   CollectionOperation,
@@ -147,6 +148,27 @@ export class CollectionBuilder {
       [{ type: 'createCollection', name, definition }],
       options,
     );
+  }
+
+  async createCollections(
+    inputs: readonly CollectionCreateInput[],
+    options: BuilderExecOptions = {},
+  ): Promise<BuilderResult> {
+    return this.apply(
+      inputs.map(({ name, definition }) => ({
+        type: 'createCollection' as const,
+        name,
+        definition: normalizeCollectionInput(definition),
+      })),
+      options,
+    );
+  }
+
+  async hasCollection(name: string): Promise<boolean> {
+    if (this.collections) {
+      return Boolean(await this.collections.get(name));
+    }
+    return this.plannedCollections.has(name);
   }
 
   async alterCollection(

@@ -205,6 +205,36 @@ describe('CollectionRegistry', () => {
     await expect(registry.validateRelations('users')).resolves.toBeUndefined();
   });
 
+  it('validates hasOne keys in their source and target scopes', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.put(
+      {
+        version: 1,
+        name: 'workflows',
+        relations: {
+          stats: {
+            type: 'hasOne',
+            target: 'workflowStats',
+            sourceKey: 'key',
+            foreignKey: 'key',
+          },
+        },
+      },
+      { expectedRevision: null },
+    );
+    const registry = new CollectionRegistry({
+      inspector: new FakeInspector([
+        physical('workflows', ['key']),
+        physical('workflow_stats', ['key']),
+      ]),
+      metadataStore: store,
+    });
+
+    await expect(
+      registry.validateRelations('workflows'),
+    ).resolves.toBeUndefined();
+  });
+
   it('aggregates cross-Collection target, targetKey, remote key, and through errors', async () => {
     const store = new InMemoryCollectionMetadataStore();
     await store.put(

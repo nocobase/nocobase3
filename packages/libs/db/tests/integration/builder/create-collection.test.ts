@@ -7,6 +7,24 @@ import {
 } from '../helpers.js';
 
 describeIntegrationDatabases('collection creation', (context) => {
+  it('checks collection existence by logical name', async () => {
+    await expect(context.builder.hasCollection('customers')).resolves.toBe(
+      false,
+    );
+
+    await context.builder.createCollection('customers', (collection) => {
+      collection.increments('id');
+    });
+
+    await expect(context.builder.hasCollection('customers')).resolves.toBe(
+      true,
+    );
+    await context.builder.dropCollection('customers');
+    await expect(context.builder.hasCollection('customers')).resolves.toBe(
+      false,
+    );
+  });
+
   it('creates related collections with indexes and foreign keys', async () => {
     await context.builder.createCollection('customers', {
       fields: [

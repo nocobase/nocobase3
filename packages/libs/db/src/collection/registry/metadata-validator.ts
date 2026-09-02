@@ -19,6 +19,7 @@ export interface RegistryMetadataDocumentValidatorOptions {
   readonly collections: ConnectionCollections;
   readonly naming?: NamingOptions;
   readonly resolver?: CollectionResolver;
+  readonly deferRelationValidation?: boolean;
 }
 
 export class RegistryMetadataDocumentValidator implements CollectionMetadataDocumentValidator {
@@ -69,6 +70,7 @@ export class RegistryMetadataDocumentValidator implements CollectionMetadataDocu
       naming: this.options.naming,
       context: index,
     }).collection;
+    if (this.options.deferRelationValidation) return;
     const relationValidator = new CollectionRelationValidator({
       get: (name) =>
         name === document.name

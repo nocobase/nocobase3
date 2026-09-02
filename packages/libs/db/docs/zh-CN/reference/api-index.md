@@ -88,6 +88,8 @@ Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, director
 ## Builder
 
 - `createCollection(name, input, options?)`
+- `createCollections(inputs, options?)`
+- `hasCollection(name)`
 - `alterCollection(name, input, options?)`
 - `dropCollection(name, options?)`
 - `renameCollection(oldName, newName, options?)`

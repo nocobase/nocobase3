@@ -1,7 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionBuilder } from '../../../src/index.js';
+import type { CollectionDefinitionInput } from '../../../src/index.js';
 
 describe('CollectionBuilder createCollection', () => {
+  it('tracks collection existence after executed operations', async () => {
+    const builder = new CollectionBuilder();
+    const definition: CollectionDefinitionInput = {
+      fields: [{ name: 'id', type: 'increments' }],
+    };
+
+    await expect(builder.hasCollection('orders')).resolves.toBe(false);
+
+    await builder.createCollection('previewOrders', definition, {
+      dryRun: true,
+    });
+    await expect(builder.hasCollection('previewOrders')).resolves.toBe(false);
+
+    await builder.createCollection('orders', definition);
+    await expect(builder.hasCollection('orders')).resolves.toBe(true);
+
+    await builder.dropCollection('orders');
+    await expect(builder.hasCollection('orders')).resolves.toBe(false);
+  });
+
   it('creates a collection from fluent input', async () => {
     const builder = new CollectionBuilder();
 
