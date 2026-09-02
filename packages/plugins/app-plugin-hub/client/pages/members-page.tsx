@@ -188,21 +188,20 @@ export default function MembersPage(): ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
 
   return (
-    <main className='mx-auto flex w-full max-w-[96rem] flex-col gap-6 p-4 sm:p-6 lg:p-8'>
-      <section className='relative overflow-hidden rounded-2xl border bg-card px-5 py-6 shadow-sm sm:px-7'>
-        <div className='pointer-events-none absolute -top-24 right-0 size-64 rounded-full bg-primary/8 blur-3xl' />
-        <div className='relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between'>
-          <div className='max-w-3xl space-y-2'>
-            <div className='flex items-center gap-2 text-xs font-semibold tracking-[0.18em] text-primary uppercase'>
-              <ShieldCheck className='size-4' aria-hidden='true' />
+    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+      <header className='border-b bg-background px-4 py-7 sm:px-6'>
+        <div className='mx-auto flex w-full max-w-7xl flex-col gap-5 sm:flex-row sm:items-end sm:justify-between'>
+          <div className='max-w-3xl'>
+            <p className='inline-flex items-center gap-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase'>
+              <ShieldCheck className='size-3.5' aria-hidden='true' />
               {t('members.header.eyebrow', { defaultValue: 'Access control' })}
-            </div>
-            <h1 className='text-2xl font-semibold tracking-tight sm:text-3xl'>
+            </p>
+            <h1 className='mt-1 text-2xl font-semibold tracking-tight'>
               {t('members.header.title', {
                 defaultValue: 'Members and roles',
               })}
             </h1>
-            <p className='max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base'>
+            <p className='mt-1 text-sm text-muted-foreground'>
               {t('members.header.description', {
                 defaultValue:
                   'Control who can develop, deploy, and administer applications. This frontend preview keeps every change in memory.',
@@ -216,74 +215,76 @@ export default function MembersPage(): ReactElement {
                 defaultValue: 'View roles',
               })}
             </Button>
-            <Button onClick={() => setInviteOpen(true)}>
+            <Button variant='outline' onClick={() => setInviteOpen(true)}>
               <UserPlus aria-hidden='true' />
               {t('members.actions.invite', { defaultValue: 'Invite member' })}
             </Button>
           </div>
         </div>
-      </section>
+      </header>
 
-      {notice ? <Feedback message={notice} /> : null}
+      <div className='mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6'>
+        {notice ? <Feedback message={notice} /> : null}
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as MembersTab)}
-      >
-        <TabsList className='w-full justify-start' variant='line'>
-          <TabsTrigger value='members' className='flex-none px-3'>
-            <Users aria-hidden='true' />
-            {t('members.tabs.members', { defaultValue: 'Members' })}
-          </TabsTrigger>
-          <TabsTrigger value='invitations' className='flex-none px-3'>
-            <CalendarClock aria-hidden='true' />
-            {t('members.tabs.invitations', { defaultValue: 'Invitations' })}
-          </TabsTrigger>
-          <TabsTrigger value='credentials' className='flex-none px-3'>
-            <Bot aria-hidden='true' />
-            {t('members.tabs.credentials', {
-              defaultValue: 'Agent credentials',
-            })}
-          </TabsTrigger>
-          <TabsTrigger value='roles' className='flex-none px-3'>
-            <KeyRound aria-hidden='true' />
-            {t('members.tabs.roles', { defaultValue: 'Built-in roles' })}
-          </TabsTrigger>
-        </TabsList>
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as MembersTab)}
+        >
+          <TabsList className='w-full justify-start' variant='line'>
+            <TabsTrigger value='members' className='flex-none px-3'>
+              <Users aria-hidden='true' />
+              {t('members.tabs.members', { defaultValue: 'Members' })}
+            </TabsTrigger>
+            <TabsTrigger value='invitations' className='flex-none px-3'>
+              <CalendarClock aria-hidden='true' />
+              {t('members.tabs.invitations', { defaultValue: 'Invitations' })}
+            </TabsTrigger>
+            <TabsTrigger value='credentials' className='flex-none px-3'>
+              <Bot aria-hidden='true' />
+              {t('members.tabs.credentials', {
+                defaultValue: 'Agent credentials',
+              })}
+            </TabsTrigger>
+            <TabsTrigger value='roles' className='flex-none px-3'>
+              <KeyRound aria-hidden='true' />
+              {t('members.tabs.roles', { defaultValue: 'Built-in roles' })}
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value='members' className='pt-3'>
-          <MemberList members={members} onMembersChange={setMembers} />
-        </TabsContent>
-        <TabsContent value='invitations' className='pt-3'>
-          <InvitationList
-            invitations={invitations}
-            onInvitationsChange={setInvitations}
-          />
-        </TabsContent>
-        <TabsContent value='credentials' className='pt-3'>
-          <CredentialList
-            credentials={credentials}
-            onCredentialsChange={setCredentials}
-          />
-        </TabsContent>
-        <TabsContent value='roles' className='pt-3'>
-          <RoleCatalog />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value='members' className='pt-3'>
+            <MemberList members={members} onMembersChange={setMembers} />
+          </TabsContent>
+          <TabsContent value='invitations' className='pt-3'>
+            <InvitationList
+              invitations={invitations}
+              onInvitationsChange={setInvitations}
+            />
+          </TabsContent>
+          <TabsContent value='credentials' className='pt-3'>
+            <CredentialList
+              credentials={credentials}
+              onCredentialsChange={setCredentials}
+            />
+          </TabsContent>
+          <TabsContent value='roles' className='pt-3'>
+            <RoleCatalog />
+          </TabsContent>
+        </Tabs>
 
-      <InviteMemberDialog
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        onInvite={(invitation) => {
-          setInvitations((current) => [invitation, ...current]);
-          setNotice(
-            t('members.feedback.invitationCreated', {
-              defaultValue: 'Invitation created for {{email}}.',
-              email: invitation.email,
-            }),
-          );
-        }}
-      />
+        <InviteMemberDialog
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          onInvite={(invitation) => {
+            setInvitations((current) => [invitation, ...current]);
+            setNotice(
+              t('members.feedback.invitationCreated', {
+                defaultValue: 'Invitation created for {{email}}.',
+                email: invitation.email,
+              }),
+            );
+          }}
+        />
+      </div>
     </main>
   );
 }

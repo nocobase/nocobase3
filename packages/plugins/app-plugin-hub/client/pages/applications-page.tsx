@@ -246,26 +246,29 @@ export default function ApplicationsPage(): ReactElement {
   };
 
   return (
-    <main className='mx-auto w-full max-w-[1500px] space-y-6 p-4 sm:p-6 lg:p-8'>
-      <header className='relative overflow-hidden rounded-2xl border bg-card px-5 py-6 shadow-sm sm:px-7'>
-        <div className='pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-primary/10 blur-3xl' />
-        <div className='relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between'>
-          <div className='max-w-3xl space-y-2'>
-            <div className='flex items-center gap-2 text-sm font-medium text-primary'>
-              <Boxes className='size-4' aria-hidden='true' />
+    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+      <header className='border-b bg-background px-4 py-7 sm:px-6'>
+        <div className='mx-auto flex w-full max-w-7xl flex-col gap-5 sm:flex-row sm:items-end sm:justify-between'>
+          <div className='max-w-3xl'>
+            <p className='inline-flex items-center gap-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase'>
+              <Boxes className='size-3.5' aria-hidden='true' />
               {t('applications.eyebrow', { defaultValue: 'Control plane' })}
-            </div>
-            <h1 className='text-2xl font-semibold tracking-tight sm:text-3xl'>
+            </p>
+            <h1 className='mt-1 text-2xl font-semibold tracking-tight'>
               {t('applications.title', { defaultValue: 'Applications' })}
             </h1>
-            <p className='max-w-2xl text-sm leading-6 text-muted-foreground'>
+            <p className='mt-1 text-sm text-muted-foreground'>
               {t('applications.description', {
                 defaultValue:
                   'Operate application runtimes, releases, and environments from one focused workspace.',
               })}
             </p>
           </div>
-          <Button type='button' size='lg' onClick={() => setCreateOpen(true)}>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => setCreateOpen(true)}
+          >
             <Plus aria-hidden='true' />
             {t('applications.create.button', {
               defaultValue: 'Create application',
@@ -274,201 +277,212 @@ export default function ApplicationsPage(): ReactElement {
         </div>
       </header>
 
-      {notice ? (
-        <Alert className='border-primary/25 bg-primary/5'>
-          <AlertTitle>
-            {t('applications.notice.title', { defaultValue: 'Done' })}
-          </AlertTitle>
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      <section
-        className='rounded-2xl border bg-card p-4 shadow-sm sm:p-5'
-        aria-label={t('applications.filters.label', {
-          defaultValue: 'Application filters',
-        })}
-      >
-        <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
-          <label className='relative min-w-0 flex-1 lg:max-w-xl'>
-            <span className='sr-only'>
-              {t('applications.search.label', {
-                defaultValue: 'Search applications',
-              })}
-            </span>
-            <Search
-              className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground'
-              aria-hidden='true'
-            />
-            <Input
-              type='search'
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setVisibleCount(PAGE_SIZE);
-              }}
-              className='h-9 pl-9'
-              placeholder={t('applications.search.placeholder', {
-                defaultValue: 'Search by name, slug, or description',
-              })}
-            />
-          </label>
-          <div className='flex min-w-0 flex-wrap items-center gap-2'>
-            <Label htmlFor='applications-runtime-filter'>
-              {t('applications.filters.status', { defaultValue: 'Status' })}
-            </Label>
-            <NativeSelect
-              id='applications-runtime-filter'
-              value={runtimeFilter}
-              onChange={(event) => {
-                setRuntimeFilter(event.target.value as RuntimeFilter);
-                setVisibleCount(PAGE_SIZE);
-              }}
-              className='min-w-40'
-            >
-              <NativeSelectOption value='all'>
-                {t('applications.filters.all', {
-                  defaultValue: 'All statuses',
-                })}
-              </NativeSelectOption>
-              {(
-                ['running', 'idle', 'starting', 'stopping', 'stopped'] as const
-              ).map((state) => (
-                <NativeSelectOption key={state} value={state}>
-                  {runtimeLabel(t, state)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
-          <div className='flex items-center gap-1 rounded-lg border bg-muted/30 p-1 lg:ml-auto'>
-            <Button
-              type='button'
-              size='icon-sm'
-              variant={view === 'cards' ? 'secondary' : 'ghost'}
-              aria-label={t('applications.views.cards', {
-                defaultValue: 'Card view',
-              })}
-              aria-pressed={view === 'cards'}
-              onClick={() => setView('cards')}
-            >
-              <Grid2X2 aria-hidden='true' />
-            </Button>
-            <Button
-              type='button'
-              size='icon-sm'
-              variant={view === 'list' ? 'secondary' : 'ghost'}
-              aria-label={t('applications.views.list', {
-                defaultValue: 'List view',
-              })}
-              aria-pressed={view === 'list'}
-              onClick={() => setView('list')}
-            >
-              <List aria-hidden='true' />
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {visibleApplications.length === 0 ? (
-        <Empty className='min-h-80 border bg-card'>
-          <EmptyHeader>
-            <EmptyMedia variant='icon'>
-              <Search aria-hidden='true' />
-            </EmptyMedia>
-            <EmptyTitle>
-              {t('applications.empty.title', {
-                defaultValue: 'No matching applications',
-              })}
-            </EmptyTitle>
-            <EmptyDescription>
-              {t('applications.empty.description', {
-                defaultValue:
-                  'Try another search term or select a different runtime status.',
-              })}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : view === 'cards' ? (
-        <div className='grid items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3'>
-          {visibleApplications.map((application) => (
-            <ApplicationCard
-              key={application.id}
-              application={application}
-              onAction={(action) =>
-                setPending({ applicationId: application.id, action })
-              }
-              onNavigate={(target) =>
-                void navigate(
-                  `/apps/${encodeURIComponent(application.id)}${target}`,
-                )
-              }
-              onOpen={() =>
-                setNotice(
-                  t('applications.open.demo', {
-                    defaultValue:
-                      'Demo mode: an application URL would open here.',
-                  }),
-                )
-              }
-            />
-          ))}
-        </div>
-      ) : (
-        <ApplicationTable
-          applications={visibleApplications}
-          onAction={(applicationId, action) =>
-            setPending({ applicationId, action })
-          }
-          onNavigate={(applicationId, target) =>
-            void navigate(`/apps/${encodeURIComponent(applicationId)}${target}`)
-          }
-          onOpen={() =>
-            setNotice(
-              t('applications.open.demo', {
-                defaultValue: 'Demo mode: an application URL would open here.',
-              }),
-            )
-          }
-        />
-      )}
-
-      <div className='flex flex-col gap-3 border-t pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between'>
-        <p>
-          {t('applications.summary', {
-            defaultValue: 'Showing {{visible}} of {{total}} applications',
-            visible: visibleApplications.length,
-            total: filteredApplications.length,
-          })}
-        </p>
-        {visibleCount < filteredApplications.length ? (
-          <Button
-            type='button'
-            variant='outline'
-            onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-          >
-            {t('applications.loadMore', { defaultValue: 'Load more' })}
-          </Button>
+      <div className='mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6'>
+        {notice ? (
+          <Alert className='border-primary/25 bg-primary/5'>
+            <AlertTitle>
+              {t('applications.notice.title', { defaultValue: 'Done' })}
+            </AlertTitle>
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
         ) : null}
-      </div>
 
-      <CreateApplicationDialog
-        open={createOpen}
-        existingSlugs={applications.map((application) => application.slug)}
-        onOpenChange={setCreateOpen}
-        onCreate={createApplication}
-      />
-      <ConfirmApplicationAction
-        pending={pending}
-        applicationName={
-          pending
-            ? applications.find(
-                (application) => application.id === pending.applicationId,
-              )?.name
-            : undefined
-        }
-        onCancel={() => setPending(undefined)}
-        onConfirm={applyPendingAction}
-      />
+        <section
+          className='rounded-2xl border bg-card p-4 shadow-sm sm:p-5'
+          aria-label={t('applications.filters.label', {
+            defaultValue: 'Application filters',
+          })}
+        >
+          <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
+            <label className='relative min-w-0 flex-1 lg:max-w-xl'>
+              <span className='sr-only'>
+                {t('applications.search.label', {
+                  defaultValue: 'Search applications',
+                })}
+              </span>
+              <Search
+                className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground'
+                aria-hidden='true'
+              />
+              <Input
+                type='search'
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setVisibleCount(PAGE_SIZE);
+                }}
+                className='h-9 pl-9'
+                placeholder={t('applications.search.placeholder', {
+                  defaultValue: 'Search by name, slug, or description',
+                })}
+              />
+            </label>
+            <div className='flex min-w-0 flex-wrap items-center gap-2'>
+              <Label htmlFor='applications-runtime-filter'>
+                {t('applications.filters.status', { defaultValue: 'Status' })}
+              </Label>
+              <NativeSelect
+                id='applications-runtime-filter'
+                value={runtimeFilter}
+                onChange={(event) => {
+                  setRuntimeFilter(event.target.value as RuntimeFilter);
+                  setVisibleCount(PAGE_SIZE);
+                }}
+                className='min-w-40'
+              >
+                <NativeSelectOption value='all'>
+                  {t('applications.filters.all', {
+                    defaultValue: 'All statuses',
+                  })}
+                </NativeSelectOption>
+                {(
+                  [
+                    'running',
+                    'idle',
+                    'starting',
+                    'stopping',
+                    'stopped',
+                  ] as const
+                ).map((state) => (
+                  <NativeSelectOption key={state} value={state}>
+                    {runtimeLabel(t, state)}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className='flex items-center gap-1 rounded-lg border bg-muted/30 p-1 lg:ml-auto'>
+              <Button
+                type='button'
+                size='icon-sm'
+                variant={view === 'cards' ? 'secondary' : 'ghost'}
+                aria-label={t('applications.views.cards', {
+                  defaultValue: 'Card view',
+                })}
+                aria-pressed={view === 'cards'}
+                onClick={() => setView('cards')}
+              >
+                <Grid2X2 aria-hidden='true' />
+              </Button>
+              <Button
+                type='button'
+                size='icon-sm'
+                variant={view === 'list' ? 'secondary' : 'ghost'}
+                aria-label={t('applications.views.list', {
+                  defaultValue: 'List view',
+                })}
+                aria-pressed={view === 'list'}
+                onClick={() => setView('list')}
+              >
+                <List aria-hidden='true' />
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {visibleApplications.length === 0 ? (
+          <Empty className='min-h-80 border bg-card'>
+            <EmptyHeader>
+              <EmptyMedia variant='icon'>
+                <Search aria-hidden='true' />
+              </EmptyMedia>
+              <EmptyTitle>
+                {t('applications.empty.title', {
+                  defaultValue: 'No matching applications',
+                })}
+              </EmptyTitle>
+              <EmptyDescription>
+                {t('applications.empty.description', {
+                  defaultValue:
+                    'Try another search term or select a different runtime status.',
+                })}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : view === 'cards' ? (
+          <div className='grid items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3'>
+            {visibleApplications.map((application) => (
+              <ApplicationCard
+                key={application.id}
+                application={application}
+                onAction={(action) =>
+                  setPending({ applicationId: application.id, action })
+                }
+                onNavigate={(target) =>
+                  void navigate(
+                    `/apps/${encodeURIComponent(application.id)}${target}`,
+                  )
+                }
+                onOpen={() =>
+                  setNotice(
+                    t('applications.open.demo', {
+                      defaultValue:
+                        'Demo mode: an application URL would open here.',
+                    }),
+                  )
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          <ApplicationTable
+            applications={visibleApplications}
+            onAction={(applicationId, action) =>
+              setPending({ applicationId, action })
+            }
+            onNavigate={(applicationId, target) =>
+              void navigate(
+                `/apps/${encodeURIComponent(applicationId)}${target}`,
+              )
+            }
+            onOpen={() =>
+              setNotice(
+                t('applications.open.demo', {
+                  defaultValue:
+                    'Demo mode: an application URL would open here.',
+                }),
+              )
+            }
+          />
+        )}
+
+        <div className='flex flex-col gap-3 border-t pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between'>
+          <p>
+            {t('applications.summary', {
+              defaultValue: 'Showing {{visible}} of {{total}} applications',
+              visible: visibleApplications.length,
+              total: filteredApplications.length,
+            })}
+          </p>
+          {visibleCount < filteredApplications.length ? (
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+            >
+              {t('applications.loadMore', { defaultValue: 'Load more' })}
+            </Button>
+          ) : null}
+        </div>
+
+        <CreateApplicationDialog
+          open={createOpen}
+          existingSlugs={applications.map((application) => application.slug)}
+          onOpenChange={setCreateOpen}
+          onCreate={createApplication}
+        />
+        <ConfirmApplicationAction
+          pending={pending}
+          applicationName={
+            pending
+              ? applications.find(
+                  (application) => application.id === pending.applicationId,
+                )?.name
+              : undefined
+          }
+          onCancel={() => setPending(undefined)}
+          onConfirm={applyPendingAction}
+        />
+      </div>
     </main>
   );
 }
