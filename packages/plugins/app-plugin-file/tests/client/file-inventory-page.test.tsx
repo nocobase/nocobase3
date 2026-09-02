@@ -57,13 +57,19 @@ describe('file inventory page', () => {
           ? sourcesResponse('alpha')
           : sourcesResponse('beta');
       }
-      if (path.includes('/alpha/files?page=1')) {
+      if (
+        path.includes('/alpha/files?pageSize=25') &&
+        !path.includes('cursor=')
+      ) {
         return filesResponse('alpha-page-1.pdf', 1, true);
       }
-      if (path.includes('/alpha/files?page=2')) {
+      if (path.includes('/alpha/files?pageSize=25&cursor=alpha-page-1.pdf')) {
         return filesResponse('alpha-page-2.pdf', 2);
       }
-      if (path.includes('/beta/files?page=1')) {
+      if (
+        path.includes('/beta/files?pageSize=25') &&
+        !path.includes('cursor=')
+      ) {
         return filesResponse('beta-page-1.pdf');
       }
       throw new Error(`Unexpected request: ${path}`);
@@ -78,12 +84,14 @@ describe('file inventory page', () => {
 
     expect(await screen.findByText('beta-page-1.pdf')).toBeVisible();
     expect(request).toHaveBeenCalledWith(
-      expect.stringContaining('/beta/files?page=1&pageSize=25'),
+      expect.stringContaining('/beta/files?pageSize=25'),
       expect.anything(),
     );
     expect(
-      request.mock.calls.some(([path]) =>
-        String(path).includes('/beta/files?page=2'),
+      request.mock.calls.some(
+        ([path]) =>
+          String(path).includes('/beta/files?') &&
+          String(path).includes('cursor='),
       ),
     ).toBe(false);
   });
@@ -119,10 +127,13 @@ describe('file inventory page', () => {
     let firstPageLoads = 0;
     request.mockImplementation(async (path: string) => {
       if (path === 'files/inventory/sources') return sourcesResponse('alpha');
-      if (path.includes('/alpha/files?page=2')) {
+      if (path.includes('/alpha/files?pageSize=25&cursor=before-shrink.pdf')) {
         return { data: [], meta: pageMeta(2) };
       }
-      if (path.includes('/alpha/files?page=1')) {
+      if (
+        path.includes('/alpha/files?pageSize=25') &&
+        !path.includes('cursor=')
+      ) {
         firstPageLoads += 1;
         return firstPageLoads === 1
           ? filesResponse('before-shrink.pdf', 1, true)
@@ -178,15 +189,20 @@ function filesResponse(
         updatedAt: '2026-09-02T01:00:00.000Z',
       },
     ],
-    meta: pageMeta(page, hasNextPage),
+    meta: pageMeta(page, hasNextPage, filename),
   };
 }
 
 function pageMeta(
-  page: number,
+  _page: number,
   hasNextPage: boolean = false,
+  nextCursor?: string,
 ): FileInventoryFilesResponse['meta'] {
-  return { page, pageSize: 25, hasNextPage };
+  return {
+    pageSize: 25,
+    hasNextPage,
+    ...(hasNextPage && nextCursor ? { nextCursor } : {}),
+  };
 }
 
 function deferred<T>(): {

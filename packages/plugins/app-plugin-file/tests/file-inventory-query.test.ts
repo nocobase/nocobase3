@@ -57,18 +57,17 @@ describe('file inventory query', () => {
 
   it('paginates only the standard client-safe fields', async () => {
     const firstPage = await listDatabaseFileSourceItems(database, source(), {
-      page: 1,
       pageSize: 2,
     });
     const result = await listDatabaseFileSourceItems(database, source(), {
-      page: 2,
       pageSize: 2,
+      cursor: firstPage.meta.nextCursor,
     });
 
     expect(firstPage.meta.hasNextPage).toBe(true);
+    expect(firstPage.meta.nextCursor).toBe('file-2');
     expect(firstPage.data).toHaveLength(2);
     expect(result.meta).toEqual({
-      page: 2,
       pageSize: 2,
       hasNextPage: false,
     });

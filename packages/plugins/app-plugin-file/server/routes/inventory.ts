@@ -1,4 +1,5 @@
-import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import type { AuthEnv } from '@nocobase/app-plugin-authentication';
+import type { AuthorizationEnv } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
@@ -11,6 +12,7 @@ import type {
   FileInventoryErrorResponse,
   FileInventorySourcesResponse,
 } from '../../shared/inventory.js';
+import { FILE_INVENTORY_RESOURCE } from '../../shared/inventory.js';
 import { listDatabaseFileSourceItems } from '../file-inventory-query.js';
 import {
   findRegisteredDatabaseFileSource,
@@ -20,17 +22,62 @@ import { translateFileMessage } from '../i18n.js';
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+const MAX_CURSOR_LENGTH = 512;
+
+type InventoryRoutesEnv = {
+  Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
+};
 
 export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
-  defineApiRoutes((app) => {
-    const authentication = app.container.resolve(authenticationToken);
+  defineApiRoutes(async (app) => {
+    const authenticationModule = await loadOptionalModule(
+      () => import('@nocobase/app-plugin-authentication'),
+      '@nocobase/app-plugin-authentication',
+    );
+    if (
+      !authenticationModule ||
+      !app.container.has(authenticationModule.authenticationToken)
+    ) {
+      return new Hono();
+    }
+    const authentication = app.container.resolve(
+      authenticationModule.authenticationToken,
+    );
+    const authorizationModule = await loadOptionalModule(
+      () => import('@nocobase/app-plugin-authorization'),
+      '@nocobase/app-plugin-authorization',
+    );
+    const authorization =
+      authorizationModule &&
+      app.container.has(authorizationModule.authorizationToken)
+        ? app.container.resolve(authorizationModule.authorizationToken)
+        : undefined;
     const database = app.container.has(databaseManagerToken)
       ? app.container.resolve(databaseManagerToken)
       : undefined;
     const router = new Hono();
-    const routes = new Hono();
+    const routes = new Hono<InventoryRoutesEnv>();
 
     routes.use('*', authentication.required());
+    if (authorization) {
+      routes.use('*', authorization.middleware());
+      routes.use('*', async (context, next) => {
+        const allowed = await context.get('authz').can({
+          resource: { type: 'page', id: FILE_INVENTORY_RESOURCE },
+          action: 'access',
+        });
+        if (!allowed) {
+          return inventoryError(
+            context,
+            'FILE_INVENTORY_FORBIDDEN',
+            'errors.inventoryForbidden',
+            'File inventory access is required.',
+            403,
+          );
+        }
+        await next();
+      });
+    }
 
     routes.get('/sources', async (context) => {
       if (!database) {
@@ -66,17 +113,14 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           404,
         );
       }
-      const page = parsePositiveInteger(context.req.query('page'), 1);
       const pageSize = parsePositiveInteger(
         context.req.query('pageSize'),
         DEFAULT_PAGE_SIZE,
         MAX_PAGE_SIZE,
       );
-      if (
-        page === null ||
-        pageSize === null ||
-        !Number.isSafeInteger((page - 1) * pageSize)
-      ) {
+      const cursorValue = context.req.query('cursor');
+      const cursor = parseCursor(cursorValue);
+      if (pageSize === null || cursor === null) {
         return inventoryError(
           context,
           'INVALID_FILE_INVENTORY_PAGINATION',
@@ -88,8 +132,8 @@ export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       try {
         return context.json(
           await listDatabaseFileSourceItems(database, source, {
-            page,
             pageSize,
+            ...(cursor === undefined ? {} : { cursor }),
           }),
         );
       } catch (error) {
@@ -125,6 +169,38 @@ function parsePositiveInteger(
   return parsed;
 }
 
+function parseCursor(value: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value.length === 0 || value.length > MAX_CURSOR_LENGTH) return null;
+  return value;
+}
+
+async function loadOptionalModule<Module>(
+  loader: () => Promise<Module>,
+  packageName: string,
+): Promise<Module | undefined> {
+  try {
+    return await loader();
+  } catch (error) {
+    if (isMissingOptionalModule(error, packageName)) return undefined;
+    throw error;
+  }
+}
+
+function isMissingOptionalModule(error: unknown, packageName: string): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    readonly code?: unknown;
+    readonly message?: unknown;
+  };
+  const { code, message } = candidate;
+  return (
+    (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') &&
+    typeof message === 'string' &&
+    message.includes(packageName)
+  );
+}
+
 function inventoryError<
   TEnv extends Env,
   TPath extends string,
@@ -134,7 +210,7 @@ function inventoryError<
   code: string,
   key: string,
   defaultValue: string,
-  status: 400 | 404 | 503,
+  status: 400 | 403 | 404 | 503,
 ): Response {
   const response: FileInventoryErrorResponse = {
     error: {

@@ -14,6 +14,7 @@ const enUS = {
     fileSizeInvalid: 'File size must be a non-negative safe integer.',
     fileTypeNotAllowed: 'The uploaded file type is not allowed.',
     inputInvalid: 'File input is invalid.',
+    inventoryForbidden: 'File inventory access is required.',
     inventoryPaginationInvalid: 'File inventory pagination is invalid.',
     inventorySourceNotFound: 'The registered file source was not found.',
     inventorySourceUnavailable: 'The registered file table is unavailable.',

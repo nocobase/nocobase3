@@ -2,6 +2,10 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   createDatabaseManager,
@@ -83,18 +87,18 @@ describe('file inventory routes', () => {
     });
 
     const files = await app.request(
-      `/files/inventory/sources/${TABLE}/files?page=1&pageSize=10`,
+      `/files/inventory/sources/${TABLE}/files?pageSize=10`,
     );
     expect(files.status).toBe(200);
     const body = await files.text();
     expect(JSON.parse(body)).toMatchObject({
       data: [{ id: 'file-1', filename: 'report.pdf' }],
-      meta: { page: 1, pageSize: 10, hasNextPage: false },
+      meta: { pageSize: 10, hasNextPage: false },
     });
     expect(body).not.toContain('files/file-1');
   });
 
-  it('validates source ids, pagination, and safe offsets', async () => {
+  it('validates source ids and cursor pagination', async () => {
     const app = await createInventoryApp({ database });
 
     const missing = await app.request(
@@ -106,9 +110,9 @@ describe('file inventory routes', () => {
     });
 
     for (const path of [
-      `/files/inventory/sources/${TABLE}/files?page=0&pageSize=10`,
       `/files/inventory/sources/${TABLE}/files?page=1&pageSize=101`,
-      `/files/inventory/sources/${TABLE}/files?page=9007199254740991&pageSize=100`,
+      `/files/inventory/sources/${TABLE}/files?cursor=`,
+      `/files/inventory/sources/${TABLE}/files?cursor=${'x'.repeat(513)}`,
     ]) {
       const response = await app.request(path);
       expect(response.status).toBe(400);
@@ -169,10 +173,32 @@ describe('file inventory routes', () => {
     expect((await app.request('/files/inventory/sources')).status).toBe(401);
   });
 
-  it('fails route creation when authentication is unavailable', () => {
-    expect(() =>
-      inventoryApiRoutes.createRouter(createApplication({ database })),
-    ).toThrow(/authentication.*not registered/iu);
+  it('requires file inventory access when authorization is available', async () => {
+    const app = await createInventoryApp({
+      database,
+      denyAuthorization: true,
+    });
+
+    const response = await app.request('/files/inventory/sources');
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'FILE_INVENTORY_FORBIDDEN' },
+    });
+  });
+
+  it('allows authenticated access when authorization is unavailable', async () => {
+    const app = await createInventoryApp({ database, authorization: false });
+
+    expect((await app.request('/files/inventory/sources')).status).toBe(200);
+  });
+
+  it('skips inventory routes when authentication is unavailable', async () => {
+    const router = await inventoryApiRoutes.createRouter(
+      createApplication({ database }),
+    );
+
+    expect((await router.request('/files/inventory/sources')).status).toBe(404);
   });
 });
 
@@ -190,7 +216,9 @@ function registerSource(database: DatabaseManager, table: string): void {
 async function createInventoryApp(
   options: {
     readonly database?: DatabaseManager;
+    readonly authorization?: boolean;
     readonly denyAuthentication?: boolean;
+    readonly denyAuthorization?: boolean;
   } = {},
 ): Promise<Hono> {
   const runtime = await createFileI18nRuntime(serverLocales);
@@ -202,7 +230,9 @@ async function createInventoryApp(
       createApplication({
         database: options.database,
         authentication: true,
+        authorization: options.authorization ?? true,
         denyAuthentication: options.denyAuthentication,
+        denyAuthorization: options.denyAuthorization,
       }),
     ),
   );
@@ -212,7 +242,9 @@ async function createInventoryApp(
 function createApplication(options: {
   readonly database?: DatabaseManager;
   readonly authentication?: boolean;
+  readonly authorization?: boolean;
   readonly denyAuthentication?: boolean;
+  readonly denyAuthorization?: boolean;
 }): AppPluginApplication {
   const container = new ServiceContainer();
   if (options.database) {
@@ -227,6 +259,16 @@ function createApplication(options: {
         return next();
       },
     } as unknown as Auth);
+  }
+  if (options.authorization) {
+    container.instance(authorizationToken, {
+      middleware: () => async (context, next) => {
+        context.set('authz', {
+          can: async () => !options.denyAuthorization,
+        });
+        await next();
+      },
+    } as unknown as AppAuthorization);
   }
   return {
     appName: 'main',

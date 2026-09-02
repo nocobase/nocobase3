@@ -32,12 +32,18 @@ Application owns
   createFileRoute() and the standard HTTP contract
   createFilesClient() and FilesClient types
   reusable upload, list, thumbnail, and preview components
+  the generic administrator file inventory page and API
   storage, filename, token, and preview mechanics
 ```
 
-The File plugin intentionally ships no business tables, attachment endpoints,
-or application pages. Never depend on `/file-demo`, `/api/attachments`,
-`fileDemo*` collections, or plugin-internal source paths.
+The File plugin intentionally ships no business tables or application-specific
+attachment endpoints and pages. It does provide the generic `/settings/files`
+inventory and `/api/files/inventory/*` API for registered database-backed file
+routes. With the Authorization plugin, both require the `file.inventory` page
+access permission; without Authorization, the API remains available to
+authenticated users. When Authentication is unavailable, the inventory API is
+not mounted. Never depend on `/file-demo`, `/api/attachments`, `fileDemo*`
+collections, or plugin-internal source paths.
 
 ## Application workflow
 

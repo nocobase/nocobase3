@@ -31,9 +31,11 @@ export default function FileInventoryPage(): ReactElement {
   const [sources, setSources] = useState<readonly FileInventorySource[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [page, setPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<
+    readonly (string | undefined)[]
+  >([undefined]);
   const [files, setFiles] = useState<readonly FileInventoryItem[]>([]);
   const [fileMeta, setFileMeta] = useState<FileInventoryFilesResponse['meta']>({
-    page: 1,
     pageSize: PAGE_SIZE,
     hasNextPage: false,
   });
@@ -53,6 +55,9 @@ export default function FileInventoryPage(): ReactElement {
   const refresh = (): void => {
     setSourcesLoading(true);
     setSourcesError(undefined);
+    setPage(1);
+    setPageCursors([undefined]);
+    setFileMeta({ pageSize: PAGE_SIZE, hasNextPage: false });
     setRevision((value) => value + 1);
   };
 
@@ -81,9 +86,9 @@ export default function FileInventoryPage(): ReactElement {
           selectedIdRef.current = next;
           setSelectedId(next);
           setPage(1);
+          setPageCursors([undefined]);
           setFiles([]);
           setFileMeta({
-            page: 1,
             pageSize: PAGE_SIZE,
             hasNextPage: false,
           });
@@ -114,6 +119,7 @@ export default function FileInventoryPage(): ReactElement {
     if (!selectedSourceId) return;
     const controller = new AbortController();
     const requestSourceId = selectedSourceId;
+    const cursor = pageCursors[page - 1];
     const isCurrentRequest = (): boolean =>
       !controller.signal.aborted && selectedIdRef.current === requestSourceId;
     void Promise.resolve().then(() => {
@@ -121,9 +127,11 @@ export default function FileInventoryPage(): ReactElement {
       setFilesLoading(true);
       setFilesError(undefined);
     });
+    const query = new URLSearchParams({ pageSize: String(PAGE_SIZE) });
+    if (cursor !== undefined) query.set('cursor', cursor);
     void appClient
       .request<FileInventoryFilesResponse>(
-        `files/inventory/sources/${encodeURIComponent(selectedSourceId)}/files?page=${page}&pageSize=${PAGE_SIZE}`,
+        `files/inventory/sources/${encodeURIComponent(selectedSourceId)}/files?${query.toString()}`,
         { signal: controller.signal },
       )
       .then((response) => {
@@ -153,18 +161,26 @@ export default function FileInventoryPage(): ReactElement {
         if (isCurrentRequest()) setFilesLoading(false);
       });
     return () => controller.abort();
-  }, [appClient, page, revision, selectedSourceId, t]);
+  }, [appClient, page, pageCursors, revision, selectedSourceId, t]);
 
   const selectSource = (sourceId: string): void => {
     if (sourceId === selectedIdRef.current) return;
     selectedIdRef.current = sourceId;
     setSelectedId(sourceId);
     setPage(1);
+    setPageCursors([undefined]);
     setFiles([]);
-    setFileMeta({ page: 1, pageSize: PAGE_SIZE, hasNextPage: false });
+    setFileMeta({ pageSize: PAGE_SIZE, hasNextPage: false });
   };
 
   const changePage = (nextPage: number): void => {
+    if (nextPage > page) {
+      if (!fileMeta.nextCursor) return;
+      setPageCursors((current) => [
+        ...current.slice(0, page),
+        fileMeta.nextCursor,
+      ]);
+    }
     setPage(nextPage);
   };
 
@@ -266,6 +282,7 @@ export default function FileInventoryPage(): ReactElement {
 
                 <Pagination
                   meta={fileMeta}
+                  page={page}
                   loading={filesLoading}
                   onPageChange={changePage}
                 />
@@ -416,10 +433,12 @@ function FilesTable({
 
 function Pagination({
   meta,
+  page,
   loading,
   onPageChange,
 }: {
   readonly meta: FileInventoryFilesResponse['meta'];
+  readonly page: number;
   readonly loading: boolean;
   readonly onPageChange: (page: number) => void;
 }): ReactElement {
@@ -430,7 +449,7 @@ function Pagination({
         <span className='min-w-20 text-center text-xs tabular-nums text-muted-foreground'>
           {t('inventory.pagination.page', {
             defaultValue: 'Page {{page}}',
-            page: meta.page,
+            page,
           })}
         </span>
         <button
@@ -438,8 +457,8 @@ function Pagination({
             defaultValue: 'Previous page',
           })}
           className='grid size-8 place-items-center rounded-md border hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
-          disabled={loading || meta.page <= 1}
-          onClick={() => onPageChange(meta.page - 1)}
+          disabled={loading || page <= 1}
+          onClick={() => onPageChange(page - 1)}
           title={t('inventory.pagination.previous', {
             defaultValue: 'Previous page',
           })}
@@ -453,7 +472,7 @@ function Pagination({
           })}
           className='grid size-8 place-items-center rounded-md border hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
           disabled={loading || !meta.hasNextPage}
-          onClick={() => onPageChange(meta.page + 1)}
+          onClick={() => onPageChange(page + 1)}
           title={t('inventory.pagination.next', {
             defaultValue: 'Next page',
           })}

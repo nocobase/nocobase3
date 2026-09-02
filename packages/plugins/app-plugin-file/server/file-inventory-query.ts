@@ -23,8 +23,8 @@ interface FileInventoryRow extends Row {
 }
 
 export interface FileInventoryPageOptions {
-  readonly page: number;
   readonly pageSize: number;
+  readonly cursor?: string;
 }
 
 const INVENTORY_COLUMNS: readonly string[] = Object.freeze([
@@ -43,26 +43,25 @@ export async function listDatabaseFileSourceItems(
   source: RegisteredDatabaseFileSource,
   options: FileInventoryPageOptions,
 ): Promise<FileInventoryFilesResponse> {
-  const offset = (options.page - 1) * options.pageSize;
-  if (!Number.isSafeInteger(offset)) {
-    throw new RangeError('File inventory offset is outside the safe range.');
-  }
-  const rows = await database
+  let query = database
     .query()
     .selectFrom<FileInventoryRow>(source.table)
     .select(INVENTORY_COLUMNS)
-    .orderBy('createdAt', 'desc')
     .orderBy('id', 'desc')
-    .limit(options.pageSize + 1)
-    .offset(offset)
-    .execute<FileInventoryRow>();
+    .limit(options.pageSize + 1);
+  if (options.cursor !== undefined) {
+    query = query.where('id', '<', options.cursor);
+  }
+  const rows = await query.execute<FileInventoryRow>();
   const hasNextPage = rows.length > options.pageSize;
+  const pageRows = rows.slice(0, options.pageSize);
+  const nextCursor = hasNextPage ? pageRows.at(-1)?.id : undefined;
   return {
-    data: rows.slice(0, options.pageSize).map(toInventoryItem),
+    data: pageRows.map(toInventoryItem),
     meta: {
-      page: options.page,
       pageSize: options.pageSize,
       hasNextPage,
+      ...(nextCursor === undefined ? {} : { nextCursor }),
     },
   };
 }

@@ -7,6 +7,7 @@ import {
   createFileRoute,
   DEFAULT_FILE_ROUTE_VISIBILITY,
   default as fileServerPlugin,
+  FILE_INVENTORY_RESOURCE as serverInventoryResource,
   type CreateFileRouteOptions,
   type FileRouteAction,
   type FileStore,
@@ -15,6 +16,7 @@ import * as serverApi from '@nocobase/app-plugin-file/server';
 import {
   createFilesClient,
   default as fileClientPlugin,
+  FILE_INVENTORY_RESOURCE as clientInventoryResource,
   FilePreviewField,
   isSafeImagePreview,
   resolveFilePreviewKind,
@@ -59,6 +61,8 @@ describe('file plugin public contracts', () => {
       allowClientOverride: false,
     });
     expect(Object.isFrozen(DEFAULT_FILE_ROUTE_VISIBILITY)).toBe(true);
+    expect(serverInventoryResource).toBe('file.inventory');
+    expect(clientInventoryResource).toBe(serverInventoryResource);
   });
 
   it('contributes the inventory routes and locales without business schema', () => {
@@ -113,6 +117,7 @@ describe('file plugin public contracts', () => {
   it('keeps application assembly APIs internal', () => {
     expect(Object.keys(serverApi).sort()).toEqual([
       'DEFAULT_FILE_ROUTE_VISIBILITY',
+      'FILE_INVENTORY_RESOURCE',
       'createFileRoute',
       'default',
     ]);

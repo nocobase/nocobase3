@@ -1,3 +1,5 @@
+export const FILE_INVENTORY_RESOURCE: string = 'file.inventory';
+
 export interface FileInventorySource {
   readonly id: string;
   readonly table: string;
@@ -28,8 +30,8 @@ export interface FileInventorySourcesResponse {
 export interface FileInventoryFilesResponse {
   readonly data: readonly FileInventoryItem[];
   readonly meta: {
-    readonly page: number;
     readonly pageSize: number;
     readonly hasNextPage: boolean;
+    readonly nextCursor?: string;
   };
 }
