@@ -1,5 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import knex, { type Knex } from 'knex';
 import {
@@ -8,6 +7,7 @@ import {
   ModuleCollectionMetadataStore,
 } from '@nocobase/db';
 import type { RunExampleOptions } from '../shared/types.js';
+import { createExampleTempDirectory } from '../shared/temp-directory.js';
 import {
   externalMetadataDocuments,
   externalMetadataSource,
@@ -38,9 +38,7 @@ export async function runExternalModuleMetadata(
   options: RunExampleOptions = {},
 ): Promise<ExternalModuleMetadataResult> {
   const write = options.write ?? (() => undefined);
-  const directory = await mkdtemp(
-    path.join(tmpdir(), 'nocobase-db-external-example-'),
-  );
+  const directory = await createExampleTempDirectory('external-');
   const filename = path.join(directory, 'external.sqlite');
   let setupClient: Knex | undefined;
   let database: DatabaseManager | undefined;

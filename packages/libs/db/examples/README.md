@@ -1,7 +1,9 @@
 # `@nocobase/db` Examples
 
 The examples are executable documentation for complete public API workflows.
-They use temporary SQLite databases and clean them up after each run.
+They create SQLite databases under `examples/tmp/` and remove each run's
+temporary subdirectory when it finishes. The `tmp/` directory is ignored by
+Git.
 
 ```bash
 pnpm --filter @nocobase/db example list

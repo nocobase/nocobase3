@@ -1,5 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -9,6 +8,7 @@ import {
   type DatabaseManager,
 } from '@nocobase/db';
 import type { RunExampleOptions } from '../shared/types.js';
+import { createExampleTempDirectory } from '../shared/temp-directory.js';
 
 const migrationName = '202609020001_create_commerce_collections';
 const seedName = '202609020002_seed_order_statuses';
@@ -47,9 +47,7 @@ export async function runManagedCollectionLifecycle(
   options: RunExampleOptions = {},
 ): Promise<ManagedCollectionLifecycleResult> {
   const write = options.write ?? (() => undefined);
-  const directory = await mkdtemp(
-    path.join(tmpdir(), 'nocobase-db-managed-example-'),
-  );
+  const directory = await createExampleTempDirectory('managed-');
   const filename = path.join(directory, 'example.sqlite');
   let database: DatabaseManager | undefined;
 

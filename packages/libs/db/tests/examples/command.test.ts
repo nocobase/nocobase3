@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { readdir } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
@@ -22,6 +23,7 @@ describe('@nocobase/db examples command', () => {
     expect(result.stdout).toContain('Loaded Database Metadata revision');
     expect(result.stdout).toContain('Resolved orders');
     expect(result.stdout).toContain('Reopened the database');
+    await expectExampleTempDirectoryEmpty();
   });
 
   it('runs the external Module Metadata lifecycle', async () => {
@@ -32,6 +34,7 @@ describe('@nocobase/db examples command', () => {
     expect(result.stdout).toContain('Module Metadata');
     expect(result.stdout).toContain('Inserted and selected records');
     expect(result.stdout).toContain('write protection');
+    await expectExampleTempDirectoryEmpty();
   });
 });
 
@@ -46,4 +49,8 @@ async function runExample(
       encoding: 'utf8',
     },
   );
+}
+
+async function expectExampleTempDirectoryEmpty(): Promise<void> {
+  await expect(readdir('examples/tmp')).resolves.toEqual([]);
 }
