@@ -1,9 +1,10 @@
-import type {
-  NotificationChannelDefinition,
-  NotificationContent,
-  NotificationProviderIdentity,
-  NotificationRecipient,
+import {
+  type NotificationChannelDefinition,
+  type NotificationContent,
+  type NotificationProviderIdentity,
+  type NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../i18n.js';
 
 export interface ImRecipient {
   readonly provider: NotificationProviderIdentity;
@@ -61,6 +62,42 @@ export function createImChannelDefinition(
 > {
   return {
     type: 'im',
+    test: {
+      label: notificationProviderText('test.channels.im', 'IM'),
+      fields: [
+        {
+          name: 'title',
+          label: notificationProviderText('test.fields.title', 'Title'),
+          type: 'text',
+          required: true,
+          defaultValue: notificationProviderText(
+            'test.defaults.title',
+            'NocoBase notification test',
+          ),
+          maxLength: 200,
+        },
+        {
+          name: 'body',
+          label: notificationProviderText('test.fields.message', 'Message'),
+          type: 'textarea',
+          required: true,
+          defaultValue: notificationProviderText(
+            'test.defaults.body',
+            'This is a test notification from NocoBase.',
+          ),
+          maxLength: 2000,
+        },
+      ],
+      toSendInput({ values, providerConfig }) {
+        const title = values.title?.trim();
+        const body = values.body?.trim();
+        if (!title || !body) throw new Error('Title and Message are required.');
+        return {
+          to: { type: 'target', id: normalizeTarget(providerConfig.target) },
+          content: { title, body },
+        };
+      },
+    },
     async createChannel(_context, config) {
       const providerTargets = new Map(
         config.providers.map((provider) => [

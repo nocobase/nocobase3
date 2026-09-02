@@ -185,9 +185,6 @@ const report = {
   notification: {
     test: {
       enabled: notification.test?.enabled ?? false,
-      emailRecipient: notification.test?.emailRecipient
-        ? '<configured>'
-        : '(missing)',
     },
     channels: notification.channels.map((channel) => ({
       type: channel.type,

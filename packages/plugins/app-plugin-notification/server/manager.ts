@@ -5,6 +5,8 @@ import { Hono } from 'hono';
 import { ChannelManager } from './channel-manager.js';
 import { createDeliveryJob, type DeliveryJobClass } from './delivery-job.js';
 import { NotificationLogs } from './logs.js';
+import { NotificationReconcileJob } from './notification-reconcile-job.js';
+import { notificationTestError } from './types.js';
 import {
   createNotificationRegistry,
   type NotificationRegistry,
@@ -25,6 +27,9 @@ import type {
   NotificationRecipient,
   NotificationSendInput,
   NotificationSendResult,
+  NotificationTestActor,
+  NotificationTestSendRequest,
+  NotificationTestTargetDescriptor,
 } from './types.js';
 
 interface ExpandedRecipientTarget {
@@ -52,11 +57,11 @@ export class NotificationManager<
   private readonly channelManager: ChannelManager;
 
   private readonly queueJob: DeliveryJobClass;
+  private readonly reconcileJob: NotificationReconcileJob;
   private readonly runtimePromises = new Map<string, Promise<void>>();
   private activated = false;
   private started = false;
   private startPromise?: Promise<void>;
-  private reconcileTimer?: ReturnType<typeof setInterval>;
 
   constructor(private readonly options: NotificationManagerOptions<TChannels>) {
     this.registry = options.registry ?? createNotificationRegistry();
@@ -73,6 +78,11 @@ export class NotificationManager<
       resolveRuntime: async (type): Promise<void> => this.ensureRuntime(type),
     });
     this.queueJob = createDeliveryJob(this.channelManager);
+    this.reconcileJob = new NotificationReconcileJob({
+      intervalMs: options.reconcileIntervalMs ?? 30_000,
+      logger: options.logger,
+      execute: async (): Promise<void> => this.reconcile(),
+    });
   }
 
   activate(): void {
@@ -81,9 +91,124 @@ export class NotificationManager<
       !this.options.config.channels.some((config) => config.enabled)
     )
       return;
+    this.registry.validate(this.options.config);
     this.options.queue.registerJob(this.queueJob);
     this.activated = true;
-    this.startReconciler();
+    this.reconcileJob.start();
+  }
+
+  listTestTargets(): readonly NotificationTestTargetDescriptor[] {
+    if (!this.options.config.test?.enabled) return [];
+    return this.registry.testTargets(this.options.config);
+  }
+
+  async sendTest(
+    request: NotificationTestSendRequest,
+    actor: NotificationTestActor,
+  ): Promise<NotificationSendResult> {
+    if (!this.options.config.test?.enabled) {
+      throw notificationTestError(
+        'NOTIFICATION_TEST_DISABLED',
+        'errors.testDisabled',
+        { status: 404 },
+      );
+    }
+    const target = this.resolveTestTarget(request);
+    const channelConfig = this.options.config.channels.find(
+      (candidate) => candidate.type === request.channel && candidate.enabled,
+    );
+    const providerConfig = channelConfig?.providers.find(
+      (candidate) =>
+        candidate.name === request.provider.name &&
+        candidate.type === request.provider.type &&
+        candidate.enabled !== false,
+    );
+    const definition = this.registry.channel(request.channel);
+    if (!channelConfig || !providerConfig || !definition?.test) {
+      throw notificationTestError(
+        'NOTIFICATION_TEST_TARGET_UNAVAILABLE',
+        'errors.testTargetUnavailable',
+      );
+    }
+    const converted = definition.test.toSendInput({
+      actor,
+      values: request.values,
+      channelConfig,
+      providerConfig,
+    });
+    const channel = target.channel.type as keyof TChannels & string;
+    const routing = {
+      [channel]: { providers: { provider: target.provider.name } },
+    } as NotificationSendInput<TChannels>['routing'];
+    const channelOverrides = converted.channelOverride
+      ? ({
+          [channel]: converted.channelOverride,
+        } as NotificationSendInput<TChannels>['channelOverrides'])
+      : undefined;
+    return this.send({
+      to: converted.to,
+      channels: [channel],
+      routing,
+      content: converted.content,
+      channelOverrides,
+      source: { type: 'notification-test', referenceId: actor.userId },
+    });
+  }
+
+  async getTestStatus(
+    notificationId: string,
+    actor: NotificationTestActor,
+  ): Promise<import('./logs.js').NotificationLogDetails | undefined> {
+    if (!this.options.config.test?.enabled) return undefined;
+    const details = await this.logs.get(notificationId);
+    return details?.log.sourceType === 'notification-test' &&
+      details.log.sourceReferenceId === actor.userId
+      ? details
+      : undefined;
+  }
+
+  private resolveTestTarget(
+    request: NotificationTestSendRequest,
+  ): NotificationTestTargetDescriptor {
+    const target = this.listTestTargets().find(
+      (candidate) =>
+        candidate.channel.type === request.channel &&
+        candidate.provider.name === request.provider.name &&
+        candidate.provider.type === request.provider.type,
+    );
+    if (!target)
+      throw notificationTestError(
+        'NOTIFICATION_TEST_TARGET_UNAVAILABLE',
+        'errors.testTargetUnavailable',
+      );
+    const fieldNames = new Set(target.fields.map((field) => field.name));
+    for (const name of Object.keys(request.values)) {
+      if (!fieldNames.has(name)) {
+        throw notificationTestError(
+          'NOTIFICATION_TEST_UNKNOWN_FIELD',
+          'errors.testUnknownField',
+          { params: { name } },
+        );
+      }
+    }
+    for (const field of target.fields) {
+      const value = request.values[field.name]?.trim() ?? '';
+      if (field.required && !value) {
+        throw notificationTestError(
+          'NOTIFICATION_TEST_REQUIRED_FIELD',
+          'errors.testRequiredField',
+          { params: { name: field.name } },
+        );
+      }
+      if (field.maxLength !== undefined && value.length > field.maxLength) {
+        throw notificationTestError(
+          'NOTIFICATION_TEST_FIELD_TOO_LONG',
+          'errors.testFieldTooLong',
+          { params: { name: field.name, maxLength: field.maxLength } },
+        );
+      }
+    }
+    return target;
   }
 
   async start(): Promise<void> {
@@ -147,8 +272,7 @@ export class NotificationManager<
         'Notification Manager started.',
       );
     } catch (error) {
-      if (this.reconcileTimer) clearInterval(this.reconcileTimer);
-      this.reconcileTimer = undefined;
+      await this.reconcileJob.stop();
       this.started = false;
       await this.channelManager.close();
       this.runtimePromises.clear();
@@ -322,8 +446,7 @@ export class NotificationManager<
   async close(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
     const wasActive = this.activated;
-    if (this.reconcileTimer) clearInterval(this.reconcileTimer);
-    this.reconcileTimer = undefined;
+    await this.reconcileJob.stop();
     await this.channelManager.close();
     this.runtimePromises.clear();
     this.activated = false;
@@ -373,19 +496,6 @@ export class NotificationManager<
         'Notification deliveries reconciled.',
       );
     }
-  }
-
-  private startReconciler(): void {
-    const interval = this.options.reconcileIntervalMs ?? 30_000;
-    this.reconcileTimer = setInterval((): void => {
-      void this.reconcile().catch((error: unknown) => {
-        this.options.logger.error(
-          { event: 'notification.reconcile_failed', err: error },
-          'Notification reconciliation failed.',
-        );
-      });
-    }, interval);
-    this.reconcileTimer.unref?.();
   }
 
   private ensureRuntime(type: string): Promise<void> {

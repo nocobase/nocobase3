@@ -74,9 +74,9 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 Settings Contribution 与 `GET /api/notifications/logs` 使用同一个权限资源。Settings Center 会在页面加载前检查权限，服务端也会拒绝没有访问权限的请求。
 
-页面右上角的 **Send test notification** 会列出当前启用的 Channel 和 Provider。选择站内信时需要填写接收用户 ID，选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **Send** 后，页面调用 Notification Provider 插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
+页面右上角的 **发送测试通知** 会列出当前启用的 Channel 和 Provider。选择站内信时可以填写接收用户 ID，留空则发送给当前用户；选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **发送** 后，页面调用通知核心插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
 
-测试能力受服务端 `notification.test.enabled` 控制。默认应用模板通过 `config.yml` 中的 `notification.test` 配置开关和可选的默认测试邮箱；未显式启用时，测试弹窗会提示该应用没有开启 Provider 测试。
+测试能力受服务端 `notification.test.enabled` 控制，并要求 `notification:test` 的 `send` 权限。默认应用模板只通过 `config.yml` 中的 `notification.test.enabled` 显式开启；未开启、无权限或没有可用 Provider 时，页面不会显示测试按钮。
 
 ## 可选的应用自有页面
 

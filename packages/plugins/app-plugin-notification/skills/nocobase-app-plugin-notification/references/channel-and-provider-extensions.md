@@ -8,6 +8,8 @@ A Channel defines the business-to-delivery adaptation:
 - Render common `NotificationContent` plus a Channel override into a Channel message.
 - Prepare a Provider-ready payload with an abort signal.
 
+A Channel may also contribute a narrow test adapter: safe field descriptors and conversion/validation into the normal send inputs. A Provider may contribute a public label and server-only configuration validation. Never place Provider configuration or secrets in a test descriptor.
+
 A Provider defines one transport implementation:
 
 - Expose stable `name` and `type` matching configuration.
@@ -19,15 +21,24 @@ Keep network I/O and credentials in the Provider. Keep user/address resolution, 
 
 ## Definition contracts
 
-Implement a `NotificationChannelDefinition<TConfig, TRecipient, TMessage, TPrepared>` with a stable `type` and `createChannel(context, config)`. Implement a `NotificationProviderDefinition<TConfig, TPrepared>` with a stable Provider `type` and `createProvider(context, config)`.
+Implement a `NotificationChannelDefinition<TConfig, TRecipient, TMessage, TPrepared>` with a stable `type` and `createChannel(context, config)`. Its optional `test` adapter owns only safe fields and `toSendInput()`. Implement a `NotificationProviderDefinition<TConfig, TPrepared>` with a stable Provider `type` and `createProvider(context, config)`. Reuse the same validation helper from optional `validateConfig()` and `createProvider()` so activation and runtime creation cannot disagree.
 
 Register the Channel once, then register every Provider definition under that Channel type before the first runtime creation:
 
 ```ts
-notification.registry
+import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
+
+const notificationRegistry = app.container.resolve(
+  notificationExtensionRegistryToken,
+);
+notificationRegistry
   .registerChannel(createSmsChannelDefinition())
   .registerProvider('sms', createExampleSmsProviderDefinition());
 ```
+
+Extension plugins use `notificationExtensionRegistryToken`; they do not
+resolve `notificationServiceToken` or depend on the manager lifecycle and
+route surface.
 
 Duplicate Channel types and duplicate Provider types within a Channel are rejected. At runtime, Provider names from configuration must be unique within the Channel.
 

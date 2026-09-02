@@ -1,9 +1,10 @@
 import { createHmac } from 'node:crypto';
 
-import type {
-  NotificationProviderDefinition,
-  ProviderSendResult,
+import {
+  type NotificationProviderDefinition,
+  type ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../../i18n.js';
 
 import { postJson, validateHttpUrl } from '../../http.js';
 import type { PreparedImMessage } from '../channel.js';
@@ -31,10 +32,13 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
 > {
   return {
     type: 'dingtalk-webhook',
+    label: notificationProviderText(
+      'test.providers.dingtalkWebhook',
+      'DingTalk webhook',
+    ),
+    validateConfig: validateDingTalkConfig,
     async createProvider(_context, config) {
-      validateHttpUrl(config.webhookUrl, {
-        allowedHosts: ['oapi.dingtalk.com'],
-      });
+      validateDingTalkConfig(config);
       return {
         name: config.name,
         type: 'dingtalk-webhook',
@@ -75,4 +79,10 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
       };
     },
   };
+}
+
+function validateDingTalkConfig(config: DingTalkWebhookProviderConfig): void {
+  validateHttpUrl(config.webhookUrl, {
+    allowedHosts: ['oapi.dingtalk.com'],
+  });
 }

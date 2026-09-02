@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const notification = vi.hoisted(() => ({
   listLogs: vi.fn(),
-  listTestProviders: vi.fn(),
+  listTestTargets: vi.fn(),
   sendTest: vi.fn(),
 }));
 
@@ -16,7 +16,8 @@ import NotificationLogsPage from '../client/pages/notification-logs-page.js';
 describe('NotificationLogsPage', () => {
   beforeEach(() => {
     notification.listLogs.mockReset();
-    notification.listTestProviders.mockReset();
+    notification.listTestTargets.mockReset();
+    notification.listTestTargets.mockResolvedValue([]);
     notification.sendTest.mockReset();
   });
 
@@ -27,6 +28,9 @@ describe('NotificationLogsPage', () => {
 
     expect(await screen.findByText('No deliveries yet')).toBeInTheDocument();
     expect(screen.getByText('Notification logs')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Send test notification' }),
+    ).not.toBeInTheDocument();
   });
 
   it('expands provider attempts for a delivery', async () => {
@@ -83,20 +87,38 @@ describe('NotificationLogsPage', () => {
 
   it('sends a test notification through a selected Provider and refreshes logs', async () => {
     notification.listLogs.mockResolvedValue([]);
-    notification.listTestProviders.mockResolvedValue([
+    notification.listTestTargets.mockResolvedValue([
       {
-        channel: 'in-app',
-        provider: { name: 'primary', type: 'database' },
-      },
-      {
-        channel: 'email',
-        provider: { name: 'smtp', type: 'smtp' },
+        channel: { type: 'email', label: 'Email' },
+        provider: { name: 'smtp', type: 'smtp', label: 'SMTP' },
+        fields: [
+          {
+            name: 'recipient',
+            label: 'Recipient',
+            type: 'email',
+            required: true,
+          },
+          {
+            name: 'title',
+            label: 'Title',
+            type: 'text',
+            required: true,
+            defaultValue: 'NocoBase notification test',
+          },
+          {
+            name: 'body',
+            label: 'Message',
+            type: 'textarea',
+            required: true,
+            defaultValue: 'This is a test notification from NocoBase.',
+          },
+        ],
       },
     ]);
     notification.sendTest.mockResolvedValue({
       notificationId: 'notification-test-1',
       status: 'pending',
-      provider: { name: 'smtp', type: 'smtp' },
+      deliveries: [],
     });
 
     render(<NotificationLogsPage />);
@@ -108,12 +130,12 @@ describe('NotificationLogsPage', () => {
       name: 'Channel and Provider',
     });
     expect(providerSelect).toHaveDisplayValue('Select a Channel and Provider');
-    expect(
-      screen.getByLabelText('Title').compareDocumentPosition(providerSelect),
-    ).toBe(Node.DOCUMENT_POSITION_PRECEDING);
     expect(screen.getByRole('group', { name: 'Email' })).toBeInTheDocument();
     fireEvent.change(providerSelect, { target: { value: 'email:smtp:smtp' } });
-    expect(providerSelect).toHaveDisplayValue('smtp (smtp)');
+    expect(
+      providerSelect.compareDocumentPosition(screen.getByLabelText('Title')),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(providerSelect).toHaveDisplayValue('smtp (SMTP)');
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox', { name: 'Recipient' }), {
       target: { value: 'recipient@example.com' },
@@ -124,9 +146,11 @@ describe('NotificationLogsPage', () => {
     expect(notification.sendTest).toHaveBeenCalledWith({
       channel: 'email',
       provider: { name: 'smtp', type: 'smtp' },
-      recipient: 'recipient@example.com',
-      title: 'NocoBase notification test',
-      body: 'This is a test notification from Hub.',
+      values: {
+        recipient: 'recipient@example.com',
+        title: 'NocoBase notification test',
+        body: 'This is a test notification from NocoBase.',
+      },
     });
     expect(
       await screen.findByText(

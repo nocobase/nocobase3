@@ -1,7 +1,6 @@
-import {
-  NOCOBASE_AI_API_URL,
-  nocobaseClient,
-} from '@nocobase/app-portal-sdk/client';
+import type { AppClient } from '@nocobase/app-client';
+
+import { requestAIAction } from './api-client.js';
 
 export type EnabledModel = { label: string; value: string };
 export type EnabledModelsConfig = {
@@ -92,11 +91,15 @@ export function prepareEnabledModels(
   return { mode: config.mode, models };
 }
 
-export async function listLLMServices(): Promise<LLMService[]> {
-  const response = await nocobaseClient.action<unknown>('llmServices', 'list', {
-    apiUrl: NOCOBASE_AI_API_URL,
-    method: 'GET',
-  });
+export async function listLLMServices(
+  client?: AppClient,
+): Promise<LLMService[]> {
+  const response = await requestAIAction<unknown>(
+    'llmServices',
+    'list',
+    { method: 'GET' },
+    client,
+  );
   const value = dataOf(response);
   return (Array.isArray(value) ? value : [])
     .filter((item): item is Record<string, unknown> =>
@@ -112,14 +115,14 @@ export async function listLLMServices(): Promise<LLMService[]> {
     }));
 }
 
-export async function listLLMProviders(): Promise<LLMProvider[]> {
-  const response = await nocobaseClient.action<unknown>(
+export async function listLLMProviders(
+  client?: AppClient,
+): Promise<LLMProvider[]> {
+  const response = await requestAIAction<unknown>(
     'ai',
     'listLLMProviders',
-    {
-      apiUrl: NOCOBASE_AI_API_URL,
-      method: 'GET',
-    },
+    { method: 'GET' },
+    client,
   );
   const value = dataOf(response);
   return (Array.isArray(value) ? value : []).flatMap((item) => {
@@ -147,16 +150,17 @@ export async function listLLMProviders(): Promise<LLMProvider[]> {
 export async function updateLLMService(
   name: string,
   values: { enabled?: boolean; enabledModels?: EnabledModelsConfig },
+  client?: AppClient,
 ): Promise<LLMService> {
-  const response = await nocobaseClient.action<unknown>(
+  const response = await requestAIAction<unknown>(
     'llmServices',
     'update',
     {
-      apiUrl: NOCOBASE_AI_API_URL,
       method: 'PUT',
       query: { key: name },
       body: values,
     },
+    client,
   );
   const value = dataOf(response);
   if (!value || typeof value !== 'object')
@@ -175,15 +179,16 @@ export async function updateLLMService(
 export async function listProviderModels(
   llmService: string,
   search?: string,
+  client?: AppClient,
 ): Promise<EnabledModel[]> {
-  const response = await nocobaseClient.action<unknown>(
+  const response = await requestAIAction<unknown>(
     'ai',
     'listProviderModels',
     {
-      apiUrl: NOCOBASE_AI_API_URL,
       method: 'POST',
       body: { llmService, search },
     },
+    client,
   );
   const value = dataOf(response);
   return (Array.isArray(value) ? value : []).flatMap((item) =>

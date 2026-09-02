@@ -1,4 +1,4 @@
-import { notificationServiceToken } from '@nocobase/app-plugin-notification';
+import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
@@ -13,9 +13,13 @@ export default class NotificationProvidersProvider<
   public readonly name: string = '@nocobase/app-plugin-notification-providers';
 
   public override async boot(): Promise<void> {
-    if (!this.app.container.has(notificationServiceToken)) return;
+    if (!this.app.container.has(notificationExtensionRegistryToken)) {
+      throw new Error(
+        'Built-in notification Providers require the notification extension registry.',
+      );
+    }
     registerBuiltInNotificationProviders(
-      this.app.container.resolve(notificationServiceToken),
+      this.app.container.resolve(notificationExtensionRegistryToken),
     );
   }
 }

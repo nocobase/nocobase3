@@ -3,12 +3,16 @@ import { createAuthentication } from '@nocobase/app-plugin-authentication';
 import { SnowflakeIdGenerator } from '@nocobase/snowflake';
 import { createLogging } from '@nocobase/logging';
 import { createDatabaseManager } from '@nocobase/db';
-import { createAIManager } from '@nocobase/ai-employee';
+import {
+  createAIManager,
+  DriveFileStorageFactory,
+} from '@nocobase/ai-employee';
+import { Readable } from 'node:stream';
 import type { AppDeps } from '../../server/runtime.js';
 
 export function createTestAppDeps(): AppDeps {
   const caches = new Map<string, Map<string, unknown>>();
-  let id = 0;
+  const objects = new Map<string, Uint8Array>();
   const database = createDatabaseManager({
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
@@ -34,6 +38,16 @@ export function createTestAppDeps(): AppDeps {
         };
       },
     },
+    fileStorageFactory: new DriveFileStorageFactory({
+      use: () => ({
+        put: async (key, content) => {
+          objects.set(key, content);
+        },
+        getStream: async (key) => Readable.from(objects.get(key) ?? []),
+        getUrl: async (key) => `/storage/${key}`,
+      }),
+    }),
+    aiStorageDisk: 'local',
     idGenerator: new SnowflakeIdGenerator({ workerId: 0 }),
     logging: createLogging({ level: 'silent' }),
   };

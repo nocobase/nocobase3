@@ -2,7 +2,12 @@ import { createHash } from 'node:crypto';
 import { Document } from '@langchain/core/documents';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { nanoid } from 'nanoid';
-import type { AIManager, FileManager } from '@nocobase/ai-employee';
+import { DocumentLoader } from '@nocobase/ai-employee';
+import type {
+  AIManager,
+  FileStorage,
+  FileStorageFactory,
+} from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { TableRepository } from './repository.js';
@@ -22,6 +27,13 @@ import KnowledgeBaseVectorizationJob, {
   registerVectorizationRuntime,
 } from './jobs/knowledge-base-vectorization.js';
 import { extractZipFiles } from './zip.js';
+import {
+  KnowledgeBaseDocumentMetadataRepository,
+  type KnowledgeBaseDocumentMetadataCreateContext,
+  KnowledgeBaseSegmentShardMetadataRepository,
+  mapKnowledgeBaseSegmentShardMetadata,
+  type KnowledgeBaseSegmentShardMetadataCreateContext,
+} from './file-storage/index.js';
 
 const EXTENSIONS = new Set(['.doc', '.docx', '.md', '.pdf', '.txt', '.zip']);
 const sha = (value: string): string =>
@@ -54,7 +66,8 @@ export class KnowledgeBaseService {
   constructor(
     readonly database: DatabaseConnection,
     readonly ai: AIManager,
-    readonly fileManager: FileManager,
+    readonly fileStorageFactory: FileStorageFactory,
+    readonly allowedStorageDisks: readonly string[],
     readonly queueManager: NocoBaseQueueManager,
     readonly vectorProvider: PGVectorProvider,
   ) {
@@ -94,16 +107,19 @@ export class KnowledgeBaseService {
         enabled: true,
       });
     }
+    const disk = this.requireAllowedStorageDisk(values.disk);
     const {
       llmService: _llmService,
       embeddingModel: _embeddingModel,
       vectorDatabaseKey: _vectorDatabaseKey,
       externalProvider: _externalProvider,
+      disk: _disk,
       ...baseValues
     } = values;
     return this.bases.create({
       ...baseValues,
       vectorStoreConfigKey,
+      disk,
       key: String(values.key ?? nanoid(32)),
       knowledgeBaseType: type as KnowledgeBaseRecord['knowledgeBaseType'],
       knowledgeBaseOuterId: String(values.knowledgeBaseOuterId ?? nanoid(32)),
@@ -157,16 +173,22 @@ export class KnowledgeBaseService {
           ...configValues,
         });
     }
+    const disk =
+      values.disk === undefined
+        ? undefined
+        : this.requireAllowedStorageDisk(values.disk);
     const {
       llmService: _llmService,
       embeddingModel: _embeddingModel,
       vectorDatabaseKey: _vectorDatabaseKey,
+      disk: _disk,
       ...baseValues
     } = values;
     await this.bases.update(
       { id },
       {
         ...baseValues,
+        ...(disk ? { disk } : {}),
         segmentOptions: values.segmentOptions
           ? normalizeSegmentOptions(values.segmentOptions)
           : undefined,
@@ -177,7 +199,7 @@ export class KnowledgeBaseService {
   async upload(
     knowledgeBaseKey: string,
     file: { name: string; type?: string; bytes: Uint8Array },
-    actorId?: string,
+    actorId?: string | number,
   ): Promise<KnowledgeBaseDocumentRecord> {
     const base = await this.requireBase(knowledgeBaseKey);
     if (base.knowledgeBaseType !== 'LOCAL')
@@ -206,23 +228,53 @@ export class KnowledgeBaseService {
       return created[0];
     }
     const key = nanoid(32);
-    const stored = await this.fileManager.put(
-      `knowledge-base/${key}`,
-      file.bytes,
-      file.name,
-      file.type,
-    );
-    const record = await this.docs.create({
-      key,
-      title: file.name,
+    const storage = this.createDocumentStorage(base);
+    const metadata = await storage.write({
+      objectId: key,
       filename: file.name,
-      extname: ext,
-      size: stored.size,
-      mimetype: file.type || stored.mimetype || 'application/octet-stream',
-      path: stored.key,
-      url: stored.url,
-      storageId: base.storageId,
-      meta: { key: stored.key },
+      content: file.bytes,
+      size: file.bytes.byteLength,
+      mimeType: file.type,
+      metadataContext: {
+        key,
+        knowledgeBaseKey: base.key,
+        title: file.name,
+        segmentOptions: base.segmentOptions,
+        createdById: actorId,
+      },
+    });
+    await this.dispatchVectorization(metadata.entity.id);
+    return metadata.entity;
+  }
+  async finalizeUpload(
+    knowledgeBaseKey: string,
+    values: JsonRecord,
+    actorId?: string | number,
+  ): Promise<KnowledgeBaseDocumentRecord> {
+    const base = await this.requireBase(knowledgeBaseKey);
+    const filename = String(values.title ?? values.filename ?? 'file');
+    const extname = String(
+      values.extname ?? this.extension(filename),
+    ).toLowerCase();
+    if (!EXTENSIONS.has(extname))
+      throw new Error(`Unsupported file type: ${extname || 'none'}`);
+    const disk = this.requireAllowedStorageDisk(values.disk ?? base.disk);
+    if (disk !== base.disk) {
+      throw new Error(
+        `Upload disk "${disk}" does not match knowledge base disk "${base.disk}".`,
+      );
+    }
+    const record = await this.docs.create({
+      key: String(values.key ?? nanoid(32)),
+      title: filename,
+      filename: String(values.filename ?? filename),
+      extname,
+      size: Number(values.size ?? 0),
+      mimetype: String(values.mimetype ?? 'application/octet-stream'),
+      path: String(values.path ?? ''),
+      ...(values.url ? { url: String(values.url) } : {}),
+      disk,
+      meta: this.jsonRecord(values.meta),
       knowledgeBaseKey,
       indexStatus: 'PENDING',
       errorMessage: null,
@@ -232,39 +284,6 @@ export class KnowledgeBaseService {
       segmentRevision: 0,
       segmentStatus: 'PENDING',
       segmentErrorMessage: null,
-      segmentOptions: base.segmentOptions,
-      enabled: true,
-      createdById: actorId,
-    });
-    await this.dispatchVectorization(record.id);
-    return record;
-  }
-  async finalizeUpload(
-    knowledgeBaseKey: string,
-    values: JsonRecord,
-    actorId?: string,
-  ): Promise<KnowledgeBaseDocumentRecord> {
-    const base = await this.requireBase(knowledgeBaseKey);
-    const filename = String(values.title ?? values.filename ?? 'file');
-    const extname = String(
-      values.extname ?? this.extension(filename),
-    ).toLowerCase();
-    if (!EXTENSIONS.has(extname))
-      throw new Error(`Unsupported file type: ${extname || 'none'}`);
-    const record = await this.docs.create({
-      ...values,
-      key: String(values.key ?? nanoid(32)),
-      title: filename,
-      filename: String(values.filename ?? filename),
-      extname,
-      knowledgeBaseKey,
-      indexStatus: 'PENDING',
-      errorMessage: null,
-      characterCount: 0,
-      segmentCount: 0,
-      segmentVersion: 0,
-      segmentRevision: 0,
-      segmentStatus: 'PENDING',
       segmentOptions: base.segmentOptions,
       enabled: true,
       createdById: actorId,
@@ -402,30 +421,24 @@ export class KnowledgeBaseService {
           shardNo,
           segments: contents,
         });
-        const stored = await this.fileManager.put(
-          `knowledge-base/${base.key}/${id}/shard-${shardNo}`,
-          Buffer.from(json),
-          `shard-${String(shardNo).padStart(4, '0')}.json`,
-          'application/json',
-        );
-        const shard = await this.shards.create(
-          {
+        const storage = this.createSegmentShardStorage(base);
+        const metadata = await storage.write({
+          objectId: `${doc.id}/shard-${shardNo}`,
+          filename: `shard-${String(shardNo).padStart(4, '0')}.json`,
+          content: Buffer.from(json),
+          mimeType: 'application/json',
+          metadataContext: {
             knowledgeBaseKey: base.key,
-            knowledgeBaseDocsId: id,
+            knowledgeBaseDocsId: doc.id,
             shardNo,
             segmentVersion: version,
             segmentCount: batch.length,
             contentHash: sha(json),
-            filename: stored.filename,
-            path: stored.key,
-            url: stored.url,
-            size: stored.size,
-            mimetype: 'application/json',
-            storageId: base.storageId,
-            meta: { segments: contents },
+            meta: {},
+            createdById: doc.createdById,
           },
-          { knowledgeBaseDocsId: id, segmentVersion: version, shardNo },
-        );
+        });
+        const shard = metadata.entity;
         await this.segments.createMany(
           pending.map((item) => ({ ...item, shardId: shard.id })),
         );
@@ -475,7 +488,7 @@ export class KnowledgeBaseService {
     if (!segment) return null;
     const shard = await this.shards.findById(segment.shardId);
     if (!shard) return null;
-    const contents = (shard.meta?.segments ?? {}) as Record<string, JsonRecord>;
+    const contents = await this.readShardContents(shard);
     return { ...segment, ...(contents[segment.contentKey] ?? {}) };
   }
   async updateSegment(
@@ -500,7 +513,7 @@ export class KnowledgeBaseService {
     }
     const shard = await this.shards.findById(segment.shardId);
     if (!shard) throw new Error('Segment shard not found');
-    const contents = (shard.meta.segments ?? {}) as Record<string, JsonRecord>;
+    const contents = await this.readShardContents(shard);
     const current = contents[uid] ?? {};
     const title = values.title ?? String(current.title ?? '');
     const content = values.content ?? String(current.content ?? '');
@@ -530,19 +543,11 @@ export class KnowledgeBaseService {
     ids: string | number | Array<string | number>,
   ): Promise<void> {
     const values = Array.isArray(ids) ? ids : [ids];
-    for (const shard of await this.shards.find({
-      filter: { knowledgeBaseDocsId: { $in: values } },
-    }))
-      if (shard.path)
-        await this.fileManager.delete(shard.path).catch(() => undefined);
     await this.segments.destroy({ knowledgeBaseDocsId: { $in: values } });
     await this.shards.destroy({ knowledgeBaseDocsId: { $in: values } });
   }
   async deleteDocuments(ids: Array<string | number>): Promise<void> {
     await this.deleteSegments(ids);
-    for (const doc of await this.docs.find({ filter: { id: { $in: ids } } }))
-      if (doc.path)
-        await this.fileManager.delete(doc.path).catch(() => undefined);
     await this.docs.destroy({ id: { $in: ids } });
   }
   async hitTest(
@@ -656,23 +661,96 @@ export class KnowledgeBaseService {
   private async aiContextDocumentLoad(
     doc: KnowledgeBaseDocumentRecord,
   ): Promise<Document[]> {
-    const runtime = this.ai as AIManager & {
-      __context?: {
-        documentLoaders?: {
-          raw?: { load(file: unknown): Promise<Document[]> };
-        };
-      };
-    };
-    const loader = runtime.__context?.documentLoaders?.raw;
-    if (!loader) {
-      const bytes = doc.path
-        ? await this.fileManager.getBytes(doc.path)
-        : new Uint8Array();
-      return [
-        new Document({ pageContent: Buffer.from(bytes).toString('utf8') }),
-      ];
+    const base = await this.requireBase(doc.knowledgeBaseKey);
+    const storage = this.createDocumentStorage(base);
+    const metadataRepository = new KnowledgeBaseDocumentMetadataRepository(
+      this.docs,
+    );
+    const metadata = await metadataRepository.findById(doc.id);
+    if (!metadata) {
+      throw new Error(`Knowledge base document #${doc.id} metadata not found`);
     }
-    return loader.load(doc);
+    const loader = new DocumentLoader(storage);
+    return loader.loadMetadata(metadata);
+  }
+  private createDocumentStorage(
+    base: KnowledgeBaseRecord,
+  ): FileStorage<
+    KnowledgeBaseDocumentRecord,
+    KnowledgeBaseDocumentMetadataCreateContext
+  > {
+    if (!base.disk) {
+      throw new Error(`Knowledge base "${base.key}" has no storage disk.`);
+    }
+    return this.fileStorageFactory.create({
+      disk: base.disk,
+      prefix: `ai-knowledge-base/${base.key}/documents`,
+      metadataRepository: new KnowledgeBaseDocumentMetadataRepository(
+        this.docs,
+      ),
+    });
+  }
+  private createSegmentShardStorage(
+    base: KnowledgeBaseRecord,
+  ): FileStorage<
+    SegmentShardRecord,
+    KnowledgeBaseSegmentShardMetadataCreateContext
+  > {
+    if (!base.disk) {
+      throw new Error(`Knowledge base "${base.key}" has no storage disk.`);
+    }
+    return this.fileStorageFactory.create({
+      disk: base.disk,
+      prefix: `ai-knowledge-base/${base.key}/segment-shards`,
+      metadataRepository: new KnowledgeBaseSegmentShardMetadataRepository(
+        this.shards,
+      ),
+    });
+  }
+  private async readShardContents(
+    shard: SegmentShardRecord,
+  ): Promise<Record<string, JsonRecord>> {
+    const base = await this.requireBase(shard.knowledgeBaseKey);
+    const storage = this.createSegmentShardStorage(base);
+    const opened = await storage.openMetadata(
+      mapKnowledgeBaseSegmentShardMetadata(shard),
+    );
+    const chunks: Buffer[] = [];
+    for await (const chunk of opened.stream as AsyncIterable<
+      Uint8Array | string
+    >) {
+      chunks.push(
+        typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk),
+      );
+    }
+    const payload = JSON.parse(
+      Buffer.concat(chunks).toString('utf8'),
+    ) as JsonRecord;
+    const storedSegments = this.jsonRecord(payload.segments) as Record<
+      string,
+      JsonRecord
+    >;
+    const persistedSegments = this.jsonRecord(shard.meta.segments) as Record<
+      string,
+      JsonRecord
+    >;
+    return { ...storedSegments, ...persistedSegments };
+  }
+  private requireAllowedStorageDisk(value: unknown): string {
+    const disk =
+      typeof value === 'string' && value.trim()
+        ? value.trim()
+        : this.allowedStorageDisks[0];
+    if (!disk) throw new Error('No knowledge base storage disk is configured');
+    if (!this.allowedStorageDisks.includes(disk)) {
+      throw new Error(`Knowledge base storage disk "${disk}" is not allowed`);
+    }
+    return disk;
+  }
+  private jsonRecord(value: unknown): JsonRecord {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as JsonRecord)
+      : {};
   }
   private async requireBase(key: string): Promise<KnowledgeBaseRecord> {
     const base = await this.bases.findOne({ key });

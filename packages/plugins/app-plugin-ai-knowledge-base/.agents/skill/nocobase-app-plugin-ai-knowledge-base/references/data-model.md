@@ -15,7 +15,7 @@ The plugin migration owns six collections. `llmServices` belongs to the AI Emplo
 
 ### `aiKnowledgeBase`
 
-Auto-increment `id`; nullable timestamps; required `knowledgeBaseType` (32), `knowledgeBaseOuterId` (64), `name` (64), `vectorStoreProvider` (128); nullable unique `key` (128), description (512), `storageId` (64), `vectorStoreConfigKey` (128), `vectorStoreConfigId` (64), confirmation timestamp, and JSON `vectorStoreProps`. Required JSON `segmentOptions` defaults to `{enabled:true,chunkSize:6000,chunkOverlap:1200}`. Counts default 0; `enabled` defaults true.
+Auto-increment `id`; nullable timestamps; required `knowledgeBaseType` (32), `knowledgeBaseOuterId` (64), `name` (64), `vectorStoreProvider` (128); nullable unique `key` (128), description (512), `disk` (64), `vectorStoreConfigKey` (128), `vectorStoreConfigId` (64), confirmation timestamp, and JSON `vectorStoreProps`. Required JSON `segmentOptions` defaults to `{enabled:true,chunkSize:6000,chunkOverlap:1200}`. Counts default 0; `enabled` defaults true.
 
 ### `aiKnowledgeBaseDocs`
 

@@ -213,6 +213,18 @@ export default function registerRoutes(
     }),
   );
   routes.get(
+    '/aiKnowledgeBase:listStorageDisks',
+    guard(async (c) =>
+      data(
+        c,
+        service.allowedStorageDisks.map((disk) => ({
+          value: disk,
+          label: disk,
+        })),
+      ),
+    ),
+  );
+  routes.get(
     '/aiKnowledgeBase:listExternalVectorStoreProviders',
     guard(async (c) =>
       data(
@@ -316,7 +328,7 @@ export default function registerRoutes(
       const base = await service.bases.findOne({ key });
       if (!base) return error(c, 404, 'Knowledge base not found');
       return data(c, {
-        id: base.storageId ?? 'default',
+        disk: base.disk,
         name: 'default',
         title: 'Default storage',
         type: 'local',

@@ -8,6 +8,17 @@ export {
   waitForPluginReady,
 } from './runtime.js';
 export { AIEmployeeProvider } from './providers/index.js';
+export {
+  aiConfig,
+  normalizeDisks,
+  resolveAIEmployeeStorageDisk,
+  resolveAIKnowledgeBaseStorageDisks,
+} from './config.js';
+export {
+  AIFileMetadataRepository,
+  mapAIFileMetadata,
+} from './file-storage/ai-file-metadata-repository.js';
+export type { AIFileMetadataCreateContext } from './file-storage/ai-file-metadata-repository.js';
 export { aiEmployeeRuntimeToken, aiManagerToken } from './tokens.js';
 export type { Context, CurrentUser } from './context.js';
 export type {

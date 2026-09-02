@@ -5,12 +5,18 @@
 // nothing, in this repository and in a generated application alike. Reading the directory first and resolving each
 // match to its real path gets past that, because `readdirSync` sees the symlinks and `realpathSync` resolves them.
 //
-// Both `client` and `dist/client` are searched: a workspace plugin exposes TypeScript sources, while an installed one
-// ships only its build output. Whichever a plugin has is scanned, and the other is skipped.
+// Client runtime files and canonical Registry source are both searched. A workspace plugin exposes TypeScript sources,
+// while an installed one may expose build output plus application-owned Registry recipes. Missing directories are skipped.
 import { existsSync, globSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
-const SOURCE_DIRECTORIES = ['client', 'dist/client', 'src', 'dist/src'];
+const SOURCE_DIRECTORIES = [
+  'client',
+  'dist/client',
+  'src',
+  'dist/src',
+  'registry',
+];
 const SCANNED_FILES = '**/*.{js,jsx,ts,tsx}';
 
 /** Every scannable directory a workspace or installed `@nocobase` package exposes. */
