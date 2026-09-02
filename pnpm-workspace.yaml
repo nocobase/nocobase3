@@ -83,7 +83,10 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   tesseract.js: false
-  ttf2woff2: set this to true or false
+  # Pulled in by @iconscout/unicons, the icon font the documentation site uses. Its build script only runs when
+  # unicons regenerates its own fonts; the .woff2 files ship in the published package, so compiling the native addon
+  # at install time produces nothing anything reads.
+  ttf2woff2: false
 
 minimumReleaseAgeExclude:
   - '@publint/pack@0.1.7'
