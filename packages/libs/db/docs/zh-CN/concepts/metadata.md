@@ -2,7 +2,9 @@
 
 Metadata 是 Collection 的应用层元信息，用于帮助 UI、应用逻辑和 Agent 理解数据模型。Metadata 和数据库结构变更要分开处理。
 
-Metadata Store、物理 Schema、完整 Collection 以及主数据库和外部数据库的目标关系，见 [Collection 架构](../collection/architecture.md)。
+先阅读 [Collection Metadata 概览](../collection-metadata/overview.md)。运行时更新使用 [`connection.collectionMetadata`](../collection-metadata/collection-metadata-service.md)，完整 Collection 从 [`connection.collections`](../collections/overview.md) 读取。
+
+Metadata Store、物理 Schema、完整 Collection 以及主数据库和外部数据库的内部设计，见 [Collection 架构](../collection/architecture.md)。
 
 目标持久化模型，以及补充 Metadata 与解析后完整 Collection 的准确边界，见
 [Metadata Store 设计](../collection/metadata-store.md)。

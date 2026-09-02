@@ -1,6 +1,13 @@
-# 数据库连接
+---
+title: 数据库连接配置
+description: 配置 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server Connection，以及命名和外部 Schema 行为。
+---
+
+# 数据库连接配置
 
 数据库连接由 `createDatabaseManager()` 创建。它返回 `DatabaseManager`，支持默认连接和多个命名连接。
+
+创建流程和默认连接行为见 [`createDatabaseManager()`](./create-database-manager.md)。本页只解释各方言和 Connection 配置。
 
 ## SQLite
 

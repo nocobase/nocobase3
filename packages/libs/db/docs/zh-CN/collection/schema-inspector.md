@@ -5,6 +5,8 @@ description: 定义如何通过数据库方言读取 Collection 解析所需的 
 
 # Schema Inspector 设计
 
+> **文档类型：深入设计。** 公共用法和准确入口见 [`connection.schemaInspector`](../schema-inspector/overview.md)；本页保留物理模型、方言实现和错误约定。
+
 > 本文描述 `@nocobase/db` 第一版 `SchemaInspector` 的接口、语义和能力边界。
 
 `SchemaInspector` 是数据库物理结构的只读入口。它把不同数据库的系统目录、`information_schema` 和

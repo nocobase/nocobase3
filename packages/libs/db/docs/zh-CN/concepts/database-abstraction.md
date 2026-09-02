@@ -1,6 +1,6 @@
 # 数据库抽象
 
-当前原型采用分层设计，把应用层 Collection DSL 和底层数据库操作解耦。
+数据库包采用分层设计，把应用层 Collection DSL 和底层数据库操作解耦。
 
 ```text
 Application / Agent
@@ -38,6 +38,9 @@ const db = createDatabaseManager({
 
 - `builder`
 - `query`
+- `collections`
+- `collectionMetadata`
+- `schemaInspector`
 - `schema`
 - `client()`
 - `transaction()`
@@ -56,7 +59,7 @@ CollectionBuilder -> SchemaAdapter -> KnexSchemaAdapter -> Knex
 
 ## QueryAdapter
 
-`QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM。它工作在数据库物理名层，使用 Connection 的 underscored 配置，但不读取 Collection Metadata。
+`QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM。它使用 Connection 级查询标识符和命名配置，但不读取 Collection Metadata 或 Collection 级 naming override。
 
 ## Repository
 
@@ -71,7 +74,7 @@ Filter Builder / Filter AST 表达筛选条件，并通过 Sort AST 表达排序
 ## Agent 注意事项
 
 - 应用层建模不要直接使用 Knex schema builder。
-- 当前可以直接使用 `db.builder()` 做 schema 变更。
+- 工具和测试可以直接使用 `db.builder()`；持久化业务 Schema 变更写入 Migration。
 - `db.query()` 只用于基础查询，复杂 Repository 设计尚未实现。
 - 适配 Kysely 或其他底层实现时，应优先扩展 adapter，而不是改 Collection DSL。
 - 需要解析 Collection 级 `tablePrefix` 时，应由未来 Repository 或 Collection Registry 负责。

@@ -5,7 +5,9 @@ description: 说明主数据库与外部数据库如何结合物理 Schema 和�
 
 # Collection 架构
 
-> 本文是第一版架构设计。文中的 `connection.collections`、Database Metadata Store、File Metadata Store、Schema Inspector 和 Collection Resolver 属于目标设计，当前尚未全部实现。
+> **文档类型：内部设计。** 编写业务代码时先阅读 [`connection.collections`](../collections/overview.md) 和 [Collection Metadata 概览](../collection-metadata/overview.md)。本页保留架构背景和设计决策。
+
+> 本文记录第一版架构形成过程。当前公共能力以 [`connection.collections`](../collections/overview.md)、[`connection.schemaInspector`](../schema-inspector/overview.md) 和 [Collection Metadata 概览](../collection-metadata/overview.md)为准；Writable JSON/YAML File Store 尚未实现。
 
 Metadata Store 的持久化边界、文档模型、后端行为和一致性规则，见
 [Metadata Store 设计](./metadata-store.md)。该文档是 Metadata Store 实现的规范性设计。

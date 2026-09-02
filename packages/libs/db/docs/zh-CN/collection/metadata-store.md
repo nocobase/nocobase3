@@ -5,6 +5,8 @@ description: 说明 Metadata Store 的职责边界、文档模型、一致性规
 
 # Metadata Store 设计
 
+> **文档类型：内部设计。** 使用入口见 [Collection Metadata 概览](../collection-metadata/overview.md)；本页保留文档模型和一致性设计。
+
 > 带 revision 的文档 Store 契约和 In-memory 后端已经实现。过渡期公共名称为
 > `CollectionMetadataStore` 和 `InMemoryCollectionMetadataStore`；旧
 > `CollectionMetadataStore` 仍供 Builder 保存完整 `CollectionDefinition`。所有消费者迁移完成后，文档

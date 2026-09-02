@@ -5,7 +5,9 @@ description: 说明物理 Schema、命名规则和补充 Metadata 如何合并�
 
 # Collection Resolver 设计
 
-> `@nocobase/db` 已提供本文第一版 `CollectionResolver`；跨 Collection 图校验和 Registry 集成在后续批次实现。
+> **文档类型：内部设计。** 业务代码通常使用 [`connection.collections`](../collections/overview.md)，不直接组合 Resolver。本页解释单个 Collection 的合并和校验算法。
+
+> `@nocobase/db` 已提供第一版 `CollectionResolver`、Registry 集成和跨 Collection relation 校验。业务代码通过 `connection.collections` 使用这些能力。
 
 `CollectionResolver` 是纯合并和校验层：
 

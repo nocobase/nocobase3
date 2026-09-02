@@ -5,6 +5,8 @@ description: 说明主数据库和外部数据库的 Schema 如何与补充 Meta
 
 # Collection 解析生命周期
 
+> **文档类型：深入设计。** 业务代码入口见 [`connection.collections`](../collections/overview.md)；本页解释 Managed/External 来源、解析与缓存生命周期。
+
 > `SchemaInspector`、`CollectionResolver`、`CollectionRegistry`、`connection.collections` 以及
 > Builder、Metadata Service、Collection Registry 和 V1 Store 后端均已接入本生命周期；运行时不再保留
 > 旧完整定义 Store 兼容路径。

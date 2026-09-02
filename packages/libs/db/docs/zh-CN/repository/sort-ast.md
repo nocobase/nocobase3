@@ -1,5 +1,7 @@
 # Sort AST
 
+> **状态：规划中。** Sort AST 当前尚未实现或导出，只用于 Repository 设计讨论，不要生成到运行时代码。
+
 > 状态：规划设计，暂未实现。
 
 Sort AST 是 Repository 排序意图的结构化表示。它用于 TypeScript、HTTP、CLI、file sync

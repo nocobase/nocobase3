@@ -1,6 +1,24 @@
-# QueryAdapter 概览
+---
+title: QueryAdapter：数据库层查询
+description: 使用 db.query() 或 connection.query 执行 select、insert、update 和 delete；Query 不读取 Collection Metadata，也不是 Repository。
+---
+
+# QueryAdapter：数据库层查询
 
 `QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM；它只负责用一套跨数据库的基础 API 查询和写入数据库表。
+
+## Agent 契约
+
+| 项目                       | 内容                                 |
+| -------------------------- | ------------------------------------ |
+| Manager 入口               | `db.query(name?)`                    |
+| Connection 入口            | `connection.query`（属性）           |
+| 名称语义                   | Connection 级查询标识符              |
+| Metadata-aware             | 否                                   |
+| Collection naming override | 不读取                               |
+| 主要副作用                 | DML                                  |
+| External Connection        | 可执行记录读写，受数据库账号权限控制 |
+| 不负责                     | Repository、relation-aware CRUD      |
 
 V1 按操作类型拆分入口，整体参考 Kysely：
 

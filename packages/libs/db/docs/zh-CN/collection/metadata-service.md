@@ -5,6 +5,8 @@ description: 说明补充 Metadata 的读取、更新、并发控制、校验和
 
 # Collection Metadata Service 设计
 
+> **文档类型：深入设计。** 公共用法见 [`connection.collectionMetadata`](../collection-metadata/collection-metadata-service.md)；本页解释校验、CAS、事务和缓存失效。
+
 > `CollectionMetadataService` 已挂到 `DatabaseConnection.collectionMetadata`，Metadata 写入会主动失效
 > Registry。Builder 在物理 Schema 创建或变更时也通过本 Service 同步补充 Metadata。
 

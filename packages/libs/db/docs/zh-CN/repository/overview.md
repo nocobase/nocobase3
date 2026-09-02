@@ -1,5 +1,7 @@
 # Repository 概览
 
+> **状态：规划中。** Repository 当前尚未实现或导出。本页只用于设计讨论，不要把示例复制到运行时代码。当前数据访问使用 [QueryAdapter](../query/overview.md)。
+
 > 状态：规划设计，暂未实现。
 
 `Repository` 是未来的应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：

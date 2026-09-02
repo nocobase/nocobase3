@@ -1,6 +1,25 @@
-# Builder API 总览
+---
+title: Collection Builder API 总览
+description: 通过 db.builder() 或 connection.builder 使用逻辑名称管理 Collection Schema；业务演进应放入 Migration。
+---
+
+# Collection Builder API 总览
 
 `CollectionBuilder` 是当前原型的核心。它负责把 Collection DSL 转换为数据库 schema operation，并通过 `SchemaAdapter` 应用到底层数据库。
+
+## Agent 契约
+
+| 项目                | 内容                                   |
+| ------------------- | -------------------------------------- |
+| Manager 入口        | `db.builder(name?)`                    |
+| Connection 入口     | `connection.builder`（属性）           |
+| 名称语义            | Collection/Field 逻辑名称              |
+| Metadata-aware      | 是                                     |
+| 主要副作用          | DDL，并同步相应 Metadata               |
+| External Connection | 禁止真实 DDL                           |
+| 业务 Schema 落点    | `defineMigration()` 的 `up()`/`down()` |
+
+直接调用 `db.builder()` 适合工具、测试和运行期明确授权的 Schema 管理流程。持久化业务 Schema 变更默认写成 Migration。
 
 ## API 分组
 
@@ -41,7 +60,7 @@
 
 - [命名映射](./naming.md)
 - [方言能力与降级](./dialect-capabilities.md)
-- [Metadata-only 更新](./metadata-only.md)
+- [Collection Metadata Service](../collection-metadata/collection-metadata-service.md)
 
 ## 三种写法
 

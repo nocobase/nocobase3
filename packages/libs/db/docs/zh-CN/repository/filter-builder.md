@@ -1,5 +1,7 @@
 # Filter Builder
 
+> **状态：规划中。** Filter Builder 当前尚未实现或导出，只用于 Repository 设计讨论，不要生成到运行时代码。
+
 > 状态：规划设计，暂未实现。
 
 `Filter Builder` 是未来 Repository 的筛选条件 DSL。它面向 Collection metadata，而不是数据库物理 schema。目标是让开发者和 Agent 都能写出可解释、可校验、可序列化、能跨数据库编译的筛选条件。

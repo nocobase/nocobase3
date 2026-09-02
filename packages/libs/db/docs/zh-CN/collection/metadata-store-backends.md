@@ -5,6 +5,8 @@ description: 说明 Database、Module、File 和 In-memory Metadata Store 的行
 
 # Metadata Store 后端
 
+> **文档类型：深入设计。** Store 选择和公共合同见 [Metadata Store 与后端](../collection-metadata/metadata-store.md)；本页保留各后端实现决策。
+
 > `DatabaseCollectionMetadataStore`、`ModuleCollectionMetadataStore` 和
 > `InMemoryCollectionMetadataStore` 已实现。多个命名 Store 的声明式配置仍是后续设计；
 > 当前数据库配置直接接收 Store 实例。

@@ -1,5 +1,7 @@
 # Select AST
 
+> **状态：规划中。** Select AST 当前尚未实现或导出，只用于 Repository 设计讨论，不要生成到运行时代码。
+
 > 状态：规划设计，暂未实现。
 
 Select AST 是 Repository 查询结果形状的结构化表示。它统一描述根 Collection 的标量
