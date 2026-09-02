@@ -62,7 +62,7 @@ await builder.dropField('orders', 'legacyStatus');
 
 ## renameCollection
 
-`renameCollection` 同步重命名逻辑 Collection、底层物理表和 Metadata：
+`renameCollection` 当前只支持 Table Collection，并同步重命名逻辑 Collection、底层物理表和 Metadata：
 
 ```ts
 await builder.renameCollection('oldUsers', 'users');
@@ -71,6 +71,8 @@ await builder.renameCollection('oldUsers', 'users');
 例如无前缀时，物理表会从 `old_users` 变为 `users`；Collection 自己的 `tablePrefix` 会保留。
 
 Builder 会在执行 DDL 前扫描 Metadata。如果 Relation、Foreign Key、结构化 View 或 Raw SQL View 等依赖不能被原子更新，会抛出 `COLLECTION_RENAME_HAS_DEPENDENCIES`，且不修改数据库或 Metadata。
+
+对 View 或 Materialized View Collection 调用时，会在 DDL 前抛出 `COLLECTION_RENAME_UNSUPPORTED_KIND`。当前没有把这两类对象错误地降级为物理表重命名。
 
 ## dropCollection
 

@@ -87,7 +87,7 @@ await db.builder().createCollection('auditLogs', (collection) => {
 
 ## 重命名和兼容性
 
-`renameCollection(from, to)` 同步重命名逻辑 Collection、物理表和 Metadata。Collection 自己的 `tablePrefix` 在重命名后保持不变。
+`renameCollection(from, to)` 当前只支持 Table Collection，并同步重命名逻辑 Collection、物理表和 Metadata。Collection 自己的 `tablePrefix` 在重命名后保持不变。View 或 Materialized View Collection 会在 DDL 前抛出 `COLLECTION_RENAME_UNSUPPORTED_KIND`。
 
 如果 Relation、Foreign Key 或 View 等依赖不能被原子更新，Builder 会在执行 DDL 前拒绝重命名。Raw SQL View 无法可靠分析，因此当前作为保守阻断项。
 

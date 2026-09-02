@@ -145,5 +145,5 @@ Resolver 从 Inspector 读取完整 View SQL 时使用：
 - `CollectionDefinition` 不承载统一的记录写权限；`kind` 只描述物理对象类型。
 - `constraints` 和 `indexes` 要分开建模。
 - 不要生成 `tableName` 或 `columnName`；物理名称由逻辑名确定性推导。
-- `renameCollection(from, to)` 会同步重命名物理表；有无法原子更新的依赖时会在 DDL 前拒绝。
+- `renameCollection(from, to)` 当前只支持 Table Collection，并会同步重命名物理表；View、Materialized View 或有无法原子更新的依赖时会在 DDL 前拒绝。
 - 命名规则详见 [命名概念](../concepts/naming.md) 和 [Builder 命名映射](../builder/naming.md)。

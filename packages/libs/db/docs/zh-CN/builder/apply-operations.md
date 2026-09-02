@@ -109,4 +109,4 @@ console.log(result.impact);
 - destructive 操作必须先 dry-run。
 - file sync 场景应先生成 snapshot + diff，再转换成 operation，再调用 `apply()`。
 - 纯 Metadata 更新不属于 `CollectionOperation`，使用 `connection.collectionMetadata`。
-- `renameCollection` 总是同步重命名物理表和 Metadata；存在无法原子更新的依赖时会在 DDL 前拒绝。
+- `renameCollection` 当前只支持 Table Collection，并总是同步重命名物理表和 Metadata；View、Materialized View 或存在无法原子更新的依赖时会在 DDL 前拒绝。

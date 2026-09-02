@@ -1,6 +1,11 @@
+---
+title: 快速开始
+description: 使用 DatabaseManager 管理 Collection、查询、Migration、Seed、事务和多连接，并了解底层 client 的使用边界。
+---
+
 # 快速开始
 
-这篇文档用一条当前可运行的主线介绍数据库入口：从 `createDatabaseManager()` 创建多连接管理器，到通过 `db.builder()` 管理 Collection，通过 `db.query()` 做数据库层查询，并在事务和多连接场景中保持同一套心智。
+这篇文档用一条当前可运行的主线介绍数据库入口：从 `createDatabaseManager()` 创建多连接管理器，到通过 `db.builder()` 管理 Collection，通过 `db.query()` 做数据库层查询，再运行 Migration、Seed，并在事务和多连接场景中保持同一套心智。
 
 当前可用入口包括：
 
@@ -8,12 +13,13 @@
 - `db.connection()`
 - `db.builder()`
 - `db.query()`
-- `db.transaction()`
-- `db.connection().client()`
 - `defineMigration()`
-- `createMigrator()`
+- `db.createMigrator()`
+- `defineSeed()`
+- `db.createSeeder()`
+- `db.transaction()`
 
-`db.repository()` 还没有实现，不属于本篇的可复制代码路径。Repository 的规划见 [Repository 概览](./repository/overview.md)，Migration 的详细约束见 [Migration](./migration/overview.md)。
+`db.repository()` 还没有实现，不属于本篇的可复制代码路径。Repository 的规划见 [Repository 概览](./repository/overview.md)，Migration 的详细约束见 [Migration](./migration/overview.md)。底层 adapter client 是最后的兜底入口，放在本文末尾介绍。
 
 ## 创建 DatabaseManager
 
@@ -272,6 +278,82 @@ Repository 的结果选择计划使用 Select AST，筛选条件使用 Filter Bu
 | `db.query()`      | 数据库查询层         | table / column query identifier | 否                           |
 | `db.repository()` | 应用数据层，规划中   | Collection / Field 逻辑名       | 是                           |
 
+## 运行 Migration
+
+Migration 文件通过 `defineMigration()` 声明版本化的数据库变更：
+
+```ts
+import { defineMigration } from '@nocobase/db';
+
+export default defineMigration({
+  name: '202609030001_create_users',
+
+  async up({ builder }) {
+    await builder.createCollection('users', (collection) => {
+      collection.increments('id');
+      collection.string('email').notNull().unique();
+    });
+  },
+
+  async down({ builder }) {
+    await builder.dropCollection('users');
+  },
+});
+```
+
+通过当前 `DatabaseManager` 创建绑定好的 runner，不需要把 `database` 再传给独立工厂：
+
+```ts
+const migrator = db.createMigrator({
+  connection: 'main',
+  directory: './database/migrations',
+  packageName: 'my-app',
+});
+
+await migrator.latest();
+```
+
+测试具体 migration 时，优先用 `upTo(name)` 固定执行边界：
+
+```ts
+await migrator.upTo('202609030001_create_users');
+```
+
+Migration 文件是不可变历史，必须把 Schema 变更完整写在文件中，不要引用会继续演化的运行时 Collection 定义。
+
+## 运行 Seed
+
+Seed 文件通过 `defineSeed()` 声明可追踪的初始化数据：
+
+```ts
+import { defineSeed } from '@nocobase/db';
+
+export default defineSeed({
+  name: '202609030002_seed_users',
+
+  async run({ query }) {
+    await query
+      .insertInto('users')
+      .values({ email: 'admin@example.com' })
+      .execute();
+  },
+});
+```
+
+使用同一个 `DatabaseManager` 创建 Seeder：
+
+```ts
+const seeder = db.createSeeder({
+  connection: 'main',
+  directory: './database/seeds',
+  packageName: 'my-app',
+});
+
+await seeder.run();
+```
+
+安装流程应先运行 Migration，再运行 Seed。Seed 只负责数据初始化；需要创建或修改 Schema 时应编写 Migration。
+
 ## 使用 db.transaction()
 
 `db.transaction()` 在一个连接事务中执行多个操作。事务回调里的 `connection` 表示当前事务连接，事务内应使用这个 `connection`，不要回到外层 `db`。
@@ -296,7 +378,7 @@ await db.transaction(async (connection) => {
 });
 ```
 
-当前原型中，`DatabaseConnection` 上的 `builder`、`query`、`schema` 是属性；`DatabaseManager` 上的 `db.builder()`、`db.query()` 是快捷方法。底层 adapter client 只通过 `DatabaseConnection.client()` 暴露。
+当前原型中，`DatabaseConnection` 上的 `builder`、`query`、`schema` 是属性；`DatabaseManager` 上的 `db.builder()`、`db.query()` 是快捷方法。
 
 ## 多连接
 
@@ -377,12 +459,37 @@ const connection = db.connection('analytics');
 await db.destroy();
 ```
 
+## 仅在公共接口不足时使用 client()
+
+`db.connection().client()` 是底层 adapter client 的兜底入口，不是常规数据库操作的首选。一般按以下优先级选择：
+
+1. Schema 和 Collection 变更使用 `builder`。
+2. 数据读写使用 `query`。
+3. 物理 Schema 验证使用 `collections.getPhysical()` 或 `schemaInspector`。
+4. 只有公共接口尚未暴露所需能力，且代码明确依赖具体 adapter 或数据库方言时，才使用 `client()`。
+
+例如执行 PostgreSQL 特有能力时：
+
+```ts
+import type { Knex } from 'knex';
+
+const connection = db.connection();
+
+if (connection.dialect === 'postgres') {
+  const client = await connection.client<Knex>();
+  await client.raw('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+}
+```
+
+使用 `client()` 的代码应显式检查 `connection.dialect` 或 `connection.capabilities`。可移植代码不要用它绕过 Builder、Query 或 Schema Inspector。
+
 ## 深入阅读
 
 - Database 连接管理见 [Database 概览](./database/overview.md)。
 - Builder 细节见 [Builder API 总览](./builder/overview.md)。
 - Query 细节见 [QueryAdapter 概览](./query/overview.md)。
 - Migration 用法见 [Migration](./migration/overview.md)。
+- Seed 用法见 [Seed](./seed/overview.md)。
 - 命名规则见 [命名概念](./concepts/naming.md)。
 - 开发维护说明见 [Agent 开发指南](./development/agent-guide.md)。
 
@@ -392,7 +499,9 @@ await db.destroy();
 createDatabaseManager()
   -> db.builder()      // Collection schema / metadata
   -> db.query()        // database query builder
+  -> db.createMigrator() // versioned schema and data changes
+  -> db.createSeeder() // tracked initial data
   -> db.transaction()  // run builder/query in one connection transaction
 ```
 
-默认连接用 `db.builder()`、`db.query()`；命名连接优先用 `db.connection('name')` 取得上下文，再调用这个连接上的能力。
+默认连接用 `db.builder()`、`db.query()`；命名连接优先用 `db.connection('name')` 取得上下文，再调用这个连接上的能力。只有公共接口无法覆盖的方言特有操作才使用 `db.connection().client()`。

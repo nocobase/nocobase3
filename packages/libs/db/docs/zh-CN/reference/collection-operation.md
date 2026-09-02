@@ -45,7 +45,7 @@ destructive 操作。
 }
 ```
 
-该操作总是按确定性命名规则同步重命名物理表和 Metadata，不支持指定任意目标物理表名。存在不能原子更新的 Relation、Foreign Key 或 View 依赖时，操作会在 DDL 前拒绝。
+该操作当前只支持 `kind: 'table'`（或省略 `kind`）的 Collection，并总是按确定性命名规则同步重命名物理表和 Metadata，不支持指定任意目标物理表名。对 View 或 Materialized View 调用时会抛出 `COLLECTION_RENAME_UNSUPPORTED_KIND`。存在不能原子更新的 Relation、Foreign Key 或 View 依赖时，操作会在 DDL 前拒绝。
 
 ## view operations
 

@@ -97,6 +97,8 @@ fk_<table>_<columns>_<targetTable>
 await db.builder().renameCollection('orderItems', 'archivedOrderItems');
 ```
 
+当前只支持 Table Collection。View 或 Materialized View Collection 会在 DDL 前抛出 `COLLECTION_RENAME_UNSUPPORTED_KIND`。
+
 此操作总是同时重命名：
 
 ```text

@@ -68,3 +68,4 @@ SQLite 和 MySQL 不支持 PostgreSQL 风格的 materialized view。当前真实
   `writable`。记录 mutation 能力由数据库和上层权限控制。
 - `view.as(...)` 引用已有 Collection 时，会使用目标 Collection 自己的 effective naming。
 - Raw SQL View 无法可靠分析依赖，因此当前会保守阻止其他 Collection rename。
+- `renameCollection()` 当前不支持 View 或 Materialized View Collection，并会在 DDL 前抛出 `COLLECTION_RENAME_UNSUPPORTED_KIND`。

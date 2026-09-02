@@ -12,9 +12,8 @@
 | `field.name`              | 应用层字段名。                                                                                      |
 | `collection.name`         | 应用层 Collection 名称。                                                                            |
 | `naming.underscored`      | 是否把逻辑表名和字段名转换为小写下划线，默认 `true`。                                               |
-| `naming.tablePrefix`      | Connection 默认或 Collection 局部覆盖的物理表名前缀。                                               |
+| `naming.tablePrefix`      | Connection 默认、可由 Collection 局部覆盖的物理表或视图名前缀，不作用于列名。                       |
 | Deterministic naming      | 通过 `underscored` 和表前缀配置从逻辑名确定性生成物理名。                                           |
-| `naming.tablePrefix`      | 推导表名或视图名时添加的前缀，不作用于列名。                                                        |
 | 逻辑名                    | 应用层名称，例如 Collection 名和 Field 名。                                                         |
 | 物理名                    | 数据库对象名称，例如 table、view、column 名。                                                       |
 | Metadata                  | 数据库无法完整表达的应用层补充语义，例如 title、description 和 relation。                           |
