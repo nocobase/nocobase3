@@ -1,7 +1,6 @@
 import path from 'node:path';
 import {
   defineAppConfig,
-  envBoolean,
   envString,
   type AppConfigDefinition,
 } from '@nocobase/app-server/config';
@@ -12,7 +11,6 @@ export interface WorkflowRuntimeConfig {
   readonly sourceRoot: string;
   readonly distRoot: string;
   readonly artifactDisk: string;
-  readonly sourceResolverDiagnostic: boolean;
   readonly production: boolean;
 }
 
@@ -30,7 +28,6 @@ export const workflowConfig: AppConfigDefinition<
     sourceRoot: Type.String(),
     distRoot: Type.String(),
     artifactDisk: Type.String(),
-    sourceResolverDiagnostic: Type.Boolean(),
     production: Type.Boolean(),
   }),
   defaults: ({
@@ -42,7 +39,6 @@ export const workflowConfig: AppConfigDefinition<
         sourceRoot: paths.server('workflows'),
         distRoot: paths.server('workflows'),
         artifactDisk: 'local',
-        sourceResolverDiagnostic: false,
         production: false,
       },
       {
@@ -52,7 +48,6 @@ export const workflowConfig: AppConfigDefinition<
     ),
   envMappings: {
     WORKFLOW_ARTIFACT_DISK: envString('artifactDisk'),
-    WORKFLOW_SOURCE_RESOLVER_DIAGNOSTIC: envBoolean('sourceResolverDiagnostic'),
     NODE_ENV: {
       path: 'production',
       parse: (value): boolean => value === 'production',

@@ -8,7 +8,6 @@ import type {
 import type { WorkflowInputSchema } from './invocation.js';
 import type { WorkflowArtifactStore } from '../loader/artifact-store.js';
 import type { WorkflowNodeOptions } from '../instructions/types.js';
-import type { WorkflowInstructionClass } from '../instructions/base.js';
 export {
   WorkflowInstruction,
   type WorkflowInstructionClass,
@@ -148,13 +147,6 @@ export interface WorkflowEngineSourceOptions {
 export interface WorkflowEngineOptions {
   database: DatabaseManager;
   connectionName?: string;
-  /**
-   * Instructions contributed by the application.
-   *
-   * `WorkflowEngine` layers this map on top of `coreInstructions`, so an entry
-   * here adds a node type or replaces a core one under the same key.
-   */
-  instructions: Map<string, WorkflowInstructionClass>;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
@@ -164,10 +156,8 @@ export interface WorkflowEngineOptions {
   sources?: WorkflowEngineSourceOptions;
   /** Immutable production artifacts. When present, run nodes never read source directories. */
   artifactStore?: WorkflowArtifactStore;
-  /** Explicit development-only opt-in for executing package source. Default false. */
-  allowSourceRunModules?: boolean;
-  /** Source root used only by the explicit execution diagnostic; it is never scanned or published. */
-  diagnosticSourceRoot?: string;
+  /** Development-only root containing one source package per workflow key. */
+  developmentResourceRoot?: string;
 
   // --- T5: fields the assembly layer needs. All optional, so the meaning of
   // every field declared before this point is unchanged. ---

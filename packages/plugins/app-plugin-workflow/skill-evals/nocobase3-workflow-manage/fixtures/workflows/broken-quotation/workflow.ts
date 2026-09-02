@@ -11,7 +11,7 @@ export default defineWorkflow({
   nodes: [
     RunInstruction.create({
       key: 'loadQuotation',
-      config: { script: './server/load-quotation.ts' },
+      config: { module: './server/load-quotation' },
     }),
   ],
 });

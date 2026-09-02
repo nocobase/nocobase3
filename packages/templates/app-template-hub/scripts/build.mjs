@@ -79,7 +79,6 @@ const serverEnvKeys = new Set([
   'DINGTALK_WEBHOOK_URL',
   'DINGTALK_WEBHOOK_SECRET',
   'WORKFLOW_ARTIFACT_DISK',
-  'WORKFLOW_SOURCE_RESOLVER_DIAGNOSTIC',
 ]);
 
 const parseEnv = (content) => {
@@ -245,6 +244,8 @@ run('Build workflow artifacts', 'pnpm', [
   '--tsconfig',
   'tsconfig.node.json',
   './scripts/build-workflows.ts',
+  '--resource-root',
+  './dist/server/workflows',
 ]);
 writeDistEnv();
 run('Generate server package', 'node', [

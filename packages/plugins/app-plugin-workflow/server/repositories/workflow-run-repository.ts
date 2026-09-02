@@ -7,7 +7,7 @@ import {
   type WorkflowId,
   type WorkflowTriggerReceipt,
 } from '../engine/index.js';
-import type { WorkflowServiceApi } from '../runtime/runtime.js';
+import type { WorkflowServiceApi } from '../service.js';
 import { BadRequestError } from '../errors.js';
 import {
   normalizePage,

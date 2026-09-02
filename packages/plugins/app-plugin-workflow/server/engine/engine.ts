@@ -3,19 +3,11 @@ import path from 'node:path';
 
 import Dispatcher from './dispatcher.js';
 import { coreInstructions } from '../instructions/index.js';
-import {
-  createRunInstruction,
-  type WorkflowRunModuleResolver,
-} from '../instructions/run/instruction.js';
 import type Processor from './processor.js';
 import {
   createWorkflowQueueAdapter,
   type WorkflowQueueAdapter,
 } from '../queue.js';
-import {
-  createSourceDirResolver,
-  WorkflowRunModuleError,
-} from '../loader/module-resolver.js';
 import WorkflowSourceLoader from '../loader/source-loader.js';
 import { createTimeoutReaper, type TimeoutReaper } from './timeout-reaper.js';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
@@ -31,7 +23,6 @@ import type {
 } from './types.js';
 import { noopWorkflowLogger } from './utils.js';
 import { loadNodeRun, serializeJson } from './utils.js';
-import { ArtifactResolver } from '../loader/artifact-resolver.js';
 
 /**
  * The assembly layer.
@@ -52,67 +43,15 @@ export default class WorkflowEngine {
   private readonly queueAdapter: WorkflowQueueAdapter | null;
   private readonly reaper: TimeoutReaper | null;
   private readonly sourceLoader: WorkflowSourceLoader | null;
-  private readonly sourceResolversByHash: Map<
-    string,
-    WorkflowRunModuleResolver
-  >;
+  private readonly sourceRootsByHash: Map<string, string>;
   constructor(options: WorkflowEngineOptions) {
     this.options = options;
     this.database = options.database;
     this.logger = options.logger ?? noopWorkflowLogger;
-    this.sourceResolversByHash = new Map<string, WorkflowRunModuleResolver>();
-    const sourceResolver: WorkflowRunModuleResolver =
-      options.allowSourceRunModules === true && options.diagnosticSourceRoot
-        ? {
-            resolve: (request) =>
-              createSourceDirResolver({
-                rootPath: path.join(
-                  options.diagnosticSourceRoot as string,
-                  request.workflowKey,
-                ),
-                enabled: true,
-              }).resolve(request),
-          }
-        : options.artifactStore
-          ? new ArtifactResolver({ store: options.artifactStore })
-          : {
-              resolve: (request) => {
-                if (!request.hash) {
-                  return Promise.reject(
-                    new WorkflowRunModuleError(
-                      `Run node "${request.nodeKey}" has no workflow source hash`,
-                    ),
-                  );
-                }
-                const resolver = this.sourceResolversByHash.get(request.hash);
-                if (!resolver) {
-                  return Promise.reject(
-                    new WorkflowRunModuleError(
-                      `No source package is registered for workflow hash "${request.hash}"`,
-                    ),
-                  );
-                }
-                return resolver.resolve(request);
-              },
-            };
-    const applicationInstructions = new Map<string, WorkflowInstructionClass>(
-      options.instructions,
+    this.sourceRootsByHash = new Map<string, string>();
+    this.instructions = new Map<string, WorkflowInstructionClass>(
+      coreInstructions,
     );
-    if (
-      options.artifactStore ||
-      (options.sources && options.allowSourceRunModules === true)
-    ) {
-      applicationInstructions.set(
-        'run',
-        createRunInstruction({ resolver: sourceResolver, app: options.app }),
-      );
-    }
-    // Core registrations first, so an application entry under the same key
-    // overrides the core one instead of being shadowed by it.
-    this.instructions = new Map<string, WorkflowInstructionClass>([
-      ...coreInstructions,
-      ...applicationInstructions,
-    ]);
     this.sourceLoader = options.sources
       ? new WorkflowSourceLoader({
           database: options.database,
@@ -144,6 +83,9 @@ export default class WorkflowEngine {
         ? {}
         : { connectionName: options.connectionName }),
       instructions: this.instructions,
+      resolveWorkflowResourceRoot: (workflow, execution) =>
+        this.resolveWorkflowResourceRoot(workflow, execution),
+      app: options.app,
       ...(this.queueAdapter === null ? {} : { queue: this.queueAdapter }),
       logger: this.logger,
       ...(options.environment === undefined
@@ -177,6 +119,15 @@ export default class WorkflowEngine {
     return this.dispatcher.idle;
   }
 
+  registerInstruction(instruction: WorkflowInstructionClass): void {
+    if (this.instructions.has(instruction.type)) {
+      throw new Error(
+        `Workflow instruction "${instruction.type}" is already registered.`,
+      );
+    }
+    this.instructions.set(instruction.type, instruction);
+  }
+
   /**
    * Order matters: the worker and the reaper have to be able to run before
    * `recover()` re-publishes what a previous process left behind.
@@ -207,15 +158,12 @@ export default class WorkflowEngine {
       .select(['key', 'hash'])
       .where('current', '=', true)
       .execute<Row>();
-    this.sourceResolversByHash.clear();
+    this.sourceRootsByHash.clear();
     for (const row of rows) {
       if (typeof row.key !== 'string' || typeof row.hash !== 'string') continue;
-      this.sourceResolversByHash.set(
+      this.sourceRootsByHash.set(
         row.hash,
-        createSourceDirResolver({
-          rootPath: path.join(sources.rootPath, row.key),
-          enabled: true,
-        }),
+        path.join(sources.rootPath, row.key),
       );
       if (sources.autoEnable === true) {
         await this.database
@@ -227,6 +175,25 @@ export default class WorkflowEngine {
           .execute();
       }
     }
+  }
+
+  private async resolveWorkflowResourceRoot(
+    workflow: WorkflowDefinition,
+    execution: import('./types.js').WorkflowRun,
+  ): Promise<string | null> {
+    if (this.options.developmentResourceRoot) {
+      return path.join(this.options.developmentResourceRoot, workflow.key);
+    }
+    if (!execution.hash) return null;
+    if (this.options.artifactStore) {
+      return this.options.artifactStore.materialize(
+        execution.workflowKey,
+        execution.hash,
+      );
+    }
+    if (this.options.sources)
+      return this.sourceRootsByHash.get(execution.hash) ?? null;
+    return null;
   }
 
   /**

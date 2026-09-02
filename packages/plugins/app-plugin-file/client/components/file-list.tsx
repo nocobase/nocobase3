@@ -1,6 +1,8 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Download, Eye, Trash2 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
+import { FILE_PLUGIN_NS } from '../../shared/namespace.js';
 import type { FileListProps } from '../types.js';
 import { publicDownloadUrl, resolveSafeFileUrl } from '../lib/file-url.js';
 import { FilePreviewDialog } from './file-preview-dialog.js';
@@ -20,9 +22,9 @@ function triggerDownload(url: string, filename: string): void {
   link.click();
 }
 
-function extension(filename: string): string {
+function extension(filename: string, noExtension: string): string {
   const dot = filename.lastIndexOf('.');
-  return dot < 0 ? 'No extension' : filename.slice(dot + 1).toUpperCase();
+  return dot < 0 ? noExtension : filename.slice(dot + 1).toUpperCase();
 }
 
 export function FileList({
@@ -35,11 +37,25 @@ export function FileList({
   labels,
   emptyState,
 }: FileListProps): ReactElement {
+  const { t } = useTranslation(FILE_PLUGIN_NS);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const choose = labels?.preview ?? 'Preview';
-  const download = labels?.download ?? 'Download';
-  const remove = labels?.remove ?? 'Remove';
+  const choose =
+    labels?.preview ?? t('common.actions.preview', { defaultValue: 'Preview' });
+  const download =
+    labels?.download ??
+    t('common.actions.download', { defaultValue: 'Download' });
+  const remove =
+    labels?.remove ?? t('common.actions.remove', { defaultValue: 'Remove' });
+  const publicLabel = t('common.visibility.public', {
+    defaultValue: 'Public',
+  });
+  const privateLabel = t('common.visibility.private', {
+    defaultValue: 'Private',
+  });
+  const noExtension = t('list.noExtension', {
+    defaultValue: 'No extension',
+  });
 
   const downloadFile = (file: FileListProps['files'][number]): void => {
     if (onDownload) {
@@ -51,18 +67,34 @@ export function FileList({
         ? publicDownloadUrl(file.contentUrl)
         : (await client.createAccessUrl(file.id)).url;
       const url = raw ? resolveSafeFileUrl(raw) : undefined;
-      if (!url) throw new Error('File URL is not allowed.');
+      if (!url) {
+        throw new Error(
+          t('errors.urlNotAllowed', {
+            defaultValue: 'File URL is not allowed.',
+          }),
+        );
+      }
       triggerDownload(url, file.filename);
     })().catch((error: unknown) => {
       onError?.(
-        error instanceof Error ? error : new Error('File download failed.'),
+        error instanceof Error
+          ? error
+          : new Error(
+              t('errors.downloadFailed', {
+                defaultValue: 'File download failed.',
+              }),
+            ),
       );
     });
   };
 
   if (!files.length) {
     return (
-      <div role='status'>{emptyState ?? labels?.empty ?? 'No files.'}</div>
+      <div role='status'>
+        {emptyState ??
+          labels?.empty ??
+          t('common.states.noFiles', { defaultValue: 'No files.' })}
+      </div>
     );
   }
 
@@ -83,8 +115,8 @@ export function FileList({
               </div>
               <div className='text-sm text-muted-foreground'>
                 {formatSize(file.size)} · {file.mimeType} ·{' '}
-                {extension(file.filename)} ·{' '}
-                {file.public ? 'Public' : 'Private'}
+                {extension(file.filename, noExtension)} ·{' '}
+                {file.public ? publicLabel : privateLabel}
               </div>
             </div>
             <div className='flex shrink-0 items-center gap-1'>

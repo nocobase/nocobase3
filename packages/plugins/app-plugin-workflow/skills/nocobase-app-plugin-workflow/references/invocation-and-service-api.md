@@ -53,9 +53,22 @@ the final trigger identifier is always the selected DSL directory key.
 ## Internal service access
 
 The public server entry exports `workflowServiceToken`. The Workflow
-ServiceProvider registers the service in the application's container, so
-business modules resolve the same typed service that routes use. Do not bind
-services to `AppRuntime` or add a mutable plugin-services object.
+ServiceProvider registers the service in the application's container. Its
+public contract exposes `registerInstruction()` for application extensions and
+`trigger()` for business invocation; management routes use additional
+package-internal methods. Do not bind services to `AppRuntime` or add a mutable
+plugin-services object.
+
+An installed server plugin may contribute an Instruction class through the
+public service:
+
+```ts
+const workflow = app.container.resolve(workflowServiceToken);
+workflow.registerInstruction(CustomInstruction);
+```
+
+Registration rejects an existing instruction type. The Artifact build process
+must register the same Instruction contract before building a DSL that uses it.
 
 Business invocation:
 
