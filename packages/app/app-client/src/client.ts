@@ -1,3 +1,5 @@
+import { createRealtimeClient, type RealtimeClient } from './realtime/index.js';
+
 export interface AppClientOptions {
   baseURL?: string;
   fetch?: typeof globalThis.fetch;
@@ -15,6 +17,7 @@ export class AppRequestError extends Error {
 }
 
 export interface AppClient {
+  readonly realtime?: RealtimeClient;
   request<T = unknown>(path: string, init?: RequestInit): Promise<T>;
   stream(path: string, init?: RequestInit): Promise<ReadableStream<Uint8Array>>;
 }
@@ -35,6 +38,9 @@ export function createAppClient(options: AppClientOptions = {}): AppClient {
     });
 
   return {
+    realtime: createRealtimeClient({
+      resolveUrl: () => resolveAppUrl('/ws'),
+    }),
     async request<T>(path: string, init: RequestInit = {}): Promise<T> {
       const response = await execute(path, init, 'application/json');
       const text = await response.text();

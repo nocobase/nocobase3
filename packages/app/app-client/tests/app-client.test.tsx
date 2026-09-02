@@ -5,6 +5,7 @@ import { type ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  appApiClientToken,
   ClientApplication,
   type ClientApplicationRenderConfigFactory,
 } from '../src/application.js';
@@ -107,6 +108,18 @@ describe('app client', () => {
 
     view.unmount();
     await app.shutdown();
+  });
+
+  it('closes the core realtime client during application shutdown', async () => {
+    const app = await createTestApplication(() =>
+      defineAppClientRenderConfig({ routes: null }),
+    );
+    const client = app.services.resolve(appApiClientToken);
+    const close = vi.spyOn(client.realtime!, 'close');
+
+    await app.shutdown();
+
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it('requires an auth provider when a route requires authentication', async () => {
