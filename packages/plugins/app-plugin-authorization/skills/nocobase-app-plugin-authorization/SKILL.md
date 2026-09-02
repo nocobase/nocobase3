@@ -1,8 +1,9 @@
 ---
-name: authorization-development
-description: 'Develop and configure NocoBase authorization: register resources, protect application APIs, define database field and record policies, and diagnose the resulting permission behavior.'
+name: nocobase-app-plugin-authorization
+description: 'Add authorization to a NocoBase 3 application or plugin: register resources and collections, protect routes and APIs, apply database field and record conditions to queries, configure Permission Sets, and diagnose a permission decision.'
 metadata:
-  short-description: Develop and configure NocoBase authorization
+  short-description: Add authorization to a NocoBase 3 application
+  domain-owner: '@nocobase/app-plugin-authorization'
 ---
 
 # Authorization development
