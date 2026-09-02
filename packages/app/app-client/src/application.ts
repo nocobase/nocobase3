@@ -50,6 +50,11 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
       return createAppClient(baseURL === undefined ? {} : { baseURL });
     });
   }
+
+  public override shutdown(): Promise<void> {
+    this.app.container.resolveIfCreated(appApiClientToken)?.realtime?.close();
+    return Promise.resolve();
+  }
 }
 
 class ContextualServiceProvider implements ServiceProviderLifecycle {
@@ -224,6 +229,7 @@ export class ClientApplication {
       await this.providerRegistry.bootAll();
       this.resolvedRefine = this.refineCollector.finalize();
       this.resolvedRenderConfig = Object.freeze(this.createRenderConfig(this));
+      this.validateAuthenticatedRoutes();
       await this.runtime.validate?.(this);
       await this.providerRegistry.startAll();
       await this.providerRegistry.readyAll();
@@ -231,6 +237,27 @@ export class ClientApplication {
     } catch (error) {
       this.state = 'failed';
       await this.shutdownAfterFailure(error);
+    }
+  }
+
+  private validateAuthenticatedRoutes(): void {
+    if (!this.runtime.routes.some((route) => route.auth === 'required')) {
+      return;
+    }
+    if (!this.refineConfig.authProvider) {
+      throw new Error(
+        'Client Application routes requiring authentication need an auth provider.',
+      );
+    }
+    if (
+      !this.runtime.routes.some(
+        (route) =>
+          route.path.toLowerCase() === '/login' && route.auth === 'guest',
+      )
+    ) {
+      throw new Error(
+        'Client Application routes requiring authentication need a guest /login route.',
+      );
     }
   }
 

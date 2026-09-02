@@ -14,15 +14,16 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Document } from '@langchain/core/documents';
 import { OpenAIClient } from '@langchain/openai';
-import type { FileManager } from '../../manager/file/index.js';
+import type { FileStorage } from '../../file-storage/index.js';
+import { toFileMetadata } from '../../file-storage/index.js';
 import { ParseableFile } from '../../manager/document-loader/plugin/types.js';
 import { resolveExtname } from '../../manager/document-loader/plugin/utils.js';
 
 export class KimiDocumentLoader {
   private readonly client: OpenAIClient;
 
-  constructor(
-    private readonly fileManager: FileManager,
+  public constructor(
+    private readonly fileStorage: FileStorage,
     private readonly options: {
       apiKey?: string;
       baseURL?: string;
@@ -50,7 +51,7 @@ export class KimiDocumentLoader {
 
   private async parseByApi(
     sourceFile: ParseableFile,
-    options?: any,
+    _options?: unknown,
   ): Promise<string> {
     let uploadedFileId = '';
     const safeFilename = path.basename(sourceFile.filename || 'document');
@@ -59,9 +60,8 @@ export class KimiDocumentLoader {
       `${sourceFile.id ?? Date.now()}.${Date.now()}.${safeFilename}`,
     );
     try {
-      const { stream } = await this.fileManager.getFileStream(
-        sourceFile as any,
-        options,
+      const { stream } = await this.fileStorage.openMetadata(
+        toFileMetadata(sourceFile),
       );
       await pipeline(stream, createWriteStream(tempFilePath));
 

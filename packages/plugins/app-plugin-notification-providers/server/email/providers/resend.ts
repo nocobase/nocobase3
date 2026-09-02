@@ -1,8 +1,9 @@
-import type {
-  NotificationProviderDefinition,
-  NotificationProviderErrorCategory,
-  ProviderSendResult,
+import {
+  type NotificationProviderDefinition,
+  type NotificationProviderErrorCategory,
+  type ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
+import { notificationProviderText } from '../../i18n.js';
 import type { ErrorResponse } from 'resend';
 
 import {
@@ -23,7 +24,10 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
 > {
   return {
     type: 'resend',
+    label: notificationProviderText('test.providers.resend', 'Resend'),
+    validateConfig: validateResendProviderConfig,
     async createProvider(_context, config) {
+      validateResendProviderConfig(config);
       const { Resend } = await import('resend');
       const client = new Resend(config.apiKey);
       return {
@@ -54,6 +58,11 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
       };
     },
   };
+}
+
+function validateResendProviderConfig(config: ResendProviderConfig): void {
+  if (!config.apiKey.trim()) throw new Error('Resend API key is required.');
+  if (!config.from.trim()) throw new Error('Resend sender is required.');
 }
 
 function resendFailure(error: ErrorResponse): ProviderSendResult {

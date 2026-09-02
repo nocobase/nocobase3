@@ -2,13 +2,15 @@
 
 Core NocoBase v3 notification runtime. It owns notification persistence,
 Channel and Provider registration, queued delivery, retry reconciliation,
-protected delivery logs, and the notification settings page.
+protected delivery logs, generic test sending, and the notification settings
+page.
 
 ## Public entries
 
 - `@nocobase/app-plugin-notification` and `/server` expose the Server plugin,
-  public notification contracts, `notificationServiceToken`, and registry
-  definitions.
+  public notification contracts, the narrow `notificationServiceToken` for
+  sending, `notificationExtensionRegistryToken` for Channel/Provider
+  contributions, and registry definitions.
 - `@nocobase/app-plugin-notification/client` exposes the Client plugin factory.
 - `/client/bootstrap` and `/client/routes` expose the individual Client
   contributions for advanced composition.
@@ -16,6 +18,8 @@ protected delivery logs, and the notification settings page.
 Applications should resolve the shared `notificationServiceToken` from their
 Server container. Do not construct a second notification manager or call a
 Provider directly, because that bypasses persistence, retry, and logs.
+Extension plugins resolve `notificationExtensionRegistryToken` instead; the
+manager lifecycle and test-route surface are internal to the core plugin.
 
 ## Runtime requirements
 
@@ -37,9 +41,18 @@ stable while work is outstanding. Credentials, recipient snapshots, message
 bodies, and lease tokens must not be written to logs.
 
 The notification log API requires authentication and the
-`page:notification.logs` `access` permission. Provider test routes are owned by
-the built-in Provider package and should remain disabled in production unless
-a controlled verification explicitly needs them.
+`page:notification.logs` `access` permission. The separate test API is enabled
+only by `notification.test.enabled`, requires the
+`notification:test` `send` permission and the
+`x-nocobase-notification-test: 1` anti-CSRF header, and exposes only safe
+Channel/Provider labels and test-field metadata. Provider deployment
+configuration and credentials remain server-only. Keep testing disabled in
+production unless a controlled verification explicitly needs a real send.
+
+The core test endpoints are `GET /api/notifications/test/targets`,
+`POST /api/notifications/test/send`, and
+`GET /api/notifications/test/:id/status`. Status is visible only to the user
+who created that test.
 
 ## Client UI and Registry
 

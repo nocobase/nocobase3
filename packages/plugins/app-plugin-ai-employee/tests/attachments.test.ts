@@ -65,7 +65,7 @@ describe('message attachment lookup', () => {
       source: { collectionName: 'aiFiles' },
     };
     const result = await findMessageAttachments(
-      createContext([{ id: 1, filename: 'upload.png', storageId: 1 }], calls),
+      createContext([{ id: 1, filename: 'upload.png', disk: 1 }], calls),
       [attachment] as any,
     );
     expect(result.get(expectLookupKey(attachment, 'aiFiles:1'))).toMatchObject({
@@ -88,7 +88,7 @@ describe('message attachment lookup', () => {
       source: { collectionName: 'attachments', field: 'orders.files' },
     };
     const result = await findMessageAttachments(
-      createContext([{ id: 2, filename: 'block.pdf', storageId: 1 }], calls),
+      createContext([{ id: 2, filename: 'block.pdf', disk: 1 }], calls),
       [attachment] as any,
     );
     expect(

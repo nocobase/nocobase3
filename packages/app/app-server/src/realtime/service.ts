@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+  DefinedRealtimeTopic,
   RealtimeConnection,
   RealtimeService,
   RealtimeSubscription,
+  RealtimeTopicAudience,
+  RealtimeTopicOptions,
 } from './types.js';
 
 import {
@@ -46,6 +49,7 @@ export function createRealtimeService(
         ws,
         connectedAt: new Date(),
         request: context.request,
+        principal: context.principal,
         subscriptions: new Set(),
       };
       connections.set(connection.id, connection);
@@ -81,6 +85,7 @@ export function createRealtimeService(
         id: randomUUID(),
         connectionId: connection.id,
         topic,
+        userId: resolveSubscriptionUserId(connection, topic),
         createdAt: new Date(),
       };
       subscriptions.set(subscription.id, subscription);
@@ -160,8 +165,68 @@ export function createRealtimeService(
       }
     },
 
-    publish(topic, payload) {
+    registerTopic(topic, topicDefinition) {
       validateRealtimeTopic(topic);
+      if (topicOptions.has(topic)) {
+        throw new RealtimeProtocolError(
+          'TOPIC_ALREADY_REGISTERED',
+          `Realtime topic "${topic}" is already registered.`,
+        );
+      }
+
+      topicOptions.set(topic, topicDefinition);
+      return () => {
+        if (topicOptions.get(topic) !== topicDefinition) {
+          return;
+        }
+
+        removeTopicSubscriptions(topic);
+        topicOptions.delete(topic);
+      };
+    },
+
+    defineTopic<Payload, Audience extends RealtimeTopicAudience>(
+      topic: string,
+      topicDefinition: { readonly audience: Audience },
+    ): DefinedRealtimeTopic<Payload, Audience> {
+      const close = service.registerTopic(topic, topicDefinition);
+      const definedTopic =
+        topicDefinition.audience === 'user'
+          ? {
+              name: topic,
+              audience: 'user' as const,
+              publishFor(userId: string, payload: Payload) {
+                return service.publish(topic, payload, { userId });
+              },
+              close,
+            }
+          : {
+              name: topic,
+              audience: 'public' as const,
+              publish(payload: Payload) {
+                return service.publish(topic, payload);
+              },
+              close,
+            };
+
+      return definedTopic as DefinedRealtimeTopic<Payload, Audience>;
+    },
+
+    publish(topic, payload, options = {}) {
+      validateRealtimeTopic(topic);
+      const audience = topicOptions.get(topic)?.audience ?? 'public';
+      if (audience === 'user' && !options.userId) {
+        throw new RealtimeProtocolError(
+          'USER_AUDIENCE_REQUIRED',
+          `Realtime topic "${topic}" requires a user audience.`,
+        );
+      }
+      if (audience === 'public' && options.userId) {
+        throw new RealtimeProtocolError(
+          'INVALID_AUDIENCE',
+          `Realtime topic "${topic}" does not accept a user audience.`,
+        );
+      }
 
       const subscriptionIds = subscriptionsByTopic.get(topic);
       if (!subscriptionIds?.size) {
@@ -187,6 +252,7 @@ export function createRealtimeService(
         if (
           !subscription ||
           !connection ||
+          (audience === 'user' && subscription.userId !== options.userId) ||
           sentConnections.has(connection.id)
         ) {
           continue;
@@ -239,8 +305,11 @@ export function createRealtimeService(
       subscriptions.clear();
       subscriptionsByTopic.clear();
       listenersByTopic.clear();
+      topicOptions.clear();
     },
   };
+
+  const topicOptions = new Map<string, RealtimeTopicOptions>();
 
   function findSubscription(
     connection: RealtimeConnection,
@@ -283,6 +352,41 @@ export function createRealtimeService(
         removeSubscription(connection, subscription);
       }
     }
+  }
+
+  function removeTopicSubscriptions(topic: string): void {
+    const subscriptionIds = subscriptionsByTopic.get(topic);
+    if (!subscriptionIds) {
+      return;
+    }
+
+    for (const subscriptionId of Array.from(subscriptionIds)) {
+      const subscription = subscriptions.get(subscriptionId);
+      const connection = subscription
+        ? connections.get(subscription.connectionId)
+        : undefined;
+      if (subscription && connection) {
+        removeSubscription(connection, subscription);
+      }
+    }
+  }
+
+  function resolveSubscriptionUserId(
+    connection: RealtimeConnection,
+    topic: string,
+  ): string | undefined {
+    if ((topicOptions.get(topic)?.audience ?? 'public') !== 'user') {
+      return undefined;
+    }
+
+    const userId = connection.principal?.userId;
+    if (!userId) {
+      throw new RealtimeProtocolError(
+        'AUTHENTICATION_REQUIRED',
+        `Realtime topic "${topic}" requires authentication.`,
+      );
+    }
+    return userId;
   }
 
   function removeSubscription(

@@ -34,10 +34,10 @@ export function getDocumentCacheKey(sourceFile: ParseableFile): string | null {
   if (sourceFile.source?.documentCache === false) {
     return null;
   }
-  if (!sourceFile.id || !sourceFile.storageId) {
+  if (sourceFile.id == null || !sourceFile.disk || !sourceFile.path) {
     return null;
   }
-  return `${sourceFile.id}@${sourceFile.storageId}`;
+  return `${sourceFile.disk}:${String(sourceFile.id)}:${sourceFile.path}`;
 }
 
 export class CachedDocumentLoader {

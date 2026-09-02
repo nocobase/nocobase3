@@ -39,6 +39,31 @@ describe('authentication provider password reset flow', () => {
       'reset-token',
     );
   });
+
+  it('refreshes realtime authentication when the session is anonymous', async () => {
+    const client = createAuthClientMock();
+    vi.spyOn(client, 'getSession').mockResolvedValue(null);
+    const refreshRealtimeSession = vi.spyOn(client, 'refreshRealtimeSession');
+    const provider = createAuthProvider(client);
+
+    await expect(provider.check()).resolves.toEqual({
+      authenticated: false,
+      redirectTo: '/login',
+    });
+    expect(refreshRealtimeSession).toHaveBeenCalledOnce();
+  });
+
+  it('refreshes realtime authentication after an unauthorized response', async () => {
+    const client = createAuthClientMock();
+    const refreshRealtimeSession = vi.spyOn(client, 'refreshRealtimeSession');
+    const provider = createAuthProvider(client);
+
+    await expect(provider.onError({ status: 401 })).resolves.toEqual({
+      logout: true,
+      redirectTo: '/login',
+    });
+    expect(refreshRealtimeSession).toHaveBeenCalledOnce();
+  });
 });
 
 function createAuthClientMock(): AuthClient {

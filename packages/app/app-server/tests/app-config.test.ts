@@ -293,6 +293,32 @@ describe('AppConfig', () => {
     });
   });
 
+  it('supports unique object properties in contributed array schemas', async () => {
+    const servicesConfig = defineAppConfig({
+      namespace: 'services',
+      schema: Type.Object({
+        entries: Type.Array(
+          Type.Object({ name: Type.String(), provider: Type.String() }),
+          { uniqueItemProperties: ['name'] },
+        ),
+      }),
+      defaults: { entries: [] },
+    });
+    const config = new AppConfig([servicesConfig], { context: {} });
+    config.load(
+      objectProvider({
+        services: {
+          entries: [
+            { name: 'same', provider: 'first' },
+            { name: 'same', provider: 'second' },
+          ],
+        },
+      }),
+    );
+
+    await expect(config.loadAll()).rejects.toThrow(/uniqueItemProperties/);
+  });
+
   it('keeps the previous snapshot when a reload fails validation', async () => {
     let enabled: boolean | string = false;
     const config = new AppConfig([featureConfig], { context: {} });

@@ -2,12 +2,12 @@
 
 ## Package ownership
 
-| Package                                       | Responsibility                                                                                                              |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `@nocobase/app-plugin-notification`           | Manager, registry, persistent Notification/Delivery/Attempt records, queue job, reconciler, logs, and protected logs UI/API |
-| `@nocobase/app-plugin-notification-in-app`    | `in-app` Channel, database Provider, personal inbox store/API, and optional Registry UI                                     |
-| `@nocobase/app-plugin-notification-providers` | `email` and `im` Channels; SMTP, Resend, Feishu, and DingTalk Provider definitions; protected Provider test API             |
-| `@nocobase/app-plugin-notification-provider`  | Browser toast adapter for Refine; not durable server delivery                                                               |
+| Package                                       | Responsibility                                                                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `@nocobase/app-plugin-notification`           | Manager, registry, persistent Notification/Delivery/Attempt records, queue job, reconciler, logs, and protected logs/test UI/API |
+| `@nocobase/app-plugin-notification-in-app`    | `in-app` Channel, database Provider, personal inbox store/API, and optional Registry UI                                          |
+| `@nocobase/app-plugin-notification-providers` | `email` and `im` Channels; SMTP, Resend, Feishu, and DingTalk Provider definitions and safe test adapters                        |
+| `@nocobase/app-plugin-notification-provider`  | Browser toast adapter for Refine; not durable server delivery                                                                    |
 
 The application owns which packages are installed, plugin ordering, configuration, secret loading, user-address resolution, and business send calls. Use the shared Application container and `notificationServiceToken`; do not create a parallel manager inside a business module.
 

@@ -45,19 +45,19 @@ Do not retry automatically. Use Provider message id when available, external Pro
 
 ## Common symptoms
 
-| Symptom                               | Check                                                                   |
-| ------------------------------------- | ----------------------------------------------------------------------- |
-| Channel is not enabled                | Effective `notification.channels`, `enabled`, and exact type            |
-| Channel definition is not registered  | Optional plugin installed/enabled and boot order before first send      |
-| Provider definition is not registered | Built-in/custom Provider plugin booted and exact Channel/type pair      |
-| No matching enabled Provider          | Provider name in routing and effective enabled config                   |
-| Runtime identity mismatch             | Definition returns the configured name/type exactly                     |
-| Unsupported recipient                 | Recipient union member and Channel resolver contract                    |
-| Queue dispatch warning                | Reconciler recovery, worker availability, persistent ready Delivery     |
-| Repeated retry                        | Attempt categories, disposition, retry delay, and max attempts          |
-| Submission timeout                    | Provider timeout, abort handling, remote latency, and unknown risk      |
-| Log route 401/403                     | Authentication and `page:notification.logs` `access` permission         |
-| Provider test 404/403                 | `notification.test.enabled`, authentication/permission, and test header |
+| Symptom                               | Check                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| Channel is not enabled                | Effective `notification.channels`, `enabled`, and exact type             |
+| Channel definition is not registered  | Optional plugin installed/enabled and boot order before first send       |
+| Provider definition is not registered | Built-in/custom Provider plugin booted and exact Channel/type pair       |
+| No matching enabled Provider          | Provider name in routing and effective enabled config                    |
+| Runtime identity mismatch             | Definition returns the configured name/type exactly                      |
+| Unsupported recipient                 | Recipient union member and Channel resolver contract                     |
+| Queue dispatch warning                | Reconciler recovery, worker availability, persistent ready Delivery      |
+| Repeated retry                        | Attempt categories, disposition, retry delay, and max attempts           |
+| Submission timeout                    | Provider timeout, abort handling, remote latency, and unknown risk       |
+| Log route 401/403                     | Authentication and `page:notification.logs` `access` permission          |
+| Notification test 404/403             | `notification.test.enabled`, `notification:test` `send`, and test header |
 
 ## Safe recovery
 

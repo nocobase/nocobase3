@@ -16,6 +16,7 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     currentRequest ??= client
       .getSession()
       .then((session) => {
+        if (!session) client.refreshRealtimeSession();
         currentUser = session?.user ?? null;
         return currentUser;
       })
@@ -130,6 +131,7 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     },
     onError: async (error) => {
       if (isUnauthorized(error)) {
+        client.refreshRealtimeSession();
         clear();
         return { logout: true, redirectTo: '/login' };
       }

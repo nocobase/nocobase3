@@ -686,6 +686,9 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../service-provider
       axios:
         specifier: ^1.7.0
         version: 1.19.0
@@ -1132,6 +1135,12 @@ importers:
 
   packages/plugins/app-plugin-ai-employee:
     dependencies:
+      '@ai-sdk/react':
+        specifier: ^2.0.0
+        version: 2.0.0(react@19.1.0)(zod@3.25.76)
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@dicebear/core':
         specifier: ^9.4.3
         version: 9.4.3
@@ -1165,6 +1174,27 @@ importers:
       '@refinedev/core':
         specifier: ^5.0.0
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.1.0))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
+      ai:
+        specifier: ^5.0.0
+        version: 5.0.0(zod@3.25.76)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      echarts:
+        specifier: ^5.5.0
+        version: 5.6.0
+      echarts-for-react:
+        specifier: ^3.0.2
+        version: 3.0.2(echarts@5.6.0)(react@19.1.0)
+      eventsource-parser:
+        specifier: ^3.0.0
+        version: 3.1.0
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -1177,6 +1207,21 @@ importers:
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.1.0)
+      next-themes:
+        specifier: ^0.4.6
+        version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react-hook-form:
+        specifier: ^7.57.0
+        version: 7.85.0(react@19.1.0)
+      react-markdown:
+        specifier: ^10.1.0
+        version: 10.1.0(@types/react@19.2.18)(react@19.1.0)
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
       zod:
         specifier: ^3
         version: 3.25.76
@@ -1190,9 +1235,6 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:*
         version: link:../app-plugin-authentication
-      '@nocobase/app-portal-sdk':
-        specifier: workspace:*
-        version: link:../../app/app-portal-sdk
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
@@ -1274,9 +1316,6 @@ importers:
       '@nocobase/ai-employee':
         specifier: workspace:^
         version: link:../../libs/ai-employee
-      '@nocobase/drive':
-        specifier: workspace:^
-        version: link:../../libs/drive
       '@refinedev/core':
         specifier: ^5.0.0
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.1.0))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -1915,6 +1954,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider
@@ -2009,9 +2051,6 @@ importers:
 
   packages/plugins/app-plugin-notification-providers:
     dependencies:
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       nodemailer:
         specifier: ^9.0.5
         version: 9.0.5
@@ -2019,12 +2058,6 @@ importers:
         specifier: ^6.22.1
         version: 6.24.0
     devDependencies:
-      '@nocobase/app-plugin-authentication':
-        specifier: workspace:*
-        version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-authorization':
-        specifier: workspace:*
-        version: link:../app-plugin-authorization
       '@nocobase/app-plugin-notification':
         specifier: workspace:*
         version: link:../app-plugin-notification
@@ -2034,6 +2067,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider

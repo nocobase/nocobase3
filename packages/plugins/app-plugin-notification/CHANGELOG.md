@@ -1,5 +1,17 @@
 # @nocobase/app-plugin-notification
 
+## Unreleased
+
+### Minor Changes
+
+- Move notification testing into the core plugin with safe dynamic target
+  descriptors, separate `notification:test` `send` authorization, actor-scoped
+  status lookup, and delivery through the normal manager send path. Validate
+  enabled Channel and Provider configuration after extension registration and
+  fail fast when required runtime dependencies are missing. Separate the
+  public sending service from the Channel/Provider extension registry so child
+  plugins do not depend on the complete manager surface.
+
 ## 0.1.0-beta.2
 
 ### Minor Changes

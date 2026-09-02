@@ -1545,7 +1545,7 @@ If information is missing, clearly state it in the summary.</Important>`;
               continue;
             }
             const parsed = await provider.parseAttachment(attachment, {
-              fileManager: this.ctx.fileManager,
+              fileStorage: this.ctx.fileStorage,
               documentLoader: this.ctx.documentLoaders.cached,
               caching: this.ctx.caching,
               getHeader: (name: string) => this.ctx.get(name),

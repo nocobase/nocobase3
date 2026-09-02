@@ -35,9 +35,8 @@ Treat `@nocobase/ai-employee` as a public dependency. Extend the application thr
 | Application path                          | Purpose                                                                                                            |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `package.json`                            | Declares the dependency and enables `@nocobase/app-plugin-ai-employee`.                                            |
+| `config.yml` → `ai.llmServices`           | Sole declarative LLM-service source; authoritative and live-reloadable.                                            |
 | `ai/`                                     | App-owned declarative employees, tools, skills, and MCP resource layer.                                            |
-| `ai/models.json`                          | Packaged/default LLM-service manifest, mainly for fresh deployments and source-controlled defaults.                |
-| `storage/ai/models.json`                  | Preferred runtime-editable LLM-service manifest; changes do not require rebuilding/repacking.                      |
 | `server/runtime/deps.ts`                  | Creates and exposes the shared `deps.ai` aggregate. Infrastructure reference, not the default customization point. |
 | `server/plugins/`                         | Resolves enabled plugins and invokes their `server/bootstrap.ts`. Infrastructure reference.                        |
 | an enabled plugin's `server/bootstrap.ts` | Preferred owner for executable AI registration and custom providers.                                               |
@@ -46,11 +45,9 @@ Treat `@nocobase/ai-employee` as a public dependency. Extend the application thr
 
 ## Three Extension Paths
 
-### 1. App `ai/` resources
+### 1. App declarative configuration and resources
 
-Use for static employees, tools, skills, MCP definitions, and packaged LLM-service defaults.
-
-For LLM services, prefer `storage/ai/models.json` in deployed or locally running applications. The storage manifest is loaded after `ai/models.json`, becomes authoritative when present, and can be edited without rebuilding/repacking the application; restart/reload the App to apply it. Keep `ai/models.json` as a source-controlled bootstrap/fallback for fresh installations.
+Use `config.yml` `ai.llmServices` for declarative LLM services. Use `ai/` only for employees, tools, skills, and MCP definitions. After editing LLM configuration, invoke application config reload; no process restart or resource rescan is required.
 
 The App resource path is simple, declarative, and automatically loaded by the enabled AI employee plugin.
 
@@ -101,12 +98,12 @@ Never call `createAIManager()` inside a plugin just to register App behavior. Th
 
 ## AI Plugin Initialization
 
-The enabled `@nocobase/app-plugin-ai-employee` bootstrap initializes persistence and starts resource loading. Its runtime:
+The enabled `@nocobase/app-plugin-ai-employee` provider initializes persistence, configuration synchronization, and resource loading. Its runtime:
 
-1. prepares database-backed resource repositories;
-2. loads package-owned defaults;
-3. loads the App's `ai/` directory as an extension/override layer;
-4. synchronizes the LLM service manifest through its storage lifecycle;
+1. subscribes to the `ai` application-config namespace;
+2. synchronizes the initial `ai.llmServices` snapshot before switching to database persistence;
+3. loads package-owned defaults and the App's `ai/` employee/tool/skill/MCP extension layer;
+4. serializes later config-reload synchronizations against the active database repository;
 5. exposes request/runtime services through the App plugin.
 
 Application code should rely on these extension points instead of reproducing the initialization pipeline.

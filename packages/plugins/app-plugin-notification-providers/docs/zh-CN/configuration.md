@@ -141,26 +141,19 @@ Webhook URL 自身包含访问凭据。不要提交包含真实凭据的 `config
 
 :::
 
-## 使用测试页面发送消息
+## 发送测试消息
 
-启动应用并登录后，打开：
+核心通知插件的日志设置页会根据受保护的 targets API 动态显示测试按钮和表单。目标列表只包含已注册定义与已启用配置实例的交集，不会返回 Webhook URL、API Key、密码或签名密钥。
 
-```text
-http://localhost:13000/main/api/notification-providers/test
-```
-
-如果修改了 `APP_BASE_PATH`，请把 `/main` 替换成实际路径。页面会列出当前启用的 Email 和 IM Provider，点击按钮后通过正式的 `NotificationManager` 发送消息，并展示 Notification 和 Delivery 状态。因此测试过程会创建 Notification、Delivery 和 Attempt 日志。
-
-测试站内信时填写接收用户 ID，测试 Email 时填写接收邮箱；IM 测试会发送到所配置 Webhook 对应的群，不需要另填接收人。Email 请求未传接收人时使用 `notification.test.emailRecipient`，站内信请求未传接收人时发送给当前登录用户。页面要求用户已登录，并且必须在 `config.yml` 中显式启用：
+测试 Email 时必须填写接收邮箱；IM 测试会发送到所选 Provider 配置的逻辑目标。页面要求用户已登录、拥有 `notification:test` 的 `send` 权限，并且必须在 `config.yml` 中显式启用：
 
 ```yaml
 notification:
   test:
     enabled: true
-    emailRecipient: recipient@example.com
 ```
 
-只应在受控环境中临时启用；生产环境验证完成后应及时关闭。
+核心接口为 `GET /api/notifications/test/targets`、`POST /api/notifications/test/send` 和 `GET /api/notifications/test/:id/status`。它们都要求 `x-nocobase-notification-test: 1` 防跨站请求头；状态只对发起该测试的用户可见。所有测试都走正式的 `NotificationManager.send()` 路径，并创建 Notification、Delivery 和 Attempt 日志。只应在受控环境中临时启用；生产环境验证完成后应及时关闭。
 
 ## 手动构造配置
 

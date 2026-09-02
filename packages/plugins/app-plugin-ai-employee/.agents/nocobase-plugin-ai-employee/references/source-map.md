@@ -31,7 +31,7 @@ Read these App-local files when present:
 
 ## App AI resources
 
-- `ai/models.json`: LLM service manifest with environment placeholders.
+- `config.yml` `ai.llmServices`: LLM service application config with environment placeholders.
 - `ai/employees/<name>/index.ts`: App employee definition.
 - `ai/employees/<name>/prompt.md`: optional long prompt.
 - `ai/tools/<name>.ts`: App backend tool.

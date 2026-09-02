@@ -16,7 +16,7 @@ export type AIFileAttachment = {
   path?: string;
   url?: string;
   preview?: string;
-  storageId?: string | number;
+  disk?: string;
   meta?: Record<string, unknown>;
   source?: AIFileSource;
 };
