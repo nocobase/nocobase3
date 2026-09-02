@@ -61,6 +61,7 @@ Migration 入口：
 - `database.createMigrator(options)`：创建绑定当前 Database Manager 的 migration runner。
 - `createMigrator({ database, ...options })`：底层 migration runner 工厂。
 - `migrator.latest()`：执行所有 pending migrations。
+- `migrator.upTo(name)`：执行到指定 migration（包含目标），不回滚目标之后的 migration。
 - `migrator.rollback()`：回滚最近一批 migrations。
 - `validateMigrations(options)`：校验 migration 文件格式和名称一致性。
 
@@ -68,7 +69,8 @@ Migration 可以使用 `{ directory, packageName? }` 加载单个来源，也可
 
 Migration context 顶层只暴露 `builder`、`query` 和 `connection`。不在顶层公开 `schema`；底层 adapter client 兜底通过 `connection.client()`。
 
-详见 [Migration](../migration/overview.md) 和 [Migration 维护清单](../migration/maintenance.md)。
+详见 [Migration](../migration/overview.md)、[Migration 测试](../migration/testing.md) 和
+[Migration 维护清单](../migration/maintenance.md)。
 
 ## Seed
 
@@ -159,6 +161,7 @@ Writable JSON/YAML File Store 尚未实现。
 - [DatabaseConfig](./database-config.md)
 - [Query API](./query-api.md)
 - [Migration](../migration/overview.md)
+- [Migration 测试](../migration/testing.md)
 - [Migration 维护清单](../migration/maintenance.md)
 - [Seed](../seed/overview.md)
 - [Seed 维护清单](../seed/maintenance.md)

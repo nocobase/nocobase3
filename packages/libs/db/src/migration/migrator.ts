@@ -20,6 +20,7 @@ import type {
 
 export interface Migrator {
   latest(): Promise<MigrationRunResult>;
+  upTo(name: string): Promise<MigrationRunResult>;
   rollback(): Promise<MigrationRollbackResult>;
 }
 
@@ -31,6 +32,19 @@ class DefaultMigrator implements Migrator {
   constructor(private readonly options: CreateMigratorOptions) {}
 
   async latest(): Promise<MigrationRunResult> {
+    return this.runPendingMigrations();
+  }
+
+  async upTo(name: string): Promise<MigrationRunResult> {
+    if (typeof name !== 'string' || name.trim() === '') {
+      throw new Error('Migration target name must be a non-empty string.');
+    }
+    return this.runPendingMigrations(name);
+  }
+
+  private async runPendingMigrations(
+    targetName?: string,
+  ): Promise<MigrationRunResult> {
     const connection = this.options.database.connection(
       this.options.connection,
     );
@@ -39,9 +53,10 @@ class DefaultMigrator implements Migrator {
         connectionName: connection.name,
         mode: connection.schemaManagement,
       },
-      'migration.latest',
+      targetName === undefined ? 'migration.latest' : 'migration.upTo',
     );
     const migrations = await loadMigrations(this.options);
+    const selectedMigrations = selectMigrations(migrations, targetName);
     const migrationConnection = createMigrationContext(connection).connection;
 
     const result = await withMigrationLock(
@@ -66,10 +81,10 @@ class DefaultMigrator implements Migrator {
         );
 
         const appliedNames = new Set(history.map((record) => record.name));
-        const pending = migrations.filter(
+        const pending = selectedMigrations.filter(
           (migration) => !appliedNames.has(migration.name),
         );
-        const skipped = migrations
+        const skipped = selectedMigrations
           .filter((migration) => appliedNames.has(migration.name))
           .map((migration) => migration.name);
         const batch =
@@ -218,6 +233,21 @@ class DefaultMigrator implements Migrator {
       });
     });
   }
+}
+
+function selectMigrations(
+  migrations: LoadedMigration[],
+  targetName?: string,
+): LoadedMigration[] {
+  if (targetName === undefined) return migrations;
+
+  const targetIndex = migrations.findIndex(
+    (migration) => migration.name === targetName,
+  );
+  if (targetIndex === -1) {
+    throw new Error(`Migration target "${targetName}" was not found.`);
+  }
+  return migrations.slice(0, targetIndex + 1);
 }
 
 function validateAppliedMigrationHistory(

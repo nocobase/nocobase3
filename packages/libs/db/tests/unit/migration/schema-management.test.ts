@@ -7,7 +7,7 @@ import {
 } from '../../../src/index.js';
 
 describe('Migrator schema management', () => {
-  it('rejects latest and rollback for external connections before loading migrations', async () => {
+  it('rejects latest, upTo, and rollback for external connections before loading migrations', async () => {
     const database = createDatabaseManager({
       connections: {
         external: {
@@ -28,6 +28,11 @@ describe('Migrator schema management', () => {
         code: 'SCHEMA_MANAGEMENT_NOT_ALLOWED',
         connection: 'external',
         operation: 'migration.latest',
+      });
+      await expect(migrator.upTo('001_create_users')).rejects.toMatchObject({
+        code: 'SCHEMA_MANAGEMENT_NOT_ALLOWED',
+        connection: 'external',
+        operation: 'migration.upTo',
       });
       await expect(migrator.rollback()).rejects.toBeInstanceOf(
         SchemaManagementNotAllowedError,

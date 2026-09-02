@@ -85,6 +85,82 @@ describeIntegrationDatabases('migration runner', (context) => {
     ]);
   });
 
+  it('runs pending migrations through an inclusive target', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('targetMigrationHistory');
+    const lockTableName = context.table('targetMigrationLock');
+    const dataTableName = context.table('targetMigrationEvents');
+    const migrationNames = [
+      '202608180001_target_first',
+      '202608180002_target_second',
+      '202608180003_target_third',
+    ] as const;
+    await context.db.schema.createTable(dataTableName, (table) => {
+      table.increments('id').primary();
+      table.string('event').notNullable();
+    });
+    for (const name of migrationNames) {
+      await writeEventMigration(directory, name, dataTableName);
+    }
+
+    const migrator = context.database.createMigrator({
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+
+    await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
+      batch: 1,
+      executed: migrationNames.slice(0, 2),
+      skipped: [],
+    });
+    await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
+      batch: 1,
+      executed: [],
+      skipped: migrationNames.slice(0, 2),
+    });
+    await expect(migrator.latest()).resolves.toEqual({
+      batch: 2,
+      executed: [migrationNames[2]],
+      skipped: migrationNames.slice(0, 2),
+    });
+    await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
+      batch: 2,
+      executed: [],
+      skipped: migrationNames.slice(0, 2),
+    });
+    await expect(migrator.rollback()).resolves.toEqual({
+      batch: 2,
+      rolledBack: [migrationNames[2]],
+    });
+    await expect(
+      context.db(dataTableName).select('event').orderBy('id'),
+    ).resolves.toEqual([
+      { event: `up:${migrationNames[0]}` },
+      { event: `up:${migrationNames[1]}` },
+      { event: `up:${migrationNames[2]}` },
+      { event: `down:${migrationNames[2]}` },
+    ]);
+  });
+
+  it('rejects an unknown or empty migration target', async () => {
+    const directory = await createTempDirectory();
+    const migrator = context.database.createMigrator({
+      connection: context.spec.name,
+      directory,
+      tableName: context.table('invalidTargetMigrationHistory'),
+      lockTableName: context.table('invalidTargetMigrationLock'),
+    });
+
+    await expect(migrator.upTo('')).rejects.toThrow(
+      'Migration target name must be a non-empty string.',
+    );
+    await expect(migrator.upTo('202608180001_missing')).rejects.toThrow(
+      'Migration target "202608180001_missing" was not found.',
+    );
+  });
+
   it('upgrades legacy history tables and preserves applied migrations', async () => {
     const directory = await createTempDirectory();
     const tableName = context.table('legacyMigrationHistory');

@@ -256,6 +256,16 @@ const migrator = database.createMigrator({
 await migrator.latest();
 ```
 
+只向前执行到指定 migration 时使用 `upTo()`，目标 migration 包含在本次范围内：
+
+```ts
+await migrator.upTo('202608180003_backfill_user_status');
+```
+
+`upTo()` 会跳过范围内已经执行的 migration，并补齐目标及之前尚未执行的 migration。
+它不会回滚目标之后已经执行的 migration。目标名称必须精确匹配当前 sources 中的一个
+migration，否则调用会失败。
+
 插件系统需要加载多个 package 时，使用 `sources`：
 
 ```ts
@@ -280,7 +290,10 @@ const migrator = database.createMigrator({
 `createMigrator({ database, ...options })` 工厂。`database` 只用于 runner 找到目标连接，
 Migration 文件里不会收到 `database`。
 
-`latest()` 会：
+具体 migration 的测试默认使用 `upTo(target)` 固定执行边界；完整测试模式见
+[Migration 测试](./testing.md)。
+
+`latest()` 和 `upTo()` 会：
 
 - 加载 migration 目录。
 - 校验文件格式和名称。
@@ -364,7 +377,7 @@ __nocobase_migrations
 
 ## Lock
 
-Runner 在 `latest()` 和 `rollback()` 前获取 migration lock，结束后释放。Lock 用于避免多个进程同时执行 migration。
+Runner 在 `latest()`、`upTo()` 和 `rollback()` 前获取 migration lock，结束后释放。Lock 用于避免多个进程同时执行 migration。
 
 默认 lock 表：
 

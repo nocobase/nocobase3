@@ -45,6 +45,8 @@ await db.destroy();
 - [命名概念](./docs/zh-CN/concepts/naming.md)
 - [Builder API 总览](./docs/zh-CN/builder/overview.md)
 - [QueryAdapter 概览](./docs/zh-CN/query/overview.md)
+- [Migration](./docs/zh-CN/migration/overview.md)
+- [Migration 测试](./docs/zh-CN/migration/testing.md)
 - [Repository 规划](./docs/zh-CN/repository/overview.md)
 - [Repository Select AST 规划](./docs/zh-CN/repository/select-ast.md)
 - [Repository Filter Builder 规划](./docs/zh-CN/repository/filter-builder.md)
@@ -96,6 +98,10 @@ docs/
       mutations.md
       naming.md
       compile.md
+    migration/
+      overview.md
+      testing.md
+      maintenance.md
     repository/
       overview.md
       select-ast.md

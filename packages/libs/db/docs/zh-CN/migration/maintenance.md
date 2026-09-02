@@ -8,6 +8,7 @@
 - `loadMigrations(options)`：加载并校验 migration 目录。
 - `validateMigrations(options)`：校验 migration 文件格式和名称。
 - `createMigrator(options)`：创建 migration runner。
+- `migrator.upTo(name)`：只向前执行到指定 migration，包含目标。
 - `migrator.latest()`：执行 pending migrations。
 - `migrator.rollback()`：回滚最近一个 batch。
 
@@ -168,7 +169,7 @@ Runner 在执行 pending migration 前校验已执行记录的 checksum。checks
 __nocobase_migration_lock
 ```
 
-`latest()` 和 `rollback()` 都必须在 lock 内运行。退出时必须释放 lock。
+`latest()`、`upTo()` 和 `rollback()` 都必须在 lock 内运行。退出时必须释放 lock。
 
 Lock 至少要保证同一进程内串行，并通过数据库表避免常见的多进程重复执行。
 
@@ -203,6 +204,9 @@ interface MigrationRollbackResult {
 
 ## 测试清单
 
+插件和应用 migration 的推荐测试模式见 [Migration 测试](./testing.md)。本节只维护 DB 包自身
+对 migration 定义、loader 和 runner 的覆盖要求。
+
 单元测试覆盖：
 
 - `defineMigration()` 添加内部标记。
@@ -219,6 +223,9 @@ interface MigrationRollbackResult {
 
 集成测试覆盖：
 
+- `upTo(name)` 包含目标，只执行目标及之前的 pending migrations。
+- `upTo(name)` 不回滚目标之后已经执行的 migration。
+- `upTo(name)` 拒绝空目标和未知目标。
 - `latest()` 只执行 pending migrations。
 - `latest()` 成功后写执行记录。
 - `latest()` 重复执行时跳过已执行 migration。

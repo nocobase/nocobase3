@@ -51,7 +51,9 @@ Collection 提供一层稳定的应用抽象：
 - 快速理解主线见 [快速开始](./quick-start.md)。
 - Builder 用法见 [Builder API 总览](./builder/overview.md)。
 - Query 用法见 [QueryAdapter 概览](./query/overview.md)。
-- Migration 用法和维护清单见 [Migration](./migration/overview.md) 和 [Migration 维护清单](./migration/maintenance.md)。
+- Migration 用法见 [Migration](./migration/overview.md)，具体 migration 的测试模式见
+  [Migration 测试](./migration/testing.md)，内部维护规则见
+  [Migration 维护清单](./migration/maintenance.md)。
 - Repository 规划见 [Repository 概览](./repository/overview.md)。
 - Repository 结果选择设计见 [Select AST](./repository/select-ast.md)。
 - Repository filter 设计见 [Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
