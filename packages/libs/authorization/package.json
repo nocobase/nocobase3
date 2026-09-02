@@ -112,8 +112,7 @@
     "access": "public"
   },
   "files": [
-    "dist",
-    "skills"
+    "dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

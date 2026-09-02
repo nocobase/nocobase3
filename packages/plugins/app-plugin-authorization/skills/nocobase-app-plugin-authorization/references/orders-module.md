@@ -89,7 +89,7 @@ import type {
   DatabaseAuthorizationConditions,
   DatabaseFilter,
   DatabaseFilterOperator,
-} from '@nocobase/authorization/database';
+} from '@nocobase/app-plugin-authorization';
 import type {
   ComparisonOperator,
   DatabaseManager,
