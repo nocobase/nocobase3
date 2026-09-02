@@ -15,7 +15,7 @@
     "ai/**/*.ts",
     "server/**/*.ts",
     "database/**/*.ts",
-    "../../app/app-portal-sdk/src/env.d.ts"
+    "types/**/*.d.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }

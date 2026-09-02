@@ -16,7 +16,12 @@
     "server",
     "database",
     "ai",
-    "package.json"
+    "package.json",
+    "README.md",
+    "CHANGELOG.md",
+    "registry",
+    "registry.config.json",
+    "public/r"
   ],
   "exports": {
     ".": {
@@ -113,6 +118,11 @@
         "migrations": "./database/migrations"
       },
       "server": "./server/bootstrap.ts"
+    },
+    "registry": {
+      "items": {
+        "nocobase-ai": "./registry/nocobase-ai"
+      }
     }
   },
   "scripts": {
@@ -124,8 +134,12 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
-    "fix": "pnpm lint:fix && pnpm format"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm typecheck:registry && pnpm test && pnpm registry:build && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
+    "registry:build": "node ../../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../../scripts/registry.mjs materialize --package .",
+    "prepack": "pnpm registry:build && pnpm build",
+    "typecheck:registry": "tsc -p tsconfig.registry.json --noEmit"
   },
   "dependencies": {
     "@dicebear/core": "^9.4.3",
@@ -142,13 +156,25 @@
     "langchain": "1.2.39",
     "lodash": "^4.17.21",
     "lucide-react": "^0.487.0",
-    "zod": "^3"
+    "zod": "^3",
+    "@ai-sdk/react": "^2.0.0",
+    "@base-ui/react": "^1.6.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "echarts": "^5.5.0",
+    "echarts-for-react": "^3.0.2",
+    "eventsource-parser": "^3.0.0",
+    "next-themes": "^0.4.6",
+    "react-hook-form": "^7.57.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.2.0",
+    "ai": "^5.0.0"
   },
   "devDependencies": {
     "@langchain/openai": "1.4.7",
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-authentication": "workspace:*",
-    "@nocobase/app-portal-sdk": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
@@ -174,13 +200,13 @@
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
-    "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
-    "react-router": "^7.0.0"
+    "react-router": "^7.0.0",
+    "react-dom": "^19.0.0"
   }
 }

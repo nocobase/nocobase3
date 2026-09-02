@@ -144,4 +144,46 @@ describe('createAppClient', () => {
       expect(error).toMatchObject({ status: 403, message });
     },
   );
+
+  it('returns a streaming response body through the same API transport', async () => {
+    const body = new ReadableStream<Uint8Array>();
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      new Response(body, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+    const client = createAppClient({ baseURL: '/main/api', fetch });
+
+    await expect(
+      client.stream('ai/aiConversations:sendMessages', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: 'session-1' }),
+      }),
+    ).resolves.toBe(body);
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/main/api/ai/aiConversations:sendMessages',
+      expect.objectContaining({
+        credentials: 'include',
+      }),
+    );
+    const headers = new Headers(fetch.mock.calls[0]?.[1]?.headers);
+    expect(headers.get('Accept')).toBe('text/event-stream');
+    expect(headers.get('Content-Type')).toBe('application/json');
+  });
+
+  it('throws AppRequestError when a streaming request fails', async () => {
+    const client = createAppClient({
+      fetch: async (): Promise<Response> =>
+        new Response(JSON.stringify({ message: 'Stream denied' }), {
+          status: 403,
+        }),
+    });
+
+    await expect(client.stream('ai/stream')).rejects.toMatchObject({
+      name: 'AppRequestError',
+      message: 'Stream denied',
+      status: 403,
+    } satisfies Partial<AppRequestError>);
+  });
 });
