@@ -70,13 +70,12 @@
   },
   "files": [
     "dist",
-    ".agents",
     "skills"
   ],
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-client-assets.mjs && tsc -p tsconfig.migrations.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit && tsc -p tsconfig.workflow-fixtures.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "eval:skill": "node --import tsx skill-evals/nocobase3-workflow-manage/runner/cli.ts",
     "eval:skill:test": "vitest run --config skill-evals/nocobase3-workflow-manage/vitest.config.ts",
