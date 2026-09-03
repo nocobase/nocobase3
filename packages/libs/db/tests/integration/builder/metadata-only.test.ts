@@ -38,5 +38,33 @@ describeIntegrationDatabases(
         },
       });
     });
+
+    it('persists optimistic lock metadata and resolves it through Collections', async () => {
+      await context.builder.createCollection('orders', (collection) => {
+        collection.increments('id');
+        collection.integer('version').notNull();
+        collection.optimisticLock('version');
+      });
+
+      const stored = await context.metadataStore.get('orders');
+      expect(stored?.document.optimisticLock).toEqual({
+        field: 'version',
+        strategy: 'increment',
+      });
+      await expect(
+        context.database
+          .connection(context.spec.name)
+          .collections.get('orders'),
+      ).resolves.toMatchObject({
+        optimisticLock: { field: 'version', strategy: 'increment' },
+      });
+
+      await context.builder.alterCollection('orders', (collection) => {
+        collection.clearOptimisticLock();
+      });
+      expect(
+        (await context.metadataStore.get('orders'))?.document.optimisticLock,
+      ).toBeUndefined();
+    });
   },
 );

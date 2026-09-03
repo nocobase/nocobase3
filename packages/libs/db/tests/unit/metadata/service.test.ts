@@ -75,6 +75,23 @@ describe('CollectionMetadataService', () => {
     });
   });
 
+  it('sets and clears optimistic lock metadata', async () => {
+    const fixture = createService();
+
+    const updated = await fixture.service.updateCollection('orders', {
+      optimisticLock: { field: 'version', strategy: 'increment' },
+    });
+    expect(updated?.document.optimisticLock).toEqual({
+      field: 'version',
+      strategy: 'increment',
+    });
+
+    const cleared = await fixture.service.updateCollection('orders', {
+      optimisticLock: null,
+    });
+    expect(cleared).toBeUndefined();
+  });
+
   it('uses the read revision even when the caller does not provide one', async () => {
     const fixture = createService();
     await fixture.store.put(

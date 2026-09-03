@@ -15,11 +15,13 @@ const ROOT_KEYS = new Set([
   'naming',
   'title',
   'description',
+  'optimisticLock',
   'fields',
   'relations',
 ]);
 const NAMING_KEYS = new Set(['underscored', 'tablePrefix']);
 const FIELD_KEYS = new Set(['title', 'description']);
+const OPTIMISTIC_LOCK_KEYS = new Set(['field', 'strategy']);
 const RELATION_KEYS = new Set([
   'type',
   'target',
@@ -70,6 +72,11 @@ export function validateCollectionMetadataDocument(
   const title = readOptionalString(input, 'title', [], issues);
   const description = readOptionalString(input, 'description', [], issues);
   const naming = readNaming(input.naming, ['naming'], issues);
+  const optimisticLock = readOptimisticLock(
+    input.optimisticLock,
+    ['optimisticLock'],
+    issues,
+  );
   const fields = readFields(input.fields, ['fields'], issues);
   const relations = readRelations(input.relations, ['relations'], issues);
 
@@ -97,9 +104,50 @@ export function validateCollectionMetadataDocument(
     naming,
     title,
     description,
+    optimisticLock,
     fields,
     relations,
   });
+}
+
+function readOptimisticLock(
+  input: unknown,
+  path: readonly (string | number)[],
+  issues: CollectionMetadataIssue[],
+): CollectionMetadataDocument['optimisticLock'] | undefined {
+  if (input === undefined) return undefined;
+  if (!isPlainObject(input)) {
+    issues.push(
+      issue(
+        'COLLECTION_METADATA_TYPE_INVALID',
+        path,
+        'Expected optimisticLock to be a plain object.',
+      ),
+    );
+    return undefined;
+  }
+  checkUnknownProperties(input, OPTIMISTIC_LOCK_KEYS, path, issues);
+  const field = readName(input, 'field', path, issues, true);
+  if (input.strategy === undefined) {
+    issues.push(
+      issue(
+        'COLLECTION_METADATA_REQUIRED',
+        [...path, 'strategy'],
+        'strategy is required.',
+      ),
+    );
+  } else if (input.strategy !== 'increment') {
+    issues.push(
+      issue(
+        'COLLECTION_METADATA_OPTIMISTIC_LOCK_INVALID',
+        [...path, 'strategy'],
+        'Only the increment optimistic lock strategy is supported.',
+      ),
+    );
+  }
+  return field && input.strategy === 'increment'
+    ? { field, strategy: 'increment' }
+    : undefined;
 }
 
 function readNaming(

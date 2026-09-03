@@ -5,7 +5,7 @@ description: 尚未实现或导出的 Collection-aware Repository 设计；当�
 
 # Repository 概览
 
-> **状态：提案。运行时可用性：未实现。导出 API：无。** 本页只用于设计讨论，不要据此生成生产代码。当前数据访问使用 [QueryAdapter](../../query/overview.md)。
+> **状态：分批实现中。运行时可用性：未实现。导出 API：类型契约与 `RepositoryError`。** 本页描述 V1 目标；当前生产数据访问仍使用 [QueryAdapter](../../query/overview.md)。
 
 `Repository` 是未来的应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：
 

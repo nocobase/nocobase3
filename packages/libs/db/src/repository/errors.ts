@@ -1,0 +1,55 @@
+export type RepositoryErrorCode =
+  | 'COLLECTION_NOT_FOUND'
+  | 'FIELD_NOT_FOUND'
+  | 'FIELD_CAPABILITY_NOT_SUPPORTED'
+  | 'FIELD_NOT_WRITABLE'
+  | 'RELATION_NOT_FOUND'
+  | 'READ_ONLY_COLLECTION'
+  | 'INVALID_AST'
+  | 'INVALID_CONTEXT'
+  | 'INVALID_FILTER'
+  | 'INVALID_PAGINATION'
+  | 'INVALID_SELECT'
+  | 'INVALID_SORT'
+  | 'INVALID_MUTATION'
+  | 'INVALID_UNIQUE_SELECTOR'
+  | 'VARIABLE_NOT_FOUND'
+  | 'MUTATION_LIMIT_EXCEEDED'
+  | 'RECORD_NOT_FOUND'
+  | 'VERSION_CONFLICT'
+  | 'RELATION_ACTION_NOT_ALLOWED'
+  | 'RELATION_REASSIGNMENT_REQUIRED';
+
+export interface RepositoryErrorOptions {
+  readonly path?: readonly (string | number)[];
+  readonly collection?: string;
+  readonly field?: string;
+  readonly relation?: string;
+  readonly retryable?: boolean;
+  readonly details?: Readonly<Record<string, unknown>>;
+  readonly cause?: unknown;
+}
+
+export class RepositoryError extends Error {
+  readonly retryable: boolean;
+  readonly path?: readonly (string | number)[];
+  readonly collection?: string;
+  readonly field?: string;
+  readonly relation?: string;
+  readonly details?: Readonly<Record<string, unknown>>;
+
+  constructor(
+    readonly code: RepositoryErrorCode,
+    message: string,
+    options: RepositoryErrorOptions = {},
+  ) {
+    super(message, { cause: options.cause });
+    this.name = 'RepositoryError';
+    this.retryable = options.retryable ?? false;
+    this.path = options.path;
+    this.collection = options.collection;
+    this.field = options.field;
+    this.relation = options.relation;
+    this.details = options.details;
+  }
+}

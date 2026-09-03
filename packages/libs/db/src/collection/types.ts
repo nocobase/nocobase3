@@ -164,6 +164,11 @@ export interface ViewOptions {
   };
 }
 
+export interface OptimisticLockDefinition {
+  field: string;
+  strategy: 'increment';
+}
+
 export interface CollectionDefinition {
   kind?: CollectionKind;
   name?: string;
@@ -175,11 +180,13 @@ export interface CollectionDefinition {
   constraints?: ConstraintDefinition[];
   indexes?: IndexDefinition[];
   view?: ViewOptions;
+  optimisticLock?: OptimisticLockDefinition;
 }
 
 export type FieldAlterInput = Partial<Omit<FieldDefinition, 'name'>>;
 
 export interface CollectionAlterDefinition {
+  optimisticLock?: OptimisticLockDefinition | null;
   addFields?: AnyFieldDefinition[];
   alterFields?: Array<{ name: string; changes: FieldAlterInput }>;
   dropFields?: string[];
@@ -410,6 +417,7 @@ export interface CollectionDefinitionBuilder {
   dbSchema(schema: string): this;
   title(title: string): this;
   description(description: string): this;
+  optimisticLock(field: string): this;
   field(field: AnyFieldDefinition): FieldDefinitionBuilder;
   increments(name?: string): FieldDefinitionBuilder;
   integer(
@@ -497,6 +505,7 @@ export interface CollectionDefinitionBuilder {
 }
 
 export interface CollectionAlterBuilder extends CollectionDefinitionBuilder {
+  clearOptimisticLock(): this;
   alterField(name: string, changes: FieldAlterInput): this;
   dropField(name: string): this;
   dropFields(...names: string[]): this;

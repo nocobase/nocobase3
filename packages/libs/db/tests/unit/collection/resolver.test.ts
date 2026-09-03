@@ -13,6 +13,66 @@ import type {
 } from '../../../src/schema/inspector/types.js';
 
 describe('CollectionResolver', () => {
+  it('merges valid optimistic lock metadata into a resolved table Collection', () => {
+    const result = resolveCollection({
+      physical: physicalCollection({
+        tableName: 'orders',
+        columns: [
+          column('id', 1),
+          column('version', 2, { dataType: 'integer', nullable: false }),
+        ],
+      }),
+      metadata: {
+        version: 1,
+        name: 'orders',
+        optimisticLock: { field: 'version', strategy: 'increment' },
+      },
+      context: emptyContext(),
+    });
+
+    expect(result.collection.optimisticLock).toEqual({
+      field: 'version',
+      strategy: 'increment',
+    });
+  });
+
+  it.each([
+    ['missing direct Field', 'missing', 'integer', false, 'table'],
+    ['non-integer Field', 'version', 'string', false, 'table'],
+    ['nullable Field', 'version', 'integer', true, 'table'],
+    ['view Collection', 'version', 'integer', false, 'view'],
+  ] as const)(
+    'rejects optimistic locking with a %s',
+    (_label, field, dataType, nullable, kind) => {
+      expect(() =>
+        resolveCollection({
+          physical: physicalCollection({
+            kind,
+            tableName: 'orders',
+            columns: [
+              column('id', 1),
+              column('version', 2, { dataType, nullable }),
+            ],
+          }),
+          metadata: {
+            version: 1,
+            name: 'orders',
+            optimisticLock: { field, strategy: 'increment' },
+          },
+          context: emptyContext(),
+        }),
+      ).toThrowError(
+        expect.objectContaining({
+          issues: expect.arrayContaining([
+            expect.objectContaining({
+              code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+            }),
+          ]),
+        }),
+      );
+    },
+  );
+
   it('maps physical facts and supplemental metadata without duplicating constraints', () => {
     const context: CollectionResolutionContext = {
       resolvePhysicalCollection: vi.fn((identity) =>

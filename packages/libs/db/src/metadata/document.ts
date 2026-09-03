@@ -1,4 +1,8 @@
-import type { NamingOptions, RelationType } from '../collection/types.js';
+import type {
+  NamingOptions,
+  OptimisticLockDefinition,
+  RelationType,
+} from '../collection/types.js';
 
 export interface CollectionMetadataDocument {
   version: 1;
@@ -6,6 +10,7 @@ export interface CollectionMetadataDocument {
   naming?: NamingOptions;
   title?: string;
   description?: string;
+  optimisticLock?: OptimisticLockDefinition;
   fields?: Record<string, FieldMetadata>;
   relations?: Record<string, RelationMetadata>;
 }

@@ -12,6 +12,7 @@ describe('validateCollectionMetadataDocument', () => {
       naming: { underscored: true, tablePrefix: '' },
       title: 'Orders',
       description: 'Customer purchase orders.',
+      optimisticLock: { field: 'version', strategy: 'increment' as const },
       fields: {
         amount: {
           title: 'Amount',
@@ -39,11 +40,40 @@ describe('validateCollectionMetadataDocument', () => {
     expect(document).not.toBe(input);
     expect(document.naming).not.toBe(input.naming);
     expect(document.fields).not.toBe(input.fields);
+    expect(document.optimisticLock).not.toBe(input.optimisticLock);
     expect(document.fields?.amount).not.toBe(input.fields.amount);
     expect(document.relations?.customer).not.toBe(input.relations.customer);
 
     input.fields.amount.title = 'Changed after validation';
     expect(document.fields?.amount.title).toBe('Amount');
+  });
+
+  it('validates optimistic lock shape and strategy', () => {
+    expectIssues(
+      {
+        version: 1,
+        name: 'orders',
+        optimisticLock: {
+          field: ' version',
+          strategy: 'timestamp',
+          unknown: true,
+        },
+      },
+      [
+        {
+          code: 'COLLECTION_METADATA_UNKNOWN_PROPERTY',
+          path: ['optimisticLock', 'unknown'],
+        },
+        {
+          code: 'COLLECTION_METADATA_NAME_INVALID',
+          path: ['optimisticLock', 'field'],
+        },
+        {
+          code: 'COLLECTION_METADATA_OPTIMISTIC_LOCK_INVALID',
+          path: ['optimisticLock', 'strategy'],
+        },
+      ],
+    );
   });
 
   it('accepts the minimal document and an empty table prefix', () => {

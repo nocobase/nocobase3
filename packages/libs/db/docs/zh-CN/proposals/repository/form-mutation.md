@@ -5,7 +5,7 @@ description: 尚未实现的前端大表单编译流程；将 initialValues、va
 
 # 表单到 Mutation AST
 
-> **状态：提案。运行时可用性：未实现。导出 API：无。** 本页只描述动态表单如何生成 [Mutation AST](./mutation-ast.md)。
+> **状态：提案配套流程。运行时可用性：未实现。** Mutation 类型契约已导出，Form Mutation Compiler 尚未实现。
 
 动态大表单不生成 Fluent 代码，也不把原始表单对象直接交给 Repository。前端 Form
 Mutation Compiler 根据字段提交策略生成单记录写入参数：

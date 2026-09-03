@@ -96,6 +96,7 @@ export function resolveCollection(
     issues,
   );
   const view = resolveView(input, issues);
+  const optimisticLock = resolveOptimisticLock(input, columns, issues);
 
   if (issues.length > 0 || !collectionName) {
     throw new CollectionResolutionError(issues);
@@ -121,6 +122,7 @@ export function resolveCollection(
     constraints,
     indexes,
     view,
+    optimisticLock,
   });
 
   return {
@@ -128,6 +130,58 @@ export function resolveCollection(
     inspection: input.physical.inspection,
     warnings,
   };
+}
+
+function resolveOptimisticLock(
+  input: CollectionResolutionInput,
+  columns: ResolvedColumns,
+  issues: CollectionResolutionIssue[],
+): CollectionDefinition['optimisticLock'] | undefined {
+  const definition = input.metadata?.optimisticLock;
+  if (!definition) return undefined;
+  if (
+    input.physical.kind === 'view' ||
+    input.physical.kind === 'materializedView'
+  ) {
+    issues.push(
+      issue(
+        'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        ['metadata', 'optimisticLock'],
+        'Optimistic locking is only supported for table Collections.',
+      ),
+    );
+    return undefined;
+  }
+  const field = columns.byLogicalName.get(definition.field);
+  if (!field) {
+    issues.push(
+      issue(
+        'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        ['metadata', 'optimisticLock', 'field'],
+        `Optimistic lock Field "${definition.field}" does not exist as a direct Field.`,
+      ),
+    );
+    return undefined;
+  }
+  if (field.type !== 'integer' && field.type !== 'bigInt') {
+    issues.push(
+      issue(
+        'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        ['metadata', 'optimisticLock', 'field'],
+        `Optimistic lock Field "${definition.field}" must be integer or bigInt.`,
+      ),
+    );
+  }
+  if (field.nullable !== false) {
+    issues.push(
+      issue(
+        'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        ['metadata', 'optimisticLock', 'field'],
+        `Optimistic lock Field "${definition.field}" must be non-nullable.`,
+      ),
+    );
+  }
+  return { ...definition };
 }
 
 function effectiveNaming(

@@ -116,6 +116,7 @@ export function extractLegacyCollectionMetadata(
       [],
       diagnostics,
     ),
+    optimisticLock: input.optimisticLock,
     fields: Object.keys(fields).length > 0 ? fields : undefined,
     relations: Object.keys(relations).length > 0 ? relations : undefined,
   });

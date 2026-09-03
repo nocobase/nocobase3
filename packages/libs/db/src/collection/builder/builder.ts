@@ -22,6 +22,7 @@ import {
   type LegacyMetadataExtractionDiagnostic,
 } from '../../metadata/legacy-extraction.js';
 import type { ConnectionCollections } from '../registry/types.js';
+import { CollectionResolutionError } from '../resolver/errors.js';
 import type {
   AnyFieldDefinition,
   BuilderExecOptions,
@@ -360,6 +361,7 @@ export class CollectionBuilder {
     assertNoPhysicalMappingOperations(effectiveOperations);
     const compilerContext =
       await this.createCompilerContext(effectiveOperations);
+    assertOptimisticLockOperations(effectiveOperations, compilerContext);
     await assertRenameOperations(
       effectiveOperations,
       compilerContext,
@@ -639,6 +641,11 @@ export class CollectionBuilder {
             operation.changes,
           );
           projected.set(operation.collection, definition);
+          if (operation.changes.optimisticLock !== undefined) {
+            await service.updateCollection(operation.collection, {
+              optimisticLock: operation.changes.optimisticLock,
+            });
+          }
           for (const field of operation.changes.addFields ?? []) {
             await syncFieldMetadata(service, operation.collection, field);
           }
@@ -983,10 +990,142 @@ function applyAlterMetadata(
 
   return {
     ...current,
+    optimisticLock:
+      changes.optimisticLock === null
+        ? undefined
+        : (changes.optimisticLock ?? current.optimisticLock),
     fields,
     indexes,
     constraints,
   };
+}
+
+function assertOptimisticLockOperations(
+  operations: CollectionOperation[],
+  context: CollectionCompilerContext,
+): void {
+  const collections = new Map<string, CollectionDefinition>();
+  for (const [name, definition] of Object.entries(context.collections ?? {})) {
+    if (definition) collections.set(name, definition);
+  }
+  for (const operation of operations) {
+    let name: string | undefined;
+    let definition: CollectionDefinition | undefined;
+    switch (operation.type) {
+      case 'createCollection':
+      case 'createViewCollection':
+      case 'replaceViewCollection':
+      case 'createMaterializedViewCollection':
+        name = operation.name;
+        definition = {
+          ...operation.definition,
+          name,
+          kind:
+            operation.type === 'createViewCollection' ||
+            operation.type === 'replaceViewCollection'
+              ? 'view'
+              : operation.type === 'createMaterializedViewCollection'
+                ? 'materializedView'
+                : (operation.definition.kind ?? 'table'),
+        };
+        break;
+      case 'alterCollection':
+        name = operation.collection;
+        if (
+          !collections.get(name)?.optimisticLock &&
+          operation.changes.optimisticLock === undefined
+        ) {
+          continue;
+        }
+        definition = applyAlterMetadata(
+          collections.get(name) ?? { name },
+          operation.changes,
+        );
+        break;
+      case 'addField':
+        name = operation.collection;
+        if (!collections.get(name)?.optimisticLock) continue;
+        definition = {
+          ...(collections.get(name) ?? { name }),
+          fields: [...(collections.get(name)?.fields ?? []), operation.field],
+        };
+        break;
+      case 'alterField':
+        name = operation.collection;
+        if (!collections.get(name)?.optimisticLock) continue;
+        definition = applyAlterMetadata(collections.get(name) ?? { name }, {
+          alterFields: [{ name: operation.field, changes: operation.changes }],
+        });
+        break;
+      case 'dropField':
+        name = operation.collection;
+        if (!collections.get(name)?.optimisticLock) continue;
+        definition = applyAlterMetadata(collections.get(name) ?? { name }, {
+          dropFields: [operation.field],
+        });
+        break;
+      case 'dropCollection':
+        collections.delete(operation.collection);
+        continue;
+      case 'renameCollection':
+      case 'addIndex':
+      case 'dropIndex':
+      case 'addConstraint':
+      case 'dropConstraint':
+      case 'refreshMaterializedViewCollection':
+        continue;
+    }
+    if (name && definition) {
+      assertOptimisticLockDefinition(name, definition);
+      collections.set(name, definition);
+    }
+  }
+}
+
+function assertOptimisticLockDefinition(
+  name: string,
+  definition: CollectionDefinition,
+): void {
+  const optimisticLock = definition.optimisticLock;
+  if (!optimisticLock) return;
+  const issues: Array<{
+    code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID';
+    path: readonly (string | number)[];
+    message: string;
+  }> = [];
+  if ((definition.kind ?? 'table') !== 'table') {
+    issues.push({
+      code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+      path: ['optimisticLock'],
+      message: 'Optimistic locking is only supported for table Collections.',
+    });
+  }
+  const field = definition.fields?.find(
+    (candidate) => candidate.name === optimisticLock.field,
+  );
+  if (!field || 'target' in field) {
+    issues.push({
+      code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+      path: ['optimisticLock', 'field'],
+      message: `Optimistic lock Field "${optimisticLock.field}" does not exist as a direct Field in Collection "${name}".`,
+    });
+  } else {
+    if (field.type !== 'integer' && field.type !== 'bigInt') {
+      issues.push({
+        code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        path: ['optimisticLock', 'field'],
+        message: `Optimistic lock Field "${optimisticLock.field}" must be integer or bigInt.`,
+      });
+    }
+    if (field.nullable !== false) {
+      issues.push({
+        code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        path: ['optimisticLock', 'field'],
+        message: `Optimistic lock Field "${optimisticLock.field}" must be non-nullable.`,
+      });
+    }
+  }
+  if (issues.length > 0) throw new CollectionResolutionError(issues);
 }
 
 function assertMetadataFieldChanges(
@@ -1321,6 +1460,7 @@ async function requiredMetadataWrite(
       return undefined;
     case 'alterCollection': {
       if (
+        operation.changes.optimisticLock !== undefined ||
         (operation.changes.addFields ?? []).some(
           fieldHasSupplementalMetadata,
         ) ||

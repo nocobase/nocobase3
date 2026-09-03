@@ -5,7 +5,7 @@ description: 尚未实现或导出的 Repository Sort AST 设计；仅供设计�
 
 # Sort AST
 
-> **状态：提案。运行时可用性：未实现。导出 API：无。** 本页只用于 Repository 设计讨论，不要据此生成生产代码。
+> **状态：分批实现中。运行时可用性：未实现。导出 API：AST 类型契约。** 本页描述 V1 目标，执行器尚未可用。
 
 Sort AST 是 Repository 排序意图的结构化表示。它用于 TypeScript、HTTP、CLI、file sync
 和未来持久化配置，明确区分：

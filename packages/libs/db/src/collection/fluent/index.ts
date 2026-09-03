@@ -12,6 +12,7 @@ import type {
   ForeignKeyConstraintDefinition,
   IndexDefinition,
   NamingOptions,
+  OptimisticLockDefinition,
   PrimaryConstraintDefinition,
   QueryViewDefinition,
   ReferentialAction,
@@ -47,6 +48,15 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
 
   description(description: string): this {
     this.definition.description = description;
+    return this;
+  }
+
+  optimisticLock(field: string): this {
+    const optimisticLock: OptimisticLockDefinition = {
+      field,
+      strategy: 'increment',
+    };
+    this.definition.optimisticLock = optimisticLock;
     return this;
   }
 
@@ -235,6 +245,9 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
       constraints: this.definition.constraints?.map((constraint) => ({
         ...constraint,
       })),
+      optimisticLock: this.definition.optimisticLock
+        ? { ...this.definition.optimisticLock }
+        : undefined,
     });
   }
 
@@ -262,6 +275,16 @@ export class FluentCollectionAlterBuilder
     addConstraints: [],
     dropConstraints: [],
   };
+
+  override optimisticLock(field: string): this {
+    this.changes.optimisticLock = { field, strategy: 'increment' };
+    return this;
+  }
+
+  clearOptimisticLock(): this {
+    this.changes.optimisticLock = null;
+    return this;
+  }
 
   override primary(
     fields: string | string[],

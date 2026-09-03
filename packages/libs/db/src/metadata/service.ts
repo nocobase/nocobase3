@@ -1,4 +1,7 @@
-import type { NamingOptions } from '../collection/types.js';
+import type {
+  NamingOptions,
+  OptimisticLockDefinition,
+} from '../collection/types.js';
 import { CollectionMetadataConflictError } from './document-store-errors.js';
 import type { CollectionMetadataStore } from './document-store.js';
 import type { CollectionMetadataStoreCapabilities } from './document-store.js';
@@ -15,6 +18,7 @@ export interface CollectionMetadataPropertiesPatch {
   readonly naming?: NamingOptions | null;
   readonly title?: string | null;
   readonly description?: string | null;
+  readonly optimisticLock?: OptimisticLockDefinition | null;
 }
 
 export interface CollectionFieldMetadataPatch {
@@ -124,7 +128,7 @@ export class CollectionMetadataService {
     patch: CollectionMetadataPropertiesPatch,
     options: UpdateCollectionMetadataOptions = {},
   ): Promise<StoredCollectionMetadata | undefined> {
-    validatePatch(patch, ['naming', 'title', 'description']);
+    validatePatch(patch, ['naming', 'title', 'description', 'optimisticLock']);
     if (patch.naming !== undefined && patch.naming !== null) {
       validateNamingPatch(patch.naming);
     }
@@ -134,6 +138,7 @@ export class CollectionMetadataService {
         : patch.naming;
     validateNullableString(patch.title, 'title');
     validateNullableString(patch.description, 'description');
+    validateOptimisticLockPatch(patch.optimisticLock);
     return this.mutate(
       name,
       'updateCollection',
@@ -142,6 +147,7 @@ export class CollectionMetadataService {
         applyNullableProperty(document, 'naming', naming);
         applyNullableProperty(document, 'title', patch.title);
         applyNullableProperty(document, 'description', patch.description);
+        applyNullableProperty(document, 'optimisticLock', patch.optimisticLock);
       },
       {
         collections: [name],
@@ -375,6 +381,29 @@ export class CollectionMetadataService {
       });
     }
     await this.initializationPromise;
+  }
+}
+
+function validateOptimisticLockPatch(
+  value: OptimisticLockDefinition | null | undefined,
+): void {
+  if (value === undefined || value === null) return;
+  if (!isPlainObject(value)) {
+    patchIssue(['optimisticLock'], 'Expected a plain object or null.');
+  }
+  validatePatch(value, ['field', 'strategy']);
+  if (
+    typeof value.field !== 'string' ||
+    value.field.trim() !== value.field ||
+    value.field.length === 0
+  ) {
+    patchIssue(['optimisticLock', 'field'], 'Expected a non-empty Field name.');
+  }
+  if (value.strategy !== 'increment') {
+    patchIssue(
+      ['optimisticLock', 'strategy'],
+      'Expected the increment strategy.',
+    );
   }
 }
 

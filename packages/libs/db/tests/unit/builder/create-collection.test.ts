@@ -33,6 +33,8 @@ describe('CollectionBuilder createCollection', () => {
         collection.naming({ tablePrefix: 'sales_' });
         collection.title('Orders');
         collection.description('Customer purchase orders.');
+        collection.integer('version').notNull();
+        collection.optimisticLock('version');
         collection.bigInt('id').primary().autoIncrement();
         collection
           .belongsTo('customer', 'customers')
@@ -52,7 +54,13 @@ describe('CollectionBuilder createCollection', () => {
           naming: { tablePrefix: 'sales_' },
           title: 'Orders',
           description: 'Customer purchase orders.',
+          optimisticLock: { field: 'version', strategy: 'increment' },
           fields: [
+            {
+              name: 'version',
+              type: 'integer',
+              nullable: false,
+            },
             {
               name: 'id',
               type: 'bigInt',
@@ -94,6 +102,7 @@ describe('CollectionBuilder createCollection', () => {
         name: 'sales_orders',
         db: { schema: 'public' },
         columns: [
+          { name: 'version', type: 'integer', nullable: false },
           { name: 'id', type: 'bigInt' },
           { name: 'customer_id', type: 'bigInt' },
           { name: 'amount', type: 'decimal', precision: 12, scale: 2 },
@@ -142,6 +151,24 @@ describe('CollectionBuilder createCollection', () => {
           },
         ],
       },
+    });
+  });
+
+  it('rejects invalid optimistic lock definitions before execution', async () => {
+    const builder = new CollectionBuilder();
+
+    await expect(
+      builder.createCollection('orders', (collection) => {
+        collection.string('version').notNull();
+        collection.optimisticLock('version');
+      }),
+    ).rejects.toMatchObject({
+      code: 'COLLECTION_RESOLUTION_FAILED',
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        }),
+      ]),
     });
   });
 
