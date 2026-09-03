@@ -7,14 +7,31 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-export type HubDesiredState = 'running' | 'stopped';
 export type HubObservedState =
-  'pending' | 'registered' | 'running' | 'stopped' | 'failed';
+  'registered' | 'running' | 'stopped' | 'failed' | 'unknown';
+export type HubDeploymentStatus =
+  'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled';
+export type HubDeploymentPhase =
+  | 'queued'
+  | 'resolving'
+  | 'verifying'
+  | 'extracting'
+  | 'preparing'
+  | 'starting'
+  | 'health_check'
+  | 'switching'
+  | 'cleaning'
+  | 'completed';
 
 export interface HubAppRecord {
   readonly id: string;
   readonly name: string;
   readonly description: string | null;
+  readonly currentDeploymentId: string | null;
+  readonly enabled: boolean;
+  readonly basePath: string;
+  readonly backend: 'in-process';
+  readonly startupMode: 'lazy' | 'eager';
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -27,6 +44,7 @@ export interface HubReleaseRecord {
   readonly checksum: string;
   readonly size: number;
   readonly configTemplate: string | null;
+  readonly manifest: Record<string, unknown> | null;
   readonly createdAt: Date;
 }
 
@@ -40,23 +58,47 @@ export interface HubConfigBinding {
 export interface HubDeploymentRecord {
   readonly id: string;
   readonly appId: string;
-  readonly desiredReleaseId: string | null;
-  readonly observedReleaseId: string | null;
-  readonly desiredState: HubDesiredState;
-  readonly observedState: HubObservedState;
-  readonly observedRevision: number | null;
-  readonly basePath: string;
-  readonly backend: 'in-process';
-  readonly activation: 'lazy' | 'eager';
+  readonly releaseId: string;
+  readonly kind: 'deploy' | 'rollback';
+  readonly rollbackTargetDeploymentId: string | null;
+  readonly previousDeploymentId: string | null;
+  readonly status: HubDeploymentStatus;
+  readonly phase: HubDeploymentPhase;
   readonly config: HubConfigBinding;
+  readonly cacheHit: boolean | null;
+  readonly hostRevision: number | null;
   readonly error: string | null;
   readonly createdAt: Date;
-  readonly updatedAt: Date;
+  readonly startedAt: Date | null;
+  readonly finishedAt: Date | null;
+}
+
+export interface HubRuntimeStatus {
+  readonly hostAvailable: boolean;
+  readonly state: HubObservedState;
+  readonly version: string | null;
+  readonly startedAt: string | null;
+  readonly lastAccessedAt: string | null;
+  readonly activeRequests: number;
+  readonly hostRevision: number | null;
+  readonly error: string | null;
 }
 
 export interface HubAppDetail {
   readonly app: HubAppRecord;
-  readonly deployment: HubDeploymentRecord;
+  readonly deployment: {
+    readonly desiredReleaseId: string | null;
+    readonly observedReleaseId: string | null;
+    readonly desiredState: 'running' | 'stopped';
+    readonly observedState: HubObservedState;
+    readonly activation: 'lazy' | 'eager';
+    readonly basePath: string;
+    readonly config: HubConfigBinding;
+    readonly error: string | null;
+    readonly updatedAt: Date;
+  };
+  readonly deployments: readonly HubDeploymentRecord[];
+  readonly runtime: HubRuntimeStatus;
   readonly releases: readonly HubReleaseRecord[];
   readonly hostUrl: string | null;
 }
@@ -84,6 +126,11 @@ export interface SaveHubConfigInput {
 
 export interface DeployHubAppInput {
   readonly releaseId: string;
+  readonly config?: SaveHubConfigInput;
+}
+
+export interface RollbackHubAppInput {
+  readonly deploymentId: string;
 }
 
 export interface UpdateHubSettingsInput {
@@ -109,12 +156,20 @@ export interface HubService {
     appId: string,
     input: UpdateHubSettingsInput,
   ): Promise<HubAppDetail>;
-  deploy(appId: string, input: DeployHubAppInput): Promise<HubAppDetail>;
+  listDeployments(appId: string): Promise<readonly HubDeploymentRecord[]>;
+  getDeployment(
+    appId: string,
+    deploymentId: string,
+  ): Promise<HubDeploymentRecord>;
+  deploy(appId: string, input: DeployHubAppInput): Promise<HubDeploymentRecord>;
+  rollback(
+    appId: string,
+    input: RollbackHubAppInput,
+  ): Promise<HubDeploymentRecord>;
   refresh(appId: string): Promise<HubAppDetail>;
   start(appId: string): Promise<HubAppDetail>;
   stop(appId: string): Promise<HubAppDetail>;
   remove(appId: string): Promise<void>;
-  restart(appId: string): Promise<HubAppDetail>;
   hostStatus(): Promise<HostStatus>;
   restoreDesiredState(): Promise<void>;
   createDeploymentSet(): Promise<HostDeploymentSet>;

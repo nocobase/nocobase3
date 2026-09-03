@@ -80,7 +80,7 @@ describe('client inspection', () => {
     ).toEqual([
       {
         auth: 'required',
-        id: '@nocobase/app-template-hub:home',
+        id: '@nocobase/app-template-hub:applications-root',
         path: '/',
       },
       {
@@ -165,6 +165,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
+      { packageName: '@nocobase/app-plugin-hub', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

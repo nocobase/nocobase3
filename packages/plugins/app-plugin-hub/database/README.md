@@ -1,32 +1,18 @@
-# Database examples
+# Application Hub database
 
-The files in `migrations/` and `seeds/` end in `.ts.example`, so NocoBase does
-not load or execute them.
+The Hub migration creates three collections with distinct ownership:
 
-To enable an example, remove only the final `.example` suffix:
+- `hubApps` stores application settings and the current successful deployment
+  pointer.
+- `hubAppReleases` stores immutable uploaded build metadata. A version label
+  may have multiple builds; the artifact checksum identifies their content.
+- `hubAppDeployments` stores immutable deploy and rollback operation history,
+  configuration bindings, progress, and errors.
 
-```text
-202609010001_hub_create_records.ts.example
-202609010001_hub_create_records.ts
+Runtime state is intentionally not persisted as authoritative Hub data. The
+App Host owns the current `registered`, `running`, `stopped`, or `failed` state,
+and the Hub reports `unknown` while the Host is unavailable.
 
-202609010002_hub_create_welcome_record.ts.example
-202609010002_hub_create_welcome_record.ts
-```
-
-The exported `name` must match the filename without the executable extension.
-If you rename an enabled `.ts` file, update its `name` as well.
-
-The generated `server/plugin.ts` already declares both directories. Empty
-directories and files ending in `.ts.example` contribute nothing, so the
-default configuration is safe to keep:
-
-```ts
-database: {
-  migrations: './database/migrations',
-  seeds: './database/seeds',
-},
-```
-
-The server plugin resolver ignores a configured directory when it is absent
-(for example, when a published plugin has no enabled migrations), so no extra
-configuration change is required when a directory has no executable files.
+The initial migration is self-contained and explicitly declares every field
+and index. After it has shipped, schema changes must be added as new migrations
+instead of editing it.

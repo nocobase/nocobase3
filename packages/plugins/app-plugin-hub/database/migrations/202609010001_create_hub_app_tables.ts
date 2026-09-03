@@ -8,6 +8,11 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('id', { length: 128 }).primary().notNull();
       collection.string('name', { length: 255 }).notNull();
       collection.text('description');
+      collection.string('currentDeploymentId', { length: 36 });
+      collection.boolean('enabled').notNull();
+      collection.string('basePath', { length: 255 }).notNull();
+      collection.string('backend', { length: 32 }).notNull();
+      collection.string('startupMode', { length: 16 }).notNull();
       collection.datetime('createdAt').notNull();
       collection.datetime('updatedAt').notNull();
     });
@@ -20,29 +25,32 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('checksum', { length: 64 }).notNull();
       collection.bigInt('size').notNull();
       collection.text('configTemplate');
+      collection.json('manifest');
       collection.datetime('createdAt').notNull();
-      collection.unique(['appId', 'version'], { mode: 'index' });
+      collection.index(['appId', 'version']);
       collection.index(['appId', 'createdAt']);
+      collection.index(['checksum']);
+      collection.unique(['artifactKey'], { mode: 'index' });
     });
 
     await builder.createCollection('hubAppDeployments', (collection) => {
       collection.string('id', { length: 36 }).primary().notNull();
-      collection
-        .string('appId', { length: 128 })
-        .notNull()
-        .unique({ mode: 'index' });
-      collection.string('desiredReleaseId', { length: 36 });
-      collection.string('observedReleaseId', { length: 36 });
-      collection.string('desiredState', { length: 16 }).notNull();
-      collection.string('observedState', { length: 16 }).notNull();
-      collection.bigInt('observedRevision');
-      collection.string('basePath', { length: 255 }).notNull();
-      collection.string('backend', { length: 32 }).notNull();
-      collection.string('activation', { length: 16 }).notNull();
+      collection.string('appId', { length: 128 }).notNull();
+      collection.string('releaseId', { length: 36 }).notNull();
+      collection.string('kind', { length: 16 }).notNull();
+      collection.string('rollbackTargetDeploymentId', { length: 36 });
+      collection.string('previousDeploymentId', { length: 36 });
+      collection.string('status', { length: 16 }).notNull();
+      collection.string('phase', { length: 32 }).notNull();
       collection.json('config').notNull();
+      collection.boolean('cacheHit');
+      collection.bigInt('hostRevision');
       collection.text('error');
       collection.datetime('createdAt').notNull();
-      collection.datetime('updatedAt').notNull();
+      collection.datetime('startedAt');
+      collection.datetime('finishedAt');
+      collection.index(['appId', 'createdAt']);
+      collection.index(['appId', 'status']);
     });
   },
 

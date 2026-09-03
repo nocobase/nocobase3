@@ -4,4 +4,4 @@
 
 ### Patch Changes
 
-- Add the initial single-Host application management flow with Release Artifacts, schema-driven file configuration, and managed deployments.
+- Add the initial single-Host application management flow with immutable Release builds, asynchronous deployment history, rollback operations, deployment-scoped configuration, Host-owned runtime status, and non-blocking eager App restoration during Hub startup.

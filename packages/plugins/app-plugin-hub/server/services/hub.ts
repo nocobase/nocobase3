@@ -15,7 +15,6 @@ import path from 'node:path';
 import type {
   HostDeploymentSet,
   HostDeploymentSpec,
-  HostDeploymentStatus,
   HostManagementService,
   HostStatus,
 } from '@nocobase/app-host/management';
@@ -39,8 +38,9 @@ import type {
   HubConfigDocument,
   HubConfigMode,
   HubDeploymentRecord,
-  HubObservedState,
+  HubRuntimeStatus,
   HubReleaseRecord,
+  RollbackHubAppInput,
   HubService,
   SaveHubConfigInput,
   UpdateHubSettingsInput,
@@ -89,6 +89,7 @@ export class DefaultHubService implements HubService {
   private readonly locks = new Map<string, Promise<unknown>>();
   private revision = 0;
   private currentHostUrl: string | null = null;
+  private startupReconciliation: Promise<void> | null = null;
 
   public constructor(private readonly options: DefaultHubServiceOptions) {
     const drive = createDriveManager({
@@ -157,36 +158,16 @@ export class DefaultHubService implements HubService {
       id,
       name,
       description: input.description?.trim() || null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const deployment: HubDeploymentRecord = {
-      id: randomUUID(),
-      appId: id,
-      desiredReleaseId: null,
-      observedReleaseId: null,
-      desiredState: 'stopped',
-      observedState: 'stopped',
-      observedRevision: null,
+      currentDeploymentId: null,
+      enabled: false,
       basePath: `/${id}`,
       backend: 'in-process',
-      activation: 'eager',
-      config: { mode: 'file' },
-      error: null,
+      startupMode: 'eager',
       createdAt: now,
       updatedAt: now,
     };
-    await this.options.database.transaction(async (connection) => {
-      await connection.query
-        .insertInto('hubApps')
-        .values(encodeApp(app))
-        .execute();
-      await connection.query
-        .insertInto('hubAppDeployments')
-        .values(encodeDeployment(deployment))
-        .execute();
-    });
-    return { app, deployment, releases: [], hostUrl: this.currentHostUrl };
+    await this.query().insertInto('hubApps').values(encodeApp(app)).execute();
+    return await this.detail(app);
   }
 
   public async listReleases(
@@ -235,19 +216,6 @@ export class DefaultHubService implements HubService {
     }
     const metadata = await inspectArtifact(input.bytes);
     const { version } = metadata;
-    const duplicate = await this.query()
-      .selectFrom('hubAppReleases')
-      .select('id')
-      .where('appId', '=', appId)
-      .where('version', '=', version)
-      .executeTakeFirst<Row>();
-    if (duplicate) {
-      throw new HubError(
-        `Release "${version}" already exists for app "${appId}".`,
-        'RELEASE_EXISTS',
-        409,
-      );
-    }
     const id = randomUUID();
     const artifactKey = `${appId}/${id}.tar.gz`;
     const release: HubReleaseRecord = {
@@ -258,6 +226,7 @@ export class DefaultHubService implements HubService {
       checksum: sha256(input.bytes),
       size: input.bytes.byteLength,
       configTemplate: metadata.configTemplate,
+      manifest: metadata.manifest,
       createdAt: new Date(),
     };
     await this.disk.put(artifactKey, input.bytes, {
@@ -277,7 +246,9 @@ export class DefaultHubService implements HubService {
   }
 
   public async readConfig(appId: string): Promise<HubConfigDocument> {
-    const deployment = await this.requireDeployment(appId);
+    const app = await this.requireApp(appId);
+    const deployment = await this.currentDeployment(app);
+    if (!deployment) return { mode: 'file', content: '', path: null };
     if (deployment.config.mode !== 'file') {
       return { mode: deployment.config.mode, content: null, path: null };
     }
@@ -301,7 +272,15 @@ export class DefaultHubService implements HubService {
     input: SaveHubConfigInput,
   ): Promise<HubConfigDocument> {
     return await this.withLock(appId, async () => {
-      const deployment = await this.requireDeployment(appId);
+      const app = await this.requireApp(appId);
+      const deployment = await this.currentDeployment(app);
+      if (!deployment) {
+        throw new HubError(
+          'App must be deployed before its configuration can be edited.',
+          'APP_NOT_DEPLOYED',
+          409,
+        );
+      }
       assertConfigMode(input.mode);
       if (input.mode === 'file') {
         if (typeof input.content !== 'string') {
@@ -314,7 +293,7 @@ export class DefaultHubService implements HubService {
         validateYamlConfig(input.content);
         await writeTextAtomic(this.configPath(deployment), input.content);
       }
-      await this.updateDeployment(appId, {
+      await this.updateDeployment(deployment.id, {
         config: {
           mode: input.mode,
           ...(deployment.config.path ? { path: deployment.config.path } : {}),
@@ -327,49 +306,43 @@ export class DefaultHubService implements HubService {
   public async deploy(
     appId: string,
     input: DeployHubAppInput,
-  ): Promise<HubAppDetail> {
-    return await this.withLock(appId, async () => {
-      const release = await this.getRelease(appId, input.releaseId);
-      const deployment = await this.requireDeployment(appId);
-      if (deployment.config.mode === 'file') {
-        await this.initializeConfigFromRelease(deployment, release);
-      }
-      await this.updateDeployment(appId, {
-        desiredReleaseId: release.id,
-        desiredState: 'running',
-        observedState: 'pending',
-        error: null,
-      });
+  ): Promise<HubDeploymentRecord> {
+    const app = await this.requireApp(appId);
+    const release = await this.getRelease(appId, input.releaseId);
+    const deployment = await this.createDeploymentRecord(
+      app,
+      release,
+      'deploy',
+      null,
+      input.config,
+    );
+    this.schedule(app.id, deployment.id);
+    return deployment;
+  }
 
-      try {
-        const hostStatus = await this.hostController.applyDeployment(
-          await this.createDeploymentSpec(appId),
-        );
-        const status = hostStatus.deployments.find(
-          (candidate) => candidate.appId === appId,
-        );
-        if (!status || status.observedState === 'failed') {
-          throw new Error(
-            status?.error ?? 'Host did not report deployment status.',
-          );
-        }
-        await this.observe(status);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await this.updateDeployment(appId, {
-          desiredReleaseId: deployment.desiredReleaseId,
-          desiredState: deployment.desiredState,
-          observedState: deployment.observedState,
-          error: message,
-        });
-        throw new HubError(
-          `Deployment failed: ${message}`,
-          'DEPLOYMENT_FAILED',
-          503,
-        );
-      }
-      return await this.getApp(appId);
-    });
+  public async rollback(
+    appId: string,
+    input: RollbackHubAppInput,
+  ): Promise<HubDeploymentRecord> {
+    const app = await this.requireApp(appId);
+    const target = await this.getDeployment(appId, input.deploymentId);
+    if (target.status !== 'succeeded') {
+      throw new HubError(
+        'Only a successful deployment can be rolled back to.',
+        'INVALID_ROLLBACK_TARGET',
+        409,
+      );
+    }
+    const release = await this.getRelease(appId, target.releaseId);
+    const deployment = await this.createDeploymentRecord(
+      app,
+      release,
+      'rollback',
+      target.id,
+      await this.configInputFromDeployment(target),
+    );
+    this.schedule(app.id, deployment.id);
+    return deployment;
   }
 
   public async updateSettings(
@@ -378,57 +351,32 @@ export class DefaultHubService implements HubService {
   ): Promise<HubAppDetail> {
     return await this.withLock(appId, async () => {
       assertActivation(input.activation);
-      const deployment = await this.requireDeployment(appId);
-      await this.updateDeployment(appId, {
-        activation: input.activation,
-        ...(deployment.desiredReleaseId
-          ? { observedState: 'pending', error: null }
-          : {}),
-      });
-      if (!deployment.desiredReleaseId) return await this.getApp(appId);
-      try {
-        const hostStatus = await this.hostController.applyDeployment(
-          await this.createDeploymentSpec(appId),
-        );
-        const status = hostStatus.deployments.find(
-          (candidate) => candidate.appId === appId,
-        );
-        if (!status || status.observedState === 'failed') {
-          throw new Error(
-            status?.error ?? 'Host did not report deployment status.',
-          );
-        }
-        await this.observe(status);
-      } catch (error) {
-        await this.updateDeployment(appId, {
-          activation: deployment.activation,
-          observedState: deployment.observedState,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+      await this.requireApp(appId);
+      await this.updateApp(appId, { startupMode: input.activation });
       return await this.getApp(appId);
     });
   }
 
   public async start(appId: string): Promise<HubAppDetail> {
     return await this.withLock(appId, async () => {
-      const deployment = await this.requireDeployment(appId);
-      if (!deployment.desiredReleaseId) {
+      const app = await this.requireApp(appId);
+      const deployment = await this.currentDeployment(app);
+      if (!deployment) {
         throw new HubError(
           'App must be deployed before it can be started.',
           'APP_NOT_DEPLOYED',
           409,
         );
       }
-      await this.updateDeployment(appId, {
-        desiredState: 'running',
-        observedState: 'pending',
-        error: null,
-      });
+      await this.updateApp(appId, { enabled: true });
       try {
         // A manual Start activates now but preserves the saved policy used on
         // the next Hub restart.
-        const spec = await this.createDeploymentSpec(appId);
+        const spec = await this.createDeploymentSpec(
+          app,
+          deployment,
+          'running',
+        );
         const hostStatus = await this.hostController.startDeployment(spec);
         const status = hostStatus.deployments.find(
           (candidate) => candidate.appId === appId,
@@ -438,12 +386,13 @@ export class DefaultHubService implements HubService {
             status?.error ?? 'Host did not report deployment status.',
           );
         }
-        await this.observe(status);
       } catch (error) {
-        await this.updateDeployment(appId, {
-          observedState: 'failed',
-          error: error instanceof Error ? error.message : String(error),
-        });
+        await this.updateApp(appId, { enabled: false });
+        throw new HubError(
+          `Start failed: ${error instanceof Error ? error.message : String(error)}`,
+          'START_FAILED',
+          503,
+        );
       }
       return await this.getApp(appId);
     });
@@ -451,29 +400,20 @@ export class DefaultHubService implements HubService {
 
   public async stop(appId: string): Promise<HubAppDetail> {
     return await this.withLock(appId, async () => {
-      await this.requireDeployment(appId);
-      await this.updateDeployment(appId, {
-        desiredState: 'stopped',
-        observedState: 'pending',
-        error: null,
-      });
+      const app = await this.requireApp(appId);
+      if (!(await this.currentDeployment(app))) {
+        throw new HubError('App is not deployed.', 'APP_NOT_DEPLOYED', 409);
+      }
+      await this.updateApp(appId, { enabled: false });
       try {
-        const hostStatus = await this.hostController.stopDeployment(appId);
-        const status = hostStatus.deployments.find(
-          (candidate) => candidate.appId === appId,
-        );
-        if (status) await this.observe(status);
-        else {
-          await this.updateDeployment(appId, {
-            observedState: 'stopped',
-            error: null,
-          });
-        }
+        await this.hostController.stopDeployment(appId);
       } catch (error) {
-        await this.updateDeployment(appId, {
-          observedState: 'failed',
-          error: error instanceof Error ? error.message : String(error),
-        });
+        await this.updateApp(appId, { enabled: true });
+        throw new HubError(
+          `Stop failed: ${error instanceof Error ? error.message : String(error)}`,
+          'STOP_FAILED',
+          503,
+        );
       }
       return await this.getApp(appId);
     });
@@ -482,7 +422,6 @@ export class DefaultHubService implements HubService {
   public async remove(appId: string): Promise<void> {
     await this.withLock(appId, async () => {
       const app = await this.requireApp(appId);
-      await this.requireDeployment(appId);
       const releases = await this.listReleases(appId);
       await this.hostController.removeDeployment(appId);
       await this.options.database.transaction(async (connection) => {
@@ -515,30 +454,6 @@ export class DefaultHubService implements HubService {
 
   public async refresh(appId: string): Promise<HubAppDetail> {
     await this.requireApp(appId);
-    const status = await this.hostStatus();
-    const deployment = status.deployments.find(
-      (candidate) => candidate.appId === appId,
-    );
-    if (deployment) await this.observe(deployment);
-    return await this.getApp(appId);
-  }
-
-  public async restart(appId: string): Promise<HubAppDetail> {
-    const deployment = await this.requireDeployment(appId);
-    if (deployment.desiredState !== 'running') {
-      throw new HubError(
-        'Stopped app cannot be restarted.',
-        'APP_STOPPED',
-        409,
-      );
-    }
-    const status = await (
-      await this.hostController.getManagementClient()
-    ).restartApp(appId);
-    const observed = status.deployments.find(
-      (candidate) => candidate.appId === appId,
-    );
-    if (observed) await this.observe(observed);
     return await this.getApp(appId);
   }
 
@@ -548,79 +463,68 @@ export class DefaultHubService implements HubService {
 
   public async restoreDesiredState(): Promise<void> {
     await this.prepare();
+    const recoveredAt = new Date();
+    await this.query()
+      .updateTable('hubAppDeployments')
+      .set({
+        status: 'failed',
+        phase: 'completed',
+        error: 'Deployment was interrupted by a Hub restart.',
+        finishedAt: recoveredAt,
+      })
+      .where('status', 'in', ['queued', 'deploying'])
+      .execute();
     this.currentHostUrl = (
       await this.hostController.ensureStarted()
     ).toString();
-    const result = await this.hostController.applyDeploymentSet(
-      await this.createDeploymentSet(),
-    );
-    await Promise.all(
-      result.status.deployments.map((status) => this.observe(status)),
-    );
+    const deploymentSet = await this.createDeploymentSet();
+    this.startupReconciliation = this.hostController
+      .applyDeploymentSet(deploymentSet)
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        this.startupReconciliation = null;
+      });
   }
 
   public async createDeploymentSet(): Promise<HostDeploymentSet> {
     const rows = await this.query()
-      .selectFrom('hubAppDeployments')
+      .selectFrom('hubApps')
       .selectAll()
-      .orderBy('appId', 'asc')
+      .orderBy('id', 'asc')
       .execute<Row>();
     const specs: HostDeploymentSpec[] = [];
     for (const row of rows) {
-      const deployment = decodeDeployment(row);
-      if (!deployment.desiredReleaseId) continue;
-      const release = await this.getRelease(
-        deployment.appId,
-        deployment.desiredReleaseId,
-      );
-      specs.push({
-        id: deployment.id,
-        appId: deployment.appId,
-        artifact: {
-          key: release.artifactKey,
-          appId: deployment.appId,
-          version: release.version,
-          checksum: release.checksum,
-        },
-        desiredState: deployment.desiredState,
-        backend: deployment.backend,
-        activation: deployment.activation,
-        basePath: deployment.basePath,
-        config:
-          deployment.config.mode === 'file'
-            ? { provider: 'file', path: deployment.config.path }
-            : undefined,
-      });
+      const app = decodeApp(row);
+      const deployment = await this.currentDeployment(app);
+      if (!deployment) continue;
+      specs.push(await this.createDeploymentSpec(app, deployment));
     }
     this.revision += 1;
     return { revision: this.revision, deployments: specs };
   }
 
   private async createDeploymentSpec(
-    appId: string,
+    app: HubAppRecord,
+    deployment: HubDeploymentRecord,
+    desiredState: 'running' | 'stopped' = app.enabled ? 'running' : 'stopped',
   ): Promise<HostDeploymentSpec> {
-    const deployment = await this.requireDeployment(appId);
-    if (!deployment.desiredReleaseId) {
-      throw new HubError(
-        'App must be deployed before it can be reconciled.',
-        'APP_NOT_DEPLOYED',
-        409,
-      );
-    }
-    const release = await this.getRelease(appId, deployment.desiredReleaseId);
+    const release = await this.getRelease(app.id, deployment.releaseId);
     return {
-      id: deployment.id,
-      appId,
+      // Host deployment identity is stable per App. Hub deployment IDs are
+      // immutable operation-history identities and must not replace it.
+      id: app.id,
+      appId: app.id,
       artifact: {
         key: release.artifactKey,
-        appId,
+        appId: app.id,
         version: release.version,
         checksum: release.checksum,
       },
-      desiredState: deployment.desiredState,
-      backend: deployment.backend,
-      activation: deployment.activation,
-      basePath: deployment.basePath,
+      desiredState,
+      backend: app.backend,
+      activation: app.startupMode,
+      basePath: app.basePath,
       config:
         deployment.config.mode === 'file'
           ? { provider: 'file', path: deployment.config.path }
@@ -633,6 +537,8 @@ export class DefaultHubService implements HubService {
   }
 
   public async shutdown(): Promise<void> {
+    await this.startupReconciliation;
+    await Promise.allSettled(this.locks.values());
     await this.hostController.shutdown();
     if (this.ownsHostController) AppHostSupervisor.resetInstance();
     this.currentHostUrl = null;
@@ -643,9 +549,27 @@ export class DefaultHubService implements HubService {
   }
 
   private async detail(app: HubAppRecord): Promise<HubAppDetail> {
+    const deployments = await this.listDeployments(app.id);
+    const current = app.currentDeploymentId
+      ? (deployments.find((item) => item.id === app.currentDeploymentId) ??
+        null)
+      : null;
+    const runtime = await this.runtimeStatus(app.id);
     return {
       app,
-      deployment: await this.requireDeployment(app.id),
+      deployment: {
+        desiredReleaseId: current?.releaseId ?? null,
+        observedReleaseId: current?.releaseId ?? null,
+        desiredState: app.enabled ? 'running' : 'stopped',
+        observedState: runtime.state,
+        activation: app.startupMode,
+        basePath: app.basePath,
+        config: current?.config ?? { mode: 'file' },
+        error: runtime.error,
+        updatedAt: current?.finishedAt ?? app.updatedAt,
+      },
+      deployments,
+      runtime,
       releases: await this.listReleases(app.id),
       hostUrl: this.currentHostUrl,
     };
@@ -666,11 +590,28 @@ export class DefaultHubService implements HubService {
     return app;
   }
 
-  private async requireDeployment(appId: string): Promise<HubDeploymentRecord> {
+  public async listDeployments(
+    appId: string,
+  ): Promise<readonly HubDeploymentRecord[]> {
+    await this.requireApp(appId);
+    const rows = await this.query()
+      .selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('appId', '=', appId)
+      .orderBy('createdAt', 'desc')
+      .execute<Row>();
+    return rows.map(decodeDeployment);
+  }
+
+  public async getDeployment(
+    appId: string,
+    deploymentId: string,
+  ): Promise<HubDeploymentRecord> {
     const row = await this.query()
       .selectFrom('hubAppDeployments')
       .selectAll()
       .where('appId', '=', appId)
+      .where('id', '=', deploymentId)
       .executeTakeFirst<Row>();
     if (!row) {
       throw new HubError('Deployment not found.', 'DEPLOYMENT_NOT_FOUND', 404);
@@ -679,27 +620,25 @@ export class DefaultHubService implements HubService {
   }
 
   private async updateDeployment(
-    appId: string,
+    deploymentId: string,
     values: Partial<HubDeploymentRecord>,
   ): Promise<void> {
     await this.query()
       .updateTable('hubAppDeployments')
-      .set({ ...encodePartialDeployment(values), updatedAt: new Date() })
-      .where('appId', '=', appId)
+      .set(encodePartialDeployment(values))
+      .where('id', '=', deploymentId)
       .execute();
   }
 
-  private async observe(status: HostDeploymentStatus): Promise<void> {
-    const deployment = await this.requireDeployment(status.appId);
-    await this.updateDeployment(status.appId, {
-      observedReleaseId:
-        status.observedState === 'failed'
-          ? deployment.observedReleaseId
-          : deployment.desiredReleaseId,
-      observedState: status.observedState,
-      observedRevision: status.revision,
-      error: status.error,
-    });
+  private async updateApp(
+    appId: string,
+    values: Partial<HubAppRecord>,
+  ): Promise<void> {
+    await this.query()
+      .updateTable('hubApps')
+      .set({ ...values, updatedAt: new Date() })
+      .where('id', '=', appId)
+      .execute();
   }
 
   private configPath(deployment: HubDeploymentRecord): string {
@@ -713,17 +652,208 @@ export class DefaultHubService implements HubService {
     );
   }
 
-  private async initializeConfigFromRelease(
-    deployment: HubDeploymentRecord,
-    release: HubReleaseRecord,
-  ): Promise<void> {
-    if (release.configTemplate === null) return;
-    const configPath = this.configPath(deployment);
+  private async currentDeployment(
+    app: HubAppRecord,
+  ): Promise<HubDeploymentRecord | null> {
+    return app.currentDeploymentId
+      ? await this.getDeployment(app.id, app.currentDeploymentId)
+      : null;
+  }
+
+  private async runtimeStatus(appId: string): Promise<HubRuntimeStatus> {
     try {
-      await lstat(configPath);
+      const status = await this.hostStatus();
+      const item = status.deployments.find(
+        (candidate) => candidate.appId === appId,
+      );
+      if (!item)
+        return {
+          hostAvailable: true,
+          state: 'stopped',
+          version: null,
+          startedAt: null,
+          lastAccessedAt: null,
+          activeRequests: 0,
+          hostRevision: status.reconciledRevision,
+          error: null,
+        };
+      return {
+        hostAvailable: true,
+        state: item.observedState,
+        version: item.app?.desiredVersion ?? null,
+        startedAt: item.app?.createdAt ?? null,
+        lastAccessedAt: item.app?.lastAccessedAt ?? null,
+        activeRequests: item.app?.activeRequests ?? 0,
+        hostRevision: item.revision,
+        error: item.error ?? item.app?.lastError ?? null,
+      };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      await writeTextAtomic(configPath, release.configTemplate);
+      return {
+        hostAvailable: false,
+        state: 'unknown',
+        version: null,
+        startedAt: null,
+        lastAccessedAt: null,
+        activeRequests: 0,
+        hostRevision: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  private async createDeploymentRecord(
+    app: HubAppRecord,
+    release: HubReleaseRecord,
+    kind: 'deploy' | 'rollback',
+    rollbackTargetDeploymentId: string | null,
+    configInput?: SaveHubConfigInput,
+  ): Promise<HubDeploymentRecord> {
+    const id = randomUUID();
+    const config = await this.prepareDeploymentConfig(
+      app,
+      release,
+      id,
+      configInput,
+    );
+    const deployment: HubDeploymentRecord = {
+      id,
+      appId: app.id,
+      releaseId: release.id,
+      kind,
+      rollbackTargetDeploymentId,
+      previousDeploymentId: app.currentDeploymentId,
+      status: 'queued',
+      phase: 'queued',
+      config,
+      cacheHit: null,
+      hostRevision: null,
+      error: null,
+      createdAt: new Date(),
+      startedAt: null,
+      finishedAt: null,
+    };
+    await this.query()
+      .insertInto('hubAppDeployments')
+      .values(encodeDeployment(deployment))
+      .execute();
+    return deployment;
+  }
+
+  private async prepareDeploymentConfig(
+    app: HubAppRecord,
+    release: HubReleaseRecord,
+    deploymentId: string,
+    input?: SaveHubConfigInput,
+  ): Promise<HubDeploymentRecord['config']> {
+    const mode = input?.mode ?? 'file';
+    assertConfigMode(mode);
+    if (mode === 'external') return { mode };
+    let content = input?.content;
+    if (content === undefined && app.currentDeploymentId) {
+      const current = await this.getDeployment(app.id, app.currentDeploymentId);
+      if (current.config.mode === 'file') {
+        try {
+          content = await readFile(this.configPath(current), 'utf8');
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+      }
+    }
+    content ??= release.configTemplate ?? '';
+    validateYamlConfig(content);
+    const configPath = path.join(
+      this.options.config.host.volumesDir,
+      app.id,
+      'configs',
+      `${deploymentId}.yml`,
+    );
+    await writeTextAtomic(configPath, content);
+    return { mode: 'file', path: configPath };
+  }
+
+  private async configInputFromDeployment(
+    deployment: HubDeploymentRecord,
+  ): Promise<SaveHubConfigInput> {
+    if (deployment.config.mode === 'external') return { mode: 'external' };
+    return {
+      mode: 'file',
+      content: await readFile(this.configPath(deployment), 'utf8'),
+    };
+  }
+
+  private schedule(appId: string, deploymentId: string): void {
+    void this.withLock(appId, () => this.runDeployment(deploymentId)).catch(
+      () => undefined,
+    );
+  }
+
+  private async getDeploymentById(
+    deploymentId: string,
+  ): Promise<HubDeploymentRecord> {
+    const row = await this.query()
+      .selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('id', '=', deploymentId)
+      .executeTakeFirst<Row>();
+    if (!row)
+      throw new HubError('Deployment not found.', 'DEPLOYMENT_NOT_FOUND', 404);
+    return decodeDeployment(row);
+  }
+
+  private async runDeployment(deploymentId: string): Promise<void> {
+    const deployment = await this.getDeploymentById(deploymentId);
+    const app = await this.requireApp(deployment.appId);
+    await this.updateDeployment(deploymentId, {
+      status: 'deploying',
+      phase: 'resolving',
+      startedAt: new Date(),
+      error: null,
+    });
+    try {
+      await this.updateDeployment(deploymentId, { phase: 'starting' });
+      const hostStatus = await this.hostController.applyDeployment(
+        await this.createDeploymentSpec(
+          { ...app, enabled: true },
+          deployment,
+          'running',
+        ),
+      );
+      const observed = hostStatus.deployments.find(
+        (candidate) => candidate.appId === app.id,
+      );
+      if (!observed || observed.observedState === 'failed')
+        throw new Error(
+          observed?.error ?? 'Host did not report deployment status.',
+        );
+      const finishedAt = new Date();
+      await this.options.database.transaction(async (connection) => {
+        await connection.query
+          .updateTable('hubAppDeployments')
+          .set({
+            status: 'succeeded',
+            phase: 'completed',
+            hostRevision: observed.revision,
+            finishedAt,
+          })
+          .where('id', '=', deploymentId)
+          .execute();
+        await connection.query
+          .updateTable('hubApps')
+          .set({
+            currentDeploymentId: deploymentId,
+            enabled: true,
+            updatedAt: finishedAt,
+          })
+          .where('id', '=', app.id)
+          .execute();
+      });
+    } catch (error) {
+      await this.updateDeployment(deploymentId, {
+        status: 'failed',
+        phase: 'completed',
+        error: error instanceof Error ? error.message : String(error),
+        finishedAt: new Date(),
+      });
     }
   }
 
@@ -766,6 +896,7 @@ function normalizeArtifactConfig(
 async function inspectArtifact(bytes: Uint8Array): Promise<{
   readonly version: string;
   readonly configTemplate: string | null;
+  readonly manifest: Record<string, unknown>;
 }> {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-hub-artifact-'),
@@ -805,8 +936,11 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
     await assertRegularArtifactFile(directory, EMBEDDED_ENTRY_PATH);
     const packageMetadata = JSON.parse(
       await readFile(path.join(directory, 'package.json'), 'utf8'),
-    ) as { version?: unknown; app?: { version?: unknown } };
-    const rawVersion = packageMetadata.app?.version ?? packageMetadata.version;
+    ) as Record<string, unknown>;
+    const appMetadata = isRecord(packageMetadata.app)
+      ? packageMetadata.app
+      : undefined;
+    const rawVersion = appMetadata?.version ?? packageMetadata.version;
     if (
       typeof rawVersion !== 'string' ||
       !RELEASE_VERSION_PATTERN.test(rawVersion)
@@ -822,7 +956,7 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
       CONFIG_TEMPLATE_PATH,
     );
     if (configTemplate !== null) validateYamlConfig(configTemplate);
-    return { version: rawVersion, configTemplate };
+    return { version: rawVersion, configTemplate, manifest: packageMetadata };
   } catch (error) {
     if (error instanceof HubError) throw error;
     throw new HubError(
@@ -960,6 +1094,11 @@ function decodeApp(row: Row): HubAppRecord {
     id: String(row.id),
     name: String(row.name),
     description: nullableString(row.description),
+    currentDeploymentId: nullableString(row.currentDeploymentId),
+    enabled: Boolean(row.enabled),
+    basePath: String(row.basePath),
+    backend: 'in-process',
+    startupMode: row.startupMode === 'lazy' ? 'lazy' : 'eager',
     createdAt: decodeDate(row.createdAt),
     updatedAt: decodeDate(row.updatedAt),
   };
@@ -974,6 +1113,7 @@ function decodeRelease(row: Row): HubReleaseRecord {
     checksum: String(row.checksum),
     size: Number(row.size),
     configTemplate: nullableString(row.configTemplate),
+    manifest: decodeNullableRecord(row.manifest),
     createdAt: decodeDate(row.createdAt),
   };
 }
@@ -982,24 +1122,27 @@ function decodeDeployment(row: Row): HubDeploymentRecord {
   return {
     id: String(row.id),
     appId: String(row.appId),
-    desiredReleaseId: nullableString(row.desiredReleaseId),
-    observedReleaseId: nullableString(row.observedReleaseId),
-    desiredState: row.desiredState === 'running' ? 'running' : 'stopped',
-    observedState: String(row.observedState) as HubObservedState,
-    observedRevision:
-      row.observedRevision == null ? null : Number(row.observedRevision),
-    basePath: String(row.basePath),
-    backend: 'in-process',
-    activation: row.activation === 'eager' ? 'eager' : 'lazy',
+    releaseId: String(row.releaseId),
+    kind: row.kind === 'rollback' ? 'rollback' : 'deploy',
+    rollbackTargetDeploymentId: nullableString(row.rollbackTargetDeploymentId),
+    previousDeploymentId: nullableString(row.previousDeploymentId),
+    status: String(row.status) as HubDeploymentRecord['status'],
+    phase: String(row.phase) as HubDeploymentRecord['phase'],
     config: decodeConfigBinding(row.config),
+    cacheHit: row.cacheHit == null ? null : Boolean(row.cacheHit),
+    hostRevision: row.hostRevision == null ? null : Number(row.hostRevision),
     error: nullableString(row.error),
     createdAt: decodeDate(row.createdAt),
-    updatedAt: decodeDate(row.updatedAt),
+    startedAt: row.startedAt == null ? null : decodeDate(row.startedAt),
+    finishedAt: row.finishedAt == null ? null : decodeDate(row.finishedAt),
   };
 }
 
 function encodeRelease(release: HubReleaseRecord): Row {
-  return { ...release };
+  return {
+    ...release,
+    manifest: release.manifest ? JSON.stringify(release.manifest) : null,
+  };
 }
 
 function encodeApp(app: HubAppRecord): Row {
@@ -1019,6 +1162,12 @@ function encodePartialDeployment(values: Partial<HubDeploymentRecord>): Row {
 
 function decodeJson(value: unknown): unknown {
   return typeof value === 'string' ? (JSON.parse(value) as unknown) : value;
+}
+
+function decodeNullableRecord(value: unknown): Record<string, unknown> | null {
+  if (value == null) return null;
+  const decoded = decodeJson(value);
+  return isRecord(decoded) ? decoded : null;
 }
 
 function decodeConfigBinding(value: unknown): HubDeploymentRecord['config'] {

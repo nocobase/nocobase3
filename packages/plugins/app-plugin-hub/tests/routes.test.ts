@@ -163,6 +163,58 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     });
   });
 
+  it('accepts deployments asynchronously', async () => {
+    const deploy = vi.fn<HubService['deploy']>().mockResolvedValue({
+      id: 'deployment-1',
+      status: 'queued',
+    } as never);
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        deploy,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer/deploy', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        releaseId: 'release-1',
+        config: { mode: 'external' },
+      }),
+    });
+
+    expect(response.status).toBe(202);
+    expect(deploy).toHaveBeenCalledWith('customer', {
+      releaseId: 'release-1',
+      config: { mode: 'external' },
+    });
+  });
+
+  it('creates rollback operations asynchronously', async () => {
+    const rollback = vi.fn<HubService['rollback']>().mockResolvedValue({
+      id: 'deployment-2',
+      status: 'queued',
+    } as never);
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        rollback,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer/rollback', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ deploymentId: 'deployment-1' }),
+    });
+
+    expect(response.status).toBe(202);
+    expect(rollback).toHaveBeenCalledWith('customer', {
+      deploymentId: 'deployment-1',
+    });
+  });
+
   it('removes one application for a system administrator', async () => {
     const remove = vi.fn<HubService['remove']>().mockResolvedValue(undefined);
     const router = await apiRoutes.createRouter(

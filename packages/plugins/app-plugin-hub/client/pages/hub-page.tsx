@@ -21,6 +21,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Shapes,
   Sparkles,
@@ -91,7 +92,12 @@ type ConfigMode = 'file' | 'managed' | 'external';
 type ActivationPolicy = 'eager' | 'lazy';
 type ViewMode = 'grid' | 'list';
 type DetailTab =
-  'deployments' | 'development' | 'resources' | 'configuration' | 'settings';
+  | 'deployments'
+  | 'releases'
+  | 'development'
+  | 'resources'
+  | 'configuration'
+  | 'settings';
 
 interface ReleaseRecord {
   readonly id: string;
@@ -101,6 +107,17 @@ interface ReleaseRecord {
   readonly configTemplate: string | null;
   readonly createdAt: string;
 }
+interface DeploymentRecord {
+  readonly id: string;
+  readonly releaseId: string;
+  readonly kind: 'deploy' | 'rollback';
+  readonly status:
+    'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled';
+  readonly phase: string;
+  readonly error: string | null;
+  readonly createdAt: string;
+  readonly finishedAt: string | null;
+}
 interface AppDetail {
   readonly app: {
     readonly id: string;
@@ -108,6 +125,13 @@ interface AppDetail {
     readonly description: string | null;
     readonly createdAt: string;
     readonly updatedAt: string;
+    readonly currentDeploymentId: string | null;
+  };
+  readonly deployments: readonly DeploymentRecord[];
+  readonly runtime: {
+    readonly hostAvailable: boolean;
+    readonly state: string;
+    readonly error: string | null;
   };
   readonly deployment: {
     readonly desiredReleaseId: string | null;
@@ -162,6 +186,7 @@ const CONFIG_MODES: readonly {
 
 const TAB_LABELS: Readonly<Record<DetailTab, string>> = {
   deployments: 'Deployments',
+  releases: 'Releases',
   development: 'Development',
   resources: 'Resources',
   configuration: 'Configuration',
@@ -236,6 +261,18 @@ export default function HubPage(): ReactElement {
       .finally(() => setLoading(false));
   }, [loadApps]);
   useEffect(() => {
+    const pending = apps.some((app) =>
+      app.deployments.some(
+        (item) => item.status === 'queued' || item.status === 'deploying',
+      ),
+    );
+    if (!pending) return;
+    const timer = window.setInterval(() => {
+      void loadApps().catch((reason: unknown) => setError(readError(reason)));
+    }, 1_500);
+    return () => window.clearInterval(timer);
+  }, [apps, loadApps]);
+  useEffect(() => {
     if (!selectedAppId) return;
     // Configuration loading is an intentional external synchronization boundary.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -260,10 +297,13 @@ export default function HubPage(): ReactElement {
     const app = apps.find((entry) => entry.app.id === id);
     setSelectedId(id);
     setSelectedReleaseId(undefined);
+    const releases = hasReleases ?? Boolean(app?.releases.length);
     setTab(
-      (hasReleases ?? Boolean(app?.releases.length))
-        ? 'deployments'
-        : 'development',
+      !releases
+        ? 'development'
+        : app?.deployments.length
+          ? 'deployments'
+          : 'releases',
     );
   };
 
@@ -338,6 +378,14 @@ export default function HubPage(): ReactElement {
               setDeploymentContent(configContent);
               setDeployOpen(true);
             }}
+            onRollback={(deploymentId) =>
+              void perform(async () => {
+                await client.request(`hub/apps/${selected.app.id}/rollback`, {
+                  method: 'POST',
+                  body: JSON.stringify({ deploymentId }),
+                });
+              })
+            }
             onUpload={() => setUploadOpen(true)}
           />
         )}
@@ -378,19 +426,22 @@ export default function HubPage(): ReactElement {
           onComplete={() =>
             void perform(async () => {
               if (!releaseId || deploymentMode === 'managed') return;
-              await saveConfig(
-                client,
-                selected.app.id,
-                deploymentMode,
-                deploymentContent,
-              );
               await client.request(`hub/apps/${selected.app.id}/deploy`, {
                 method: 'POST',
-                body: JSON.stringify({ releaseId }),
+                body: JSON.stringify({
+                  releaseId,
+                  config: {
+                    mode: deploymentMode,
+                    ...(deploymentMode === 'file'
+                      ? { content: deploymentContent }
+                      : {}),
+                  },
+                }),
               });
               setConfigMode(deploymentMode);
               setConfigContent(deploymentContent);
               setDeployOpen(false);
+              setTab('deployments');
             })
           }
         />
@@ -663,6 +714,7 @@ function Detail({
   onRemove,
   onStop,
   onDeploy,
+  onRollback,
   onUpload,
 }: {
   readonly app: AppDetail;
@@ -683,12 +735,14 @@ function Detail({
   readonly onRemove: () => void;
   readonly onStop: () => void;
   readonly onDeploy: () => void;
+  readonly onRollback: (deploymentId: string) => void;
   readonly onUpload: () => void;
 }): ReactElement {
   const deployed = hasDeployment(app);
   const detailTabs: readonly DetailTab[] = [
     ...(app.releases.length === 0 ? (['development'] as const) : []),
     'deployments',
+    'releases',
     'resources',
     ...(deployed ? (['configuration'] as const) : []),
     'settings',
@@ -697,11 +751,15 @@ function Detail({
     ? tab
     : app.releases.length === 0
       ? 'development'
-      : 'deployments';
+      : app.deployments.length
+        ? 'deployments'
+        : 'releases';
   const visitUrl = applicationUrl(app);
   const running = app.deployment.observedState === 'running';
   const registered = app.deployment.observedState === 'registered';
-  const transitioning = app.deployment.observedState === 'pending';
+  const transitioning = app.deployments.some(
+    (item) => item.status === 'queued' || item.status === 'deploying',
+  );
   const activeRelease = findRelease(app, app.deployment.observedReleaseId);
   return (
     <>
@@ -799,7 +857,10 @@ function Detail({
           </header>
           <div className='p-6'>
             <TabsContent value='deployments'>
-              <Deployments
+              <Deployments app={app} onRollback={onRollback} />
+            </TabsContent>
+            <TabsContent value='releases'>
+              <Releases
                 app={app}
                 selected={release?.id}
                 onSelect={onRelease}
@@ -844,6 +905,108 @@ function Detail({
 }
 
 function Deployments({
+  app,
+  onRollback,
+}: {
+  readonly app: AppDetail;
+  readonly onRollback: (deploymentId: string) => void;
+}): ReactElement {
+  if (app.deployments.length === 0) {
+    return (
+      <Empty
+        icon={<Boxes />}
+        title='No deployments yet'
+        description='Deploy a release to create the first deployment.'
+      />
+    );
+  }
+  return (
+    <div className='space-y-5'>
+      <div>
+        <h2 className='font-semibold'>Deployments</h2>
+        <p className='mt-1 text-sm text-muted-foreground'>
+          Each row is a deployment operation. Rolling back creates a new
+          deployment using the selected release and configuration.
+        </p>
+      </div>
+      <div className='overflow-hidden rounded-xl border'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Release</TableHead>
+              <TableHead>Operation</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className='text-right'>Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {app.deployments.map((deployment) => {
+              const deployedRelease = findRelease(app, deployment.releaseId);
+              const current = deployment.id === app.app.currentDeploymentId;
+              return (
+                <TableRow key={deployment.id}>
+                  <TableCell>
+                    <span className='font-medium'>
+                      {deployedRelease
+                        ? `v${deployedRelease.version}`
+                        : 'Unknown'}
+                    </span>
+                    {deployedRelease ? (
+                      <span className='ml-2 font-mono text-[11px] text-muted-foreground'>
+                        {deployedRelease.checksum.slice(0, 12)}
+                      </span>
+                    ) : null}
+                    {current ? (
+                      <Badge className='ml-2 bg-emerald-500/10 text-emerald-700'>
+                        Current
+                      </Badge>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className='capitalize'>
+                    {deployment.kind === 'rollback' ? 'Rollback' : 'Deploy'}
+                  </TableCell>
+                  <TableCell>
+                    <div className='space-y-1'>
+                      <StatusBadge state={deployment.status} />
+                      {deployment.status === 'deploying' ? (
+                        <div className='text-xs capitalize text-muted-foreground'>
+                          {deployment.phase.replaceAll('_', ' ')}
+                        </div>
+                      ) : deployment.error ? (
+                        <div
+                          className='max-w-64 truncate text-xs text-destructive'
+                          title={deployment.error}
+                        >
+                          {deployment.error}
+                        </div>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell className='text-muted-foreground'>
+                    {formatDate(deployment.createdAt)}
+                  </TableCell>
+                  <TableCell className='text-right'>
+                    <Button
+                      disabled={deployment.status !== 'succeeded' || current}
+                      onClick={() => onRollback(deployment.id)}
+                      size='sm'
+                      variant='ghost'
+                    >
+                      <RotateCcw className='size-4' /> Roll back
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function Releases({
   app,
   selected,
   onSelect,
@@ -1811,15 +1974,17 @@ function StatusBadge({ state }: { readonly state: string }): ReactElement {
       ? 'bg-emerald-500/10 text-emerald-700'
       : state === 'failed'
         ? 'bg-destructive/10 text-destructive'
-        : state === 'pending'
+        : state === 'pending' || state === 'queued' || state === 'deploying'
           ? 'bg-amber-500/10 text-amber-700'
-          : state === 'registered'
-            ? 'bg-sky-500/10 text-sky-700'
-            : 'bg-muted text-muted-foreground';
+          : state === 'succeeded'
+            ? 'bg-emerald-500/10 text-emerald-700'
+            : state === 'registered'
+              ? 'bg-sky-500/10 text-sky-700'
+              : 'bg-muted text-muted-foreground';
   return (
     <Badge className={`self-center gap-1.5 whitespace-nowrap ${style}`}>
       <span
-        className={`size-1.5 rounded-full ${state === 'running' ? 'bg-emerald-500' : state === 'failed' ? 'bg-destructive' : state === 'pending' ? 'bg-amber-500' : state === 'registered' ? 'bg-sky-500' : 'bg-slate-400'}`}
+        className={`size-1.5 rounded-full ${state === 'running' || state === 'succeeded' ? 'bg-emerald-500' : state === 'failed' ? 'bg-destructive' : state === 'pending' || state === 'queued' || state === 'deploying' ? 'bg-amber-500' : state === 'registered' ? 'bg-sky-500' : 'bg-slate-400'}`}
       />
       {stateLabel(state)}
     </Badge>

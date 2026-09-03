@@ -15,6 +15,7 @@ import {
   hubServiceToken,
   type CreateHubAppInput,
   type DeployHubAppInput,
+  type RollbackHubAppInput,
   type SaveHubConfigInput,
   type UpdateHubSettingsInput,
 } from '../tokens.js';
@@ -94,8 +95,29 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
     routes.post('/apps/:appId/deploy', async (context) => {
       const input = await context.req.json<DeployHubAppInput>();
-      return await respond(context, () =>
-        hub.deploy(context.req.param('appId'), input),
+      return await respond(
+        context,
+        () => hub.deploy(context.req.param('appId'), input),
+        202,
+      );
+    });
+    routes.get('/apps/:appId/deployments', async (context) =>
+      respond(context, () => hub.listDeployments(context.req.param('appId'))),
+    );
+    routes.get('/apps/:appId/deployments/:deploymentId', async (context) =>
+      respond(context, () =>
+        hub.getDeployment(
+          context.req.param('appId'),
+          context.req.param('deploymentId'),
+        ),
+      ),
+    );
+    routes.post('/apps/:appId/rollback', async (context) => {
+      const input = await context.req.json<RollbackHubAppInput>();
+      return await respond(
+        context,
+        () => hub.rollback(context.req.param('appId'), input),
+        202,
       );
     });
     routes.post('/apps/:appId/stop', async (context) =>
@@ -110,9 +132,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     routes.delete('/apps/:appId', async (context) =>
       respond(context, () => hub.remove(context.req.param('appId'))),
     );
-    routes.post('/apps/:appId/restart', async (context) =>
-      respond(context, () => hub.restart(context.req.param('appId'))),
-    );
     routes.get('/host/status', async (context) =>
       respond(context, () => hub.hostStatus()),
     );
@@ -124,9 +143,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 async function respond<T>(
   context: Context,
   work: () => Promise<T>,
+  status: 200 | 202 = 200,
 ): Promise<Response> {
   try {
-    return context.json({ data: await work() });
+    return context.json({ data: await work() }, status);
   } catch (error) {
     if (error instanceof HubError) {
       return context.json(

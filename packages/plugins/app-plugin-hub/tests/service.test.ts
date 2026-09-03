@@ -70,7 +70,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     await rm(rootDir, { recursive: true, force: true });
   });
 
-  it('creates an App with a stopped desired deployment', async () => {
+  it('creates an App without inventing a deployment record', async () => {
     const detail = await service.createApp({
       id: 'customer',
       name: 'Customer',
@@ -79,11 +79,11 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(detail).toMatchObject({
       app: { id: 'customer', name: 'Customer' },
       deployment: {
-        appId: 'customer',
         desiredState: 'stopped',
         activation: 'eager',
         config: { mode: 'file' },
       },
+      deployments: [],
       releases: [],
     });
   });
@@ -97,38 +97,31 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     const content = '# Edited by the Hub\nfeature:\n  enabled: true\n';
 
-    await service.saveConfig('customer', {
-      mode: 'file',
-      content,
-    });
-    const detail = await service.deploy('customer', {
+    const queued = await service.deploy('customer', {
       releaseId: release.id,
+      config: { mode: 'file', content },
     });
+    const deployment = await waitForDeployment(service, 'customer', queued.id);
+    const detail = await service.getApp('customer');
 
     expect(release.configTemplate).toBe(
       '# Customer settings\nfeature:\n  enabled: false\n',
     );
     expect(release.version).toBe('1.2.3');
-    expect(detail.deployment).toMatchObject({
-      desiredReleaseId: release.id,
-      observedReleaseId: release.id,
-      desiredState: 'running',
-      observedState: 'running',
-      activation: 'eager',
+    expect(deployment).toMatchObject({
+      status: 'succeeded',
+      phase: 'completed',
     });
+    expect(detail.app.currentDeploymentId).toBe(queued.id);
     expect(host.lastDeploymentSet?.deployments).toEqual([
       expect.objectContaining({
         appId: 'customer',
         desiredState: 'running',
-        config: { provider: 'file' },
+        config: expect.objectContaining({ provider: 'file' }),
       }),
     ]);
-    const configPath = path.join(
-      rootDir,
-      'app-volumes',
-      'customer',
-      'config.yml',
-    );
+    const configPath = deployment.config.path;
+    if (!configPath) throw new Error('Expected deployment config path.');
     expect(parseYaml(await readFile(configPath, 'utf8'))).toEqual({
       feature: { enabled: true },
     });
@@ -142,6 +135,7 @@ describe('@nocobase/app-plugin-hub service', () => {
       bytes: await createArtifact(rootDir, '1.2.3'),
     });
     await service.deploy('customer', { releaseId: release.id });
+    await waitForLatestDeployment(service, 'customer');
 
     expect(host.lastDeploymentSet?.deployments[0]).toMatchObject({
       desiredState: 'running',
@@ -182,26 +176,21 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(host.targetedOperations.at(-1)).toBe('remove:customer');
   });
 
-  it('reports a deployment failure instead of returning a successful detail', async () => {
+  it('records an asynchronous failure without replacing the active deployment', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.2.3'),
     });
     host.nextApplyError = new Error('activation failed');
 
-    await expect(
-      service.deploy('customer', { releaseId: release.id }),
-    ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'DEPLOYMENT_FAILED',
-      status: 503,
+    const queued = await service.deploy('customer', { releaseId: release.id });
+    const failed = await waitForDeployment(service, 'customer', queued.id);
+    expect(failed).toMatchObject({
+      status: 'failed',
+      error: 'activation failed',
     });
     await expect(service.getApp('customer')).resolves.toMatchObject({
-      deployment: {
-        desiredReleaseId: null,
-        desiredState: 'stopped',
-        observedState: 'stopped',
-        error: 'activation failed',
-      },
+      app: { currentDeploymentId: null },
     });
   });
 
@@ -213,7 +202,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
 
     expect(detail.app.createdAt.valueOf()).toBeGreaterThan(before);
-    expect(detail.deployment.updatedAt.valueOf()).toBeGreaterThan(before);
+    expect(detail.app.updatedAt.valueOf()).toBeGreaterThan(before);
   });
 
   it('accepts a Release without a config template', async () => {
@@ -246,40 +235,35 @@ describe('@nocobase/app-plugin-hub service', () => {
       }),
     });
 
-    await service.deploy('customer', { releaseId: release.id });
+    const queued = await service.deploy('customer', { releaseId: release.id });
+    const deployment = await waitForDeployment(service, 'customer', queued.id);
 
-    await expect(
-      readFile(
-        path.join(rootDir, 'app-volumes', 'customer', 'config.yml'),
-        'utf8',
-      ),
-    ).resolves.toBe('feature:\n  enabled: true\n');
+    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
+      'feature:\n  enabled: true\n',
+    );
     expect(host.lastDeploymentSet?.deployments[0]?.config).toEqual({
       provider: 'file',
-      path: undefined,
+      path: deployment.config.path,
     });
   });
 
   it('does not overwrite saved config with a newer Release template', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
-    await service.saveConfig('customer', {
-      mode: 'file',
-      content: 'feature:\n  enabled: false\n',
-    });
     const release = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.2.3', {
         configTemplate: 'feature:\n  enabled: true\n',
       }),
     });
 
-    await service.deploy('customer', { releaseId: release.id });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'feature:\n  enabled: false\n' },
+    });
+    const deployment = await waitForDeployment(service, 'customer', queued.id);
 
-    await expect(
-      readFile(
-        path.join(rootDir, 'app-volumes', 'customer', 'config.yml'),
-        'utf8',
-      ),
-    ).resolves.toBe('feature:\n  enabled: false\n');
+    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
+      'feature:\n  enabled: false\n',
+    );
   });
 
   it('does not pass config to Host in external mode', async () => {
@@ -288,12 +272,11 @@ describe('@nocobase/app-plugin-hub service', () => {
       bytes: await createArtifact(rootDir, '1.2.3'),
     });
 
-    await service.saveConfig('customer', {
-      mode: 'file',
-      content: 'feature:\n  enabled: true\n',
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
     });
-    await service.saveConfig('customer', { mode: 'external' });
-    await service.deploy('customer', { releaseId: release.id });
+    await waitForDeployment(service, 'customer', queued.id);
 
     expect(await service.readConfig('customer')).toEqual({
       mode: 'external',
@@ -301,12 +284,6 @@ describe('@nocobase/app-plugin-hub service', () => {
       path: null,
     });
     expect(host.lastDeploymentSet?.deployments[0]?.config).toBeUndefined();
-    await expect(
-      readFile(
-        path.join(rootDir, 'app-volumes', 'customer', 'config.yml'),
-        'utf8',
-      ),
-    ).resolves.toBe('feature:\n  enabled: true\n');
   });
 
   it('refreshes observed state from the managed Host', async () => {
@@ -315,6 +292,7 @@ describe('@nocobase/app-plugin-hub service', () => {
       bytes: await createArtifact(rootDir, '1.2.3'),
     });
     await service.deploy('customer', { releaseId: release.id });
+    await waitForLatestDeployment(service, 'customer');
     const current = host.lastDeploymentSet?.deployments[0];
     if (!current) throw new Error('Expected a deployment spec.');
     host.lastDeploymentSet = {
@@ -324,40 +302,142 @@ describe('@nocobase/app-plugin-hub service', () => {
 
     const detail = await service.refresh('customer');
 
-    expect(detail.deployment).toMatchObject({
-      observedState: 'stopped',
-      observedRevision: 42,
+    expect(detail.runtime).toMatchObject({
+      state: 'stopped',
+      hostRevision: 42,
     });
   });
 
   it('rejects invalid YAML and non-object file configuration', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
 
     await expect(
-      service.saveConfig('customer', {
-        mode: 'file',
-        content: 'feature: [',
+      service.deploy('customer', {
+        releaseId: release.id,
+        config: { mode: 'file', content: 'feature: [' },
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
       code: 'INVALID_CONFIG_FILE',
       status: 422,
     });
     await expect(
-      service.saveConfig('customer', {
-        mode: 'file',
-        content: '- one\n- two\n',
+      service.deploy('customer', {
+        releaseId: release.id,
+        config: { mode: 'file', content: '- one\n- two\n' },
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
       code: 'INVALID_CONFIG_FILE',
       status: 422,
     });
   });
+
+  it('allows multiple builds with the same version', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const first = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const second = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3', {
+        configTemplate: 'feature: true\n',
+      }),
+    });
+
+    expect(second.version).toBe(first.version);
+    expect(second.id).not.toBe(first.id);
+    expect(second.checksum).not.toBe(first.checksum);
+  });
+
+  it('rolls back by creating a new deployment history record', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const firstRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const first = await service.deploy('customer', {
+      releaseId: firstRelease.id,
+    });
+    await waitForDeployment(service, 'customer', first.id);
+    const secondRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '2.0.0'),
+    });
+    const second = await service.deploy('customer', {
+      releaseId: secondRelease.id,
+    });
+    await waitForDeployment(service, 'customer', second.id);
+
+    const rollback = await service.rollback('customer', {
+      deploymentId: first.id,
+    });
+    const completed = await waitForDeployment(service, 'customer', rollback.id);
+
+    expect(completed).toMatchObject({
+      kind: 'rollback',
+      releaseId: firstRelease.id,
+      rollbackTargetDeploymentId: first.id,
+      previousDeploymentId: second.id,
+      status: 'succeeded',
+    });
+    await expect(service.getApp('customer')).resolves.toMatchObject({
+      app: { currentDeploymentId: rollback.id },
+    });
+  });
+
+  it('does not wait for eager Apps to finish during Host startup', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const deployed = await service.deploy('customer', {
+      releaseId: release.id,
+    });
+    await waitForDeployment(service, 'customer', deployed.id);
+    let releaseStartup: (() => void) | undefined;
+    host.nextDeploymentSetGate = new Promise<void>((resolve) => {
+      releaseStartup = resolve;
+    });
+
+    await expect(service.restoreDesiredState()).resolves.toBeUndefined();
+    expect(host.deploymentSetStarted).toBe(true);
+    expect(host.deploymentSetCompleted).toBe(false);
+
+    releaseStartup?.();
+    await host.nextDeploymentSetGate;
+  });
 });
+
+async function waitForLatestDeployment(
+  service: DefaultHubService,
+  appId: string,
+): Promise<import('../server/tokens.js').HubDeploymentRecord> {
+  const [deployment] = await service.listDeployments(appId);
+  if (!deployment) throw new Error('Expected a deployment.');
+  return await waitForDeployment(service, appId, deployment.id);
+}
+
+async function waitForDeployment(
+  service: DefaultHubService,
+  appId: string,
+  deploymentId: string,
+): Promise<import('../server/tokens.js').HubDeploymentRecord> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const deployment = await service.getDeployment(appId, deploymentId);
+    if (deployment.status !== 'queued' && deployment.status !== 'deploying') {
+      return deployment;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error('Deployment did not complete.');
+}
 
 class FakeHostController implements HubHostController {
   public lastDeploymentSet: HostDeploymentSet | undefined;
   public targetedOperations: string[] = [];
   public nextApplyError: Error | undefined;
+  public nextDeploymentSetGate: Promise<void> | undefined;
+  public deploymentSetStarted = false;
+  public deploymentSetCompleted = false;
 
   public async ensureStarted(): Promise<URL> {
     return new URL('http://127.0.0.1:13010');
@@ -366,7 +446,10 @@ class FakeHostController implements HubHostController {
   public async applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<{ readonly status: HostStatus }> {
+    this.deploymentSetStarted = true;
+    await this.nextDeploymentSetGate;
     this.lastDeploymentSet = deploymentSet;
+    this.deploymentSetCompleted = true;
     return { status: createStatus(deploymentSet) };
   }
 

@@ -48,10 +48,11 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     ).resolves.toEqual([true, true, true]);
     await expect(
       Promise.all([
+        client.schema.hasColumn('hub_apps', 'current_deployment_id'),
         client.schema.hasColumn('hub_app_releases', 'config_template'),
-        client.schema.hasColumn('hub_app_deployments', 'desired_release_id'),
+        client.schema.hasColumn('hub_app_deployments', 'release_id'),
       ]),
-    ).resolves.toEqual([true, true]);
+    ).resolves.toEqual([true, true, true]);
     await expect(
       metadataStore.getCollection('hubAppReleases'),
     ).resolves.toMatchObject({
