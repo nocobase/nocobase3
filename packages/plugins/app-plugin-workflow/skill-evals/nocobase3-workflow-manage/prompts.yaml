@@ -51,7 +51,7 @@ cases:
       - Creates one package whose directory name is the stable workflow key.
       - Separates inputSchema from administrator parameters and declares an accurate calculateRisk result schema.
       - Uses only RunInstruction.create(), ConditionInstruction.create(), arrays, and yes/no branch blocks supported by the current contracts.
-      - Runs pnpm exec workflow check against the package or workflow.ts and reports all six validation phases as passed.
+      - Runs pnpm exec workflow check against the package or workflow.ts and reports all five validation phases as passed.
       - Reports created source files separately from runtime mutations and states that no runtime mutation occurred.
     forbidden:
       - Adding a top-level trigger, start, node map, edge list, or generic public trigger route.
@@ -79,7 +79,7 @@ cases:
       - Inserts assessFraud and highRisk after loadOrder, places holdForReview only in the yes branch, and moves the existing stock decision under the no branch without duplicating its node keys.
       - Keeps recordOutcome as the common successor after both high-risk and stock-handling paths.
       - Creates a package-relative run script with a named run export and deterministic JSON-storable output.
-      - Runs the real workflow checker against the modified package and reports its six-phase result, while distinguishing that source check from complete Artifact run-script bundling.
+      - Runs the real workflow checker against the modified package and reports its five-phase result, while distinguishing that source check from complete Artifact run-script collection.
       - Reports the modified and added files and states that no load, enablement, invocation, or runtime mutation occurred.
     forbidden:
       - Replacing the package wholesale or renaming/removing existing stable node keys.
@@ -98,7 +98,7 @@ cases:
       我需要代码检查器给出的可靠结论，不要只做文本审查，也不要修改文件。
     expected:
       - Runs pnpm exec workflow check on the exact target.
-      - Reports pass or failure from the real typecheck, bundle, evaluate, schema, semantic, and compile pipeline.
+      - Reports pass or failure from the real typecheck, evaluate, schema, semantic, and compile pipeline.
       - On failure, reports the earliest failing phase plus available code, file/line, AST path, node key, and contract type.
       - Leaves the source and database unchanged.
     forbidden:
@@ -113,11 +113,11 @@ cases:
       server/workflows/quotation-decision 的 workflow check 已通过。请确认这是否足以证明
       ./server/missing.ts 存在、能被打包且导出了 run；只做评估，不要构建或修改文件。
     expected:
-      - Explains that the six-phase source checker validates workflow.ts AST/IR and does not inspect or bundle run scripts.
+      - Explains that the five-phase source checker validates workflow.ts AST/IR and does not inspect or load run scripts.
       - Identifies package scan/inclusion, path and import policy, run-entry bundling, and named run export as separate Artifact-build checks.
       - Does not claim package buildability from a passing source check.
     forbidden:
-      - Treating the workflow.ts bundle phase as a run-script bundle check.
+      - Treating workflow.ts evaluation as a run-script check.
       - Building or mutating during this read-only request.
 
   - id: validate-unknown-node-capability

@@ -1,44 +1,30 @@
-import type {
-  NodeResultSchema,
-  WorkflowSourceAst,
-} from '../instructions/definition.js';
+import type { WorkflowSourceAst } from '../server/instructions/definition.js';
 
-import type { WorkflowInstructionClass } from '../engine/types.js';
 import {
   normalizeWorkflowParameterSchema,
   type WorkflowParameterSchema,
-} from '../engine/parameters.js';
+} from '../server/engine/parameters.js';
 import type { WorkflowSourceIssue } from './source-issues.js';
-import { validateWorkflowInputSchema } from '../engine/invocation.js';
+import { validateWorkflowInputSchema } from '../server/engine/invocation.js';
 import {
   resolveNodeResultSchema,
   validateNodeResultReference,
   validateNodeResultSchema,
   visitNodeResultScopes,
   type NodeResultScope,
-} from '../engine/node-results.js';
+  type WorkflowSourceContracts,
+  type WorkflowSourceRuntimeContracts,
+} from '../server/engine/node-results.js';
 
 const NODE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const BRANCH_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
-export interface WorkflowNodeSourceContract {
-  readonly type: string;
-  readonly branches:
-    readonly string[] | null | ((config: never) => readonly string[]);
-  readonly result?: NodeResultSchema | null;
-  readonly validateConfig: (
-    config: unknown,
-  ) => readonly { path: string; message: string }[];
-}
-
-export interface WorkflowSourceContracts {
-  nodes: ReadonlyMap<string, WorkflowNodeSourceContract>;
-}
-
-export interface WorkflowSourceRuntimeContracts {
-  instructions: Map<string, WorkflowInstructionClass>;
-}
+export type {
+  WorkflowNodeSourceContract,
+  WorkflowSourceContracts,
+  WorkflowSourceRuntimeContracts,
+} from '../server/engine/node-results.js';
 
 type TemplateParameter = { key: string; defaultValue?: string };
 

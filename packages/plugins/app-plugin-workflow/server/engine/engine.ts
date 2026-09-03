@@ -8,10 +8,8 @@ import {
   createWorkflowQueueAdapter,
   type WorkflowQueueAdapter,
 } from '../queue.js';
-import WorkflowSourceLoader from '../loader/source-loader.js';
 import { createTimeoutReaper, type TimeoutReaper } from './timeout-reaper.js';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
-import type { Row } from '@nocobase/db';
 import type {
   JsonObject,
   WorkflowDefinition,
@@ -42,28 +40,13 @@ export default class WorkflowEngine {
   private readonly options: WorkflowEngineOptions;
   private readonly queueAdapter: WorkflowQueueAdapter | null;
   private readonly reaper: TimeoutReaper | null;
-  private readonly sourceLoader: WorkflowSourceLoader | null;
-  private readonly sourceRootsByHash: Map<string, string>;
   constructor(options: WorkflowEngineOptions) {
     this.options = options;
     this.database = options.database;
     this.logger = options.logger ?? noopWorkflowLogger;
-    this.sourceRootsByHash = new Map<string, string>();
     this.instructions = new Map<string, WorkflowInstructionClass>(
       coreInstructions,
     );
-    this.sourceLoader = options.sources
-      ? new WorkflowSourceLoader({
-          database: options.database,
-          ...(options.connectionName === undefined
-            ? {}
-            : { connectionName: options.connectionName }),
-          instructions: this.instructions,
-          defaultRootPath: options.sources.rootPath,
-          autoActivate: options.sources.autoActivate === true,
-        })
-      : null;
-
     // The adapter has to exist before the dispatcher, because the dispatcher
     // takes it as its `queue`. Creating it also claims the queue name globally,
     // which `dispose()` releases.
@@ -133,8 +116,6 @@ export default class WorkflowEngine {
    * `recover()` re-publishes what a previous process left behind.
    */
   async initialize(): Promise<void> {
-    await this.sourceLoader?.load();
-    await this.refreshSourceResolvers();
     await this.queueAdapter?.startWorker();
     this.reaper?.start();
     const recovered = await this.dispatcher.recover(
@@ -146,34 +127,6 @@ export default class WorkflowEngine {
       this.logger.info(
         `Workflow runtime re-published ${recovered} undispatched run(s)`,
       );
-    }
-  }
-
-  async refreshSourceResolvers(): Promise<void> {
-    const sources = this.options.sources;
-    if (!sources) return;
-    const rows = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['key', 'hash'])
-      .where('current', '=', true)
-      .execute<Row>();
-    this.sourceRootsByHash.clear();
-    for (const row of rows) {
-      if (typeof row.key !== 'string' || typeof row.hash !== 'string') continue;
-      this.sourceRootsByHash.set(
-        row.hash,
-        path.join(sources.rootPath, row.key),
-      );
-      if (sources.autoEnable === true) {
-        await this.database
-          .query()
-          .updateTable(WORKFLOW_COLLECTIONS.workflows)
-          .set({ enabled: true })
-          .where('key', '=', row.key)
-          .where('current', '=', true)
-          .execute();
-      }
     }
   }
 
@@ -191,8 +144,6 @@ export default class WorkflowEngine {
         execution.hash,
       );
     }
-    if (this.options.sources)
-      return this.sourceRootsByHash.get(execution.hash) ?? null;
     return null;
   }
 

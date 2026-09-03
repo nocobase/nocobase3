@@ -2178,9 +2178,6 @@ importers:
       elkjs:
         specifier: ^0.10.2
         version: 0.10.2
-      esbuild:
-        specifier: ^0.25.12
-        version: 0.25.12
       hono:
         specifier: 'catalog:'
         version: 4.13.2

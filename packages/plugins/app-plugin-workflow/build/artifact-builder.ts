@@ -1,13 +1,17 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { WorkflowFlatIr } from '../instructions/definition.js';
+import type { WorkflowFlatIr } from '../server/instructions/definition.js';
+import {
+  computeWorkflowArtifactDigest,
+  type WorkflowArtifactDefinition,
+} from '../server/loader/artifact.js';
 
-export interface WorkflowArtifactDefinition extends WorkflowFlatIr {
-  readonly formatVersion: 1;
-  readonly key: string;
-}
+export {
+  computeWorkflowArtifactDigest,
+  type WorkflowArtifactDefinition,
+  type WorkflowArtifactDigestFile,
+} from '../server/loader/artifact.js';
 
 export interface WorkflowArtifactBuildInput {
   key: string;
@@ -24,20 +28,15 @@ export interface WorkflowArtifactBuildResult {
 export interface WorkflowPackageBuildOptions {
   instructions: Map<
     string,
-    import('../engine/types.js').WorkflowInstructionClass
+    import('../server/engine/types.js').WorkflowInstructionClass
   >;
   /** Package root whose relative file layout is copied into the artifact. */
   resourceRoot?: string;
 }
 
-export interface WorkflowArtifactDigestFile {
-  readonly path: string;
-  readonly content: string | Uint8Array;
-}
-
 function normalizeJson(
-  value: import('../engine/types.js').JsonValue,
-): import('../engine/types.js').JsonValue {
+  value: import('../server/engine/types.js').JsonValue,
+): import('../server/engine/types.js').JsonValue {
   if (Array.isArray(value)) return value.map(normalizeJson);
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
@@ -52,7 +51,7 @@ function normalizeJson(
 export function canonicalWorkflowJson(
   value: WorkflowArtifactDefinition,
 ): string {
-  return `${JSON.stringify(normalizeJson(value as object as import('../engine/types.js').JsonObject), null, 2)}\n`;
+  return `${JSON.stringify(normalizeJson(value as object as import('../server/engine/types.js').JsonObject), null, 2)}\n`;
 }
 
 export function buildWorkflowArtifact(
@@ -155,29 +154,4 @@ export async function writeWorkflowArtifact(
   await fs.rm(keyRoot, { recursive: true, force: true });
   await fs.rename(temporaryKeyRoot, keyRoot);
   return path.join(keyRoot, result.digest);
-}
-
-export function computeWorkflowArtifactDigest(
-  files: readonly WorkflowArtifactDigestFile[],
-): string {
-  const hash = createHash('sha256');
-  for (const file of [...files].sort(comparePaths)) {
-    const normalizedPath = file.path.replaceAll('\\', '/');
-    const content =
-      typeof file.content === 'string'
-        ? Buffer.from(file.content)
-        : Buffer.from(file.content);
-    hash
-      .update(normalizedPath)
-      .update('\0')
-      .update(String(content.byteLength))
-      .update('\0')
-      .update(content)
-      .update('\0');
-  }
-  return hash.digest('hex');
-}
-
-function comparePaths(left: { path: string }, right: { path: string }): number {
-  return Buffer.from(left.path).compare(Buffer.from(right.path));
 }

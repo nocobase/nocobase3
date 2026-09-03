@@ -17,7 +17,7 @@ import {
   RunInstruction,
   validateRunConfig,
 } from '../server/instructions/run/instruction.js';
-import { buildWorkflowArtifact } from '../server/loader/artifact-builder.js';
+import { buildWorkflowArtifact } from '../build/artifact-builder.js';
 import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 import { pendingInstruction } from './fixtures/instructions.js';
 import {

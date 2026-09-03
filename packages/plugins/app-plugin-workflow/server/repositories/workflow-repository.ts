@@ -309,7 +309,6 @@ export class WorkflowRepository {
         );
       },
     );
-    await this.service.refreshSourceResolvers();
     return workflow;
   }
 
@@ -319,7 +318,6 @@ export class WorkflowRepository {
 
   async setStatus(id: WorkflowId, enabled: boolean): Promise<WorkflowListItem> {
     const result = await this.setCurrentEnabled(id, enabled);
-    await this.service.refreshSourceResolvers();
     return result;
   }
 

@@ -25,10 +25,6 @@
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
-    "./build": {
-      "types": "./build/index.ts",
-      "import": "./build/index.ts"
-    },
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
@@ -52,10 +48,6 @@
       "./client": {
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
-      },
-      "./build": {
-        "types": "./dist/build/index.d.ts",
-        "import": "./dist/build/index.js"
       },
       "./server": {
         "types": "./dist/server/index.d.ts",
@@ -94,7 +86,6 @@
     "@sinclair/typebox": "catalog:",
     "@xyflow/react": "^12.11.3",
     "elkjs": "^0.10.2",
-    "esbuild": "^0.25.12",
     "hono": "catalog:",
     "lucide-react": "^0.487.0"
   },
@@ -108,7 +99,13 @@
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
-    "react-router": "^7.0.2"
+    "react-router": "^7.0.2",
+    "typescript": "^6.0.3"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@boringnode/queue": "^0.7.1",
