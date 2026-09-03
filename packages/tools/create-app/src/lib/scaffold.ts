@@ -55,7 +55,6 @@ const FALLBACK_GITIGNORE = [
   '/storage/',
   '/.agents/',
   '/.nocobase/',
-  '/.nb3/',
   '*.log',
   '',
 ].join('\n');

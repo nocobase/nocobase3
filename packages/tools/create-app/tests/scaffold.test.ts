@@ -427,7 +427,6 @@ describe('gitignore handling', () => {
     expect(contents).toContain('node_modules');
     expect(contents).toContain('/config.yml');
     expect(contents).toContain('/.nocobase/');
-    expect(contents).toContain('/.nb3/');
     expect(contents).toContain('/.agents/');
   });
 
