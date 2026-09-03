@@ -17,14 +17,14 @@ Filter Builder 只在 Repository 层使用：
 await db.repository('orders').findMany({
   filter: (filter) =>
     filter.and([
-      filter.select('status').eq('paid'),
+      filter.string('status').eq('paid'),
       filter.number('amount').gte(100),
       filter.date('createdAt').notBefore('2026-01-01'),
     ]),
 });
 ```
 
-这里的 `orders`、`status`、`amount`、`createdAt` 都是 Collection / Field 逻辑名。Repository 会根据 Collection metadata 解析字段类型、关系路径和命名规则，再编译成底层 QueryAdapter 可以执行的查询。
+这里的 `orders`、`status`、`amount`、`createdAt` 都是 Collection / Field 逻辑名。Repository 会根据 Collection metadata 解析字段类型和关系路径，再把只含逻辑名的查询计划交给绑定 connection 的数据库 adapter 执行。
 
 ## 和 db.query().where() 的区别
 
@@ -52,7 +52,7 @@ Repository 操作通过 `filter` callback 接收 Filter Builder：
 
 ```ts
 await db.repository('orders').findMany({
-  filter: (filter) => filter.select('status').eq('paid'),
+  filter: (filter) => filter.string('status').eq('paid'),
 });
 ```
 
@@ -62,7 +62,10 @@ await db.repository('orders').findMany({
 await db.repository('orders').findMany({
   filter: (filter) =>
     filter.and([
-      filter.select('status').in(['paid', 'completed']),
+      filter.or([
+        filter.string('status').eq('paid'),
+        filter.string('status').eq('completed'),
+      ]),
       filter.number('amount').gte(100),
       filter.or([
         filter.string('orderNo').includes('SO-'),
@@ -90,7 +93,7 @@ f.and(...);
 推荐使用完整入口：
 
 ```ts
-filter.select('status').eq('paid');
+filter.string('status').eq('paid');
 filter.relation('roles').some(...);
 filter.variable('$user.id');
 filter.and([...]);
@@ -100,24 +103,31 @@ filter.and([...]);
 
 ## 字段方法组
 
-不同字段类型的可用操作符不同。Filter Builder 不提供通用 `field()` 入口作为主 API，而是按字段 operator group 提供方法组。
+不同 Field type 的可用操作符不同。Filter Builder 不根据 UI 控件、字段名称、是否为主键或数据库物理列类型猜测语义，而是从路径终点的 Collection Field `type` 选择并校验 operator group。
 
-| Builder 方法组             | 常见字段                               | 方法                                                                                                        | 输出 operator                                                                                                                  |
-| -------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `filter.string(path)`      | input、email、phone、URL、UUID         | `includes()`、`notIncludes()`、`eq()`、`ne()`、`empty()`、`notEmpty()`                                      | `$includes`、`$notIncludes`、`$eq`、`$ne`、`$empty`、`$notEmpty`                                                               |
-| `filter.largeText(path)`   | Markdown、rich text                    | `includes()`、`notIncludes()`、`eq()`、`ne()`、`empty()`、`notEmpty()`                                      | `$includes`、`$notIncludes`、`$eq`、`$ne`、`$empty`、`$notEmpty`                                                               |
-| `filter.number(path)`      | number、integer、percent               | `eq()`、`ne()`、`gt()`、`gte()`、`lt()`、`lte()`、`empty()`、`notEmpty()`                                   | `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$empty`、`$notEmpty`                                                              |
-| `filter.date(path)`        | date、datetime、created at、updated at | `on()`、`notOn()`、`before()`、`after()`、`notBefore()`、`notAfter()`、`between()`、`empty()`、`notEmpty()` | `$dateOn`、`$dateNotOn`、`$dateBefore`、`$dateAfter`、`$dateNotBefore`、`$dateNotAfter`、`$dateBetween`、`$empty`、`$notEmpty` |
-| `filter.time(path)`        | time                                   | `eq()`、`ne()`、`empty()`、`notEmpty()`                                                                     | `$eq`、`$neq`、`$empty`、`$notEmpty`                                                                                           |
-| `filter.select(path)`      | select、radio、enum                    | `eq()`、`ne()`、`in()`、`notIn()`、`empty()`、`notEmpty()`                                                  | `$eq`、`$ne`、`$in`、`$notIn`、`$empty`、`$notEmpty`                                                                           |
-| `filter.multiSelect(path)` | multiple select、checkbox group、array | `match()`、`notMatch()`、`anyOf()`、`noneOf()`、`empty()`、`notEmpty()`                                     | `$match`、`$notMatch`、`$anyOf`、`$noneOf`、`$empty`、`$notEmpty`                                                              |
-| `filter.boolean(path)`     | checkbox、boolean                      | `isTrue()`、`isFalse()`、`empty()`、`notEmpty()`                                                            | `$isTruly`、`$isFalsy`、`$empty`、`$notEmpty`                                                                                  |
-| `filter.id(path)`          | id、relation terminal id               | `eq()`、`ne()`、`exists()`、`notExists()`                                                                   | `$eq`、`$ne`、`$exists`、`$notExists`                                                                                          |
-| `filter.object(path)`      | object                                 | `eq()`、`ne()`                                                                                              | `$eq`、`$ne`                                                                                                                   |
-| `filter.collection(path)`  | collection selector                    | `eq()`、`ne()`、`in()`、`notIn()`、`empty()`、`notEmpty()`                                                  | `$eq`、`$ne`、`$in`、`$notIn`、`$empty`、`$notEmpty`                                                                           |
-| `filter.tableOid(path)`    | table OID                              | `childIn()`、`childNotIn()`                                                                                 | `$childIn`、`$childNotIn`                                                                                                      |
+| Builder 方法组         | Collection Field `type`                                         | 方法                                                                                                        | 输出 operator                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `filter.string(path)`  | `string`、`uuid`                                                | `includes()`、`notIncludes()`、`eq()`、`ne()`、`empty()`、`notEmpty()`                                      | `$includes`、`$notIncludes`、`$eq`、`$ne`、`$empty`、`$notEmpty`                                                               |
+| `filter.text(path)`    | `text`                                                          | `includes()`、`notIncludes()`、`eq()`、`ne()`、`empty()`、`notEmpty()`                                      | `$includes`、`$notIncludes`、`$eq`、`$ne`、`$empty`、`$notEmpty`                                                               |
+| `filter.number(path)`  | `increments`、`integer`、`bigInt`、`decimal`、`float`、`double` | `eq()`、`ne()`、`gt()`、`gte()`、`lt()`、`lte()`、`empty()`、`notEmpty()`                                   | `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$empty`、`$notEmpty`                                                              |
+| `filter.date(path)`    | `date`                                                          | `on()`、`notOn()`、`before()`、`after()`、`notBefore()`、`notAfter()`、`between()`、`empty()`、`notEmpty()` | `$dateOn`、`$dateNotOn`、`$dateBefore`、`$dateAfter`、`$dateNotBefore`、`$dateNotAfter`、`$dateBetween`、`$empty`、`$notEmpty` |
+| `filter.date(path)`    | `datetime`                                                      | `before()`、`after()`、`notBefore()`、`notAfter()`、`between()`、`empty()`、`notEmpty()`                    | `$dateBefore`、`$dateAfter`、`$dateNotBefore`、`$dateNotAfter`、`$dateBetween`、`$empty`、`$notEmpty`                          |
+| `filter.time(path)`    | `time`                                                          | `eq()`、`ne()`、`empty()`、`notEmpty()`                                                                     | `$eq`、`$ne`、`$empty`、`$notEmpty`                                                                                            |
+| `filter.boolean(path)` | `boolean`                                                       | `isTrue()`、`isFalse()`、`empty()`、`notEmpty()`                                                            | `$isTruly`、`$isFalsy`、`$empty`、`$notEmpty`                                                                                  |
+| `filter.json(path)`    | `json`                                                          | V1 暂无 operator                                                                                            | —                                                                                                                              |
 
-运行时应根据 Collection metadata 校验方法组是否匹配字段。比如 `createdAt` 是 date 字段时，只能使用 `filter.date('createdAt')` 的方法，不能用 `filter.number('createdAt').gte(...)`。
+`filter.largeText()`、`filter.id()` 和 `filter.object()` 不进入 V1。`text` 与 `json` 分别使用同名 Field type 对应的 `filter.text()` 和 `filter.json()`；主键、唯一键或 relation 终点的 ID 仍按其实际 Field type 使用 `filter.number()` 或 `filter.string()`，不会因为承担 ID 角色而获得独立 operator group。`blob` 和 `native` 暂不支持筛选。
+
+Collection 允许扩展自定义 Field type，但 V1 对没有明确 operator group 映射的类型应报“不支持筛选”，不能按值形状或底层列类型回退猜测。
+
+### `empty` / `notEmpty` 的固定语义
+
+- `string` 和 `text`：`empty` 表示 `NULL OR ''`，`notEmpty` 表示 `NOT NULL AND != ''`。
+- 其他支持这些 operator 的标量 Field：`empty` 只表示 `NULL`，`notEmpty` 只表示 `NOT NULL`。
+- `json` 在 V1 不提供 `empty` / `notEmpty`，也不提供跨数据库含义不一致的结构相等判断。
+- relation 只通过 `filter.relation().empty()` / `notEmpty()` 判断关联集合是否为空。
+
+运行时必须根据 Collection metadata 校验方法组是否匹配终点 Field。比如 `createdAt` 是 `date` Field 时，只能使用 `filter.date('createdAt')`，不能使用 `filter.number('createdAt').gte(...)`。
 
 ## 日期条件
 
@@ -144,6 +154,11 @@ filter.date('createdAt').between(['2026-01-01', '2026-12-31']);
 
 这样可以避免 Agent 把自然语言里的“大于等于”直接翻译成 `$gte`，导致前端 filter UI 无法正确展示。
 
+`date` literal 必须是 ISO `YYYY-MM-DD`。`datetime` literal 必须是带显式 offset 或 `Z` 的
+ISO 8601；代码 API 收到 `Date` 时先规范化为 ISO string。`between([start, end])` 使用
+`[start, end)` 半开区间。V1 不提供 `today`、`thisWeek` 等相对日期；`on()` / `notOn()`
+只用于 `date`，避免在未提供时区的情况下猜测 `datetime` 的自然日边界。
+
 ## 关系筛选
 
 Relation filter 必须区分 to-one 和 to-many。
@@ -157,12 +172,12 @@ await db.repository('orders').findMany({
   filter: (filter) =>
     filter.and([
       filter.string('customer.name').includes('Acme'),
-      filter.id('createdBy.id').eq(filter.variable('$user.id')),
+      filter.string('createdBy.id').eq(filter.variable('$user.id')),
     ]),
 });
 ```
 
-`customer.name` 的终点字段是 `name`，所以使用 string group。`createdBy.id` 的终点字段是 `id`，所以使用 id group。
+`customer.name` 的终点 Field 是 `string`，所以使用 string group。这个示例中 `createdBy.id` 的终点 Field 是 `uuid`，因此也使用 string group；如果它是 `integer`，则应使用 number group。
 
 ### To-many relation
 
@@ -212,14 +227,6 @@ await db.repository('users').findMany({
 });
 ```
 
-如果 `roles.name` 在 metadata 中是 select / enum 字段，也可以使用：
-
-```ts
-filter
-  .relation('roles')
-  .some((role) => role.select('name').in(['root', 'admin']));
-```
-
 ### Relation 量词
 
 | 方法             | 语义                         |
@@ -244,7 +251,8 @@ await db.repository('orders').findMany({
       id: 1,
     },
   },
-  filter: (filter) => filter.id('createdBy.id').eq(filter.variable('$user.id')),
+  filter: (filter) =>
+    filter.string('createdBy.id').eq(filter.variable('$user.id')),
 });
 ```
 
@@ -252,7 +260,7 @@ await db.repository('orders').findMany({
 
 ```ts
 // 不推荐作为代码 API
-filter.id('createdBy.id').eq('{{$user.id}}');
+filter.string('createdBy.id').eq('{{$user.id}}');
 ```
 
 `filter.variable('$user.id')` 会生成一等 AST value，由 Repository 运行时解析。缺失变量默认应抛错。解析后的值进入 SQL bindings，不参与 SQL 字符串拼接。

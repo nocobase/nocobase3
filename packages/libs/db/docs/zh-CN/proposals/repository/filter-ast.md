@@ -7,13 +7,13 @@ description: 尚未实现或导出的 Repository Filter AST 设计；仅供设�
 
 > **状态：提案。运行时可用性：未实现。导出 API：无。** 本页只用于 Repository 设计讨论，不要据此生成生产代码。
 
-Filter AST 是 Repository Filter Builder 的结构化结果。它用于在代码、HTTP、CLI、file sync、权限配置和未来持久化场景之间传递同一套筛选条件。
+Filter AST 是 Repository Filter Builder 的结构化结果。它用于在代码、HTTP、CLI、file sync 和未来持久化场景之间传递同一套筛选条件。
 
 Filter Builder 更适合 TypeScript 代码：
 
 ```ts
 filter.and([
-  filter.select('status').eq('paid'),
+  filter.string('status').eq('paid'),
   filter.date('createdAt').notBefore('2026-01-01'),
 ]);
 ```
@@ -107,24 +107,18 @@ export type FilterOperator =
   | '$dateNotBefore'
   | '$dateNotAfter'
   | '$dateBetween'
-  | '$in'
-  | '$notIn'
-  | '$match'
-  | '$notMatch'
-  | '$anyOf'
-  | '$noneOf'
   | '$isTruly'
-  | '$isFalsy'
-  | '$exists'
-  | '$notExists'
-  | '$neq'
-  | '$childIn'
-  | '$childNotIn';
+  | '$isFalsy';
 
 export type FilterScalar = string | number | boolean | null;
 
+export type FilterLiteral =
+  | FilterScalar
+  | readonly FilterLiteral[]
+  | { readonly [key: string]: FilterLiteral };
+
 export type FilterValue =
-  FilterScalar | FilterVariable | readonly (FilterScalar | FilterVariable)[];
+  FilterLiteral | FilterVariable | readonly (FilterLiteral | FilterVariable)[];
 
 export interface FilterVariable {
   kind: 'variable';
@@ -157,7 +151,7 @@ Filter AST 的根节点始终是 group：
 即使只有一个条件，也应被标准化到 `and` group 中：
 
 ```ts
-filter.select('status').eq('paid');
+filter.string('status').eq('paid');
 ```
 
 可以生成：
@@ -215,9 +209,22 @@ Relation 的 to-one 路径也可以表现为普通字段条件：
 
 - `createdBy` 是否为合法 relation。
 - `id` 是否为 relation 目标 Collection 上的合法字段。
-- `id` 的 operator group 是否允许 `$eq`。
+- `id` 的实际 Field type 对应的 operator group 是否允许 `$eq`。
+
+字段是否为主键或唯一键不改变 operator group；`text`、`json` 和 ID Field 都按 Collection 中声明的实际 Field type 校验。`json` 在 V1 没有可执行 operator；保留 group 是为了显式报告 capability，而不是回退成 object 或 string 比较。
+自定义 Field type 必须显式注册 operator group；没有映射时拒绝条件。`blob` 和 `native`
+在 V1 不支持筛选。
 
 `empty()`、`notEmpty()`、`isTrue()`、`isFalse()`、`exists()`、`notExists()` 这类不需要业务入参的方法，可以在 AST 中省略 `value`。如果后续要兼容 NocoBase 既有 object filter，序列化层可以按目标格式补出 `true` 之类的占位值。
+
+V1 的空值语义固定如下：string/text 的 `$empty` 是 `NULL OR ''`，`$notEmpty` 是
+`NOT NULL AND != ''`；其他支持这些 operator 的标量 Field 只判断 `NULL` / `NOT NULL`；
+JSON 不支持二者。relation 的空值只通过 relation quantifier 表达。
+
+日期 literal 也必须可移植：`date` 使用 ISO `YYYY-MM-DD`，`datetime` 使用带显式 offset
+或 `Z` 的 ISO 8601，代码 API 中的 `Date` 先转 ISO string。`$dateBetween` 是 `[start, end)`
+半开区间。`$dateOn` / `$dateNotOn` 只用于 `date`；V1 不在缺少时区时解释 datetime
+自然日，也不支持相对日期 token。
 
 ## Relation 节点
 
@@ -282,7 +289,8 @@ await db.repository('orders').findMany({
       id: 1,
     },
   },
-  filter: (filter) => filter.id('createdBy.id').eq(filter.variable('$user.id')),
+  filter: (filter) =>
+    filter.string('createdBy.id').eq(filter.variable('$user.id')),
 });
 ```
 
@@ -341,7 +349,7 @@ const users = await db.repository('users').findMany({
             role.string('name').eq('admin'),
           ]),
         ),
-      filter.id('createdBy.id').eq(filter.variable('$user.id')),
+      filter.string('createdBy.id').eq(filter.variable('$user.id')),
     ]),
 });
 ```
@@ -411,7 +419,7 @@ Filter AST
   -> validate operator
   -> resolve variables from context
   -> compile relation joins / exists queries
-  -> compile to QueryAdapter
+  -> execute logical plan through the bound database adapter
 ```
 
 任何一步失败都应给出可解释错误，而不是降级成 raw SQL。

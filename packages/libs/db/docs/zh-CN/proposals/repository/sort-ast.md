@@ -55,7 +55,6 @@ Sort AST 要满足以下目标：
 - 无歧义，to-one relation field 和 to-many aggregate 使用不同节点。
 - 跨数据库，明确 NULL、空关系、空集合和稳定分页语义。
 - 可组合，同一个 Sort AST 可以放在根查询或 Select AST 的 relation 节点中。
-- 权限安全，排序字段和关系路径不能绕过字段与记录权限。
 - 与数据库解耦，不暴露 raw SQL、collation、tableName 或 columnName。
 
 Sort AST 本身已经是可序列化协议，不需要再设计链式 Sort Builder。
@@ -161,17 +160,20 @@ V1 不接受：
 ```
 
 `field` 使用 Field 逻辑名。V1 可以允许有确定数据库表示和排序语义的直接标量字段，
-例如 string、number、boolean、date、datetime、time、UUID 和 select。应拒绝：
+例如 string、number、boolean、date、datetime、time 和 UUID。应拒绝：
 
 - relation Field；
 - object / JSON 整体；
 - 未声明可排序的 virtual field；
-- 不存在或无权排序的字段；
+- Collection 中不存在的字段；
 - raw expression；
 - tableName 或 columnName。
 
-是否允许 large text 或特定计算字段应由 Field metadata 的 sortable capability 明确声明，
-不能按数据库方言悄悄放宽。
+V1 使用固定的 Collection Field type capability matrix：`increments`、`integer`、`bigInt`、
+`decimal`、`float`、`double`、`string`、`uuid`、`boolean`、`date`、`datetime` 和 `time` 可直接
+排序；`text`、`json`、`blob`、`native`、relation、virtual 和 generated Field 不可排序。
+V1 不新增尚不存在的 `FieldMetadata.sortable`，也不能按数据库方言悄悄放宽。未来若引入
+正式 capability metadata，再由 Collection 层统一扩展该矩阵。
 
 ## Relation 节点内部排序
 
@@ -416,21 +418,11 @@ createdAt DESC NULLS LAST, id ASC
 这类输入应报错，不使用“最后一个覆盖前一个”或自动去重。relation path 和 aggregate
 参数都参与 target 等价性判断。
 
-## 权限与侧信道
+## V1 授权边界
 
-排序可以泄露未返回字段的信息，因此 `select` 未包含某字段不代表它可以绕过权限参与
-排序。V1 建议：
-
-- 直接排序字段必须具有读取和排序权限；
-- relation path 上每个 relation Field 必须允许访问；
-- relation 终点字段必须具有读取和排序权限；
-- relationAggregate 只聚合授权后可见的目标记录；
-- 授权 filter 必须进入 join、子查询或预聚合范围；
-- 不可见的 to-one 目标按 `null` 排序；
-- 不允许通过 raw expression、隐藏 columnName 或聚合未授权字段绕过约束。
-
-未来如果需要“允许排序但不允许返回”的字段，应设计显式 `sort` capability，不能默认
-把所有底层字段开放给排序。
+Repository V1 只根据 Collection Field type、relation 基数和数据库能力校验排序，不注入
+或执行 policy。授权由可信调用边界在调用 Repository 前完成。未来 policy 若限制可排序
+字段或目标记录范围，应作为独立编译阶段加入，不改变 Sort AST 结构。
 
 ## 编译策略
 
@@ -447,7 +439,7 @@ count 错误。无论底层采用哪种策略，都必须保证排序和分页�
 结果集上。
 
 Sort AST 不允许调用方指定 join 类型或强制某种 SQL 计划。查询计划由 Repository 根据
-metadata、权限、方言 capability 和成本选择。
+Collection、方言 capability 和成本选择。
 
 ## 完整示例
 
@@ -486,7 +478,7 @@ metadata、权限、方言 capability 和成本选择。
 
 ```text
 customer.name ASC NULLS LAST
-  -> authorized SUM(items.amount) DESC NULLS LAST
+  -> SUM(items.amount) DESC NULLS LAST
   -> orders.id ASC
 ```
 
@@ -505,12 +497,11 @@ Sort AST
   -> validate direct field or relation path
   -> validate relation cardinality
   -> validate aggregate and terminal field compatibility
-  -> authorize path, field and aggregate scope
   -> normalize nulls default
   -> reject duplicate targets
   -> derive stable unique tie-breaker
   -> choose dialect-capable execution plan
-  -> compile to QueryAdapter
+  -> execute logical plan through the bound database adapter
 ```
 
 错误必须包含 Sort AST item 下标、Collection、Field 或 relation path。例如：
@@ -530,7 +521,7 @@ Sort AST V1 建议支持：
 - 单个终点 to-many relation 的 `count`、`sum`、`avg`、`min`、`max` 聚合排序；
 - `asc` / `desc`；
 - `nulls: first` / `last`，默认 `last`；
-- metadata 校验、权限校验和自动稳定 tie-breaker。
+- Collection 校验和自动稳定 tie-breaker。
 
 V1 暂不支持：
 

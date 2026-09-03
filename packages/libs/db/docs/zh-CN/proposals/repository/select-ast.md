@@ -76,7 +76,6 @@ Select AST 要满足以下目标：
 - 可推导，TypeScript 可以根据选择树推导最终返回结构。
 - 可组合，relation 节点可以递归包含 Select AST、Filter AST 和 Sort AST。
 - 可执行，编译器可以生成批量关系加载计划，避免 N+1 查询和根记录重复。
-- 权限安全，每一级字段、关系和目标记录都可以独立应用授权约束。
 - 与数据库解耦，不暴露 tableName、columnName、join、raw SQL 或方言参数。
 
 `select` 描述返回什么；它不负责决定根记录是否匹配，也不负责根记录的顺序。根查询的
@@ -176,14 +175,13 @@ AST 中不接受以下简写：
 
 | 输入                | 语义                                                      |
 | ------------------- | --------------------------------------------------------- |
-| `select` 整体省略   | 返回根 Collection 默认允许读取的标量字段，不自动加载关系  |
-| `fields` 省略       | 返回当前节点默认允许读取的标量字段                        |
+| `select` 整体省略   | 返回根 Collection 的全部直接非 relation Field，不加载关系 |
+| `fields` 省略       | 返回当前节点的全部直接非 relation Field                   |
 | `fields: []`        | 不返回当前节点的显式标量字段，可以只返回所选择的 relation |
 | `relations` 省略/空 | 不加载 relation                                           |
 
-“默认标量字段”不是数据库的 `SELECT *`。Repository 应先根据 Collection metadata 解析
-可输出的直接标量字段，再与授权系统允许的输出字段求交集。relation、内部字段和不可读字段
-不能因为 `fields` 省略而被自动返回。
+这里的默认集合只来自 Collection：所有直接非 relation Field 都返回，不依据 UI schema、
+字段名称或物理表结构推测“应用字段”。这不是数据库的 `SELECT *`，relation 必须显式选择。
 
 当 `fields: []` 但选择了 relation 时，Repository 可以在内部读取主键、source key 或
 foreign key 以完成关系组装；这些依赖字段若未被显式选择，必须在最终返回前移除。
@@ -271,10 +269,10 @@ relation 节点的 `select` 必填。即使希望返回目标 Collection 的默�
 
 Relation Field 的 metadata 决定返回基数：
 
-| relation 类型              | 返回形状              | 无匹配或无权访问时 |
-| -------------------------- | --------------------- | ------------------ |
-| `belongsTo`、`hasOne`      | 目标记录对象或 `null` | `null`             |
-| `hasMany`、`belongsToMany` | 目标记录数组          | `[]`               |
+| relation 类型              | 返回形状              | 无匹配时 |
+| -------------------------- | --------------------- | -------- |
+| `belongsTo`、`hasOne`      | 目标记录对象或 `null` | `null`   |
+| `hasMany`、`belongsToMany` | 目标记录数组          | `[]`     |
 
 已请求的 relation key 必须存在于结果中，不能因为没有关联记录而省略。没有在 Select AST 中
 请求的 relation 则不应出现在结果中。
@@ -320,9 +318,6 @@ Relation 节点可以使用目标 Collection 的 Filter AST 限制返回的关�
 这个 filter 只决定每条订单返回哪些 `items`，不决定订单本身是否进入根结果。需要筛选
 “至少存在一条 quantity 大于 0 的 item 的订单”时，必须在根 Filter AST 使用 relation
 quantifier。两种语义不能隐式互换。
-
-授权系统对目标 Collection 追加的记录约束必须与 relation filter 使用 `and` 合并，不能
-由调用方 filter 覆盖。
 
 ## Relation Sort
 
@@ -455,32 +450,21 @@ to-one relation 节点可以带 sort，但它没有可观察的数组排序效�
 
 外层的 `select` 和 `filter` 是 Repository operation options，不是另一个 AST 包装层。
 
-## 权限与安全
+## V1 授权边界
 
-Select AST 编译时必须逐级应用权限：
+Repository V1 只根据 Collection 校验字段、关系、目标 Collection 和结构预算，不注入或
+执行 policy。授权由 HTTP、CLI、service 等可信调用边界在调用 Repository 前完成；
+`context` 只用于 Filter 变量解析，不能充当授权上下文。
 
-1. 校验调用方可以读取当前 Collection。
-2. `fields` 显式请求无权读取的字段时拒绝查询；`fields` 省略时，默认字段集合与允许输出
-   字段求交集。
-3. 校验 relation Field 本身允许输出。
-4. 进入目标 Collection 后重新应用目标记录和字段权限。
-5. 将 relation-local filter 与授权 filter 使用 `and` 合并。
-6. relation-local sort 引用的字段也必须具有相应读取和排序权限。
-7. 内部加载的主键、foreign key 和 source key 不得泄漏到最终输出。
-
-权限过滤后的 to-one 结果视为未关联并返回 `null`；to-many 中不可见的目标记录从数组中
-移除。不能先无约束加载全部关系，再把权限处理交给调用方。
-
-显式请求无权访问的 relation 也应拒绝查询，不能静默省略 relation key。这样调用方能够
-区分“没有关联记录”和“无权请求这个关系”，同时保留目标记录权限过滤后的 `null` / `[]`
-语义。
+未来若引入 Repository policy，应在独立阶段收紧 Select、Filter 和 Sort，并保持现有 AST
+结构不变。本提案不预先规定 policy provider、字段裁剪或记录过滤的具体协议。
 
 选择树还应受资源预算限制，例如最大深度、relation 节点总数和预计加载记录数。超过
 预算应给出可解释错误，不能因为 AST 合法就允许无限递归或指数级加载。
 
 ## 加载与编译
 
-Select AST 不规定必须使用 join。Repository 可以根据 relation 类型、分页、权限和方言
+Select AST 不规定必须使用 join。Repository 可以根据 relation 类型、分页和方言
 能力选择：
 
 - to-one join；
@@ -495,7 +479,7 @@ Select AST 不规定必须使用 join。Repository 可以根据 relation 类型�
 - 不改变根记录基数和分页；
 - relation-local filter 和 sort 只作用于目标节点；
 - 共享 relation 前缀只加载一次；
-- 返回字段严格等于授权后的选择结果；
+- 返回字段严格等于选择结果；
 - 相同输入在支持的数据库上产生一致结果形状。
 
 ## `fields` / `appends` 兼容
@@ -516,7 +500,7 @@ legacy fields / appends
   -> normalize paths
   -> merge shared relation prefixes
   -> build Select AST
-  -> validate metadata and permissions
+  -> validate against Collection
   -> compile loading plan
 ```
 
@@ -533,9 +517,7 @@ Select AST
   -> validate kind and version
   -> resolve root collection
   -> validate direct scalar fields
-  -> authorize selected fields
   -> resolve each relation field and target collection
-  -> authorize relation field
   -> recursively validate target selection
   -> validate relation-local Filter AST
   -> validate relation-local Sort AST
@@ -557,7 +539,7 @@ Select AST V1 建议支持：
 - relation-local Filter AST；
 - to-many relation-local Sort AST；
 - `fields` / `appends` 到 Select AST 的边界兼容转换；
-- metadata、权限、深度和节点数量校验；
+- Collection、深度和节点数量校验；
 - 不改变根基数的批量关系加载。
 
 V1 暂不支持：
