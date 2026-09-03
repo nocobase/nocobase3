@@ -1,5 +1,31 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 4243eb0: Add a terminate instruction that can finish a workflow early from the main path or a conditional branch, with success and failure outcomes and a distinct termination icon.
+
+### Patch Changes
+
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- 4243eb0: Reload workflows after status changes, open manual runs on their execution canvas, and keep descriptions out of canvas node cards.
+- 4243eb0: Render each empty workflow condition branch as a distinct path before it rejoins the common successor.
+- 4243eb0: Show workflow node descriptions in canvas dialogs and execution detail dialogs, with a subtle borderless disclosure for descriptions in execution records.
+- 4243eb0: Add a theme-aware canvas control for switching between compact vertical and horizontal workflow layouts, adapt the zoom controls and minimap to light and dark themes, route edges with ELK orthogonal paths, preserve condition branch order, and merge converging edges at their successor input port.
+- 813da59: Declare `typescript` as a runtime dependency. `server/loader/source-parser.ts` imports it and the engine reaches that module through a static import chain, so a deployed application crashed on start with `Cannot find package 'typescript'` while every development checkout resolved it from devDependencies.
+- Updated dependencies [8d88ff4]
+- Updated dependencies [43d5bf0]
+- Updated dependencies [813da59]
+- Updated dependencies [cee3251]
+  - @nocobase/app-server@1.0.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/app-plugin-authentication@0.1.0-beta.6
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/queue@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.5
 
 ### Minor Changes
