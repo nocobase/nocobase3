@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -88,15 +88,13 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@sinclair/typebox": "catalog:",
-    "@xyflow/react": "^12.11.3",
     "elkjs": "^0.10.2",
     "esbuild": "^0.25.12",
     "hono": "catalog:",
-    "lucide-react": "^0.487.0"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
@@ -111,6 +109,7 @@
     "react-router": "^7.0.2"
   },
   "devDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@boringnode/queue": "^0.7.1",
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-authentication": "workspace:*",
@@ -124,16 +123,17 @@
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "@xyflow/react": "^12.11.3",
     "better-sqlite3": "^13.0.3",
     "eslint": "catalog:",
-    "knex": "^3.1.0",
     "jsdom": "catalog:",
+    "knex": "^3.1.0",
+    "lucide-react": "^0.487.0",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:",
     "vitest": "catalog:",
     "yaml": "^2.8.1"
   }

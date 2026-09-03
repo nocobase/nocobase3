@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -137,9 +138,10 @@ export class CachedDocumentLoader {
     if (!cacheKey) {
       return null;
     }
+    const cacheFileKey = createHash('sha256').update(cacheKey).digest('hex');
     const tempFilePath = path.join(
       os.tmpdir(),
-      `${cacheKey}.${Date.now()}.parsed.${this.options.parsedFileExtname}`,
+      `nocobase-document-${cacheFileKey}.${Date.now()}.parsed.${this.options.parsedFileExtname}`,
     );
     await fs.writeFile(tempFilePath, text, 'utf-8');
 
