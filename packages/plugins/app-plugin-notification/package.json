@@ -100,8 +100,7 @@
   "dependencies": {
     "@nocobase/logging": "workspace:^",
     "@sinclair/typebox": "catalog:",
-    "hono": "catalog:",
-    "lucide-react": "^0.487.0"
+    "hono": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
@@ -131,6 +130,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "eslint": "catalog:",
+    "lucide-react": "^0.487.0",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

@@ -107,14 +107,9 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
     "@nocobase/drive": "workspace:^",
-    "clsx": "^2.1.1",
     "hono": "catalog:",
-    "lucide-react": "^0.487.0",
-    "react-markdown": "catalog:",
-    "remark-gfm": "catalog:",
-    "tailwind-merge": "^3.2.0"
+    "remark-gfm": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
@@ -125,6 +120,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
@@ -136,12 +132,16 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "clsx": "^2.1.1",
     "eslint": "catalog:",
     "jsdom": "catalog:",
+    "lucide-react": "^0.487.0",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-markdown": "catalog:",
     "shadcn": "^4.13.1",
+    "tailwind-merge": "^3.2.0",
     "tailwindcss": "catalog:",
     "tw-animate-css": "^1.2.5",
     "typescript": "catalog:",
