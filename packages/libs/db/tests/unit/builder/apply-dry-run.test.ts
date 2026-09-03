@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionBuilder } from '../../../src/index.js';
-import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
 import { RecordingSchemaAdapter } from './helpers.js';
 
 describe('CollectionBuilder apply and dryRun', () => {
@@ -8,10 +7,8 @@ describe('CollectionBuilder apply and dryRun', () => {
     const adapter = new RecordingSchemaAdapter([
       'alter table orders add column paid_at timestamp',
     ]);
-    const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
       schemaAdapter: adapter,
-      metadataStore,
     });
 
     const result = await builder.apply(
@@ -35,15 +32,12 @@ describe('CollectionBuilder apply and dryRun', () => {
     expect(result.sql).toEqual([
       'alter table orders add column paid_at timestamp',
     ]);
-    expect(await metadataStore.getCollection('orders')).toBeUndefined();
   });
 
-  it('executes schema operations and syncs metadata by default', async () => {
+  it('executes schema operations by default', async () => {
     const adapter = new RecordingSchemaAdapter();
-    const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
       schemaAdapter: adapter,
-      metadataStore,
     });
 
     await builder.apply([
@@ -68,10 +62,6 @@ describe('CollectionBuilder apply and dryRun', () => {
       table: {
         name: 'orders',
       },
-    });
-    expect(await metadataStore.getCollection('orders')).toMatchObject({
-      name: 'orders',
-      fields: [{ name: 'id' }],
     });
   });
 

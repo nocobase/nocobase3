@@ -1,3 +1,8 @@
+---
+title: Builder 约束与索引
+description: 为 Collection 定义 primary、unique、foreign key 和 index，并正确处理 check 与 dropConstraint 的当前能力限制。
+---
+
 # Constraints 和 Indexes
 
 Collection DSL 把 constraints 和 indexes 分开建模。
@@ -109,9 +114,11 @@ await builder.dropConstraint('orders', 'uk_orders_paid_at');
 
 ## 当前限制
 
-`check` constraint 已经建模，但当前还没有完整编译到 SQL。
+`check` constraint 已进入 Collection DSL，但当前 Schema Adapter 不会把它编译为 SQL。默认 capability planner 会产生 `UNSUPPORTED_CHECK_CONSTRAINT` warning 并跳过该约束；`strict: true` 会把该 warning 升级为错误。
 
-`dropConstraint` 当前实现较基础，后续需要按 primary、unique、foreign key 等类型分别处理。
+`dropConstraint` 当前通过底层 foreign key 删除路径执行，不是可移植的通用约束删除接口。不要用它删除 primary 或 unique constraint；使用前必须确认目标方言和约束类型的实际行为。
+
+方言能力、warning 和 strict 模式见[方言能力](./dialect-capabilities.md)。
 
 ## Agent 注意事项
 
@@ -119,4 +126,6 @@ await builder.dropConstraint('orders', 'uk_orders_paid_at');
 - 查询性能用 indexes。
 - 不要把 unique 建成普通 index。
 - 跨数据库时，不要依赖所有方言都支持 deferrable、partial index 或 check constraint。
+- 不要假设 `check` 已写入数据库；检查 apply result 中的 warning，要求严格执行时启用 `strict: true`。
+- 不要把 `dropConstraint()` 当作通用 primary、unique 和 foreign key 删除入口。
 - 重要 index、constraint 显式写 `name`，不要依赖自动名做长期维护。

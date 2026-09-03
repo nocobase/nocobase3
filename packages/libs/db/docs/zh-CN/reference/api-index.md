@@ -1,141 +1,163 @@
-# API 索引
+---
+title: @nocobase/db API 索引
+description: 当前已实现并公开的 Database、Builder、Query、Collections、Schema Inspector、Migration、Seed 和 Metadata API。
+---
 
-本页列出当前可用的主要 public API。详细类型见同目录下的 reference 文档。
+# `@nocobase/db` API 索引
+
+本页只列当前已经实现并公开的主要 API。Repository 等规划接口不属于当前 API。
 
 ## Database
 
-- `defineDatabase(config)`：类型辅助函数，返回传入配置。
+### 创建与配置
+
 - `createDatabaseManager(config)`：创建 `DatabaseManager`。
-- `DatabaseManager`：管理默认连接和命名连接。
-- `DatabaseConnection`：表示一个具体数据库连接。
-- `QueryAdapter`：数据库层 Query Builder。
+- `defineDatabase(config)`：配置类型辅助函数，原样返回输入。
+- `DatabaseConfig` / `ConnectionConfig`：Manager 和 Connection 配置。
 
-## Query
+文档：[`createDatabaseManager()`](../database/create-database-manager.md)、[连接配置](../database/connections.md)、[`DatabaseConfig`](./database-config.md)。
 
-- `selectFrom(table)`
-- `insertInto(table)`
-- `updateTable(table)`
-- `deleteFrom(table)`
-- `execute()`
-- `executeTakeFirst()`
-- `executeTakeFirstOrThrow()`
-- `value(column)`
-- `pluck(column)`
-- `exists()`
-- `compile()`
+### DatabaseManager
 
-## Repository（规划中，当前不可调用）
+- `connection(name?)`
+- `builder(name?)`
+- `query(name?)`
+- `transaction(fn, name?)`
+- `createMigrator(options)`
+- `createSeeder(options)`
+- `connect(name?)`
+- `disconnect(name?)`
+- `reconnect(name?)`
+- `destroy()`
 
-Repository 当前尚未实现。当前 `DatabaseManager` 没有 `db.repository()`，`DatabaseConnection` 也没有 `connection.repository()`；不要把规划接口复制到运行时代码。
+文档：[DatabaseManager](../database/database-manager.md)。
 
-规划中的入口：
+### DatabaseConnection
 
-- `db.repository(collectionName, connectionName?)`
-- `connection.repository(collectionName)`
+- `name`
+- `driver`
+- `dialect`
+- `schemaManagement`
+- `capabilities`
+- `builder`
+- `query`
+- `collections`
+- `collectionMetadata`
+- `schema`
+- `schemaInspector`
+- `client()`
+- `connect()` / `disconnect()` / `reconnect()`
+- `transaction(fn)`
 
-规划中的常规操作：
-
-- `findMany({ select?, filter?, sort?, limit?, offset?, context? })`
-- `findOne({ select?, filter?, sort?, context? })`：必须至少提供 `filter` 或非空
-  `sort`
-- `count({ filter?, context? })`
-- `exists({ filter?, context? })`
-- `create({ values })`
-- `update({ filter, values })` 或显式全量更新 `update({ all: true, values })`
-- `delete({ filter })` 或显式全量删除 `delete({ all: true })`
-
-`update()` 和 `delete()` 都是批量操作，返回 `{ affectedCount }`；缺失 `filter` 不能隐式
-表示全量写入。`select` 使用 Select AST 描述标量字段和 relation 结果树；`sort` 使用
-Sort AST 区分直接字段、to-one relation field 和 to-many relation aggregate。
-
-规划中的筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder；HTTP、CLI 和
-持久化配置使用结构化 AST。详见 [Repository 概览](../repository/overview.md)、
-[Select AST](../repository/select-ast.md)、[Filter Builder](../repository/filter-builder.md)、
-[Filter AST](../repository/filter-ast.md) 和 [Sort AST](../repository/sort-ast.md)。
-
-## Migration
-
-Migration 入口：
-
-- `defineMigration(definition)`：唯一合法的 migration 文件定义方式。
-- `createMigrator(options)`：创建 migration runner。
-- `migrator.latest()`：执行所有 pending migrations。
-- `migrator.rollback()`：回滚最近一批 migrations。
-- `validateMigrations(options)`：校验 migration 文件格式和名称一致性。
-
-Migration 可以使用 `{ directory, packageName? }` 加载单个来源，也可以使用 `sources: [{ packageName, directory }]` 加载多个 package。所有 migration 的 `name` 必须全局唯一，执行顺序按 `name` 排序。
-
-Migration context 顶层只暴露 `builder`、`query` 和 `connection`。不在顶层公开 `schema`；底层 adapter client 兜底通过 `connection.client()`。
-
-详见 [Migration](../migration/overview.md) 和 [Migration 维护清单](../migration/maintenance.md)。
-
-## Seed
-
-Seed 入口：
-
-- `defineSeed(definition)`：定义一次性安装数据初始化。
-- `createSeeder(options)`：创建 seed runner。
-- `seeder.run()`：执行 pending seeds。
-- `loadSeeds(options)`：加载并校验 seed sources。
-- `validateSeeds(options)`：只校验 seed 文件。
-
-Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, directory }]`。所有 seed 的 `name` 全局唯一并决定执行顺序。Seed context 只暴露 `query` 和 `connection`。
-
-详见 [Seed](../seed/overview.md) 和 [Seed 维护清单](../seed/maintenance.md)。
+文档：[DatabaseConnection](../database/database-connection.md)、[事务](../database/transactions.md)。
 
 ## Builder
 
-- `createCollection(name, input, options?)`
-- `alterCollection(name, input, options?)`
-- `dropCollection(name, options?)`
-- `renameCollection(oldName, newName, options?)`
-- `createViewCollection(name, input, options?)`
-- `replaceViewCollection(name, input, options?)`
-- `createMaterializedViewCollection(name, input, options?)`
-- `refreshMaterializedViewCollection(name, options?)`
-- `addField(collection, field, options?)`
-- `alterField(collection, field, changes, options?)`
-- `dropField(collection, field, options?)`
-- `addIndex(collection, index, options?)`
-- `dropIndex(collection, index, options?)`
-- `addConstraint(collection, constraint, options?)`
-- `dropConstraint(collection, constraint, options?)`
-- `updateCollectionMetadata(collection, patch, options?)`
-- `updateFieldMetadata(collection, field, patch, options?)`
-- `apply(operations, options?)`
+- Collection：`createCollection()`、`createCollections()`、`hasCollection()`、`alterCollection()`、`dropCollection()`、`renameCollection()`
+- View：`createViewCollection()`、`replaceViewCollection()`、`createMaterializedViewCollection()`、`refreshMaterializedViewCollection()`
+- Field：`addField()`、`alterField()`、`dropField()`
+- Index：`addIndex()`、`dropIndex()`
+- Constraint：`addConstraint()`、`dropConstraint()`
+- Plan：`apply()`
 
-## Metadata
+文档：[Builder 总览](../builder/overview.md)、[`CollectionOperation`](./collection-operation.md)、[`BuilderExecOptions`](./builder-options.md)、[`BuilderResult`](./builder-result.md)。
 
-- `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
-- `CollectionMetadataStore`：元数据存储接口。
+## Query
 
-## Adapter
+- 入口：`selectFrom()`、`insertInto()`、`updateTable()`、`deleteFrom()`
+- 执行：`execute()`、`executeTakeFirst()`、`executeTakeFirstOrThrow()`
+- 便捷结果：`value()`、`pluck()`、`exists()`
+- 编译和不可变清理：`compile()`、`clearSelect()`、`clearWhere()`、`clearJoins()`、`clearGroupBy()`、`clearHaving()`、`clearOrderBy()`、`clearLimit()`、`clearOffset()`（按 Query 类型提供）
 
-- `SchemaAdapter`：schema operation 执行接口。
-- `NoopSchemaAdapter`：测试和 dry-run 友好的空实现。
-- `KnexSchemaAdapter`：基于 Knex 的 schema adapter。
+文档：[QueryAdapter 总览](../query/overview.md)、[Query API Reference](./query-api.md)。
 
-## Reference
+## Collections
 
-- [DatabaseConfig](./database-config.md)
-- [Query API](./query-api.md)
-- [Migration](../migration/overview.md)
-- [Migration 维护清单](../migration/maintenance.md)
-- [Seed](../seed/overview.md)
-- [Seed 维护清单](../seed/maintenance.md)
-- [Repository 概览（规划中）](../repository/overview.md)
-- [Repository Select AST（规划中）](../repository/select-ast.md)
-- [Repository Filter Builder（规划中）](../repository/filter-builder.md)
-- [Repository Filter AST（规划中）](../repository/filter-ast.md)
-- [Repository Sort AST（规划中）](../repository/sort-ast.md)
-- [CollectionDefinition](./collection-definition.md)
-- [FieldDefinition](./field-definition.md)
-- [CollectionOperation](./collection-operation.md)
-- [BuilderExecOptions](./builder-options.md)
-- [BuilderResult](./builder-result.md)
-- [术语表](./glossary.md)
+- `connection.collections.get(name)`
+- `getPhysical(name)`
+- `getResolution(name)`
+- `list(options?)`
+- `scan(options?)`
+- `invalidate(name?)`
+- `refresh(name)`
+- `validateRelations(name?)`
 
-## Development
+文档：[`connection.collections`](../collections/overview.md)。
 
-- [源码与测试目录结构](../development/source-layout.md)
-- [Agent 开发指南](../development/agent-guide.md)
+## Schema Inspector
+
+- `listSchemas()`
+- `getPhysicalCollection(identifier)`
+- `listPhysicalCollections(options?)`
+- `scanPhysicalCollections(options?)`
+
+文档：[`connection.schemaInspector`](../schema-inspector/overview.md)。
+
+## Migration
+
+- `defineMigration(definition)`：定义 Migration 文件。
+- `database.createMigrator(options)`：创建绑定当前 Manager 的 runner。
+- `createMigrator({ database, ...options })`：底层工厂。
+- `latest()` / `upTo(name)` / `rollback()`：执行和回滚。
+- `loadMigrations(options)` / `validateMigrations(options)`：加载或只校验 sources。
+
+文档：[Migration 概览](../migration/overview.md)、[`defineMigration()`](../migration/define-migration.md)、[`db.createMigrator()`](../migration/create-migrator.md)、[Migration 测试](../migration/testing.md)。
+
+## Seed
+
+- `defineSeed(definition)`：定义 Seed 文件。
+- `database.createSeeder(options)`：创建绑定当前 Manager 的 runner。
+- `createSeeder({ database, ...options })`：底层工厂。
+- `run()`：执行 pending Seeds。
+- `loadSeeds(options)` / `validateSeeds(options)`：加载或只校验 sources。
+
+文档：[Seed 概览](../seed/overview.md)、[`defineSeed()`](../seed/define-seed.md)、[`db.createSeeder()`](../seed/create-seeder.md)。
+
+## Collection Metadata
+
+### 定义与校验
+
+- `defineCollectionMetadata(document)`
+- `validateCollectionMetadataDocument(input)`
+- `CollectionMetadataValidationError`
+
+### Store
+
+- `CollectionMetadataStore`
+- `DatabaseCollectionMetadataStore`
+- `ModuleCollectionMetadataStore`
+- `InMemoryCollectionMetadataStore`
+- `TransactionCollectionMetadataStore`
+- `CollectionMetadataConflictError`
+
+### Service
+
+- `connection.collectionMetadata`
+- `CollectionMetadataService`
+- `CollectionMetadataPatchError`
+
+文档：[Collection Metadata 概览](../collection-metadata/overview.md)、[Metadata Store](../collection-metadata/metadata-store.md)、[Metadata Service](../collection-metadata/collection-metadata-service.md)、[Metadata Document](./collection-metadata-document.md)。
+
+### 专用迁移工具
+
+- `extractLegacyCollectionMetadata(input, options?)`
+
+该函数只用于显式转换旧完整 Collection 定义，不是普通业务 API，也不是运行时 fallback。详见[旧 Collection 定义转换](./legacy-collection-metadata-extraction.md)。
+
+## Schema Adapter
+
+- `SchemaAdapter`
+- `NoopSchemaAdapter`
+- `KnexSchemaAdapter`
+
+Schema Adapter 是 Builder 和数据库实现之间的低层边界。业务 Schema 变更优先使用 Builder，不直接调用 Adapter。
+
+## 当前不可调用
+
+Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 当前是设计规划，不属于公开运行时 API。相关页面只用于未来设计讨论，不应复制到当前业务代码。
+
+## Agent 入口
+
+- [任务路由](../agent/task-router.md)
+- [实现护栏](../agent/guardrails.md)
+- [验证指南](../agent/verification.md)

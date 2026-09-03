@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionBuilder } from '../../../src/index.js';
+import { RecordingSchemaAdapter } from './helpers.js';
 
 describe('CollectionBuilder view collections', () => {
   it('creates view collections from structured query DSL', async () => {
@@ -8,10 +9,9 @@ describe('CollectionBuilder view collections', () => {
     const result = await builder.createViewCollection(
       'usersView',
       (view) => {
-        view.tableName('users_view');
         view.title('Adult users');
         view.description('Users older than 18.');
-        view.string('firstName', { columnName: 'first_name' });
+        view.string('firstName');
         view.as((query) =>
           query.from('users').select('firstName').where('age', '>', 18),
         );
@@ -24,8 +24,6 @@ describe('CollectionBuilder view collections', () => {
       name: 'usersView',
       definition: {
         kind: 'view',
-        writable: false,
-        tableName: 'users_view',
         title: 'Adult users',
         description: 'Users older than 18.',
       },
@@ -54,8 +52,7 @@ describe('CollectionBuilder view collections', () => {
     const result = await builder.replaceViewCollection(
       'usersView',
       (view) => {
-        view.tableName('users_view');
-        view.string('firstName', { columnName: 'first_name' });
+        view.string('firstName');
         view.asRaw('select first_name from users where age > ?', [18]);
       },
       { dryRun: true },
@@ -65,7 +62,6 @@ describe('CollectionBuilder view collections', () => {
       type: 'replaceViewCollection',
       definition: {
         kind: 'view',
-        writable: false,
         view: {
           asRaw: {
             sql: 'select first_name from users where age > ?',
@@ -92,8 +88,7 @@ describe('CollectionBuilder view collections', () => {
     const createResult = await builder.createMaterializedViewCollection(
       'usersSnapshot',
       (view) => {
-        view.tableName('users_snapshot');
-        view.string('firstName', { columnName: 'first_name' });
+        view.string('firstName');
         view.as((query) =>
           query.from('users').select('firstName').where('age', '>', 18),
         );
@@ -107,7 +102,6 @@ describe('CollectionBuilder view collections', () => {
       type: 'createMaterializedViewCollection',
       definition: {
         kind: 'materializedView',
-        writable: false,
         view: {
           refresh: {
             strategy: 'manual',
@@ -151,4 +145,42 @@ describe('CollectionBuilder view collections', () => {
       },
     ]);
   });
+
+  it.each([
+    {
+      kind: 'view',
+      create: (builder: CollectionBuilder) =>
+        builder.createViewCollection('usersView', (view) => {
+          view.string('firstName');
+          view.as((query) => query.from('users').select('firstName'));
+        }),
+    },
+    {
+      kind: 'materializedView',
+      create: (builder: CollectionBuilder) =>
+        builder.createMaterializedViewCollection('usersView', (view) => {
+          view.string('firstName');
+          view.as((query) => query.from('users').select('firstName'));
+        }),
+    },
+  ])(
+    'rejects renaming $kind collections before DDL',
+    async ({ kind, create }) => {
+      const schemaAdapter = new RecordingSchemaAdapter();
+      const builder = new CollectionBuilder({ schemaAdapter });
+      await create(builder);
+      schemaAdapter.executed = [];
+
+      await expect(
+        builder.renameCollection('usersView', 'activeUsers'),
+      ).rejects.toMatchObject({
+        name: 'CollectionRenameUnsupportedKindError',
+        code: 'COLLECTION_RENAME_UNSUPPORTED_KIND',
+        from: 'usersView',
+        to: 'activeUsers',
+        kind,
+      });
+      expect(schemaAdapter.executed).toEqual([]);
+    },
+  );
 });

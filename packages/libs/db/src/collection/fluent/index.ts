@@ -30,15 +30,6 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     constraints: [],
   };
 
-  tableName(name: string): this {
-    this.definition.tableName = name;
-    return this;
-  }
-
-  mapToTable(name: string): this {
-    return this.tableName(name);
-  }
-
   naming(options: NamingOptions): this {
     this.definition.naming = { ...(this.definition.naming ?? {}), ...options };
     return this;
@@ -459,15 +450,6 @@ export class FluentFieldDefinitionBuilder implements FieldDefinitionBuilder {
     return this;
   }
 
-  columnName(name: string): this {
-    this.definition.columnName = name;
-    return this;
-  }
-
-  mapToColumn(name: string): this {
-    return this.columnName(name);
-  }
-
   title(title: string): this {
     this.definition.title = title;
     return this;
@@ -524,18 +506,6 @@ export class FluentRelationFieldBuilder
   ) {
     super(collection, definition);
     this.definition = definition;
-  }
-
-  override columnName(): never {
-    throw new Error(
-      'Relation fields do not support columnName(). Define a local foreign key field and reference it with foreignKey().',
-    );
-  }
-
-  override mapToColumn(): never {
-    throw new Error(
-      'Relation fields do not support mapToColumn(). Define a local foreign key field and reference it with foreignKey().',
-    );
   }
 
   override references(): never {

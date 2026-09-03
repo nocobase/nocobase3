@@ -146,20 +146,66 @@ jobs:
           PACK_DIR: ${{ runner.temp }}/nocobase-pack-check
         run: pnpm pack:check
 
+  db-integration:
+    name: DB integration (${{ matrix.database }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        database:
+          - postgres
+          - mysql
+          - oracle
+          - mssql
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared development config
+        run: pnpm dev-config:build
+
+      - name: Start ${{ matrix.database }}
+        run: pnpm --filter @nocobase/db test:db:up:${{ matrix.database }}
+
+      - name: Test ${{ matrix.database }}
+        run: pnpm --filter @nocobase/db test:integration:${{ matrix.database }}
+
+      - name: Stop test databases
+        if: ${{ always() }}
+        run: pnpm --filter @nocobase/db test:db:down
+
   quality:
     name: quality
     if: ${{ always() }}
     needs:
       - changed-files
       - validation
+      - db-integration
     runs-on: ubuntu-latest
     steps:
       - name: Verify parallel jobs
         env:
           CHANGED_FILES_RESULT: ${{ needs.changed-files.result }}
           VALIDATION_RESULT: ${{ needs.validation.result }}
+          DB_INTEGRATION_RESULT: ${{ needs['db-integration'].result }}
         run: |
-          if [[ "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" ]]; then
+          if [[ "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" || "$DB_INTEGRATION_RESULT" != "success" ]]; then
             echo "One or more quality jobs failed or were cancelled."
             exit 1
           fi

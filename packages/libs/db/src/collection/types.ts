@@ -25,7 +25,7 @@ export type FieldType =
 
 export type Deferrable = boolean | 'immediate' | 'deferred';
 export type ReferentialAction =
-  'cascade' | 'restrict' | 'set null' | 'no action';
+  'cascade' | 'restrict' | 'set null' | 'set default' | 'no action';
 export type FilterExpression = Record<string, unknown>;
 export type DialectOptions = Record<string, unknown>;
 export type RelationType = 'belongsTo' | 'hasOne' | 'hasMany' | 'belongsToMany';
@@ -56,14 +56,11 @@ export interface FieldBase {
   precision?: number;
   scale?: number;
   unsigned?: boolean;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
   db?: DbOptions;
 }
 
 export interface FieldDefinition extends FieldBase {
   type: FieldType;
-  columnName?: string;
   target?: never;
   sourceKey?: never;
   targetKey?: never;
@@ -78,7 +75,6 @@ export interface FieldDefinition extends FieldBase {
 
 export type RelationFieldDefinition = FieldBase & {
   type: RelationType;
-  columnName?: never;
   target: string;
   sourceKey?: string;
   targetKey?: string;
@@ -171,11 +167,9 @@ export interface ViewOptions {
 export interface CollectionDefinition {
   kind?: CollectionKind;
   name?: string;
-  tableName?: string;
   naming?: NamingOptions;
   title?: string;
   description?: string;
-  writable?: boolean;
   db?: DbOptions;
   fields?: AnyFieldDefinition[];
   constraints?: ConstraintDefinition[];
@@ -195,21 +189,13 @@ export interface CollectionAlterDefinition {
   dropConstraints?: string[];
 }
 
-export interface FieldMetadataPatch {
-  title?: string;
-  description?: string;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
-}
-
-export interface CollectionMetadataPatch {
-  title?: string;
-  description?: string;
-  fields?: Record<string, FieldMetadataPatch>;
-}
-
 export type CollectionDefinitionInput =
   CollectionDefinition | ((collection: CollectionDefinitionBuilder) => void);
+
+export interface CollectionCreateInput {
+  readonly name: string;
+  readonly definition: CollectionDefinitionInput;
+}
 
 export type CollectionAlterInput =
   CollectionAlterDefinition | ((collection: CollectionAlterBuilder) => void);
@@ -240,10 +226,6 @@ export interface BuilderExecOptions {
    * Use DatabaseManager.transaction() or DatabaseConnection.transaction() today.
    */
   transaction?: boolean;
-}
-
-export interface MetadataUpdateOptions {
-  strict?: boolean;
 }
 
 export interface RefreshMaterializedViewOptions extends BuilderExecOptions {
@@ -299,8 +281,6 @@ export type CollectionOperation =
       type: 'renameCollection';
       from: string;
       to: string;
-      renameTable?: boolean;
-      renameTableTo?: string;
     }
   | {
       type: 'createViewCollection';
@@ -337,18 +317,7 @@ export type CollectionOperation =
       collection: string;
       constraint: ConstraintDefinition;
     }
-  | { type: 'dropConstraint'; collection: string; constraint: string }
-  | {
-      type: 'updateCollectionMetadata';
-      collection: string;
-      patch: CollectionMetadataPatch;
-    }
-  | {
-      type: 'updateFieldMetadata';
-      collection: string;
-      field: string;
-      patch: FieldMetadataPatch;
-    };
+  | { type: 'dropConstraint'; collection: string; constraint: string };
 
 export type SchemaOperation =
   | { type: 'createTable'; table: TableSchemaDefinition; ifNotExists?: boolean }
@@ -437,8 +406,6 @@ export type PhysicalConstraintDefinition =
   | CheckConstraintDefinition;
 
 export interface CollectionDefinitionBuilder {
-  tableName(name: string): this;
-  mapToTable(name: string): this;
   naming(options: NamingOptions): this;
   dbSchema(schema: string): this;
   title(title: string): this;
@@ -562,8 +529,6 @@ export interface FieldDefinitionBuilder {
   defaultTo(value: unknown): this;
   unique(options?: Omit<UniqueConstraintDefinition, 'type' | 'fields'>): this;
   index(options?: Omit<IndexDefinition, 'fields'>): this;
-  columnName(name: string): this;
-  mapToColumn(name: string): this;
   title(title: string): this;
   description(description: string): this;
   dbComment(comment: string): this;

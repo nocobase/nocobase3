@@ -1,0 +1,33 @@
+import type { NamingOptions, RelationType } from '../collection/types.js';
+
+export interface CollectionMetadataDocument {
+  version: 1;
+  name: string;
+  naming?: NamingOptions;
+  title?: string;
+  description?: string;
+  fields?: Record<string, FieldMetadata>;
+  relations?: Record<string, RelationMetadata>;
+}
+
+export interface FieldMetadata {
+  title?: string;
+  description?: string;
+}
+
+export interface RelationMetadata {
+  type: RelationType;
+  target: string;
+  sourceKey?: string;
+  targetKey?: string;
+  foreignKey?: string;
+  otherKey?: string;
+  through?: string;
+  title?: string;
+  description?: string;
+}
+
+export interface StoredCollectionMetadata {
+  document: CollectionMetadataDocument;
+  revision: string | number;
+}

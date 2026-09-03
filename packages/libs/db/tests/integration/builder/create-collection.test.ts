@@ -7,6 +7,24 @@ import {
 } from '../helpers.js';
 
 describeIntegrationDatabases('collection creation', (context) => {
+  it('checks collection existence by logical name', async () => {
+    await expect(context.builder.hasCollection('customers')).resolves.toBe(
+      false,
+    );
+
+    await context.builder.createCollection('customers', (collection) => {
+      collection.increments('id');
+    });
+
+    await expect(context.builder.hasCollection('customers')).resolves.toBe(
+      true,
+    );
+    await context.builder.dropCollection('customers');
+    await expect(context.builder.hasCollection('customers')).resolves.toBe(
+      false,
+    );
+  });
+
   it('creates related collections with indexes and foreign keys', async () => {
     await context.builder.createCollection('customers', {
       fields: [
@@ -83,21 +101,21 @@ describeIntegrationDatabases('collection creation', (context) => {
     ]);
   });
 
-  it('creates scalar fields with defaults, native types, and database column names', async () => {
-    const auditLogsTable = context.identifier('audit_logs');
+  it('creates scalar fields with defaults, native types, and deterministic database column names', async () => {
+    const auditLogsTable = context.table('auditLogs');
 
     await context.builder.createCollection('auditLogs', (collection) => {
-      collection.tableName(auditLogsTable);
       collection.increments('id');
-      collection
-        .string('eventName', { columnName: 'event_name', length: 128 })
-        .notNull();
+      collection.string('eventName', { length: 128 }).notNull();
       collection.boolean('enabled').defaultTo(true);
       collection.json('payload');
-      collection.native('ipAddress', 'text', {
-        columnName: 'ip_address',
-        title: 'IP address',
-      });
+      collection.native(
+        'ipAddress',
+        context.spec.dialect === 'oracle' ? 'clob' : 'text',
+        {
+          title: 'IP address',
+        },
+      );
     });
 
     expect(await context.db.schema.hasTable(auditLogsTable)).toBe(true);
@@ -126,7 +144,7 @@ describeIntegrationDatabases('collection creation', (context) => {
 
     expect(
       await getColumnType(context, auditLogsTable, 'ip_address'),
-    ).toContain('text');
+    ).toContain(context.spec.dialect === 'oracle' ? 'clob' : 'text');
   });
 
   it('skips duplicate create and missing drop when idempotent options are enabled', async () => {

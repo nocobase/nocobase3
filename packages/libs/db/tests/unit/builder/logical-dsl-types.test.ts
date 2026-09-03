@@ -12,7 +12,6 @@ const collectionDefinition: CollectionDefinition = {
     {
       name: 'companyId',
       type: 'integer',
-      columnName: 'company_id',
     },
   ],
   constraints: [
@@ -57,12 +56,6 @@ function assertFieldReferenceTypes(field: FieldDefinitionBuilder): void {
 function assertRelationBuilderTypes(relation: RelationFieldBuilder): void {
   relation.foreignKey('companyId');
 
-  // @ts-expect-error Relation fields do not support physical columnName configuration.
-  relation.columnName('company_id');
-
-  // @ts-expect-error Relation fields do not support field-level physical column mapping.
-  relation.mapToColumn('company_id');
-
   // @ts-expect-error Relation fields do not support scalar field references.
   relation.references({ collection: 'companies', field: 'id' });
 }
@@ -74,15 +67,6 @@ const relationFieldDefinition: RelationFieldDefinition = {
   type: 'belongsTo',
   target: 'companies',
   foreignKey: 'companyId',
-};
-
-const _invalidRelationFieldDefinition: RelationFieldDefinition = {
-  name: 'company',
-  type: 'belongsTo',
-  target: 'companies',
-  foreignKey: 'companyId',
-  // @ts-expect-error Relation field configuration uses logical names and cannot carry columnName.
-  columnName: 'company_id',
 };
 
 const _invalidForeignKeyConstraint: ForeignKeyConstraintDefinition = {
@@ -99,7 +83,6 @@ describe('CollectionBuilder logical DSL types', () => {
   it('keeps type-only logical name assertions out of runtime behavior', () => {
     expect(_validDefinitions).toHaveLength(2);
     expect(relationFieldDefinition.target).toBe('companies');
-    expect(_invalidRelationFieldDefinition.target).toBe('companies');
     expect(_invalidForeignKeyConstraint.references.collection).toBe(
       'companies',
     );

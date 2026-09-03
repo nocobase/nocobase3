@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionBuilder } from '../../../src/index.js';
-import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
+import type { CollectionDefinitionInput } from '../../../src/index.js';
 
 describe('CollectionBuilder createCollection', () => {
+  it('tracks collection existence after executed operations', async () => {
+    const builder = new CollectionBuilder();
+    const definition: CollectionDefinitionInput = {
+      fields: [{ name: 'id', type: 'increments' }],
+    };
+
+    await expect(builder.hasCollection('orders')).resolves.toBe(false);
+
+    await builder.createCollection('previewOrders', definition, {
+      dryRun: true,
+    });
+    await expect(builder.hasCollection('previewOrders')).resolves.toBe(false);
+
+    await builder.createCollection('orders', definition);
+    await expect(builder.hasCollection('orders')).resolves.toBe(true);
+
+    await builder.dropCollection('orders');
+    await expect(builder.hasCollection('orders')).resolves.toBe(false);
+  });
+
   it('creates a collection from fluent input', async () => {
     const builder = new CollectionBuilder();
 
@@ -10,7 +30,7 @@ describe('CollectionBuilder createCollection', () => {
       'orders',
       (collection) => {
         collection.dbSchema('public');
-        collection.tableName('sales_orders');
+        collection.naming({ tablePrefix: 'sales_' });
         collection.title('Orders');
         collection.description('Customer purchase orders.');
         collection.bigInt('id').primary().autoIncrement();
@@ -29,7 +49,7 @@ describe('CollectionBuilder createCollection', () => {
         name: 'orders',
         definition: {
           db: { schema: 'public' },
-          tableName: 'sales_orders',
+          naming: { tablePrefix: 'sales_' },
           title: 'Orders',
           description: 'Customer purchase orders.',
           fields: [
@@ -82,9 +102,8 @@ describe('CollectionBuilder createCollection', () => {
     });
   });
 
-  it('creates a collection from object input and syncs metadata by default', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
-    const builder = new CollectionBuilder({ metadataStore });
+  it('creates a collection from object input', async () => {
+    const builder = new CollectionBuilder();
 
     const result = await builder.createCollection('orders', {
       title: 'Orders',
@@ -123,14 +142,6 @@ describe('CollectionBuilder createCollection', () => {
           },
         ],
       },
-    });
-    expect(await metadataStore.getCollection('orders')).toMatchObject({
-      name: 'orders',
-      title: 'Orders',
-      fields: [
-        { name: 'id', type: 'increments' },
-        { name: 'amount', title: 'Amount' },
-      ],
     });
   });
 

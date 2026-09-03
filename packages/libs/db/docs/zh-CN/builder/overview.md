@@ -1,6 +1,25 @@
-# Builder API 总览
+---
+title: Collection Builder API 总览
+description: 通过 db.builder() 或 connection.builder 使用逻辑名称管理 Collection Schema；业务演进应放入 Migration。
+---
 
-`CollectionBuilder` 是当前原型的核心。它负责把 Collection DSL 转换为数据库 schema operation，并通过 `SchemaAdapter` 应用到底层数据库。
+# Collection Builder API 总览
+
+`CollectionBuilder` 是当前公开的 Collection Schema 变更入口。它负责把 Collection DSL 转换为数据库 schema operation，并通过 `SchemaAdapter` 应用到底层数据库。
+
+## Agent 契约
+
+| 项目                | 内容                                   |
+| ------------------- | -------------------------------------- |
+| Manager 入口        | `db.builder(name?)`                    |
+| Connection 入口     | `connection.builder`（属性）           |
+| 名称语义            | Collection/Field 逻辑名称              |
+| Metadata-aware      | 是                                     |
+| 主要副作用          | DDL，并同步相应 Metadata               |
+| External Connection | 禁止真实 DDL                           |
+| 业务 Schema 落点    | `defineMigration()` 的 `up()`/`down()` |
+
+直接调用 `db.builder()` 适合工具、测试和运行期明确授权的 Schema 管理流程。持久化业务 Schema 变更默认写成 Migration。
 
 ## API 分组
 
@@ -33,11 +52,6 @@
 - `addConstraint`
 - `dropConstraint`
 
-元信息：
-
-- `updateCollectionMetadata`
-- `updateFieldMetadata`
-
 执行计划：
 
 - `apply`
@@ -46,7 +60,7 @@
 
 - [命名映射](./naming.md)
 - [方言能力与降级](./dialect-capabilities.md)
-- [metadata-only API](./metadata-only.md)
+- [Collection Metadata Service](../collection-metadata/collection-metadata-service.md)
 
 ## 三种写法
 
@@ -102,7 +116,7 @@ await builder.apply([
 
 - 只允许白名单 operation。
 - destructive 操作必须先 dry-run。
-- metadata-only 操作和 schema 操作分开提交。
+- Metadata Service 更新和 Schema 操作分开提交。
 - 每次执行前输出 `operations`、`schemaOperations`、`warnings`、`impact`。
 - 出现 `severity: 'unsafe'` 的 warning 时，应要求用户确认或改用 `strict: true` 阻止执行。
 - 目标数据库不明确时，不生成 `native`、`asRaw`、物化视图或方言敏感约束。

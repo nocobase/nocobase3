@@ -1,3 +1,8 @@
+---
+title: 批量应用 CollectionOperation
+description: 使用 builder.apply 执行结构化 CollectionOperation，进行批量变更、dry-run、SQL 预览和影响审计。
+---
+
 # apply 和 CollectionOperation
 
 `builder.apply()` 接收 `CollectionOperation[]`，它是 Collection Builder 的执行计划层。
@@ -52,7 +57,7 @@ console.log(result.impact);
   type: ('dropCollection', collection);
 }
 {
-  type: ('renameCollection', from, to, renameTable, renameTableTo);
+  type: ('renameCollection', from, to);
 }
 {
   type: ('createViewCollection', name, definition);
@@ -87,12 +92,6 @@ console.log(result.impact);
 {
   type: ('dropConstraint', collection, constraint);
 }
-{
-  type: ('updateCollectionMetadata', collection, patch);
-}
-{
-  type: ('updateFieldMetadata', collection, field, patch);
-}
 ```
 
 ## destructive 操作
@@ -114,5 +113,5 @@ console.log(result.impact);
 - Agent 输出执行计划、diff 结果或批量 apply payload 时，优先输出 `CollectionOperation[]`。
 - destructive 操作必须先 dry-run。
 - file sync 场景应先生成 snapshot + diff，再转换成 operation，再调用 `apply()`。
-- `updateCollectionMetadata` 和 `updateFieldMetadata` 不应生成 schema operation。
-- `renameCollection` 默认是逻辑改名；只有 `renameTable: true` 或 `renameTableTo` 才会重命名物理表。
+- 纯 Metadata 更新不属于 `CollectionOperation`，使用 `connection.collectionMetadata`。
+- `renameCollection` 当前只支持 Table Collection，并总是同步重命名物理表和 Metadata；View、Materialized View 或存在无法原子更新的依赖时会在 DDL 前拒绝。

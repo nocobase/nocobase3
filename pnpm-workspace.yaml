@@ -57,6 +57,8 @@ catalog:
   jsdom: ^30.0.1
   keyv: ^5.6.0
   knex: ^3.1.0
+  oracledb: ^6.10.0
+  tedious: ^20.0.0
   lint-staged: ^17.3.0
   postcss: ^8.5.3
   prettier: ^3.9.6
@@ -83,6 +85,7 @@ catalog:
 # donation notice. A package left out entirely stops the install with ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
   better-sqlite3: true
+  oracledb: true
   esbuild: true
   tesseract.js: false
 

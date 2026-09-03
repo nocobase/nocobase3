@@ -29,16 +29,15 @@ describeIntegrationDatabases('seed runner', (context) => {
     await writeEventSeed(
       firstDirectory,
       '202608210002_alpha_defaults',
-      dataTableName,
+      'seedEvents',
     );
     await writeEventSeed(
       secondDirectory,
       '202608210001_beta_defaults',
-      dataTableName,
+      'seedEvents',
     );
 
-    const seeder = createSeeder({
-      database: context.database,
+    const seeder = context.database.createSeeder({
       connection: context.spec.name,
       sources: [
         { packageName: '@nocobase/plugin-alpha', directory: firstDirectory },
@@ -99,9 +98,9 @@ describeIntegrationDatabases('seed runner', (context) => {
       export default defineSeed({
         name: '202608210001_retry_defaults',
         async run({ query }) {
-          await query.insertInto('${dataTableName}').values({ status: 'created' }).execute();
+          await query.insertInto('retrySeedRows').values({ status: 'created' }).execute();
           const control = await query
-            .selectFrom('${controlTableName}')
+            .selectFrom('retrySeedControl')
             .select('allow_run')
             .executeTakeFirstOrThrow();
           if (!control.allow_run) {
@@ -185,7 +184,7 @@ describeIntegrationDatabases('seed runner', (context) => {
         name: '202608210001_non_transactional_seed',
         transaction: false,
         async run({ query }) {
-          await query.insertInto('${dataTableName}').values({ status: 'created' }).execute();
+          await query.insertInto('nonTransactionalSeedRows').values({ status: 'created' }).execute();
         },
       });
     `,

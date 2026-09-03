@@ -1,0 +1,9 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/node-tooling.json",
+  "compilerOptions": {
+    "paths": {
+      "@nocobase/db": ["../src/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}

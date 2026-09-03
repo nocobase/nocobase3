@@ -15,7 +15,7 @@ export interface ConnectionAdapterContext<
 > {
   name: string;
   config: TConfig;
-  metadataStore: CollectionMetadataStore;
+  metadataStore?: CollectionMetadataStore;
 }
 
 export interface ConnectionFactory {

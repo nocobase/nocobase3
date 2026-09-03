@@ -1,3 +1,4 @@
+import { assertManagedSchema } from '../database/schema-management.js';
 import { createMigrationContext } from './context.js';
 import {
   DEFAULT_MIGRATION_TABLE,
@@ -19,6 +20,7 @@ import type {
 
 export interface Migrator {
   latest(): Promise<MigrationRunResult>;
+  upTo(name: string): Promise<MigrationRunResult>;
   rollback(): Promise<MigrationRollbackResult>;
 }
 
@@ -30,13 +32,34 @@ class DefaultMigrator implements Migrator {
   constructor(private readonly options: CreateMigratorOptions) {}
 
   async latest(): Promise<MigrationRunResult> {
+    return this.runPendingMigrations();
+  }
+
+  async upTo(name: string): Promise<MigrationRunResult> {
+    if (typeof name !== 'string' || name.trim() === '') {
+      throw new Error('Migration target name must be a non-empty string.');
+    }
+    return this.runPendingMigrations(name);
+  }
+
+  private async runPendingMigrations(
+    targetName?: string,
+  ): Promise<MigrationRunResult> {
     const connection = this.options.database.connection(
       this.options.connection,
     );
+    assertManagedSchema(
+      {
+        connectionName: connection.name,
+        mode: connection.schemaManagement,
+      },
+      targetName === undefined ? 'migration.latest' : 'migration.upTo',
+    );
     const migrations = await loadMigrations(this.options);
+    const selectedMigrations = selectMigrations(migrations, targetName);
     const migrationConnection = createMigrationContext(connection).connection;
 
-    return withMigrationLock(
+    const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
@@ -58,10 +81,10 @@ class DefaultMigrator implements Migrator {
         );
 
         const appliedNames = new Set(history.map((record) => record.name));
-        const pending = migrations.filter(
+        const pending = selectedMigrations.filter(
           (migration) => !appliedNames.has(migration.name),
         );
-        const skipped = migrations
+        const skipped = selectedMigrations
           .filter((migration) => appliedNames.has(migration.name))
           .map((migration) => migration.name);
         const batch =
@@ -76,16 +99,25 @@ class DefaultMigrator implements Migrator {
         return { batch, executed, skipped };
       },
     );
+    if (result.executed.length > 0) connection.collections.invalidate();
+    return result;
   }
 
   async rollback(): Promise<MigrationRollbackResult> {
     const connection = this.options.database.connection(
       this.options.connection,
     );
+    assertManagedSchema(
+      {
+        connectionName: connection.name,
+        mode: connection.schemaManagement,
+      },
+      'migration.rollback',
+    );
     const migrations = await loadMigrations(this.options);
     const migrationConnection = createMigrationContext(connection).connection;
 
-    return withMigrationLock(
+    const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
@@ -137,6 +169,8 @@ class DefaultMigrator implements Migrator {
         return { batch, rolledBack };
       },
     );
+    if (result.rolledBack.length > 0) connection.collections.invalidate();
+    return result;
   }
 
   private async runUpMigration(
@@ -199,6 +233,21 @@ class DefaultMigrator implements Migrator {
       });
     });
   }
+}
+
+function selectMigrations(
+  migrations: LoadedMigration[],
+  targetName?: string,
+): LoadedMigration[] {
+  if (targetName === undefined) return migrations;
+
+  const targetIndex = migrations.findIndex(
+    (migration) => migration.name === targetName,
+  );
+  if (targetIndex === -1) {
+    throw new Error(`Migration target "${targetName}" was not found.`);
+  }
+  return migrations.slice(0, targetIndex + 1);
 }
 
 function validateAppliedMigrationHistory(

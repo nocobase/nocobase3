@@ -1,6 +1,9 @@
 import type { CollectionBuilder } from '../collection/builder/index.js';
-import { InMemoryCollectionMetadataStore } from '../metadata/index.js';
+import { createMigrator, type Migrator } from '../migration/migrator.js';
+import type { DatabaseMigratorOptions } from '../migration/types.js';
 import type { QueryAdapter } from '../query/index.js';
+import { createSeeder, type Seeder } from '../seed/seeder.js';
+import type { DatabaseSeederOptions } from '../seed/types.js';
 import type { DatabaseConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
@@ -10,8 +13,10 @@ export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder(name?: string): CollectionBuilder;
-  /** Database-layer query builder. Does not read Collection metadata or columnName mappings. */
+  /** Database-layer query builder. Does not read Collection metadata or collection table prefixes. */
   query(name?: string): QueryAdapter;
+  createMigrator(options: DatabaseMigratorOptions): Migrator;
+  createSeeder(options: DatabaseSeederOptions): Seeder;
 
   connect(name?: string): Promise<DatabaseConnection>;
 
@@ -23,6 +28,17 @@ export interface DatabaseManager {
   disconnect(name?: string): Promise<void>;
   reconnect(name?: string): Promise<DatabaseConnection>;
   destroy(): Promise<void>;
+}
+
+export class CollectionMetadataStoreRequiredError extends Error {
+  readonly code = 'COLLECTION_METADATA_STORE_REQUIRED' as const;
+
+  constructor(readonly connection: string) {
+    super(
+      `External database connection "${connection}" requires an explicit Collection Metadata Store.`,
+    );
+    this.name = 'CollectionMetadataStoreRequiredError';
+  }
 }
 
 export function createDatabaseManager(config: DatabaseConfig): DatabaseManager {
@@ -55,13 +71,15 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error(`Database connection "${name}" is not configured.`);
     }
 
+    const metadataStore =
+      connectionConfig.metadataStore ?? this.config.metadataStore;
+    if (connectionConfig.schemaManagement === 'external' && !metadataStore) {
+      throw new CollectionMetadataStoreRequiredError(name);
+    }
     const connection = this.factory.create({
       name,
       config: connectionConfig,
-      metadataStore:
-        connectionConfig.metadataStore ??
-        this.config.metadataStore ??
-        new InMemoryCollectionMetadataStore(),
+      metadataStore,
     });
     this.connections.set(name, connection);
     return connection;
@@ -73,6 +91,14 @@ export class DefaultDatabaseManager implements DatabaseManager {
 
   query(name?: string): QueryAdapter {
     return this.connection(name).query;
+  }
+
+  createMigrator(options: DatabaseMigratorOptions): Migrator {
+    return createMigrator({ ...options, database: this });
+  }
+
+  createSeeder(options: DatabaseSeederOptions): Seeder {
+    return createSeeder({ ...options, database: this });
   }
 
   async connect(name?: string): Promise<DatabaseConnection> {

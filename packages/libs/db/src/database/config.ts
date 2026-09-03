@@ -1,6 +1,5 @@
 import type { NamingOptions } from '../collection/types.js';
 import type { CollectionMetadataStore } from '../metadata/index.js';
-import type { NamingStrategy } from '../naming/index.js';
 import type { DatabaseCapabilities } from '../schema/index.js';
 
 export interface DatabaseConfig {
@@ -9,14 +8,17 @@ export interface DatabaseConfig {
   metadataStore?: CollectionMetadataStore;
 }
 
-export type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql';
+export type DatabaseDialect =
+  'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
+
+export type SchemaManagementMode = 'managed' | 'external';
 
 export interface BaseConnectionConfig {
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
-  managed?: boolean;
+  onCollectionMetadataInvalidationError?: (error: unknown) => void;
+  schemaManagement?: SchemaManagementMode;
   debug?: boolean;
   pool?: unknown;
   driverOptions?: Record<string, unknown>;
@@ -43,8 +45,34 @@ export type MysqlConnectionConfig = BaseConnectionConfig & {
   ssl?: boolean | Record<string, unknown>;
 } & MysqlConnectionTargetConfig;
 
+export type OracleConnectionConfig = BaseConnectionConfig & {
+  dialect: 'oracle';
+  driver?: 'oracledb';
+  serviceName: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+};
+
+export type MssqlConnectionConfig = BaseConnectionConfig & {
+  dialect: 'mssql';
+  driver?: 'tedious';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  encrypt?: boolean;
+  trustServerCertificate?: boolean;
+};
+
 export type ConnectionConfig =
-  SqliteConnectionConfig | PostgresConnectionConfig | MysqlConnectionConfig;
+  | SqliteConnectionConfig
+  | PostgresConnectionConfig
+  | MysqlConnectionConfig
+  | OracleConnectionConfig
+  | MssqlConnectionConfig;
 
 export type DatabaseDriver = NonNullable<ConnectionConfig['driver']>;
 

@@ -48,6 +48,8 @@ export interface CreateSeederOptions extends LoadSeedsOptions {
   readonly lockTableName?: string;
 }
 
+export type DatabaseSeederOptions = Omit<CreateSeederOptions, 'database'>;
+
 export interface SeedRunResult {
   readonly executed: string[];
   readonly skipped: string[];

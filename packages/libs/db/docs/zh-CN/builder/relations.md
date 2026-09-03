@@ -1,3 +1,8 @@
+---
+title: Builder 关系字段
+description: 定义 belongsTo、hasOne、hasMany 和 belongsToMany metadata，并区分关系说明、本地列、索引和外键约束。
+---
+
 # 关系字段
 
 Collection Builder 当前支持四种关系字段：
@@ -39,7 +44,7 @@ await builder.createCollection('orders', (collection) => {
 collection.belongsTo('createdBy', 'users');
 ```
 
-在 `underscored: true` 下会创建 `created_by_id`。
+固定命名规则会创建 `created_by_id`。
 
 如果写了：
 
@@ -47,23 +52,16 @@ collection.belongsTo('createdBy', 'users');
 collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 ```
 
-`foreignKey` 表示当前 Collection 里的逻辑字段名，不是物理列名。在 `underscored: true` 下，如果没有同名逻辑字段定义，会按命名策略推导成本地列 `created_by_id`。
+`foreignKey` 表示当前 Collection 里的逻辑字段名，不是物理列名。如果没有同名逻辑字段定义，会按固定规则推导成本地列 `created_by_id`。
 
-如果已有字段显式设置了物理列名：
+如果需要让关系复用已有的本地字段，应显式定义该逻辑字段，再用 `foreignKey()` 引用：
 
 ```ts
-collection.bigInt('createdById').columnName('creator_id');
+collection.bigInt('createdById');
 collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 ```
 
-最终关系会使用 `creator_id`，并且不会重复创建 `created_by_id`。
-
-关系字段本身不配置 `columnName`。如果需要指定物理外键列名，应显式定义本地外键字段，再用 `foreignKey()` 引用它：
-
-```ts
-collection.bigInt('createdById').columnName('creator_id');
-collection.belongsTo('createdBy', 'users').foreignKey('createdById');
-```
+最终关系使用 `created_by_id`，并且不会重复创建外键列。
 
 ## hasOne 和 hasMany
 
@@ -108,10 +106,10 @@ collection
 | `sourceKey`                                | source Collection 上的字段 `name`                         |
 | `targetKey`                                | target Collection 上的字段 `name`                         |
 
-物理表名和物理列名只通过 `tableName`、`columnName` 表达。即使数据库列叫 `creator_id`，关系里也应写逻辑字段名：
+关系参数始终写逻辑名。物理列由 Collection 的 effective naming 生成：
 
 ```ts
-collection.bigInt('createdById').columnName('creator_id');
+collection.bigInt('createdById');
 collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 ```
 
@@ -122,4 +120,4 @@ collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 - 不要期望 `belongsToMany` 自动创建中间表。
 - 需要跨 MySQL 时，整型外键和自增主键的 unsigned 属性要匹配。
 - 关系参数引用逻辑名，不要把 `foreignKey()`、`sourceKey()`、`targetKey()`、`otherKey()`、`through()` 当作物理名配置。
-- 关系字段不配置 `columnName()`；需要显式物理外键列名时，在本地外键字段上使用 `columnName()`。
+- 不要在关系字段或本地外键字段上配置 `columnName()`。

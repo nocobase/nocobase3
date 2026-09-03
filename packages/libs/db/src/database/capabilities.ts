@@ -44,5 +44,26 @@ export function resolveDatabaseCapabilities(
     });
   }
 
+  if (dialect === 'oracle') {
+    Object.assign(base, {
+      schemas: true,
+      materializedViews: true,
+      refreshMaterializedViews: true,
+      deferrableConstraints: true,
+      nativeTypes: true,
+      comments: true,
+    });
+  }
+
+  if (dialect === 'mssql') {
+    Object.assign(base, {
+      schemas: true,
+      replaceView: true,
+      partialIndexes: true,
+      nativeTypes: true,
+      comments: true,
+    });
+  }
+
   return { ...base, ...overrides };
 }

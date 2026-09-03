@@ -1,6 +1,11 @@
+---
+title: Builder 字段定义
+description: 使用 Object DSL 或 Fluent DSL 定义数据库字段、类型、默认值和物理列选项，并理解逻辑名到物理名的映射。
+---
+
 # 字段
 
-Field 是 Collection 的字段定义。字段既包含应用层信息，也可以包含数据库层映射信息。
+Field 是 Collection 的字段定义。字段同时包含应用层信息和数据库结构信息，但物理列名由逻辑字段名确定性生成。
 
 ## 常用字段类型
 
@@ -52,15 +57,14 @@ collection
 
 ```ts
 collection.string('eventName', {
-  columnName: 'event_name',
   length: 128,
 });
 ```
 
 - `eventName` 是应用层字段名。
-- `event_name` 是数据库物理列名。
+- `event_name` 是固定规则推导出的数据库物理列名。
 
-如果没有显式 `columnName`，字段会根据当前命名策略推导物理列名。详见 [命名映射](./naming.md)。
+Field 不支持 `columnName` 或字段级 naming。详见 [Builder 命名](./naming.md)。
 
 ## 自增字段
 
@@ -83,9 +87,7 @@ collection.increments('id');
 ## native type
 
 ```ts
-collection.native('ipAddress', 'inet', {
-  columnName: 'ip_address',
-});
+collection.native('ipAddress', 'inet');
 ```
 
 `native` 会直接使用底层数据库类型，属于方言敏感能力。跨数据库应用应谨慎使用。
@@ -112,6 +114,6 @@ collection.string('email').dbComment('User email address');
 
 - `title` 和 `description` 是应用层元信息。
 - `db.comment` 是数据库层 comment。
-- `columnName` 是物理列名覆盖，不要用它代替字段名。
-- `columnName` 按原样使用，不再参与 underscored 转换。
+- 物理列名由逻辑字段名和 Collection 的 `naming.underscored` 生成。
+- 不要生成 `columnName` 或字段级 naming。
 - MySQL 中引用 `increments` 主键的整型外键通常需要 `unsigned: true`。

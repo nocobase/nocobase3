@@ -322,13 +322,19 @@ describe('addDriverDependency', () => {
   it('rejects a driver it has no version range for', async () => {
     const directory = await createTemplate();
 
-    await expect(addDriverDependency(directory, 'oracledb')).rejects.toThrow(
+    await expect(addDriverDependency(directory, 'db2')).rejects.toThrow(
       /No version range/u,
     );
   });
 
   it('knows a range for every driver it can install', async () => {
-    for (const driver of ['better-sqlite3', 'pg', 'mysql2']) {
+    for (const driver of [
+      'better-sqlite3',
+      'pg',
+      'mysql2',
+      'oracledb',
+      'tedious',
+    ]) {
       expect(DRIVER_VERSIONS[driver]).toMatch(/^\^\d+\.\d+\.\d+$/u);
     }
   });

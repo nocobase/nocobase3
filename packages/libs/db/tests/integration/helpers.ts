@@ -12,7 +12,8 @@ import {
   truncateIdentifier,
 } from '../../src/index.js';
 
-export type IntegrationDialect = 'sqlite' | 'postgres' | 'mysql';
+export type IntegrationDialect =
+  'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
 
 export interface IntegrationDatabaseSpec {
   name: string;
@@ -25,6 +26,9 @@ export interface IntegrationDatabaseSpec {
   username?: string;
   password?: string;
   charset?: string;
+  serviceName?: string;
+  encrypt?: boolean;
+  trustServerCertificate?: boolean;
   pool?: unknown;
 }
 
@@ -55,7 +59,7 @@ export function describeIntegrationDatabases(
 export function useIntegrationDatabase(
   spec: IntegrationDatabaseSpec,
 ): IntegrationTestContext {
-  const naming = new DefaultNamingStrategy({ underscored: true });
+  const naming = new DefaultNamingStrategy();
   const context = {
     spec,
     table: (collection: string) => context.identifier(collection),
@@ -76,7 +80,6 @@ export function useIntegrationDatabase(
           ...createConnectionConfig(spec),
           pool: spec.pool,
           naming: {
-            underscored: true,
             tablePrefix: `${context.prefix}_`,
           },
         },
@@ -124,6 +127,20 @@ export async function listIndexes(
       );
       return rows.map((row) => ({ ...row, name: row.name ?? row.INDEX_NAME }));
     }
+    case 'oracle':
+      return rawRows(
+        await context.db.raw(
+          'select index_name as "name" from user_indexes where table_name = ?',
+          [tableName],
+        ),
+      );
+    case 'mssql':
+      return rawRows(
+        await context.db.raw(
+          `select i.name from sys.indexes i join sys.tables t on t.object_id = i.object_id where t.name = ? and i.name is not null`,
+          [tableName],
+        ),
+      );
     default:
       return assertNever(context.spec.dialect);
   }
@@ -182,6 +199,46 @@ export async function listForeignKeys(
         from: row.column_name ?? row.COLUMN_NAME,
         to: row.referenced_column ?? row.REFERENCED_COLUMN_NAME,
       }));
+    case 'oracle':
+      return rawRows(
+        await context.db.raw(
+          `
+          select
+            rc.table_name as "table",
+            cc.column_name as "from",
+            rcc.column_name as "to"
+          from user_constraints c
+          join user_cons_columns cc
+            on cc.constraint_name = c.constraint_name
+          join all_constraints rc
+            on rc.owner = c.r_owner
+            and rc.constraint_name = c.r_constraint_name
+          join all_cons_columns rcc
+            on rcc.owner = rc.owner
+            and rcc.constraint_name = rc.constraint_name
+            and rcc.position = cc.position
+          where c.constraint_type = 'R'
+            and c.table_name = ?
+        `,
+          [tableName],
+        ),
+      );
+    case 'mssql':
+      return rawRows(
+        await context.db.raw(
+          `
+            select rt.name as [table], pc.name as [from], rc.name as [to]
+            from sys.foreign_keys fk
+            join sys.foreign_key_columns fkc on fkc.constraint_object_id = fk.object_id
+            join sys.tables pt on pt.object_id = fkc.parent_object_id
+            join sys.columns pc on pc.object_id = fkc.parent_object_id and pc.column_id = fkc.parent_column_id
+            join sys.tables rt on rt.object_id = fkc.referenced_object_id
+            join sys.columns rc on rc.object_id = fkc.referenced_object_id and rc.column_id = fkc.referenced_column_id
+            where pt.name = ?
+          `,
+          [tableName],
+        ),
+      );
     default:
       return assertNever(context.spec.dialect);
   }
@@ -224,6 +281,24 @@ export async function listColumns(
         name: row.name ?? row.COLUMN_NAME,
         type: row.type ?? row.DATA_TYPE,
       }));
+    case 'oracle':
+      return rawRows(
+        await context.db.raw(
+          `
+          select column_name as "name", data_type as "type"
+          from user_tab_columns
+          where table_name = ?
+        `,
+          [tableName],
+        ),
+      );
+    case 'mssql':
+      return rawRows(
+        await context.db.raw(
+          `select c.name, t.name as type from sys.columns c join sys.types t on t.user_type_id = c.user_type_id join sys.tables tb on tb.object_id = c.object_id where tb.name = ?`,
+          [tableName],
+        ),
+      );
     default:
       return assertNever(context.spec.dialect);
   }
@@ -248,7 +323,9 @@ export async function getColumnType(
 export async function expectForeignKeyViolation(
   action: Promise<unknown>,
 ): Promise<void> {
-  await expect(action).rejects.toThrow(/foreign key/i);
+  await expect(action).rejects.toThrow(
+    /foreign key|integrity constraint|ORA-02291/i,
+  );
 }
 
 export async function expectUniqueViolation(
@@ -264,7 +341,7 @@ function getIntegrationDatabaseSpecs(): IntegrationDatabaseSpec[] {
       'sqlite',
   );
   const connectionNames = requested.includes('all')
-    ? ['sqlite', 'postgres', 'mysql']
+    ? ['sqlite', 'postgres', 'mysql', 'oracle', 'mssql']
     : requested;
   return connectionNames.map(createIntegrationDatabaseSpec);
 }
@@ -304,6 +381,30 @@ function createIntegrationDatabaseSpec(name: string): IntegrationDatabaseSpec {
         password: process.env.MYSQL_PASSWORD ?? 'nocobase',
         database: process.env.MYSQL_DATABASE ?? 'nocobase_collection_builder',
       };
+    case 'oracle':
+      return {
+        name: 'oracle',
+        dialect: 'oracle',
+        driver: 'oracledb',
+        host: process.env.ORACLE_HOST ?? '127.0.0.1',
+        port: Number(process.env.ORACLE_PORT ?? 11521),
+        username: process.env.ORACLE_USER ?? 'nocobase',
+        password: process.env.ORACLE_PASSWORD ?? 'nocobase',
+        serviceName: process.env.ORACLE_SERVICE_NAME ?? 'FREEPDB1',
+      };
+    case 'mssql':
+      return {
+        name: 'mssql',
+        dialect: 'mssql',
+        driver: 'tedious',
+        host: process.env.MSSQL_HOST ?? '127.0.0.1',
+        port: Number(process.env.MSSQL_PORT ?? 11433),
+        username: process.env.MSSQL_USER ?? 'sa',
+        password: process.env.MSSQL_PASSWORD ?? 'NocoBase_Mssql_2026',
+        database: process.env.MSSQL_DATABASE ?? 'nocobase_collection_builder',
+        encrypt: false,
+        trustServerCertificate: true,
+      };
     default:
       throw new Error(`Unsupported integration database connection "${name}".`);
   }
@@ -339,6 +440,28 @@ function createConnectionConfig(
         username: spec.username,
         password: spec.password,
         charset: spec.charset,
+      };
+    case 'oracle':
+      return {
+        dialect: 'oracle',
+        driver: 'oracledb',
+        host: spec.host,
+        port: spec.port,
+        serviceName: spec.serviceName ?? 'FREEPDB1',
+        username: spec.username,
+        password: spec.password,
+      };
+    case 'mssql':
+      return {
+        dialect: 'mssql',
+        driver: 'tedious',
+        host: spec.host,
+        port: spec.port,
+        database: spec.database,
+        username: spec.username,
+        password: spec.password,
+        encrypt: spec.encrypt,
+        trustServerCertificate: spec.trustServerCertificate,
       };
     default:
       return assertNever(spec.dialect);
@@ -405,6 +528,52 @@ async function cleanupIntegrationObjects(
         await context.db.raw('set foreign_key_checks = 1');
       }
       break;
+    case 'oracle': {
+      const materializedViews = await listOracleObjects(
+        context,
+        'user_mviews',
+        'mview_name',
+      );
+      for (const view of materializedViews) {
+        await context.db.raw(
+          `drop materialized view ${quoteIdentifier(view, context.spec.dialect)}`,
+        );
+      }
+      for (const view of views) {
+        await context.db.raw(
+          `drop view ${quoteIdentifier(view, context.spec.dialect)}`,
+        );
+      }
+      for (const table of tables) {
+        await context.db.raw(
+          `drop table ${quoteIdentifier(table, context.spec.dialect)} cascade constraints purge`,
+        );
+      }
+      const sequences = await listOracleObjects(
+        context,
+        'user_sequences',
+        'sequence_name',
+      );
+      for (const sequence of sequences) {
+        await context.db.raw(
+          `drop sequence ${quoteIdentifier(sequence, context.spec.dialect)}`,
+        );
+      }
+      break;
+    }
+    case 'mssql':
+      await dropMssqlForeignKeys(context);
+      for (const view of views) {
+        await context.db.raw(
+          `drop view ${quoteIdentifier(view, context.spec.dialect)}`,
+        );
+      }
+      for (const table of tables) {
+        await context.db.raw(
+          `drop table ${quoteIdentifier(table, context.spec.dialect)}`,
+        );
+      }
+      break;
     default:
       assertNever(context.spec.dialect);
   }
@@ -454,6 +623,27 @@ async function listObjects(
         ),
       ).map((row) => String(row.name ?? row.TABLE_NAME));
     }
+    case 'oracle': {
+      const source = objectType === 'table' ? 'user_tables' : 'user_views';
+      const column = objectType === 'table' ? 'table_name' : 'view_name';
+      return rawRows(
+        await context.db.raw(
+          `select ${column} as "name" from ${source} where ${column} like ?`,
+          [like],
+        ),
+      )
+        .map((row) => String(row.name ?? row.NAME))
+        .filter((name) => name.startsWith(`${context.prefix}_`));
+    }
+    case 'mssql': {
+      const type = objectType === 'table' ? 'U' : 'V';
+      return rawRows(
+        await context.db.raw(
+          `select o.name from sys.objects o where o.type = ? and o.is_ms_shipped = 0 and o.name like ?`,
+          [type, like],
+        ),
+      ).map((row) => String(row.name));
+    }
     default:
       return assertNever(context.spec.dialect);
   }
@@ -470,6 +660,44 @@ function rawRows(result: unknown): Array<Record<string, any>> {
     return (result as { rows: Array<Record<string, any>> }).rows;
   }
   return [];
+}
+
+async function listOracleObjects(
+  context: IntegrationTestContext,
+  source: 'user_mviews' | 'user_sequences',
+  column: 'mview_name' | 'sequence_name',
+): Promise<string[]> {
+  const rows = rawRows(
+    await context.db.raw(
+      `select ${column} as "name" from ${source} where ${column} like ?`,
+      [`${context.prefix}_%`],
+    ),
+  );
+  return rows
+    .map((row) => String(row.name ?? row.NAME))
+    .filter((name) => name.startsWith(`${context.prefix}_`));
+}
+
+async function dropMssqlForeignKeys(
+  context: IntegrationTestContext,
+): Promise<void> {
+  const rows = rawRows(
+    await context.db.raw(
+      `
+        select s.name as schema_name, t.name as table_name, fk.name as constraint_name
+        from sys.foreign_keys fk
+        join sys.tables t on t.object_id = fk.parent_object_id
+        join sys.schemas s on s.schema_id = t.schema_id
+        where t.name like ?
+      `,
+      [`${context.prefix}_%`],
+    ),
+  );
+  for (const row of rows) {
+    await context.db.raw(
+      `alter table ${quoteIdentifier(String(row.schema_name), 'mssql')}.${quoteIdentifier(String(row.table_name), 'mssql')} drop constraint ${quoteIdentifier(String(row.constraint_name), 'mssql')}`,
+    );
+  }
 }
 
 function createTestPrefix(): string {
@@ -497,6 +725,14 @@ function normalizeConnectionName(name: string): IntegrationDialect {
     case 'mysql':
     case 'mysql2':
       return 'mysql';
+    case 'oracle':
+    case 'oracledb':
+      return 'oracle';
+    case 'mssql':
+    case 'sqlserver':
+    case 'sql-server':
+    case 'tedious':
+      return 'mssql';
     default:
       throw new Error(`Unsupported integration database connection "${name}".`);
   }
@@ -508,6 +744,9 @@ function quoteIdentifier(
 ): string {
   if (dialect === 'mysql') {
     return `\`${identifier.replace(/`/g, '``')}\``;
+  }
+  if (dialect === 'mssql') {
+    return `[${identifier.replace(/]/g, ']]')}]`;
   }
   return `"${identifier.replace(/"/g, '""')}"`;
 }

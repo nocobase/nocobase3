@@ -1,6 +1,18 @@
 import type { Knex } from 'knex';
 import { CollectionBuilder } from '../../../collection/builder/index.js';
-import type { CollectionMetadataStore } from '../../../metadata/index.js';
+import {
+  CollectionRegistry,
+  RegistryMetadataDocumentValidator,
+  type ConnectionCollections,
+} from '../../../collection/registry/index.js';
+import {
+  CollectionMetadataService,
+  DatabaseCollectionMetadataStore,
+  TransactionCollectionMetadataStore,
+  type CollectionMetadataInvalidation,
+  type CollectionMetadataInvalidator,
+  type CollectionMetadataStore,
+} from '../../../metadata/index.js';
 import { DefaultNamingStrategy } from '../../../naming/index.js';
 import { KnexQueryAdapter, type QueryAdapter } from '../../../query/index.js';
 import { KnexSchemaAdapter } from '../../../schema/adapters/knex/index.js';
@@ -8,71 +20,133 @@ import type {
   DatabaseCapabilities,
   SchemaAdapter,
 } from '../../../schema/index.js';
+import type { SchemaInspector } from '../../../schema/inspector/index.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
 import type {
   ConnectionConfig,
   DatabaseDialect,
   DatabaseDriver,
+  SchemaManagementMode,
 } from '../../config.js';
 import type { DatabaseConnection } from '../../connection.js';
+import { SchemaManagementSchemaAdapter } from '../../schema-management.js';
 import { createKnexClient } from './client.js';
 import {
   resolveKnexConnectionConfig,
   type KnexConnectionConfig,
 } from './config.js';
+import { resolveKnexDatabaseDialectAdapter } from './dialect-adapters.js';
 
 export class KnexDatabaseConnection implements DatabaseConnection {
   readonly driver: DatabaseDriver;
   readonly dialect: DatabaseDialect;
+  readonly schemaManagement: SchemaManagementMode;
   readonly capabilities: DatabaseCapabilities;
   readonly schema: SchemaAdapter;
+  readonly schemaInspector: SchemaInspector;
   readonly builder: CollectionBuilder;
+  readonly collections: ConnectionCollections;
+  readonly collectionMetadata: CollectionMetadataService;
   readonly query: QueryAdapter;
 
   private knexInstance?: Knex;
   private readonly config: KnexConnectionConfig;
+  private readonly metadataStore: CollectionMetadataStore;
 
   constructor(
     readonly name: string,
     private readonly sourceConfig: ConnectionConfig,
-    private readonly metadataStore: CollectionMetadataStore,
+    metadataStore?: CollectionMetadataStore,
     knexInstance?: Knex,
+    transactionInvalidations?: TransactionInvalidationCollector,
   ) {
     this.knexInstance = knexInstance;
     this.config = resolveKnexConnectionConfig(sourceConfig);
+    this.metadataStore =
+      metadataStore ??
+      new DatabaseCollectionMetadataStore({
+        resolveClient: () => this.resolveClient(),
+      });
     this.driver = this.config.driver;
     this.dialect = this.config.dialect;
+    this.schemaManagement = this.config.schemaManagement;
     this.capabilities = resolveDatabaseCapabilities(
       this.dialect,
       this.config.capabilities,
     );
-    this.schema = new LazySchemaAdapter(
-      () => this.resolveClient(),
-      (client) =>
-        new KnexSchemaAdapter(client, {
-          dialect: this.dialect,
-          capabilities: this.capabilities,
-        }),
+    this.schemaInspector = resolveKnexDatabaseDialectAdapter(
       this.dialect,
-      this.capabilities,
+    ).createSchemaInspector({
+      connectionName: this.name,
+      config: this.config,
+      resolveClient: () => this.resolveClient(),
+    });
+    this.schema = new SchemaManagementSchemaAdapter(
+      new LazySchemaAdapter(
+        () => this.resolveClient(),
+        (client) =>
+          new KnexSchemaAdapter(client, {
+            dialect: this.dialect,
+            capabilities: this.capabilities,
+          }),
+        this.dialect,
+        this.capabilities,
+      ),
+      {
+        connectionName: this.name,
+        mode: this.schemaManagement,
+      },
     );
     this.query = new KnexQueryAdapter(
       () => this.getClient(),
       new DefaultNamingStrategy({
         underscored: this.config.naming?.underscored,
-        tablePrefix: '',
+        tablePrefix: this.config.naming?.tablePrefix,
       }),
     );
+    const collections = new CollectionRegistry({
+      inspector: this.schemaInspector,
+      metadataStore: this.metadataStore,
+      naming: this.config.naming,
+      isInternalPhysicalCollection:
+        this.metadataStore instanceof DatabaseCollectionMetadataStore
+          ? (identity) =>
+              this.metadataStore instanceof DatabaseCollectionMetadataStore &&
+              this.metadataStore.isInternalPhysicalCollection(identity)
+          : undefined,
+    });
+    this.collections = collections;
+    const invalidator = transactionInvalidations
+      ? new TransactionCollectionInvalidator(
+          collections,
+          transactionInvalidations,
+        )
+      : collections;
+    this.collectionMetadata = new CollectionMetadataService({
+      store: this.metadataStore,
+      validator: new RegistryMetadataDocumentValidator({
+        inspector: this.schemaInspector,
+        metadataStore: this.metadataStore,
+        collections,
+        naming: this.config.naming,
+        deferRelationValidation: Boolean(transactionInvalidations),
+      }),
+      invalidator,
+      onInvalidationError: (error) =>
+        this.reportCollectionMetadataInvalidationError(error),
+    });
     this.builder = new CollectionBuilder({
       schemaAdapter: this.schema,
-      metadataStore,
+      collections,
+      collectionMetadata: this.collectionMetadata,
+      schemaInvalidator: invalidator,
       naming: this.config.naming,
-      namingStrategy: this.config.namingStrategy,
     });
   }
 
   async connect(): Promise<this> {
     this.getClient();
+    await (this.collections as CollectionRegistry).initialize();
     return this;
   }
 
@@ -81,6 +155,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   }
 
   async disconnect(): Promise<void> {
+    this.collections.invalidate();
     const client = this.knexInstance;
     if (!client) {
       return;
@@ -99,15 +174,36 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T> {
     const client = await this.resolveClient();
-    return client.transaction(async (trx) => {
-      const connection = new KnexDatabaseConnection(
-        this.name,
-        this.sourceConfig,
-        this.metadataStore,
-        trx,
-      );
-      return fn(connection);
-    });
+    let stagedMetadata: TransactionCollectionMetadataStore | undefined;
+    const invalidations = new TransactionInvalidationCollector();
+    let result: T;
+    try {
+      result = await client.transaction(async (trx) => {
+        const metadataStore =
+          this.metadataStore instanceof DatabaseCollectionMetadataStore
+            ? this.metadataStore.withClient(async () => trx)
+            : (stagedMetadata = new TransactionCollectionMetadataStore(
+                this.metadataStore,
+              ));
+        const connection = new KnexDatabaseConnection(
+          this.name,
+          this.sourceConfig,
+          metadataStore,
+          trx,
+          invalidations,
+        );
+        const transactionResult = await fn(connection);
+        await invalidations.validateRelations(connection.collections);
+        await stagedMetadata?.commit();
+        return transactionResult;
+      });
+    } catch (error) {
+      await stagedMetadata?.rollbackCommitted();
+      invalidations.clear();
+      throw error;
+    }
+    invalidations.apply(this.collections as CollectionRegistry);
+    return result;
   }
 
   private getClient(): Knex {
@@ -119,6 +215,75 @@ export class KnexDatabaseConnection implements DatabaseConnection {
 
   private async resolveClient(): Promise<Knex> {
     return this.getClient();
+  }
+
+  private reportCollectionMetadataInvalidationError(error: unknown): void {
+    if (this.sourceConfig.onCollectionMetadataInvalidationError) {
+      this.sourceConfig.onCollectionMetadataInvalidationError(error);
+      return;
+    }
+    process.emitWarning(
+      error instanceof Error ? error : new Error(String(error)),
+      { code: 'COLLECTION_METADATA_INVALIDATION_FAILED' },
+    );
+  }
+}
+
+class TransactionInvalidationCollector {
+  private all = false;
+  private namingIndex = false;
+  private readonly collections = new Set<string>();
+
+  async validateRelations(collections: ConnectionCollections): Promise<void> {
+    for (const collection of this.collections) {
+      await collections.validateRelations(collection);
+    }
+  }
+
+  record(change?: CollectionMetadataInvalidation): void {
+    if (!change) {
+      this.all = true;
+      return;
+    }
+    for (const collection of change.collections) {
+      this.collections.add(collection);
+    }
+    this.namingIndex ||= change.namingIndex;
+  }
+
+  apply(target: CollectionMetadataInvalidator): void {
+    if (this.all) {
+      target.invalidateAll();
+    } else if (this.collections.size > 0 || this.namingIndex) {
+      target.invalidate({
+        collections: [...this.collections],
+        namingIndex: this.namingIndex,
+      });
+    }
+    this.clear();
+  }
+
+  clear(): void {
+    this.all = false;
+    this.namingIndex = false;
+    this.collections.clear();
+  }
+}
+
+class TransactionCollectionInvalidator implements CollectionMetadataInvalidator {
+  constructor(
+    private readonly local: CollectionMetadataInvalidator,
+    private readonly transaction: TransactionInvalidationCollector,
+  ) {}
+
+  invalidate(change: CollectionMetadataInvalidation): void {
+    this.local.invalidate(change);
+    this.transaction.record(change);
+  }
+
+  invalidateAll(): void {
+    this.local.invalidateAll();
+    this.transaction.record();
   }
 }
 

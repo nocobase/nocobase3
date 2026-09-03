@@ -1,3 +1,8 @@
+---
+title: 创建 Collection
+description: 使用 Object DSL 或 Fluent DSL 创建 Collection 及数据库表，并正确配置字段、命名和执行选项。
+---
+
 # createCollection
 
 `createCollection` 用于创建新的 Collection，并创建对应的数据库表。
@@ -53,14 +58,14 @@ await builder.createCollection('orders', (collection) => {
 });
 ```
 
-## 自定义物理表名
+## Collection 级表前缀
 
 ```ts
 await builder.createCollection('auditLogs', {
-  tableName: 'audit_logs',
+  naming: { underscored: true, tablePrefix: 'archive_' },
   fields: [
     { name: 'id', type: 'increments', primaryKey: true },
-    { name: 'eventName', type: 'string', columnName: 'event_name' },
+    { name: 'eventName', type: 'string' },
   ],
 });
 ```
@@ -69,17 +74,19 @@ Fluent DSL 中也可以写成：
 
 ```ts
 await builder.createCollection('auditLogs', (collection) => {
-  collection.tableName('audit_logs');
+  collection.naming({ underscored: true, tablePrefix: 'archive_' });
   collection.increments('id');
-  collection.string('eventName').columnName('event_name');
+  collection.string('eventName');
 });
 ```
 
-如果没有显式 `tableName` 或 `columnName`，Builder 会根据 connection 或 Collection 的 `naming` 推导物理名。详见 [命名映射](./naming.md)。
+两种写法都会创建 `archive_audit_logs.event_name`。Collection 可以覆盖 `underscored` 和 `tablePrefix`，但不能指定任意表名或列名。详见 [Builder 命名](./naming.md)。
 
 ## 与 metadata 的关系
 
-默认情况下，`createCollection` 会同步 Collection 元数据。可以通过 `syncMetadata: false` 禁止：
+默认情况下，`createCollection` 只同步补充 Metadata（Collection/Field 的 title、description、naming 和
+relations）。物理 type、nullable、default、index 和 constraint 以数据库为准，不写入 Store。可以通过
+`syncMetadata: false` 禁止补充文档同步：
 
 ```ts
 await builder.createCollection('orders', definition, {
@@ -93,12 +100,12 @@ await builder.createCollection('orders', definition, {
 
 ## Metadata 影响
 
-默认会保存 Collection 元数据，除非 `syncMetadata: false`。
+默认只保存可提取的补充 Metadata；没有补充信息时不创建空文档。`syncMetadata: false` 时不保存。
 
 ## Agent 注意事项
 
 - Agent 写 migration 文件或 TypeScript 代码时，优先使用 Fluent DSL。
 - Agent 调用 HTTP API、CLI，或生成 `collection.json` 时，优先使用 Object DSL。
-- 如果只是补充标题、描述等元信息，不要使用 `createCollection`，应使用 metadata-only API。
+- 如果只是补充标题、描述等元信息，不要使用 `createCollection`，应使用 `connection.collectionMetadata`。
 - `type: 'increments'` 会在 schema 编译阶段被视为自增主键字段。
-- 绑定已有物理表或列时使用 `tableName`、`columnName`，不要把物理名写进逻辑 `name`。
+- 不要生成 `tableName`、`columnName` 或任意物理名称映射。

@@ -2,6 +2,7 @@ export * from './config.js';
 export * from './connection.js';
 export * from './factory.js';
 export * from './manager.js';
+export * from './schema-management.js';
 export * from './token.js';
 export * from './capabilities.js';
 export * from './drivers/knex/index.js';

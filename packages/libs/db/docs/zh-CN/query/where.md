@@ -1,3 +1,8 @@
+---
+title: Query where 条件
+description: 使用三参 where、ExpressionBuilder、字段引用、exists 和子查询表达 QueryAdapter 条件，并说明当前操作符边界。
+---
+
 # where 条件
 
 `where` 参考 Kysely 风格。简单条件使用三参形式：
@@ -14,7 +19,7 @@ await db
 
 ## 跨数据库 operator
 
-V1 支持这些跨数据库 operator：
+当前 API 支持这些跨数据库 operator：
 
 ```ts
 type ComparisonOperator =
@@ -47,7 +52,7 @@ await db
   .execute();
 ```
 
-V1 不提供 `ilike`、JSON operator、raw where。需要这类能力时，应先判断是否能在 Repository 或业务封装里实现可移植表达。
+当前 API 不提供 `ilike`、JSON operator 或 raw where。确实需要数据库专用操作符时，应在业务模块中隔离该查询，并通过 `connection.client()` 使用底层 client。
 
 ## ExpressionBuilder
 
@@ -129,7 +134,7 @@ await db
 
 ## exists
 
-V1 不提供 `whereExists()` / `whereNotExists()`，而是通过 `eb.exists()` 和 `eb.not()` 组合：
+当前 API 不提供 `whereExists()` / `whereNotExists()`，而是通过 `eb.exists()` 和 `eb.not()` 组合：
 
 ```ts
 const orders = await db
@@ -181,8 +186,8 @@ const orders = await db
   .execute();
 ```
 
-## 和 Repository Filter 的区别
+## 当前边界：不是 Collection-aware Filter
 
 本页描述的是 `db.query()` 的数据库层 `where`。它面向 table / column query identifier，不读取 Collection metadata。
 
-未来 Repository 会提供 Collection-aware 的 Filter Builder，根据 Collection metadata 校验字段类型和 operator group。`db.repository()` 当前尚未实现，不要把 Repository 规划示例复制到运行时代码；详细设计见 [Filter Builder](../repository/filter-builder.md)。
+当前包不提供 `db.repository()`，QueryAdapter 也不会根据 Collection Metadata 校验字段类型或操作符分组。需要了解候选设计时可阅读 [Filter Builder 提案](../proposals/repository/filter-builder.md)，但提案接口不能用于当前代码。

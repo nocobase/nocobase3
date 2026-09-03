@@ -1,3 +1,8 @@
+---
+title: Builder 执行选项
+description: BuilderExecOptions 和 CollectionBuilderOptions 的字段参考，包括 dry-run、SQL 预览、metadata 同步、strict 与命名配置。
+---
+
 # BuilderExecOptions
 
 `BuilderExecOptions` 控制 Builder 执行方式。它面向自动化、CLI、file sync、migration 和 Agent 场景。
@@ -17,16 +22,20 @@ interface BuilderExecOptions {
 
 ## CollectionBuilderOptions
 
-创建 `CollectionBuilder` 时可以传入 schema adapter、metadata store 和命名配置：
+创建 `CollectionBuilder` 时可以传入 Schema adapter、Collection 读取入口、Metadata Service 和命名配置：
 
 ```ts
 interface CollectionBuilderOptions {
   schemaAdapter?: SchemaAdapter;
-  metadataStore?: CollectionMetadataStore;
+  collections?: Pick<ConnectionCollections, 'get' | 'scan'>;
+  collectionMetadata?: CollectionMetadataService;
+  schemaInvalidator?: CollectionMetadataInvalidator;
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
 }
 ```
+
+完整应用通过 `DatabaseConnection` 自动注入这些协作者：Builder 从 `collections` 读取物理 Schema 与补充
+Metadata 的解析结果，通过 `collectionMetadata` 只写补充文档，并通过 `schemaInvalidator` 清理解析缓存。
 
 `naming` 用于默认逻辑名到物理名的映射：
 
@@ -64,8 +73,10 @@ interface NamingOptions {
 }
 ```
 
-- `underscored: true`：把推导出的表名和列名转成小写下划线。
+- `underscored`：是否把逻辑表名和字段名转换为小写下划线，默认 `true`。
 - `tablePrefix`：只作用于推导出的表名或视图名，不作用于列名。
+
+Collection 可以用自己的 `naming` 覆盖 Connection 或 Builder 默认值；`tablePrefix: ''` 表示清除继承的前缀。
 
 ## 当前已验证选项
 
@@ -98,7 +109,8 @@ await builder.createCollection('orders', definition, {
 });
 ```
 
-默认会同步 Collection metadata。`syncMetadata: false` 会跳过 metadata 保存或更新。
+默认会同步补充 Collection Metadata。`syncMetadata: false` 会跳过文档保存或更新，但 DDL 成功后仍然使
+Registry 中的旧物理结构失效。物理 field、index 和 constraint 不会因为默认同步而复制进 Metadata Store。
 
 ### strict
 
@@ -147,13 +159,11 @@ await builder.dropCollection('orders', {
 
 `ifExists: true` 用于删除类操作。当前支持 `dropCollection()`：当底层表不存在时跳过删除，避免缺失对象错误。
 
-## 预留选项
+## 当前无执行语义的选项
 
 以下选项已经出现在类型里，但当前还没有完整执行语义：
 
 - `transaction`：当前不会自动包裹 Builder 操作；需要事务时使用 `db.transaction()` 或 `connection.transaction()`。
-
-后续可以把 `transaction` 接入 Builder 执行流程。
 
 ## Agent 注意事项
 

@@ -24,7 +24,6 @@ import type {
 
 export interface CollectionCompilerOptions {
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
 }
 
 export interface CollectionCompilerContext {
@@ -34,16 +33,13 @@ export interface CollectionCompilerContext {
 export class CollectionCompiler {
   private readonly naming: NamingStrategy;
   private readonly namingOptions: Required<NamingOptions>;
-  private readonly customNamingStrategy: boolean;
 
   constructor(options: CollectionCompilerOptions = {}) {
     this.namingOptions = {
       underscored: options.naming?.underscored ?? true,
       tablePrefix: options.naming?.tablePrefix ?? '',
     };
-    this.customNamingStrategy = Boolean(options.namingStrategy);
-    this.naming =
-      options.namingStrategy ?? new DefaultNamingStrategy(this.namingOptions);
+    this.naming = new DefaultNamingStrategy(this.namingOptions);
   }
 
   compile(
@@ -56,21 +52,14 @@ export class CollectionCompiler {
   }
 
   effectiveTableName(name: string, definition?: CollectionDefinition): string {
-    return (
-      definition?.tableName ??
-      this.namingFor(definition).collectionToTableName(name)
-    );
+    return this.namingFor(definition).collectionToTableName(name);
   }
 
   effectiveColumnName(
     field: string,
-    definition?: AnyFieldDefinition,
-    collection?: CollectionDefinition,
+    definition?: CollectionDefinition,
   ): string {
-    return (
-      definition?.columnName ??
-      this.namingFor(collection).fieldToColumnName(field)
-    );
+    return this.namingFor(definition).fieldToColumnName(field);
   }
 
   private compileOperation(
@@ -110,9 +99,6 @@ export class CollectionCompiler {
           }),
         ];
       case 'renameCollection':
-        if (!operation.renameTable && !operation.renameTableTo) {
-          return [];
-        }
         return [
           {
             type: 'renameTable',
@@ -120,16 +106,10 @@ export class CollectionCompiler {
               operation.from,
               context.collections?.[operation.from],
             ),
-            to:
-              operation.renameTableTo ??
-              this.effectiveTableName(
-                operation.to,
-                this.renameDefinition(
-                  context.collections?.[operation.from],
-                  operation.to,
-                  true,
-                ),
-              ),
+            to: this.effectiveTableName(
+              operation.to,
+              context.collections?.[operation.from],
+            ),
           },
         ];
       case 'createViewCollection':
@@ -238,9 +218,6 @@ export class CollectionCompiler {
             context,
           ),
         ];
-      case 'updateCollectionMetadata':
-      case 'updateFieldMetadata':
-        return [];
       default:
         return assertNever(operation);
     }
@@ -420,7 +397,6 @@ export class CollectionCompiler {
     }
 
     for (const field of changes.alterFields ?? []) {
-      const existing = existingFields.find((item) => item.name === field.name);
       const oldColumnName = this.resolveColumn(
         field.name,
         existingFields,
@@ -431,8 +407,7 @@ export class CollectionCompiler {
         column: oldColumnName,
         changes: {
           ...field.changes,
-          name:
-            field.changes.columnName ?? existing?.columnName ?? oldColumnName,
+          name: oldColumnName,
         },
       });
     }
@@ -764,10 +739,7 @@ export class CollectionCompiler {
       }
       return this.namingFor(collection).relationForeignKey(relation.name);
     }
-    return (
-      field.columnName ??
-      this.namingFor(collection).fieldToColumnName(field.name)
-    );
+    return this.namingFor(collection).fieldToColumnName(field.name);
   }
 
   private relationUsesExistingField(
@@ -786,7 +758,7 @@ export class CollectionCompiler {
   }
 
   private namingFor(definition?: CollectionDefinition): NamingStrategy {
-    if (this.customNamingStrategy || !definition?.naming) {
+    if (!definition?.naming) {
       return this.naming;
     }
     return new DefaultNamingStrategy({
@@ -804,21 +776,6 @@ export class CollectionCompiler {
       ...(collection ?? { name }),
       fields,
     };
-  }
-
-  private renameDefinition(
-    definition: CollectionDefinition | undefined,
-    name: string,
-    renamingTable: boolean,
-  ): CollectionDefinition | undefined {
-    if (!definition) {
-      return { name };
-    }
-    const next = { ...definition, name };
-    if (renamingTable) {
-      delete next.tableName;
-    }
-    return next;
   }
 }
 

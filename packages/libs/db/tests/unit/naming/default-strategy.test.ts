@@ -19,7 +19,7 @@ describe('DefaultNamingStrategy', () => {
     );
   });
 
-  it('supports explicit naming options for table prefix and non-underscored identifiers', () => {
+  it('supports table prefixes and configurable underscored identifiers', () => {
     const prefixed = new DefaultNamingStrategy({
       underscored: true,
       tablePrefix: 'tbl_',

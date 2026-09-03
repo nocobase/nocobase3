@@ -1,3 +1,8 @@
+---
+title: DatabaseConfig
+description: 创建 DatabaseManager 时使用的默认连接、Connection 配置、Schema 管理模式和 Metadata Store 配置参考。
+---
+
 # DatabaseConfig
 
 `DatabaseConfig` 用于创建 `DatabaseManager`。
@@ -32,7 +37,11 @@ const db = createDatabaseManager({
 
 ```ts
 type ConnectionConfig =
-  SqliteConnectionConfig | PostgresConnectionConfig | MysqlConnectionConfig;
+  | SqliteConnectionConfig
+  | PostgresConnectionConfig
+  | MysqlConnectionConfig
+  | OracleConnectionConfig
+  | MssqlConnectionConfig;
 ```
 
 公共配置：
@@ -40,10 +49,10 @@ type ConnectionConfig =
 ```ts
 interface BaseConnectionConfig {
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
-  managed?: boolean;
+  onCollectionMetadataInvalidationError?: (error: unknown) => void;
+  schemaManagement?: 'managed' | 'external';
   debug?: boolean;
   pool?: unknown;
   driverOptions?: Record<string, unknown>;
@@ -57,8 +66,22 @@ interface BaseConnectionConfig {
 | `sqlite`   | `better-sqlite3` |
 | `postgres` | `pg`             |
 | `mysql`    | `mysql2`         |
+| `oracle`   | `oracledb`       |
+| `mssql`    | `tedious`        |
 
 `driver` 如果显式填写，必须和 `dialect` 匹配。
+
+### schemaManagement
+
+`schemaManagement` 声明 NocoBase 是否拥有这个 Connection 的物理 Schema，默认值是 `'managed'`：
+
+- `'managed'`：允许通过 Builder/Schema Adapter 执行 DDL，也允许运行 Migration。
+- `'external'`：真实 DDL 和 Migration 会以 `SCHEMA_MANAGEMENT_NOT_ALLOWED` 拒绝；Builder dry-run 和 SQL
+  预览仍然可用。
+
+该配置不控制业务记录权限。外部 Schema 仍可通过 Query API 查询、插入、更新或删除记录，最终是否允许由
+数据库权限和上层 ACL 决定。`connection.client()` 是底层逃生口，不经过 Schema guard；直接用它执行 DDL
+时，调用者自行负责遵守 Schema 所有权边界。
 
 SQLite：
 
@@ -117,6 +140,40 @@ type MysqlConnectionConfig = BaseConnectionConfig & {
 
 用户配置使用 `username`，内部会转换成底层 driver 需要的 `user`。
 
+Oracle：
+
+```ts
+type OracleConnectionConfig = BaseConnectionConfig & {
+  dialect: 'oracle';
+  driver?: 'oracledb';
+  host?: string;
+  port?: number;
+  serviceName: string;
+  username?: string;
+  password?: string;
+};
+```
+
+Oracle 使用 `serviceName`，内部组合为 `host:port/serviceName` 形式的 `connectString`。`oracledb` 6 默认使用 Thin mode，不要求安装 Oracle Instant Client。
+
+SQL Server：
+
+```ts
+type MssqlConnectionConfig = BaseConnectionConfig & {
+  dialect: 'mssql';
+  driver?: 'tedious';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  encrypt?: boolean;
+  trustServerCertificate?: boolean;
+};
+```
+
+SQL Server 底层使用 Knex 的 `mssql` dialect 和 `tedious` driver。`encrypt` 控制传输加密；本地自签名测试环境可以设置 `trustServerCertificate: true`，生产环境应优先使用受信任证书。
+
 MySQL 的 `socketPath` 是另一种连接目标，可以和 `database`、`username`、`password` 一起使用，但不要和 `host`、`port` 混用。
 
 `driverOptions` 只放当前类型未覆盖的底层 driver 参数。常用连接参数必须平铺，不要放进 `driverOptions`。当前不提供连接 URL 配置方式，也不要在 `driverOptions` 里写 `connectionString` 或 `uri`。
@@ -132,31 +189,37 @@ type NamingOptions = {
 };
 ```
 
+`underscored` 控制是否把逻辑名转换为小写下划线，默认 `true`；`tablePrefix` 是 Connection 上的默认表前缀。Collection 可以局部覆盖两项配置，但不支持注入自定义 `namingStrategy`。
+
 `naming` 是 connection 级默认命名配置。Collection 可以通过 `collection.naming(...)` 覆盖。
 
-更完整规则见 [命名概念](../concepts/naming.md)。
+更完整规则见 [命名概念](../concepts/naming/overview.md)。
 
 ## metadataStore
 
-`metadataStore` 可以放在 manager 级，也可以放在 connection 级：
+`metadataStore` 是补充文档 Store，可放在 Manager 或 Connection 级；Connection 级优先：
 
 ```ts
+const metadataStore = new InMemoryCollectionMetadataStore();
+
 const db = createDatabaseManager({
   metadataStore,
   connections: {
     main: {
-      dialect: 'postgres',
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT ?? 5432),
-      database: process.env.DB_DATABASE,
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
+      dialect: 'sqlite',
+      filename: ':memory:',
     },
   },
 });
 ```
 
-connection 级 `metadataStore` 优先于 manager 级 `metadataStore`。
+配置后可以使用 `connection.collections` 读取解析后的完整 Collection，并通过
+`connection.collectionMetadata` 更新补充 Metadata。`managed` Connection 未配置时自动使用数据库内部表
+持久化；`external` Connection 必须显式配置可写或只读 Store，否则创建 Connection 时抛出
+`COLLECTION_METADATA_STORE_REQUIRED`。
+
+`onCollectionMetadataInvalidationError` 只报告 Metadata 已成功提交之后的缓存失效异常；默认通过 Node warning
+报告。该异常不会回滚已经持久化的文档。
 
 ## defineDatabase
 
