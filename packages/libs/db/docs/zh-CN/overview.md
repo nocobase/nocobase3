@@ -1,15 +1,13 @@
 ---
 title: '@nocobase/db 概览'
-description: 从 DatabaseManager 进入 Builder、Query、Collections、Transaction、Migration、Seed 和 Collection Metadata。
+description: 根据数据库任务选择 DatabaseManager、Builder、Query、Collections、Migration、Seed 或 Metadata。
 ---
 
 # `@nocobase/db` 概览
 
 `@nocobase/db` 提供多数据库连接管理、Collection Schema 构建、数据库层查询、事务、Migration、Seed、物理 Schema 检查和 Collection Metadata 解析。
 
-## 从任务开始
-
-AI Agent 在写代码前先阅读 [Agent 任务路由](./agent/task-router.md)。它会同时确定 API、代码文件位置和最低验证。
+## 按任务选择入口
 
 | 要做什么            | 首选入口                                        |
 | ------------------- | ----------------------------------------------- |
@@ -21,6 +19,8 @@ AI Agent 在写代码前先阅读 [Agent 任务路由](./agent/task-router.md)�
 | 检查物理数据库对象  | `connection.schemaInspector`                    |
 | 更新补充 Metadata   | `connection.collectionMetadata`                 |
 | 初始化安装数据      | `defineSeed()` + `db.createSeeder()`            |
+
+选择入口时先判断任务操作的是 Schema、业务数据、物理数据库结构，还是补充 Metadata。这些能力不能互相替代；完整判断见[任务路由](./agent/task-router.md)。
 
 ## 对象关系
 
@@ -44,26 +44,23 @@ createDatabaseManager(config)
          -> collectionMetadata               supplemental metadata
 ```
 
-## 阅读路径
+## 推荐阅读路径
 
 1. [快速开始](./quick-start.md)
-2. [核心概念](./concepts/README.md)
-3. [Database 概览](./database/overview.md)
-4. [Builder](./builder/overview.md) 或 [Query](./query/overview.md)
-5. [Collections](./collections/overview.md)、[Schema Inspector](./schema-inspector/overview.md) 或 [Collection Metadata](./collection-metadata/overview.md)
-6. [Migration](./migration/overview.md) 和 [Seed](./seed/overview.md)
-7. [API 索引](./reference/api-index.md)
-8. [完整文档目录](./toc.md)
+2. 根据任务进入 [Builder](./builder/overview.md)、[Query](./query/overview.md)、[Migration](./migration/overview.md)、[Seed](./seed/overview.md)或其他专题
+3. 遇到名称或 Metadata 边界时阅读[核心概念](./concepts/README.md)
+4. 需要按名称定位公开能力时使用[公开 API 导航](./reference/api-index.md)
+5. 需要查阅全部主题时使用[完整文档目录](./toc.md)
 
 ## 文档可信级别
 
-| 目录                                  | 用途                         | Agent 能否用于生成业务代码          |
-| ------------------------------------- | ---------------------------- | ----------------------------------- |
-| [`concepts/`](./concepts/README.md)   | 当前稳定概念和 API 边界      | 可以，但不替代具体 API 文档         |
-| `database/`、`builder/`、`query/` 等  | 当前公开 API 与任务说明      | 可以，以 API 索引和类型声明交叉验证 |
-| [`internals/`](./internals/README.md) | 当前底层实现和维护者设计     | 仅用于维护或诊断，不要绕过公开入口  |
-| [`proposals/`](./proposals/README.md) | 尚未实现或导出的未来设计提案 | 不可以                              |
-| [`archive/`](./archive/README.md)     | 已被取代的历史材料           | 不可以，示例也不保证能编译或运行    |
+| 目录                                  | 用途                         | 使用边界                             |
+| ------------------------------------- | ---------------------------- | ------------------------------------ |
+| [`concepts/`](./concepts/README.md)   | 当前稳定概念和 API 边界      | 用于理解，不替代具体 API 文档        |
+| `database/`、`builder/`、`query/` 等  | 当前公开能力的选择与推荐用法 | 可指导当前代码，以类型声明为最终依据 |
+| [`internals/`](./internals/README.md) | 当前底层实现和维护者设计     | 仅用于维护或诊断，不要绕过公开入口   |
+| [`proposals/`](./proposals/README.md) | 尚未实现或导出的未来设计提案 | 不可用于当前代码                     |
+| [`archive/`](./archive/README.md)     | 已被取代的历史材料           | 不可用于当前代码                     |
 
 ## 当前边界
 

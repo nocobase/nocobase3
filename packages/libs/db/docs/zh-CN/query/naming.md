@@ -142,7 +142,7 @@ Query 不读取 Collection Metadata，因此不会自动应用 Collection 对 `u
 
 不要把 `getPhysical()` 返回的 `tableName` 再传给普通 Query。当前没有已实现的 Collection-aware Repository API。
 
-## Agent 注意事项
+## 使用注意事项
 
 - camelCase identifier 默认转换为 snake_case；Connection 可以配置 `underscored: false`。
 - 显式 `select()` 保留调用方输入的结果 key，`selectAll()` 才自动映射未显式命名的下划线 key。

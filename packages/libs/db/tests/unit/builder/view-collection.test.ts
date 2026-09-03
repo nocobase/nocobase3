@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/collection/builder/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
 import { RecordingSchemaAdapter } from './helpers.js';
 
 describe('CollectionBuilder view collections', () => {

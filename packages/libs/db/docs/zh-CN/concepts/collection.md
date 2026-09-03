@@ -52,7 +52,7 @@ await connection.builder.createCollection('orders', {
 | `view`             | 普通视图 | 不应默认假设可写       |
 | `materializedView` | 物化视图 | 不应默认假设可写       |
 
-`kind` 只描述物理对象类型，不是权限模型。Agent 不得因为一个 Collection 能被读取，就推断它一定支持 Insert、Update 或 Delete。
+`kind` 只描述物理对象类型，不是权限模型。不能因为一个 Collection 能被读取，就推断它一定支持 Insert、Update 或 Delete。
 
 ## 应用语义与数据库事实
 
@@ -81,7 +81,7 @@ await connection.builder.createCollection('orders', {
 
 `connection.query` 是数据库层查询接口，只使用 Connection naming，不读取 Collection Metadata 或 Collection 局部 naming。当前没有已实现的 Collection-aware Repository API；相关内容仅存在于 [Repository 提案](../proposals/repository/overview.md)。
 
-## Agent 规则
+## 使用规则
 
 - 不要把 Collection 直接等同于数据库表。
 - Builder、Relation、Index 和 Constraint 中使用 Collection 与 Field 的逻辑名称。

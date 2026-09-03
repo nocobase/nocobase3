@@ -41,12 +41,7 @@ if (result.document) {
 
 ## 结果与诊断
 
-```ts
-interface LegacyMetadataExtractionResult {
-  document?: CollectionMetadataDocument;
-  diagnostics: readonly LegacyMetadataExtractionDiagnostic[];
-}
-```
+返回值包含可选的 `document` 和完整的 `diagnostics`。具体结构从 `extractLegacyCollectionMetadata()` 的 TypeScript 返回类型获得；相关结果类型当前不是根入口具名导出，不要从源码深路径导入。
 
 每条诊断包含：
 
@@ -64,7 +59,7 @@ interface LegacyMetadataExtractionResult {
 
 只要存在 `error`，结果就不包含 `document`。调用方不得忽略错误并自行拼出部分文档。
 
-## Agent 约束
+## 使用约束
 
 - 不要为新 Collection 生成 legacy extraction 调用。
 - 不要在应用启动或每次 Collection 解析时调用它。

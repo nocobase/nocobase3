@@ -91,9 +91,9 @@ export default defineCollectionMetadata({
 }
 ```
 
-不要为了给 UI 或 Agent 补充说明而修改数据库 comment。
+不要为了补充应用说明而修改数据库 comment。
 
-## Agent 规则
+## 使用规则
 
 - 先判断任务改变的是物理 Schema、补充语义，还是两者都改变。
 - 纯 Metadata 更新使用 `connection.collectionMetadata`，不要生成 Schema operation。

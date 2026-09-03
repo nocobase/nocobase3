@@ -7,7 +7,7 @@ description: 使用 CollectionMetadataService 更新 Collection、Field 和 Rela
 
 `connection.collectionMetadata` 是运行时 Metadata 服务。它在 Store 之上执行 patch、文档校验、compare-and-swap 和 Collection 缓存失效。
 
-## Agent 契约
+## 使用边界
 
 | 项目            | 内容                                      |
 | --------------- | ----------------------------------------- |

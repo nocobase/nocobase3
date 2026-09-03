@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CollectionResolutionError,
-  resolveCollection,
-  type CollectionResolutionContext,
-} from '../../../src/collection/resolver/index.js';
+import { CollectionResolutionError } from '../../../src/collection/resolver/errors.js';
+import { resolveCollection } from '../../../src/collection/resolver/resolver.js';
+import type { CollectionResolutionContext } from '../../../src/collection/resolver/types.js';
 import {
   missingFieldDriftFixture,
   ordersResolverFixture,

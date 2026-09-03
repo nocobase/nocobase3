@@ -4,7 +4,7 @@ import type {
 } from '../../../src/index.js';
 import type { NamingOptions } from '../../../src/collection/types.js';
 import type { PhysicalCollectionSchema } from '../../../src/schema/inspector/types.js';
-import type { CollectionResolutionIssueCode } from '../../../src/collection/resolver/index.js';
+import type { CollectionResolutionIssueCode } from '../../../src/collection/resolver/errors.js';
 
 export interface ResolverSuccessFixture {
   readonly name: string;

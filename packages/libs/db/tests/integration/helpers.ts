@@ -1,7 +1,7 @@
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 import type { ConnectionConfig } from '../../src/index.js';
-import { CollectionBuilder } from '../../src/collection/builder/index.js';
+import { CollectionBuilder } from '../../src/collection/builder/builder.js';
 import {
   createDatabaseManager,
   type DatabaseManager,

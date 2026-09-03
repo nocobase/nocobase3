@@ -1,279 +1,105 @@
 ---
-title: QueryAdapter API
-description: QueryAdapter、SelectQuery、InsertQuery、UpdateQuery、DeleteQuery 和 ExpressionBuilder 的当前公共接口参考。
+title: QueryAdapter 用法参考
+description: 根据读取、写入、条件、关联、聚合和结果形状选择 QueryAdapter API；精确签名以 TypeScript 类型声明为准。
 ---
 
-# Query API
+# QueryAdapter 用法参考
 
-本页列出 QueryAdapter 的当前公开 API。用法说明见 [QueryAdapter 概览](../query/overview.md)。
+本页解释 Query API 的选择和组合方式，不复制接口定义。精确泛型、重载、参数和返回类型以 `@nocobase/db` 导出的 TypeScript 类型声明为准。
 
-## QueryAdapter
+## 选择查询入口
 
-```ts
-interface QueryAdapter {
-  selectFrom<TRecord extends Row = Row>(
-    table: string,
-  ): SelectQuery<TRecord, Row>;
-  insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
-  updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
-  deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
-}
-```
+| 目标     | 入口            | 继续阅读                          |
+| -------- | --------------- | --------------------------------- |
+| 读取记录 | `selectFrom()`  | [select 查询](../query/select.md) |
+| 新增记录 | `insertInto()`  | [数据写入](../query/mutations.md) |
+| 更新记录 | `updateTable()` | [数据写入](../query/mutations.md) |
+| 删除记录 | `deleteFrom()`  | [数据写入](../query/mutations.md) |
 
-## SelectQuery
+这四个入口返回不可变 Query Builder。链式方法返回新的查询对象，不修改之前保存的对象。
 
-```ts
-interface SelectQuery<
-  TRecord extends Row = Row,
-  TResult extends Row = TRecord,
-> {
-  select(selection: SelectionExpression): SelectQuery<TRecord, Row>;
-  select(selections: readonly SelectionExpression[]): SelectQuery<TRecord, Row>;
-  select(factory: SelectionFactory): SelectQuery<TRecord, Row>;
-  selectAll(table?: string): SelectQuery<TRecord, Row>;
-  distinct(): SelectQuery<TRecord, TResult>;
+## 组合读取查询
 
-  where(
-    lhs: ReferenceExpression | Expression<unknown>,
-    op: ComparisonOperator,
-    rhs: OperandValueExpressionOrList,
-  ): SelectQuery<TRecord, TResult>;
-  where(expression: Expression<SqlBool>): SelectQuery<TRecord, TResult>;
-  where(factory: ExpressionFactory<SqlBool>): SelectQuery<TRecord, TResult>;
-  whereRef(
-    lhs: ReferenceExpression,
-    op: ComparisonOperator,
-    rhs: ReferenceExpression,
-  ): SelectQuery<TRecord, TResult>;
+| 需求           | 使用                                                         |
+| -------------- | ------------------------------------------------------------ |
+| 选择字段       | `select()` / `selectAll()`                                   |
+| 去重           | `distinct()`                                                 |
+| 添加条件       | `where()` / `whereRef()`                                     |
+| 关联表         | `innerJoin()` / `leftJoin()` / `rightJoin()` / `crossJoin()` |
+| 分组与聚合条件 | `groupBy()` / `having()` / `havingRef()`                     |
+| 排序和分页     | `orderBy()` / `limit()` / `offset()`                         |
 
-  innerJoin(
-    table: string,
-    leftRef: ReferenceExpression,
-    rightRef: ReferenceExpression,
-  ): SelectQuery<TRecord, TResult>;
-  innerJoin(
-    table: string,
-    callback: JoinCallback,
-  ): SelectQuery<TRecord, TResult>;
-  leftJoin(
-    table: string,
-    leftRef: ReferenceExpression,
-    rightRef: ReferenceExpression,
-  ): SelectQuery<TRecord, TResult>;
-  leftJoin(
-    table: string,
-    callback: JoinCallback,
-  ): SelectQuery<TRecord, TResult>;
-  rightJoin(
-    table: string,
-    leftRef: ReferenceExpression,
-    rightRef: ReferenceExpression,
-  ): SelectQuery<TRecord, TResult>;
-  rightJoin(
-    table: string,
-    callback: JoinCallback,
-  ): SelectQuery<TRecord, TResult>;
-  crossJoin(table: string): SelectQuery<TRecord, TResult>;
-
-  groupBy(column: string): SelectQuery<TRecord, TResult>;
-  groupBy(columns: readonly string[]): SelectQuery<TRecord, TResult>;
-  having(
-    lhs: ReferenceExpression | Expression<unknown>,
-    op: ComparisonOperator,
-    rhs: OperandValueExpressionOrList,
-  ): SelectQuery<TRecord, TResult>;
-  having(expression: Expression<SqlBool>): SelectQuery<TRecord, TResult>;
-  having(factory: ExpressionFactory<SqlBool>): SelectQuery<TRecord, TResult>;
-  havingRef(
-    lhs: ReferenceExpression,
-    op: ComparisonOperator,
-    rhs: ReferenceExpression,
-  ): SelectQuery<TRecord, TResult>;
-
-  orderBy(
-    column: string,
-    direction?: OrderDirection,
-  ): SelectQuery<TRecord, TResult>;
-  limit(count: number): SelectQuery<TRecord, TResult>;
-  offset(count: number): SelectQuery<TRecord, TResult>;
-
-  clearSelect(): SelectQuery<TRecord, Row>;
-  clearWhere(): SelectQuery<TRecord, TResult>;
-  clearJoins(): SelectQuery<TRecord, TResult>;
-  clearGroupBy(): SelectQuery<TRecord, TResult>;
-  clearHaving(): SelectQuery<TRecord, TResult>;
-  clearOrderBy(): SelectQuery<TRecord, TResult>;
-  clearLimit(): SelectQuery<TRecord, TResult>;
-  clearOffset(): SelectQuery<TRecord, TResult>;
-
-  execute<T = TResult>(): Promise<T[]>;
-  executeTakeFirst<T = TResult>(): Promise<T | undefined>;
-  executeTakeFirstOrThrow<T = TResult>(): Promise<T>;
-  value<T = unknown>(column: string): Promise<T | undefined>;
-  pluck<T = unknown>(column: string): Promise<T[]>;
-  exists(): Promise<boolean>;
-  compile(): CompiledQuery;
-}
-```
-
-## InsertQuery
+简单条件使用三参数 `where(lhs, operator, rhs)`：
 
 ```ts
-interface InsertQuery<TRecord extends Row = Row> {
-  values(data: TRecord | readonly TRecord[]): InsertQuery<TRecord>;
-  execute(): Promise<InsertResult>;
-  compile(): CompiledQuery;
-}
+const order = await db
+  .query()
+  .selectFrom('orders')
+  .select(['id', 'orderNo'])
+  .where('status', '=', 'paid')
+  .executeTakeFirst();
 ```
 
-## UpdateQuery
+组合 `and`、`or`、`not`、`between`、`exists` 或子查询时，使用 Expression Builder。不要生成二参数 `where(field, value)` 或 Knex 风格的 `orWhere()`、`whereIn()`、`whereNull()`。
+
+完整条件用法见[where 条件](../query/where.md)，关联和聚合分别见 [join](../query/joins.md)与[聚合和 having](../query/aggregates.md)。
+
+## 选择结果形状
+
+| 需要的结果           | 终止方法                    |
+| -------------------- | --------------------------- |
+| 所有匹配行           | `execute()`                 |
+| 第一行或 `undefined` | `executeTakeFirst()`        |
+| 必须存在的第一行     | `executeTakeFirstOrThrow()` |
+| 第一行的一个列值     | `value(column)`             |
+| 所有行的一个列值数组 | `pluck(column)`             |
+| 是否存在匹配行       | `exists()`                  |
+
+选择终止方法时表达调用方真正需要的结果。不要先获取全部记录再手工截取第一行或映射单列。
+
+## 引用列与传入值
+
+普通字符串右值会作为参数绑定；需要引用另一列时使用 `whereRef()` 或 `eb.ref()`：
 
 ```ts
-interface UpdateQuery<TRecord extends Row = Row> {
-  set(data: Partial<TRecord>): UpdateQuery<TRecord>;
-  where(
-    lhs: ReferenceExpression | Expression<unknown>,
-    op: ComparisonOperator,
-    rhs: OperandValueExpressionOrList,
-  ): UpdateQuery<TRecord>;
-  where(expression: Expression<SqlBool>): UpdateQuery<TRecord>;
-  where(factory: ExpressionFactory<SqlBool>): UpdateQuery<TRecord>;
-  whereRef(
-    lhs: ReferenceExpression,
-    op: ComparisonOperator,
-    rhs: ReferenceExpression,
-  ): UpdateQuery<TRecord>;
-  clearWhere(): UpdateQuery<TRecord>;
-  allowAllRows(): UpdateQuery<TRecord>;
-  execute(): Promise<UpdateResult>;
-  compile(): CompiledQuery;
-}
+const rows = await db
+  .query()
+  .selectFrom('orders')
+  .selectAll()
+  .whereRef('updatedAt', '>', 'createdAt')
+  .execute();
 ```
 
-## DeleteQuery
+需要 OR join 条件时，在 join callback 中通过 Expression Builder 组合条件。Query API 不提供 `orOn()` 或 `orOnRef()`。
+
+## 安全执行写操作
+
+`updateTable()` 和 `deleteFrom()` 默认要求条件。确实需要影响全部记录时，显式调用 `allowAllRows()`，让意图在代码审查中可见。
 
 ```ts
-interface DeleteQuery<TRecord extends Row = Row> {
-  where(
-    lhs: ReferenceExpression | Expression<unknown>,
-    op: ComparisonOperator,
-    rhs: OperandValueExpressionOrList,
-  ): DeleteQuery<TRecord>;
-  where(expression: Expression<SqlBool>): DeleteQuery<TRecord>;
-  where(factory: ExpressionFactory<SqlBool>): DeleteQuery<TRecord>;
-  whereRef(
-    lhs: ReferenceExpression,
-    op: ComparisonOperator,
-    rhs: ReferenceExpression,
-  ): DeleteQuery<TRecord>;
-  clearWhere(): DeleteQuery<TRecord>;
-  allowAllRows(): DeleteQuery<TRecord>;
-  execute(): Promise<DeleteResult>;
-  compile(): CompiledQuery;
-}
+await db
+  .query()
+  .updateTable('orders')
+  .set({ archived: true })
+  .where('status', '=', 'cancelled')
+  .execute();
 ```
 
-## ComparisonOperator
+多个写操作必须共同成功或失败时，使用同一个事务回调参数中的 `connection.query`。完整写入规则见[数据写入](../query/mutations.md)和[事务](../database/transactions.md)。
 
-```ts
-type ComparisonOperator =
-  | '='
-  | '!='
-  | '<>'
-  | '>'
-  | '>='
-  | '<'
-  | '<='
-  | 'in'
-  | 'not in'
-  | 'is'
-  | 'is not'
-  | 'like'
-  | 'not like';
-```
+## 检查和复用查询
 
-## ExpressionBuilder
+- `compile()` 用于检查即将执行的 SQL 和绑定参数，不执行查询。
+- `clearSelect()`、`clearWhere()`、`clearJoins()`、`clearGroupBy()`、`clearHaving()`、`clearOrderBy()`、`clearLimit()` 和 `clearOffset()` 按查询类型提供。
+- `clear*()` 返回新的 Query Builder，适合从一个基础查询派生不同变体。
 
-```ts
-interface ExpressionBuilder {
-  (
-    lhs: ReferenceExpression | Expression<unknown>,
-    op: ComparisonOperator,
-    rhs: OperandValueExpressionOrList,
-  ): Expression<SqlBool>;
+具体支持哪些 `clear*()` 方法，以当前 Query 类型声明为准。示例见[Query 编译与清除条件](../query/compile.md)。
 
-  readonly eb: ExpressionBuilder;
-  readonly fn: FunctionModule;
+## 能力边界
 
-  ref(reference: ReferenceExpression): Expression<unknown>;
-  val(value: unknown): Expression<unknown>;
-  and(
-    expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>,
-  ): Expression<SqlBool>;
-  or(
-    expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>,
-  ): Expression<SqlBool>;
-  not(expression: ExpressionInput<SqlBool>): Expression<SqlBool>;
-  between(
-    expr: ReferenceExpression | Expression<unknown>,
-    start: unknown,
-    end: unknown,
-  ): Expression<SqlBool>;
-  exists(query: SubqueryBuilder): Expression<SqlBool>;
-  selectFrom(table: string): SubqueryBuilder;
-  parens<T = unknown>(expression: ExpressionInput<T>): Expression<T>;
-}
-```
+- Query 使用 Connection 级查询标识符，不读取 Collection Metadata 或 Collection 级 naming override。
+- Query 不是 Collection-aware Repository，不自动解析 relation。
+- Query 不提供 raw SQL API。必须使用方言特有能力时，通过 `connection.client()` 进入底层 adapter，并明确可移植性边界。
+- 支持的比较操作符、表达式输入和泛型结果推导，以 `ComparisonOperator`、`ExpressionBuilder` 和各 Query 类型声明为准。
 
-## JoinBuilder
-
-```ts
-interface JoinBuilder {
-  on(
-    lhs: ReferenceExpression | Expression<unknown>,
-    op: ComparisonOperator,
-    rhs: OperandValueExpressionOrList,
-  ): JoinBuilder;
-  on(expression: Expression<SqlBool>): JoinBuilder;
-  on(factory: ExpressionFactory<SqlBool>): JoinBuilder;
-  onRef(
-    lhs: ReferenceExpression,
-    op: ComparisonOperator,
-    rhs: ReferenceExpression,
-  ): JoinBuilder;
-}
-```
-
-当前 API 对齐 Kysely，不提供 `orOn()` / `orOnRef()`。需要 OR join 条件时使用：
-
-```ts
-join.on((eb) =>
-  eb.or([
-    eb('o.customerId', '=', eb.ref('c.id')),
-    eb('o.fallbackCustomerId', '=', eb.ref('c.id')),
-  ]),
-);
-```
-
-## FunctionModule
-
-```ts
-interface FunctionModule {
-  count<T = number>(
-    column: ReferenceExpression | Expression<unknown>,
-  ): AggregateExpression<T>;
-  countAll<T = number>(table?: string): AggregateExpression<T>;
-  sum<T = number>(
-    column: ReferenceExpression | Expression<unknown>,
-  ): AggregateExpression<T>;
-  avg<T = number>(
-    column: ReferenceExpression | Expression<unknown>,
-  ): AggregateExpression<T>;
-  min<T = unknown>(
-    column: ReferenceExpression | Expression<unknown>,
-  ): AggregateExpression<T>;
-  max<T = unknown>(
-    column: ReferenceExpression | Expression<unknown>,
-  ): AggregateExpression<T>;
-}
-```
+从整体能力开始阅读 [QueryAdapter 概览](../query/overview.md)。

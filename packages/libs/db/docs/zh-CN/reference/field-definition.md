@@ -1,79 +1,43 @@
 ---
-title: FieldDefinition
-description: Collection 字段类型、公共选项、数据库扩展和 RelationFieldDefinition 的类型参考。
+title: FieldDefinition 用法
+description: 说明普通字段、原生数据库类型、物理检查信息和四类 Relation Field 的选择与名称语义。
 ---
 
-# FieldDefinition
+# FieldDefinition 用法
 
-FieldDefinition 描述 Collection 字段。
+FieldDefinition 描述普通字段，RelationFieldDefinition 描述 Collection 关系。本文解释如何选择和组合字段属性；精确字段类型、可选属性和引用动作以 TypeScript 声明为准。
 
-```ts
-interface FieldDefinition {
-  name: string;
-  type: FieldType;
-  title?: string;
-  description?: string;
-  nullable?: boolean;
-  defaultValue?: unknown;
-  primaryKey?: boolean;
-  autoIncrement?: boolean;
-  unique?: boolean;
-  index?: boolean;
-  length?: number;
-  precision?: number;
-  scale?: number;
-  unsigned?: boolean;
-  db?: DbOptions;
-}
-```
-
-## FieldType
-
-```ts
-type FieldType =
-  | 'increments'
-  | 'integer'
-  | 'bigInt'
-  | 'string'
-  | 'text'
-  | 'boolean'
-  | 'decimal'
-  | 'float'
-  | 'double'
-  | 'date'
-  | 'time'
-  | 'datetime'
-  | 'json'
-  | 'uuid'
-  | 'native'
-  | 'belongsTo'
-  | 'hasOne'
-  | 'hasMany'
-  | 'belongsToMany'
-  | string;
-```
-
-## name 和物理列名
-
-`name` 是应用层逻辑字段名。物理列名根据 Collection 的 `naming.underscored` 推导；默认转为 snake_case，`underscored: false` 时保持原样。不支持字段级 `columnName` 或 `naming`。
+## 定义普通字段
 
 ```ts
 {
   name: 'eventName',
   type: 'string',
+  length: 120,
+  nullable: false,
+  title: 'Event name',
 }
 ```
 
-上面的物理列名是 `event_name`。
+常用属性可以分为三组：
 
-## 应用层元信息
+| 目的     | 属性示例                                                           |
+| -------- | ------------------------------------------------------------------ |
+| 数据结构 | `type`、`nullable`、`defaultValue`、`length`、`precision`、`scale` |
+| 键和访问 | `primaryKey`、`autoIncrement`、`unique`、`index`                   |
+| 应用说明 | `title`、`description`                                             |
 
-- `title`
-- `description`
+支持的完整 `FieldType` 集合以类型声明为准。跨数据库代码优先使用通用类型；`native` 只用于明确依赖某一方言的数据库类型。
 
-这些信息用于应用和 Agent，不等同于数据库结构。
+## 理解逻辑名和物理列名
 
-## 数据库层配置
+`name` 是逻辑字段名。默认 `underscored: true` 时，`eventName` 对应物理列 `event_name`；`underscored: false` 时保持原样。
+
+字段不支持单独设置 `columnName` 或 `naming`。不要自行预测或保存物理列名；需要检查实际数据库列时使用 Schema Inspector。
+
+## 区分应用 Metadata 和数据库信息
+
+`title`、`description` 是应用层 Metadata，不等同于数据库结构。数据库原生类型或数据库 comment 放在 `db`：
 
 ```ts
 {
@@ -86,52 +50,32 @@ type FieldType =
 }
 ```
 
-Resolver 从物理 Schema 生成 Field 时，还会在 `db` 中保留当前通用 DSL 没有独立属性的只读事实：
+Resolver 还会在 `db` 中保留 Inspector 读取到的 default expression、generated column 和原生类型 Schema 等物理事实。这些值用于描述数据库现状，不会写入补充 Metadata，也不应被重新解释成 virtual Field。
 
-- `db.defaultExpression`：数据库返回的原始 default 表达式；只有 Inspector 同时解析出值时才设置
-  `defaultValue`；
-- `db.generated`：generated/computed column 的表达式和 stored 标记；
-- `db.nativeTypeSchema`：原生类型所属 schema（数据库能够提供时）。
+## 选择 Relation 类型
 
-这些属性来自 Inspector，不保存到 Collection Metadata，也不能把 generated column 重新解释成 virtual Field。
+| 关系            | 本地物理列 | 关键引用                              |
+| --------------- | ---------- | ------------------------------------- |
+| `belongsTo`     | 默认创建   | target、foreignKey、targetKey         |
+| `hasOne`        | 默认不创建 | target、foreignKey、sourceKey         |
+| `hasMany`       | 默认不创建 | target、foreignKey、sourceKey         |
+| `belongsToMany` | 默认不创建 | target、through、foreignKey、otherKey |
 
-## RelationFieldDefinition
+Relation 的 `target`、`through`、`sourceKey`、`targetKey`、`foreignKey` 和 `otherKey` 都是逻辑引用：
 
-```ts
-interface RelationFieldDefinition {
-  name: string;
-  type: 'belongsTo' | 'hasOne' | 'hasMany' | 'belongsToMany';
-  target: string;
-  sourceKey?: string;
-  targetKey?: string;
-  foreignKey?: string;
-  foreignKeyType?: FieldType;
-  otherKey?: string;
-  through?: string;
-  constraints?: boolean;
-  onDelete?: ReferentialAction;
-  onUpdate?: ReferentialAction;
-}
-```
+- `target` 指向目标 Collection。
+- `through` 指向中间 Collection。
+- `belongsTo.foreignKey` 指向当前 Collection 的本地字段。
+- `hasOne` 和 `hasMany` 的 `foreignKey` 指向目标 Collection 上的字段。
+- `belongsToMany` 的 `foreignKey` 和 `otherKey` 指向 through Collection 上的字段。
 
-这些关系参数都是逻辑引用，不直接表示物理名：
+需要自定义外键行为时使用 `constraints`、`onDelete` 和 `onUpdate`。不要把物理表名或列名写进 Relation 参数。
 
-- `target` 引用目标 Collection 的 `name`。
-- `through` 引用中间表 Collection 的 `name`。
-- `belongsTo.foreignKey` 引用当前 Collection 的本地外键字段 `name`。
-- `hasOne.foreignKey`、`hasMany.foreignKey` 引用 target Collection 上指回当前 Collection 的字段 `name`。
-- `belongsToMany.foreignKey`、`belongsToMany.otherKey` 引用 through Collection 上的字段 `name`。
-- `sourceKey` 引用 source Collection 的字段 `name`。
-- `targetKey` 引用 target Collection 的字段 `name`。
+## 常见选择
 
-关系字段也不支持自定义物理列名。`foreignKey` 始终引用逻辑字段名，并按固定规则转换为物理列名。
+- 自增主键使用 `increments`，无需再模拟独立序列。
+- `belongsTo` 需要本地外键列；可以显式定义该字段，但物理名称仍由逻辑名推导。
+- `hasOne`、`hasMany` 和 `belongsToMany` 是关系 Metadata，不应假设它们在当前 Collection 上创建列。
+- 数据完整性要求优先使用 constraint；`index` 主要表达访问性能需求。
 
-## Agent 注意事项
-
-- `type: 'increments'` 会被编译成自增字段。
-- `belongsTo` 会创建本地外键列。
-- `hasOne`、`hasMany`、`belongsToMany` 默认不创建本地物理列。
-- 需要跨数据库时，优先使用通用 FieldType。
-- 不要生成字段级物理名称映射。
-- 关系参数使用逻辑名，不要把物理名写进 `foreignKey`、`targetKey`、`through` 等参数。
-- 需要本地外键字段时可以显式定义它，但其物理名称仍由逻辑字段名推导。
+Fluent DSL 写法和 Relation 示例见 [Builder 字段](../builder/fields.md)与[Builder 关系](../builder/relations.md)。

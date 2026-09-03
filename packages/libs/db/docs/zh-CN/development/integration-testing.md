@@ -156,7 +156,7 @@ Query 真实测试覆盖：
 - naming / underscored / alias
 - compile
 
-## Agent 注意事项
+## 维护注意事项
 
 - 修改 Builder 编译或 adapter 行为后，应跑 `npm run test:integration:all`。
 - SQLite 通过不代表 PostgreSQL、MySQL、Oracle 或 SQL Server 一定通过。

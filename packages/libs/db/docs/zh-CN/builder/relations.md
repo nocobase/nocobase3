@@ -113,7 +113,7 @@ collection.bigInt('createdById');
 collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 ```
 
-## Agent 注意事项
+## 使用注意事项
 
 - 只有 `belongsTo` 默认创建本地物理列。
 - `belongsTo` 的外键约束需要显式 `constraints(true)`。

@@ -10,7 +10,7 @@ import {
   SchemaManagementNotAllowedError,
   type DatabaseConnection,
 } from '../../../src/index.js';
-import { CollectionRenameAtomicityError } from '../../../src/collection/builder/index.js';
+import { CollectionRenameAtomicityError } from '../../../src/collection/builder/builder.js';
 import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
 import { resolveDatabaseCapabilities } from '../../../src/database/capabilities.js';
 import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex/config.js';

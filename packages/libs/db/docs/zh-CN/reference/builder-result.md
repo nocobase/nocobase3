@@ -1,43 +1,26 @@
 ---
-title: BuilderResult
-description: Builder 执行结果的字段参考，包括 Collection operation、Schema operation、SQL、warning 和影响等级。
+title: BuilderResult 用法
+description: 解释 BuilderResult 中执行计划、Schema 操作、SQL 预览、能力 warning 和影响等级的使用方式。
 ---
 
-# BuilderResult
+# BuilderResult 用法
 
-Builder API 返回 `BuilderResult`，用于描述执行结果、编译结果、SQL 预览和影响等级。
+Builder API 返回 `BuilderResult`，供调用方查看输入计划、编译结果、SQL 预览和风险。本文解释字段语义；精确结构以 TypeScript 声明为准。
 
-```ts
-interface BuilderResult {
-  operations: CollectionOperation[];
-  schemaOperations?: SchemaOperation[];
-  sql?: string[];
-  metadata?: MetadataChangeSet;
-  warnings?: BuilderWarning[];
-  impact?: BuilderImpact[];
-}
-```
+## 读取结果
 
-## operations
+| 字段               | 含义                              | 适合用途                      |
+| ------------------ | --------------------------------- | ----------------------------- |
+| `operations`       | 原始 Collection operation         | 展示请求、审计逻辑变更        |
+| `schemaOperations` | 编译后的数据库 Schema operation   | 诊断命名转换和方言计划        |
+| `sql`              | adapter 可提供的 SQL 预览         | dry-run 展示和调试            |
+| `warnings`         | 方言能力降级、跳过或忽略          | 决定展示、阻止或接受 fallback |
+| `impact`           | safe、warning 或 destructive 影响 | 审批和危险操作保护            |
+| `metadata`         | 预留的 Metadata change summary    | 当前不要依赖                  |
 
-原始 Collection operation。
+当前 Builder 不填充 `metadata`。审计流程应读取 `operations`、`schemaOperations`、`warnings` 和 `impact`；纯 Metadata 更新由 `connection.collectionMetadata` 完成，也不返回 `BuilderResult`。
 
-```ts
-result.operations;
-```
-
-## metadata
-
-`metadata` 字段当前不填充。Agent、CLI 或 UI 需要审计时，应读取 `operations`、`schemaOperations`、`warnings` 和 `impact`，不得依赖 `metadata`。
-
-## schemaOperations
-
-编译后的数据库 schema operation。纯 Metadata 更新使用 `connection.collectionMetadata`，不返回
-`BuilderResult`。
-
-## sql
-
-当 `previewSql: true` 且 adapter 支持 SQL 编译时返回。
+## 预览 SQL
 
 ```ts
 const result = await builder.createCollection('orders', definition, {
@@ -48,52 +31,34 @@ const result = await builder.createCollection('orders', definition, {
 console.log(result.sql);
 ```
 
-## impact
+只有当前 adapter 支持 SQL 编译时才返回 `sql`。SQL 是诊断输出，不应保存为跨数据库 DSL 或代替 `operations`。
 
-影响等级：
+## 处理影响等级
 
-```ts
-type BuilderImpactLevel = 'safe' | 'warning' | 'destructive';
-```
+| level         | 含义               | 建议处理                     |
+| ------------- | ------------------ | ---------------------------- |
+| `safe`        | 通常不损失现有数据 | 正常展示或执行               |
+| `warning`     | 需要调用方理解影响 | 展示说明并按场景决定是否继续 |
+| `destructive` | 可能删除数据或结构 | 要求明确确认或审批           |
 
-示例：
+`strict` 不处理 destructive 确认。自动化执行前应独立检查 `impact`。
 
-```ts
-[
-  {
-    level: 'destructive',
-    operation: 'dropField',
-    message: 'Dropping field users.name may remove existing data.',
-  },
-];
-```
+## 处理 capability warning
 
-## warnings
+Warning 的两个维度需要一起判断：
 
-`warnings` 用于表达 capability 降级、跳过和方言限制。
+| 属性                    | 典型含义                           |
+| ----------------------- | ---------------------------------- |
+| `fallback: 'downgrade'` | 以语义较弱但可工作的形式执行       |
+| `fallback: 'skip'`      | 跳过当前数据库不支持的 Schema 片段 |
+| `fallback: 'ignore'`    | 忽略对当前方言无意义的配置         |
+| `severity: 'warning'`   | 通常可继续，但应展示提示           |
+| `severity: 'unsafe'`    | 存在语义损失，生产执行应阻止       |
 
-```ts
-interface BuilderWarning {
-  code: string;
-  message: string;
-  path?: Array<string | number>;
-  capability?: string;
-  dialect?: string;
-  fallback?: 'downgrade' | 'skip' | 'ignore';
-  severity?: 'warning' | 'unsafe';
-}
-```
+Migration、CI 和生产发布通常使用 `strict: true` 阻止真实执行中的 capability warning。需要先查看 warning 时组合 `dryRun: true`。
 
-常见含义：
+## 建立审计记录
 
-- `fallback: 'downgrade'`：已安全降级，例如 deferrable constraint 变成普通 constraint。
-- `fallback: 'skip'`：相关 schema 片段被跳过，例如不支持 materialized view。
-- `fallback: 'ignore'`：相关配置被忽略，例如 SQLite 下的 `db.schema`。
-- `severity: 'warning'`：通常可以继续执行，但调用方应展示提示。
-- `severity: 'unsafe'`：存在语义损失，migration / CI / 生产发布应使用 `strict: true` 阻止执行。
+审计日志优先保存结构化的 `operations`、`schemaOperations`、`warnings` 和 `impact`，并记录实际执行环境和数据库方言。不要只保存生成 SQL，因为不同 adapter 和版本可能产生不同 SQL 表达。
 
-## Agent 注意事项
-
-- 执行 destructive 操作前，检查 `impact`。
-- 自动化流程可以把 `operations` 和 `schemaOperations` 作为审计日志。
-- `sql` 只用于预览，不应作为跨数据库 DSL 的 canonical source。
+选项组合见 [Builder 执行选项](./builder-options.md)，方言 fallback 见[Builder 方言能力](../builder/dialect-capabilities.md)。

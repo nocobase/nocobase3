@@ -7,7 +7,7 @@ description: 按逻辑名称读取、列举、扫描、刷新和校验由物理 
 
 `connection.collections` 是连接级属性，没有 `db.collections()` 快捷入口。它把物理数据库 Schema 与补充 Metadata 解析成完整 `CollectionDefinition`。
 
-## Agent 契约
+## 使用边界
 
 | 项目             | 内容                               |
 | ---------------- | ---------------------------------- |

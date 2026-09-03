@@ -40,6 +40,7 @@
         "CollectionDefinitionBuilder",
         "CollectionMetadataDocument",
         "CollectionMetadataStore",
+        "CollectionOperation",
         "ComparisonOperator",
         "ConnectionConfig",
         "CreateMigratorOptions",

@@ -5,7 +5,7 @@ description: 建立 @nocobase/db 的 Collection、Metadata 和命名心智模型
 
 # 核心概念
 
-本目录只解释当前版本中跨 API 共享的稳定概念。具体方法、参数和可运行示例以对应主题文档与 [API 索引](../reference/api-index.md) 为准。
+本目录只解释当前版本中跨 API 共享的稳定概念。具体用法和可运行示例以对应主题文档与[公开 API 导航](../reference/api-index.md)为准，精确接口以 TypeScript 类型声明为准。
 
 ## 阅读路径
 
@@ -29,7 +29,7 @@ description: 建立 @nocobase/db 的 Collection、Metadata 和命名心智模型
 | 更新补充 Metadata   | [Collection Metadata](../collection-metadata/overview.md) |
 | 编写数据库升级      | [Migration](../migration/overview.md)                     |
 
-## Agent 边界
+## 使用边界
 
 - 本目录描述概念，不替代 TypeScript 类型和 API 参考。
 - 内部组件和实现算法位于 [`internals/`](../internals/README.md)。

@@ -1,45 +1,22 @@
 ---
-title: Collection Metadata Document
-description: Collection Metadata Document 的公共类型、defineCollectionMetadata 辅助、严格运行时校验和 Store 合同参考。
+title: Collection Metadata Document 用法
+description: 定义和校验补充 Collection Metadata，并选择公开 Store、revision 和 compare-and-swap 用法。
 ---
 
-# Collection Metadata Document
+# Collection Metadata Document 用法
 
 `CollectionMetadataDocument` 保存物理 Schema 无法表达的补充信息。表、列、类型、默认值、索引和约束仍以数据库物理 Schema 为准，不应写入 Metadata 文档。
 
-```ts
-interface CollectionMetadataDocument {
-  version: 1;
-  name: string;
-  naming?: {
-    underscored?: boolean;
-    tablePrefix?: string;
-  };
-  title?: string;
-  description?: string;
-  fields?: Record<
-    string,
-    {
-      title?: string;
-      description?: string;
-    }
-  >;
-  relations?: Record<
-    string,
-    {
-      type: 'belongsTo' | 'hasOne' | 'hasMany' | 'belongsToMany';
-      target: string;
-      sourceKey?: string;
-      targetKey?: string;
-      foreignKey?: string;
-      otherKey?: string;
-      through?: string;
-      title?: string;
-      description?: string;
-    }
-  >;
-}
-```
+| 内容                    | 用途                                  |
+| ----------------------- | ------------------------------------- |
+| `version`               | 选择文档格式；当前只接受版本 1        |
+| `name`                  | 标识逻辑 Collection                   |
+| `naming`                | 补充 Collection 级命名覆盖            |
+| `title` / `description` | 描述 Collection 的应用语义            |
+| `fields`                | 按逻辑字段名补充 title 和 description |
+| `relations`             | 按逻辑名称声明 relation 及其应用信息  |
+
+Relation 支持的类型和引用属性以 `RelationMetadata` 声明为准。不要在文档里复制物理 Schema 或自定义物理名称。
 
 ## 定义辅助
 
@@ -120,18 +97,18 @@ await store.delete(updated.document.name, {
 `list({ limit, cursor })` 按 Collection 名称稳定分页，只返回 revision、naming、title 和 description 等轻量
 摘要。默认 limit 为 100，最大为 1000。
 
-已实现的后端包括：
+业务代码可以显式选择：
 
 - `InMemoryCollectionMetadataStore`：用于测试或显式临时场景；
-- `DatabaseCollectionMetadataStore`：通过自包含内部表持久化文档，使用递增数字 revision 和数据库 CAS；
 - `ModuleCollectionMetadataStore`：加载已导入的 TypeScript 文档数组，只读，使用规范内容的 SHA-256 revision；
-- `TransactionCollectionMetadataStore`：事务中的隔离覆盖层，提交后向基础 Store 执行 CAS 回放；
+
+Managed Connection 未显式配置 Store 时，会自动使用内部数据库 Store；事务覆盖层也由 Connection 生命周期管理。它们不是需要业务代码直接构造的公开入口。
 
 Module Store 的 `put()` 和 `delete()` 固定抛出 `METADATA_STORE_READ_ONLY`。当前不提供可写 JSON/YAML File Store，不能把 Module Store 当作运行时文件编辑器。
 
 Store 的 `capabilities.writable` 只表示补充 Metadata 文档是否支持写入。它与业务记录的写权限无关，
 也不取代 `schemaManagement` 对 DDL 和 Migration 的控制。
 
-各后端的构造方式和持久化边界见 [Metadata Store 后端实现](../internals/metadata/store-backends.md)。
+维护底层实现时再阅读 [Metadata Store 后端实现](../internals/metadata/store-backends.md)。
 
 旧完整 Collection 定义的显式迁移工具见[旧 Collection 定义转换](./legacy-collection-metadata-extraction.md)。

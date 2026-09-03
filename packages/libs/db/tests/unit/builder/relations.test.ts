@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/collection/builder/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
 
 describe('CollectionBuilder relation fields', () => {
   it('compiles belongsTo as a local foreign key column with optional constraint', async () => {

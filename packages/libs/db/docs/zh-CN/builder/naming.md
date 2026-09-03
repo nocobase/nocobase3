@@ -114,7 +114,7 @@ Builder 会在 DDL 前检查所有 Metadata。Relation target/through、Foreign 
 
 `db.query()` 使用 Connection 的 `underscored` 和 `tablePrefix`，但不读取 Collection Metadata，因此不知道 Collection 覆盖的 naming。详见 [Query 命名归一化](../query/naming.md)。
 
-## Agent 注意事项
+## 使用注意事项
 
 - 始终生成逻辑 Collection 和 Field 名。
 - 需要保留 camelCase 物理 identifier 时配置 `naming.underscored: false`。

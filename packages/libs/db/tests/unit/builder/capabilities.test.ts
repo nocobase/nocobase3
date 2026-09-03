@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type DatabaseCapabilities } from '../../../src/schema/adapter.js';
-import { CollectionBuilder } from '../../../src/collection/builder/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
 import { UnsupportedCapabilityError } from '../../../src/schema/capabilities.js';
 
 const sqliteCapabilities: DatabaseCapabilities = {

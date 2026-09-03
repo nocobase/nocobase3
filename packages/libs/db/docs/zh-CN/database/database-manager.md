@@ -5,7 +5,7 @@ description: DatabaseManager 的默认连接快捷 API、Migrator、Seeder 和�
 
 # `DatabaseManager`：应用级数据库入口
 
-## Agent 契约
+## 使用边界
 
 | 项目     | 内容                                                |
 | -------- | --------------------------------------------------- |

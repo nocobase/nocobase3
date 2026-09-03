@@ -62,4 +62,4 @@ Seed Context 只有 `query` 和 `connection`，没有 `builder`。默认 `transa
 - 已发布 Seed 不修改、不插队；变化通过更晚的新 Seed 表达。
 - 不提供 rollback、refresh、truncate 或 repeatable 行为。
 
-继续阅读：[创建 Seeder](./create-seeder.md)、[Agent Seed 工作流](../agent/implement-seed-data.md)。
+继续阅读：[创建 Seeder](./create-seeder.md)、[安装默认数据指南](../agent/implement-seed-data.md)。

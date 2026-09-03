@@ -64,10 +64,10 @@ await builder.refreshMaterializedViewCollection('adultUsers');
 
 SQLite 和 MySQL 不支持 PostgreSQL 风格的 materialized view。当前真实数据库集成测试只覆盖普通 view。
 
-## Agent 注意事项
+## 使用注意事项
 
 - 优先使用结构化 `view.as(...)`。
-- `asRaw` 需要 Agent 明确知道目标数据库方言。
+- 使用 `asRaw` 前必须明确目标数据库方言。
 - 不要假设所有数据库支持 materialized view。
 - `kind: 'view'` 或 `kind: 'materializedView'` 只描述数据库对象类型；Collection definition 不保存
   `writable`。记录 mutation 能力由数据库和上层权限控制。

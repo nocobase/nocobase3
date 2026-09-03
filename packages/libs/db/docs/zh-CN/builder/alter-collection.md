@@ -91,7 +91,7 @@ await builder.dropCollection('orders');
 
 `alterCollection`、`addField`、`alterField`、`dropField`、`dropCollection` 和 `renameCollection` 都可能修改数据库结构。
 
-## Agent 注意事项
+## 使用注意事项
 
 - 删除字段或删除 Collection 前，应先 dry-run。
 - 字段重命名当前没有独立 API，可用 add + migrate data + drop 的方式表达。

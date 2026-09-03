@@ -74,7 +74,7 @@ await analytics.transaction(async (connection) => {
 });
 ```
 
-## Agent 注意事项
+## 使用注意事项
 
 - transaction 内只使用回调里的 `connection`。
 - 需要 Builder、Query 混合操作时，也应全部走同一个事务 connection。

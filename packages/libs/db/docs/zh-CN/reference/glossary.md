@@ -10,7 +10,7 @@ description: 定义 @nocobase/db 当前实现中的 Collection、Metadata、命�
 | Collection                  | 应用层数据模型抽象，可以映射到表、视图或物化视图。                                                  |
 | Collection DSL              | 描述 Collection 的结构化定义语言。                                                                  |
 | Collection Builder          | 执行 Collection 创建和变更的核心 API。                                                              |
-| CollectionOperation         | Builder 的结构化执行计划。                                                                          |
+| CollectionOperation         | `builder.apply()` 接收并从根入口导出的结构化 Schema 执行计划类型。                                  |
 | Field                       | Collection 的应用层字段。                                                                           |
 | Column                      | 数据库物理列。                                                                                      |
 | `field.name`                | 应用层字段名。                                                                                      |
@@ -51,11 +51,11 @@ description: 定义 @nocobase/db 当前实现中的 Collection、Metadata、命�
 例如：
 
 - 使用 `createCollection`，不要写成“创建集合方法”。
-- 使用 `CollectionOperation`，不要写成“集合操作”。
+- 使用 `CollectionOperation` 或 `builder.apply()`，不要写成“集合操作”。
 - 使用 `SchemaAdapter`，不要写成“结构适配器”。
 
-## Agent 注意事项
+## 使用注意事项
 
-Agent 生成代码或解释 API 时，应优先使用英文 API 名和类型名，中文只用于解释含义。涉及命名映射时，应按照[命名概念](../concepts/naming/overview.md)明确区分逻辑名、Connection 相对查询标识符和物理名。
+代码和 API 说明应优先使用英文 API 名和类型名，中文只用于解释含义。涉及命名映射时，应按照[命名概念](../concepts/naming/overview.md)明确区分逻辑名、Connection 相对查询标识符和物理名。
 
 Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 当前未实现，不属于本术语表描述的当前 API；相关名词只在 [Repository 提案](../proposals/repository/overview.md)中使用。

@@ -1,46 +1,46 @@
 ---
 title: DB 文档目录
-description: 按公开 API、Agent 任务、开发维护、内部实现、未来提案和历史归档列出 @nocobase/db 的完整文档地图。
+description: 按当前用法、任务、开发维护、内部实现、未来提案和历史归档列出 @nocobase/db 的完整文档地图。
 ---
 
 # DB 文档目录
 
-本页列出 `@nocobase/db` 的全部文档。编写当前业务代码时，优先阅读“开始使用”“Agent 任务指南”和各公开 API 主题；`internals/`、`proposals/` 与 `archive/` 具有不同的使用边界。
+本页列出 `@nocobase/db` 的全部文档。编写当前业务代码时，优先阅读“开始使用”“按任务选择”和各公开 API 主题；`internals/`、`proposals/` 与 `archive/` 具有不同的使用边界。
 
 ## 如何选择
 
-| 目标              | 从这里开始                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------ |
-| 第一次使用 DB 包  | [DB 概览](./overview.md)和[快速开始](./quick-start.md)                               |
-| 让 Agent 实现业务 | [Agent 任务路由](./agent/task-router.md)                                             |
-| 按 API 名查文档   | [API 索引](./reference/api-index.md)                                                 |
-| 维护 DB 包源码    | [源码与测试布局](./development/package-layout.md)和[内部实现](./internals/README.md) |
+| 目标             | 从这里开始                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| 第一次使用 DB 包 | [DB 概览](./overview.md)和[快速开始](./quick-start.md)                               |
+| 按业务任务选 API | [数据库任务路由](./agent/task-router.md)                                             |
+| 按 API 名查文档  | [公开 API 导航](./reference/api-index.md)                                            |
+| 维护 DB 包源码   | [源码与测试布局](./development/package-layout.md)和[内部实现](./internals/README.md) |
 
-| 文档区域                | 用途                                 | 能否指导当前业务代码     |
-| ----------------------- | ------------------------------------ | ------------------------ |
-| 公开主题与 `reference/` | 当前 API、行为与类型参考             | 可以；类型声明是最终依据 |
-| `agent/`                | 从业务任务路由到 API、代码位置和验证 | 可以                     |
-| `development/`          | 维护 DB 包、Migration 和 Seed        | 仅用于对应维护任务       |
-| `internals/`            | 当前内部实现和诊断                   | 不应据此绕过公开 API     |
-| `proposals/`            | 尚未实现的设计                       | 不可以                   |
-| `archive/`              | 已被替代的历史材料                   | 不可以                   |
+| 文档区域                | 用途                          | 能否指导当前业务代码         |
+| ----------------------- | ----------------------------- | ---------------------------- |
+| 公开主题与 `reference/` | 当前 API、行为与类型参考      | 可以；类型声明是最终依据     |
+| `agent/`                | 按业务任务选择当前公开 API    | 可以；精确接口以类型声明为准 |
+| `development/`          | 维护 DB 包、Migration 和 Seed | 仅用于对应维护任务           |
+| `internals/`            | 当前内部实现和诊断            | 不应据此绕过公开 API         |
+| `proposals/`            | 尚未实现的设计                | 不可以                       |
+| `archive/`              | 已被替代的历史材料            | 不可以                       |
 
 ## 开始使用
 
 - [`@nocobase/db` 概览](./overview.md)：理解包的能力、对象关系、阅读路径和当前边界。
 - [快速开始](./quick-start.md)：运行 DatabaseManager、Migration、Seed、Query、Transaction 和 Collections 的最小完整流程。
 
-## Agent 任务指南
+## 按任务选择
 
-- [AI Agent 数据库开发入口](./agent/index.md)：查看 Agent 核心对象、最高优先级规则和能力状态。
-- [Agent 任务路由](./agent/task-router.md)：根据业务目标选择 API、文件位置、必读文档和最低验证。
+- [数据库任务入口](./agent/index.md)：从 Schema、数据访问、Seed、Metadata 或外部数据库任务进入。
+- [数据库任务路由](./agent/task-router.md)：根据业务目标选择当前公开 API 和用法文档。
 - [使用 Migration 实现业务 Schema 变更](./agent/implement-schema-change.md)：新增或修改 Collection、Field、Index 和 Constraint。
 - [使用 Query 和 Transaction 实现数据访问](./agent/implement-data-access.md)：实现记录查询、写入和原子操作。
 - [使用 Seed 实现安装默认数据](./agent/implement-seed-data.md)：创建幂等的一次性安装数据。
 - [选择 Collections、Schema Inspector 与 Metadata API](./agent/work-with-collections-and-metadata.md)：区分物理 Schema、完整 Collection 和补充 Metadata。
 - [接入外部数据库](./agent/connect-external-database.md)：配置 external Connection 并组合 Inspector、Module Metadata、Collections 和 Query。
-- [Agent 实现护栏](./agent/guardrails.md)：检查禁止接口、事务、命名、Migration 和跨数据库约束。
-- [Agent 验证指南](./agent/verification.md)：按变更范围选择测试、类型检查、构建和多方言验证。
+- [实现护栏](./agent/guardrails.md)：检查当前 API 的危险边界和常见误用。
+- [验证指南](./agent/verification.md)：按改动范围选择测试、类型检查、构建和多方言验证。
 
 ## 核心概念
 
@@ -71,7 +71,7 @@ description: 按公开 API、Agent 任务、开发维护、内部实现、未来
 - [创建与维护 View Collection](./builder/view-collections.md)：创建、替换和刷新 View 或 Materialized View。
 - [Builder 命名](./builder/naming.md)：处理 `underscored`、`tablePrefix` 和 rename 安全边界。
 - [Builder 方言能力](./builder/dialect-capabilities.md)：处理不同数据库的 warning、fallback 和 strict 模式。
-- [批量应用 CollectionOperation](./builder/apply-operations.md)：执行结构化操作、dry-run、SQL 预览和影响审计。
+- [批量应用结构化操作](./builder/apply-operations.md)：执行结构化操作、dry-run、SQL 预览和影响审计。
 
 ## QueryAdapter
 
@@ -109,15 +109,15 @@ description: 按公开 API、Agent 任务、开发维护、内部实现、未来
 - [`defineSeed()`](./seed/define-seed.md)：编写幂等、事务安全且不可变的 Seed 文件。
 - [`db.createSeeder()`](./seed/create-seeder.md)：绑定 Seed Source，处理 checksum、锁和失败重试。
 
-## API Reference
+## 公开 API 导航
 
-- [`@nocobase/db` API 索引](./reference/api-index.md)：按公开导出和对象查找参考文档。
+- [`@nocobase/db` 公开 API 导航](./reference/api-index.md)：按能力和类型主题查找用法文档。
 - [`DatabaseConfig`](./reference/database-config.md)：查看 Manager、Connection、方言、命名和 Metadata Store 配置类型。
 - [`BuilderExecOptions`](./reference/builder-options.md)：查看 dry-run、SQL 预览、Metadata 同步和 strict 等选项。
 - [`BuilderResult`](./reference/builder-result.md)：查看 operation、SQL、warning 和影响等级。
 - [`CollectionDefinition`](./reference/collection-definition.md)：查看 Collection、Naming、Constraint 和 Index 类型。
 - [`FieldDefinition`](./reference/field-definition.md)：查看普通 Field 和 Relation Field 类型。
-- [`CollectionOperation`](./reference/collection-operation.md)：查看 Builder 结构化执行计划格式。
+- [`CollectionOperation`](./reference/collection-operation.md)：定义 Builder 结构化执行计划，并理解 apply、dry-run 和 Metadata 边界。
 - [Collection Metadata Document](./reference/collection-metadata-document.md)：查看文档类型、定义辅助、严格校验和 Store 合同。
 - [旧 Collection 定义转换](./reference/legacy-collection-metadata-extraction.md)：仅在显式迁移旧完整定义时使用 `extractLegacyCollectionMetadata()`。
 - [QueryAdapter API](./reference/query-api.md)：查看 Query、ExpressionBuilder 和各类终止方法的接口。

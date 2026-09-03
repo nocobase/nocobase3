@@ -7,7 +7,7 @@ description: 使用 db.query() 或 connection.query 执行 select、insert、upd
 
 `QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM；它只负责用一套跨数据库的基础 API 查询和写入数据库表。
 
-## Agent 契约
+## 使用边界
 
 | 项目                       | 内容                                 |
 | -------------------------- | ------------------------------------ |
@@ -20,18 +20,7 @@ description: 使用 db.query() 或 connection.query 执行 select、insert、upd
 | External Connection        | 可执行记录读写，受数据库账号权限控制 |
 | 不负责                     | Repository、relation-aware CRUD      |
 
-当前 API 按操作类型拆分入口，整体参考 Kysely：
-
-```ts
-interface QueryAdapter {
-  selectFrom<TRecord extends Row = Row>(
-    table: string,
-  ): SelectQuery<TRecord, Row>;
-  insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
-  updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
-  deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
-}
-```
+当前 API 按操作类型提供 `selectFrom()`、`insertInto()`、`updateTable()` 和 `deleteFrom()` 四个入口，整体参考 Kysely。具体组合方式见 [QueryAdapter 用法参考](../reference/query-api.md)，精确类型以 TypeScript 声明为准。
 
 查询执行方法也对齐 Kysely 的语义：
 
@@ -111,7 +100,7 @@ await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 - QueryAdapter 不提供 raw SQL API。确实需要数据库专用能力时，可以通过 `await connection.client()` 获取底层 client；该逃生口不保证跨数据库可移植，也不会应用高层 Schema guard。
 - 复杂业务查询应在业务模块中封装，并明确其方言和命名假设。
 
-## Agent 注意事项
+## 常见误用
 
 - 写查询代码时，优先使用 `selectFrom()`、`insertInto()`、`updateTable()`、`deleteFrom()`。
 - 查询执行使用 `execute()`、`executeTakeFirst()`、`executeTakeFirstOrThrow()`。

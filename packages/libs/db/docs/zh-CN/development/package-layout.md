@@ -5,7 +5,7 @@ description: 按职责说明 @nocobase/db 的源码模块、测试分层和新�
 
 # DB 包源码与测试布局
 
-本页帮助维护者和 Agent 定位实现与测试。它只列稳定的职责边界；具体文件以源码目录为准。
+本页帮助维护者定位实现与测试。它只列稳定的职责边界；具体文件以源码目录为准。
 
 ## 源码模块
 
@@ -79,7 +79,7 @@ tests/
 | Migration                           | `tests/unit/migration/` 和 `tests/integration/migration/`     |
 | Seed                                | `tests/unit/seed/` 和 `tests/integration/seed/`               |
 
-## Agent 约束
+## 维护约束
 
 - 新增公开 API 时，显式加入根入口并更新 API 基线；不要让调用方导入深层实现文件。
 - QueryAdapter 测试不得假设它读取 Collection Metadata；需要 Collection 解析时使用 `connection.collections`。
@@ -91,4 +91,4 @@ tests/
 - [集成测试](./integration-testing.md)
 - [Migration 维护](./migration-maintenance.md)
 - [Seed 维护](./seed-maintenance.md)
-- [Agent 验证清单](../agent/verification.md)
+- [验证指南](../agent/verification.md)

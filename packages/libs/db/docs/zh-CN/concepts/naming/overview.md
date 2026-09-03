@@ -50,7 +50,7 @@ Collection 可以覆盖 Connection 的 `underscored` 和 `tablePrefix`。没有�
 | `connection.schemaInspector` | 物理名称                  | 否                     | 否                          |
 | `connection.client()`        | 物理名称                  | 否                     | 否                          |
 
-这一区分是 Agent 生成代码时最重要的约束。不要把 Inspector 返回的完整物理表名直接传给普通 Query；Query 会把它再次当作相对标识符应用 Connection naming。
+这一区分是使用 DB API 时最重要的约束。不要把 Inspector 返回的完整物理表名直接传给普通 Query；Query 会把它再次当作相对标识符应用 Connection naming。
 
 ## 逻辑引用
 
@@ -71,7 +71,7 @@ Collection DSL 不支持自定义 `tableName`、`columnName` 或 `namingStrategy
 
 Collection 创建后再修改 `underscored` 或 `tablePrefix`，可能改变表、列、Index、Constraint、Foreign Key 和 View 引用。配置变更本身不会迁移已有数据库，生产环境必须通过显式 Migration 完成相应的物理 Schema 变更。
 
-## Agent 规则
+## 使用规则
 
 - Builder、Metadata、Relation 和结构化 View 中始终使用逻辑名。
 - Query 表来源使用不带 Connection 前缀的相对标识符。

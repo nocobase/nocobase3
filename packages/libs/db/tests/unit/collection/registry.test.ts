@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CollectionRegistry,
-  CollectionRelationValidationError,
-} from '../../../src/collection/registry/index.js';
+import { CollectionRegistry } from '../../../src/collection/registry/registry.js';
+import { CollectionRelationValidationError } from '../../../src/collection/registry/relation-validator.js';
 import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
 import type {
   ListPhysicalCollectionsOptions,

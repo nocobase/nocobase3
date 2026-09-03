@@ -7,7 +7,7 @@ description: 通过 db.builder() 或 connection.builder 使用逻辑名称管理
 
 `CollectionBuilder` 是当前公开的 Collection Schema 变更入口。它负责把 Collection DSL 转换为数据库 schema operation，并通过 `SchemaAdapter` 应用到底层数据库。
 
-## Agent 契约
+## 使用边界
 
 | 项目                | 内容                                   |
 | ------------------- | -------------------------------------- |
@@ -104,15 +104,14 @@ await builder.apply([
 ## 推荐选择
 
 - 写 migration 文件、插件代码或测试时，优先使用 Fluent DSL。
-- Agent 写 migration 文件或 TypeScript 代码时，也优先使用 Fluent DSL。
 - HTTP API、CLI、`collection.json` 和其他配置载体，优先使用 Object DSL。
 - file sync、snapshot diff、自动 apply 和审计场景，优先使用 Operation DSL。
 - 需要解释变更计划时，使用 `builder.apply()` 更清晰。
 - destructive 操作先用 `dryRun` 和 `previewSql`。
 
-## Agent 安全界面
+## 自动化安全界面
 
-完整 Builder API 适合高级开发者和框架内部使用。Agent 自动化场景建议再包一层更受限的操作界面：
+完整 Builder API 适合高级开发者和框架内部使用。自动化执行场景建议再包一层更受限的操作界面：
 
 - 只允许白名单 operation。
 - destructive 操作必须先 dry-run。
@@ -123,21 +122,11 @@ await builder.apply([
 
 ## 返回结果
 
-大部分 Builder API 返回 `BuilderResult`：
+大部分 Builder API 返回 `BuilderResult`，用于读取结构化操作、编译后的 Schema 操作、SQL 预览、能力 warning 和影响等级。字段语义见 [`BuilderResult`](../reference/builder-result.md)，精确类型以 TypeScript 声明为准。
 
-```ts
-interface BuilderResult {
-  operations: CollectionOperation[];
-  schemaOperations?: SchemaOperation[];
-  sql?: string[];
-  warnings?: BuilderWarning[];
-  impact?: BuilderImpact[];
-}
-```
+## 常见误用
 
-## Agent 注意事项
-
-- 不要让 Agent 直接拼 Knex schema builder。
+- 不要直接拼 Knex schema builder。
 - 不要把 `unique` 当普通 index 建模。
 - 不要把 `title`、`description` 写成 `db.comment`。
 - 不要假设所有数据库都支持物化视图。

@@ -72,4 +72,4 @@ Context 顶层没有 `database`、`schema`、`client` 或 `dialect`。Runner 在
 - 引入分支合并后不再修改该 Migration，后续修正创建新文件。
 - 不使用硬编码旧 checksum 绕过历史校验。
 
-继续阅读：[创建 Migrator](./create-migrator.md)、[执行与测试](./testing.md)、[Agent Schema 工作流](../agent/implement-schema-change.md)。
+继续阅读：[创建 Migrator](./create-migrator.md)、[执行与测试](./testing.md)、[业务 Schema 变更指南](../agent/implement-schema-change.md)。

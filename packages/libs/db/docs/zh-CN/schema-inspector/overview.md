@@ -7,7 +7,7 @@ description: 使用物理数据库 identity 只读检查 Schema、表、视图�
 
 Schema Inspector 是 Connection 上的只读物理数据库接口。它不使用 Collection 逻辑名，不读取补充 Metadata，也不修改数据库。
 
-## Agent 契约
+## 使用边界
 
 | 项目           | 内容                                       |
 | -------------- | ------------------------------------------ |
@@ -18,22 +18,7 @@ Schema Inspector 是 Connection 上的只读物理数据库接口。它不使用
 | 找不到对象     | `getPhysicalCollection()` 返回 `undefined` |
 | 方言差异       | 通过 `inspection` status 和 warnings 表达  |
 
-## API
-
-```ts
-interface SchemaInspector {
-  listSchemas(): Promise<PhysicalSchemaInfo[]>;
-  getPhysicalCollection(
-    identifier: PhysicalCollectionIdentifier,
-  ): Promise<PhysicalCollectionSchema | undefined>;
-  listPhysicalCollections(
-    options?: ListPhysicalCollectionsOptions,
-  ): Promise<PhysicalCollectionPage>;
-  scanPhysicalCollections(
-    options?: ScanPhysicalCollectionsOptions,
-  ): AsyncIterable<PhysicalCollectionSchema>;
-}
-```
+精确参数和返回类型以公开的 `SchemaInspector` TypeScript 声明为准。
 
 ## 最小示例
 

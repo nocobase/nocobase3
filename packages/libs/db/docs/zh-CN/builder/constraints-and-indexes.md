@@ -120,7 +120,7 @@ await builder.dropConstraint('orders', 'uk_orders_paid_at');
 
 方言能力、warning 和 strict 模式见[方言能力](./dialect-capabilities.md)。
 
-## Agent 注意事项
+## 使用注意事项
 
 - 数据完整性用 constraints。
 - 查询性能用 indexes。

@@ -84,7 +84,7 @@ Builder 会在执行前根据当前连接的 `capabilities` 生成 capability pl
 - SQL Server 不支持显式 `ON DELETE RESTRICT`，Builder 会编译为语义等价的 `NO ACTION`。
 - SQL Server 对整数直接执行 `AVG` 会截断小数，Query Adapter 会先转换为浮点数再聚合。
 
-## Agent 注意事项
+## 使用注意事项
 
 - 生成跨数据库代码时，优先使用通用字段类型。
 - 不要默认使用 `native`、`asRaw` 或 materialized view。

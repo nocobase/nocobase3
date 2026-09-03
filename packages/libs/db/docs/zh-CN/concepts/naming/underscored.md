@@ -33,7 +33,7 @@ export function snakeCase(value: string): string {
 | `OAuth2Tokens` | `oauth2_tokens`     | `OAuth2Tokens`       |
 | `APIKeys`      | `apikeys`           | `APIKeys`            |
 
-连续大写字母不会被自动分成单词，因此 `APIKeys` 得到 `apikeys`，而不是 `api_keys`。不要在 Agent 中使用另一套 snake_case 算法预测物理名称。
+连续大写字母不会被自动分成单词，因此 `APIKeys` 得到 `apikeys`，而不是 `api_keys`。不要使用另一套 snake_case 算法预测物理名称。
 
 ## Connection 与 Collection
 
@@ -74,7 +74,7 @@ Query 中显式 `select()`、Alias 和 `selectAll()` 的结果 key 还具有独�
 
 修改现有 Collection 的 `underscored` 可能改变表名、列名和依赖对象名称。生产数据库必须通过显式 Migration 完成重命名，不能只修改 Connection 或 Collection 配置。
 
-## Agent 规则
+## 使用规则
 
 - 未明确配置时按 `underscored: true` 理解。
 - 使用本文给出的实际转换算法，不要自行猜测缩写分词。

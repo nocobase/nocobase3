@@ -1,47 +1,15 @@
 ---
-title: AI Agent 数据库开发入口
-description: 面向编写 NocoBase 业务代码的 AI Agent，提供任务路由、API 选择、实现护栏和验证入口。
+title: 数据库任务入口
+description: 根据 Schema、数据访问、Seed、Metadata 和外部数据库任务选择 @nocobase/db 的推荐入口与用法文档。
 ---
 
-# AI Agent 数据库开发入口
+# 数据库任务入口
 
-本组文档帮助 Agent 先选对实现层，再生成可编译、可测试的代码。不要从 API 名称猜实现方式；先根据业务任务阅读[任务路由](./task-router.md)。
+本页只负责把任务路由到当前公开用法。项目约束以适用范围内的 `AGENTS.md` 为准，精确接口以 `@nocobase/db` 的 TypeScript 类型声明为准。
 
-如果尚未理解 Collection、Metadata 或名称层级，先阅读[核心概念](../concepts/README.md)。概念文档解释边界，具体实现仍以本组任务指南和正式 API 文档为准。
+先根据业务目标阅读[任务路由](./task-router.md)。如果尚未理解 Collection、Metadata 或名称层级，再阅读[核心概念](../concepts/README.md)。
 
-## 核心对象
-
-```text
-createDatabaseManager(config)
-  -> DatabaseManager
-       -> connection(name?)
-       -> builder(name?)
-       -> query(name?)
-       -> transaction(fn, name?)
-       -> createMigrator(options)
-       -> createSeeder(options)
-            |
-            v
-       DatabaseConnection
-         -> builder
-         -> query
-         -> collections
-         -> transaction()
-         -> schemaInspector
-         -> collectionMetadata
-```
-
-`DatabaseManager` 上的 `connection()`、`builder()` 和 `query()` 是方法。`DatabaseConnection` 上的 `builder`、`query`、`collections`、`schemaInspector` 和 `collectionMetadata` 是属性。
-
-## 五条最高优先级规则
-
-1. 持久化业务 Schema 变更写成新的 Migration；不要在应用启动时临时修改 Schema。
-2. Migration 的结构变更使用 `builder`，数据变更使用 `query`；Seed 只初始化数据。
-3. 事务内只使用回调参数里的 `connection`，不要回到外层 `db`。
-4. Builder 和 Collections 使用 Collection 逻辑名；Query 使用 Connection 相对查询标识符；Schema Inspector 使用物理数据库 identity。完整对照见[命名概念](../concepts/naming/overview.md)。
-5. Repository 尚未实现；不要生成 `db.repository()` 或 `connection.repository()`。
-
-## 按任务继续
+## 选择任务
 
 | 任务                            | 阅读                                                              |
 | ------------------------------- | ----------------------------------------------------------------- |
@@ -50,12 +18,7 @@ createDatabaseManager(config)
 | 添加安装默认数据                | [实现 Seed 数据](./implement-seed-data.md)                        |
 | 读取 Collection 或维护 Metadata | [Collection 与 Metadata](./work-with-collections-and-metadata.md) |
 | 接入外部数据库                  | [接入外部数据库](./connect-external-database.md)                  |
-| 检查禁止项和危险边界            | [实现护栏](./guardrails.md)                                       |
-| 确认测试和完成条件              | [验证指南](./verification.md)                                     |
+| 检查当前 API 的使用边界         | [实现护栏](./guardrails.md)                                       |
+| 选择与改动匹配的验证范围        | [验证指南](./verification.md)                                     |
 
-## 当前 API 状态
-
-- 当前可用：DatabaseManager、DatabaseConnection、Builder、Query、Collections、Schema Inspector、Migration、Seed、Collection Metadata。
-- 高级逃生口：`connection.schema`、`connection.client()`、独立 `createMigrator()`、独立 `createSeeder()`。
-- 提案中、不可生成：Repository、Select AST、Filter Builder、Filter AST、Sort AST。
-- 当前不提供：Writable File Metadata Store。
+查看能力关系时阅读[整体概览](../overview.md)；按 API 名称定位文档时使用[公开 API 导航](../reference/api-index.md)。

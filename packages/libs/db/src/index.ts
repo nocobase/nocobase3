@@ -29,6 +29,7 @@ export type {
   CollectionAlterBuilder,
   CollectionDefinition,
   CollectionDefinitionBuilder,
+  CollectionOperation,
   FieldDefinition,
   FieldDefinitionBuilder,
   RelationFieldBuilder,

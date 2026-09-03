@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { CollectionResolutionError } from '../../../src/collection/resolver/errors.js';
 import {
-  CollectionResolutionError,
   CollectionResolver,
   resolveCollection,
-  type CollectionResolutionContext,
-} from '../../../src/collection/resolver/index.js';
+} from '../../../src/collection/resolver/resolver.js';
+import type { CollectionResolutionContext } from '../../../src/collection/resolver/types.js';
 import type { CollectionMetadataDocument } from '../../../src/index.js';
 import type {
   PhysicalCollectionSchema,

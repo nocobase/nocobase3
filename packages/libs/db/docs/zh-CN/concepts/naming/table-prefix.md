@@ -88,7 +88,7 @@ Collection 创建后修改 `tablePrefix`，等同于修改物理表或 View 名�
 
 如果依赖不能安全、原子地更新，应拒绝变更，而不是只修改配置。
 
-## Agent 规则
+## 使用规则
 
 - Builder、Relation 和结构化 View 中使用逻辑 Collection 名，不手写前缀。
 - Query 表来源使用不带 Connection 前缀的相对标识符。

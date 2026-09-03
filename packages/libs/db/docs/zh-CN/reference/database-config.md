@@ -1,23 +1,17 @@
 ---
-title: DatabaseConfig
-description: 创建 DatabaseManager 时使用的默认连接、Connection 配置、Schema 管理模式和 Metadata Store 配置参考。
+title: Database 配置
+description: 选择默认连接、数据库方言、Schema 管理模式、命名规则和 Metadata Store；精确配置类型以 TypeScript 声明为准。
 ---
 
-# DatabaseConfig
+# Database 配置
 
-`DatabaseConfig` 用于创建 `DatabaseManager`。
+`DatabaseConfig` 描述一个 Manager 及其命名连接。配置从 `createDatabaseManager()` 或 `defineDatabase()` 进入；精确字段、方言联合类型和回调签名以 TypeScript 声明为准。
 
-```ts
-interface DatabaseConfig {
-  default?: string;
-  connections: Record<string, ConnectionConfig>;
-  metadataStore?: CollectionMetadataStore;
-}
-```
-
-## 基础配置
+## 创建最小配置
 
 ```ts
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
   connections: {
@@ -29,177 +23,51 @@ const db = createDatabaseManager({
 });
 ```
 
-`default` 指定默认连接名。如果不写，会使用 `connections` 中的第一个连接。
+`connections` 以名称区分数据库连接。`default` 指定 Manager 快捷方法使用的连接；省略时，当前实现使用配置中的第一个连接。应用配置应显式指定 `default`，避免连接顺序变化影响行为。
 
-## ConnectionConfig
+## 选择方言配置
 
-用户配置只描述数据库类型和连接参数，不暴露内部 adapter 配置：
+| 方言       | 默认驱动         | 关键配置                                                              |
+| ---------- | ---------------- | --------------------------------------------------------------------- |
+| SQLite     | `better-sqlite3` | `filename` 必填；内存数据库使用 `:memory:`                            |
+| PostgreSQL | `pg`             | 支持 host/port/database/username/password、`schema` 和 `ssl`          |
+| MySQL      | `mysql2`         | host/port 与 `socketPath` 二选一；支持 `charset`、`timezone` 和 `ssl` |
+| Oracle     | `oracledb`       | `serviceName` 必填；host 和 port 用于组成连接地址                     |
+| SQL Server | `tedious`        | 支持 `encrypt` 和 `trustServerCertificate`                            |
 
-```ts
-type ConnectionConfig =
-  | SqliteConnectionConfig
-  | PostgresConnectionConfig
-  | MysqlConnectionConfig
-  | OracleConnectionConfig
-  | MssqlConnectionConfig;
-```
+通常只配置 `dialect`，让 DB 包选择匹配的 `driver`。显式填写 `driver` 时必须与方言匹配。完整必填项和允许值由对应的 `SqliteConnectionConfig`、`PostgresConnectionConfig`、`MysqlConnectionConfig`、`OracleConnectionConfig` 和 `MssqlConnectionConfig` 类型约束。
 
-公共配置：
+所有方言都使用 `username`；DB 包负责转换为底层驱动需要的属性。当前不提供统一连接 URL 配置。
 
-```ts
-interface BaseConnectionConfig {
-  naming?: NamingOptions;
-  capabilities?: Partial<DatabaseCapabilities>;
-  metadataStore?: CollectionMetadataStore;
-  onCollectionMetadataInvalidationError?: (error: unknown) => void;
-  schemaManagement?: 'managed' | 'external';
-  debug?: boolean;
-  pool?: unknown;
-  driverOptions?: Record<string, unknown>;
-}
-```
+## 声明 Schema 所有权
 
-`dialect` 是必填字段。`driver` 是底层 Node.js 数据库驱动，通常不写，由 `dialect` 自动推导：
+`schemaManagement` 决定 NocoBase 是否拥有连接的物理 Schema：
 
-| dialect    | 默认 driver      |
-| ---------- | ---------------- |
-| `sqlite`   | `better-sqlite3` |
-| `postgres` | `pg`             |
-| `mysql`    | `mysql2`         |
-| `oracle`   | `oracledb`       |
-| `mssql`    | `tedious`        |
+| 模式       | 适用场景                     | Schema 行为                                                   |
+| ---------- | ---------------------------- | ------------------------------------------------------------- |
+| `managed`  | NocoBase 管理的数据库        | 允许 Builder DDL 和 Migration；这是默认值                     |
+| `external` | 已有或由其他系统管理的数据库 | 拒绝真实 Builder DDL 和 Migration；仍允许 dry-run 和 SQL 预览 |
 
-`driver` 如果显式填写，必须和 `dialect` 匹配。
+该选项不等于数据只读。External Connection 是否能查询或写入记录，取决于数据库账号权限和上层 ACL。`connection.client()` 不经过高层 Schema guard，不得用它绕过所有权边界。
 
-### schemaManagement
+## 配置命名和能力
 
-`schemaManagement` 声明 NocoBase 是否拥有这个 Connection 的物理 Schema，默认值是 `'managed'`：
+- `naming` 设置 Connection 级 `underscored` 和 `tablePrefix` 默认值。完整规则见[命名概念](../concepts/naming/overview.md)。
+- `capabilities` 只用于明确覆盖数据库能力判断，不应作为日常配置猜测方言支持情况。
+- `debug`、`pool` 和 `driverOptions` 用于连接诊断或底层驱动扩展。
 
-- `'managed'`：允许通过 Builder/Schema Adapter 执行 DDL，也允许运行 Migration。
-- `'external'`：真实 DDL 和 Migration 会以 `SCHEMA_MANAGEMENT_NOT_ALLOWED` 拒绝；Builder dry-run 和 SQL
-  预览仍然可用。
+常用连接参数应使用方言配置的顶层字段。只有当前类型尚未覆盖的驱动参数才放入 `driverOptions`；不要在其中放 `connectionString`、`uri`、`adapter`、`client` 或另一份连接配置。
 
-该配置不控制业务记录权限。外部 Schema 仍可通过 Query API 查询、插入、更新或删除记录，最终是否允许由
-数据库权限和上层 ACL 决定。`connection.client()` 是底层逃生口，不经过 Schema guard；直接用它执行 DDL
-时，调用者自行负责遵守 Schema 所有权边界。
+## 配置 Metadata Store
 
-SQLite：
+`metadataStore` 可以设在 Manager 或单个 Connection 上，Connection 级配置优先：
 
 ```ts
-interface SqliteConnectionConfig extends BaseConnectionConfig {
-  dialect: 'sqlite';
-  driver?: 'better-sqlite3';
-  filename: string;
-}
-```
+import {
+  createDatabaseManager,
+  InMemoryCollectionMetadataStore,
+} from '@nocobase/db';
 
-PostgreSQL：
-
-```ts
-type PostgresConnectionConfig = BaseConnectionConfig & {
-  dialect: 'postgres';
-  driver?: 'pg';
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  schema?: string | readonly string[];
-  ssl?: boolean | Record<string, unknown>;
-};
-```
-
-MySQL：
-
-```ts
-type MysqlConnectionConfig = BaseConnectionConfig & {
-  dialect: 'mysql';
-  driver?: 'mysql2';
-  charset?: string;
-  timezone?: string;
-  ssl?: boolean | Record<string, unknown>;
-} & (
-    | {
-        socketPath: string;
-        host?: never;
-        port?: never;
-        database?: string;
-        username?: string;
-        password?: string;
-      }
-    | {
-        host?: string;
-        port?: number;
-        database?: string;
-        username?: string;
-        password?: string;
-        socketPath?: never;
-      }
-  );
-```
-
-用户配置使用 `username`，内部会转换成底层 driver 需要的 `user`。
-
-Oracle：
-
-```ts
-type OracleConnectionConfig = BaseConnectionConfig & {
-  dialect: 'oracle';
-  driver?: 'oracledb';
-  host?: string;
-  port?: number;
-  serviceName: string;
-  username?: string;
-  password?: string;
-};
-```
-
-Oracle 使用 `serviceName`，内部组合为 `host:port/serviceName` 形式的 `connectString`。`oracledb` 6 默认使用 Thin mode，不要求安装 Oracle Instant Client。
-
-SQL Server：
-
-```ts
-type MssqlConnectionConfig = BaseConnectionConfig & {
-  dialect: 'mssql';
-  driver?: 'tedious';
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
-};
-```
-
-SQL Server 底层使用 Knex 的 `mssql` dialect 和 `tedious` driver。`encrypt` 控制传输加密；本地自签名测试环境可以设置 `trustServerCertificate: true`，生产环境应优先使用受信任证书。
-
-MySQL 的 `socketPath` 是另一种连接目标，可以和 `database`、`username`、`password` 一起使用，但不要和 `host`、`port` 混用。
-
-`driverOptions` 只放当前类型未覆盖的底层 driver 参数。常用连接参数必须平铺，不要放进 `driverOptions`。当前不提供连接 URL 配置方式，也不要在 `driverOptions` 里写 `connectionString` 或 `uri`。
-
-用户配置中不要写 `adapter`、`client` 或 `connection`。默认 adapter 是 Knex，内部会把用户配置归一化成 Knex 需要的 `client` 和 `connection`。
-
-## naming
-
-```ts
-type NamingOptions = {
-  underscored?: boolean;
-  tablePrefix?: string;
-};
-```
-
-`underscored` 控制是否把逻辑名转换为小写下划线，默认 `true`；`tablePrefix` 是 Connection 上的默认表前缀。Collection 可以局部覆盖两项配置，但不支持注入自定义 `namingStrategy`。
-
-`naming` 是 connection 级默认命名配置。Collection 可以通过 `collection.naming(...)` 覆盖。
-
-更完整规则见 [命名概念](../concepts/naming/overview.md)。
-
-## metadataStore
-
-`metadataStore` 是补充文档 Store，可放在 Manager 或 Connection 级；Connection 级优先：
-
-```ts
 const metadataStore = new InMemoryCollectionMetadataStore();
 
 const db = createDatabaseManager({
@@ -213,30 +81,27 @@ const db = createDatabaseManager({
 });
 ```
 
-配置后可以使用 `connection.collections` 读取解析后的完整 Collection，并通过
-`connection.collectionMetadata` 更新补充 Metadata。`managed` Connection 未配置时自动使用数据库内部表
-持久化；`external` Connection 必须显式配置可写或只读 Store，否则创建 Connection 时抛出
-`COLLECTION_METADATA_STORE_REQUIRED`。
+- Managed Connection 未显式配置时，自动使用数据库内部表持久化 Metadata。
+- External Connection 必须显式提供 Metadata Store。
+- `onCollectionMetadataInvalidationError` 只处理 Metadata 已提交后发生的缓存失效错误；它不会回滚已持久化的文档。
 
-`onCollectionMetadataInvalidationError` 只报告 Metadata 已成功提交之后的缓存失效异常；默认通过 Node warning
-报告。该异常不会回滚已经持久化的文档。
+Store 的选择和读写边界见 [Collection Metadata](../collection-metadata/overview.md)。
 
-## defineDatabase
+## 只定义配置
 
-`defineDatabase()` 是类型辅助函数：
+`defineDatabase()` 是类型辅助函数，只返回输入，不创建 Manager：
 
 ```ts
+import { createDatabaseManager, defineDatabase } from '@nocobase/db';
+
 const config = defineDatabase({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: { dialect: 'sqlite', filename: ':memory:' },
   },
 });
 
 const db = createDatabaseManager(config);
 ```
 
-它只返回传入配置，不创建 `DatabaseManager`。
+需要运行时入口和生命周期说明时，继续阅读 [`createDatabaseManager()`](../database/create-database-manager.md)和 [DatabaseManager](../database/database-manager.md)。

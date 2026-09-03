@@ -110,7 +110,7 @@ collection.string('email').dbComment('User email address');
 }
 ```
 
-## Agent 注意事项
+## 使用注意事项
 
 - `title` 和 `description` 是应用层元信息。
 - `db.comment` 是数据库层 comment。

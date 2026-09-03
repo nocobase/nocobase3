@@ -6,21 +6,11 @@
 
 ## 文档入口
 
-- [整体概览](./docs/zh-CN/overview.md)
-- [快速开始](./docs/zh-CN/quick-start.md)
-- [核心概念](./docs/zh-CN/concepts/README.md)
-- [AI Agent 数据库开发入口](./docs/zh-CN/agent/index.md)
-- [Agent 任务路由](./docs/zh-CN/agent/task-router.md)
-- [DatabaseManager](./docs/zh-CN/database/database-manager.md)
-- [DatabaseConnection](./docs/zh-CN/database/database-connection.md)
-- [Builder](./docs/zh-CN/builder/overview.md)
-- [QueryAdapter](./docs/zh-CN/query/overview.md)
-- [Collections](./docs/zh-CN/collections/overview.md)
-- [Schema Inspector](./docs/zh-CN/schema-inspector/overview.md)
-- [Migration](./docs/zh-CN/migration/overview.md)
-- [Seed](./docs/zh-CN/seed/overview.md)
-- [Collection Metadata](./docs/zh-CN/collection-metadata/overview.md)
-- [API 索引](./docs/zh-CN/reference/api-index.md)
+- 第一次使用：阅读[整体概览](./docs/zh-CN/overview.md)和[快速开始](./docs/zh-CN/quick-start.md)。
+- 按任务选择入口：阅读[任务路由](./docs/zh-CN/agent/task-router.md)。
+- 按公开能力深入：阅读 [Database](./docs/zh-CN/database/overview.md)、[Builder](./docs/zh-CN/builder/overview.md)、[Query](./docs/zh-CN/query/overview.md)、[Migration](./docs/zh-CN/migration/overview.md) 或 [Seed](./docs/zh-CN/seed/overview.md)。
+- 按名称查找 API：阅读[公开 API 导航](./docs/zh-CN/reference/api-index.md)，并以 TypeScript 类型声明为最终依据。
+- 浏览全部页面：查看[完整文档目录](./docs/zh-CN/toc.md)。
 
 维护 `@nocobase/db` 底层实现时再进入[内部实现文档](./docs/zh-CN/internals/README.md)。[未来提案](./docs/zh-CN/proposals/README.md)和尚未删除但具有追溯价值的[历史归档](./docs/zh-CN/archive/README.md)都不是当前 API 合同，不能据此生成生产代码。
 
@@ -68,7 +58,7 @@ pnpm --filter @nocobase/db check
 pnpm --filter @nocobase/db test:integration
 ```
 
-完整验证和多方言选择见 [Agent 验证指南](./docs/zh-CN/agent/verification.md)。
+完整验证和多方言选择见[验证指南](./docs/zh-CN/agent/verification.md)。
 
 ## 当前边界
 

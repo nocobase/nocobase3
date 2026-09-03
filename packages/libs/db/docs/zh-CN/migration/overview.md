@@ -70,4 +70,4 @@ await migrator.latest();
 - [创建和运行 Migrator](./create-migrator.md)
 - [Migration 测试](./testing.md)
 - [Migration 维护清单](../development/migration-maintenance.md)
-- [Agent Schema 实现流程](../agent/implement-schema-change.md)
+- [业务 Schema 变更指南](../agent/implement-schema-change.md)

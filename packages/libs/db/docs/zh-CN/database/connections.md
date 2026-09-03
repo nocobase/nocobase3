@@ -176,7 +176,7 @@ const config = defineDatabase({
 const db = createDatabaseManager(config);
 ```
 
-## Agent 注意事项
+## 使用注意事项
 
 - `createDatabaseManager()` 是运行时入口。
 - `defineDatabase()` 只帮助定义配置，不创建 manager。

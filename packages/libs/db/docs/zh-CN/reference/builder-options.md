@@ -1,150 +1,62 @@
 ---
 title: Builder 执行选项
-description: BuilderExecOptions 的字段参考，包括 dry-run、SQL 预览、metadata 同步、strict 与命名配置。
+description: 根据预览、Metadata 同步、存在性处理、方言严格模式和事务需要选择 BuilderExecOptions。
 ---
 
-# BuilderExecOptions
+# Builder 执行选项
 
-`BuilderExecOptions` 控制 Builder 执行方式。它面向自动化、CLI、file sync、migration 和 Agent 场景。
+`BuilderExecOptions` 控制一次 Builder 调用的执行方式。本文说明各选项的行为和组合方式；精确属性以 TypeScript 声明为准。
 
-```ts
-interface BuilderExecOptions {
-  dryRun?: boolean;
-  previewSql?: boolean;
-  syncMetadata?: boolean;
-  ifNotExists?: boolean;
-  ifExists?: boolean;
-  strict?: boolean;
-  // reserved; currently not a runtime guarantee
-  transaction?: boolean;
-}
-```
+## 选择选项
 
-## NamingOptions
+| 目的                      | 选项                  | 当前行为                                        |
+| ------------------------- | --------------------- | ----------------------------------------------- |
+| 只编译、不修改数据库      | `dryRun`              | 不执行 Schema 变更，也不同步 Metadata           |
+| 查看 adapter 生成的 SQL   | `previewSql`          | adapter 支持时返回 SQL，通常与 dry-run 一起使用 |
+| 跳过 Metadata 同步        | `syncMetadata: false` | 保留 DDL，但不保存或更新补充 Metadata           |
+| 对已存在对象跳过创建      | `ifNotExists`         | 仅对明确支持的创建操作生效                      |
+| 对不存在对象跳过删除      | `ifExists`            | 仅对明确支持的删除操作生效                      |
+| 阻止能力降级              | `strict`              | 真实执行遇到 capability warning 时抛错          |
+| 请求 Builder 自动管理事务 | `transaction`         | 预留字段，当前没有执行语义                      |
 
-通过 Connection 配置默认逻辑名到物理名的映射：
-
-```ts
-import { createDatabaseManager } from '@nocobase/db';
-
-const db = createDatabaseManager({
-  connections: {
-    main: {
-      dialect: 'postgres',
-      naming: {
-        underscored: true,
-        tablePrefix: 'tbl_',
-      },
-    },
-  },
-});
-
-const builder = db.builder();
-```
-
-```ts
-interface NamingOptions {
-  underscored?: boolean;
-  tablePrefix?: string;
-}
-```
-
-- `underscored`：是否把逻辑表名和字段名转换为小写下划线，默认 `true`。
-- `tablePrefix`：只作用于推导出的表名或视图名，不作用于列名。
-
-Collection 可以用自己的 `naming` 覆盖 Connection 或 Builder 默认值；`tablePrefix: ''` 表示清除继承的前缀。
-
-## 当前已验证选项
-
-### dryRun
-
-```ts
-const result = await builder.apply(operations, {
-  dryRun: true,
-});
-```
-
-`dryRun: true` 只编译 operation，不执行数据库 schema 变更，也不会同步 metadata。
-
-### previewSql
+## 先预览变更
 
 ```ts
 const result = await builder.apply(operations, {
   dryRun: true,
   previewSql: true,
-});
-```
-
-`previewSql: true` 会尝试返回底层 SQL。只有当前 `SchemaAdapter` 支持 SQL 编译时才会有结果。
-
-### syncMetadata
-
-```ts
-await builder.createCollection('orders', definition, {
-  syncMetadata: false,
-});
-```
-
-默认会同步补充 Collection Metadata。`syncMetadata: false` 会跳过文档保存或更新，但 DDL 成功后仍然使
-Registry 中的旧物理结构失效。物理 field、index 和 constraint 不会因为默认同步而复制进 Metadata Store。
-
-### strict
-
-```ts
-await builder.apply(operations, {
-  strict: true,
-});
-```
-
-`strict: true` 用于 migration、CI 和生产发布。只要执行计划里出现 capability warning，实际 apply 会抛出 `UnsupportedCapabilityError`。
-
-`strict: true` 不是 destructive 操作确认机制。`dropCollection()`、`dropField()` 等危险操作会体现在 `BuilderResult.impact` 中，调用方需要显式检查。
-
-`dryRun: true` 会优先返回 warnings，不会因为 `strict: true` 直接抛错：
-
-```ts
-const result = await builder.apply(operations, {
-  dryRun: true,
   strict: true,
 });
 
-console.log(result.warnings);
+console.log(result.operations, result.sql, result.warnings, result.impact);
 ```
 
-这样 Agent、CLI 或 UI 可以先展示风险，再决定是否继续。
+dry-run 优先返回 warning，即使同时启用了 `strict`，也不会因为 capability warning 直接抛错。这允许 CLI、UI 或自动化工具先展示计划和风险。
 
-### ifNotExists
+`previewSql` 依赖当前 Schema Adapter 的编译能力；没有 `sql` 不表示计划无效。SQL 只用于诊断和预览，不是跨数据库的 canonical source。
 
-```ts
-await builder.createCollection('orders', definition, {
-  ifNotExists: true,
-});
-```
+## 控制 Metadata 同步
 
-`ifNotExists: true` 用于创建类操作。当前支持 `createCollection()`：当底层表已经存在时跳过建表，避免重复创建错误。
+Builder 默认同步从 Collection 定义中提取出的补充 Metadata。设置 `syncMetadata: false` 会跳过文档写入，但 DDL 成功后仍使旧的 Collection 解析缓存失效。
 
-这个选项只表示“对象不存在才创建”，不会对已经存在的表做字段、索引或约束对齐。需要调整结构时，应继续写新的 migration，并使用 `alterCollection()`、`addField()`、`addIndex()` 等明确操作。
+物理 Field、Index 和 Constraint 不会因为默认同步而复制进 Metadata Store。纯 Metadata 更新使用 `connection.collectionMetadata`。
 
-### ifExists
+## 谨慎使用存在性选项
 
-```ts
-await builder.dropCollection('orders', {
-  ifExists: true,
-});
-```
+`ifNotExists` 和 `ifExists` 只处理对象是否存在，不执行 Schema 对齐：
 
-`ifExists: true` 用于删除类操作。当前支持 `dropCollection()`：当底层表不存在时跳过删除，避免缺失对象错误。
+- 已存在的 Collection 不会因为 `ifNotExists` 自动补齐字段、索引或约束。
+- 不存在的 Collection 可以在支持的 drop 操作中通过 `ifExists` 跳过。
+- 修改已有结构仍应使用明确的 alter、add 或 drop operation。
 
-## 当前无执行语义的选项
+具体哪些 Builder 方法支持这些选项，以方法类型和对应专题文档为准。
 
-以下选项已经出现在类型里，但当前还没有完整执行语义：
+## 理解 strict 的边界
 
-- `transaction`：当前不会自动包裹 Builder 操作；需要事务时使用 `db.transaction()` 或 `connection.transaction()`。
+`strict: true` 适合 Migration、CI 和生产发布，用来阻止方言能力 warning 对应的降级或跳过。它不是 destructive 操作确认机制；删除类操作仍必须检查 `BuilderResult.impact`。
 
-## Agent 注意事项
+## 显式管理事务
 
-- 自动执行前优先使用 `dryRun: true`。
-- 需要给用户展示执行计划时，同时打开 `previewSql: true`。
-- migration、CI 和生产发布建议使用 `strict: true`。
-- 创建 collection 的 migration 建议使用 `{ ifNotExists: true }`，删除 collection 的回滚建议使用 `{ ifExists: true }`。
-- destructive 操作不能只依赖选项兜底，应检查 `BuilderResult.impact`。
+`transaction` 当前只是预留选项。需要事务时，通过 `db.transaction()` 或 `connection.transaction()` 获取事务 Connection，并使用该 Connection 的 Builder。不要假设设置 `transaction: true` 已经提供原子性。
+
+命名配置属于 Connection 或 Collection，而不是 `BuilderExecOptions`；详见[命名概念](../concepts/naming/overview.md)。执行结果见 [`BuilderResult`](./builder-result.md)。

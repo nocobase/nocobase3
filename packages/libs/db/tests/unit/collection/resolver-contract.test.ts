@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CollectionResolutionError,
-  type CollectionResolutionInput,
-  type CollectionResolutionResult,
-} from '../../../src/collection/resolver/index.js';
+import { CollectionResolutionError } from '../../../src/collection/resolver/errors.js';
+import type {
+  CollectionResolutionInput,
+  CollectionResolutionResult,
+} from '../../../src/collection/resolver/types.js';
 
 describe('Collection Resolver contract', () => {
   it('exposes a stable aggregate resolution error', () => {

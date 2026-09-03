@@ -5,7 +5,7 @@ description: 创建 DatabaseManager，用 Migration 建表、Seed 初始化数�
 
 # 快速开始
 
-本页演示一个最小数据库生命周期。业务实现前，AI Agent 应先阅读[任务路由](./agent/task-router.md)。
+本页演示一个最小数据库生命周期：创建 Manager、运行 Migration 和 Seed、查询数据、执行事务并释放资源。若只需要完成其中一种任务，先阅读[任务路由](./agent/task-router.md)。
 
 ## 1. 创建 DatabaseManager
 
@@ -145,15 +145,12 @@ await db.destroy();
 
 ## 下一步
 
-- [创建与配置 DatabaseManager](./database/connections.md)
-- [DatabaseManager](./database/database-manager.md)
-- [DatabaseConnection](./database/database-connection.md)
-- [Builder](./builder/overview.md)
-- [Query](./query/overview.md)
-- [Migration](./migration/overview.md)
-- [Seed](./seed/overview.md)
-- [Collections](./collections/overview.md)
-- [Collection Metadata](./collection-metadata/overview.md)
+- 配置连接或管理生命周期：[Database](./database/overview.md)
+- 修改业务 Schema：[Migration](./migration/overview.md)和 [Builder](./builder/overview.md)
+- 查询或修改数据：[Query](./query/overview.md)和[事务](./database/transactions.md)
+- 初始化安装数据：[Seed](./seed/overview.md)
+- 读取完整 Collection 或补充 Metadata：[Collections](./collections/overview.md)和 [Collection Metadata](./collection-metadata/overview.md)
+- 检查真实数据库结构：[Schema Inspector](./schema-inspector/overview.md)
 
 仓库内的完整可运行示例位于 `packages/libs/db/examples/managed-collection-lifecycle`，执行：
 
