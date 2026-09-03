@@ -224,6 +224,12 @@ describe('application workflow Artifact lazy synchronization', () => {
       fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
     ).resolves.toEqual(expect.arrayContaining(['workflow.json', 'server']));
     await firstRepository.setStatus(first.id as string, false);
+    await expect(firstRepository.enable(v1)).resolves.toMatchObject({
+      id: String(first.id),
+      enabled: true,
+      hash: v1,
+    });
+    await firstRepository.setStatus(first.id as string, false);
     await expect(
       firstRepository.enable(first.id as string),
     ).resolves.toMatchObject({ id: String(first.id), enabled: true, hash: v1 });

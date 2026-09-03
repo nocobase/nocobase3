@@ -19,6 +19,39 @@ export function asWorkflowId(value: unknown): WorkflowId {
   throw new Error('Workflow row has an invalid id.');
 }
 
+export type ParsedWorkflowIdentifier =
+  { kind: 'id'; value: string } | { kind: 'hash'; value: string };
+
+const WORKFLOW_ID_PATTERN = /^[1-9]\d*$/;
+const ARTIFACT_HASH_PATTERN = /^[a-f\d]{64}$/i;
+const MAX_WORKFLOW_ID = 9_223_372_036_854_775_807n;
+
+export function parseWorkflowIdentifier(
+  value: WorkflowId,
+): ParsedWorkflowIdentifier {
+  const identifier = String(value);
+  if (ARTIFACT_HASH_PATTERN.test(identifier)) {
+    return { kind: 'hash', value: identifier.toLowerCase() };
+  }
+  if (
+    WORKFLOW_ID_PATTERN.test(identifier) &&
+    BigInt(identifier) <= MAX_WORKFLOW_ID
+  ) {
+    return { kind: 'id', value: identifier };
+  }
+  throw new BadRequestError(
+    'Workflow identifier must be a positive integer id or a 64-character hexadecimal Artifact hash.',
+  );
+}
+
+export function parseWorkflowId(value: WorkflowId): WorkflowId {
+  const identifier = parseWorkflowIdentifier(value);
+  if (identifier.kind === 'id') return identifier.value;
+  throw new BadRequestError(
+    'Workflow identifier must be a positive integer id.',
+  );
+}
+
 export function normalizePage(options: { page?: number; pageSize?: number }): {
   page: number;
   pageSize: number;
