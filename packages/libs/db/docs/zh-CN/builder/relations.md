@@ -5,12 +5,7 @@ description: 定义 belongsTo、hasOne、hasMany 和 belongsToMany metadata，�
 
 # 关系字段
 
-Collection Builder 当前支持四种关系字段：
-
-- `belongsTo`
-- `hasOne`
-- `hasMany`
-- `belongsToMany`
+关系字段同时描述 Collection Metadata 和可能产生的物理 Schema。先判断关系由哪一侧持有外键，再决定是否需要本地列、索引和数据库约束。
 
 ## 行为表
 
@@ -21,7 +16,19 @@ Collection Builder 当前支持四种关系字段：
 | `hasMany`       | 否         | 否           | 否               | 是       |
 | `belongsToMany` | 否         | 否           | 否               | 是       |
 
-## belongsTo
+四种入口都返回 Relation Builder。常见链式能力按用途分组如下：
+
+| 目的             | API                                                               |
+| ---------------- | ----------------------------------------------------------------- |
+| 指定关联端       | `target()`、`sourceKey()`、`targetKey()`                          |
+| 指定外键         | `foreignKey()`、`foreignKeyType()`                                |
+| 配置多对多中间表 | `through()`、`otherKey()`                                         |
+| 创建数据库约束   | `constraints()`、`onDelete()`、`onUpdate()`                       |
+| 配置本地字段     | `notNull()`、`nullable()`、`defaultTo()`、`index()`、`unsigned()` |
+
+不是每个关系都需要设置所有参数。优先依靠约定，只在外键位置、字段名或约束行为需要偏离默认值时配置。
+
+## 定义 belongsTo
 
 ```ts
 await builder.createCollection('orders', (collection) => {
@@ -63,7 +70,7 @@ collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 
 最终关系使用 `created_by_id`，并且不会重复创建外键列。
 
-## hasOne 和 hasMany
+## 定义 hasOne 和 hasMany
 
 ```ts
 await builder.createCollection('customers', (collection) => {
@@ -77,7 +84,7 @@ await builder.createCollection('customers', (collection) => {
 
 这里的 `foreignKey('customerId')` 引用的是 target Collection 上的逻辑字段名，不是当前 Collection 的物理列名。
 
-## belongsToMany
+## 定义 belongsToMany
 
 ```ts
 collection
@@ -121,3 +128,4 @@ collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 - 需要跨 MySQL 时，整型外键和自增主键的 unsigned 属性要匹配。
 - 关系参数引用逻辑名，不要把 `foreignKey()`、`sourceKey()`、`targetKey()`、`otherKey()`、`through()` 当作物理名配置。
 - 不要在关系字段或本地外键字段上配置 `columnName()`。
+- 方言兼容和逻辑名解析见[命名与跨数据库兼容](./portability.md)。

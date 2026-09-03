@@ -77,4 +77,4 @@ description: 生成 @nocobase/db 业务代码时必须遵守的 API、事务、M
 
 ## 规划能力
 
-Repository、Select AST、Filter Builder、Filter AST、Sort AST 和 Writable File Metadata Store 当前未实现。设计材料不能复制到运行时代码。
+Repository、Select AST、Filter Builder、Filter AST、Sort AST、Mutation AST 和 Writable File Metadata Store 当前未实现。设计材料不能复制到运行时代码。

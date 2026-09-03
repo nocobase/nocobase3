@@ -64,7 +64,7 @@ createDatabaseManager(config)
 
 ## 当前边界
 
-- Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 是[未来提案](./proposals/README.md)，当前不可调用。
+- Repository、Select AST、Filter Builder、Filter AST、Sort AST 和 Mutation AST 是[未来提案](./proposals/README.md)，当前不可调用。
 - Builder 使用 Collection/Field 逻辑名。
 - Query 使用 Connection 级查询标识符，不读取 Collection Metadata。
 - Schema Inspector 使用物理数据库 identity。

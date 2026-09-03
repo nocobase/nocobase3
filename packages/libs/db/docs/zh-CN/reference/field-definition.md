@@ -78,4 +78,4 @@ Relation 的 `target`、`through`、`sourceKey`、`targetKey`、`foreignKey` 和
 - `hasOne`、`hasMany` 和 `belongsToMany` 是关系 Metadata，不应假设它们在当前 Collection 上创建列。
 - 数据完整性要求优先使用 constraint；`index` 主要表达访问性能需求。
 
-Fluent DSL 写法和 Relation 示例见 [Builder 字段](../builder/fields.md)与[Builder 关系](../builder/relations.md)。
+Fluent DSL 写法和 Relation 示例见[在 Migration 中管理 Collection Schema](../builder/collection-schema.md)与[Builder 关系](../builder/relations.md)。

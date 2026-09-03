@@ -83,5 +83,5 @@ Collection 创建后再修改 `underscored` 或 `tablePrefix`，可能改变表�
 
 - [`underscored` 命名规则](./underscored.md)
 - [`tablePrefix` 表前缀](./table-prefix.md)
-- [Builder 命名](../../builder/naming.md)
+- [Builder 命名与跨数据库兼容](../../builder/portability.md)
 - [Query 命名归一化](../../query/naming.md)

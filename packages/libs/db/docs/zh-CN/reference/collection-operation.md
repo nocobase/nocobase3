@@ -64,4 +64,4 @@ const preview = await db.builder().apply(operations, {
 
 Operation DSL 表达 Schema 计划。Builder 可以在 Schema 成功后同步可提取的补充 Metadata，但纯 `title`、`description` 或 Relation Metadata 更新应使用 `connection.collectionMetadata`，不要伪造成 Schema operation。
 
-更多执行和审计示例见[批量应用结构化操作](../builder/apply-operations.md)。
+更多执行和审计示例见 [Builder 执行与审计](../builder/execution.md)。

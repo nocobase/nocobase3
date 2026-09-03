@@ -38,7 +38,7 @@ Database 与 Transaction Metadata Store、Schema Adapter、Query Knex Adapter、
 
 ## 非公开或尚不可用
 
-Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 当前是设计规划，不属于公开运行时 API。相关页面只用于未来设计讨论，不应复制到当前业务代码。
+Repository、Select AST、Filter Builder、Filter AST、Sort AST 和 Mutation AST 当前是设计规划，不属于公开运行时 API。相关页面只用于未来设计讨论，不应复制到当前业务代码。
 
 ## 从任务开始
 

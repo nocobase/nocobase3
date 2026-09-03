@@ -58,4 +58,4 @@ description: 定义 @nocobase/db 当前实现中的 Collection、Metadata、命�
 
 代码和 API 说明应优先使用英文 API 名和类型名，中文只用于解释含义。涉及命名映射时，应按照[命名概念](../concepts/naming/overview.md)明确区分逻辑名、Connection 相对查询标识符和物理名。
 
-Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 当前未实现，不属于本术语表描述的当前 API；相关名词只在 [Repository 提案](../proposals/repository/overview.md)中使用。
+Repository、Select AST、Filter Builder、Filter AST、Sort AST 和 Mutation AST 当前未实现，不属于本术语表描述的当前 API；相关名词只在 [Repository 提案](../proposals/repository/overview.md)中使用。

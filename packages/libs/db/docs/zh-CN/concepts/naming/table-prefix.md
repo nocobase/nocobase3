@@ -101,5 +101,5 @@ Collection 创建后修改 `tablePrefix`，等同于修改物理表或 View 名�
 
 - [命名概念](./overview.md)
 - [`underscored` 命名规则](./underscored.md)
-- [Builder 命名](../../builder/naming.md)
+- [Builder 命名与跨数据库兼容](../../builder/portability.md)
 - [Query 命名归一化](../../query/naming.md)

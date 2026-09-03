@@ -61,4 +61,4 @@ Migration、CI 和生产发布通常使用 `strict: true` 阻止真实执行中�
 
 审计日志优先保存结构化的 `operations`、`schemaOperations`、`warnings` 和 `impact`，并记录实际执行环境和数据库方言。不要只保存生成 SQL，因为不同 adapter 和版本可能产生不同 SQL 表达。
 
-选项组合见 [Builder 执行选项](./builder-options.md)，方言 fallback 见[Builder 方言能力](../builder/dialect-capabilities.md)。
+选项组合见 [Builder 执行选项](./builder-options.md)，方言 fallback 见[命名与跨数据库兼容](../builder/portability.md)。

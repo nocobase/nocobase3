@@ -63,15 +63,11 @@ description: 按当前用法、任务、开发维护、内部实现、未来提�
 ## Collection Builder
 
 - [Collection Builder 总览](./builder/overview.md)：选择 `db.builder()` 或 `connection.builder`，并理解 Schema 变更边界。
-- [创建 Collection](./builder/create-collection.md)：通过 Object DSL 或 Fluent DSL 创建数据库表。
-- [修改 Collection](./builder/alter-collection.md)：新增、修改或删除 Field、Index 和 Constraint。
-- [Builder 字段定义](./builder/fields.md)：配置 Field 类型、默认值和物理列选项。
+- [在 Migration 中管理 Collection Schema](./builder/collection-schema.md)：创建、修改、重命名或删除表结构，并选择 Field、Index 和 Constraint。
 - [Builder 关系字段](./builder/relations.md)：定义四种 Relation Metadata，并区分本地列和数据库外键。
-- [Builder 约束与索引](./builder/constraints-and-indexes.md)：定义完整性约束、性能索引并处理当前能力限制。
 - [创建与维护 View Collection](./builder/view-collections.md)：创建、替换和刷新 View 或 Materialized View。
-- [Builder 命名](./builder/naming.md)：处理 `underscored`、`tablePrefix` 和 rename 安全边界。
-- [Builder 方言能力](./builder/dialect-capabilities.md)：处理不同数据库的 warning、fallback 和 strict 模式。
-- [批量应用结构化操作](./builder/apply-operations.md)：执行结构化操作、dry-run、SQL 预览和影响审计。
+- [命名与跨数据库兼容](./builder/portability.md)：处理逻辑名、物理名、capabilities、warning 和 strict 模式。
+- [Builder 执行与审计](./builder/execution.md)：执行结构化计划、dry-run、SQL 预览和影响审计。
 
 ## QueryAdapter
 
@@ -166,6 +162,8 @@ description: 按当前用法、任务、开发维护、内部实现、未来提�
 - [Filter AST 提案](./proposals/repository/filter-ast.md)：候选的筛选条件序列化模型。
 - [Select AST 提案](./proposals/repository/select-ast.md)：候选的字段与 Relation 选择模型。
 - [Sort AST 提案](./proposals/repository/sort-ast.md)：候选的排序表达模型。
+- [Mutation AST 提案](./proposals/repository/mutation-ast.md)：候选的精简关系写入、Fluent Builder 和 Agent 协议。
+- [表单到 Mutation AST 提案](./proposals/repository/form-mutation.md)：将前端大表单变化编译为 Repository mutation。
 
 ## 历史归档
 

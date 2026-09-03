@@ -86,5 +86,5 @@ Query 中显式 `select()`、Alias 和 `selectAll()` 的结果 key 还具有独�
 
 - [命名概念](./overview.md)
 - [`tablePrefix` 表前缀](./table-prefix.md)
-- [Builder 命名](../../builder/naming.md)
+- [Builder 命名与跨数据库兼容](../../builder/portability.md)
 - [Query 命名归一化](../../query/naming.md)

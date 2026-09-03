@@ -51,7 +51,7 @@ Collection DSL 中以下位置都使用逻辑名：
 }
 ```
 
-Collection 级 `naming` 只应在单个 Collection 确实需要覆盖 Connection 默认值时使用。它不支持任意指定物理表名。完整规则见 [Builder 命名](../builder/naming.md)。
+Collection 级 `naming` 只应在单个 Collection 确实需要覆盖 Connection 默认值时使用。它不支持任意指定物理表名。完整规则见[命名与跨数据库兼容](../builder/portability.md)。
 
 ## 组织字段、约束和索引
 
@@ -60,7 +60,7 @@ Collection 级 `naming` 只应在单个 Collection 确实需要覆盖 Connection
 - 查询性能需求放在 `indexes`。
 - Relation 参数始终引用逻辑 Collection 和字段。
 
-字段与 Relation 的选择见 [FieldDefinition](./field-definition.md)，约束和索引的区别见[约束与索引](../builder/constraints-and-indexes.md)。
+字段与 Relation 的选择见 [FieldDefinition](./field-definition.md)，约束和索引的区别见[在 Migration 中管理 Collection Schema](../builder/collection-schema.md)。
 
 ## 定义 View
 
@@ -89,4 +89,4 @@ Collection 级 `naming` 只应在单个 Collection 确实需要覆盖 Connection
 - 不要生成 `tableName` 或 `columnName` 映射。
 - `renameCollection()` 当前只支持 Table Collection，并会按确定性规则同步处理物理表和 Metadata。
 
-完整创建示例见[创建 Collection](../builder/create-collection.md)。
+完整创建示例见[在 Migration 中管理 Collection Schema](../builder/collection-schema.md)。
