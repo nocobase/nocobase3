@@ -1,6 +1,6 @@
 ---
 title: Client Components
-description: 在 NocoBase v3 插件中区分页面、React Provider、公共和内部 React Components，并正确设计导出、依赖、所有权与测试。
+description: 在 NocoBase v3 插件中区分页面、React Provider、公共和内部 React Components，优先使用插件本地的 shadcn/ui，并正确设计导出、依赖、所有权与测试。
 ---
 
 # Client Components
@@ -19,17 +19,128 @@ Component 是 Client UI 的基础源码，但 `client.components` 不是 Client 
 
 需要可导航页面时阅读 [Client Routes](./client-routes-examples.md)；需要共享 React Context 时阅读 [Client React Providers](./client-react-providers.md)；需要交付可编辑源码时阅读 [Registry](./registry.md)。
 
-## 编写最小组件
+## UI 实现默认优先使用 shadcn/ui
+
+实现 Button、Input、Select、Dialog、Sheet、Table、Tabs、Tooltip、Dropdown Menu、Form 等常见交互或界面模式时，必须先检查 shadcn/ui 是否已有对应组件，并优先通过 shadcn CLI 把源码添加到当前插件。不要先手写一套重复的 primitive，也不要从已经删除的 `@nocobase/ui` 或 `@nocobase/app-client/ui` 导入。
+
+这里的“优先”不表示每个 JSX 元素都必须来自 shadcn。`section`、`div`、标题、段落和只有原生语义的简单元素可以直接编写；业务组件通常使用 Tailwind utilities 组合布局，并复用 shadcn primitives 完成交互、状态、可访问性和一致的主题表现。只有 shadcn 没有合适 primitive，或者现有 primitive 无法满足明确的业务语义时，才实现插件自己的基础组件，并在代码中保持同样的 accessibility 和主题约定。
+
+shadcn/ui 是源码分发方式，不是 NocoBase 的共享运行时 UI 包。插件运行时使用的 shadcn 源码由插件自己拥有，放在 `client/components/ui/`，跟随插件发布和升级；不得依赖消费 App 的 `client/components/ui/`。Registry 安装源码的所有权不同：安装后由 App 拥有，因此 Registry source 可以通过 `@/components/ui/*` 使用 App 的 primitives。完整区别见 [Registry](./registry.md)。
+
+## 为插件初始化 shadcn/ui
+
+需要编写业务 UI，但插件根目录还没有 `components.json` 时，先参考 `packages/examples/app-plugin-registry-example/components.json` 添加下面的配置：
+
+```json
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "client/styles.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "rtl": false,
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "menuColor": "default",
+  "menuAccent": "subtle"
+}
+```
+
+同时准备 shadcn 的生成入口 `client/styles.css`：
+
+```css
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+/* Generation entrypoint only. The host application owns the theme tokens. */
+```
+
+插件 `tsconfig.json` 中的 `@/*` 必须指向插件自己的 `client/*`：
+
+```json
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./client/*"]
+    }
+  }
+}
+```
+
+在插件的 `devDependencies` 中维护 `shadcn`、`tailwindcss` 和 `tw-animate-css`。生成组件实际 import 的包，例如 `@base-ui/react`、`class-variance-authority`、`clsx`、`tailwind-merge` 或图标库，属于插件运行时依赖，必须保留在 `dependencies`；不要因为它们由 CLI 添加就移动到根包或假设 App 会提供。
+
+然后在插件目录按需添加组件，可以一次添加多个：
+
+```bash
+cd packages/plugins/app-plugin-audit-log
+pnpm exec shadcn add button card dialog
+```
+
+不要为了“可能以后会用”批量生成全部组件，只添加当前实现实际使用的 primitives。不要使用 `--overwrite` 覆盖已经定制的组件，除非已经检查 diff 并明确接受覆盖。
+
+CLI 生成结束后仍需按本仓库的声明输出和 ESM 规则复查代码：
+
+- 为导出的函数、组件、常量和默认参数补充明确类型；匿名返回结构提取为具名导出类型；
+- 将插件运行时代码中的内部 alias import 改为相对路径并带 `.js` 后缀，例如 `../../lib/utils.js`；TypeScript 的 `paths` 不会替换发布后 JavaScript 中的 import specifier；
+- 业务组件同样通过相对 `.js` 路径引用插件自己的 `client/components/ui/*`；
+- 删除没有实际使用的生成文件和依赖，并运行插件的 lint、typecheck、test 和 build；
+- 修改依赖后按仓库要求运行 `CI=true pnpm install --no-frozen-lockfile`，同步 `pnpm-lock.yaml`。
+
+`packages/examples/app-plugin-registry-example` 展示了完整的 `components.json`、`client/styles.css`、`client/lib/utils.ts`、package dependencies 和经过声明输出适配的 `client/components/ui/button.tsx`，需要可运行参考时以它为准。
+
+## 编写业务组件
+
+下面的组件用普通 HTML 负责结构和文本语义，用插件本地的 shadcn `Button` 和 `Card` primitives 负责可交互控件和界面基础样式：
 
 ```tsx
 import type { ReactElement } from 'react';
 
+import { Button } from './ui/button.js';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from './ui/card.js';
+
 export interface AuditSummaryProps {
+  readonly onViewRecords: () => void;
   readonly total: number;
 }
 
-export function AuditSummary({ total }: AuditSummaryProps): ReactElement {
-  return <span>{total} audit records</span>;
+export function AuditSummary({
+  onViewRecords,
+  total,
+}: AuditSummaryProps): ReactElement {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Audit records</CardTitle>
+        <CardAction>
+          <Button variant='outline' onClick={onViewRecords}>
+            View records
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <p className='text-2xl font-semibold'>{total}</p>
+      </CardContent>
+    </Card>
+  );
 }
 ```
 

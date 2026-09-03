@@ -9,6 +9,7 @@ import {
   toPageResponse,
 } from './helpers.js';
 import type { WorkflowRepository } from '../repositories/workflow-repository.js';
+import { translateWorkflowMessage } from '../i18n.js';
 
 export function createWorkflowDefinitionRoutes(
   workflows: Pick<
@@ -54,7 +55,16 @@ export function createWorkflowDefinitionRoutes(
   routes.patch('/workflows/:id/status', async (c) => {
     const enabled = readEnabled(await readBody(c.req.raw));
     if (enabled === undefined)
-      return c.json({ message: 'enabled must be a boolean' }, 400);
+      return c.json(
+        {
+          message: translateWorkflowMessage(
+            c,
+            'errors.enabledBoolean',
+            'enabled must be a boolean',
+          ),
+        },
+        400,
+      );
     const data = await workflows.setStatus(c.req.param('id'), enabled);
     return c.json({ data });
   });

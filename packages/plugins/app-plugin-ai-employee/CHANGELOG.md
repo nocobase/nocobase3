@@ -1,5 +1,29 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.1
+
+### Minor Changes
+
+- 8d88ff4: Replace the public AI Employee LLM service filesystem loader with the application `config.yml` contract at `ai.llmServices`. Configured model entries use a simple label/value array and are converted internally to custom mode. The App plugin validates and synchronizes declarative service definitions at startup and on application-config reload while preserving repository-managed enabled state for matching services. The default App template includes a commented configuration example, and the App config validator supports unique object properties for rejecting duplicate service names.
+- 81c6d6d: Replace the temporary AI file manager with metadata-aware, drive-backed file storage factories, configurable storage disks, and per-domain metadata repositories.
+
+### Patch Changes
+
+- 43d5bf0: Publish the application-owned AI Employee frontend Registry with its chat components. Plugin-owned development showcases now live under `client/dev`, outside the materialized Registry item, and are excluded from production application builds. The Registry uses the application-scoped `@nocobase/app-client` transport for JSON, upload, and streaming requests instead of the deprecated Portal SDK client. The Default and Hub templates scan plugin Registry source for Tailwind utilities, so materialized components retain their intended responsive layout and sizing.
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- Updated dependencies [8d88ff4]
+- Updated dependencies [43d5bf0]
+- Updated dependencies [813da59]
+- Updated dependencies [81c6d6d]
+- Updated dependencies [cee3251]
+  - @nocobase/ai-employee@0.2.0-beta.1
+  - @nocobase/app-server@1.0.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/app-plugin-authentication@0.1.0-beta.6
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.0
 
 ### Minor Changes

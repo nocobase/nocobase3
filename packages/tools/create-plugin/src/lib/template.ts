@@ -31,7 +31,9 @@ interface TemplateFile {
 const BASE_TEMPLATE_FILES = new Set([
   '.gitignore.template',
   '.prettierignore.template',
+  'AGENTS.md',
   'CHANGELOG.md',
+  'CLAUDE.md',
   'README.md',
   'eslint.config.template.js',
   'package.template.json',

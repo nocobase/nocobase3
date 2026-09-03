@@ -55,7 +55,6 @@ const FALLBACK_GITIGNORE = [
   '/storage/',
   '/.agents/',
   '/.nocobase/',
-  '/.nb3/',
   '*.log',
   '',
 ].join('\n');
@@ -110,6 +109,60 @@ async function restoreGitignore(directory: string): Promise<void> {
   }
 }
 
+/**
+ * Source files carrying the template's own package name, which has to become the application's.
+ *
+ * The name is not decoration in any of these: `client/runtime.ts` declares the `packageName` that becomes the
+ * application's i18n namespace on the browser side, while the server derives the same namespace from `package.json`.
+ * Left unrewritten the two disagree, so `APP_NS` resolves to a different namespace in each half of the application.
+ * It also fails `pnpm client:inspect`, which compares the two and refuses to run when they differ.
+ *
+ * `server/providers/app-example.ts` names a service token, and a token's identity is its name.
+ *
+ * Documentation is deliberately absent. `MIGRATION.md` refers to `@nocobase/app-template-default` as the upstream
+ * template a derived application merges from, which stays correct and would be made wrong by rewriting it.
+ */
+const PACKAGE_NAME_SOURCES = [
+  'client/runtime.ts',
+  'client/service-provider.ts',
+  'server/providers/app-example.ts',
+] as const;
+
+/**
+ * Replaces the template's package name with the application's in the few sources that embed it.
+ *
+ * A missing file is skipped rather than treated as an error: the list covers both templates, and neither is required
+ * to keep a file the other has.
+ */
+async function rewritePackageName(
+  directory: string,
+  templateName: string,
+  appName: string,
+): Promise<void> {
+  if (templateName === '' || templateName === appName) {
+    return;
+  }
+
+  await Promise.all(
+    PACKAGE_NAME_SOURCES.map(async (relative) => {
+      const target = path.join(directory, relative);
+      let contents: string;
+
+      try {
+        contents = await readFile(target, 'utf8');
+      } catch {
+        return;
+      }
+
+      const rewritten = contents.split(templateName).join(appName);
+
+      if (rewritten !== contents) {
+        await writeFile(target, rewritten, 'utf8');
+      }
+    }),
+  );
+}
+
 export interface ScaffoldOptions {
   templateDirectory: string;
   targetDirectory: string;
@@ -119,13 +172,13 @@ export interface ScaffoldOptions {
 }
 
 /**
- * Copies an extracted template into its final location and rewrites its manifest.
+ * Copies an extracted template into its final location and rewrites what identifies it as the template.
  *
- * Only what identifies the template is touched: the name becomes the app's, and the display name, description, and
- * publish metadata are dropped so a generated app is not labelled "Default Template" or pointed at the template's own
- * release. Everything else is kept as packed, including the version, which leaves a record of the template version the
- * app came from, and the dependency ranges pnpm already resolved from `workspace:` and `catalog:` when it built the
- * tarball.
+ * The manifest name and display name become the app's, the publish metadata is dropped so a generated app is not
+ * pointed at the template's own release, and the few sources that embed the template's package name are rewritten —
+ * see `PACKAGE_NAME_SOURCES` for why each one matters. Everything else is kept as packed, including the version,
+ * which leaves a record of the template version the app came from, and the dependency ranges pnpm already resolved
+ * from `workspace:` and `catalog:` when it built the tarball.
  */
 export async function scaffoldFromTemplate(
   options: ScaffoldOptions,
@@ -142,11 +195,17 @@ export async function scaffoldFromTemplate(
     unknown
   >;
 
+  const templateName = typeof manifest.name === 'string' ? manifest.name : '';
+
   manifest.name = name;
 
-  // Identity and publish metadata describe the template, not what is built from it. Leaving `displayName` behind would
-  // label a new app "Default Template", and leaving the publish fields would point it at the template's own release.
-  delete manifest.displayName;
+  // `displayName` is what the client shell renders in its sidebar footer, through the `__PORTAL_TEMPLATE_NAME__`
+  // constant `vite.config.ts` defines from it. Deleting it left that constant `undefined`, so a generated app fell
+  // back to the literal "Default Template" baked into the shell — the template's label, on every app built from it.
+  manifest.displayName = name;
+
+  // The remaining publish metadata describes the template rather than what is built from it, and would point a
+  // generated app at the template's own release.
   delete manifest.description;
   delete manifest.publishConfig;
   delete manifest.repository;
@@ -161,6 +220,8 @@ export async function scaffoldFromTemplate(
     `${JSON.stringify(manifest, null, 2)}\n`,
     'utf8',
   );
+
+  await rewritePackageName(targetDirectory, templateName, name);
 
   for (const [relative, contents] of Object.entries(extraFiles ?? {})) {
     const target = path.join(targetDirectory, relative);
