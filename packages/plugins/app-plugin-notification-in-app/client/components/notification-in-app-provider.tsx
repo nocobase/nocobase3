@@ -1,31 +1,23 @@
+import { appApiClientToken, useService } from '@nocobase/app-client';
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
+  type PropsWithChildren,
+  type ReactElement,
 } from 'react';
-import { appApiClientToken, useService } from '@nocobase/app-client';
-import { IN_APP_NOTIFICATION_REALTIME_TOPIC } from '@nocobase/app-plugin-notification-in-app/realtime';
-import { fetchUnreadCount } from './api.js';
-import { subscribeToInboxInvalidations } from './subscription.js';
 
-export { IN_APP_NOTIFICATION_REALTIME_TOPIC };
-
-export interface NotificationInAppRuntimeValue {
-  readonly unreadCount: number;
-  readonly revision: number;
-  refresh(): void;
-}
-
-const NotificationInAppRuntimeContext = createContext<
-  NotificationInAppRuntimeValue | undefined
->(undefined);
+import { fetchUnreadCount } from '../api.js';
+import {
+  NotificationInAppRuntimeContext,
+  type NotificationInAppRuntimeValue,
+} from '../notification-in-app-runtime.js';
+import { subscribeToInboxInvalidations } from '../subscription.js';
 
 export function NotificationInAppProvider({
   children,
-}: React.PropsWithChildren): React.ReactElement {
+}: PropsWithChildren): ReactElement {
   const appClient = useService(appApiClientToken);
   const [unreadCount, setUnreadCount] = useState(0);
   const [revision, setRevision] = useState(0);
@@ -55,10 +47,4 @@ export function NotificationInAppProvider({
       {children}
     </NotificationInAppRuntimeContext.Provider>
   );
-}
-
-export function useNotificationInAppRuntime(): NotificationInAppRuntimeValue {
-  const value = useContext(NotificationInAppRuntimeContext);
-  if (!value) throw new Error('NotificationInAppProvider is required.');
-  return value;
 }

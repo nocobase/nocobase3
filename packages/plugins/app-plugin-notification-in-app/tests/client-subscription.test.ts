@@ -9,9 +9,9 @@ import { IN_APP_NOTIFICATION_REALTIME_TOPIC } from '../shared/realtime.js';
 import {
   subscribeToInboxInvalidations,
   type InboxFocusTarget,
-} from '../registry/in-app-ui/subscription.js';
+} from '../client/subscription.js';
 
-describe('in-app notification Registry subscription', () => {
+describe('in-app notification Client subscription', () => {
   it('refreshes after subscription recovery, valid events, and focus', () => {
     let eventListener: RealtimeListener<unknown> | undefined;
     let subscribedListener: (() => void) | undefined;

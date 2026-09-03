@@ -52,9 +52,7 @@ export async function fetchUnreadCount(
 ): Promise<number> {
   const response = await client.request<{ readonly count: number }>(
     'notifications/in-app/unread-count',
-    {
-      signal,
-    },
+    { signal },
   );
   return response.count;
 }

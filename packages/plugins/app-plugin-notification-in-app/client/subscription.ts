@@ -1,5 +1,6 @@
 import type { AppClient } from '@nocobase/app-client';
-import { IN_APP_NOTIFICATION_REALTIME_TOPIC } from '@nocobase/app-plugin-notification-in-app/realtime';
+
+import { IN_APP_NOTIFICATION_REALTIME_TOPIC } from '../shared/realtime.js';
 
 export interface InboxFocusTarget {
   addEventListener(type: 'focus', listener: EventListener): void;

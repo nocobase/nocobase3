@@ -5,7 +5,7 @@
 - `@nocobase/app-plugin-authentication` supplies the authenticated user and session.
 - `@nocobase/app-plugin-notification-in-app/server` supplies inbox persistence and HTTP routes.
 - `@nocobase/app-plugin-notification/server` is required when the application needs the registered `in-app` Channel and Provider contribution.
-- `@nocobase/app-client` supplies the application-scoped HTTP and realtime clients used by the Registry UI.
+- `@nocobase/app-client` supplies the application-scoped HTTP and realtime clients used by the Client inbox page.
 
 Register the core notification Server plugin before the in-app Server plugin. The in-app routes can operate without the core plugin, but notification delivery through the `in-app` Channel cannot.
 
@@ -20,17 +20,15 @@ import {
 } from '@nocobase/app-plugin-notification-in-app/realtime';
 ```
 
-Do not import `server/realtime`, store implementations, or Registry authoring paths from application code.
+Do not import `server/realtime`, store implementations, or other internal implementation paths from application code.
 
-The `in-app-ui` Registry item materializes to:
+The package's Client plugin contributes this development-only App-relative route:
 
 ```text
-client/extensions/nocobase-notification-in-app-ui
+/dev/notification-in-app
 ```
 
-It intentionally has no `extension.ts`. The application must mount `NotificationInAppProvider` and place `NotificationInAppPage` in its authenticated route tree.
-
-Install the declared npm dependencies and Registry primitives `alert`, `badge`, `button`, and `card`. The low-level `registry:materialize` command deliberately copies only source; it does not install either dependency class.
+Register `@nocobase/app-plugin-notification-in-app/client` in the application Client composition root. The page mounts `NotificationInAppProvider` locally and cleans up its realtime and focus listeners when navigation leaves the page. The Dev Route and its exclusive dependencies are absent from production builds.
 
 ## HTTP and realtime behavior
 
@@ -42,9 +40,7 @@ When an application configures `api.baseURL` or `api.realtimeURL`, both transpor
 
 #### Ownership and upgrades
 
-The package owns canonical Registry source and may publish improved recipes. After materialization, the application owns its copy. Registry materialization refuses to overwrite an existing target; compare the base recipe, current application copy, and new recipe, then merge intentionally.
-
-Keep local UI text, navigation, access presentation, and layout in the application copy. Keep authentication enforcement, per-user isolation, CSRF, persistence, and event publication in the package Server implementation.
+The plugin owns the inbox components, Provider, Dev Route, authentication enforcement, per-user isolation, CSRF, persistence, and event publication. Applications receive UI changes by upgrading the plugin. A production inbox surface requires a separate product decision and must use an authenticated App or Settings Route rather than exposing the Dev Route.
 
 ## Diagnosis order
 

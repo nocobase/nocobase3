@@ -8,6 +8,8 @@
   API available when the core notification Server plugin is not registered,
   and fail fast when the required database service is missing. The package
   still requires the core package for its shared extension contracts.
+- Move the inbox component example into the plugin-owned Client runtime and
+  expose it at the development-only `/dev/notification-in-app` route.
 
 ## 0.2.0-beta.3
 

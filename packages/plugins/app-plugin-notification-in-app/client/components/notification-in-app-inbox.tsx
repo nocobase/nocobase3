@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { appApiClientToken, useService } from '@nocobase/app-client';
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   Bell,
   CheckCheck,
@@ -6,30 +7,32 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { NavLink } from 'react-router';
-import { appApiClientToken, useService } from '@nocobase/app-client';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import {
   fetchInbox,
   markInboxRead,
   mutateInboxItem,
   type InboxItem,
   type InboxMutationAction,
-} from './api.js';
-import { useNotificationInAppRuntime } from './runtime.js';
+} from '../api.js';
+import { IN_APP_NOTIFICATION_CLIENT_NAMESPACE } from '../i18n.js';
+import { useNotificationInAppRuntime } from '../notification-in-app-runtime.js';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert.js';
+import { Badge } from './ui/badge.js';
+import { Button } from './ui/button.js';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from './ui/card.js';
 
-export function NotificationInAppPage(): React.ReactElement {
+export function NotificationInAppInbox(): ReactElement {
   const appClient = useService(appApiClientToken);
+  const { t } = useTranslation(IN_APP_NOTIFICATION_CLIENT_NAMESPACE);
   const inboxRuntime = useNotificationInAppRuntime();
   const { revision, unreadCount } = inboxRuntime;
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -41,10 +44,9 @@ export function NotificationInAppPage(): React.ReactElement {
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setError(undefined);
     fetchInbox(appClient, { unreadOnly }, controller.signal)
       .then((response) => {
+        setError(undefined);
         setItems(response.data);
         setNextCursor(response.nextCursor);
       })
@@ -77,7 +79,11 @@ export function NotificationInAppPage(): React.ReactElement {
       inboxRuntime.refresh();
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : 'Inbox update failed.',
+        reason instanceof Error
+          ? reason.message
+          : t('inbox.errors.update', {
+              defaultValue: 'Inbox update failed.',
+            }),
       );
       inboxRuntime.refresh();
     }
@@ -97,7 +103,9 @@ export function NotificationInAppPage(): React.ReactElement {
       setError(
         reason instanceof Error
           ? reason.message
-          : 'Could not load more notifications.',
+          : t('inbox.errors.loadMore', {
+              defaultValue: 'Could not load more notifications.',
+            }),
       );
     } finally {
       setLoadingMore(false);
@@ -118,7 +126,9 @@ export function NotificationInAppPage(): React.ReactElement {
       setError(
         reason instanceof Error
           ? reason.message
-          : 'Could not mark notifications as read.',
+          : t('inbox.errors.markAllRead', {
+              defaultValue: 'Could not mark notifications as read.',
+            }),
       );
       inboxRuntime.refresh();
     }
@@ -129,18 +139,27 @@ export function NotificationInAppPage(): React.ReactElement {
       <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
         <div>
           <div className='mb-2 flex items-center gap-2 text-sm font-medium text-primary'>
-            <Bell className='size-4' /> Personal inbox
+            <Bell className='size-4' />{' '}
+            {t('inbox.eyebrow', { defaultValue: 'Personal inbox' })}
           </div>
           <div className='flex flex-wrap items-center gap-2'>
             <h1 className='text-2xl font-semibold tracking-tight'>
-              Message center
+              {t('inbox.title', { defaultValue: 'Message center' })}
             </h1>
             {unreadCount > 0 ? (
-              <Badge variant='secondary'>{unreadCount} unread</Badge>
+              <Badge variant='secondary'>
+                {t('inbox.unreadCount', {
+                  count: unreadCount,
+                  defaultValue: '{{count}} unread',
+                })}
+              </Badge>
             ) : null}
           </div>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Updates from the applications and workflows you use.
+            {t('inbox.description', {
+              defaultValue:
+                'Updates from the applications and workflows you use.',
+            })}
           </p>
         </div>
         <Button
@@ -148,7 +167,8 @@ export function NotificationInAppPage(): React.ReactElement {
           onClick={() => void readAll()}
           disabled={items.every((item) => item.readAt)}
         >
-          <CheckCheck /> Mark all read
+          <CheckCheck />{' '}
+          {t('inbox.markAllRead', { defaultValue: 'Mark all read' })}
         </Button>
       </header>
 
@@ -156,26 +176,32 @@ export function NotificationInAppPage(): React.ReactElement {
         <CardHeader className='border-b bg-muted/20 py-4'>
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div>
-              <CardTitle className='text-base'>Messages</CardTitle>
+              <CardTitle>
+                {t('inbox.messagesTitle', { defaultValue: 'Messages' })}
+              </CardTitle>
               <CardDescription>
-                In-app messages keep an independent read state for the current
-                user.
+                {t('inbox.messagesDescription', {
+                  defaultValue:
+                    'In-app messages keep an independent read state for the current user.',
+                })}
               </CardDescription>
             </div>
-            <div className='flex gap-2'>
-              <Button
-                variant={unreadOnly ? 'default' : 'outline'}
-                onClick={() => setUnreadOnly((value) => !value)}
-              >
-                Unread
-              </Button>
-            </div>
+            <Button
+              variant={unreadOnly ? 'default' : 'outline'}
+              onClick={() => setUnreadOnly((value) => !value)}
+            >
+              {t('inbox.unreadFilter', { defaultValue: 'Unread' })}
+            </Button>
           </div>
         </CardHeader>
         <CardContent className='p-0'>
           {error ? (
             <Alert variant='destructive' className='m-4'>
-              <AlertTitle>Inbox unavailable</AlertTitle>
+              <AlertTitle>
+                {t('inbox.unavailable', {
+                  defaultValue: 'Inbox unavailable',
+                })}
+              </AlertTitle>
               <AlertDescription className='flex items-center justify-between gap-3'>
                 {error}
                 <Button
@@ -183,23 +209,31 @@ export function NotificationInAppPage(): React.ReactElement {
                   variant='outline'
                   onClick={() => inboxRuntime.refresh()}
                 >
-                  <RefreshCw /> Retry
+                  <RefreshCw /> {t('inbox.retry', { defaultValue: 'Retry' })}
                 </Button>
               </AlertDescription>
             </Alert>
           ) : null}
           {loading ? (
             <div className='p-10 text-center text-sm text-muted-foreground'>
-              Loading notifications…
+              {t('inbox.loading', {
+                defaultValue: 'Loading notifications…',
+              })}
             </div>
           ) : items.length === 0 ? (
             <div className='grid place-items-center gap-2 p-12 text-center'>
               <div className='grid size-12 place-items-center rounded-full bg-muted'>
                 <Bell className='size-5 text-muted-foreground' />
               </div>
-              <p className='font-medium'>You’re all caught up</p>
+              <p className='font-medium'>
+                {t('inbox.emptyTitle', {
+                  defaultValue: 'You’re all caught up',
+                })}
+              </p>
               <p className='text-sm text-muted-foreground'>
-                New notifications will appear here.
+                {t('inbox.emptyDescription', {
+                  defaultValue: 'New notifications will appear here.',
+                })}
               </p>
             </div>
           ) : (
@@ -218,23 +252,25 @@ export function NotificationInAppPage(): React.ReactElement {
           disabled={loadingMore}
           onClick={() => void loadMore()}
         >
-          {loadingMore ? 'Loading…' : 'Load more'}
+          {loadingMore
+            ? t('inbox.loadingMore', { defaultValue: 'Loading…' })
+            : t('inbox.loadMore', { defaultValue: 'Load more' })}
         </Button>
       ) : null}
     </div>
   );
 }
 
-function InboxRow({
-  item,
-  onMutate,
-}: {
+interface InboxRowProps {
   readonly item: InboxItem;
   readonly onMutate: (
     item: InboxItem,
     action: InboxMutationAction,
   ) => Promise<void>;
-}): React.ReactElement {
+}
+
+function InboxRow({ item, onMutate }: InboxRowProps): ReactElement {
+  const { t } = useTranslation(IN_APP_NOTIFICATION_CLIENT_NAMESPACE);
   return (
     <article
       className={`flex gap-3 p-4 sm:p-5 ${item.readAt ? 'bg-background' : 'bg-primary/[0.035]'}`}
@@ -258,7 +294,9 @@ function InboxRow({
               {item.body}
             </p>
           </div>
-          <Badge variant='outline'>In-app</Badge>
+          <Badge variant='outline'>
+            {t('inbox.channel', { defaultValue: 'In-app' })}
+          </Badge>
         </div>
         <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground'>
           <time dateTime={item.createdAt}>
@@ -272,7 +310,7 @@ function InboxRow({
               size='sm'
               className='h-auto px-1 text-xs'
             >
-              Open <ExternalLink />
+              {t('inbox.open', { defaultValue: 'Open' })} <ExternalLink />
             </Button>
           ) : null}
           <Button
@@ -281,10 +319,14 @@ function InboxRow({
             className='ml-auto'
             onClick={() => void onMutate(item, item.readAt ? 'unread' : 'read')}
           >
-            {item.readAt ? 'Mark unread' : 'Mark read'}
+            {item.readAt
+              ? t('inbox.markUnread', { defaultValue: 'Mark unread' })
+              : t('inbox.markRead', { defaultValue: 'Mark read' })}
           </Button>
           <Button
-            aria-label='Delete notification'
+            aria-label={t('inbox.delete', {
+              defaultValue: 'Delete notification',
+            })}
             variant='ghost'
             size='icon-sm'
             onClick={() => void onMutate(item, 'delete')}

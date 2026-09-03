@@ -6,9 +6,9 @@ import {
   fetchUnreadCount,
   markInboxRead,
   mutateInboxItem,
-} from '../registry/in-app-ui/api.js';
+} from '../client/api.js';
 
-describe('in-app notification Registry API', () => {
+describe('in-app notification Client API', () => {
   it('uses relative paths on the injected application client', async () => {
     const responses: unknown[] = [
       { data: [], nextCursor: 'next' },
