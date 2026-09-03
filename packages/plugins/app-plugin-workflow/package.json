@@ -92,8 +92,7 @@
     "@nocobase/logging": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "elkjs": "^0.10.2",
-    "hono": "catalog:",
-    "typescript": "catalog:"
+    "hono": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
@@ -139,6 +138,7 @@
     "react-dom": "catalog:",
     "react-router": "catalog:",
     "tsx": "catalog:",
+    "typescript": "catalog:",
     "vitest": "catalog:",
     "yaml": "^2.8.1"
   }
