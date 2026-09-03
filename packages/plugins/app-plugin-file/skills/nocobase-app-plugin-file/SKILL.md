@@ -32,25 +32,13 @@ Application owns
   createFileRoute() and the standard HTTP contract
   createFilesClient() and FilesClient types
   reusable upload, list, thumbnail, and preview components
-  the generic administrator file inventory page and API
   storage, filename, token, and preview mechanics
 ```
 
-The File plugin intentionally ships no business tables or application-specific
-attachment endpoints and pages. It does provide the generic `/settings/files`
-inventory and `/api/files/inventory/*` API for registered database-backed file
-routes. Authentication and Authorization are required and must both be enabled.
-The page and API require the `file.inventory` page access permission, which the
-built-in system administrator receives through the wildcard page grant. Never
-depend on `/file-demo`, `/api/attachments`, `fileDemo*` collections, or
-plugin-internal source paths.
-
 ## Application workflow
 
-1. Confirm `@nocobase/app-plugin-authentication`,
-   `@nocobase/app-plugin-authorization`, and `@nocobase/app-plugin-file` are
-   installed and registered so the required runtime services and the File
-   plugin's Client and Server contributions are available.
+1. Confirm `@nocobase/app-plugin-file` is installed and registered so its
+   Client and Server locale contributions are available.
 2. Add the business collection and its standard file table under the
    application's `database/migrations/` directory.
 3. Add a scoped `createFileRoute()` contribution under the application's
