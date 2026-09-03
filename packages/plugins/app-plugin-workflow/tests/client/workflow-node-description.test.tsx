@@ -8,6 +8,8 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { I18nProvider } from '@nocobase/i18n/client';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowRunResultDialog } from '../../client/workflow-management/inspector.js';
 import { workflowApi } from '../../client/workflow-management/data.js';
@@ -16,6 +18,14 @@ import {
   WorkflowDetailPage,
 } from '../../client/workflow-management/pages.js';
 import type { WorkflowNestedDefinition } from '../../client/types.js';
+import clientLocales from '../../client/locales/index.js';
+import { createWorkflowI18nRuntime } from '../i18n.js';
+
+const i18n = await createWorkflowI18nRuntime(clientLocales);
+
+function renderWithI18n(element: ReactElement): ReturnType<typeof render> {
+  return render(<I18nProvider runtime={i18n}>{element}</I18nProvider>);
+}
 
 const canvasDefinitions = vi.hoisted(() => [] as WorkflowNestedDefinition[]);
 
@@ -100,7 +110,7 @@ describe('workflow node descriptions', () => {
       workflow({ enabled: true, current: true }),
     );
 
-    render(
+    renderWithI18n(
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
         <Routes>
           <Route
@@ -129,7 +139,7 @@ describe('workflow node descriptions', () => {
       workflow({ enabled: true, current: true }),
     );
 
-    render(
+    renderWithI18n(
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
         <Routes>
           <Route
@@ -166,7 +176,7 @@ describe('workflow node descriptions', () => {
       workflow({ id: 'workflow-42', enabled: true, current: true }),
     );
 
-    render(
+    renderWithI18n(
       <MemoryRouter initialEntries={['/workflows/workflow-hash']}>
         <CurrentLocation />
         <Routes>
@@ -204,7 +214,7 @@ describe('workflow node descriptions', () => {
       createdAt: '2026-09-02T08:00:00.000Z',
     });
 
-    render(
+    renderWithI18n(
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
         <CurrentLocation />
         <Routes>
@@ -229,7 +239,7 @@ describe('workflow node descriptions', () => {
   });
 
   it('shows the selected canvas node description in a dialog', () => {
-    render(
+    renderWithI18n(
       <NodeDescriptionDialog
         title='Notify owner'
         description='Send the final result to the record owner.'
@@ -248,7 +258,7 @@ describe('workflow node descriptions', () => {
     vi.spyOn(workflowApi, 'nodeRuns').mockReturnValue(new Promise(() => {}));
     vi.spyOn(workflowApi, 'payload').mockReturnValue(new Promise(() => {}));
 
-    render(
+    renderWithI18n(
       <WorkflowRunResultDialog
         runId='run-1'
         nodeRun={nodeRun}
