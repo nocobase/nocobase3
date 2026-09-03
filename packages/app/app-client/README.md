@@ -105,6 +105,13 @@ An application owns:
 - finalized `app.refineConfig` after startup;
 - finalized React render configuration consumed by `AppClientRoot`.
 
+The application API client also owns a lazy realtime connection. By default,
+its WebSocket endpoint is the `/ws` sibling of `api.baseURL`; deployments with
+a different topology can set `api.realtimeURL` explicitly. A subscription is
+ready only after `onSubscribed(topic, listener)` fires, which lets consumers
+refetch durable state after initial connection and reconnection without a gap
+before the server acknowledges the topic.
+
 Create an application directly when the default helper is sufficient:
 
 ```ts

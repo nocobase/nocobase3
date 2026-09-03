@@ -55,8 +55,10 @@ it('connects lazily, dispatches events, and restores topics after session change
   vi.stubGlobal('WebSocket', MockWebSocket);
 
   const events: RealtimeEvent<{ readonly kind: string }>[] = [];
+  const subscribed = vi.fn();
   const listenerError = vi.spyOn(console, 'error').mockImplementation(() => {});
   const client = createRealtimeClient({ resolveUrl: () => '/main/ws' });
+  client.onSubscribed('notifications:in-app', subscribed);
   expect(sockets).toHaveLength(0);
 
   const unsubscribeThrowing = client.subscribe('notifications:in-app', () => {
@@ -69,11 +71,21 @@ it('connects lazily, dispatches events, and restores topics after session change
 
   sockets[0]?.open();
   expect(sockets[0]?.url).toBe('wss://example.com/main/ws');
+  const firstSubscriptionRequest = sentMessages.at(-1);
   expect(sentMessages.at(-1)).toEqual({
     type: 'subscribe',
-    id: 'subscribe:notifications:in-app',
+    id: expect.any(String),
     topic: 'notifications:in-app',
   });
+  expect(subscribed).not.toHaveBeenCalled();
+
+  sockets[0]?.message({
+    type: 'subscribed',
+    id: firstSubscriptionRequest?.id,
+    topic: 'notifications:in-app',
+    subscriptionId: 'subscription-1',
+  });
+  expect(subscribed).toHaveBeenCalledOnce();
 
   sockets[0]?.message({
     type: 'event',
@@ -97,16 +109,50 @@ it('connects lazily, dispatches events, and restores topics after session change
     sentMessages.filter((message) => message.type === 'ping'),
   ).toHaveLength(1);
   sockets[1]?.open();
+  const secondSubscriptionRequest = sentMessages.at(-1);
   expect(sentMessages.at(-1)).toEqual({
     type: 'subscribe',
-    id: 'subscribe:notifications:in-app',
+    id: expect.any(String),
     topic: 'notifications:in-app',
   });
+  expect(secondSubscriptionRequest?.id).not.toBe(firstSubscriptionRequest?.id);
+  expect(subscribed).toHaveBeenCalledOnce();
+  sockets[1]?.message({
+    type: 'subscribed',
+    id: secondSubscriptionRequest?.id,
+    topic: 'notifications:in-app',
+    subscriptionId: 'subscription-2',
+  });
+  expect(subscribed).toHaveBeenCalledTimes(2);
 
+  const unsubscribeOther = client.subscribe('notifications:other', vi.fn());
   unsubscribeThrowing();
   unsubscribe();
   expect(sentMessages.at(-1)).toEqual({
     type: 'unsubscribe',
     topic: 'notifications:in-app',
   });
+
+  const unsubscribeReplacement = client.subscribe(
+    'notifications:in-app',
+    vi.fn(),
+  );
+  const replacementSubscriptionRequest = sentMessages.at(-1);
+  sockets[1]?.message({
+    type: 'subscribed',
+    id: secondSubscriptionRequest?.id,
+    topic: 'notifications:in-app',
+    subscriptionId: 'stale-subscription',
+  });
+  expect(subscribed).toHaveBeenCalledTimes(2);
+  sockets[1]?.message({
+    type: 'subscribed',
+    id: replacementSubscriptionRequest?.id,
+    topic: 'notifications:in-app',
+    subscriptionId: 'replacement-subscription',
+  });
+  expect(subscribed).toHaveBeenCalledTimes(3);
+
+  unsubscribeReplacement();
+  unsubscribeOther();
 });

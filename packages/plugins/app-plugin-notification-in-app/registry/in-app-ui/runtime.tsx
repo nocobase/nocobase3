@@ -7,10 +7,11 @@ import {
   useState,
 } from 'react';
 import { appApiClientToken, useService } from '@nocobase/app-client';
+import { IN_APP_NOTIFICATION_REALTIME_TOPIC } from '@nocobase/app-plugin-notification-in-app/realtime';
 import { fetchUnreadCount } from './api.js';
+import { subscribeToInboxInvalidations } from './subscription.js';
 
-export const IN_APP_NOTIFICATION_REALTIME_TOPIC: string =
-  'notifications:in-app';
+export { IN_APP_NOTIFICATION_REALTIME_TOPIC };
 
 export interface NotificationInAppRuntimeValue {
   readonly unreadCount: number;
@@ -35,28 +36,14 @@ export function NotificationInAppProvider({
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchUnreadCount(controller.signal)
+    fetchUnreadCount(appClient, controller.signal)
       .then(setUnreadCount)
       .catch(() => undefined);
     return () => controller.abort();
-  }, [revision]);
+  }, [appClient, revision]);
 
   useEffect(() => {
-    const refreshInbox = (): void => refresh();
-    const unsubscribeOpen = appClient.realtime?.onOpen(refreshInbox);
-    const unsubscribeTopic = appClient.realtime?.subscribe<unknown>(
-      IN_APP_NOTIFICATION_REALTIME_TOPIC,
-      (event): void => {
-        if (isInboxChanged(event.payload)) refreshInbox();
-      },
-    );
-    window.addEventListener('focus', refreshInbox);
-
-    return () => {
-      window.removeEventListener('focus', refreshInbox);
-      unsubscribeTopic?.();
-      unsubscribeOpen?.();
-    };
+    return subscribeToInboxInvalidations(appClient, window, refresh);
   }, [appClient, refresh]);
 
   const value = useMemo<NotificationInAppRuntimeValue>(
@@ -74,13 +61,4 @@ export function useNotificationInAppRuntime(): NotificationInAppRuntimeValue {
   const value = useContext(NotificationInAppRuntimeContext);
   if (!value) throw new Error('NotificationInAppProvider is required.');
   return value;
-}
-
-function isInboxChanged(payload: unknown): boolean {
-  return (
-    typeof payload === 'object' &&
-    payload !== null &&
-    'kind' in payload &&
-    payload.kind === 'inbox.changed'
-  );
 }

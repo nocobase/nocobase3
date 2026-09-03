@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "README.md",
+    "skills",
     "registry",
     "registry.config.json",
     "public/r"
@@ -27,6 +28,10 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./realtime": {
+      "types": "./shared/realtime.ts",
+      "import": "./shared/realtime.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -39,6 +44,10 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
+      },
+      "./realtime": {
+        "types": "./dist/shared/realtime.d.ts",
+        "import": "./dist/shared/realtime.js"
       },
       "./package.json": "./package.json"
     }

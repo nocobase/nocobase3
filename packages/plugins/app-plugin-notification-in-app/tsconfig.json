@@ -4,5 +4,5 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["server/**/*.ts", "database/**/*.ts"]
+  "include": ["server/**/*.ts", "shared/**/*.ts", "database/**/*.ts"]
 }
