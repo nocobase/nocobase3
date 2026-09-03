@@ -53,6 +53,7 @@ createDatabaseManager(config)
 5. [Collections](./collections/overview.md)、[Schema Inspector](./schema-inspector/overview.md) 或 [Collection Metadata](./collection-metadata/overview.md)
 6. [Migration](./migration/overview.md) 和 [Seed](./seed/overview.md)
 7. [API 索引](./reference/api-index.md)
+8. [完整文档目录](./toc.md)
 
 ## 文档可信级别
 
