@@ -74,13 +74,10 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "hono": "catalog:",
-    "tailwind-merge": "^3.2.0"
+    "hono": "catalog:"
   },
   "devDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-authentication": "workspace:*",
     "@nocobase/app-server": "workspace:*",
@@ -90,11 +87,14 @@
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shadcn": "^4.13.1",
+    "tailwind-merge": "^3.2.0",
     "tailwindcss": "catalog:",
     "tw-animate-css": "^1.2.5",
     "typescript": "catalog:",

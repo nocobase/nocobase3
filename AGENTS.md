@@ -198,6 +198,30 @@ It does not apply to `packages/app` and `packages/libs`. They compose the runtim
 
 `pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
 
+## Declaring Dependencies by How They Are Used
+
+Server code that ships goes in `dependencies`. Client code, build tooling, tests, and type-only imports go in `devDependencies` — or in `peerDependencies` when the consuming application must provide a single shared copy. `pnpm deps:check` enforces the server half and runs in CI.
+
+The asymmetry is not a style preference. It follows from the two halves being deployed differently.
+
+**The server half is deployed unbundled.** `pnpm build` emits `dist/server` with its bare imports intact, then generates `dist/package.json` by walking `dependencies` and installs a `node_modules` beside it. That tree is what a deployed server resolves against, and `devDependencies` are not part of it. A server module importing something declared only as a devDependency therefore resolves in every development checkout and is absent exactly once — on the deployed server. `@nocobase/app-plugin-workflow` shipped this: `server/loader/source-parser.ts` imports `typescript`, the engine reaches that module through a static import chain, and `typescript` sat in `devDependencies`. Nothing warned at install time; the application crashed on start with `Cannot find package 'typescript'`, an error naming nothing that points back at the manifest.
+
+**The client half is bundled by the application.** A plugin's `client/` is compiled by the consuming application's Vite build, which resolves those imports at build time and inlines them into `dist/client`. Nothing resolves them again at runtime, so a `dependencies` entry buys the bundle nothing — and costs something real, because the same walk that builds `dist/package.json` drags every one of them into the server deployment to be installed and never required. `lucide-react` and `@xyflow/react` alone were 44 MB of that, in a tree whose server code references neither.
+
+So the question is where the importing code runs, and then what the import actually is:
+
+- **A server value import belongs in `dependencies`.** `import ts from 'typescript'` in `server/` needs it even though TypeScript sounds like build tooling.
+- **A client import belongs in `devDependencies`.** `react`, `lucide-react`, `@base-ui/react`, `clsx`, and everything else reached only from `client/` — the application bundles them, and it declares its own copies.
+- **A type-only import belongs in `devDependencies` wherever it lives.** `import type { Config } from 'x'` and `import { type A, type B } from 'x'` are erased before anything runs.
+- **A dynamic `import()` counts as a value import.** Deferring the load changes when a package is needed, not whether.
+- **The `files` field decides whether code ships at all.** A test, an eval harness, or a build script excluded from `files` never reaches a consumer, so its imports are correctly devDependencies.
+
+`registry/` is excluded for a stronger reason than `client/`: it is shadcn-style source copied into an application and compiled there against that application's own `react` and `@/` alias. The plugin cannot resolve those imports at all, so declaring them would claim dependencies it does not have.
+
+`peerDependencies` is the third answer, for a package the application must supply exactly one copy of. `@nocobase/i18n` is the shape to copy: it exports a server entry and a client entry from one package, so `i18next` is an ordinary dependency while `react`, `hono`, and `react-i18next` are optional peers — a server-only consumer installs none of them, and a browser consumer gets the application's single copy rather than a second one that would leave `useTranslation` reading an empty provider. Mark such a peer `optional` in `peerDependenciesMeta` so the consumer that legitimately does not need it gets no warning.
+
+When the check reports something, there are two correct fixes and picking the wrong one is worse than the original: declare it in `dependencies` if server code genuinely imports it, or stop importing it from server code if it is client or build-time code that leaked across. Adding a declaration to silence the check trades a startup crash for a dependency every deployment carries forever.
+
 ## Language
 
 Anything a person outside the team can read is written in English. Anything only the team reads may be written in Chinese.
