@@ -9,6 +9,7 @@ import { Hono } from 'hono';
 import { createPluginContextMiddleware } from '../runtime.js';
 import { aiEmployeeRuntimeToken } from '../tokens.js';
 import { registerAIEmployeeRoutes } from './index.js';
+import { registerAIListLLMServicesCompatibilityRoute } from './ai.js';
 import { createAICurrentUserMiddleware } from './utils.js';
 
 export const aiEmployeeApiRoutes: AppApiRouteContribution<AppPluginApplication> =
@@ -23,6 +24,11 @@ export const aiEmployeeApiRoutes: AppApiRouteContribution<AppPluginApplication> 
       createPluginContextMiddleware(runtime),
     );
     router.route('/ai', routes);
+    registerAIListLLMServicesCompatibilityRoute(
+      router,
+      createAICurrentUserMiddleware(auth),
+      createPluginContextMiddleware(runtime),
+    );
     return router;
   });
 

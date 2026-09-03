@@ -1,4 +1,6 @@
-import type { Hono } from 'hono';
+import type { Hono, MiddlewareHandler } from 'hono';
+
+import { createAIRequestMiddleware } from './utils.js';
 
 export function createAIRouter(app: Hono): void {
   app.get('/ai:listAllEnabledModels', async (context) => {
@@ -13,14 +15,7 @@ export function createAIRouter(app: Hono): void {
     return context.json(result as never);
   });
 
-  app.get('/ai:listLLMServices', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.modelService.listLLMServices(
-      ctx,
-      context.req.query('model') || undefined,
-    );
-    return context.json(result as never);
-  });
+  registerAIListLLMServicesRoute(app);
 
   app.get('/ai:listModels', async (context) => {
     const ctx = context.var.ctx;
@@ -42,6 +37,28 @@ export function createAIRouter(app: Hono): void {
 
   app.post('/ai:testFlight', async (context) => {
     const result = unsupportedAIAction('ai:testFlight');
+    return context.json(result as never);
+  });
+}
+
+export function registerAIListLLMServicesCompatibilityRoute(
+  app: Hono,
+  ...middlewares: MiddlewareHandler[]
+): void {
+  for (const middleware of middlewares) {
+    app.use('/ai:listLLMServices', middleware);
+  }
+  app.use('/ai:listLLMServices', createAIRequestMiddleware());
+  registerAIListLLMServicesRoute(app);
+}
+
+function registerAIListLLMServicesRoute(app: Hono): void {
+  app.get('/ai:listLLMServices', async (context) => {
+    const ctx = context.var.ctx;
+    const result = await ctx.modelService.listLLMServices(
+      ctx,
+      context.req.query('model') || undefined,
+    );
     return context.json(result as never);
   });
 }
