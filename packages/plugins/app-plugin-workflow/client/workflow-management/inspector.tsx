@@ -1,4 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
+import type { Translator } from '@nocobase/i18n';
+import { useTranslation } from '@nocobase/i18n/client';
+import { WORKFLOW_NS } from '../namespace.js';
 import { workflowApi } from './data.js';
 import type { WorkflowNodeRunPayload, WorkflowNodeRunRecord } from './types.js';
 import { Badge } from './ui/badge.js';
@@ -15,18 +18,19 @@ export function WorkflowInspector({
   selectedAttempt,
   onSelectAttempt,
 }: WorkflowInspectorProps): ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
   if (!nodeKey)
     return (
-      <aside aria-label='Workflow inspector'>
-        <h2>Workflow overview</h2>
-        <p>Select a node to inspect it.</p>
+      <aside aria-label={t('inspector.label')}>
+        <h2>{t('inspector.overview')}</h2>
+        <p>{t('inspector.selectNode')}</p>
       </aside>
     );
   return (
-    <aside aria-label='Workflow inspector'>
+    <aside aria-label={t('inspector.label')}>
       <h2>{nodeKey}</h2>
       <label>
-        Attempt{' '}
+        {t('inspector.attempt')}{' '}
         <select
           value={selectedAttempt ?? attempts.at(-1)?.id ?? ''}
           onChange={(event) => onSelectAttempt?.(event.target.value)}
@@ -42,7 +46,7 @@ export function WorkflowInspector({
         {attempts.map((attempt) => (
           <li key={attempt.id}>
             #{attempt.id} · {attempt.startedAt} →{' '}
-            {attempt.finishedAt ?? 'running'}
+            {attempt.finishedAt ?? t('inspector.stillRunning')}
           </li>
         ))}
       </ol>
@@ -50,7 +54,7 @@ export function WorkflowInspector({
   );
 }
 
-function displayValue(value: unknown): string {
+function displayValue(value: unknown, t: Translator): string {
   if (value === undefined) return 'undefined';
   if (value === null) return 'null';
   if (typeof value === 'string') return value;
@@ -64,26 +68,26 @@ function displayValue(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return '[Unserializable value]';
+    return t('inspector.unserializable');
   }
 }
-function formatClientTime(value: string | null): string {
-  if (!value) return 'running';
+function formatClientTime(value: string | null, t: Translator): string {
+  if (!value) return t('inspector.stillRunning');
   const date = new Date(value);
   const part = (next: number, width: number = 2): string =>
     String(next).padStart(width, '0');
   return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}:${part(date.getSeconds())}.${part(date.getMilliseconds(), 3)}`;
 }
-function runStatusLabel(status: number): string {
+function runStatusLabel(status: number, t: Translator): string {
   return status === 1
-    ? 'Succeeded'
+    ? t('status.succeeded')
     : status === 0
-      ? 'Running'
+      ? t('status.running')
       : status === -1
-        ? 'Failed'
+        ? t('status.failed')
         : status === -2
-          ? 'Error'
-          : 'Aborted';
+          ? t('status.error')
+          : t('status.aborted');
 }
 function runStatusTone(status: number): string {
   return status === 1
@@ -149,7 +153,8 @@ function WorkflowRunResultDialogContent({
   nodeTitle,
   nodeDescription,
   onClose,
-}: WorkflowRunResultDialogProps) {
+}: WorkflowRunResultDialogProps): ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
   const [attemptId, setAttemptId] = useState(nodeRun.id);
   const attemptsKey = `${runId}:${nodeRun.nodeKey}`;
   const [attemptsResult, setAttemptsResult] = useState<{
@@ -227,14 +232,16 @@ function WorkflowRunResultDialogContent({
               <Badge
                 className={`workflow-run-status-tag ${runStatusTone(current.status)}`}
               >
-                {runStatusLabel(current.status)}
+                {runStatusLabel(current.status, t)}
               </Badge>
-              <span>Duration {formatRunDuration(current)}</span>
+              <span>
+                {t('common.duration', { duration: formatRunDuration(current) })}
+              </span>
             </div>
           </div>
           <button
             type='button'
-            aria-label='Close result'
+            aria-label={t('inspector.closeResult')}
             onClick={animatedClose.close}
           >
             ×
@@ -242,15 +249,15 @@ function WorkflowRunResultDialogContent({
         </header>
         {attempts.length > 1 ? (
           <label>
-            Attempt{' '}
+            {t('inspector.attempt')}{' '}
             <select
               value={attemptId}
               onChange={(event) => setAttemptId(event.target.value)}
             >
               {attempts.map((attempt, index) => (
                 <option key={attempt.id} value={attempt.id}>
-                  {index + 1} · {runStatusLabel(attempt.status)} ·{' '}
-                  {formatClientTime(attempt.startedAt)}
+                  {index + 1} · {runStatusLabel(attempt.status, t)} ·{' '}
+                  {formatClientTime(attempt.startedAt, t)}
                 </option>
               ))}
             </select>
@@ -258,7 +265,7 @@ function WorkflowRunResultDialogContent({
         ) : null}
         {nodeDescription?.trim() ? (
           <details className='workflow-node-description-disclosure'>
-            <summary>Description</summary>
+            <summary>{t('common.description')}</summary>
             <p>{nodeDescription}</p>
           </details>
         ) : null}
@@ -267,28 +274,28 @@ function WorkflowRunResultDialogContent({
         ) : payload ? (
           <div className='workflow-result-content'>
             {payload.truncated ? (
-              <p role='status'>Large payload was truncated for display.</p>
+              <p role='status'>{t('inspector.payloadTruncated')}</p>
             ) : null}
             {payload.error ? (
               <>
-                <h3>Error</h3>
+                <h3>{t('status.error')}</h3>
                 <pre>{payload.error}</pre>
               </>
             ) : (
               <>
-                <h3>Result</h3>
-                <pre>{displayValue(payload.result)}</pre>
+                <h3>{t('inspector.result')}</h3>
+                <pre>{displayValue(payload.result, t)}</pre>
               </>
             )}
             {payload.log?.trim() ? (
               <>
-                <h3>Log</h3>
+                <h3>{t('inspector.log')}</h3>
                 <pre>{payload.log}</pre>
               </>
             ) : null}
           </div>
         ) : (
-          <p>Loading result…</p>
+          <p>{t('inspector.loadingResult')}</p>
         )}
       </section>
     </div>
@@ -303,6 +310,7 @@ export function WorkflowInputDialog({
   input,
   onClose,
 }: WorkflowInputDialogProps): ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
   const animatedClose = useAnimatedDialogClose(onClose);
   return (
     <div
@@ -323,20 +331,20 @@ export function WorkflowInputDialog({
       >
         <header>
           <div>
-            <h2 id='workflow-input-title'>Workflow input</h2>
-            <p>Input context available when this execution started.</p>
+            <h2 id='workflow-input-title'>{t('inspector.inputTitle')}</h2>
+            <p>{t('inspector.inputDescription')}</p>
           </div>
           <button
             type='button'
-            aria-label='Close input'
+            aria-label={t('inspector.closeInput')}
             onClick={animatedClose.close}
           >
             ×
           </button>
         </header>
         <div className='workflow-result-content'>
-          <h3>Input</h3>
-          <pre>{displayValue(input)}</pre>
+          <h3>{t('inspector.input')}</h3>
+          <pre>{displayValue(input, t)}</pre>
         </div>
       </section>
     </div>

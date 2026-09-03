@@ -5,6 +5,7 @@ import {
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowProviderConfig } from '../server/provider.js';
@@ -12,6 +13,10 @@ import { createNodeRunRoutes } from '../server/routes/node-runs.js';
 import { apiRoutes } from '../server/routes/index.js';
 import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
 import { createWorkflowDefinitionRoutes } from '../server/routes/workflows.js';
+import serverLocales from '../server/locales/index.js';
+import { createWorkflowI18nRuntime } from './i18n.js';
+
+const i18n = await createWorkflowI18nRuntime(serverLocales);
 
 describe('@nocobase/app-plugin-workflow routes', () => {
   it('registers the protected workflow API routes', async () => {
@@ -145,7 +150,10 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       } as unknown as Auth),
     );
 
-    const response = await router.request('/workflows');
+    const app = new Hono();
+    app.use('*', createI18nMiddleware(i18n));
+    app.route('/', router);
+    const response = await app.request('/workflows');
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
@@ -169,6 +177,26 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       message: 'enabled must be a boolean',
     });
   });
+
+  it('translates validation errors from the request locale', async () => {
+    const app = new Hono();
+    const workflow = createWorkflowRepositories();
+    registerTestRoutes(app, workflow);
+
+    const response = await app.request('/api/workflows/definition-1/status', {
+      method: 'PATCH',
+      headers: {
+        'accept-language': 'zh-CN',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ enabled: 'yes' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      message: 'enabled 必须为布尔值',
+    });
+  });
 });
 
 interface TestRepositories {
@@ -184,6 +212,7 @@ function createTestApp(repositories: TestRepositories): Hono {
 }
 
 function registerTestRoutes(app: Hono, repositories: TestRepositories): void {
+  app.use('*', createI18nMiddleware(i18n));
   app.route('/api', createWorkflowDefinitionRoutes(repositories.workflows));
   app.route('/api', createWorkflowRunRoutes(repositories.workflowRuns));
   app.route('/api', createNodeRunRoutes(repositories.workflowRuns));
