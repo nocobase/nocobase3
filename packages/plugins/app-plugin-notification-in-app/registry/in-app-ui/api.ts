@@ -1,5 +1,4 @@
-import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
-import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
+import type { AppClient } from '@nocobase/app-client';
 
 export type InboxMutationAction = 'read' | 'unread' | 'delete';
 
@@ -26,13 +25,14 @@ export interface InboxListResponse {
 }
 
 export async function fetchInbox(
+  client: AppClient,
   filters: InboxFilters,
   signal?: AbortSignal,
 ): Promise<InboxListResponse> {
   const query = new URLSearchParams({ limit: String(filters.limit ?? 25) });
   if (filters.unreadOnly) query.set('unreadOnly', 'true');
   if (filters.cursor) query.set('cursor', filters.cursor);
-  const value = await requestJson<unknown>(`${getInboxBaseUrl()}?${query}`, {
+  const value = await client.request<unknown>(`notifications/in-app?${query}`, {
     signal,
   });
   if (Array.isArray(value)) return { data: value as readonly InboxItem[] };
@@ -46,9 +46,12 @@ export async function fetchInbox(
   throw new Error('Inbox returned an invalid response.');
 }
 
-export async function fetchUnreadCount(signal?: AbortSignal): Promise<number> {
-  const response = await requestJson<{ readonly count: number }>(
-    `${getInboxBaseUrl()}/unread-count`,
+export async function fetchUnreadCount(
+  client: AppClient,
+  signal?: AbortSignal,
+): Promise<number> {
+  const response = await client.request<{ readonly count: number }>(
+    'notifications/in-app/unread-count',
     {
       signal,
     },
@@ -57,85 +60,40 @@ export async function fetchUnreadCount(signal?: AbortSignal): Promise<number> {
 }
 
 export async function mutateInboxItem(
+  client: AppClient,
   id: string,
   action: InboxMutationAction,
 ): Promise<InboxItem> {
   const response = await mutation<{ readonly data: InboxItem }>(
-    `${getInboxBaseUrl()}/${encodeURIComponent(id)}`,
+    client,
+    `notifications/in-app/${encodeURIComponent(id)}`,
     { action },
   );
   return response.data;
 }
 
-export async function markInboxRead(): Promise<number> {
+export async function markInboxRead(client: AppClient): Promise<number> {
   const response = await mutation<{ readonly updated: number }>(
-    `${getInboxBaseUrl()}/read-all`,
+    client,
+    'notifications/in-app/read-all',
     {},
   );
   return response.updated;
 }
 
-async function mutation<T>(url: string, body: object): Promise<T> {
-  const csrf = await requestJson<{ readonly token: string }>(
-    `${getInboxBaseUrl()}/csrf`,
+async function mutation<T>(
+  client: AppClient,
+  path: string,
+  body: object,
+): Promise<T> {
+  const csrf = await client.request<{ readonly token: string }>(
+    'notifications/in-app/csrf',
   );
-  return requestJson<T>(url, {
+  return client.request<T>(path, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-csrf-token': csrf.token },
+    headers: { 'x-csrf-token': csrf.token },
     body: JSON.stringify(body),
   });
-}
-
-function getInboxBaseUrl(): string {
-  return `${getPortalBase().replace(/\/$/, '')}/api/notifications/in-app`;
-}
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const method = apiMethod(init?.method);
-  const headers = new Headers(
-    nocobaseClient.getHeaders({ method, withAclMeta: false, body: init?.body }),
-  );
-  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
-  const response = await fetch(url, {
-    credentials: 'include',
-    ...init,
-    headers,
-  });
-  const value: unknown = await response.json().catch(() => undefined);
-  if (!response.ok) {
-    const error =
-      value &&
-      typeof value === 'object' &&
-      'error' in value &&
-      value.error &&
-      typeof value.error === 'object'
-        ? (value.error as { readonly message?: unknown })
-        : undefined;
-    throw new Error(
-      typeof error?.message === 'string'
-        ? error.message
-        : `Inbox request failed (${response.status}).`,
-    );
-  }
-  if (value === undefined) {
-    throw new Error('Inbox returned an invalid response.');
-  }
-  return value as T;
-}
-
-function apiMethod(
-  method: string | undefined,
-): 'GET' | 'POST' | 'PUT' | 'DELETE' {
-  switch (method?.toUpperCase()) {
-    case 'POST':
-      return 'POST';
-    case 'PUT':
-      return 'PUT';
-    case 'DELETE':
-      return 'DELETE';
-    default:
-      return 'GET';
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
