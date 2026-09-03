@@ -29,7 +29,7 @@ async function runtimeModuleGraph(entry: string): Promise<Set<string>> {
 }
 
 describe('workflow server runtime boundary', () => {
-  it('does not load build-only modules or compiler dependencies', async () => {
+  it('does not load build modules or compiler dependencies', async () => {
     const graph = await runtimeModuleGraph(
       path.join(pluginRoot, 'server/plugin.ts'),
     );

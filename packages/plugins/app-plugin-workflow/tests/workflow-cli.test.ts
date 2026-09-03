@@ -16,13 +16,25 @@ describe('workflow CLI', () => {
       fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
     ) as {
       bin?: Record<string, string>;
-      publishConfig?: { bin?: Record<string, string> };
+      exports?: Record<string, unknown>;
+      publishConfig?: {
+        bin?: Record<string, string>;
+        exports?: Record<string, unknown>;
+      };
     };
 
     expect(manifest.bin?.workflow).toBe('./bin/workflow.ts');
     expect(manifest.publishConfig?.bin?.workflow).toBe(
       './dist/bin/workflow.js',
     );
+    expect(manifest.exports?.['./build']).toEqual({
+      types: './build/index.ts',
+      import: './build/index.ts',
+    });
+    expect(manifest.publishConfig?.exports?.['./build']).toEqual({
+      types: './dist/build/index.d.ts',
+      import: './dist/build/index.js',
+    });
   });
 
   it('runs from source before the package is built and accepts a relative package path', async () => {
