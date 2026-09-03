@@ -3,12 +3,14 @@ import {
   CollectionResolutionError,
   CollectionResolver,
   resolveCollection,
-  type CollectionMetadataDocument,
   type CollectionResolutionContext,
-  type PhysicalCollectionSchema,
-  type PhysicalSchemaAspect,
-  type PhysicalSchemaInspectionStatus,
-} from '../../../src/index.js';
+} from '../../../src/collection/resolver/index.js';
+import type { CollectionMetadataDocument } from '../../../src/index.js';
+import type {
+  PhysicalCollectionSchema,
+  PhysicalSchemaAspect,
+  PhysicalSchemaInspectionStatus,
+} from '../../../src/schema/inspector/types.js';
 
 describe('CollectionResolver', () => {
   it('maps physical facts and supplemental metadata without duplicating constraints', () => {

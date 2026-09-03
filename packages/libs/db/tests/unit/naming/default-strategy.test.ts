@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DefaultNamingStrategy, snakeCase } from '../../../src/index.js';
+import { DefaultNamingStrategy } from '../../../src/naming/default-strategy.js';
+import { snakeCase } from '../../../src/naming/utils.js';
 
 describe('DefaultNamingStrategy', () => {
   it('normalizes collection and field names to database identifiers', () => {

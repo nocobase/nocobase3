@@ -1,14 +1,14 @@
 import type { CollectionDefinition, NamingOptions } from '../types.js';
 import { CollectionResolver } from '../resolver/resolver.js';
 import { CollectionResolutionError } from '../resolver/errors.js';
+import type { CollectionMetadataStore } from '../../metadata/document-store.js';
 import type {
-  CollectionMetadataStore,
   CollectionMetadataDocumentValidator,
   CollectionMetadataValidationContext,
-} from '../../metadata/index.js';
+} from '../../metadata/service.js';
 import type { CollectionMetadataDocument } from '../../metadata/document.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
-import type { SchemaInspector } from '../../schema/inspector/inspector.js';
+import type { SchemaInspector } from '../../schema/inspector/types.js';
 import { CollectionNamingIndex } from './naming-index.js';
 import { CollectionRelationValidator } from './relation-validator.js';
 import type { ConnectionCollections } from './types.js';

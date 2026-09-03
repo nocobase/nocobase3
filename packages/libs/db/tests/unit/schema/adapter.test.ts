@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   SchemaManagementNotAllowedError,
   SchemaManagementSchemaAdapter,
-} from '../../../src/database/index.js';
+} from '../../../src/database/schema-management.js';
 import {
   NoopSchemaAdapter,
   type SchemaAdapter,
-} from '../../../src/schema/index.js';
+} from '../../../src/schema/adapter.js';
 
 describe('NoopSchemaAdapter', () => {
   it('accepts schema operations without executing anything', async () => {

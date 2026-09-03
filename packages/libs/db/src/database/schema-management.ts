@@ -1,5 +1,5 @@
 import type { SchemaOperation } from '../collection/types.js';
-import type { SchemaAdapter } from '../schema/index.js';
+import type { SchemaAdapter } from '../schema/adapter.js';
 import type { SchemaManagementMode } from './config.js';
 
 export interface SchemaManagementGuardOptions {

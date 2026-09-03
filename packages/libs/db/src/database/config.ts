@@ -1,6 +1,6 @@
 import type { NamingOptions } from '../collection/types.js';
-import type { CollectionMetadataStore } from '../metadata/index.js';
-import type { DatabaseCapabilities } from '../schema/index.js';
+import type { CollectionMetadataStore } from '../metadata/document-store.js';
+import type { DatabaseCapabilities } from '../schema/adapter.js';
 
 export interface DatabaseConfig {
   default?: string;

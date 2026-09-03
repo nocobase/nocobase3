@@ -3,17 +3,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  CollectionRenameAtomicityError,
-  DatabaseCollectionMetadataStore,
   createDatabaseManager,
   defineDatabase,
   InMemoryCollectionMetadataStore,
   ModuleCollectionMetadataStore,
-  resolveDatabaseCapabilities,
-  resolveKnexConnectionConfig,
   SchemaManagementNotAllowedError,
   type DatabaseConnection,
 } from '../../../src/index.js';
+import { CollectionRenameAtomicityError } from '../../../src/collection/builder/index.js';
+import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
+import { resolveDatabaseCapabilities } from '../../../src/database/capabilities.js';
+import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex/config.js';
 
 describe('DatabaseManager', () => {
   it('returns lazy builder, query, and connection handles for the default connection', async () => {

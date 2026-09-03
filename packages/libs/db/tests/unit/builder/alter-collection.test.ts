@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/index.js';
 
 describe('CollectionBuilder alterCollection', () => {
   it('collects fluent alter operations', async () => {

@@ -12,7 +12,7 @@ export default createNodeVitestConfig({
         'src/**/index.ts',
         'src/**/types.ts',
         'src/database/connection.ts',
-        'src/database/drivers/knex/config.ts',
+        'src/database/internal/knex/config.ts',
         'src/metadata/store.ts',
         'src/naming/strategy.ts',
       ],

@@ -1,6 +1,6 @@
 ---
 title: Builder 执行选项
-description: BuilderExecOptions 和 CollectionBuilderOptions 的字段参考，包括 dry-run、SQL 预览、metadata 同步、strict 与命名配置。
+description: BuilderExecOptions 的字段参考，包括 dry-run、SQL 预览、metadata 同步、strict 与命名配置。
 ---
 
 # BuilderExecOptions
@@ -20,38 +20,14 @@ interface BuilderExecOptions {
 }
 ```
 
-## CollectionBuilderOptions
+## NamingOptions
 
-创建 `CollectionBuilder` 时可以传入 Schema adapter、Collection 读取入口、Metadata Service 和命名配置：
-
-```ts
-interface CollectionBuilderOptions {
-  schemaAdapter?: SchemaAdapter;
-  collections?: Pick<ConnectionCollections, 'get' | 'scan'>;
-  collectionMetadata?: CollectionMetadataService;
-  schemaInvalidator?: CollectionMetadataInvalidator;
-  naming?: NamingOptions;
-}
-```
-
-完整应用通过 `DatabaseConnection` 自动注入这些协作者：Builder 从 `collections` 读取物理 Schema 与补充
-Metadata 的解析结果，通过 `collectionMetadata` 只写补充文档，并通过 `schemaInvalidator` 清理解析缓存。
-
-`naming` 用于默认逻辑名到物理名的映射：
+通过 Connection 配置默认逻辑名到物理名的映射：
 
 ```ts
-const builder = new CollectionBuilder({
-  naming: {
-    underscored: true,
-    tablePrefix: 'tbl_',
-  },
-});
-```
+import { createDatabaseManager } from '@nocobase/db';
 
-在完整应用里更推荐通过 connection 配置传入：
-
-```ts
-createDatabaseManager({
+const db = createDatabaseManager({
   connections: {
     main: {
       dialect: 'postgres',
@@ -62,9 +38,9 @@ createDatabaseManager({
     },
   },
 });
-```
 
-## NamingOptions
+const builder = db.builder();
+```
 
 ```ts
 interface NamingOptions {

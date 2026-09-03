@@ -1,7 +1,5 @@
-import {
-  defineCollectionMetadata,
-  type PhysicalCollectionSchema,
-} from '../../../src/index.js';
+import { defineCollectionMetadata } from '../../../src/index.js';
+import type { PhysicalCollectionSchema } from '../../../src/schema/inspector/types.js';
 import type {
   ResolverFailureFixture,
   ResolverSuccessFixture,

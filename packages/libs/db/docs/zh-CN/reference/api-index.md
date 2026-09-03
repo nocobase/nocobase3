@@ -5,7 +5,7 @@ description: 当前已实现并公开的 Database、Builder、Query、Collection
 
 # `@nocobase/db` API 索引
 
-本页只列当前已经实现并公开的主要 API。Repository 等规划接口不属于当前 API。
+本页只列当前已经实现并公开的主要 API。所有公开 API 都从根入口 `@nocobase/db` 导入；不要从源码深路径或 `internal/` 导入。Repository 等规划接口不属于当前 API。
 
 ## Database
 
@@ -124,17 +124,16 @@ description: 当前已实现并公开的 Database、Builder、Query、Collection
 ### Store
 
 - `CollectionMetadataStore`
-- `DatabaseCollectionMetadataStore`
 - `ModuleCollectionMetadataStore`
 - `InMemoryCollectionMetadataStore`
-- `TransactionCollectionMetadataStore`
 - `CollectionMetadataConflictError`
 
 ### Service
 
 - `connection.collectionMetadata`
-- `CollectionMetadataService`
 - `CollectionMetadataPatchError`
+
+`CollectionMetadataService` 是 `connection.collectionMetadata` 的返回类型，不应由应用直接实例化。
 
 文档：[Collection Metadata 概览](../collection-metadata/overview.md)、[Metadata Store](../collection-metadata/metadata-store.md)、[Metadata Service](../collection-metadata/collection-metadata-service.md)、[Metadata Document](./collection-metadata-document.md)。
 
@@ -144,13 +143,9 @@ description: 当前已实现并公开的 Database、Builder、Query、Collection
 
 该函数只用于显式转换旧完整 Collection 定义，不是普通业务 API，也不是运行时 fallback。详见[旧 Collection 定义转换](./legacy-collection-metadata-extraction.md)。
 
-## Schema Adapter
+## 内部实现边界
 
-- `SchemaAdapter`
-- `NoopSchemaAdapter`
-- `KnexSchemaAdapter`
-
-Schema Adapter 是 Builder 和数据库实现之间的低层边界。业务 Schema 变更优先使用 Builder，不直接调用 Adapter。
+Database 与 Transaction Metadata Store、Schema Adapter、Query Knex Adapter、Connection Factory 和 Knex Connection 都是包内实现。业务 Schema 变更使用 Builder，查询使用 `connection.query`；不要自行组合内部实现。
 
 ## 当前不可调用
 

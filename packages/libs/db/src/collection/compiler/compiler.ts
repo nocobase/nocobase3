@@ -1,7 +1,5 @@
-import {
-  DefaultNamingStrategy,
-  type NamingStrategy,
-} from '../../naming/index.js';
+import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
+import type { NamingStrategy } from '../../naming/strategy.js';
 import type {
   AnyFieldDefinition,
   CollectionAlterDefinition,

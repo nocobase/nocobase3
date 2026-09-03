@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { SchemaInspectorError } from '../../../src/index.js';
+import { SchemaInspectorError } from '../../../src/schema/inspector/errors.js';
 import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('schema inspector', (context) => {

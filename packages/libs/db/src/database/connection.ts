@@ -1,12 +1,9 @@
-import type { CollectionBuilder } from '../collection/builder/index.js';
-import type { ConnectionCollections } from '../collection/registry/index.js';
-import type { CollectionMetadataService } from '../metadata/index.js';
-import type { QueryAdapter } from '../query/index.js';
-import type {
-  DatabaseCapabilities,
-  SchemaAdapter,
-  SchemaInspector,
-} from '../schema/index.js';
+import type { CollectionBuilder } from '../collection/builder/builder.js';
+import type { ConnectionCollections } from '../collection/registry/types.js';
+import type { CollectionMetadataService } from '../metadata/service.js';
+import type { QueryAdapter } from '../query/types.js';
+import type { DatabaseCapabilities, SchemaAdapter } from '../schema/adapter.js';
+import type { SchemaInspector } from '../schema/inspector/types.js';
 import type {
   DatabaseDialect,
   DatabaseDriver,

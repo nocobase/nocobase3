@@ -3,7 +3,7 @@ import {
   CollectionResolutionError,
   type CollectionResolutionInput,
   type CollectionResolutionResult,
-} from '../../../src/index.js';
+} from '../../../src/collection/resolver/index.js';
 
 describe('Collection Resolver contract', () => {
   it('exposes a stable aggregate resolution error', () => {

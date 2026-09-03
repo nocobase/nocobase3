@@ -1,5 +1,5 @@
 import type { NamingOptions, RelationType } from '../collection/types.js';
-import { DefaultNamingStrategy } from '../naming/index.js';
+import { DefaultNamingStrategy } from '../naming/default-strategy.js';
 import type {
   CollectionMetadataDocument,
   FieldMetadata,

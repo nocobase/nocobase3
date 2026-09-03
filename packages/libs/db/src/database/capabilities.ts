@@ -1,4 +1,4 @@
-import type { DatabaseCapabilities } from '../schema/index.js';
+import type { DatabaseCapabilities } from '../schema/adapter.js';
 
 export function resolveDatabaseCapabilities(
   dialect: string,

@@ -3,23 +3,21 @@ import type {
   CollectionKind,
   NamingOptions,
 } from '../types.js';
-import {
-  CollectionResolver,
-  CollectionResolutionError,
-  type CollectionResolutionResult,
-} from '../resolver/index.js';
+import { CollectionResolver } from '../resolver/resolver.js';
+import { CollectionResolutionError } from '../resolver/errors.js';
+import type { CollectionResolutionResult } from '../resolver/types.js';
+import type { CollectionMetadataStore } from '../../metadata/document-store.js';
+import type { StoredCollectionMetadata } from '../../metadata/document.js';
 import type {
-  CollectionMetadataStore,
   CollectionMetadataInvalidation,
   CollectionMetadataInvalidator,
-  StoredCollectionMetadata,
-} from '../../metadata/index.js';
+} from '../../metadata/service.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
-import type { SchemaInspector } from '../../schema/inspector/inspector.js';
 import type {
   PhysicalCollectionKind,
   PhysicalCollectionSchema,
   PhysicalCollectionSummary,
+  SchemaInspector,
 } from '../../schema/inspector/types.js';
 import { CollectionNamingIndex } from './naming-index.js';
 import { CollectionRelationValidator } from './relation-validator.js';

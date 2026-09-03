@@ -1,13 +1,13 @@
-import type { CollectionBuilder } from '../collection/builder/index.js';
+import type { CollectionBuilder } from '../collection/builder/builder.js';
 import { createMigrator, type Migrator } from '../migration/migrator.js';
 import type { DatabaseMigratorOptions } from '../migration/types.js';
-import type { QueryAdapter } from '../query/index.js';
+import type { QueryAdapter } from '../query/types.js';
 import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
 import type { DatabaseConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
-import { KnexConnectionAdapter } from './drivers/knex/index.js';
+import { KnexConnectionAdapter } from './internal/knex/adapter.js';
 
 export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;

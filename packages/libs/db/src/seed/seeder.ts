@@ -1,11 +1,11 @@
-import { createSeedContext } from './context.js';
+import { createSeedContext } from './internal/context.js';
 import {
   DEFAULT_SEED_TABLE,
   ensureSeedTable,
   readSeedHistory,
   recordSeedCompleted,
-} from './history.js';
-import { DEFAULT_SEED_LOCK_TABLE, withSeedLock } from './lock.js';
+} from './internal/history.js';
+import { DEFAULT_SEED_LOCK_TABLE, withSeedLock } from './internal/lock.js';
 import { loadSeeds } from './loader.js';
 import type {
   CreateSeederOptions,
@@ -14,10 +14,13 @@ import type {
   SeedRunResult,
 } from './types.js';
 
+/** Executes pending seed definitions for one database connection. */
 export interface Seeder {
+  /** Executes every seed that has no matching history record. */
   run(): Promise<SeedRunResult>;
 }
 
+/** Creates a seed runner backed by the supplied database manager. */
 export function createSeeder(options: CreateSeederOptions): Seeder {
   return new DefaultSeeder(options);
 }

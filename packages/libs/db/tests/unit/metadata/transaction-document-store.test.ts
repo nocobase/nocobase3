@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  InMemoryCollectionMetadataStore,
-  ModuleCollectionMetadataStore,
-  TransactionCollectionMetadataStore,
-} from '../../../src/index.js';
+import { InMemoryCollectionMetadataStore } from '../../../src/metadata/in-memory-document-store.js';
+import { ModuleCollectionMetadataStore } from '../../../src/metadata/module-document-store.js';
+import { TransactionCollectionMetadataStore } from '../../../src/metadata/internal/transaction-document-store.js';
 
 describe('TransactionCollectionMetadataStore', () => {
   it('isolates writes until commit and preserves compare-and-swap', async () => {

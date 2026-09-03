@@ -184,6 +184,19 @@ export interface PhysicalCollectionSchema extends PhysicalCollectionSummary {
   readonly inspection: PhysicalSchemaInspection;
 }
 
+export interface SchemaInspector {
+  listSchemas(): Promise<PhysicalSchemaInfo[]>;
+  getPhysicalCollection(
+    identifier: PhysicalCollectionIdentifier,
+  ): Promise<PhysicalCollectionSchema | undefined>;
+  listPhysicalCollections(
+    options?: ListPhysicalCollectionsOptions,
+  ): Promise<PhysicalCollectionPage>;
+  scanPhysicalCollections(
+    options?: ScanPhysicalCollectionsOptions,
+  ): AsyncIterable<PhysicalCollectionSchema>;
+}
+
 export interface SchemaInspectorFactoryContext<
   TClient = unknown,
   TConfig = unknown,
@@ -197,5 +210,5 @@ export interface DatabaseDialectAdapter<TClient = unknown, TConfig = unknown> {
   readonly dialect: DatabaseDialect;
   createSchemaInspector(
     context: SchemaInspectorFactoryContext<TClient, TConfig>,
-  ): import('./inspector.js').SchemaInspector;
+  ): SchemaInspector;
 }

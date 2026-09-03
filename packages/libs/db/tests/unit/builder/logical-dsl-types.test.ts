@@ -1,10 +1,10 @@
 import type {
   CollectionDefinition,
   FieldDefinitionBuilder,
-  ForeignKeyConstraintDefinition,
   RelationFieldBuilder,
   RelationFieldDefinition,
 } from '../../../src/index.js';
+import type { ForeignKeyConstraintDefinition } from '../../../src/collection/types.js';
 import { describe, expect, it } from 'vitest';
 
 const collectionDefinition: CollectionDefinition = {

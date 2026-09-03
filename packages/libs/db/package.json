@@ -27,7 +27,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
+    "prepack": "pnpm build",
     "example": "tsx ./examples/command.ts",
     "playground": "tsx ./playground/command.ts",
     "test": "vitest run",
@@ -45,6 +46,8 @@
     "test:integration:oracle": "INTEGRATION_DB_CONNECTIONS=oracle vitest run tests/integration",
     "test:integration:mssql": "INTEGRATION_DB_CONNECTIONS=mssql vitest run tests/integration",
     "test:integration:all": "INTEGRATION_DB_CONNECTIONS=all vitest run tests/integration",
+    "api:check": "node ./scripts/check-public-api.mjs",
+    "api:update": "node ./scripts/check-public-api.mjs --write",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:examples": "tsc -p examples/tsconfig.json --noEmit",
     "typecheck:playground": "tsc -p playground/tsconfig.json --noEmit",
@@ -52,7 +55,7 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm typecheck:examples && pnpm typecheck:playground && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm api:check && pnpm typecheck:examples && pnpm typecheck:playground && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {

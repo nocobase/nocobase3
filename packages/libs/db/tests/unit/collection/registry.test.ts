@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   CollectionRegistry,
   CollectionRelationValidationError,
-  InMemoryCollectionMetadataStore,
-  type ListPhysicalCollectionsOptions,
-  type PhysicalCollectionIdentifier,
-  type PhysicalCollectionPage,
-  type PhysicalCollectionSchema,
-  type ScanPhysicalCollectionsOptions,
-  type SchemaInspector,
-} from '../../../src/index.js';
+} from '../../../src/collection/registry/index.js';
+import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
+import type {
+  ListPhysicalCollectionsOptions,
+  PhysicalCollectionIdentifier,
+  PhysicalCollectionPage,
+  PhysicalCollectionSchema,
+  ScanPhysicalCollectionsOptions,
+  SchemaInspector,
+} from '../../../src/schema/inspector/types.js';
 
 describe('CollectionRegistry', () => {
   it('deduplicates concurrent loads, caches clones, refreshes, and avoids negative caching', async () => {

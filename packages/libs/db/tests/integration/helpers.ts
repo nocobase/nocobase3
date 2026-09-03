@@ -1,16 +1,14 @@
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
-import { CollectionBuilder, type ConnectionConfig } from '../../src/index.js';
+import type { ConnectionConfig } from '../../src/index.js';
+import { CollectionBuilder } from '../../src/collection/builder/index.js';
 import {
   createDatabaseManager,
   type DatabaseManager,
 } from '../../src/index.js';
 import { InMemoryCollectionMetadataStore } from '../../src/index.js';
-import {
-  DefaultNamingStrategy,
-  snakeCase,
-  truncateIdentifier,
-} from '../../src/index.js';
+import { DefaultNamingStrategy } from '../../src/naming/default-strategy.js';
+import { snakeCase, truncateIdentifier } from '../../src/naming/utils.js';
 
 export type IntegrationDialect =
   'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';

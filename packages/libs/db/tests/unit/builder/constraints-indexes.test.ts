@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/index.js';
 
 describe('CollectionBuilder constraints and indexes', () => {
   it('keeps constraints and indexes as separate DSL concepts', async () => {

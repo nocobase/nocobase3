@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+import { CollectionMetadataConflictError } from '../../../src/metadata/document-store-errors.js';
+import type { CollectionMetadataDocument } from '../../../src/metadata/document.js';
+import { InMemoryCollectionMetadataStore } from '../../../src/metadata/in-memory-document-store.js';
+import { CollectionMetadataPatchError } from '../../../src/metadata/service-errors.js';
 import {
-  CollectionMetadataConflictError,
-  CollectionMetadataPatchError,
   CollectionMetadataService,
-  InMemoryCollectionMetadataStore,
-  type CollectionMetadataDocument,
   type CollectionMetadataDocumentValidator,
   type CollectionMetadataInvalidation,
   type CollectionMetadataInvalidator,
-} from '../../../src/index.js';
+} from '../../../src/metadata/service.js';
 
 describe('CollectionMetadataService', () => {
   it('creates, patches, clears, and removes empty documents with Store CAS', async () => {

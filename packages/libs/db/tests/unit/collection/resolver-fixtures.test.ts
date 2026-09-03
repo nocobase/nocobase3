@@ -3,7 +3,7 @@ import {
   CollectionResolutionError,
   resolveCollection,
   type CollectionResolutionContext,
-} from '../../../src/index.js';
+} from '../../../src/collection/resolver/index.js';
 import {
   missingFieldDriftFixture,
   ordersResolverFixture,

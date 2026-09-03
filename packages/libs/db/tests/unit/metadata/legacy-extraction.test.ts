@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractLegacyCollectionMetadata } from '../../../src/index.js';
+import { extractLegacyCollectionMetadata } from '../../../src/metadata/legacy-extraction.js';
 
 describe('extractLegacyCollectionMetadata', () => {
   it('extracts only supplemental collection, field, and relation metadata', () => {

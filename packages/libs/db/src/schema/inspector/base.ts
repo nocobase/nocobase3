@@ -1,6 +1,5 @@
 import type { DatabaseDialect } from '../../database/config.js';
 import { SchemaInspectorError } from './errors.js';
-import type { SchemaInspector } from './inspector.js';
 import {
   decodePhysicalCollectionCursor,
   encodePhysicalCollectionCursor,
@@ -16,6 +15,7 @@ import type {
   PhysicalCollectionSummary,
   PhysicalSchemaInfo,
   ScanPhysicalCollectionsOptions,
+  SchemaInspector,
 } from './types.js';
 
 const DEFAULT_PAGE_SIZE = 100;

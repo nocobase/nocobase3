@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { DatabaseCollectionMetadataStore } from '../../../src/index.js';
+import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
 import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases(

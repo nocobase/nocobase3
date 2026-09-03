@@ -1,13 +1,16 @@
 import { assertManagedSchema } from '../database/schema-management.js';
-import { createMigrationContext } from './context.js';
+import { createMigrationContext } from './internal/context.js';
 import {
   DEFAULT_MIGRATION_TABLE,
   deleteMigrationHistoryRecord,
   ensureMigrationTable,
   readMigrationHistory,
   recordMigrationCompleted,
-} from './history.js';
-import { DEFAULT_MIGRATION_LOCK_TABLE, withMigrationLock } from './lock.js';
+} from './internal/history.js';
+import {
+  DEFAULT_MIGRATION_LOCK_TABLE,
+  withMigrationLock,
+} from './internal/lock.js';
 import { loadMigrations } from './loader.js';
 import type {
   CreateMigratorOptions,
@@ -18,12 +21,17 @@ import type {
   MigrationRunResult,
 } from './types.js';
 
+/** Executes and rolls back ordered migrations for one database connection. */
 export interface Migrator {
+  /** Applies every pending migration. */
   latest(): Promise<MigrationRunResult>;
+  /** Applies pending migrations through the named migration, inclusive. */
   upTo(name: string): Promise<MigrationRunResult>;
+  /** Rolls back the most recently applied migration batch. */
   rollback(): Promise<MigrationRollbackResult>;
 }
 
+/** Creates a migration runner backed by the supplied database manager. */
 export function createMigrator(options: CreateMigratorOptions): Migrator {
   return new DefaultMigrator(options);
 }

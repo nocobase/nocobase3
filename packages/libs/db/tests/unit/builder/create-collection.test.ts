@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
-import type { CollectionDefinitionInput } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/index.js';
+import type { CollectionDefinitionInput } from '../../../src/collection/types.js';
 
 describe('CollectionBuilder createCollection', () => {
   it('tracks collection existence after executed operations', async () => {

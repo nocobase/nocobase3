@@ -6,7 +6,7 @@ import {
 import {
   CollectionCompiler,
   type CollectionCompilerContext,
-} from '../compiler/index.js';
+} from '../compiler/compiler.js';
 import {
   FluentCollectionAlterBuilder,
   FluentCollectionDefinitionBuilder,
@@ -15,11 +15,13 @@ import {
 import {
   type CollectionMetadataInvalidator,
   type CollectionMetadataService,
-  CollectionMetadataStoreReadOnlyError,
+} from '../../metadata/service.js';
+import { CollectionMetadataStoreReadOnlyError } from '../../metadata/document-store-errors.js';
+import {
   extractLegacyCollectionMetadata,
   type LegacyMetadataExtractionDiagnostic,
-} from '../../metadata/index.js';
-import type { ConnectionCollections } from '../registry/index.js';
+} from '../../metadata/legacy-extraction.js';
+import type { ConnectionCollections } from '../registry/types.js';
 import type {
   AnyFieldDefinition,
   BuilderExecOptions,

@@ -2,6 +2,8 @@
 
 `@nocobase/db` 提供多数据库连接管理、Collection Schema Builder、Query Adapter、Transaction、Migration、Seed、Schema Inspector 和 Collection Metadata。
 
+所有公开 API 都从包根入口导入；不要从源码深路径或 `internal/` 导入。
+
 ## 文档入口
 
 - [整体概览](./docs/zh-CN/overview.md)

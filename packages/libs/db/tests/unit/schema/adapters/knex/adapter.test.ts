@@ -1,6 +1,6 @@
 import knex from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
-import { KnexSchemaAdapter } from '../../../../../src/schema/adapters/knex/index.js';
+import { KnexSchemaAdapter } from '../../../../../src/schema/internal/knex/adapter.js';
 
 describe('KnexSchemaAdapter', () => {
   const clients: Array<ReturnType<typeof knex>> = [];

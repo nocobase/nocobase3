@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
-import {
-  createKnexClient,
-  DatabaseCollectionMetadataStore,
-  resolveKnexConnectionConfig,
-} from '../../../src/index.js';
+import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
+import { createKnexClient } from '../../../src/database/internal/knex/client.js';
+import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex/config.js';
 
 describe('DatabaseCollectionMetadataStore', () => {
   const clients: Knex[] = [];
