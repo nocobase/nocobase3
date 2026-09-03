@@ -2476,9 +2476,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.1.10(vitest@4.1.10)
-      '@xyflow/react':
-        specifier: ^12.11.3
-        version: 12.11.5(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       ai:
         specifier: 5.0.0
         version: 5.0.0(zod@3.25.76)
@@ -2509,9 +2506,6 @@ importers:
       echarts-for-react:
         specifier: 3.0.2
         version: 3.0.2(echarts@5.6.0)(react@19.1.0)
-      elkjs:
-        specifier: ^0.10.2
-        version: 0.10.2
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.1.0)
@@ -2812,9 +2806,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.1.10(vitest@4.1.10)
-      '@xyflow/react':
-        specifier: ^12.11.3
-        version: 12.11.5(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       ai:
         specifier: 5.0.0
         version: 5.0.0(zod@3.25.76)
@@ -2845,9 +2836,6 @@ importers:
       echarts-for-react:
         specifier: 3.0.2
         version: 3.0.2(echarts@5.6.0)(react@19.1.0)
-      elkjs:
-        specifier: ^0.10.2
-        version: 0.10.2
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.1.0)
