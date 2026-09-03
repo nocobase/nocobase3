@@ -1,11 +1,5 @@
 export type WorkflowSourcePhase =
-  | 'typecheck'
-  | 'bundle'
-  | 'evaluate'
-  | 'schema'
-  | 'semantic'
-  | 'compile'
-  | 'publish';
+  'typecheck' | 'evaluate' | 'schema' | 'semantic' | 'compile' | 'publish';
 
 export interface WorkflowSourceIssue {
   phase: WorkflowSourcePhase;

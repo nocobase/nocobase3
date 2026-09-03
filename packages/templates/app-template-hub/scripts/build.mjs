@@ -220,10 +220,8 @@ run('Rewrite server path aliases', 'pnpm', [
 ]);
 run('Build workflow artifacts', 'pnpm', [
   'exec',
-  'tsx',
-  '--tsconfig',
-  'tsconfig.node.json',
-  './scripts/build-workflows.ts',
+  'workflow',
+  'build',
   '--resource-root',
   './dist/server/workflows',
 ]);

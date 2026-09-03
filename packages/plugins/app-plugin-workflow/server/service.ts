@@ -62,7 +62,6 @@ export class WorkflowService {
       database: options.database,
       artifactStore: this.store,
       distRoot: options.distRoot,
-      refreshEngine: (): Promise<void> => this.engine.refreshSourceResolvers(),
     });
   }
 
@@ -113,10 +112,6 @@ export class WorkflowService {
         `Workflow revision "${String(revisionId)}" was not found`,
       );
     return this.executeRevision(workflow, input, triggerOptions);
-  }
-
-  refreshSourceResolvers(): Promise<void> {
-    return this.engine.refreshSourceResolvers();
   }
 
   discoverArtifacts(): Promise<readonly WorkflowDistArtifact[]> {
@@ -218,7 +213,6 @@ export type WorkflowServiceApi = Pick<
   WorkflowService,
   | 'trigger'
   | 'triggerRevision'
-  | 'refreshSourceResolvers'
   | 'discoverArtifacts'
   | 'ensureArtifactMaterialized'
 >;

@@ -25,7 +25,6 @@ describe('workflow repositories', () => {
         status: 'accepted',
         eventKey: 'test-event',
       }),
-      refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
       ensureArtifactMaterialized: async () => undefined,
     };
@@ -135,7 +134,6 @@ describe('workflow repositories', () => {
         status: 'accepted',
         eventKey: 'test-event',
       }),
-      refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => artifacts,
       ensureArtifactMaterialized: async () => undefined,
     };

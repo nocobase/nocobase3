@@ -4,9 +4,9 @@ import path from 'node:path';
 import type {
   WorkflowFlatIr,
   WorkflowSourceAst,
-} from '../instructions/definition.js';
+} from '../server/instructions/definition.js';
 
-import { coreInstructions } from '../instructions/index.js';
+import { coreInstructions } from '../server/instructions/index.js';
 import { compileWorkflowSource } from './source-compiler.js';
 import { WorkflowSourceCheckError } from './source-issues.js';
 import { parseWorkflowSource } from './source-parser.js';

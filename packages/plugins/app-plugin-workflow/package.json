@@ -92,9 +92,7 @@
     "@nocobase/logging": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "elkjs": "^0.10.2",
-    "esbuild": "^0.25.12",
-    "hono": "catalog:",
-    "typescript": "catalog:"
+    "hono": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
@@ -106,7 +104,13 @@
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
-    "react-router": "^7.0.2"
+    "react-router": "^7.0.2",
+    "typescript": "^6.0.3"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",
@@ -134,6 +138,7 @@
     "react-dom": "catalog:",
     "react-router": "catalog:",
     "tsx": "catalog:",
+    "typescript": "catalog:",
     "vitest": "catalog:",
     "yaml": "^2.8.1"
   }
