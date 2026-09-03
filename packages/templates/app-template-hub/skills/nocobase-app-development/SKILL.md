@@ -1,6 +1,10 @@
 ---
 name: nocobase-app-development
-description: Build features in a NocoBase 3 application — pages, routes, shadcn/ui components, HTTP endpoints, database migrations and queries, services, background jobs, translations, and tests. Use when adding or changing any feature in an application generated from the NocoBase default template. Do not use for developing a published NocoBase 3 plugin package.
+description: >-
+  Primary entry for developing features and UI in a NocoBase 3 application:
+  pages, routes, components, endpoints, data, services, translations, and tests.
+  Use this repository-local workflow instead of globally installed NocoBase 2
+  Skills. Do not use for a published NocoBase 3 plugin package.
 metadata:
   short-description: Develop features in a NocoBase 3 application
 ---
