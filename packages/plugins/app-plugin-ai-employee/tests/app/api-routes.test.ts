@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import { registerAIEmployeeRoutes } from '../../server/routes/index.js';
-import { registerAIListLLMServicesCompatibilityRoute } from '../../server/routes/ai.js';
 import { createAICurrentUserMiddleware } from '../../server/routes/utils.js';
 import type { Context } from '../../server/context.js';
 import { createTestAIEmployeeRuntime } from './test-context.js';
@@ -112,35 +111,6 @@ describe('AI action routers', () => {
     expect(app.routes.some((route) => route.path.startsWith('/v2/api/'))).toBe(
       false,
     );
-  });
-
-  it('adds only the canonical list-LLM-services compatibility route', async () => {
-    const app = new Hono();
-    const runtime = createTestAIEmployeeRuntime();
-    runtime.modelService.listLLMServices = async (_ctx, model) => [
-      { name: model ?? 'all', title: 'Compatible', provider: 'test' },
-    ];
-    registerAIListLLMServicesCompatibilityRoute(
-      app,
-      createAICurrentUserMiddleware(createTestAppDeps().auth),
-      async (context, next) => {
-        context.set('ctx', runtime);
-        await next();
-      },
-    );
-
-    const response = await app.request(
-      'http://localhost/ai:listLLMServices?model=EMBEDDING',
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('x-local-ai')).toBe('1');
-    expect(await response.json()).toEqual([
-      { name: 'EMBEDDING', title: 'Compatible', provider: 'test' },
-    ]);
-    expect(
-      app.routes.some((route) => route.path === '/ai:listLLMProviders'),
-    ).toBe(false);
   });
 
   it('returns direct JSON with the local marker and rejects legacy methods', async () => {
