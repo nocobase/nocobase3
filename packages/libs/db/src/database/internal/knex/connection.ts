@@ -14,6 +14,12 @@ import type {
 import { DefaultNamingStrategy } from '../../../naming/default-strategy.js';
 import { KnexQueryAdapter } from '../../../query/internal/knex/adapter.js';
 import type { QueryAdapter } from '../../../query/types.js';
+import { KnexRepositoryExecutionAdapter } from '../../../repository/internal/knex-execution-adapter.js';
+import { DefaultRepository } from '../../../repository/repository.js';
+import type {
+  Repository,
+  RepositoryRecord,
+} from '../../../repository/types.js';
 import { KnexSchemaAdapter } from '../../../schema/internal/knex/adapter.js';
 import type {
   DatabaseCapabilities,
@@ -151,6 +157,18 @@ export class KnexDatabaseConnection implements DatabaseConnection {
 
   async client<T = unknown>(): Promise<T> {
     return this.resolveClient() as T;
+  }
+
+  repository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(collection: string): Repository<TRecord, TCreate, TUpdate> {
+    return new DefaultRepository<TRecord, TCreate, TUpdate>({
+      collection,
+      collections: this.collections,
+      adapter: new KnexRepositoryExecutionAdapter(() => this.getClient()),
+    });
   }
 
   async disconnect(): Promise<void> {

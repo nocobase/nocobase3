@@ -5,7 +5,7 @@ description: 尚未实现或导出的 Repository Filter AST 设计；仅供设�
 
 # Filter AST
 
-> **状态：分批实现中。运行时可用性：未实现。导出 API：AST 类型契约。** 本页描述 V1 目标，Builder 与执行器尚未可用。
+> **状态：分批实现中。运行时可用性：直接标量 Filter AST 已实现。** Relation Filter 节点尚未执行；关系能力当前返回 capability error。
 
 Filter AST 是 Repository Filter Builder 的结构化结果。它用于在代码、HTTP、CLI、file sync 和未来持久化场景之间传递同一套筛选条件。
 

@@ -5,7 +5,7 @@ description: 尚未实现或导出的 Collection-aware Filter Builder 设计；�
 
 # Filter Builder
 
-> **状态：分批实现中。运行时可用性：未实现。导出 API：Builder 类型契约。** 本页描述 V1 目标，Builder 与执行器尚未可用。
+> **状态：分批实现中。运行时可用性：直接标量 Field 已实现。** Relation Filter Builder 节点可构造但尚未执行；关系能力当前返回 capability error。
 
 `Filter Builder` 是未来 Repository 的筛选条件 DSL。它面向 Collection metadata，而不是数据库物理 schema。目标是让开发者和 Agent 都能写出可解释、可校验、可序列化、能跨数据库编译的筛选条件。
 

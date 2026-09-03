@@ -5,7 +5,7 @@ description: 尚未实现或导出的 Repository Select AST 设计；仅供设�
 
 # Select AST
 
-> **状态：分批实现中。运行时可用性：未实现。导出 API：AST 类型契约。** 本页描述 V1 目标，执行器尚未可用。
+> **状态：分批实现中。运行时可用性：直接标量 selection 已实现。** Relation selection 尚未执行；关系能力当前返回 capability error。
 
 Select AST 是 Repository 查询结果形状的结构化表示。它统一描述根 Collection 的标量
 字段投影、关系加载、嵌套关系投影，以及关系节点自己的筛选和排序。

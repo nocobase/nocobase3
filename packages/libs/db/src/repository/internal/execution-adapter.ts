@@ -1,49 +1,82 @@
 import type { CollectionDefinition } from '../../collection/types.js';
 import type {
-  CreateManyResult,
-  DeleteManyResult,
-  DeleteOneResult,
+  FilterAst,
   RepositoryRecord,
-  SingleMutationResult,
-  UpdateManyResult,
+  SortAst,
+  UniqueSelector,
 } from '../types.js';
 
-export interface RepositoryLogicalPlan {
+export interface RepositoryReadPlan {
   readonly collection: CollectionDefinition;
+  readonly fields: readonly string[];
+  readonly filter?: FilterAst;
+  readonly sort?: SortAst;
+  readonly limit?: number;
+  readonly offset?: number;
 }
 
-export interface RepositoryReadPlan extends RepositoryLogicalPlan {
-  readonly operation: 'findMany' | 'findOne' | 'count' | 'exists';
-  readonly input: Readonly<Record<string, unknown>>;
+export interface RepositoryFilterPlan {
+  readonly collection: CollectionDefinition;
+  readonly filter?: FilterAst;
 }
 
-export interface RepositoryMutationPlan extends RepositoryLogicalPlan {
-  readonly operation:
-    | 'createOne'
-    | 'createMany'
-    | 'updateOne'
-    | 'updateMany'
-    | 'deleteOne'
-    | 'deleteMany';
-  readonly input: Readonly<Record<string, unknown>>;
+export interface RepositoryCreateOnePlan {
+  readonly collection: CollectionDefinition;
+  readonly fields: readonly string[];
+  readonly values: RepositoryRecord;
 }
 
-export type RepositoryExecutionResult =
-  | RepositoryRecord[]
-  | RepositoryRecord
-  | undefined
-  | number
-  | boolean
-  | SingleMutationResult<RepositoryRecord>
-  | CreateManyResult
-  | UpdateManyResult
-  | DeleteOneResult
-  | DeleteManyResult;
+export interface RepositoryCreateManyPlan {
+  readonly collection: CollectionDefinition;
+  readonly records: readonly RepositoryRecord[];
+}
+
+export interface RepositoryUpdateOnePlan {
+  readonly collection: CollectionDefinition;
+  readonly fields: readonly string[];
+  readonly unique: UniqueSelector;
+  readonly values: RepositoryRecord;
+  readonly ifVersion?: string | number;
+}
+
+export interface RepositoryUpdateManyPlan {
+  readonly collection: CollectionDefinition;
+  readonly filter?: FilterAst;
+  readonly all: boolean;
+  readonly values: RepositoryRecord;
+}
+
+export interface RepositoryDeleteOnePlan {
+  readonly collection: CollectionDefinition;
+  readonly unique: UniqueSelector;
+  readonly ifVersion?: string | number;
+}
+
+export interface RepositoryDeleteManyPlan {
+  readonly collection: CollectionDefinition;
+  readonly filter?: FilterAst;
+  readonly all: boolean;
+}
+
+export interface RepositoryExecutedMutation {
+  readonly record: RepositoryRecord;
+  readonly version?: string | number;
+}
 
 /** Internal adapter boundary. Plans contain logical Collection and Field names only. */
 export interface RepositoryExecutionAdapter {
-  executeRead(plan: RepositoryReadPlan): Promise<RepositoryExecutionResult>;
-  executeMutation(
-    plan: RepositoryMutationPlan,
-  ): Promise<RepositoryExecutionResult>;
+  findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]>;
+  findOne(plan: RepositoryReadPlan): Promise<RepositoryRecord | undefined>;
+  count(plan: RepositoryFilterPlan): Promise<number>;
+  exists(plan: RepositoryFilterPlan): Promise<boolean>;
+  createOne(plan: RepositoryCreateOnePlan): Promise<RepositoryExecutedMutation>;
+  createMany(plan: RepositoryCreateManyPlan): Promise<number>;
+  updateOne(
+    plan: RepositoryUpdateOnePlan,
+  ): Promise<RepositoryExecutedMutation | undefined>;
+  updateMany(plan: RepositoryUpdateManyPlan): Promise<number>;
+  deleteOne(
+    plan: RepositoryDeleteOnePlan,
+  ): Promise<'deleted' | 'missing' | 'conflict'>;
+  deleteMany(plan: RepositoryDeleteManyPlan): Promise<number>;
 }

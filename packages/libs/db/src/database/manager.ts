@@ -2,6 +2,7 @@ import type { CollectionBuilder } from '../collection/builder/builder.js';
 import { createMigrator, type Migrator } from '../migration/migrator.js';
 import type { DatabaseMigratorOptions } from '../migration/types.js';
 import type { QueryAdapter } from '../query/types.js';
+import type { Repository, RepositoryRecord } from '../repository/types.js';
 import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
 import type { DatabaseConfig } from './config.js';
@@ -15,6 +16,14 @@ export interface DatabaseManager {
   builder(name?: string): CollectionBuilder;
   /** Database-layer query builder. Does not read Collection metadata or collection table prefixes. */
   query(name?: string): QueryAdapter;
+  repository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+    connection?: string,
+  ): Repository<TRecord, TCreate, TUpdate>;
   createMigrator(options: DatabaseMigratorOptions): Migrator;
   createSeeder(options: DatabaseSeederOptions): Seeder;
 
@@ -91,6 +100,19 @@ export class DefaultDatabaseManager implements DatabaseManager {
 
   query(name?: string): QueryAdapter {
     return this.connection(name).query;
+  }
+
+  repository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+    connection?: string,
+  ): Repository<TRecord, TCreate, TUpdate> {
+    return this.connection(connection).repository<TRecord, TCreate, TUpdate>(
+      collection,
+    );
   }
 
   createMigrator(options: DatabaseMigratorOptions): Migrator {

@@ -2,6 +2,7 @@ import type { CollectionBuilder } from '../collection/builder/builder.js';
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import type { CollectionMetadataService } from '../metadata/service.js';
 import type { QueryAdapter } from '../query/types.js';
+import type { Repository, RepositoryRecord } from '../repository/types.js';
 import type { DatabaseCapabilities, SchemaAdapter } from '../schema/adapter.js';
 import type { SchemaInspector } from '../schema/inspector/types.js';
 import type {
@@ -25,6 +26,13 @@ export interface DatabaseConnection {
   collectionMetadata: CollectionMetadataService;
   /** Database-layer query builder. Uses Connection naming but not Collection-level overrides. */
   query: QueryAdapter;
+  repository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+  ): Repository<TRecord, TCreate, TUpdate>;
   schema: SchemaAdapter;
   /** Read-only physical database schema introspection. Uses physical names. */
   schemaInspector: SchemaInspector;

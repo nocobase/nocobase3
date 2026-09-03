@@ -5,7 +5,7 @@ description: 尚未实现或导出的 Repository 关系写入协议；定义精�
 
 # Mutation AST
 
-> **状态：分批实现中。运行时可用性：未实现。导出 API：AST、Builder 与结果类型契约。** 本页描述 V1 目标，Builder 与执行器尚未可用。
+> **状态：分批实现中。运行时可用性：根标量 mutation、结果 envelope 与 optimistic lock 已实现。** Relation Mutation Builder/AST 尚未执行；关系能力当前返回 capability error。
 
 Mutation AST 是 Repository 关系写入的规范化协议。V1 只解决两类问题：
 

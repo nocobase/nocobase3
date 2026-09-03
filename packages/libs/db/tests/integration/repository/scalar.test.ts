@@ -1,0 +1,214 @@
+import { expect, it } from 'vitest';
+import {
+  describeIntegrationDatabases,
+  type IntegrationTestContext,
+} from '../helpers.js';
+
+describeIntegrationDatabases('scalar Repository', (context) => {
+  it('runs Collection-aware reads, filters, sorts, variables, and pagination', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+    await repository.createMany({
+      records: [
+        { orderNo: 'SO-001', status: 'draft', amount: 50, note: '' },
+        { orderNo: 'SO-002', status: 'paid', amount: 120, note: null },
+        { orderNo: 'SO-003', status: 'paid', amount: 240, note: 'priority' },
+      ],
+    });
+
+    await expect(
+      repository.findMany({
+        select: selection(['orderNo', 'amount']),
+        context: { minimum: 100 },
+        filter: (filter) =>
+          filter.and([
+            filter.string('status').eq('paid'),
+            filter.number('amount').gte(filter.variable('$minimum')),
+          ]),
+        sort: sorting('amount', 'desc'),
+        limit: 1,
+      }),
+    ).resolves.toEqual([{ orderNo: 'SO-003', amount: 240 }]);
+    await expect(
+      repository.count({
+        filter: (filter) => filter.string('note').empty(),
+      }),
+    ).resolves.toBe(2);
+    await expect(
+      repository.exists({
+        filter: (filter) => filter.string('note').includes('prior'),
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      repository.findOne({
+        filter: (filter) => filter.string('orderNo').eq('SO-002'),
+      }),
+    ).resolves.toMatchObject({ orderNo: 'SO-002', status: 'paid' });
+  });
+
+  it('runs scalar mutations with logical unique selectors and optimistic locking', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+
+    const created = await repository.createOne({
+      values: { orderNo: 'SO-001', status: 'draft', amount: 50 },
+      select: selection(['id', 'orderNo']),
+    });
+    expect(created).toMatchObject({
+      record: { id: expect.any(Number), orderNo: 'SO-001' },
+      createdTargets: [],
+      version: 1,
+    });
+    const id = created.record.id;
+
+    const updated = await repository.updateOne({
+      unique: unique('id', id),
+      ifVersion: 1,
+      values: { status: 'paid' },
+      select: selection(['orderNo', 'status']),
+    });
+    expect(updated).toEqual({
+      record: { orderNo: 'SO-001', status: 'paid' },
+      createdTargets: [],
+      version: 2,
+    });
+    await expect(
+      repository.updateOne({
+        unique: unique('id', id),
+        ifVersion: 1,
+        values: { status: 'stale' },
+      }),
+    ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
+
+    await repository.createMany({
+      records: [
+        { orderNo: 'SO-002', status: 'draft', amount: 100 },
+        { orderNo: 'SO-003', status: 'draft', amount: 200 },
+      ],
+    });
+    await expect(
+      repository.updateMany({
+        filter: (filter) => filter.string('status').eq('draft'),
+        values: { status: 'cancelled' },
+      }),
+    ).resolves.toEqual({ updatedCount: 2 });
+    await expect(
+      repository.findMany({
+        select: selection(['version']),
+        filter: (filter) => filter.string('status').eq('cancelled'),
+        sort: sorting('id', 'asc'),
+      }),
+    ).resolves.toEqual([{ version: 2 }, { version: 2 }]);
+    await expect(
+      repository.deleteMany({
+        filter: (filter) => filter.string('status').eq('cancelled'),
+      }),
+    ).resolves.toEqual({ deletedCount: 2 });
+
+    await expect(
+      repository.deleteOne({
+        unique: unique('id', id),
+        ifVersion: 2,
+      }),
+    ).resolves.toEqual({ deleted: true });
+    await expect(repository.count()).resolves.toBe(0);
+  });
+
+  it('validates Collection Field capabilities and preserves transaction binding', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+
+    await expect(
+      repository.findMany({
+        filter: (filter) => filter.number('status').eq(1),
+      }),
+    ).rejects.toMatchObject({ code: 'FIELD_CAPABILITY_NOT_SUPPORTED' });
+    await expect(
+      repository.createOne({
+        values: { orderNo: 'SO-001', status: 'draft', amount: 1, version: 9 },
+      }),
+    ).rejects.toMatchObject({ code: 'FIELD_NOT_WRITABLE' });
+    await expect(
+      repository.updateOne({
+        unique: unique('status', 'draft'),
+        values: { amount: 2 },
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_UNIQUE_SELECTOR' });
+
+    await expect(
+      context.database.transaction(async (connection) => {
+        await connection.repository('repositoryOrders').createOne({
+          values: { orderNo: 'ROLLBACK', status: 'draft', amount: 1 },
+        });
+        throw new Error('rollback');
+      }, context.spec.name),
+    ).rejects.toThrow('rollback');
+    await expect(
+      repository.exists({
+        filter: (filter) => filter.string('orderNo').eq('ROLLBACK'),
+      }),
+    ).resolves.toBe(false);
+  });
+});
+
+async function createOrders(context: IntegrationTestContext): Promise<void> {
+  await context.builder.createCollection('repositoryOrders', (collection) => {
+    collection.increments('id');
+    collection.string('orderNo').notNull().unique();
+    collection.string('status').notNull();
+    collection.integer('amount').notNull();
+    collection.string('note').nullable();
+    collection.integer('version').notNull();
+    collection.optimisticLock('version');
+  });
+}
+
+function selection(fields: readonly string[]): {
+  readonly kind: 'select';
+  readonly version: 1;
+  readonly root: {
+    readonly kind: 'selection';
+    readonly fields: readonly string[];
+  };
+} {
+  return {
+    kind: 'select' as const,
+    version: 1 as const,
+    root: { kind: 'selection' as const, fields },
+  };
+}
+
+function sorting(
+  field: string,
+  direction: 'asc' | 'desc',
+): {
+  readonly kind: 'sort';
+  readonly version: 1;
+  readonly items: readonly [
+    {
+      readonly by: { readonly kind: 'field'; readonly field: string };
+      readonly direction: 'asc' | 'desc';
+    },
+  ];
+} {
+  return {
+    kind: 'sort' as const,
+    version: 1 as const,
+    items: [{ by: { kind: 'field' as const, field }, direction }],
+  };
+}
+
+function unique(
+  field: string,
+  value: unknown,
+): {
+  readonly kind: 'unique';
+  readonly fields: readonly [string];
+  readonly values: Readonly<Record<string, unknown>>;
+} {
+  return {
+    kind: 'unique' as const,
+    fields: [field],
+    values: { [field]: value },
+  };
+}
