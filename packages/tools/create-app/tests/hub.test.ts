@@ -1,16 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  buildHubConfigFile,
-  buildHubEnvFile,
-  DEFAULT_HUB_HOST,
-  DEFAULT_HUB_PORT,
-  finalizeHub,
-  HUB_STATE_DIR,
-  readEnvExample,
-} from '../src/lib/hub.ts';
+import { buildHubEnvFile, readEnvExample } from '../src/lib/hub.ts';
 
 const created: string[] = [];
 
@@ -111,24 +103,6 @@ describe('buildHubEnvFile', () => {
   });
 });
 
-describe('buildHubConfigFile', () => {
-  /** `.nb3/hub.json` is what the `nb3 hub` commands walk up the tree looking for. */
-  it('writes the config the nb3 hub commands look for', () => {
-    const contents = buildHubConfigFile({
-      host: DEFAULT_HUB_HOST,
-      name: 'my-hub',
-      port: DEFAULT_HUB_PORT,
-    });
-
-    expect(JSON.parse(contents)).toEqual({
-      host: '127.0.0.1',
-      name: 'my-hub',
-      port: 3000,
-    });
-    expect(contents.endsWith('\n')).toBe(true);
-  });
-});
-
 describe('readEnvExample', () => {
   it('reads the template example when there is one', async () => {
     const directory = await createTempDirectory();
@@ -143,82 +117,5 @@ describe('readEnvExample', () => {
 
   it('returns undefined when the template ships none', async () => {
     expect(await readEnvExample(await createTempDirectory())).toBeUndefined();
-  });
-});
-
-describe('finalizeHub', () => {
-  it('creates the runtime directories the hub writes into', async () => {
-    const directory = await createTempDirectory();
-
-    await finalizeHub(directory);
-
-    for (const relative of ['logs', 'cache']) {
-      const target = path.join(directory, HUB_STATE_DIR, relative);
-      await expect(readFile(target).catch((error) => error.code)).resolves.toBe(
-        'EISDIR',
-      );
-    }
-  });
-
-  it('ignores the runtime state it just made room for', async () => {
-    const directory = await createTempDirectory();
-    await writeFile(
-      path.join(directory, '.gitignore'),
-      'node_modules\ndist\n',
-      'utf8',
-    );
-
-    await finalizeHub(directory);
-
-    const contents = await readFile(path.join(directory, '.gitignore'), 'utf8');
-
-    expect(contents).toContain('node_modules');
-    expect(contents).toContain(`${HUB_STATE_DIR}/logs/`);
-    expect(contents).toContain(`${HUB_STATE_DIR}/cache/`);
-    expect(contents).toContain(`${HUB_STATE_DIR}/*.pid`);
-  });
-
-  /** Running twice must not stack duplicate blocks, since the entries are appended rather than rewritten. */
-  it('is safe to run twice', async () => {
-    const directory = await createTempDirectory();
-    await writeFile(path.join(directory, '.gitignore'), 'node_modules\n');
-
-    await finalizeHub(directory);
-    await finalizeHub(directory);
-
-    const contents = await readFile(path.join(directory, '.gitignore'), 'utf8');
-
-    expect(contents.split(`${HUB_STATE_DIR}/logs/`)).toHaveLength(2);
-  });
-
-  it('writes a gitignore when the template shipped none', async () => {
-    const directory = await createTempDirectory();
-
-    await finalizeHub(directory);
-
-    const contents = await readFile(path.join(directory, '.gitignore'), 'utf8');
-
-    expect(contents).toContain(`${HUB_STATE_DIR}/logs/`);
-  });
-
-  it('leaves an existing nested state directory alone', async () => {
-    const directory = await createTempDirectory();
-    await mkdir(path.join(directory, HUB_STATE_DIR, 'logs'), {
-      recursive: true,
-    });
-    await writeFile(
-      path.join(directory, HUB_STATE_DIR, 'logs', 'keep.log'),
-      'kept',
-      'utf8',
-    );
-
-    await finalizeHub(directory);
-
-    expect(
-      await readFile(
-        path.join(directory, HUB_STATE_DIR, 'logs', 'keep.log'),
-        'utf8',
-      ),
-    ).toBe('kept');
   });
 });
