@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-hub",
   "displayName": "NocoBase Hub",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "1.0.0-beta.3",
+    "defaultTemplateVersion": "1.0.0-beta.4",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -74,9 +74,6 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
-    "@nocobase/config": "workspace:^",
-    "@nocobase/db": "workspace:^",
-    "@nocobase/i18n": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
@@ -97,14 +94,17 @@
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/caching": "workspace:^",
+    "@nocobase/config": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
-    "@nocobase/snowflake": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@nocobase/snowflake": "workspace:^",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/devtools": "^2.0.1",
@@ -133,7 +133,6 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@vitest/coverage-v8": "catalog:",
-    "@xyflow/react": "^12.11.3",
     "ai": "5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -144,7 +143,6 @@
     "dingtalk-jsapi": "3.1.1",
     "echarts": "^5.5.0",
     "echarts-for-react": "3.0.2",
-    "elkjs": "^0.10.2",
     "embla-carousel-react": "^8.6.0",
     "eslint": "catalog:",
     "eventsource-parser": "3.1.0",
@@ -162,6 +160,7 @@
     "react-dom": "catalog:",
     "react-error-boundary": "^6.0.0",
     "react-hook-form": "^7.57.0",
+    "react-i18next": "catalog:",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.12.2",
     "react-router": "catalog:",
@@ -179,6 +178,7 @@
     "zod": "^3.25.76"
   },
   "files": [
+    ".prettierignore",
     "client",
     "server",
     "database",
@@ -193,7 +193,6 @@
     "tsconfig.json",
     "tsconfig.node.json",
     "tsconfig.server.json",
-    "Dockerfile",
     "ecosystem.config.js",
     "config.example.yml",
     "README.MD",

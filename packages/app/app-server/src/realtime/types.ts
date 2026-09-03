@@ -6,6 +6,15 @@ import {
 
 export interface RealtimeConnectionContext {
   request?: Request;
+  principal?: RealtimePrincipal;
+}
+
+export interface RealtimePrincipal {
+  readonly userId: string;
+}
+
+export interface RealtimePrincipalResolver {
+  resolve(request: Request): Promise<RealtimePrincipal | undefined>;
 }
 
 export interface RealtimeConnection {
@@ -13,6 +22,7 @@ export interface RealtimeConnection {
   readonly ws: AppWebSocket;
   readonly connectedAt: Date;
   readonly request?: Request;
+  readonly principal?: RealtimePrincipal;
   readonly subscriptions: Set<string>;
 }
 
@@ -20,13 +30,46 @@ export interface RealtimeSubscription {
   readonly id: string;
   readonly connectionId: string;
   readonly topic: string;
+  readonly userId?: string;
   readonly createdAt: Date;
 }
 
 export interface RealtimePublishResult {
-  topic: string;
-  subscriberCount: number;
+  readonly topic: string;
+  readonly subscriberCount: number;
 }
+
+export type RealtimeTopicAudience = 'public' | 'user';
+
+export interface RealtimeTopicOptions {
+  readonly audience: RealtimeTopicAudience;
+}
+
+export interface RealtimePublishOptions {
+  readonly userId?: string;
+}
+
+export interface RealtimeTopicBase {
+  readonly name: string;
+  close(): void;
+}
+
+export interface RealtimePublicTopic<Payload> extends RealtimeTopicBase {
+  readonly audience: 'public';
+  publish(payload: Payload): RealtimePublishResult;
+}
+
+export interface RealtimeUserTopic<Payload> extends RealtimeTopicBase {
+  readonly audience: 'user';
+  publishFor(userId: string, payload: Payload): RealtimePublishResult;
+}
+
+export type DefinedRealtimeTopic<
+  Payload,
+  Audience extends RealtimeTopicAudience,
+> = Audience extends 'user'
+  ? RealtimeUserTopic<Payload>
+  : RealtimePublicTopic<Payload>;
 
 export interface RealtimeService {
   connect(
@@ -46,7 +89,16 @@ export interface RealtimeService {
     connection: RealtimeConnection,
     data: AppWebSocketMessageData,
   ): void;
-  publish(topic: string, payload: unknown): RealtimePublishResult;
+  registerTopic(topic: string, options: RealtimeTopicOptions): () => void;
+  defineTopic<Payload, Audience extends RealtimeTopicAudience>(
+    topic: string,
+    options: { readonly audience: Audience },
+  ): DefinedRealtimeTopic<Payload, Audience>;
+  publish(
+    topic: string,
+    payload: unknown,
+    options?: RealtimePublishOptions,
+  ): RealtimePublishResult;
   subscriptionCount(topic: string): number;
   onTopicSubscriptionChange(
     topic: string,
@@ -57,3 +109,8 @@ export interface RealtimeService {
 
 export const realtimeServiceToken: ServiceToken<RealtimeService> =
   createServiceToken<RealtimeService>('@nocobase/app/realtime-service');
+
+export const realtimePrincipalResolverToken: ServiceToken<RealtimePrincipalResolver> =
+  createServiceToken<RealtimePrincipalResolver>(
+    '@nocobase/app/realtime-principal-resolver',
+  );

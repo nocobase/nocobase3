@@ -4,13 +4,15 @@ import type {
   WorkflowGraphDefinitionNode,
 } from './types.js';
 
-export type WorkflowGraphNodeKind = 'start' | 'workflow-node' | 'end';
+export type WorkflowGraphNodeKind =
+  'start' | 'workflow-node' | 'branch-anchor' | 'end';
 export type WorkflowGraphEdgeKind = 'main' | 'branch';
 
 export interface WorkflowNodeVisualContract {
   readonly type: string;
   readonly title: string;
   readonly getBranchKeys: (config: JsonObject) => readonly string[];
+  readonly terminal?: boolean;
   readonly getBranchLabel?: (branchKey: string, config: JsonObject) => string;
   readonly summarizeConfig?: (config: JsonObject) => string | null;
 }
@@ -62,6 +64,15 @@ const DEFAULT_CONTRACTS: WorkflowNodeContractRegistry = new Map<
       type: 'condition',
       title: 'Condition',
       getBranchKeys: () => ['yes', 'no'],
+    },
+  ],
+  [
+    'terminate',
+    {
+      type: 'terminate',
+      title: 'Terminate',
+      getBranchKeys: () => [],
+      terminal: true,
     },
   ],
   ['run', { type: 'run', title: 'Run', getBranchKeys: () => [] }],
@@ -139,6 +150,19 @@ function projectBlock(
       config: node.config,
       summary: contract?.summarizeConfig?.(node.config) ?? null,
     });
+    if (contract?.terminal === true) {
+      addEdge(edges, {
+        id: edgeId(nodeId, endNodeId(), 'main'),
+        source: nodeId,
+        target: endNodeId(),
+        kind: 'main',
+        branchOwnerKey: null,
+        branchKey: null,
+        label: null,
+      });
+      nextId = nodeId;
+      continue;
+    }
     const branchKeys = [
       ...(contract?.getBranchKeys(node.config) ??
         Object.keys(node.branches ?? {})),
@@ -160,15 +184,40 @@ function projectBlock(
     for (const branchKey of branchKeys) {
       const branch = node.branches?.[branchKey] ?? [];
       if (branch.length === 0) {
+        const anchorId = branchAnchorId(node.key, branchKey);
+        addNode(nodes, {
+          id: anchorId,
+          kind: 'branch-anchor',
+          workflowNodeKey: null,
+          nodeType: null,
+          title: 'Empty branch',
+          description: null,
+          virtual: true,
+          width: 24,
+          height: 24,
+          branchOwnerKey: node.key,
+          branchKey,
+          config: null,
+          summary: null,
+        });
         addEdge(edges, {
-          id: branchEdgeId(nodeId, branchKey, continuationId),
+          id: branchEdgeId(nodeId, branchKey, anchorId),
           source: nodeId,
-          target: continuationId,
+          target: anchorId,
           kind: 'branch',
           branchOwnerKey: node.key,
           branchKey,
           label:
             contract?.getBranchLabel?.(branchKey, node.config) ?? branchKey,
+        });
+        addEdge(edges, {
+          id: edgeId(anchorId, continuationId, 'main'),
+          source: anchorId,
+          target: continuationId,
+          kind: 'main',
+          branchOwnerKey: node.key,
+          branchKey,
+          label: null,
         });
       } else {
         const headId = projectBlock(

@@ -11,12 +11,34 @@ helpers. The dependency is one-way; the core package does not import this plugin
 
 ## Plugin entries
 
-- `server/bootstrap.ts` initializes the database-backed runtime and loads package-owned
-  resources from `ai/` before the application's external `ai/` extension directory.
+- `server/plugin.ts` contributes the `ai` application-config schema and provider lifecycle.
+- `server/providers/ai-employee.ts` subscribes to config reloads and synchronizes `ai.llmServices` into the repository-backed manager.
+- `server/bootstrap.ts` initializes the database-backed runtime and loads package-owned resources from `ai/` before the application's external `ai/` extension directory.
 - `server/routes/index.ts` installs per-request authentication context and AI
   action routes.
 - `database/collections` defines the AI Employee collection layout, and
   `database/migrations` creates it through the App migration system.
+
+## LLM service configuration
+
+Declare LLM services only in the application's `config.yml`:
+
+```yaml
+ai:
+  llmServices:
+    - name: openai
+      title: OpenAI
+      provider: openai
+      options:
+        apiKey: ${OPENAI_API_KEY}
+      enabledModels:
+        - label: GPT-4.1
+          value: gpt-4.1
+      enabled: true
+      sort: 10
+```
+
+The configured name set is authoritative, including an empty array. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Reloading the `ai` application-config namespace reconciles additions, structural updates, and removals without restarting the process or rescanning the AI resource directory. Existing records preserve the user-managed `enabled` and `enabledModels` values. Environment references are expanded recursively after validation; missing variables become empty strings.
 
 ## Development showcases
 

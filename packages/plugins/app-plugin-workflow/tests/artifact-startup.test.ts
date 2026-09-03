@@ -16,7 +16,7 @@ import {
 import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
-} from '../server/loader/artifact-builder.js';
+} from '../build/artifact-builder.js';
 import { WorkflowService } from '../server/service.js';
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';

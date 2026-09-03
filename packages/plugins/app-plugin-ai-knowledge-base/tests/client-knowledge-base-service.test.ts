@@ -43,6 +43,27 @@ const base = {
   enabled: true,
 };
 
+test('normalizes database boolean values in knowledge base responses', async () => {
+  const { client } = recordingClient(() => ({
+    data: {
+      data: [
+        { ...base, key: 'enabled', enabled: 1 },
+        { ...base, id: 2, key: 'disabled', enabled: 0 },
+      ],
+      meta: { count: 2, page: 1, pageSize: 20 },
+    },
+  }));
+  const service = createKnowledgeBaseService(client);
+
+  await expect(
+    service.listKnowledgeBases({ mode: 'all' }),
+  ).resolves.toMatchObject({
+    rows: [
+      { key: 'enabled', enabled: true },
+      { key: 'disabled', enabled: false },
+    ],
+  });
+});
 const document = {
   id: 2,
   knowledgeBaseKey: 'handbook',
@@ -240,12 +261,12 @@ test('knowledge base management actions use flat create, update, delete, and ena
   });
   expect(calls.find((call) => call.action === 'listLLMServices')).toMatchObject(
     {
-      resource: 'ai',
+      resource: 'ai/ai',
       options: { method: 'GET', query: { model: 'EMBEDDING' } },
     },
   );
   expect(calls.find((call) => call.action === 'listModels')).toMatchObject({
-    resource: 'ai',
+    resource: 'ai/ai',
     options: {
       method: 'GET',
       query: { llmService: 'embedding-service', model: 'EMBEDDING' },

@@ -1,5 +1,29 @@
 # @nocobase/app-plugin-ai-knowledge-base
 
+## 0.1.0-beta.1
+
+### Minor Changes
+
+- 81c6d6d: Replace the temporary AI file manager with metadata-aware, drive-backed file storage factories, configurable storage disks, and per-domain metadata repositories.
+
+### Patch Changes
+
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- Updated dependencies [8d88ff4]
+- Updated dependencies [43d5bf0]
+- Updated dependencies [813da59]
+- Updated dependencies [81c6d6d]
+- Updated dependencies [cee3251]
+  - @nocobase/ai-employee@0.2.0-beta.1
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.1
+  - @nocobase/app-server@1.0.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/app-portal-sdk@1.0.0-beta.3
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/queue@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.0
 
 ### Minor Changes

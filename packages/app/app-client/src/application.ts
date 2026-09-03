@@ -50,6 +50,11 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
       return createAppClient(baseURL === undefined ? {} : { baseURL });
     });
   }
+
+  public override shutdown(): Promise<void> {
+    this.app.container.resolveIfCreated(appApiClientToken)?.realtime?.close();
+    return Promise.resolve();
+  }
 }
 
 class ContextualServiceProvider implements ServiceProviderLifecycle {

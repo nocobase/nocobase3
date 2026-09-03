@@ -8,7 +8,7 @@ The workflow answers process questions: where is this business case, why did it 
 
 ## When to use it now
 
-With the default application's currently aggregated `condition` and `run` instructions, prefer Workflow when one or more of these are central:
+With the default application's currently aggregated `condition`, `run`, and `terminate` instructions, prefer Workflow when one or more of these are central:
 
 - Background business steps must execute in a durable, explicit order and survive worker restarts.
 - Ordered steps and conditional paths must be explicit and reviewable.
@@ -25,7 +25,7 @@ Long-running human approval, externally resumable waiting, loops, notifications 
 - A workflow describes process control, not every business rule.
 - The TypeScript DSL is authoring parameters. Loading compiles it to immutable tree-shaped IR and materialized definitions; runtime does not reinterpret the current source file.
 - Invocation source is outside the definition. The DSL has no `trigger` field. Cron, webhook, domain event, or another module calls the internal workflow service.
-- The current workflow plugin exports `ConditionInstruction` and `RunInstruction`. Do not assume approval, wait, loop, notification, subflow, or other Instruction classes unless an installed plugin exports them and the application registers them.
+- The current workflow plugin exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`. `terminate` can finish the complete execution early, including from inside a condition branch. Do not assume approval, wait, loop, notification, subflow, or other Instruction classes unless an installed plugin exports them and the application registers them.
 - Extension discovery is not automatic across layers. Confirm the exported Instruction class, checker contracts, Artifact builder registry, runtime registry, and owning plugin deployment separately.
 - The topology is an ordered tree of blocks with branches and common successors, not an arbitrary DAG: no `goto`, joins, general cycles, or cross-branch edges.
 - Workflow input (per invocation) and workflow input (administrator configuration) are different contracts and different lifecycles.

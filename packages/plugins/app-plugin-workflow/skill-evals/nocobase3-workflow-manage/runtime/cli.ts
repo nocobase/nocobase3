@@ -34,7 +34,6 @@ try {
       status: 'accepted' as const,
       eventKey: 'fixture-event',
     }),
-    refreshSourceResolvers: async (): Promise<void> => undefined,
     discoverArtifacts: async () => [],
     ensureArtifactMaterialized: async () => undefined,
   };
