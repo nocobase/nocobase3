@@ -3,12 +3,12 @@ import {
   type AppServerPlugin,
 } from '@nocobase/app-server/plugins';
 
-import { inventoryApiRoutes } from './routes/inventory.js';
+import { fileSettingsApiRoutes } from './settings/routes.js';
 
 const filePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-file',
   locales: () => import('./locales/index.js'),
-  routes: [inventoryApiRoutes],
+  routes: [fileSettingsApiRoutes],
 });
 
 export default filePlugin;

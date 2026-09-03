@@ -17,14 +17,14 @@ import { Hono, type Context, type Env, type Input } from 'hono';
 import type {
   FileInventoryErrorResponse,
   FileInventorySourcesResponse,
-} from '../../shared/inventory.js';
-import { FILE_INVENTORY_RESOURCE } from '../../shared/inventory.js';
-import { listDatabaseFileSourceItems } from '../file-inventory-query.js';
+} from '../../shared/settings/inventory.js';
+import { FILE_INVENTORY_RESOURCE } from '../../shared/settings/inventory.js';
+import { translateFileMessage } from '../i18n.js';
+import { listDatabaseFileSourceItems } from './inventory-query.js';
 import {
   findRegisteredDatabaseFileSource,
   listRegisteredDatabaseFileSources,
-} from '../file-source-registry.js';
-import { translateFileMessage } from '../i18n.js';
+} from './source-registry.js';
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -34,7 +34,7 @@ type InventoryRoutesEnv = {
   Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
 };
 
-export const inventoryApiRoutes: AppApiRouteContribution<AppPluginApplication> =
+export const fileSettingsApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes((app) => {
     const authentication = app.container.resolve(authenticationToken);
     const authorization = app.container.resolve(authorizationToken);

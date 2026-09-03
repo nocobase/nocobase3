@@ -17,11 +17,11 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFileRoute } from '../server/create-file-route.js';
-import serverLocales from '../server/locales/index.js';
-import { inventoryApiRoutes } from '../server/routes/inventory.js';
-import { FILE_INVENTORY_RESOURCE } from '../shared/inventory.js';
-import { createFileI18nRuntime } from './i18n.js';
+import { createFileRoute } from '../../server/create-file-route.js';
+import serverLocales from '../../server/locales/index.js';
+import { fileSettingsApiRoutes } from '../../server/settings/routes.js';
+import { FILE_INVENTORY_RESOURCE } from '../../shared/settings/inventory.js';
+import { createFileI18nRuntime } from '../i18n.js';
 
 const TABLE = 'routeInventoryFiles';
 
@@ -196,12 +196,12 @@ describe('file inventory routes', () => {
 
   it('requires Authentication and Authorization services at composition time', () => {
     expect(() =>
-      inventoryApiRoutes.createRouter(
+      fileSettingsApiRoutes.createRouter(
         createApplication({ database, authorization: true }),
       ),
     ).toThrow('Service "@nocobase/app/authentication" is not registered.');
     expect(() =>
-      inventoryApiRoutes.createRouter(
+      fileSettingsApiRoutes.createRouter(
         createApplication({ database, authentication: true }),
       ),
     ).toThrow('Service "@nocobase/app/authorization" is not registered.');
@@ -246,7 +246,7 @@ async function createInventoryApp(
   app.use('*', createI18nMiddleware(runtime));
   app.route(
     '/',
-    await inventoryApiRoutes.createRouter(
+    await fileSettingsApiRoutes.createRouter(
       createApplication({
         database: options.database,
         authentication: true,

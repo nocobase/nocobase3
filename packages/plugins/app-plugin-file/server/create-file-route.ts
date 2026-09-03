@@ -23,7 +23,6 @@ import {
   type StoredFileObject,
 } from './file-storage.js';
 import { createDatabaseFileStore } from './database-file-store.js';
-import { registerDatabaseFileSource } from './file-source-registry.js';
 import { normalizeFileName } from './filename.js';
 import {
   translateFileError,
@@ -39,6 +38,7 @@ import {
   type FileStore,
   type NewFileRecord,
 } from './types.js';
+import { registerDatabaseFileSource } from './settings/source-registry.js';
 
 interface ClientFileRecord {
   readonly id: string;

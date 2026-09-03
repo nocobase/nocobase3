@@ -3,13 +3,13 @@ import type { DatabaseManager, Row } from '@nocobase/db';
 import type {
   FileInventoryFilesResponse,
   FileInventoryItem,
-} from '../shared/inventory.js';
+} from '../../shared/settings/inventory.js';
 import {
   normalizeDatabaseFileSize,
   normalizeDatabaseFileVisibility,
   serializeDatabaseDate,
-} from './database-file-record.js';
-import type { RegisteredDatabaseFileSource } from './file-source-registry.js';
+} from '../database-file-record.js';
+import type { RegisteredDatabaseFileSource } from './source-registry.js';
 
 interface FileInventoryRow extends Row {
   id: string;

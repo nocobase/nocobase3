@@ -1,9 +1,9 @@
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { listDatabaseFileSourceItems } from '../server/file-inventory-query.js';
-import { serializeDatabaseDate } from '../server/database-file-record.js';
-import type { RegisteredDatabaseFileSource } from '../server/file-source-registry.js';
+import { serializeDatabaseDate } from '../../server/database-file-record.js';
+import { listDatabaseFileSourceItems } from '../../server/settings/inventory-query.js';
+import type { RegisteredDatabaseFileSource } from '../../server/settings/source-registry.js';
 
 const TABLE = 'inventoryFiles';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import routes from '../../client/routes.js';
+import routes from '../../client/settings/routes.js';
 
 describe('file inventory client routes', () => {
   it('declares a protected Settings page', () => {

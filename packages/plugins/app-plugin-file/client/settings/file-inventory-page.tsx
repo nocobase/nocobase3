@@ -21,7 +21,7 @@ import type {
   FileInventoryItem,
   FileInventorySource,
   FileInventorySourcesResponse,
-} from '../../shared/inventory.js';
+} from '../../shared/settings/inventory.js';
 
 const PAGE_SIZE = 25;
 

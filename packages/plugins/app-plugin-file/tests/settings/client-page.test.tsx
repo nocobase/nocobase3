@@ -20,13 +20,13 @@ vi.mock('@nocobase/app-client', async (importOriginal) => {
   };
 });
 
-import FileInventoryPage from '../../client/pages/file-inventory-page.js';
 import clientLocales from '../../client/locales/index.js';
+import FileInventoryPage from '../../client/settings/file-inventory-page.js';
 import { FILE_PLUGIN_NS } from '../../shared/namespace.js';
 import type {
   FileInventoryFilesResponse,
   FileInventorySourcesResponse,
-} from '../../shared/inventory.js';
+} from '../../shared/settings/inventory.js';
 import { createFileI18nRuntime } from '../i18n.js';
 
 describe('file inventory page', () => {

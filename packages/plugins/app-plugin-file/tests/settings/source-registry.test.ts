@@ -5,7 +5,7 @@ import {
   findRegisteredDatabaseFileSource,
   listRegisteredDatabaseFileSources,
   registerDatabaseFileSource,
-} from '../server/file-source-registry.js';
+} from '../../server/settings/source-registry.js';
 
 describe('file source registry', () => {
   let database: DatabaseManager;
