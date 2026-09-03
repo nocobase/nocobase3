@@ -74,7 +74,7 @@ Rules:
 
 1. Classify the request with [Workflow Concepts](references/workflow-concepts.md). Use Workflow only when process state, orchestration, visibility, or auditability is the primary requirement.
 2. Discover the installed plugins' exported Instruction classes and the application's registered instruction contracts. Never assume optional nodes are installed.
-3. For authoring, read [DSL Authoring](references/dsl-authoring.md) completely, place one package below the configured workflow source root, and keep its stable directory name as the workflow key.
+3. For authoring, read [DSL Authoring](references/dsl-authoring.md) completely, place one package below the configured workflow source root, keep its stable directory name as the workflow key, and write `workflow.ts` with the reference's `WorkflowSourceAst`-annotated binding and default export so it passes the application's `isolatedDeclarations` typecheck.
 4. Declare the invocation `inputSchema` separately from administrator `parameters`. Design stable, globally unique node keys before writing nodes.
 5. Express order with arrays and branches only with `.branch({...})`. Put executable business work in `run` scripts and declare each dynamic result contract.
 6. Validate the DSL before any load or publication. Run the actual checker against the package; do not substitute a TypeScript-only check. This five-phase source check does not inspect `run` scripts.
@@ -115,7 +115,7 @@ Rollback guidance:
 # Verification Checklist
 
 - The package directory resolves to the intended stable workflow key.
-- `workflow.ts` default-exports exactly the value returned by `defineWorkflow()`.
+- `workflow.ts` binds the `defineWorkflow()` result to a `const` annotated with the exported `WorkflowSourceAst` type and default-exports exactly that value, so the module compiles under the application's `isolatedDeclarations` server tsconfig. A bare `export default defineWorkflow(...)` raises `TS9037` and must not be used.
 - The DSL imports Instruction classes from their owning plugins and uses only classes registered by the application.
 - Input Schema has object root and only supported keywords; representative allowed and denied contexts are checked.
 - Parameters, templates, JSON Logic variables, result schemas, and node-result visibility obey current contracts.

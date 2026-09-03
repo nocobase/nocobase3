@@ -54,9 +54,10 @@ import {
   ConditionInstruction,
   defineWorkflow,
   RunInstruction,
+  type WorkflowSourceAst,
 } from '@nocobase/app-plugin-workflow';
 
-export default defineWorkflow({
+const workflow: WorkflowSourceAst = defineWorkflow({
   title: 'Quotation decision',
   description: 'Calculates a quotation and routes high-value cases.',
   inputSchema: {
@@ -124,7 +125,11 @@ export default defineWorkflow({
     }),
   ],
 });
+
+export default workflow;
 ```
+
+Bind the `defineWorkflow()` result to a `const` annotated `WorkflowSourceAst` and default-export that binding. The application's server tsconfig enables `isolatedDeclarations`, and its `server/**/*.ts` include covers `workflow.ts`, so a bare `export default defineWorkflow({ ... })` fails `pnpm typecheck` with `error TS9037: Default exports can't be inferred with --isolatedDeclarations.` The annotated binding keeps the explicit `WorkflowSourceAst` type in the module's own declaration and compiles cleanly.
 
 The common successor `recordDecision` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST.
 
@@ -237,7 +242,7 @@ Keep those stages separate: source check does not prove run-entry buildability; 
 | `inputSchema` |       no | object-root Input Schema; default is `{ type: 'object' }`          |
 | `nodes`       |      yes | ordered array of node expressions; may be empty                    |
 
-There is no top-level `trigger`, `start`, node map, or edge list. The default export must be the direct/derived value returned by `defineWorkflow()` and the evaluated AST must be JSON-compatible: no functions, symbols, BigInt, Date, Map, class instances, circular references, or non-finite numbers.
+There is no top-level `trigger`, `start`, node map, or edge list. The module default-exports a const annotated `WorkflowSourceAst` that holds the direct/derived value returned by `defineWorkflow()`, so the module still type-checks under the application's `isolatedDeclarations` server build. The evaluated AST must be JSON-compatible: no functions, symbols, BigInt, Date, Map, class instances, circular references, or non-finite numbers.
 
 ## Input Schema
 
@@ -419,6 +424,7 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 ## Error-prevention checklist
 
 - No legacy YAML, `trigger`, `start`, node map, numeric branch, or edge-list syntax.
+- `workflow.ts` binds `defineWorkflow()` to a const annotated with the exported `WorkflowSourceAst` type and default-exports that binding; it never default-exports a bare call expression, which fails the application's `isolatedDeclarations` typecheck (`TS9037`).
 - Import only Instruction classes exported by installed plugins and registered by the application.
 - No invented nodes/operators/config fields.
 - All objects and evaluated helpers produce JSON-only values.
