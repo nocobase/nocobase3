@@ -88,7 +88,95 @@ describe('managed host reconciliation', () => {
       deploymentSet(3, artifact, { desiredState: 'stopped' }),
     );
     expect(stopped.status.deployments[0]?.observedState).toBe('stopped');
+    expect(host.registry.has('customer')).toBe(true);
+    expect(host.registry.isActive('customer')).toBe(false);
+
+    const started = await host.management.startDeployment({
+      ...firstDeploymentSet.deployments[0]!,
+      desiredState: 'running',
+    });
+    expect(started.deployments[0]?.observedState).toBe('running');
+    expect(host.registry.isActive('customer')).toBe(true);
+  });
+
+  it('applies and removes one managed deployment without a complete set', async () => {
+    const { deploymentsDir, volumesDir, artifact, artifactDir } =
+      await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: deploymentsDir,
+      appVolumesDir: volumesDir,
+      artifact: fsArtifact(artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const deployment = deploymentSet(1, artifact, {
+      activation: 'eager',
+    }).deployments[0]!;
+
+    const deployed = await host.management.applyDeployment(deployment);
+    expect(deployed.deployments[0]).toMatchObject({
+      appId: 'customer',
+      observedState: 'running',
+    });
+
+    const removed = await host.management.removeDeployment('customer');
+    expect(removed.deployments).toEqual([]);
     expect(host.registry.has('customer')).toBe(false);
+  });
+
+  it('reuses an installed artifact with the same release identity', async () => {
+    const { deploymentsDir, volumesDir, artifact, artifactDir } =
+      await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: deploymentsDir,
+      appVolumesDir: volumesDir,
+      artifact: fsArtifact(artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const deployment = deploymentSet(1, artifact).deployments[0]!;
+
+    await host.management.applyDeployment(deployment);
+    await rm(path.join(artifactDir, artifact.key));
+
+    const repeated = await host.management.applyDeployment(deployment);
+    expect(repeated.deployments[0]).toMatchObject({
+      appId: 'customer',
+      observedState: 'registered',
+    });
+  });
+
+  it('rejects identity collisions in targeted deployment operations', async () => {
+    const { deploymentsDir, volumesDir, artifact, artifactDir } =
+      await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: deploymentsDir,
+      appVolumesDir: volumesDir,
+      artifact: fsArtifact(artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const deployment = deploymentSet(1, artifact).deployments[0]!;
+    await host.management.applyDeployment(deployment);
+
+    await expect(
+      host.management.applyDeployment({
+        ...deployment,
+        appId: 'another-app',
+        artifact: { ...deployment.artifact, appId: 'another-app' },
+      }),
+    ).rejects.toThrow('cannot change app ID');
+    await expect(
+      host.management.applyDeployment({
+        ...deployment,
+        id: 'another-deployment',
+      }),
+    ).rejects.toThrow('already managed by deployment');
+
+    expect((await host.management.getStatus()).desiredRevision).toBe(1);
   });
 
   it('keeps the previous runtime when a new artifact cannot be resolved', async () => {

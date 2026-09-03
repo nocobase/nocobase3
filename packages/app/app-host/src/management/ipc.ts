@@ -11,13 +11,21 @@ import type { ChildProcess } from 'node:child_process';
 import type { HostManagementService } from './manager.ts';
 import type {
   ApplyDeploymentSetResult,
+  HostDeploymentSpec,
   HostDeploymentSet,
   HostStatus,
 } from './types.ts';
 
 const IPC_CHANNEL = 'nocobase-app-host';
 
-type IpcMethod = 'applyDeploymentSet' | 'getStatus' | 'restartApp';
+type IpcMethod =
+  | 'applyDeploymentSet'
+  | 'applyDeployment'
+  | 'startDeployment'
+  | 'stopDeployment'
+  | 'removeDeployment'
+  | 'getStatus'
+  | 'restartApp';
 
 interface IpcRequest {
   channel: typeof IPC_CHANNEL;
@@ -61,6 +69,22 @@ export class IpcHostManagementClient implements HostManagementService {
       'applyDeploymentSet',
       deploymentSet,
     );
+  }
+
+  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    return this.call<HostStatus>('applyDeployment', deployment);
+  }
+
+  startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    return this.call<HostStatus>('startDeployment', deployment);
+  }
+
+  stopDeployment(appId: string): Promise<HostStatus> {
+    return this.call<HostStatus>('stopDeployment', { appId });
+  }
+
+  removeDeployment(appId: string): Promise<HostStatus> {
+    return this.call<HostStatus>('removeDeployment', { appId });
   }
 
   getStatus(): Promise<HostStatus> {
@@ -179,6 +203,22 @@ export class IpcHostManagementServer {
           request.payload as HostDeploymentSet,
         );
         break;
+      case 'applyDeployment':
+        result = await this.service.applyDeployment(
+          request.payload as HostDeploymentSpec,
+        );
+        break;
+      case 'startDeployment':
+        result = await this.service.startDeployment(
+          request.payload as HostDeploymentSpec,
+        );
+        break;
+      case 'stopDeployment':
+        result = await this.service.stopDeployment(payloadAppId(request));
+        break;
+      case 'removeDeployment':
+        result = await this.service.removeDeployment(payloadAppId(request));
+        break;
       case 'restartApp':
         result = await this.service.restartApp(
           (request.payload as { appId: string }).appId,
@@ -213,9 +253,17 @@ function isIpcRequest(value: unknown): value is IpcRequest {
 function isIpcMethod(value: unknown): value is IpcMethod {
   return (
     value === 'applyDeploymentSet' ||
+    value === 'applyDeployment' ||
+    value === 'startDeployment' ||
+    value === 'stopDeployment' ||
+    value === 'removeDeployment' ||
     value === 'getStatus' ||
     value === 'restartApp'
   );
+}
+
+function payloadAppId(request: IpcRequest): string {
+  return (request.payload as { appId: string }).appId;
 }
 
 function isIpcResponse(value: unknown): value is IpcResponse {

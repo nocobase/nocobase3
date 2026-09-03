@@ -9,7 +9,7 @@
 
 import { createHash } from 'node:crypto';
 import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   AppBackendKind,
@@ -110,7 +110,7 @@ export class DeploymentCatalog {
 
     const version =
       packageJson?.app?.version ?? packageJson?.version ?? 'local';
-    const fingerprint = await this.calculateFingerprint(rootDir);
+    const fingerprint = await this.calculateFingerprint(appId, rootDir);
 
     return {
       id: appId,
@@ -286,9 +286,12 @@ export class DeploymentCatalog {
     return /^[a-zA-Z0-9_-]+$/.test(appId);
   }
 
-  private async calculateFingerprint(rootDir: string): Promise<string> {
+  private async calculateFingerprint(
+    appId: string,
+    rootDir: string,
+  ): Promise<string> {
     const files: string[] = [];
-    await this.collectFiles(rootDir, rootDir, files);
+    await this.collectFiles(appId, rootDir, rootDir, files);
     files.sort((a, b) => a.localeCompare(b));
 
     const hash = createHash('sha256');
@@ -302,6 +305,7 @@ export class DeploymentCatalog {
   }
 
   private async collectFiles(
+    appId: string,
     rootDir: string,
     directory: string,
     files: string[],
@@ -320,15 +324,41 @@ export class DeploymentCatalog {
       const entryPath = path.join(directory, entry.name);
       this.assertInside(rootDir, entryPath);
       if (entry.isDirectory()) {
-        await this.collectFiles(rootDir, entryPath, files);
+        await this.collectFiles(appId, rootDir, entryPath, files);
       } else if (entry.isFile()) {
         files.push(entryPath);
       } else if (entry.isSymbolicLink()) {
+        if (await this.isRuntimeStorageLink(appId, rootDir, entryPath)) {
+          continue;
+        }
         throw new Error(
           `App deployment must not contain symbolic link ${entryPath}`,
         );
       }
     }
+  }
+
+  private async isRuntimeStorageLink(
+    appId: string,
+    rootDir: string,
+    entryPath: string,
+  ): Promise<boolean> {
+    const installedRoot = path.join(this.deploymentsDir, appId);
+    if (
+      path.resolve(rootDir) !== installedRoot ||
+      entryPath !== path.join(installedRoot, 'public', 'storage')
+    ) {
+      return false;
+    }
+
+    const target = await readlink(entryPath);
+    const resolvedTarget = path.resolve(path.dirname(entryPath), target);
+    const expectedTarget = path.join(
+      this.volumes.storageDir(appId),
+      'app',
+      'public',
+    );
+    return resolvedTarget === expectedTarget;
   }
 }
 

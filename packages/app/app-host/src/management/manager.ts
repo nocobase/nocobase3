@@ -18,6 +18,7 @@ import type { AppHostMode } from '../host-mode.ts';
 import { ManagedReconciler } from './managed-reconciler.ts';
 import type {
   ApplyDeploymentSetResult,
+  HostDeploymentSpec,
   HostDeploymentSet,
   HostStatus,
 } from './types.ts';
@@ -26,6 +27,10 @@ export interface HostManagementService {
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult>;
+  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  stopDeployment(appId: string): Promise<HostStatus>;
+  removeDeployment(appId: string): Promise<HostStatus>;
   getStatus(): Promise<HostStatus>;
   restartApp(appId: string): Promise<HostStatus>;
 }
@@ -86,6 +91,34 @@ export class HostManager implements HostManagementService {
       throw new Error('Deployment sets require managed host mode');
     }
     return this.state.reconciler.applyDeploymentSet(deploymentSet);
+  }
+
+  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    if (this.state.mode !== 'managed') {
+      throw new Error('Deployments require managed host mode');
+    }
+    return this.state.reconciler.applyDeployment(deployment);
+  }
+
+  startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    if (this.state.mode !== 'managed') {
+      throw new Error('Deployments require managed host mode');
+    }
+    return this.state.reconciler.startDeployment(deployment);
+  }
+
+  stopDeployment(appId: string): Promise<HostStatus> {
+    if (this.state.mode !== 'managed') {
+      throw new Error('Deployments require managed host mode');
+    }
+    return this.state.reconciler.stopDeployment(appId);
+  }
+
+  removeDeployment(appId: string): Promise<HostStatus> {
+    if (this.state.mode !== 'managed') {
+      throw new Error('Deployments require managed host mode');
+    }
+    return this.state.reconciler.removeDeployment(appId);
   }
 
   async getStatus(): Promise<HostStatus> {

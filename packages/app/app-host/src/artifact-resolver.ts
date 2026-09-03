@@ -9,12 +9,13 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, rm } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { finished, pipeline } from 'node:stream/promises';
 
 import type { NocoBaseDriveDisk } from '@nocobase/drive';
 import { x as extractTar } from 'tar';
+import type { Logger } from '@nocobase/logging';
 
 import type { DeploymentCatalog } from './deployment/catalog.ts';
 import type { AppDefinition } from './app-types.ts';
@@ -40,11 +41,20 @@ export interface ArtifactResolver {
 export interface DriveArtifactResolverOptions {
   appDeploymentsDir: string;
   localArtifactDir?: string;
+  logger?: Logger;
 }
+
+interface InstalledArtifactMetadata {
+  readonly formatVersion: 1;
+  readonly reference: ArtifactReference;
+}
+
+const INSTALLED_ARTIFACT_FILE = '.nocobase-artifact.json';
 
 export class DriveArtifactResolver implements ArtifactResolver {
   readonly appDeploymentsDir: string;
   readonly localArtifactDir?: string;
+  readonly logger?: Logger;
 
   constructor(
     readonly disk: NocoBaseDriveDisk,
@@ -55,6 +65,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     this.localArtifactDir = options.localArtifactDir
       ? path.resolve(options.localArtifactDir)
       : undefined;
+    this.logger = options.logger;
   }
 
   async resolve(reference: ArtifactReference): Promise<ResolvedArtifact> {
@@ -77,12 +88,34 @@ export class DriveArtifactResolver implements ArtifactResolver {
     );
     let hasBackup = false;
     let installed = false;
+    const startedAt = Date.now();
 
     try {
+      const installedArtifact = await this.resolveInstalledArtifact(
+        reference,
+        targetDir,
+      );
+      if (installedArtifact) {
+        this.logger?.info(
+          {
+            appId: reference.appId,
+            artifactKey: reference.key,
+            artifactVersion: reference.version,
+            artifactChecksum: reference.checksum,
+            cacheHit: true,
+            durationMs: Date.now() - startedAt,
+          },
+          'Reused installed app artifact',
+        );
+        return installedArtifact;
+      }
+
+      const checksumStartedAt = Date.now();
       const localPath = this.localArtifactPath(reference.key);
       const actualChecksum = localPath
         ? await hashLocalArtifact(localPath)
         : await downloadArtifact(this.disk, reference.key, archivePath);
+      const checksumDurationMs = Date.now() - checksumStartedAt;
       if (actualChecksum !== reference.checksum) {
         throw new Error(
           `Artifact checksum mismatch for app "${reference.appId}": expected "${reference.checksum}", received "${actualChecksum}"`,
@@ -90,6 +123,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
       }
 
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
+      const extractStartedAt = Date.now();
       await extractTar({
         cwd: stagingDir,
         file: localPath ?? archivePath,
@@ -98,12 +132,17 @@ export class DriveArtifactResolver implements ArtifactResolver {
         strict: true,
         filter: assertSafeArchiveEntry,
       });
+      const extractDurationMs = Date.now() - extractStartedAt;
+      const discoveryStartedAt = Date.now();
       const stagedDefinition = await this.catalog.discoverAt(
         reference.appId,
         stagingDir,
       );
       assertArtifactIdentity(stagedDefinition, reference);
+      await writeInstalledArtifactMetadata(stagingDir, reference);
+      const discoveryDurationMs = Date.now() - discoveryStartedAt;
 
+      const swapStartedAt = Date.now();
       try {
         await rename(targetDir, backupDir);
         hasBackup = true;
@@ -116,6 +155,23 @@ export class DriveArtifactResolver implements ArtifactResolver {
         reference.appId,
         targetDir,
       );
+      const swapDurationMs = Date.now() - swapStartedAt;
+
+      this.logger?.info(
+        {
+          appId: reference.appId,
+          artifactKey: reference.key,
+          artifactVersion: reference.version,
+          artifactChecksum: reference.checksum,
+          cacheHit: false,
+          checksumDurationMs,
+          extractDurationMs,
+          discoveryDurationMs,
+          swapDurationMs,
+          durationMs: Date.now() - startedAt,
+        },
+        'Installed app artifact',
+      );
 
       let settled = false;
       return {
@@ -125,7 +181,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
           if (settled) return;
           settled = true;
           if (hasBackup) {
-            await rm(backupDir, { recursive: true, force: true });
+            this.removeInBackground(backupDir, reference);
           }
         },
         rollback: async (): Promise<void> => {
@@ -164,6 +220,99 @@ export class DriveArtifactResolver implements ArtifactResolver {
     }
     return filePath;
   }
+
+  private async resolveInstalledArtifact(
+    reference: ArtifactReference,
+    targetDir: string,
+  ): Promise<ResolvedArtifact | null> {
+    const metadata = await readInstalledArtifactMetadata(targetDir);
+    if (!metadata || !artifactReferencesEqual(metadata.reference, reference)) {
+      return null;
+    }
+    const definition = await this.catalog.discoverAt(
+      reference.appId,
+      targetDir,
+    );
+    assertArtifactIdentity(definition, reference);
+    return {
+      reference,
+      definition,
+      commit: () => Promise.resolve(),
+      rollback: () => Promise.resolve(),
+    };
+  }
+
+  private removeInBackground(
+    directory: string,
+    reference: ArtifactReference,
+  ): void {
+    const startedAt = Date.now();
+    void rm(directory, { recursive: true, force: true })
+      .then(() => {
+        this.logger?.info(
+          {
+            appId: reference.appId,
+            artifactKey: reference.key,
+            directory,
+            durationMs: Date.now() - startedAt,
+          },
+          'Removed previous app artifact in background',
+        );
+      })
+      .catch((error: unknown) => {
+        this.logger?.warn(
+          { err: error, appId: reference.appId, directory },
+          'Failed to remove previous app artifact in background',
+        );
+      });
+  }
+}
+
+async function readInstalledArtifactMetadata(
+  targetDir: string,
+): Promise<InstalledArtifactMetadata | null> {
+  try {
+    const value = JSON.parse(
+      await readFile(path.join(targetDir, INSTALLED_ARTIFACT_FILE), 'utf8'),
+    ) as Partial<InstalledArtifactMetadata>;
+    return value.formatVersion === 1 && value.reference
+      ? (value as InstalledArtifactMetadata)
+      : null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    return null;
+  }
+}
+
+async function writeInstalledArtifactMetadata(
+  targetDir: string,
+  reference: ArtifactReference,
+): Promise<void> {
+  const metadata: InstalledArtifactMetadata = {
+    formatVersion: 1,
+    reference,
+  };
+  await writeFile(
+    path.join(targetDir, INSTALLED_ARTIFACT_FILE),
+    `${JSON.stringify(metadata)}\n`,
+    { mode: 0o600, flag: 'wx' },
+  );
+}
+
+function artifactReferencesEqual(
+  left: ArtifactReference,
+  right: ArtifactReference,
+): boolean {
+  return (
+    typeof left.key === 'string' &&
+    typeof left.appId === 'string' &&
+    typeof left.version === 'string' &&
+    typeof left.checksum === 'string' &&
+    left.key === right.key &&
+    left.appId === right.appId &&
+    left.version === right.version &&
+    left.checksum.toLowerCase() === right.checksum.toLowerCase()
+  );
 }
 
 async function downloadArtifact(
@@ -219,6 +368,11 @@ function assertSafeArchiveEntry(entryPath: string): boolean {
     normalized.startsWith('../')
   ) {
     throw new Error(`Artifact archive contains an unsafe path "${entryPath}"`);
+  }
+  if (normalized === INSTALLED_ARTIFACT_FILE) {
+    throw new Error(
+      `Artifact archive contains reserved path "${INSTALLED_ARTIFACT_FILE}"`,
+    );
   }
   return true;
 }

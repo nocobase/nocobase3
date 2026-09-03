@@ -76,6 +76,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/app-host": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
@@ -85,9 +86,12 @@
     "@nocobase/drive": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@sinclair/typebox": "catalog:",
-    "ajv": "catalog:",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "hono": "catalog:",
+    "lucide-react": "^0.487.0",
     "tar": "^7.4.3",
+    "tailwind-merge": "^3.2.0",
     "yaml": "^2.8.1"
   },
   "peerDependencies": {
@@ -99,6 +103,9 @@
     "eslint": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
+    "shadcn": "^4.13.1",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "^1.2.5",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "@types/node": "catalog:",

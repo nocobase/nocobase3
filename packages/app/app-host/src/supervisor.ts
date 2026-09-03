@@ -18,8 +18,10 @@ import { resolveAppHostMode, type AppHostMode } from './host-mode.ts';
 import {
   IpcHostManagementClient,
   type ApplyDeploymentSetResult,
+  type HostDeploymentSpec,
   type HostDeploymentSet,
   type HostManagementService,
+  type HostStatus,
 } from './management/index.ts';
 
 export type AppHostSupervisorStatus =
@@ -315,6 +317,45 @@ export class AppHostSupervisor {
     return result;
   }
 
+  async applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    const management = await this.getManagementClient();
+    const status = await management.applyDeployment(deployment);
+    this.updateLastDeploymentSet(status.desiredRevision, deployment);
+    return status;
+  }
+
+  async startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    const management = await this.getManagementClient();
+    const status = await management.startDeployment(deployment);
+    this.updateLastDeploymentSet(status.desiredRevision, {
+      ...deployment,
+      desiredState: 'running',
+    });
+    return status;
+  }
+
+  async stopDeployment(appId: string): Promise<HostStatus> {
+    const management = await this.getManagementClient();
+    const status = await management.stopDeployment(appId);
+    this.mapLastDeploymentSet(status.desiredRevision, (deployments) =>
+      deployments.map((deployment) =>
+        deployment.appId === appId
+          ? { ...deployment, desiredState: 'stopped' }
+          : deployment,
+      ),
+    );
+    return status;
+  }
+
+  async removeDeployment(appId: string): Promise<HostStatus> {
+    const management = await this.getManagementClient();
+    const status = await management.removeDeployment(appId);
+    this.mapLastDeploymentSet(status.desiredRevision, (deployments) =>
+      deployments.filter((deployment) => deployment.appId !== appId),
+    );
+    return status;
+  }
+
   async getManagementClient(): Promise<HostManagementService> {
     if (this.mode !== 'managed') {
       throw new Error('App host management client requires managed mode');
@@ -337,6 +378,31 @@ export class AppHostSupervisor {
 
     this.shuttingDown = true;
     await this.stop('App host supervisor shutdown');
+  }
+
+  private updateLastDeploymentSet(
+    revision: number,
+    deployment: HostDeploymentSpec,
+  ): void {
+    const deployments = this.lastDeploymentSet?.deployments ?? [];
+    this.lastDeploymentSet = {
+      revision,
+      deployments: [
+        ...deployments.filter((item) => item.id !== deployment.id),
+        structuredClone(deployment),
+      ],
+    };
+  }
+
+  private mapLastDeploymentSet(
+    revision: number,
+    map: (deployments: HostDeploymentSpec[]) => HostDeploymentSpec[],
+  ): void {
+    if (!this.lastDeploymentSet) return;
+    this.lastDeploymentSet = {
+      revision,
+      deployments: map(this.lastDeploymentSet.deployments),
+    };
   }
 
   private async startManagedChild(): Promise<URL> {

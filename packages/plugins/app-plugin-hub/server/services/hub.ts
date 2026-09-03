@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -11,7 +12,6 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
-import type { AppConfigSchemaDocument } from '@nocobase/app-server/config';
 import type {
   HostDeploymentSet,
   HostDeploymentSpec,
@@ -26,7 +26,6 @@ import {
   type AppDriveDiskConfig,
   type NocoBaseDriveDisk,
 } from '@nocobase/drive';
-import { Ajv, type ErrorObject } from 'ajv';
 import { x as extractTar } from 'tar';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
@@ -38,17 +37,20 @@ import type {
   HubAppDetail,
   HubAppRecord,
   HubConfigDocument,
+  HubConfigMode,
   HubDeploymentRecord,
   HubObservedState,
   HubReleaseRecord,
   HubService,
   SaveHubConfigInput,
+  UpdateHubSettingsInput,
 } from '../tokens.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 const APP_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const RELEASE_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,254}$/;
-const CONFIG_SCHEMA_PATH = 'dist/config-schema.json';
+const CONFIG_TEMPLATE_PATH = 'config.yml';
+const EMBEDDED_ENTRY_PATH = 'dist/server/embedded.js';
 
 export interface DefaultHubServiceOptions {
   readonly database: DatabaseManager;
@@ -61,6 +63,10 @@ export interface HubHostController {
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<{ readonly status: HostStatus }>;
+  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  stopDeployment(appId: string): Promise<HostStatus>;
+  removeDeployment(appId: string): Promise<HostStatus>;
   getManagementClient(): Promise<HostManagementService>;
   shutdown(): Promise<void>;
 }
@@ -164,8 +170,8 @@ export class DefaultHubService implements HubService {
       observedRevision: null,
       basePath: `/${id}`,
       backend: 'in-process',
-      activation: 'lazy',
-      config: { provider: 'file' },
+      activation: 'eager',
+      config: { mode: 'file' },
       error: null,
       createdAt: now,
       updatedAt: now,
@@ -217,14 +223,6 @@ export class DefaultHubService implements HubService {
     input: CreateHubReleaseInput,
   ): Promise<HubReleaseRecord> {
     await this.requireApp(appId);
-    const version = input.version.trim();
-    if (!RELEASE_VERSION_PATTERN.test(version)) {
-      throw new HubError(
-        'Release version must use package-version characters only.',
-        'INVALID_VERSION',
-        422,
-      );
-    }
     if (
       input.bytes.byteLength === 0 ||
       input.bytes.byteLength > MAX_ARTIFACT_SIZE
@@ -235,6 +233,8 @@ export class DefaultHubService implements HubService {
         413,
       );
     }
+    const metadata = await inspectArtifact(input.bytes);
+    const { version } = metadata;
     const duplicate = await this.query()
       .selectFrom('hubAppReleases')
       .select('id')
@@ -248,7 +248,6 @@ export class DefaultHubService implements HubService {
         409,
       );
     }
-    const metadata = await inspectArtifact(input.bytes, version);
     const id = randomUUID();
     const artifactKey = `${appId}/${id}.tar.gz`;
     const release: HubReleaseRecord = {
@@ -258,9 +257,7 @@ export class DefaultHubService implements HubService {
       artifactKey,
       checksum: sha256(input.bytes),
       size: input.bytes.byteLength,
-      configSchema: metadata.schema,
-      configSchemaFormatVersion: metadata.schema.formatVersion,
-      configSchemaDigest: metadata.schemaDigest,
+      configTemplate: metadata.configTemplate,
       createdAt: new Date(),
     };
     await this.disk.put(artifactKey, input.bytes, {
@@ -281,32 +278,19 @@ export class DefaultHubService implements HubService {
 
   public async readConfig(appId: string): Promise<HubConfigDocument> {
     const deployment = await this.requireDeployment(appId);
+    if (deployment.config.mode !== 'file') {
+      return { mode: deployment.config.mode, content: null, path: null };
+    }
     const configPath = this.configPath(deployment);
     try {
-      const content = parseConfigDocument(
-        configPath,
-        await readFile(configPath, 'utf8'),
-      );
-      if (!isRecord(content)) {
-        throw new HubError(
-          'App configuration must be a YAML object.',
-          'INVALID_CONFIG_FILE',
-          422,
-        );
-      }
       return {
-        content,
-        releaseId: deployment.desiredReleaseId ?? deployment.observedReleaseId,
+        mode: 'file',
+        content: await readFile(configPath, 'utf8'),
         path: configPath,
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return {
-          content: {},
-          releaseId:
-            deployment.desiredReleaseId ?? deployment.observedReleaseId,
-          path: configPath,
-        };
+        return { mode: 'file', content: '', path: configPath };
       }
       throw error;
     }
@@ -318,15 +302,25 @@ export class DefaultHubService implements HubService {
   ): Promise<HubConfigDocument> {
     return await this.withLock(appId, async () => {
       const deployment = await this.requireDeployment(appId);
-      const release = await this.getRelease(appId, input.releaseId);
-      validateConfig(input.content, release.configSchema);
-      const configPath = this.configPath(deployment);
-      await writeConfigAtomic(configPath, input.content);
-      return {
-        content: input.content,
-        releaseId: release.id,
-        path: configPath,
-      };
+      assertConfigMode(input.mode);
+      if (input.mode === 'file') {
+        if (typeof input.content !== 'string') {
+          throw new HubError(
+            'File configuration content is required.',
+            'INVALID_CONFIG_FILE',
+            422,
+          );
+        }
+        validateYamlConfig(input.content);
+        await writeTextAtomic(this.configPath(deployment), input.content);
+      }
+      await this.updateDeployment(appId, {
+        config: {
+          mode: input.mode,
+          ...(deployment.config.path ? { path: deployment.config.path } : {}),
+        },
+      });
+      return await this.readConfig(appId);
     });
   }
 
@@ -337,11 +331,9 @@ export class DefaultHubService implements HubService {
     return await this.withLock(appId, async () => {
       const release = await this.getRelease(appId, input.releaseId);
       const deployment = await this.requireDeployment(appId);
-      const configPath = this.configPath(deployment);
-      const previousConfig = await readOptionalFile(configPath);
-      const config = input.config ?? (await this.readConfig(appId)).content;
-      validateConfig(config, release.configSchema);
-      await writeConfigAtomic(configPath, config);
+      if (deployment.config.mode === 'file') {
+        await this.initializeConfigFromRelease(deployment, release);
+      }
       await this.updateDeployment(appId, {
         desiredReleaseId: release.id,
         desiredState: 'running',
@@ -350,10 +342,10 @@ export class DefaultHubService implements HubService {
       });
 
       try {
-        const result = await this.hostController.applyDeploymentSet(
-          await this.createDeploymentSet(),
+        const hostStatus = await this.hostController.applyDeployment(
+          await this.createDeploymentSpec(appId),
         );
-        const status = result.status.deployments.find(
+        const status = hostStatus.deployments.find(
           (candidate) => candidate.appId === appId,
         );
         if (!status || status.observedState === 'failed') {
@@ -363,11 +355,93 @@ export class DefaultHubService implements HubService {
         }
         await this.observe(status);
       } catch (error) {
-        await restoreFile(configPath, previousConfig);
+        const message = error instanceof Error ? error.message : String(error);
         await this.updateDeployment(appId, {
           desiredReleaseId: deployment.desiredReleaseId,
           desiredState: deployment.desiredState,
           observedState: deployment.observedState,
+          error: message,
+        });
+        throw new HubError(
+          `Deployment failed: ${message}`,
+          'DEPLOYMENT_FAILED',
+          503,
+        );
+      }
+      return await this.getApp(appId);
+    });
+  }
+
+  public async updateSettings(
+    appId: string,
+    input: UpdateHubSettingsInput,
+  ): Promise<HubAppDetail> {
+    return await this.withLock(appId, async () => {
+      assertActivation(input.activation);
+      const deployment = await this.requireDeployment(appId);
+      await this.updateDeployment(appId, {
+        activation: input.activation,
+        ...(deployment.desiredReleaseId
+          ? { observedState: 'pending', error: null }
+          : {}),
+      });
+      if (!deployment.desiredReleaseId) return await this.getApp(appId);
+      try {
+        const hostStatus = await this.hostController.applyDeployment(
+          await this.createDeploymentSpec(appId),
+        );
+        const status = hostStatus.deployments.find(
+          (candidate) => candidate.appId === appId,
+        );
+        if (!status || status.observedState === 'failed') {
+          throw new Error(
+            status?.error ?? 'Host did not report deployment status.',
+          );
+        }
+        await this.observe(status);
+      } catch (error) {
+        await this.updateDeployment(appId, {
+          activation: deployment.activation,
+          observedState: deployment.observedState,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return await this.getApp(appId);
+    });
+  }
+
+  public async start(appId: string): Promise<HubAppDetail> {
+    return await this.withLock(appId, async () => {
+      const deployment = await this.requireDeployment(appId);
+      if (!deployment.desiredReleaseId) {
+        throw new HubError(
+          'App must be deployed before it can be started.',
+          'APP_NOT_DEPLOYED',
+          409,
+        );
+      }
+      await this.updateDeployment(appId, {
+        desiredState: 'running',
+        observedState: 'pending',
+        error: null,
+      });
+      try {
+        // A manual Start activates now but preserves the saved policy used on
+        // the next Hub restart.
+        const spec = await this.createDeploymentSpec(appId);
+        const hostStatus = await this.hostController.startDeployment(spec);
+        const status = hostStatus.deployments.find(
+          (candidate) => candidate.appId === appId,
+        );
+        if (!status || status.observedState === 'failed') {
+          throw new Error(
+            status?.error ?? 'Host did not report deployment status.',
+          );
+        }
+        await this.observe(status);
+      } catch (error) {
+        await this.updateDeployment(appId, {
+          observedState: 'failed',
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -384,10 +458,8 @@ export class DefaultHubService implements HubService {
         error: null,
       });
       try {
-        const result = await this.hostController.applyDeploymentSet(
-          await this.createDeploymentSet(),
-        );
-        const status = result.status.deployments.find(
+        const hostStatus = await this.hostController.stopDeployment(appId);
+        const status = hostStatus.deployments.find(
           (candidate) => candidate.appId === appId,
         );
         if (status) await this.observe(status);
@@ -407,7 +479,51 @@ export class DefaultHubService implements HubService {
     });
   }
 
-  public async restart(appId: string): Promise<HostStatus> {
+  public async remove(appId: string): Promise<void> {
+    await this.withLock(appId, async () => {
+      const app = await this.requireApp(appId);
+      await this.requireDeployment(appId);
+      const releases = await this.listReleases(appId);
+      await this.hostController.removeDeployment(appId);
+      await this.options.database.transaction(async (connection) => {
+        await connection.query
+          .deleteFrom('hubAppReleases')
+          .where('appId', '=', appId)
+          .execute();
+        await connection.query
+          .deleteFrom('hubAppDeployments')
+          .where('appId', '=', appId)
+          .execute();
+        await connection.query
+          .deleteFrom('hubApps')
+          .where('id', '=', app.id)
+          .execute();
+      });
+      await Promise.allSettled([
+        ...releases.map((release) => this.disk.delete(release.artifactKey)),
+        rm(path.join(this.options.config.host.deploymentsDir, appId), {
+          recursive: true,
+          force: true,
+        }),
+        rm(path.join(this.options.config.host.volumesDir, appId), {
+          recursive: true,
+          force: true,
+        }),
+      ]);
+    });
+  }
+
+  public async refresh(appId: string): Promise<HubAppDetail> {
+    await this.requireApp(appId);
+    const status = await this.hostStatus();
+    const deployment = status.deployments.find(
+      (candidate) => candidate.appId === appId,
+    );
+    if (deployment) await this.observe(deployment);
+    return await this.getApp(appId);
+  }
+
+  public async restart(appId: string): Promise<HubAppDetail> {
     const deployment = await this.requireDeployment(appId);
     if (deployment.desiredState !== 'running') {
       throw new HubError(
@@ -416,9 +532,14 @@ export class DefaultHubService implements HubService {
         409,
       );
     }
-    return await (
+    const status = await (
       await this.hostController.getManagementClient()
     ).restartApp(appId);
+    const observed = status.deployments.find(
+      (candidate) => candidate.appId === appId,
+    );
+    if (observed) await this.observe(observed);
+    return await this.getApp(appId);
   }
 
   public async hostStatus(): Promise<HostStatus> {
@@ -465,11 +586,46 @@ export class DefaultHubService implements HubService {
         backend: deployment.backend,
         activation: deployment.activation,
         basePath: deployment.basePath,
-        config: deployment.config,
+        config:
+          deployment.config.mode === 'file'
+            ? { provider: 'file', path: deployment.config.path }
+            : undefined,
       });
     }
     this.revision += 1;
     return { revision: this.revision, deployments: specs };
+  }
+
+  private async createDeploymentSpec(
+    appId: string,
+  ): Promise<HostDeploymentSpec> {
+    const deployment = await this.requireDeployment(appId);
+    if (!deployment.desiredReleaseId) {
+      throw new HubError(
+        'App must be deployed before it can be reconciled.',
+        'APP_NOT_DEPLOYED',
+        409,
+      );
+    }
+    const release = await this.getRelease(appId, deployment.desiredReleaseId);
+    return {
+      id: deployment.id,
+      appId,
+      artifact: {
+        key: release.artifactKey,
+        appId,
+        version: release.version,
+        checksum: release.checksum,
+      },
+      desiredState: deployment.desiredState,
+      backend: deployment.backend,
+      activation: deployment.activation,
+      basePath: deployment.basePath,
+      config:
+        deployment.config.mode === 'file'
+          ? { provider: 'file', path: deployment.config.path }
+          : undefined,
+    };
   }
 
   public hostUrl(): string | null {
@@ -557,6 +713,20 @@ export class DefaultHubService implements HubService {
     );
   }
 
+  private async initializeConfigFromRelease(
+    deployment: HubDeploymentRecord,
+    release: HubReleaseRecord,
+  ): Promise<void> {
+    if (release.configTemplate === null) return;
+    const configPath = this.configPath(deployment);
+    try {
+      await lstat(configPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      await writeTextAtomic(configPath, release.configTemplate);
+    }
+  }
+
   private async writeHostConfig(): Promise<void> {
     const document = {
       host: {
@@ -567,7 +737,10 @@ export class DefaultHubService implements HubService {
         appVolumesDir: this.options.config.host.volumesDir,
       },
     };
-    await writeConfigAtomic(this.options.config.host.configPath, document);
+    await writeStructuredConfigAtomic(
+      this.options.config.host.configPath,
+      document,
+    );
   }
 
   private async withLock<T>(appId: string, work: () => Promise<T>): Promise<T> {
@@ -590,10 +763,10 @@ function normalizeArtifactConfig(
     : artifact;
 }
 
-async function inspectArtifact(
-  bytes: Uint8Array,
-  expectedVersion: string,
-): Promise<{ schema: AppConfigSchemaDocument; schemaDigest: string }> {
+async function inspectArtifact(bytes: Uint8Array): Promise<{
+  readonly version: string;
+  readonly configTemplate: string | null;
+}> {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-hub-artifact-'),
   );
@@ -622,27 +795,34 @@ async function inspectArtifact(
           );
         }
         return (
-          normalized === 'package.json' || normalized === CONFIG_SCHEMA_PATH
+          normalized === 'package.json' ||
+          normalized === CONFIG_TEMPLATE_PATH ||
+          normalized === EMBEDDED_ENTRY_PATH
         );
       },
     });
+    await assertRegularArtifactFile(directory, 'package.json');
+    await assertRegularArtifactFile(directory, EMBEDDED_ENTRY_PATH);
     const packageMetadata = JSON.parse(
       await readFile(path.join(directory, 'package.json'), 'utf8'),
     ) as { version?: unknown; app?: { version?: unknown } };
-    const version = packageMetadata.app?.version ?? packageMetadata.version;
-    if (version !== expectedVersion) {
+    const rawVersion = packageMetadata.app?.version ?? packageMetadata.version;
+    if (
+      typeof rawVersion !== 'string' ||
+      !RELEASE_VERSION_PATTERN.test(rawVersion)
+    ) {
       throw new HubError(
-        `Artifact version "${String(version)}" does not match release version "${expectedVersion}".`,
-        'ARTIFACT_VERSION_MISMATCH',
+        'Artifact package.json must contain a valid version.',
+        'INVALID_ARTIFACT_VERSION',
         422,
       );
     }
-    const schemaBytes = await readFile(
-      path.join(directory, CONFIG_SCHEMA_PATH),
+    const configTemplate = await readOptionalArtifactText(
+      directory,
+      CONFIG_TEMPLATE_PATH,
     );
-    const schema = JSON.parse(schemaBytes.toString('utf8')) as unknown;
-    assertSchemaDocument(schema);
-    return { schema, schemaDigest: sha256(schemaBytes) };
+    if (configTemplate !== null) validateYamlConfig(configTemplate);
+    return { version: rawVersion, configTemplate };
   } catch (error) {
     if (error instanceof HubError) throw error;
     throw new HubError(
@@ -655,102 +835,21 @@ async function inspectArtifact(
   }
 }
 
-function assertSchemaDocument(
-  value: unknown,
-): asserts value is AppConfigSchemaDocument {
-  if (
-    !isRecord(value) ||
-    value.formatVersion !== 1 ||
-    !Array.isArray(value.configs) ||
-    !Array.isArray(value.variants)
-  ) {
-    throw new HubError(
-      'Artifact config schema uses an unsupported format.',
-      'INVALID_CONFIG_SCHEMA',
-      422,
-    );
-  }
-  for (const entry of value.configs) {
-    if (
-      !isRecord(entry) ||
-      typeof entry.namespace !== 'string' ||
-      !isRecord(entry.schema)
-    ) {
-      throw new HubError(
-        'Artifact config schema contains an invalid config entry.',
-        'INVALID_CONFIG_SCHEMA',
-        422,
-      );
-    }
-  }
-}
-
-function validateConfig(
-  content: Record<string, unknown>,
-  document: AppConfigSchemaDocument,
-): void {
-  const ajv = new Ajv({
-    allErrors: true,
-    strictSchema: false,
-    useDefaults: false,
-  });
-  const errors: string[] = [];
-  for (const entry of document.configs) {
-    const value = content[entry.namespace];
-    if (value === undefined) continue;
-    const validate = ajv.compile(entry.schema);
-    if (!validate(value)) {
-      errors.push(...formatAjvErrors(entry.namespace, validate.errors));
-    }
-  }
-  for (const variant of document.variants) {
-    const entries = valueAtPath(content, variant.target);
-    if (entries === undefined) continue;
-    if (!isRecord(entries)) {
-      errors.push(`/${variant.target.replaceAll('.', '/')}: must be an object`);
-      continue;
-    }
-    for (const [name, value] of Object.entries(entries)) {
-      if (isRecord(value) && value[variant.discriminator] === variant.value) {
-        const validate = ajv.compile(variant.schema);
-        if (!validate(value)) {
-          errors.push(
-            ...formatAjvErrors(
-              `${variant.target.replaceAll('.', '/')}/${name}`,
-              validate.errors,
-            ),
-          );
-        }
-      }
-    }
-  }
-  if (errors.length) {
-    throw new HubError(
-      `Configuration is invalid: ${errors.join('; ')}`,
-      'INVALID_CONFIG',
-      422,
-    );
-  }
-}
-
-function formatAjvErrors(
-  namespace: string,
-  errors: readonly ErrorObject[] | null | undefined,
-): string[] {
-  return (errors ?? []).map(
-    (error) =>
-      `/${namespace}${error.instancePath}: ${error.message ?? 'invalid value'}`,
-  );
-}
-
-async function writeConfigAtomic(
+async function writeStructuredConfigAtomic(
   filePath: string,
   content: Record<string, unknown>,
+): Promise<void> {
+  await writeTextAtomic(filePath, serializeConfigDocument(filePath, content));
+}
+
+async function writeTextAtomic(
+  filePath: string,
+  content: string,
 ): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
   const temporary = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, serializeConfigDocument(filePath, content), {
+    await writeFile(temporary, ensureTrailingNewline(content), {
       mode: 0o600,
       flag: 'wx',
     });
@@ -759,17 +858,6 @@ async function writeConfigAtomic(
   } finally {
     await rm(temporary, { force: true });
   }
-}
-
-function parseConfigDocument(filePath: string, source: string): unknown {
-  const extension = path.extname(filePath).toLowerCase();
-  if (extension === '.json') return JSON.parse(source) as unknown;
-  if (extension === '.yml' || extension === '.yaml') return parseYaml(source);
-  throw new HubError(
-    `Unsupported config file extension "${extension || '(none)'}".`,
-    'UNSUPPORTED_CONFIG_FILE',
-    422,
-  );
 }
 
 function serializeConfigDocument(
@@ -788,37 +876,79 @@ function serializeConfigDocument(
   );
 }
 
-function valueAtPath(
-  content: Record<string, unknown>,
-  target: string,
-): unknown {
-  let current: unknown = content;
-  for (const segment of target.split('.')) {
-    if (!isRecord(current)) return undefined;
-    current = current[segment];
-  }
-  return current;
-}
-
-async function readOptionalFile(filePath: string): Promise<Uint8Array | null> {
+async function readOptionalArtifactText(
+  directory: string,
+  relativePath: string,
+): Promise<string | null> {
+  const filePath = path.join(directory, relativePath);
   try {
-    return await readFile(filePath);
+    const stats = await lstat(filePath);
+    if (!stats.isFile()) {
+      throw new HubError(
+        `Artifact entry "${relativePath}" must be a regular file.`,
+        'INVALID_ARTIFACT',
+        422,
+      );
+    }
+    return await readFile(filePath, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
 }
 
-async function restoreFile(
-  filePath: string,
-  previous: Uint8Array | null,
-): Promise<void> {
-  if (!previous) {
-    await rm(filePath, { force: true });
-    return;
+function validateYamlConfig(content: string): void {
+  try {
+    const value: unknown =
+      content.trim() === '' ? {} : (parseYaml(content) as unknown);
+    if (!isRecord(value)) throw new Error('the YAML root must be an object');
+  } catch (error) {
+    throw new HubError(
+      `Invalid config.yml: ${error instanceof Error ? error.message : String(error)}`,
+      'INVALID_CONFIG_FILE',
+      422,
+    );
   }
-  await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
-  await writeFile(filePath, previous, { mode: 0o600 });
+}
+
+function assertConfigMode(mode: unknown): asserts mode is HubConfigMode {
+  if (mode !== 'file' && mode !== 'external') {
+    throw new HubError(
+      'Configuration mode must be file or external.',
+      'INVALID_CONFIG_MODE',
+      422,
+    );
+  }
+}
+
+function assertActivation(
+  activation: unknown,
+): asserts activation is 'lazy' | 'eager' {
+  if (activation !== 'lazy' && activation !== 'eager') {
+    throw new HubError(
+      'Activation policy must be lazy or eager.',
+      'INVALID_ACTIVATION_POLICY',
+      422,
+    );
+  }
+}
+
+async function assertRegularArtifactFile(
+  directory: string,
+  relativePath: string,
+): Promise<void> {
+  const stats = await lstat(path.join(directory, relativePath));
+  if (!stats.isFile()) {
+    throw new HubError(
+      `Artifact entry "${relativePath}" must be a regular file.`,
+      'INVALID_ARTIFACT',
+      422,
+    );
+  }
+}
+
+function ensureTrailingNewline(content: string): string {
+  return content.endsWith('\n') ? content : `${content}\n`;
 }
 
 function sha256(value: Uint8Array): string {
@@ -830,8 +960,8 @@ function decodeApp(row: Row): HubAppRecord {
     id: String(row.id),
     name: String(row.name),
     description: nullableString(row.description),
-    createdAt: new Date(String(row.createdAt)),
-    updatedAt: new Date(String(row.updatedAt)),
+    createdAt: decodeDate(row.createdAt),
+    updatedAt: decodeDate(row.updatedAt),
   };
 }
 
@@ -843,10 +973,8 @@ function decodeRelease(row: Row): HubReleaseRecord {
     artifactKey: String(row.artifactKey),
     checksum: String(row.checksum),
     size: Number(row.size),
-    configSchema: decodeJson(row.configSchema) as AppConfigSchemaDocument,
-    configSchemaFormatVersion: Number(row.configSchemaFormatVersion),
-    configSchemaDigest: String(row.configSchemaDigest),
-    createdAt: new Date(String(row.createdAt)),
+    configTemplate: nullableString(row.configTemplate),
+    createdAt: decodeDate(row.createdAt),
   };
 }
 
@@ -863,15 +991,15 @@ function decodeDeployment(row: Row): HubDeploymentRecord {
     basePath: String(row.basePath),
     backend: 'in-process',
     activation: row.activation === 'eager' ? 'eager' : 'lazy',
-    config: decodeJson(row.config) as HubDeploymentRecord['config'],
+    config: decodeConfigBinding(row.config),
     error: nullableString(row.error),
-    createdAt: new Date(String(row.createdAt)),
-    updatedAt: new Date(String(row.updatedAt)),
+    createdAt: decodeDate(row.createdAt),
+    updatedAt: decodeDate(row.updatedAt),
   };
 }
 
 function encodeRelease(release: HubReleaseRecord): Row {
-  return { ...release, configSchema: JSON.stringify(release.configSchema) };
+  return { ...release };
 }
 
 function encodeApp(app: HubAppRecord): Row {
@@ -893,6 +1021,21 @@ function decodeJson(value: unknown): unknown {
   return typeof value === 'string' ? (JSON.parse(value) as unknown) : value;
 }
 
+function decodeConfigBinding(value: unknown): HubDeploymentRecord['config'] {
+  const decoded = decodeJson(value);
+  if (!isRecord(decoded)) return { mode: 'file' };
+  if (decoded.mode === 'external') {
+    return { mode: 'external' };
+  }
+  if (decoded.mode === 'file' || decoded.provider === 'file') {
+    return {
+      mode: 'file',
+      ...(typeof decoded.path === 'string' ? { path: decoded.path } : {}),
+    };
+  }
+  return { mode: 'file' };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -904,4 +1047,13 @@ function nullableString(value: unknown): string | null {
     return String(value);
   }
   throw new Error('Expected a scalar database value.');
+}
+
+function decodeDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value);
+  if (typeof value === 'string' && /^\d+$/u.test(value)) {
+    return new Date(Number(value));
+  }
+  return new Date(String(value));
 }

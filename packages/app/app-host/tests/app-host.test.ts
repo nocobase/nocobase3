@@ -40,7 +40,7 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
   );
   await writeFile(
     path.join(appRoot, 'dist', 'client', 'index.html'),
-    `<!doctype html><html><body><main>Customer App</main><script type="module" src="/assets/app.js"></script></body></html>`,
+    `<!doctype html><html><head><link rel="stylesheet" href="/main/assets/app.css"><meta property="og:image" content="/main/assets/preview.png"><link rel="preload" href="//cdn.example.com/assets/vendor.js"><link rel="preload" href="https://cdn.example.com/assets/vendor.css"><script src="/customer/assets/already.js"></script></head><body><main>Customer App</main><script type="module" src="/main/assets/app.js"></script></body></html>`,
   );
   await writeFile(
     path.join(appRoot, 'dist', 'client', 'assets', 'app.js'),
@@ -58,8 +58,11 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
             const url = new URL(request.url);
             if (url.pathname === "/") {
               const html = await readFile(path.join(scope.clientDir, "index.html"), "utf8");
-              return new Response(html.replaceAll('"/assets/', '"' + scope.assetsBasePath + "/"), {
-                headers: { "content-type": "text/html; charset=utf-8" },
+              return new Response(html, {
+                headers: {
+                  "content-type": "text/html; charset=utf-8",
+                  "content-length": String(Buffer.byteLength(html)),
+                },
               });
             }
 
@@ -120,6 +123,13 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
   const pageHtml = await page.text();
   expect(pageHtml).toContain('Customer App');
   expect(pageHtml).toContain('/customer/assets/app.js');
+  expect(pageHtml).toContain('/customer/assets/app.css');
+  expect(pageHtml).toContain('/customer/assets/preview.png');
+  expect(pageHtml).toContain('/customer/assets/already.js');
+  expect(pageHtml).toContain('//cdn.example.com/assets/vendor.js');
+  expect(pageHtml).toContain('https://cdn.example.com/assets/vendor.css');
+  expect(pageHtml).not.toContain('/main/assets/');
+  expect(page.headers.get('content-length')).toBeNull();
 
   const asset = await fetch(
     `http://127.0.0.1:${address.port}/customer/assets/app.js`,

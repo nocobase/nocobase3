@@ -16,6 +16,7 @@ import {
   type CreateHubAppInput,
   type DeployHubAppInput,
   type SaveHubConfigInput,
+  type UpdateHubSettingsInput,
 } from '../tokens.js';
 
 const SYSTEM_ADMINISTRATOR = 'system-administrator';
@@ -71,16 +72,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     );
     routes.post('/apps/:appId/releases', async (context) =>
       respond(context, async () => {
-        const version = context.req.header('x-release-version')?.trim();
-        if (!version) {
-          throw new HubError(
-            'x-release-version header is required.',
-            'VERSION_REQUIRED',
-            422,
-          );
-        }
         return await hub.createRelease(context.req.param('appId'), {
-          version,
           bytes: await readBody(context.req.raw, MAX_ARTIFACT_SIZE),
         });
       }),
@@ -94,6 +86,12 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         hub.saveConfig(context.req.param('appId'), input),
       );
     });
+    routes.put('/apps/:appId/settings', async (context) => {
+      const input = await context.req.json<UpdateHubSettingsInput>();
+      return await respond(context, () =>
+        hub.updateSettings(context.req.param('appId'), input),
+      );
+    });
     routes.post('/apps/:appId/deploy', async (context) => {
       const input = await context.req.json<DeployHubAppInput>();
       return await respond(context, () =>
@@ -102,6 +100,15 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
     routes.post('/apps/:appId/stop', async (context) =>
       respond(context, () => hub.stop(context.req.param('appId'))),
+    );
+    routes.post('/apps/:appId/start', async (context) =>
+      respond(context, () => hub.start(context.req.param('appId'))),
+    );
+    routes.post('/apps/:appId/refresh', async (context) =>
+      respond(context, () => hub.refresh(context.req.param('appId'))),
+    );
+    routes.delete('/apps/:appId', async (context) =>
+      respond(context, () => hub.remove(context.req.param('appId'))),
     );
     routes.post('/apps/:appId/restart', async (context) =>
       respond(context, () => hub.restart(context.req.param('appId'))),

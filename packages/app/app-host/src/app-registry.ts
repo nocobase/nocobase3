@@ -193,6 +193,7 @@ export class AppRuntimeRegistry {
   ): Promise<ReplaceAppDefinitionResult> {
     const id = definition.id;
     return this.withAppLock(id, async () => {
+      const startedAt = Date.now();
       const currentDefinition = this.definitions.get(id);
       const currentRuntime = this.runtimes.get(id);
       const nextDefinition = this.createDefinition(id, definition);
@@ -201,10 +202,21 @@ export class AppRuntimeRegistry {
         !definitionsEqual(currentDefinition, nextDefinition);
 
       if (!changed) {
+        const activationStartedAt = Date.now();
         const app =
           replaceOptions.activate && !currentRuntime
             ? await this.ensureActiveUnlocked(id)
             : (currentRuntime?.snapshot() ?? null);
+        this.logger?.info(
+          {
+            appId: id,
+            changed: false,
+            activationDurationMs: Date.now() - activationStartedAt,
+            destroyDurationMs: 0,
+            durationMs: Date.now() - startedAt,
+          },
+          'App definition replacement completed',
+        );
         return { definition: currentDefinition, app, changed: false };
       }
 
@@ -218,15 +230,18 @@ export class AppRuntimeRegistry {
       }
 
       let newRuntime: ActiveAppHandle;
+      const activationStartedAt = Date.now();
       try {
         newRuntime = await this.activateDefinition(nextDefinition);
       } catch (error) {
         throw new AppReloadFailedError(id, error);
       }
+      const activationDurationMs = Date.now() - activationStartedAt;
 
       this.definitions.set(id, nextDefinition);
       this.runtimes.set(id, newRuntime);
 
+      const destroyStartedAt = Date.now();
       if (currentRuntime) {
         try {
           await currentRuntime.destroy({
@@ -240,6 +255,18 @@ export class AppRuntimeRegistry {
           );
         }
       }
+      const destroyDurationMs = Date.now() - destroyStartedAt;
+
+      this.logger?.info(
+        {
+          appId: id,
+          changed: true,
+          activationDurationMs,
+          destroyDurationMs,
+          durationMs: Date.now() - startedAt,
+        },
+        'App definition replacement completed',
+      );
 
       return {
         definition: nextDefinition,
@@ -586,18 +613,22 @@ export class AppRuntimeRegistry {
 
     const startedAt = Date.now();
     try {
+      const factoryStartedAt = Date.now();
       const createApp = await this.resolveFactory(definition);
+      const factoryDurationMs = Date.now() - factoryStartedAt;
       const backend = this.backends.get(definition.backend);
       if (!backend) {
         throw new Error(
           `App backend "${definition.backend}" is not available on this host`,
         );
       }
+      const backendStartedAt = Date.now();
       const runtime = await backend.activate({
         definition,
         version,
         createApp,
       });
+      const backendDurationMs = Date.now() - backendStartedAt;
 
       // In-process runtimes emit `created` only after activation.
       const activatableRuntime = runtime as ActiveAppHandle & {
@@ -609,6 +640,15 @@ export class AppRuntimeRegistry {
 
       this.metrics.activations += 1;
       this.metrics.lastActivationDurationMs = Date.now() - startedAt;
+      this.logger?.info(
+        {
+          appId: definition.id,
+          factoryDurationMs,
+          backendDurationMs,
+          durationMs: this.metrics.lastActivationDurationMs,
+        },
+        'App runtime activation completed',
+      );
       return runtime;
     } catch (error) {
       this.metrics.activationFailures += 1;

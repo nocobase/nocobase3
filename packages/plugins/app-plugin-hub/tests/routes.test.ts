@@ -63,7 +63,6 @@ describe('@nocobase/app-plugin-hub API routes', () => {
       method: 'POST',
       headers: {
         'content-length': String(256 * 1024 * 1024 + 1),
-        'x-release-version': '1.0.0',
       },
       body: 'not-read',
     });
@@ -73,11 +72,120 @@ describe('@nocobase/app-plugin-hub API routes', () => {
       error: { code: 'ARTIFACT_TOO_LARGE' },
     });
   });
+
+  it('forwards configuration mode and YAML content', async () => {
+    const saveConfig = vi.fn<HubService['saveConfig']>().mockResolvedValue({
+      mode: 'file',
+      content: 'database:\n  dialect: sqlite\n',
+      path: '/app-volumes/customer/config.yml',
+    });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        saveConfig,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer/config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'file',
+        content: 'database:\n  dialect: sqlite\n',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(saveConfig).toHaveBeenCalledWith('customer', {
+      mode: 'file',
+      content: 'database:\n  dialect: sqlite\n',
+    });
+  });
+
+  it('refreshes one application from the Host status', async () => {
+    const refresh = vi.fn<HubService['refresh']>().mockResolvedValue({
+      app: { id: 'customer' },
+    } as never);
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        refresh,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer/refresh', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(refresh).toHaveBeenCalledWith('customer');
+  });
+
+  it('starts a previously deployed application', async () => {
+    const start = vi.fn<HubService['start']>().mockResolvedValue({
+      app: { id: 'customer' },
+    } as never);
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        start,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer/start', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(start).toHaveBeenCalledWith('customer');
+  });
+
+  it('updates application startup settings', async () => {
+    const updateSettings = vi
+      .fn<HubService['updateSettings']>()
+      .mockResolvedValue({ app: { id: 'customer' } } as never);
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        updateSettings,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ activation: 'lazy' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateSettings).toHaveBeenCalledWith('customer', {
+      activation: 'lazy',
+    });
+  });
+
+  it('removes one application for a system administrator', async () => {
+    const remove = vi.fn<HubService['remove']>().mockResolvedValue(undefined);
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        remove,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer', {
+      method: 'DELETE',
+    });
+
+    expect(response.status).toBe(200);
+    expect(remove).toHaveBeenCalledWith('customer');
+  });
 });
 
 function createApplication(
   role: 'anonymous' | 'member' | 'administrator',
-  listApps: HubService['listApps'],
+  service:
+    | HubService['listApps']
+    | (Partial<HubService> & Pick<HubService, 'listApps'>),
 ): AppPluginApplication {
   const container = new ServiceContainer();
   container.instance(authenticationToken, {
@@ -100,7 +208,12 @@ function createApplication(
         role === 'administrator' ? [{ key: 'system-administrator' }] : [],
     },
   } as AppAuthorization);
-  container.instance(hubServiceToken, { listApps } as HubService);
+  container.instance(
+    hubServiceToken,
+    (typeof service === 'function'
+      ? { listApps: service }
+      : service) as HubService,
+  );
   return {
     appName: 'hub',
     publicBasePath: '',

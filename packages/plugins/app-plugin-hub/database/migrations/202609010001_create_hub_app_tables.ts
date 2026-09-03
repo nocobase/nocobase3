@@ -19,9 +19,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('artifactKey', { length: 1024 }).notNull();
       collection.string('checksum', { length: 64 }).notNull();
       collection.bigInt('size').notNull();
-      collection.json('configSchema').notNull();
-      collection.integer('configSchemaFormatVersion').notNull();
-      collection.string('configSchemaDigest', { length: 64 }).notNull();
+      collection.text('configTemplate');
       collection.datetime('createdAt').notNull();
       collection.unique(['appId', 'version'], { mode: 'index' });
       collection.index(['appId', 'createdAt']);

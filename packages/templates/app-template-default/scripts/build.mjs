@@ -255,13 +255,6 @@ run('Build workflow artifacts', 'pnpm', [
   'tsconfig.node.json',
   './scripts/build-workflows.ts',
 ]);
-run('Build config schema', 'pnpm', [
-  'exec',
-  'tsx',
-  '--tsconfig',
-  'tsconfig.node.json',
-  './scripts/build-config-schema.ts',
-]);
 writeDistEnv();
 run('Generate server package', 'node', [
   './scripts/build-server-dist-package.mjs',

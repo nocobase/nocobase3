@@ -50,36 +50,43 @@ describe('AppHostSupervisor', () => {
     try {
       await supervisor.ensureStarted();
 
+      const deployment = {
+        id: 'demo',
+        appId: 'demo',
+        artifact: fixture.artifact,
+        desiredState: 'running' as const,
+        backend: 'in-process' as const,
+        activation: 'eager' as const,
+      };
       const result = await supervisor.applyDeploymentSet({
         revision: 1,
-        deployments: [
-          {
-            id: 'demo',
-            appId: 'demo',
-            artifact: fixture.artifact,
-            desiredState: 'running',
-            backend: 'in-process',
-            activation: 'eager',
-          },
-        ],
+        deployments: [deployment],
       });
       expect(result.status.deployments[0]).toMatchObject({
         appId: 'demo',
         observedState: 'running',
       });
 
+      const stopped = await supervisor.stopDeployment('demo');
+      expect(stopped.deployments[0]?.observedState).toBe('stopped');
+      const started = await supervisor.startDeployment(deployment);
+      expect(started.deployments[0]?.observedState).toBe('running');
+
       await supervisor.restart('test restart');
       const recovered = await (
         await supervisor.getManagementClient()
       ).getStatus();
       expect(recovered).toMatchObject({
-        desiredRevision: 1,
-        reconciledRevision: 1,
+        desiredRevision: 3,
+        reconciledRevision: 3,
       });
       expect(recovered.deployments[0]).toMatchObject({
         appId: 'demo',
         observedState: 'running',
       });
+
+      const removed = await supervisor.removeDeployment('demo');
+      expect(removed.deployments).toEqual([]);
     } finally {
       await supervisor.shutdown();
       AppHostSupervisor.resetInstance();

@@ -36,3 +36,44 @@ export function addBasePathToRedirectResponse(
     statusText: response.statusText,
   });
 }
+
+const ROOT_RELATIVE_ASSET_ATTRIBUTE =
+  /(\b(?:src|href|content)\s*=\s*["'])\/(?!\/)(?:[^"'<>?#]*\/)?assets\//gi;
+
+export async function addBasePathToHtmlResponse(
+  response: Response,
+  basePath: string,
+): Promise<Response> {
+  const contentType = response.headers.get('content-type');
+  if (
+    !contentType?.toLowerCase().startsWith('text/html') ||
+    response.body === null
+  ) {
+    return response;
+  }
+
+  const html = await response.text();
+  const normalizedBasePath =
+    basePath === '/' ? '' : `/${basePath.replace(/^\/+|\/+$/g, '')}`;
+  const rewrittenHtml = html.replace(
+    ROOT_RELATIVE_ASSET_ATTRIBUTE,
+    `$1${normalizedBasePath}/assets/`,
+  );
+
+  if (rewrittenHtml === html) {
+    return new Response(html, {
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+    });
+  }
+
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+
+  return new Response(rewrittenHtml, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}

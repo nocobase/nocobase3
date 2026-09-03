@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -81,6 +81,83 @@ describe('DeploymentCatalog', () => {
         dataDir: path.join(volumesDir, 'customer', 'storage'),
       },
     ]);
+  });
+
+  it('ignores the runtime-created public storage link in an installed deployment', async () => {
+    const { deploymentsDir, appDir } = await createAppWorkspace([
+      'dist/server/embedded.js',
+    ]);
+    const volumesDir = path.join(deploymentsDir, '..', 'volumes');
+    const publicStorageDir = path.join(
+      volumesDir,
+      'customer',
+      'storage',
+      'app',
+      'public',
+    );
+    const publicStorageLink = path.join(appDir, 'public', 'storage');
+    await mkdir(publicStorageDir, { recursive: true });
+    await mkdir(path.dirname(publicStorageLink), { recursive: true });
+    await symlink(
+      path.relative(path.dirname(publicStorageLink), publicStorageDir),
+      publicStorageLink,
+      'dir',
+    );
+    const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
+
+    await expect(catalog.discover()).resolves.toMatchObject([
+      {
+        id: 'customer',
+        server: { entrypoint: 'dist/server/embedded.js' },
+      },
+    ]);
+  });
+
+  it('rejects unexpected symbolic links in an installed deployment', async () => {
+    const { deploymentsDir, appDir } = await createAppWorkspace([
+      'dist/server/embedded.js',
+    ]);
+    const volumesDir = path.join(deploymentsDir, '..', 'volumes');
+    const publicStorageLink = path.join(appDir, 'public', 'storage');
+    await mkdir(path.dirname(publicStorageLink), { recursive: true });
+    await symlink('../dist', publicStorageLink, 'dir');
+    const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
+
+    await expect(catalog.discover()).rejects.toThrow(
+      'App deployment must not contain symbolic link',
+    );
+  });
+
+  it('rejects the storage link outside the installed deployment directory', async () => {
+    const { deploymentsDir } = await createAppWorkspace([
+      'dist/server/embedded.js',
+    ]);
+    const volumesDir = path.join(deploymentsDir, '..', 'volumes');
+    const stagingDir = path.join(deploymentsDir, '.customer.staging');
+    const publicStorageDir = path.join(
+      volumesDir,
+      'customer',
+      'storage',
+      'app',
+      'public',
+    );
+    await mkdir(path.join(stagingDir, 'dist', 'server'), { recursive: true });
+    await writeFile(
+      path.join(stagingDir, 'dist', 'server', 'embedded.js'),
+      'export const marker = true;\n',
+    );
+    await mkdir(publicStorageDir, { recursive: true });
+    await mkdir(path.join(stagingDir, 'public'), { recursive: true });
+    await symlink(
+      path.relative(path.join(stagingDir, 'public'), publicStorageDir),
+      path.join(stagingDir, 'public', 'storage'),
+      'dir',
+    );
+    const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
+
+    await expect(catalog.discoverAt('customer', stagingDir)).rejects.toThrow(
+      'App deployment must not contain symbolic link',
+    );
   });
 
   it('discovers client assets as optional app artifacts', async () => {

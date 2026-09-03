@@ -70,6 +70,12 @@ object by Drive key, version, app ID, and SHA-256 checksum. The host reads that
 object through its configured `@nocobase/drive` FS or S3 disk, verifies it,
 atomically deploys it to `app-deployments/<appId>`, prepares writable storage
 at `app-volumes/<appId>/storage`, and reports reconciled state back to the Hub.
+An installed-artifact marker lets later reconciliation of the same Drive key,
+version, app ID, and checksum reuse the expanded directory without downloading,
+hashing, or extracting the archive again. Replaced directories are removed in
+the background after the new runtime is active. Host logs report checksum,
+extraction, discovery, swap, activation, and previous-runtime destruction
+durations so slow deployments can be attributed to a concrete phase.
 For file configuration, the deployment set may select an absolute path or the default
 `app-volumes/<appId>/config` path. Non-file configuration providers are handled
 by the app and do not involve the host. A failed runtime replacement restores

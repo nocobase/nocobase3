@@ -33,7 +33,7 @@ export class ManagedReconciler {
   private desiredRevision = 0;
   private reconciledRevision = 0;
   private lastSetPayload: string | null = null;
-  private applyPromise: Promise<ApplyDeploymentSetResult> = Promise.resolve({
+  private operationPromise: Promise<unknown> = Promise.resolve({
     accepted: false,
     status: {
       mode: 'managed',
@@ -53,11 +53,88 @@ export class ManagedReconciler {
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult> {
-    const current = this.applyPromise
+    const current = this.operationPromise
       .catch(() => undefined)
       .then(() => this.applyDeploymentSetUnlocked(deploymentSet));
-    this.applyPromise = current;
+    this.operationPromise = current;
     return current;
+  }
+
+  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    return this.enqueue(async () => {
+      validateDeploymentSet({ revision: 1, deployments: [deployment] });
+      this.assertDeploymentIdentity(deployment);
+      const revision = this.nextRevision();
+      await this.reconcileDeployment(revision, deployment);
+      this.reconciledRevision = revision;
+      return this.getStatus();
+    });
+  }
+
+  startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+    return this.enqueue(async () => {
+      const running = {
+        ...deployment,
+        desiredState: 'running' as const,
+        activation: 'eager' as const,
+      };
+      validateDeploymentSet({ revision: 1, deployments: [running] });
+      this.assertDeploymentIdentity(running);
+      const revision = this.nextRevision();
+      if (this.registry.has(deployment.appId)) {
+        const app = await this.registry.ensureActive(deployment.appId);
+        this.statuses.set(deployment.id, {
+          id: deployment.id,
+          appId: deployment.appId,
+          desiredState: 'running',
+          observedState: 'running',
+          revision,
+          app,
+          error: null,
+        });
+      } else {
+        await this.reconcileDeployment(revision, running);
+      }
+      this.reconciledRevision = revision;
+      return this.getStatus();
+    });
+  }
+
+  stopDeployment(appId: string): Promise<HostStatus> {
+    return this.enqueue(async () => {
+      const status = this.requireStatus(appId);
+      const revision = this.nextRevision();
+      await this.registry.evict(appId, {
+        reason: `deployment ${status.id} stopped`,
+      });
+      this.statuses.set(status.id, {
+        ...status,
+        desiredState: 'stopped',
+        observedState: 'stopped',
+        revision,
+        app: null,
+        error: null,
+      });
+      this.reconciledRevision = revision;
+      return this.getStatus();
+    });
+  }
+
+  removeDeployment(appId: string): Promise<HostStatus> {
+    return this.enqueue(async () => {
+      const revision = this.nextRevision();
+      const status = [...this.statuses.values()].find(
+        (candidate) => candidate.appId === appId,
+      );
+      await this.registry.unregister(appId, {
+        reason: status
+          ? `deployment ${status.id} removed`
+          : `app ${appId} removed`,
+      });
+      if (status) this.statuses.delete(status.id);
+      this.reconciledRevision = revision;
+      return this.getStatus();
+    });
   }
 
   getStatus(): HostStatus {
@@ -145,7 +222,7 @@ export class ManagedReconciler {
     spec: HostDeploymentSpec,
   ): Promise<void> {
     if (spec.desiredState === 'stopped') {
-      await this.registry.unregister(spec.appId, {
+      await this.registry.evict(spec.appId, {
         reason: `deployment ${spec.id} stopped`,
       });
       this.statuses.set(spec.id, {
@@ -213,6 +290,44 @@ export class ManagedReconciler {
         app: this.registry.snapshot(spec.appId) ?? null,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const current = this.operationPromise
+      .catch(() => undefined)
+      .then(operation);
+    this.operationPromise = current;
+    return current;
+  }
+
+  private nextRevision(): number {
+    this.desiredRevision += 1;
+    return this.desiredRevision;
+  }
+
+  private requireStatus(appId: string): HostDeploymentStatus {
+    const status = [...this.statuses.values()].find(
+      (candidate) => candidate.appId === appId,
+    );
+    if (!status) throw new Error(`Deployment for app "${appId}" was not found`);
+    return status;
+  }
+
+  private assertDeploymentIdentity(deployment: HostDeploymentSpec): void {
+    const statusById = this.statuses.get(deployment.id);
+    if (statusById && statusById.appId !== deployment.appId) {
+      throw new Error(
+        `Deployment "${deployment.id}" cannot change app ID from "${statusById.appId}" to "${deployment.appId}"`,
+      );
+    }
+    const statusByAppId = [...this.statuses.values()].find(
+      (status) => status.appId === deployment.appId,
+    );
+    if (statusByAppId && statusByAppId.id !== deployment.id) {
+      throw new Error(
+        `App "${deployment.appId}" is already managed by deployment "${statusByAppId.id}"`,
+      );
     }
   }
 }

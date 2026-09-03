@@ -25,7 +25,10 @@ import type {
   AppScope,
   AppSnapshot,
 } from './app-types.ts';
-import { addBasePathToRedirectResponse } from './redirects.ts';
+import {
+  addBasePathToHtmlResponse,
+  addBasePathToRedirectResponse,
+} from './redirects.ts';
 
 export interface InProcessAppHandleOptions {
   version: number;
@@ -228,7 +231,11 @@ export class InProcessAppHandle implements AppScope, ActiveAppHandle {
         durationMs: Date.now() - startedAt,
         activeRequests: this.activeRequests,
       });
-      return addBasePathToRedirectResponse(response, this.basePath);
+      const mountedResponse = await addBasePathToHtmlResponse(
+        response,
+        this.basePath,
+      );
+      return addBasePathToRedirectResponse(mountedResponse, this.basePath);
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
       this.emit('app:requestError', {

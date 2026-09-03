@@ -1,4 +1,3 @@
-import type { AppConfigSchemaDocument } from '@nocobase/app-server/config';
 import type {
   HostDeploymentSet,
   HostStatus,
@@ -27,14 +26,14 @@ export interface HubReleaseRecord {
   readonly artifactKey: string;
   readonly checksum: string;
   readonly size: number;
-  readonly configSchema: AppConfigSchemaDocument;
-  readonly configSchemaFormatVersion: number;
-  readonly configSchemaDigest: string;
+  readonly configTemplate: string | null;
   readonly createdAt: Date;
 }
 
-export interface HubFileConfigBinding {
-  readonly provider: 'file';
+export type HubConfigMode = 'file' | 'external';
+
+export interface HubConfigBinding {
+  readonly mode: HubConfigMode;
   readonly path?: string;
 }
 
@@ -49,7 +48,7 @@ export interface HubDeploymentRecord {
   readonly basePath: string;
   readonly backend: 'in-process';
   readonly activation: 'lazy' | 'eager';
-  readonly config: HubFileConfigBinding;
+  readonly config: HubConfigBinding;
   readonly error: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -69,24 +68,26 @@ export interface CreateHubAppInput {
 }
 
 export interface CreateHubReleaseInput {
-  readonly version: string;
   readonly bytes: Uint8Array;
 }
 
 export interface HubConfigDocument {
-  readonly content: Record<string, unknown>;
-  readonly releaseId: string | null;
-  readonly path: string;
+  readonly mode: HubConfigMode;
+  readonly content: string | null;
+  readonly path: string | null;
 }
 
 export interface SaveHubConfigInput {
-  readonly releaseId: string;
-  readonly content: Record<string, unknown>;
+  readonly mode: HubConfigMode;
+  readonly content?: string;
 }
 
 export interface DeployHubAppInput {
   readonly releaseId: string;
-  readonly config?: Record<string, unknown>;
+}
+
+export interface UpdateHubSettingsInput {
+  readonly activation: 'lazy' | 'eager';
 }
 
 export interface HubService {
@@ -104,9 +105,16 @@ export interface HubService {
     appId: string,
     input: SaveHubConfigInput,
   ): Promise<HubConfigDocument>;
+  updateSettings(
+    appId: string,
+    input: UpdateHubSettingsInput,
+  ): Promise<HubAppDetail>;
   deploy(appId: string, input: DeployHubAppInput): Promise<HubAppDetail>;
+  refresh(appId: string): Promise<HubAppDetail>;
+  start(appId: string): Promise<HubAppDetail>;
   stop(appId: string): Promise<HubAppDetail>;
-  restart(appId: string): Promise<HostStatus>;
+  remove(appId: string): Promise<void>;
+  restart(appId: string): Promise<HubAppDetail>;
   hostStatus(): Promise<HostStatus>;
   restoreDesiredState(): Promise<void>;
   createDeploymentSet(): Promise<HostDeploymentSet>;
