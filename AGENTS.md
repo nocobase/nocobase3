@@ -222,6 +222,8 @@ So the question is where the importing code runs, and then what the import actua
 
 When the check reports something, there are two correct fixes and picking the wrong one is worse than the original: declare it in `dependencies` if server code genuinely imports it, or stop importing it from server code if it is client or build-time code that leaked across. Adding a declaration to silence the check trades a startup crash for a dependency every deployment carries forever.
 
+`pnpm plugin:create` emits a generated plugin's `AGENTS.md` carrying this rule, so a plugin created tomorrow is told where a dependency goes before anyone adds one. When the rule changes here, change `packages/tools/create-plugin/template/AGENTS.md` in the same commit — the two are kept in step by a test, but only for the files' existence, not their content.
+
 ## Language
 
 Anything a person outside the team can read is written in English. Anything only the team reads may be written in Chinese.
