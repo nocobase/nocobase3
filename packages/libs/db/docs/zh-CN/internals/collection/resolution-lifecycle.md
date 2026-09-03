@@ -1,184 +1,89 @@
 ---
 title: Collection 解析生命周期
-description: 说明主数据库和外部数据库的 Schema 如何与补充 Metadata 合并，以及完整 Collection 如何缓存和失效。
+description: 说明 connection.collections 从命名索引、Schema Inspector 和 Metadata Store 加载数据，到解析、缓存、失效与事务提交的当前流程。
 ---
 
 # Collection 解析生命周期
 
-> **文档类型：内部实现。** 业务代码入口见 [`connection.collections`](../../collections/overview.md)；本页解释 Managed/External 来源、解析与缓存生命周期。
-
-> `SchemaInspector`、`CollectionResolver`、`CollectionRegistry`、`connection.collections` 以及
-> Builder、Metadata Service、Collection Registry 和 V1 Store 后端均已接入本生命周期；运行时不再保留
-> 旧完整定义 Store 兼容路径。
-
-完整 Collection 由物理事实和补充 Metadata 共同派生：
+`connection.collections` 按逻辑名称读取 Collection。一次未命中缓存的 `get(name)` 经过以下阶段：
 
 ```text
-Physical Schema + Collection Metadata
-  -> Collection Resolver
-  -> Complete CollectionDefinition
-  -> Collection Registry
+logical name
+  -> CollectionNamingIndex resolves physical table name
+  -> Schema Inspector reads PhysicalCollectionSchema
+  -> Metadata Store reads the document and revision
+  -> CollectionResolver validates and merges inputs
+  -> Registry caches CollectionResolutionResult
+  -> caller receives a clone
 ```
 
-## 主数据库
+## 初始化与命名索引
 
-主数据库以 Migration 作为物理 Schema 变更的权威来源：
+Registry 首次使用时初始化 Metadata Store，并通过分页摘要建立 `CollectionNamingIndex`。索引合并 Connection 命名和每个文档的局部命名，用于：
 
-```text
-Migration
-  -> Collection Builder
-  -> Physical Schema
-  -> Supplemental Metadata
-  -> Collection Resolver
-  -> Collection Registry
-```
+- 从逻辑 Collection 名得到物理表名；
+- 从物理表名反向得到逻辑名；
+- 检测两个逻辑名映射到同一物理表；
+- 为列表和扫描计算需要读取的物理表名前缀。
 
-Builder 执行物理 Schema 操作，并仅将补充部分写入 Metadata Store。它不会把执行后的物理 Schema
-再复制一份到 Store 中作为第二个权威来源。
+命名不能确定性反向映射时，Registry 报告 `COLLECTION_NAME_CONFLICT`，不会猜测名称。
 
-例如：
+## 单个读取
 
-```ts
-await builder.createCollection('orders', (collection) => {
-  collection.title('Orders');
-  collection.string('orderNo').notNullable().title('Order number');
-});
-```
+`get(name)` 返回解析后的 `CollectionDefinition | undefined`：
 
-`string()` 和 `notNullable()` 编译为物理 Schema。持久化文档只包含：
+- 物理对象和 Metadata 都不存在：返回 `undefined`；
+- Metadata 存在但物理对象不存在：报告 `COLLECTION_SCHEMA_DRIFT`；
+- 物理对象存在：进入 Resolver；
+- Resolver 发现不一致：抛出带稳定 issue code 和 path 的 `CollectionResolutionError`。
 
-```ts
-{
-  version: 1,
-  name: 'orders',
-  title: 'Orders',
-  fields: {
-    orderNo: {
-      title: 'Order number',
-    },
-  },
-}
-```
+`getPhysical(name)` 使用同一逻辑名映射，但只返回物理结构。`getResolution(name)` 还返回 inspection completeness 和 warning，适合审计工具判断结果是否完整。
 
-如果 Collection 没有补充 Metadata，并且逻辑名称可以完全推导，Store 无需仅为了重复表示它的存在而保存
-空文档。
+## 列表与扫描
 
-Builder 在编译 alter/drop 等操作时通过 `connection.collections` 读取 Inspector 与 Metadata 合并后的完整
-定义。DDL 成功后，它按受影响的逻辑 Collection 精确失效 Registry。字段 title/description 和 relation
-进入补充文档；type、nullable、default、index 和 constraint 等物理事实不会复制进 Store。删除物理字段时，
-同名 field/relation Metadata 也会清除。
+`list()` 从 Inspector 获取轻量物理摘要，再补充 Metadata 中的标题和描述，不解析所有 Field。它会过滤 Database Metadata Store 使用的内部表。
 
-## 外部数据库
+`scan()` 逐个读取完整 Physical Schema 和 Metadata，解析后以 `AsyncIterable<CollectionDefinition>` 返回，避免一次把整个数据库放进内存。
 
-外部 Schema 不属于 NocoBase Migration 的管理范围：
+## 缓存与并发
 
-```text
-External Physical Schema
-  -> Schema Inspector
-  -> Inferred Logical Schema
-  + Module/File Metadata Store
-  -> Collection Resolver
-  -> Collection Registry
-```
+成功的解析结果按逻辑 Collection 名缓存。同一个名称的并发首次读取共享 in-flight Promise，避免重复 introspection。
 
-Introspection 可以推导有明确外键支持的 relation。仅基于命名规则推测的 relation 应先作为候选，直到工具、
-Agent 或开发者确认后再写入补充 Metadata。修改外部 Metadata 永远不能修改外部数据库的物理 Schema。
+失败、连接错误和不存在的 `undefined` 结果不会长期缓存。返回给调用方的对象经过复制，调用方修改它不会污染 Registry 中的结果。
 
-## 解析规则
+## 失效
 
-各类信息的职责保持明确：
+| 操作               | 行为                                           |
+| ------------------ | ---------------------------------------------- |
+| `invalidate(name)` | 清除指定 Collection 的 cache 和 in-flight load |
+| `invalidate()`     | 清除全部解析缓存和 Naming Index                |
+| `refresh(name)`    | 失效指定名称后立即重新解析                     |
+| Metadata 命名变化  | 失效相关 Collection，并重建 Naming Index       |
 
-```text
-物理结构    Schema Inspector
-应用语义    Metadata Store
-完整模型    Collection Resolver
-```
+Builder、Migration 和 Metadata Service 在成功修改后主动记录失效。外部系统直接改变数据库时，掌握该变化的调用方必须显式 `refresh()` 或 `invalidate()`。
 
-Metadata 不能将物理 `varchar` 列改成 integer，也不能修改物理可空性。Resolver 应执行以下校验：
+## Relation 校验
 
-- 已存在物理 Field 的 Metadata 与该 Field 合并；
-- 普通 `fields` 项如果找不到物理 Field，应报告 Schema drift；
-- relation 引用的本地 key 不存在时应报校验错误；
-- 单个 Collection 解析只校验 relation 的本地 key；target、target key 和 through Collection 由显式的
-  `CollectionRelationValidator` 图校验处理；
-- fields 和 relations 中的重复名称必须拒绝；
-- introspection 遇到无法唯一确定的反向命名时应报告问题，不能猜测。
+Resolver 先校验单个 Collection 内能够确认的 relation 信息。`validateRelations(name?)` 再遍历一个可达关系图或全部 Collection，确认：
 
-## Connection Collections API
+- target Collection 存在；
+- sourceKey 和 targetKey 存在；
+- `hasOne` / `hasMany` 的 foreign key 位于目标 Collection；
+- `belongsToMany` 的 through Collection、foreignKey 和 otherKey 存在。
 
-应用和 Agent 通过 Connection 读取解析后的 Collection：
+## 事务
 
-```ts
-const orders = await db.connection().collections.get('orders');
-const externalOrders = await db
-  .connection('external')
-  .collections.get('orders');
-```
+事务 Connection 拥有独立 Registry。事务中的 Metadata 和 Schema 变更先使事务内缓存失效，并由 collector 记录需要传播的失效范围。
 
-`get(name)` 惰性 introspect 并解析一个 Collection。`list()` 必须分页，并且只返回轻量摘要；它不能隐式解析
-大型数据库中的所有表。全量 introspection 应使用显式的 `scan()` 或 `export()` 操作。
+提交前会在事务视图中验证受影响的 relation。数据库事务和必要的 Metadata Store 回放成功后，collector 才把失效应用到父 Connection；失败或回滚不会发布父级失效。
 
-第一版不增加重复的 `db.collections()` 快捷方式。
+## Rename 安全边界
 
-## Registry 失效
-
-`CollectionRegistry` 在内存中缓存完整的解析结果。遇到以下情况时应使缓存失效：
-
-- Builder 成功修改 Schema；
-- Metadata Service 成功写入；
-- 完成一批 Migration；
-- Module 或 File Metadata 重载；
-- 检测到物理 Schema drift。
-
-可能时应只使当前 Collection 失效。Relation 变更可能还需要使相关 target Collection 失效。循环 relation
-通过分阶段图校验处理，普通 `get()` 不递归等待完整关系图。
-
-## Agent Snapshot
-
-完整的解析后 Collection 可以导出为供 Agent 使用的文件：
-
-```text
-.collection-cache/
-└── external/
-    └── orders.collection.json
-```
-
-该 Snapshot 是可生成、可丢弃和可重建的派生产物。它不是 Metadata Store 的输入，也不是新的权威来源。
-
-## Rename 与原子性
-
-Rename 可能同时影响物理表或 View、Metadata、relation target、Registry 项和 Snapshot。如果无法原子协调这些变更，
-第一版必须在执行 DDL 之前拒绝 rename。
-
-Store 层的 `delete(old) + put(new)` 不是原子 Collection rename。完整操作由
-`CollectionBuilder.renameCollection()` 协调。只有当当前数据库方言支持将物理 Schema 操作和所有 Metadata
-变更放在同一原子事务中时，Database Store 事务才足够安全。Module 和 File Metadata 的 rename 是源码或
-文件变更，不由运行时 Builder 执行。
-
-已保存 Metadata 与确定性命名规则冲突时，启动或升级校验必须输出准确差异并停止。系统不能自动 rename
-生产数据库对象，也不能静默重写 Metadata。
-
-## 当前实现状态
-
-本生命周期描述的能力已全部落地：
-
-1. Physical Schema、Metadata V1、稳定错误和 legacy extraction 已实现；
-2. 五种数据库的 `SchemaInspector` 已实现；
-3. `CollectionResolver`、本地校验和跨 Collection relation 图校验已实现；
-4. revision/CAS Store、Naming Index、Registry、Service 和 Connection API 已实现；
-5. Database、Module、In-memory 和 transaction Store 后端已实现；
-6. Builder、Migration 和 transaction 已接入 Metadata 同步与 Registry 失效；
-7. 旧完整 `CollectionDefinition` Store、legacy runtime adapter 和 Builder Metadata-only API 已移除。
-
-Schema Snapshot、Agent Snapshot、可写 JSON/YAML File Store 和声明式命名 Store 注册表是独立的后续能力，
-不属于当前解析链路的运行时能力，也不是该链路的依赖。
+Collection rename 会同时影响物理对象、Metadata 文档名、relation target、Naming Index 和 Registry cache。当前 Builder 在不能原子协调这些对象时，会在 DDL 之前拒绝 rename。不要绕过该保护手工组合一半 rename 操作。
 
 ## 相关文档
 
-- [Collection 架构](./architecture.md)
-- [Schema Inspector 设计](../schema-inspector/architecture.md)
-- [Collection Resolver 设计](./resolver.md)
-- [Collection Registry 设计](./registry.md)
-- [Metadata Store 设计](../metadata/store.md)
-- [Metadata Store 后端](../metadata/store-backends.md)
-- [Collection Metadata Service 设计](../metadata/service.md)
+- [Collection 当前架构](./architecture.md)
+- [Collection Resolver](./resolver.md)
+- [Collection Registry](./registry.md)
+- [`connection.collections`](../../collections/overview.md)

@@ -1,3 +1,8 @@
+---
+title: Builder 方言能力
+description: 比较 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server 的 Schema 能力，并处理 warning、fallback 与 strict 模式。
+---
+
 # 方言能力
 
 Collection DSL 的目标是屏蔽常见数据库差异，但底层数据库能力并不完全一致。Agent 和开发者都不能假设所有方言支持相同能力。

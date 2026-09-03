@@ -1,3 +1,8 @@
+---
+title: Builder 关系字段
+description: 定义 belongsTo、hasOne、hasMany 和 belongsToMany metadata，并区分关系说明、本地列、索引和外键约束。
+---
+
 # 关系字段
 
 Collection Builder 当前支持四种关系字段：

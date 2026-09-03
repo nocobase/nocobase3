@@ -20,7 +20,7 @@ description: 使用 db.query() 或 connection.query 执行 select、insert、upd
 | External Connection        | 可执行记录读写，受数据库账号权限控制 |
 | 不负责                     | Repository、relation-aware CRUD      |
 
-V1 按操作类型拆分入口，整体参考 Kysely：
+当前 API 按操作类型拆分入口，整体参考 Kysely：
 
 ```ts
 interface QueryAdapter {
@@ -102,16 +102,14 @@ await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 
 如果 Connection 的 `tablePrefix` 是 `app_`，上面的表和列会分别归一化为 `app_orders` 和 `order_no`。示例中的 Collection 局部前缀恰好与 Connection 一致；如果它们不同，Query 仍只使用 Connection 配置，无法从 Collection Metadata 得知局部覆盖。
 
-Repository 提案使用 Filter Builder 表达应用层条件。`db.repository()` 当前尚未实现，不要把提案示例复制到运行时代码；详见 [Repository 提案](../proposals/repository/overview.md) 和 [Filter Builder 提案](../proposals/repository/filter-builder.md)。
+当前包不提供 `db.repository()`。需要了解候选的应用层查询设计时，可以阅读 [Repository 提案](../proposals/repository/overview.md)；提案中的接口不能用于当前运行时代码。
 
 ## 当前边界
 
-- Repository 暂未实现。
-- Model 暂未实现。
-- Transformer 暂未实现。
+- 不提供 `db.repository()` 或 Collection-aware Filter。
 - QueryAdapter 是数据库层查询接口，不是 Collection-aware 查询接口。
-- V1 不提供 raw API；以后如有需要，应作为 unsafe escape hatch 单独设计。
-- 复杂业务查询可以后续通过 Repository 或自定义 query 封装补充。
+- QueryAdapter 不提供 raw SQL API。确实需要数据库专用能力时，可以通过 `await connection.client()` 获取底层 client；该逃生口不保证跨数据库可移植，也不会应用高层 Schema guard。
+- 复杂业务查询应在业务模块中封装，并明确其方言和命名假设。
 
 ## Agent 注意事项
 
@@ -121,7 +119,7 @@ Repository 提案使用 Filter Builder 表达应用层条件。`db.repository()`
 - 复杂条件使用 `where((eb) => ...)`。
 - 不要生成二参 `where(field, value)`。
 - 不要生成 `orWhere()`、`whereIn()`、`whereNull()` 等 Knex 风格快捷方法。
-- 不要生成 raw SQL。
+- 优先使用 QueryAdapter，不要在可移植查询中生成 raw SQL；只有明确需要数据库专用能力时才使用 `connection.client()`。
 - 不要把 `QueryAdapter` 当 Repository 使用。
 - Query 表来源参数使用 Connection 相对标识符，不写 Connection 前缀。
 - 需要解析 Collection 级 `tablePrefix` 时，不要使用 `db.query()` 假装 Repository。

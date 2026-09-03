@@ -57,4 +57,5 @@ createDatabaseManager(config)
 
 - 当前可用：DatabaseManager、DatabaseConnection、Builder、Query、Collections、Schema Inspector、Migration、Seed、Collection Metadata。
 - 高级逃生口：`connection.schema`、`connection.client()`、独立 `createMigrator()`、独立 `createSeeder()`。
-- 规划中、不可生成：Repository、Select AST、Filter Builder、Filter AST、Sort AST、Writable File Metadata Store。
+- 提案中、不可生成：Repository、Select AST、Filter Builder、Filter AST、Sort AST。
+- 当前不提供：Writable File Metadata Store。

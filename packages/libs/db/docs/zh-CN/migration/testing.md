@@ -1,3 +1,8 @@
+---
+title: Migration 测试
+description: 通过真实 Migrator 和数据库验证 migration 的物理 Schema、Metadata、数据结果、回滚、checksum 与安装链路。
+---
+
 # Migration 测试
 
 Migration 测试应执行 package 中真实的 migration 文件，并验证升级后的物理 Schema、
@@ -389,7 +394,7 @@ expect(users).toMatchObject({
 Schema Inspector 使用物理表名和列名；Resolved Collections 使用逻辑 Collection 名和 Field
 名。只有 Schema Inspector 尚未暴露、且 migration 明确依赖的方言特有信息，才考虑用
 `connection.client()` 做最后的只读验证。不要为了方便断言而直接使用底层 client 执行 DDL。
-Schema Inspector 的返回结构和更多示例见 [Schema Inspector 内部实现](../internals/schema-inspector/architecture.md) 和
+Schema Inspector 的返回结构和更多示例见 [Schema Inspector 物理模型](../internals/schema-inspector/physical-schema-model.md) 和
 [Schema Inspector 示例](../schema-inspector/examples.md)。
 
 不要只断言 runner 没有抛出异常；测试必须验证 migration 承诺的实际结果。

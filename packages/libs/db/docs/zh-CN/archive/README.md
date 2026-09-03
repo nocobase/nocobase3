@@ -16,3 +16,4 @@ description: 收录已被当前实现或文档取代的 DB 历史资料；这些
 ## 归档内容
 
 - [Collection 确定性物理命名设计历史](./design-history/deterministic-collection-naming.md)：当前契约见[命名概念](../concepts/naming/overview.md)、[Builder 命名](../builder/naming.md)和 [Query 命名](../query/naming.md)。
+- [v2 到 v3 的数据源模型变化](./version-history/v2-v3-data-source-model.md)：当前契约见 [Collection 概念](../concepts/collection.md)、[QueryAdapter](../query/overview.md)和 [Resolved Collections](../collections/overview.md)。

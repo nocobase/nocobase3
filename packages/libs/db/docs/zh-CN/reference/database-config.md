@@ -1,3 +1,8 @@
+---
+title: DatabaseConfig
+description: 创建 DatabaseManager 时使用的默认连接、Connection 配置、Schema 管理模式和 Metadata Store 配置参考。
+---
+
 # DatabaseConfig
 
 `DatabaseConfig` 用于创建 `DatabaseManager`。
@@ -192,7 +197,7 @@ type NamingOptions = {
 
 ## metadataStore
 
-`metadataStore` 是 V1 补充文档 Store，可放在 manager 或 connection 级；connection 级优先：
+`metadataStore` 是补充文档 Store，可放在 Manager 或 Connection 级；Connection 级优先：
 
 ```ts
 const metadataStore = new InMemoryCollectionMetadataStore();

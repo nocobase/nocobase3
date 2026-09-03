@@ -24,5 +24,8 @@ description: 面向 DB 包维护者的当前实现说明；业务代码应优先
 
 ## Schema Inspector
 
-- [Schema Inspector 实现](./schema-inspector/architecture.md)
+- [Schema Inspector 内部架构](./schema-inspector/architecture.md)
+- [Schema Inspector 物理模型](./schema-inspector/physical-schema-model.md)
+- [Schema Inspector 方言行为](./schema-inspector/dialects.md)
+- [Schema Inspector 分页、完整性与错误](./schema-inspector/pagination-and-errors.md)
 - 当前 API 示例见 [Schema Inspector 示例](../schema-inspector/examples.md)

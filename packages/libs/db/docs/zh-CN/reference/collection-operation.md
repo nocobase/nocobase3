@@ -1,3 +1,8 @@
+---
+title: CollectionOperation
+description: Builder 执行计划的结构参考，并说明何时选择 Fluent DSL、Object DSL 或 CollectionOperation 数组。
+---
+
 # CollectionOperation
 
 `CollectionOperation` 是 Builder 的执行计划格式。它适合 file sync、snapshot diff、批量 apply 和审计。

@@ -1,3 +1,8 @@
+---
+title: 批量应用 CollectionOperation
+description: 使用 builder.apply 执行结构化 CollectionOperation，进行批量变更、dry-run、SQL 预览和影响审计。
+---
+
 # apply 和 CollectionOperation
 
 `builder.apply()` 接收 `CollectionOperation[]`，它是 Collection Builder 的执行计划层。

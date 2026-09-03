@@ -1,3 +1,8 @@
+---
+title: BuilderResult
+description: Builder 执行结果的字段参考，包括 Collection operation、Schema operation、SQL、warning 和影响等级。
+---
+
 # BuilderResult
 
 Builder API 返回 `BuilderResult`，用于描述执行结果、编译结果、SQL 预览和影响等级。
@@ -23,7 +28,7 @@ result.operations;
 
 ## metadata
 
-`metadata` 是预留的变更摘要字段，当前实现暂未填充。Agent、CLI 或 UI 需要审计时，应优先读取 `operations`、`schemaOperations`、`warnings` 和 `impact`。
+`metadata` 字段当前不填充。Agent、CLI 或 UI 需要审计时，应读取 `operations`、`schemaOperations`、`warnings` 和 `impact`，不得依赖 `metadata`。
 
 ## schemaOperations
 

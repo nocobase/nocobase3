@@ -1,3 +1,8 @@
+---
+title: 创建与维护 View Collection
+description: 使用结构化查询创建、替换和刷新普通视图或物化视图，并处理命名与方言能力差异。
+---
+
 # View Collection
 
 View Collection 用于把数据库视图映射成 Collection。

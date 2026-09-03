@@ -28,8 +28,7 @@ PostgreSQL Connection 配置了 `schema: ['tenant_a', 'public']` 时，可以返
 ];
 ```
 
-`default: true` 表示省略 schema 时首先用于解析未限定物理名称。MySQL 第一版只返回当前 database；SQLite
-第一版返回：
+`default: true` 表示省略 schema 时首先用于解析未限定物理名称。MySQL 当前只返回 Connection 使用的 database；SQLite 当前只返回：
 
 ```ts
 [{ name: 'main', default: true }];
@@ -777,12 +776,15 @@ const physicalOrderItems =
   await connection.collections.getPhysical('orderItems');
 ```
 
-只有外部数据库接入、Schema Snapshot、drift 检查或数据库结构审计等底层工具需要直接使用
+只有外部数据库接入、drift 检查或数据库结构审计等底层工具需要直接使用
 `connection.schemaInspector`。
 
 ## 相关文档
 
-- [Schema Inspector 内部实现](../internals/schema-inspector/architecture.md)
+- [Schema Inspector 内部架构](../internals/schema-inspector/architecture.md)
+- [物理 Schema 模型](../internals/schema-inspector/physical-schema-model.md)
+- [方言行为](../internals/schema-inspector/dialects.md)
+- [分页、完整性与错误](../internals/schema-inspector/pagination-and-errors.md)
 - [Collection Resolver 内部实现](../internals/collection/resolver.md)
 - [Collection Registry 内部实现](../internals/collection/registry.md)
 - [Collection 解析生命周期](../internals/collection/resolution-lifecycle.md)

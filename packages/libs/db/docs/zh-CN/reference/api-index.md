@@ -119,7 +119,6 @@ description: 当前已实现并公开的 Database、Builder、Query、Collection
 
 - `defineCollectionMetadata(document)`
 - `validateCollectionMetadataDocument(input)`
-- `extractLegacyCollectionMetadata(input, options?)`
 - `CollectionMetadataValidationError`
 
 ### Store
@@ -138,6 +137,12 @@ description: 当前已实现并公开的 Database、Builder、Query、Collection
 - `CollectionMetadataPatchError`
 
 文档：[Collection Metadata 概览](../collection-metadata/overview.md)、[Metadata Store](../collection-metadata/metadata-store.md)、[Metadata Service](../collection-metadata/collection-metadata-service.md)、[Metadata Document](./collection-metadata-document.md)。
+
+### 专用迁移工具
+
+- `extractLegacyCollectionMetadata(input, options?)`
+
+该函数只用于显式转换旧完整 Collection 定义，不是普通业务 API，也不是运行时 fallback。详见[旧 Collection 定义转换](./legacy-collection-metadata-extraction.md)。
 
 ## Schema Adapter
 

@@ -1,3 +1,8 @@
+---
+title: CollectionDefinition
+description: CollectionDefinition、CollectionKind、DbOptions、NamingOptions、ConstraintDefinition 和 IndexDefinition 的类型参考。
+---
+
 # CollectionDefinition
 
 `CollectionDefinition` 是 Collection DSL 的核心结构。

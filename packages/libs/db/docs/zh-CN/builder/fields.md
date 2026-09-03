@@ -1,3 +1,8 @@
+---
+title: Builder 字段定义
+description: 使用 Object DSL 或 Fluent DSL 定义数据库字段、类型、默认值和物理列选项，并理解逻辑名到物理名的映射。
+---
+
 # 字段
 
 Field 是 Collection 的字段定义。字段同时包含应用层信息和数据库结构信息，但物理列名由逻辑字段名确定性生成。

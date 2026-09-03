@@ -1,3 +1,8 @@
+---
+title: 创建 Collection
+description: 使用 Object DSL 或 Fluent DSL 创建 Collection 及数据库表，并正确配置字段、命名和执行选项。
+---
+
 # createCollection
 
 `createCollection` 用于创建新的 Collection，并创建对应的数据库表。

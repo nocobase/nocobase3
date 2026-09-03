@@ -1,3 +1,8 @@
+---
+title: Builder 执行选项
+description: BuilderExecOptions 和 CollectionBuilderOptions 的字段参考，包括 dry-run、SQL 预览、metadata 同步、strict 与命名配置。
+---
+
 # BuilderExecOptions
 
 `BuilderExecOptions` 控制 Builder 执行方式。它面向自动化、CLI、file sync、migration 和 Agent 场景。
@@ -154,13 +159,11 @@ await builder.dropCollection('orders', {
 
 `ifExists: true` 用于删除类操作。当前支持 `dropCollection()`：当底层表不存在时跳过删除，避免缺失对象错误。
 
-## 预留选项
+## 当前无执行语义的选项
 
 以下选项已经出现在类型里，但当前还没有完整执行语义：
 
 - `transaction`：当前不会自动包裹 Builder 操作；需要事务时使用 `db.transaction()` 或 `connection.transaction()`。
-
-后续可以把 `transaction` 接入 Builder 执行流程。
 
 ## Agent 注意事项
 

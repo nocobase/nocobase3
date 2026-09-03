@@ -48,4 +48,4 @@ await analytics.query.selectFrom('events').selectAll().execute();
 
 ## 不存在的入口
 
-Repository 尚未实现，不要生成 `db.repository()`。根据任务使用 Query，或者等待 Collection-aware Repository 实现。
+当前不提供 `db.repository()`。根据任务使用 Query；Repository 页面属于提案，不能把其中接口用于运行时代码。

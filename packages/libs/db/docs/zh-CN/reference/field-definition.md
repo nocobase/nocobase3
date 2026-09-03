@@ -1,3 +1,8 @@
+---
+title: FieldDefinition
+description: Collection 字段类型、公共选项、数据库扩展和 RelationFieldDefinition 的类型参考。
+---
+
 # FieldDefinition
 
 FieldDefinition 描述 Collection 字段。

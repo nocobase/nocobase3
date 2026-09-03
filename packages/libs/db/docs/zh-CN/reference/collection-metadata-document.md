@@ -1,6 +1,6 @@
 ---
 title: Collection Metadata Document
-description: Collection Metadata V1 的公共类型、定义辅助、运行时校验和旧定义提取参考。
+description: Collection Metadata Document 的公共类型、defineCollectionMetadata 辅助、严格运行时校验和 Store 合同参考。
 ---
 
 # Collection Metadata Document
@@ -90,33 +90,9 @@ try {
 
 错误对象的顶层 `code` 固定为 `COLLECTION_METADATA_INVALID`。每个 issue 都包含稳定的 `code`、结构化 `path` 和供人阅读的 `message`。
 
-## 从旧定义提取
-
-`extractLegacyCollectionMetadata(input, options?)` 是纯转换函数。它只按允许列表提取 Collection 的 `name`、`naming`、`title`、`description`，普通字段的 `title`、`description`，以及 relation 定义；它不访问 Inspector，也不检查物理字段是否真实存在。
-
-```ts
-import { extractLegacyCollectionMetadata } from '@nocobase/db';
-
-const result = extractLegacyCollectionMetadata(legacyDefinition, {
-  naming: connectionNaming,
-});
-
-if (result.document) {
-  // The document is structurally valid and can enter the migration flow.
-}
-
-for (const diagnostic of result.diagnostics) {
-  console.log(diagnostic.severity, diagnostic.code, diagnostic.path);
-}
-```
-
-可安全丢弃的物理属性不会产生诊断；已移除的应用语义会产生 warning；虚拟字段、无效 relation、重复名称和不兼容的显式物理名称会产生阻断 error。只要存在 error，结果就不包含 `document`。
-
-完整的存储边界、校验规则和 legacy extraction 允许列表见 [Metadata Store 内部实现](../internals/metadata/store.md)。
-
 ## Metadata Store
 
-最终 Store 接口名为 `CollectionMetadataStore`。它只保存 V1 补充文档，不保存完整
+`CollectionMetadataStore` 只保存补充文档，不保存完整
 `CollectionDefinition`，所有写入都要求 compare-and-swap：
 
 ```ts
@@ -149,11 +125,13 @@ await store.delete(updated.document.name, {
 - `InMemoryCollectionMetadataStore`：用于测试或显式临时场景；
 - `DatabaseCollectionMetadataStore`：通过自包含内部表持久化文档，使用递增数字 revision 和数据库 CAS；
 - `ModuleCollectionMetadataStore`：加载已导入的 TypeScript 文档数组，只读，使用规范内容的 SHA-256 revision；
+- `TransactionCollectionMetadataStore`：事务中的隔离覆盖层，提交后向基础 Store 执行 CAS 回放；
 
-Module Store 的 `put()` 和 `delete()` 固定抛出 `METADATA_STORE_READ_ONLY`。Writable JSON/YAML File
-Store 尚未实现，不能把 Module Store 当作运行时文件编辑器。
+Module Store 的 `put()` 和 `delete()` 固定抛出 `METADATA_STORE_READ_ONLY`。当前不提供可写 JSON/YAML File Store，不能把 Module Store 当作运行时文件编辑器。
 
 Store 的 `capabilities.writable` 只表示补充 Metadata 文档是否支持写入。它与业务记录的写权限无关，
 也不取代 `schemaManagement` 对 DDL 和 Migration 的控制。
 
 各后端的构造方式和持久化边界见 [Metadata Store 后端实现](../internals/metadata/store-backends.md)。
+
+旧完整 Collection 定义的显式迁移工具见[旧 Collection 定义转换](./legacy-collection-metadata-extraction.md)。

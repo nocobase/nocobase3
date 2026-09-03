@@ -1,6 +1,11 @@
+---
+title: QueryAdapter API
+description: QueryAdapter、SelectQuery、InsertQuery、UpdateQuery、DeleteQuery 和 ExpressionBuilder 的当前公共接口参考。
+---
+
 # Query API
 
-本页列出 QueryAdapter V1 的 public API。用法说明见 [QueryAdapter 概览](../query/overview.md)。
+本页列出 QueryAdapter 的当前公开 API。用法说明见 [QueryAdapter 概览](../query/overview.md)。
 
 ## QueryAdapter
 
@@ -239,7 +244,7 @@ interface JoinBuilder {
 }
 ```
 
-V1 对齐 Kysely，不提供 `orOn()` / `orOnRef()`。需要 OR join 条件时使用：
+当前 API 对齐 Kysely，不提供 `orOn()` / `orOnRef()`。需要 OR join 条件时使用：
 
 ```ts
 join.on((eb) =>

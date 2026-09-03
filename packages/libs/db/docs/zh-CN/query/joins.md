@@ -1,6 +1,11 @@
+---
+title: Query join
+description: 使用可跨数据库的 inner、left、right、cross join 和 callback join，并说明当前不支持的 join 类型。
+---
+
 # join
 
-V1 只保留多数据库可移植的 join。
+QueryAdapter 只提供以下可跨数据库的 join：
 
 ```ts
 await db
@@ -21,7 +26,7 @@ await db
 - `leftJoin(table, callback)`
 - `rightJoin(table, callback)`
 
-V1 不提供 `fullJoin`、lateral join、raw join、update/delete join。
+当前 API 不提供 `fullJoin`、lateral join、raw join 或 update/delete join。
 
 ## callback join
 

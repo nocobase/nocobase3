@@ -1,3 +1,8 @@
+---
+title: 修改 Collection
+description: 使用 alterCollection 新增、修改或删除字段、索引和约束，并了解 rename 与 metadata 同步的安全边界。
+---
+
 # alterCollection
 
 `alterCollection` 用于修改已有 Collection 的结构。它可以新增字段、修改字段、删除字段、增加索引、增加约束、删除索引或删除约束。

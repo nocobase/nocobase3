@@ -94,7 +94,7 @@ export interface UpdateCollectionMetadataOptions {
 
 调用者传入 `expectedRevision` 时，Service 还必须先确认读到的版本与之一致。未传入时，Service
 使用本次读取得到的 revision，仍然不会执行 blind write。发生冲突时抛出
-`METADATA_CONFLICT`，第一版不自动重试，避免在重试中覆盖新的业务意图。
+`METADATA_CONFLICT`。Service 不自动重试，避免在重试中覆盖新的业务意图。
 
 如果 patch 没有造成文档变化，Service 原样返回当前 stored document，不增加 revision、不重复校验，也不触发失效。
 
@@ -155,7 +155,7 @@ Builder 不提供 Metadata-only 快捷方法。创建 Collection、添加 Field 
 
 ## 相关文档
 
-- [Metadata Store 设计](./store.md)
-- [Collection Resolver 设计](../collection/resolver.md)
-- [Collection Registry 设计](../collection/registry.md)
+- [Metadata Store 内部契约](./store.md)
+- [Collection Resolver](../collection/resolver.md)
+- [Collection Registry](../collection/registry.md)
 - [Collection 解析生命周期](../collection/resolution-lifecycle.md)
