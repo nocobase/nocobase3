@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Bell } from 'lucide-react';
 
 import routes from '../client/routes.js';
 
@@ -10,7 +11,7 @@ describe('in-app notification Client routes', () => {
     expect(route).toMatchObject({
       name: 'notification-in-app',
       path: '/notification-in-app',
-      navigation: { title: 'nav.devInbox' },
+      navigation: { title: 'nav.devInbox', icon: Bell },
       componentLoader: expect.any(Function),
     });
     await expect(route?.componentLoader()).resolves.toMatchObject({

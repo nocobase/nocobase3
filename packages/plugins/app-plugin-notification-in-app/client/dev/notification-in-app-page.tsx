@@ -5,8 +5,10 @@ import { NotificationInAppProvider } from '../components/notification-in-app-pro
 
 export default function NotificationInAppDevPage(): ReactElement {
   return (
-    <NotificationInAppProvider>
-      <NotificationInAppInbox />
-    </NotificationInAppProvider>
+    <section className='px-6 py-10'>
+      <NotificationInAppProvider>
+        <NotificationInAppInbox />
+      </NotificationInAppProvider>
+    </section>
   );
 }
