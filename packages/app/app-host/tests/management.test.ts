@@ -8,10 +8,18 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { c as createTar } from 'tar';
 import {
   createAppHost,
@@ -55,8 +63,8 @@ describe('managed host reconciliation', () => {
       revision: 1,
     });
     expect(host.registry.isActive('customer')).toBe(true);
-    expect(host.registry.definition('customer')?.rootDir).toContain(
-      path.join(deploymentsDir, 'customer'),
+    expect(host.registry.definition('customer')?.rootDir).toBe(
+      revisionDirectory(deploymentsDir, artifact),
     );
     expect(host.registry.definition('customer')?.dataDir).toBe(
       path.join(volumesDir, 'customer', 'storage'),
@@ -126,8 +134,9 @@ describe('managed host reconciliation', () => {
   });
 
   it('reuses an installed artifact with the same release identity', async () => {
-    const { deploymentsDir, volumesDir, artifact, artifactDir } =
-      await createFixture();
+    const fixture = await createFixture();
+    const { deploymentsDir, volumesDir, artifact, artifactDir } = fixture;
+    const replacement = await createArtifact(fixture, '1.2.4');
     const host = createAppHost({
       mode: 'managed',
       appDeploymentsDir: deploymentsDir,
@@ -139,13 +148,89 @@ describe('managed host reconciliation', () => {
     const deployment = deploymentSet(1, artifact).deployments[0]!;
 
     await host.management.applyDeployment(deployment);
+    await host.management.applyDeployment(
+      deploymentSet(1, replacement).deployments[0]!,
+    );
+    const publicStorageDir = path.join(
+      volumesDir,
+      'customer',
+      'storage',
+      'app',
+      'public',
+    );
+    const publicStorageLink = path.join(
+      revisionDirectory(deploymentsDir, artifact),
+      'public',
+      'storage',
+    );
+    await mkdir(publicStorageDir, { recursive: true });
+    await mkdir(path.dirname(publicStorageLink), { recursive: true });
+    await symlink(
+      path.relative(path.dirname(publicStorageLink), publicStorageDir),
+      publicStorageLink,
+      'dir',
+    );
     await rm(path.join(artifactDir, artifact.key));
 
     const repeated = await host.management.applyDeployment(deployment);
     expect(repeated.deployments[0]).toMatchObject({
       appId: 'customer',
       observedState: 'registered',
+      cacheHit: true,
     });
+    expect(host.registry.definition('customer')?.rootDir).toBe(
+      revisionDirectory(deploymentsDir, artifact),
+    );
+  });
+
+  it('keeps immutable revisions and retains the three most recently used builds', async () => {
+    const fixture = await createFixture();
+    const { deploymentsDir, volumesDir, artifactDir } = fixture;
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: deploymentsDir,
+      appVolumesDir: volumesDir,
+      artifact: fsArtifact(artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const artifacts = [fixture.artifact];
+    for (const version of ['1.2.4', '1.2.5', '1.2.6']) {
+      artifacts.push(await createArtifact(fixture, version));
+    }
+
+    for (const artifact of artifacts) {
+      await host.management.applyDeployment(
+        deploymentSet(1, artifact).deployments[0]!,
+      );
+      expect(host.registry.definition('customer')?.rootDir).toBe(
+        revisionDirectory(deploymentsDir, artifact),
+      );
+    }
+
+    await vi.waitFor(
+      async () => {
+        expect(
+          await revisionNames(deploymentsDir, fixture.artifact.appId),
+        ).toHaveLength(3);
+      },
+      { timeout: 2_000 },
+    );
+    const retained = await revisionNames(
+      deploymentsDir,
+      fixture.artifact.appId,
+    );
+    expect(retained).not.toContain(fixture.artifact.checksum);
+    expect(retained).toContain(artifacts.at(-1)?.checksum);
+
+    const rollback = await host.management.applyDeployment(
+      deploymentSet(1, fixture.artifact).deployments[0]!,
+    );
+    expect(rollback.deployments[0]?.observedState).toBe('registered');
+    expect(rollback.deployments[0]?.cacheHit).toBe(false);
+    expect(host.registry.definition('customer')?.rootDir).toBe(
+      revisionDirectory(deploymentsDir, fixture.artifact),
+    );
   });
 
   it('rejects identity collisions in targeted deployment operations', async () => {
@@ -464,6 +549,7 @@ async function createFixture(): Promise<{
   deploymentsDir: string;
   volumesDir: string;
   artifactDir: string;
+  appRoot: string;
   artifact: ArtifactReference;
 }> {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'nocobase-managed-'));
@@ -492,18 +578,63 @@ async function createFixture(): Promise<{
   await mkdir(path.join(artifactDir, 'releases', 'customer'), {
     recursive: true,
   });
-  const key = 'releases/customer/1.2.3.tar.gz';
-  const archivePath = path.join(artifactDir, key);
-  await createTar({ cwd: appRoot, file: archivePath, gzip: true }, ['.']);
-  const checksum = createHash('sha256')
-    .update(await readFile(archivePath))
-    .digest('hex');
-  return {
+  const fixture = {
     deploymentsDir,
     volumesDir,
     artifactDir,
-    artifact: { key, appId: 'customer', version: '1.2.3', checksum },
+    appRoot,
+    artifact: {} as ArtifactReference,
   };
+  fixture.artifact = await createArtifact(fixture, '1.2.3');
+  return fixture;
+}
+
+async function createArtifact(
+  fixture: { artifactDir: string; appRoot: string },
+  version: string,
+): Promise<ArtifactReference> {
+  await writeFile(
+    path.join(fixture.appRoot, 'package.json'),
+    JSON.stringify({
+      name: '@example/customer',
+      version,
+      type: 'module',
+    }),
+  );
+  const key = `releases/customer/${version}.tar.gz`;
+  const archivePath = path.join(fixture.artifactDir, key);
+  await createTar({ cwd: fixture.appRoot, file: archivePath, gzip: true }, [
+    '.',
+  ]);
+  const checksum = createHash('sha256')
+    .update(await readFile(archivePath))
+    .digest('hex');
+  return { key, appId: 'customer', version, checksum };
+}
+
+function revisionDirectory(
+  deploymentsDir: string,
+  artifact: ArtifactReference,
+): string {
+  return path.join(
+    deploymentsDir,
+    artifact.appId,
+    'revisions',
+    artifact.checksum.toLowerCase(),
+  );
+}
+
+async function revisionNames(
+  deploymentsDir: string,
+  appId: string,
+): Promise<string[]> {
+  return (
+    await readdir(path.join(deploymentsDir, appId, 'revisions'), {
+      withFileTypes: true,
+    })
+  )
+    .filter((entry) => entry.isDirectory() && /^[a-f0-9]{64}$/.test(entry.name))
+    .map((entry) => entry.name);
 }
 
 function fsArtifact(location: string) {

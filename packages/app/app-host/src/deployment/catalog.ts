@@ -344,9 +344,17 @@ export class DeploymentCatalog {
     entryPath: string,
   ): Promise<boolean> {
     const installedRoot = path.join(this.deploymentsDir, appId);
+    const resolvedRoot = path.resolve(rootDir);
+    const relativeRoot = path.relative(installedRoot, resolvedRoot);
+    const revisionParts = relativeRoot.split(path.sep);
+    const isInstalledRoot = resolvedRoot === installedRoot;
+    const isManagedRevision =
+      revisionParts.length === 2 &&
+      revisionParts[0] === 'revisions' &&
+      /^[a-f0-9]{64}$/.test(revisionParts[1] ?? '');
     if (
-      path.resolve(rootDir) !== installedRoot ||
-      entryPath !== path.join(installedRoot, 'public', 'storage')
+      (!isInstalledRoot && !isManagedRevision) ||
+      entryPath !== path.join(resolvedRoot, 'public', 'storage')
     ) {
       return false;
     }

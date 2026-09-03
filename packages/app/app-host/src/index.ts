@@ -128,6 +128,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       localArtifactDir:
         artifact.driver === 'fs' ? artifact.location : undefined,
       logger: logger.child({ component: 'artifact-resolver' }),
+      expandedRevisionLimit: mode === 'managed' ? 3 : undefined,
     });
   const registry = new AppRuntimeRegistry({
     resolveFactory: (definition) => moduleLoader.resolveFactory(definition),

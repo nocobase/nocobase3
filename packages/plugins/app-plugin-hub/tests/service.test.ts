@@ -111,6 +111,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(deployment).toMatchObject({
       status: 'succeeded',
       phase: 'completed',
+      cacheHit: false,
     });
     expect(detail.app.currentDeploymentId).toBe(queued.id);
     expect(host.lastDeploymentSet?.deployments).toEqual([
@@ -547,6 +548,7 @@ function createStatus(deploymentSet: HostDeploymentSet): HostStatus {
       observedState:
         deployment.desiredState === 'running' ? 'running' : 'stopped',
       revision: deploymentSet.revision,
+      cacheHit: false,
       app: null,
       error: null,
     })),

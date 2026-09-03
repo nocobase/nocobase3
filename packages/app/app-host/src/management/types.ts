@@ -44,6 +44,7 @@ export interface HostDeploymentStatus {
   desiredState: DeploymentDesiredState;
   observedState: DeploymentObservedState;
   revision: number;
+  cacheHit: boolean | null;
   app: AppSnapshot | null;
   error: string | null;
 }

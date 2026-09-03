@@ -47,7 +47,7 @@ The directories have separate lifecycles:
 ```text
 storage/
   app-artifacts/             immutable release archives
-  app-deployments/<appId>/   replaceable package.json and dist code
+  app-deployments/<appId>/   standalone package or managed revision cache
   app-volumes/<appId>/       persistent config.yml/yaml/json and storage/
 ```
 
@@ -68,18 +68,25 @@ The Hub supplies complete host deployment sets over an authenticated
 Node IPC channel. Each artifact reference identifies one immutable `.tar.gz`
 object by Drive key, version, app ID, and SHA-256 checksum. The host reads that
 object through its configured `@nocobase/drive` FS or S3 disk, verifies it,
-atomically deploys it to `app-deployments/<appId>`, prepares writable storage
-at `app-volumes/<appId>/storage`, and reports reconciled state back to the Hub.
-An installed-artifact marker lets later reconciliation of the same Drive key,
-version, app ID, and checksum reuse the expanded directory without downloading,
-hashing, or extracting the archive again. Replaced directories are removed in
-the background after the new runtime is active. Host logs report checksum,
-extraction, discovery, swap, activation, and previous-runtime destruction
-durations so slow deployments can be attributed to a concrete phase.
+expands it to the immutable
+`app-deployments/<appId>/revisions/<sha256>` directory, prepares writable
+storage at `app-volumes/<appId>/storage`, and reports reconciled state back to
+the Hub. Each Runtime keeps the exact revision root it was started from, so an
+old Runtime cannot observe the new Runtime's code or static assets while it is
+draining. An installed-artifact marker lets later reconciliation of the same
+Release checksum reuse the expanded directory without downloading, hashing, or
+extracting the archive again. After a successful replacement, the Host retains
+the three most recently used expanded revisions for fast rollback and prunes
+older local revisions in the background. Deployment history and Release
+artifacts have independent retention policies. Host logs report checksum,
+extraction, discovery, activation, previous-runtime destruction, and cache
+pruning durations so slow deployments can be attributed to a concrete phase.
 For file configuration, the deployment set may select an absolute path or the default
 `app-volumes/<appId>/config` path. Non-file configuration providers are handled
-by the app and do not involve the host. A failed runtime replacement restores
-the previous deployed directory without replacing the app volume.
+by the app and do not involve the host. Runtime replacement is start-first with
+bounded graceful request draining. A failed activation leaves the previous
+Runtime and its immutable revision untouched; this is not a guarantee of zero
+downtime for long-lived connections or incompatible database migrations.
 
 ```bash
 APP_HOST_MODE=managed app-host

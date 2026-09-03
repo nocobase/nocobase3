@@ -832,6 +832,7 @@ export class DefaultHubService implements HubService {
           .set({
             status: 'succeeded',
             phase: 'completed',
+            cacheHit: observed.cacheHit,
             hostRevision: observed.revision,
             finishedAt,
           })

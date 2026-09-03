@@ -89,6 +89,7 @@ export class ManagedReconciler {
           desiredState: 'running',
           observedState: 'running',
           revision,
+          cacheHit: this.statuses.get(deployment.id)?.cacheHit ?? null,
           app,
           error: null,
         });
@@ -112,6 +113,7 @@ export class ManagedReconciler {
         desiredState: 'stopped',
         observedState: 'stopped',
         revision,
+        cacheHit: status.cacheHit,
         app: null,
         error: null,
       });
@@ -231,6 +233,7 @@ export class ManagedReconciler {
         desiredState: spec.desiredState,
         observedState: 'stopped',
         revision,
+        cacheHit: this.statuses.get(spec.id)?.cacheHit ?? null,
         app: null,
         error: null,
       });
@@ -277,6 +280,7 @@ export class ManagedReconciler {
         desiredState: spec.desiredState,
         observedState: result.app ? 'running' : 'registered',
         revision,
+        cacheHit: artifact.cacheHit,
         app: result.app,
         error: null,
       });
@@ -287,6 +291,7 @@ export class ManagedReconciler {
         desiredState: spec.desiredState,
         observedState: 'failed',
         revision,
+        cacheHit: null,
         app: this.registry.snapshot(spec.appId) ?? null,
         error: error instanceof Error ? error.message : String(error),
       });

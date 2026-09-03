@@ -114,6 +114,7 @@ interface DeploymentRecord {
   readonly status:
     'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled';
   readonly phase: string;
+  readonly cacheHit: boolean | null;
   readonly error: string | null;
   readonly createdAt: string;
   readonly finishedAt: string | null;
@@ -857,14 +858,18 @@ function Detail({
           </header>
           <div className='p-6'>
             <TabsContent value='deployments'>
-              <Deployments app={app} onRollback={onRollback} />
+              <Deployments
+                app={app}
+                busy={busy || transitioning}
+                onDeploy={onDeploy}
+                onRollback={onRollback}
+              />
             </TabsContent>
             <TabsContent value='releases'>
               <Releases
                 app={app}
                 selected={release?.id}
                 onSelect={onRelease}
-                onDeploy={onDeploy}
                 onUpload={onUpload}
               />
             </TabsContent>
@@ -906,9 +911,13 @@ function Detail({
 
 function Deployments({
   app,
+  busy,
+  onDeploy,
   onRollback,
 }: {
   readonly app: AppDetail;
+  readonly busy: boolean;
+  readonly onDeploy: () => void;
   readonly onRollback: (deploymentId: string) => void;
 }): ReactElement {
   if (app.deployments.length === 0) {
@@ -917,17 +926,30 @@ function Deployments({
         icon={<Boxes />}
         title='No deployments yet'
         description='Deploy a release to create the first deployment.'
+        action={
+          <Button
+            disabled={busy || app.releases.length === 0}
+            onClick={onDeploy}
+          >
+            <Play className='size-4' /> Deploy
+          </Button>
+        }
       />
     );
   }
   return (
     <div className='space-y-5'>
-      <div>
-        <h2 className='font-semibold'>Deployments</h2>
-        <p className='mt-1 text-sm text-muted-foreground'>
-          Each row is a deployment operation. Rolling back creates a new
-          deployment using the selected release and configuration.
-        </p>
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <h2 className='font-semibold'>Deployments</h2>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            Each row is a deployment operation. Rolling back creates a new
+            deployment using the selected release and configuration.
+          </p>
+        </div>
+        <Button disabled={busy || app.releases.length === 0} onClick={onDeploy}>
+          <Play className='size-4' /> Deploy
+        </Button>
       </div>
       <div className='overflow-hidden rounded-xl border'>
         <Table>
@@ -936,6 +958,7 @@ function Deployments({
               <TableHead>Release</TableHead>
               <TableHead>Operation</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Artifact</TableHead>
               <TableHead>Created</TableHead>
               <TableHead className='text-right'>Action</TableHead>
             </TableRow>
@@ -974,14 +997,25 @@ function Deployments({
                           {deployment.phase.replaceAll('_', ' ')}
                         </div>
                       ) : deployment.error ? (
-                        <div
-                          className='max-w-64 truncate text-xs text-destructive'
-                          title={deployment.error}
-                        >
-                          {deployment.error}
-                        </div>
+                        <DeploymentError message={deployment.error} />
                       ) : null}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {deployment.status === 'succeeded' &&
+                    deployment.cacheHit !== null ? (
+                      <Badge
+                        className={
+                          deployment.cacheHit
+                            ? 'bg-sky-500/10 text-sky-700'
+                            : 'bg-violet-500/10 text-violet-700'
+                        }
+                      >
+                        {deployment.cacheHit ? 'Cached' : 'Expanded'}
+                      </Badge>
+                    ) : (
+                      <span className='text-muted-foreground'>—</span>
+                    )}
                   </TableCell>
                   <TableCell className='text-muted-foreground'>
                     {formatDate(deployment.createdAt)}
@@ -1006,17 +1040,45 @@ function Deployments({
   );
 }
 
+function DeploymentError({
+  message,
+}: {
+  readonly message: string;
+}): ReactElement {
+  const [copied, setCopied] = useState(false);
+  const copy = async (): Promise<void> => {
+    await navigator.clipboard.writeText(message);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1_500);
+  };
+  return (
+    <div className='mt-1 flex max-w-md items-start gap-1 text-xs text-destructive'>
+      <span className='min-w-0 flex-1 select-text whitespace-normal break-words leading-5'>
+        {message}
+      </span>
+      <Button
+        aria-label='Copy deployment error'
+        className='-mt-1 size-7 shrink-0 text-destructive hover:text-destructive'
+        onClick={() => void copy()}
+        size='icon'
+        title={copied ? 'Copied' : 'Copy error'}
+        variant='ghost'
+      >
+        {copied ? <ClipboardCheck /> : <Clipboard />}
+      </Button>
+    </div>
+  );
+}
+
 function Releases({
   app,
   selected,
   onSelect,
-  onDeploy,
   onUpload,
 }: {
   readonly app: AppDetail;
   readonly selected: string | undefined;
   readonly onSelect: (id: string) => void;
-  readonly onDeploy: () => void;
   readonly onUpload: () => void;
 }): ReactElement {
   return (
@@ -1025,15 +1087,12 @@ function Releases({
         <div>
           <h2 className='font-semibold'>Releases</h2>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Upload release artifacts, select one, then deploy it.
+            Upload and inspect immutable release artifacts for this application.
           </p>
         </div>
         <div className='flex gap-2'>
           <Button onClick={onUpload} variant='outline'>
             <CloudUpload className='size-4' /> Upload release
-          </Button>
-          <Button disabled={!selected} onClick={onDeploy}>
-            <Play className='size-4' /> Deploy
           </Button>
         </div>
       </div>
