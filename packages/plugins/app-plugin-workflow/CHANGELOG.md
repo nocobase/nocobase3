@@ -1,5 +1,14 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- 15c77a6: Move Workflow source parsing and Artifact generation behind the `workflow build` command while retaining the public build API for applications with custom Instructions. The command uses Node's native TypeScript loading in a disposable process and removes esbuild entirely. CLI build modules remain in the published package, but production servers do not load them or TypeScript at runtime.
+- fe9ad59: Add complete English and Chinese translations for workflow management, canvas controls, status and dialog copy, navigation, accessibility labels, and request-localized API errors.
+- b446b6a: Validate and route workflow definition IDs and Artifact hashes before querying the database.
+- 15988a2: Teach and verify workflow authoring under the application's `isolatedDeclarations` server typecheck: bind `defineWorkflow()` to a `WorkflowSourceAst`-annotated const before default-exporting it instead of default-exporting the call directly, and compile the skill-eval workflow fixtures under that contract in `pnpm typecheck`. Also drop the stale `.agents` entry from the published `files` allowlist — the workflow skill ships under `skills/` and the plugin has no `.agents` directory.
+
 ## 0.1.0-beta.6
 
 ### Minor Changes
