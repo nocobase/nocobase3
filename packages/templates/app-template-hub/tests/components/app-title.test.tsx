@@ -1,70 +1,57 @@
-import {
-  AppClientRoot,
-  ClientApplication,
-  createAppClientConfig,
-} from '@nocobase/app-client';
+import { createAppClientConfig } from '@nocobase/app-client';
 import { defineClientPlugins } from '@nocobase/app-client/plugins';
 import {
   defineAppRuntime,
   resolveAppRuntime,
 } from '@nocobase/app-client/runtime';
-import { render, waitFor } from '@testing-library/react';
-import { ServiceProvider } from '@nocobase/service-provider';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../../client/app.ts';
-import reactProviders from '../../client/react-providers.ts';
-import serviceProviders from '../../client/service-provider.ts';
+import { DefaultClientServiceProvider } from '../../client/service-provider.ts';
 
 describe('application title', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('uses the configured title while the application is mounted', async () => {
-    vi.stubGlobal('matchMedia', createMatchMedia());
+  it('uses the configured title during the application lifecycle', async () => {
     const previousTitle = 'Host title';
     document.title = previousTitle;
-    const runtime = await resolveAppRuntime(
-      defineAppRuntime({
-        packageName: '@example/app',
-        config: createAppClientConfig,
-        serviceProviders: [...serviceProviders, TestRouterProvider],
-        reactProviders,
-        routes: [],
-        plugins: defineClientPlugins([]),
-      }),
-      { rawConfig: { app: { title: 'Configured application' } } },
-    );
-    const app = createApp(runtime);
+    const app = await createTestApp('Configured application');
+
     await app.start();
 
-    const view = render(<AppClientRoot app={app} />);
+    expect(app.refineConfig.options?.title).toEqual({
+      text: 'Configured application',
+    });
+    expect(document.title).toBe('Configured application');
 
-    await waitFor(() => expect(document.title).toBe('Configured application'));
-    view.unmount();
-    expect(document.title).toBe(previousTitle);
     await app.shutdown();
+    expect(document.title).toBe(previousTitle);
+  });
+
+  it('falls back to NocoBase for a blank configured title', async () => {
+    const previousTitle = 'Host title';
+    document.title = previousTitle;
+    const app = await createTestApp('   ');
+
+    await app.start();
+
+    expect(app.refineConfig.options?.title).toEqual({ text: 'NocoBase' });
+    expect(document.title).toBe('NocoBase');
+
+    await app.shutdown();
+    expect(document.title).toBe(previousTitle);
   });
 });
 
-class TestRouterProvider extends ServiceProvider<ClientApplication> {
-  public readonly name: string = '@example/router';
-
-  public override boot(): Promise<void> {
-    this.app.refine.setRouterProvider({});
-    return Promise.resolve();
-  }
-}
-
-function createMatchMedia(): (query: string) => MediaQueryList {
-  return (query: string): MediaQueryList =>
-    ({
-      addEventListener: vi.fn(),
-      addListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-      matches: false,
-      media: query,
-      onchange: null,
-      removeEventListener: vi.fn(),
-      removeListener: vi.fn(),
-    }) as MediaQueryList;
+async function createTestApp(title: string) {
+  const runtime = await resolveAppRuntime(
+    defineAppRuntime({
+      packageName: '@example/app',
+      config: createAppClientConfig,
+      serviceProviders: [DefaultClientServiceProvider],
+      reactProviders: [],
+      routes: [],
+      plugins: defineClientPlugins([]),
+    }),
+    { rawConfig: { app: { title } } },
+  );
+  return createApp(runtime);
 }
