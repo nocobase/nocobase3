@@ -19,6 +19,8 @@
     "remark-gfm": "4.0.1"
   },
   "devDependencies": {
+    "@alicloud/cdn20180510": "^4.2.2",
+    "@alicloud/openapi-client": "^0.4.14",
     "@eslint/js": "^9.35.0",
     "@fontsource/nunito": "^5.2.7",
     "@fortawesome/fontawesome-free": "^7.1.0",
@@ -36,6 +38,7 @@
     "@types/node": "^22.8.1",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "ali-oss": "^6.20.0",
     "body-scroll-lock": "4.0.0-beta.0",
     "chokidar": "^3.6.0",
     "clsx": "^2.1.1",
