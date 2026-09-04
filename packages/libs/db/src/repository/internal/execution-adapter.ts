@@ -1,6 +1,8 @@
 import type { CollectionDefinition } from '../../collection/types.js';
 import type {
   FilterAst,
+  CreatedTargetReference,
+  RelationMutationAst,
   RepositoryRecord,
   SelectAst,
   SortAst,
@@ -26,6 +28,8 @@ export interface RepositoryCreateOnePlan {
   readonly collection: CollectionDefinition;
   readonly fields: readonly string[];
   readonly values: RepositoryRecord;
+  readonly relations?: RelationMutationAst;
+  readonly select?: SelectAst;
 }
 
 export interface RepositoryCreateManyPlan {
@@ -39,6 +43,8 @@ export interface RepositoryUpdateOnePlan {
   readonly unique: UniqueSelector;
   readonly values: RepositoryRecord;
   readonly ifVersion?: string | number;
+  readonly relations?: RelationMutationAst;
+  readonly select?: SelectAst;
 }
 
 export interface RepositoryUpdateManyPlan {
@@ -62,6 +68,7 @@ export interface RepositoryDeleteManyPlan {
 
 export interface RepositoryExecutedMutation {
   readonly record: RepositoryRecord;
+  readonly createdTargets: readonly CreatedTargetReference[];
   readonly version?: string | number;
 }
 

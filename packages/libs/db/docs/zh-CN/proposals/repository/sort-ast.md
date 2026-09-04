@@ -5,7 +5,7 @@ description: Repository Sort AST 的设计与当前运行时能力。
 
 # Sort AST
 
-> **状态：分批实现中。运行时可用性：直接 Field、to-one Relation Field 与 to-many aggregate 排序已实现。** relation-local sort 可用于 to-many selection，关系 mutation 尚未实现。
+> **状态：V1 运行时已实现。** 直接 Field、to-one Relation Field 与 to-many aggregate 排序均可执行；relation-local sort 可用于 to-many selection。
 
 Sort AST 是 Repository 排序意图的结构化表示。它用于 TypeScript、HTTP、CLI、file sync
 和未来持久化配置，明确区分：

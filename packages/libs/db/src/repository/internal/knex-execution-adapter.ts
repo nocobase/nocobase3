@@ -8,6 +8,9 @@ import type {
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
 import { RepositoryError } from '../errors.js';
 import type {
+  ConnectTarget,
+  CreatedTargetReference,
+  CreateTarget,
   FilterAst,
   FilterConditionNode,
   FilterGroupNode,
@@ -15,6 +18,8 @@ import type {
   FilterRelationNode,
   FilterValue,
   RepositoryRecord,
+  RelationMutationAst,
+  RelationMutationNode,
   SelectNode,
   SelectRelationNode,
   SortItemNode,
@@ -108,18 +113,26 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async executeCreateOne(
     plan: RepositoryCreateOnePlan,
   ): Promise<RepositoryExecutedMutation> {
-    const values = withInitialVersion(plan.collection, plan.values);
-    const query = tableQuery(this.getClient(), plan.collection).insert(
-      mapWrite(plan.collection, values),
+    const createdTargets: CreatedTargetReference[] = [];
+    const { record, unique } = await this.createRecord(
+      plan.collection,
+      plan.values,
+      plan.relations,
+      createdTargets,
     );
-    const returned = (await query.returning(
-      plan.fields.map((field) => column(plan.collection, field)),
-    )) as unknown;
-    const returnedRow = firstReturnedRow(returned);
-    const record = returnedRow
-      ? mapRow(plan.collection, plan.fields, returnedRow)
-      : await this.reloadCreated(plan, values, returned);
-    return { record, version: versionOf(plan.collection, record) };
+    const selected = await this.findOne({
+      collection: plan.collection,
+      fields: plan.fields,
+      select: plan.select,
+      filter: uniqueFilter(unique),
+    });
+    if (!selected)
+      throw new Error('Created Repository record could not be reloaded.');
+    return {
+      record: selected,
+      createdTargets,
+      version: versionOf(plan.collection, record),
+    };
   }
 
   async createMany(plan: RepositoryCreateManyPlan): Promise<number> {
@@ -141,20 +154,52 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async executeUpdateOne(
     plan: RepositoryUpdateOnePlan,
   ): Promise<RepositoryExecutedMutation | undefined> {
-    const query = tableQuery(this.getClient(), plan.collection).update(
-      mapWrite(plan.collection, plan.values),
-    );
-    applyUnique(query, plan.collection, plan.unique);
-    applyVersion(query, plan.collection, plan.ifVersion);
-    incrementVersion(query, plan.collection);
-    if (affectedCount(await query) === 0) return undefined;
+    const current = await this.lockByUnique(plan.collection, plan.unique);
+    if (!current) return undefined;
+    if (
+      plan.ifVersion !== undefined &&
+      versionOf(plan.collection, current) !== plan.ifVersion
+    ) {
+      return undefined;
+    }
+    if (Object.keys(plan.values).length > 0) {
+      const query = tableQuery(this.getClient(), plan.collection).update(
+        mapWrite(plan.collection, plan.values),
+      );
+      applyUnique(query, plan.collection, plan.unique);
+      applyVersion(query, plan.collection, plan.ifVersion);
+      if (affectedCount(await query) === 0) return undefined;
+      Object.assign(current, plan.values);
+    }
+    const createdTargets: CreatedTargetReference[] = [];
+    if (plan.relations) {
+      await this.applyRelationMutations(
+        plan.collection,
+        current,
+        plan.unique,
+        plan.relations,
+        createdTargets,
+      );
+    }
+    if (plan.collection.optimisticLock) {
+      const versionQuery = tableQuery(this.getClient(), plan.collection);
+      applyUnique(versionQuery, plan.collection, plan.unique);
+      applyVersion(versionQuery, plan.collection, plan.ifVersion);
+      incrementVersion(versionQuery, plan.collection);
+      if (affectedCount(await versionQuery) === 0) return undefined;
+    }
     const record = await this.findOne({
       collection: plan.collection,
       fields: plan.fields,
+      select: plan.select,
       filter: uniqueFilter(plan.unique),
     });
     return record
-      ? { record, version: versionOf(plan.collection, record) }
+      ? {
+          record,
+          createdTargets,
+          version: versionOf(plan.collection, record),
+        }
       : undefined;
   }
 
@@ -257,23 +302,6 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     return query;
   }
 
-  private async reloadCreated(
-    plan: RepositoryCreateOnePlan,
-    values: RepositoryRecord,
-    returned: unknown,
-  ): Promise<RepositoryRecord> {
-    const selector = deriveCreatedSelector(plan.collection, values, returned);
-    const record = await this.findOne({
-      collection: plan.collection,
-      fields: plan.fields,
-      filter: uniqueFilter(selector),
-    });
-    if (!record) {
-      throw new Error('Created Repository record could not be reloaded.');
-    }
-    return record;
-  }
-
   private async findByUnique(
     collection: CollectionDefinition,
     unique: UniqueSelector,
@@ -283,6 +311,434 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       fields: scalarFields(collection).map((field) => field.name),
       filter: uniqueFilter(unique),
     });
+  }
+
+  private async lockByUnique(
+    collection: CollectionDefinition,
+    unique: UniqueSelector,
+  ): Promise<RepositoryRecord | undefined> {
+    const fields = scalarFields(collection).map((field) => field.name);
+    const query = tableQuery(this.getClient(), collection).select(
+      fields.map((field) =>
+        this.getClient().ref(column(collection, field)).as(field),
+      ),
+    );
+    applyUnique(query, collection, unique);
+    query.forUpdate();
+    return (await query.first()) as RepositoryRecord | undefined;
+  }
+
+  private async createRecord(
+    collection: CollectionDefinition,
+    input: RepositoryRecord,
+    relations: RelationMutationAst | undefined,
+    createdTargets: CreatedTargetReference[],
+    clientKey?: string,
+    additionalPhysicalValues: RepositoryRecord = {},
+  ): Promise<{ record: RepositoryRecord; unique: UniqueSelector }> {
+    const values = withInitialVersion(collection, input);
+    const physicalValues = {
+      ...mapWrite(collection, values),
+      ...additionalPhysicalValues,
+    };
+    const deferred: RelationMutationNode[] = [];
+    for (const node of relations?.items ?? []) {
+      const resolved = await this.resolveRelation(collection, node.field);
+      if (resolved.relation.type === 'belongsTo' && node.action === 'set') {
+        const target = await this.resolveMutationTarget(
+          resolved.target,
+          node.target,
+          createdTargets,
+        );
+        physicalValues[resolved.sourceColumn] =
+          target.record[resolved.targetKey];
+      } else {
+        deferred.push(node);
+      }
+    }
+    const record = await this.insertRecord(collection, values, physicalValues);
+    const unique = selectorFromRecord(collection, record);
+    if (clientKey) {
+      createdTargets.push({ clientKey, collection: collection.name!, unique });
+    }
+    if (deferred.length > 0) {
+      await this.applyRelationMutations(
+        collection,
+        record,
+        unique,
+        {
+          kind: 'relationMutation',
+          version: 1,
+          collection: collection.name,
+          items: deferred,
+        },
+        createdTargets,
+      );
+    }
+    return { record, unique };
+  }
+
+  private async insertRecord(
+    collection: CollectionDefinition,
+    values: RepositoryRecord,
+    physicalValues: RepositoryRecord = mapWrite(
+      collection,
+      withInitialVersion(collection, values),
+    ),
+  ): Promise<RepositoryRecord> {
+    const fields = scalarFields(collection).map((field) => field.name);
+    const query = tableQuery(this.getClient(), collection).insert(
+      physicalValues,
+    );
+    const returned = (await query.returning(
+      fields.map((field) => column(collection, field)),
+    )) as unknown;
+    const returnedRow = firstReturnedRow(returned);
+    if (returnedRow) return mapRow(collection, fields, returnedRow);
+    const selector = deriveCreatedSelector(collection, values, returned);
+    const record = await this.findOne({
+      collection,
+      fields,
+      filter: uniqueFilter(selector),
+    });
+    if (!record)
+      throw new Error('Created Repository record could not be reloaded.');
+    return record;
+  }
+
+  private async applyRelationMutations(
+    collection: CollectionDefinition,
+    source: RepositoryRecord,
+    sourceUnique: UniqueSelector,
+    mutations: RelationMutationAst,
+    createdTargets: CreatedTargetReference[],
+  ): Promise<void> {
+    for (const node of mutations.items) {
+      const resolved = await this.resolveRelation(collection, node.field);
+      await this.applyRelationMutation(
+        resolved,
+        source,
+        sourceUnique,
+        node,
+        createdTargets,
+      );
+    }
+  }
+
+  private async applyRelationMutation(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    sourceUnique: UniqueSelector,
+    node: RelationMutationNode,
+    createdTargets: CreatedTargetReference[],
+  ): Promise<void> {
+    if (node.action === 'set') {
+      const target = await this.resolveMutationTarget(
+        resolved.target,
+        node.target,
+        createdTargets,
+        resolved,
+        source,
+      );
+      await this.connectRelation(resolved, source, sourceUnique, target.record);
+      return;
+    }
+    if (node.action === 'clear') {
+      await this.clearRelation(resolved, source, sourceUnique);
+      return;
+    }
+    const connect =
+      node.action === 'patch' ? (node.connect ?? []) : node.targets;
+    const create = node.action === 'patch' ? (node.create ?? []) : [];
+    const desired: Array<{
+      record: RepositoryRecord;
+      unique: UniqueSelector;
+    }> = [];
+    for (const target of [...connect, ...create]) {
+      desired.push(
+        await this.resolveMutationTarget(
+          resolved.target,
+          target,
+          createdTargets,
+          resolved,
+          source,
+        ),
+      );
+    }
+    if (node.action === 'replace') {
+      await this.replaceRelation(
+        resolved,
+        source,
+        sourceUnique,
+        desired.map((target) => target.record),
+      );
+      return;
+    }
+    for (const target of desired) {
+      await this.connectRelation(resolved, source, sourceUnique, target.record);
+    }
+    for (const selector of node.disconnect ?? []) {
+      const target = await this.findTarget(resolved.target, selector);
+      await this.disconnectRelation(resolved, source, sourceUnique, target);
+    }
+  }
+
+  private async resolveMutationTarget(
+    collection: CollectionDefinition,
+    target: ConnectTarget | CreateTarget,
+    createdTargets: CreatedTargetReference[],
+    resolved?: ResolvedRepositoryRelation,
+    source?: RepositoryRecord,
+  ): Promise<{ record: RepositoryRecord; unique: UniqueSelector }> {
+    if (target.kind === 'create') {
+      const additionalPhysicalValues: RepositoryRecord = {};
+      if (
+        source &&
+        resolved &&
+        (resolved.relation.type === 'hasOne' ||
+          resolved.relation.type === 'hasMany')
+      ) {
+        additionalPhysicalValues[
+          column(collection, resolved.targetForeignKey!)
+        ] = source[resolved.sourceKey];
+      }
+      return this.createRecord(
+        collection,
+        target.values,
+        target.relations,
+        createdTargets,
+        target.clientKey,
+        additionalPhysicalValues,
+      );
+    }
+    return {
+      record: await this.findTarget(collection, target.by),
+      unique: target.by,
+    };
+  }
+
+  private async findTarget(
+    collection: CollectionDefinition,
+    unique: UniqueSelector,
+  ): Promise<RepositoryRecord> {
+    const target = await this.findByUnique(collection, unique);
+    if (!target) {
+      throw new RepositoryError(
+        'RECORD_NOT_FOUND',
+        'Relation target was not found.',
+        {
+          collection: collection.name,
+        },
+      );
+    }
+    return target;
+  }
+
+  private async connectRelation(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    sourceUnique: UniqueSelector,
+    target: RepositoryRecord,
+  ): Promise<void> {
+    if (resolved.relation.type === 'belongsTo') {
+      const query = tableQuery(this.getClient(), resolved.source).update({
+        [resolved.sourceColumn]: target[resolved.targetKey],
+      });
+      applyUnique(query, resolved.source, sourceUnique);
+      await query;
+      return;
+    }
+    if (
+      resolved.relation.type === 'hasOne' ||
+      resolved.relation.type === 'hasMany'
+    ) {
+      const sourceValue = source[resolved.sourceKey];
+      const current = target[resolved.targetForeignKey!];
+      if (
+        current !== null &&
+        current !== undefined &&
+        current !== sourceValue
+      ) {
+        throw new RepositoryError(
+          'RELATION_REASSIGNMENT_REQUIRED',
+          'Relation target already belongs to another source record.',
+          {
+            collection: resolved.source.name,
+            relation: resolved.relation.name,
+          },
+        );
+      }
+      if (resolved.relation.type === 'hasOne') {
+        const existing = tableQuery(this.getClient(), resolved.target)
+          .where(
+            column(resolved.target, resolved.targetForeignKey!),
+            sourceValue as Knex.Value,
+          )
+          .whereNot(
+            column(resolved.target, resolved.targetKey),
+            target[resolved.targetKey] as Knex.Value,
+          );
+        if (await existing.clone().first()) {
+          if (!relationForeignKeyNullable(resolved)) {
+            relationActionNotAllowed(resolved, 'set');
+          }
+          await existing.update({
+            [column(resolved.target, resolved.targetForeignKey!)]: null,
+          });
+        }
+      }
+      await tableQuery(this.getClient(), resolved.target)
+        .where(
+          column(resolved.target, resolved.targetKey),
+          target[resolved.targetKey] as Knex.Value,
+        )
+        .update({
+          [column(resolved.target, resolved.targetForeignKey!)]: sourceValue,
+        });
+      return;
+    }
+    const edge = {
+      [column(resolved.through!, resolved.throughSourceForeignKey!)]:
+        source[resolved.sourceKey],
+      [column(resolved.through!, resolved.throughTargetForeignKey!)]:
+        target[resolved.targetKey],
+    };
+    const exists = await tableQuery(this.getClient(), resolved.through!)
+      .where(edge)
+      .first();
+    if (!exists)
+      await tableQuery(this.getClient(), resolved.through!).insert(edge);
+  }
+
+  private async clearRelation(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    sourceUnique: UniqueSelector,
+  ): Promise<void> {
+    if (resolved.relation.type === 'belongsTo') {
+      if (resolved.relation.nullable === false)
+        relationActionNotAllowed(resolved, 'clear');
+      const query = tableQuery(this.getClient(), resolved.source).update({
+        [resolved.sourceColumn]: null,
+      });
+      applyUnique(query, resolved.source, sourceUnique);
+      await query;
+      return;
+    }
+    if (resolved.relation.type !== 'hasOne')
+      relationActionNotAllowed(resolved, 'clear');
+    if (!relationForeignKeyNullable(resolved))
+      relationActionNotAllowed(resolved, 'clear');
+    await tableQuery(this.getClient(), resolved.target)
+      .where(
+        column(resolved.target, resolved.targetForeignKey!),
+        source[resolved.sourceKey] as Knex.Value,
+      )
+      .update({ [column(resolved.target, resolved.targetForeignKey!)]: null });
+  }
+
+  private async disconnectRelation(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    _sourceUnique: UniqueSelector,
+    target: RepositoryRecord,
+  ): Promise<void> {
+    if (resolved.relation.type === 'belongsToMany') {
+      await tableQuery(this.getClient(), resolved.through!)
+        .where(
+          column(resolved.through!, resolved.throughSourceForeignKey!),
+          source[resolved.sourceKey] as Knex.Value,
+        )
+        .where(
+          column(resolved.through!, resolved.throughTargetForeignKey!),
+          target[resolved.targetKey] as Knex.Value,
+        )
+        .delete();
+      return;
+    }
+    if (
+      resolved.relation.type !== 'hasMany' ||
+      !relationForeignKeyNullable(resolved)
+    ) {
+      relationActionNotAllowed(resolved, 'patch');
+    }
+    await tableQuery(this.getClient(), resolved.target)
+      .where(
+        column(resolved.target, resolved.targetKey),
+        target[resolved.targetKey] as Knex.Value,
+      )
+      .where(
+        column(resolved.target, resolved.targetForeignKey!),
+        source[resolved.sourceKey] as Knex.Value,
+      )
+      .update({ [column(resolved.target, resolved.targetForeignKey!)]: null });
+  }
+
+  private async replaceRelation(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    sourceUnique: UniqueSelector,
+    desired: readonly RepositoryRecord[],
+  ): Promise<void> {
+    const desiredValues = new Set(
+      desired.map((target) => target[resolved.targetKey]),
+    );
+    if (resolved.relation.type === 'belongsToMany') {
+      const current = (await tableQuery(this.getClient(), resolved.through!)
+        .select(
+          this.getClient()
+            .ref(column(resolved.through!, resolved.throughTargetForeignKey!))
+            .as('target'),
+        )
+        .where(
+          column(resolved.through!, resolved.throughSourceForeignKey!),
+          source[resolved.sourceKey] as Knex.Value,
+        )) as Array<{ target: unknown }>;
+      for (const edge of current) {
+        if (!desiredValues.has(edge.target)) {
+          await tableQuery(this.getClient(), resolved.through!)
+            .where(
+              column(resolved.through!, resolved.throughSourceForeignKey!),
+              source[resolved.sourceKey] as Knex.Value,
+            )
+            .where(
+              column(resolved.through!, resolved.throughTargetForeignKey!),
+              edge.target as Knex.Value,
+            )
+            .delete();
+        }
+      }
+    } else {
+      if (!relationForeignKeyNullable(resolved)) {
+        const current = await tableQuery(this.getClient(), resolved.target)
+          .where(
+            column(resolved.target, resolved.targetForeignKey!),
+            source[resolved.sourceKey] as Knex.Value,
+          )
+          .whereNotIn(column(resolved.target, resolved.targetKey), [
+            ...desiredValues,
+          ] as Knex.Value[])
+          .first();
+        if (current) relationActionNotAllowed(resolved, 'replace');
+      } else {
+        let query = tableQuery(this.getClient(), resolved.target).where(
+          column(resolved.target, resolved.targetForeignKey!),
+          source[resolved.sourceKey] as Knex.Value,
+        );
+        if (desiredValues.size > 0) {
+          query = query.whereNotIn(
+            column(resolved.target, resolved.targetKey),
+            [...desiredValues] as Knex.Value[],
+          );
+        }
+        await query.update({
+          [column(resolved.target, resolved.targetForeignKey!)]: null,
+        });
+      }
+    }
+    for (const target of desired) {
+      await this.connectRelation(resolved, source, sourceUnique, target);
+    }
   }
 
   private async inTransaction<TResult>(
@@ -1289,6 +1745,55 @@ function deriveCreatedSelector(
   }
   throw new Error(
     'Created Repository record has no reloadable unique selector.',
+  );
+}
+
+function selectorFromRecord(
+  collection: CollectionDefinition,
+  record: RepositoryRecord,
+): UniqueSelector {
+  const constraint = (collection.constraints ?? []).find(
+    (candidate) =>
+      (candidate.type === 'primary' || candidate.type === 'unique') &&
+      candidate.fields.every((field) => record[field] !== undefined),
+  );
+  if (
+    !constraint ||
+    constraint.type === 'foreignKey' ||
+    constraint.type === 'check'
+  ) {
+    throw new Error('Repository record has no usable unique selector.');
+  }
+  return {
+    kind: 'unique',
+    fields: constraint.fields,
+    values: Object.fromEntries(
+      constraint.fields.map((field) => [field, record[field]]),
+    ),
+  };
+}
+
+function relationForeignKeyNullable(
+  resolved: ResolvedRepositoryRelation,
+): boolean {
+  const field = resolved.target.fields?.find(
+    (candidate) => candidate.name === resolved.targetForeignKey,
+  );
+  return Boolean(field && isScalarField(field) && field.nullable !== false);
+}
+
+function relationActionNotAllowed(
+  resolved: ResolvedRepositoryRelation,
+  action: string,
+): never {
+  throw new RepositoryError(
+    'RELATION_ACTION_NOT_ALLOWED',
+    `Action "${action}" is not allowed for Relation "${resolved.relation.name}".`,
+    {
+      collection: resolved.source.name,
+      relation: resolved.relation.name,
+      details: { received: action },
+    },
   );
 }
 

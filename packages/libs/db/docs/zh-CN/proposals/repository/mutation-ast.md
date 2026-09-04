@@ -1,11 +1,11 @@
 ---
 title: Mutation AST 提案
-description: 尚未实现或导出的 Repository 关系写入协议；定义精简 V1、Fluent Builder、有界嵌套和 Agent 工作流。
+description: Repository 关系写入 V1 协议、Fluent Builder、有界嵌套和 Agent 工作流。
 ---
 
 # Mutation AST
 
-> **状态：分批实现中。运行时可用性：根标量 mutation、结果 envelope 与 optimistic lock 已实现。** Relation Mutation Builder/AST 尚未执行；关系能力当前返回 capability error。
+> **状态：V1 运行时已实现，正在进行多数据库兼容验证。** Relation Mutation Builder/AST、四类关系写入、事务内最终回读、`createdTargets`、有界 nested create、能力描述/校验与 optimistic lock 均可执行。
 
 Mutation AST 是 Repository 关系写入的规范化协议。V1 只解决两类问题：
 
@@ -729,7 +729,7 @@ connect-or-create，但应作为独立、可发现的 capability，而不是改�
 
 ## Agent 注意事项
 
-- 本页是规划文档，不代表当前代码已经可用。
+- 本页 V1 接口已实现；标为“暂不支持”的能力仍不能生成或执行。
 - 根标量放 `values`，relation 写入放 `relations`。
 - To-one 使用 `set` / `clear`；to-many 增量操作使用 `patch`，完整状态使用 `replace`。
 - 已有目标只用与主键或唯一约束匹配的逻辑 Field 集合 selector；新目标只用 `create`。

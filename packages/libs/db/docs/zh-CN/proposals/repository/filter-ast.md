@@ -5,7 +5,7 @@ description: Repository Filter AST 的设计与当前运行时能力。
 
 # Filter AST
 
-> **状态：分批实现中。运行时可用性：直接标量与 Relation Filter AST 已实现。** 关系量词通过相关子查询执行，关系 mutation 尚未实现。
+> **状态：V1 运行时已实现。** 直接标量与 Relation Filter AST 均可执行，关系量词通过相关子查询编译。
 
 Filter AST 是 Repository Filter Builder 的结构化结果。它用于在代码、HTTP、CLI、file sync 和未来持久化场景之间传递同一套筛选条件。
 

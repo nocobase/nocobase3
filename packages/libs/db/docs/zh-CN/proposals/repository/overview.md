@@ -5,7 +5,7 @@ description: Collection-aware Repository 的分批实现设计与当前运行时
 
 # Repository 概览
 
-> **状态：分批实现中。运行时可用性：标量 CRUD 与关系读取已实现。** 公共类型、`RepositoryError`、`db.repository()` 和 `connection.repository()` 已导出；关系 selection、filter 和 sort 可执行，关系 mutation 仍返回 capability error。本页其余部分描述完整 V1 目标。
+> **状态：V1 运行时已实现，正在进行多数据库兼容验证。** 公共类型、`RepositoryError`、`db.repository()` 和 `connection.repository()` 已导出；标量 CRUD、关系 selection/filter/sort、Relation Mutation、optimistic lock 和结果 envelope 均可执行。本页同时记录 V1 契约与后续边界。
 
 `Repository` 是未来的应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：
 
