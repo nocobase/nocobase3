@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 describe('LanguageSwitcher', () => {
-  it('shows a translated title above the language control', async () => {
+  it('shows a translated title for the language options', async () => {
     const runtime = await createRuntime(['en-US', 'zh-CN']);
     const user = userEvent.setup();
 
@@ -40,14 +40,18 @@ describe('LanguageSwitcher', () => {
       </I18nProvider>,
     );
 
-    const title = screen.getByText('Language');
-    expect(title).toBeVisible();
-    expect(title.parentElement).toHaveClass('space-y-1.5');
-
     await user.click(screen.getByRole('combobox'));
+    expect(await screen.findByText('Language')).toHaveAttribute(
+      'data-slot',
+      'select-label',
+    );
     await user.click(await screen.findByRole('option', { name: '中文' }));
 
-    expect(await screen.findByText('语言')).toBeVisible();
+    await user.click(screen.getByRole('combobox'));
+    expect(await screen.findByText('语言')).toHaveAttribute(
+      'data-slot',
+      'select-label',
+    );
   });
 
   it('shows the current language by name rather than by locale code', async () => {

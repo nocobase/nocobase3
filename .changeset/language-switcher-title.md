@@ -3,4 +3,4 @@
 '@nocobase/app-template-hub': patch
 ---
 
-Show a translated title above the language switcher in the application account menu.
+Show a translated title in the language switcher's options panel.

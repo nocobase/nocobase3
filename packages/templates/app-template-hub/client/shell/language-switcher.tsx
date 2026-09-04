@@ -7,6 +7,7 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -20,7 +21,7 @@ export interface LanguageSwitcherProps {
  * Picks the application's language.
  *
  * The plugin owns the switch itself — storage, resource loading, telling the server — and this owns how it looks, so
- * the control and its visible title match the rest of the application rather than the browser's native select.
+ * the control matches the rest of the application rather than the browser's native select.
  */
 export function LanguageSwitcher({
   className,
@@ -32,44 +33,41 @@ export function LanguageSwitcher({
   if (locales.length < 2) return null;
 
   return (
-    <div className='space-y-1.5'>
-      <p className='px-1.5 text-xs font-medium text-muted-foreground'>
-        {t('actions.language', { defaultValue: 'Language' })}
-      </p>
-      <Select
-        value={locale}
-        onValueChange={(value: unknown) => {
-          if (typeof value === 'string' && value !== locale) {
-            void setLocale(value);
-          }
-        }}
-        disabled={switching}
+    <Select
+      value={locale}
+      onValueChange={(value: unknown) => {
+        if (typeof value === 'string' && value !== locale) {
+          void setLocale(value);
+        }
+      }}
+      disabled={switching}
+    >
+      <SelectTrigger
+        aria-label={t('actions.language', { defaultValue: 'Language' })}
+        className={cn('w-full', className)}
+        size='sm'
       >
-        <SelectTrigger
-          aria-label={t('actions.language', { defaultValue: 'Language' })}
-          className={cn('w-full', className)}
-          size='sm'
-        >
-          {/* Without a formatter the trigger shows the raw value — "zh-CN" rather than the language's own name. */}
-          <SelectValue>
-            {(value: string | null) =>
-              locales.find((definition) => definition.locale === value)
-                ?.label ??
-              value ??
-              ''
-            }
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {locales.map((definition) => (
-              <SelectItem key={definition.locale} value={definition.locale}>
-                {definition.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </div>
+        {/* Without a formatter the trigger shows the raw value — "zh-CN" rather than the language's own name. */}
+        <SelectValue>
+          {(value: string | null) =>
+            locales.find((definition) => definition.locale === value)?.label ??
+            value ??
+            ''
+          }
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel>
+            {t('actions.language', { defaultValue: 'Language' })}
+          </SelectLabel>
+          {locales.map((definition) => (
+            <SelectItem key={definition.locale} value={definition.locale}>
+              {definition.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
