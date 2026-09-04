@@ -55,8 +55,10 @@ it('connects lazily, dispatches events, and restores topics after session change
   vi.stubGlobal('WebSocket', MockWebSocket);
 
   const events: RealtimeEvent<{ readonly kind: string }>[] = [];
+  const opened = vi.fn();
   const listenerError = vi.spyOn(console, 'error').mockImplementation(() => {});
   const client = createRealtimeClient({ resolveUrl: () => '/main/ws' });
+  client.onOpen(opened);
   expect(sockets).toHaveLength(0);
 
   const unsubscribeThrowing = client.subscribe('notifications:in-app', () => {
@@ -74,6 +76,7 @@ it('connects lazily, dispatches events, and restores topics after session change
     id: 'subscribe:notifications:in-app',
     topic: 'notifications:in-app',
   });
+  expect(opened).toHaveBeenCalledOnce();
 
   sockets[0]?.message({
     type: 'event',
@@ -102,11 +105,26 @@ it('connects lazily, dispatches events, and restores topics after session change
     id: 'subscribe:notifications:in-app',
     topic: 'notifications:in-app',
   });
+  expect(opened).toHaveBeenCalledTimes(2);
 
+  const unsubscribeOther = client.subscribe('notifications:other', vi.fn());
   unsubscribeThrowing();
   unsubscribe();
   expect(sentMessages.at(-1)).toEqual({
     type: 'unsubscribe',
     topic: 'notifications:in-app',
   });
+
+  const unsubscribeReplacement = client.subscribe(
+    'notifications:in-app',
+    vi.fn(),
+  );
+  expect(sentMessages.at(-1)).toEqual({
+    type: 'subscribe',
+    id: 'subscribe:notifications:in-app',
+    topic: 'notifications:in-app',
+  });
+
+  unsubscribeReplacement();
+  unsubscribeOther();
 });
