@@ -8,25 +8,25 @@ import {
 import {
   buildWorkflowPackage,
   writeWorkflowArtifact,
-} from '../server/loader/artifact-builder.js';
+} from './artifact-builder.js';
 
 export {
   buildWorkflowArtifact,
   computeWorkflowArtifactDigest,
   writeWorkflowArtifact,
-} from '../server/loader/artifact-builder.js';
+} from './artifact-builder.js';
 export type {
   WorkflowArtifactBuildInput,
   WorkflowArtifactBuildResult,
   WorkflowArtifactDefinition,
   WorkflowArtifactDigestFile,
-} from '../server/loader/artifact-builder.js';
-export { checkWorkflowPackage } from '../server/loader/source-check.js';
-export { WorkflowSourceCheckError } from '../server/loader/source-issues.js';
+} from './artifact-builder.js';
+export { checkWorkflowPackage } from './source-check.js';
+export { WorkflowSourceCheckError } from './source-issues.js';
 export type {
   WorkflowSourceIssue,
   WorkflowSourcePhase,
-} from '../server/loader/source-issues.js';
+} from './source-issues.js';
 
 export interface ApplicationWorkflowBuildSummary {
   packages: number;

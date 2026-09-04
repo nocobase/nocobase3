@@ -129,7 +129,6 @@ describe('workflow skill prompt fixtures', () => {
         status: 'accepted' as const,
         eventKey: 'test-event',
       }),
-      refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
       ensureArtifactMaterialized: async () => undefined,
     };
@@ -186,7 +185,6 @@ describe('workflow skill prompt fixtures', () => {
         status: 'accepted' as const,
         eventKey: 'test-event',
       }),
-      refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
       ensureArtifactMaterialized: async () => undefined,
     };

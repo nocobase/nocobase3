@@ -70,6 +70,56 @@ describe('resolveAppBase', () => {
 });
 
 describe('createAppClient', () => {
+  it('derives the realtime endpoint from a configured API base URL', () => {
+    let websocketUrl: string | undefined;
+    class MockWebSocket {
+      public static readonly CONNECTING = 0;
+      public readonly readyState = MockWebSocket.CONNECTING;
+
+      public constructor(url: string) {
+        websocketUrl = url;
+      }
+    }
+    vi.stubGlobal('window', {
+      location: {
+        href: 'https://ui.example.com/main/',
+        origin: 'https://ui.example.com',
+      },
+    });
+    vi.stubGlobal('WebSocket', MockWebSocket);
+
+    const client = createAppClient({
+      baseURL: 'https://ui.example.com/apps/demo/api',
+    });
+    client.realtime?.subscribe('test:topic', vi.fn());
+
+    expect(websocketUrl).toBe('wss://ui.example.com/apps/demo/ws');
+  });
+
+  it('uses an explicit realtime endpoint override', () => {
+    let websocketUrl: string | undefined;
+    class MockWebSocket {
+      public static readonly CONNECTING = 0;
+      public readonly readyState = MockWebSocket.CONNECTING;
+
+      public constructor(url: string) {
+        websocketUrl = url;
+      }
+    }
+    vi.stubGlobal('window', {
+      location: {
+        href: 'https://ui.example.com/main/',
+        origin: 'https://ui.example.com',
+      },
+    });
+    vi.stubGlobal('WebSocket', MockWebSocket);
+
+    const client = createAppClient({ realtimeURL: '/custom/realtime' });
+    client.realtime?.subscribe('test:topic', vi.fn());
+
+    expect(websocketUrl).toBe('wss://ui.example.com/custom/realtime');
+  });
+
   it('lets the browser add the multipart boundary for FormData requests', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       new Response(JSON.stringify({ data: { id: 'file-1' } }), {

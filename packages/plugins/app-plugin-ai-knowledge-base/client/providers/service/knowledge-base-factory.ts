@@ -60,8 +60,12 @@ const text = (value: unknown) =>
   typeof value === 'string' ? value : undefined;
 const number = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-const boolean = (value: unknown) =>
-  typeof value === 'boolean' ? value : undefined;
+const boolean = (value: unknown) => {
+  if (typeof value === 'boolean') return value;
+  if (value === 1) return true;
+  if (value === 0) return false;
+  return undefined;
+};
 const recordId = (value: unknown) =>
   typeof value === 'string' || typeof value === 'number' ? value : undefined;
 
@@ -514,7 +518,7 @@ export function createKnowledgeBaseService(
         externalProvidersPayload,
       ] = await Promise.all([
         action(client, 'aiVectorDatabases', 'listEnabled', { method: 'GET' }),
-        action(client, 'ai', 'listLLMServices', {
+        action(client, 'ai/ai', 'listLLMServices', {
           method: 'GET',
           query: { model: 'EMBEDDING' },
         }),
@@ -566,7 +570,7 @@ export function createKnowledgeBaseService(
     },
     async listEmbeddingModels(llmService) {
       const payload = responseData(
-        await action(client, 'ai', 'listModels', {
+        await action(client, 'ai/ai', 'listModels', {
           method: 'GET',
           query: { llmService, model: 'EMBEDDING' },
         }),

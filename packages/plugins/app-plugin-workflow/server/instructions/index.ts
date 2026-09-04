@@ -1,13 +1,16 @@
 export * from './base.js';
 import type { WorkflowInstructionClass } from './base.js';
 import { ConditionInstruction } from './condition/instruction.js';
+import { TerminateInstruction } from './terminate/instruction.js';
 import { RunInstruction } from './run/instruction.js';
 
 export const INSTRUCTION_TYPES: {
   readonly condition: 'condition';
+  readonly terminate: 'terminate';
   readonly run: 'run';
 } = {
   condition: 'condition',
+  terminate: 'terminate',
   run: 'run',
 };
 
@@ -17,6 +20,7 @@ export type InstructionType =
 export const coreInstructions: ReadonlyMap<string, WorkflowInstructionClass> =
   new Map<string, WorkflowInstructionClass>([
     [ConditionInstruction.type, ConditionInstruction],
+    [TerminateInstruction.type, TerminateInstruction],
     [RunInstruction.type, RunInstruction],
   ]);
 
@@ -29,6 +33,16 @@ export type {
   ConditionBranchKey,
   ConditionConfig,
 } from './condition/instruction.js';
+
+export {
+  TerminateInstruction,
+  TERMINATE_OUTCOMES,
+  validateTerminateConfig,
+} from './terminate/instruction.js';
+export type {
+  TerminateConfig,
+  TerminateOutcome,
+} from './terminate/instruction.js';
 
 export {
   assertWorkflowRunResult,

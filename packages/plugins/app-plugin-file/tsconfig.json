@@ -9,6 +9,11 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["server/**/*.ts", "client/**/*.ts", "client/**/*.tsx"],
+  "include": [
+    "server/**/*.ts",
+    "client/**/*.ts",
+    "client/**/*.tsx",
+    "shared/**/*.ts"
+  ],
   "exclude": ["tests", "registry"]
 }

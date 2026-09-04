@@ -36,7 +36,7 @@ Use these layers in order:
 
 # Scope
 
-- Add App-owned employees, skills, backend tools, MCP definitions, and LLM manifests under `ai/`.
+- Add App-owned employees, skills, backend tools, MCP definitions, and LLM configurations under `ai/`.
 - Use built-in employees and tools without copying their definitions into the App.
 - Build chat, page context, form filling, tasks, shortcuts, frontend tools, and result renderers in the App's AI frontend extension.
 - Consume `/api/ai` through the existing `NocoBaseAIService` and chat transport.
@@ -102,7 +102,7 @@ The App's `ai/` directory extends package built-ins. Built-ins load first and Ap
 - `ai/tools/<name>.ts`;
 - `ai/skills/<name>/SKILLS.md` and optional `tools/`;
 - `ai/mcp/<name>.ts`;
-- `ai/models.json`.
+- `config.yml` `ai.llmServices`.
 
 ## Employee
 
@@ -146,11 +146,11 @@ export default defineTools({
 
 Explicitly choose scope, execution, and permission. Validate input, enforce business authorization inside the tool, and return serializable output. Use `GENERAL` only when every employee should see it; otherwise activate a `SPECIFIED` tool from an employee or skill.
 
-## Skill, MCP, and models
+## Skill, MCP, and LLM services
 
 - Skill: create `SKILLS.md` with `scope`, `name`, `description`, optional `tools`, and instructions. Skill-local tools are discovered automatically.
 - MCP: default-export `defineMCP({...})`; the filename is the server name. Read the installed public `MCPOptions` type and keep credentials in environment/config.
-- Models: configure `ai/models.json` with environment placeholders, explicit enabled models, and unavailable providers disabled.
+- LLM services: configure `config.yml` `ai.llmServices` with environment placeholders and explicit enabled models. The name set is authoritative; reload application config after edits. No process restart or AI resource rescan is required.
 
 The App runtime already owns its `AIManager`; do not call `createAIManager()` merely to load normal `ai/` resources.
 

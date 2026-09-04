@@ -1,5 +1,9 @@
 import * as ElkModule from 'elkjs/lib/elk.bundled.js';
-import type { ELK, ELKConstructorArguments } from 'elkjs/lib/elk-api.js';
+import type {
+  ELK,
+  ELKConstructorArguments,
+  ElkExtendedEdge,
+} from 'elkjs/lib/elk-api.js';
 import type {
   WorkflowLayoutInput,
   WorkflowLayoutResult,
@@ -23,19 +27,34 @@ export async function layoutWithElk(
       'elk.algorithm': 'layered',
       'elk.direction': input.direction,
       'elk.spacing.nodeNode': '48',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '104',
+      'elk.layered.spacing.nodeNodeBetweenLayers':
+        input.direction === 'DOWN' ? '56' : '104',
       'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.edgeRouting': 'ORTHOGONAL',
     },
     children: input.nodes.map((node) => ({
       id: node.id,
       width: node.width,
       height: node.height,
+      layoutOptions:
+        node.ports.length > 0
+          ? { 'elk.portConstraints': 'FIXED_ORDER' }
+          : undefined,
+      ports: node.ports.map((port) => ({
+        id: port.id,
+        width: 0,
+        height: 0,
+        layoutOptions: {
+          'elk.port.side': port.side,
+          'elk.port.index': String(port.index),
+        },
+      })),
     })),
     edges: input.edges.map((edge) => ({
       id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target],
+      sources: [edge.sourcePort ?? edge.source],
+      targets: [edge.targetPort],
     })),
   });
   return {
@@ -43,6 +62,14 @@ export async function layoutWithElk(
       id: node.id,
       x: node.x ?? 0,
       y: node.y ?? 0,
+    })),
+    routes: ((result.edges ?? []) as ElkExtendedEdge[]).map((edge) => ({
+      id: edge.id,
+      points: (edge.sections ?? []).flatMap((section, index) => [
+        ...(index === 0 ? [section.startPoint] : []),
+        ...(section.bendPoints ?? []),
+        section.endPoint,
+      ]),
     })),
   };
 }

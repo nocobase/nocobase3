@@ -21,7 +21,7 @@ Every server execution model reference is:
 
 ```ts
 type ModelRef = {
-  llmService: string; // LLM service name from models.json/settings
+  llmService: string; // LLM service name from config.yml/settings
   model: string; // provider model id
 };
 ```

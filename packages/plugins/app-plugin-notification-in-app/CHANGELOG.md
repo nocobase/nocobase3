@@ -1,5 +1,23 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.4
+
+### Minor Changes
+
+- cee3251: Add authenticated realtime subscriptions, refresh their identity after authentication changes, and invalidate in-app notification state through user-scoped events.
+
+### Patch Changes
+
+- Updated dependencies [8d88ff4]
+- Updated dependencies [813da59]
+- Updated dependencies [cee3251]
+  - @nocobase/app-server@1.0.0-beta.6
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/app-plugin-authentication@0.1.0-beta.6
+  - @nocobase/app-plugin-notification@0.1.0-beta.3
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## Unreleased
 
 ### Minor Changes
@@ -8,6 +26,8 @@
   API available when the core notification Server plugin is not registered,
   and fail fast when the required database service is missing. The package
   still requires the core package for its shared extension contracts.
+- Move the inbox component example into the plugin-owned Client runtime and
+  expose it at the development-only `/dev/notification-in-app` route.
 
 ## 0.2.0-beta.3
 

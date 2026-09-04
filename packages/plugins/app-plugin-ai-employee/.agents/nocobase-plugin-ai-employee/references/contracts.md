@@ -158,31 +158,22 @@ Use `stdio` with `command`/`args`, or `sse`/`http` with `url`. Do not commit bea
 
 ## LLM models
 
-Each entry in `ai/models.json` is:
+Each entry in `config.yml` `ai.llmServices` is:
 
 ```ts
-type LLMServiceOptions = {
+type AIEmployeeLLMServiceConfig = {
   name: string; // unique service key
   title?: string; // display title
   provider: string; // registered provider key
   options?: Record<string, unknown>; // provider credentials/config
-  enabledModels?:
-    | string[] // normalized to custom {label,value} entries
-    | {
-        mode: 'recommended' | 'provider' | 'custom';
-        models: {
-          label: string;
-          value: string;
-        }[];
-      }
-    | null;
+  enabledModels?: Array<{ label: string; value: string }>; // implicit custom mode
   modelOptions?: Record<string, unknown>;
   enabled?: boolean;
   sort?: number;
 };
 ```
 
-Environment placeholders use `${NAME}` and are expanded at load time. A missing environment variable becomes an empty string, so verify secrets before enabling a provider. `enabledModels` strings are model ids; object mode controls recommended/provider/custom selection. `provider` must be registered by the runtime (for example `openai`, `deepseek`, `dashscope`, `anthropic`, `ollama`, or another installed provider).
+The `ai.llmServices` array is authoritative and defaults to empty. Configured `enabledModels` entries are converted internally to `{ mode: 'custom', models }`. Duplicate names or invalid entries reject the snapshot before repository mutation. Environment placeholders use `${NAME}` and are expanded recursively after validation; a missing variable becomes an empty string. Existing names preserve repository `enabled` and `enabledModels`; new names use config values or manager defaults. Reload application config after editing.
 
 Frontend model values are:
 
@@ -369,10 +360,10 @@ type AIFrontendToolRegistration<TArgs = unknown, TResult = unknown> = {
 };
 ```
 
-The generated manifest is:
+The generated configuration is:
 
 ```ts
-type AIFrontendToolManifest = {
+type AIFrontendToolConfiguration = {
   id: string; // `${blockUid}:${name}`
   blockUid: string; // page context id
   name: string;

@@ -7,6 +7,7 @@ import {
   createFileRoute,
   DEFAULT_FILE_ROUTE_VISIBILITY,
   default as fileServerPlugin,
+  FILE_INVENTORY_RESOURCE as serverInventoryResource,
   type CreateFileRouteOptions,
   type FileRouteAction,
   type FileStore,
@@ -15,6 +16,7 @@ import * as serverApi from '@nocobase/app-plugin-file/server';
 import {
   createFilesClient,
   default as fileClientPlugin,
+  FILE_INVENTORY_RESOURCE as clientInventoryResource,
   FilePreviewField,
   isSafeImagePreview,
   resolveFilePreviewKind,
@@ -59,12 +61,24 @@ describe('file plugin public contracts', () => {
       allowClientOverride: false,
     });
     expect(Object.isFrozen(DEFAULT_FILE_ROUTE_VISIBILITY)).toBe(true);
+    expect(serverInventoryResource).toBe('file.inventory');
+    expect(clientInventoryResource).toBe(serverInventoryResource);
   });
 
-  it('contributes locales without built-in business UI, API routes, or database schema', () => {
+  it('contributes the inventory routes and locales without business schema', () => {
     expect(fileClientPlugin()).toMatchObject({
       packageName: '@nocobase/app-plugin-file',
-      routes: [],
+      routes: [
+        {
+          parent: 'settings',
+          routes: [
+            {
+              name: 'files',
+              path: '/files',
+            },
+          ],
+        },
+      ],
       locales: {
         'en-US': expect.any(Function),
         'zh-CN': expect.any(Function),
@@ -73,7 +87,7 @@ describe('file plugin public contracts', () => {
     expect(fileServerPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-file',
       serviceProviders: [],
-      routes: [],
+      routes: [{ scope: 'api', createRouter: expect.any(Function) }],
       locales: expect.any(Function),
     });
     expect(fileServerPlugin.database).toBeUndefined();
@@ -103,6 +117,7 @@ describe('file plugin public contracts', () => {
   it('keeps application assembly APIs internal', () => {
     expect(Object.keys(serverApi).sort()).toEqual([
       'DEFAULT_FILE_ROUTE_VISIBILITY',
+      'FILE_INVENTORY_RESOURCE',
       'createFileRoute',
       'default',
     ]);

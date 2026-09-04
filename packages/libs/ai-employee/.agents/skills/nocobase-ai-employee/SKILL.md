@@ -44,9 +44,9 @@ Rules:
 
 - Infer `task` and `resource` when the request is clear.
 - Prefer `<appRoot>/ai/` for static employees, tools, skills, and MCP definitions.
-- Prefer `<appRoot>/storage/ai/models.json` for LLM service configuration so operators can change models/services without rebuilding or repacking the App.
+- Prefer `<appRoot>/config.yml` under `ai.llmServices` for LLM service configuration so operators can change models/services without rebuilding or repacking the App.
 - Require a plugin owner for executable bootstrap logic, dynamic tools, custom providers, or optional features.
-- Inspect the App's plugin manifest before assuming the AI employee plugin is enabled.
+- Inspect the App's plugin configuration before assuming the AI employee plugin is enabled.
 
 # Reference Loading Map
 
@@ -65,7 +65,7 @@ Rules:
 2. Confirm `@nocobase/app-plugin-ai-employee` is enabled in the App plugin configuration and `@nocobase/ai-employee` is available as a dependency.
 3. Read [`references/architecture.md`](references/architecture.md) and choose one application extension path:
    - static employee/tool/skill/MCP resource in `<appRoot>/ai/`;
-   - runtime-editable LLM services in `<appRoot>/storage/ai/models.json`, with `<appRoot>/ai/models.json` as the packaged fallback;
+   - declarative LLM services in `<appRoot>/config.yml` under `ai.llmServices`;
    - programmatic registration in an enabled App plugin's `server/bootstrap.ts`;
    - custom LLM provider owned by an enabled App plugin.
 4. For any static resource or manager call, read [`references/application-contracts.md`](references/application-contracts.md) first. It is intentionally self-contained because the coding agent may not have access to the dependency source.
@@ -79,14 +79,14 @@ Rules:
 
 # Application Decision Rules
 
-- **Static LLM service:** prefer `<appRoot>/storage/ai/models.json` for runtime-editable service configuration. It is loaded after the packaged App manifest and is authoritative, so changes only require an App restart/reload—not a rebuild or repack. Keep `<appRoot>/ai/models.json` only as the packaged/default fallback for fresh deployments.
+- **Declarative LLM service:** configure `<appRoot>/config.yml` under `ai.llmServices`. The configured name set is authoritative. Invoke application config reload after editing; no process restart, rebuild, repack, or AI resource rescan is required.
 - **Static backend tool:** add `<appRoot>/ai/tools/<name>.ts` or `<name>/index.ts`.
 - **Static skill:** add `<appRoot>/ai/skills/<directory>/SKILLS.md`, with optional local tools.
 - **Static employee:** add `<appRoot>/ai/employees/<name>.ts` or `<name>/index.ts`, with optional `prompt.md`, local tools, and local skills.
 - **Static MCP connection:** add a direct module under `<appRoot>/ai/mcp/`.
 - **Context/request/session-dependent tools:** call `deps.ai.toolsManager.registerDynamicTools(...)` from plugin bootstrap.
 - **Computed application resources:** call the appropriate manager from plugin bootstrap rather than generating files at runtime.
-- **Custom LLM backend:** implement provider classes in the owning App plugin, register with `deps.ai.llmProviderManager`, then use that key in `models.json` or `llmServiceManager`.
+- **Custom LLM backend:** implement provider classes in the owning App plugin, register with `deps.ai.llmProviderManager`, then use that key in `config.yml` `ai.llmServices` or `llmServiceManager`.
 - **Cross-plugin optional capability:** attach it with `deps.ai.features.enableFeatures(...)` from the capability plugin.
 - **AI chat UI or HTTP routes:** use the application AI plugin/client integration; `@nocobase/ai-employee` is the server-side core contract, not the complete UI facade.
 
@@ -96,7 +96,7 @@ Require explicit confirmation before:
 
 - overriding a package-provided resource by reusing its key;
 - renaming an employee username, skill name, tool/MCP filename key, provider key, or LLM service name;
-- deleting entries from the App's authoritative `models.json` when storage synchronization may remove existing services;
+- deleting names from authoritative `ai.llmServices`, including replacing it with an empty array;
 - changing MCP transport, command, URL, headers, or credentials;
 - replacing a built-in provider registry key;
 - editing generated App runtime infrastructure instead of using App resource/plugin extension points.
@@ -104,7 +104,7 @@ Require explicit confirmation before:
 Rollback guidance:
 
 - Restore the previous App resource or plugin bootstrap registration.
-- Restart the App so filesystem resources and provider registrations reload.
+- Reload application config for `ai.llmServices` changes; restart only when changing executable filesystem resources or provider registrations.
 - For MCP changes, restore configuration and rebuild/restart the MCP client through the normal lifecycle.
 - Re-run the App's and owning plugin's available validation scripts.
 

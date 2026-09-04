@@ -6,7 +6,7 @@ import {
   computeWorkflowArtifactDigest,
   type WorkflowArtifactDefinition,
   type WorkflowArtifactDigestFile,
-} from './artifact-builder.js';
+} from './artifact.js';
 
 export interface WorkflowArtifactStore {
   has(workflowKey: string, digest: string): Promise<boolean>;

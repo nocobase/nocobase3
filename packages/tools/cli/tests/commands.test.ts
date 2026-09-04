@@ -1,47 +1,22 @@
 import type { Config } from '@oclif/core';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { loadTestConfig, runCommand } from './helpers.ts';
 
 /**
- * The command surface this package is expected to expose. The tests assert it exactly, so adding or renaming a command
- * is a deliberate edit here rather than something that drifts in unnoticed.
+ * The command surface this package exposes, asserted exactly so adding or renaming a command is a deliberate edit here
+ * rather than something that drifts in unnoticed.
  *
- * The plugin commands are documented in internal-docs/cli. The app and hub commands are not: their behaviour is still being
- * settled, and documenting a moving target is worse than pointing at `--help`.
+ * All of it is plugin registration, and all of it is reached through a `pnpm` script rather than by typing `nb3`: the
+ * repository root and both application templates map these to `plugin:register`, `plugin:inspect`, and so on. See
+ * internal-docs/cli.
  */
-const APP_COMMANDS = [
-  'config',
-  'create',
-  'deploy',
-  'destroy',
-  'dev',
-  'info',
-  'list',
-  'plugin:register',
-  'plugin:inspect',
-  'plugin:skills:sync',
-  'plugin:unregister',
-  'plugin:update',
-  'pull',
-];
-const HUB_COMMANDS = [
-  'create',
-  'dev',
-  'logs',
-  'open',
-  'restart',
-  'start',
-  'status',
-  'stop',
-];
-
 const EXPECTED_IDS = [
-  ...APP_COMMANDS.map((name) => `app:${name}`),
-  ...HUB_COMMANDS.map((name) => `hub:${name}`),
-].sort();
+  'app:plugin:inspect',
+  'app:plugin:register',
+  'app:plugin:skills:sync',
+  'app:plugin:unregister',
+  'app:plugin:update',
+];
 
 let config: Config;
 
@@ -51,14 +26,11 @@ beforeAll(async () => {
 
 describe('command tree', () => {
   it('exposes exactly the documented commands', () => {
-    expect([...config.commandIDs].sort()).toEqual(EXPECTED_IDS);
+    expect([...config.commandIDs].sort()).toEqual([...EXPECTED_IDS].sort());
   });
 
-  it('groups every command under the app or hub topic', () => {
-    const topics = config.topics.map((topic) => topic.name);
-
-    expect(topics).toContain('app');
-    expect(topics).toContain('hub');
+  it('groups every command under the app topic', () => {
+    expect(config.topics.map((topic) => topic.name)).toContain('app');
   });
 
   it('gives every command a summary so help output is never blank', () => {
@@ -99,110 +71,64 @@ describe('command tree', () => {
 });
 
 describe('documented argument contract', () => {
+  /**
+   * `--dir` and `--json` are the two flags every command shares: each one has to find the application it acts on, and
+   * each may be driven by an agent that needs machine-readable output. `internal-docs/cli` documents them as a table
+   * covering the whole surface, so a command that quietly dropped one would make that documentation wrong.
+   */
+  it.each(EXPECTED_IDS)('%s accepts the shared flags', (id) => {
+    const flags = Object.keys(
+      config.findCommand(id, { must: true }).flags ?? {},
+    );
+
+    expect(flags).toContain('dir');
+    expect(flags).toContain('json');
+  });
+
+  /**
+   * `--workspace-root` targets an application inside this monorepo rather than a generated one, which is what the
+   * repository root's own `plugin:*` scripts pass. `update` is the exception: it upgrades an installed package, and
+   * a workspace application's plugins are linked from source rather than installed.
+   */
   it.each([
-    ['app:create', ['name'], ['dir', 'template', 'registry']],
-    ['app:pull', ['name', 'dir'], ['hub']],
-    ['app:deploy', [], ['dir', 'hub']],
-    ['app:config', ['key', 'value'], ['dir', 'json']],
-    ['app:destroy', ['dir'], ['hub', 'yes']],
-    ['app:destroy', ['dir'], ['hub', 'yes']],
-    ['hub:create', ['name'], ['dir', 'template', 'registry', 'port', 'host']],
-    ['hub:dev', [], ['hub-dir', 'port', 'host', 'portals-dir']],
-    ['hub:logs', [], ['dir', 'follow', 'tail']],
-    ['hub:status', [], ['dir', 'json']],
-    ['hub:open', [], ['dir', 'print']],
-  ])('%s takes the documented args and flags', (id, args, flags) => {
-    const command = config.findCommand(id, { must: true });
-
-    expect(Object.keys(command.args ?? {})).toEqual(args);
-    expect(Object.keys(command.flags ?? {})).toEqual(flags);
+    'app:plugin:inspect',
+    'app:plugin:register',
+    'app:plugin:unregister',
+    'app:plugin:skills:sync',
+  ])('%s can target a workspace application', (id) => {
+    expect(
+      Object.keys(config.findCommand(id, { must: true }).flags ?? {}),
+    ).toContain('workspace-root');
   });
 
-  it('requires the directory to delete, so destroy can never guess', () => {
-    const command = config.findCommand('app:destroy', { must: true });
-    expect(command.args?.dir?.required).toBe(true);
-  });
-
-  it('requires a name for the commands that create something', () => {
-    for (const id of ['app:create', 'hub:create']) {
+  it('names the plugin as an argument where one must be chosen', () => {
+    for (const id of [
+      'app:plugin:inspect',
+      'app:plugin:register',
+      'app:plugin:unregister',
+    ]) {
       const command = config.findCommand(id, { must: true });
-      expect(command.args?.name?.required, `${id} should require name`).toBe(
+      expect(command.args?.name?.required, `${id} should require a name`).toBe(
         true,
       );
     }
-  });
-
-  it('leaves the app name optional where it defaults to the current directory', () => {
-    const command = config.findCommand('app:info', { must: true });
-    expect(command.args?.name?.required).toBeFalsy();
-  });
-});
-
-/**
- * These commands are blocked on work outside the CLI. They must fail rather than print a placeholder and succeed: a
- * script that deploys, sees exit 0, and carries on would be badly misled. Exit 3 marks "not built yet" specifically,
- * so it can be told apart from a runtime error (1) or a bad argument (2).
- */
-describe('unimplemented commands', () => {
-  // `app deploy` and `hub start` resolve their project before reporting, so they need one to reach that point.
-  let workspace: string;
-
-  beforeAll(async () => {
-    workspace = await mkdtemp(path.join(os.tmpdir(), 'nb3-unimplemented-'));
-
-    await mkdir(path.join(workspace, '.nb3'), { recursive: true });
-    await writeFile(
-      path.join(workspace, '.nb3', 'config.json'),
-      JSON.stringify({
-        hub: 'http://localhost:3000',
-        name: 'demo',
-        template: 't',
-        templateVersion: '1.0.0',
-      }),
-      'utf8',
-    );
-    await writeFile(
-      path.join(workspace, '.nb3', 'hub.json'),
-      JSON.stringify({ host: '127.0.0.1', name: 'demo', port: 3000 }),
-      'utf8',
-    );
-  });
-
-  afterAll(async () => {
-    await rm(workspace, { force: true, recursive: true });
-  });
-
-  it.each([
-    ['app:deploy', ['--dir']],
-    ['app:list', []],
-    ['app:pull', ['crm']],
-  ])('%s fails with exit 3', async (id, argv) => {
-    const withWorkspace = argv.at(-1) === '--dir' ? [...argv, workspace] : argv;
-
-    await expect(runCommand(config, id, withWorkspace)).rejects.toMatchObject({
-      oclif: { exit: 3 },
-    });
   });
 });
 
 describe('argument errors', () => {
   it('rejects a missing required argument', async () => {
-    await expect(runCommand(config, 'app:create', [])).rejects.toMatchObject({
+    await expect(
+      runCommand(config, 'app:plugin:register', []),
+    ).rejects.toMatchObject({
       oclif: { exit: 2 },
     });
   });
 
   it('rejects an unknown flag', async () => {
     await expect(
-      runCommand(config, 'app:deploy', ['--nonexistent']),
+      runCommand(config, 'app:plugin:inspect', ['--nonexistent']),
     ).rejects.toMatchObject({
       oclif: { exit: 2 },
     });
-  });
-
-  it('rejects a non-numeric value for an integer flag', async () => {
-    await expect(
-      runCommand(config, 'hub:logs', ['--tail', 'abc']),
-    ).rejects.toBeTruthy();
   });
 });

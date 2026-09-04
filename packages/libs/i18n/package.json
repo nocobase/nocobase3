@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/i18n",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Internationalization runtime shared by NocoBase applications and plugins.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -58,8 +58,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "i18next": "catalog:",
-    "react-i18next": "catalog:"
+    "i18next": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
@@ -75,18 +74,23 @@
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-i18next": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
     "hono": "catalog:",
-    "react": "catalog:"
+    "react": "catalog:",
+    "react-i18next": "catalog:"
   },
   "peerDependenciesMeta": {
     "hono": {
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "react-i18next": {
       "optional": true
     }
   }

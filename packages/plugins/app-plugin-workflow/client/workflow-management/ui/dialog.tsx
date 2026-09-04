@@ -1,6 +1,8 @@
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { XIcon } from 'lucide-react';
 import type { ComponentProps, ReactElement } from 'react';
+import { useTranslation } from '@nocobase/i18n/client';
+import { WORKFLOW_NS } from '../../namespace.js';
 
 function classes(...values: (string | undefined)[]): string {
   return values.filter(Boolean).join(' ');
@@ -49,6 +51,7 @@ export function DialogContent({
   showCloseButton = true,
   ...props
 }: DialogContentProps): ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
   return (
     <DialogPrimitive.Portal>
       <DialogOverlay />
@@ -68,7 +71,7 @@ export function DialogContent({
             className='absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-lg border border-transparent text-sm font-medium transition-all outline-none hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
           >
             <XIcon className='size-4' />
-            <span className='sr-only'>Close</span>
+            <span className='sr-only'>{t('common.close')}</span>
           </DialogPrimitive.Close>
         ) : null}
       </DialogPrimitive.Popup>

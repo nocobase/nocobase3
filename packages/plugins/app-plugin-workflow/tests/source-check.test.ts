@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { checkWorkflowPackage } from '../build/index.js';
-import { validateWorkflowFlatIrTopology } from '../server/loader/source-compiler.js';
-import { typecheckWorkflowSource } from '../server/loader/source-parser.js';
+import { validateWorkflowFlatIrTopology } from '../server/engine/node-results.js';
+import { typecheckWorkflowSource } from '../build/source-parser.js';
 
 const authoringEntry = fileURLToPath(new URL('../index.ts', import.meta.url));
 const temporaryDirectories: string[] = [];
@@ -20,7 +20,7 @@ async function sourceFile(body: string): Promise<string> {
   const file = path.join(directory, 'workflow.ts');
   await fs.writeFile(
     file,
-    `import { ConditionInstruction, defineWorkflow, RunInstruction } from ${JSON.stringify(authoringEntry)};\n${body}`,
+    `import { ConditionInstruction, defineWorkflow, RunInstruction, TerminateInstruction } from ${JSON.stringify(authoringEntry)};\n${body}`,
   );
   return file;
 }
@@ -67,7 +67,7 @@ describe('workflow check', () => {
     );
   });
 
-  it('runs typecheck, bundle, evaluate, schema, semantic, and compile without writing a database', async () => {
+  it('runs typecheck, evaluate, schema, semantic, and compile without writing a database', async () => {
     const file = await sourceFile(
       `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [RunInstruction.create({ key: 'inside', config: { module: './inside' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
     );
@@ -75,6 +75,18 @@ describe('workflow check', () => {
       ir: {
         start: 'c',
         nodes: [{ key: 'c' }, { key: 'inside' }, { key: 'after' }],
+      },
+    });
+  });
+
+  it('accepts a terminate instruction inside a condition branch', async () => {
+    const file = await sourceFile(
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [TerminateInstruction.create({ key: 'stop', config: { outcome: 'success' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
+    );
+    await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
+      ir: {
+        start: 'c',
+        nodes: [{ key: 'c' }, { key: 'stop' }, { key: 'after' }],
       },
     });
   });
