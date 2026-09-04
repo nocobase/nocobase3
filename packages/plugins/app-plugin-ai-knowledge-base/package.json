@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-ai-knowledge-base",
   "displayName": "AI Knowledge Base App Plugin",
   "description": "Knowledge base, document segmentation, and PGVector integration for NocoBase Apps.",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {

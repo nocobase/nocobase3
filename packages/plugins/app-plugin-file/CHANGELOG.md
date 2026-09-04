@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-file
 
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 4c2241b: Add a read-only Files Settings page for standard database-backed file routes. Sources are registered automatically by `createFileRoute()` and listed with cursor-paginated file metadata without exposing storage object keys. Authentication and Authorization are required runtime dependencies, and the page and API both enforce the `file.inventory` page access permission granted to system administrators through their wildcard page permission.
+
 ## 0.1.0-beta.5
 
 ### Patch Changes

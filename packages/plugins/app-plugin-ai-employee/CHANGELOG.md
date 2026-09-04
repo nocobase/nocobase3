@@ -1,5 +1,13 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.2
+
+### Patch Changes
+
+- 8b18b47: Fixed knowledge-base document uploads in ESM applications, made parsed-document cache paths filesystem-safe, corrected embedding-model API requests and database boolean handling, and prevented non-image chat attachments from rendering as broken image previews.
+- Updated dependencies [8b18b47]
+  - @nocobase/ai-employee@0.2.0-beta.2
+
 ## 0.1.0-beta.1
 
 ### Minor Changes

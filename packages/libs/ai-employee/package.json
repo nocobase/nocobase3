@@ -2,7 +2,7 @@
   "name": "@nocobase/ai-employee",
   "displayName": "AI Employee Core",
   "description": "Framework-neutral AI employee contracts, resource managers, loaders, providers, and helpers.",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {

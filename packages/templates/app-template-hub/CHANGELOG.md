@@ -1,5 +1,11 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.5
+
+### Patch Changes
+
+- 15c77a6: Move Workflow source parsing and Artifact generation behind the `workflow build` command while retaining the public build API for applications with custom Instructions. The command uses Node's native TypeScript loading in a disposable process and removes esbuild entirely. CLI build modules remain in the published package, but production servers do not load them or TypeScript at runtime.
+
 ## 1.0.0-beta.4
 
 ### Minor Changes
