@@ -248,59 +248,22 @@ export class DefaultHubService implements HubService {
   public async readConfig(appId: string): Promise<HubConfigDocument> {
     const app = await this.requireApp(appId);
     const deployment = await this.currentDeployment(app);
-    if (!deployment) return { mode: 'file', content: '', path: null };
+    if (!deployment) return { mode: 'file', content: '' };
     if (deployment.config.mode !== 'file') {
-      return { mode: deployment.config.mode, content: null, path: null };
+      return { mode: deployment.config.mode, content: null };
     }
     const configPath = this.configPath(deployment);
     try {
       return {
         mode: 'file',
         content: await readFile(configPath, 'utf8'),
-        path: configPath,
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return { mode: 'file', content: '', path: configPath };
+        return { mode: 'file', content: '' };
       }
       throw error;
     }
-  }
-
-  public async saveConfig(
-    appId: string,
-    input: SaveHubConfigInput,
-  ): Promise<HubConfigDocument> {
-    return await this.withLock(appId, async () => {
-      const app = await this.requireApp(appId);
-      const deployment = await this.currentDeployment(app);
-      if (!deployment) {
-        throw new HubError(
-          'App must be deployed before its configuration can be edited.',
-          'APP_NOT_DEPLOYED',
-          409,
-        );
-      }
-      assertConfigMode(input.mode);
-      if (input.mode === 'file') {
-        if (typeof input.content !== 'string') {
-          throw new HubError(
-            'File configuration content is required.',
-            'INVALID_CONFIG_FILE',
-            422,
-          );
-        }
-        validateYamlConfig(input.content);
-        await writeTextAtomic(this.configPath(deployment), input.content);
-      }
-      await this.updateDeployment(deployment.id, {
-        config: {
-          mode: input.mode,
-          ...(deployment.config.path ? { path: deployment.config.path } : {}),
-        },
-      });
-      return await this.readConfig(appId);
-    });
   }
 
   public async deploy(
@@ -339,7 +302,7 @@ export class DefaultHubService implements HubService {
       release,
       'rollback',
       target.id,
-      await this.configInputFromDeployment(target),
+      input.config ?? (await this.configInputFromDeployment(target)),
     );
     this.schedule(app.id, deployment.id);
     return deployment;
@@ -619,6 +582,21 @@ export class DefaultHubService implements HubService {
     return decodeDeployment(row);
   }
 
+  public async readDeploymentConfig(
+    appId: string,
+    deploymentId: string,
+  ): Promise<HubConfigDocument> {
+    const deployment = await this.getDeployment(appId, deploymentId);
+    if (deployment.config.mode === 'external') {
+      return { mode: 'external', content: null };
+    }
+    const configPath = this.configPath(deployment);
+    return {
+      mode: 'file',
+      content: await readFile(configPath, 'utf8'),
+    };
+  }
+
   private async updateDeployment(
     deploymentId: string,
     values: Partial<HubDeploymentRecord>,
@@ -749,6 +727,7 @@ export class DefaultHubService implements HubService {
     assertConfigMode(mode);
     if (mode === 'external') return { mode };
     let content = input?.content;
+    content ??= release.configTemplate ?? undefined;
     if (content === undefined && app.currentDeploymentId) {
       const current = await this.getDeployment(app.id, app.currentDeploymentId);
       if (current.config.mode === 'file') {
@@ -759,7 +738,7 @@ export class DefaultHubService implements HubService {
         }
       }
     }
-    content ??= release.configTemplate ?? '';
+    content ??= '';
     validateYamlConfig(content);
     const configPath = path.join(
       this.options.config.host.volumesDir,
@@ -774,10 +753,14 @@ export class DefaultHubService implements HubService {
   private async configInputFromDeployment(
     deployment: HubDeploymentRecord,
   ): Promise<SaveHubConfigInput> {
-    if (deployment.config.mode === 'external') return { mode: 'external' };
+    const config = await this.readDeploymentConfig(
+      deployment.appId,
+      deployment.id,
+    );
+    if (config.mode === 'external') return { mode: 'external' };
     return {
       mode: 'file',
-      content: await readFile(this.configPath(deployment), 'utf8'),
+      content: config.content ?? '',
     };
   }
 
@@ -982,6 +965,7 @@ async function writeTextAtomic(
   content: string,
 ): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  await chmod(path.dirname(filePath), 0o700);
   const temporary = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, ensureTrailingNewline(content), {

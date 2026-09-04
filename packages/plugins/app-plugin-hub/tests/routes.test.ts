@@ -51,6 +51,49 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(listApps).toHaveBeenCalledOnce();
   });
 
+  it('keeps Release config.yml out of lists and reads it on demand', async () => {
+    const release = {
+      id: 'release-1',
+      appId: 'customer',
+      version: '1.0.0',
+      artifactKey: 'releases/customer/release-1.tgz',
+      checksum: 'a'.repeat(64),
+      size: 100,
+      configTemplate: 'auth:\n  secret: sensitive\n',
+      manifest: null,
+      createdAt: new Date('2026-09-04T00:00:00Z'),
+    } as const;
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        listReleases: vi
+          .fn<HubService['listReleases']>()
+          .mockResolvedValue([release]),
+        getRelease: vi
+          .fn<HubService['getRelease']>()
+          .mockResolvedValue(release),
+      }),
+    );
+
+    const listResponse = await router.request('/hub/apps/customer/releases');
+    const listBody = (await listResponse.json()) as {
+      readonly data: readonly Record<string, unknown>[];
+    };
+    expect(listBody.data[0]).toMatchObject({
+      id: 'release-1',
+      hasConfigTemplate: true,
+    });
+    expect(listBody.data[0]).not.toHaveProperty('configTemplate');
+
+    const configResponse = await router.request(
+      '/hub/apps/customer/releases/release-1/config-template',
+    );
+    expect(configResponse.headers.get('cache-control')).toBe('no-store');
+    await expect(configResponse.json()).resolves.toEqual({
+      data: { content: 'auth:\n  secret: sensitive\n' },
+    });
+  });
+
   it('rejects oversized Release bodies before reading them', async () => {
     const router = await apiRoutes.createRouter(
       createApplication(
@@ -70,35 +113,6 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(response.status).toBe(413);
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'ARTIFACT_TOO_LARGE' },
-    });
-  });
-
-  it('forwards configuration mode and YAML content', async () => {
-    const saveConfig = vi.fn<HubService['saveConfig']>().mockResolvedValue({
-      mode: 'file',
-      content: 'database:\n  dialect: sqlite\n',
-      path: '/app-volumes/customer/config.yml',
-    });
-    const router = await apiRoutes.createRouter(
-      createApplication('administrator', {
-        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
-        saveConfig,
-      }),
-    );
-
-    const response = await router.request('/hub/apps/customer/config', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'file',
-        content: 'database:\n  dialect: sqlite\n',
-      }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(saveConfig).toHaveBeenCalledWith('customer', {
-      mode: 'file',
-      content: 'database:\n  dialect: sqlite\n',
     });
   });
 
@@ -206,12 +220,46 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     const response = await router.request('/hub/apps/customer/rollback', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ deploymentId: 'deployment-1' }),
+      body: JSON.stringify({
+        deploymentId: 'deployment-1',
+        config: { mode: 'file', content: 'feature: true\n' },
+      }),
     });
 
     expect(response.status).toBe(202);
     expect(rollback).toHaveBeenCalledWith('customer', {
       deploymentId: 'deployment-1',
+      config: { mode: 'file', content: 'feature: true\n' },
+    });
+  });
+
+  it('reads the configuration captured by a deployment', async () => {
+    const readDeploymentConfig = vi
+      .fn<HubService['readDeploymentConfig']>()
+      .mockResolvedValue({
+        mode: 'file',
+        content: 'feature: false\n',
+      });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        readDeploymentConfig,
+      }),
+    );
+
+    const response = await router.request(
+      '/hub/apps/customer/deployments/deployment-1/config',
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('pragma')).toBe('no-cache');
+    expect(readDeploymentConfig).toHaveBeenCalledWith(
+      'customer',
+      'deployment-1',
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      data: { mode: 'file', content: 'feature: false\n' },
     });
   });
 

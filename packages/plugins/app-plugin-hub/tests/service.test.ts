@@ -1,4 +1,11 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -242,6 +249,13 @@ describe('@nocobase/app-plugin-hub service', () => {
     await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
       'feature:\n  enabled: true\n',
     );
+    await expect(stat(deployment.config.path!)).resolves.toMatchObject({
+      mode: expect.any(Number),
+    });
+    expect((await stat(deployment.config.path!)).mode & 0o777).toBe(0o600);
+    expect(
+      (await stat(path.dirname(deployment.config.path!))).mode & 0o777,
+    ).toBe(0o700);
     expect(host.lastDeploymentSet?.deployments[0]?.config).toEqual({
       provider: 'file',
       path: deployment.config.path,
@@ -282,7 +296,6 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(await service.readConfig('customer')).toEqual({
       mode: 'external',
       content: null,
-      path: null,
     });
     expect(host.lastDeploymentSet?.deployments[0]?.config).toBeUndefined();
   });
@@ -351,6 +364,58 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(second.checksum).not.toBe(first.checksum);
   });
 
+  it('uses the selected Release config.yml for a new deployment', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const firstRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0', {
+        configTemplate: 'feature: old\n',
+      }),
+    });
+    const first = await service.deploy('customer', {
+      releaseId: firstRelease.id,
+    });
+    await waitForDeployment(service, 'customer', first.id);
+
+    const secondRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '2.0.0', {
+        configTemplate: 'feature: new\n',
+      }),
+    });
+    const second = await service.deploy('customer', {
+      releaseId: secondRelease.id,
+    });
+    const completed = await waitForDeployment(service, 'customer', second.id);
+
+    await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
+      'feature: new\n',
+    );
+  });
+
+  it('keeps the active configuration when a Release has no config.yml', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const firstRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0', {
+        configTemplate: 'feature: current\n',
+      }),
+    });
+    const first = await service.deploy('customer', {
+      releaseId: firstRelease.id,
+    });
+    await waitForDeployment(service, 'customer', first.id);
+
+    const secondRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '2.0.0'),
+    });
+    const second = await service.deploy('customer', {
+      releaseId: secondRelease.id,
+    });
+    const completed = await waitForDeployment(service, 'customer', second.id);
+
+    await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
+      'feature: current\n',
+    );
+  });
+
   it('rolls back by creating a new deployment history record', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const firstRelease = await service.createRelease('customer', {
@@ -383,6 +448,36 @@ describe('@nocobase/app-plugin-hub service', () => {
     await expect(service.getApp('customer')).resolves.toMatchObject({
       app: { currentDeploymentId: rollback.id },
     });
+  });
+
+  it('allows rollback configuration to be reviewed and changed', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const first = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'feature: false\n' },
+    });
+    await waitForDeployment(service, 'customer', first.id);
+
+    await expect(
+      service.readDeploymentConfig('customer', first.id),
+    ).resolves.toMatchObject({
+      mode: 'file',
+      content: 'feature: false\n',
+    });
+
+    const rollback = await service.rollback('customer', {
+      deploymentId: first.id,
+      config: { mode: 'file', content: 'feature: true\n' },
+    });
+    const completed = await waitForDeployment(service, 'customer', rollback.id);
+
+    expect(completed.config.path).toBeTruthy();
+    await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
+      'feature: true\n',
+    );
   });
 
   it('does not wait for eager Apps to finish during Host startup', async () => {

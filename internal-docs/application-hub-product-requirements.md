@@ -118,13 +118,15 @@ Hub 不再保留独立 Home page，登录后以 Applications 作为主入口。
 
 Deploy 入口属于 Deployments，而不是 Releases。因为“部署”产生的是一次 Deployment 操作，Release 只是被选择的输入。
 
-部署弹窗使用固定宽度的三步流程：
+部署弹窗使用固定宽度的三步流程，各步骤切换时不改变弹窗尺寸：
 
 1. **Release**：选择要部署的具体构建，同版本构建通过 checksum 摘要区分。
 2. **Configuration**：选择 Config file 或 External，并在需要时编辑 `config.yml`。
 3. **Review**：确认 App、Release 和配置来源后提交。
 
-首次使用 Config file 时，若 Release 携带 `config.yml`，则自动作为初始内容；否则使用空 YAML 配置。
+Configuration 使用左右对照的 YAML 代码编辑器：左侧始终展示当前成功 Deployment 的实际配置且只读，右侧展示本次 Deployment 的新配置且可编辑。即使两者相同，也明确展示双方和 `No configuration changes`；首次部署时左侧显示无当前配置。
+
+首次使用 Config file 时，若 Release 携带 `config.yml`，右侧自动使用该内容；否则使用空 YAML 配置。
 
 提交后 Hub 立即创建 `queued` Deployment 并返回 HTTP 202，页面转到 Deployments 并轮询进度，不要求用户保持部署弹窗打开。
 
@@ -133,7 +135,10 @@ Deploy 入口属于 Deployments，而不是 Releases。因为“部署”产生�
 后续部署与首次部署使用同一流程，但有两个重要默认行为：
 
 - 默认选中当前 Release，用户可切换到新 Release 或其他构建；
-- 当前 Deployment 使用 Config file 时，新 Deployment 默认复用当前配置内容，Release 内新的模板不会自动覆盖已有配置。
+- 所选 Release 包含 `config.yml` 时，它直接成为右侧 New configuration，用来与左侧 Current configuration 比较；不增加额外的“使用模板”操作；
+- 所选 Release 不包含 `config.yml` 时，若存在当前 Config file 配置则继承它，避免意外清空；首次部署则使用空配置。
+
+切换 Release 会同步重置右侧为新 Release 对应的初始配置。页面实时校验 YAML 根节点、显示差异，并在配置无效时禁止进入 Review。
 
 新 Deployment 成功前，`currentDeploymentId` 仍指向上一次成功部署。如果新版本展开、校验或启动失败，历史中会保留失败记录，但不会把当前成功 Deployment 指针切过去。
 
@@ -142,9 +147,11 @@ Deploy 入口属于 Deployments，而不是 Releases。因为“部署”产生�
 回滚入口位于 Deployments 历史。
 
 1. 用户选择一条历史成功 Deployment。
-2. Hub 读取该记录的 Release 和配置快照。
-3. Hub 新建一条 `kind=rollback` 的 Deployment，并记录回滚目标。
-4. 后续执行流程与普通部署完全相同。
+2. Hub 固定该记录的 Release，并读取其配置快照作为回滚表单的初始值。
+3. 用户依次完成 Configuration 和 Review；可以保留目标配置，也可以在提交前调整配置。
+4. 页面始终并列展示当前配置和目标配置；相同时明确显示无变化，不同时由代码编辑器展示逐行差异。
+5. Hub 新建一条 `kind=rollback` 的 Deployment，并记录回滚目标和本次确认后的配置快照。
+6. 后续执行流程与普通部署完全相同。
 
 如果目标 Release 的已展开 revision 仍在本地，Host 直接复用缓存；如果已被清理，Host 从原始 Release 制品重新展开。两种情况的产品语义相同，差异只在速度。
 
@@ -158,7 +165,9 @@ Deploy 入口属于 Deployments，而不是 Releases。因为“部署”产生�
 | Hub managed | 预留、禁用 | 未来由 Hub 数据库保存结构化配置和密钥                         |
 | External    | 可用       | Hub 不生成或挂载配置文件，由外部运行环境提供                  |
 
-Configuration tab 只展示当前 Deployment 已选定的配置方式，不允许在该 tab 内直接切换来源。如需更换来源，必须发起新 Deployment。Config file 的内容可在部署后编辑并保存；当前实现不会因保存配置自动重启 App。
+Configuration tab 只读展示当前 Deployment 固化的配置来源和配置快照，不能直接修改内容或切换来源。如需修改，必须发起新 Deployment，通过 Current/New 对比和 Review 后生成新的不可变快照。
+
+Config file 是兼容性的整文件管理模式，可能包含数据库口令、认证密钥等敏感数据。Hub 将整份文件视为敏感信息：快照位于非公开 App volume，目录和文件分别使用 `0700`、`0600`，采用原子写入，配置读取响应禁止缓存，列表、日志和错误不携带正文。该模式允许系统管理员查看明文；未来 Hub managed 才提供写入后不可读取的字段级 Secret Store。
 
 ### 5.7 启动、停止、访问和刷新
 
@@ -220,15 +229,26 @@ Deployments 页会将成功操作标记为 Cached 或 Expanded，这是性能信
 
 ### 6.3 Runtime 替换
 
-当前采用 start-first 替换：
+当前临时采用 stop-first 替换：
 
-1. 旧 Runtime 保持服务。
+1. 停止并销毁旧 Runtime。
 2. Host 使用新 revision 和新配置创建新 Runtime。
-3. 新 Runtime 启动成功后，Host 才切换流量指向。
-4. 旧 Runtime 在有界的优雅排空时间内完成已接收请求，然后销毁。
-5. 新 Runtime 启动失败时，旧 Runtime 和当前成功 Deployment 保持不变。
+3. 新 Runtime 启动成功后更新当前 Runtime 和成功 Deployment。
+4. 新 Runtime 启动失败时，Host 尝试用旧 definition 重新创建 Runtime，成功 Deployment 保持不变。
+5. 如果新 Runtime 和旧 Runtime 都无法启动，Deployment 失败并保留两次启动的错误原因。
 
-该机制可以缩小常规 HTTP 请求的中断窗口，但不承诺严格零中断。长连接、WebSocket、进程内状态以及不兼容的数据库 migration 都需要单独策略。
+该策略会在部署期间产生短暂访问中断，不能视为零中断部署。它是队列 Runtime 隔离完成前的安全策略，而不是最终部署架构。
+
+采用 stop-first 的直接原因是 `@boringnode/queue` 当前将 `QueueManager`、`Locator` 和 job dispatch runtime 保存在进程级模块单例中。Hub 的 in-process backend 会在同一 Node.js 进程中运行多个 App，并且一次部署原本还会短暂并存同一 App 的新旧 Runtime。新旧 Runtime 初始化 Workflow worker 时会共享并覆盖上述队列状态，可能出现重复监听、Job 类解析到错误 Runtime，以及旧 Runtime 销毁新 Runtime 队列资源等问题。
+
+后续需要在以下方案中做出选择，再恢复 start-first HTTP Runtime 替换：
+
+- 推动 `@boringnode/queue` 提供完整实例 API，使 Manager、Job registry、dispatcher、executor、adapter 和 Worker 生命周期都归属于一个 App Runtime；
+- 将 App 后台 Worker 放入独立进程，以进程作为模块单例的隔离边界；
+- 生产队列统一使用 Redis，并评估由 BullMQ 提供实例级 Queue/Worker；
+- 将队列提升为 Host 级共享服务，并显式实现 App/Runtime handler 路由和 active Runtime 交接。
+
+无论最终选择哪种方案，持久化队列名都应归属于 App，例如 `workflow:<appId>`，不能包含 Runtime ID。Runtime ID 只用于消费者身份、日志、所有权和部署交接，避免延迟或重试任务滞留在已经销毁的部署队列中。
 
 App 的 migration 和 seed 仍在 App Runtime 启动过程中执行，因此它们的耗时会直接计入部署的启动阶段。当前不提供数据库 migration 自动回滚。
 
@@ -303,7 +323,7 @@ storage/
 | `config`                               | 本次部署的配置来源和可选文件路径                                  |
 | `cacheHit`                             | 本次是复用已展开 revision 还是重新展开                            |
 | `hostRevision`                         | Host 接受该操作时的 reconciliation revision                       |
-| `error`                                | 失败原因，页面完整展示并允许复制                                  |
+| `error`                                | 失败原因；表格单行摘要展示，完整内容可查看和复制                  |
 | `createdAt`, `startedAt`, `finishedAt` | 排队、开始和完成时间                                              |
 
 Hub 数据库是 App 设置、Release、Deployment 历史和当前成功 Deployment 指针的权威来源。Host 是当前 Runtime 状态、已注册定义和已展开缓存的权威来源。
@@ -315,7 +335,8 @@ Hub 数据库是 App 设置、Release、Deployment 历史和当前成功 Deploym
 - tar 条目不能逃逸展开目录，不接受制品中的符号链接；
 - checksum 不匹配时拒绝部署；
 - App ID 限制为字母、数字、下划线和连字符，用于避免路径和身份歧义；
-- Config file 以原子写入方式保存，并校验 YAML 根节点为对象。
+- Config file 以 `0600` 权限原子写入受保护目录，并校验 YAML 根节点为对象；
+- 返回配置正文的 API 使用 `Cache-Control: no-store`，避免敏感配置被浏览器或代理缓存。
 
 ## 10. 当前交付范围
 
@@ -324,11 +345,11 @@ Hub 数据库是 App 设置、Release、Deployment 历史和当前成功 Deploym
 - Hub 中的 Applications 主入口、卡片/列表、搜索和 App 详情；
 - 无 Release App 的 Development 引导；
 - Release 上传、元数据读取、安全校验和 Drive 存储；
-- Release、Configuration、Review 三步部署；
+- Release、Configuration、Review 三步部署，以及 Current/New 双栏 YAML 代码编辑和差异展示；
 - 异步 Deployment 记录、进度轮询、完整错误展示与复制；
 - 从成功 Deployment 创建新回滚操作；
 - 按 checksum 缓存不可变 revision，每 App 保留 3 个已展开构建；
-- start-first Runtime 替换和有界优雅排空；
+- stop-first Runtime 替换，以及替换失败时恢复旧 Runtime；
 - 指定 App 的 Refresh、Visit、Start、Stop 和 Remove；
 - eager/lazy 启动策略，以及 Hub 启动时的非阻塞后台恢复；
 - 基于配置 key 的 Databases、Drives 和 Caching 非敏感摘要展示，以及 LLM services 预留页面。
@@ -344,7 +365,7 @@ Hub 数据库是 App 设置、Release、Deployment 历史和当前成功 Deploym
 - Hub managed 配置仅占位，尚未实现数据库配置与密钥管理；
 - Resources 当前主要从非敏感配置摘要推导，不是完整的资源管理 API；
 - 没有 Release 或 Deployment 历史的自动保留策略，“保留 3 个”只适用于 Host 本地已展开缓存；
-- start-first 不是严格零中断发布，不包含数据库 schema 兼容性、长连接迁移或自动 migration 回滚保证；
+- stop-first 在部署和恢复旧 Runtime 期间会产生短暂访问中断，且不包含数据库 migration 自动回滚保证；
 - Remove 是完整删除，当前不提供软删除或恢复站。
 
 ## 12. 后续演进方向

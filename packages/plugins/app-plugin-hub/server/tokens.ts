@@ -116,7 +116,6 @@ export interface CreateHubReleaseInput {
 export interface HubConfigDocument {
   readonly mode: HubConfigMode;
   readonly content: string | null;
-  readonly path: string | null;
 }
 
 export interface SaveHubConfigInput {
@@ -131,6 +130,7 @@ export interface DeployHubAppInput {
 
 export interface RollbackHubAppInput {
   readonly deploymentId: string;
+  readonly config?: SaveHubConfigInput;
 }
 
 export interface UpdateHubSettingsInput {
@@ -148,10 +148,6 @@ export interface HubService {
     input: CreateHubReleaseInput,
   ): Promise<HubReleaseRecord>;
   readConfig(appId: string): Promise<HubConfigDocument>;
-  saveConfig(
-    appId: string,
-    input: SaveHubConfigInput,
-  ): Promise<HubConfigDocument>;
   updateSettings(
     appId: string,
     input: UpdateHubSettingsInput,
@@ -161,6 +157,10 @@ export interface HubService {
     appId: string,
     deploymentId: string,
   ): Promise<HubDeploymentRecord>;
+  readDeploymentConfig(
+    appId: string,
+    deploymentId: string,
+  ): Promise<HubConfigDocument>;
   deploy(appId: string, input: DeployHubAppInput): Promise<HubDeploymentRecord>;
   rollback(
     appId: string,

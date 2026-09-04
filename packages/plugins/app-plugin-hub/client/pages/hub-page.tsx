@@ -76,8 +76,9 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table.js';
-import { Textarea } from '../components/ui/textarea.js';
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -99,12 +100,21 @@ type DetailTab =
   | 'configuration'
   | 'settings';
 
+const ConfigEditor = lazy(async () => {
+  const module = await import('../components/config-editor.js');
+  return { default: module.ConfigEditor };
+});
+const ConfigMergeEditor = lazy(async () => {
+  const module = await import('../components/config-editor.js');
+  return { default: module.ConfigMergeEditor };
+});
+
 interface ReleaseRecord {
   readonly id: string;
   readonly version: string;
   readonly size: number;
   readonly checksum: string;
-  readonly configTemplate: string | null;
+  readonly hasConfigTemplate: boolean;
   readonly createdAt: string;
 }
 interface DeploymentRecord {
@@ -154,7 +164,9 @@ interface ApiResponse<T> {
 interface ConfigResponse {
   readonly mode: 'file' | 'external';
   readonly content: string | null;
-  readonly path: string | null;
+}
+interface ConfigTemplateResponse {
+  readonly content: string | null;
 }
 
 const CONFIG_MODES: readonly {
@@ -205,8 +217,12 @@ export default function HubPage(): ReactElement {
   const [configContent, setConfigContent] = useState('');
   const [deploymentMode, setDeploymentMode] = useState<ConfigMode>('file');
   const [deploymentContent, setDeploymentContent] = useState('');
-  const [configPath, setConfigPath] = useState<string | null>(null);
+  const [deploymentBaseline, setDeploymentBaseline] = useState('');
+  const [deploymentBaselineMode, setDeploymentBaselineMode] =
+    useState<ConfigMode>('file');
   const [selectedReleaseId, setSelectedReleaseId] = useState<string>();
+  const [deploymentReleaseId, setDeploymentReleaseId] = useState<string>();
+  const [rollbackDeploymentId, setRollbackDeploymentId] = useState<string>();
   const [artifact, setArtifact] = useState<File>();
   const [deployOpen, setDeployOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -241,18 +257,26 @@ export default function HubPage(): ReactElement {
     setApps(response.data);
   }, [client]);
   const loadConfig = useCallback(
-    async (appId: string, template?: string | null): Promise<void> => {
+    async (appId: string): Promise<void> => {
       const response = await client.request<ApiResponse<ConfigResponse>>(
         `hub/apps/${appId}/config`,
       );
       setConfigMode(response.data.mode);
-      setConfigContent(response.data.content || template || '');
-      setConfigPath(response.data.path);
+      setConfigContent(response.data.content ?? '');
+    },
+    [client],
+  );
+  const loadReleaseConfig = useCallback(
+    async (appId: string, releaseId: string): Promise<string | null> => {
+      const response = await client.request<
+        ApiResponse<ConfigTemplateResponse>
+      >(`hub/apps/${appId}/releases/${releaseId}/config-template`);
+      return response.data.content;
     },
     [client],
   );
   const selectedAppId = selected?.app.id;
-  const selectedTemplate = release?.configTemplate;
+  const selectedCurrentDeploymentId = selected?.app.currentDeploymentId;
 
   useEffect(() => {
     // Initial loading synchronizes the page with the Hub service.
@@ -277,10 +301,10 @@ export default function HubPage(): ReactElement {
     if (!selectedAppId) return;
     // Configuration loading is an intentional external synchronization boundary.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadConfig(selectedAppId, selectedTemplate).catch((reason: unknown) =>
+    void loadConfig(selectedAppId).catch((reason: unknown) =>
       setError(readError(reason)),
     );
-  }, [loadConfig, release?.id, selectedAppId, selectedTemplate]);
+  }, [loadConfig, selectedAppId, selectedCurrentDeploymentId]);
 
   const perform = async (work: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -333,17 +357,10 @@ export default function HubPage(): ReactElement {
             release={release}
             configMode={configMode}
             configContent={configContent}
-            configPath={configPath}
             busy={busy}
             onBack={() => setSelectedId(undefined)}
             onTab={setTab}
             onRelease={setSelectedReleaseId}
-            onConfigContent={setConfigContent}
-            onSaveConfig={() =>
-              void perform(() =>
-                saveConfig(client, selected.app.id, configMode, configContent),
-              )
-            }
             onRefresh={() =>
               void perform(async () => {
                 await client.request(`hub/apps/${selected.app.id}/refresh`, {
@@ -375,18 +392,46 @@ export default function HubPage(): ReactElement {
               })
             }
             onDeploy={() => {
-              setDeploymentMode(configMode);
-              setDeploymentContent(configContent);
-              setDeployOpen(true);
+              if (!releaseId) return;
+              setBusy(true);
+              setError(undefined);
+              void loadReleaseConfig(selected.app.id, releaseId)
+                .then((template) => {
+                  setDeploymentReleaseId(releaseId);
+                  setDeploymentMode(template !== null ? 'file' : configMode);
+                  setDeploymentContent(
+                    template ?? (configMode === 'file' ? configContent : ''),
+                  );
+                  setDeploymentBaseline(configContent);
+                  setDeploymentBaselineMode(configMode);
+                  setRollbackDeploymentId(undefined);
+                  setDeployOpen(true);
+                })
+                .catch((reason: unknown) => setError(readError(reason)))
+                .finally(() => setBusy(false));
             }}
-            onRollback={(deploymentId) =>
-              void perform(async () => {
-                await client.request(`hub/apps/${selected.app.id}/rollback`, {
-                  method: 'POST',
-                  body: JSON.stringify({ deploymentId }),
-                });
-              })
-            }
+            onRollback={(deploymentId) => {
+              setBusy(true);
+              setError(undefined);
+              void client
+                .request<ApiResponse<ConfigResponse>>(
+                  `hub/apps/${selected.app.id}/deployments/${deploymentId}/config`,
+                )
+                .then((response) => {
+                  const target = selected.deployments.find(
+                    (item) => item.id === deploymentId,
+                  );
+                  setDeploymentReleaseId(target?.releaseId);
+                  setDeploymentMode(response.data.mode);
+                  setDeploymentContent(response.data.content ?? '');
+                  setDeploymentBaseline(configContent);
+                  setDeploymentBaselineMode(configMode);
+                  setRollbackDeploymentId(deploymentId);
+                  setDeployOpen(true);
+                })
+                .catch((reason: unknown) => setError(readError(reason)))
+                .finally(() => setBusy(false));
+            }}
             onUpload={() => setUploadOpen(true)}
           />
         )}
@@ -416,21 +461,45 @@ export default function HubPage(): ReactElement {
       {deployOpen && selected ? (
         <DeploymentDialog
           app={selected}
-          releaseId={releaseId}
+          releaseId={deploymentReleaseId}
           mode={deploymentMode}
           content={deploymentContent}
+          baselineContent={deploymentBaseline}
+          baselineMode={deploymentBaselineMode}
+          rollback={Boolean(rollbackDeploymentId)}
           busy={busy}
-          onRelease={setSelectedReleaseId}
+          onRelease={(nextReleaseId) => {
+            const nextRelease = selected.releases.find(
+              (item) => item.id === nextReleaseId,
+            );
+            setDeploymentReleaseId(nextReleaseId);
+            if (!nextRelease?.hasConfigTemplate) {
+              setDeploymentMode(configMode);
+              setDeploymentContent(configMode === 'file' ? configContent : '');
+              return;
+            }
+            setBusy(true);
+            void loadReleaseConfig(selected.app.id, nextReleaseId)
+              .then((template) => {
+                setDeploymentContent(template ?? '');
+                setDeploymentMode('file');
+              })
+              .catch((reason: unknown) => setError(readError(reason)))
+              .finally(() => setBusy(false));
+          }}
           onMode={setDeploymentMode}
           onContent={setDeploymentContent}
           onClose={() => setDeployOpen(false)}
           onComplete={() =>
             void perform(async () => {
-              if (!releaseId || deploymentMode === 'managed') return;
-              await client.request(`hub/apps/${selected.app.id}/deploy`, {
+              if (!deploymentReleaseId || deploymentMode === 'managed') return;
+              const endpoint = rollbackDeploymentId ? 'rollback' : 'deploy';
+              await client.request(`hub/apps/${selected.app.id}/${endpoint}`, {
                 method: 'POST',
                 body: JSON.stringify({
-                  releaseId,
+                  ...(rollbackDeploymentId
+                    ? { deploymentId: rollbackDeploymentId }
+                    : { releaseId: deploymentReleaseId }),
                   config: {
                     mode: deploymentMode,
                     ...(deploymentMode === 'file'
@@ -439,9 +508,9 @@ export default function HubPage(): ReactElement {
                   },
                 }),
               });
-              setConfigMode(deploymentMode);
-              setConfigContent(deploymentContent);
+              setSelectedReleaseId(deploymentReleaseId);
               setDeployOpen(false);
+              setRollbackDeploymentId(undefined);
               setTab('deployments');
             })
           }
@@ -702,13 +771,10 @@ function Detail({
   release,
   configMode,
   configContent,
-  configPath,
   busy,
   onBack,
   onTab,
   onRelease,
-  onConfigContent,
-  onSaveConfig,
   onRefresh,
   onStart,
   onSaveSettings,
@@ -723,13 +789,10 @@ function Detail({
   readonly release: ReleaseRecord | undefined;
   readonly configMode: ConfigMode;
   readonly configContent: string;
-  readonly configPath: string | null;
   readonly busy: boolean;
   readonly onBack: () => void;
   readonly onTab: (tab: DetailTab) => void;
   readonly onRelease: (id: string) => void;
-  readonly onConfigContent: (content: string) => void;
-  readonly onSaveConfig: () => void;
   readonly onRefresh: () => void;
   readonly onStart: () => void;
   readonly onSaveSettings: (activation: ActivationPolicy) => void;
@@ -883,14 +946,7 @@ function Detail({
             </TabsContent>
             {deployed ? (
               <TabsContent value='configuration'>
-                <Configuration
-                  mode={configMode}
-                  content={configContent}
-                  path={configPath}
-                  busy={busy}
-                  onContent={onConfigContent}
-                  onSave={onSaveConfig}
-                />
+                <Configuration mode={configMode} content={configContent} />
               </TabsContent>
             ) : null}
             <TabsContent value='settings'>
@@ -1046,19 +1102,25 @@ function DeploymentError({
   readonly message: string;
 }): ReactElement {
   const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(false);
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(message);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1_500);
   };
   return (
-    <div className='mt-1 flex max-w-md items-start gap-1 text-xs text-destructive'>
-      <span className='min-w-0 flex-1 select-text whitespace-normal break-words leading-5'>
-        {message}
-      </span>
+    <div className='mt-1 flex max-w-80 items-center gap-1'>
+      <Button
+        className='h-6 min-w-0 flex-1 justify-start px-1 text-xs text-destructive hover:text-destructive'
+        onClick={() => setOpen(true)}
+        title={message}
+        variant='ghost'
+      >
+        <span className='truncate'>{message}</span>
+      </Button>
       <Button
         aria-label='Copy deployment error'
-        className='-mt-1 size-7 shrink-0 text-destructive hover:text-destructive'
+        className='size-6 shrink-0 text-destructive hover:text-destructive'
         onClick={() => void copy()}
         size='icon'
         title={copied ? 'Copied' : 'Copy error'}
@@ -1066,6 +1128,27 @@ function DeploymentError({
       >
         {copied ? <ClipboardCheck /> : <Clipboard />}
       </Button>
+      {open ? (
+        <AppDialog
+          title='Deployment error'
+          description='The deployment did not complete successfully.'
+          onClose={() => setOpen(false)}
+          wide
+        >
+          <pre className='max-h-[24rem] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 font-mono text-xs leading-5 text-red-200'>
+            {message}
+          </pre>
+          <div className='mt-5 flex justify-end gap-2'>
+            <Button onClick={() => setOpen(false)} variant='outline'>
+              Close
+            </Button>
+            <Button onClick={() => void copy()}>
+              {copied ? <ClipboardCheck /> : <Clipboard />}
+              {copied ? 'Copied' : 'Copy error'}
+            </Button>
+          </div>
+        </AppDialog>
+      ) : null}
     </div>
   );
 }
@@ -1511,17 +1594,9 @@ function Development({ appId }: { readonly appId: string }): ReactElement {
 function Configuration({
   mode,
   content,
-  path,
-  busy,
-  onContent,
-  onSave,
 }: {
   readonly mode: ConfigMode;
   readonly content: string;
-  readonly path: string | null;
-  readonly busy: boolean;
-  readonly onContent: (content: string) => void;
-  readonly onSave: () => void;
 }): ReactElement {
   const source = CONFIG_MODES.find((item) => item.value === mode);
   return (
@@ -1530,7 +1605,7 @@ function Configuration({
         <div>
           <h2 className='font-semibold'>Configuration</h2>
           <p className='mt-1 text-sm text-muted-foreground'>
-            This source was selected during the latest deployment.
+            Immutable configuration captured by the current deployment.
           </p>
         </div>
         <Badge className='gap-1.5 bg-muted text-foreground [&_svg]:size-3.5'>
@@ -1538,8 +1613,8 @@ function Configuration({
         </Badge>
       </div>
       <div className='rounded-lg border bg-muted/20 px-4 py-3 text-xs leading-5 text-muted-foreground'>
-        To use a different configuration source, start a new deployment and
-        select it in the Configuration step.
+        To change this configuration or its source, create a new deployment and
+        review the result before applying it.
       </div>
       {mode === 'file' ? (
         <div className='overflow-hidden rounded-xl border'>
@@ -1549,22 +1624,13 @@ function Configuration({
                 <FileCode2 className='size-4' /> config.yml
               </span>
               <span className='mt-1 block font-mono text-[11px] text-muted-foreground'>
-                {path ?? 'Created when saved'}
+                Current deployment snapshot · Read-only
               </span>
             </div>
           </div>
-          <Textarea
-            aria-label='config.yml content'
-            className='min-h-[420px] resize-y rounded-none border-0 bg-slate-950 p-5 font-mono text-[13px] leading-6 text-slate-100 focus-visible:ring-0'
-            onChange={(event) => onContent(event.target.value)}
-            spellCheck={false}
-            value={content}
-          />
-          <div className='flex justify-end border-t bg-muted/20 p-3'>
-            <Button disabled={busy} onClick={onSave}>
-              Save configuration
-            </Button>
-          </div>
+          <Suspense fallback={<ConfigEditorFallback />}>
+            <ConfigEditor readOnly value={content} />
+          </Suspense>
         </div>
       ) : null}
       {mode === 'external' ? (
@@ -1584,6 +1650,9 @@ function DeploymentDialog({
   releaseId,
   mode,
   content,
+  baselineContent,
+  baselineMode,
+  rollback,
   busy,
   onRelease,
   onMode,
@@ -1595,6 +1664,9 @@ function DeploymentDialog({
   readonly releaseId: string | undefined;
   readonly mode: ConfigMode;
   readonly content: string;
+  readonly baselineContent: string;
+  readonly baselineMode: ConfigMode;
+  readonly rollback: boolean;
   readonly busy: boolean;
   readonly onRelease: (releaseId: string) => void;
   readonly onMode: (mode: ConfigMode) => void;
@@ -1602,34 +1674,32 @@ function DeploymentDialog({
   readonly onClose: () => void;
   readonly onComplete: () => void;
 }): ReactElement {
-  const [step, setStep] = useState(0);
+  const firstStep = rollback ? 1 : 0;
+  const [step, setStep] = useState(firstStep);
   const release = app.releases.find((item) => item.id === releaseId);
+  const validationError =
+    mode === 'file' ? validateConfigDocument(content) : null;
+  const summary = summarizeConfigChanges(
+    baselineMode,
+    mode,
+    baselineContent,
+    content,
+  );
   return (
     <AppDialog
-      title='Deploy application'
+      title={rollback ? 'Roll back application' : 'Deploy application'}
       description={app.app.name}
       onClose={onClose}
       wide
     >
-      <div className='mb-6 flex items-center gap-3 text-sm'>
-        <Badge className={step === 0 ? '' : 'bg-muted text-muted-foreground'}>
-          1&nbsp; Release
-        </Badge>
-        <span className='h-px flex-1 bg-border' />
-        <Badge className={step === 1 ? '' : 'bg-muted text-muted-foreground'}>
-          2&nbsp; Configuration
-        </Badge>
-        <span className='h-px flex-1 bg-border' />
-        <Badge className={step === 2 ? '' : 'bg-muted text-muted-foreground'}>
-          3&nbsp; Review
-        </Badge>
-      </div>
+      <DeploymentSteps current={step} rollback={rollback} />
       <div>
         {step === 0 ? (
           <div className='max-h-[22rem] overflow-y-auto rounded-xl border'>
             {app.releases.map((item) => (
               <Button
                 className={`grid h-auto w-full grid-cols-[minmax(0,1fr)_auto] justify-stretch rounded-none border-b px-4 py-3 text-left last:border-0 ${releaseId === item.id ? 'bg-primary/5' : ''}`}
+                disabled={busy}
                 key={item.id}
                 onClick={() => onRelease(item.id)}
                 variant='ghost'
@@ -1659,20 +1729,89 @@ function DeploymentDialog({
           </div>
         ) : step === 1 ? (
           <div className='space-y-5'>
+            {rollback ? (
+              <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
+                <span className='text-muted-foreground'>Release</span>
+                <span className='font-medium'>
+                  {release ? `v${release.version}` : '—'}
+                </span>
+              </div>
+            ) : null}
             <ConfigModePicker value={mode} onChange={onMode} />
             {mode === 'file' ? (
-              <Textarea
-                aria-label='Deployment config.yml'
-                className='min-h-64 w-full rounded-xl bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100'
-                onChange={(event) => onContent(event.target.value)}
-                value={content}
-              />
+              <div className='overflow-hidden rounded-xl border'>
+                <div className='grid grid-cols-2 divide-x border-b bg-muted/20'>
+                  <div className='px-4 py-3'>
+                    <div className='flex items-center gap-2 text-sm font-medium'>
+                      <FileCode2 className='size-4 text-muted-foreground' />
+                      Current configuration
+                    </div>
+                    <p className='mt-1 text-xs text-muted-foreground'>
+                      {app.app.currentDeploymentId
+                        ? `Deployment ${shortId(app.app.currentDeploymentId)} · Read-only`
+                        : 'No active configuration'}
+                    </p>
+                  </div>
+                  <div className='px-4 py-3'>
+                    <div className='flex items-center gap-2 text-sm font-medium'>
+                      <FileCode2 className='size-4 text-primary' /> New
+                      configuration
+                    </div>
+                    <p className='mt-1 text-xs text-muted-foreground'>
+                      {rollback
+                        ? 'Restored from the selected deployment · Editable'
+                        : release?.hasConfigTemplate
+                          ? `From Release v${release?.version ?? '—'} · Editable`
+                          : app.app.currentDeploymentId
+                            ? `Based on current deployment · Release v${release?.version ?? '—'} has no config.yml`
+                            : `Release v${release?.version ?? '—'} has no config.yml · Editable`}
+                    </p>
+                  </div>
+                </div>
+                <Suspense fallback={<ConfigEditorFallback />}>
+                  <ConfigMergeEditor
+                    current={baselineMode === 'file' ? baselineContent : ''}
+                    onChange={onContent}
+                    value={content}
+                  />
+                </Suspense>
+              </div>
             ) : null}
-            {release?.configTemplate ? (
-              <p className='text-xs text-muted-foreground'>
-                This release includes a config.yml template. Existing saved
-                configuration will not be overwritten.
-              </p>
+            {mode === 'external' ? (
+              <div className='grid gap-3 sm:grid-cols-2'>
+                <div className='rounded-xl border bg-muted/20 px-4 py-3'>
+                  <p className='text-xs text-muted-foreground'>
+                    Current configuration
+                  </p>
+                  <p className='mt-1 text-sm font-medium'>
+                    {app.app.currentDeploymentId
+                      ? configModeLabel(baselineMode)
+                      : 'No active configuration'}
+                  </p>
+                </div>
+                <div className='rounded-xl border border-primary/30 bg-primary/5 px-4 py-3'>
+                  <p className='text-xs text-muted-foreground'>
+                    New configuration
+                  </p>
+                  <p className='mt-1 text-sm font-medium'>External</p>
+                  <p className='mt-1 text-xs text-muted-foreground'>
+                    Runtime configuration and secrets are supplied outside Hub.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {mode === 'file' ? (
+              <ConfigStatus error={validationError} summary={summary} />
+            ) : null}
+            {mode === 'file' ? (
+              <Alert className='border-amber-500/30 bg-amber-500/5 text-amber-800'>
+                <TriangleAlert className='size-4 shrink-0' />
+                <AlertDescription className='text-amber-800'>
+                  config.yml may contain secrets. Hub stores the complete file
+                  with this deployment, and authorized administrators can view
+                  its contents.
+                </AlertDescription>
+              </Alert>
             ) : null}
           </div>
         ) : (
@@ -1693,34 +1832,268 @@ function DeploymentDialog({
                 {mode === 'file' ? 'Config file' : 'External'}
               </span>
             </div>
+            {mode === 'file' ? (
+              <div className='space-y-4 p-4'>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                  <div className='rounded-lg border bg-muted/20 px-3 py-2.5'>
+                    <p className='text-xs text-muted-foreground'>
+                      Current configuration
+                    </p>
+                    <p className='mt-1 text-sm font-medium'>
+                      {app.app.currentDeploymentId
+                        ? `${configModeLabel(baselineMode)} · Deployment ${shortId(app.app.currentDeploymentId)}`
+                        : 'No active configuration'}
+                    </p>
+                  </div>
+                  <div className='rounded-lg border bg-primary/5 px-3 py-2.5'>
+                    <p className='text-xs text-muted-foreground'>
+                      New configuration
+                    </p>
+                    <p className='mt-1 text-sm font-medium'>
+                      {rollback
+                        ? 'Config file · Selected deployment snapshot'
+                        : `Config file · Release v${release?.version ?? '—'}`}
+                    </p>
+                  </div>
+                </div>
+                <ConfigStatus error={validationError} summary={summary} />
+                <details className='overflow-hidden rounded-lg border'>
+                  <summary className='cursor-pointer bg-muted/20 px-3 py-2 text-sm font-medium'>
+                    Review configuration changes
+                  </summary>
+                  <Suspense fallback={<ConfigEditorFallback />}>
+                    <ConfigMergeEditor
+                      current={baselineMode === 'file' ? baselineContent : ''}
+                      readOnly
+                      value={content}
+                    />
+                  </Suspense>
+                </details>
+              </div>
+            ) : (
+              <div className='p-4'>
+                <div className='flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2.5 text-sm text-emerald-700'>
+                  <Check className='size-4 shrink-0' />
+                  {summary.sourceChanged
+                    ? `Configuration source changes from ${configModeLabel(baselineMode)} to External`
+                    : 'No configuration source changes'}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
       <div className='mt-7 flex justify-between gap-2'>
         <Button
-          onClick={step === 0 ? onClose : () => setStep(step - 1)}
+          onClick={step === firstStep ? onClose : () => setStep(step - 1)}
           variant='outline'
         >
-          {step === 0 ? 'Cancel' : 'Back'}
+          {step === firstStep ? 'Cancel' : 'Back'}
         </Button>
         {step < 2 ? (
           <Button
-            disabled={!release || (step === 1 && mode === 'managed')}
+            disabled={
+              !release ||
+              busy ||
+              (step === 1 && (mode === 'managed' || validationError !== null))
+            }
             onClick={() => setStep(step + 1)}
           >
             Continue <ChevronRight />
           </Button>
         ) : (
           <Button
-            disabled={busy || !release || mode === 'managed'}
+            disabled={
+              busy || !release || mode === 'managed' || validationError !== null
+            }
             onClick={onComplete}
           >
-            {busy ? 'Deploying…' : 'Deploy'}
+            {busy
+              ? rollback
+                ? 'Rolling back…'
+                : 'Deploying…'
+              : rollback
+                ? 'Roll back'
+                : 'Deploy'}
           </Button>
         )}
       </div>
     </AppDialog>
   );
+}
+
+interface ConfigChangeSummary {
+  readonly added: number;
+  readonly removed: number;
+  readonly sourceChanged: boolean;
+  readonly unchanged: boolean;
+}
+
+function summarizeConfigChanges(
+  beforeMode: ConfigMode,
+  afterMode: ConfigMode,
+  before: string,
+  after: string,
+): ConfigChangeSummary {
+  const lines = diffLines(before, after);
+  return {
+    added: lines.filter((line) => line.kind === 'added').length,
+    removed: lines.filter((line) => line.kind === 'removed').length,
+    sourceChanged: beforeMode !== afterMode,
+    unchanged: beforeMode === afterMode && before === after,
+  };
+}
+
+function ConfigStatus({
+  error,
+  summary,
+}: {
+  readonly error: string | null;
+  readonly summary: ConfigChangeSummary;
+}): ReactElement {
+  if (error) {
+    return (
+      <div className='flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive'>
+        <AlertCircle className='mt-0.5 size-4 shrink-0' />
+        <span>{error}</span>
+      </div>
+    );
+  }
+  return (
+    <div className='flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2.5 text-sm text-emerald-700'>
+      <Check className='size-4 shrink-0' />
+      <span>
+        {summary.unchanged
+          ? 'Valid YAML · No configuration changes'
+          : summary.sourceChanged
+            ? `Valid YAML · Configuration source changed · ${summary.added} added and ${summary.removed} removed lines`
+            : `Valid YAML · ${summary.added} added and ${summary.removed} removed lines`}
+      </span>
+    </div>
+  );
+}
+
+function ConfigEditorFallback(): ReactElement {
+  return (
+    <div
+      className='h-[360px] animate-pulse bg-muted/30'
+      aria-label='Loading editor'
+    />
+  );
+}
+
+function validateConfigDocument(content: string): string | null {
+  try {
+    const value: unknown = content.trim() === '' ? {} : parseYaml(content);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return 'The YAML root must be an object.';
+    }
+    return null;
+  } catch (error) {
+    return `Invalid config.yml: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function shortId(value: string): string {
+  return `#${value.slice(0, 8)}`;
+}
+
+function configModeLabel(mode: ConfigMode): string {
+  return mode === 'file'
+    ? 'Config file'
+    : mode === 'external'
+      ? 'External'
+      : 'Hub managed';
+}
+
+type DiffLine = {
+  readonly id: string;
+  readonly kind: 'unchanged' | 'added' | 'removed';
+  readonly value: string;
+};
+
+function diffLines(before: string, after: string): readonly DiffLine[] {
+  const left = before.split('\n');
+  const right = after.split('\n');
+  if (left.length * right.length > 250_000) {
+    return diffLinesByPosition(left, right);
+  }
+  const lengths = Array.from({ length: left.length + 1 }, () =>
+    Array<number>(right.length + 1).fill(0),
+  );
+  for (let i = left.length - 1; i >= 0; i -= 1) {
+    for (let j = right.length - 1; j >= 0; j -= 1) {
+      lengths[i][j] =
+        left[i] === right[j]
+          ? lengths[i + 1][j + 1] + 1
+          : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+    }
+  }
+  const result: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < left.length || j < right.length) {
+    if (i < left.length && j < right.length && left[i] === right[j]) {
+      result.push({
+        id: String(result.length),
+        kind: 'unchanged',
+        value: left[i],
+      });
+      i += 1;
+      j += 1;
+    } else if (
+      j < right.length &&
+      (i === left.length || lengths[i][j + 1] >= lengths[i + 1][j])
+    ) {
+      result.push({
+        id: String(result.length),
+        kind: 'added',
+        value: right[j],
+      });
+      j += 1;
+    } else {
+      result.push({
+        id: String(result.length),
+        kind: 'removed',
+        value: left[i],
+      });
+      i += 1;
+    }
+  }
+  return result;
+}
+
+function diffLinesByPosition(
+  left: readonly string[],
+  right: readonly string[],
+): readonly DiffLine[] {
+  const result: DiffLine[] = [];
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    if (left[index] === right[index]) {
+      result.push({
+        id: String(result.length),
+        kind: 'unchanged',
+        value: left[index] ?? '',
+      });
+      continue;
+    }
+    if (left[index] !== undefined) {
+      result.push({
+        id: String(result.length),
+        kind: 'removed',
+        value: left[index],
+      });
+    }
+    if (right[index] !== undefined) {
+      result.push({
+        id: String(result.length),
+        kind: 'added',
+        value: right[index],
+      });
+    }
+  }
+  return result;
 }
 
 function UploadReleaseDialog({
@@ -1777,32 +2150,80 @@ function ConfigModePicker({
   readonly value: ConfigMode;
   readonly onChange: (mode: ConfigMode) => void;
 }): ReactElement {
+  const selected = CONFIG_MODES.find((item) => item.value === value);
   return (
-    <div className='grid gap-3 md:grid-cols-3'>
-      {CONFIG_MODES.map((item) => (
-        <Button
-          className={`relative h-auto min-h-20 flex-col items-stretch justify-start whitespace-normal rounded-xl p-3 text-left ${value === item.value ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''}`}
-          disabled={item.disabled}
-          key={item.value}
-          onClick={() => onChange(item.value)}
-          variant='outline'
-        >
-          <span className='flex items-center gap-2 pr-5 text-sm font-medium'>
+    <div>
+      <div className='grid gap-2 sm:grid-cols-3'>
+        {CONFIG_MODES.map((item) => (
+          <Button
+            className={`relative h-11 justify-start px-3 ${value === item.value ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''}`}
+            disabled={item.disabled}
+            key={item.value}
+            onClick={() => onChange(item.value)}
+            variant='outline'
+          >
             <span className='text-muted-foreground [&_svg]:size-4'>
               {item.icon}
             </span>
             <span>{item.title}</span>
             {item.disabled ? <Badge className='text-[9px]'>Soon</Badge> : null}
-          </span>
-          <span className='mt-1 block pl-6 text-[11px] leading-4 text-muted-foreground'>
-            {item.description}
-          </span>
-          {value === item.value ? (
-            <Check className='absolute top-3 right-3 size-3.5 text-primary' />
-          ) : null}
-        </Button>
-      ))}
+            {value === item.value ? (
+              <Check className='absolute right-3 size-3.5 text-primary' />
+            ) : null}
+          </Button>
+        ))}
+      </div>
+      <p className='mt-2 text-xs text-muted-foreground'>
+        {selected?.description}
+      </p>
     </div>
+  );
+}
+
+function DeploymentSteps({
+  current,
+  rollback,
+}: {
+  readonly current: number;
+  readonly rollback: boolean;
+}): ReactElement {
+  const steps = rollback
+    ? [
+        { index: 1, label: 'Configuration' },
+        { index: 2, label: 'Review' },
+      ]
+    : [
+        { index: 0, label: 'Release' },
+        { index: 1, label: 'Configuration' },
+        { index: 2, label: 'Review' },
+      ];
+  return (
+    <ol className='mb-6 flex items-center' aria-label='Deployment progress'>
+      {steps.map((item, position) => {
+        const active = item.index === current;
+        const complete = item.index < current;
+        return (
+          <li className='contents' key={item.label}>
+            {position > 0 ? (
+              <span
+                className={`mx-3 h-px min-w-6 flex-1 ${complete || active ? 'bg-primary/50' : 'bg-border'}`}
+              />
+            ) : null}
+            <span
+              aria-current={active ? 'step' : undefined}
+              className={`flex items-center gap-2 text-sm font-medium ${active ? 'text-foreground' : 'text-muted-foreground'}`}
+            >
+              <span
+                className={`grid size-6 place-items-center rounded-full border text-xs ${active ? 'border-primary bg-primary text-primary-foreground' : complete ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-background'}`}
+              >
+                {complete ? <Check className='size-3.5' /> : position + 1}
+              </span>
+              {item.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 function CreateDialog({
@@ -1886,7 +2307,7 @@ function AppDialog({
     <UiDialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent
         className={wide ? 'max-w-none p-8' : 'max-w-xl p-8'}
-        style={wide ? { width: 'min(48rem, calc(100vw - 2rem))' } : undefined}
+        style={wide ? { width: 'min(72rem, calc(100vw - 2rem))' } : undefined}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -2074,18 +2495,6 @@ function hasDeployment(app: AppDetail): boolean {
 }
 function ensureSlash(value: string): string {
   return value.endsWith('/') ? value : `${value}/`;
-}
-async function saveConfig(
-  client: import('@nocobase/app-client').AppClient,
-  appId: string,
-  mode: ConfigMode,
-  content: string,
-): Promise<void> {
-  if (mode === 'managed') return;
-  await client.request(`hub/apps/${appId}/config`, {
-    method: 'PUT',
-    body: JSON.stringify({ mode, ...(mode === 'file' ? { content } : {}) }),
-  });
 }
 async function uploadArtifact(
   appId: string,

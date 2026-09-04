@@ -15,8 +15,9 @@ import {
   hubServiceToken,
   type CreateHubAppInput,
   type DeployHubAppInput,
+  type HubAppDetail,
+  type HubReleaseRecord,
   type RollbackHubAppInput,
-  type SaveHubConfigInput,
   type UpdateHubSettingsInput,
 } from '../tokens.js';
 
@@ -51,40 +52,63 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
 
     routes.get('/apps', async (context) =>
-      respond(context, () => hub.listApps()),
+      respond(context, async () =>
+        (await hub.listApps()).map(releaseMetadataForApp),
+      ),
     );
     routes.post('/apps', async (context) => {
       const input = await context.req.json<CreateHubAppInput>();
       return await respond(context, () => hub.createApp(input));
     });
     routes.get('/apps/:appId', async (context) =>
-      respond(context, () => hub.getApp(context.req.param('appId'))),
+      respond(context, async () =>
+        releaseMetadataForApp(await hub.getApp(context.req.param('appId'))),
+      ),
     );
     routes.get('/apps/:appId/releases', async (context) =>
-      respond(context, () => hub.listReleases(context.req.param('appId'))),
-    );
-    routes.get('/apps/:appId/releases/:releaseId', async (context) =>
-      respond(context, () =>
-        hub.getRelease(
-          context.req.param('appId'),
-          context.req.param('releaseId'),
+      respond(context, async () =>
+        (await hub.listReleases(context.req.param('appId'))).map(
+          releaseMetadata,
         ),
       ),
     );
+    routes.get('/apps/:appId/releases/:releaseId', async (context) =>
+      respond(context, async () =>
+        releaseMetadata(
+          await hub.getRelease(
+            context.req.param('appId'),
+            context.req.param('releaseId'),
+          ),
+        ),
+      ),
+    );
+    routes.get(
+      '/apps/:appId/releases/:releaseId/config-template',
+      async (context) => {
+        preventSensitiveResponseCaching(context);
+        return await respond(context, async () => ({
+          content: (
+            await hub.getRelease(
+              context.req.param('appId'),
+              context.req.param('releaseId'),
+            )
+          ).configTemplate,
+        }));
+      },
+    );
     routes.post('/apps/:appId/releases', async (context) =>
       respond(context, async () => {
-        return await hub.createRelease(context.req.param('appId'), {
-          bytes: await readBody(context.req.raw, MAX_ARTIFACT_SIZE),
-        });
+        return releaseMetadata(
+          await hub.createRelease(context.req.param('appId'), {
+            bytes: await readBody(context.req.raw, MAX_ARTIFACT_SIZE),
+          }),
+        );
       }),
     );
-    routes.get('/apps/:appId/config', async (context) =>
-      respond(context, () => hub.readConfig(context.req.param('appId'))),
-    );
-    routes.put('/apps/:appId/config', async (context) => {
-      const input = await context.req.json<SaveHubConfigInput>();
+    routes.get('/apps/:appId/config', async (context) => {
+      preventSensitiveResponseCaching(context);
       return await respond(context, () =>
-        hub.saveConfig(context.req.param('appId'), input),
+        hub.readConfig(context.req.param('appId')),
       );
     });
     routes.put('/apps/:appId/settings', async (context) => {
@@ -111,6 +135,18 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           context.req.param('deploymentId'),
         ),
       ),
+    );
+    routes.get(
+      '/apps/:appId/deployments/:deploymentId/config',
+      async (context) => {
+        preventSensitiveResponseCaching(context);
+        return await respond(context, () =>
+          hub.readDeploymentConfig(
+            context.req.param('appId'),
+            context.req.param('deploymentId'),
+          ),
+        );
+      },
     );
     routes.post('/apps/:appId/rollback', async (context) => {
       const input = await context.req.json<RollbackHubAppInput>();
@@ -156,6 +192,29 @@ async function respond<T>(
     }
     throw error;
   }
+}
+
+function preventSensitiveResponseCaching(context: Context): void {
+  context.header('Cache-Control', 'no-store');
+  context.header('Pragma', 'no-cache');
+}
+
+type HubReleaseMetadata = Omit<HubReleaseRecord, 'configTemplate'> & {
+  readonly hasConfigTemplate: boolean;
+};
+
+function releaseMetadata(release: HubReleaseRecord): HubReleaseMetadata {
+  const { configTemplate, ...metadata } = release;
+  return { ...metadata, hasConfigTemplate: configTemplate !== null };
+}
+
+function releaseMetadataForApp(app: HubAppDetail): Omit<
+  HubAppDetail,
+  'releases'
+> & {
+  readonly releases: readonly HubReleaseMetadata[];
+} {
+  return { ...app, releases: app.releases.map(releaseMetadata) };
 }
 
 async function readBody(request: Request, limit: number): Promise<Uint8Array> {

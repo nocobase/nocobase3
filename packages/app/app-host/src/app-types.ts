@@ -214,14 +214,14 @@ export interface AppActivationBackend {
 export interface DeployAppOptions {
   version?: string;
   reason?: string;
-  strategy?: 'restart' | 'blue-green';
+  strategy?: 'restart';
   destroyTimeoutMs?: number;
   waitForReady?: boolean;
 }
 
 export interface AppDeploymentResult {
   id: string;
-  strategy: 'restart' | 'blue-green';
+  strategy: 'restart';
   previousVersion: string | null;
   desiredVersion: string;
   activeVersion: string;

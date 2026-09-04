@@ -229,41 +229,31 @@ export class AppRuntimeRegistry {
         await this.evictForCapacity();
       }
 
+      const replacementStartedAt = Date.now();
       let newRuntime: ActiveAppHandle;
-      const activationStartedAt = Date.now();
       try {
-        newRuntime = await this.activateDefinition(nextDefinition);
+        newRuntime = await this.replaceRuntimeStopFirst({
+          id,
+          currentDefinition,
+          currentRuntime,
+          nextDefinition,
+          reason: replaceOptions.reason ?? 'app definition replaced',
+          destroyTimeoutMs: replaceOptions.destroyTimeoutMs,
+        });
       } catch (error) {
         throw new AppReloadFailedError(id, error);
       }
-      const activationDurationMs = Date.now() - activationStartedAt;
+      const replacementDurationMs = Date.now() - replacementStartedAt;
 
       this.definitions.set(id, nextDefinition);
-      this.runtimes.set(id, newRuntime);
-
-      const destroyStartedAt = Date.now();
-      if (currentRuntime) {
-        try {
-          await currentRuntime.destroy({
-            reason: replaceOptions.reason ?? 'app definition replaced',
-            timeoutMs: replaceOptions.destroyTimeoutMs,
-          });
-        } catch (error) {
-          this.logger?.error(
-            { err: error, appId: id },
-            'Failed to destroy replaced app runtime',
-          );
-        }
-      }
-      const destroyDurationMs = Date.now() - destroyStartedAt;
 
       this.logger?.info(
         {
           appId: id,
           changed: true,
-          activationDurationMs,
-          destroyDurationMs,
+          replacementDurationMs,
           durationMs: Date.now() - startedAt,
+          replacementStrategy: 'stop-first',
         },
         'App definition replacement completed',
       );
@@ -326,16 +316,14 @@ export class AppRuntimeRegistry {
       const oldRuntime = this.runtimes.get(id);
 
       try {
-        const newRuntime = await this.activateDefinition(definition);
-        this.runtimes.set(id, newRuntime);
-
-        if (oldRuntime) {
-          await oldRuntime.destroy({
-            reason:
-              options.reason ?? `reloaded by version ${newRuntime.version}`,
-            timeoutMs: options.destroyTimeoutMs,
-          });
-        }
+        const newRuntime = await this.replaceRuntimeStopFirst({
+          id,
+          currentDefinition: definition,
+          currentRuntime: oldRuntime,
+          nextDefinition: definition,
+          reason: options.reason ?? 'app reloaded',
+          destroyTimeoutMs: options.destroyTimeoutMs,
+        });
 
         this.metrics.reloads += 1;
         return newRuntime.snapshot();
@@ -368,7 +356,6 @@ export class AppRuntimeRegistry {
             ? { ...currentDefinition.release, version: desiredVersion }
             : undefined,
         });
-        this.definitions.set(id, definition);
       }
 
       try {
@@ -376,21 +363,21 @@ export class AppRuntimeRegistry {
           await this.evictForCapacity();
         }
 
-        const newRuntime = await this.activateDefinition(definition);
-        this.runtimes.set(id, newRuntime);
-
-        if (oldRuntime) {
-          await oldRuntime.destroy({
-            reason: options.reason ?? `deployed version ${desiredVersion}`,
-            timeoutMs: options.destroyTimeoutMs,
-          });
-        }
+        const newRuntime = await this.replaceRuntimeStopFirst({
+          id,
+          currentDefinition,
+          currentRuntime: oldRuntime,
+          nextDefinition: definition,
+          reason: options.reason ?? `deployed version ${desiredVersion}`,
+          destroyTimeoutMs: options.destroyTimeoutMs,
+        });
+        this.definitions.set(id, definition);
 
         const app = newRuntime.snapshot();
         this.metrics.deployments += 1;
         return {
           id,
-          strategy: options.strategy ?? 'blue-green',
+          strategy: 'restart',
           previousVersion: oldSnapshot?.codeVersion ?? null,
           desiredVersion,
           activeVersion: app.codeVersion,
@@ -398,13 +385,61 @@ export class AppRuntimeRegistry {
           app,
         };
       } catch (error) {
-        if (desiredVersion !== currentDefinition.desiredVersion) {
-          this.definitions.set(id, currentDefinition);
-        }
-
         throw new AppReloadFailedError(id, error);
       }
     });
+  }
+
+  // This remains stop-first until queue managers and job registries are
+  // isolated per App Runtime. Starting both runtimes concurrently can make
+  // @boringnode/queue process-level state cross runtime boundaries.
+  private async replaceRuntimeStopFirst(options: {
+    id: string;
+    currentDefinition: AppDefinition | undefined;
+    currentRuntime: ActiveAppHandle | undefined;
+    nextDefinition: AppDefinition;
+    reason: string;
+    destroyTimeoutMs?: number;
+  }): Promise<ActiveAppHandle> {
+    const {
+      id,
+      currentDefinition,
+      currentRuntime,
+      nextDefinition,
+      reason,
+      destroyTimeoutMs,
+    } = options;
+
+    if (currentRuntime) {
+      await currentRuntime.destroy({ reason, timeoutMs: destroyTimeoutMs });
+      if (this.runtimes.get(id) === currentRuntime) {
+        this.runtimes.delete(id);
+      }
+    }
+
+    try {
+      const newRuntime = await this.activateDefinition(nextDefinition);
+      this.runtimes.set(id, newRuntime);
+      return newRuntime;
+    } catch (activationError) {
+      if (!currentRuntime || !currentDefinition?.enabled) {
+        throw activationError;
+      }
+
+      try {
+        const restoredRuntime =
+          await this.activateDefinition(currentDefinition);
+        this.runtimes.set(id, restoredRuntime);
+      } catch (restoreError) {
+        throw new AggregateError(
+          [activationError, restoreError],
+          `App "${id}" failed to activate the replacement and restore the previous runtime`,
+          { cause: restoreError },
+        );
+      }
+
+      throw activationError;
+    }
   }
 
   async destroy(
