@@ -1,0 +1,26 @@
+[
+  {
+    "text": "开始",
+    "link": "/get-started/"
+  },
+  {
+    "text": "教程",
+    "link": "/tutorials/"
+  },
+  {
+    "text": "应用开发",
+    "link": "/app/"
+  },
+  {
+    "text": "插件",
+    "link": "/plugins/"
+  },
+  {
+    "text": "部署",
+    "link": "/deployment/"
+  },
+  {
+    "text": "官网",
+    "link": "https://www.nocobase.com/cn/"
+  }
+]
