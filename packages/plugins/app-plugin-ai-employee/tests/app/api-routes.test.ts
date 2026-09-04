@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { registerAIEmployeeRoutes } from '../../server/routes/index.js';
-import { createAICurrentUserMiddleware } from '../../server/routes/utils.js';
-import type { Context } from '../../server/context.js';
-import { createTestAIEmployeeRuntime } from './test-context.js';
+import { createAIEmployeeRoutes } from '../../server/routes/index.js';
+import type { Context } from '../../server/internal/runtime-context.js';
+import { createTestAIEmployeeFixture } from './test-context.js';
 import { createTestAppDeps } from './test-app-deps.js';
 
 const methods: Record<string, string> = {
@@ -76,14 +75,12 @@ for (const resource of ['aiTools', 'aiSkills', 'llmServices', 'aiMcpServers']) {
 describe('AI action routers', () => {
   it('registers each supported local action once under /api/ai with a precise method', () => {
     const app = new Hono();
-    const routes = new Hono();
-    registerAIEmployeeRoutes(
-      routes,
-      createAICurrentUserMiddleware(createTestAppDeps().auth),
-      async (_context, next) => {
-        await next();
-      },
-    );
+    const { context: runtime, services } = createTestAIEmployeeFixture();
+    const routes = createAIEmployeeRoutes({
+      authentication: createTestAppDeps().auth,
+      services,
+      logger: runtime.logger,
+    });
     app.route('/api/ai', routes);
 
     const localRoutes = app.routes.filter(
@@ -115,21 +112,18 @@ describe('AI action routers', () => {
 
   it('returns direct JSON with the local marker and rejects legacy methods', async () => {
     const app = new Hono();
-    const runtime = createTestAIEmployeeRuntime();
-    runtime.employeeService.list = async () => [];
-    runtime.aiConversationService.unreadCounts = async () => ({
+    const { context: runtime, services } = createTestAIEmployeeFixture();
+    services.ready = async () => undefined;
+    services.employeeService.list = async () => [];
+    services.conversationService.unreadCounts = async () => ({
       conversationUnreadCount: 3,
       workflowTaskUnreadCount: 0,
     });
-    const routes = new Hono();
-    registerAIEmployeeRoutes(
-      routes,
-      createAICurrentUserMiddleware(createTestAppDeps().auth),
-      async (context, next) => {
-        context.set('ctx', runtime);
-        await next();
-      },
-    );
+    const routes = createAIEmployeeRoutes({
+      authentication: createTestAppDeps().auth,
+      services,
+      logger: runtime.logger,
+    });
     app.route('/api/ai', routes);
 
     const response = await app.request(
@@ -155,26 +149,46 @@ describe('AI action routers', () => {
     expect(legacyMethod.status).toBe(404);
   });
 
+  it('preserves the legacy error envelope while mapping explicit statuses', async () => {
+    const app = new Hono();
+    const { context: runtime, services } = createTestAIEmployeeFixture();
+    services.ready = async () => undefined;
+    const routes = createAIEmployeeRoutes({
+      authentication: createTestAppDeps().auth,
+      services,
+      logger: runtime.logger,
+    });
+    app.route('/api/ai', routes);
+
+    const response = await app.request(
+      'http://localhost/api/ai/aiEmployees:get',
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      errors: [{ message: 'key is required' }],
+      error: 'key is required',
+    });
+  });
   it('wires each managed resource to a dedicated service instance', () => {
-    const runtime = createTestAIEmployeeRuntime();
-    expect(runtime.employeeService.constructor.name).toBe('AIEmployeeService');
-    expect(runtime.toolService.constructor.name).toBe('AIToolService');
-    expect(runtime.skillService.constructor.name).toBe('AISkillService');
-    expect(runtime.llmService.constructor.name).toBe('LLMService');
-    expect(runtime.mcpServerService.constructor.name).toBe(
+    const { context: runtime, services } = createTestAIEmployeeFixture();
+    expect(services.employeeService.constructor.name).toBe('AIEmployeeService');
+    expect(services.toolService.constructor.name).toBe('AIToolService');
+    expect(services.skillService.constructor.name).toBe('AISkillService');
+    expect(services.llmService.constructor.name).toBe('LLMService');
+    expect(services.mcpServerService.constructor.name).toBe(
       'AIMCPServerService',
     );
-    expect(runtime.aiConversationService.constructor.name).toBe(
+    expect(services.conversationService.constructor.name).toBe(
       'AIConversationService',
     );
     expect(
       new Set([
-        runtime.employeeService,
-        runtime.toolService,
-        runtime.skillService,
-        runtime.llmService,
-        runtime.mcpServerService,
-        runtime.aiConversationService,
+        services.employeeService,
+        services.toolService,
+        services.skillService,
+        services.llmService,
+        services.mcpServerService,
+        services.conversationService,
       ]).size,
     ).toBe(6);
   });

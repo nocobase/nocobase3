@@ -14,7 +14,7 @@ export default createClientLibraryConfig({
     'server/repository/**',
     'server/routes/*.ts',
     'server/service/**',
-    'server/runtime.ts',
+    'server/internal/**',
   ],
   overrides: [
     {

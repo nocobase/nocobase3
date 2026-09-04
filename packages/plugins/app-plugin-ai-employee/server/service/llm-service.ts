@@ -2,11 +2,11 @@ import {
   normalizeEnabledModelsConfig,
   type LLMServiceEntity,
 } from '@nocobase/ai-employee';
-import type { Context } from '../context.js';
+import type { AIManager } from '@nocobase/ai-employee';
 import type {
   LLMServiceDto,
   LLMServiceResourceInput,
-} from '../routes/contracts.js';
+} from '../domain/api-contracts.js';
 import {
   asRecord,
   badRequest,
@@ -16,29 +16,39 @@ import {
   requiredString,
 } from './utils.js';
 
+export interface LLMServiceOptions {
+  readonly ai: AIManager;
+}
+
 export class LLMService {
-  async list(ctx: Context): Promise<LLMServiceDto[]> {
-    return (await ctx.ai.llmServiceManager.listLLMServices()).map(
+  private readonly ai: AIManager;
+
+  public constructor({ ai }: LLMServiceOptions) {
+    this.ai = ai;
+  }
+  async list(_options: {}): Promise<LLMServiceDto[]> {
+    return (await this.ai.llmServiceManager.listLLMServices()).map(
       serializeLLMService,
     );
   }
 
-  async get(ctx: Context, name: string): Promise<LLMServiceDto> {
-    const service = await ctx.ai.llmServiceManager.getLLMService(name);
+  async get({ name }: { name: string }): Promise<LLMServiceDto> {
+    const service = await this.ai.llmServiceManager.getLLMService(name);
     if (!service) throw notFound('llmServices', name);
     return serializeLLMService(service);
   }
 
-  async upsert(
-    ctx: Context,
-    input: LLMServiceResourceInput,
-  ): Promise<LLMServiceDto> {
+  async upsert({
+    input,
+  }: {
+    input: LLMServiceResourceInput;
+  }): Promise<LLMServiceDto> {
     const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
     const name = requiredString(record.name, 'name');
-    const current = await ctx.ai.llmServiceManager.getLLMService(name);
+    const current = await this.ai.llmServiceManager.getLLMService(name);
     if (!current && !record.provider) throw badRequest('provider is required');
-    await ctx.ai.llmServiceManager.registerLLMService({
+    await this.ai.llmServiceManager.registerLLMService({
       name,
       title: optionalString(record.title) ?? current?.title ?? name,
       provider: optionalString(record.provider) ?? current?.provider ?? '',
@@ -49,11 +59,11 @@ export class LLMService {
       modelOptions: asRecord(record.modelOptions) ?? current?.modelOptions,
       sort: typeof record.sort === 'number' ? record.sort : current?.sort,
     });
-    return this.get(ctx, name);
+    return this.get({ name });
   }
 
-  async delete(ctx: Context, name: string): Promise<void> {
-    await ctx.ai.llmServiceManager.deleteLLMService(name);
+  async delete({ name }: { name: string }): Promise<void> {
+    await this.ai.llmServiceManager.deleteLLMService(name);
   }
 }
 

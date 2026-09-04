@@ -4,8 +4,14 @@ import { AIConversationsManager } from '../../server/ai-employees/ai-conversatio
 describe('AIConversationsManager', () => {
   it('loads only messages that belong to the requested session', async () => {
     const findMessages = vi.fn().mockResolvedValue([]);
-    const manager = new AIConversationsManager({
-      repositories: {
+    const manager = new AIConversationsManager(
+      {
+        ai: {
+          toolsManager: { listTools: vi.fn().mockResolvedValue([]) },
+          llmProviderManager: { llmProviders: new Map() },
+        },
+      } as any,
+      {
         aiConversations: {
           findOne: vi.fn().mockResolvedValue({ sessionId: 'session-a' }),
           count: vi.fn().mockResolvedValue(1),
@@ -13,12 +19,8 @@ describe('AIConversationsManager', () => {
         },
         aiMessages: { find: findMessages },
         aiToolMessages: { find: vi.fn().mockResolvedValue([]) },
-      },
-      ai: {
-        toolsManager: { listTools: vi.fn().mockResolvedValue([]) },
-        llmProviderManager: { llmProviders: new Map() },
-      },
-    } as any);
+      } as any,
+    );
 
     await manager.getMessages({
       userId: 'user-1',

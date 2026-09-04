@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../context.js';
+import type { Context } from '../internal/runtime-context.js';
 import type { Cache } from '@nocobase/caching';
 
 const CACHE_NAME = 'ai-llm-stream-cache';

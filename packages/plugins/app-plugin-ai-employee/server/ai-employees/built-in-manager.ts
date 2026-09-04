@@ -10,7 +10,7 @@
  * and defaults to the app package name.
  */
 
-import type { Context } from '../context.js';
+import type { Context } from '../internal/runtime-context.js';
 import type { AIEmployee } from '@nocobase/ai-employee';
 import _ from 'lodash';
 
