@@ -30,6 +30,9 @@
       "@nocobase/app-plugin-install": {
         "enabled": true
       },
+      "@nocobase/app-plugin-mail": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-notification": {
         "enabled": true
       },
@@ -83,6 +86,7 @@
     "@nocobase/app-plugin-file": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
+    "@nocobase/app-plugin-mail": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-plugin-notification-in-app": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
