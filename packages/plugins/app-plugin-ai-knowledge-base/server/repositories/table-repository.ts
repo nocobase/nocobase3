@@ -26,12 +26,12 @@ function applyFilter(query: SelectQuery, filter: Filter): SelectQuery {
 }
 
 export class TableRepository<T extends Record<string, unknown>> {
-  constructor(
+  public constructor(
     private readonly database: DatabaseConnection,
-    readonly table: string,
+    public readonly table: string,
   ) {}
 
-  async find(
+  public async find(
     options: {
       filter?: Filter;
       sort?: string[];
@@ -54,15 +54,15 @@ export class TableRepository<T extends Record<string, unknown>> {
     return (await query.execute<T>()).map((row) => this.decode(row));
   }
 
-  async findOne(filter: Filter): Promise<T | null> {
+  public async findOne(filter: Filter): Promise<T | null> {
     return (await this.find({ filter, limit: 1 }))[0] ?? null;
   }
 
-  async findById(id: string | number): Promise<T | null> {
+  public async findById(id: string | number): Promise<T | null> {
     return this.findOne({ id });
   }
 
-  async count(filter: Filter = {}): Promise<number> {
+  public async count(filter: Filter = {}): Promise<number> {
     const query = applyFilter(
       this.database.query
         .selectFrom(this.table)
@@ -75,7 +75,7 @@ export class TableRepository<T extends Record<string, unknown>> {
     return Number(row?.count ?? 0);
   }
 
-  async create(values: Partial<T>, lookupFilter?: Filter): Promise<T> {
+  public async create(values: Partial<T>, lookupFilter?: Filter): Promise<T> {
     const now = new Date();
     const input = this.encode({ createdAt: now, updatedAt: now, ...values });
     const result = await this.database.query
@@ -106,7 +106,7 @@ export class TableRepository<T extends Record<string, unknown>> {
     return this.decode(input as T);
   }
 
-  async createMany(values: Array<Partial<T>>): Promise<void> {
+  public async createMany(values: Array<Partial<T>>): Promise<void> {
     if (!values.length) return;
     const now = new Date();
     await this.database.query
@@ -120,7 +120,7 @@ export class TableRepository<T extends Record<string, unknown>> {
       .execute();
   }
 
-  async update(filter: Filter, values: Partial<T>): Promise<number> {
+  public async update(filter: Filter, values: Partial<T>): Promise<number> {
     let query = this.database.query
       .updateTable(this.table)
       .set(this.encode({ ...values, updatedAt: new Date() }));
@@ -143,7 +143,7 @@ export class TableRepository<T extends Record<string, unknown>> {
     return (await query.execute()).updatedCount ?? 0;
   }
 
-  async destroy(filter: Filter): Promise<number> {
+  public async destroy(filter: Filter): Promise<number> {
     let query = this.database.query.deleteFrom(this.table);
     for (const [field, value] of Object.entries(filter)) {
       if (

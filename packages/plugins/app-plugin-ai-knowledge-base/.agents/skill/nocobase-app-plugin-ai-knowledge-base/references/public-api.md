@@ -17,6 +17,8 @@
 | `@nocobase/app-plugin-ai-knowledge-base/client/routes`           | Default `defineClientRoutes([])` result; currently no standalone route declarations.                                                                                |
 | `@nocobase/app-plugin-ai-knowledge-base/client/settings-pages`   | `KnowledgeBaseSettingsPage` and `VectorDatabaseSettingsPage`.                                                                                                       |
 | `@nocobase/app-plugin-ai-knowledge-base/client/vector-databases` | `Component` and default export for the vector-database page.                                                                                                        |
+| `@nocobase/app-plugin-ai-knowledge-base/server`                  | Canonical Server plugin definition for explicit App `server/plugins.ts` composition.                                                                                |
+| `@nocobase/app-plugin-ai-knowledge-base/server/plugin`           | Compatibility alias for the same Server plugin definition.                                                                                                          |
 | `@nocobase/app-plugin-ai-knowledge-base/package.json`            | Manifest metadata.                                                                                                                                                  |
 
 Client peers are `@nocobase/app-client`, `@refinedev/core`, React 19, and React Router 7.
@@ -38,9 +40,8 @@ The exported component barrel also includes knowledge-base, document, retrieval,
 
 Do not import any unexported file path, including dependency-internal source/build paths or server implementation paths. In particular:
 
-- server `KnowledgeBaseService` is not exported;
-- `TableRepository` is internal;
-- the hidden AI-manager service bridge is internal;
+- server RepositoryFactory, ManagerFactory, ServiceFactory, repositories, managers, domain services, and feature implementations are not exported;
+- the queue executor adapter and PGVector implementation are internal;
 - migrations and queue jobs are lifecycle-managed;
 - AI feature enablement is automatic;
 - the built-in PGVector provider has no public application registration API;

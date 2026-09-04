@@ -5,8 +5,8 @@ import type {
   NewFileMetadata,
 } from '@nocobase/ai-employee';
 
-import type { TableRepository } from '../repository.js';
-import type { JsonRecord, SegmentShardRecord } from '../types.js';
+import type { TableRepository } from '../repositories/table-repository.js';
+import type { JsonRecord, SegmentShardRecord } from '../internal-types.js';
 
 export interface KnowledgeBaseSegmentShardMetadataCreateContext {
   readonly knowledgeBaseKey: string;
