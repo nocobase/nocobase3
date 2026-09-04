@@ -25,7 +25,22 @@ import type {
   NormalizedMailMessage,
   NormalizedMailAttachment,
   MailAddress,
+  MailAuthorizationTransaction,
+  MailProviderIdentity,
 } from './types.js';
+
+interface AuthorizationStateRow extends Row {
+  stateHash: string;
+  userId: string;
+  providerType: string;
+  providerName: string;
+  redirectUri: string;
+  verifierCredentialReference: string;
+  scopes: readonly string[] | string;
+  expiresAt: string;
+  consumedAt?: string | null;
+  createdAt: string;
+}
 
 interface AccountRow extends Row {
   id: string;
@@ -156,12 +171,86 @@ interface OutboxRow extends Row {
 export class DatabaseMailStore implements MailStore {
   public constructor(private readonly database: DatabaseManager) {}
 
+  public async createAuthorizationTransaction(
+    transaction: MailAuthorizationTransaction,
+  ): Promise<void> {
+    await this.database
+      .query()
+      .insertInto<AuthorizationStateRow>('mailAuthorizationStates')
+      .values({
+        stateHash: transaction.stateHash,
+        userId: transaction.userId,
+        providerType: transaction.provider.type,
+        providerName: transaction.provider.name,
+        redirectUri: transaction.redirectUri,
+        verifierCredentialReference: transaction.verifierCredentialReference,
+        scopes: JSON.stringify(transaction.scopes),
+        expiresAt: transaction.expiresAt,
+        createdAt: new Date().toISOString(),
+      })
+      .execute();
+  }
+
+  public async consumeAuthorizationTransaction(
+    stateHash: string,
+    now: string,
+  ): Promise<MailAuthorizationTransaction | undefined> {
+    return this.database.transaction(async (connection) => {
+      const row = await connection.query
+        .selectFrom<AuthorizationStateRow>('mailAuthorizationStates')
+        .selectAll()
+        .where('stateHash', '=', stateHash)
+        .where('consumedAt', 'is', null)
+        .where('expiresAt', '>', now)
+        .executeTakeFirst<AuthorizationStateRow>();
+      if (!row) return undefined;
+      const updated = await connection.query
+        .updateTable<AuthorizationStateRow>('mailAuthorizationStates')
+        .set({ consumedAt: now })
+        .where('stateHash', '=', stateHash)
+        .where('consumedAt', 'is', null)
+        .execute();
+      return updated.updatedCount === 1
+        ? {
+            stateHash: row.stateHash,
+            userId: row.userId,
+            provider: {
+              type: row.providerType,
+              name: row.providerName,
+            },
+            redirectUri: row.redirectUri,
+            verifierCredentialReference: row.verifierCredentialReference,
+            scopes: parseJson<readonly string[]>(
+              row.scopes,
+              'authorization scopes',
+            ),
+            expiresAt: row.expiresAt,
+          }
+        : undefined;
+    });
+  }
+
   public async getAccount(accountId: string): Promise<MailAccount | undefined> {
     const row = await this.database
       .query()
       .selectFrom<AccountRow>('mailAccounts')
       .selectAll()
       .where('id', '=', accountId)
+      .executeTakeFirst<AccountRow>();
+    return row ? fromAccountRow(row) : undefined;
+  }
+
+  public async findAccountByProviderAddress(
+    provider: MailProviderIdentity,
+    address: string,
+  ): Promise<MailAccount | undefined> {
+    const row = await this.database
+      .query()
+      .selectFrom<AccountRow>('mailAccounts')
+      .selectAll()
+      .where('providerType', '=', provider.type)
+      .where('providerName', '=', provider.name)
+      .where('address', '=', address)
       .executeTakeFirst<AccountRow>();
     return row ? fromAccountRow(row) : undefined;
   }
@@ -178,24 +267,18 @@ export class DatabaseMailStore implements MailStore {
   }
 
   public async saveAccount(account: MailAccount): Promise<MailAccount> {
-    const now = new Date().toISOString();
-    const existing = await this.getAccount(account.id);
-    const row = toAccountRow(account, now, existing ? undefined : now);
-    if (existing) {
-      await this.database
-        .query()
-        .updateTable<AccountRow>('mailAccounts')
-        .set(row)
-        .where('id', '=', account.id)
-        .execute();
-    } else {
-      await this.database
-        .query()
-        .insertInto<AccountRow>('mailAccounts')
-        .values(row)
-        .execute();
-    }
+    await persistAccount(this.database.query(), account);
     return account;
+  }
+
+  public async saveAuthorizedAccount(
+    account: MailAccount,
+    identities: readonly MailIdentity[],
+  ): Promise<void> {
+    await this.database.transaction(async (connection): Promise<void> => {
+      await persistAccount(connection.query, account);
+      await replaceAccountIdentities(connection.query, account.id, identities);
+    });
   }
 
   public async listIdentities(
@@ -216,16 +299,7 @@ export class DatabaseMailStore implements MailStore {
     identities: readonly MailIdentity[],
   ): Promise<void> {
     await this.database.transaction(async (connection): Promise<void> => {
-      await connection.query
-        .deleteFrom<IdentityRow>('mailIdentities')
-        .where('accountId', '=', accountId)
-        .execute();
-      if (identities.length > 0) {
-        await connection.query
-          .insertInto<IdentityRow>('mailIdentities')
-          .values(identities.map(toIdentityRow))
-          .execute();
-      }
+      await replaceAccountIdentities(connection.query, accountId, identities);
     });
   }
 
@@ -255,6 +329,11 @@ export class DatabaseMailStore implements MailStore {
   public async commitSyncBatch(batch: MailSyncBatch): Promise<void> {
     await this.database.transaction(async (connection): Promise<void> => {
       await upsertMessages(connection.query, batch.accountId, batch.messages);
+      await removeMessagesFromFolders(
+        connection.query,
+        batch.accountId,
+        batch.removedFromFolders ?? [],
+      );
       await deleteMessages(
         connection.query,
         batch.accountId,
@@ -429,6 +508,11 @@ export class DatabaseMailStore implements MailStore {
         connection.query,
         input.run.accountId,
         input.messages,
+      );
+      await removeMessagesFromFolders(
+        connection.query,
+        input.run.accountId,
+        input.removedFromFolders ?? [],
       );
       await deleteMessages(
         connection.query,
@@ -771,6 +855,45 @@ export function createDatabaseMailStore(
   return new DatabaseMailStore(database);
 }
 
+async function persistAccount(
+  query: QueryAdapter,
+  account: MailAccount,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const existing = await query
+    .selectFrom<AccountRow>('mailAccounts')
+    .select('id')
+    .where('id', '=', account.id)
+    .executeTakeFirst<Pick<AccountRow, 'id'>>();
+  const row = toAccountRow(account, now, existing ? undefined : now);
+  if (existing) {
+    await query
+      .updateTable<AccountRow>('mailAccounts')
+      .set(row)
+      .where('id', '=', account.id)
+      .execute();
+    return;
+  }
+  await query.insertInto<AccountRow>('mailAccounts').values(row).execute();
+}
+
+async function replaceAccountIdentities(
+  query: QueryAdapter,
+  accountId: string,
+  identities: readonly MailIdentity[],
+): Promise<void> {
+  await query
+    .deleteFrom<IdentityRow>('mailIdentities')
+    .where('accountId', '=', accountId)
+    .execute();
+  if (identities.length > 0) {
+    await query
+      .insertInto<IdentityRow>('mailIdentities')
+      .values(identities.map(toIdentityRow))
+      .execute();
+  }
+}
+
 async function upsertMessages(
   query: QueryAdapter,
   accountId: string,
@@ -843,6 +966,31 @@ async function deleteMessages(
     .where('accountId', '=', accountId)
     .where('providerMessageId', 'in', providerMessageIds)
     .execute();
+}
+
+async function removeMessagesFromFolders(
+  query: QueryAdapter,
+  accountId: string,
+  removals: readonly import('./types.js').MailProviderFolderRemoval[],
+): Promise<void> {
+  for (const removal of removals) {
+    const row = await query
+      .selectFrom<MessageRow>('mailMessages')
+      .select(['id', 'providerFolderIds'])
+      .where('accountId', '=', accountId)
+      .where('providerMessageId', '=', removal.providerMessageId)
+      .executeTakeFirst<Pick<MessageRow, 'id' | 'providerFolderIds'>>();
+    if (!row) continue;
+    const providerFolderIds = parseJson<readonly string[]>(
+      row.providerFolderIds,
+      'message folder IDs',
+    ).filter((folderId) => folderId !== removal.providerFolderId);
+    await query
+      .updateTable<MessageRow>('mailMessages')
+      .set({ providerFolderIds: JSON.stringify(providerFolderIds) })
+      .where('id', '=', row.id)
+      .execute();
+  }
 }
 
 async function upsertSyncState(

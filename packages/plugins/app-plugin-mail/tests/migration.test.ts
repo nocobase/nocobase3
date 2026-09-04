@@ -15,6 +15,8 @@ interface SqliteClient {
 }
 
 const COLLECTIONS = [
+  ['mailCredentials', 'mail_credentials'],
+  ['mailAuthorizationStates', 'mail_authorization_states'],
   ['mailAccounts', 'mail_accounts'],
   ['mailIdentities', 'mail_identities'],
   ['mailFolders', 'mail_folders'],

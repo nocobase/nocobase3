@@ -3,6 +3,8 @@ import {
   type AuthEnv,
 } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { appConfig } from '@nocobase/app-server/config';
+import { joinBasePath } from '@nocobase/app-server/support';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
@@ -19,7 +21,7 @@ import type {
 } from '../types.js';
 
 export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
-  defineApiRoutes(({ container }) => {
+  defineApiRoutes(({ container, config, publicBasePath }) => {
     const router = new Hono();
     const routes = new Hono<AuthEnv>();
     const authentication = container.resolve(authenticationToken);
@@ -58,6 +60,27 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.listAccounts(operationContext(context)),
       }),
     );
+    routes.get('/providers', async (context) =>
+      context.json({ data: await mail.listProviders() }),
+    );
+    routes.post('/authorizations', async (context) => {
+      const value = await readObject(context.req.raw);
+      const identity = config.get(appConfig);
+      const origin = identity.publicOrigin ?? new URL(context.req.url).origin;
+      return context.json({
+        data: await mail.startAuthorization(operationContext(context), {
+          provider: {
+            type: requiredString(value.type, 'type'),
+            name: requiredString(value.name, 'name'),
+          },
+          redirectUri: new URL(
+            joinBasePath(publicBasePath, '/mail/oauth/callback'),
+            origin,
+          ).toString(),
+          scopes: optionalStringArray(value.scopes, 'scopes'),
+        }),
+      });
+    });
     routes.get('/accounts/:accountId/identities', async (context) =>
       context.json({
         data: await mail.listIdentities(

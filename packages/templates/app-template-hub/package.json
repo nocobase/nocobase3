@@ -33,6 +33,12 @@
       "@nocobase/app-plugin-mail": {
         "enabled": true
       },
+      "@nocobase/app-plugin-mail-provider-gmail": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-mail-provider-microsoft": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-notification": {
         "enabled": true
       },
@@ -87,6 +93,8 @@
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-mail": "workspace:^",
+    "@nocobase/app-plugin-mail-provider-gmail": "workspace:^",
+    "@nocobase/app-plugin-mail-provider-microsoft": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-plugin-notification-in-app": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",

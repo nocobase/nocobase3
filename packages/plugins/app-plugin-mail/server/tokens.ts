@@ -4,6 +4,7 @@ import {
 } from '@nocobase/service-provider';
 
 import type {
+  MailCredentialVault,
   MailProviderAdapterResolver,
   MailProviderRegistry,
   MailService,
@@ -16,6 +17,11 @@ export const mailServiceToken: ServiceToken<MailService> =
 
 export const mailStoreToken: ServiceToken<MailStore> =
   createServiceToken<MailStore>('@nocobase/app-plugin-mail/store');
+
+export const mailCredentialVaultToken: ServiceToken<MailCredentialVault> =
+  createServiceToken<MailCredentialVault>(
+    '@nocobase/app-plugin-mail/credential-vault',
+  );
 
 export const mailProviderRegistryToken: ServiceToken<MailProviderRegistry> =
   createServiceToken<MailProviderRegistry>(

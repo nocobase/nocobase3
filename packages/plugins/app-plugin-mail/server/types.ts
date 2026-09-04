@@ -273,6 +273,7 @@ export interface MailAuthorizationStartInput {
   readonly provider: MailProviderIdentity;
   readonly redirectUri: string;
   readonly state: string;
+  readonly codeChallenge: string;
   readonly scopes?: readonly string[];
 }
 
@@ -280,6 +281,19 @@ export interface MailAuthorizationStartResult {
   readonly authorizationUrl: string;
   readonly state: string;
   readonly expiresAt?: string;
+}
+
+export interface MailStartAuthorizationInput {
+  readonly provider: MailProviderIdentity;
+  readonly redirectUri: string;
+  readonly scopes?: readonly string[];
+}
+
+export interface MailCompleteAuthorizationInput {
+  readonly state: string;
+  readonly code?: string;
+  readonly error?: string;
+  readonly errorDescription?: string;
 }
 
 export interface MailAuthorizationCallbackInput {
@@ -367,6 +381,14 @@ export interface MailAttachmentContent {
 }
 
 export interface MailService {
+  listProviders(): Promise<readonly MailProviderView[]>;
+  startAuthorization(
+    context: MailOperationContext,
+    input: MailStartAuthorizationInput,
+  ): Promise<MailAuthorizationStartResult>;
+  completeAuthorization(
+    input: MailCompleteAuthorizationInput,
+  ): Promise<MailAccountView>;
   listAccounts(
     context: MailOperationContext,
   ): Promise<readonly MailAccountView[]>;
@@ -447,14 +469,22 @@ export interface MailProviderAuthorizationCallbackInput {
   readonly redirectUri: string;
   readonly state: string;
   readonly code: string;
+  readonly codeVerifier: string;
+  readonly scopes: readonly string[];
   readonly signal?: AbortSignal;
 }
 
 export interface MailProviderChangePage {
   readonly messages: readonly NormalizedMailMessage[];
+  readonly removedFromFolders?: readonly MailProviderFolderRemoval[];
   readonly deletedProviderMessageIds: readonly string[];
   readonly nextCursor: MailSyncCursor;
   readonly hasMore: boolean;
+}
+
+export interface MailProviderFolderRemoval {
+  readonly providerMessageId: string;
+  readonly providerFolderId: string;
 }
 
 export interface MailProviderListChangesInput {
@@ -474,6 +504,8 @@ export interface MailProviderListMessagesInput {
 export interface MailProviderMessagePage {
   readonly messages: readonly NormalizedMailMessage[];
   readonly nextCursor?: string;
+  /** Checkpoint produced by Providers that enumerate initial state with delta. */
+  readonly syncCursor?: MailSyncCursor;
 }
 
 export interface MailProviderSendInput {
@@ -620,6 +652,14 @@ export interface MailProviderAdapter {
 
 export interface MailProviderContext {
   readonly publicBasePath: string;
+  readonly credentials: MailCredentialVault;
+}
+
+export interface MailCredentialVault {
+  put(value: unknown): Promise<string>;
+  get<T>(reference: string): Promise<T>;
+  replace(reference: string, value: unknown): Promise<void>;
+  delete(reference: string): Promise<void>;
 }
 
 export interface MailProviderMoveResult {
@@ -663,6 +703,23 @@ export interface MailProviderRegistry {
   definitions(): readonly MailProviderDefinition[];
 }
 
+export interface MailProviderView {
+  readonly type: string;
+  readonly name: string;
+  readonly label: string;
+  readonly capabilities: MailProviderCapabilities;
+}
+
+export interface MailAuthorizationTransaction {
+  readonly stateHash: string;
+  readonly userId: string;
+  readonly provider: MailProviderIdentity;
+  readonly redirectUri: string;
+  readonly verifierCredentialReference: string;
+  readonly scopes: readonly string[];
+  readonly expiresAt: string;
+}
+
 export interface MailProviderAdapterResolver {
   resolve(
     account: MailAccount,
@@ -674,6 +731,7 @@ export interface MailSyncBatch {
   readonly accountId: string;
   readonly folders: readonly NormalizedMailFolder[];
   readonly messages: readonly NormalizedMailMessage[];
+  readonly removedFromFolders?: readonly MailProviderFolderRemoval[];
   readonly deletedProviderMessageIds: readonly string[];
   readonly previousCursor?: MailSyncCursor;
   readonly nextCursor: MailSyncCursor;
@@ -683,6 +741,7 @@ export interface MailSyncStepCommit {
   readonly run: MailSyncRun;
   readonly folders?: readonly NormalizedMailFolder[];
   readonly messages: readonly NormalizedMailMessage[];
+  readonly removedFromFolders?: readonly MailProviderFolderRemoval[];
   readonly deletedProviderMessageIds?: readonly string[];
   readonly phase: MailSyncPhase;
   readonly status: MailSyncRunStatus;
@@ -729,9 +788,24 @@ export interface MailStoredSubmission extends MailSubmission {
 }
 
 export interface MailStore {
+  createAuthorizationTransaction(
+    transaction: MailAuthorizationTransaction,
+  ): Promise<void>;
+  consumeAuthorizationTransaction(
+    stateHash: string,
+    now: string,
+  ): Promise<MailAuthorizationTransaction | undefined>;
   getAccount(accountId: string): Promise<MailAccount | undefined>;
+  findAccountByProviderAddress(
+    provider: MailProviderIdentity,
+    address: string,
+  ): Promise<MailAccount | undefined>;
   listAccounts(userId: string): Promise<readonly MailAccount[]>;
   saveAccount(account: MailAccount): Promise<MailAccount>;
+  saveAuthorizedAccount(
+    account: MailAccount,
+    identities: readonly MailIdentity[],
+  ): Promise<void>;
   listIdentities(accountId: string): Promise<readonly MailIdentity[]>;
   replaceIdentities(
     accountId: string,

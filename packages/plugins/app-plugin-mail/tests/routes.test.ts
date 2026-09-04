@@ -45,6 +45,30 @@ describe('mail API routes', () => {
     );
   });
 
+  it('starts OAuth with the configured public callback URL', async () => {
+    const startAuthorization = vi.fn<MailService['startAuthorization']>(
+      async () => ({
+        authorizationUrl: 'https://accounts.example.com/authorize',
+        state: 'state-1',
+      }),
+    );
+    const router = await createRouter(true, service({ startAuthorization }));
+    const response = await router.request('/mail/authorizations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'gmail', name: 'google' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(startAuthorization).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        provider: { type: 'gmail', name: 'google' },
+        redirectUri: 'https://mail.example.com/test/mail/oauth/callback',
+      },
+    );
+  });
+
   it('rejects invalid send requests before calling the Mail service', async () => {
     const sendMessage = vi.fn<MailService['sendMessage']>();
     const router = await createRouter(true, service({ sendMessage }));
@@ -129,7 +153,13 @@ async function createRouter(
   return mailApiRoutes.createRouter({
     appName: 'test',
     publicBasePath: '/test',
-    config: { app: { name: 'test', publicBasePath: '/test' } },
+    config: {
+      get: () => ({
+        name: 'test',
+        publicBasePath: '/test',
+        publicOrigin: 'https://mail.example.com',
+      }),
+    },
     paths: createConfigPaths({ rootDir: '/missing' }),
     router: new Hono(),
     container,
@@ -138,6 +168,20 @@ async function createRouter(
 
 function service(overrides: Partial<MailService> = {}): MailService {
   return {
+    listProviders: async () => [],
+    startAuthorization: async (_context, input) => ({
+      authorizationUrl: `https://example.com/authorize/${input.provider.type}`,
+      state: 'state-1',
+    }),
+    completeAuthorization: async () => ({
+      id: 'account-1',
+      userId: 'user-1',
+      provider: { type: 'test', name: 'test' },
+      address: 'user@example.com',
+      scopes: [],
+      status: 'active',
+      isDefault: true,
+    }),
     listAccounts: async () => [],
     listIdentities: async () => [],
     startSync: async (_context, input) => syncRun(input.accountId, 'user-1'),

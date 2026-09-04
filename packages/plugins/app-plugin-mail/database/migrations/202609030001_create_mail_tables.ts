@@ -3,6 +3,34 @@ import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 const migration: MigrationDefinition = defineMigration({
   name: '202609030001_create_mail_tables',
   async up({ builder }) {
+    await builder.createCollection('mailCredentials', (collection) => {
+      collection
+        .string('reference', { length: 100, nullable: false })
+        .primary();
+      collection.text('ciphertext', { nullable: false });
+      collection.datetime('createdAt', { nullable: false });
+      collection.datetime('updatedAt', { nullable: false });
+    });
+
+    await builder.createCollection('mailAuthorizationStates', (collection) => {
+      collection.string('stateHash', { length: 64, nullable: false }).primary();
+      collection.string('userId', { length: 255, nullable: false });
+      collection.string('providerType', { length: 100, nullable: false });
+      collection.string('providerName', { length: 255, nullable: false });
+      collection.string('redirectUri', { length: 2000, nullable: false });
+      collection.string('verifierCredentialReference', {
+        length: 100,
+        nullable: false,
+      });
+      collection.json('scopes', { nullable: false });
+      collection.datetime('expiresAt', { nullable: false });
+      collection.datetime('consumedAt');
+      collection.datetime('createdAt', { nullable: false });
+      collection.index(['expiresAt', 'consumedAt'], {
+        name: 'mail_authorization_states_expiry_idx',
+      });
+    });
+
     await builder.createCollection('mailAccounts', (collection) => {
       collection.uuid('id').primary();
       collection.string('userId', { length: 255, nullable: false });
@@ -177,6 +205,8 @@ const migration: MigrationDefinition = defineMigration({
     await builder.dropCollection('mailFolders');
     await builder.dropCollection('mailIdentities');
     await builder.dropCollection('mailAccounts');
+    await builder.dropCollection('mailAuthorizationStates');
+    await builder.dropCollection('mailCredentials');
   },
 });
 

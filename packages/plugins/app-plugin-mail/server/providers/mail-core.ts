@@ -5,12 +5,15 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 
 import { createMailProviderAdapterResolver } from '../adapter-resolver.js';
+import { mailConfig } from '../config.js';
+import { createDatabaseMailCredentialVault } from '../credentials.js';
 import { createMailProviderRegistry } from '../registry.js';
 import { createMailRuntime } from '../runtime.js';
 import { DefaultMailService } from '../service.js';
 import { createDatabaseMailStore } from '../store.js';
 import {
   mailProviderAdapterResolverToken,
+  mailCredentialVaultToken,
   mailProviderRegistryToken,
   mailRuntimeToken,
   mailServiceToken,
@@ -28,11 +31,24 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
     this.app.container.singleton(mailStoreToken, (container) =>
       createDatabaseMailStore(container.resolve(databaseManagerToken)),
     );
-    this.app.container.singleton(mailProviderAdapterResolverToken, () =>
-      createMailProviderAdapterResolver({
-        registry,
-        context: { publicBasePath: this.app.publicBasePath },
-      }),
+    this.app.container.singleton(mailCredentialVaultToken, (container) =>
+      createDatabaseMailCredentialVault(
+        container.resolve(databaseManagerToken),
+        this.app.config.get(mailConfig).credentialEncryptionKey,
+      ),
+    );
+    this.app.container.singleton(
+      mailProviderAdapterResolverToken,
+      (container) =>
+        createMailProviderAdapterResolver({
+          registry,
+          context: {
+            publicBasePath: this.app.publicBasePath,
+            credentials: container.resolve(mailCredentialVaultToken),
+          },
+          resolveConfig: (account) =>
+            this.resolveProviderConfig(account.provider),
+        }),
     );
     this.app.container.singleton(mailRuntimeToken, (container) =>
       createMailRuntime({
@@ -53,8 +69,35 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
           store: container.resolve(mailStoreToken),
           adapters: container.resolve(mailProviderAdapterResolverToken),
           outbox: container.resolve(mailRuntimeToken),
+          registry,
+          providerContext: {
+            publicBasePath: this.app.publicBasePath,
+            credentials: container.resolve(mailCredentialVaultToken),
+          },
+          credentials: container.resolve(mailCredentialVaultToken),
+          resolveProviderConfig: (provider) =>
+            this.resolveProviderConfig(provider),
+          listProviderConfigs: () => this.listProviderConfigs(),
         }),
     );
+  }
+
+  private listProviderConfigs(): readonly import('../types.js').MailProviderConfig[] {
+    return Object.entries(this.app.config.get(mailConfig).providers).map(
+      ([name, config]) => ({ ...config, name }),
+    );
+  }
+
+  private resolveProviderConfig(
+    provider: import('../types.js').MailProviderIdentity,
+  ): import('../types.js').MailProviderConfig {
+    const config = this.app.config.get(mailConfig).providers[provider.name];
+    if (!config || config.type !== provider.type || config.enabled === false) {
+      throw new Error(
+        `Mail Provider configuration "${provider.name}" is unavailable.`,
+      );
+    }
+    return { ...config, name: provider.name };
   }
 
   public override start(): Promise<void> {

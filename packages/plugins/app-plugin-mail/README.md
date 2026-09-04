@@ -11,6 +11,8 @@ The first runnable vertical slice provides:
 
 - authenticated Mail API routes for sending, starting sync, reading sync
   status, and reading synchronized messages;
+- authenticated OAuth start plus a public one-time-state callback;
+- AES-256-GCM encrypted OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
   explicit `unknown` result for indeterminate Provider submissions;
 - resumable initial and incremental mailbox synchronization;
@@ -25,10 +27,11 @@ The first runnable vertical slice provides:
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
-The MVP does not provide UI, OAuth routes, Provider credentials, attachment
-downloads, push webhooks, scheduled sync, subscription renewal, or concrete
-Gmail/Microsoft Provider implementations. Provider plugins register a
-`MailProviderDefinition` and own their credentials and external API calls.
+The MVP does not provide UI, push webhooks, scheduled sync, subscription
+renewal, or outbound attachments. Gmail and Microsoft implementations live in
+separate Provider plugins; Mail Core owns OAuth transactions and encrypted
+credential storage, while Provider plugins own protocol calls and token
+refresh behavior.
 
 ## Runtime flow
 
@@ -86,6 +89,8 @@ All MVP routes require an authenticated application session:
 
 ```text
 GET  /api/mail/accounts
+GET  /api/mail/providers
+POST /api/mail/authorizations
 GET  /api/mail/accounts/:accountId/identities
 POST /api/mail/messages/send
 POST /api/mail/accounts/:accountId/sync
@@ -93,6 +98,11 @@ GET  /api/mail/sync-runs/:syncRunId
 GET  /api/mail/messages
 GET  /api/mail/accounts/:accountId/messages/:messageId
 ```
+
+`GET /mail/oauth/callback` is intentionally public because Google and
+Microsoft redirect the browser to it. It accepts only a short-lived,
+single-use state created by the authenticated start endpoint; state and PKCE
+verifiers are never returned by account APIs.
 
 Account ownership is enforced again in `MailService`; Route authentication is
 not treated as ownership authorization. Inactive accounts cannot send or

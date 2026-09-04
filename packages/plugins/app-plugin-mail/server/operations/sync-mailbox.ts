@@ -198,7 +198,9 @@ export class SyncMailboxOperation {
       status: 'running',
       historyCursor: hasMore ? page.nextCursor : undefined,
       baselineCursor: run.baselineCursor,
-      changeCursor: hasMore ? undefined : run.baselineCursor,
+      changeCursor: hasMore
+        ? undefined
+        : (page.syncCursor ?? run.baselineCursor),
       createNextTask: true,
     });
   }
@@ -236,6 +238,7 @@ export class SyncMailboxOperation {
     await this.dependencies.store.commitSyncStep({
       run,
       messages: page.messages,
+      removedFromFolders: page.removedFromFolders,
       deletedProviderMessageIds: page.deletedProviderMessageIds,
       phase: page.hasMore ? run.phase : 'completed',
       status: page.hasMore ? 'running' : 'completed',

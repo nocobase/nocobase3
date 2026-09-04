@@ -1879,6 +1879,9 @@ importers:
 
   packages/plugins/app-plugin-mail:
     dependencies:
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -1898,6 +1901,74 @@ importers:
       '@nocobase/queue':
         specifier: workspace:*
         version: link:../../libs/queue
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/plugins/app-plugin-mail-provider-gmail:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
+    devDependencies:
+      '@nocobase/app-plugin-mail':
+        specifier: workspace:*
+        version: link:../app-plugin-mail
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/plugins/app-plugin-mail-provider-microsoft:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
+    devDependencies:
+      '@nocobase/app-plugin-mail':
+        specifier: workspace:*
+        version: link:../app-plugin-mail
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider
@@ -2360,6 +2431,12 @@ importers:
       '@nocobase/app-plugin-mail':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-mail
+      '@nocobase/app-plugin-mail-provider-gmail':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-mail-provider-gmail
+      '@nocobase/app-plugin-mail-provider-microsoft':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-mail-provider-microsoft
       '@nocobase/app-plugin-notification':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification
@@ -2702,6 +2779,12 @@ importers:
       '@nocobase/app-plugin-mail':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-mail
+      '@nocobase/app-plugin-mail-provider-gmail':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-mail-provider-gmail
+      '@nocobase/app-plugin-mail-provider-microsoft':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-mail-provider-microsoft
       '@nocobase/app-plugin-notification':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification

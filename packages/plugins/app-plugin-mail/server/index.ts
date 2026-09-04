@@ -1,6 +1,8 @@
 export { default } from './plugin.js';
 export { MailCoreProvider } from './providers/mail-core.js';
 export * from './adapter-resolver.js';
+export * from './config.js';
+export * from './credentials.js';
 export * from './operations/index.js';
 export * from './registry.js';
 export * from './runtime.js';

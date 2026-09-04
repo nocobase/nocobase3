@@ -76,6 +76,7 @@
     "@nocobase/service-provider": "workspace:^"
   },
   "dependencies": {
+    "@sinclair/typebox": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {
