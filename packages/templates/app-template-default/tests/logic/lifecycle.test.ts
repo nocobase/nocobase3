@@ -44,7 +44,6 @@ describe('app service providers', () => {
               visibility: 'private',
             },
           },
-          links: {},
         },
         logging: {
           enabled: false,
@@ -120,7 +119,6 @@ describe('app service providers', () => {
                 visibility: 'public',
               },
             },
-            links: {},
           },
         }),
         container: services,

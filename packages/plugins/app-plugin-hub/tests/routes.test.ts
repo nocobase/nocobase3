@@ -51,7 +51,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(listApps).toHaveBeenCalledOnce();
   });
 
-  it('keeps Release config.yml out of lists and reads it on demand', async () => {
+  it('keeps the Release config example out of lists and reads it on demand', async () => {
     const release = {
       id: 'release-1',
       appId: 'customer',
@@ -233,33 +233,32 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     });
   });
 
-  it('reads the configuration captured by a deployment', async () => {
-    const readDeploymentConfig = vi
-      .fn<HubService['readDeploymentConfig']>()
-      .mockResolvedValue({
-        mode: 'file',
-        content: 'feature: false\n',
-      });
+  it('updates the active file configuration without creating a deployment', async () => {
+    const updateConfig = vi.fn<HubService['updateConfig']>().mockResolvedValue({
+      mode: 'file',
+      content: 'feature: true\n',
+    });
     const router = await apiRoutes.createRouter(
       createApplication('administrator', {
         listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
-        readDeploymentConfig,
+        updateConfig,
       }),
     );
 
-    const response = await router.request(
-      '/hub/apps/customer/deployments/deployment-1/config',
-    );
+    const response = await router.request('/hub/apps/customer/config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'feature: true\n' }),
+    });
 
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('pragma')).toBe('no-cache');
-    expect(readDeploymentConfig).toHaveBeenCalledWith(
-      'customer',
-      'deployment-1',
-    );
+    expect(updateConfig).toHaveBeenCalledWith('customer', {
+      content: 'feature: true\n',
+    });
     await expect(response.json()).resolves.toMatchObject({
-      data: { mode: 'file', content: 'feature: false\n' },
+      data: { mode: 'file', content: 'feature: true\n' },
     });
   });
 

@@ -49,10 +49,12 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     await expect(
       Promise.all([
         client.schema.hasColumn('hub_apps', 'current_deployment_id'),
+        client.schema.hasColumn('hub_apps', 'config'),
         client.schema.hasColumn('hub_app_releases', 'config_template'),
         client.schema.hasColumn('hub_app_deployments', 'release_id'),
+        client.schema.hasColumn('hub_app_deployments', 'config'),
       ]),
-    ).resolves.toEqual([true, true, true]);
+    ).resolves.toEqual([true, false, true, true, true]);
     await expect(
       metadataStore.getCollection('hubAppReleases'),
     ).resolves.toMatchObject({
@@ -60,6 +62,20 @@ describe('@nocobase/app-plugin-hub database migration', () => {
         expect.objectContaining({ name: 'configTemplate' }),
       ]),
     });
+    await expect(
+      metadataStore.getCollection('hubAppDeployments'),
+    ).resolves.toMatchObject({
+      fields: expect.arrayContaining([
+        expect.objectContaining({ name: 'config' }),
+      ]),
+    });
+    await expect(metadataStore.getCollection('hubApps')).resolves.toMatchObject(
+      {
+        fields: expect.not.arrayContaining([
+          expect.objectContaining({ name: 'config' }),
+        ]),
+      },
+    );
   });
 
   it('drops the schema and metadata', async () => {

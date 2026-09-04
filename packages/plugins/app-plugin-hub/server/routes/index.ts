@@ -18,6 +18,7 @@ import {
   type HubAppDetail,
   type HubReleaseRecord,
   type RollbackHubAppInput,
+  type UpdateHubConfigInput,
   type UpdateHubSettingsInput,
 } from '../tokens.js';
 
@@ -111,6 +112,13 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         hub.readConfig(context.req.param('appId')),
       );
     });
+    routes.put('/apps/:appId/config', async (context) => {
+      preventSensitiveResponseCaching(context);
+      const input = await context.req.json<UpdateHubConfigInput>();
+      return await respond(context, () =>
+        hub.updateConfig(context.req.param('appId'), input),
+      );
+    });
     routes.put('/apps/:appId/settings', async (context) => {
       const input = await context.req.json<UpdateHubSettingsInput>();
       return await respond(context, () =>
@@ -135,18 +143,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           context.req.param('deploymentId'),
         ),
       ),
-    );
-    routes.get(
-      '/apps/:appId/deployments/:deploymentId/config',
-      async (context) => {
-        preventSensitiveResponseCaching(context);
-        return await respond(context, () =>
-          hub.readDeploymentConfig(
-            context.req.param('appId'),
-            context.req.param('deploymentId'),
-          ),
-        );
-      },
     );
     routes.post('/apps/:appId/rollback', async (context) => {
       const input = await context.req.json<RollbackHubAppInput>();

@@ -83,77 +83,7 @@ describe('DeploymentCatalog', () => {
     ]);
   });
 
-  it('ignores the runtime-created public storage link in an installed deployment', async () => {
-    const { deploymentsDir, appDir } = await createAppWorkspace([
-      'dist/server/embedded.js',
-    ]);
-    const volumesDir = path.join(deploymentsDir, '..', 'volumes');
-    const publicStorageDir = path.join(
-      volumesDir,
-      'customer',
-      'storage',
-      'app',
-      'public',
-    );
-    const publicStorageLink = path.join(appDir, 'public', 'storage');
-    await mkdir(publicStorageDir, { recursive: true });
-    await mkdir(path.dirname(publicStorageLink), { recursive: true });
-    await symlink(
-      path.relative(path.dirname(publicStorageLink), publicStorageDir),
-      publicStorageLink,
-      'dir',
-    );
-    const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
-
-    await expect(catalog.discover()).resolves.toMatchObject([
-      {
-        id: 'customer',
-        server: { entrypoint: 'dist/server/embedded.js' },
-      },
-    ]);
-  });
-
-  it('ignores the runtime-created public storage link in a managed revision', async () => {
-    const { deploymentsDir } = await createAppWorkspace([]);
-    const volumesDir = path.join(deploymentsDir, '..', 'volumes');
-    const revisionDir = path.join(
-      deploymentsDir,
-      'customer',
-      'revisions',
-      'a'.repeat(64),
-    );
-    const publicStorageDir = path.join(
-      volumesDir,
-      'customer',
-      'storage',
-      'app',
-      'public',
-    );
-    const publicStorageLink = path.join(revisionDir, 'public', 'storage');
-    await mkdir(path.join(revisionDir, 'dist', 'server'), { recursive: true });
-    await writeFile(
-      path.join(revisionDir, 'dist', 'server', 'embedded.js'),
-      'export const marker = true;\n',
-    );
-    await mkdir(publicStorageDir, { recursive: true });
-    await mkdir(path.dirname(publicStorageLink), { recursive: true });
-    await symlink(
-      path.relative(path.dirname(publicStorageLink), publicStorageDir),
-      publicStorageLink,
-      'dir',
-    );
-    const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
-
-    await expect(
-      catalog.discoverAt('customer', revisionDir),
-    ).resolves.toMatchObject({
-      id: 'customer',
-      rootDir: revisionDir,
-      server: { entrypoint: 'dist/server/embedded.js' },
-    });
-  });
-
-  it('rejects unexpected symbolic links in an installed deployment', async () => {
+  it('rejects symbolic links in an installed deployment', async () => {
     const { deploymentsDir, appDir } = await createAppWorkspace([
       'dist/server/embedded.js',
     ]);
@@ -168,31 +98,19 @@ describe('DeploymentCatalog', () => {
     );
   });
 
-  it('rejects the storage link outside the installed deployment directory', async () => {
+  it('rejects symbolic links in a staging deployment directory', async () => {
     const { deploymentsDir } = await createAppWorkspace([
       'dist/server/embedded.js',
     ]);
     const volumesDir = path.join(deploymentsDir, '..', 'volumes');
     const stagingDir = path.join(deploymentsDir, '.customer.staging');
-    const publicStorageDir = path.join(
-      volumesDir,
-      'customer',
-      'storage',
-      'app',
-      'public',
-    );
     await mkdir(path.join(stagingDir, 'dist', 'server'), { recursive: true });
     await writeFile(
       path.join(stagingDir, 'dist', 'server', 'embedded.js'),
       'export const marker = true;\n',
     );
-    await mkdir(publicStorageDir, { recursive: true });
     await mkdir(path.join(stagingDir, 'public'), { recursive: true });
-    await symlink(
-      path.relative(path.join(stagingDir, 'public'), publicStorageDir),
-      path.join(stagingDir, 'public', 'storage'),
-      'dir',
-    );
+    await symlink('../dist', path.join(stagingDir, 'public', 'storage'), 'dir');
     const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
 
     await expect(catalog.discoverAt('customer', stagingDir)).rejects.toThrow(

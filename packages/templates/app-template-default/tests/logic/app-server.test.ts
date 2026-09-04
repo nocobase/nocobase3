@@ -1309,7 +1309,6 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
           visibility: 'private' as const,
         },
       },
-      links: {},
     },
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),

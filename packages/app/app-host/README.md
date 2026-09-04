@@ -83,10 +83,11 @@ extraction, discovery, activation, previous-runtime destruction, and cache
 pruning durations so slow deployments can be attributed to a concrete phase.
 For file configuration, the deployment set may select an absolute path or the default
 `app-volumes/<appId>/config` path. Non-file configuration providers are handled
-by the app and do not involve the host. Runtime replacement is start-first with
-bounded graceful request draining. A failed activation leaves the previous
-Runtime and its immutable revision untouched; this is not a guarantee of zero
-downtime for long-lived connections or incompatible database migrations.
+by the app and do not involve the host. Runtime replacement is stop-first with
+bounded graceful request draining. If activation fails, the Host attempts to
+recreate the previous Runtime from its unchanged definition and immutable
+revision; this is not a guarantee of zero downtime for long-lived connections
+or incompatible database migrations.
 
 ```bash
 APP_HOST_MODE=managed app-host
@@ -99,6 +100,10 @@ host with bounded exponential backoff and replays its latest accepted deployment
 The current runtime capability is `in-process`; Worker and Process backends can
 be registered through the backend router contract but are not advertised until
 their isolation runners are implemented.
+
+The application Drive uses the App `storage` directory as its default private
+filesystem disk. There is no default public filesystem disk or public storage
+route; revisions remain immutable and contain no runtime-created storage links.
 
 The package fixture shows the supported single-level deployment layout:
 

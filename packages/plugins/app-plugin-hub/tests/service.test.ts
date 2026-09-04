@@ -95,7 +95,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
   });
 
-  it('stores a Release config template and deploys Hub-managed file config', async () => {
+  it('stores a Release config example as the deployment template', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.2.3', {
@@ -213,13 +213,70 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(detail.app.updatedAt.valueOf()).toBeGreaterThan(before);
   });
 
-  it('accepts a Release without a config template', async () => {
+  it('accepts a Release without a config example', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.2.3'),
     });
 
     expect(release.configTemplate).toBeNull();
+  });
+
+  it.each(['config.example.yml', 'config.example.yaml'])(
+    'reads %s as the Release config template',
+    async (configTemplateName) => {
+      await service.createApp({ id: 'customer', name: 'Customer' });
+      const release = await service.createRelease('customer', {
+        bytes: await createArtifact(rootDir, '1.2.3', {
+          configTemplate: '{"feature":{"enabled":true}}\n',
+          configTemplateName,
+        }),
+      });
+
+      expect(release.configTemplate).toBe('{"feature":{"enabled":true}}\n');
+    },
+  );
+
+  it('does not treat a real config.yml in the Release as a template', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3', {
+        configTemplate: 'auth:\n  secret: must-not-be-imported\n',
+        configTemplateName: 'config.yml',
+      }),
+    });
+
+    expect(release.configTemplate).toBeNull();
+  });
+
+  it('does not treat config.example.json as a supported template', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3', {
+        configTemplate: '{"feature":true}\n',
+        configTemplateName: 'config.example.json',
+      }),
+    });
+
+    expect(release.configTemplate).toBeNull();
+  });
+
+  it('rejects a Release with multiple config examples', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+
+    await expect(
+      service.createRelease('customer', {
+        bytes: await createArtifact(rootDir, '1.2.3', {
+          configTemplates: {
+            'config.example.yml': 'feature: yml\n',
+            'config.example.yaml': 'feature: yaml\n',
+          },
+        }),
+      }),
+    ).rejects.toMatchObject<Partial<HubError>>({
+      code: 'INVALID_ARTIFACT',
+      status: 422,
+    });
   });
 
   it('rejects an invalid version in the Artifact package manifest', async () => {
@@ -300,6 +357,69 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(host.lastDeploymentSet?.deployments[0]?.config).toBeUndefined();
   });
 
+  it('updates the active file configuration without creating a deployment', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'feature: false\n' },
+    });
+    const deployment = await waitForDeployment(service, 'customer', queued.id);
+    const deploymentsBefore = await service.listDeployments('customer');
+
+    await expect(
+      service.updateConfig('customer', { content: 'feature: true\n' }),
+    ).resolves.toEqual({ mode: 'file', content: 'feature: true\n' });
+
+    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
+      'feature: true\n',
+    );
+    await expect(service.listDeployments('customer')).resolves.toHaveLength(
+      deploymentsBefore.length,
+    );
+    expect(host.targetedOperations).toEqual(['deploy:customer']);
+  });
+
+  it('rejects invalid updates to the active file configuration', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'feature: false\n' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+
+    await expect(
+      service.updateConfig('customer', { content: 'feature: [' }),
+    ).rejects.toMatchObject<Partial<HubError>>({
+      code: 'INVALID_CONFIG_FILE',
+      status: 422,
+    });
+  });
+
+  it('does not allow Hub to edit external configuration', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+
+    await expect(
+      service.updateConfig('customer', { content: 'feature: true\n' }),
+    ).rejects.toMatchObject<Partial<HubError>>({
+      code: 'CONFIG_NOT_EDITABLE',
+      status: 409,
+    });
+  });
+
   it('refreshes observed state from the managed Host', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
@@ -364,7 +484,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(second.checksum).not.toBe(first.checksum);
   });
 
-  it('uses the selected Release config.yml for a new deployment', async () => {
+  it('uses the selected Release config example for a new deployment', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const firstRelease = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.0.0', {
@@ -391,7 +511,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     );
   });
 
-  it('keeps the active configuration when a Release has no config.yml', async () => {
+  it('keeps the active configuration when a Release has no config example', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const firstRelease = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.0.0', {
@@ -461,9 +581,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     await waitForDeployment(service, 'customer', first.id);
 
-    await expect(
-      service.readDeploymentConfig('customer', first.id),
-    ).resolves.toMatchObject({
+    await expect(service.readConfig('customer')).resolves.toMatchObject({
       mode: 'file',
       content: 'feature: false\n',
     });
@@ -474,10 +592,52 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     const completed = await waitForDeployment(service, 'customer', rollback.id);
 
-    expect(completed.config.path).toBeTruthy();
+    expect(completed.config).toEqual(first.config);
     await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
       'feature: true\n',
     );
+  });
+
+  it('inherits the target deployment config mode during rollback', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const target = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', target.id);
+
+    const rollback = await service.rollback('customer', {
+      deploymentId: target.id,
+    });
+    const completed = await waitForDeployment(service, 'customer', rollback.id);
+
+    expect(completed.config).toEqual({ mode: 'external' });
+    expect(host.lastDeploymentSet?.deployments[0]?.config).toBeUndefined();
+  });
+
+  it('rejects changing the target deployment config mode during rollback', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const target = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', target.id);
+
+    await expect(
+      service.rollback('customer', {
+        deploymentId: target.id,
+        config: { mode: 'file', content: 'feature: true\n' },
+      }),
+    ).rejects.toMatchObject<Partial<HubError>>({
+      code: 'ROLLBACK_CONFIG_MODE_MISMATCH',
+      status: 409,
+    });
   });
 
   it('does not wait for eager Apps to finish during Host startup', async () => {
@@ -653,7 +813,11 @@ function createStatus(deploymentSet: HostDeploymentSet): HostStatus {
 async function createArtifact(
   rootDir: string,
   version: string,
-  options: { readonly configTemplate?: string } = {},
+  options: {
+    readonly configTemplate?: string;
+    readonly configTemplateName?: string;
+    readonly configTemplates?: Readonly<Record<string, string>>;
+  } = {},
 ): Promise<Uint8Array> {
   const source = path.join(rootDir, `artifact-${version}`);
   const archive = path.join(rootDir, `artifact-${version}.tar.gz`);
@@ -665,8 +829,19 @@ async function createArtifact(
   await writeFile(path.join(source, 'dist', 'server', 'embedded.js'), '');
   const entries = ['package.json', 'dist/server/embedded.js'];
   if (options.configTemplate !== undefined) {
-    await writeFile(path.join(source, 'config.yml'), options.configTemplate);
-    entries.push('config.yml');
+    const configTemplateName =
+      options.configTemplateName ?? 'config.example.yml';
+    await writeFile(
+      path.join(source, configTemplateName),
+      options.configTemplate,
+    );
+    entries.push(configTemplateName);
+  }
+  for (const [configTemplateName, configTemplate] of Object.entries(
+    options.configTemplates ?? {},
+  )) {
+    await writeFile(path.join(source, configTemplateName), configTemplate);
+    entries.push(configTemplateName);
   }
   await createTar({ cwd: source, file: archive, gzip: true }, entries);
   return await readFile(archive);

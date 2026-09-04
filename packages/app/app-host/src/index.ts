@@ -119,7 +119,6 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const drive = createDriveManager({
     default: 'artifact',
     disks: { artifact },
-    links: {},
   });
   const artifactResolver =
     options.artifactResolver ??

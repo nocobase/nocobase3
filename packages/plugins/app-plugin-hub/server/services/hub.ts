@@ -35,6 +35,7 @@ import type {
   DeployHubAppInput,
   HubAppDetail,
   HubAppRecord,
+  HubConfigBinding,
   HubConfigDocument,
   HubConfigMode,
   HubDeploymentRecord,
@@ -43,13 +44,17 @@ import type {
   RollbackHubAppInput,
   HubService,
   SaveHubConfigInput,
+  UpdateHubConfigInput,
   UpdateHubSettingsInput,
 } from '../tokens.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 const APP_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const RELEASE_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,254}$/;
-const CONFIG_TEMPLATE_PATH = 'config.yml';
+const CONFIG_TEMPLATE_PATHS = [
+  'config.example.yml',
+  'config.example.yaml',
+] as const;
 const EMBEDDED_ENTRY_PATH = 'dist/server/embedded.js';
 
 export interface DefaultHubServiceOptions {
@@ -95,7 +100,6 @@ export class DefaultHubService implements HubService {
     const drive = createDriveManager({
       default: 'artifact',
       disks: { artifact: options.config.artifact },
-      links: {},
     });
     this.disk = drive.use('artifact');
     this.ownsHostController = options.hostController === undefined;
@@ -266,6 +270,26 @@ export class DefaultHubService implements HubService {
     }
   }
 
+  public async updateConfig(
+    appId: string,
+    input: UpdateHubConfigInput,
+  ): Promise<HubConfigDocument> {
+    return await this.withLock(appId, async () => {
+      const app = await this.requireApp(appId);
+      const deployment = await this.currentDeployment(app);
+      if (!deployment || deployment.config.mode !== 'file') {
+        throw new HubError(
+          'Only active Config file configuration can be edited by Hub.',
+          'CONFIG_NOT_EDITABLE',
+          409,
+        );
+      }
+      validateYamlConfig(input.content);
+      await writeTextAtomic(this.configPath(deployment), input.content);
+      return await this.readConfig(appId);
+    });
+  }
+
   public async deploy(
     appId: string,
     input: DeployHubAppInput,
@@ -297,12 +321,20 @@ export class DefaultHubService implements HubService {
       );
     }
     const release = await this.getRelease(appId, target.releaseId);
+    if (input.config && input.config.mode !== target.config.mode) {
+      throw new HubError(
+        'Rollback configuration mode must match the target deployment.',
+        'ROLLBACK_CONFIG_MODE_MISMATCH',
+        409,
+      );
+    }
     const deployment = await this.createDeploymentRecord(
       app,
       release,
       'rollback',
       target.id,
-      input.config ?? (await this.configInputFromDeployment(target)),
+      input.config ?? { mode: target.config.mode },
+      target.config,
     );
     this.schedule(app.id, deployment.id);
     return deployment;
@@ -582,21 +614,6 @@ export class DefaultHubService implements HubService {
     return decodeDeployment(row);
   }
 
-  public async readDeploymentConfig(
-    appId: string,
-    deploymentId: string,
-  ): Promise<HubConfigDocument> {
-    const deployment = await this.getDeployment(appId, deploymentId);
-    if (deployment.config.mode === 'external') {
-      return { mode: 'external', content: null };
-    }
-    const configPath = this.configPath(deployment);
-    return {
-      mode: 'file',
-      content: await readFile(configPath, 'utf8'),
-    };
-  }
-
   private async updateDeployment(
     deploymentId: string,
     values: Partial<HubDeploymentRecord>,
@@ -614,7 +631,10 @@ export class DefaultHubService implements HubService {
   ): Promise<void> {
     await this.query()
       .updateTable('hubApps')
-      .set({ ...values, updatedAt: new Date() })
+      .set({
+        ...values,
+        updatedAt: new Date(),
+      })
       .where('id', '=', appId)
       .execute();
   }
@@ -685,13 +705,14 @@ export class DefaultHubService implements HubService {
     kind: 'deploy' | 'rollback',
     rollbackTargetDeploymentId: string | null,
     configInput?: SaveHubConfigInput,
+    configBinding?: HubConfigBinding,
   ): Promise<HubDeploymentRecord> {
     const id = randomUUID();
     const config = await this.prepareDeploymentConfig(
       app,
       release,
-      id,
       configInput,
+      configBinding,
     );
     const deployment: HubDeploymentRecord = {
       id,
@@ -720,10 +741,10 @@ export class DefaultHubService implements HubService {
   private async prepareDeploymentConfig(
     app: HubAppRecord,
     release: HubReleaseRecord,
-    deploymentId: string,
     input?: SaveHubConfigInput,
-  ): Promise<HubDeploymentRecord['config']> {
-    const mode = input?.mode ?? 'file';
+    binding?: HubConfigBinding,
+  ): Promise<HubConfigBinding> {
+    const mode = binding?.mode ?? input?.mode ?? 'file';
     assertConfigMode(mode);
     if (mode === 'external') return { mode };
     let content = input?.content;
@@ -740,28 +761,11 @@ export class DefaultHubService implements HubService {
     }
     content ??= '';
     validateYamlConfig(content);
-    const configPath = path.join(
-      this.options.config.host.volumesDir,
-      app.id,
-      'configs',
-      `${deploymentId}.yml`,
-    );
+    const configPath =
+      binding?.path ??
+      path.join(this.options.config.host.volumesDir, app.id, 'config.yml');
     await writeTextAtomic(configPath, content);
     return { mode: 'file', path: configPath };
-  }
-
-  private async configInputFromDeployment(
-    deployment: HubDeploymentRecord,
-  ): Promise<SaveHubConfigInput> {
-    const config = await this.readDeploymentConfig(
-      deployment.appId,
-      deployment.id,
-    );
-    if (config.mode === 'external') return { mode: 'external' };
-    return {
-      mode: 'file',
-      content: config.content ?? '',
-    };
   }
 
   private schedule(appId: string, deploymentId: string): void {
@@ -911,7 +915,9 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
         }
         return (
           normalized === 'package.json' ||
-          normalized === CONFIG_TEMPLATE_PATH ||
+          CONFIG_TEMPLATE_PATHS.includes(
+            normalized as (typeof CONFIG_TEMPLATE_PATHS)[number],
+          ) ||
           normalized === EMBEDDED_ENTRY_PATH
         );
       },
@@ -935,11 +941,14 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
         422,
       );
     }
-    const configTemplate = await readOptionalArtifactText(
+    const configTemplateFile = await readConfigTemplate(
       directory,
-      CONFIG_TEMPLATE_PATH,
+      CONFIG_TEMPLATE_PATHS,
     );
-    if (configTemplate !== null) validateYamlConfig(configTemplate);
+    const configTemplate = configTemplateFile?.content ?? null;
+    if (configTemplateFile) {
+      validateYamlConfig(configTemplateFile.content);
+    }
     return { version: rawVersion, configTemplate, manifest: packageMetadata };
   } catch (error) {
     if (error instanceof HubError) throw error;
@@ -1014,6 +1023,25 @@ async function readOptionalArtifactText(
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
+}
+
+async function readConfigTemplate(
+  directory: string,
+  relativePaths: readonly string[],
+): Promise<{ readonly path: string; readonly content: string } | null> {
+  const matches: { path: string; content: string }[] = [];
+  for (const relativePath of relativePaths) {
+    const content = await readOptionalArtifactText(directory, relativePath);
+    if (content !== null) matches.push({ path: relativePath, content });
+  }
+  if (matches.length > 1) {
+    throw new HubError(
+      `Release artifact must contain at most one config example; found ${matches.map((match) => match.path).join(', ')}.`,
+      'INVALID_ARTIFACT',
+      422,
+    );
+  }
+  return matches[0] ?? null;
 }
 
 function validateYamlConfig(content: string): void {
@@ -1155,7 +1183,7 @@ function decodeNullableRecord(value: unknown): Record<string, unknown> | null {
   return isRecord(decoded) ? decoded : null;
 }
 
-function decodeConfigBinding(value: unknown): HubDeploymentRecord['config'] {
+function decodeConfigBinding(value: unknown): HubConfigBinding {
   const decoded = decodeJson(value);
   if (!isRecord(decoded)) return { mode: 'file' };
   if (decoded.mode === 'external') {

@@ -1,5 +1,5 @@
 import { yaml } from '@codemirror/lang-yaml';
-import { MergeView } from '@codemirror/merge';
+import { MergeView, unifiedMergeView } from '@codemirror/merge';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
@@ -147,6 +147,52 @@ export function ConfigEditor({
       viewRef.current = null;
     };
   }, [readOnly]);
+
+  useEffect(() => replaceDocument(viewRef.current, value), [value]);
+
+  return <div className='overflow-hidden' ref={parentRef} />;
+}
+
+export interface ConfigUnifiedDiffProps {
+  readonly current: string;
+  readonly value: string;
+}
+
+export function ConfigUnifiedDiff({
+  current,
+  value,
+}: ConfigUnifiedDiffProps): ReactElement {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView>(null);
+  const initialValueRef = useRef(value);
+
+  useEffect(() => {
+    const parent = parentRef.current;
+    if (!parent) return;
+    const view = new EditorView({
+      parent,
+      doc: initialValueRef.current,
+      extensions: [
+        ...commonExtensions,
+        EditorState.readOnly.of(true),
+        EditorView.editable.of(false),
+        unifiedMergeView({
+          original: current,
+          highlightChanges: true,
+          gutter: true,
+          mergeControls: false,
+          allowInlineDiffs: true,
+          collapseUnchanged: { margin: 3, minSize: 8 },
+          diffConfig: { scanLimit: 1_000, timeout: 500 },
+        }),
+      ],
+    });
+    viewRef.current = view;
+    return (): void => {
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, [current]);
 
   useEffect(() => replaceDocument(viewRef.current, value), [value]);
 

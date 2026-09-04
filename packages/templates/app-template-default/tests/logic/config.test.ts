@@ -28,7 +28,14 @@ describe('application config', () => {
     expect(runtime.appConfig.get(appConfig).name).toBe('main');
     expect(runtime.appConfig.get(cachingConfig).default).toBe('memory');
     expect(runtime.appConfig.get(databaseConfig).default).toBe('main');
-    expect(runtime.appConfig.get(driveConfig).default).toBe('local');
+    const drive = runtime.appConfig.get(driveConfig);
+    expect(drive.default).toBe('local');
+    expect(drive.disks.local).toEqual({
+      driver: 'fs',
+      location: fileURLToPath(new URL('../../storage', import.meta.url)),
+      visibility: 'private',
+    });
+    expect(drive.disks.public).toBeUndefined();
     expect(runtime.appConfig.get(loggingConfig).default).toBe('system');
     expect(runtime.appConfig.get(queueConfig).default).toBe('sync');
     expect(runtime.appConfig.get(queueConfig).jobs?.locations).toEqual(

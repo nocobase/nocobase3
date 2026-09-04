@@ -9,7 +9,7 @@
 
 import { createHash } from 'node:crypto';
 import type { Dirent } from 'node:fs';
-import { readdir, readFile, readlink, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   AppBackendKind,
@@ -328,45 +328,11 @@ export class DeploymentCatalog {
       } else if (entry.isFile()) {
         files.push(entryPath);
       } else if (entry.isSymbolicLink()) {
-        if (await this.isRuntimeStorageLink(appId, rootDir, entryPath)) {
-          continue;
-        }
         throw new Error(
           `App deployment must not contain symbolic link ${entryPath}`,
         );
       }
     }
-  }
-
-  private async isRuntimeStorageLink(
-    appId: string,
-    rootDir: string,
-    entryPath: string,
-  ): Promise<boolean> {
-    const installedRoot = path.join(this.deploymentsDir, appId);
-    const resolvedRoot = path.resolve(rootDir);
-    const relativeRoot = path.relative(installedRoot, resolvedRoot);
-    const revisionParts = relativeRoot.split(path.sep);
-    const isInstalledRoot = resolvedRoot === installedRoot;
-    const isManagedRevision =
-      revisionParts.length === 2 &&
-      revisionParts[0] === 'revisions' &&
-      /^[a-f0-9]{64}$/.test(revisionParts[1] ?? '');
-    if (
-      (!isInstalledRoot && !isManagedRevision) ||
-      entryPath !== path.join(resolvedRoot, 'public', 'storage')
-    ) {
-      return false;
-    }
-
-    const target = await readlink(entryPath);
-    const resolvedTarget = path.resolve(path.dirname(entryPath), target);
-    const expectedTarget = path.join(
-      this.volumes.storageDir(appId),
-      'app',
-      'public',
-    );
-    return resolvedTarget === expectedTarget;
   }
 }
 

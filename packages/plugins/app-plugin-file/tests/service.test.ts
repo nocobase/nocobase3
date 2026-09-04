@@ -31,7 +31,6 @@ describe('file storage and access helpers', () => {
     drive = createDriveManager(
       {
         default: 'local',
-        links: {},
         disks: {
           local: {
             driver: 'fs',

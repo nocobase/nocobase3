@@ -108,7 +108,7 @@ Hub 不再保留独立 Home page，登录后以 Applications 作为主入口。
 
 1. 用户在 Releases 中选择 `.tar.gz` 制品。
 2. Hub 检查大小、安全路径、`package.json`、版本号和 `dist/server/embedded.js`。
-3. 如果根目录包含 `config.yml`，Hub 同时读取并验证其作为部署配置模板。
+3. 如果根目录包含 `config.example.yml` 或 `config.example.yaml`，Hub 同时读取并按 YAML 验证其作为部署配置模板。两者不能同时存在，制品中的真实 `config.yml` 不会被读取为模板。
 4. 校验通过后，Hub 将原始制品写入 Drive，并新建 Release 记录。
 5. 上传完成后不自动发起 Deployment。
 
@@ -124,9 +124,9 @@ Deploy 入口属于 Deployments，而不是 Releases。因为“部署”产生�
 2. **Configuration**：选择 Config file 或 External，并在需要时编辑 `config.yml`。
 3. **Review**：确认 App、Release 和配置来源后提交。
 
-Configuration 使用左右对照的 YAML 代码编辑器：左侧始终展示当前成功 Deployment 的实际配置且只读，右侧展示本次 Deployment 的新配置且可编辑。即使两者相同，也明确展示双方和 `No configuration changes`；首次部署时左侧显示无当前配置。
+Configuration 默认使用全宽 YAML 编辑器编辑 New configuration，并可切换到只读 Compare 查看 Current/New 差异；Review 步骤继续提供只读差异预览。即使两者相同，也明确显示 `No configuration changes`；首次部署时 Current 显示无当前配置。
 
-首次使用 Config file 时，若 Release 携带 `config.yml`，右侧自动使用该内容；否则使用空 YAML 配置。
+首次使用 Config file 时，若 Release 携带 `config.example.yml` 或 `config.example.yaml`，New configuration 自动使用该模板，并明确提示用户在继续前替换示例值、占位符、凭据和密钥；否则使用空 YAML 配置。模板后缀不影响运行配置的文件名，Hub 统一写入 `config.yml`。
 
 提交后 Hub 立即创建 `queued` Deployment 并返回 HTTP 202，页面转到 Deployments 并轮询进度，不要求用户保持部署弹窗打开。
 
@@ -135,8 +135,8 @@ Configuration 使用左右对照的 YAML 代码编辑器：左侧始终展示当
 后续部署与首次部署使用同一流程，但有两个重要默认行为：
 
 - 默认选中当前 Release，用户可切换到新 Release 或其他构建；
-- 所选 Release 包含 `config.yml` 时，它直接成为右侧 New configuration，用来与左侧 Current configuration 比较；不增加额外的“使用模板”操作；
-- 所选 Release 不包含 `config.yml` 时，若存在当前 Config file 配置则继承它，避免意外清空；首次部署则使用空配置。
+- 所选 Release 包含 `config.example.yml` 或 `config.example.yaml` 时，它直接成为右侧 New configuration，用来与左侧 Current configuration 比较；不增加额外的“使用模板”操作；
+- 所选 Release 不包含配置示例时，若存在当前 Config file 配置则继承它，避免意外清空；首次部署则使用空配置。
 
 切换 Release 会同步重置右侧为新 Release 对应的初始配置。页面实时校验 YAML 根节点、显示差异，并在配置无效时禁止进入 Review。
 
@@ -147,10 +147,10 @@ Configuration 使用左右对照的 YAML 代码编辑器：左侧始终展示当
 回滚入口位于 Deployments 历史。
 
 1. 用户选择一条历史成功 Deployment。
-2. Hub 固定该记录的 Release，并读取其配置快照作为回滚表单的初始值。
-3. 用户依次完成 Configuration 和 Review；可以保留目标配置，也可以在提交前调整配置。
+2. Hub 固定该记录的 Release 和配置来源。配置来源决定 App 如何加载配置，回滚时不能修改。
+3. 用户依次完成 Configuration 和 Review。目标为 Config file 时，右侧优先使用目标 Release 的配置示例；没有示例时使用当前配置，并允许在提交前调整内容。目标为 External 时不展示编辑器。
 4. 页面始终并列展示当前配置和目标配置；相同时明确显示无变化，不同时由代码编辑器展示逐行差异。
-5. Hub 新建一条 `kind=rollback` 的 Deployment，并记录回滚目标和本次确认后的配置快照。
+5. Hub 新建一条 `kind=rollback` 的 Deployment，记录回滚目标，并继承目标 Deployment 的配置来源和后端文件路径。
 6. 后续执行流程与普通部署完全相同。
 
 如果目标 Release 的已展开 revision 仍在本地，Host 直接复用缓存；如果已被清理，Host 从原始 Release 制品重新展开。两种情况的产品语义相同，差异只在速度。
@@ -159,15 +159,15 @@ Configuration 使用左右对照的 YAML 代码编辑器：左侧始终展示当
 
 部署时的配置来源有三个产品选项：
 
-| 选项        | 当前状态   | 行为                                                          |
-| ----------- | ---------- | ------------------------------------------------------------- |
-| Config file | 可用       | Hub 为本次 Deployment 保存 YAML 快照，Host 把文件路径传给 App |
-| Hub managed | 预留、禁用 | 未来由 Hub 数据库保存结构化配置和密钥                         |
-| External    | 可用       | Hub 不生成或挂载配置文件，由外部运行环境提供                  |
+| 选项        | 当前状态   | 行为                                                                                  |
+| ----------- | ---------- | ------------------------------------------------------------------------------------- |
+| Config file | 可用       | Hub 管理 App 的 YAML 文件，Deployment 保存 mode/path binding，Host 把文件路径传给 App |
+| Hub managed | 预留、禁用 | 未来由 Hub 数据库保存结构化配置和密钥                                                 |
+| External    | 可用       | Hub 不生成或挂载配置文件，由外部运行环境提供                                          |
 
-Configuration tab 只读展示当前 Deployment 固化的配置来源和配置快照，不能直接修改内容或切换来源。如需修改，必须发起新 Deployment，通过 Current/New 对比和 Review 后生成新的不可变快照。
+Configuration tab 展示当前成功 Deployment 固化的配置来源。Config file 可以直接编辑并 Save；保存只更新当前 binding 指向的文件，不创建 Deployment，也暂不触发 config reload，修改在下次 Start 或 Deploy 时生效。配置来源不能在此切换，配置文件路径暂不在前端展示或编辑。
 
-Config file 是兼容性的整文件管理模式，可能包含数据库口令、认证密钥等敏感数据。Hub 将整份文件视为敏感信息：快照位于非公开 App volume，目录和文件分别使用 `0700`、`0600`，采用原子写入，配置读取响应禁止缓存，列表、日志和错误不携带正文。该模式允许系统管理员查看明文；未来 Hub managed 才提供写入后不可读取的字段级 Secret Store。
+Config file 是兼容性的整文件管理模式，可能包含数据库口令、认证密钥等敏感数据。Hub 将整份文件视为敏感信息：文件位于非公开 App volume，目录和文件分别使用 `0700`、`0600`，采用原子写入，配置读取响应禁止缓存，列表、日志和错误不携带正文。该模式允许系统管理员查看明文；未来 Hub managed 才提供写入后不可读取的字段级 Secret Store。当前不为配置内容单独实现版本控制，多个 file-mode Deployment 可以指向同一 App 配置文件。
 
 ### 5.7 启动、停止、访问和刷新
 
@@ -225,7 +225,7 @@ Host 收到部署后：
 
 3 个 revision 只是本地加速缓存，不限制 Release 数量或 Deployment 历史数量。已被清理的历史版本仍可以回滚，只是需要重新下载和展开。
 
-Deployments 页会将成功操作标记为 Cached 或 Expanded，这是性能信息，不改变部署结果的业务语义。
+`cacheHit` 仍作为 Deployment 的诊断数据保留，但不占用 Deployments 主表列。主表优先展示可复制的 Deployment ID、Release、操作类型、状态、完整创建时间和操作入口；缓存准备方式可在后续 Deployment 详情中展示。
 
 ### 6.3 Runtime 替换
 
@@ -264,14 +264,11 @@ storage/
 │           └── <sha256>/
 │               ├── .nocobase-artifact.json
 │               ├── package.json
-│               ├── dist/
-│               └── public/storage -> app-volumes/<appId>/storage/app/public
+│               └── dist/
 └── app-volumes/
     └── <appId>/
-        ├── configs/
-        │   └── <deploymentId>.yml
+        ├── config.yml
         └── storage/
-            └── app/public/
 ```
 
 三类数据必须区分生命周期：
@@ -280,7 +277,7 @@ storage/
 - `app-deployments` 保存可再生成的展开 revision，是有上限的本地缓存；
 - `app-volumes` 保存配置和 App 产生的持久化数据，不随普通重新部署被替换。
 
-`public/storage` 是部署目录内的运行时符号链接，使不可变代码目录中的公开文件路径指向可持久化 volume。用户上传的图片、附件等公开文件因此不会在更换 Release 时丢失。制品自身不允许携带这个或其他符号链接；该链接只能由受信任的 Runtime 准备流程创建，且目标必须精确指向当前 App 的 volume。
+默认 `local` Drive 直接使用 App 的 `storage` 系统目录，且不提供公开访问。Drive 不再修改不可变 revision 或创建符号链接；制品也不允许包含符号链接。公开文件目录和 HTTP 访问以后作为独立能力设计。
 
 ## 8. 数据模型与状态权威
 
@@ -299,16 +296,16 @@ storage/
 
 ### 8.2 `hubAppReleases`
 
-| 字段             | 含义                                   |
-| ---------------- | -------------------------------------- |
-| `id`, `appId`    | Release 身份及所属 App                 |
-| `version`        | 来自制品的版本标签，不要求唯一         |
-| `artifactKey`    | Drive 中原始制品的不可变位置           |
-| `checksum`       | 制品内容校验和展开缓存键               |
-| `size`           | 制品大小                               |
-| `configTemplate` | Release 根目录 `config.yml` 的可选模板 |
-| `manifest`       | 上传时读取的 `package.json` 元数据     |
-| `createdAt`      | 上传时间                               |
+| 字段             | 含义                                                                        |
+| ---------------- | --------------------------------------------------------------------------- |
+| `id`, `appId`    | Release 身份及所属 App                                                      |
+| `version`        | 来自制品的版本标签，不要求唯一                                              |
+| `artifactKey`    | Drive 中原始制品的不可变位置                                                |
+| `checksum`       | 制品内容校验和展开缓存键                                                    |
+| `size`           | 制品大小                                                                    |
+| `configTemplate` | Release 根目录 `config.example.yml` 或 `config.example.yaml` 的可选模板内容 |
+| `manifest`       | 上传时读取的 `package.json` 元数据                                          |
+| `createdAt`      | 上传时间                                                                    |
 
 ### 8.3 `hubAppDeployments`
 
@@ -385,7 +382,7 @@ Hub 数据库是 App 设置、Release、Deployment 历史和当前成功 Deploym
 为避免只验证单个按钮，建议按以下主线做端到端验收：
 
 1. 创建 App，确认 Development 为默认 tab，Visit/Start/Stop 均不可用。
-2. 上传带 `config.yml` 的首个 Release，确认只生成 Release，不会自动部署。
+2. 上传带 `config.example.yml` 或 `config.example.yaml` 的首个 Release，确认只生成 Release，不会自动部署。
 3. 从 Deployments 发起首次部署，完成 Release、Configuration、Review 三步确认。
 4. 确认请求返回后页面可继续操作，Deployment 从 queued/deploying 进入 succeeded 或 failed。
 5. 部署成功后验证 Visit、Refresh、Start/Stop 的可用条件和 Runtime 状态。
@@ -393,6 +390,6 @@ Hub 数据库是 App 设置、Release、Deployment 历史和当前成功 Deploym
 7. 部署新构建，确认新 Deployment 成功前旧 App 仍可用，失败时当前指针不变。
 8. 回滚到历史成功 Deployment，确认新增 rollback 记录，并分别验证 Cached 与 Expanded 路径。
 9. 重启 Hub，确认 Hub 本身不等待全部 App 启动；期望运行的 eager App 最终 Running，lazy App 最终 Ready，已 Stop 的 App 仍保持 Stopped。
-10. 验证配置和 `public/storage` 数据在二次部署与 Hub 重启后仍保留。
+10. 验证配置和 App `storage` 数据在二次部署与 Hub 重启后仍保留。
 11. 构造失败制品，确认完整错误可见、可选中且可一键复制。
 12. 移除 App，确认数据库记录、原始制品、revision 和 volume 都按预期删除。

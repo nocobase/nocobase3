@@ -10,6 +10,7 @@
 import type { ArtifactResolver } from '../artifact-resolver.ts';
 import type { AppRuntimeRegistry } from '../app-registry.ts';
 import type { AppVolumeManager } from '../deployment/volume-manager.ts';
+import { rootErrorMessage } from '../errors.ts';
 import path from 'node:path';
 import type {
   ApplyDeploymentSetResult,
@@ -293,7 +294,7 @@ export class ManagedReconciler {
         revision,
         cacheHit: null,
         app: this.registry.snapshot(spec.appId) ?? null,
-        error: error instanceof Error ? error.message : String(error),
+        error: rootErrorMessage(error),
       });
     }
   }

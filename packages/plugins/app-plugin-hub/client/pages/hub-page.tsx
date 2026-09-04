@@ -15,8 +15,10 @@ import {
   FileCode2,
   Grid2X2,
   HardDrive,
+  Info,
   List,
   LoaderCircle,
+  MoreHorizontal,
   PackageOpen,
   Play,
   Plus,
@@ -53,6 +55,12 @@ import {
   DialogTitle,
 } from '../components/ui/dialog.js';
 import { Input } from '../components/ui/input.js';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu.js';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group.js';
 import {
   Empty as ShadcnEmpty,
@@ -108,6 +116,10 @@ const ConfigMergeEditor = lazy(async () => {
   const module = await import('../components/config-editor.js');
   return { default: module.ConfigMergeEditor };
 });
+const ConfigUnifiedDiff = lazy(async () => {
+  const module = await import('../components/config-editor.js');
+  return { default: module.ConfigUnifiedDiff };
+});
 
 interface ReleaseRecord {
   readonly id: string;
@@ -124,6 +136,7 @@ interface DeploymentRecord {
   readonly status:
     'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled';
   readonly phase: string;
+  readonly config: { readonly mode: 'file' | 'external' };
   readonly cacheHit: boolean | null;
   readonly error: string | null;
   readonly createdAt: string;
@@ -383,6 +396,17 @@ export default function HubPage(): ReactElement {
                 });
               })
             }
+            onSaveConfiguration={(content) =>
+              void perform(async () => {
+                const response = await client.request<
+                  ApiResponse<ConfigResponse>
+                >(`hub/apps/${selected.app.id}/config`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ content }),
+                });
+                setConfigContent(response.data.content ?? '');
+              })
+            }
             onRemove={() => setRemoveOpen(true)}
             onStop={() =>
               void perform(async () => {
@@ -411,19 +435,21 @@ export default function HubPage(): ReactElement {
                 .finally(() => setBusy(false));
             }}
             onRollback={(deploymentId) => {
+              const target = selected.deployments.find(
+                (item) => item.id === deploymentId,
+              );
+              if (!target) return;
               setBusy(true);
               setError(undefined);
-              void client
-                .request<ApiResponse<ConfigResponse>>(
-                  `hub/apps/${selected.app.id}/deployments/${deploymentId}/config`,
-                )
-                .then((response) => {
-                  const target = selected.deployments.find(
-                    (item) => item.id === deploymentId,
+              void loadReleaseConfig(selected.app.id, target.releaseId)
+                .then((template) => {
+                  setDeploymentReleaseId(target.releaseId);
+                  setDeploymentMode(target.config.mode);
+                  setDeploymentContent(
+                    target.config.mode === 'file'
+                      ? (template ?? configContent)
+                      : '',
                   );
-                  setDeploymentReleaseId(target?.releaseId);
-                  setDeploymentMode(response.data.mode);
-                  setDeploymentContent(response.data.content ?? '');
                   setDeploymentBaseline(configContent);
                   setDeploymentBaselineMode(configMode);
                   setRollbackDeploymentId(deploymentId);
@@ -778,6 +804,7 @@ function Detail({
   onRefresh,
   onStart,
   onSaveSettings,
+  onSaveConfiguration,
   onRemove,
   onStop,
   onDeploy,
@@ -796,6 +823,7 @@ function Detail({
   readonly onRefresh: () => void;
   readonly onStart: () => void;
   readonly onSaveSettings: (activation: ActivationPolicy) => void;
+  readonly onSaveConfiguration: (content: string) => void;
   readonly onRemove: () => void;
   readonly onStop: () => void;
   readonly onDeploy: () => void;
@@ -946,7 +974,13 @@ function Detail({
             </TabsContent>
             {deployed ? (
               <TabsContent value='configuration'>
-                <Configuration mode={configMode} content={configContent} />
+                <Configuration
+                  key={`${app.app.id}:${app.app.currentDeploymentId}`}
+                  mode={configMode}
+                  content={configContent}
+                  busy={busy || transitioning}
+                  onSave={onSaveConfiguration}
+                />
               </TabsContent>
             ) : null}
             <TabsContent value='settings'>
@@ -1007,16 +1041,17 @@ function Deployments({
           <Play className='size-4' /> Deploy
         </Button>
       </div>
-      <div className='overflow-hidden rounded-xl border'>
+      <div className='overflow-hidden rounded-lg border bg-card'>
         <Table>
-          <TableHeader>
+          <TableHeader className='bg-muted/20'>
             <TableRow>
-              <TableHead>Release</TableHead>
-              <TableHead>Operation</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Artifact</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className='text-right'>Action</TableHead>
+              <TableHead className='w-[34%]'>Release</TableHead>
+              <TableHead className='w-[26%]'>Deployment</TableHead>
+              <TableHead className='w-[20%]'>Status</TableHead>
+              <TableHead className='w-[20%]'>Created</TableHead>
+              <TableHead className='w-12'>
+                <span className='sr-only'>Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1024,67 +1059,73 @@ function Deployments({
               const deployedRelease = findRelease(app, deployment.releaseId);
               const current = deployment.id === app.app.currentDeploymentId;
               return (
-                <TableRow key={deployment.id}>
-                  <TableCell>
-                    <span className='font-medium'>
-                      {deployedRelease
-                        ? `v${deployedRelease.version}`
-                        : 'Unknown'}
-                    </span>
-                    {deployedRelease ? (
-                      <span className='ml-2 font-mono text-[11px] text-muted-foreground'>
-                        {deployedRelease.checksum.slice(0, 12)}
+                <TableRow
+                  className={
+                    current
+                      ? 'bg-primary/[0.025] hover:bg-primary/[0.045]'
+                      : undefined
+                  }
+                  key={deployment.id}
+                >
+                  <TableCell className='py-3'>
+                    <div className='flex items-center gap-2'>
+                      <span className='font-medium tabular-nums'>
+                        {deployedRelease
+                          ? `v${deployedRelease.version}`
+                          : 'Unknown'}
                       </span>
-                    ) : null}
-                    {current ? (
-                      <Badge className='ml-2 bg-emerald-500/10 text-emerald-700'>
-                        Current
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className='capitalize'>
-                    {deployment.kind === 'rollback' ? 'Rollback' : 'Deploy'}
-                  </TableCell>
-                  <TableCell>
-                    <div className='space-y-1'>
-                      <StatusBadge state={deployment.status} />
-                      {deployment.status === 'deploying' ? (
-                        <div className='text-xs capitalize text-muted-foreground'>
-                          {deployment.phase.replaceAll('_', ' ')}
-                        </div>
-                      ) : deployment.error ? (
-                        <DeploymentError message={deployment.error} />
+                      {current ? (
+                        <Badge className='bg-emerald-500/10 text-emerald-700'>
+                          Current
+                        </Badge>
                       ) : null}
                     </div>
+                    {deployedRelease ? (
+                      <div className='mt-0.5 font-mono text-[11px] text-muted-foreground'>
+                        {deployedRelease.checksum.slice(0, 12)}
+                      </div>
+                    ) : null}
                   </TableCell>
-                  <TableCell>
-                    {deployment.status === 'succeeded' &&
-                    deployment.cacheHit !== null ? (
-                      <Badge
-                        className={
-                          deployment.cacheHit
-                            ? 'bg-sky-500/10 text-sky-700'
-                            : 'bg-violet-500/10 text-violet-700'
+                  <TableCell className='py-3'>
+                    <DeploymentId value={deployment.id} />
+                    <div className='mt-0.5 text-xs text-muted-foreground'>
+                      {deployment.kind === 'rollback'
+                        ? 'Rolled back'
+                        : 'Deployed'}
+                    </div>
+                  </TableCell>
+                  <TableCell className='py-3'>
+                    <DeploymentStatus deployment={deployment} />
+                  </TableCell>
+                  <TableCell className='whitespace-nowrap py-3 text-sm text-muted-foreground tabular-nums'>
+                    {formatDateTime(deployment.createdAt)}
+                  </TableCell>
+                  <TableCell className='py-3 text-right'>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            aria-label={`Actions for deployment ${shortId(deployment.id)}`}
+                            className='size-8 text-muted-foreground'
+                            size='icon'
+                            variant='ghost'
+                          >
+                            <MoreHorizontal />
+                          </Button>
                         }
-                      >
-                        {deployment.cacheHit ? 'Cached' : 'Expanded'}
-                      </Badge>
-                    ) : (
-                      <span className='text-muted-foreground'>—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className='text-muted-foreground'>
-                    {formatDate(deployment.createdAt)}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    <Button
-                      disabled={deployment.status !== 'succeeded' || current}
-                      onClick={() => onRollback(deployment.id)}
-                      size='sm'
-                      variant='ghost'
-                    >
-                      <RotateCcw className='size-4' /> Roll back
-                    </Button>
+                      />
+                      <DropdownMenuContent align='end' className='w-40'>
+                        <DropdownMenuItem
+                          disabled={
+                            busy || deployment.status !== 'succeeded' || current
+                          }
+                          onClick={() => onRollback(deployment.id)}
+                        >
+                          <RotateCcw />
+                          Roll back
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );
@@ -1092,6 +1133,61 @@ function Deployments({
           </TableBody>
         </Table>
       </div>
+    </div>
+  );
+}
+
+function DeploymentId({ value }: { readonly value: string }): ReactElement {
+  const [copied, setCopied] = useState(false);
+  const copy = async (): Promise<void> => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1_500);
+  };
+  return (
+    <Button
+      aria-label='Copy deployment ID'
+      className='group/deployment-id h-auto cursor-copy gap-1 rounded-none p-0 text-sm font-medium tabular-nums hover:bg-transparent hover:text-primary [&_svg]:size-3.5'
+      onClick={() => void copy()}
+      variant='ghost'
+    >
+      {shortId(value)}
+      {copied ? (
+        <ClipboardCheck className='text-muted-foreground' />
+      ) : (
+        <Clipboard className='opacity-0 transition-opacity group-hover/deployment-id:opacity-100 group-focus-visible/deployment-id:opacity-100' />
+      )}
+    </Button>
+  );
+}
+
+function DeploymentStatus({
+  deployment,
+}: {
+  readonly deployment: DeploymentRecord;
+}): ReactElement {
+  if (deployment.status === 'deploying') {
+    return (
+      <Badge
+        className='gap-1.5 whitespace-nowrap bg-amber-500/10 text-amber-700'
+        role='status'
+      >
+        <span className='size-1.5 rounded-full bg-amber-500' />
+        {deploymentPhaseLabel(deployment.phase)}
+      </Badge>
+    );
+  }
+  return (
+    <div className='space-y-1'>
+      <div className='flex items-center gap-2'>
+        <StatusBadge state={deployment.status} />
+        {deployment.cacheHit ? (
+          <Badge className='bg-sky-500/10 text-sky-700 dark:text-sky-300'>
+            Cache reused
+          </Badge>
+        ) : null}
+      </div>
+      {deployment.error ? <DeploymentError message={deployment.error} /> : null}
     </div>
   );
 }
@@ -1594,52 +1690,70 @@ function Development({ appId }: { readonly appId: string }): ReactElement {
 function Configuration({
   mode,
   content,
+  busy,
+  onSave,
 }: {
   readonly mode: ConfigMode;
   readonly content: string;
+  readonly busy: boolean;
+  readonly onSave: (content: string) => void;
 }): ReactElement {
   const source = CONFIG_MODES.find((item) => item.value === mode);
+  const [draft, setDraft] = useState(content);
+  const validationError = validateConfigDocument(draft);
+  const changed = draft !== content;
   return (
     <div className='space-y-5'>
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div>
           <h2 className='font-semibold'>Configuration</h2>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Immutable configuration captured by the current deployment.
+            Configuration source used by this application.
           </p>
         </div>
         <Badge className='gap-1.5 bg-muted text-foreground [&_svg]:size-3.5'>
           {source?.icon} {source?.title ?? mode}
         </Badge>
       </div>
-      <div className='rounded-lg border bg-muted/20 px-4 py-3 text-xs leading-5 text-muted-foreground'>
-        To change this configuration or its source, create a new deployment and
-        review the result before applying it.
-      </div>
       {mode === 'file' ? (
-        <div className='overflow-hidden rounded-xl border'>
-          <div className='flex items-center justify-between border-b bg-muted/20 px-4 py-3'>
-            <div>
+        <div className='space-y-4'>
+          <div className='overflow-hidden rounded-xl border'>
+            <div className='border-b bg-muted/20 px-4 py-3'>
               <span className='flex items-center gap-2 text-sm font-medium'>
                 <FileCode2 className='size-4' /> config.yml
               </span>
-              <span className='mt-1 block font-mono text-[11px] text-muted-foreground'>
-                Current deployment snapshot · Read-only
-              </span>
             </div>
+            <Suspense fallback={<ConfigEditorFallback />}>
+              <ConfigEditor value={draft} onChange={setDraft} />
+            </Suspense>
           </div>
-          <Suspense fallback={<ConfigEditorFallback />}>
-            <ConfigEditor readOnly value={content} />
-          </Suspense>
+          <ConfigStatus
+            error={validationError}
+            summary={summarizeConfigChanges('file', 'file', content, draft)}
+          />
+          <p className='text-xs text-muted-foreground'>
+            Saved changes take effect the next time the application starts or is
+            deployed.
+          </p>
+          <div className='flex justify-end'>
+            <Button
+              disabled={busy || !changed || validationError !== null}
+              onClick={() => onSave(draft)}
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
         </div>
       ) : null}
       {mode === 'external' ? (
-        <Panel title='External configuration' icon={<ExternalLink />}>
-          <p className='text-sm leading-6 text-muted-foreground'>
-            Hub will not mount a configuration file. Runtime configuration and
-            secrets must be supplied by the external environment.
-          </p>
-        </Panel>
+        <Alert className='bg-muted/20'>
+          <ExternalLink />
+          <AlertDescription>
+            Configuration and secrets are supplied by the runtime environment.
+            Hub does not create, mount, or edit a configuration file for this
+            deployment.
+          </AlertDescription>
+        </Alert>
       ) : null}
     </div>
   );
@@ -1676,6 +1790,7 @@ function DeploymentDialog({
 }): ReactElement {
   const firstStep = rollback ? 1 : 0;
   const [step, setStep] = useState(firstStep);
+  const [configView, setConfigView] = useState<'edit' | 'compare'>('edit');
   const release = app.releases.find((item) => item.id === releaseId);
   const validationError =
     mode === 'file' ? validateConfigDocument(content) : null;
@@ -1701,7 +1816,10 @@ function DeploymentDialog({
                 className={`grid h-auto w-full grid-cols-[minmax(0,1fr)_auto] justify-stretch rounded-none border-b px-4 py-3 text-left last:border-0 ${releaseId === item.id ? 'bg-primary/5' : ''}`}
                 disabled={busy}
                 key={item.id}
-                onClick={() => onRelease(item.id)}
+                onClick={() => {
+                  setConfigView('edit');
+                  onRelease(item.id);
+                }}
                 variant='ghost'
               >
                 <span className='flex items-center gap-3'>
@@ -1737,44 +1855,97 @@ function DeploymentDialog({
                 </span>
               </div>
             ) : null}
-            <ConfigModePicker value={mode} onChange={onMode} />
+            {rollback ? (
+              <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
+                <span className='text-muted-foreground'>
+                  Configuration source
+                </span>
+                <span className='font-medium'>{configModeLabel(mode)}</span>
+              </div>
+            ) : (
+              <ConfigModePicker value={mode} onChange={onMode} />
+            )}
             {mode === 'file' ? (
-              <div className='overflow-hidden rounded-xl border'>
-                <div className='grid grid-cols-2 divide-x border-b bg-muted/20'>
-                  <div className='px-4 py-3'>
-                    <div className='flex items-center gap-2 text-sm font-medium'>
-                      <FileCode2 className='size-4 text-muted-foreground' />
-                      Current configuration
+              <div className='space-y-3'>
+                {release?.hasConfigTemplate ? (
+                  <Alert className='border-blue-500/25 bg-blue-500/5'>
+                    <Info className='size-4 shrink-0 text-blue-600' />
+                    <AlertDescription>
+                      A configuration template from Release v{release.version}{' '}
+                      has been loaded. Replace example values, placeholders,
+                      credentials, and secrets with deployment-ready values
+                      before continuing.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                <Tabs
+                  onValueChange={(value) =>
+                    setConfigView(value as 'edit' | 'compare')
+                  }
+                  value={configView}
+                >
+                  <div className='overflow-hidden rounded-xl border'>
+                    <div className='flex flex-wrap items-end justify-between gap-3 border-b bg-muted/20 px-4 pt-3'>
+                      <div className='pb-3'>
+                        <div className='flex items-center gap-2 text-sm font-medium'>
+                          <FileCode2 className='size-4 text-primary' />
+                          Deployment configuration
+                        </div>
+                        <p className='mt-1 text-xs text-muted-foreground'>
+                          {release?.hasConfigTemplate
+                            ? `Based on the template from Release v${release.version}`
+                            : app.app.currentDeploymentId
+                              ? 'Based on the current application configuration'
+                              : 'No Release template is available'}
+                        </p>
+                      </div>
+                      <TabsList className='w-auto shrink-0'>
+                        <TabsTrigger className='pb-2' value='edit'>
+                          Edit
+                        </TabsTrigger>
+                        <TabsTrigger className='pb-2' value='compare'>
+                          Compare
+                        </TabsTrigger>
+                      </TabsList>
                     </div>
-                    <p className='mt-1 text-xs text-muted-foreground'>
-                      {app.app.currentDeploymentId
-                        ? `Deployment ${shortId(app.app.currentDeploymentId)} · Read-only`
-                        : 'No active configuration'}
-                    </p>
+                    <TabsContent value='edit'>
+                      <Suspense fallback={<ConfigEditorFallback />}>
+                        <ConfigEditor value={content} onChange={onContent} />
+                      </Suspense>
+                    </TabsContent>
+                    <TabsContent value='compare'>
+                      <div className='grid grid-cols-2 divide-x border-b bg-muted/20'>
+                        <div className='px-4 py-2.5'>
+                          <p className='text-xs font-medium'>Current</p>
+                          <p className='mt-0.5 text-xs text-muted-foreground'>
+                            {app.app.currentDeploymentId
+                              ? `Deployment ${shortId(app.app.currentDeploymentId)} · Read-only`
+                              : 'No active configuration'}
+                          </p>
+                        </div>
+                        <div className='px-4 py-2.5'>
+                          <p className='text-xs font-medium'>
+                            {release?.hasConfigTemplate
+                              ? 'New · From Release template'
+                              : 'New configuration'}
+                          </p>
+                          <p className='mt-0.5 text-xs text-muted-foreground'>
+                            Deployment-ready configuration · Read-only preview
+                          </p>
+                        </div>
+                      </div>
+                      <Suspense fallback={<ConfigEditorFallback />}>
+                        <ConfigMergeEditor
+                          current={
+                            baselineMode === 'file' ? baselineContent : ''
+                          }
+                          readOnly
+                          value={content}
+                        />
+                      </Suspense>
+                    </TabsContent>
                   </div>
-                  <div className='px-4 py-3'>
-                    <div className='flex items-center gap-2 text-sm font-medium'>
-                      <FileCode2 className='size-4 text-primary' /> New
-                      configuration
-                    </div>
-                    <p className='mt-1 text-xs text-muted-foreground'>
-                      {rollback
-                        ? 'Restored from the selected deployment · Editable'
-                        : release?.hasConfigTemplate
-                          ? `From Release v${release?.version ?? '—'} · Editable`
-                          : app.app.currentDeploymentId
-                            ? `Based on current deployment · Release v${release?.version ?? '—'} has no config.yml`
-                            : `Release v${release?.version ?? '—'} has no config.yml · Editable`}
-                    </p>
-                  </div>
-                </div>
-                <Suspense fallback={<ConfigEditorFallback />}>
-                  <ConfigMergeEditor
-                    current={baselineMode === 'file' ? baselineContent : ''}
-                    onChange={onContent}
-                    value={content}
-                  />
-                </Suspense>
+                </Tabs>
               </div>
             ) : null}
             {mode === 'external' ? (
@@ -1808,7 +1979,7 @@ function DeploymentDialog({
                 <TriangleAlert className='size-4 shrink-0' />
                 <AlertDescription className='text-amber-800'>
                   config.yml may contain secrets. Hub stores the complete file
-                  with this deployment, and authorized administrators can view
+                  for this application, and authorized administrators can view
                   its contents.
                 </AlertDescription>
               </Alert>
@@ -1851,7 +2022,9 @@ function DeploymentDialog({
                     </p>
                     <p className='mt-1 text-sm font-medium'>
                       {rollback
-                        ? 'Config file · Selected deployment snapshot'
+                        ? release?.hasConfigTemplate
+                          ? 'Config file · Edited Release template'
+                          : 'Config file · Reviewed for rollback'
                         : `Config file · Release v${release?.version ?? '—'}`}
                     </p>
                   </div>
@@ -1862,9 +2035,8 @@ function DeploymentDialog({
                     Review configuration changes
                   </summary>
                   <Suspense fallback={<ConfigEditorFallback />}>
-                    <ConfigMergeEditor
+                    <ConfigUnifiedDiff
                       current={baselineMode === 'file' ? baselineContent : ''}
-                      readOnly
                       value={content}
                     />
                   </Suspense>
@@ -2112,7 +2284,7 @@ function UploadReleaseDialog({
   return (
     <AppDialog
       title='Upload release'
-      description='Upload a built application artifact. Version and config.yml are detected automatically.'
+      description='Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.'
       onClose={onClose}
     >
       <Button
@@ -2346,25 +2518,6 @@ function ErrorBanner({
     </Alert>
   );
 }
-function Panel({
-  title,
-  icon,
-  children,
-}: {
-  readonly title: string;
-  readonly icon: ReactNode;
-  readonly children: ReactNode;
-}): ReactElement {
-  return (
-    <Card className='p-5'>
-      <CardHeader className='mb-4 flex-row items-center gap-2 p-0 text-sm font-semibold'>
-        <span className='text-muted-foreground [&_svg]:size-4'>{icon}</span>
-        {title}
-      </CardHeader>
-      {children}
-    </Card>
-  );
-}
 function Field({
   label,
   hint,
@@ -2528,6 +2681,19 @@ function stateLabel(value: string): string {
   if (value === 'registered') return 'Ready';
   if (value === 'pending') return 'Updating';
   return value ? `${value[0]?.toUpperCase()}${value.slice(1)}` : 'Unknown';
+}
+function deploymentPhaseLabel(value: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    resolving: 'Preparing release',
+    verifying: 'Verifying release',
+    extracting: 'Extracting files',
+    preparing: 'Preparing application',
+    starting: 'Starting application',
+    health_check: 'Checking application health',
+    switching: 'Activating release',
+    cleaning: 'Cleaning up',
+  };
+  return labels[value] ?? stateLabel(value.replaceAll('_', ' '));
 }
 function resourceGroups(
   content: string,
@@ -2704,6 +2870,18 @@ function formatDate(value: string): string {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
+      }).format(date);
+}
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) || date.valueOf() <= 0
+    ? '—'
+    : new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
       }).format(date);
 }
 function formatBytes(value: number): string {
