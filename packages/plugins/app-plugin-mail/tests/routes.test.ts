@@ -2,6 +2,10 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -16,6 +20,19 @@ describe('mail API routes', () => {
     const router = await createRouter(false, service());
     const response = await router.request('/mail/accounts');
     expect(response.status).toBe(401);
+  });
+
+  it('enforces the same Mail settings permission as the client route', async () => {
+    const router = await createRouter(true, service(), false);
+    const response = await router.request('/mail/accounts');
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'MAIL_ACCESS_DENIED',
+        message: 'Mail settings access is required.',
+      },
+    });
   });
 
   it('starts a bounded asynchronous sync for the authenticated user', async () => {
@@ -132,6 +149,7 @@ describe('mail API routes', () => {
 async function createRouter(
   authenticated: boolean,
   mail: MailService,
+  allowed = true,
 ): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(authenticationToken, {
@@ -149,6 +167,12 @@ async function createRouter(
       await next();
     },
   } as Auth);
+  container.instance(authorizationToken, {
+    middleware: () => async (context, next) => {
+      context.set('authz', { can: async () => allowed });
+      await next();
+    },
+  } as unknown as AppAuthorization);
   container.instance(mailServiceToken, mail);
   return mailApiRoutes.createRouter({
     appName: 'test',

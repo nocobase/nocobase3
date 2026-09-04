@@ -29,14 +29,17 @@ describe('Mail OAuth callback route', () => {
     const completed = await router.request(
       '/mail/oauth/callback?state=state-1&code=code-1',
     );
-    expect(completed.status).toBe(200);
+    expect(completed.status).toBe(302);
+    expect(completed.headers.get('location')).toBe(
+      '/test/settings/mail?mailAuthorization=success',
+    );
     expect(completeAuthorization).toHaveBeenCalledWith({
       state: 'state-1',
       code: 'code-1',
     });
   });
 
-  it('does not expose Provider callback errors', async () => {
+  it('redirects Provider callback errors without exposing their details', async () => {
     const router = await createRouter(
       service({
         completeAuthorization: async () => {
@@ -48,13 +51,10 @@ describe('Mail OAuth callback route', () => {
       '/mail/oauth/callback?state=state-1&error=access_denied',
     );
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({
-      error: {
-        code: 'MAIL_AUTHORIZATION_FAILED',
-        message: 'Mail authorization could not be completed.',
-      },
-    });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(
+      '/test/settings/mail?mailAuthorization=failure',
+    );
   });
 });
 

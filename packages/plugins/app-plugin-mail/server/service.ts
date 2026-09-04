@@ -244,11 +244,9 @@ export class DefaultMailService implements MailService {
       input.accountId,
     );
     if (active) return toSyncRunView(active);
-    const mode = input.mode ?? 'initial';
-    if (
-      mode === 'incremental' &&
-      !(await this.dependencies.store.getSyncCursor(input.accountId))
-    ) {
+    const cursor = await this.dependencies.store.getSyncCursor(input.accountId);
+    const mode = input.mode ?? (cursor ? 'incremental' : 'initial');
+    if (mode === 'incremental' && !cursor) {
       throw new Error(
         'Initial mailbox sync must complete before incremental sync.',
       );

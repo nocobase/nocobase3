@@ -1,0 +1,116 @@
+import type { MailResource } from './en-US.js';
+
+const zhCN: MailResource = {
+  nav: {
+    settings: '邮件',
+    dev: '邮件开发工具',
+  },
+  actions: {
+    refresh: '刷新',
+    reloadAccounts: '重新加载账户',
+  },
+  settings: {
+    eyebrow: '通信',
+    title: '邮件设置',
+    description: '连接邮箱账户，并控制首次同步导入的历史邮件范围。',
+    loading: '正在加载邮件配置…',
+    authorizationSuccess: '邮件账户已连接。',
+    authorizationFailure: '邮件账户连接失败，请重试。',
+    initialSync: {
+      title: '首次同步限制',
+      description:
+        '限制首次导入规模，让大型邮箱可以分批且可恢复地处理。基线同步完成后将转为增量同步。',
+      receivedAfter: '仅导入此日期之后的邮件',
+      maxMessages: '最多导入邮件数',
+      batchSize: '每批邮件数',
+    },
+    providers: {
+      title: '服务商',
+      description: '这里只显示服务端已配置并启用的服务商。',
+      emptyTitle: '未配置邮件服务商',
+      emptyDescription: '请在服务端邮件配置中添加 Gmail 或 Microsoft 服务商。',
+      connect: '连接账户',
+      connected: '已连接 {{count}} 个',
+    },
+    accounts: {
+      title: '已连接账户',
+      description: '先执行有界的首次导入，之后可按需触发增量同步。',
+      emptyTitle: '尚未连接账户',
+      emptyDescription: '请先通过上方服务商连接邮箱账户。',
+      default: '默认',
+      sync: '同步邮箱',
+      syncProgress: '已处理 {{messages}} 封邮件，共 {{pages}} 批',
+    },
+  },
+  dev: {
+    eyebrow: '开发工具',
+    title: '邮件开发工具',
+    description: '使用已连接账户验证发送与同步 API。此路由不会进入生产构建。',
+    account: '账户',
+    identity: '发件身份',
+    noAccounts: '没有已连接账户',
+    send: {
+      title: '发送邮件',
+      description: '每次提交都会生成新的幂等键，并通过邮件发送操作执行。',
+      to: '收件人',
+      subject: '主题',
+      subjectPlaceholder: 'NocoBase 邮件测试',
+      body: '纯文本正文',
+      bodyPlaceholder: '这封邮件由 NocoBase 邮件开发工具发送。',
+      sending: '正在提交…',
+      submit: '提交邮件',
+      accepted: '发送任务',
+    },
+    sync: {
+      title: '同步邮箱',
+      description: '新账户应使用有界的首次同步；生成基线游标后再使用增量同步。',
+      mode: '模式',
+      initial: '首次同步',
+      incremental: '增量同步',
+      start: '开始同步',
+      run: '同步任务',
+    },
+    messages: {
+      title: '已同步邮件',
+      empty: '本地还没有邮件，请先执行同步。',
+      noSubject: '（无主题）',
+      unknownSender: '未知发件人',
+    },
+  },
+  capabilities: {
+    receive: '接收',
+    send: '发送',
+    incrementalSync: '增量同步',
+    pushNotifications: '推送通知',
+    folders: '文件夹',
+    labels: '标签',
+    drafts: '草稿',
+    moveMessage: '移动邮件',
+    aliases: '别名',
+  },
+  status: {
+    account: {
+      connecting: '连接中',
+      active: '正常',
+      reauthorizationRequired: '需要重新授权',
+      suspended: '已暂停',
+      revoked: '已撤销',
+      removing: '正在移除',
+    },
+    sync: {
+      pending: '等待中',
+      running: '进行中',
+      completed: '已完成',
+      failed: '失败',
+      cancelled: '已取消',
+    },
+  },
+  errors: {
+    requestFailed: '邮件请求失败。',
+    authorizationFailed: '无法发起邮件授权。',
+    syncFailed: '无法开始邮箱同步。',
+    sendFailed: '无法提交邮件。',
+  },
+};
+
+export default zhCN;

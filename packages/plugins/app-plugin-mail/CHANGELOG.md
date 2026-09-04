@@ -11,3 +11,5 @@
 - Add the Mail database schema, runtime service wiring, and Provider contracts.
 - Add one-time PKCE OAuth orchestration and encrypted credential storage for
   concrete Provider plugins.
+- Add Mail settings and development pages for account authorization, bounded
+  synchronization, test sending, and synchronized-message inspection.

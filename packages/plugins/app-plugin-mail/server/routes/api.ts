@@ -2,6 +2,10 @@ import {
   authenticationToken,
   type AuthEnv,
 } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { appConfig } from '@nocobase/app-server/config';
 import { joinBasePath } from '@nocobase/app-server/support';
@@ -20,14 +24,41 @@ import type {
   MailStartSyncInput,
 } from '../types.js';
 
+type MailRoutesEnv = {
+  Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
+};
+
 export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container, config, publicBasePath }) => {
     const router = new Hono();
-    const routes = new Hono<AuthEnv>();
+    const routes = new Hono<MailRoutesEnv>();
     const authentication = container.resolve(authenticationToken);
+    const authorization = container.resolve(authorizationToken);
     const mail = container.resolve(mailServiceToken);
 
-    routes.use('*', authentication.required());
+    routes.use(
+      '*',
+      authentication.required(),
+      authorization.middleware(),
+      async (context, next) => {
+        const allowed = await context.get('authz').can({
+          resource: { type: 'page', id: 'mail.settings' },
+          action: 'access',
+        });
+        if (!allowed) {
+          return context.json(
+            {
+              error: {
+                code: 'MAIL_ACCESS_DENIED',
+                message: 'Mail settings access is required.',
+              },
+            },
+            403,
+          );
+        }
+        await next();
+      },
+    );
     routes.onError((error, context) => {
       if (error instanceof MailIdempotencyConflictError) {
         return context.json(

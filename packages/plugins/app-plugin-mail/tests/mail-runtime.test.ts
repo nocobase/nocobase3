@@ -262,6 +262,12 @@ describe('mail MVP runtime', () => {
     expect(await store.getSyncCursor('account-1')).toEqual({
       value: 'watermark-2',
     });
+
+    const next = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1' },
+    );
+    expect(next.mode).toBe('incremental');
   });
 
   it('persists a retry Outbox without advancing the failed page checkpoint', async () => {

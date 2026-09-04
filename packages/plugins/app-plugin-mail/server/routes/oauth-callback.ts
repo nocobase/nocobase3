@@ -1,4 +1,5 @@
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { joinBasePath } from '@nocobase/app-server/support';
 import {
   defineRootRoutes,
   type AppRootRouteContribution,
@@ -9,7 +10,7 @@ import { mailServiceToken } from '../tokens.js';
 
 /** Public OAuth callback secured by a short-lived, one-time state transaction. */
 export const mailOAuthCallbackRoutes: AppRootRouteContribution<AppPluginApplication> =
-  defineRootRoutes(({ container }) => {
+  defineRootRoutes(({ container, publicBasePath }) => {
     const router = new Hono();
     const mail = container.resolve(mailServiceToken);
 
@@ -27,23 +28,18 @@ export const mailOAuthCallbackRoutes: AppRootRouteContribution<AppPluginApplicat
         );
       }
       try {
-        return context.json({
-          data: await mail.completeAuthorization({
-            state,
-            code: context.req.query('code'),
-            error: context.req.query('error'),
-            errorDescription: context.req.query('error_description'),
-          }),
+        await mail.completeAuthorization({
+          state,
+          code: context.req.query('code'),
+          error: context.req.query('error'),
+          errorDescription: context.req.query('error_description'),
         });
+        return context.redirect(
+          `${joinBasePath(publicBasePath, '/settings/mail')}?mailAuthorization=success`,
+        );
       } catch {
-        return context.json(
-          {
-            error: {
-              code: 'MAIL_AUTHORIZATION_FAILED',
-              message: 'Mail authorization could not be completed.',
-            },
-          },
-          400,
+        return context.redirect(
+          `${joinBasePath(publicBasePath, '/settings/mail')}?mailAuthorization=failure`,
         );
       }
     });
