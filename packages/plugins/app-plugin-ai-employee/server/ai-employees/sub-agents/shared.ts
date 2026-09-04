@@ -7,16 +7,19 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../context.js';
+import type { Context } from '../../internal/runtime-context.js';
+import type { RuntimeServices } from '../../internal/runtime-services.js';
+import type { RepositoryFactory } from '../../repository/database/factory.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import type { SubAgentConversationMetadata } from '@nocobase/ai-employee';
 
 export async function listAccessibleAIEmployees(
   ctx: Context,
+  repositories: RepositoryFactory,
 ): Promise<AIEmployeeEntity[]> {
   const filter = await buildAccessibleEmployeeFilter(ctx);
-  return ctx.repositories.aiEmployees.find({
+  return repositories.aiEmployees.find({
     filter,
     sort: ['sort', 'username'],
   });
@@ -24,10 +27,11 @@ export async function listAccessibleAIEmployees(
 
 export async function getAccessibleAIEmployee(
   ctx: Context,
+  repositories: RepositoryFactory,
   username: string,
 ): Promise<AIEmployeeEntity | null> {
   const filter = await buildAccessibleEmployeeFilter(ctx);
-  return ctx.repositories.aiEmployees.findOne({
+  return repositories.aiEmployees.findOne({
     filter: {
       ...filter,
       username,
@@ -35,8 +39,12 @@ export async function getAccessibleAIEmployee(
   });
 }
 
-function localizeBuiltInInfo(ctx: Context, employee: AIEmployeeEntity) {
-  ctx.builtInManager.setupBuiltInInfo(
+function localizeBuiltInInfo(
+  ctx: Context,
+  runtime: RuntimeServices,
+  employee: AIEmployeeEntity,
+) {
+  runtime.builtInManager.setupBuiltInInfo(
     ctx,
     employee as unknown as AIEmployeeType,
   );
@@ -44,9 +52,10 @@ function localizeBuiltInInfo(ctx: Context, employee: AIEmployeeEntity) {
 
 export function serializeEmployeeSummary(
   ctx: Context,
+  runtime: RuntimeServices,
   employee: AIEmployeeEntity,
 ) {
-  localizeBuiltInInfo(ctx, employee);
+  localizeBuiltInInfo(ctx, runtime, employee);
   return {
     username: employee.username as string,
     nickname: employee.nickname as string,
@@ -59,12 +68,13 @@ export function serializeEmployeeSummary(
 
 export function serializeEmployeeDetail(
   ctx: Context,
+  runtime: RuntimeServices,
   employee: AIEmployeeEntity,
 ) {
-  localizeBuiltInInfo(ctx, employee);
+  localizeBuiltInInfo(ctx, runtime, employee);
   const about = employee.about || employee.defaultPrompt || '';
   return {
-    ...serializeEmployeeSummary(ctx, employee),
+    ...serializeEmployeeSummary(ctx, runtime, employee),
     about,
   };
 }
@@ -85,22 +95,28 @@ async function buildAccessibleEmployeeFilter(ctx: Context) {
 
 export const getSkillSettingsFromMain = async (
   ctx: Context,
+  repositories: RepositoryFactory,
   sessionId: string,
 ): Promise<Record<string, any> | null | undefined> => {
   if (!sessionId) {
     return null;
   }
-  const aiConversation = await ctx.repositories.aiConversations.findOne({
+  const aiConversation = await repositories.aiConversations.findOne({
     filter: {
       sessionId,
       userId: ctx.auth?.user?.id,
     },
   });
-  return aiConversation?.options?.skillSettings;
+  const skillSettings = aiConversation?.options?.skillSettings;
+  return skillSettings && typeof skillSettings === 'object'
+    ? (skillSettings as Record<string, any>)
+    : skillSettings == null
+      ? skillSettings
+      : undefined;
 };
 
 export const updateMessageMetadata = async (
-  ctx: Context,
+  repositories: RepositoryFactory,
   sessionId: string,
   toolCallId: string,
   subSessionId: string,
@@ -109,7 +125,7 @@ export const updateMessageMetadata = async (
   if (!sessionId) {
     return;
   }
-  const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
+  const aiToolMessage = await repositories.aiToolMessages.findOne({
     filter: {
       sessionId,
       toolCallId,
@@ -118,7 +134,7 @@ export const updateMessageMetadata = async (
   if (!aiToolMessage) {
     return;
   }
-  const aiMessage = await ctx.repositories.aiMessages.findOne({
+  const aiMessage = await repositories.aiMessages.findOne({
     filter: {
       sessionId,
       messageId: String(aiToolMessage.messageId),
@@ -151,7 +167,7 @@ export const updateMessageMetadata = async (
 
   metadata.subAgentConversations = subAgentConversations;
 
-  await ctx.repositories.aiMessages.update({
+  await repositories.aiMessages.update({
     values: {
       metadata,
     },

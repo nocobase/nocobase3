@@ -1,4 +1,7 @@
-import type { DatabaseConnection } from '@nocobase/db';
+import { randomUUID } from 'node:crypto';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { databaseManagerToken, type DatabaseConnection } from '@nocobase/db';
+import type { ServiceResolver } from '@nocobase/service-provider';
 
 import type {
   AIConversationEntity,
@@ -52,15 +55,39 @@ const JSON_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
   llmServices: new Set(['options', 'enabledModels', 'modelOptions']),
 };
 
-export class CollectionRepositoryFactory implements DatabaseRepositoryFactory {
-  private readonly records = new Map<string, BaseCollectionRepository<any>>();
+export interface RepositoryFactoryOptions {
+  readonly container: ServiceResolver;
+}
 
-  constructor(
-    private readonly connection: DatabaseConnection,
-    private readonly generateId?: () => string | number | bigint,
-  ) {}
+export interface DirectRepositoryFactoryOptions {
+  readonly connection: DatabaseConnection;
+  readonly generateId?: () => string | number | bigint;
+}
 
-  collectionRepository<T extends object>(
+/** App-container-scoped, lazily-created repository graph for this plugin. */
+export class RepositoryFactory implements DatabaseRepositoryFactory {
+  private readonly records = new Map<
+    string,
+    BaseCollectionRepository<object>
+  >();
+  private readonly connection: DatabaseConnection;
+  private readonly generateId: () => string | number | bigint;
+
+  public constructor(
+    options: RepositoryFactoryOptions | DirectRepositoryFactoryOptions,
+  ) {
+    if ('container' in options) {
+      const database = options.container.resolve(databaseManagerToken);
+      const idGenerator = options.container.resolve(idGeneratorToken);
+      this.connection = database.connection();
+      this.generateId = () => String(idGenerator.generate());
+      return;
+    }
+    this.connection = options.connection;
+    this.generateId = options.generateId ?? randomUUID;
+  }
+
+  public collectionRepository<T extends object>(
     name: string,
   ): CollectionRepository<T> {
     let repository = this.records.get(name);
@@ -70,62 +97,74 @@ export class CollectionRepositoryFactory implements DatabaseRepositoryFactory {
         name,
         this.generateId,
         JSON_FIELDS[name] ?? new Set(),
-      );
+      ) as BaseCollectionRepository<object>;
       this.records.set(name, repository);
     }
     return repository as unknown as CollectionRepository<T>;
   }
 
-  get aiConversations(): AIConversationRepository {
+  public get aiConversations(): AIConversationRepository {
     return this.collectionRepository<AIConversationEntity>('aiConversations');
   }
-  get aiEmployees(): AIEmployeeRepository {
+
+  public get aiEmployees(): AIEmployeeRepository {
     const name = 'aiEmployees';
     let repository = this.records.get(name);
     if (!repository) {
       repository = new DatabaseAIEmployeeRepository(
         this.connection,
         this.generateId,
-      );
+      ) as unknown as BaseCollectionRepository<object>;
       this.records.set(name, repository);
     }
-    return repository as DatabaseAIEmployeeRepository;
+    return repository as unknown as DatabaseAIEmployeeRepository;
   }
-  get aiFiles(): AIFileRepository {
+
+  public get aiFiles(): AIFileRepository {
     return this.collectionRepository<AIFileEntity>('aiFiles');
   }
-  get aiMcpClients(): AIMCPRepository {
+
+  public get aiMcpClients(): AIMCPRepository {
     return this.collectionRepository<MCPEntity>('aiMcpClients');
   }
-  get aiMessages(): AIMessageRepository {
+
+  public get aiMessages(): AIMessageRepository {
     return this.collectionRepository<AIMessageEntity>('aiMessages');
   }
-  get aiSettings(): AISettingsRepository {
+
+  public get aiSettings(): AISettingsRepository {
     return this.collectionRepository<AISettingsEntity>('aiSettings');
   }
-  get aiToolMessages(): AIToolMessageRepository {
+
+  public get aiToolMessages(): AIToolMessageRepository {
     return this.collectionRepository<AIToolMessageEntity>('aiToolMessages');
   }
-  get aiUsageEvents(): AIUsageEventRepository {
+
+  public get aiUsageEvents(): AIUsageEventRepository {
     return this.collectionRepository<AIUsageEventEntity>('aiUsageEvents');
   }
-  get lcCheckpoints(): LCCheckpointRepository {
+
+  public get lcCheckpoints(): LCCheckpointRepository {
     return this.collectionRepository<LCCheckpointEntity>('lcCheckpoints');
   }
-  get lcCheckpointBlobs(): LCCheckpointBlobRepository {
+
+  public get lcCheckpointBlobs(): LCCheckpointBlobRepository {
     return this.collectionRepository<LCCheckpointBlobEntity>(
       'lcCheckpointBlobs',
     );
   }
-  get lcCheckpointWrites(): LCCheckpointWriteRepository {
+
+  public get lcCheckpointWrites(): LCCheckpointWriteRepository {
     return this.collectionRepository<LCCheckpointWriteEntity>(
       'lcCheckpointWrites',
     );
   }
-  get llmServices(): LLMServiceRepository {
+
+  public get llmServices(): LLMServiceRepository {
     return this.collectionRepository<LLMServiceEntity>('llmServices');
   }
-  get usersAiEmployees(): UserAIEmployeeRepository {
+
+  public get usersAiEmployees(): UserAIEmployeeRepository {
     return this.collectionRepository<UserAIEmployeeEntity>('usersAiEmployees');
   }
 }

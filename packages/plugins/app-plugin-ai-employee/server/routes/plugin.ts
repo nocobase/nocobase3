@@ -4,25 +4,23 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
+import { loggingToken } from '@nocobase/app-server/logging';
 import { Hono } from 'hono';
 
-import { createPluginContextMiddleware } from '../runtime.js';
-import { aiEmployeeRuntimeToken } from '../tokens.js';
-import { registerAIEmployeeRoutes } from './index.js';
-import { createAICurrentUserMiddleware } from './utils.js';
+import { serviceFactoryToken } from '../internal/tokens.js';
+import { createAIEmployeeRoutes } from './index.js';
 
 export const aiEmployeeApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono();
-    const runtime = container.resolve(aiEmployeeRuntimeToken);
-    const auth = container.resolve(authenticationToken);
-    const routes = new Hono();
-    registerAIEmployeeRoutes(
-      routes,
-      createAICurrentUserMiddleware(auth),
-      createPluginContextMiddleware(runtime),
+    router.route(
+      '/ai',
+      createAIEmployeeRoutes({
+        authentication: container.resolve(authenticationToken),
+        services: container.resolve(serviceFactoryToken),
+        logger: container.resolve(loggingToken).getLogger('ai-employee'),
+      }),
     );
-    router.route('/ai', routes);
     return router;
   });
 

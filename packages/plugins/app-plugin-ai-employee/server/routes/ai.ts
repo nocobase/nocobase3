@@ -1,42 +1,35 @@
+import type { ServiceFactory } from '../service/factory.js';
 import type { Hono } from 'hono';
 
-export function createAIRouter(app: Hono): void {
+export function createAIRouter(app: Hono, services: ServiceFactory): void {
   app.get('/ai:listAllEnabledModels', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.modelService.listEnabled(ctx);
+    const result = await services.modelService.listEnabled({});
     return context.json(result as never);
   });
 
   app.get('/ai:listLLMProviders', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.modelService.listLLMProviders(ctx);
+    const result = await services.modelService.listLLMProviders({});
     return context.json(result as never);
   });
 
   app.get('/ai:listLLMServices', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.modelService.listLLMServices(
-      ctx,
-      context.req.query('model') || undefined,
-    );
+    const result = await services.modelService.listLLMServices({
+      model: context.req.query('model') || undefined,
+    });
     return context.json(result as never);
   });
 
   app.get('/ai:listModels', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.modelService.listModels(
-      ctx,
-      context.req.query('llmService') ?? '',
-      context.req.query('model') || undefined,
-    );
+    const result = await services.modelService.listModels({
+      llmService: context.req.query('llmService') ?? '',
+      model: context.req.query('model') || undefined,
+    });
     return context.json(result as never);
   });
   app.post('/ai:listProviderModels', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.modelService.listProviderModels(
-      ctx,
-      await context.req.json(),
-    );
+    const result = await services.modelService.listProviderModels({
+      input: await context.req.json(),
+    });
     return context.json(result as never);
   });
 

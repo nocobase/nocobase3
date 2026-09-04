@@ -9,7 +9,8 @@
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { EEFeatures } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import type { Context } from '../../context.js';
+import type { Context } from '../../internal/runtime-context.js';
+import type { RepositoryFactory } from '../../repository/database/factory.js';
 
 export const KNOWLEDGE_BASE_RETRIEVAL_STRATEGIES = [
   'always',
@@ -159,7 +160,19 @@ const buildKnowledgeBaseContent = (
 };
 
 export class KnowledgeBaseManager {
-  constructor(private readonly ctx: Context) {}
+  private readonly ctx: Context;
+  private readonly repositories: RepositoryFactory;
+
+  constructor({
+    ctx,
+    repositories,
+  }: {
+    ctx: Context;
+    repositories: RepositoryFactory;
+  }) {
+    this.ctx = ctx;
+    this.repositories = repositories;
+  }
 
   async retrievePrompt({
     username,
@@ -234,6 +247,9 @@ export class KnowledgeBaseManager {
   private async getEmployee(
     username: string,
   ): Promise<KnowledgeBaseEmployee | undefined> {
-    return this.ctx.repositories.aiEmployees.findOne({ filter: { username } });
+    return (
+      (await this.repositories.aiEmployees.findOne({ filter: { username } })) ??
+      undefined
+    );
   }
 }

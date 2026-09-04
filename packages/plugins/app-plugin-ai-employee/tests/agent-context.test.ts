@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { createAgentContext } from '../server/agent/context.js';
-import { createTestAIEmployeeRuntime } from './app/test-context.js';
+import { createTestAIEmployeeFixture } from './app/test-context.js';
 
 const contextTool = defineTools<AgentContext<{}, {}>>({
   scope: 'GENERAL',
@@ -18,7 +18,11 @@ const contextFreeTool = defineTools<AgentContext<{}, {}>>({
 
 describe('AgentContext adapter', () => {
   it('maps repositories, actor, state, and applies state overrides without leaking transport fields', () => {
-    const ctx = createTestAIEmployeeRuntime();
+    const {
+      context: ctx,
+      repositories,
+      services,
+    } = createTestAIEmployeeFixture();
     ctx.currentUser = {
       id: 7,
       roles: ['member'],
@@ -32,13 +36,16 @@ describe('AgentContext adapter', () => {
       streamTarget: { write() {}, end() {} },
       abortSignal: new AbortController().signal,
     };
-    const agentContext = createAgentContext(ctx, {
-      state: { sessionId: 'sub' },
-    });
-    expect(agentContext.database).toBe(ctx.databaseManager);
-    expect(agentContext.repositories.aiMessages).toBe(
-      ctx.repositories.aiMessages,
+    const agentContext = createAgentContext(
+      ctx,
+      repositories,
+      services.runtimeServices,
+      {
+        state: { sessionId: 'sub' },
+      },
     );
+    expect(agentContext.database).toBe(ctx.databaseManager);
+    expect(agentContext.repositories.aiMessages).toBe(repositories.aiMessages);
     expect(agentContext.actor).toEqual({
       id: 7,
       roles: ['admin'],
@@ -58,13 +65,27 @@ describe('AgentContext adapter', () => {
 
 describe('AgentService AgentContext propagation', () => {
   it('passes request-scoped contexts independently and reports missing context clearly', async () => {
-    const appContext = createTestAIEmployeeRuntime();
-    const contextA = createAgentContext(appContext, {
-      state: { sessionId: 'A' },
-    });
-    const contextB = createAgentContext(appContext, {
-      state: { sessionId: 'B' },
-    });
+    const {
+      context: appContext,
+      repositories,
+      services,
+    } = createTestAIEmployeeFixture();
+    const contextA = createAgentContext(
+      appContext,
+      repositories,
+      services.runtimeServices,
+      {
+        state: { sessionId: 'A' },
+      },
+    );
+    const contextB = createAgentContext(
+      appContext,
+      repositories,
+      services.runtimeServices,
+      {
+        state: { sessionId: 'B' },
+      },
+    );
     const built = (await import('@nocobase/ai-employee')).buildTool(
       contextTool,
     ) as unknown as {

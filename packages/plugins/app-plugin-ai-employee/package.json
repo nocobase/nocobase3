@@ -124,8 +124,7 @@
     "plugin": {
       "database": {
         "migrations": "./database/migrations"
-      },
-      "server": "./server/bootstrap.ts"
+      }
     },
     "registry": {
       "items": {

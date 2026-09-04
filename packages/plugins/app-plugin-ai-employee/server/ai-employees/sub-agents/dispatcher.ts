@@ -7,7 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../context.js';
+import type { Context } from '../../internal/runtime-context.js';
+import type { RuntimeServices } from '../../internal/runtime-services.js';
+import type { RepositoryFactory } from '../../repository/database/factory.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import { ModelRef } from '../ai-employee.js';
@@ -30,7 +32,23 @@ export type SubAgentTask = {
 };
 
 export class SubAgentsDispatcher {
-  constructor(private readonly ctx: Context) {}
+  private readonly ctx: Context;
+  private readonly repositories: RepositoryFactory;
+  private readonly runtime: RuntimeServices;
+
+  constructor({
+    ctx,
+    repositories,
+    runtime,
+  }: {
+    ctx: Context;
+    repositories: RepositoryFactory;
+    runtime: RuntimeServices;
+  }) {
+    this.ctx = ctx;
+    this.repositories = repositories;
+    this.runtime = runtime;
+  }
   private extractTextContent(content: unknown): string {
     if (typeof content === 'string') {
       return content;
@@ -74,14 +92,13 @@ export class SubAgentsDispatcher {
   }
 
   private async resolveSubAgentSessionId(
-    ctx: Context,
     sessionId: string,
   ): Promise<string | null> {
     if (!sessionId) {
       return null;
     }
 
-    const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
+    const aiToolMessage = await this.repositories.aiToolMessages.findOne({
       filter: {
         sessionId,
         toolName: 'dispatch-sub-agent-task',
@@ -95,7 +112,7 @@ export class SubAgentsDispatcher {
       return null;
     }
 
-    const aiMessage = await ctx.repositories.aiMessages.findOne({
+    const aiMessage = await this.repositories.aiMessages.findOne({
       filter: {
         sessionId,
         messageId: String(aiToolMessage.messageId),
@@ -114,15 +131,14 @@ export class SubAgentsDispatcher {
   }
 
   private async resolveLastMessage(
-    ctx: Context,
     sessionId: string,
   ): Promise<AIMessageEntity | null> {
-    const subSessionId = await this.resolveSubAgentSessionId(ctx, sessionId);
+    const subSessionId = await this.resolveSubAgentSessionId(sessionId);
     if (!subSessionId) {
       return null;
     }
 
-    return ctx.repositories.aiMessages.findOne({
+    return this.repositories.aiMessages.findOne({
       filter: {
         sessionId: subSessionId,
       },
@@ -147,13 +163,15 @@ export class SubAgentsDispatcher {
       throw new Error('User not authenticated');
     }
 
-    const resolvedModel = await ctx.aiEmployeesManager.resolveModel(
+    const resolvedModel = await this.runtime.aiEmployeesManager.resolveModel(
       employee,
       model,
     );
 
     const agent = await createAIEmployeeAgentService({
       ctx,
+      repositories: this.repositories,
+      runtime: this.runtime,
       employee,
       sessionId,
       skillSettings,
@@ -161,14 +179,16 @@ export class SubAgentsDispatcher {
       model: resolvedModel,
       from: 'sub-agent',
     });
-    const lastMessage = await ctx.repositories.aiMessages.findOne({
+    const lastMessage = await this.repositories.aiMessages.findOne({
       filter: {
         sessionId,
       },
       sort: ['-messageId'],
     });
     const decisions = lastMessage
-      ? await ctx.aiConversationsManager.getUserDecisions(lastMessage.messageId)
+      ? await this.runtime.aiConversationsManager.getUserDecisions(
+          lastMessage.messageId,
+        )
       : null;
     let context;
     if (
@@ -183,17 +203,22 @@ export class SubAgentsDispatcher {
       };
     }
 
-    const agentContext = createAgentContext(ctx, {
-      state: {
-        sessionId,
-        model: resolvedModel,
-        webSearch,
-        messages,
+    const agentContext = createAgentContext(
+      ctx,
+      this.repositories,
+      this.runtime,
+      {
+        state: {
+          sessionId,
+          model: resolvedModel as unknown as Record<string, unknown>,
+          webSearch,
+          messages,
+        },
       },
-    });
+    );
     const result = await agent.service.invoke(
       {
-        userDecisions: decisions,
+        userDecisions: decisions ?? undefined,
         userMessages: decisions
           ? undefined
           : [
@@ -224,12 +249,12 @@ export class SubAgentsDispatcher {
     return this.extractLastMessageText(result);
   }
 
-  async isInterrupted(sessionId: string, ctx: Context): Promise<boolean> {
+  async isInterrupted(sessionId: string): Promise<boolean> {
     if (!sessionId) {
       return false;
     }
 
-    const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
+    const aiToolMessage = await this.repositories.aiToolMessages.findOne({
       filter: {
         sessionId,
         toolName: 'dispatch-sub-agent-task',
@@ -246,7 +271,7 @@ export class SubAgentsDispatcher {
     if (!userId) {
       throw new Error('User not authenticated');
     }
-    const conversation = await ctx.repositories.aiConversations.findOne({
+    const conversation = await this.repositories.aiConversations.findOne({
       filter: {
         sessionId,
         userId,
@@ -255,7 +280,7 @@ export class SubAgentsDispatcher {
     if (!conversation) {
       return;
     }
-    const lastMessage = await this.resolveLastMessage(ctx, sessionId);
+    const lastMessage = await this.resolveLastMessage(sessionId);
     if (!sessionId || !lastMessage) {
       return;
     }
@@ -263,7 +288,7 @@ export class SubAgentsDispatcher {
       type: 'reject' as const,
       message: `The user ignored the tools usage and send new messages`,
     };
-    const updated = await ctx.repositories.aiToolMessages.update({
+    const updated = await this.repositories.aiToolMessages.update({
       values: { userDecision, invokeStatus: 'waiting' },
       filter: {
         sessionId: lastMessage.sessionId,
@@ -272,7 +297,7 @@ export class SubAgentsDispatcher {
       },
     });
     if (updated > 0) {
-      return await ctx.aiConversationsManager.getUserDecisions(
+      return await this.runtime.aiConversationsManager.getUserDecisions(
         lastMessage.messageId,
       );
     }

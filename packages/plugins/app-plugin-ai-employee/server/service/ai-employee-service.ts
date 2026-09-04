@@ -1,10 +1,13 @@
-import type { Context } from '../context.js';
+import type { AIManager } from '@nocobase/ai-employee';
+import type { DatabaseConnection } from '@nocobase/db';
+import type { Actor, Translate } from '../domain/contracts.js';
+import type { DatabaseRepositoryFactory } from '../repository/runtime-factory.js';
 import { EEFeatures } from '@nocobase/ai-employee';
 import type {
   AIEmployeeEntity,
   AIEmployeeToolSetting,
 } from '@nocobase/ai-employee';
-import type { AIEmployeeDto } from '../routes/contracts.js';
+import type { AIEmployeeDto } from '../domain/api-contracts.js';
 import type { UserAIEmployeeEntity } from '../repository/index.js';
 import {
   asRecord,
@@ -58,23 +61,26 @@ function cloneEmployee(employee: AIEmployeeEntity): AIEmployeeRecord {
   };
 }
 
-function localizeBuiltInInfo(ctx: Context, employee: AIEmployeeRecord): void {
-  if (!employee.builtIn || !ctx.t) {
+function localizeBuiltInInfo(
+  translate: Translate,
+  employee: AIEmployeeRecord,
+): void {
+  if (!employee.builtIn) {
     return;
   }
-  const options = { ns: ctx.i18nNamespace };
-  employee.nickname = ctx.t(employee.nickname ?? '', options);
-  employee.position = ctx.t(employee.position ?? '', options);
-  employee.bio = ctx.t(employee.bio ?? '', options);
-  employee.greeting = ctx.t(employee.greeting ?? '', options);
+  const options = { ns: '@nocobase/app-plugin-ai-employee' };
+  employee.nickname = translate(employee.nickname ?? '', options);
+  employee.position = translate(employee.position ?? '', options);
+  employee.bio = translate(employee.bio ?? '', options);
+  employee.greeting = translate(employee.greeting ?? '', options);
 }
 
 function serializeEmployee(
-  ctx: Context,
+  translate: Translate,
   employee: AIEmployeeEntity,
 ): AIEmployeeRecord {
   const serialized = cloneEmployee(employee);
-  localizeBuiltInInfo(ctx, serialized);
+  localizeBuiltInInfo(translate, serialized);
   return serialized;
 }
 function hasOwn(record: Record<string, any>, key: string): boolean {
@@ -175,17 +181,17 @@ function getKnowledgeBaseKeys(employee: AIEmployeeRecord): string[] {
 }
 
 async function enrichMissingKnowledgeBaseKeys(
-  ctx: Context,
+  ai: AIManager,
   employees: AIEmployeeRecord[],
 ): Promise<void> {
-  if (!ctx.ai.features.isFeaturesEnabled([EEFeatures.knowledgeBase])) {
+  if (!ai.features.isFeaturesEnabled([EEFeatures.knowledgeBase])) {
     return;
   }
   const knowledgeBaseKeys = [
     ...new Set(employees.flatMap(getKnowledgeBaseKeys)),
   ];
   const knowledgeBases = knowledgeBaseKeys.length
-    ? await ctx.ai.features.knowledgeBase.getKnowledgeBase(knowledgeBaseKeys)
+    ? await ai.features.knowledgeBase.getKnowledgeBase(knowledgeBaseKeys)
     : [];
   const existingKeys = new Set(
     knowledgeBases.map((knowledgeBase) => knowledgeBase.key),
@@ -201,11 +207,33 @@ async function enrichMissingKnowledgeBaseKeys(
  * `aiEmployees` service for AI employee resource management
  * (`listByUser`, `updateUserPrompt`) operating on plain repository entities.
  */
+export interface AIEmployeeServiceOptions {
+  readonly ai: AIManager;
+  readonly repositories: DatabaseRepositoryFactory;
+  readonly database: DatabaseConnection;
+  readonly knownRoles?: string[];
+}
+
 export class AIEmployeeService {
-  constructor(private readonly options?: { knownRoles?: string[] }) {}
+  private readonly ai: AIManager;
+  private readonly repositories: DatabaseRepositoryFactory;
+  private readonly database: DatabaseConnection;
+  private readonly configuredKnownRoles: string[] | undefined;
+
+  public constructor({
+    ai,
+    repositories,
+    database,
+    knownRoles,
+  }: AIEmployeeServiceOptions) {
+    this.ai = ai;
+    this.repositories = repositories;
+    this.database = database;
+    this.configuredKnownRoles = knownRoles;
+  }
 
   get knownRoles(): string[] {
-    if (this.options?.knownRoles?.length) return this.options.knownRoles;
+    if (this.configuredKnownRoles?.length) return this.configuredKnownRoles;
     const env = process.env.AI_DEFAULT_ROLES ?? '';
     const fromEnv = env
       .split(',')
@@ -214,20 +242,28 @@ export class AIEmployeeService {
     return fromEnv.length ? fromEnv : ['admin', 'member', 'root'];
   }
 
-  async listByUser(ctx: Context): Promise<AIEmployeeDto[]> {
-    const skills = await ctx.ai.skillsManager.listSkills({
+  async listByUser({
+    actor,
+    translate,
+  }: {
+    actor: Actor;
+    translate: Translate;
+  }): Promise<AIEmployeeDto[]> {
+    const skills = await this.ai.skillsManager.listSkills({
       scope: 'GENERAL',
     });
-    const tools = await ctx.ai.toolsManager.listTools({
+    const tools = await this.ai.toolsManager.listTools({
       scope: 'GENERAL',
     });
-    const userId = ctx.currentUser.id;
+    const userId = actor.id;
     const where: Record<string, unknown> = { enabled: true };
 
-    const rows = await ctx.repositories.aiEmployees.find({ filter: where });
+    const rows = await this.repositories.aiEmployees.find({
+      filter: where,
+    });
     const userConfigs = new Map<string, UserAIEmployeeEntity>();
     if (userId != null) {
-      const configs = await ctx.repositories.usersAiEmployees.find({
+      const configs = await this.repositories.usersAiEmployees.find({
         filter: { userId },
       });
       for (const config of configs) {
@@ -241,7 +277,7 @@ export class AIEmployeeService {
     });
 
     return sortedRows.map((row: AIEmployeeEntity) => {
-      const serialized = serializeEmployee(ctx, row);
+      const serialized = serializeEmployee(translate, row);
       const skillSettings: AIEmployeeEntity['skillSettings'] =
         serialized.skillSettings ?? {
           skills: [],
@@ -259,7 +295,7 @@ export class AIEmployeeService {
       for (const skill of skills) skillSettings.skills.push(skill.name);
       return {
         username: serialized.username,
-        nickname: serialized.nickname,
+        nickname: serialized.nickname ?? serialized.username,
         position: serialized.position,
         avatar: serialized.avatar,
         bio: serialized.bio,
@@ -278,15 +314,20 @@ export class AIEmployeeService {
     });
   }
 
-  async updateUserPrompt(
-    ctx: Context,
-    aiEmployee: string,
-    prompt: string,
-  ): Promise<void> {
-    if (!aiEmployee) return ctx.throw!(400);
-    const userId = ctx.currentUser.id;
-    const repo = ctx.repositories.usersAiEmployees;
-    await ctx.database.transaction(async (connection) => {
+  async updateUserPrompt({
+    actorId,
+    employeeKey,
+    prompt,
+  }: {
+    actorId: string | number;
+    employeeKey: string;
+    prompt: string;
+  }): Promise<void> {
+    if (!employeeKey) throw badRequest('aiEmployee is required');
+    const userId = actorId;
+    const aiEmployee = employeeKey;
+    const repo = this.repositories.usersAiEmployees;
+    await this.database.transaction(async (connection) => {
       const record = await repo.findOne(
         { filter: { userId, aiEmployee } },
         { connection },
@@ -305,33 +346,45 @@ export class AIEmployeeService {
     });
   }
 
-  getTemplates(_ctx: Context): Array<Record<string, unknown>> {
+  getTemplates(_options: {}): Array<Record<string, unknown>> {
     return [];
   }
 
-  async list(ctx: Context): Promise<unknown[]> {
-    const employees = (await ctx.repositories.aiEmployees.find({})).map(
-      (employee: AIEmployeeEntity) => serializeEmployee(ctx, employee),
+  async list({ translate }: { translate: Translate }): Promise<unknown[]> {
+    const employees = (await this.repositories.aiEmployees.find({})).map(
+      (employee: AIEmployeeEntity) => serializeEmployee(translate, employee),
     );
-    await enrichMissingKnowledgeBaseKeys(ctx, employees);
+    await enrichMissingKnowledgeBaseKeys(this.ai, employees);
     return employees;
   }
 
-  async get(ctx: Context, username: string): Promise<unknown> {
-    const employee = await ctx.repositories.aiEmployees.findOne({
+  async get({
+    username,
+    translate,
+  }: {
+    username: string;
+    translate: Translate;
+  }): Promise<unknown> {
+    const employee = await this.repositories.aiEmployees.findOne({
       filter: { username },
     });
     if (!employee) throw notFound('aiEmployees', username);
-    const serialized = serializeEmployee(ctx, employee);
-    await enrichMissingKnowledgeBaseKeys(ctx, [serialized]);
+    const serialized = serializeEmployee(translate, employee);
+    await enrichMissingKnowledgeBaseKeys(this.ai, [serialized]);
     return serialized;
   }
 
-  async upsert(ctx: Context, input: unknown): Promise<unknown> {
+  async upsert({
+    input,
+    translate,
+  }: {
+    input: unknown;
+    translate: Translate;
+  }): Promise<unknown> {
     const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
     const username = requiredString(record.username, 'username');
-    const current = await ctx.repositories.aiEmployees.findOne({
+    const current = await this.repositories.aiEmployees.findOne({
       filter: { username },
     });
     const currentRecord: Partial<AIEmployeeRecord> = current
@@ -393,22 +446,22 @@ export class AIEmployeeService {
           : (current?.deprecated ?? false),
       sort: typeof record.sort === 'number' ? record.sort : current?.sort,
     };
-    await ctx.database.transaction(async (connection) => {
+    await this.database.transaction(async (connection) => {
       if (current) {
-        await ctx.repositories.aiEmployees.update(
+        await this.repositories.aiEmployees.update(
           { filter: { username }, values },
           { connection },
         );
       } else {
-        await ctx.repositories.aiEmployees.create({ values }, { connection });
+        await this.repositories.aiEmployees.create({ values }, { connection });
       }
     });
-    return this.get(ctx, username);
+    return this.get({ username, translate });
   }
 
-  async delete(ctx: Context, username: string): Promise<void> {
-    await ctx.database.transaction(async (connection) => {
-      await ctx.repositories.aiEmployees.destroy(
+  async delete({ username }: { username: string }): Promise<void> {
+    await this.database.transaction(async (connection) => {
+      await this.repositories.aiEmployees.destroy(
         { filter: { username } },
         { connection },
       );

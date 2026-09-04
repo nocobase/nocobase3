@@ -1,10 +1,8 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
-import { Hono, type MiddlewareHandler } from 'hono';
-import type { AIEmployeePluginDeps } from '../bootstrap.js';
-import {
-  createPluginContextMiddleware,
-  createPluginRuntime,
-} from '../runtime.js';
+import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { Logger } from '@nocobase/logging';
+import { Hono } from 'hono';
+
+import type { ServiceFactory } from '../service/factory.js';
 import { createAIConversationsRouter } from './ai-conversations.js';
 import { createAIEmployeeRouter } from './ai-employees.js';
 import { createAIFilesRouter } from './ai-files.js';
@@ -15,39 +13,38 @@ import { createAIRouter } from './ai.js';
 import {
   createAICurrentUserMiddleware,
   createAIRequestMiddleware,
+  errorResponse,
 } from './utils.js';
 import { createLLMServicesRouter } from './llm-services.js';
 
 export * from './contracts.js';
 
-export function registerAIEmployeeRoutes(
-  routes: Hono,
-  ...middlewares: MiddlewareHandler[]
-): void {
-  for (const middleware of middlewares) {
-    routes.use('*', middleware);
-  }
-  routes.use('*', createAIRequestMiddleware());
-  createAIRouter(routes);
-  createAIEmployeeRouter(routes);
-  createAIConversationsRouter(routes);
-  createAIFilesRouter(routes);
-  createAIToolsRouter(routes);
-  createAISkillsRouter(routes);
-  createLLMServicesRouter(routes);
-  createAIMCPServersRouter(routes);
+export interface CreateAIEmployeeRoutesOptions {
+  readonly authentication: Auth;
+  readonly services: ServiceFactory;
+  readonly logger: Logger;
 }
 
-export default function registerRoutes({
-  app,
-  deps,
-}: AppPluginRoutesContext<AIEmployeePluginDeps>): void {
+export function createAIEmployeeRoutes(
+  options: CreateAIEmployeeRoutesOptions,
+): Hono {
   const routes = new Hono();
-  const runtime = createPluginRuntime({ deps });
-  registerAIEmployeeRoutes(
-    routes,
-    createAICurrentUserMiddleware(deps.auth),
-    createPluginContextMiddleware(runtime),
+  routes.onError((error) => errorResponse(error));
+  routes.use('*', createAICurrentUserMiddleware(options.authentication));
+  routes.use(
+    '*',
+    createAIRequestMiddleware({
+      ready: () => options.services.ready(),
+      logger: options.logger,
+    }),
   );
-  app.route('/api/ai', routes);
+  createAIRouter(routes, options.services);
+  createAIEmployeeRouter(routes, options.services);
+  createAIConversationsRouter(routes, options.services);
+  createAIFilesRouter(routes, options.services);
+  createAIToolsRouter(routes, options.services);
+  createAISkillsRouter(routes, options.services);
+  createLLMServicesRouter(routes, options.services);
+  createAIMCPServersRouter(routes, options.services);
+  return routes;
 }

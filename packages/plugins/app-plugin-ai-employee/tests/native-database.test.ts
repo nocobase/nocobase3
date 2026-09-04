@@ -5,7 +5,7 @@ import {
   createMigrator,
   type DatabaseManager,
 } from '@nocobase/db';
-import { CollectionRepositoryFactory } from '../server/repository/database/factory.js';
+import { RepositoryFactory } from '../server/repository/database/factory.js';
 
 const managers: DatabaseManager[] = [];
 
@@ -44,8 +44,8 @@ afterEach(async () => {
 describe('native AI employee persistence', () => {
   it('creates native tables and shares records across repository factories', async () => {
     const database = await createDatabase();
-    const first = new CollectionRepositoryFactory(database.connection());
-    const second = new CollectionRepositoryFactory(database.connection());
+    const first = new RepositoryFactory({ connection: database.connection() });
+    const second = new RepositoryFactory({ connection: database.connection() });
     await first.aiEmployees.create({
       values: {
         username: 'nathan',
@@ -102,7 +102,9 @@ describe('native AI employee persistence', () => {
 
   it('sorts AI employee lists by sort ascending by default', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     await repositories.aiEmployees.create({
       values: [
         {
@@ -132,7 +134,9 @@ describe('native AI employee persistence', () => {
 
   it('round-trips plain-text values stored in JSON tool-message content', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     const toolMessage = await repositories.aiToolMessages.create({
       values: {
         sessionId: '123e4567-e89b-12d3-a456-426614174000',
@@ -171,7 +175,9 @@ describe('native AI employee persistence', () => {
 
   it('round-trips array-backed JSON fields used by LLM service configuration', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     await repositories.llmServices.create({
       values: {
         name: 'openai',
@@ -194,7 +200,9 @@ describe('native AI employee persistence', () => {
 
   it('rolls back transaction-bound repository writes', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     await expect(
       database.transaction(async (connection) => {
         await repositories.aiEmployees.create(
@@ -222,7 +230,9 @@ describe('native AI employee persistence', () => {
 
   it('round-trips checkpoint blobs without a JSON record store', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     const blob = Uint8Array.from([0, 1, 2, 255]);
     await repositories.lcCheckpointBlobs.create({
       values: {

@@ -1,4 +1,6 @@
-import type { Context } from '../context.js';
+import type { Context } from '../internal/runtime-context.js';
+import type { RuntimeServices } from '../internal/runtime-services.js';
+import type { RepositoryFactory } from '../repository/database/factory.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   AIChatContext,
@@ -29,7 +31,7 @@ import type {
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { sendSSEError } from '../routes/utils.js';
+import { sendStreamError } from '../domain/errors.js';
 import { getSystemPrompt } from './prompts.js';
 import _ from 'lodash';
 import { createAIChatConversation } from './ai-chat-conversation.js';
@@ -86,7 +88,7 @@ type EmployeeToolSetting = {
   autoCall?: boolean;
 };
 
-type RuntimeSkillSettings = {
+export type RuntimeSkillSettings = {
   toolsVersion?: unknown;
   tools?: string[];
   skillsVersion?: unknown;
@@ -95,6 +97,8 @@ type RuntimeSkillSettings = {
 
 export interface AIEmployeeOptions {
   ctx: Context;
+  repositories: RepositoryFactory;
+  runtime: RuntimeServices;
   employee: AIEmployeeEntity;
   sessionId: string;
   systemMessage?: unknown;
@@ -140,6 +144,8 @@ export class AIEmployee {
   userMessageCount = 0;
 
   private ctx: Context;
+  private repositories: RepositoryFactory;
+  private runtime: RuntimeServices;
   private systemMessage?: unknown;
   private protocol: ChatStreamProtocol;
   private webSearch?: boolean;
@@ -151,6 +157,8 @@ export class AIEmployee {
 
   constructor({
     ctx,
+    repositories,
+    runtime,
     employee,
     sessionId,
     systemMessage,
@@ -163,10 +171,13 @@ export class AIEmployee {
   }: AIEmployeeOptions) {
     this.employee = employee;
     this.ctx = ctx;
+    this.repositories = repositories;
+    this.runtime = runtime;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
     this.aiChatConversation = createAIChatConversation(
       this.ctx,
+      this.repositories,
       this.sessionId,
     );
     this.skillSettings = skillSettings;
@@ -174,9 +185,10 @@ export class AIEmployee {
     this.legacy = legacy;
     this.from = from;
     this.tools = tools;
-    this.streamCached = this.ctx.llmStreamCachedManager.getCached(sessionId);
+    this.streamCached =
+      this.runtime.llmStreamCachedManager.getCached(sessionId);
 
-    const builtInManager = this.ctx.builtInManager;
+    const builtInManager = this.runtime.builtInManager;
     builtInManager.setupBuiltInInfo(ctx, this.employee);
     this.webSearch = webSearch;
     this.protocol = ChatStreamProtocol.fromContext(ctx, async (chunk) => {
@@ -534,9 +546,9 @@ export class AIEmployee {
     const allTools = tools ?? [];
     if (this.from === 'main-agent') {
       const checkpointer = new NativeCollectionSaver({
-        checkpoints: this.ctx.repositories.lcCheckpoints,
-        blobs: this.ctx.repositories.lcCheckpointBlobs,
-        writes: this.ctx.repositories.lcCheckpointWrites,
+        checkpoints: this.repositories.lcCheckpoints,
+        blobs: this.repositories.lcCheckpointBlobs,
+        writes: this.repositories.lcCheckpointWrites,
       });
       return createLangChainAgent({
         model,
@@ -645,7 +657,7 @@ export class AIEmployee {
         },
         state,
       );
-      this.ctx.aiEmployeesManager.conversationController.set(
+      this.runtime.aiEmployeesManager.conversationController.set(
         this.sessionId,
         controller,
       );
@@ -1011,7 +1023,7 @@ export class AIEmployee {
       return about;
     }
 
-    const userConfig = await this.ctx.repositories.usersAiEmployees.findOne({
+    const userConfig = await this.repositories.usersAiEmployees.findOne({
       filter: {
         userId: this.ctx.auth?.user?.id ?? 0,
         aiEmployee: this.employee.username,
@@ -1024,10 +1036,8 @@ export class AIEmployee {
     }
 
     const aiMessages = await this.aiChatConversation.listMessages();
-    const workContextBackground = await this.ctx.workContextHandler.background(
-      this.ctx,
-      aiMessages,
-    );
+    const workContextBackground =
+      await this.runtime.workContextHandler.background(this.ctx, aiMessages);
     if (workContextBackground?.length) {
       background = `${background}\n${workContextBackground.join('\n')}`;
     }
@@ -1109,7 +1119,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     const currentFrontendTools = toolCalls.some(
       (toolCall) => toolCall.name === EXECUTE_FRONTEND_TOOL_NAME,
     )
-      ? await listCurrentFrontendTools(this.ctx, {
+      ? await listCurrentFrontendTools(this.repositories, {
           ...this.ctx.requestExecution,
           sessionId: this.sessionId,
         })
@@ -1133,11 +1143,13 @@ If information is missing, clearly state it in the summary.</Important>`;
             messageId: messageId,
             toolCallId: toolCall.id,
             toolName: toolCall.name,
-            status: toolsExisted ? null : 'error',
-            content: toolsExisted ? null : `Tool ${toolCall.name} not found`,
+            status: toolsExisted ? (null as unknown as string) : 'error',
+            content: toolsExisted
+              ? (null as unknown as string)
+              : `Tool ${toolCall.name} not found`,
             invokeStatus: toolsExisted ? 'init' : 'done',
-            invokeStartTime: toolsExisted ? null : nowTime,
-            invokeEndTime: toolsExisted ? null : nowTime,
+            invokeStartTime: toolsExisted ? (null as unknown as Date) : nowTime,
+            invokeEndTime: toolsExisted ? (null as unknown as Date) : nowTime,
             auto,
             execution: tools?.execution ?? 'backend',
           };
@@ -1313,7 +1325,7 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
   async cancelToolCall() {
     let messageId;
-    const historyMessages = await this.ctx.repositories.aiMessages.find({
+    const historyMessages = await this.repositories.aiMessages.find({
       filter: { sessionId: this.sessionId },
       sort: ['-messageId'],
     });
@@ -1364,7 +1376,7 @@ If information is missing, clearly state it in the summary.</Important>`;
           { connection },
         );
       }
-      return await this.ctx.repositories.aiMessages.create(
+      return await this.repositories.aiMessages.create(
         {
           values: validToolMessages.map((toolMessage) => ({
             messageId: String(this.ctx.snowflake.generate()),
@@ -1394,7 +1406,7 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   sendErrorResponse(errorMessage: string) {
-    sendSSEError(this.requireStreamTarget(), errorMessage);
+    sendStreamError(this.requireStreamTarget(), errorMessage);
   }
 
   private requireStreamTarget() {
@@ -1404,7 +1416,7 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   sendSpecificError({ name, message }: { name: string; message: string }) {
-    sendSSEError(this.requireStreamTarget(), message, name);
+    sendStreamError(this.requireStreamTarget(), message, name);
   }
 
   // === Conversation/thread helpers ===
@@ -1427,7 +1439,9 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   removeAbortController() {
-    this.ctx.aiEmployeesManager.conversationController.delete(this.sessionId);
+    this.runtime.aiEmployeesManager.conversationController.delete(
+      this.sessionId,
+    );
   }
 
   shouldInterruptToolCall(tools: ToolsEntity | undefined): boolean {
@@ -1462,6 +1476,7 @@ If information is missing, clearly state it in the summary.</Important>`;
 
     const attachmentsByLookup = await findMessageAttachments(
       this.ctx,
+      this.repositories,
       attachments,
     );
     return messages.map((message) => {
@@ -1496,7 +1511,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     provider: LLMProvider;
   }) {
     const formattedMessages = [];
-    const workContextHandler = this.ctx.workContextHandler;
+    const workContextHandler = this.runtime.workContextHandler;
     const normalizedMessages = await this.normalizeMessageAttachments(messages);
 
     // 截断过长的内容
@@ -1546,7 +1561,7 @@ If information is missing, clearly state it in the summary.</Important>`;
             }
             const parsed = await provider.parseAttachment(attachment, {
               fileStorage: this.ctx.fileStorage,
-              documentLoader: this.ctx.documentLoaders.cached,
+              documentLoader: this.runtime.documentLoaders.cached,
               caching: this.ctx.caching,
               getHeader: (name: string) => this.ctx.get(name),
             });
@@ -1633,7 +1648,10 @@ If information is missing, clearly state it in the summary.</Important>`;
     >
   > {
     const result = new Map();
-    const { toolCalls } = await this.aiMessagesRepo.findById(messageId);
+    const message = await this.aiMessagesRepo.findOne({
+      filter: { messageId },
+    });
+    const toolCalls = message?.toolCalls;
     if (!toolCalls) {
       return result;
     }
@@ -1688,10 +1706,13 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!this.areToolsEnabled()) {
       return [];
     }
-    const currentFrontendTools = await listCurrentFrontendTools(this.ctx, {
-      ...this.ctx.requestExecution,
-      sessionId: this.sessionId,
-    });
+    const currentFrontendTools = await listCurrentFrontendTools(
+      this.repositories,
+      {
+        ...this.ctx.requestExecution,
+        sessionId: this.sessionId,
+      },
+    );
     const tools: ToolsEntity[] = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
       ctx: this.ctx,
@@ -1713,7 +1734,9 @@ If information is missing, clearly state it in the summary.</Important>`;
     const settingsTools = this.employee.skillSettings?.tools ?? [];
     const employeeTools = [...settingsTools, ...this.tools];
     if (
-      await this.ctx.knowledgeBaseManager.isEnabledKnowledgeBase(this.employee)
+      await this.runtime.knowledgeBaseManager.isEnabledKnowledgeBase(
+        this.employee,
+      )
     ) {
       const knowledgeBaseRetrieveTool = await this.toolsManager.getTools(
         SYSTEM_TOOLS.KNOWLEDGE_BASE,
@@ -1854,11 +1877,8 @@ If information is missing, clearly state it in the summary.</Important>`;
     const result = new Set<string>();
     for (const item of list) {
       const { content } = item;
-      if (
-        _.isPlainObject(content) &&
-        typeof content['skillName'] === 'string'
-      ) {
-        result.add(content['skillName']);
+      if (isRecord(content) && typeof content.skillName === 'string') {
+        result.add(content.skillName);
         continue;
       }
       if (typeof content === 'string') {
@@ -1912,8 +1932,12 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!specifiedToolNames.includes('dispatch-sub-agent-task')) {
       return [];
     }
-    const availableAIEmployees = (await listAccessibleAIEmployees(this.ctx))
-      .map((employee) => serializeEmployeeSummary(this.ctx, employee))
+    const availableAIEmployees = (
+      await listAccessibleAIEmployees(this.ctx, this.repositories)
+    )
+      .map((employee) =>
+        serializeEmployeeSummary(this.ctx, this.runtime, employee),
+      )
       .filter((it) => it.username !== this.employee.username);
     return availableAIEmployees;
   }
@@ -1964,8 +1988,8 @@ If information is missing, clearly state it in the summary.</Important>`;
       throw new Error('Conversation not existed');
     }
     return AgentThread.newThread(
-      aiConversation.sessionId,
-      aiConversation.thread,
+      String(aiConversation.sessionId),
+      aiConversation.thread ?? 0,
     );
   }
 
@@ -2018,15 +2042,15 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   private get aiConversationsRepo() {
-    return this.ctx.repositories.aiConversations;
+    return this.repositories.aiConversations;
   }
 
   private get aiMessagesRepo() {
-    return this.ctx.repositories.aiMessages;
+    return this.repositories.aiMessages;
   }
 
   private get aiToolMessagesRepo() {
-    return this.ctx.repositories.aiToolMessages;
+    return this.repositories.aiToolMessages;
   }
 }
 

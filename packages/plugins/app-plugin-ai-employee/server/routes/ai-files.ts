@@ -1,21 +1,30 @@
+import type { ServiceFactory } from '../service/factory.js';
 import type { Hono } from 'hono';
+
 import { requiredString } from './utils.js';
 
-export function createAIFilesRouter(app: Hono): void {
+export function createAIFilesRouter(app: Hono, services: ServiceFactory): void {
   app.post('/aiFiles:create', async (context) => {
-    const ctx = context.var.ctx;
     const form = await context.req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) throw new Error('file is required');
-    const result = await ctx.fileService.create(ctx, file);
+    const result = await services.fileService.create({
+      actor: context.var.currentUser,
+      file,
+    });
     return context.json(result as never);
   });
 
   app.get('/aiFiles:preview', async (context) => {
-    const ctx = context.var.ctx;
-    return ctx.fileService.preview(
-      ctx,
-      requiredString(context.req.query('id'), 'file id'),
-    );
+    const result = await services.fileService.preview({
+      actor: context.var.currentUser,
+      id: requiredString(context.req.query('id'), 'id'),
+    });
+    return new Response(result.stream, {
+      headers: {
+        'Content-Type': result.contentType,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(result.filename)}"`,
+      },
+    });
   });
 }

@@ -7,8 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { ConversationRequestExecution, Context } from '../context.js';
+import type { ConversationRequestExecution } from '../internal/runtime-context.js';
 import { z } from 'zod';
+import type { RepositoryFactory } from '../repository/database/factory.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,
@@ -98,7 +99,7 @@ const findRequestFrontendTools = (
 };
 
 export const listCurrentFrontendTools = async (
-  ctx: Context,
+  repositories: RepositoryFactory,
   execution: ConversationRequestExecution = {},
 ): Promise<FrontendToolManifest[]> => {
   const currentSessionId =
@@ -107,7 +108,7 @@ export const listCurrentFrontendTools = async (
     return findRequestFrontendTools(execution);
   }
 
-  const conversationRepository = ctx.repositories.aiConversations;
+  const conversationRepository = repositories.aiConversations;
   const conversation = (await conversationRepository.findOne({
     filter: {
       sessionId: currentSessionId,
@@ -141,11 +142,11 @@ export const listCurrentFrontendTools = async (
 };
 
 export const findCurrentFrontendTool = async (
-  ctx: Context,
+  repositories: RepositoryFactory,
   toolId: string,
   execution: ConversationRequestExecution = {},
 ): Promise<FrontendToolManifest | undefined> => {
-  const tools = await listCurrentFrontendTools(ctx, execution);
+  const tools = await listCurrentFrontendTools(repositories, execution);
   return tools.find((tool) => tool.id === toolId);
 };
 

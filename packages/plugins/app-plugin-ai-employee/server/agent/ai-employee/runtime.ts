@@ -1,4 +1,6 @@
-import type { Context } from '../../context.js';
+import type { Context } from '../../internal/runtime-context.js';
+import type { RuntimeServices } from '../../internal/runtime-services.js';
+import type { RepositoryFactory } from '../../repository/database/factory.js';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { SkillsEntity } from '@nocobase/ai-employee';
 /**
@@ -54,6 +56,8 @@ export interface ModelRef {
 
 export interface AIEmployeeOptions {
   ctx: Context;
+  repositories: RepositoryFactory;
+  runtime: RuntimeServices;
   employee: any;
   sessionId: string;
   systemMessage?: string;
@@ -74,6 +78,8 @@ export class AIEmployeeCapabilities {
   userMessageCount = 0;
 
   private ctx: Context;
+  private repositories: RepositoryFactory;
+  private runtime: RuntimeServices;
   private systemMessage?: string;
   private webSearch?: boolean;
   private model?: ModelRef;
@@ -81,6 +87,8 @@ export class AIEmployeeCapabilities {
 
   constructor({
     ctx,
+    repositories,
+    runtime,
     employee,
     sessionId,
     systemMessage,
@@ -92,17 +100,20 @@ export class AIEmployeeCapabilities {
   }: AIEmployeeOptions) {
     this.employee = employee;
     this.ctx = ctx;
+    this.repositories = repositories;
+    this.runtime = runtime;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
     this.aiChatConversation = createAIChatConversation(
       this.ctx,
+      this.repositories,
       this.sessionId,
     );
     this.skillSettings = skillSettings;
     this.model = model;
     this.from = from;
     this.tools = tools;
-    const builtInManager = this.ctx.builtInManager;
+    const builtInManager = this.runtime.builtInManager;
     builtInManager.setupBuiltInInfo(
       ctx,
       this.employee as unknown as AIEmployeeType,
@@ -160,7 +171,7 @@ export class AIEmployeeCapabilities {
       return about;
     }
 
-    const userConfig = await this.ctx.repositories.usersAiEmployees.findOne({
+    const userConfig = await this.repositories.usersAiEmployees.findOne({
       filter: {
         userId: this.ctx.auth?.user?.id ?? 0,
         aiEmployee: this.employee.username,
@@ -173,10 +184,8 @@ export class AIEmployeeCapabilities {
     }
 
     const aiMessages = await this.aiChatConversation.listMessages();
-    const workContextBackground = await this.ctx.workContextHandler.background(
-      this.ctx,
-      aiMessages,
-    );
+    const workContextBackground =
+      await this.runtime.workContextHandler.background(this.ctx, aiMessages);
     if (workContextBackground?.length) {
       background = `${background}\n${workContextBackground.join('\n')}`;
     }
@@ -185,7 +194,7 @@ export class AIEmployeeCapabilities {
       background = `${background}\n${addSystemPrompt.map((it) => it.content).join('\n')}`;
     }
 
-    const knowledgeBaseManager = this.ctx.knowledgeBaseManager;
+    const knowledgeBaseManager = this.runtime.knowledgeBaseManager;
     const employee = this.employee as unknown as AIEmployeeType;
     const knowledgeBaseEnabled =
       await knowledgeBaseManager.isEnabledKnowledgeBase(employee);
@@ -283,7 +292,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     const currentFrontendTools = toolCalls.some(
       (toolCall) => toolCall.name === EXECUTE_FRONTEND_TOOL_NAME,
     )
-      ? await listCurrentFrontendTools(this.ctx, {
+      ? await listCurrentFrontendTools(this.repositories, {
           ...this.ctx.requestExecution,
           sessionId: this.sessionId,
         })
@@ -307,11 +316,13 @@ If information is missing, clearly state it in the summary.</Important>`;
             messageId,
             toolCallId: toolCall.id,
             toolName: toolCall.name,
-            status: toolsExisted ? null : 'error',
-            content: toolsExisted ? null : `Tool ${toolCall.name} not found`,
+            status: toolsExisted ? (null as unknown as string) : 'error',
+            content: toolsExisted
+              ? (null as unknown as string)
+              : `Tool ${toolCall.name} not found`,
             invokeStatus: toolsExisted ? 'init' : 'done',
-            invokeStartTime: toolsExisted ? null : nowTime,
-            invokeEndTime: toolsExisted ? null : nowTime,
+            invokeStartTime: toolsExisted ? (null as unknown as Date) : nowTime,
+            invokeEndTime: toolsExisted ? (null as unknown as Date) : nowTime,
             auto,
             execution: tools?.execution ?? 'backend',
           };
@@ -463,7 +474,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     reason = 'The user ignored the application for tools usage and will continued to ask questions',
   ) {
     let messageId;
-    const historyMessages = await this.ctx.repositories.aiMessages.find({
+    const historyMessages = await this.repositories.aiMessages.find({
       sort: ['-messageId'],
     });
     const [lastMessage] = historyMessages;
@@ -511,7 +522,7 @@ If information is missing, clearly state it in the summary.</Important>`;
           { connection: transaction },
         );
       }
-      return await this.ctx.repositories.aiMessages.create(
+      return await this.repositories.aiMessages.create(
         {
           values: toolMessages.map((toolMessage) => ({
             messageId: String(this.ctx.snowflake.generate()),
@@ -597,6 +608,7 @@ If information is missing, clearly state it in the summary.</Important>`;
 
     const attachmentsByLookup = await findMessageAttachments(
       this.ctx,
+      this.repositories,
       attachments,
     );
     return messages.map((message) => {
@@ -626,7 +638,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     provider: LLMProvider;
   }) {
     const formattedMessages = [];
-    const workContextHandler = this.ctx.workContextHandler;
+    const workContextHandler = this.runtime.workContextHandler;
     const normalizedMessages = await this.normalizeMessageAttachments(messages);
 
     // 截断过长的内容
@@ -670,7 +682,7 @@ If information is missing, clearly state it in the summary.</Important>`;
           for (const attachment of attachments) {
             const parsed = await provider.parseAttachment(attachment as any, {
               fileStorage: this.ctx.fileStorage,
-              documentLoader: this.ctx.documentLoaders.cached,
+              documentLoader: this.runtime.documentLoaders.cached,
               caching: this.ctx.caching,
               getHeader: (name: string) => this.ctx.get(name),
             });
@@ -757,9 +769,10 @@ If information is missing, clearly state it in the summary.</Important>`;
     >
   > {
     const result = new Map();
-    const { toolCalls } = await this.aiMessagesRepo.findOne({
+    const message = await this.aiMessagesRepo.findOne({
       filter: { messageId },
     });
+    const toolCalls = message?.toolCalls;
     if (!toolCalls) {
       return result;
     }
@@ -773,7 +786,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     ToolsEntity | undefined
   > {
     const employee = this.employee as unknown as AIEmployeeType;
-    const knowledgeBaseManager = this.ctx.knowledgeBaseManager;
+    const knowledgeBaseManager = this.runtime.knowledgeBaseManager;
     if (!(await knowledgeBaseManager.isEnabledKnowledgeBase(employee))) {
       return undefined;
     }
@@ -794,10 +807,13 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!this.areToolsEnabled()) {
       return [];
     }
-    const currentFrontendTools = await listCurrentFrontendTools(this.ctx, {
-      ...this.ctx.requestExecution,
-      sessionId: this.sessionId,
-    });
+    const currentFrontendTools = await listCurrentFrontendTools(
+      this.repositories,
+      {
+        ...this.ctx.requestExecution,
+        sessionId: this.sessionId,
+      },
+    );
     const tools: ToolsEntity[] = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
       ctx: this.ctx,
@@ -1009,8 +1025,12 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!specifiedToolNames.includes('dispatch-sub-agent-task')) {
       return [];
     }
-    const availableAIEmployees = (await listAccessibleAIEmployees(this.ctx))
-      .map((employee) => serializeEmployeeSummary(this.ctx, employee))
+    const availableAIEmployees = (
+      await listAccessibleAIEmployees(this.ctx, this.repositories)
+    )
+      .map((employee) =>
+        serializeEmployeeSummary(this.ctx, this.runtime, employee),
+      )
       .filter((it) => it.username !== this.employee.username);
     return availableAIEmployees;
   }
@@ -1034,15 +1054,15 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   private get aiConversationsRepo() {
-    return this.ctx.repositories.aiConversations;
+    return this.repositories.aiConversations;
   }
 
   private get aiMessagesRepo() {
-    return this.ctx.repositories.aiMessages;
+    return this.repositories.aiMessages;
   }
 
   private get aiToolMessagesRepo() {
-    return this.ctx.repositories.aiToolMessages;
+    return this.repositories.aiToolMessages;
   }
 }
 

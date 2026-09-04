@@ -1,4 +1,4 @@
-import type { Context } from '../server/context.js';
+import type { Context } from '../server/internal/runtime-context.js';
 /**
  * Minimal test harness for repository-backed resource managers.
  */

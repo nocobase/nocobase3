@@ -7,7 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../context.js';
+import type { Context } from '../internal/runtime-context.js';
+import type { RepositoryFactory } from '../repository/database/factory.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   AIMessage,
@@ -87,7 +88,10 @@ export const registerAIConversationReadNotification = (
 ): void => {};
 
 export class AIConversationsManager {
-  constructor(protected ctx: Context) {}
+  constructor(
+    protected ctx: Context,
+    protected repositories: RepositoryFactory,
+  ) {}
 
   async create({
     userId,
@@ -225,7 +229,7 @@ export class AIConversationsManager {
 
     const pageSize = 10;
     const maxLimit = 200;
-    const messageRepository = this.ctx.repositories.aiMessages;
+    const messageRepository = this.repositories.aiMessages;
     const filter: Record<string, unknown> = {
       sessionId,
       role: {
@@ -279,7 +283,8 @@ export class AIConversationsManager {
         .map((toolCall: AIToolCall) => toolCall.id),
       ...subAgentConversationMessages
         .filter((row: ParsedMessageRow) => (row.toolCalls?.length ?? 0) > 0)
-        .flatMap((row: ParsedMessageRow) => row.toolCalls ?? []),
+        .flatMap((row: ParsedMessageRow) => row.toolCalls ?? [])
+        .map((toolCall: AIToolCall) => toolCall.id),
     ];
     const toolMessages = await this.aiToolMessagesRepo.find({
       filter: {
@@ -373,7 +378,7 @@ export class AIConversationsManager {
     const allInterruptedToolCall = await this.aiToolMessagesRepo.find({
       filter: {
         messageId,
-        interruptActionOrder: { $ne: null },
+        interruptActionOrder: { $ne: null as unknown as number },
       },
       sort: ['interruptActionOrder'],
     });
@@ -438,14 +443,14 @@ export class AIConversationsManager {
   }
 
   private get aiConversationsRepo() {
-    return this.ctx.repositories.aiConversations;
+    return this.repositories.aiConversations;
   }
 
   private get aiMessagesRepo() {
-    return this.ctx.repositories.aiMessages;
+    return this.repositories.aiMessages;
   }
 
   private get aiToolMessagesRepo() {
-    return this.ctx.repositories.aiToolMessages;
+    return this.repositories.aiToolMessages;
   }
 }
