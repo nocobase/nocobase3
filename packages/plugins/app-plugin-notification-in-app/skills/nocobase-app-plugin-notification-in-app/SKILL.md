@@ -58,7 +58,7 @@ Rules:
 3. Register `@nocobase/app-plugin-notification` before `@nocobase/app-plugin-notification-in-app/server` when the application needs the `in-app` Channel contribution.
 4. Register `@nocobase/app-plugin-notification-in-app/client` in the Client composition root. In a development build, verify the page at `/dev/notification-in-app` relative to the App base path.
 5. Keep inbox reads and mutations on the injected `AppClient`. Do not reconstruct `/api` from the browser location or Portal base.
-6. Keep HTTP state authoritative. On a validated `inbox.changed` event, successful subscription acknowledgement, or window focus, trigger a bounded HTTP refetch.
+6. Keep HTTP state authoritative. On a validated `inbox.changed` event, realtime connection open, or window focus, trigger a bounded HTTP refetch.
 7. Use the public `@nocobase/app-plugin-notification-in-app/realtime` entry for shared topic or event types; do not import Server internals.
 8. Test allowed and denied users, CSRF-protected mutations, pagination, custom API hosts, realtime invalidation, reconnect recovery, and Dev Route registration.
 9. Run lint, typecheck, tests, and build for the plugin and affected application.
@@ -97,7 +97,7 @@ Rollback guidance:
 - The page-local Provider mounts only while the inbox page is open.
 - HTTP calls use the injected `AppClient` and honor custom `api.baseURL` configuration.
 - Realtime connects through the configured application client and uses the public topic constant.
-- Subscription acknowledgement, valid invalidation events, and window focus refetch durable state.
+- Realtime connection open, valid invalidation events, and window focus refetch durable state.
 - Malformed or unrelated realtime payloads do not alter inbox state.
 - Reads and writes remain scoped to the authenticated user.
 - Mutations obtain and send the CSRF token; anonymous and invalid-token requests are denied.
@@ -108,7 +108,7 @@ Rollback guidance:
 
 1. Happy path: an authenticated user lists messages, reads one item, and observes the unread count decrease.
 2. Custom host: an application with a non-default API base sends inbox HTTP and WebSocket traffic to its configured backend.
-3. Recovery: a reconnect receives a successful subscription acknowledgement and refetches durable unread state even when no event arrived while offline.
+3. Recovery: a reopened realtime connection refetches durable unread state even when no event arrived while offline.
 4. Isolation and safety: another user cannot read or mutate the first user's item, and a missing or invalid CSRF token is rejected.
 5. Invalid input: a malformed cursor, unsupported mutation action, or unrelated realtime payload is rejected or ignored without corrupting displayed state.
 

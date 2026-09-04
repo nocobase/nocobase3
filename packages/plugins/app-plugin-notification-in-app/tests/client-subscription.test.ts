@@ -12,12 +12,12 @@ import {
 } from '../client/subscription.js';
 
 describe('in-app notification Client subscription', () => {
-  it('refreshes after subscription recovery, valid events, and focus', () => {
+  it('refreshes after connection recovery, valid events, and focus', () => {
     let eventListener: RealtimeListener<unknown> | undefined;
-    let subscribedListener: (() => void) | undefined;
+    let openListener: (() => void) | undefined;
     let focusListener: EventListener | undefined;
     const unsubscribeEvent = vi.fn();
-    const unsubscribeSubscribed = vi.fn();
+    const unsubscribeOpen = vi.fn();
     const realtime: RealtimeClient = {
       connected: true,
       subscribe: vi.fn((topic, listener) => {
@@ -25,11 +25,9 @@ describe('in-app notification Client subscription', () => {
         eventListener = listener as RealtimeListener<unknown>;
         return unsubscribeEvent;
       }),
-      onOpen: vi.fn(() => vi.fn()),
-      onSubscribed: vi.fn((topic, listener) => {
-        expect(topic).toBe(IN_APP_NOTIFICATION_REALTIME_TOPIC);
-        subscribedListener = listener;
-        return unsubscribeSubscribed;
+      onOpen: vi.fn((listener) => {
+        openListener = listener;
+        return unsubscribeOpen;
       }),
       refreshSession: vi.fn(),
       close: vi.fn(),
@@ -45,7 +43,7 @@ describe('in-app notification Client subscription', () => {
 
     const cleanup = subscribeToInboxInvalidations(client, target, refresh);
 
-    subscribedListener?.();
+    openListener?.();
     eventListener?.({
       type: 'event',
       topic: IN_APP_NOTIFICATION_REALTIME_TOPIC,
@@ -66,7 +64,7 @@ describe('in-app notification Client subscription', () => {
 
     expect(target.removeEventListener).toHaveBeenCalledWith('focus', refresh);
     expect(unsubscribeEvent).toHaveBeenCalledOnce();
-    expect(unsubscribeSubscribed).toHaveBeenCalledOnce();
+    expect(unsubscribeOpen).toHaveBeenCalledOnce();
   });
 });
 

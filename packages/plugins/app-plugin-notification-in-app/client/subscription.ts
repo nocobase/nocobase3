@@ -12,10 +12,7 @@ export function subscribeToInboxInvalidations(
   target: InboxFocusTarget,
   refresh: () => void,
 ): () => void {
-  const unsubscribeSubscribed = appClient.realtime?.onSubscribed?.(
-    IN_APP_NOTIFICATION_REALTIME_TOPIC,
-    refresh,
-  );
+  const unsubscribeOpen = appClient.realtime?.onOpen(refresh);
   const unsubscribeTopic = appClient.realtime?.subscribe<unknown>(
     IN_APP_NOTIFICATION_REALTIME_TOPIC,
     (event): void => {
@@ -27,7 +24,7 @@ export function subscribeToInboxInvalidations(
   return (): void => {
     target.removeEventListener('focus', refresh);
     unsubscribeTopic?.();
-    unsubscribeSubscribed?.();
+    unsubscribeOpen?.();
   };
 }
 

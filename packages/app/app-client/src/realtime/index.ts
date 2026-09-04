@@ -14,7 +14,6 @@ export interface RealtimeClient {
     listener: RealtimeListener<Payload>,
   ): () => void;
   onOpen(listener: () => void): () => void;
-  onSubscribed?(topic: string, listener: () => void): () => void;
   refreshSession(): void;
   close(): void;
 }
@@ -26,12 +25,10 @@ export interface RealtimeClientOptions {
 }
 
 interface RealtimeWireMessage {
-  readonly id?: string;
   readonly type?: string;
   readonly topic?: string;
   readonly payload?: unknown;
   readonly publishedAt?: string;
-  readonly subscriptionId?: string;
 }
 
 type UntypedRealtimeListener = RealtimeListener<unknown>;
@@ -43,11 +40,8 @@ export function createRealtimeClient(
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let pingTimer: ReturnType<typeof setInterval> | undefined;
   let reconnectCount = 0;
-  let subscriptionRequestSequence = 0;
   let manuallyClosed = false;
   const openListeners = new Set<() => void>();
-  const pendingSubscriptionIds = new Map<string, string>();
-  const subscribedListeners = new Map<string, Set<() => void>>();
   const topicListeners = new Map<string, Set<UntypedRealtimeListener>>();
 
   const client: RealtimeClient = {
@@ -76,7 +70,6 @@ export function createRealtimeClient(
         listeners.delete(listener as UntypedRealtimeListener);
         if (listeners.size > 0) return;
         topicListeners.delete(topic);
-        pendingSubscriptionIds.delete(topic);
         send({ type: 'unsubscribe', topic });
         if (topicListeners.size === 0) client.close();
       };
@@ -86,17 +79,6 @@ export function createRealtimeClient(
       openListeners.add(listener);
       return (): void => {
         openListeners.delete(listener);
-      };
-    },
-
-    onSubscribed(topic: string, listener: () => void): () => void {
-      validateRealtimeTopic(topic);
-      const listeners = subscribedListeners.get(topic) ?? new Set<() => void>();
-      listeners.add(listener);
-      subscribedListeners.set(topic, listeners);
-      return (): void => {
-        listeners.delete(listener);
-        if (listeners.size === 0) subscribedListeners.delete(topic);
       };
     },
 
@@ -114,7 +96,6 @@ export function createRealtimeClient(
       manuallyClosed = true;
       clearReconnectTimer();
       stopPing();
-      pendingSubscriptionIds.clear();
       socket?.close();
       socket = undefined;
     },
@@ -151,17 +132,6 @@ export function createRealtimeClient(
         console.warn('Unable to parse NocoBase realtime message.', error);
         return;
       }
-      if (isRealtimeSubscribed(message)) {
-        if (pendingSubscriptionIds.get(message.topic) !== message.id) return;
-        pendingSubscriptionIds.delete(message.topic);
-        for (const listener of subscribedListeners.get(message.topic) ?? []) {
-          notifyListener(
-            listener,
-            `Realtime subscribed listener for topic "${message.topic}" failed.`,
-          );
-        }
-        return;
-      }
       if (!isRealtimeEvent(message)) return;
       for (const listener of topicListeners.get(message.topic) ?? []) {
         notifyListener(
@@ -178,7 +148,6 @@ export function createRealtimeClient(
       if (socket !== nextSocket) return;
       socket = undefined;
       stopPing();
-      pendingSubscriptionIds.clear();
       if (!manuallyClosed && topicListeners.size > 0) scheduleReconnect();
     };
   }
@@ -190,12 +159,7 @@ export function createRealtimeClient(
   }
 
   function sendSubscription(topic: string): void {
-    subscriptionRequestSequence += 1;
-    const id = `subscribe:${subscriptionRequestSequence}:${topic}`;
-    pendingSubscriptionIds.set(topic, id);
-    if (!send({ type: 'subscribe', id, topic })) {
-      pendingSubscriptionIds.delete(topic);
-    }
+    send({ type: 'subscribe', id: `subscribe:${topic}`, topic });
   }
 
   function scheduleReconnect(): void {
@@ -261,21 +225,5 @@ function isRealtimeEvent(
     message.type === 'event' &&
     typeof message.topic === 'string' &&
     typeof message.publishedAt === 'string'
-  );
-}
-
-function isRealtimeSubscribed(
-  message: RealtimeWireMessage,
-): message is RealtimeWireMessage & {
-  readonly type: 'subscribed';
-  readonly id: string;
-  readonly topic: string;
-  readonly subscriptionId: string;
-} {
-  return (
-    message.type === 'subscribed' &&
-    typeof message.id === 'string' &&
-    typeof message.topic === 'string' &&
-    typeof message.subscriptionId === 'string'
   );
 }

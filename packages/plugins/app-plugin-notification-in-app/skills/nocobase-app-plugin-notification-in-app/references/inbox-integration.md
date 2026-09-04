@@ -34,7 +34,7 @@ Register `@nocobase/app-plugin-notification-in-app/client` in the application Cl
 
 The authenticated inbox API is rooted at `notifications/in-app` relative to the injected `AppClient` API base. Reads include list and unread-count. Writes include read/unread/delete and read-all, each preceded by an authenticated CSRF-token request.
 
-The WebSocket topic is user-scoped by the Server. An `inbox.changed` event does not carry authoritative inbox contents; it tells the UI to refetch HTTP state. The UI also refetches after a successful subscription acknowledgement so events missed during disconnection are recovered. Window focus is a fallback invalidation.
+The WebSocket topic is user-scoped by the Server. An `inbox.changed` event does not carry authoritative inbox contents; it tells the UI to refetch HTTP state. The UI also refetches when the realtime connection opens so events missed during disconnection are recovered. Window focus is a fallback invalidation.
 
 When an application configures `api.baseURL` or `api.realtimeURL`, both transports must use those injected client settings. Never derive the HTTP endpoint from `window.location`, a Portal base, or the WebSocket URL.
 
@@ -47,9 +47,9 @@ The plugin owns the inbox components, Provider, Dev Route, authentication enforc
 1. Confirm the authenticated list and unread-count endpoints return the expected durable state.
 2. Confirm mutations fetch a CSRF token and return the changed item/count.
 3. Confirm the application client points HTTP and realtime transports at the intended backend.
-4. Confirm the realtime connection subscribes to the public topic and receives a matching acknowledgement.
+4. Confirm the realtime connection subscribes to the public topic.
 5. Confirm a valid invalidation increments the UI revision and triggers an HTTP refetch.
-6. Confirm a reconnect acknowledgement refetches even when no event was received.
-7. Confirm cleanup removes the topic, acknowledgement, and window-focus listeners.
+6. Confirm reopening the realtime connection refetches even when no event was received.
+7. Confirm cleanup removes the topic, connection-open, and window-focus listeners.
 
 Do not diagnose a missing UI update by manually changing the inbox table or publishing synthetic production events. Reproduce with an isolated test notification or inspect the durable route and subscription logs.
