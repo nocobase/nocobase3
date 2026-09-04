@@ -81,6 +81,20 @@ function normalizeDomain(domain) {
   return domain.replace(/^https?:\/\//u, '').replace(/\/+$/u, '');
 }
 
+/**
+ * `ali-oss` builds its endpoint by appending `.aliyuncs.com` to whatever it is given, so it needs the `oss-` prefixed
+ * form. ossutil, which the workflow uses to upload, wants the bare region id — and the bare id is also what the OSS
+ * console displays. One secret holds the console's value and this adds the prefix, rather than asking anyone to
+ * remember which of two secrets takes which spelling of the same region.
+ *
+ * Getting this wrong is quiet: `cn-beijing` yields `cn-beijing.aliyuncs.com`, a host that does not resolve, and the
+ * failure surfaces as a network error naming nothing recognizable.
+ */
+function ossRegion() {
+  const region = process.env.DOCS_ALI_OSS_REGION.trim();
+  return region.startsWith('oss-') ? region : `oss-${region}`;
+}
+
 function createCdnClient() {
   const config = new Config({
     accessKeyId: process.env.DOCS_ALI_OSS_ACCESS_KEY_ID,
@@ -96,7 +110,7 @@ function createOssClient() {
     accessKeyId: process.env.DOCS_ALI_OSS_ACCESS_KEY_ID,
     accessKeySecret: process.env.DOCS_ALI_OSS_ACCESS_KEY_SECRET,
     bucket: process.env.DOCS_ALI_OSS_BUCKET,
-    region: process.env.DOCS_ALI_OSS_REGION,
+    region: ossRegion(),
   });
 }
 

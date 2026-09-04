@@ -117,16 +117,21 @@ jobs:
           sudo mv /tmp/ossutil/ossutil-2.2.2-linux-amd64/ossutil /usr/local/bin/ossutil
           sudo chmod 755 /usr/local/bin/ossutil
 
+          # ossutil takes the bare region id, `cn-beijing`, and derives the endpoint from it; the SDK the publish
+          # script uses takes the `oss-` prefixed form. The secret holds whichever one was pasted from the console,
+          # and each side normalizes it — `--region oss-cn-beijing` is rejected outright.
+          REGION="${DOCS_ALI_OSS_REGION#oss-}"
+
           # Asia/Shanghai so the directory name reads as the local time of the people who deploy it.
           TIMESTAMP="$(TZ=Asia/Shanghai date +%Y%m%d%H%M%S)"
           echo "Uploading to oss://$DOCS_ALI_OSS_BUCKET/$TIMESTAMP/"
 
           ossutil cp -r ./dist/ "oss://$DOCS_ALI_OSS_BUCKET/$TIMESTAMP/" \
-            -f -j 64 --region "$DOCS_ALI_OSS_REGION"
+            -f -j 64 --region "$REGION"
 
           # The bucket's static-website error document is read from the root, not from inside a version directory.
           ossutil cp ./dist/404.html "oss://$DOCS_ALI_OSS_BUCKET/404.html" \
-            -f --region "$DOCS_ALI_OSS_REGION"
+            -f --region "$REGION"
 
           node ./scripts/deploy-cdn.mjs --timestamp "$TIMESTAMP"
 
