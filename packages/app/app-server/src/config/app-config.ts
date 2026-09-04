@@ -76,6 +76,13 @@ export class AppConfig<TContext = unknown> {
       strictSchema: false,
       useDefaults: false,
     });
+    this.ajv.addKeyword({
+      keyword: 'uniqueItemProperties',
+      type: 'array',
+      schemaType: 'array',
+      validate: uniqueItemProperties,
+      errors: false,
+    });
     for (const contribution of contributions) {
       if (contribution.kind === 'variant') continue;
       const config = contribution;
@@ -378,6 +385,21 @@ function normalizeVariantDiscriminator(discriminator: string): string {
     );
   }
   return normalized;
+}
+
+function uniqueItemProperties(properties: unknown, value: unknown): boolean {
+  if (!Array.isArray(properties) || !Array.isArray(value)) return true;
+  for (const property of properties) {
+    if (typeof property !== 'string') continue;
+    const seen = new Set<unknown>();
+    for (const item of value) {
+      if (!isRecord(item)) continue;
+      const propertyValue = item[property];
+      if (seen.has(propertyValue)) return false;
+      seen.add(propertyValue);
+    }
+  }
+  return true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

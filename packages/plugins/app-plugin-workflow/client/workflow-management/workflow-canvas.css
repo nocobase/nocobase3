@@ -36,6 +36,22 @@
   );
 }
 .workflow-canvas {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: var(--border);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-stroke-color: var(--border);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--card-foreground);
+  --xy-controls-button-color-hover: var(--accent-foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: none;
+  --xy-selection-background-color: color-mix(
+    in oklab,
+    var(--accent) 72%,
+    transparent
+  );
+  --xy-selection-border: 1px dotted var(--ring);
   width: 100%;
   height: 560px;
   position: relative;
@@ -74,11 +90,11 @@
   box-shadow: 0 11px 24px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
-.workflow-flow-node.condition {
+.workflow-flow-node.instruction-condition {
   border-color: var(--border);
   background: var(--card);
 }
-.workflow-flow-node.condition:hover {
+.workflow-flow-node.instruction-condition:hover {
   border-color: var(--foreground);
 }
 .workflow-flow-node.boundary {
@@ -130,8 +146,9 @@
   height: 18px;
   stroke-width: 2;
 }
-.workflow-flow-node.run .workflow-flow-icon,
-.workflow-flow-node.condition .workflow-flow-icon {
+.workflow-flow-node.instruction-run .workflow-flow-icon,
+.workflow-flow-node.instruction-condition .workflow-flow-icon,
+.workflow-flow-node.instruction-terminate .workflow-flow-icon {
   background: var(--workflow-emphasis);
   color: var(--primary-foreground);
 }
@@ -164,15 +181,6 @@
   font-size: 14px;
   line-height: 1.25;
 }
-.workflow-flow-copy small {
-  display: -webkit-box;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.35;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
 .workflow-flow-handle {
   width: 8px !important;
   height: 8px !important;
@@ -180,11 +188,21 @@
   background: var(--muted-foreground) !important;
   box-shadow: 0 0 0 1px var(--border);
 }
-.workflow-flow-node.condition .workflow-flow-handle {
+.workflow-flow-node.instruction-condition .workflow-flow-handle {
   background: var(--muted-foreground) !important;
 }
 .workflow-flow-node.boundary .workflow-flow-handle {
   background: currentColor !important;
+}
+.workflow-flow-branch-anchor {
+  width: 24px;
+  height: 24px;
+  border: 2px dashed var(--workflow-edge-muted);
+  border-radius: 999px;
+  background: var(--background);
+}
+.workflow-flow-branch-anchor.resolved {
+  border-color: var(--workflow-success-soft);
 }
 .workflow-selected .workflow-flow-node {
   box-shadow:
@@ -221,12 +239,68 @@
 .workflow-canvas .react-flow__edge-path {
   stroke-linecap: round;
 }
+
+.workflow-flow-edge-label {
+  position: absolute;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--background) 96%, transparent);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  pointer-events: none;
+}
+.workflow-layout-toggle {
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--muted);
+}
+.workflow-layout-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.workflow-layout-toggle button:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+.workflow-layout-toggle button.active {
+  color: var(--foreground);
+  background: var(--background);
+}
+.workflow-layout-toggle button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.workflow-layout-toggle svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.2;
+}
 .workflow-canvas .react-flow__controls,
 .workflow-canvas .react-flow__minimap {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: none;
+}
+.workflow-canvas .react-flow__controls-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .workflow-canvas-viewport {
   opacity: 0;
@@ -786,6 +860,61 @@
   margin-top: 8px;
   color: var(--muted-foreground);
   font-size: 12px;
+}
+.workflow-node-description-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.workflow-node-description-dialog p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.workflow-node-description-disclosure {
+  margin: 8px 0 18px;
+}
+.workflow-node-description-disclosure summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 0;
+  list-style: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.workflow-node-description-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+.workflow-node-description-disclosure summary::before {
+  width: 10px;
+  content: '›';
+  flex: 0 0 10px;
+  line-height: 1;
+  text-align: center;
+  transition: transform 120ms ease;
+}
+.workflow-node-description-disclosure[open] summary::before {
+  transform: rotate(90deg);
+}
+.workflow-node-description-disclosure summary:hover {
+  color: var(--foreground);
+}
+.workflow-node-description-disclosure summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.workflow-node-description-disclosure p {
+  margin: 6px 0 0;
+  /* Match the summary text after its 10px marker and 6px gap. */
+  padding-left: 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 @keyframes workflow-dialog-backdrop-in {
   from {

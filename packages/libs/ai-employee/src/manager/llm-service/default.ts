@@ -65,17 +65,17 @@ export class DefaultLLMServiceManager implements LLMServiceManager {
     const services = await this.repository.find({ sort: ['sort', 'name'] });
     const targetServices = await repository.find({ sort: ['sort', 'name'] });
     const serviceNames = new Set(services.map((service) => service.name));
-    for (const service of targetServices) {
-      if (!serviceNames.has(service.name)) {
-        await repository.destroy({ filter: { name: service.name } });
-      }
-    }
     for (const service of services) {
       await this.registerLLMServiceInRepository(
         repository,
         this.toLLMServiceOptions(service),
         true,
       );
+    }
+    for (const service of targetServices) {
+      if (!serviceNames.has(service.name)) {
+        await repository.destroy({ filter: { name: service.name } });
+      }
     }
     this.repository = repository;
   }

@@ -5,7 +5,7 @@
 | Package                                       | Responsibility                                                                                                                   |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `@nocobase/app-plugin-notification`           | Manager, registry, persistent Notification/Delivery/Attempt records, queue job, reconciler, logs, and protected logs/test UI/API |
-| `@nocobase/app-plugin-notification-in-app`    | `in-app` Channel, database Provider, personal inbox store/API, and optional Registry UI                                          |
+| `@nocobase/app-plugin-notification-in-app`    | `in-app` Channel, database Provider, personal inbox store/API, and a development-only Client inbox page                          |
 | `@nocobase/app-plugin-notification-providers` | `email` and `im` Channels; SMTP, Resend, Feishu, and DingTalk Provider definitions and safe test adapters                        |
 | `@nocobase/app-plugin-notification-provider`  | Browser toast adapter for Refine; not durable server delivery                                                                    |
 

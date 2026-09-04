@@ -4,10 +4,10 @@
 
 - [How to Use This Reference](#how-to-use-this-reference)
 - [Tool Definition](#tool-definition)
-- [Skill Manifest](#skill-manifest)
+- [Skill Configuration](#skill-configuration)
 - [AI Employee Definition](#ai-employee-definition)
 - [MCP Definition](#mcp-definition)
-- [LLM Service Manifest](#llm-service-manifest)
+- [LLM Service Application Config](#llm-service-configuration)
 - [AIManager Shape](#aimanager-shape)
 - [Manager Return Entities](#manager-return-entities)
 - [Tools Manager Signatures](#tools-manager-signatures)
@@ -108,7 +108,7 @@ export default defineTools<AgentContext>({
 });
 ```
 
-## Skill Manifest
+## Skill Configuration
 
 A skill is a `SKILLS.md` file parsed as Markdown with YAML frontmatter.
 
@@ -248,76 +248,57 @@ export default defineMCP({
 
 The registered server name is the module filename. After programmatic MCP changes, call `rebuildClient()`.
 
-## LLM Service Manifest
+## LLM Service Application Config
 
-Preferred file: `<appRoot>/storage/ai/models.json`.
+Preferred file: `<appRoot>/config.yml` under `ai.llmServices`.
 
 ```ts
-type LLMServiceOptions = {
+type AIEmployeeLLMServiceConfig = {
   name: string;
   title?: string;
   provider: string;
   options?: Record<string, unknown>;
-  enabledModels?:
-    | string[]
-    | null
-    | {
-        mode: 'recommended' | 'provider' | 'custom';
-        models: Array<{
-          label: string;
-          value: string;
-        }>;
-      };
+  enabledModels?: Array<{ label: string; value: string }>;
   modelOptions?: Record<string, unknown>;
   enabled?: boolean;
   sort?: number;
 };
 ```
 
-Manifest rules:
+Configuration rules:
 
-- Top-level JSON value must be an array.
-- `name` and `provider` must be non-empty strings; invalid entries are ignored.
-- `title` defaults to current title or `name`.
-- `options` defaults to current options or `{}`.
-- `enabled` defaults to current value or `true`.
-- `sort` defaults to current value or `0`.
-- `modelOptions` defaults to current values or `{ temperature: 1, topP: 1, frequencyPenalty: 0, presencePenalty: 0 }`.
-- `${ENV_NAME}` expands recursively in every string. A missing environment variable becomes an empty string.
-- In the storage manifest, replacement mode is authoritative: services absent from a successfully loaded manifest are removed.
+- `ai.llmServices` defaults to an empty array and is authoritative.
+- `name` and `provider` must be non-empty strings; validation rejects the whole snapshot before repository mutation.
+- Duplicate names reject the whole snapshot.
+- `options` and `modelOptions` preserve provider-specific nested values.
+- `${ENV_NAME}` expands recursively after validation. A missing environment variable becomes an empty string.
+- Existing repository records preserve `enabled` and `enabledModels`; other definition fields come from config.
+- New records use config `enabled` and `enabledModels`, or manager defaults when omitted.
+- Additions and updates occur before stale configured names are deleted.
 
 Recommended explicit model configuration:
 
-```json
-[
-  {
-    "name": "company-openai",
-    "title": "Company OpenAI",
-    "provider": "openai",
-    "options": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "baseURL": "${OPENAI_BASE_URL}"
-    },
-    "enabledModels": {
-      "mode": "custom",
-      "models": [{ "label": "GPT 4.1", "value": "gpt-4.1" }]
-    },
-    "modelOptions": {
-      "temperature": 0.3
-    },
-    "enabled": true,
-    "sort": 10
-  }
-]
+```yaml
+ai:
+  llmServices:
+    - name: company-openai
+      title: Company OpenAI
+      provider: openai
+      options:
+        apiKey: ${OPENAI_API_KEY}
+        baseURL: ${OPENAI_BASE_URL}
+      enabledModels:
+        - label: GPT-4.1
+          value: gpt-4.1
+      modelOptions:
+        temperature: 0.3
+      enabled: true
+      sort: 10
 ```
 
-`enabledModels` modes:
+After editing `config.yml`, invoke the application config reload mechanism. The live subscription reconciles the new snapshot without a process restart or AI resource rescan.
 
-- `recommended`: manager uses the package's recommended model registry.
-- `provider`: uses the explicit `models` array supplied for provider-selected models.
-- `custom`: uses the explicit `models` array supplied by the App.
-- Legacy `string[]`: normalized to `custom` with identical labels/values.
-- `null` or omitted: normalized to `recommended`.
+`enabledModels` is always an array of `{ label, value }` entries in application config. The plugin converts it internally to `{ mode: 'custom', models }`. Omit the field to use manager defaults for a new service.
 
 ## AIManager Shape
 
@@ -833,7 +814,7 @@ Do not assume optional state fields exist. Check them before use.
 - Making an employee-local skill directory differ from frontmatter `name`.
 - Assuming `definition.name` controls a filesystem-loaded tool key; the file/directory controls it.
 - Using an LLM service provider title instead of the provider registry key.
-- Treating `storage/ai/models.json` as a partial patch; it is an authoritative replacement manifest when successfully loaded.
+- Treating `config.yml` `ai.llmServices` as a partial patch; it is an authoritative replacement configuration when successfully loaded.
 - Omitting required `name` or `provider` from an LLM service entry.
 - Expecting a plugin's async bootstrap return value to be awaited.
 - Calling a feature getter without checking that the feature is enabled.

@@ -22,7 +22,7 @@ App ai/ resources
 client/extensions/nocobase-ai
 ```
 
-Use App resource files for employees, skills, backend tools, MCP, and model manifests. Use the installed AI frontend service/transport for chat. Use the enabled plugin instead of creating a second AI runtime.
+Use App resource files for employees, skills, backend tools, and MCP. Use `config.yml` `ai.llmServices` for declarative model services, and use the installed AI frontend service/transport for chat. Use the enabled plugin instead of creating a second AI runtime.
 
 ## Public core APIs
 
@@ -90,7 +90,7 @@ Choose the least invasive public extension point:
 2. Backend operation → `ai/tools/<name>.ts` with `defineTools`.
 3. Reusable instructions → `ai/skills/<name>/SKILLS.md`.
 4. External service/process → `ai/mcp/<name>.ts` with `defineMCP`.
-5. Provider/model setup → `ai/models.json` and environment variables.
+5. Provider/model setup → `config.yml` `ai.llmServices` and environment variables.
 6. Chat/page experience → `client/extensions/nocobase-ai`.
 7. Browser action → `defineAIFrontendTool` in page context.
 8. Form population → `useAIForm` and built-in `formFiller`.

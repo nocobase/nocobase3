@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildApplicationWorkflows } from '../build/index.js';
+import { echoInstruction } from './fixtures/instructions.js';
 
 const authoringEntry = fileURLToPath(new URL('../index.ts', import.meta.url));
 const roots: string[] = [];
@@ -62,6 +63,35 @@ describe('application workflow builder', () => {
     await expect(
       fs.readFile(path.join(result.artifacts[0], 'workflow.ts'), 'utf8'),
     ).resolves.toContain('defineWorkflow');
+  });
+
+  it('builds workflows that use application-registered instructions', async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'workflow-application-build-instruction-'),
+    );
+    roots.push(root);
+    const sourceRoot = path.join(root, 'server/workflows');
+    const distRoot = path.join(root, 'dist/server/workflows');
+    const packageRoot = path.join(sourceRoot, 'custom');
+    await fs.mkdir(packageRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(packageRoot, 'workflow.ts'),
+      `import { defineWorkflow, type NodeExpression } from ${JSON.stringify(authoringEntry)};
+const echo: NodeExpression = { key: 'echo', type: 'echo', config: { value: 'custom' } };
+export default defineWorkflow({ title: 'Custom instruction', nodes: [echo] });
+`,
+    );
+
+    const result = await buildApplicationWorkflows({
+      sourceRoot,
+      distRoot,
+      instructions: new Map([['echo', echoInstruction]]),
+    });
+
+    expect(result.packages).toBe(1);
+    await expect(
+      fs.readFile(path.join(result.artifacts[0], 'workflow.json'), 'utf8'),
+    ).resolves.toContain('"type": "echo"');
   });
 
   it('collects default-build modules without changing their relative paths', async () => {

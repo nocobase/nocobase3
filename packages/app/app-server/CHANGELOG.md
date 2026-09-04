@@ -1,5 +1,17 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.6
+
+### Minor Changes
+
+- cee3251: Add authenticated realtime subscriptions, refresh their identity after authentication changes, and invalidate in-app notification state through user-scoped events.
+
+### Patch Changes
+
+- 8d88ff4: Replace the public AI Employee LLM service filesystem loader with the application `config.yml` contract at `ai.llmServices`. Configured model entries use a simple label/value array and are converted internally to custom mode. The App plugin validates and synchronizes declarative service definitions at startup and on application-config reload while preserving repository-managed enabled state for matching services. The default App template includes a commented configuration example, and the App config validator supports unique object properties for rejecting duplicate service names.
+- Updated dependencies [813da59]
+  - @nocobase/i18n@1.0.0-beta.2
+
 ## 1.0.0-beta.5
 
 ### Patch Changes

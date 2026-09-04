@@ -10,6 +10,10 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  realtimeServiceToken,
+  type RealtimeService,
+} from '@nocobase/app-server/realtime';
 
 import { InAppNotificationProvider } from '../server/providers/in-app-notification.js';
 import { inAppNotificationStoreToken } from '../server/tokens.js';
@@ -18,12 +22,17 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
   it('registers its Channel and Provider during boot', async () => {
     const registerProvider = vi.fn();
     const registerChannel = vi.fn(() => ({ registerProvider }));
+    const close = vi.fn();
+    const defineTopic = vi.fn(() => ({ publishFor: vi.fn(), close }));
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, {} as DatabaseManager);
     container.instance(notificationExtensionRegistryToken, {
       registerChannel,
     } as unknown as NotificationExtensionRegistry);
     container.instance(authenticationToken, {} as Auth);
+    container.instance(realtimeServiceToken, {
+      defineTopic,
+    } as unknown as RealtimeService);
     const provider = new InAppNotificationProvider({
       container,
       router: new Hono(),
@@ -40,6 +49,12 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
       'in-app',
       expect.objectContaining({ type: 'database' }),
     );
+    expect(defineTopic).toHaveBeenCalledWith('notifications:in-app', {
+      audience: 'user',
+    });
+
+    await provider.shutdown();
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it('keeps the inbox store available when the core Server plugin is not registered', async () => {

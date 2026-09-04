@@ -126,6 +126,15 @@ export function buildExecutionOverlay(
     edgeEvidence.set(id, evidence);
     traversedEdgeIds.add(id);
   }
+  for (const node of graph.nodes) {
+    if (
+      node.kind === 'branch-anchor' &&
+      graph.edges.some(
+        (edge) => edge.target === node.id && traversedEdgeIds.has(edge.id),
+      )
+    )
+      nodeStatus.set(node.id, 'resolved');
+  }
   if (
     runStatusValue === 1 &&
     graph.edges.some(
@@ -214,7 +223,19 @@ export function inferTransitions(
         edge.kind === 'branch',
     );
     if (!enter) continue;
-    result.set(enter.id, nodeRun.branchKey ? 'persisted' : 'inferred');
+    const evidence = nodeRun.branchKey ? 'persisted' : 'inferred';
+    result.set(enter.id, evidence);
+    let target = enter.target;
+    while (
+      graph.nodes.find((node) => node.id === target)?.kind === 'branch-anchor'
+    ) {
+      const exit = graph.edges.find(
+        (edge) => edge.source === target && edge.kind === 'main',
+      );
+      if (!exit) break;
+      result.set(exit.id, evidence);
+      target = exit.target;
+    }
   }
   const last = transitions.at(-1);
   const lastId = last ? byKey.get(last.nodeKey) : undefined;

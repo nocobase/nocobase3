@@ -1,5 +1,25 @@
 # @nocobase/app-plugin-file
 
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 4c2241b: Add a read-only Files Settings page for standard database-backed file routes. Sources are registered automatically by `createFileRoute()` and listed with cursor-paginated file metadata without exposing storage object keys. Authentication and Authorization are required runtime dependencies, and the page and API both enforce the `file.inventory` page access permission granted to system administrators through their wildcard page permission.
+
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- Updated dependencies [8d88ff4]
+- Updated dependencies [43d5bf0]
+- Updated dependencies [813da59]
+- Updated dependencies [cee3251]
+  - @nocobase/app-server@1.0.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/db@1.0.0-beta.2
+
 ## 0.1.0-beta.4
 
 ### Minor Changes

@@ -2,9 +2,10 @@ import {
   ConditionInstruction,
   defineWorkflow,
   RunInstruction,
+  type WorkflowSourceAst,
 } from '@nocobase/app-plugin-workflow';
 
-export default defineWorkflow({
+const workflow: WorkflowSourceAst = defineWorkflow({
   title: 'Fixture quotation decision',
   inputSchema: {
     type: 'object',
@@ -57,3 +58,5 @@ export default defineWorkflow({
     }),
   ],
 });
+
+export default workflow;

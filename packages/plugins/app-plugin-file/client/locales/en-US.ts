@@ -39,6 +39,40 @@ const enUS = {
   list: {
     noExtension: 'No extension',
   },
+  inventory: {
+    nav: 'Files',
+    title: 'Files',
+    refresh: 'Refresh',
+    sources: {
+      title: 'Sources',
+      loading: 'Loading sources...',
+      empty: 'No database file sources are registered.',
+    },
+    files: {
+      loading: 'Loading files...',
+      empty: 'No file records.',
+      noSource: 'No file source selected.',
+      unavailable: 'Files unavailable',
+      columns: {
+        file: 'File',
+        disk: 'Disk',
+        size: 'Size',
+        visibility: 'Visibility',
+        created: 'Created',
+        updated: 'Updated',
+      },
+    },
+    pagination: {
+      page: 'Page {{page}}',
+      previous: 'Previous page',
+      next: 'Next page',
+    },
+    errors: {
+      loadSources: 'Unable to load file sources.',
+      loadFiles: 'Unable to load files from this source.',
+      sourcesUnavailable: 'File sources unavailable',
+    },
+  },
   preview: {
     downloadFile: 'Download file',
     loading: 'Loading preview...',

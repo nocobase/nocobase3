@@ -47,8 +47,17 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
   public override register(): void {
     this.app.container.singleton(appApiClientToken, (): AppClient => {
       const baseURL = this.app.config.get<string>('api.baseURL');
-      return createAppClient(baseURL === undefined ? {} : { baseURL });
+      const realtimeURL = this.app.config.get<string>('api.realtimeURL');
+      return createAppClient({
+        ...(baseURL === undefined ? {} : { baseURL }),
+        ...(realtimeURL === undefined ? {} : { realtimeURL }),
+      });
     });
+  }
+
+  public override shutdown(): Promise<void> {
+    this.app.container.resolveIfCreated(appApiClientToken)?.realtime?.close();
+    return Promise.resolve();
   }
 }
 

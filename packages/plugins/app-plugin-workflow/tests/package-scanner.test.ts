@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertPackageRelativePath,
   scanWorkflowPackage,
-} from '../server/loader/package-scanner.js';
+} from '../build/package-scanner.js';
 
 const roots: string[] = [];
 async function fixture(): Promise<string> {

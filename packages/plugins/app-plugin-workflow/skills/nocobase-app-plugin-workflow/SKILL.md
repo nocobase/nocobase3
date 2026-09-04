@@ -4,8 +4,8 @@ description: 'Use when agents need to define, validate, invoke, inspect, or diag
 argument-hint: '[action: explain|define|validate|invoke|inspect|diagnose] [workflow-key-or-path]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: workflow
-version: 1.1.3
-last-reviewed: 2026-08-27
+version: 1.2.0
+last-reviewed: 2026-09-01
 risk-level: medium
 metadata:
   domain-owner: '@nocobase/app-plugin-workflow'
@@ -32,7 +32,7 @@ classes, and registered node contracts.
 
 - Explain what a workflow is and decide whether a business process belongs in Workflow or ordinary code.
 - Create or update TypeScript workflow packages and their `run` scripts.
-- Validate source through the real typecheck, bundle, evaluation, schema, semantic, and compilation pipeline.
+- Validate source through the real typecheck, evaluation, schema, semantic, and compilation pipeline.
 - Invoke workflows through the internal service or authenticated management HTTP API.
 - Inspect definitions, revisions, runs, node runs, results, errors, and logs to diagnose failures.
 
@@ -55,7 +55,7 @@ classes, and registered node contracts.
 
 Rules:
 
-- Read current source contracts before authoring. The workflow plugin currently exports `ConditionInstruction` and `RunInstruction`; another application may register more.
+- Read current source contracts before authoring. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`; another application may register more.
 - If the process, target, or required input cannot be resolved safely, stop mutation and ask.
 - If the user says "you decide", choose code for a single atomic operation and Workflow for a durable, auditable, multi-step process; use `inspect` before changing an existing target.
 - Never infer database ids from keys. Resolve them through the service/API when an id-based operation is required.
@@ -74,11 +74,11 @@ Rules:
 
 1. Classify the request with [Workflow Concepts](references/workflow-concepts.md). Use Workflow only when process state, orchestration, visibility, or auditability is the primary requirement.
 2. Discover the installed plugins' exported Instruction classes and the application's registered instruction contracts. Never assume optional nodes are installed.
-3. For authoring, read [DSL Authoring](references/dsl-authoring.md) completely, place one package below the configured workflow source root, and keep its stable directory name as the workflow key.
+3. For authoring, read [DSL Authoring](references/dsl-authoring.md) completely, place one package below the configured workflow source root, keep its stable directory name as the workflow key, and write `workflow.ts` with the reference's `WorkflowSourceAst`-annotated binding and default export so it passes the application's `isolatedDeclarations` typecheck.
 4. Declare the invocation `inputSchema` separately from administrator `parameters`. Design stable, globally unique node keys before writing nodes.
 5. Express order with arrays and branches only with `.branch({...})`. Put executable business work in `run` scripts and declare each dynamic result contract.
-6. Validate the DSL before any load or publication. Run the actual checker against the package; do not substitute a TypeScript-only check. This six-phase source check does not inspect `run` scripts.
-7. Fix every reported phase in order: `typecheck`, `bundle`, `evaluate`, `schema`, `semantic`, then `compile`. Re-run until it passes.
+6. Validate the DSL before any load or publication. Run the actual checker against the package; do not substitute a TypeScript-only check. This five-phase source check does not inspect `run` scripts.
+7. Fix every reported phase in order: `typecheck`, `evaluate`, `schema`, `semantic`, then `compile`. Re-run until it passes.
 8. Build the complete package through the owning application's Workflow Artifact build. Development artifacts preserve package-relative TypeScript resources; production artifacts collect the JavaScript emitted by the application's normal server build at the same relative paths. Then load through the runtime path. Do not write definitions or nodes directly to the database.
 9. For invocation, use [Invocation and Service API](references/invocation-and-service-api.md) to enumerate Workflow DSL packages. If no key is given, match the business request against each `workflow.ts` `title` and `description`, then use the selected package's directory name as the stable trigger key. Read its `inputSchema`, construct conforming input, get the workflow runtime from the application runtime, and call `workflowRuntime.trigger(key, input, options)`; do not use an API or database for discovery.
 10. Read back the trigger receipt or run record. A service trigger returns `accepted` or `skipped`; only an accepted receipt has an `eventKey`. Poll/query by the persisted run only when asynchronous scheduling has created it.
@@ -115,21 +115,21 @@ Rollback guidance:
 # Verification Checklist
 
 - The package directory resolves to the intended stable workflow key.
-- `workflow.ts` default-exports exactly the value returned by `defineWorkflow()`.
+- `workflow.ts` binds the `defineWorkflow()` result to a `const` annotated with the exported `WorkflowSourceAst` type and default-exports exactly that value, so the module compiles under the application's `isolatedDeclarations` server tsconfig. A bare `export default defineWorkflow(...)` raises `TS9037` and must not be used.
 - The DSL imports Instruction classes from their owning plugins and uses only classes registered by the application.
 - Input Schema has object root and only supported keywords; representative allowed and denied contexts are checked.
 - Parameters, templates, JSON Logic variables, result schemas, and node-result visibility obey current contracts.
 - Node keys are valid, globally unique, stable, and branch keys belong to the node contract.
 - The source check passes, then the package Artifact build preserves package-relative resources and paths. The `run` instruction validates module resolution and the named `run` export when it loads the module.
 - Every run-script result is JSON-storable and every referenced dynamic result has an accurate `result` schema.
-- The real workflow checker passes all six phases and compilation produces a reachable acyclic tree topology.
+- The real workflow checker passes all five phases and compilation produces a reachable acyclic tree topology.
 - Every source or setting write has an immediate readback or rebuild/check result.
 - Invocation selects the intended DSL package from its key/title/description, uses its directory name as the trigger key, supplies input conforming to its `workflow.ts` `inputSchema`, and uses a stable event key.
 - Diagnosis correlates definition version/hash, run, node run, payload/error/log, and server structured logs without exposing secrets.
 
 # Minimal Test Scenarios
 
-1. Valid package: typecheck, bundle, evaluate, validate, and compile a condition with `yes`/`no` branches and a common successor.
+1. Valid package: typecheck, evaluate, validate, and compile a condition with `yes`/`no` branches and a common successor.
 2. Valid invocation: enumerate DSL packages, select one by explicit key or business fit against title/description, use its directory key, construct input from its `workflow.ts` `inputSchema`, discriminate `accepted`/`skipped`, and for `accepted` verify the persisted run and resolved node runs.
 3. Invalid DSL: reject an unknown node/config field, duplicate node key, illegal branch, or invisible node-result reference before database writes.
 4. Invalid invocation: service-trigger missing/disabled workflows return `skipped`; accepted workflows still reject invalid/oversized input or a missing parent run with a precise error code.

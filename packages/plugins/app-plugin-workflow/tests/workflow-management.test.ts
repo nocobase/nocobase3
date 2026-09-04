@@ -6,9 +6,96 @@ import {
   workflowApi,
 } from '../client/workflow-management/data.js';
 import { createLayoutCacheKey } from '../client/workflow-management/graph/layout-cache.js';
+import { layoutWithElk } from '../client/workflow-management/graph/elk-layout.js';
 import { configureWorkflowClient } from '../client/workflow-management/runtime.js';
+import { createLayoutInput, projectWorkflowGraph } from '../client/index.js';
 
 describe('workflow management', () => {
+  it('routes vertical condition branches orthogonally in fixed visual order', async () => {
+    const graph = projectWorkflowGraph({
+      title: 'Amount routing example',
+      inputSchema: { type: 'object' },
+      nodes: [
+        {
+          key: 'checkAmount',
+          type: 'condition',
+          config: {},
+          branches: {
+            yes: [{ key: 'approvalPath', type: 'run', config: {} }],
+            no: [{ key: 'directPath', type: 'run', config: {} }],
+          },
+        },
+        { key: 'summarize', type: 'run', config: {} },
+      ],
+    });
+    const result = await layoutWithElk(createLayoutInput(graph));
+    const route = (branchKey: string) => {
+      const edge = graph.edges.find(
+        (candidate) =>
+          candidate.source === 'node:checkAmount' &&
+          candidate.branchKey === branchKey,
+      );
+      return result.routes.find((candidate) => candidate.id === edge?.id);
+    };
+    const noRoute = route('no');
+    const yesRoute = route('yes');
+    expect(noRoute?.points.length).toBeGreaterThanOrEqual(2);
+    expect(yesRoute?.points.length).toBeGreaterThanOrEqual(2);
+    expect(noRoute!.points[0].x).toBeLessThan(yesRoute!.points[0].x);
+    for (const edgeRoute of result.routes) {
+      for (let index = 1; index < edgeRoute.points.length; index += 1) {
+        const previous = edgeRoute.points[index - 1];
+        const point = edgeRoute.points[index];
+        expect(point.x === previous.x || point.y === previous.y).toBe(true);
+      }
+    }
+  });
+
+  it('merges empty condition branches at the successor input port', async () => {
+    const graph = projectWorkflowGraph({
+      title: 'Empty branch example',
+      inputSchema: { type: 'object' },
+      nodes: [
+        {
+          key: 'checkAmount',
+          type: 'condition',
+          config: {},
+          branches: { yes: [], no: [] },
+        },
+        { key: 'summarize', type: 'run', config: {} },
+      ],
+    });
+    const result = await layoutWithElk(createLayoutInput(graph));
+    const incomingRoutes = graph.edges
+      .filter((edge) => edge.target === 'node:summarize')
+      .map((edge) => result.routes.find((route) => route.id === edge.id));
+    expect(incomingRoutes).toHaveLength(2);
+    const endpoints = incomingRoutes.map((route) => route?.points.at(-1));
+    expect(endpoints[0]).toEqual(endpoints[1]);
+    const successor = result.positions.find(
+      (position) => position.id === 'node:summarize',
+    );
+    expect(endpoints[0]).toEqual({
+      x: successor!.x + 120,
+      y: successor!.y,
+    });
+  });
+
+  it('uses compact spacing between vertical workflow layers', async () => {
+    const graph = projectWorkflowGraph({
+      title: 'Linear example',
+      inputSchema: { type: 'object' },
+      nodes: [
+        { key: 'first', type: 'run', config: {} },
+        { key: 'second', type: 'run', config: {} },
+      ],
+    });
+    const result = await layoutWithElk(createLayoutInput(graph));
+    const position = (id: string) =>
+      result.positions.find((candidate) => candidate.id === id)!;
+    expect(position('node:second').y - position('node:first').y - 88).toBe(56);
+  });
+
   it('scopes the layout cache to the definition', () => {
     expect(
       createLayoutCacheKey({

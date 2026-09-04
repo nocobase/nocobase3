@@ -7,7 +7,7 @@ import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
   buildWorkflowArtifact,
   type WorkflowDistArtifact,
-} from '../server/loader/artifact-builder.js';
+} from '../build/artifact-builder.js';
 import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 import { WorkflowPublisher } from '../server/loader/synchronizer.js';
 import { createTestDatabase, insertTestRun } from './helpers.js';

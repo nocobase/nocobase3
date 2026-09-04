@@ -14,7 +14,7 @@ export default createNodeVitestConfig({
     },
   },
   test: {
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
     testTimeout: 30_000,
   },
 });
