@@ -5,8 +5,11 @@ import type {
   NewFileMetadata,
 } from '@nocobase/ai-employee';
 
-import type { TableRepository } from '../repository.js';
-import type { KnowledgeBaseDocumentRecord, SegmentOptions } from '../types.js';
+import type { TableRepository } from '../repositories/table-repository.js';
+import type {
+  KnowledgeBaseDocumentRecord,
+  SegmentOptions,
+} from '../internal-types.js';
 
 export interface KnowledgeBaseDocumentMetadataCreateContext {
   readonly key: string;

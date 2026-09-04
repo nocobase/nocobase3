@@ -15,7 +15,7 @@ From `<appRoot>`, inspect the actual manifest and plugin configuration; do not a
 node -e "const p=require('./package.json'); console.log(p.dependencies?.['@nocobase/app-plugin-ai-knowledge-base'] ?? p.devDependencies?.['@nocobase/app-plugin-ai-knowledge-base'] ?? 'not installed')"
 ```
 
-Use the App's supported plugin-management command or admin UI to confirm registration and enablement. At runtime an authenticated client can inspect enabled plugins through the normal plugin-manager action (`pm:listEnabledV2` for the `client-v2` lane or `pm:listEnabled` for `client`). Do not use that list as an authorization decision.
+Use the App's supported plugin-management command or admin UI to confirm installation, explicit Client/Server registration, and enablement. For source Apps, verify that `client/plugins.ts` imports the Client export and `server/plugins.ts` imports the canonical `/server` export. At runtime an authenticated client can inspect enabled plugins through the normal plugin-manager action (`pm:listEnabledV2` for the `client-v2` lane or `pm:listEnabled` for `client`). Do not use that list as an authorization decision.
 
 ## Required runtime services
 
@@ -26,7 +26,7 @@ The package declares and uses:
 - queue manager: all document vectorization is dispatched to queue `default`;
 - an enabled LLM service with an `EMBEDDING` model for vector creation/search.
 
-The server cannot finish route registration if bootstrap did not initialize its internal service. Missing AI, queue, or database dependencies are startup/configuration errors, not recoverable client states.
+The server resolves these required services when its lazy ServiceFactory is first used during provider boot. Missing AI, queue, file-storage, or database bindings are startup/configuration errors, not recoverable client states.
 
 ## Storage and PGVector
 

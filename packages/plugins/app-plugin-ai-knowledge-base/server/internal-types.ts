@@ -1,12 +1,9 @@
-import type { AIManager, FileStorageFactory } from '@nocobase/ai-employee';
-import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
-
 export type SegmentOptions = {
   enabled: boolean;
   chunkSize: number;
   chunkOverlap: number;
 };
+
 export type KnowledgeBaseType = 'LOCAL' | 'READONLY' | 'EXTERNAL';
 export type JsonRecord = Record<string, unknown>;
 
@@ -104,8 +101,10 @@ export interface SegmentShardRecord extends JsonRecord {
   size: number;
   mimetype: string;
   disk: string;
-  meta: JsonRecord;
+  meta: JsonRow;
 }
+
+type JsonRow = JsonRecord & { segments?: unknown };
 
 export interface VectorDatabaseRecord extends JsonRecord {
   id: string | number;
@@ -131,18 +130,20 @@ export interface VectorStoreConfigRecord extends JsonRecord {
   enabled: boolean;
 }
 
-export interface KnowledgeBasePluginDeps {
-  ai: AIManager;
-  database: DatabaseManager;
-  fileStorageFactory: FileStorageFactory;
-  allowedStorageDisks: readonly string[];
-  queueManager: NocoBaseQueueManager;
+export interface KnowledgeBaseVectorizationDispatcher {
+  dispatch(options: {
+    documentId: string | number;
+    relatedQuestions?: readonly string[];
+    rebuildOnly?: boolean;
+  }): Promise<void>;
 }
 
-export interface KnowledgeBasePluginRuntime {
-  ai: AIManager;
-  database: DatabaseConnection;
-  fileStorageFactory: FileStorageFactory;
-  allowedStorageDisks: readonly string[];
-  queueManager: NocoBaseQueueManager;
+export interface KnowledgeBaseVectorizationExecutor {
+  vectorize(options: {
+    documentId: string | number;
+    relatedQuestions?: readonly string[];
+  }): Promise<void>;
+  reindexExistingSegments(options: {
+    documentId: string | number;
+  }): Promise<void>;
 }
