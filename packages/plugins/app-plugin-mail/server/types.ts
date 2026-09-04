@@ -211,6 +211,7 @@ export interface MailSyncRun {
   readonly processedMessages: number;
   readonly processedPages: number;
   readonly historyCursor?: string;
+  readonly folderCursor?: string;
   readonly baselineCursor?: MailSyncCursor;
   readonly changeCursor?: MailSyncCursor;
   readonly leaseToken?: string;
@@ -493,9 +494,24 @@ export interface MailProviderListChangesInput {
   readonly signal?: AbortSignal;
 }
 
+export interface MailProviderListFoldersInput {
+  readonly cursor?: string;
+  readonly limit: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface MailProviderFolderPage {
+  readonly folders: readonly NormalizedMailFolder[];
+  readonly nextCursor?: string;
+  /** Exact Provider folder scope, present only on the final page. */
+  readonly completeProviderFolderIds?: readonly string[];
+}
+
 export interface MailProviderListMessagesInput {
   readonly providerFolderIds?: readonly string[];
   readonly receivedAfter?: string;
+  /** Provider baseline seed captured before the initial history pass starts. */
+  readonly baselineCursor?: MailSyncCursor;
   readonly cursor?: string;
   readonly limit?: number;
   readonly signal?: AbortSignal;
@@ -504,7 +520,10 @@ export interface MailProviderListMessagesInput {
 export interface MailProviderMessagePage {
   readonly messages: readonly NormalizedMailMessage[];
   readonly nextCursor?: string;
-  /** Checkpoint produced by Providers that enumerate initial state with delta. */
+  /**
+   * Pre-history checkpoint. A Provider may return empty preparation pages while
+   * establishing this checkpoint before it returns bounded history pages.
+   */
   readonly syncCursor?: MailSyncCursor;
 }
 
@@ -603,8 +622,12 @@ export interface MailProviderAdapter {
     signal?: AbortSignal,
   ): Promise<MailProviderResult<MailAuthorizedAccount>>;
   listFolders?(
-    signal?: AbortSignal,
-  ): Promise<MailProviderResult<readonly NormalizedMailFolder[]>>;
+    input: MailProviderListFoldersInput,
+  ): Promise<MailProviderResult<MailProviderFolderPage>>;
+  reconcileSyncCursor?(
+    cursor: MailSyncCursor | undefined,
+    providerFolderIds: readonly string[],
+  ): MailProviderResult<MailSyncCursor>;
   listMessages?(
     input: MailProviderListMessagesInput,
   ): Promise<MailProviderResult<MailProviderMessagePage>>;
@@ -740,12 +763,14 @@ export interface MailSyncBatch {
 export interface MailSyncStepCommit {
   readonly run: MailSyncRun;
   readonly folders?: readonly NormalizedMailFolder[];
+  readonly completeProviderFolderIds?: readonly string[];
   readonly messages: readonly NormalizedMailMessage[];
   readonly removedFromFolders?: readonly MailProviderFolderRemoval[];
   readonly deletedProviderMessageIds?: readonly string[];
   readonly phase: MailSyncPhase;
   readonly status: MailSyncRunStatus;
   readonly historyCursor?: string;
+  readonly folderCursor?: string;
   readonly baselineCursor?: MailSyncCursor;
   readonly changeCursor?: MailSyncCursor;
   readonly createNextTask: boolean;
@@ -824,6 +849,7 @@ export interface MailStore {
     messageId: string,
   ): Promise<MailMessage | undefined>;
   getSyncCursor(accountId: string): Promise<MailSyncCursor | undefined>;
+  clearSyncCursor(accountId: string): Promise<void>;
   createSyncRun(input: MailCreateSyncRunInput): Promise<MailSyncRun>;
   findActiveSyncRun(accountId: string): Promise<MailSyncRun | undefined>;
   getSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
@@ -834,6 +860,11 @@ export interface MailStore {
     leaseToken: string,
     leaseExpiresAt: string,
   ): Promise<MailSyncRun | undefined>;
+  renewSyncRunLease(
+    syncRunId: string,
+    leaseToken: string,
+    leaseExpiresAt: string,
+  ): Promise<boolean>;
   commitSyncStep(input: MailSyncStepCommit): Promise<MailSyncRun>;
   failSyncRun(run: MailSyncRun, error: MailProviderError): Promise<MailSyncRun>;
   releaseSyncRun(

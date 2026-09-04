@@ -19,11 +19,13 @@ import {
   type MailSyncRunView,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
+import { Button } from '../components/ui/button.js';
+import { Card } from '../components/ui/card.js';
+import { Input } from '../components/ui/input.js';
+import { NativeSelect } from '../components/ui/native-select.js';
+import { Textarea } from '../components/ui/textarea.js';
 
 const mail = getMailClient();
-const controlClassName =
-  'mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-50';
-
 interface ComposeValue {
   readonly to: string;
   readonly subject: string;
@@ -226,15 +228,14 @@ export default function MailDevPage(): ReactElement {
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
       <MailPageHeader
         actions={
-          <button
-            className='inline-flex h-9 items-center justify-center gap-2 rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:opacity-50'
+          <Button
             disabled={busy === 'loading'}
             onClick={loadAccounts}
-            type='button'
+            variant='outline'
           >
             <RefreshCw aria-hidden='true' className='size-4' />
             {t('actions.reloadAccounts', { defaultValue: 'Reload accounts' })}
-          </button>
+          </Button>
         }
         description={t('dev.description', {
           defaultValue:
@@ -251,12 +252,12 @@ export default function MailDevPage(): ReactElement {
           </div>
         ) : null}
 
-        <section className='rounded-xl border bg-card p-5 shadow-sm'>
+        <Card className='p-5 shadow-sm'>
           <div className='grid gap-4 md:grid-cols-2'>
             <label className='text-sm font-medium'>
               {t('dev.account', { defaultValue: 'Account' })}
-              <select
-                className={controlClassName}
+              <NativeSelect
+                className='mt-1'
                 onChange={(event) => setAccountId(event.target.value)}
                 value={accountId}
               >
@@ -272,12 +273,12 @@ export default function MailDevPage(): ReactElement {
                     {account.address}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <label className='text-sm font-medium'>
               {t('dev.identity', { defaultValue: 'Sending identity' })}
-              <select
-                className={controlClassName}
+              <NativeSelect
+                className='mt-1'
                 disabled={!accountId}
                 onChange={(event) => setIdentityId(event.target.value)}
                 value={identityId}
@@ -289,7 +290,7 @@ export default function MailDevPage(): ReactElement {
                       : identity.address}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           </div>
           {selectedAccount ? (
@@ -297,10 +298,10 @@ export default function MailDevPage(): ReactElement {
               {selectedAccount.provider.type} / {selectedAccount.provider.name}
             </p>
           ) : null}
-        </section>
+        </Card>
 
         <div className='grid gap-6 xl:grid-cols-2'>
-          <section className='rounded-xl border bg-card p-5 shadow-sm'>
+          <Card className='p-5 shadow-sm'>
             <div className='flex items-center gap-2'>
               <Send aria-hidden='true' className='size-5 text-primary' />
               <h2 className='font-semibold'>
@@ -316,23 +317,25 @@ export default function MailDevPage(): ReactElement {
             <form className='mt-5 space-y-4' onSubmit={sendMessage}>
               <label className='block text-sm font-medium'>
                 {t('dev.send.to', { defaultValue: 'To' })}
-                <input
-                  className={controlClassName}
+                <Input
+                  className='mt-1'
                   onChange={(event) =>
                     setCompose((current) => ({
                       ...current,
                       to: event.target.value,
                     }))
                   }
-                  placeholder='alice@example.com, bob@example.com'
+                  placeholder={t('dev.send.toPlaceholder', {
+                    defaultValue: 'alice@example.com, bob@example.com',
+                  })}
                   required
                   value={compose.to}
                 />
               </label>
               <label className='block text-sm font-medium'>
                 {t('dev.send.subject', { defaultValue: 'Subject' })}
-                <input
-                  className={controlClassName}
+                <Input
+                  className='mt-1'
                   onChange={(event) =>
                     setCompose((current) => ({
                       ...current,
@@ -348,8 +351,8 @@ export default function MailDevPage(): ReactElement {
               </label>
               <label className='block text-sm font-medium'>
                 {t('dev.send.body', { defaultValue: 'Plain-text body' })}
-                <textarea
-                  className='mt-1 min-h-32 w-full rounded-md border bg-background px-3 py-2 text-sm shadow-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/20'
+                <Textarea
+                  className='mt-1 min-h-32'
                   onChange={(event) =>
                     setCompose((current) => ({
                       ...current,
@@ -364,8 +367,7 @@ export default function MailDevPage(): ReactElement {
                   value={compose.text}
                 />
               </label>
-              <button
-                className='inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 disabled:opacity-50'
+              <Button
                 disabled={!accountId || !identityId || busy === 'sending'}
                 type='submit'
               >
@@ -373,7 +375,7 @@ export default function MailDevPage(): ReactElement {
                 {busy === 'sending'
                   ? t('dev.send.sending', { defaultValue: 'Submitting…' })
                   : t('dev.send.submit', { defaultValue: 'Submit message' })}
-              </button>
+              </Button>
             </form>
             {submission ? (
               <ResultRow
@@ -384,9 +386,9 @@ export default function MailDevPage(): ReactElement {
                 status={submission.status}
               />
             ) : null}
-          </section>
+          </Card>
 
-          <section className='rounded-xl border bg-card p-5 shadow-sm'>
+          <Card className='p-5 shadow-sm'>
             <div className='flex items-center gap-2'>
               <RefreshCw aria-hidden='true' className='size-5 text-primary' />
               <h2 className='font-semibold'>
@@ -402,8 +404,8 @@ export default function MailDevPage(): ReactElement {
             <div className='mt-5 space-y-4'>
               <label className='block text-sm font-medium'>
                 {t('dev.sync.mode', { defaultValue: 'Mode' })}
-                <select
-                  className={controlClassName}
+                <NativeSelect
+                  className='mt-1'
                   onChange={(event) =>
                     setSyncMode(event.target.value as MailSyncMode)
                   }
@@ -415,7 +417,7 @@ export default function MailDevPage(): ReactElement {
                   <option value='incremental'>
                     {t('dev.sync.incremental', { defaultValue: 'Incremental' })}
                   </option>
-                </select>
+                </NativeSelect>
               </label>
               <MailSyncPolicyFields
                 disabled={busy === 'syncing'}
@@ -433,8 +435,7 @@ export default function MailDevPage(): ReactElement {
                 onChange={setPolicy}
                 value={policy}
               />
-              <button
-                className='inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 disabled:opacity-50'
+              <Button
                 disabled={!accountId || busy === 'syncing'}
                 onClick={startSync}
                 type='button'
@@ -444,7 +445,7 @@ export default function MailDevPage(): ReactElement {
                   className={`size-4 ${busy === 'syncing' ? 'animate-spin' : ''}`}
                 />
                 {t('dev.sync.start', { defaultValue: 'Start sync' })}
-              </button>
+              </Button>
             </div>
             {syncRun ? (
               <ResultRow
@@ -453,7 +454,7 @@ export default function MailDevPage(): ReactElement {
                 status={syncRun.status}
               />
             ) : null}
-          </section>
+          </Card>
         </div>
 
         <section className='overflow-hidden rounded-xl border bg-card shadow-sm'>

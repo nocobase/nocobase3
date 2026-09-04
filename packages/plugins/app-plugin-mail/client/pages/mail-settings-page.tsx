@@ -18,6 +18,8 @@ import {
   type MailSyncRunView,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
+import { Button } from '../components/ui/button.js';
+import { Card } from '../components/ui/card.js';
 
 const mail = getMailClient();
 
@@ -169,18 +171,13 @@ export default function MailSettingsPage(): ReactElement {
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
       <MailPageHeader
         actions={
-          <button
-            className='inline-flex h-9 items-center justify-center gap-2 rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:opacity-50'
-            disabled={loading}
-            onClick={refresh}
-            type='button'
-          >
+          <Button disabled={loading} onClick={refresh} variant='outline'>
             <RefreshCw
               aria-hidden='true'
               className={`size-4 ${loading ? 'animate-spin' : ''}`}
             />
             {t('actions.refresh', { defaultValue: 'Refresh' })}
-          </button>
+          </Button>
         }
         description={t('settings.description', {
           defaultValue:
@@ -193,7 +190,7 @@ export default function MailSettingsPage(): ReactElement {
       <div className='mx-auto w-full max-w-7xl space-y-6 px-6 py-6'>
         {authorizationNotice ? (
           <div
-            className={`rounded-xl border p-4 text-sm ${authorizationNotice === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}
+            className={`rounded-xl border p-4 text-sm ${authorizationNotice === 'success' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}
           >
             {authorizationNotice === 'success'
               ? t('settings.authorizationSuccess', {
@@ -212,7 +209,7 @@ export default function MailSettingsPage(): ReactElement {
           </div>
         ) : null}
 
-        <section className='rounded-xl border bg-card p-5 shadow-sm'>
+        <Card className='p-5 shadow-sm'>
           <div className='mb-4'>
             <h2 className='font-semibold'>
               {t('settings.initialSync.title', {
@@ -241,7 +238,7 @@ export default function MailSettingsPage(): ReactElement {
             onChange={setPolicy}
             value={policy}
           />
-        </section>
+        </Card>
 
         <section>
           <div className='mb-3'>

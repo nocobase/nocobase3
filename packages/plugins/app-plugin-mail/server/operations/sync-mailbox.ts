@@ -24,13 +24,14 @@ export class SyncMailboxOperation {
 
   public async execute(payload: MailSyncMailboxTaskPayload): Promise<void> {
     const now = Date.now();
+    const leaseMs = this.dependencies.leaseMs ?? 60_000;
     const leaseToken = randomUUID();
     const run = await this.dependencies.store.claimSyncRun(
       payload.syncRunId,
       payload.expectedRevision,
       payload.expectedPhase,
       leaseToken,
-      new Date(now + (this.dependencies.leaseMs ?? 60_000)).toISOString(),
+      new Date(now + leaseMs).toISOString(),
     );
     if (!run) {
       const current = await this.dependencies.store.getSyncRun(
@@ -76,10 +77,24 @@ export class SyncMailboxOperation {
       );
       return;
     }
+    const stopLeaseHeartbeat = this.startLeaseHeartbeat(
+      run.id,
+      leaseToken,
+      leaseMs,
+    );
     try {
       await this.executeStep(run, adapter);
     } catch (error) {
       const normalized = normalizeError(error);
+      if (isCursorInvalid(normalized)) {
+        await this.dependencies.store.clearSyncCursor(account.id);
+      }
+      if (normalized.category === 'authentication' && !normalized.retryable) {
+        await this.dependencies.store.saveAccount({
+          ...account,
+          status: 'reauthorizationRequired',
+        });
+      }
       if (normalized.retryable) {
         await this.dependencies.store.releaseSyncRun(
           run,
@@ -92,8 +107,30 @@ export class SyncMailboxOperation {
       }
       await this.dependencies.store.failSyncRun(run, normalized);
     } finally {
+      stopLeaseHeartbeat();
       await closeQuietly(adapter);
     }
+  }
+
+  private startLeaseHeartbeat(
+    syncRunId: string,
+    leaseToken: string,
+    leaseMs: number,
+  ): () => void {
+    const interval = setInterval(
+      () => {
+        void this.dependencies.store
+          .renewSyncRunLease(
+            syncRunId,
+            leaseToken,
+            new Date(Date.now() + leaseMs).toISOString(),
+          )
+          .catch(() => undefined);
+      },
+      Math.max(1_000, Math.floor(leaseMs / 3)),
+    );
+    interval.unref();
+    return (): void => clearInterval(interval);
   }
 
   private async executeStep(
@@ -117,24 +154,10 @@ export class SyncMailboxOperation {
     run: MailSyncRun,
     adapter: MailProviderAdapter,
   ): Promise<void> {
-    if (run.mode === 'incremental') {
-      const folders = adapter.listFolders
-        ? unwrap(await adapter.listFolders())
-        : [];
-      await this.dependencies.store.commitSyncStep({
-        run,
-        folders,
-        messages: [],
-        phase: 'incremental',
-        status: 'running',
-        changeCursor: await this.dependencies.store.getSyncCursor(
-          run.accountId,
-        ),
-        createNextTask: true,
-      });
-      return;
-    }
-    if (!adapter.listMessages || !adapter.getCurrentSyncCursor) {
+    if (
+      run.mode === 'initial' &&
+      (!adapter.listMessages || !adapter.getCurrentSyncCursor)
+    ) {
       throw new MailOperationError(
         terminalError(
           'MAIL_INITIAL_SYNC_NOT_SUPPORTED',
@@ -142,17 +165,50 @@ export class SyncMailboxOperation {
         ),
       );
     }
-    const baseline = unwrap(await adapter.getCurrentSyncCursor());
-    const folders = adapter.listFolders
-      ? unwrap(await adapter.listFolders())
-      : [];
+    const baseline =
+      run.mode === 'initial'
+        ? (run.baselineCursor ?? unwrap(await adapter.getCurrentSyncCursor!()))
+        : undefined;
+    const folderPage = adapter.listFolders
+      ? unwrap(
+          await adapter.listFolders({
+            cursor: run.folderCursor,
+            limit: run.policy.batchSize,
+          }),
+        )
+      : { folders: [], completeProviderFolderIds: [] };
+    if (folderPage.nextCursor) {
+      await this.dependencies.store.commitSyncStep({
+        run,
+        folders: folderPage.folders,
+        messages: [],
+        phase: 'preparing',
+        status: 'running',
+        folderCursor: folderPage.nextCursor,
+        baselineCursor: baseline,
+        createNextTask: true,
+      });
+      return;
+    }
+    const currentCursor =
+      run.mode === 'initial'
+        ? baseline
+        : await this.dependencies.store.getSyncCursor(run.accountId);
+    const providerFolderIds =
+      folderPage.completeProviderFolderIds ??
+      folderPage.folders.map((folder) => folder.providerFolderId);
+    const changeCursor = adapter.reconcileSyncCursor
+      ? unwrap(adapter.reconcileSyncCursor(currentCursor, providerFolderIds))
+      : currentCursor;
     await this.dependencies.store.commitSyncStep({
       run,
-      folders,
+      folders: folderPage.folders,
+      completeProviderFolderIds: folderPage.completeProviderFolderIds,
       messages: [],
-      phase: 'history',
+      phase: run.mode === 'initial' ? 'history' : 'incremental',
       status: 'running',
-      baselineCursor: baseline,
+      baselineCursor: run.mode === 'initial' ? changeCursor : baseline,
+      changeCursor: run.mode === 'incremental' ? changeCursor : undefined,
       createNextTask: true,
     });
   }
@@ -179,7 +235,11 @@ export class SyncMailboxOperation {
     }
     const page = unwrap(
       await adapter.listMessages({
+        providerFolderIds: (
+          await this.dependencies.store.listFolders(run.accountId)
+        ).map((folder) => folder.providerFolderId),
         receivedAfter: run.policy.receivedAfter,
+        baselineCursor: run.baselineCursor,
         cursor: run.historyCursor,
         limit: Math.min(run.policy.batchSize, remaining),
       }),
@@ -277,6 +337,10 @@ function normalizeError(error: unknown): MailProviderError {
     category: 'unknown',
     retryable: true,
   };
+}
+
+function isCursorInvalid(error: MailProviderError): boolean {
+  return error.code.endsWith('_SYNC_CURSOR_INVALID');
 }
 
 export type SyncCursor = MailSyncCursor;

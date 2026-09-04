@@ -100,6 +100,13 @@ describe('Microsoft Mail Provider', () => {
       )
       .mockResolvedValueOnce(
         Response.json({
+          value: [],
+          '@odata.deltaLink':
+            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=opaque',
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
           value: [
             {
               id: 'message-1',
@@ -108,8 +115,6 @@ describe('Microsoft Mail Provider', () => {
               body: { contentType: 'text', content: 'Body' },
             },
           ],
-          '@odata.deltaLink':
-            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=opaque',
         }),
       );
     vi.stubGlobal('fetch', fetchMock);
@@ -141,7 +146,11 @@ describe('Microsoft Mail Provider', () => {
       }),
     ).resolves.toEqual({ status: 'accepted' });
 
-    const page = await adapter.listMessages({ limit: 100 });
+    const baseline = await adapter.listMessages({ limit: 100 });
+    const page = await adapter.listMessages({
+      cursor: baseline.ok ? baseline.value.nextCursor : undefined,
+      limit: 100,
+    });
     expect(page).toMatchObject({
       ok: true,
       value: {
@@ -168,13 +177,9 @@ describe('Microsoft Mail Provider', () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
         Response.json({
-          value: [
-            {
-              id: 'inbox',
-              displayName: 'Inbox',
-              childFolderCount: 0,
-            },
-          ],
+          value: [],
+          '@odata.deltaLink':
+            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=baseline',
         }),
       )
       .mockResolvedValueOnce(
@@ -191,7 +196,14 @@ describe('Microsoft Mail Provider', () => {
       account(),
     );
 
-    const first = await adapter.listMessages({ limit: 100 });
+    const baseline = await adapter.listMessages({
+      providerFolderIds: ['inbox'],
+      limit: 100,
+    });
+    const first = await adapter.listMessages({
+      cursor: baseline.ok ? baseline.value.nextCursor : undefined,
+      limit: 100,
+    });
     expect(first.ok && first.value.nextCursor).toBeDefined();
     const second = await adapter.listMessages({
       cursor: first.ok ? first.value.nextCursor : undefined,
@@ -205,7 +217,7 @@ describe('Microsoft Mail Provider', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('drains a truncated bootstrap to a delta checkpoint without exceeding the import bound', async () => {
+  it('bounds history while catching messages that arrive after the real delta baseline', async () => {
     const credentials = memoryVault();
     await credentials.putAt('credential-1', {
       provider: 'microsoft',
@@ -230,28 +242,37 @@ describe('Microsoft Mail Provider', () => {
       )
       .mockResolvedValueOnce(
         Response.json({
-          value: [
-            {
-              id: 'imported-message',
-              parentFolderId: 'inbox',
-              subject: 'Within bound',
-            },
-          ],
-          '@odata.nextLink':
-            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$skiptoken=page-2',
+          value: [],
+          '@odata.deltaLink':
+            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=baseline',
         }),
       )
       .mockResolvedValueOnce(
         Response.json({
           value: [
             {
-              id: 'not-imported-message',
+              id: 'imported-message',
               parentFolderId: 'inbox',
-              subject: 'Beyond bound',
+              subject: 'Within bound',
+              receivedDateTime: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          '@odata.nextLink':
+            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$skiptoken=history-page-2',
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [
+            {
+              id: 'arrived-after-baseline',
+              parentFolderId: 'inbox',
+              subject: 'Arrived after baseline',
+              receivedDateTime: '2025-12-31T23:59:59.000Z',
             },
           ],
           '@odata.deltaLink':
-            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=checkpoint',
+            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=after-catch-up',
         }),
       );
     vi.stubGlobal('fetch', fetchMock);
@@ -261,22 +282,220 @@ describe('Microsoft Mail Provider', () => {
       account(),
     );
 
-    const initial = await adapter.listMessages({ limit: 1 });
-    expect(initial).toMatchObject({
+    const baseline = await adapter.listMessages({ limit: 1 });
+    expect(baseline).toMatchObject({
+      ok: true,
+      value: { messages: [], nextCursor: expect.any(String) },
+    });
+    const history = await adapter.listMessages({
+      cursor: baseline.ok ? baseline.value.nextCursor : undefined,
+      limit: 1,
+    });
+    expect(history).toMatchObject({
       ok: true,
       value: { messages: [{ providerMessageId: 'imported-message' }] },
     });
-    if (!initial.ok || !initial.value.syncCursor) {
-      throw new Error('Expected a Microsoft bootstrap cursor.');
+    if (!history.ok || !history.value.syncCursor) {
+      throw new Error('Expected a Microsoft baseline cursor.');
     }
     const catchUp = await adapter.listChanges({
-      cursor: initial.value.syncCursor,
+      cursor: history.value.syncCursor,
       limit: 1,
     });
 
     expect(catchUp).toMatchObject({
       ok: true,
-      value: { messages: [], hasMore: false },
+      value: {
+        messages: [{ providerMessageId: 'arrived-after-baseline' }],
+        hasMore: false,
+      },
+    });
+    expect(fetchMock.mock.calls[1][0]).toContain('%24deltatoken=latest');
+    expect(fetchMock.mock.calls[2][0]).toContain('/messages?');
+    expect(fetchMock.mock.calls[2][0]).not.toContain('/messages/delta?');
+    expect(fetchMock.mock.calls).toHaveLength(4);
+  });
+
+  it('reports rejected token refresh before send as a terminal authentication failure', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'expired-access',
+      refreshToken: 'revoked-refresh',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      scopes: ['offline_access'],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          { error: 'invalid_grant', error_description: 'Token was revoked.' },
+          { status: 400 },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    const result = await adapter.sendMessage({
+      trackingId: 'submission-auth-failure',
+      identity: {
+        id: 'identity-1',
+        accountId: 'account-1',
+        address: 'user@example.com',
+        isPrimary: true,
+        canSend: true,
+      },
+      message: {
+        to: [{ address: 'recipient@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'Hello',
+        text: 'Mail body',
+        attachments: [],
+        references: [],
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: { category: 'authentication', retryable: false },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('discovers one folder page per call and resumes nested traversal', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [
+            {
+              id: 'parent',
+              displayName: 'Projects',
+              childFolderCount: 1,
+            },
+          ],
+          '@odata.nextLink':
+            'https://graph.microsoft.com/v1.0/me/mailFolders?$skiptoken=top-2',
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [{ id: 'inbox', displayName: 'Inbox' }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [{ id: 'child', displayName: 'Child' }],
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    const first = await adapter.listFolders({ limit: 100 });
+    const second = await adapter.listFolders({
+      cursor: first.ok ? first.value.nextCursor : undefined,
+      limit: 100,
+    });
+    const third = await adapter.listFolders({
+      cursor: second.ok ? second.value.nextCursor : undefined,
+      limit: 100,
+    });
+
+    expect(first).toMatchObject({
+      ok: true,
+      value: { folders: [{ providerFolderId: 'parent' }] },
+    });
+    expect(second).toMatchObject({
+      ok: true,
+      value: { folders: [{ providerFolderId: 'inbox' }] },
+    });
+    expect(third).toMatchObject({
+      ok: true,
+      value: {
+        folders: [{ providerFolderId: 'child' }],
+        completeProviderFolderIds: ['parent', 'inbox', 'child'],
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('bootstraps a newly discovered folder during incremental sync', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          value: [
+            {
+              id: 'new-message',
+              parentFolderId: 'new-folder',
+              subject: 'Found after folder creation',
+            },
+          ],
+          '@odata.deltaLink':
+            'https://graph.microsoft.com/v1.0/me/mailFolders/new-folder/messages/delta?$deltatoken=new-checkpoint',
+        }),
+      ),
+    );
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+    const reconciled = adapter.reconcileSyncCursor(
+      {
+        version: 'microsoft-graph-v1',
+        value: {
+          checkpoints: JSON.stringify({
+            inbox:
+              'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=old',
+          }),
+          folders: JSON.stringify(['inbox']),
+          folderIndex: '0',
+        },
+      },
+      ['new-folder'],
+    );
+    if (!reconciled.ok) throw new Error('Expected cursor reconciliation.');
+
+    const changes = await adapter.listChanges({
+      cursor: reconciled.value,
+      limit: 100,
+    });
+
+    expect(changes).toMatchObject({
+      ok: true,
+      value: {
+        messages: [{ providerMessageId: 'new-message' }],
+        hasMore: false,
+      },
     });
   });
 });

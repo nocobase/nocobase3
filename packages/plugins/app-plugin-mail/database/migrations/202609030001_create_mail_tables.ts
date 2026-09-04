@@ -139,6 +139,7 @@ const migration: MigrationDefinition = defineMigration({
         defaultValue: 0,
       });
       collection.text('historyCursor');
+      collection.text('folderCursor');
       collection.json('baselineCursor');
       collection.json('changeCursor');
       collection.string('leaseToken', { length: 100 });

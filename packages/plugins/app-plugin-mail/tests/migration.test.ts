@@ -74,6 +74,7 @@ describe('mail database migration', () => {
     ).resolves.toMatchObject({
       fields: expect.arrayContaining([
         expect.objectContaining({ name: 'historyCursor' }),
+        expect.objectContaining({ name: 'folderCursor' }),
         expect.objectContaining({ name: 'baselineCursor' }),
       ]),
     });

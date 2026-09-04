@@ -10,7 +10,9 @@ import type {
   MailProviderContext,
   MailProviderDefinition,
   MailProviderError,
+  MailProviderFolderPage,
   MailProviderListChangesInput,
+  MailProviderListFoldersInput,
   MailProviderListMessagesInput,
   MailProviderMessagePage,
   MailProviderResult,
@@ -283,27 +285,33 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   }
 
   public async listFolders(
-    signal?: AbortSignal,
-  ): Promise<MailProviderResult<readonly NormalizedMailFolder[]>> {
+    input: MailProviderListFoldersInput,
+  ): Promise<MailProviderResult<MailProviderFolderPage>> {
     const result = await this.request<GmailLabelList>('/users/me/labels', {
-      signal,
+      signal: input.signal,
     });
     if (!result.ok) return result;
+    const folders = (result.value.labels ?? []).flatMap((label) =>
+      label.id
+        ? [
+            {
+              providerFolderId: label.id,
+              type: gmailFolderType(label.id),
+              name: label.name ?? label.id,
+              unreadCount: label.messagesUnread,
+              kind: 'label' as const,
+            },
+          ]
+        : [],
+    );
     return {
       ok: true,
-      value: (result.value.labels ?? []).flatMap((label) =>
-        label.id
-          ? [
-              {
-                providerFolderId: label.id,
-                type: gmailFolderType(label.id),
-                name: label.name ?? label.id,
-                unreadCount: label.messagesUnread,
-                kind: 'label' as const,
-              },
-            ]
-          : [],
-      ),
+      value: {
+        folders,
+        completeProviderFolderIds: folders.map(
+          (folder) => folder.providerFolderId,
+        ),
+      },
     };
   }
 
@@ -459,7 +467,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     } catch (error) {
       return {
         status: 'failed',
-        error: unknownError(error, 'GMAIL_AUTHORIZATION_FAILED'),
+        error: errorResult(error, 'GMAIL_AUTHORIZATION_FAILED'),
       };
     }
     try {
@@ -502,7 +510,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         init,
       );
     } catch (error) {
-      return { ok: false, error: unknownError(error, 'GMAIL_REQUEST_FAILED') };
+      return { ok: false, error: errorResult(error, 'GMAIL_REQUEST_FAILED') };
     }
   }
 
@@ -522,7 +530,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       },
       signal,
     );
-    if (!refreshed.ok) throw new Error(refreshed.error.message);
+    if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
     const next: GmailCredential = {
       ...credential,
       accessToken: required(refreshed.value.access_token, 'Gmail access token'),
@@ -873,6 +881,18 @@ function unknownError(error: unknown, code: string): MailProviderError {
     category: 'network',
     retryable: true,
   };
+}
+
+class ProviderRequestError extends Error {
+  public constructor(public readonly providerError: MailProviderError) {
+    super(providerError.message);
+  }
+}
+
+function errorResult(error: unknown, code: string): MailProviderError {
+  return error instanceof ProviderRequestError
+    ? error.providerError
+    : unknownError(error, code);
 }
 
 function failure<T>(

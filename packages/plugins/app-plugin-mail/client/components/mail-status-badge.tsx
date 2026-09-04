@@ -10,10 +10,10 @@ export interface MailStatusBadgeProps {
 
 const toneClasses: Readonly<Record<MailStatusTone, string>> = {
   neutral: 'border-border bg-muted text-muted-foreground',
-  success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700',
-  warning: 'border-amber-500/30 bg-amber-500/10 text-amber-700',
+  success: 'border-primary/30 bg-primary/10 text-primary',
+  warning: 'border-accent bg-accent text-accent-foreground',
   danger: 'border-destructive/30 bg-destructive/10 text-destructive',
-  info: 'border-sky-500/30 bg-sky-500/10 text-sky-700',
+  info: 'border-secondary bg-secondary text-secondary-foreground',
 };
 
 export function MailStatusBadge({

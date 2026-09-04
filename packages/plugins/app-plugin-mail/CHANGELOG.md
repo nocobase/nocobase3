@@ -13,3 +13,7 @@
   concrete Provider plugins.
 - Add Mail settings and development pages for account authorization, bounded
   synchronization, test sending, and synchronized-message inspection.
+- Recover interrupted pending sends, terminal OAuth failures, and expired sync
+  cursors; paginate folder discovery and renew long-running sync leases.
+- Add Server error translations, local shadcn UI primitives, and an App-facing
+  Mail Plugin Skill.

@@ -14,6 +14,7 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
+import { getRequestTranslator } from '@nocobase/i18n/server';
 
 import { mailServiceToken } from '../tokens.js';
 import { MailIdempotencyConflictError } from '../operations/send-mail.js';
@@ -27,6 +28,8 @@ import type {
 type MailRoutesEnv = {
   Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
 };
+
+const MAIL_NAMESPACE = '@nocobase/app-plugin-mail';
 
 export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container, config, publicBasePath }) => {
@@ -46,11 +49,12 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           action: 'access',
         });
         if (!allowed) {
+          const t = getRequestTranslator(context, MAIL_NAMESPACE);
           return context.json(
             {
               error: {
                 code: 'MAIL_ACCESS_DENIED',
-                message: 'Mail settings access is required.',
+                message: t('errors.accessDenied'),
               },
             },
             403,
@@ -60,13 +64,13 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     routes.onError((error, context) => {
+      const t = getRequestTranslator(context, MAIL_NAMESPACE);
       if (error instanceof MailIdempotencyConflictError) {
         return context.json(
           {
             error: {
               code: 'MAIL_IDEMPOTENCY_CONFLICT',
-              message:
-                'The idempotency key is already associated with another request.',
+              message: t('errors.idempotencyConflict'),
             },
           },
           409,
@@ -77,9 +81,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         {
           error: {
             code: invalid ? 'INVALID_MAIL_REQUEST' : 'MAIL_REQUEST_FAILED',
-            message: invalid
-              ? 'The mail request is invalid.'
-              : 'The mail request could not be completed.',
+            message: t(
+              invalid ? 'errors.invalidRequest' : 'errors.requestFailed',
+            ),
           },
         },
         invalid ? 400 : 422,
@@ -138,6 +142,7 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       );
     });
     routes.get('/sync-runs/:syncRunId', async (context) => {
+      const t = getRequestTranslator(context, MAIL_NAMESPACE);
       const run = await mail.getSyncRun(
         operationContext(context),
         context.req.param('syncRunId'),
@@ -148,7 +153,7 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             {
               error: {
                 code: 'MAIL_SYNC_RUN_NOT_FOUND',
-                message: 'Mail sync run was not found.',
+                message: t('errors.syncRunNotFound'),
               },
             },
             404,
@@ -169,6 +174,7 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       });
     });
     routes.get('/accounts/:accountId/messages/:messageId', async (context) => {
+      const t = getRequestTranslator(context, MAIL_NAMESPACE);
       const message = await mail.getMessage(
         operationContext(context),
         context.req.param('accountId'),
@@ -180,7 +186,7 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             {
               error: {
                 code: 'MAIL_MESSAGE_NOT_FOUND',
-                message: 'Mail message was not found.',
+                message: t('errors.messageNotFound'),
               },
             },
             404,

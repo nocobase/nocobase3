@@ -53,6 +53,7 @@ const zhCN: MailResource = {
       title: '发送邮件',
       description: '每次提交都会生成新的幂等键，并通过邮件发送操作执行。',
       to: '收件人',
+      toPlaceholder: 'alice@example.com, bob@example.com',
       subject: '主题',
       subjectPlaceholder: 'NocoBase 邮件测试',
       body: '纯文本正文',

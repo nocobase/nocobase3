@@ -27,6 +27,8 @@ The first runnable vertical slice provides:
 - request-fingerprinted send idempotency and lease-fenced submission results;
 - bounded history pages followed by catch-up from the watermark captured
   before history import;
+- resumable Provider folder discovery with cursor reconciliation for folder
+  additions and removals;
 - idempotent message upserts by `(accountId, providerMessageId)`;
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
@@ -55,8 +57,10 @@ POST /api/mail/accounts/:accountId/sync
   -> messages + checkpoint + next Outbox in one transaction
 ```
 
-An initial sync first captures a Provider change watermark, imports bounded
-history pages, then catches up changes from that watermark. One Queue
+An initial sync first establishes a Provider change watermark, imports bounded
+history pages, then catches up changes from that watermark. A Provider may use
+empty, resumable preparation pages to establish per-folder watermarks before
+returning history. One Queue
 execution advances one state-machine step, so a large mailbox never requires
 one unbounded HTTP request or one unbounded Job.
 
@@ -78,9 +82,14 @@ app.container.resolve(mailProviderRegistryToken).register(definition);
 
 For safe initial sync, a Provider adapter implements:
 
-- `getCurrentSyncCursor()` to capture the pre-history watermark;
-- `listMessages()` for bounded history pagination;
+- `getCurrentSyncCursor()` to initialize the pre-history baseline;
+- `listMessages()` for resumable baseline preparation and bounded history
+  pagination; it returns the established checkpoint as `syncCursor`;
 - `listChanges()` for bounded catch-up and later incremental sync.
+
+Providers with folder hierarchies implement paginated `listFolders()` and
+`reconcileSyncCursor()`. A folder page is persisted before another Queue task
+is planned, so discovering a large hierarchy remains bounded and resumable.
 
 For sending, it implements `sendMessage()`. A Provider that accepted a message
 but cannot return an identifier may omit `providerMessageId`. Network or

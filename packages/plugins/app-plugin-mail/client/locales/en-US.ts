@@ -59,6 +59,7 @@ const enUS = {
       description:
         'Each submission receives a fresh idempotency key and runs through the Mail send operation.',
       to: 'To',
+      toPlaceholder: 'alice@example.com, bob@example.com',
       subject: 'Subject',
       subjectPlaceholder: 'NocoBase mail test',
       body: 'Plain-text body',

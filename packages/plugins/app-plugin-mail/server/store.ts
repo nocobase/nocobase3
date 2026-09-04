@@ -129,6 +129,7 @@ interface SyncRunRow extends Row {
   processedMessages: number;
   processedPages: number;
   historyCursor?: string | null;
+  folderCursor?: string | null;
   baselineCursor?: MailSyncCursor | string | null;
   changeCursor?: MailSyncCursor | string | null;
   leaseToken?: string | null;
@@ -416,6 +417,14 @@ export class DatabaseMailStore implements MailStore {
       : undefined;
   }
 
+  public async clearSyncCursor(accountId: string): Promise<void> {
+    await this.database
+      .query()
+      .deleteFrom('mailSyncStates')
+      .where('accountId', '=', accountId)
+      .execute();
+  }
+
   public async createSyncRun(
     input: MailCreateSyncRunInput,
   ): Promise<MailSyncRun> {
@@ -496,6 +505,22 @@ export class DatabaseMailStore implements MailStore {
     return result.updatedCount === 1 ? this.getSyncRun(syncRunId) : undefined;
   }
 
+  public async renewSyncRunLease(
+    syncRunId: string,
+    leaseToken: string,
+    leaseExpiresAt: string,
+  ): Promise<boolean> {
+    const result = await this.database
+      .query()
+      .updateTable<SyncRunRow>('mailSyncRuns')
+      .set({ leaseExpiresAt, updatedAt: new Date().toISOString() })
+      .where('id', '=', syncRunId)
+      .where('status', '=', 'running')
+      .where('leaseToken', '=', leaseToken)
+      .execute();
+    return result.updatedCount === 1;
+  }
+
   public async commitSyncStep(input: MailSyncStepCommit): Promise<MailSyncRun> {
     const now = new Date().toISOString();
     await this.database.transaction(async (connection): Promise<void> => {
@@ -504,6 +529,19 @@ export class DatabaseMailStore implements MailStore {
         input.run.accountId,
         input.folders ?? [],
       );
+      if (input.completeProviderFolderIds) {
+        let staleFolders = connection.query
+          .deleteFrom('mailFolders')
+          .where('accountId', '=', input.run.accountId);
+        if (input.completeProviderFolderIds.length > 0) {
+          staleFolders = staleFolders.where(
+            'providerFolderId',
+            'not in',
+            input.completeProviderFolderIds,
+          );
+        }
+        await staleFolders.execute();
+      }
       await upsertMessages(
         connection.query,
         input.run.accountId,
@@ -530,6 +568,7 @@ export class DatabaseMailStore implements MailStore {
             input.run.processedMessages + input.messages.length,
           processedPages: input.run.processedPages + 1,
           historyCursor: input.historyCursor ?? null,
+          folderCursor: input.folderCursor ?? null,
           baselineCursor: jsonOrNull(input.baselineCursor),
           changeCursor: jsonOrNull(input.changeCursor),
           leaseToken: null,
@@ -1246,6 +1285,7 @@ function fromSyncRunRow(row: SyncRunRow): MailSyncRun {
     processedMessages: Number(row.processedMessages),
     processedPages: Number(row.processedPages),
     historyCursor: row.historyCursor ?? undefined,
+    folderCursor: row.folderCursor ?? undefined,
     baselineCursor: row.baselineCursor
       ? parseJson<MailSyncCursor>(row.baselineCursor, 'baseline cursor')
       : undefined,

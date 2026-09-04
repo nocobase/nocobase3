@@ -10,6 +10,7 @@ import { mailConfig } from './config.js';
 const mailPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-mail',
   config: mailConfig,
+  locales: () => import('./locales/index.js'),
   serviceProviders,
   routes,
   database: {

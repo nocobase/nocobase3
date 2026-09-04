@@ -5,6 +5,7 @@ import {
   type AppRootRouteContribution,
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
+import { getRequestTranslator } from '@nocobase/i18n/server';
 
 import { mailServiceToken } from '../tokens.js';
 
@@ -17,11 +18,12 @@ export const mailOAuthCallbackRoutes: AppRootRouteContribution<AppPluginApplicat
     router.get('/mail/oauth/callback', async (context) => {
       const state = context.req.query('state');
       if (!state) {
+        const t = getRequestTranslator(context, '@nocobase/app-plugin-mail');
         return context.json(
           {
             error: {
               code: 'MAIL_AUTHORIZATION_STATE_REQUIRED',
-              message: 'Mail authorization state is required.',
+              message: t('errors.authorizationStateRequired'),
             },
           },
           400,

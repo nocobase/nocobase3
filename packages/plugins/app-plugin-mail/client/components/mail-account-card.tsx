@@ -3,6 +3,8 @@ import type { ReactElement } from 'react';
 
 import type { MailAccountView } from '../mail-client.js';
 import { MailStatusBadge, type MailStatusTone } from './mail-status-badge.js';
+import { Button } from './ui/button.js';
+import { Card } from './ui/card.js';
 
 export interface MailAccountCardProps {
   readonly account: MailAccountView;
@@ -24,7 +26,7 @@ export function MailAccountCard({
   onSync,
 }: MailAccountCardProps): ReactElement {
   return (
-    <article className='rounded-xl border bg-card p-5 shadow-sm'>
+    <Card className='p-5 shadow-sm'>
       <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div className='min-w-0'>
           <div className='flex flex-wrap items-center gap-2'>
@@ -42,8 +44,7 @@ export function MailAccountCard({
             {providerLabel}
           </p>
         </div>
-        <button
-          className='inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50'
+        <Button
           disabled={syncing || account.status !== 'active'}
           onClick={() => onSync(account)}
           type='button'
@@ -53,9 +54,9 @@ export function MailAccountCard({
             className={`size-4 ${syncing ? 'animate-spin' : ''}`}
           />
           {syncLabel}
-        </button>
+        </Button>
       </div>
-    </article>
+    </Card>
   );
 }
 

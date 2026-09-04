@@ -150,6 +150,59 @@ describe('Gmail Mail Provider', () => {
       },
     });
   });
+
+  it('keeps a rejected token refresh as a terminal authentication error', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'expired-access',
+      refreshToken: 'revoked-refresh',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json(
+            { error: 'invalid_grant', error_description: 'Token was revoked.' },
+            { status: 400 },
+          ),
+        ),
+    );
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    const result = await adapter.sendMessage({
+      trackingId: 'submission-auth-failure',
+      identity: {
+        id: 'identity-1',
+        accountId: 'account-1',
+        address: 'user@example.com',
+        isPrimary: true,
+        canSend: true,
+      },
+      message: {
+        to: [{ address: 'recipient@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'Hello',
+        text: 'Mail body',
+        attachments: [],
+        references: [],
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: { category: 'authentication', retryable: false },
+    });
+  });
 });
 
 interface MemoryVault extends MailCredentialVault {

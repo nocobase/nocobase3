@@ -48,7 +48,7 @@ export class SendMailOperation {
       );
     if (existing) {
       assertMatchingRequest(existing.requestFingerprint, requestFingerprint);
-      return existing;
+      if (existing.status !== 'pending') return existing;
     }
 
     const identity = await this.dependencies.store.getIdentity(
@@ -58,19 +58,21 @@ export class SendMailOperation {
       throw new Error('Mail sending identity is not available.');
     }
 
-    const created = await this.dependencies.store.createSubmission(
-      {
-        id: randomUUID(),
-        accountId: account.id,
-        status: 'pending',
-      },
-      input.idempotencyKey,
-      requestFingerprint,
-    );
-    assertMatchingRequest(created.requestFingerprint, requestFingerprint);
+    const submission =
+      existing ??
+      (await this.dependencies.store.createSubmission(
+        {
+          id: randomUUID(),
+          accountId: account.id,
+          status: 'pending',
+        },
+        input.idempotencyKey,
+        requestFingerprint,
+      ));
+    assertMatchingRequest(submission.requestFingerprint, requestFingerprint);
     const leaseToken = randomUUID();
     const claimed = await this.dependencies.store.claimSubmission(
-      created.id,
+      submission.id,
       leaseToken,
       new Date(now + 120_000).toISOString(),
     );
@@ -79,7 +81,7 @@ export class SendMailOperation {
         (await this.dependencies.store.getSubmissionByIdempotencyKey(
           account.id,
           input.idempotencyKey,
-        )) ?? created
+        )) ?? submission
       );
     }
 
@@ -92,7 +94,7 @@ export class SendMailOperation {
     } catch (error) {
       return this.dependencies.store.finishSubmission(
         {
-          ...created,
+          ...submission,
           status: 'failed',
           error: {
             code: 'MAIL_PROVIDER_UNAVAILABLE',
@@ -110,7 +112,7 @@ export class SendMailOperation {
     if (!adapter.capabilities.send || !adapter.sendMessage) {
       return this.dependencies.store.finishSubmission(
         {
-          ...created,
+          ...submission,
           status: 'failed',
           error: {
             code: 'MAIL_SEND_NOT_SUPPORTED',
@@ -125,7 +127,7 @@ export class SendMailOperation {
 
     try {
       const result = await adapter.sendMessage({
-        trackingId: created.id,
+        trackingId: submission.id,
         identity,
         message: toProviderMessage(input),
         signal: context.signal,
@@ -133,16 +135,25 @@ export class SendMailOperation {
       if (result.status === 'accepted') {
         return this.dependencies.store.finishSubmission(
           {
-            ...created,
+            ...submission,
             status: 'accepted',
             providerMessageId: result.providerMessageId,
           },
           leaseToken,
         );
       }
+      if (
+        result.error.category === 'authentication' &&
+        !result.error.retryable
+      ) {
+        await this.dependencies.store.saveAccount({
+          ...account,
+          status: 'reauthorizationRequired',
+        });
+      }
       return this.dependencies.store.finishSubmission(
         {
-          ...created,
+          ...submission,
           status: result.status === 'submission_unknown' ? 'unknown' : 'failed',
           error: result.error,
         },
@@ -151,7 +162,7 @@ export class SendMailOperation {
     } catch (error) {
       return this.dependencies.store.finishSubmission(
         {
-          ...created,
+          ...submission,
           status: 'unknown',
           error: {
             code: 'MAIL_SEND_RESULT_UNKNOWN',

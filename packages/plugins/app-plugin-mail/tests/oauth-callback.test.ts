@@ -1,11 +1,14 @@
 import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
+import { I18nRuntime } from '@nocobase/i18n';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { mailOAuthCallbackRoutes } from '../server/routes/oauth-callback.js';
 import { mailServiceToken } from '../server/tokens.js';
 import type { MailService } from '../server/types.js';
+import serverLocales from '../server/locales/index.js';
 
 describe('Mail OAuth callback route', () => {
   it('is public but requires a valid state value', async () => {
@@ -61,7 +64,7 @@ describe('Mail OAuth callback route', () => {
 async function createRouter(mail: MailService): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(mailServiceToken, mail);
-  return mailOAuthCallbackRoutes.createRouter({
+  const contribution = await mailOAuthCallbackRoutes.createRouter({
     appName: 'test',
     publicBasePath: '/test',
     config: { app: { name: 'test', publicBasePath: '/test' } },
@@ -69,6 +72,16 @@ async function createRouter(mail: MailService): Promise<Hono> {
     router: new Hono(),
     container,
   });
+  const runtime = new I18nRuntime({
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
+  });
+  runtime.registerNamespace('@nocobase/app-plugin-mail', serverLocales);
+  await runtime.init();
+  const router = new Hono();
+  router.use('*', createI18nMiddleware(runtime));
+  router.route('/', contribution);
+  return router;
 }
 
 function service(overrides: Partial<MailService> = {}): MailService {

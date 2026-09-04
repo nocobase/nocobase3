@@ -53,6 +53,7 @@ describe('mail MVP runtime', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await runtime?.close();
     await queue?.close();
     await database.destroy();
@@ -89,6 +90,38 @@ describe('mail MVP runtime', () => {
     expect(second).toEqual(first);
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(accounts[0]).not.toHaveProperty('credentialReference');
+  });
+
+  it('resumes a pending submission after interruption before claiming', async () => {
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'accepted',
+      providerMessageId: 'provider-sent-after-resume',
+    }));
+    const claim = vi.spyOn(store, 'claimSubmission');
+    claim.mockResolvedValueOnce(false);
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: { kick: vi.fn() },
+    });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      to: [{ address: 'recipient@example.com' }],
+      subject: 'Resume me',
+      text: 'Mail body',
+      idempotencyKey: 'interrupted-before-claim',
+    } as const;
+
+    const interrupted = await service.sendMessage({ actorId: 'user-1' }, input);
+    const resumed = await service.sendMessage({ actorId: 'user-1' }, input);
+
+    expect(interrupted.status).toBe('pending');
+    expect(resumed).toMatchObject({
+      status: 'accepted',
+      providerMessageId: 'provider-sent-after-resume',
+    });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it('rejects reuse of an idempotency key for different content', async () => {
@@ -328,6 +361,152 @@ describe('mail MVP runtime', () => {
     );
     expect(claimed).toHaveLength(1);
     expect(claimed[0].deduplicationKey).toContain(':retry:');
+  });
+
+  it('renews the sync-run lease while a Provider request is still running', async () => {
+    const entered = Promise.withResolvers<void>();
+    const providerGate = Promise.withResolvers<void>();
+    const adapters = resolver({
+      ...baseAdapter(),
+      getCurrentSyncCursor: async () => {
+        entered.resolve();
+        await providerGate.promise;
+        return { ok: true, value: { value: 'watermark-1' } };
+      },
+      listMessages: async () => ({ ok: true, value: { messages: [] } }),
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: { kick: vi.fn() },
+    });
+    await service.startSync({ actorId: 'user-1' }, { accountId: 'account-1' });
+    const outbox = await store.claimOutbox(
+      new Date().toISOString(),
+      'heartbeat-outbox-lease',
+      new Date(Date.now() + 10_000).toISOString(),
+      1,
+    );
+    await store.markOutboxPublished(
+      outbox[0].id,
+      outbox[0].leaseToken ?? '',
+      new Date().toISOString(),
+    );
+    const renew = vi.spyOn(store, 'renewSyncRunLease');
+    vi.useFakeTimers({ now: new Date() });
+    const operation = new SyncMailboxOperation({
+      store,
+      adapters,
+      leaseMs: 3_000,
+    });
+
+    const running = operation.execute(outbox[0].payload);
+    await entered.promise;
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(renew).toHaveBeenCalledTimes(1);
+    providerGate.resolve();
+    await running;
+  });
+
+  it('clears an expired Provider cursor so the next sync can rebootstrap', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'expired-cursor' },
+    });
+    const adapters = resolver({
+      ...baseAdapter(),
+      listFolders: async () => ({
+        ok: true,
+        value: { folders: [], completeProviderFolderIds: [] },
+      }),
+      listChanges: async () => ({
+        ok: false,
+        error: {
+          code: 'TEST_SYNC_CURSOR_INVALID',
+          message: 'The cursor expired.',
+          category: 'provider',
+          retryable: false,
+        },
+      }),
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: { kick: vi.fn() },
+    });
+    const created = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1' },
+    );
+    const task = await store.claimOutbox(
+      new Date().toISOString(),
+      'cursor-outbox-lease',
+      new Date(Date.now() + 10_000).toISOString(),
+      1,
+    );
+    await store.markOutboxPublished(
+      task[0].id,
+      task[0].leaseToken ?? '',
+      new Date().toISOString(),
+    );
+    const operation = new SyncMailboxOperation({ store, adapters });
+
+    await operation.execute(task[0].payload);
+    const nextTask = await store.claimOutbox(
+      new Date().toISOString(),
+      'cursor-next-outbox-lease',
+      new Date(Date.now() + 10_000).toISOString(),
+      1,
+    );
+    await operation.execute(nextTask[0].payload);
+
+    expect(await store.getSyncRun(created.id)).toMatchObject({
+      status: 'failed',
+      error: { code: 'TEST_SYNC_CURSOR_INVALID' },
+    });
+    expect(await store.getSyncCursor('account-1')).toBeUndefined();
+    const restarted = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1' },
+    );
+    expect(restarted.mode).toBe('initial');
+  });
+
+  it('marks an account for reauthorization after a terminal auth failure', async () => {
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'failed',
+      error: {
+        code: 'TEST_OAUTH_INVALID_GRANT',
+        message: 'The refresh token was revoked.',
+        category: 'authentication',
+        retryable: false,
+      },
+    }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: { kick: vi.fn() },
+    });
+
+    await service.sendMessage(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [{ address: 'recipient@example.com' }],
+        subject: 'Authentication failure',
+        text: 'Mail body',
+        idempotencyKey: 'auth-failure',
+      },
+    );
+
+    expect(await store.getAccount('account-1')).toMatchObject({
+      status: 'reauthorizationRequired',
+    });
   });
 
   it('ignores a redelivered task after its sync step advanced', async () => {

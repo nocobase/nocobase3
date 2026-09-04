@@ -11,7 +11,9 @@ import type {
   MailProviderContext,
   MailProviderDefinition,
   MailProviderError,
+  MailProviderFolderPage,
   MailProviderListChangesInput,
+  MailProviderListFoldersInput,
   MailProviderListMessagesInput,
   MailProviderMessagePage,
   MailProviderResult,
@@ -19,7 +21,6 @@ import type {
   MailProviderSendResult,
   MailSyncCursor,
   NormalizedMailAttachment,
-  NormalizedMailFolder,
   NormalizedMailMessage,
 } from '@nocobase/app-plugin-mail/server/types';
 
@@ -139,11 +140,18 @@ interface GraphAttachment {
   contentBytes?: string;
 }
 
+interface FolderCursor {
+  readonly pending: readonly string[];
+  readonly providerFolderIds: readonly string[];
+}
+
 interface InitialCursor {
+  readonly phase: 'baseline' | 'history';
   readonly folders: readonly string[];
   readonly folderIndex: number;
   readonly checkpoints: Readonly<Record<string, string>>;
   readonly nextLink?: string;
+  readonly receivedAfter?: string;
 }
 
 interface ChangeCursor {
@@ -151,9 +159,6 @@ interface ChangeCursor {
   readonly folders?: readonly string[];
   readonly folderIndex?: number;
   readonly nextLink?: string;
-  readonly bootstrap?: boolean;
-  readonly receivedAfter?: string;
-  readonly pageSize?: number;
 }
 
 export const microsoftMailProviderDefinition: MailProviderDefinition<MicrosoftMailProviderConfig> =
@@ -311,21 +316,92 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
   }
 
   public async listFolders(
-    signal?: AbortSignal,
-  ): Promise<MailProviderResult<readonly NormalizedMailFolder[]>> {
-    const folders = await this.allFolders(signal);
-    return folders.ok
-      ? {
-          ok: true,
-          value: folders.value.map((folder) => ({
-            providerFolderId: required(folder.id, 'Microsoft folder ID'),
-            type: graphFolderType(folder.displayName),
-            name: folder.displayName ?? '',
-            unreadCount: folder.unreadItemCount,
-            kind: 'folder',
-          })),
-        }
-      : folders;
+    input: MailProviderListFoldersInput,
+  ): Promise<MailProviderResult<MailProviderFolderPage>> {
+    const decoded = input.cursor ? decodeFolderCursor(input.cursor) : undefined;
+    if (input.cursor && !decoded) return invalidSyncCursor();
+    const cursor: FolderCursor = decoded ?? {
+      pending: ['/me/mailFolders?includeHiddenFolders=true&$top=100'],
+      providerFolderIds: [],
+    };
+    const [url, ...remaining] = cursor.pending;
+    if (!url) {
+      return {
+        ok: true,
+        value: {
+          folders: [],
+          completeProviderFolderIds: cursor.providerFolderIds,
+        },
+      };
+    }
+    const page = await this.request<GraphPage<GraphFolder>>(url, {
+      signal: input.signal,
+    });
+    if (!page.ok) return page;
+    const folders = (page.value.value ?? []).map((folder) => ({
+      providerFolderId: required(folder.id, 'Microsoft folder ID'),
+      type: graphFolderType(folder.displayName),
+      name: folder.displayName ?? '',
+      unreadCount: folder.unreadItemCount,
+      kind: 'folder' as const,
+    }));
+    const childUrls = (page.value.value ?? []).flatMap((folder) =>
+      (folder.childFolderCount ?? 0) > 0 && folder.id
+        ? [
+            `/me/mailFolders/${encodeURIComponent(folder.id)}/childFolders?includeHiddenFolders=true&$top=100`,
+          ]
+        : [],
+    );
+    const pending = [
+      ...(page.value['@odata.nextLink'] ? [page.value['@odata.nextLink']] : []),
+      ...remaining,
+      ...childUrls,
+    ];
+    const providerFolderIds = uniqueStrings([
+      ...cursor.providerFolderIds,
+      ...folders.map((folder) => folder.providerFolderId),
+    ]);
+    return {
+      ok: true,
+      value: {
+        folders,
+        nextCursor:
+          pending.length > 0
+            ? encode({ pending, providerFolderIds } satisfies FolderCursor)
+            : undefined,
+        completeProviderFolderIds:
+          pending.length === 0 ? providerFolderIds : undefined,
+      },
+    };
+  }
+
+  public reconcileSyncCursor(
+    syncCursor: MailSyncCursor | undefined,
+    providerFolderIds: readonly string[],
+  ): MailProviderResult<MailSyncCursor> {
+    const cursor = parseGraphCursor(syncCursor);
+    if (!cursor && syncCursor) {
+      return failure(
+        'MICROSOFT_SYNC_CURSOR_INVALID',
+        'Microsoft sync cursor is invalid.',
+        'provider',
+        false,
+      );
+    }
+    const folders = uniqueStrings(providerFolderIds);
+    const checkpoints = Object.fromEntries(
+      Object.entries(cursor?.checkpoints ?? {}).filter(([folderId]) =>
+        folders.includes(folderId),
+      ),
+    );
+    return {
+      ok: true,
+      value: graphCursor({
+        checkpoints,
+        folders,
+        folderIndex: 0,
+      }),
+    };
   }
 
   public async listMessages(
@@ -333,27 +409,109 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
   ): Promise<MailProviderResult<MailProviderMessagePage>> {
     let cursor: InitialCursor | undefined;
     if (input.cursor) {
-      cursor = decode<InitialCursor>(input.cursor);
+      cursor = decodeInitialCursor(input.cursor);
+      if (!cursor) return invalidSyncCursor();
     } else {
-      const folders = input.providerFolderIds?.length
-        ? { ok: true as const, value: input.providerFolderIds }
-        : await this.folderIds(input.signal);
-      if (!folders.ok) return folders;
-      cursor = { folders: folders.value, folderIndex: 0, checkpoints: {} };
+      let folders = input.providerFolderIds ?? [];
+      if (folders.length === 0) {
+        const discovered = await this.listFolders({
+          limit: input.limit ?? 100,
+          signal: input.signal,
+        });
+        if (!discovered.ok) return discovered;
+        if (discovered.value.nextCursor)
+          return failure(
+            'MICROSOFT_FOLDER_SCOPE_REQUIRED',
+            'Microsoft initial sync requires the complete discovered folder scope.',
+            'configuration',
+            false,
+          );
+        folders = discovered.value.completeProviderFolderIds ?? [];
+      }
+      if (folders.length === 0)
+        return failure(
+          'MICROSOFT_FOLDER_SCOPE_REQUIRED',
+          'Microsoft initial sync requires a discovered folder scope.',
+          'configuration',
+          false,
+        );
+      const baseline = parseGraphCursor(input.baselineCursor);
+      cursor = {
+        phase: 'baseline',
+        folders,
+        folderIndex: 0,
+        checkpoints: baseline?.checkpoints ?? {},
+        receivedAfter: input.receivedAfter,
+      };
+    }
+    if (cursor.phase === 'baseline') {
+      if (cursor.folderIndex >= cursor.folders.length) {
+        return {
+          ok: true,
+          value: {
+            messages: [],
+            nextCursor: encode({
+              ...cursor,
+              phase: 'history',
+              folderIndex: 0,
+            } satisfies InitialCursor),
+            syncCursor: graphCursor({
+              checkpoints: cursor.checkpoints,
+              folders: cursor.folders,
+            }),
+          },
+        };
+      }
+      const folderId = cursor.folders[cursor.folderIndex];
+      const page = await this.request<GraphPage<GraphMessage>>(
+        this.latestDeltaUrl(folderId),
+        { signal: input.signal },
+      );
+      if (!page.ok) return page;
+      const deltaLink = page.value['@odata.deltaLink'];
+      if (!deltaLink)
+        return failure(
+          'MICROSOFT_DELTA_LINK_MISSING',
+          'Microsoft latest delta response did not include a checkpoint.',
+          'provider',
+          false,
+        );
+      const checkpoints = {
+        ...cursor.checkpoints,
+        [folderId]: deltaLink,
+      };
+      const folderIndex = cursor.folderIndex + 1;
+      return {
+        ok: true,
+        value: {
+          messages: [],
+          nextCursor: encode({
+            ...cursor,
+            phase:
+              folderIndex >= cursor.folders.length ? 'history' : 'baseline',
+            folderIndex: folderIndex >= cursor.folders.length ? 0 : folderIndex,
+            checkpoints,
+          } satisfies InitialCursor),
+          syncCursor: graphCursor({ checkpoints, folders: cursor.folders }),
+        },
+      };
     }
     if (cursor.folderIndex >= cursor.folders.length) {
       return {
         ok: true,
         value: {
           messages: [],
-          syncCursor: graphCursor({ checkpoints: cursor.checkpoints }),
+          syncCursor: graphCursor({
+            checkpoints: cursor.checkpoints,
+            folders: cursor.folders,
+          }),
         },
       };
     }
     const folderId = cursor.folders[cursor.folderIndex];
     const url =
       cursor.nextLink ??
-      this.deltaUrl(folderId, input.limit ?? 100, input.receivedAfter);
+      this.messageListUrl(folderId, input.limit ?? 100, input.receivedAfter);
     const page = await this.request<GraphPage<GraphMessage>>(url, {
       signal: input.signal,
     });
@@ -363,46 +521,35 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       input.signal,
     );
     if (!normalized.ok) return normalized;
+    const messages = filterReceivedAfter(
+      normalized.value.messages,
+      cursor.receivedAfter,
+    );
     const checkpoints = { ...cursor.checkpoints };
     let folderIndex = cursor.folderIndex;
     const nextLink = page.value['@odata.nextLink'];
     if (!nextLink) {
-      const deltaLink = page.value['@odata.deltaLink'];
-      if (!deltaLink)
-        return failure(
-          'MICROSOFT_DELTA_LINK_MISSING',
-          'Microsoft delta response did not include a checkpoint.',
-          'provider',
-          false,
-        );
-      checkpoints[folderId] = deltaLink;
       folderIndex += 1;
     }
     const finished = folderIndex >= cursor.folders.length && !nextLink;
     return {
       ok: true,
       value: {
-        messages: normalized.value.messages,
+        messages,
         nextCursor: finished
           ? undefined
           : encode({
               folders: cursor.folders,
+              phase: 'history',
               folderIndex,
               checkpoints,
+              receivedAfter: cursor.receivedAfter,
               ...(nextLink ? { nextLink } : {}),
             }),
         syncCursor: graphCursor({
           checkpoints,
           folders: cursor.folders,
-          folderIndex,
-          ...(nextLink ? { nextLink } : {}),
-          ...(!finished
-            ? {
-                bootstrap: true,
-                receivedAfter: input.receivedAfter,
-                pageSize: input.limit ?? 100,
-              }
-            : {}),
+          folderIndex: 0,
         }),
       },
     };
@@ -447,13 +594,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     const requestUrl =
       cursor.nextLink ??
       cursor.checkpoints[folderId] ??
-      (cursor.bootstrap
-        ? this.deltaUrl(
-            folderId,
-            cursor.pageSize ?? input.limit,
-            cursor.receivedAfter,
-          )
-        : undefined);
+      this.deltaUrl(folderId, input.limit);
     if (!requestUrl) {
       return failure(
         'MICROSOFT_SYNC_CURSOR_INVALID',
@@ -474,15 +615,10 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
             false,
           )
         : page;
-    const normalized = cursor.bootstrap
-      ? {
-          ok: true as const,
-          value: {
-            messages: [] as readonly NormalizedMailMessage[],
-            deletedProviderMessageIds: [] as readonly string[],
-          },
-        }
-      : await this.normalizePage(page.value.value ?? [], input.signal);
+    const normalized = await this.normalizePage(
+      page.value.value ?? [],
+      input.signal,
+    );
     if (!normalized.ok) return normalized;
     const checkpoints = { ...cursor.checkpoints };
     const nextLink = page.value['@odata.nextLink'];
@@ -512,13 +648,6 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
             ? {
                 folderIndex: nextIndex,
                 ...(nextLink ? { nextLink } : {}),
-                ...(cursor.bootstrap
-                  ? {
-                      bootstrap: true,
-                      receivedAfter: cursor.receivedAfter,
-                      pageSize: cursor.pageSize,
-                    }
-                  : {}),
               }
             : {}),
         }),
@@ -564,8 +693,16 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
   public async sendMessage(
     input: MailProviderSendInput,
   ): Promise<MailProviderSendResult> {
+    let token: string;
     try {
-      const token = await this.accessToken(input.signal);
+      token = await this.accessToken(input.signal);
+    } catch (error) {
+      return {
+        status: 'failed',
+        error: errorResult(error, 'MICROSOFT_AUTHORIZATION_FAILED'),
+      };
+    }
+    try {
       const response = await fetch(`${graphBase(this.config)}/me/sendMail`, {
         method: 'POST',
         headers: {
@@ -673,47 +810,25 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     };
   }
 
-  private async folderIds(
-    signal?: AbortSignal,
-  ): Promise<MailProviderResult<readonly string[]>> {
-    const folders = await this.allFolders(signal);
-    return folders.ok
-      ? {
-          ok: true,
-          value: folders.value.flatMap((folder) =>
-            folder.id ? [folder.id] : [],
-          ),
-        }
-      : folders;
-  }
-
-  private async allFolders(
-    signal?: AbortSignal,
-  ): Promise<MailProviderResult<readonly GraphFolder[]>> {
-    const output: GraphFolder[] = [];
-    const pending = ['/me/mailFolders?includeHiddenFolders=true&$top=100'];
-    while (pending.length) {
-      let url: string | undefined = pending.shift();
-      while (url) {
-        const page = await this.request<GraphPage<GraphFolder>>(url, {
-          signal,
-        });
-        if (!page.ok) return page;
-        for (const folder of page.value.value ?? []) {
-          output.push(folder);
-          if ((folder.childFolderCount ?? 0) > 0 && folder.id) {
-            pending.push(
-              `/me/mailFolders/${encodeURIComponent(folder.id)}/childFolders?includeHiddenFolders=true&$top=100`,
-            );
-          }
-        }
-        url = page.value['@odata.nextLink'];
-      }
-    }
-    return { ok: true, value: output };
-  }
-
   private deltaUrl(
+    folderId: string,
+    limit: number,
+    _receivedAfter?: string,
+  ): string {
+    const query = new URLSearchParams({
+      $select: MESSAGE_SELECT,
+      $top: String(Math.min(limit, 500)),
+      $orderby: 'receivedDateTime desc',
+    });
+    return `/me/mailFolders/${encodeURIComponent(folderId)}/messages/delta?${query.toString()}`;
+  }
+
+  private latestDeltaUrl(folderId: string): string {
+    const query = new URLSearchParams({ $deltatoken: 'latest' });
+    return `/me/mailFolders/${encodeURIComponent(folderId)}/messages/delta?${query.toString()}`;
+  }
+
+  private messageListUrl(
     folderId: string,
     limit: number,
     receivedAfter?: string,
@@ -721,10 +836,12 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     const query = new URLSearchParams({
       $select: MESSAGE_SELECT,
       $top: String(Math.min(limit, 500)),
+      $orderby: 'receivedDateTime desc',
     });
-    if (receivedAfter)
+    if (receivedAfter) {
       query.set('$filter', `receivedDateTime ge ${receivedAfter}`);
-    return `/me/mailFolders/${encodeURIComponent(folderId)}/messages/delta?${query.toString()}`;
+    }
+    return `/me/mailFolders/${encodeURIComponent(folderId)}/messages?${query.toString()}`;
   }
 
   private async request<T>(
@@ -741,7 +858,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     } catch (error) {
       return {
         ok: false,
-        error: unknownError(error, 'MICROSOFT_REQUEST_FAILED'),
+        error: errorResult(error, 'MICROSOFT_REQUEST_FAILED'),
       };
     }
   }
@@ -763,7 +880,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       },
       signal,
     );
-    if (!refreshed.ok) throw new Error(refreshed.error.message);
+    if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
     const next: MicrosoftCredential = {
       ...credential,
       accessToken: required(
@@ -944,9 +1061,6 @@ function graphCursor(value: ChangeCursor): MailSyncCursor {
       folders: JSON.stringify(value.folders ?? []),
       folderIndex: String(value.folderIndex ?? 0),
       ...(value.nextLink ? { nextLink: value.nextLink } : {}),
-      ...(value.bootstrap ? { bootstrap: 'true' } : {}),
-      ...(value.receivedAfter ? { receivedAfter: value.receivedAfter } : {}),
-      ...(value.pageSize ? { pageSize: String(value.pageSize) } : {}),
     },
     version: 'microsoft-graph-v1',
   };
@@ -962,30 +1076,122 @@ function parseGraphCursor(
     typeof value.checkpoints !== 'string'
   )
     return undefined;
-  const checkpoints = JSON.parse(value.checkpoints) as Record<string, string>;
-  const folders =
-    typeof value.folders === 'string'
-      ? (JSON.parse(value.folders) as readonly string[])
-      : undefined;
-  return {
-    checkpoints,
-    folders,
-    folderIndex: Number(value.folderIndex ?? 0),
-    nextLink: typeof value.nextLink === 'string' ? value.nextLink : undefined,
-    bootstrap: value.bootstrap === 'true',
-    receivedAfter:
-      typeof value.receivedAfter === 'string' ? value.receivedAfter : undefined,
-    pageSize:
-      typeof value.pageSize === 'string' ? Number(value.pageSize) : undefined,
-  };
+  try {
+    const checkpoints: unknown = JSON.parse(value.checkpoints);
+    const folders: unknown =
+      typeof value.folders === 'string' ? JSON.parse(value.folders) : undefined;
+    const folderIndex = Number(value.folderIndex ?? 0);
+    if (
+      !isStringRecord(checkpoints) ||
+      (folders !== undefined && !isStringArray(folders)) ||
+      !Number.isSafeInteger(folderIndex) ||
+      folderIndex < 0
+    ) {
+      return undefined;
+    }
+    return {
+      checkpoints,
+      folders,
+      folderIndex,
+      nextLink: typeof value.nextLink === 'string' ? value.nextLink : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function filterReceivedAfter(
+  messages: readonly NormalizedMailMessage[],
+  receivedAfter: string | undefined,
+): readonly NormalizedMailMessage[] {
+  if (!receivedAfter) return messages;
+  const cutoff = Date.parse(receivedAfter);
+  if (!Number.isFinite(cutoff)) return messages;
+  return messages.filter(
+    (message) =>
+      message.receivedAt !== undefined &&
+      Date.parse(message.receivedAt) >= cutoff,
+  );
+}
+
+function uniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
 }
 
 function encode(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
-function decode<T>(value: string): T {
-  return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as T;
+function decodeFolderCursor(value: string): FolderCursor | undefined {
+  const decoded = decode(value);
+  if (!decoded || typeof decoded !== 'object') return undefined;
+  const record = decoded as Record<string, unknown>;
+  return isStringArray(record.pending) &&
+    isStringArray(record.providerFolderIds)
+    ? {
+        pending: record.pending,
+        providerFolderIds: record.providerFolderIds,
+      }
+    : undefined;
+}
+
+function decodeInitialCursor(value: string): InitialCursor | undefined {
+  const decoded = decode(value);
+  if (!decoded || typeof decoded !== 'object') return undefined;
+  const record = decoded as Record<string, unknown>;
+  const { phase, folders, folderIndex, checkpoints } = record;
+  if (
+    (phase !== 'baseline' && phase !== 'history') ||
+    !isStringArray(folders) ||
+    typeof folderIndex !== 'number' ||
+    !Number.isSafeInteger(folderIndex) ||
+    folderIndex < 0 ||
+    !isStringRecord(checkpoints)
+  ) {
+    return undefined;
+  }
+  const { nextLink, receivedAfter } = record;
+  if (
+    (nextLink !== undefined && typeof nextLink !== 'string') ||
+    (receivedAfter !== undefined && typeof receivedAfter !== 'string')
+  ) {
+    return undefined;
+  }
+  return { phase, folders, folderIndex, checkpoints, nextLink, receivedAfter };
+}
+
+function decode(value: string): unknown {
+  try {
+    return JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'string')
+  );
+}
+
+function isStringRecord(
+  value: unknown,
+): value is Readonly<Record<string, string>> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((item) => typeof item === 'string')
+  );
+}
+
+function invalidSyncCursor<T>(): MailProviderResult<T> {
+  return failure(
+    'MICROSOFT_SYNC_CURSOR_INVALID',
+    'Microsoft sync cursor is invalid.',
+    'provider',
+    false,
+  );
 }
 
 function authority(config: MicrosoftMailProviderConfig): string {
@@ -1051,6 +1257,18 @@ function unknownError(error: unknown, code: string): MailProviderError {
     category: 'network',
     retryable: true,
   };
+}
+
+class ProviderRequestError extends Error {
+  public constructor(public readonly providerError: MailProviderError) {
+    super(providerError.message);
+  }
+}
+
+function errorResult(error: unknown, code: string): MailProviderError {
+  return error instanceof ProviderRequestError
+    ? error.providerError
+    : unknownError(error, code);
 }
 
 function failure<T>(

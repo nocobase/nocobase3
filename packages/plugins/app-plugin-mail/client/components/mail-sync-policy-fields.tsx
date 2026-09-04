@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { Input } from './ui/input.js';
 
 export interface MailSyncPolicyValue {
   readonly receivedAfter: string;
@@ -17,9 +18,6 @@ export interface MailSyncPolicyFieldsProps {
   readonly onChange: (value: MailSyncPolicyValue) => void;
 }
 
-const inputClassName =
-  'mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-50';
-
 export function MailSyncPolicyFields({
   value,
   labels,
@@ -30,8 +28,8 @@ export function MailSyncPolicyFields({
     <div className='grid gap-4 sm:grid-cols-3'>
       <label className='text-sm font-medium'>
         {labels.receivedAfter}
-        <input
-          className={inputClassName}
+        <Input
+          className='mt-1'
           disabled={disabled}
           onChange={(event) =>
             onChange({ ...value, receivedAfter: event.target.value })
@@ -42,8 +40,8 @@ export function MailSyncPolicyFields({
       </label>
       <label className='text-sm font-medium'>
         {labels.maxMessages}
-        <input
-          className={inputClassName}
+        <Input
+          className='mt-1'
           disabled={disabled}
           max={100000}
           min={1}
@@ -64,8 +62,8 @@ export function MailSyncPolicyFields({
       </label>
       <label className='text-sm font-medium'>
         {labels.batchSize}
-        <input
-          className={inputClassName}
+        <Input
+          className='mt-1'
           disabled={disabled}
           max={500}
           min={1}

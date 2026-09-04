@@ -4,7 +4,10 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "rootDir": ".",
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      "@/*": ["./client/*"]
+    }
   },
   "include": [
     "server/**/*.ts",

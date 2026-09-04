@@ -2,6 +2,8 @@ import { PlugZap } from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import type { MailProviderView } from '../mail-client.js';
+import { Button } from './ui/button.js';
+import { Card } from './ui/card.js';
 
 export interface MailProviderCardProps {
   readonly provider: MailProviderView;
@@ -27,7 +29,7 @@ export function MailProviderCard({
     .map(([name]) => name);
 
   return (
-    <article className='flex h-full flex-col rounded-xl border bg-card p-5 shadow-sm'>
+    <Card className='flex h-full flex-col p-5 shadow-sm'>
       <div className='flex items-start justify-between gap-4'>
         <div className='flex min-w-0 items-center gap-3'>
           <span className='grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary'>
@@ -41,7 +43,7 @@ export function MailProviderCard({
           </div>
         </div>
         {connectedAccounts > 0 ? (
-          <span className='rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700'>
+          <span className='rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary'>
             {connectedLabel}
           </span>
         ) : null}
@@ -56,14 +58,14 @@ export function MailProviderCard({
           </span>
         ))}
       </div>
-      <button
-        className='mt-5 inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+      <Button
+        className='mt-5'
         disabled={connecting}
         onClick={() => onConnect(provider)}
-        type='button'
+        variant='outline'
       >
         {connectLabel}
-      </button>
-    </article>
+      </Button>
+    </Card>
   );
 }

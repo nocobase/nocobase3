@@ -9,11 +9,14 @@ import {
 import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
+import { I18nRuntime } from '@nocobase/i18n';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { mailApiRoutes } from '../server/routes/api.js';
 import { mailServiceToken } from '../server/tokens.js';
 import type { MailService, MailSyncRunView } from '../server/types.js';
+import serverLocales from '../server/locales/index.js';
 
 describe('mail API routes', () => {
   it('owns an authentication boundary', async () => {
@@ -31,6 +34,21 @@ describe('mail API routes', () => {
       error: {
         code: 'MAIL_ACCESS_DENIED',
         message: 'Mail settings access is required.',
+      },
+    });
+  });
+
+  it('translates API errors from the request locale', async () => {
+    const router = await createRouter(true, service(), false);
+    const response = await router.request('/mail/accounts', {
+      headers: { 'accept-language': 'zh-CN' },
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'MAIL_ACCESS_DENIED',
+        message: '需要邮件设置访问权限。',
       },
     });
   });
@@ -174,7 +192,7 @@ async function createRouter(
     },
   } as unknown as AppAuthorization);
   container.instance(mailServiceToken, mail);
-  return mailApiRoutes.createRouter({
+  const contribution = await mailApiRoutes.createRouter({
     appName: 'test',
     publicBasePath: '/test',
     config: {
@@ -188,6 +206,16 @@ async function createRouter(
     router: new Hono(),
     container,
   });
+  const runtime = new I18nRuntime({
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
+  });
+  runtime.registerNamespace('@nocobase/app-plugin-mail', serverLocales);
+  await runtime.init();
+  const router = new Hono();
+  router.use('*', createI18nMiddleware(runtime));
+  router.route('/', contribution);
+  return router;
 }
 
 function service(overrides: Partial<MailService> = {}): MailService {
