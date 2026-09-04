@@ -35,6 +35,7 @@ import type {
   RepositoryMutationDescription,
   RepositoryRecord,
   SelectAst,
+  SelectRelationNode,
   SingleMutationResult,
   SortAst,
   UniqueSelector,
@@ -59,13 +60,22 @@ export class DefaultRepository<
 
   async findMany(options: FindManyOptions<TRecord> = {}): Promise<TRecord[]> {
     const collection = await this.collection();
-    const fields = validateSelect(collection, options.select);
-    const filter = normalizeFilter(collection, options.filter, options.context);
-    const sort = validateSort(collection, options.sort);
+    const selection = await this.validateSelect(
+      collection,
+      options.select,
+      options.context,
+    );
+    const filter = await this.normalizeFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
+    const sort = await this.validateSort(collection, options.sort);
     validatePagination(options.limit, options.offset, sort);
     return (await this.options.adapter.findMany({
       collection,
-      fields,
+      fields: selection.fields,
+      select: selection.select,
       filter,
       sort,
       limit: options.limit,
@@ -77,10 +87,18 @@ export class DefaultRepository<
     options: FindOneOptions<TRecord>,
   ): Promise<TRecord | undefined> {
     const collection = await this.collection();
-    const fields = validateSelect(collection, options.select);
-    const filter = normalizeFilter(collection, options.filter, options.context);
-    const sort = validateSort(collection, options.sort);
-    if (!filter && (!sort || sort.items.length === 0)) {
+    const selection = await this.validateSelect(
+      collection,
+      options.select,
+      options.context,
+    );
+    const filter = await this.normalizeFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
+    const sort = await this.validateSort(collection, options.sort);
+    if (!filter && (!options.sort || options.sort.items.length === 0)) {
       invalid(
         'INVALID_FILTER',
         'findOne() requires filter or non-empty sort.',
@@ -91,7 +109,8 @@ export class DefaultRepository<
     }
     return (await this.options.adapter.findOne({
       collection,
-      fields,
+      fields: selection.fields,
+      select: selection.select,
       filter,
       sort,
       limit: 1,
@@ -102,7 +121,11 @@ export class DefaultRepository<
     const collection = await this.collection();
     return this.options.adapter.count({
       collection,
-      filter: normalizeFilter(collection, options.filter, options.context),
+      filter: await this.normalizeFilter(
+        collection,
+        options.filter,
+        options.context,
+      ),
     });
   }
 
@@ -110,7 +133,11 @@ export class DefaultRepository<
     const collection = await this.collection();
     return this.options.adapter.exists({
       collection,
-      filter: normalizeFilter(collection, options.filter, options.context),
+      filter: await this.normalizeFilter(
+        collection,
+        options.filter,
+        options.context,
+      ),
     });
   }
 
@@ -161,7 +188,11 @@ export class DefaultRepository<
     assertWritableCollection(collection);
     if (options.relations) relationNotSupported(collection);
     const values = validateValues(collection, options.values, 'createOne');
-    const requestedFields = validateSelect(collection, options.select);
+    const selection = await this.validateSelect(collection, options.select);
+    if (selection.select?.root.relations?.length) {
+      relationNotSupported(collection, ['select', 'root', 'relations']);
+    }
+    const requestedFields = selection.fields;
     const executionFields = includeExecutionFields(collection, requestedFields);
     const result = await this.options.adapter.createOne({
       collection,
@@ -206,7 +237,11 @@ export class DefaultRepository<
     const unique = validateUnique(collection, options.unique);
     validateIfVersion(collection, options.ifVersion);
     const values = validateValues(collection, options.values, 'updateOne');
-    const requestedFields = validateSelect(collection, options.select);
+    const selection = await this.validateSelect(collection, options.select);
+    if (selection.select?.root.relations?.length) {
+      relationNotSupported(collection, ['select', 'root', 'relations']);
+    }
+    const requestedFields = selection.fields;
     const result = await this.options.adapter.updateOne({
       collection,
       fields: includeExecutionFields(collection, requestedFields),
@@ -229,7 +264,7 @@ export class DefaultRepository<
   ): Promise<UpdateManyResult> {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    const filter = normalizeMutationFilter(
+    const filter = await this.normalizeMutationFilter(
       collection,
       options.filter,
       options.context,
@@ -266,7 +301,7 @@ export class DefaultRepository<
   ): Promise<DeleteManyResult> {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    const filter = normalizeMutationFilter(
+    const filter = await this.normalizeMutationFilter(
       collection,
       options.filter,
       options.context,
@@ -293,6 +328,68 @@ export class DefaultRepository<
       );
     }
     return collection;
+  }
+
+  private async normalizeFilter<T extends object>(
+    collection: CollectionDefinition,
+    input: RepositoryFilter<T> | undefined,
+    context: Readonly<Record<string, unknown>> | undefined,
+  ): Promise<FilterAst | undefined> {
+    return normalizeFilterWithRelations(
+      this.options.collections,
+      collection,
+      input,
+      context,
+    );
+  }
+
+  private async validateSelect(
+    collection: CollectionDefinition,
+    select: SelectAst | undefined,
+    context?: Readonly<Record<string, unknown>>,
+  ): Promise<ValidatedSelect> {
+    return validateSelectWithRelations(
+      this.options.collections,
+      collection,
+      select,
+      context,
+    );
+  }
+
+  private async validateSort(
+    collection: CollectionDefinition,
+    sort: SortAst | undefined,
+  ): Promise<SortAst | undefined> {
+    return validateSortWithRelations(
+      this.options.collections,
+      collection,
+      sort,
+    );
+  }
+
+  private async normalizeMutationFilter<T extends object>(
+    collection: CollectionDefinition,
+    filter: RepositoryFilter<T> | undefined,
+    context: Readonly<Record<string, unknown>> | undefined,
+    all: boolean,
+  ): Promise<FilterAst | undefined> {
+    if (all) {
+      if (filter !== undefined) {
+        invalid('INVALID_FILTER', 'filter and all are mutually exclusive.', {
+          collection: collection.name,
+        });
+      }
+      return undefined;
+    }
+    const normalized = await this.normalizeFilter(collection, filter, context);
+    if (!normalized || normalized.root.items.length === 0) {
+      invalid(
+        'INVALID_FILTER',
+        'Bulk mutations require a non-empty filter or all: true.',
+        { collection: collection.name, path: ['filter'] },
+      );
+    }
+    return normalized;
   }
 
   private async throwUpdateMiss(
@@ -386,7 +483,7 @@ const SORTABLE_TYPES = new Set([
   'time',
 ]);
 
-function normalizeFilter<TRecord extends object>(
+function normalizeScalarFilter<TRecord extends object>(
   collection: CollectionDefinition,
   input: RepositoryFilter<TRecord> | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
@@ -458,9 +555,7 @@ function validateFilterNode(
   if (node.kind === 'group') {
     return validateFilterGroup(collection, node, context, path);
   }
-  if (node.kind === 'relation') relationNotSupported(collection, path);
-  if (node.path.length !== 1)
-    relationNotSupported(collection, [...path, 'path']);
+  if (node.kind === 'relation' || node.path.length !== 1) return node;
   const field = scalarField(collection, node.path[0], [...path, 'path', 0]);
   const builderGroup = getFilterFieldGroup(node);
   if (
@@ -642,7 +737,7 @@ function resolveVariable(
   return current;
 }
 
-function validateSelect(
+function validateScalarSelect(
   collection: CollectionDefinition,
   select: SelectAst | undefined,
 ): string[] {
@@ -665,9 +760,6 @@ function validateSelect(
       path: ['collection'],
     });
   }
-  if (select.root.relations && select.root.relations.length > 0) {
-    relationNotSupported(collection, ['root', 'relations']);
-  }
   const fields =
     select.root.fields ?? scalarFields(collection).map((field) => field.name);
   const seen = new Set<string>();
@@ -689,7 +781,7 @@ function validateSelect(
   return [...fields];
 }
 
-function validateSort(
+function validateScalarSort(
   collection: CollectionDefinition,
   sort: SortAst | undefined,
 ): SortAst | undefined {
@@ -750,6 +842,480 @@ function validateSort(
   return { ...sort, collection: collection.name };
 }
 
+async function normalizeFilterWithRelations<TRecord extends object>(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  input: RepositoryFilter<TRecord> | undefined,
+  context: Readonly<Record<string, unknown>> | undefined,
+): Promise<FilterAst | undefined> {
+  const normalized = normalizeScalarFilter(collection, input, context);
+  if (!normalized) return undefined;
+  return {
+    ...normalized,
+    root: await normalizeRelationFilterGroup(
+      collections,
+      collection,
+      normalized.root,
+      context,
+      ['root'],
+    ),
+  };
+}
+
+async function normalizeRelationFilterGroup(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  group: FilterGroupNode,
+  context: Readonly<Record<string, unknown>> | undefined,
+  path: readonly (string | number)[],
+  inheritedBuilderGroup?: string,
+): Promise<FilterGroupNode> {
+  return {
+    ...group,
+    items: await Promise.all(
+      group.items.map((node, index) =>
+        normalizeRelationFilterNode(
+          collections,
+          collection,
+          node,
+          context,
+          [...path, 'items', index],
+          inheritedBuilderGroup,
+        ),
+      ),
+    ),
+  };
+}
+
+async function normalizeRelationFilterNode(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  node: FilterNode,
+  context: Readonly<Record<string, unknown>> | undefined,
+  path: readonly (string | number)[],
+  inheritedBuilderGroup?: string,
+): Promise<FilterNode> {
+  if (node.kind === 'group') {
+    return normalizeRelationFilterGroup(
+      collections,
+      collection,
+      node,
+      context,
+      path,
+      inheritedBuilderGroup,
+    );
+  }
+  if (node.kind === 'condition') {
+    const builderGroup = inheritedBuilderGroup ?? getFilterFieldGroup(node);
+    if (node.path.length === 1) {
+      const field = scalarField(collection, node.path[0], [...path, 'path', 0]);
+      if (
+        builderGroup !== undefined &&
+        builderGroup !== FILTER_GROUP_BY_TYPE[field.type]
+      ) {
+        invalid(
+          'FIELD_CAPABILITY_NOT_SUPPORTED',
+          `Filter group "${builderGroup}" does not match Field "${field.name}" of type "${field.type}".`,
+          { collection: collection.name, field: field.name, path },
+        );
+      }
+      return validateFilterNode(collection, node, context, path);
+    }
+    const [relationName, ...rest] = node.path;
+    const relation = relationField(collection, relationName, [
+      ...path,
+      'path',
+      0,
+    ]);
+    if (relation.type !== 'belongsTo' && relation.type !== 'hasOne') {
+      invalid(
+        'INVALID_FILTER',
+        'Direct relation paths may traverse to-one relations only.',
+        {
+          collection: collection.name,
+          relation: relation.name,
+          path: [...path, 'path'],
+        },
+      );
+    }
+    const target = await targetCollection(collections, relation, path);
+    const nestedInput: FilterConditionNode = { ...node, path: rest };
+    const nested = await normalizeRelationFilterNode(
+      collections,
+      target,
+      nestedInput,
+      context,
+      path,
+      builderGroup,
+    );
+    return {
+      kind: 'relation',
+      path: [relation.name],
+      quantifier: 'exists',
+      filter: asGroup(nested),
+    };
+  }
+  if (node.path.length !== 1) {
+    invalid(
+      'INVALID_FILTER',
+      'Relation quantifier path must name one relation.',
+      {
+        collection: collection.name,
+        path: [...path, 'path'],
+      },
+    );
+  }
+  const relation = relationField(collection, node.path[0], [
+    ...path,
+    'path',
+    0,
+  ]);
+  const target = await targetCollection(collections, relation, path);
+  if (
+    (node.quantifier === 'some' || node.quantifier === 'none') &&
+    !node.filter
+  ) {
+    invalid('INVALID_FILTER', `${node.quantifier} requires a nested filter.`, {
+      collection: collection.name,
+      relation: relation.name,
+      path: [...path, 'filter'],
+    });
+  }
+  if (node.quantifier !== 'some' && node.quantifier !== 'none' && node.filter) {
+    invalid('INVALID_FILTER', `${node.quantifier} does not accept a filter.`, {
+      collection: collection.name,
+      relation: relation.name,
+      path: [...path, 'filter'],
+    });
+  }
+  return {
+    ...node,
+    filter: node.filter
+      ? await normalizeRelationFilterGroup(
+          collections,
+          target,
+          validateFilterGroup(target, node.filter, context, [
+            ...path,
+            'filter',
+          ]),
+          context,
+          [...path, 'filter'],
+        )
+      : undefined,
+  };
+}
+
+async function validateSelectWithRelations(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  select: SelectAst | undefined,
+  context: Readonly<Record<string, unknown>> | undefined,
+): Promise<ValidatedSelect> {
+  const fields = validateScalarSelect(collection, select);
+  const seen = new Set<string>();
+  const relations: SelectRelationNode[] = [];
+  for (const [index, node] of (select?.root.relations ?? []).entries()) {
+    const path = ['root', 'relations', index] as const;
+    if (node.kind !== 'relation') {
+      invalid('INVALID_SELECT', 'Expected a relation selection node.', {
+        collection: collection.name,
+        path,
+      });
+    }
+    if (seen.has(node.field)) {
+      invalid(
+        'INVALID_SELECT',
+        `Relation "${node.field}" is selected more than once.`,
+        {
+          collection: collection.name,
+          relation: node.field,
+          path,
+        },
+      );
+    }
+    seen.add(node.field);
+    const relation = relationField(collection, node.field, [...path, 'field']);
+    const target = await targetCollection(collections, relation, path);
+    const nested = await validateSelectWithRelations(
+      collections,
+      target,
+      {
+        kind: 'select',
+        version: 1,
+        root: node.select,
+      },
+      context,
+    );
+    const filter = await normalizeFilterWithRelations(
+      collections,
+      target,
+      node.filter,
+      context,
+    );
+    if (
+      node.sort?.items.length &&
+      (relation.type === 'belongsTo' || relation.type === 'hasOne')
+    ) {
+      invalid(
+        'INVALID_SORT',
+        'Relation-local sort is only available for to-many relations.',
+        {
+          collection: collection.name,
+          relation: relation.name,
+          path: [...path, 'sort'],
+        },
+      );
+    }
+    const sort = isToManyRelation(relation)
+      ? await validateSortWithRelations(collections, target, node.sort)
+      : undefined;
+    relations.push({
+      ...node,
+      select: nested.select?.root ?? { ...node.select, fields: nested.fields },
+      filter,
+      sort,
+    });
+  }
+  return {
+    fields,
+    select: select
+      ? {
+          ...select,
+          collection: collection.name,
+          root: { ...select.root, fields, relations },
+        }
+      : undefined,
+  };
+}
+
+interface ValidatedSelect {
+  readonly fields: string[];
+  readonly select?: SelectAst;
+}
+
+async function validateSortWithRelations(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  sort: SortAst | undefined,
+): Promise<SortAst | undefined> {
+  if (!sort) {
+    const fields = primaryFields(collection);
+    return fields.length
+      ? {
+          kind: 'sort',
+          version: 1,
+          collection: collection.name,
+          items: fields.map((field) => ({
+            by: { kind: 'field', field },
+            direction: 'asc',
+          })),
+        }
+      : undefined;
+  }
+  const directItems = sort.items.filter((item) => item.by.kind === 'field');
+  validateScalarSort(collection, { ...sort, items: directItems });
+  const seen = new Set<string>();
+  for (const [index, item] of sort.items.entries()) {
+    if (item.direction !== 'asc' && item.direction !== 'desc') {
+      invalid('INVALID_SORT', 'Sort direction must be asc or desc.', {
+        collection: collection.name,
+        path: ['items', index, 'direction'],
+      });
+    }
+    if (
+      item.nulls !== undefined &&
+      item.nulls !== 'first' &&
+      item.nulls !== 'last'
+    ) {
+      invalid('INVALID_SORT', 'Sort nulls must be first or last.', {
+        collection: collection.name,
+        path: ['items', index, 'nulls'],
+      });
+    }
+    const identity = JSON.stringify(item.by);
+    if (seen.has(identity)) {
+      invalid('INVALID_SORT', 'Sort targets must not be repeated.', {
+        collection: collection.name,
+        path: ['items', index, 'by'],
+      });
+    }
+    seen.add(identity);
+    if (item.by.kind === 'field') continue;
+    let current = collection;
+    let terminal: RelationFieldDefinition | undefined;
+    for (const [relationIndex, name] of item.by.relation.entries()) {
+      terminal = relationField(current, name, [
+        'items',
+        index,
+        'by',
+        'relation',
+        relationIndex,
+      ]);
+      if (
+        item.by.kind === 'relationAggregate' &&
+        relationIndex < item.by.relation.length - 1 &&
+        terminal.type !== 'belongsTo' &&
+        terminal.type !== 'hasOne'
+      ) {
+        invalid(
+          'INVALID_SORT',
+          'relationAggregate may traverse to-one relations before one terminal to-many relation.',
+          {
+            collection: current.name,
+            relation: terminal.name,
+            path: ['items', index, 'by', 'relation', relationIndex],
+          },
+        );
+      }
+      if (
+        item.by.kind === 'relationField' &&
+        terminal.type !== 'belongsTo' &&
+        terminal.type !== 'hasOne'
+      ) {
+        invalid(
+          'INVALID_SORT',
+          'relationField may traverse to-one relations only.',
+          {
+            collection: current.name,
+            relation: terminal.name,
+            path: ['items', index, 'by'],
+          },
+        );
+      }
+      current = await targetCollection(collections, terminal, ['items', index]);
+    }
+    if (!terminal) {
+      invalid('INVALID_SORT', 'Relation sort path must not be empty.', {
+        collection: collection.name,
+        path: ['items', index, 'by', 'relation'],
+      });
+    }
+    if (item.by.kind === 'relationField') {
+      const field = scalarField(current, item.by.field, [
+        'items',
+        index,
+        'by',
+        'field',
+      ]);
+      if (!SORTABLE_TYPES.has(field.type)) {
+        invalid(
+          'FIELD_CAPABILITY_NOT_SUPPORTED',
+          'Relation Field is not sortable.',
+          {
+            collection: current.name,
+            field: field.name,
+            path: ['items', index, 'by', 'field'],
+          },
+        );
+      }
+    } else {
+      if (terminal.type === 'belongsTo' || terminal.type === 'hasOne') {
+        invalid(
+          'INVALID_SORT',
+          'relationAggregate requires a to-many terminal relation.',
+          {
+            collection: collection.name,
+            relation: terminal.name,
+            path: ['items', index, 'by'],
+          },
+        );
+      }
+      if (item.by.aggregate !== 'count') {
+        const field = scalarField(current, item.by.field, [
+          'items',
+          index,
+          'by',
+          'field',
+        ]);
+        const allowed =
+          item.by.aggregate === 'sum' || item.by.aggregate === 'avg'
+            ? FILTER_GROUP_BY_TYPE[field.type] === 'number'
+            : SORTABLE_TYPES.has(field.type);
+        if (!allowed) {
+          invalid(
+            'FIELD_CAPABILITY_NOT_SUPPORTED',
+            `Aggregate "${item.by.aggregate}" is not supported for Field "${field.name}" of type "${field.type}".`,
+            {
+              collection: current.name,
+              field: field.name,
+              path: ['items', index, 'by', 'field'],
+            },
+          );
+        }
+      }
+    }
+  }
+  const items = [...sort.items];
+  const direct = new Set(
+    items.flatMap((item) => (item.by.kind === 'field' ? [item.by.field] : [])),
+  );
+  const alreadyUnique = uniqueConstraints(collection).some((constraint) =>
+    constraint.fields.every((field) => direct.has(field)),
+  );
+  if (!alreadyUnique) {
+    for (const field of primaryFields(collection)) {
+      if (!direct.has(field)) {
+        items.push({ by: { kind: 'field', field }, direction: 'asc' });
+      }
+    }
+  }
+  return { ...sort, collection: collection.name, items };
+}
+
+function primaryFields(collection: CollectionDefinition): string[] {
+  return (
+    uniqueConstraints(collection).find(
+      (constraint) => constraint.type === 'primary',
+    )?.fields ?? []
+  );
+}
+
+function asGroup(node: FilterNode): FilterGroupNode {
+  return node.kind === 'group'
+    ? node
+    : { kind: 'group', logic: 'and', items: [node] };
+}
+
+function relationField(
+  collection: CollectionDefinition,
+  name: string,
+  path: readonly (string | number)[],
+): RelationFieldDefinition {
+  const field = directField(collection, name, path);
+  if (!isRelationField(field)) {
+    invalid('RELATION_NOT_FOUND', `Field "${name}" is not a relation.`, {
+      collection: collection.name,
+      field: name,
+      path,
+    });
+  }
+  return field;
+}
+
+function isToManyRelation(relation: RelationFieldDefinition): boolean {
+  return relation.type === 'hasMany' || relation.type === 'belongsToMany';
+}
+
+async function targetCollection(
+  collections: Pick<ConnectionCollections, 'get'>,
+  relation: RelationFieldDefinition,
+  path: readonly (string | number)[],
+): Promise<CollectionDefinition> {
+  const target = await collections.get(relation.target);
+  if (!target) {
+    invalid(
+      'COLLECTION_NOT_FOUND',
+      `Relation target "${relation.target}" does not exist.`,
+      {
+        collection: relation.target,
+        relation: relation.name,
+        path,
+      },
+    );
+  }
+  return target;
+}
+
 function validatePagination(
   limit: number | undefined,
   offset: number | undefined,
@@ -778,31 +1344,6 @@ function validatePagination(
       path: ['offset'],
     });
   }
-}
-
-function normalizeMutationFilter<TRecord extends object>(
-  collection: CollectionDefinition,
-  filter: RepositoryFilter<TRecord> | undefined,
-  context: Readonly<Record<string, unknown>> | undefined,
-  all: boolean,
-): FilterAst | undefined {
-  if (all) {
-    if (filter !== undefined) {
-      invalid('INVALID_FILTER', 'filter and all are mutually exclusive.', {
-        collection: collection.name,
-      });
-    }
-    return undefined;
-  }
-  const normalized = normalizeFilter(collection, filter, context);
-  if (!normalized || normalized.root.items.length === 0) {
-    invalid(
-      'INVALID_FILTER',
-      'Bulk mutations require a non-empty filter or all: true.',
-      { collection: collection.name, path: ['filter'] },
-    );
-  }
-  return normalized;
 }
 
 function validateValues(

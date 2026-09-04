@@ -2,6 +2,7 @@ import type { CollectionDefinition } from '../../collection/types.js';
 import type {
   FilterAst,
   RepositoryRecord,
+  SelectAst,
   SortAst,
   UniqueSelector,
 } from '../types.js';
@@ -9,6 +10,7 @@ import type {
 export interface RepositoryReadPlan {
   readonly collection: CollectionDefinition;
   readonly fields: readonly string[];
+  readonly select?: SelectAst;
   readonly filter?: FilterAst;
   readonly sort?: SortAst;
   readonly limit?: number;

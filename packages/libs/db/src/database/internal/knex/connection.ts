@@ -167,7 +167,10 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     return new DefaultRepository<TRecord, TCreate, TUpdate>({
       collection,
       collections: this.collections,
-      adapter: new KnexRepositoryExecutionAdapter(() => this.getClient()),
+      adapter: new KnexRepositoryExecutionAdapter(
+        () => this.getClient(),
+        (name) => this.collections.get(name),
+      ),
     });
   }
 

@@ -1,11 +1,11 @@
 ---
 title: Repository 提案
-description: 尚未实现或导出的 Collection-aware Repository 设计；当前生产代码应使用 QueryAdapter。
+description: Collection-aware Repository 的分批实现设计与当前运行时能力。
 ---
 
 # Repository 概览
 
-> **状态：分批实现中。运行时可用性：标量 CRUD 已实现，关系能力尚未实现。** 公共类型、`RepositoryError`、`db.repository()` 和 `connection.repository()` 已导出；关系节点当前返回 capability error。本页其余部分描述完整 V1 目标。
+> **状态：分批实现中。运行时可用性：标量 CRUD 与关系读取已实现。** 公共类型、`RepositoryError`、`db.repository()` 和 `connection.repository()` 已导出；关系 selection、filter 和 sort 可执行，关系 mutation 仍返回 capability error。本页其余部分描述完整 V1 目标。
 
 `Repository` 是未来的应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：
 
@@ -132,7 +132,7 @@ Repository 管理：创建时初始化为 `1`，普通 `values` 不能提供或�
 递增。
 该配置属于补充 Collection metadata，必须持久化在 `CollectionMetadataDocument` 并合并到
 resolved `CollectionDefinition`，不能从物理 Schema 猜测。metadata 校验必须确认 Field
-存在、为直接非空 `integer` 或 `bigInt`，并拒绝 view/materialized view。当前运行时代码尚未实现。
+存在、为直接非空 `integer` 或 `bigInt`，并拒绝 view/materialized view。当前运行时代码已实现该配置、metadata 持久化、校验与标量 mutation 版本递增。
 
 ### 内部执行适配器
 

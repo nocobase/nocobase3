@@ -1,11 +1,11 @@
 ---
 title: Select AST 提案
-description: 尚未实现或导出的 Repository Select AST 设计；仅供设计讨论，不可用于生成生产代码。
+description: Repository Select AST 的设计与当前运行时能力。
 ---
 
 # Select AST
 
-> **状态：分批实现中。运行时可用性：直接标量 selection 已实现。** Relation selection 尚未执行；关系能力当前返回 capability error。
+> **状态：分批实现中。运行时可用性：直接标量与 Relation selection 已实现。** 支持四种关系基数、嵌套 selection、relation-local filter/sort 和批量组装；关系 mutation 尚未实现。
 
 Select AST 是 Repository 查询结果形状的结构化表示。它统一描述根 Collection 的标量
 字段投影、关系加载、嵌套关系投影，以及关系节点自己的筛选和排序。

@@ -1,11 +1,11 @@
 ---
 title: Filter Builder 提案
-description: 尚未实现或导出的 Collection-aware Filter Builder 设计；仅供设计讨论，不可用于生成生产代码。
+description: Collection-aware Filter Builder 的设计与当前运行时能力。
 ---
 
 # Filter Builder
 
-> **状态：分批实现中。运行时可用性：直接标量 Field 已实现。** Relation Filter Builder 节点可构造但尚未执行；关系能力当前返回 capability error。
+> **状态：分批实现中。运行时可用性：直接标量 Field 与 Relation Filter 已实现。** Relation Builder 支持 `some`、`none`、`exists`、`notExists`、`empty` 和 `notEmpty`，关系 mutation 尚未实现。
 
 `Filter Builder` 是未来 Repository 的筛选条件 DSL。它面向 Collection metadata，而不是数据库物理 schema。目标是让开发者和 Agent 都能写出可解释、可校验、可序列化、能跨数据库编译的筛选条件。
 
@@ -285,7 +285,7 @@ Filter Builder V1 不规划：
 
 ## Agent 注意事项
 
-- 本页接口为规划接口，当前代码中尚未实现。
+- 本页 V1 Filter Builder 接口已导出并由 Repository 运行时执行。
 - Agent 写 TypeScript 代码时，优先使用 Filter Builder。
 - Agent 生成 HTTP / CLI / 持久化配置时，可以输出 Filter AST。
 - 选择方法组之前必须先根据 Collection metadata 确认终点字段类型。
