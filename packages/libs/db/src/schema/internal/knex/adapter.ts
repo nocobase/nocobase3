@@ -210,10 +210,16 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     } else {
       switch (column.type) {
         case 'integer':
-          builder = table.integer(column.name);
+          builder =
+            this.dialect === 'oracle'
+              ? table.specificType(column.name, 'number(9, 0)')
+              : table.integer(column.name);
           break;
         case 'bigInt':
-          builder = table.bigInteger(column.name);
+          builder =
+            this.dialect === 'oracle'
+              ? table.specificType(column.name, 'number(18, 0)')
+              : table.bigInteger(column.name);
           break;
         case 'string':
           builder = table.string(column.name, column.length);

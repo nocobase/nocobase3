@@ -13,6 +13,31 @@ import type {
 } from '../../../src/schema/inspector/types.js';
 
 describe('CollectionResolver', () => {
+  it('exposes a portable logical unique constraint for a plain unique index', () => {
+    const result = resolveCollection({
+      physical: physicalCollection({
+        tableName: 'users',
+        columns: [column('id', 1), column('email', 2)],
+        primaryKey: { name: 'users_pkey', columns: ['id'] },
+        indexes: [
+          {
+            name: 'users_email_unique',
+            keys: [{ columnName: 'email' }],
+            unique: true,
+          },
+        ],
+      }),
+      context: emptyContext(),
+    });
+
+    expect(result.collection.constraints).toContainEqual({
+      type: 'unique',
+      fields: ['email'],
+      name: 'users_email_unique',
+      mode: 'index',
+    });
+  });
+
   it('merges valid optimistic lock metadata into a resolved table Collection', () => {
     const result = resolveCollection({
       physical: physicalCollection({

@@ -325,7 +325,8 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     );
     applyUnique(query, collection, unique);
     query.forUpdate();
-    return (await query.first()) as RepositoryRecord | undefined;
+    const rows = (await query) as RepositoryRecord[];
+    return rows[0];
   }
 
   private async createRecord(
@@ -557,7 +558,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       if (
         current !== null &&
         current !== undefined &&
-        current !== sourceValue
+        associationKey(current) !== associationKey(sourceValue)
       ) {
         throw new RepositoryError(
           'RELATION_REASSIGNMENT_REQUIRED',
@@ -680,8 +681,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     sourceUnique: UniqueSelector,
     desired: readonly RepositoryRecord[],
   ): Promise<void> {
-    const desiredValues = new Set(
-      desired.map((target) => target[resolved.targetKey]),
+    const desiredValues = new Map(
+      desired.map((target) => [
+        associationKey(target[resolved.targetKey]),
+        target[resolved.targetKey],
+      ]),
     );
     if (resolved.relation.type === 'belongsToMany') {
       const current = (await tableQuery(this.getClient(), resolved.through!)
@@ -695,7 +699,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           source[resolved.sourceKey] as Knex.Value,
         )) as Array<{ target: unknown }>;
       for (const edge of current) {
-        if (!desiredValues.has(edge.target)) {
+        if (!desiredValues.has(associationKey(edge.target))) {
           await tableQuery(this.getClient(), resolved.through!)
             .where(
               column(resolved.through!, resolved.throughSourceForeignKey!),
@@ -716,7 +720,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
             source[resolved.sourceKey] as Knex.Value,
           )
           .whereNotIn(column(resolved.target, resolved.targetKey), [
-            ...desiredValues,
+            ...desiredValues.values(),
           ] as Knex.Value[])
           .first();
         if (current) relationActionNotAllowed(resolved, 'replace');
@@ -728,7 +732,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         if (desiredValues.size > 0) {
           query = query.whereNotIn(
             column(resolved.target, resolved.targetKey),
-            [...desiredValues] as Knex.Value[],
+            [...desiredValues.values()] as Knex.Value[],
           );
         }
         await query.update({
@@ -901,15 +905,16 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await this.loadRelations(resolved.target, targets, node.select);
     }
 
-    const grouped = new Map<unknown, RepositoryRecord[]>();
+    const grouped = new Map<string, RepositoryRecord[]>();
     for (const target of targets) {
-      const key = target[relationParentHelper(node.field)];
+      const key = associationKey(target[relationParentHelper(node.field)]);
       const group = grouped.get(key) ?? [];
       group.push(projectRow(target, requested, node.select));
       grouped.set(key, group);
     }
     for (const parent of parents) {
-      const matches = grouped.get(parent[relationHelper(node.field)]) ?? [];
+      const matches =
+        grouped.get(associationKey(parent[relationHelper(node.field)])) ?? [];
       parent[node.field] = isToOne(resolved.relation)
         ? (matches[0] ?? null)
         : matches;
@@ -1102,13 +1107,18 @@ function collectionReference(
   collection: CollectionDefinition,
   alias: string,
 ): Knex.Raw {
+  const aliasKeyword = isOracleClient(client) ? ' ' : ' as ';
   return collection.db?.schema
-    ? client.raw('??.?? as ??', [
+    ? client.raw(`??.??${aliasKeyword}??`, [
         collection.db.schema,
         tableName(collection),
         alias,
       ])
-    : client.raw('?? as ??', [tableName(collection), alias]);
+    : client.raw(`??${aliasKeyword}??`, [tableName(collection), alias]);
+}
+
+function isOracleClient(client: Knex): boolean {
+  return (client.client.config as { client?: string }).client === 'oracledb';
 }
 
 function naming(collection: CollectionDefinition): DefaultNamingStrategy {
@@ -1155,6 +1165,13 @@ function uniqueValues(values: readonly unknown[]): unknown[] {
   return [
     ...new Set(values.filter((value) => value !== null && value !== undefined)),
   ];
+}
+
+function associationKey(value: unknown): string {
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'number' || typeof value === 'string')
+    return String(value);
+  return JSON.stringify(value);
 }
 
 function isToOne(relation: RelationFieldDefinition): boolean {
@@ -1705,7 +1722,15 @@ function versionOf(
   record: RepositoryRecord,
 ): string | number | undefined {
   if (!collection.optimisticLock) return undefined;
-  return record[collection.optimisticLock.field] as string | number | undefined;
+  const version = record[collection.optimisticLock.field];
+  if (
+    typeof version === 'string' &&
+    /^-?\d+$/u.test(version) &&
+    Number.isSafeInteger(Number(version))
+  ) {
+    return Number(version);
+  }
+  return version as string | number | undefined;
 }
 
 function firstReturnedRow(value: unknown): RepositoryRecord | undefined {

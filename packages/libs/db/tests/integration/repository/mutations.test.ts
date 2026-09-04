@@ -12,15 +12,15 @@ import {
 
 describeIntegrationDatabases('Repository relation mutations', (context) => {
   it('creates a root with connected, created, and nested relation targets', async () => {
-    await createMutationFixture(context);
+    const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');
 
     const created = await repository.createOne({
       values: { name: 'Repository' },
       relations: (relations) =>
         relations
-          .set('owner', (owner) => owner.connect({ id: 1 }))
-          .set('profile', (profile) => profile.connect({ id: 1 }))
+          .set('owner', (owner) => owner.connect({ id: fixture.ada }))
+          .set('profile', (profile) => profile.connect({ id: fixture.profile }))
           .patch('tasks', (tasks) =>
             tasks.create(
               { title: 'Implement' },
@@ -28,14 +28,14 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
                 clientKey: 'task-local',
                 relations: (nested) =>
                   nested.set('assignee', (assignee) =>
-                    assignee.connect({ id: 2 }),
+                    assignee.connect({ id: fixture.bob }),
                   ),
               },
             ),
           )
           .patch('tags', (tags) =>
             tags
-              .connect({ id: 1 })
+              .connect({ id: fixture.databaseTag })
               .create({ label: 'runtime' }, { clientKey: 'tag-local' }),
           ),
       select: projectSelection(),
@@ -66,16 +66,18 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
   });
 
   it('patches and replaces relations atomically while advancing root version', async () => {
-    await createMutationFixture(context);
+    const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');
     const first = await repository.createOne({
       values: { name: 'Repository' },
       relations: (relations) =>
         relations
-          .set('owner', (owner) => owner.connect({ id: 1 }))
-          .set('profile', (profile) => profile.connect({ id: 1 }))
-          .patch('tasks', (tasks) => tasks.connect({ id: 1 }))
-          .patch('tags', (tags) => tags.connect({ id: 1 })),
+          .set('owner', (owner) => owner.connect({ id: fixture.ada }))
+          .set('profile', (profile) => profile.connect({ id: fixture.profile }))
+          .patch('tasks', (tasks) =>
+            tasks.connect({ id: fixture.implementTask }),
+          )
+          .patch('tags', (tags) => tags.connect({ id: fixture.databaseTag })),
       select: selection(['id']),
     });
 
@@ -84,12 +86,16 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
       ifVersion: 1,
       relations: (relations) =>
         relations
-          .set('owner', (owner) => owner.connect({ id: 2 }))
+          .set('owner', (owner) => owner.connect({ id: fixture.bob }))
           .clear('profile')
           .patch('tasks', (tasks) =>
-            tasks.connect({ id: 2 }).disconnect({ id: 1 }),
+            tasks
+              .connect({ id: fixture.reviewTask })
+              .disconnect({ id: fixture.implementTask }),
           )
-          .replace('tags', (tags) => tags.connect({ id: 2 })),
+          .replace('tags', (tags) =>
+            tags.connect({ id: fixture.typescriptTag }),
+          ),
       select: projectSelection(),
     });
 
@@ -108,7 +114,9 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
         unique: unique('id', first.record.id),
         ifVersion: 1,
         relations: (relations) =>
-          relations.replace('tags', (tags) => tags.connect({ id: 1 })),
+          relations.replace('tags', (tags) =>
+            tags.connect({ id: fixture.databaseTag }),
+          ),
       }),
     ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
     await expect(
@@ -126,18 +134,22 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
   });
 
   it('rejects implicit reassignment and rolls the complete transaction back', async () => {
-    await createMutationFixture(context);
+    const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');
     const first = await repository.createOne({
       values: { name: 'First' },
       relations: (relations) =>
-        relations.patch('tasks', (tasks) => tasks.connect({ id: 1 })),
+        relations.patch('tasks', (tasks) =>
+          tasks.connect({ id: fixture.implementTask }),
+        ),
       select: selection(['id']),
     });
     await repository.createOne({
       values: { name: 'Second' },
       relations: (relations) =>
-        relations.patch('tasks', (tasks) => tasks.connect({ id: 2 })),
+        relations.patch('tasks', (tasks) =>
+          tasks.connect({ id: fixture.reviewTask }),
+        ),
     });
 
     await expect(
@@ -146,7 +158,9 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
         ifVersion: 1,
         values: { name: 'Should roll back' },
         relations: (relations) =>
-          relations.patch('tasks', (tasks) => tasks.connect({ id: 2 })),
+          relations.patch('tasks', (tasks) =>
+            tasks.connect({ id: fixture.reviewTask }),
+          ),
       }),
     ).rejects.toMatchObject({ code: 'RELATION_REASSIGNMENT_REQUIRED' });
     await expect(
@@ -157,7 +171,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
   });
 
   it('describes and validates executable relation capabilities', async () => {
-    await createMutationFixture(context);
+    const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');
 
     await expect(
@@ -172,7 +186,10 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           targetCollection: 'repositoryUsers',
           allowedActions: ['set', 'clear'],
           patchOperations: undefined,
-          uniqueFieldSets: [{ fields: ['id'], primary: true }],
+          uniqueFieldSets: [
+            { fields: ['id'], primary: true },
+            { fields: ['email'], primary: false },
+          ],
         },
         {
           field: 'tasks',
@@ -210,7 +227,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           kind: 'relation',
           field: 'owner',
           action: 'patch',
-          connect: [{ kind: 'connect', by: unique('id', 1) }],
+          connect: [{ kind: 'connect', by: unique('id', fixture.ada) }],
         },
       ],
     };
@@ -229,7 +246,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
 
 async function createMutationFixture(
   context: IntegrationTestContext,
-): Promise<void> {
+): Promise<MutationFixtureIds> {
   await context.builder.createCollections([
     {
       name: 'repositoryUsers',
@@ -291,23 +308,61 @@ async function createMutationFixture(
       },
     },
   ]);
-  await context.db(context.table('repositoryUsers')).insert([
-    { id: 1, name: 'Ada', email: 'ada@example.com' },
-    { id: 2, name: 'Bob', email: 'bob@example.com' },
-  ]);
-  await context.db(context.table('repositoryProjectProfiles')).insert({
-    id: 1,
-    summary: 'Primary project',
-    project_id: null,
+  const users = context.database.repository('repositoryUsers');
+  const profiles = context.database.repository('repositoryProjectProfiles');
+  const tasks = context.database.repository('repositoryTasks');
+  const tags = context.database.repository('repositoryTagsForMutation');
+  const ada = await users.createOne({
+    values: { name: 'Ada', email: 'ada@example.com' },
+    select: selection(['id']),
   });
-  await context.db(context.table('repositoryTasks')).insert([
-    { id: 1, title: 'Implement', project_id: null, assignee_id: 1 },
-    { id: 2, title: 'Review', project_id: null, assignee_id: null },
-  ]);
-  await context.db(context.table('repositoryTagsForMutation')).insert([
-    { id: 1, label: 'database' },
-    { id: 2, label: 'typescript' },
-  ]);
+  const bob = await users.createOne({
+    values: { name: 'Bob', email: 'bob@example.com' },
+    select: selection(['id']),
+  });
+  const profile = await profiles.createOne({
+    values: { summary: 'Primary project', projectId: null },
+    select: selection(['id']),
+  });
+  const implementTask = await tasks.createOne({
+    values: { title: 'Implement', projectId: null },
+    relations: (relations) =>
+      relations.set('assignee', (assignee) =>
+        assignee.connect({ id: ada.record.id }),
+      ),
+    select: selection(['id']),
+  });
+  const reviewTask = await tasks.createOne({
+    values: { title: 'Review', projectId: null },
+    select: selection(['id']),
+  });
+  const databaseTag = await tags.createOne({
+    values: { label: 'database' },
+    select: selection(['id']),
+  });
+  const typescriptTag = await tags.createOne({
+    values: { label: 'typescript' },
+    select: selection(['id']),
+  });
+  return {
+    ada: ada.record.id,
+    bob: bob.record.id,
+    profile: profile.record.id,
+    implementTask: implementTask.record.id,
+    reviewTask: reviewTask.record.id,
+    databaseTag: databaseTag.record.id,
+    typescriptTag: typescriptTag.record.id,
+  };
+}
+
+interface MutationFixtureIds {
+  readonly ada: unknown;
+  readonly bob: unknown;
+  readonly profile: unknown;
+  readonly implementTask: unknown;
+  readonly reviewTask: unknown;
+  readonly databaseTag: unknown;
+  readonly typescriptTag: unknown;
 }
 
 function projectSelection(): SelectAst {

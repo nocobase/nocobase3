@@ -270,34 +270,55 @@ async function createRelationFixture(
     },
   ]);
 
-  await context.db(context.table('repositoryAuthors')).insert([
-    { id: 1, name: 'Ada' },
-    { id: 2, name: 'Bob' },
-    { id: 3, name: 'Cara' },
-  ]);
-  await context.db(context.table('repositoryProfiles')).insert({
-    id: 1,
-    author_id: 1,
-    bio: 'compiler engineer',
+  const authors = context.database.repository('repositoryAuthors');
+  const profiles = context.database.repository('repositoryProfiles');
+  const publishers = context.database.repository('repositoryPublishers');
+  const books = context.database.repository('repositoryBooks');
+  const tags = context.database.repository('repositoryTags');
+  const bookTags = context.database.repository('repositoryBookTags');
+  const ada = await authors.createOne({ values: { name: 'Ada' } });
+  const bob = await authors.createOne({ values: { name: 'Bob' } });
+  await authors.createOne({ values: { name: 'Cara' } });
+  await profiles.createOne({
+    values: { authorId: ada.record.id, bio: 'compiler engineer' },
   });
-  await context.db(context.table('repositoryPublishers')).insert([
-    { id: 1, name: 'North' },
-    { id: 2, name: 'South' },
-  ]);
-  await context.db(context.table('repositoryBooks')).insert([
-    { id: 1, title: 'Alpha', pages: 180, author_id: 1, publisher_id: 1 },
-    { id: 2, title: 'Beta', pages: 260, author_id: 1, publisher_id: null },
-    { id: 3, title: 'Gamma', pages: 90, author_id: 2, publisher_id: 2 },
-  ]);
-  await context.db(context.table('repositoryTags')).insert([
-    { id: 1, label: 'database' },
-    { id: 2, label: 'typescript' },
-  ]);
-  await context.db(context.table('repositoryBookTags')).insert([
-    { id: 1, book_id: 1, tag_id: 1 },
-    { id: 2, book_id: 1, tag_id: 2 },
-    { id: 3, book_id: 3, tag_id: 1 },
-  ]);
+  const north = await publishers.createOne({ values: { name: 'North' } });
+  const south = await publishers.createOne({ values: { name: 'South' } });
+  const alpha = await books.createOne({
+    values: {
+      title: 'Alpha',
+      pages: 180,
+      authorId: ada.record.id,
+      publisherId: north.record.id,
+    },
+  });
+  await books.createOne({
+    values: {
+      title: 'Beta',
+      pages: 260,
+      authorId: ada.record.id,
+      publisherId: null,
+    },
+  });
+  const gamma = await books.createOne({
+    values: {
+      title: 'Gamma',
+      pages: 90,
+      authorId: bob.record.id,
+      publisherId: south.record.id,
+    },
+  });
+  const databaseTag = await tags.createOne({ values: { label: 'database' } });
+  const typescriptTag = await tags.createOne({
+    values: { label: 'typescript' },
+  });
+  await bookTags.createMany({
+    records: [
+      { bookId: alpha.record.id, tagId: databaseTag.record.id },
+      { bookId: alpha.record.id, tagId: typescriptTag.record.id },
+      { bookId: gamma.record.id, tagId: databaseTag.record.id },
+    ],
+  });
 }
 
 function selection(

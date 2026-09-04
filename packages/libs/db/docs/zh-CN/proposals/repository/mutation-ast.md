@@ -5,7 +5,7 @@ description: Repository 关系写入 V1 协议、Fluent Builder、有界嵌套�
 
 # Mutation AST
 
-> **状态：V1 运行时已实现，正在进行多数据库兼容验证。** Relation Mutation Builder/AST、四类关系写入、事务内最终回读、`createdTargets`、有界 nested create、能力描述/校验与 optimistic lock 均可执行。
+> **状态：V1 运行时已实现。** Relation Mutation Builder/AST、四类关系写入、事务内最终回读、`createdTargets`、有界 nested create、能力描述/校验与 optimistic lock 均可执行，并已通过 SQLite、PostgreSQL、MySQL、Oracle 与 MSSQL 集成测试。
 
 Mutation AST 是 Repository 关系写入的规范化协议。V1 只解决两类问题：
 

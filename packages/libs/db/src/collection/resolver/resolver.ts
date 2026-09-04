@@ -89,6 +89,7 @@ export function resolveCollection(
 
   const constraints = resolveConstraints(input, columns, issues);
   const indexes = resolveIndexes(input, columns, issues);
+  addUniqueIndexConstraints(constraints, indexes);
   const relations = resolveRelations(
     input.metadata?.relations,
     columns,
@@ -130,6 +131,42 @@ export function resolveCollection(
     inspection: input.physical.inspection,
     warnings,
   };
+}
+
+function addUniqueIndexConstraints(
+  constraints: ConstraintDefinition[],
+  indexes: readonly IndexDefinition[],
+): void {
+  for (const index of indexes) {
+    if (
+      index.db?.unique !== true ||
+      !index.fields?.length ||
+      index.expressions?.length ||
+      index.predicate ||
+      constraints.some(
+        (constraint) =>
+          constraint.type === 'unique' &&
+          sameFieldSet(constraint.fields, index.fields!),
+      )
+    ) {
+      continue;
+    }
+    constraints.push({
+      type: 'unique',
+      fields: [...index.fields],
+      name: index.name,
+      mode: 'index',
+    });
+  }
+}
+
+function sameFieldSet(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length && left.every((field) => right.includes(field))
+  );
 }
 
 function resolveOptimisticLock(
