@@ -137,14 +137,18 @@ describe('client inspection', () => {
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
     ).toEqual([
-      { id: '@nocobase/app-template-hub:theme', order: 1 },
+      {
+        id: '@nocobase/app-template-hub:document-title',
+        order: 1,
+      },
+      { id: '@nocobase/app-template-hub:theme', order: 2 },
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
-        order: 2,
+        order: 3,
       },
       {
         id: '@nocobase/app-plugin-routes-example:routes-example',
-        order: 3,
+        order: 4,
       },
     ]);
     expect(
