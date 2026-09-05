@@ -3,10 +3,13 @@ import type {
   FieldDefinition,
 } from '../collection/types.js';
 import { RepositoryError } from './errors.js';
+import { resolveMutationValue } from './values.js';
 import type {
   NumericMutationBuilder,
   NumericMutationJsonInput,
   NumericMutationOperand,
+  NumericMutationOperandInput,
+  RepositoryContext,
   NumericMutationOperation,
   RepositoryMutationScalarValue,
 } from './types.js';
@@ -32,16 +35,16 @@ const numericTypes: ReadonlySet<string> = new Set([
 ]);
 
 class DefaultNumericMutationBuilder implements NumericMutationBuilder {
-  increment(value: NumericMutationOperand): NumericMutationJsonInput {
+  increment(value: NumericMutationOperandInput): NumericMutationJsonInput {
     return { increment: value };
   }
-  decrement(value: NumericMutationOperand): NumericMutationJsonInput {
+  decrement(value: NumericMutationOperandInput): NumericMutationJsonInput {
     return { decrement: value };
   }
-  multiply(value: NumericMutationOperand): NumericMutationJsonInput {
+  multiply(value: NumericMutationOperandInput): NumericMutationJsonInput {
     return { multiply: value };
   }
-  divide(value: NumericMutationOperand): NumericMutationJsonInput {
+  divide(value: NumericMutationOperandInput): NumericMutationJsonInput {
     return { divide: value };
   }
 }
@@ -65,12 +68,15 @@ export function normalizeNumericMutation(
   field: FieldDefinition,
   input: unknown,
   updating: boolean,
+  context?: RepositoryContext,
+  path: readonly (string | number)[] = ['values', field.name],
 ): RepositoryMutationScalarValue {
-  const fail = (message: string): never => {
+  const fail = (message: string, variable?: string): never => {
     throw new RepositoryError('INVALID_MUTATION', message, {
       collection: collection.name,
       field: field.name,
-      path: ['values', field.name],
+      path,
+      details: variable ? { variable } : undefined,
     });
   };
   // Objects in JSON fields are always data, including keys named "increment".
@@ -125,7 +131,13 @@ export function normalizeNumericMutation(
   )
     return fail('Expected exactly one numeric update operation.');
   const operation = keys[0] as NumericMutationOperation;
-  const operand: unknown = (value as Record<string, unknown>)[operation];
+  const resolved = resolveMutationValue(
+    (value as Record<string, unknown>)[operation],
+    context,
+    [...path, operation],
+  );
+  const variable = resolved.variable;
+  const operand = resolved.value;
   if (!(
     (typeof operand === 'number' && Number.isFinite(operand)) ||
     typeof operand === 'bigint' ||
@@ -135,6 +147,7 @@ export function normalizeNumericMutation(
   )) {
     return fail(
       'Numeric update operands must be finite numbers, bigint values, or decimal strings.',
+      variable,
     );
   }
   if (
@@ -145,9 +158,9 @@ export function normalizeNumericMutation(
       (typeof operand === 'string' && /^[+-]?\d+$/.test(operand))
     )
   ) {
-    return fail('Integer update operands must be exact integers.');
+    return fail('Integer update operands must be exact integers.', variable);
   }
   if (operation === 'divide' && Number(operand) === 0)
-    return fail('Numeric update division by zero is not allowed.');
+    return fail('Numeric update division by zero is not allowed.', variable);
   return { kind: 'numericMutation', operation, value: operand };
 }

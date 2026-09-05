@@ -119,9 +119,13 @@
         "MigrationTransactionMode",
         "Migrator",
         "MssqlConnectionConfig",
+        "MutationLiteral",
         "MutationScope",
         "MutationValidationError",
         "MutationValidationResult",
+        "MutationValueInput",
+        "MutationValuesInput",
+        "MutationVariable",
         "MysqlConnectionConfig",
         "NestedCreateOptions",
         "NonEmptyRepositorySort",
@@ -131,6 +135,7 @@
         "NumericMutationInput",
         "NumericMutationJsonInput",
         "NumericMutationOperand",
+        "NumericMutationOperandInput",
         "NumericMutationOperation",
         "OptimisticLockDefinition",
         "OracleConnectionConfig",
@@ -186,6 +191,7 @@
         "RepositorySort",
         "RepositoryUniqueFieldSetDescription",
         "Row",
+        "ScalarCreateValues",
         "ScalarUpdateValues",
         "SchemaInspector",
         "SchemaManagementMode",
@@ -231,7 +237,8 @@
         "UpdateRelationFieldMutationInput",
         "UpdateRelationFieldMutationJsonInput",
         "UpsertOneOptions",
-        "ValidateMutationOptions"
+        "ValidateMutationOptions",
+        "ValuesBuilder"
       ]
     }
   }

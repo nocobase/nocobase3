@@ -9,6 +9,11 @@ import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
 import { identityConstraints } from './internal/identity.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
+import {
+  evaluateValues,
+  resolveMutationValue,
+  validateResolvedMutationValue,
+} from './values.js';
 import { jsonOperators, validateJsonCondition } from './json-filter.js';
 import {
   aggregateExpressionToNode,
@@ -65,6 +70,7 @@ import type {
   MutationValidationError,
   MutationValidationResult,
   Repository,
+  RepositoryContext,
   RepositoryCursor,
   RepositoryFilter,
   RepositoryMutationDescription,
@@ -454,8 +460,10 @@ export class DefaultRepository<
       await normalizeModelMutation(
         this.options.collections,
         collection,
-        options.values,
+        evaluateValues(options.values),
         options.operation,
+        1,
+        { nodes: 0, clientKeys: new Set(), context: options.context },
       );
       if (options.operation === 'updateOne') {
         await this.normalizeSingleMutationFilter(
@@ -480,8 +488,10 @@ export class DefaultRepository<
     const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
-      options.values,
+      evaluateValues(options.values),
       'createOne',
+      1,
+      { nodes: 0, clientKeys: new Set(), context: options.context },
     );
     const selection = await this.validateSelect(
       collection,
@@ -529,14 +539,18 @@ export class DefaultRepository<
   > {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    if (options.values.length === 0) {
+    const input = evaluateValues(options.values);
+    if (!Array.isArray(input) || input.length === 0) {
       invalid('INVALID_MUTATION', 'createMany() values must not be empty.', {
         collection: collection.name,
         path: ['values'],
       });
     }
-    const records = options.values.map((record) =>
-      validateValues(collection, record, 'createMany'),
+    const records = input.map((record: unknown, index: number) =>
+      validateValues(collection, record, 'createMany', false, options.context, [
+        'values',
+        index,
+      ]),
     );
     const selection = options.select
       ? await this.validateSelect(collection, options.select, options.context)
@@ -566,8 +580,10 @@ export class DefaultRepository<
     const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
-      options.values,
+      evaluateValues(options.values),
       'updateOne',
+      1,
+      { nodes: 0, clientKeys: new Set(), context: options.context },
     );
     const filter = await this.normalizeSingleMutationFilter(
       collection,
@@ -619,14 +635,20 @@ export class DefaultRepository<
       normalizeModelMutation(
         this.options.collections,
         collection,
-        options.create,
+        evaluateValues(options.create),
         'createOne',
+        1,
+        { nodes: 0, clientKeys: new Set(), context: options.context },
+        ['create'],
       ),
       normalizeModelMutation(
         this.options.collections,
         collection,
-        options.update,
+        evaluateValues(options.update),
         'updateOne',
+        1,
+        { nodes: 0, clientKeys: new Set(), context: options.context },
+        ['update'],
       ),
     ]);
     if (
@@ -712,7 +734,13 @@ export class DefaultRepository<
       options.context,
       options.all === true,
     );
-    const values = validateValues(collection, options.values, 'updateMany');
+    const values = validateValues(
+      collection,
+      evaluateValues(options.values),
+      'updateMany',
+      false,
+      options.context,
+    );
     const selection = options.select
       ? await this.validateSelect(collection, options.select, options.context)
       : undefined;
@@ -2504,6 +2532,7 @@ const MUTATION_LIMITS = { maxDepth: 3, maxNodes: 100 } as const;
 interface MutationValidationState {
   nodes: number;
   readonly clientKeys: Set<string>;
+  readonly context?: RepositoryContext;
 }
 
 interface NormalizedModelMutation {
@@ -2514,10 +2543,11 @@ interface NormalizedModelMutation {
 async function normalizeModelMutation(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
-  input: object | undefined,
+  input: unknown,
   operation: 'createOne' | 'updateOne',
   depth = 1,
   state: MutationValidationState = { nodes: 0, clientKeys: new Set() },
+  path: readonly (string | number)[] = ['values'],
 ): Promise<NormalizedModelMutation> {
   if (!isPlainRecord(input)) {
     invalid('INVALID_MUTATION', 'values must be a plain object.', {
@@ -2549,6 +2579,8 @@ async function normalizeModelMutation(
     scalarValues,
     operation,
     relationItems.length > 0,
+    state.context,
+    path,
   );
   if (relationItems.length === 0) return { values };
   const relations = await normalizeRelationMutation(
@@ -4150,9 +4182,11 @@ function validateDistinct(
 
 function validateValues(
   collection: CollectionDefinition,
-  input: object | undefined,
+  input: unknown,
   operation: 'createOne' | 'createMany' | 'updateOne' | 'updateMany',
   allowEmpty = false,
+  context?: RepositoryContext,
+  path: readonly (string | number)[] = ['values'],
 ): RepositoryRecord {
   if (!isPlainRecord(input)) {
     invalid('INVALID_MUTATION', 'values must be a plain object.', {
@@ -4200,12 +4234,20 @@ function validateValues(
         },
       );
     }
-    normalized[key] = normalizeNumericMutation(
-      collection,
-      field,
-      input[key],
-      operation === 'updateOne' || operation === 'updateMany',
-    );
+    const resolved = resolveMutationValue(input[key], context, [...path, key]);
+    normalized[key] = resolved.expression
+      ? validateResolvedMutationValue(field, resolved, collection.name, [
+          ...path,
+          key,
+        ])
+      : normalizeNumericMutation(
+          collection,
+          field,
+          input[key],
+          operation === 'updateOne' || operation === 'updateMany',
+          context,
+          [...path, key],
+        );
   }
   return normalized;
 }

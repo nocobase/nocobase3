@@ -27,6 +27,27 @@ description: 使用 Repository 创建、更新、删除和 upsert 记录，掌�
 
 ## 创建一条记录
 
+### Values 变量与字面量
+
+根级 `createOne / updateOne / updateMany` 的 values、`upsertOne` 的 create/update 支持同步 callback，callback 接收 ValuesBuilder 并返回字段对象；`createMany.values` 的 callback 返回非空数组。callback 只构造输入，不直接接收 context。
+
+```ts
+await projects.updateOne({
+  filter: { id: 'project-1' },
+  values: (v) => ({
+    name: v.variable('$input.name'),
+    budget: (budget) => budget.increment(v.variable('$input.delta')),
+  }),
+  context: { input: { name: 'Updated project', delta: '10.00' } },
+});
+```
+
+纯 JSON 可使用 `{ kind: 'variable', path: '$input.name' }`。变量缺失、解析为 undefined、类型不匹配或原子操作数非法时，在执行写入前报错。错误携带值的位置和变量路径。根级 upsert 的两个分支都会预先解析与校验，不只检查最终执行的分支。`validateMutation` 的 createOne/updateOne 分支支持同样的 values callback 和 context。
+
+JSON 字段可以整体引用变量，但不会递归解析普通 JSON 内部的变量标记。需要原样保存字段值边界上的变量标记时，使用 `v.literal(value)`，纯 JSON 为 `{ kind: 'literal', value }`。变量解析得到的数据不会再解释成变量或写入操作。不支持字段名、操作名或整个 mutation 结构的变量替换，也不支持异步 values callback。
+
+当前阶段覆盖根级标量赋值、批量写入和原子操作数；嵌套关系与 through payload 的变量支持将在下一阶段补齐。
+
 `createOne` 和 `createMany` 均支持可选 `context`，用于返回 `select` 中各层关系 Filter 的变量解析。变量路径以 `$` 开头，例如 `filter.variable('$viewerCode')` 对应 `context: { viewerCode: 'user-a' }`。context 不自动填充 values、不作为事务对象，也不自动应用权限条件；变量缺失或类型不符合字段要求时，在写入前报错。
 
 ```ts

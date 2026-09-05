@@ -16,23 +16,48 @@ export type RepositoryRecord = Record<string, RepositoryMutationScalarValue>;
 
 export type RepositoryContext = Readonly<Record<string, unknown>>;
 
+export type MutationVariable = FilterVariable;
+
+export interface MutationLiteral<T = RepositoryMutationScalarValue> {
+  readonly kind: 'literal';
+  readonly value: T;
+}
+
+export interface ValuesBuilder {
+  variable(path: string): MutationVariable;
+  literal<T extends RepositoryMutationScalarValue>(
+    value: T,
+  ): MutationLiteral<T>;
+}
+
+export type MutationValueInput<T> = T | MutationVariable | MutationLiteral<T>;
+
+export type MutationValuesInput<T> = T | ((values: ValuesBuilder) => T);
+
+export type ScalarCreateValues<T extends object> = {
+  readonly [K in keyof T]: MutationValueInput<T[K]>;
+};
+
 export type NumericMutationOperand = number | bigint | string;
+
+export type NumericMutationOperandInput =
+  MutationValueInput<NumericMutationOperand>;
 
 export type NumericMutationOperation =
   'increment' | 'decrement' | 'multiply' | 'divide';
 
 export type NumericMutationJsonInput = {
   [TOperation in NumericMutationOperation]: Readonly<
-    Record<TOperation, NumericMutationOperand> &
+    Record<TOperation, NumericMutationOperandInput> &
       Partial<Record<Exclude<NumericMutationOperation, TOperation>, never>>
   >;
 }[NumericMutationOperation];
 
 export interface NumericMutationBuilder {
-  increment(value: NumericMutationOperand): NumericMutationJsonInput;
-  decrement(value: NumericMutationOperand): NumericMutationJsonInput;
-  multiply(value: NumericMutationOperand): NumericMutationJsonInput;
-  divide(value: NumericMutationOperand): NumericMutationJsonInput;
+  increment(value: NumericMutationOperandInput): NumericMutationJsonInput;
+  decrement(value: NumericMutationOperandInput): NumericMutationJsonInput;
+  multiply(value: NumericMutationOperandInput): NumericMutationJsonInput;
+  divide(value: NumericMutationOperandInput): NumericMutationJsonInput;
 }
 
 export type NumericMutationInput =
@@ -41,7 +66,7 @@ export type NumericMutationInput =
 
 export type ScalarUpdateValues<TUpdate extends object> = {
   readonly [TKey in keyof TUpdate]:
-    | TUpdate[TKey]
+    | MutationValueInput<TUpdate[TKey]>
     | (unknown extends TUpdate[TKey]
         ? NumericMutationInput
         : NonNullable<TUpdate[TKey]> extends number | bigint | string
@@ -935,11 +960,17 @@ export type DynamicUpdateMutationInput =
     ) => UpdateRelationFieldMutationBuilder | NumericMutationJsonInput);
 
 export type CreateMutationValues<TCreate extends object> = {
-  readonly [TKey in keyof TCreate]: CreateMutationProperty<TCreate[TKey]>;
+  readonly [TKey in keyof TCreate]:
+    | CreateMutationProperty<TCreate[TKey]>
+    | MutationVariable
+    | MutationLiteral<TCreate[TKey]>;
 };
 
 export type UpdateMutationValues<TUpdate extends object> = {
-  readonly [TKey in keyof TUpdate]: UpdateMutationProperty<TUpdate[TKey]>;
+  readonly [TKey in keyof TUpdate]:
+    | UpdateMutationProperty<TUpdate[TKey]>
+    | MutationVariable
+    | MutationLiteral<TUpdate[TKey]>;
 };
 
 export interface RepositoryReadOptions<
@@ -996,7 +1027,7 @@ export interface CreateOneOptions<
   TCreate extends object,
   TRecord extends object = RepositoryRecord,
 > {
-  readonly values: CreateMutationValues<TCreate>;
+  readonly values: MutationValuesInput<CreateMutationValues<TCreate>>;
   readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
 }
@@ -1005,7 +1036,9 @@ export interface CreateManyOptions<
   TCreate extends object,
   TRecord extends object = RepositoryRecord,
 > {
-  readonly values: readonly [TCreate, ...TCreate[]];
+  readonly values: MutationValuesInput<
+    readonly [ScalarCreateValues<TCreate>, ...ScalarCreateValues<TCreate>[]]
+  >;
   readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
 }
@@ -1021,7 +1054,7 @@ export type UpdateOneOptions<
   readonly select?: RepositorySelect<TRecord>;
   readonly ifVersion?: string | number;
   readonly context?: RepositoryContext;
-  readonly values: UpdateMutationValues<TUpdate>;
+  readonly values: MutationValuesInput<UpdateMutationValues<TUpdate>>;
 };
 
 export type UpsertOneOptions<
@@ -1029,8 +1062,8 @@ export type UpsertOneOptions<
   TUpdate extends object,
   TRecord extends object = RepositoryRecord,
 > = SingleMutationSelector<TRecord> & {
-  readonly create: CreateMutationValues<TCreate>;
-  readonly update: UpdateMutationValues<TUpdate>;
+  readonly create: MutationValuesInput<CreateMutationValues<TCreate>>;
+  readonly update: MutationValuesInput<UpdateMutationValues<TUpdate>>;
   readonly select?: RepositorySelect<TRecord>;
   readonly ifVersion?: string | number;
   readonly context?: RepositoryContext;
@@ -1050,7 +1083,7 @@ export type UpdateManyOptions<
   TRecord extends object,
   TUpdate extends object,
 > = MutationScope<TRecord> & {
-  readonly values: ScalarUpdateValues<TUpdate>;
+  readonly values: MutationValuesInput<ScalarUpdateValues<TUpdate>>;
   readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
 };
@@ -1107,13 +1140,14 @@ export type ValidateMutationOptions<
 > =
   | {
       readonly operation: 'createOne';
-      readonly values: CreateMutationValues<TCreate>;
+      readonly values: MutationValuesInput<CreateMutationValues<TCreate>>;
+      readonly context?: RepositoryContext;
     }
   | ({
       readonly operation: 'updateOne';
       readonly ifVersion?: string | number;
       readonly context?: RepositoryContext;
-      readonly values: UpdateMutationValues<TUpdate>;
+      readonly values: MutationValuesInput<UpdateMutationValues<TUpdate>>;
     } & SingleMutationSelector<TRecord>);
 
 export interface RepositoryUniqueFieldSetDescription {
