@@ -65,6 +65,9 @@ export interface DefaultHubServiceOptions {
 }
 
 export interface HubHostController {
+  restoreDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<{ readonly status: HostStatus }>;
   ensureStarted(): Promise<URL>;
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
@@ -546,7 +549,7 @@ export class DefaultHubService implements HubService {
     ).toString();
     const deploymentSet = await this.createDeploymentSet();
     this.startupReconciliation = this.hostController
-      .applyDeploymentSet(deploymentSet)
+      .restoreDeploymentSet(deploymentSet)
       .then(() => undefined)
       .catch(() => undefined)
       .finally(() => {
@@ -790,13 +793,16 @@ export class DefaultHubService implements HubService {
         };
       return {
         hostAvailable: true,
-        state: item.observedState,
+        state: item.app?.state === 'active' ? 'running' : item.observedState,
         version: item.app?.desiredVersion ?? null,
         startedAt: item.app?.createdAt ?? null,
         lastAccessedAt: item.app?.lastAccessedAt ?? null,
         activeRequests: item.app?.activeRequests ?? 0,
         hostRevision: item.revision,
-        error: item.error ?? item.app?.lastError ?? null,
+        error:
+          item.app?.state === 'active'
+            ? (item.app.lastError ?? null)
+            : (item.error ?? item.app?.lastError ?? null),
       };
     } catch (error) {
       return {
@@ -824,6 +830,7 @@ export class DefaultHubService implements HubService {
     const config = await this.prepareDeploymentConfig(
       app,
       release,
+      id,
       configInput,
       configBinding,
     );
@@ -854,6 +861,7 @@ export class DefaultHubService implements HubService {
   private async prepareDeploymentConfig(
     app: HubAppRecord,
     release: HubReleaseRecord,
+    deploymentId: string,
     input?: SaveHubConfigInput,
     binding?: HubConfigBinding,
   ): Promise<HubConfigBinding> {
@@ -874,9 +882,12 @@ export class DefaultHubService implements HubService {
     }
     content ??= '';
     validateYamlConfig(content);
-    const configPath =
-      binding?.path ??
-      path.join(this.options.config.host.appVolumesDir, app.id, 'config.yml');
+    const configPath = path.join(
+      this.options.config.host.appVolumesDir,
+      app.id,
+      'configs',
+      `config.${deploymentId}.yml`,
+    );
     await writeTextAtomic(configPath, content);
     return { mode: 'file', path: configPath };
   }
@@ -903,11 +914,14 @@ export class DefaultHubService implements HubService {
   private async runDeployment(deploymentId: string): Promise<void> {
     const deployment = await this.getDeploymentById(deploymentId);
     const app = await this.requireApp(deployment.appId);
+    const previous = await this.currentDeployment(app);
+    let rejectedByHost = false;
     await this.updateDeployment(deploymentId, {
       status: 'deploying',
       phase: 'resolving',
       startedAt: new Date(),
       error: null,
+      previousDeploymentId: app.currentDeploymentId,
     });
     try {
       await this.updateDeployment(deploymentId, { phase: 'starting' });
@@ -921,10 +935,12 @@ export class DefaultHubService implements HubService {
       const observed = hostStatus.deployments.find(
         (candidate) => candidate.appId === app.id,
       );
-      if (!observed || observed.observedState === 'failed')
+      if (!observed || observed.observedState === 'failed') {
+        rejectedByHost = observed?.observedState === 'failed' && !observed.app;
         throw new Error(
           observed?.error ?? 'Host did not report deployment status.',
         );
+      }
       const finishedAt = new Date();
       await this.options.database.transaction(async (connection) => {
         await connection.query
@@ -948,6 +964,7 @@ export class DefaultHubService implements HubService {
           .where('id', '=', app.id)
           .execute();
       });
+      if (previous) await this.removeDeploymentConfig(previous);
     } catch (error) {
       await this.updateDeployment(deploymentId, {
         status: 'failed',
@@ -955,7 +972,25 @@ export class DefaultHubService implements HubService {
         error: error instanceof Error ? error.message : String(error),
         finishedAt: new Date(),
       });
+      // An IPC failure can occur after activation. Keep the candidate file
+      // unless the host has explicitly reported that the deployment failed.
+      if (rejectedByHost) await this.removeDeploymentConfig(deployment);
     }
+  }
+
+  private async removeDeploymentConfig(
+    deployment: HubDeploymentRecord,
+  ): Promise<void> {
+    if (deployment.config.mode !== 'file') return;
+    const ownedPath = path.join(
+      this.options.config.host.appVolumesDir,
+      deployment.appId,
+      'configs',
+      `config.${deployment.id}.yml`,
+    );
+    if (deployment.config.path !== ownedPath) return;
+    // Cleanup must not turn a successful deployment into a failed one.
+    await rm(ownedPath, { force: true }).catch(() => undefined);
   }
 
   private async writeHostConfig(): Promise<void> {

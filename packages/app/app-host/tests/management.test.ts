@@ -39,6 +39,40 @@ afterEach(async () => {
 });
 
 describe('managed host reconciliation', () => {
+  it('restores local revisions without reading artifacts and fails when the revision is missing', async () => {
+    const fixture = await createFixture();
+    const options = {
+      mode: 'managed' as const,
+      appDeploymentsDir: fixture.deploymentsDir,
+      appVolumesDir: fixture.volumesDir,
+      artifact: fsArtifact(fixture.artifactDir),
+      evictionIntervalMs: 0,
+    };
+    const initial = createAppHost(options);
+    const set = deploymentSet(1, fixture.artifact, { activation: 'eager' });
+    await initial.management.applyDeploymentSet(set);
+    await initial.close();
+    await rm(path.join(fixture.artifactDir, fixture.artifact.key));
+    const restored = createAppHost(options);
+    hosts.push(restored);
+    expect(
+      (await restored.management.restoreDeploymentSet(set)).status
+        .deployments[0]?.observedState,
+    ).toBe('running');
+    await restored.close();
+    hosts.pop();
+    await rm(revisionDirectory(fixture.deploymentsDir, fixture.artifact), {
+      recursive: true,
+    });
+    const missing = createAppHost(options);
+    hosts.push(missing);
+    const result = await missing.management.restoreDeploymentSet(set);
+    expect(result.status.deployments[0]).toMatchObject({
+      observedState: 'failed',
+      error: expect.stringContaining('Deploy the release again'),
+    });
+  });
+
   it('reports pending while startup is in progress and other Apps are queued', async () => {
     const { deploymentsDir, volumesDir, artifact, artifactDir } =
       await createFixture();

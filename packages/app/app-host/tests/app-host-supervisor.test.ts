@@ -184,6 +184,7 @@ describe('AppHostSupervisor', () => {
         ],
       });
       const previousPid = supervisor.getInfo().pid;
+      await rm(path.join(volumesDir, 'app-artifacts', fixture.artifact.key));
       if (!previousPid) {
         throw new Error('Managed app-host has no process ID');
       }
@@ -195,14 +196,22 @@ describe('AppHostSupervisor', () => {
           supervisor.getInfo().pid !== previousPid,
         10_000,
       );
-      const recovered = await (
-        await supervisor.getManagementClient()
-      ).getStatus();
-      expect(recovered).toMatchObject({
-        ready: true,
-        desiredRevision: 1,
-        reconciledRevision: 1,
-      });
+      await vi.waitFor(
+        async () => {
+          const recovered = await (
+            await supervisor.getManagementClient()
+          ).getStatus();
+          expect(recovered).toMatchObject({
+            ready: true,
+            desiredRevision: 1,
+            reconciledRevision: 1,
+            deployments: [
+              expect.objectContaining({ observedState: 'running' }),
+            ],
+          });
+        },
+        { timeout: 10_000 },
+      );
     } finally {
       await supervisor.shutdown();
       await rm(volumesDir, { recursive: true, force: true });

@@ -308,6 +308,16 @@ export class AppHostSupervisor {
     return result;
   }
 
+  async restoreDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult> {
+    const management = await this.getManagementClient();
+    const result = await management.restoreDeploymentSet(deploymentSet);
+    if (result.accepted)
+      this.lastDeploymentSet = structuredClone(deploymentSet);
+    return result;
+  }
+
   async applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
     const management = await this.getManagementClient();
     const status = await management.applyDeployment(deployment);
@@ -459,7 +469,11 @@ export class AppHostSupervisor {
     try {
       await this.waitForReady(targetUrl);
       if (management && this.lastDeploymentSet) {
-        await management.applyDeploymentSet(this.lastDeploymentSet);
+        void management
+          .restoreDeploymentSet(this.lastDeploymentSet)
+          .catch((error: unknown) => {
+            console.error('Failed to restore app-host applications', error);
+          });
       }
       this.status = 'ready';
       return targetUrl;

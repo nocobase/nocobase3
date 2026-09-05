@@ -274,6 +274,46 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
   });
 
+  it('keeps a surviving runtime running while recording a failed deployment', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const initial = await service.deploy('customer', { releaseId: release.id });
+    await waitForDeployment(service, 'customer', initial.id);
+    const status = createStatus(host.lastDeploymentSet!);
+    status.deployments[0]!.observedState = 'failed';
+    status.deployments[0]!.error = 'New artifact unavailable';
+    status.deployments[0]!.app = {
+      state: 'active',
+      desiredVersion: '1.2.3',
+      lastError: null,
+    } as NonNullable<HostStatus['deployments'][number]['app']>;
+    vi.spyOn(host, 'applyDeployment').mockResolvedValue(status);
+    const management = await host.getManagementClient();
+    vi.spyOn(host, 'getManagementClient').mockResolvedValue({
+      ...management,
+      getStatus: async () => status,
+    });
+    const queued = await service.deploy('customer', { releaseId: release.id });
+    expect(
+      await waitForDeployment(service, 'customer', queued.id),
+    ).toMatchObject({ status: 'failed', error: 'New artifact unavailable' });
+    expect(await service.getApp('customer')).toMatchObject({
+      app: { currentDeploymentId: initial.id },
+      runtime: { state: 'running', error: null },
+    });
+    expect((await service.listApps())[0]?.runtime).toMatchObject({
+      state: 'running',
+      error: null,
+    });
+    status.deployments[0]!.app = null;
+    expect((await service.getApp('customer')).runtime).toMatchObject({
+      state: 'failed',
+      error: 'New artifact unavailable',
+    });
+  });
+
   it('returns valid database dates rather than the Unix epoch', async () => {
     const before = Date.now() - 1_000;
     const detail = await service.createApp({
@@ -673,11 +713,62 @@ describe('@nocobase/app-plugin-hub service', () => {
       config: { mode: 'file', content: 'feature: true\n' },
     });
     const completed = await waitForDeployment(service, 'customer', rollback.id);
+    expect(completed.config.path).not.toBe(first.config.path);
+    expect(path.basename(completed.config.path!)).toBe(
+      `config.${completed.id}.yml`,
+    );
+    await vi.waitFor(async () => {
+      await expect(stat(first.config.path!)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    });
 
-    expect(completed.config).toEqual(first.config);
+    expect(completed.config.mode).toBe(first.config.mode);
     await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
       'feature: true\n',
     );
+  });
+
+  it('isolates pending deployment configuration and cleans rejected candidates', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const initial = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'value: old\n' },
+    });
+    await waitForDeployment(service, 'customer', initial.id);
+    const gate = Promise.withResolvers<void>();
+    vi.spyOn(host, 'applyDeployment').mockImplementationOnce(async (spec) => {
+      await gate.promise;
+      const status = createStatus({ revision: 2, deployments: [spec] });
+      status.deployments[0]!.observedState = 'failed';
+      status.deployments[0]!.error = 'Activation failed';
+      return status;
+    });
+    const candidate = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'value: new\n' },
+    });
+    try {
+      expect(candidate.config.path).not.toBe(initial.config.path);
+      expect(await readFile(initial.config.path!, 'utf8')).toBe('value: old\n');
+      expect(await readFile(candidate.config.path!, 'utf8')).toBe(
+        'value: new\n',
+      );
+    } finally {
+      gate.resolve();
+    }
+    expect(
+      (await waitForDeployment(service, 'customer', candidate.id)).status,
+    ).toBe('failed');
+    await vi.waitFor(async () => {
+      await expect(stat(candidate.config.path!)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    });
+    expect(await readFile(initial.config.path!, 'utf8')).toBe('value: old\n');
   });
 
   it('inherits the target deployment config mode during rollback', async () => {
@@ -770,6 +861,11 @@ async function waitForDeployment(
 }
 
 class FakeHostController implements HubHostController {
+  restoreDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): ReturnType<FakeHostController['applyDeploymentSet']> {
+    return this.applyDeploymentSet(deploymentSet);
+  }
   readonly reloadAppConfig = vi.fn(async (_appId: string) => ({
     changedNamespaces: ['feature'],
   }));
@@ -838,6 +934,10 @@ class FakeHostController implements HubHostController {
   public async getManagementClient(): Promise<HostManagementService> {
     return {
       reloadAppConfig: this.reloadAppConfig,
+      restoreDeploymentSet: async (deploymentSet) => ({
+        accepted: true,
+        status: createStatus(deploymentSet),
+      }),
       applyDeploymentSet: async (deploymentSet) => ({
         accepted: true,
         status: createStatus(deploymentSet),

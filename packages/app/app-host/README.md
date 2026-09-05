@@ -191,6 +191,11 @@ calls the active instance's `config.reload()` under the per-App lifecycle
 lock without replacing the runtime. It returns `null` for an inactive App
 and does not activate it. Configuration reload errors propagate to the caller.
 
+Managed host startup uses `restoreDeploymentSet` to register installed local
+revisions and activate eager Apps asynchronously. Restoration does not download
+or extract artifacts, create Hub deployment records, or prune revisions. Missing
+installed revisions require an explicit deployment. Lazy Apps remain inactive.
+
 The `lifecycle` fixture is a complete lifecycle example. It registers a
 `scope.onBeforeDestroy(...)` hook, registers a `scope.registerDisposer(...)`
 cleanup function, and implements the actual `dispose()` logic.

@@ -43,6 +43,7 @@ export interface ResolvedArtifact {
 }
 
 export interface ArtifactResolver {
+  restore(reference: ArtifactReference): Promise<ResolvedArtifact>;
   resolve(reference: ArtifactReference): Promise<ResolvedArtifact>;
 }
 
@@ -65,6 +66,27 @@ const REVISION_DIRECTORY = 'revisions';
 const DEFAULT_EXPANDED_REVISION_LIMIT = 3;
 
 export class DriveArtifactResolver implements ArtifactResolver {
+  async restore(reference: ArtifactReference): Promise<ResolvedArtifact> {
+    validateArtifactReference(reference);
+    const targetDir = path.join(
+      this.appDeploymentsDir,
+      reference.appId,
+      REVISION_DIRECTORY,
+      reference.checksum.toLowerCase(),
+    );
+    const artifact = await this.resolveInstalledArtifact(
+      reference,
+      targetDir,
+      false,
+      true,
+    );
+    if (!artifact)
+      throw new Error(
+        `Installed revision for app "${reference.appId}" is missing. Deploy the release again.`,
+      );
+    this.activeRevisionByApp.set(reference.appId, targetDir);
+    return artifact;
+  }
   readonly appDeploymentsDir: string;
   readonly localArtifactDir?: string;
   readonly logger?: Logger;

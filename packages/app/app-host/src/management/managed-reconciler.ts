@@ -61,6 +61,16 @@ export class ManagedReconciler {
     return current;
   }
 
+  restoreDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult> {
+    const current = this.operationPromise
+      .catch(() => undefined)
+      .then(() => this.applyDeploymentSetUnlocked(deploymentSet, true));
+    this.operationPromise = current;
+    return current;
+  }
+
   applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
     return this.enqueue(async () => {
       validateDeploymentSet({ revision: 1, deployments: [deployment] });
@@ -186,6 +196,7 @@ export class ManagedReconciler {
 
   private async applyDeploymentSetUnlocked(
     deploymentSet: HostDeploymentSet,
+    restoring: boolean = false,
   ): Promise<ApplyDeploymentSetResult> {
     validateDeploymentSet(deploymentSet);
     for (const spec of deploymentSet.deployments) {
@@ -233,7 +244,7 @@ export class ManagedReconciler {
     }
 
     for (const spec of deploymentSet.deployments) {
-      await this.reconcileDeployment(deploymentSet.revision, spec);
+      await this.reconcileDeployment(deploymentSet.revision, spec, restoring);
     }
     this.reconciledRevision = deploymentSet.revision;
     return { accepted, status: this.getStatus() };
@@ -242,6 +253,7 @@ export class ManagedReconciler {
   private async reconcileDeployment(
     revision: number,
     spec: HostDeploymentSpec,
+    restoring: boolean = false,
   ): Promise<void> {
     if (spec.desiredState === 'stopped') {
       await this.registry.evict(spec.appId, {
@@ -267,7 +279,9 @@ export class ManagedReconciler {
           `App backend "${spec.backend}" is not available on this host`,
         );
       }
-      const artifact = await this.artifactResolver.resolve(spec.artifact);
+      const artifact = restoring
+        ? await this.artifactResolver.restore(spec.artifact)
+        : await this.artifactResolver.resolve(spec.artifact);
       let result;
       try {
         const configPath = spec.config

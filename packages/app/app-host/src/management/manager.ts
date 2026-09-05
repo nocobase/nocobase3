@@ -25,6 +25,9 @@ import type {
 } from './types.ts';
 
 export interface HostManagementService {
+  restoreDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult>;
   reloadAppConfig(appId: string): Promise<AppConfigReloadResult | null>;
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
@@ -49,6 +52,13 @@ type HostModeState =
   | { mode: 'managed'; reconciler: ManagedReconciler };
 
 export class HostManager implements HostManagementService {
+  restoreDeploymentSet(
+    deploymentSet: HostDeploymentSet,
+  ): Promise<ApplyDeploymentSetResult> {
+    if (this.state.mode !== 'managed')
+      throw new Error('Deployment restoration requires managed host mode');
+    return this.state.reconciler.restoreDeploymentSet(deploymentSet);
+  }
   reloadAppConfig(
     appId: string,
   ): ReturnType<HostManagementService['reloadAppConfig']> {
