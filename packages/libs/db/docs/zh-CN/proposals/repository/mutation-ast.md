@@ -504,22 +504,22 @@ Fluent Builder -> RelationMutationAst -> validation -> mutation plan
   -> 前端 initialValues
   -> 用户编辑得到 values 和 changeSet
   -> Form Mutation Compiler
-  -> { values, relations: RelationMutationAst, ifVersion }
+  -> { filter, values, ifVersion }
   -> Repository validate/execute
   -> 返回 SingleMutationResult
 ```
 
 基本映射：
 
-| 表单字段              | 编译结果                                  |
-| --------------------- | ----------------------------------------- |
-| dirty 标量            | 根 `values`                               |
-| dirty to-one selector | identity 改变生成 `set`，清空生成 `clear` |
-| 完整 to-many selector | 用当前完整值生成 `replace`                |
-| 新建关联子表行        | `patch.create`，行内 relation 可递归编译  |
-| 新加入的已有目标      | `patch.connect`                           |
-| 被明确移除的目标      | `patch.disconnect`                        |
-| 未 dirty 字段         | 不生成 mutation                           |
+| 表单字段              | 编译结果                                          |
+| --------------------- | ------------------------------------------------- |
+| dirty 标量            | 根 `values`                                       |
+| dirty to-one selector | 生成字段级 `connect`，清空生成 `disconnect: true` |
+| 完整 to-many selector | 用当前完整值生成字段级 `set`                      |
+| 新建关联子表行        | 字段级 `create`，行内 relation 可递归编译         |
+| 新加入的已有目标      | 字段级 `connect`                                  |
+| 被明确移除的目标      | 字段级 `disconnect`                               |
+| 未 dirty 字段         | 不生成 mutation                                   |
 
 `initialValues` 和当前 `values` 通常都留在前端。`initialValues` 只用于编译用户意图，默认
 不提交给后端，也不能作为并发依据。后端只接收 mutation 和可选 `ifVersion`，并根据

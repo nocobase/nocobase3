@@ -504,7 +504,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           createdTargets,
         );
       } else if (node.delete) {
-        await this.deleteRelatedTarget(resolved, source, node.delete);
+        await this.deleteRelatedTarget(
+          resolved,
+          source,
+          sourceUnique,
+          node.delete,
+        );
       }
       return;
     }
@@ -555,7 +560,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     for (const target of node.delete ?? []) {
-      await this.deleteRelatedTarget(resolved, source, target);
+      await this.deleteRelatedTarget(resolved, source, sourceUnique, target);
     }
   }
 
@@ -628,6 +633,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async deleteRelatedTarget(
     resolved: ResolvedRepositoryRelation,
     source: RepositoryRecord,
+    sourceUnique: UniqueSelector,
     target: RelationDeleteTarget,
   ): Promise<void> {
     const selected = await this.lockRelatedTarget(
@@ -637,7 +643,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     );
     if (selected === 'missing') relationTargetNotFound(resolved);
     if (selected === 'multiple') multipleRelationTargetsMatched(resolved);
-    await this.removeTargetEdgesForDelete(resolved, selected.record);
+    await this.removeTargetEdgesForDelete(
+      resolved,
+      sourceUnique,
+      selected.record,
+    );
     const query = tableQuery(this.getClient(), resolved.target).delete();
     applyUnique(query, resolved.target, selected.unique);
     if (affectedCount(await query) === 0) relationTargetNotFound(resolved);
@@ -645,15 +655,18 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   private async removeTargetEdgesForDelete(
     resolved: ResolvedRepositoryRelation,
+    sourceUnique: UniqueSelector,
     target: RepositoryRecord,
   ): Promise<void> {
     if (resolved.relation.type === 'belongsTo') {
       if (resolved.relation.nullable === false) {
         relationActionNotAllowed(resolved, 'delete');
       }
-      await tableQuery(this.getClient(), resolved.source)
-        .where(resolved.sourceColumn, target[resolved.targetKey] as Knex.Value)
-        .update({ [resolved.sourceColumn]: null });
+      const query = tableQuery(this.getClient(), resolved.source).update({
+        [resolved.sourceColumn]: null,
+      });
+      applyUnique(query, resolved.source, sourceUnique);
+      await query;
       return;
     }
     if (resolved.relation.type === 'belongsToMany') {

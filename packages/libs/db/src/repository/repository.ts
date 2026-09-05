@@ -187,6 +187,12 @@ export class DefaultRepository<
             relation,
             options.operation,
           ),
+          modifyOperations:
+            toOne && options.operation === 'updateOne'
+              ? canDisconnect
+                ? (['update', 'upsert', 'delete'] as const)
+                : (['update', 'upsert'] as const)
+              : undefined,
           patchOperations: toOne
             ? undefined
             : options.operation === 'createOne'
@@ -1531,6 +1537,21 @@ async function relationFieldInputToNode(
     relation,
     path,
   );
+  if (
+    state.delete.length > 0 &&
+    relation.type === 'belongsTo' &&
+    !(await relationCanDisconnect(collections, collection, relation))
+  ) {
+    invalid(
+      'RELATION_ACTION_NOT_ALLOWED',
+      'delete is not allowed through a required belongsTo relation.',
+      {
+        collection: collection.name,
+        relation: relation.name,
+        path: [...path, 'delete'],
+      },
+    );
+  }
   const update = await Promise.all(
     state.update.map((target, index) =>
       relationUpdateInputToTarget(
@@ -1848,7 +1869,6 @@ async function relationDeleteInputToTarget(
   input: RelationDeleteInput,
   path: readonly (string | number)[],
 ): Promise<RelationDeleteTarget> {
-  const filterInput = input.filter;
   if (!isPlainRecord(input)) {
     invalid(
       'INVALID_MUTATION',
@@ -1859,6 +1879,8 @@ async function relationDeleteInputToTarget(
       },
     );
   }
+  const filterInput = input.filter as
+    RepositoryFilter<RepositoryRecord> | undefined;
   const filter = filterInput
     ? await normalizeFilterWithRelations(
         collections,
@@ -2221,6 +2243,21 @@ async function normalizeRelationMutation(
           { collection: collection.name, relation: relation.name, path },
         );
       }
+      if (
+        node.delete &&
+        relation.type === 'belongsTo' &&
+        !(await relationCanDisconnect(collections, collection, relation))
+      ) {
+        invalid(
+          'RELATION_ACTION_NOT_ALLOWED',
+          'delete is not allowed through a required belongsTo relation.',
+          {
+            collection: collection.name,
+            relation: relation.name,
+            path: [...path, 'delete'],
+          },
+        );
+      }
       items.push({
         ...node,
         update: node.update
@@ -2459,13 +2496,13 @@ async function normalizeRelationDeleteTarget(
   filterRequired: boolean,
   path: readonly (string | number)[],
 ): Promise<RelationDeleteTarget> {
-  const filter = target.filter;
   if (!isPlainRecord(target)) {
     invalid('INVALID_MUTATION', 'Expected a relation delete target.', {
       collection: collection.name,
       path,
     });
   }
+  const filter = target.filter as FilterAst | undefined;
   return {
     filter: await normalizeRelationTargetFilter(
       collections,

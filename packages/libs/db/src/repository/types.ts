@@ -675,6 +675,7 @@ export interface RepositoryRelationMutationDescription {
   readonly allowedActions: readonly (
     'set' | 'clear' | 'patch' | 'replace' | 'modify'
   )[];
+  readonly modifyOperations?: readonly ('update' | 'upsert' | 'delete')[];
   readonly patchOperations?: readonly (
     'connect' | 'create' | 'disconnect' | 'update' | 'upsert' | 'delete'
   )[];

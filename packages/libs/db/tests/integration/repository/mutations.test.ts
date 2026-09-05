@@ -487,6 +487,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           cardinality: 'one',
           targetCollection: 'repositoryUsers',
           allowedActions: ['set', 'modify', 'clear'],
+          modifyOperations: ['update', 'upsert', 'delete'],
           patchOperations: undefined,
           uniqueFieldSets: [
             { fields: ['id'], primary: true },
@@ -498,6 +499,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           cardinality: 'many',
           targetCollection: 'repositoryTasks',
           allowedActions: ['patch', 'replace'],
+          modifyOperations: undefined,
           patchOperations: [
             'connect',
             'create',
@@ -516,6 +518,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           cardinality: 'one',
           targetCollection: 'repositoryProjectProfiles',
           allowedActions: ['set', 'modify', 'clear'],
+          modifyOperations: ['update', 'upsert', 'delete'],
           patchOperations: undefined,
           uniqueFieldSets: [{ fields: ['id'], primary: true }],
         },
@@ -524,6 +527,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           cardinality: 'many',
           targetCollection: 'repositoryTagsForMutation',
           allowedActions: ['patch', 'replace'],
+          modifyOperations: undefined,
           patchOperations: [
             'connect',
             'create',

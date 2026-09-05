@@ -1,11 +1,12 @@
 ---
-title: 表单到 Mutation AST 提案
-description: 尚未实现的前端大表单编译流程；将 initialValues、values 和 changeSet 转换为 Repository mutation。
+title: 表单到 Repository Mutation 提案
+description: 前端大表单将 initialValues、values 和 changeSet 编译为模型形状的 Repository values。
 ---
 
-# 表单到 Mutation AST
+# 表单到 Repository Mutation
 
-> **状态：提案配套流程。运行时可用性：未实现。** Mutation 类型契约已导出，Form Mutation Compiler 尚未实现。
+> **状态：编译器尚未实现，Repository 接收契约已实现。** Form Mutation Compiler 应输出
+> 可序列化的模型形状 `values`，不再要求前端构造内部 Relation Mutation AST。
 
 动态大表单不生成 Fluent 代码，也不把原始表单对象直接交给 Repository。前端 Form
 Mutation Compiler 根据字段提交策略生成单记录写入参数：
@@ -15,8 +16,8 @@ Mutation Compiler 根据字段提交策略生成单记录写入参数：
 编辑表单 -> UpdateOneOptions -> repository.updateOne(...)
 ```
 
-两者的核心输出都是 `{ values, relations: RelationMutationAst }`；编辑表单另外携带
-`unique` 和可选 `ifVersion`。`createMany()` 是标量批量创建入口，不承载一张大表单里的
+两者的核心输出都是 `{ values }`；编辑表单另外携带严格单条 `filter` 和可选
+`ifVersion`。`createMany()` 是标量批量创建入口，不承载一张大表单里的
 关系树。
 
 ## 流程
@@ -51,13 +52,13 @@ Mutation Compiler 根据字段提交策略生成单记录写入参数：
 
 表单 schema 必须声明字段语义，编译器不能只靠值的形状猜测：
 
-| 字段类型              | 提交策略   | AST                                           |
-| --------------------- | ---------- | --------------------------------------------- |
-| 普通标量              | 按表单模式 | 新建提交应保存值；编辑只提交实际变化          |
-| to-one selector       | `set`      | identity 改变生成 `set`，主动清空生成 `clear` |
-| 完整 to-many selector | `replace`  | 当前完整列表生成 `replace.targets`            |
-| 局部 relation action  | `patch`    | 显式生成 connect/create/disconnect            |
-| 新建关联子表行        | `create`   | `patch.create`，行内关系可以递归编译          |
+| 字段类型              | 提交策略   | `values` 中的 JSON                                       |
+| --------------------- | ---------- | -------------------------------------------------------- |
+| 普通标量              | 按表单模式 | 新建提交应保存值；编辑只提交实际变化                     |
+| to-one selector       | `connect`  | identity 改变生成 `connect`，清空生成 `disconnect: true` |
+| 完整 to-many selector | `set`      | 当前完整列表生成 `set: selectors`                        |
+| 局部 relation action  | 增量操作   | 显式生成 `connect/create/disconnect`                     |
+| 新建关联子表行        | `create`   | `create` 数组，行内关系继续递归编译                      |
 
 编辑场景中未 dirty 字段不产生 mutation；新建场景则按表单提交策略保留应持久化的默认值。
 显示名称、头像、计算值和 UI 临时状态不参与 relation identity 比较。
@@ -100,54 +101,14 @@ const changeSet = {
 ```json
 {
   "values": {
-    "title": "New title"
-  },
-  "relations": {
-    "kind": "relationMutation",
-    "version": 1,
-    "items": [
-      {
-        "kind": "relation",
-        "field": "customer",
-        "action": "set",
-        "target": {
-          "kind": "connect",
-          "by": {
-            "kind": "unique",
-            "fields": ["id"],
-            "values": { "id": "customer-2" }
-          }
-        }
-      },
-      {
-        "kind": "relation",
-        "field": "tags",
-        "action": "replace",
-        "targets": [
-          {
-            "kind": "connect",
-            "by": {
-              "kind": "unique",
-              "fields": ["id"],
-              "values": { "id": "tag-1" }
-            }
-          },
-          {
-            "kind": "connect",
-            "by": {
-              "kind": "unique",
-              "fields": ["id"],
-              "values": { "id": "tag-3" }
-            }
-          }
-        ]
-      }
-    ]
+    "title": "New title",
+    "customer": { "connect": { "id": "customer-2" } },
+    "tags": { "set": [{ "id": "tag-1" }, { "id": "tag-3" }] }
   }
 }
 ```
 
-多选字段生成 `replace`，让 Repository 在事务内相对于数据库当前集合计算真实差异；前端
+多选字段生成 `set`，让 Repository 在事务内相对于数据库当前集合计算真实差异；前端
 不需要把初始 `[tag-1, tag-2]` 自行换算成 connect/disconnect。
 
 ## 新建子表和多层关系
@@ -165,12 +126,11 @@ const changeSet = {
 }
 ```
 
-编译器生成 `patch.create`，再把 `product` 编译到该 CreateTarget 的嵌套 `relations`。持久化
+编译器生成字段级 `create` 数组，再把 `product` 递归编译为内层字段级 `connect`。持久化
 记录只通过唯一 selector 识别；新行必须使用稳定 `clientKey`，不能使用数组下标。
 
-V1 不把已有子表行的字段变化编译成嵌套 target update。目标记录更新应单独调用目标
-Collection Repository；如果大表单必须原子更新多个已有实体，应在扩展 V1 前单独设计
-compound mutation，而不是把行为隐藏进 relation connect。
+已有子表行可以显式编译为字段级 `update/upsert/delete`，但 to-many 的每项必须带 target
+filter；`upsert.filter` 必须等价于唯一约束。编译器不能从展示值或数组位置推断 target。
 
 ## 完整性与并发
 
@@ -193,11 +153,11 @@ Repository V1 不执行 policy。可信调用边界必须在调用 Repository �
 
 ## 错误映射
 
-Form Mutation Compiler 应保存表单 path 到 AST path 的 source map。例如：
+Form Mutation Compiler 应保存表单 path 到提交 path 的 source map。例如：
 
 ```text
 form: items[item-local-1].product
-AST:  relations.items[1].create[0].relations.items[0].target.by
+values: items.create[0].product.connect
 ```
 
 后端返回结构化 AST 错误后，前端使用该映射把错误定位到具体字段或子表行。创建成功后，
@@ -209,7 +169,7 @@ Repository 返回 `SingleMutationResult`；前端用 `result.createdTargets` 中
 
 - 表单 compiler 和 Repository 是两个边界；Repository 不理解 dirty、控件或 UI 展示值。
 - `initialValues` 默认留在前端，只提交编译后的 mutation 和版本。
-- 完整状态字段使用 `replace`，局部动作使用 `patch`。
+- 完整状态字段使用 `set`，局部动作使用 `connect/create/disconnect/update/upsert/delete`。
 - 未 dirty 字段不生成 mutation；空值不能自动解释为清空。
 - 部分加载列表不得生成 `replace`。
-- V1 只递归编译新建行中的 connect/create，不递归更新或删除已有目标。
+- 已有目标的 update/delete 必须显式携带关系作用域内的 target filter。
