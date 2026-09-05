@@ -2,6 +2,10 @@
 
 This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 Skills here; follow the nearest `AGENTS.md` and repository-local NocoBase 3 Skill instead.
 
+## Before Creating or Updating a Pull Request
+
+Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing. If no changeset is needed, explain why in the PR description; documentation-only, test-only, and other changes that do not affect published output are exempt.
+
 ## Repository Layout
 
 Every published package lives under `packages/`, grouped into six directories by what the package is. The grouping is a convention for readers: pnpm resolves packages by name, so which directory a package sits in changes nothing about how it is depended on or filtered.

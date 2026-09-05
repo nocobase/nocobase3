@@ -1,8 +1,14 @@
 import { I18nProvider } from '@nocobase/i18n/client';
 import { I18nRuntime } from '@nocobase/i18n';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import { LanguageSwitcher } from '@/shell/language-switcher';
 
@@ -29,35 +35,85 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')));
 });
 
+function renderMenu(runtime: I18nRuntime) {
+  return render(
+    <I18nProvider runtime={runtime}>
+      <DropdownMenu>
+        <DropdownMenuTrigger>Account</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <LanguageSwitcher />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </I18nProvider>,
+  );
+}
+
 describe('LanguageSwitcher', () => {
   it('shows the current language by name rather than by locale code', async () => {
     const runtime = await createRuntime(['en-US', 'zh-CN']);
 
-    render(
-      <I18nProvider runtime={runtime}>
-        <LanguageSwitcher />
-      </I18nProvider>,
-    );
+    renderMenu(runtime);
+    screen.getByRole('button', { name: 'Account' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
 
-    const trigger = screen.getByRole('combobox');
+    const trigger = await screen.findByRole('menuitem', {
+      name: /Language\s*English/,
+    });
     expect(trigger).toHaveTextContent('English');
     expect(trigger).not.toHaveTextContent('en-US');
+    await userEvent.click(trigger);
+    expect(
+      await screen.findByRole('menuitemradio', { name: 'English' }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole('menuitemradio', { name: '中文' }),
+    ).not.toBeChecked();
   });
 
   it('switches the language when another is chosen', async () => {
     const runtime = await createRuntime(['en-US', 'zh-CN']);
     const user = userEvent.setup();
 
-    render(
-      <I18nProvider runtime={runtime}>
-        <LanguageSwitcher />
-      </I18nProvider>,
+    renderMenu(runtime);
+    screen.getByRole('button', { name: 'Account' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+
+    await user.click(
+      await screen.findByRole('menuitem', { name: /Language\s*English/ }),
     );
+    // jsdom has no submenu geometry for the pointer safe corridor.
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '中文' }));
 
-    await user.click(screen.getByRole('combobox'));
-    await user.click(await screen.findByRole('option', { name: '中文' }));
+    await waitFor(() => expect(runtime.getLocale()).toBe('zh-CN'));
+    expect(screen.getByRole('menuitem', { name: /语言\s*中文/ })).toBeVisible();
+    expect(
+      await screen.findByRole('menuitemradio', { name: '中文' }),
+    ).toBeChecked();
+  });
 
+  it('supports switching from the keyboard', async () => {
+    const runtime = await createRuntime(['en-US', 'zh-CN']);
+    const user = userEvent.setup();
+    renderMenu(runtime);
+
+    await user.tab();
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('menuitem', { name: /Language\s*English/ }),
+      ).toHaveFocus(),
+    );
+    await user.keyboard('{ArrowRight}');
+    expect(
+      await screen.findByRole('menuitemradio', { name: 'English' }),
+    ).toHaveFocus();
+    await user.keyboard('{ArrowDown}{Enter}');
     expect(runtime.getLocale()).toBe('zh-CN');
+    expect(screen.getByRole('menuitemradio', { name: '中文' })).toBeChecked();
+    await user.keyboard('{Escape}{Escape}');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Account' })).toHaveFocus(),
+    );
   });
 
   it('renders nothing when the application offers one language', async () => {

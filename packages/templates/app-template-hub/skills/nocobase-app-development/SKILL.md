@@ -79,6 +79,8 @@ Everything else — `client/routing/`, `client/shell/`, `client/layouts/`, `clie
 
 When the built-in mechanism genuinely cannot express the requirement, changing that structure is a legitimate answer. Comment what you changed and why the built-in path did not fit, and update `AGENTS.md` and this Skill in the same change so they still describe the real application.
 
+The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
+
 ## Ownership
 
 ```text
