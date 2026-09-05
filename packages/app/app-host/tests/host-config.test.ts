@@ -26,6 +26,20 @@ afterEach(async () => {
 });
 
 describe('loadAppHostConfig', () => {
+  it('uses pretty logging outside production', async () => {
+    const rootDir = await createTempDirectory();
+    const config = await loadAppHostConfig({
+      rootDir,
+      environment: { NODE_ENV: 'development' },
+    });
+    expect(config.logging).toMatchObject({
+      transport: {
+        target: 'pino-pretty',
+        options: { colorize: true, singleLine: true },
+      },
+    });
+  });
+
   it('loads the host namespace from JSON and applies environment overrides', async () => {
     const rootDir = await createTempDirectory();
     await writeFile(

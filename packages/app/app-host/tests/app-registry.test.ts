@@ -7,7 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AppConfig } from '@nocobase/app-server/config';
 
 import { AppRuntimeRegistry } from '../dist/app-registry.js';
 
@@ -31,7 +32,7 @@ function createRegistry(events: string[]): AppRuntimeRegistry {
       scope.registerDisposer('test runtime', () => {
         events.push(`stop:${version}`);
       });
-      return { fetch: () => new Response(version) };
+      return { fetch: () => new Response(version), config: new AppConfig() };
     },
   });
   registries.push(registry);
@@ -39,6 +40,37 @@ function createRegistry(events: string[]): AppRuntimeRegistry {
 }
 
 describe('AppRuntimeRegistry runtime replacement', () => {
+  it('reloads only the active App configuration without replacing its runtime', async () => {
+    const config = new AppConfig();
+    const reload = vi
+      .spyOn(config, 'reload')
+      .mockResolvedValue({ changedNamespaces: ['feature'] });
+    const registry = new AppRuntimeRegistry({
+      startEvictionLoop: false,
+      resolveFactory: () => async () => ({
+        fetch: () => new Response('ok'),
+        config,
+      }),
+    });
+    registries.push(registry);
+    await registry.create('customer');
+    const snapshot = registry.requireSnapshot('customer');
+    await expect(registry.reloadAppConfig('customer')).resolves.toEqual({
+      changedNamespaces: ['feature'],
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(registry.requireSnapshot('customer').version).toBe(snapshot.version);
+    reload.mockRejectedValueOnce(new Error('Invalid configuration'));
+    await expect(registry.reloadAppConfig('customer')).rejects.toThrow(
+      'Invalid configuration',
+    );
+    expect(registry.isActive('customer')).toBe(true);
+    await registry.evict('customer');
+    await expect(registry.reloadAppConfig('customer')).resolves.toBeNull();
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(registry.isActive('customer')).toBe(false);
+  });
+
   it('stops the current runtime before activating its replacement', async () => {
     const events: string[] = [];
     const registry = createRegistry(events);

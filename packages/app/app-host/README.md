@@ -178,14 +178,18 @@ Server artifacts should export `createServer(scope)`. The host still accepts
 `createApp(scope)`, `default(scope)`, `createApp()`, and the old
 `createApi(scope)` export during the v3 transition.
 
-The returned app object should expose `fetch(request)` and may expose
-`websocket(request)`. App-created resources should be released through
+The returned app object must implement `AppInstance` from
+`@nocobase/app-server/runtime`: `fetch`, `config`, and optional `websocket`.
+NocoBase `Application` implements this contract directly.
+App-created resources should be released through
 `scope.registerDisposer(name, dispose)`.
 
 The host and App Server share this contract and its `ws`-backed Node adapter
-through `@nocobase/app-websocket`. The Host does not depend on
-`@nocobase/app-server`; compatible App servers are loaded through the
-structural `fetch` and optional `websocket` contract.
+through `@nocobase/app-websocket`. The Host imports App Server types only;
+it does not load its runtime module. `management.reloadAppConfig(appId)`
+calls the active instance's `config.reload()` under the per-App lifecycle
+lock without replacing the runtime. It returns `null` for an inactive App
+and does not activate it. Configuration reload errors propagate to the caller.
 
 The `lifecycle` fixture is a complete lifecycle example. It registers a
 `scope.onBeforeDestroy(...)` hook, registers a `scope.registerDisposer(...)`

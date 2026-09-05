@@ -8,21 +8,12 @@
  */
 
 import type { AppState } from './events.ts';
-import type {
-  AppWebSocketAcceptResult,
-  AppWebSocketHandler,
-} from '@nocobase/app-websocket';
+import type { AppInstance } from '@nocobase/app-server/runtime';
+import type { AppConfigReloadResult } from '@nocobase/app-server/config';
+export type { AppInstance } from '@nocobase/app-server/runtime';
+import type { AppWebSocketAcceptResult } from '@nocobase/app-websocket';
 
 export type AppDisposer = () => void | Promise<void>;
-
-export interface FetchApp {
-  fetch(
-    request: Request,
-    env?: unknown,
-    executionCtx?: unknown,
-  ): Response | Promise<Response>;
-  websocket?: AppWebSocketHandler;
-}
 
 export interface AppScope {
   readonly id: string;
@@ -44,7 +35,9 @@ export interface AppScope {
   onBeforeDestroy(handler: () => void | Promise<void>): () => void;
 }
 
-export type AppFactory = (scope: AppScope) => FetchApp | Promise<FetchApp>;
+export type AppFactory = (
+  scope: AppScope,
+) => AppInstance | Promise<AppInstance>;
 
 export type AppBackendKind =
   'in-process' | 'worker' | 'process' | 'external-service';
@@ -180,6 +173,7 @@ export interface AppSnapshot {
 }
 
 export interface ActiveAppHandle {
+  reloadConfig(): Promise<AppConfigReloadResult>;
   readonly id: string;
   readonly version: number;
   readonly basePath: string;

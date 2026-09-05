@@ -366,7 +366,7 @@ export default function HubPage(): ReactElement {
   useEffect(() => {
     if (!selectedAppId) return;
     let cancelled = false;
-    const key = `${selectedAppId}:${tab}:${refreshVersion}:${selectedCurrentDeploymentId}`;
+    const key = `${selectedAppId}:${tab}`;
     const load = async (): Promise<void> => {
       if (tab === 'deployments') {
         const response = await client.request<
@@ -471,10 +471,7 @@ export default function HubPage(): ReactElement {
         ) : (
           <Detail
             app={selected}
-            panelLoading={
-              panelKey !==
-              `${selectedAppId}:${tab}:${refreshVersion}:${selectedCurrentDeploymentId}`
-            }
+            panelLoading={panelKey !== `${selectedAppId}:${tab}`}
             tab={tab}
             release={release}
             configMode={configMode}
@@ -1910,6 +1907,7 @@ function Configuration({
 }): ReactElement {
   const source = CONFIG_MODES.find((item) => item.value === mode);
   const [draft, setDraft] = useState(content);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const validationError = validateConfigDocument(draft);
   const changed = draft !== content;
   return (
@@ -1941,16 +1939,13 @@ function Configuration({
             error={validationError}
             summary={summarizeConfigChanges('file', 'file', content, draft)}
           />
-          <p className='text-xs text-muted-foreground'>
-            Saved changes take effect the next time the application starts or is
-            deployed.
-          </p>
+          <ConfigReloadNotice />
           <div className='flex justify-end'>
             <Button
               disabled={busy || !changed || validationError !== null}
-              onClick={() => onSave(draft)}
+              onClick={() => setReviewOpen(true)}
             >
-              {busy ? 'Saving…' : 'Save'}
+              {busy ? 'Publishing…' : 'Save and publish'}
             </Button>
           </div>
         </div>
@@ -1965,6 +1960,87 @@ function Configuration({
           </AlertDescription>
         </Alert>
       ) : null}
+      {reviewOpen ? (
+        <AppDialog
+          wide
+          title='Review configuration changes'
+          description='Review the current and new configuration before publishing. This reloads configuration without restarting the application.'
+          onClose={() => setReviewOpen(false)}
+        >
+          <ConfigChangesReview
+            current={content}
+            value={draft}
+            baselineMode={mode}
+            validationError={validationError}
+            expanded
+          />
+          <div className='mt-4'>
+            <ConfigReloadNotice />
+          </div>
+          <div className='mt-7 flex justify-between gap-2'>
+            <Button variant='outline' onClick={() => setReviewOpen(false)}>
+              Back
+            </Button>
+            <Button
+              disabled={busy || !changed || validationError !== null}
+              onClick={() => {
+                setReviewOpen(false);
+                onSave(draft);
+              }}
+            >
+              Save and publish
+            </Button>
+          </div>
+        </AppDialog>
+      ) : null}
+    </div>
+  );
+}
+
+function ConfigReloadNotice(): ReactElement {
+  return (
+    <Alert>
+      <Info />
+      <AlertDescription>
+        Configuration reload does not restart the application. Services that
+        support live updates apply changes immediately. Other changes take
+        effect after the application restarts. Stopped applications load the
+        configuration on next start.
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+function ConfigChangesReview({
+  current,
+  value,
+  baselineMode,
+  validationError,
+  expanded = false,
+}: {
+  readonly current: string;
+  readonly value: string;
+  readonly baselineMode: ConfigMode;
+  readonly validationError: string | null;
+  readonly expanded?: boolean;
+}): ReactElement {
+  return (
+    <div className='space-y-4'>
+      <ConfigStatus
+        error={validationError}
+        summary={summarizeConfigChanges(baselineMode, 'file', current, value)}
+      />
+      <details className='overflow-hidden rounded-lg border' open={expanded}>
+        <summary className='cursor-pointer bg-muted/20 px-3 py-2 text-sm font-medium'>
+          Review configuration changes
+        </summary>
+        <Suspense fallback={<ConfigEditorFallback />}>
+          <ConfigUnifiedDiff
+            current={baselineMode === 'file' ? current : ''}
+            value={value}
+          />
+        </Suspense>
+      </details>
     </div>
   );
 }
@@ -2239,18 +2315,12 @@ function DeploymentDialog({
                     </p>
                   </div>
                 </div>
-                <ConfigStatus error={validationError} summary={summary} />
-                <details className='overflow-hidden rounded-lg border'>
-                  <summary className='cursor-pointer bg-muted/20 px-3 py-2 text-sm font-medium'>
-                    Review configuration changes
-                  </summary>
-                  <Suspense fallback={<ConfigEditorFallback />}>
-                    <ConfigUnifiedDiff
-                      current={baselineMode === 'file' ? baselineContent : ''}
-                      value={content}
-                    />
-                  </Suspense>
-                </details>
+                <ConfigChangesReview
+                  current={baselineContent}
+                  value={content}
+                  baselineMode={baselineMode}
+                  validationError={validationError}
+                />
               </div>
             ) : (
               <div className='p-4'>

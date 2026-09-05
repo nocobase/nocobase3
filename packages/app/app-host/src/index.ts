@@ -101,6 +101,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const logging = createLogging(
     options.logging ?? {
       default: 'host',
+      name: 'app-host',
       level: 'info',
       base: { service: 'app-host' },
     },

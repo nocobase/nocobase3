@@ -310,6 +310,16 @@ export class DefaultHubService implements HubService {
       }
       validateYamlConfig(input.content);
       await writeTextAtomic(this.configPath(deployment), input.content);
+      try {
+        const management = await this.hostController.getManagementClient();
+        await management.reloadAppConfig(appId);
+      } catch (error) {
+        throw new HubError(
+          `Configuration was saved, but runtime configuration reload failed: ${error instanceof Error ? error.message : String(error)}`,
+          'CONFIG_RELOAD_FAILED',
+          503,
+        );
+      }
       return await this.readConfig(appId);
     });
   }

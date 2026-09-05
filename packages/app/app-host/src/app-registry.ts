@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { AppConfigReloadResult } from '@nocobase/app-server/config';
 import {
   InvalidAppIdError,
   AppCapacityExceededError,
@@ -305,6 +306,13 @@ export class AppRuntimeRegistry {
     }
 
     return evicted;
+  }
+
+  async reloadAppConfig(id: string): Promise<AppConfigReloadResult | null> {
+    return this.withAppLock(id, async () => {
+      const runtime = this.runtimes.get(id);
+      return runtime ? await runtime.reloadConfig() : null;
+    });
   }
 
   async reload(

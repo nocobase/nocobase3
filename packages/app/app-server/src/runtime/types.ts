@@ -1,4 +1,5 @@
 import type { EnvMap } from '../config/index.js';
+import type { AppConfigAccessor } from '../config/index.js';
 import type { ApplicationFetchHandler } from '../application/index.js';
 import type { AppWebSocketHandler } from '@nocobase/app-websocket';
 
@@ -11,6 +12,10 @@ export interface AppLifecycle {
 export interface AppServer {
   readonly fetch: ApplicationFetchHandler;
   websocket?: AppWebSocketHandler;
+}
+
+export interface AppInstance extends AppServer {
+  readonly config: AppConfigAccessor;
 }
 
 export interface AppPathOptions {

@@ -20,7 +20,7 @@ import type {
   AppDefinition,
   AppDisposer,
   AppDestroyOptions,
-  FetchApp,
+  AppInstance,
   AppRequestMetadata,
   AppScope,
   AppSnapshot,
@@ -60,7 +60,11 @@ export class InProcessAppHandle implements AppScope, ActiveAppHandle {
   readonly isolation: AppDefinition['isolation'];
   readonly tier: AppDefinition['tier'];
   readonly events: AppEventBus = new AppEventBus();
-  app!: FetchApp;
+  app!: AppInstance;
+
+  reloadConfig(): ReturnType<AppInstance['config']['reload']> {
+    return this.app.config.reload();
+  }
 
   private readonly globalEvents: AppEventBus;
   private readonly abortController = new AbortController();

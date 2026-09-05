@@ -19,6 +19,7 @@ import type {
 const IPC_CHANNEL = 'nocobase-app-host';
 
 type IpcMethod =
+  | 'reloadAppConfig'
   | 'applyDeploymentSet'
   | 'applyDeployment'
   | 'startDeployment'
@@ -50,6 +51,11 @@ export interface IpcHostManagementClientOptions {
 }
 
 export class IpcHostManagementClient implements HostManagementService {
+  reloadAppConfig(
+    appId: string,
+  ): ReturnType<HostManagementService['reloadAppConfig']> {
+    return this.call('reloadAppConfig', { appId });
+  }
   private sequence = 0;
   private readonly session: string;
   private readonly timeoutMs: number;
@@ -219,6 +225,9 @@ export class IpcHostManagementServer {
       case 'removeDeployment':
         result = await this.service.removeDeployment(payloadAppId(request));
         break;
+      case 'reloadAppConfig':
+        result = await this.service.reloadAppConfig(payloadAppId(request));
+        break;
       case 'restartApp':
         result = await this.service.restartApp(
           (request.payload as { appId: string }).appId,
@@ -258,7 +267,8 @@ function isIpcMethod(value: unknown): value is IpcMethod {
     value === 'stopDeployment' ||
     value === 'removeDeployment' ||
     value === 'getStatus' ||
-    value === 'restartApp'
+    value === 'restartApp' ||
+    value === 'reloadAppConfig'
   );
 }
 

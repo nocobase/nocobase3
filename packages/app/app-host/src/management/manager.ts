@@ -8,6 +8,7 @@
  */
 
 import type { ArtifactResolver } from '../artifact-resolver.ts';
+import type { AppConfigReloadResult } from '@nocobase/app-server/config';
 import type { AppRuntimeRegistry } from '../app-registry.ts';
 import type { DeploymentCatalog } from '../deployment/catalog.ts';
 import {
@@ -24,6 +25,7 @@ import type {
 } from './types.ts';
 
 export interface HostManagementService {
+  reloadAppConfig(appId: string): Promise<AppConfigReloadResult | null>;
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult>;
@@ -47,6 +49,11 @@ type HostModeState =
   | { mode: 'managed'; reconciler: ManagedReconciler };
 
 export class HostManager implements HostManagementService {
+  reloadAppConfig(
+    appId: string,
+  ): ReturnType<HostManagementService['reloadAppConfig']> {
+    return this.registry.reloadAppConfig(appId);
+  }
   private readonly registry: AppRuntimeRegistry;
   private readonly state: HostModeState;
 

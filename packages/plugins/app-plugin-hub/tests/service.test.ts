@@ -452,6 +452,16 @@ describe('@nocobase/app-plugin-hub service', () => {
       deploymentsBefore.length,
     );
     expect(host.targetedOperations).toEqual(['deploy:customer']);
+    expect(host.reloadAppConfig).toHaveBeenCalledWith('customer');
+    host.reloadAppConfig.mockRejectedValueOnce(
+      new Error('Invalid configuration'),
+    );
+    await expect(
+      service.updateConfig('customer', { content: 'feature: false\n' }),
+    ).rejects.toMatchObject({ code: 'CONFIG_RELOAD_FAILED' });
+    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
+      'feature: false\n',
+    );
   });
 
   it('rejects invalid updates to the active file configuration', async () => {
@@ -760,6 +770,9 @@ async function waitForDeployment(
 }
 
 class FakeHostController implements HubHostController {
+  readonly reloadAppConfig = vi.fn(async (_appId: string) => ({
+    changedNamespaces: ['feature'],
+  }));
   public lastDeploymentSet: HostDeploymentSet | undefined;
   public targetedOperations: string[] = [];
   public nextApplyError: Error | undefined;
@@ -824,6 +837,7 @@ class FakeHostController implements HubHostController {
 
   public async getManagementClient(): Promise<HostManagementService> {
     return {
+      reloadAppConfig: this.reloadAppConfig,
       applyDeploymentSet: async (deploymentSet) => ({
         accepted: true,
         status: createStatus(deploymentSet),

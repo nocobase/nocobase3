@@ -204,6 +204,7 @@ function createDefaultHostLoggingConfig(
 ): ConfigMap {
   const config: ConfigMap = {
     default: 'host',
+    name: 'app-host',
     level: 'info',
     base: { service: 'app-host' },
   };
@@ -222,7 +223,18 @@ function createDefaultHostLoggingConfig(
       },
     };
   }
-  return config;
+  return {
+    ...config,
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname',
+        singleLine: true,
+      },
+    },
+  };
 }
 
 function resolveConfigDirectory(value: string, rootDir: string): string {

@@ -21,6 +21,28 @@ const featureConfig = defineAppConfig({
 });
 
 describe('AppConfig', () => {
+  it('logs successful loads and reloads without configuration values', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const config = new AppConfig([featureConfig]);
+      await config.loadAll();
+      expect(info).toHaveBeenCalledWith('App configuration loaded', {
+        durationMs: expect.any(Number),
+      });
+      info.mockClear();
+      await Promise.all([config.reload(), config.reload()]);
+      expect(info).toHaveBeenCalledExactlyOnceWith(
+        'App configuration reloaded',
+        {
+          changedNamespaces: [],
+          durationMs: expect.any(Number),
+        },
+      );
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it('loads YAML and JSON files according to their extension', async () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-config-'));
     try {

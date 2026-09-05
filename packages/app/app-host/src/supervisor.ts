@@ -648,10 +648,10 @@ export class AppHostSupervisor {
 
   private pipeChildLogs(child: ChildProcess): void {
     child.stdout?.on('data', (chunk: unknown) => {
-      writePrefixedChunk('app-host', chunk, process.stdout);
+      if (Buffer.isBuffer(chunk)) process.stdout.write(chunk);
     });
     child.stderr?.on('data', (chunk: unknown) => {
-      writePrefixedChunk('app-host', chunk, process.stderr);
+      if (Buffer.isBuffer(chunk)) process.stderr.write(chunk);
     });
   }
 
@@ -820,27 +820,5 @@ function waitForChildExit(
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
-  });
-}
-
-function writePrefixedChunk(
-  prefix: string,
-  chunk: unknown,
-  writer: NodeJS.WriteStream,
-): void {
-  if (!Buffer.isBuffer(chunk)) {
-    return;
-  }
-
-  const text = chunk.toString();
-  const lines = text.split(/\r?\n/);
-  const hasTrailingNewline = text.endsWith('\n') || text.endsWith('\r');
-
-  lines.forEach((line, index) => {
-    if (!line && index === lines.length - 1 && hasTrailingNewline) {
-      return;
-    }
-
-    writer.write(`[${prefix}] ${line}\n`);
   });
 }
