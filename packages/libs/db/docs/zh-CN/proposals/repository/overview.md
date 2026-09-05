@@ -361,7 +361,10 @@ interface Repository<
   createOne(
     options: CreateOneOptions<TCreate>,
   ): Promise<SingleMutationResult<RepositoryRecord>>;
-  createMany(options: CreateManyOptions<TCreate>): Promise<CreateManyResult>;
+  createMany(
+    options: CreateManyOptions<TCreate, TRecord>,
+  ): Promise<CreateManyResult>;
+  // 提供 select 时返回 CreateManyResult<TResult>。
   updateOne(
     options: UpdateOneOptions<TUpdate, TRecord>,
   ): Promise<SingleMutationResult<RepositoryRecord>>;
@@ -371,9 +374,11 @@ interface Repository<
   updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,
   ): Promise<UpdateManyResult>;
+  // 提供 select 时返回 UpdateManyResult<TResult>。
   deleteOne(options: DeleteOneOptions<TRecord>): Promise<DeleteOneResult>;
   // 提供 select 时返回 DeleteOneResult<TResult>，其中包含删除前 record。
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
+  // 提供 select 时返回 DeleteManyResult<TResult>。
 }
 
 type RepositoryErrorCode =
@@ -440,12 +445,12 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
 | 方法           | 根记录作用域                  | V1 关系写入 | 结果                         |
 | -------------- | ----------------------------- | ----------- | ---------------------------- |
 | `createOne()`  | 一个新根记录                  | 支持        | `SingleMutationResult`       |
-| `createMany()` | 一个非空的根记录列表          | 不支持      | `{ createdCount }`           |
+| `createMany()` | 一个非空的根记录列表          | 不支持      | `{ createdCount, records? }` |
 | `updateOne()`  | `filter` 必须恰好匹配一条记录 | 支持        | `SingleMutationResult`       |
 | `upsertOne()`  | 唯一 `filter` 创建或更新      | 支持        | `SingleMutationResult`       |
-| `updateMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ updatedCount }`           |
+| `updateMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ updatedCount, records? }` |
 | `deleteOne()`  | `filter` 必须恰好匹配一条记录 | 不支持      | `{ deleted: true, record? }` |
-| `deleteMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ deletedCount }`           |
+| `deleteMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ deletedCount, records? }` |
 
 这些名称是 V1 的唯一规范写法，不再提供语义含糊的 `create()`、`update()`、`delete()`
 别名。Agent 仅根据方法名就能判断单条/批量边界，不需要结合参数猜测。
@@ -474,8 +479,11 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
   中完成。省略 `select` 时仍只返回 `{ deleted: true }`。
 - `updateOne()` 必须提供非空 `values`。`deleteOne()` 只删除根记录，不在同一输入里混入
   relation mutation；关系限制和级联行为由 Collection metadata 与数据库约束决定。
-- `createMany()`、`updateMany()` 和 `deleteMany()` 返回与操作对应的明确计数字段，不使用
-  容易混淆的统一 `affectedCount`。V1 的批量方法都不接受关系操作。
+- `createMany()`、`updateMany()` 和 `deleteMany()` 始终返回与操作对应的明确计数字段；显式
+  提供 `select` 时还返回 `records`，省略时保持 count-only 快路径。create 返回顺序等于输入
+  顺序，update/delete 按 mutation 前主键升序返回；delete 返回删除前快照。
+- 批量 values 不接受关系操作，但批量 `select` 可以 include relation。批量 returning 要求
+  Collection 定义主键，以便跨数据库稳定锁定和回读。
 - `updateOne()` 和 `updateMany()` 的 `values` 不能是空对象。
 - `updateMany()` 和 `deleteMany()` 必须明确提供 `filter`。确实需要作用于整个 Collection
   时，调用方必须显式写 `all: true`；`filter` 和 `all` 互斥。空 group、缺失 filter 或把
@@ -740,9 +748,10 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
   `validateMutation()` 预校验规范 AST；执行事务仍需重新检查数据库当前状态。
 - `createMany()`、`updateMany()` 和 `deleteMany()` 是无关系写入的批量操作；后两者要求
   显式 `filter` 或 `all: true`。
-- `createOne()`、`updateOne()` 和 `upsertOne()` 返回 `SingleMutationResult`；读方法直接返回结果，批量写入
-  返回各自的 count object；`deleteOne()` 省略 `select` 时返回 `{ deleted: true }`，提供
-  `select` 时同时返回删除前的 `record`。
+- `createOne()`、`updateOne()` 和 `upsertOne()` 返回 `SingleMutationResult`；读方法直接返回
+  结果；批量写入始终返回各自的 count，显式提供 `select` 时同时返回 `records`。
+  `deleteOne()` 省略 `select` 时返回 `{ deleted: true }`，提供 `select` 时同时返回删除前的
+  `record`。
 - 支持 Collection 显式配置的 increment optimistic lock；关系 mutation 与根字段 mutation
   共用根版本，V1 不设计独立 relation revision。
 - 暂不实现 Model。

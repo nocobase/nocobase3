@@ -9,14 +9,14 @@ Repository 提供七个按记录基数和写入语义区分的方法：
 
 ```ts
 repository.createOne({ values, select });
-repository.createMany({ values });
+repository.createMany({ values, select });
 
 repository.updateOne({ filter, values, ifVersion, select, context });
 repository.upsertOne({ filter, create, update, ifVersion, select, context });
-repository.updateMany({ filter, values, context });
+repository.updateMany({ filter, values, select, context });
 
 repository.deleteOne({ filter, ifVersion, context });
-repository.deleteMany({ filter, context });
+repository.deleteMany({ filter, select, context });
 ```
 
 其中，`createOne()`、`updateOne()` 和 `upsertOne()` 支持关系写入；批量方法不支持关系写入，
@@ -28,7 +28,7 @@ repository.deleteMany({ filter, context });
 
 ## 公共 Select 示例
 
-`createOne()` 和 `updateOne()` 可以通过 `select` 指定写入后回读的记录形状：
+所有 mutation 方法都可以通过 `select` 指定返回的记录形状：
 
 ```ts
 import type { SelectBuilder } from '@nocobase/db';
@@ -149,6 +149,27 @@ const result = await projects.createMany({
 
 result.createdCount;
 // 2
+```
+
+提供 `select` 时，同时返回按输入顺序排列的新记录：
+
+```ts
+const result = await projects.createMany({
+  values: [
+    { name: 'Project B', status: 'active' },
+    { name: 'Project A', status: 'draft' },
+  ],
+  select: (select) => select.fields('id', 'name'),
+});
+
+result;
+// {
+//   createdCount: 2,
+//   records: [
+//     { id: 'project-b', name: 'Project B' },
+//     { id: 'project-a', name: 'Project A' },
+//   ],
+// }
 ```
 
 `values` 必须是非空数组。所有记录会先完成校验，再在同一个事务中写入；任意一条失败时
@@ -390,6 +411,22 @@ result.updatedCount;
 // The number of updated records.
 ```
 
+提供 `select` 时，同时返回更新后的记录。记录按 mutation 前的主键升序排列：
+
+```ts
+const result = await projects.updateMany({
+  filter: { status: 'draft' },
+  values: { status: 'archived' },
+  select: (select) =>
+    select
+      .fields('id', 'status')
+      .include('owner', (owner) => owner.fields('id', 'name')),
+});
+
+result.records;
+// [{ id: 'project-1', status: 'archived', owner: { id: 'user-1', name: 'Ada' } }]
+```
+
 确实需要更新整个 Collection 时，必须显式使用 `all: true`：
 
 ```ts
@@ -402,7 +439,8 @@ await projects.updateMany({
 ```
 
 `filter` 和 `all` 互斥，不能同时提供。`values` 必须是非空对象，并且只能包含直接标量
-Field；`updateMany()` 不支持 relation mutation、`select` 或 `ifVersion`。
+Field；`updateMany()` 不支持 relation mutation 或 `ifVersion`。`select` 可以 include
+relation，但只影响返回形状，不执行关系写入。
 
 ## `upsertOne()`
 
@@ -485,6 +523,21 @@ result.deletedCount;
 // The number of deleted records.
 ```
 
+提供 `select` 时，同时返回按 mutation 前主键升序排列的删除前快照：
+
+```ts
+const result = await projects.deleteMany({
+  filter: { status: 'archived' },
+  select: (select) =>
+    select
+      .fields('id', 'name')
+      .include('owner', (owner) => owner.fields('id', 'name')),
+});
+
+result.records;
+// The selected records as they existed immediately before deletion.
+```
+
 删除整个 Collection 也必须显式确认：
 
 ```ts
@@ -493,20 +546,23 @@ await projects.deleteMany({
 });
 ```
 
-`deleteMany()` 不支持 relation mutation、`select` 或 `ifVersion`。省略 `filter` 且没有
-`all: true` 会被拒绝，不会被解释为删除全部记录。
+`deleteMany()` 不支持 relation mutation 或 `ifVersion`。省略 `filter` 且没有 `all: true`
+会被拒绝，不会被解释为删除全部记录。
+
+三个批量方法都只有在显式提供 `select` 时返回 `records`；省略时继续使用只返回 count 的
+快速路径。批量 returning 需要 Collection 定义主键，以便锁定、稳定排序和回读记录。
 
 ## 方法对照
 
 | 方法           | 输入                   | 根记录范围                | 关系写入 | 返回值                       |
 | -------------- | ---------------------- | ------------------------- | -------- | ---------------------------- |
 | `createOne()`  | 模型形状 `values`      | 一条新记录                | 支持     | `SingleMutationResult`       |
-| `createMany()` | 非空标量 `values` 数组 | 多条新记录                | 不支持   | `{ createdCount }`           |
+| `createMany()` | 非空标量 `values` 数组 | 多条新记录                | 不支持   | `{ createdCount, records? }` |
 | `updateOne()`  | 非空模型形状 `values`  | `filter` 恰好匹配一条     | 支持     | `SingleMutationResult`       |
 | `upsertOne()`  | `create` + `update`    | 唯一 `filter` 创建或更新  | 支持     | `SingleMutationResult`       |
-| `updateMany()` | 非空标量 `values`      | `filter` 全部匹配或 `all` | 不支持   | `{ updatedCount }`           |
+| `updateMany()` | 非空标量 `values`      | `filter` 全部匹配或 `all` | 不支持   | `{ updatedCount, records? }` |
 | `deleteOne()`  | 无                     | `filter` 恰好匹配一条     | 不支持   | `{ deleted: true, record? }` |
-| `deleteMany()` | 无                     | `filter` 全部匹配或 `all` | 不支持   | `{ deletedCount }`           |
+| `deleteMany()` | 无                     | `filter` 全部匹配或 `all` | 不支持   | `{ deletedCount, records? }` |
 
 ## 使用规则
 
@@ -518,6 +574,7 @@ await projects.deleteMany({
 - to-many target `update/delete` 必须提供 filter，且在当前 relation scope 内恰好匹配一条；
 - `upsert.filter` 必须等价于主键或唯一约束，`create` 必须携带相同的唯一字段值；
 - 批量方法不支持关系写入；全量更新或删除必须显式提供 `all: true`；
+- 批量方法提供 `select` 时返回 `records`，并允许在返回形状中 include relation；
 - `context` 只解析 Filter 变量，不承担授权；
 - 简单 equality Filter 使用 shorthand；比较、逻辑组合、变量或关系筛选使用 Builder 或完整 AST；
 - Builder 和纯 JSON `values` 共享相同语义，并归一化为 Repository 内部执行协议。

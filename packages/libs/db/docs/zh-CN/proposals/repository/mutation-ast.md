@@ -119,11 +119,13 @@ interface SingleMutationResult<TResult> {
 `createOne()` 和 `updateOne()` 返回 `SingleMutationResult`。`select` 只决定 `record` 的形状；
 `createdTargets` 始终存在，没有 nested create 时为空数组；Collection 启用 optimistic lock
 时，`version` 返回根记录的最新版本。读方法直接返回记录、数字或布尔值，不使用这个
-envelope；批量 mutation 继续返回各自的 count object。
+envelope。
 
 `createdTargets` 只包含显式提供 `clientKey` 的 CreateTarget，并按 AST 深度优先顺序返回。
 同一 mutation tree 中的 `clientKey` 必须唯一；每个成功创建的 key 恰好对应一个结果项。
-未提供 `clientKey` 的目标仍会创建，但不出现在该数组中。
+未提供 `clientKey` 的目标仍会创建，但不出现在该数组中。批量 mutation 始终返回各自的
+count object；显式提供 `select` 时还返回 `records`，但批量 values 仍不接受 relation
+mutation。
 
 ## 内部 TypeScript 结构（节选）
 

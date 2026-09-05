@@ -1,8 +1,11 @@
 import type {
+  CreateManyResult,
+  DeleteManyResult,
   DeleteOneResult,
   Repository,
   SelectAst,
   SingleMutationResult,
+  UpdateManyResult,
 } from '../../../src/index.js';
 import { expectTypeOf, it } from 'vitest';
 
@@ -108,6 +111,31 @@ function _deleteUserWithAst(repository: UserRepository, select: SelectAst) {
   });
 }
 
+function _createSelectedUsers(repository: UserRepository) {
+  return repository.createMany({
+    values: [
+      { name: 'Alice', email: 'alice@example.com' },
+      { name: 'Bob', email: 'bob@example.com' },
+    ],
+    select: (select) => select.fields('id', 'name'),
+  });
+}
+
+function _updateSelectedUsers(repository: UserRepository) {
+  return repository.updateMany({
+    filter: { enabled: false },
+    values: { enabled: true },
+    select: (select) => select.fields('id', 'enabled'),
+  });
+}
+
+function _deleteSelectedUsers(repository: UserRepository) {
+  return repository.deleteMany({
+    filter: { enabled: false },
+    select: (select) => select.fields('id', 'email'),
+  });
+}
+
 it('infers scalar builder selections and preserves fallback result types', () => {
   expectTypeOf<ReturnType<typeof _findSelectedUsers>>().toEqualTypeOf<
     Promise<Array<Pick<UserRecord, 'id' | 'name'>>>
@@ -144,5 +172,14 @@ it('infers scalar builder selections and preserves fallback result types', () =>
   >();
   expectTypeOf<ReturnType<typeof _deleteUserWithAst>>().toEqualTypeOf<
     Promise<DeleteOneResult<UserRecord>>
+  >();
+  expectTypeOf<ReturnType<typeof _createSelectedUsers>>().toEqualTypeOf<
+    Promise<CreateManyResult<Pick<UserRecord, 'id' | 'name'>>>
+  >();
+  expectTypeOf<ReturnType<typeof _updateSelectedUsers>>().toEqualTypeOf<
+    Promise<UpdateManyResult<Pick<UserRecord, 'id' | 'enabled'>>>
+  >();
+  expectTypeOf<ReturnType<typeof _deleteSelectedUsers>>().toEqualTypeOf<
+    Promise<DeleteManyResult<Pick<UserRecord, 'id' | 'email'>>>
   >();
 });

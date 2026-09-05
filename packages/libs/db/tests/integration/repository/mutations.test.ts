@@ -243,6 +243,62 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
     ).rejects.toMatchObject({ code: 'FIELD_NOT_WRITABLE', field: 'tasks' });
   });
 
+  it('returns relation selections from bulk update and delete', async () => {
+    const fixture = await createMutationFixture(context);
+    const repository = context.database.repository('repositoryProjects');
+    const first = await repository.createOne({
+      values: {
+        name: 'First bulk project',
+        owner: { connect: { id: fixture.ada } },
+      },
+      select: (select) => select.fields('id'),
+    });
+    const second = await repository.createOne({
+      values: {
+        name: 'Second bulk project',
+        owner: { connect: { id: fixture.bob } },
+      },
+      select: (select) => select.fields('id'),
+    });
+
+    const updated = await repository.updateMany({
+      all: true,
+      values: { name: 'Bulk updated' },
+      select: (select) =>
+        select
+          .fields('id', 'name')
+          .include('owner', (owner) => owner.fields('name')),
+    });
+    expect(updated).toEqual({
+      updatedCount: 2,
+      records: [
+        {
+          id: first.record.id,
+          name: 'Bulk updated',
+          owner: { name: 'Ada' },
+        },
+        {
+          id: second.record.id,
+          name: 'Bulk updated',
+          owner: { name: 'Bob' },
+        },
+      ],
+    });
+
+    await expect(
+      repository.deleteMany({
+        all: true,
+        select: (select) =>
+          select
+            .fields('id', 'name')
+            .include('owner', (owner) => owner.fields('name')),
+      }),
+    ).resolves.toEqual({
+      deletedCount: 2,
+      records: updated.records,
+    });
+  });
+
   it('updates, upserts, and deletes targets inside the current relation scope', async () => {
     const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');

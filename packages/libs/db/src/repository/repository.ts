@@ -297,9 +297,25 @@ export class DefaultRepository<
     };
   }
 
+  async createMany<TSelection extends AnySelectBuilder<TRecord>>(
+    options: CreateManyOptions<TCreate, TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<CreateManyResult<SelectedBuilderRecord<TRecord, TSelection>>>;
   async createMany(
-    options: CreateManyOptions<TCreate>,
-  ): Promise<CreateManyResult> {
+    options: CreateManyOptions<TCreate, TRecord> & {
+      readonly select: SelectAst;
+    },
+  ): Promise<CreateManyResult<TRecord>>;
+  async createMany(
+    options: CreateManyOptions<TCreate, TRecord>,
+  ): Promise<CreateManyResult>;
+  async createMany(
+    options: CreateManyOptions<TCreate, TRecord>,
+  ): Promise<
+    | CreateManyResult
+    | { readonly createdCount: number; readonly records: readonly TRecord[] }
+  > {
     const collection = await this.collection();
     assertWritableCollection(collection);
     if (options.values.length === 0) {
@@ -311,12 +327,24 @@ export class DefaultRepository<
     const records = options.values.map((record) =>
       validateValues(collection, record, 'createMany'),
     );
-    return {
-      createdCount: await this.options.adapter.createMany({
-        collection,
-        records,
-      }),
-    };
+    const selection = options.select
+      ? await this.validateSelect(collection, options.select)
+      : undefined;
+    if (selection) assertBulkReturningIdentity(collection);
+    const result = await this.options.adapter.createMany({
+      collection,
+      records,
+      fields: selection
+        ? includeExecutionFields(collection, selection.fields)
+        : undefined,
+      select: selection?.select,
+    });
+    return selection
+      ? {
+          createdCount: result.count,
+          records: pickManySelections(result.records, selection) as TRecord[],
+        }
+      : { createdCount: result.count };
   }
 
   async updateOne(
@@ -446,9 +474,25 @@ export class DefaultRepository<
     };
   }
 
+  async updateMany<TSelection extends AnySelectBuilder<TRecord>>(
+    options: UpdateManyOptions<TRecord, TUpdate> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<UpdateManyResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  async updateMany(
+    options: UpdateManyOptions<TRecord, TUpdate> & {
+      readonly select: SelectAst;
+    },
+  ): Promise<UpdateManyResult<TRecord>>;
   async updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,
-  ): Promise<UpdateManyResult> {
+  ): Promise<UpdateManyResult>;
+  async updateMany(
+    options: UpdateManyOptions<TRecord, TUpdate>,
+  ): Promise<
+    | UpdateManyResult
+    | { readonly updatedCount: number; readonly records: readonly TRecord[] }
+  > {
     const collection = await this.collection();
     assertWritableCollection(collection);
     const filter = await this.normalizeMutationFilter(
@@ -458,14 +502,26 @@ export class DefaultRepository<
       options.all === true,
     );
     const values = validateValues(collection, options.values, 'updateMany');
-    return {
-      updatedCount: await this.options.adapter.updateMany({
-        collection,
-        filter,
-        all: options.all === true,
-        values,
-      }),
-    };
+    const selection = options.select
+      ? await this.validateSelect(collection, options.select, options.context)
+      : undefined;
+    if (selection) assertBulkReturningIdentity(collection);
+    const result = await this.options.adapter.updateMany({
+      collection,
+      filter,
+      all: options.all === true,
+      values,
+      fields: selection
+        ? includeExecutionFields(collection, selection.fields)
+        : undefined,
+      select: selection?.select,
+    });
+    return selection
+      ? {
+          updatedCount: result.count,
+          records: pickManySelections(result.records, selection) as TRecord[],
+        }
+      : { updatedCount: result.count };
   }
 
   async deleteOne<TSelection extends AnySelectBuilder<TRecord>>(
@@ -518,9 +574,23 @@ export class DefaultRepository<
     return { deleted: true };
   }
 
+  async deleteMany<TSelection extends AnySelectBuilder<TRecord>>(
+    options: DeleteManyOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<DeleteManyResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  async deleteMany(
+    options: DeleteManyOptions<TRecord> & { readonly select: SelectAst },
+  ): Promise<DeleteManyResult<TRecord>>;
   async deleteMany(
     options: DeleteManyOptions<TRecord>,
-  ): Promise<DeleteManyResult> {
+  ): Promise<DeleteManyResult>;
+  async deleteMany(
+    options: DeleteManyOptions<TRecord>,
+  ): Promise<
+    | DeleteManyResult
+    | { readonly deletedCount: number; readonly records: readonly TRecord[] }
+  > {
     const collection = await this.collection();
     assertWritableCollection(collection);
     const filter = await this.normalizeMutationFilter(
@@ -529,13 +599,25 @@ export class DefaultRepository<
       options.context,
       options.all === true,
     );
-    return {
-      deletedCount: await this.options.adapter.deleteMany({
-        collection,
-        filter,
-        all: options.all === true,
-      }),
-    };
+    const selection = options.select
+      ? await this.validateSelect(collection, options.select, options.context)
+      : undefined;
+    if (selection) assertBulkReturningIdentity(collection);
+    const result = await this.options.adapter.deleteMany({
+      collection,
+      filter,
+      all: options.all === true,
+      fields: selection
+        ? includeExecutionFields(collection, selection.fields)
+        : undefined,
+      select: selection?.select,
+    });
+    return selection
+      ? {
+          deletedCount: result.count,
+          records: pickManySelections(result.records, selection) as TRecord[],
+        }
+      : { deletedCount: result.count };
   }
 
   private async collection(): Promise<CollectionDefinition> {
@@ -1499,6 +1581,18 @@ async function validateSelectInputWithRelations(
 interface ValidatedSelect {
   readonly fields: string[];
   readonly select?: SelectAst;
+}
+
+function pickManySelections(
+  records: readonly RepositoryRecord[] | undefined,
+  selection: ValidatedSelect,
+): RepositoryRecord[] {
+  if (!records) {
+    throw new Error('Bulk mutation returning did not provide records.');
+  }
+  return records.map((record) =>
+    pickSelection(record, selection.fields, selection.select),
+  );
 }
 
 async function validateSortWithRelations<TRecord extends object>(
@@ -3233,6 +3327,16 @@ function assertWritableCollection(collection: CollectionDefinition): void {
       {
         collection: collection.name,
       },
+    );
+  }
+}
+
+function assertBulkReturningIdentity(collection: CollectionDefinition): void {
+  if (primaryFields(collection).length === 0) {
+    invalid(
+      'INVALID_MUTATION',
+      'Bulk mutation returning requires a primary key.',
+      { collection: collection.name, path: ['select'] },
     );
   }
 }

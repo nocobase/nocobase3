@@ -25,6 +25,7 @@ import type {
   RelationUpsertTarget,
   SelectNode,
   SelectIncludeNode,
+  SelectAst,
   SortNode,
   UniqueSelector,
 } from '../types.js';
@@ -35,6 +36,7 @@ import type {
   RepositoryDeleteOnePlan,
   RepositoryDeletedMutation,
   RepositoryExecutedMutation,
+  RepositoryExecutedManyMutation,
   RepositoryExecutionAdapter,
   RepositoryFilterPlan,
   RepositoryReadPlan,
@@ -146,14 +148,39 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     };
   }
 
-  async createMany(plan: RepositoryCreateManyPlan): Promise<number> {
+  async createMany(
+    plan: RepositoryCreateManyPlan,
+  ): Promise<RepositoryExecutedManyMutation> {
+    if (plan.fields) {
+      return this.inTransaction((adapter) =>
+        adapter.executeCreateManyReturning(plan),
+      );
+    }
     const records = plan.records.map((record) =>
       mapWrite(plan.collection, withInitialVersion(plan.collection, record)),
     );
     const result = (await tableQuery(this.getClient(), plan.collection).insert(
       records,
     )) as unknown;
-    return insertedCount(result, records.length);
+    return { count: insertedCount(result, records.length) };
+  }
+
+  private async executeCreateManyReturning(
+    plan: RepositoryCreateManyPlan,
+  ): Promise<RepositoryExecutedManyMutation> {
+    const fields = plan.fields;
+    if (!fields) throw new Error('Returning createMany requires fields.');
+    const records: RepositoryRecord[] = [];
+    for (const values of plan.records) {
+      const result = await this.executeCreateOne({
+        collection: plan.collection,
+        fields,
+        values,
+        select: plan.select,
+      });
+      records.push(result.record);
+    }
+    return { count: records.length, records };
   }
 
   async updateOne(
@@ -258,7 +285,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     return updated;
   }
 
-  async updateMany(plan: RepositoryUpdateManyPlan): Promise<number> {
+  async updateMany(
+    plan: RepositoryUpdateManyPlan,
+  ): Promise<RepositoryExecutedManyMutation> {
+    if (plan.fields) {
+      return this.inTransaction((adapter) =>
+        adapter.executeUpdateManyReturning(plan),
+      );
+    }
     const query = tableQuery(this.getClient(), plan.collection).update(
       mapWrite(plan.collection, plan.values),
     );
@@ -277,7 +311,41 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     incrementVersion(query, plan.collection);
-    return affectedCount(await query);
+    return { count: affectedCount(await query) };
+  }
+
+  private async executeUpdateManyReturning(
+    plan: RepositoryUpdateManyPlan,
+  ): Promise<RepositoryExecutedManyMutation> {
+    const fields = plan.fields;
+    if (!fields) throw new Error('Returning updateMany requires fields.');
+    const selected = await this.lockManyByFilter(plan.collection, plan.filter);
+    if (selected.length === 0) return { count: 0, records: [] };
+    const query = tableQuery(this.getClient(), plan.collection).update(
+      mapWrite(plan.collection, plan.values),
+    );
+    applySelectors(
+      query,
+      plan.collection,
+      selected.map((item) => item.unique),
+    );
+    incrementVersion(query, plan.collection);
+    const count = affectedCount(await query);
+    assertBulkMutationCount('updateMany', count, selected.length);
+    const resultSelectors = selected.map((item) =>
+      selectorFromFields(
+        plan.collection,
+        { ...item.record, ...plan.values },
+        item.unique.fields,
+      ),
+    );
+    const records = await this.findManyBySelectors(
+      plan.collection,
+      resultSelectors,
+      fields,
+      plan.select,
+    );
+    return { count, records };
   }
 
   async deleteOne(
@@ -319,7 +387,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     return plan.ifVersion === undefined ? 'missing' : 'conflict';
   }
 
-  async deleteMany(plan: RepositoryDeleteManyPlan): Promise<number> {
+  async deleteMany(
+    plan: RepositoryDeleteManyPlan,
+  ): Promise<RepositoryExecutedManyMutation> {
+    if (plan.fields) {
+      return this.inTransaction((adapter) =>
+        adapter.executeDeleteManyReturning(plan),
+      );
+    }
     const query = tableQuery(this.getClient(), plan.collection).delete();
     if (plan.filter) {
       const graph = await this.prepareFilterGraph(
@@ -335,7 +410,28 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         this.getClient(),
       );
     }
-    return affectedCount(await query);
+    return { count: affectedCount(await query) };
+  }
+
+  private async executeDeleteManyReturning(
+    plan: RepositoryDeleteManyPlan,
+  ): Promise<RepositoryExecutedManyMutation> {
+    const fields = plan.fields;
+    if (!fields) throw new Error('Returning deleteMany requires fields.');
+    const selected = await this.lockManyByFilter(plan.collection, plan.filter);
+    if (selected.length === 0) return { count: 0, records: [] };
+    const selectors = selected.map((item) => item.unique);
+    const records = await this.findManyBySelectors(
+      plan.collection,
+      selectors,
+      fields,
+      plan.select,
+    );
+    const query = tableQuery(this.getClient(), plan.collection).delete();
+    applySelectors(query, plan.collection, selectors);
+    const count = affectedCount(await query);
+    assertBulkMutationCount('deleteMany', count, selected.length);
+    return { count, records };
   }
 
   private async buildRead(
@@ -422,6 +518,76 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       record: rows[0],
       unique: selectorFromRecord(collection, rows[0]),
     };
+  }
+
+  private async lockManyByFilter(
+    collection: CollectionDefinition,
+    filter: FilterAst | undefined,
+  ): Promise<LockedMutationRecord[]> {
+    const client = this.getClient();
+    const alias = 'repository_root';
+    const fields = scalarFields(collection).map((field) => field.name);
+    const query = tableQuery(client, collection, alias).select(
+      fields.map((field) =>
+        client.ref(column(collection, field)).withSchema(alias).as(field),
+      ),
+    );
+    if (filter) {
+      const graph = await this.prepareFilterGraph(collection, filter.root);
+      applyFilter(query, collection, filter.root, graph, alias, client);
+    }
+    for (const field of stableIdentityFields(collection)) {
+      query.orderBy(column(collection, field), 'asc');
+    }
+    query.forUpdate();
+    const rows = (await query) as RepositoryRecord[];
+    return rows.map((record) => ({
+      record,
+      unique: selectorFromFields(
+        collection,
+        record,
+        stableIdentityFields(collection),
+      ),
+    }));
+  }
+
+  private async findManyBySelectors(
+    collection: CollectionDefinition,
+    selectors: readonly UniqueSelector[],
+    fields: readonly string[],
+    select: SelectAst | undefined,
+  ): Promise<RepositoryRecord[]> {
+    if (selectors.length === 0) return [];
+    const records = await this.findMany({
+      collection,
+      fields,
+      select,
+      filter: selectorsFilter(selectors),
+      sort: {
+        kind: 'sort',
+        version: 1,
+        items: stableIdentityFields(collection).map((field) => ({
+          kind: 'field',
+          path: [field],
+          direction: 'asc',
+        })),
+      },
+    });
+    const identityFields = selectors[0]?.fields;
+    if (!identityFields) return [];
+    const recordsBySelector = new Map(
+      records.map((record) => [
+        selectorKey(selectorFromFields(collection, record, identityFields)),
+        record,
+      ]),
+    );
+    const ordered = selectors.map((selector) =>
+      recordsBySelector.get(selectorKey(selector)),
+    );
+    if (ordered.some((record) => record === undefined)) {
+      throw new Error('Bulk mutation record could not be reloaded.');
+    }
+    return ordered as RepositoryRecord[];
   }
 
   private async createRecord(
@@ -2044,6 +2210,20 @@ function applyUnique(
   }
 }
 
+function applySelectors(
+  query: Knex.QueryBuilder,
+  collection: CollectionDefinition,
+  selectors: readonly UniqueSelector[],
+): void {
+  query.where(function applySelectorSet(this: Knex.QueryBuilder): void {
+    for (const selector of selectors) {
+      this.orWhere(function applySelector(this: Knex.QueryBuilder): void {
+        applyUnique(this, collection, selector);
+      });
+    }
+  });
+}
+
 function whereValue(
   query: Knex.QueryBuilder,
   boolean: 'and' | 'or',
@@ -2206,6 +2386,22 @@ function selectorFromRecord(
   };
 }
 
+function selectorFromFields(
+  collection: CollectionDefinition,
+  record: RepositoryRecord,
+  fields: readonly string[],
+): UniqueSelector {
+  const values = Object.fromEntries(
+    fields.map((field) => [field, record[field]]),
+  );
+  if (fields.some((field) => values[field] === undefined)) {
+    throw new Error(
+      `Repository record for Collection "${collection.name}" has no value for its stable identity.`,
+    );
+  }
+  return { kind: 'unique', fields, values };
+}
+
 function relationForeignKeyNullable(
   resolved: ResolvedRepositoryRelation,
 ): boolean {
@@ -2269,6 +2465,51 @@ function uniqueFilter(unique: UniqueSelector): FilterAst {
       })),
     },
   };
+}
+
+function selectorsFilter(selectors: readonly UniqueSelector[]): FilterAst {
+  return {
+    kind: 'filter',
+    version: 1,
+    root: {
+      kind: 'group',
+      logic: 'or',
+      items: selectors.map((selector) => uniqueFilter(selector).root),
+    },
+  };
+}
+
+function stableIdentityFields(collection: CollectionDefinition): string[] {
+  const constraint = (collection.constraints ?? []).find(
+    (candidate) => candidate.type === 'primary',
+  );
+  if (constraint?.type === 'primary') return [...constraint.fields];
+  const unique = (collection.constraints ?? []).find(
+    (candidate) => candidate.type === 'unique',
+  );
+  if (unique?.type === 'unique') return [...unique.fields];
+  throw new Error('Repository Collection has no stable identity fields.');
+}
+
+function selectorKey(selector: UniqueSelector): string {
+  return selector.fields
+    .map(
+      (field) =>
+        `${JSON.stringify(field)}:${associationKey(selector.values[field])}`,
+    )
+    .join('|');
+}
+
+function assertBulkMutationCount(
+  operation: 'updateMany' | 'deleteMany',
+  affected: number,
+  expected: number,
+): void {
+  if (affected !== expected) {
+    throw new Error(
+      `${operation} affected ${affected} records after locking ${expected} records.`,
+    );
+  }
 }
 
 function affectedCount(value: unknown): number {

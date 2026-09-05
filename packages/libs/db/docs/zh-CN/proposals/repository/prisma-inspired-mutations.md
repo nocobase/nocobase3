@@ -8,8 +8,8 @@ description: 参考 Prisma 的模型形状输入和 Relation Builder，统一 Re
 > **状态：核心写入契约已实现。** `createOne()` / `updateOne()` 的 `values` 支持字段级
 > Builder 和纯 JSON，覆盖 `create`、`connect`、`disconnect`、`set`、`update`、`upsert`
 > 和 `delete`；`updateOne()` / `deleteOne()` 使用严格基数的根 `filter`。顶层
-> `relations`、单条 `unique` 和 `createMany.records` 已完成迁移。`deleteOne()` 返回删除前
-> 快照仍是候选设计；当前完整契约以 [Repository 概览](./overview.md) 与
+> `relations`、单条 `unique` 和 `createMany.records` 已完成迁移。单条删除和批量 mutation
+> 也已支持通过 `select` 返回记录；当前完整契约以 [Repository 概览](./overview.md) 与
 > [Mutation AST](./mutation-ast.md) 为准。
 
 ## 背景
@@ -68,13 +68,13 @@ await projects.updateOne({
 
 ```ts
 repository.createOne({ values, select });
-repository.createMany({ values: [values] });
+repository.createMany({ values: [values], select });
 
 repository.updateOne({ filter, values, ifVersion, select, context });
-repository.updateMany({ filter, values, context });
+repository.updateMany({ filter, values, select, context });
 
 repository.deleteOne({ filter, ifVersion, select, context });
-repository.deleteMany({ filter, context });
+repository.deleteMany({ filter, select, context });
 ```
 
 全量批量写入必须显式使用 `all: true`：
@@ -87,11 +87,11 @@ repository.deleteMany({ all: true });
 | 方法           | 根记录范围                | Relation Builder | 建议结果                         |
 | -------------- | ------------------------- | ---------------- | -------------------------------- |
 | `createOne()`  | 一个新根记录              | `create/connect` | `SingleMutationResult`           |
-| `createMany()` | 非空 `values` 列表        | 不支持           | `{ createdCount }`               |
+| `createMany()` | 非空 `values` 列表        | 不支持           | `{ createdCount, records? }`     |
 | `updateOne()`  | `filter` 恰好匹配一条     | 完整单条关系能力 | `SingleMutationResult`           |
-| `updateMany()` | `filter` 全部匹配或 `all` | 不支持           | `{ updatedCount }`               |
+| `updateMany()` | `filter` 全部匹配或 `all` | 不支持           | `{ updatedCount, records? }`     |
 | `deleteOne()`  | `filter` 恰好匹配一条     | 不支持           | 删除前记录和 `{ deleted: true }` |
-| `deleteMany()` | `filter` 全部匹配或 `all` | 不支持           | `{ deletedCount }`               |
+| `deleteMany()` | `filter` 全部匹配或 `all` | 不支持           | `{ deletedCount, records? }`     |
 
 六个方法的完整调用示例见 [Repository 写入方法示例](./mutation-examples.md)。
 
@@ -198,11 +198,18 @@ const result = await projects.createMany({
     { name: 'Project A', status: 'draft' },
     { name: 'Project B', status: 'active' },
   ],
+  select: (select) => select.fields('id', 'name'),
 });
 ```
 
 ```ts
-expect(result).toEqual({ createdCount: 2 });
+expect(result).toEqual({
+  createdCount: 2,
+  records: [
+    { id: 'project-a', name: 'Project A' },
+    { id: 'project-b', name: 'Project B' },
+  ],
+});
 ```
 
 所有记录必须先完成校验，再在同一事务中创建；任一记录失败则整批回滚。本提案的
@@ -418,11 +425,13 @@ const result = await projects.updateMany({
     status: 'archived',
     archivedAt: new Date(),
   },
+  select: (select) => select.fields('id', 'status'),
 });
 ```
 
 ```ts
-expect(result).toEqual({ updatedCount: 12 });
+expect(result.updatedCount).toBe(12);
+expect(result.records).toHaveLength(12);
 ```
 
 省略 filter 不能表示全集；全集更新必须写成：
@@ -436,7 +445,7 @@ await projects.updateMany({
 
 `filter` 与 `all` 互斥。`updateMany()` 不接受 Relation Builder，也不允许空 `values`。
 Collection 启用 optimistic lock 时，每条成功更新的根记录都必须推进版本，但批量方法不接收
-单个 `ifVersion`。
+单个 `ifVersion`。提供 `select` 时，`records` 是更新后结果，并按 mutation 前主键升序排列。
 
 ## `deleteOne()`
 
@@ -478,11 +487,13 @@ Collection metadata 与数据库约束。
 ```ts
 const result = await projects.deleteMany({
   filter: (filter) => filter.string('status').eq('archived'),
+  select: (select) => select.fields('id', 'name'),
 });
 ```
 
 ```ts
-expect(result).toEqual({ deletedCount: 12 });
+expect(result.deletedCount).toBe(12);
+expect(result.records).toHaveLength(12);
 ```
 
 全集删除必须显式确认：
@@ -492,7 +503,9 @@ await projects.deleteMany({ all: true });
 ```
 
 `deleteMany({})`、空 filter group、变量解析成空条件，以及同时提供 `filter` 和 `all` 都必须
-在执行前拒绝。
+在执行前拒绝。提供 `select` 时，`records` 是删除前快照，并按 mutation 前主键升序排列。
+批量 `select` 可以 include relation；省略 `select` 时不返回 `records`。批量 returning 要求
+Collection 定义主键。
 
 ## TypeScript 类型轮廓
 
@@ -659,7 +672,8 @@ interface SingleMutationResult<TResult> {
 - `select` 只裁剪 `record`，不裁剪 `createdTargets` 或 `version`；
 - `createdTargets` 继续映射显式 `clientKey` 的 nested create；
 - `version` 是根记录 mutation 后的最新 optimistic lock 版本；
-- 批量方法只返回明确的 `createdCount`、`updatedCount` 或 `deletedCount`。
+- 批量方法始终返回明确的 `createdCount`、`updatedCount` 或 `deletedCount`；显式提供
+  `select` 时还返回 `records`。
 
 `deleteOne()` 使用独立 envelope；省略 `select` 时不包含 `record`：
 

@@ -35,6 +35,8 @@ export interface RepositoryCreateOnePlan {
 export interface RepositoryCreateManyPlan {
   readonly collection: CollectionDefinition;
   readonly records: readonly RepositoryRecord[];
+  readonly fields?: readonly string[];
+  readonly select?: SelectAst;
 }
 
 export interface RepositoryUpdateOnePlan {
@@ -64,6 +66,8 @@ export interface RepositoryUpdateManyPlan {
   readonly filter?: FilterAst;
   readonly all: boolean;
   readonly values: RepositoryRecord;
+  readonly fields?: readonly string[];
+  readonly select?: SelectAst;
 }
 
 export interface RepositoryDeleteOnePlan {
@@ -78,6 +82,8 @@ export interface RepositoryDeleteManyPlan {
   readonly collection: CollectionDefinition;
   readonly filter?: FilterAst;
   readonly all: boolean;
+  readonly fields?: readonly string[];
+  readonly select?: SelectAst;
 }
 
 export interface RepositoryExecutedMutation {
@@ -90,6 +96,11 @@ export interface RepositoryDeletedMutation {
   readonly record: RepositoryRecord;
 }
 
+export interface RepositoryExecutedManyMutation {
+  readonly count: number;
+  readonly records?: readonly RepositoryRecord[];
+}
+
 export type RepositorySingleMutationMiss = 'missing' | 'multiple' | 'conflict';
 
 /** Internal adapter boundary. Plans contain logical Collection and Field names only. */
@@ -99,18 +110,24 @@ export interface RepositoryExecutionAdapter {
   count(plan: RepositoryFilterPlan): Promise<number>;
   exists(plan: RepositoryFilterPlan): Promise<boolean>;
   createOne(plan: RepositoryCreateOnePlan): Promise<RepositoryExecutedMutation>;
-  createMany(plan: RepositoryCreateManyPlan): Promise<number>;
+  createMany(
+    plan: RepositoryCreateManyPlan,
+  ): Promise<RepositoryExecutedManyMutation>;
   updateOne(
     plan: RepositoryUpdateOnePlan,
   ): Promise<RepositoryExecutedMutation | RepositorySingleMutationMiss>;
   upsertOne(
     plan: RepositoryUpsertOnePlan,
   ): Promise<RepositoryExecutedMutation | 'conflict'>;
-  updateMany(plan: RepositoryUpdateManyPlan): Promise<number>;
+  updateMany(
+    plan: RepositoryUpdateManyPlan,
+  ): Promise<RepositoryExecutedManyMutation>;
   deleteOne(
     plan: RepositoryDeleteOnePlan,
   ): Promise<
     'deleted' | RepositoryDeletedMutation | RepositorySingleMutationMiss
   >;
-  deleteMany(plan: RepositoryDeleteManyPlan): Promise<number>;
+  deleteMany(
+    plan: RepositoryDeleteManyPlan,
+  ): Promise<RepositoryExecutedManyMutation>;
 }

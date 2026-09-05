@@ -629,8 +629,12 @@ export interface CreateOneOptions<
   readonly select?: RepositorySelect<TRecord>;
 }
 
-export interface CreateManyOptions<TCreate extends object> {
+export interface CreateManyOptions<
+  TCreate extends object,
+  TRecord extends object = RepositoryRecord,
+> {
   readonly values: readonly [TCreate, ...TCreate[]];
+  readonly select?: RepositorySelect<TRecord>;
 }
 
 export interface SingleMutationSelector<TRecord extends object> {
@@ -674,6 +678,7 @@ export type UpdateManyOptions<
   TUpdate extends object,
 > = MutationScope<TRecord> & {
   readonly values: TUpdate;
+  readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
 };
 
@@ -686,6 +691,7 @@ export type DeleteOneOptions<TRecord extends object = RepositoryRecord> =
 
 export type DeleteManyOptions<TRecord extends object> =
   MutationScope<TRecord> & {
+    readonly select?: RepositorySelect<TRecord>;
     readonly context?: RepositoryContext;
   };
 
@@ -701,21 +707,21 @@ export interface SingleMutationResult<TResult> {
   readonly version?: string | number;
 }
 
-export interface CreateManyResult {
-  readonly createdCount: number;
-}
+export type CreateManyResult<TResult = never> = [TResult] extends [never]
+  ? { readonly createdCount: number }
+  : { readonly createdCount: number; readonly records: readonly TResult[] };
 
-export interface UpdateManyResult {
-  readonly updatedCount: number;
-}
+export type UpdateManyResult<TResult = never> = [TResult] extends [never]
+  ? { readonly updatedCount: number }
+  : { readonly updatedCount: number; readonly records: readonly TResult[] };
 
 export type DeleteOneResult<TResult = never> = [TResult] extends [never]
   ? { readonly deleted: true }
   : { readonly deleted: true; readonly record: TResult };
 
-export interface DeleteManyResult {
-  readonly deletedCount: number;
-}
+export type DeleteManyResult<TResult = never> = [TResult] extends [never]
+  ? { readonly deletedCount: number }
+  : { readonly deletedCount: number; readonly records: readonly TResult[] };
 
 export interface DescribeMutationOptions {
   readonly operation: 'createOne' | 'updateOne';
@@ -815,7 +821,19 @@ export interface Repository<
   createOne(
     options: CreateOneOptions<TCreate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>>;
-  createMany(options: CreateManyOptions<TCreate>): Promise<CreateManyResult>;
+  createMany<TSelection extends AnySelectBuilder<TRecord>>(
+    options: CreateManyOptions<TCreate, TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<CreateManyResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  createMany(
+    options: CreateManyOptions<TCreate, TRecord> & {
+      readonly select: SelectAst;
+    },
+  ): Promise<CreateManyResult<TRecord>>;
+  createMany(
+    options: CreateManyOptions<TCreate, TRecord>,
+  ): Promise<CreateManyResult>;
   updateOne<TSelection extends AnySelectBuilder<TRecord>>(
     options: UpdateOneOptions<TUpdate, TRecord> & {
       readonly select: (select: SelectBuilder<TRecord>) => TSelection;
@@ -832,6 +850,16 @@ export interface Repository<
   upsertOne(
     options: UpsertOneOptions<TCreate, TUpdate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>>;
+  updateMany<TSelection extends AnySelectBuilder<TRecord>>(
+    options: UpdateManyOptions<TRecord, TUpdate> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<UpdateManyResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  updateMany(
+    options: UpdateManyOptions<TRecord, TUpdate> & {
+      readonly select: SelectAst;
+    },
+  ): Promise<UpdateManyResult<TRecord>>;
   updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,
   ): Promise<UpdateManyResult>;
@@ -844,5 +872,13 @@ export interface Repository<
     options: DeleteOneOptions<TRecord> & { readonly select: SelectAst },
   ): Promise<DeleteOneResult<TRecord>>;
   deleteOne(options: DeleteOneOptions<TRecord>): Promise<DeleteOneResult>;
+  deleteMany<TSelection extends AnySelectBuilder<TRecord>>(
+    options: DeleteManyOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<DeleteManyResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  deleteMany(
+    options: DeleteManyOptions<TRecord> & { readonly select: SelectAst },
+  ): Promise<DeleteManyResult<TRecord>>;
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
 }
