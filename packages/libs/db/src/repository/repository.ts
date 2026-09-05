@@ -82,6 +82,7 @@ import type {
   SingleMutationResult,
   SortAst,
   SortNode,
+  StreamOptions,
   UniqueSelector,
   UpdateManyOptions,
   UpdateManyResult,
@@ -136,6 +137,63 @@ export class DefaultRepository<
       limit: options.limit,
       offset: options.offset,
     })) as TRecord[];
+  }
+
+  stream<TSelection extends AnySelectBuilder<TRecord>>(
+    options: StreamOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): AsyncIterable<SelectedBuilderRecord<TRecord, TSelection>>;
+  stream(options?: StreamOptions<TRecord>): AsyncIterable<TRecord>;
+  stream(options: StreamOptions<TRecord> = {}): AsyncIterable<TRecord> {
+    return this.executeStream(options);
+  }
+
+  private async *executeStream(
+    options: StreamOptions<TRecord>,
+  ): AsyncIterable<TRecord> {
+    const collection = await this.collection();
+    const selection = await this.validateSelect(
+      collection,
+      options.select,
+      options.context,
+    );
+    if (selection.select?.root.includes?.length) {
+      invalid(
+        'INVALID_STREAM',
+        'Streaming does not support relation include.',
+        {
+          collection: collection.name,
+          path: ['select'],
+        },
+      );
+    }
+    const filter = await this.normalizeFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
+    const sort = await this.validateSort(collection, options.sort);
+    validatePagination(options.limit, undefined, sort, options.cursor);
+    const distinct = validateDistinct(collection, options.distinct, sort);
+    const cursor = validateCursor(
+      collection,
+      options.cursor,
+      sort,
+      options.sort !== undefined,
+    );
+    for await (const record of this.options.adapter.stream({
+      collection,
+      fields: selection.fields,
+      select: selection.select,
+      filter,
+      sort,
+      distinct,
+      cursor,
+      limit: options.limit,
+    })) {
+      yield record as TRecord;
+    }
   }
 
   async findOne(

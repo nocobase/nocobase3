@@ -352,6 +352,7 @@ interface Repository<
   exists(options?: FilterOnlyOptions<TRecord>): Promise<boolean>;
   aggregate(options: AggregateOptions<TRecord>): Promise<AggregateResult>;
   groupBy(options: GroupByOptions<TRecord>): Promise<GroupByResult[]>;
+  stream(options?: StreamOptions<TRecord>): AsyncIterable<TRecord>;
 
   describeMutation(
     options: DescribeMutationOptions,
@@ -394,6 +395,7 @@ type RepositoryErrorCode =
   | 'INVALID_AGGREGATE'
   | 'INVALID_GROUP_BY'
   | 'INVALID_DISTINCT'
+  | 'INVALID_STREAM'
   | 'INVALID_MUTATION'
   | 'INVALID_UNIQUE_SELECTOR'
   | 'RECORD_NOT_FOUND'
@@ -455,6 +457,7 @@ Aggregate 的 Builder、JSON AST、空集合和精度语义见
 完整记录去重的字段、排序和分页语义见 [Repository Distinct](./distinct.md)。
 根级 cursor 的稳定排序、字典序边界和组合规则见
 [Repository Cursor Pagination](./pagination.md)。
+AsyncIterable、背压、取消和连接释放语义见 [Repository Streaming](./streaming.md)。
 
 ### 写入语义与安全边界
 
@@ -760,6 +763,7 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 - GroupBy 复用 Aggregate，并支持直接标量分组、结果 having 和聚合别名排序。
 - `findMany()` 支持跨数据库字段组合 distinct；sort 选择代表行，分页作用于去重结果。
 - `findMany()` 支持基于稳定直接标量 sort 的排他 cursor，并可与 distinct 组合。
+- `stream()` 流式产出根级记录，支持标量 select 和常规查询条件，但不支持 relation include。
 - `createOne()` 和 `updateOne()` 使用模型形状 `values`：标量字段直接写值，relation Field
   可以使用 Builder 或等价纯 JSON。
 - relation Field 支持 `create`、`connect`、`disconnect`、`set`、`update`、`upsert` 和

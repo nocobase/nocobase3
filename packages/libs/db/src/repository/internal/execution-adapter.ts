@@ -127,6 +127,7 @@ export type RepositorySingleMutationMiss = 'missing' | 'multiple' | 'conflict';
 /** Internal adapter boundary. Plans contain logical Collection and Field names only. */
 export interface RepositoryExecutionAdapter {
   findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]>;
+  stream(plan: RepositoryReadPlan): AsyncIterable<RepositoryRecord>;
   findOne(plan: RepositoryReadPlan): Promise<RepositoryRecord | undefined>;
   count(plan: RepositoryFilterPlan): Promise<number>;
   exists(plan: RepositoryFilterPlan): Promise<boolean>;

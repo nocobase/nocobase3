@@ -710,6 +710,11 @@ export interface FindManyOptions<
   readonly offset?: number;
 }
 
+export type StreamOptions<TRecord extends object> = Omit<
+  FindManyOptions<TRecord>,
+  'offset'
+> & { readonly offset?: never };
+
 export type RepositoryCursor<TRecord extends object = RepositoryRecord> =
   Readonly<Partial<TRecord>>;
 
@@ -909,6 +914,12 @@ export interface Repository<
     },
   ): Promise<SelectedBuilderRecord<TRecord, TSelection>[]>;
   findMany(options?: FindManyOptions<TRecord>): Promise<TRecord[]>;
+  stream<TSelection extends AnySelectBuilder<TRecord>>(
+    options: StreamOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): AsyncIterable<SelectedBuilderRecord<TRecord, TSelection>>;
+  stream(options?: StreamOptions<TRecord>): AsyncIterable<TRecord>;
   findOne<TSelection extends AnySelectBuilder<TRecord>>(
     options: FindOneOptions<TRecord> & {
       readonly select: (select: SelectBuilder<TRecord>) => TSelection;

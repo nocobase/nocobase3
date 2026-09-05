@@ -19,7 +19,7 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 |    6 | GroupBy                  | 已实现：复用 Aggregate Builder/AST，支持直接标量分组、结果 `having`、聚合别名排序和 Builder 返回类型推导                                        |
 |    7 | Distinct                 | 已实现：`distinct: ['country', 'role']` 按组合选择完整代表记录，sort 决定代表行、分页作用于去重结果，不公开 `distinctOn`                        |
 |    8 | 统一分页                 | 已实现：根级 cursor、relation-local limit/cursor 共用稳定直接标量 sort 与字典序条件；关系分页按父记录独立生效                                   |
-|    9 | Streaming                | 查询契约稳定后定义 AsyncIterable、背压、取消和连接释放；V1 先限制为根级记录流                                                                   |
+|    9 | Streaming                | 已实现：AsyncIterable 根级记录流，支持查询条件与标量 select；提前取消销毁底层流并释放资源，不支持 include/aggregate/groupBy                     |
 
 ## 已冻结的组合原则
 
@@ -27,7 +27,7 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 - Cursor 必须基于稳定的非空标量排序；V1 不把 relation aggregate sort 作为 cursor 轴，也不支持每个父记录使用不同 cursor。
 - 根级和 relation-local cursor 共用同一套字段校验与字典序边界编译器；relation-local `limit` 对每个父记录独立生效。
 - `Aggregate` 先于 `GroupBy`；批量 returning 先定义跨数据库结果语义，再利用数据库原生 `RETURNING` 做优化。
-- Streaming 最后接入，避免每增加一种查询形态都重新定义资源生命周期。
+- Streaming 在查询契约稳定后接入，复用根级查询编译，并独立约束资源生命周期。
 
 ## 分阶段交付
 

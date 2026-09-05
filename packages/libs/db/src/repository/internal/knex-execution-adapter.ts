@@ -69,11 +69,29 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   ) {}
 
   async findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]> {
-    const rows = (await await this.buildRead(plan)) as RepositoryRecord[];
+    const { query } = await this.buildRead(plan);
+    const rows = (await query) as RepositoryRecord[];
     if (plan.select?.root.includes?.length) {
       await this.loadRelations(plan.collection, rows, plan.select.root);
     }
     return rows.map((row) => projectRow(row, plan.fields, plan.select?.root));
+  }
+
+  async *stream(plan: RepositoryReadPlan): AsyncIterable<RepositoryRecord> {
+    if (plan.select?.root.includes?.length) {
+      throw new Error('Repository stream does not support relation include.');
+    }
+    const { query } = await this.buildRead(plan);
+    const source = query.stream() as AsyncIterable<RepositoryRecord> & {
+      destroy(error?: Error): void;
+    };
+    try {
+      for await (const row of source) {
+        yield projectRow(row, plan.fields, plan.select?.root);
+      }
+    } finally {
+      source.destroy();
+    }
   }
 
   async findOne(
@@ -579,7 +597,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   private async buildRead(
     plan: RepositoryReadPlan,
-  ): Promise<Knex.QueryBuilder> {
+  ): Promise<{ readonly query: Knex.QueryBuilder }> {
     const client = this.getClient();
     const fields = await this.selectionFields(
       plan.collection,
@@ -615,14 +633,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     }
     if (plan.limit !== undefined) query.limit(plan.limit);
     if (plan.offset !== undefined) query.offset(plan.offset);
-    return query;
+    return { query };
   }
 
   private async buildDistinctRead(
     plan: RepositoryReadPlan,
     fields: readonly SelectionColumn[],
     rootAlias: string,
-  ): Promise<Knex.QueryBuilder> {
+  ): Promise<{ readonly query: Knex.QueryBuilder }> {
     const distinct = plan.distinct;
     if (!distinct) throw new Error('Distinct read requires distinct Fields.');
     const sort = plan.sort?.items ?? [];
@@ -711,7 +729,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     }
     if (plan.limit !== undefined) query.limit(plan.limit);
     if (plan.offset !== undefined) query.offset(plan.offset);
-    return query;
+    return { query };
   }
 
   private async findByUnique(
