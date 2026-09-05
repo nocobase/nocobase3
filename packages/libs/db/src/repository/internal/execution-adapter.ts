@@ -29,8 +29,15 @@ export interface RepositoryReadPlan {
   readonly filter?: FilterAst;
   readonly sort?: SortAst;
   readonly distinct?: readonly string[];
+  readonly cursor?: readonly RepositoryCursorAxis[];
   readonly limit?: number;
   readonly offset?: number;
+}
+
+export interface RepositoryCursorAxis {
+  readonly field: string;
+  readonly direction: 'asc' | 'desc';
+  readonly value: unknown;
 }
 
 export interface RepositoryFilterPlan {

@@ -431,6 +431,8 @@ interface RepositoryErrorShape {
 - `findMany()` 可以不带 `filter`，表示读取整个 Collection。`limit` 和 `offset` 必须是
   非负整数；不传 `limit` 时 Repository 本身不偷偷增加上限，HTTP、CLI 等边界层应设置
   自己的默认分页限制。
+- `cursor` 使用完整稳定 sort 值作为排他边界，并与 `offset` 互斥；V1 只接受 non-nullable
+  直接标量排序轴。
 - `distinct` 接受非空直接标量字段数组；稳定 `sort` 决定每组的完整代表记录，去重先于
   `limit` 和 `offset`。
 - `findOne()` 不是“按唯一键查找”的别名。它返回匹配结果中的第一条，因此必须至少提供
@@ -451,6 +453,8 @@ Aggregate 的 Builder、JSON AST、空集合和精度语义见
 分组字段、having、聚合别名排序和结果类型见
 [Repository GroupBy](./group-by.md)。
 完整记录去重的字段、排序和分页语义见 [Repository Distinct](./distinct.md)。
+根级 cursor 的稳定排序、字典序边界和组合规则见
+[Repository Cursor Pagination](./pagination.md)。
 
 ### 写入语义与安全边界
 
@@ -755,6 +759,7 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 - Aggregate 支持根级 `count`、`sum`、`avg`、`min` 和 `max`，并接受 Filter 与 context。
 - GroupBy 复用 Aggregate，并支持直接标量分组、结果 having 和聚合别名排序。
 - `findMany()` 支持跨数据库字段组合 distinct；sort 选择代表行，分页作用于去重结果。
+- `findMany()` 支持基于稳定直接标量 sort 的排他 cursor，并可与 distinct 组合。
 - `createOne()` 和 `updateOne()` 使用模型形状 `values`：标量字段直接写值，relation Field
   可以使用 Builder 或等价纯 JSON。
 - relation Field 支持 `create`、`connect`、`disconnect`、`set`、`update`、`upsert` 和

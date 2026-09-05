@@ -21,7 +21,10 @@ import {
   type SelectBuilderState,
 } from './select-builder.js';
 import { DefaultSortBuilder, sortExpressionToNode } from './sort-builder.js';
-import type { RepositoryExecutionAdapter } from './internal/execution-adapter.js';
+import type {
+  RepositoryCursorAxis,
+  RepositoryExecutionAdapter,
+} from './internal/execution-adapter.js';
 import type {
   AggregateAst,
   AggregateBuilder,
@@ -58,6 +61,7 @@ import type {
   MutationValidationError,
   MutationValidationResult,
   Repository,
+  RepositoryCursor,
   RepositoryFilter,
   RepositoryMutationDescription,
   RepositoryRecord,
@@ -113,8 +117,14 @@ export class DefaultRepository<
       options.context,
     );
     const sort = await this.validateSort(collection, options.sort);
-    validatePagination(options.limit, options.offset, sort);
+    validatePagination(options.limit, options.offset, sort, options.cursor);
     const distinct = validateDistinct(collection, options.distinct, sort);
+    const cursor = validateCursor(
+      collection,
+      options.cursor,
+      sort,
+      options.sort !== undefined,
+    );
     return (await this.options.adapter.findMany({
       collection,
       fields: selection.fields,
@@ -122,6 +132,7 @@ export class DefaultRepository<
       filter,
       sort,
       distinct,
+      cursor,
       limit: options.limit,
       offset: options.offset,
     })) as TRecord[];
@@ -3475,6 +3486,7 @@ function validatePagination(
   limit: number | undefined,
   offset: number | undefined,
   sort: SortAst | undefined,
+  cursor: object | undefined,
 ): void {
   if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 0)) {
     invalid(
@@ -3499,6 +3511,129 @@ function validatePagination(
       path: ['offset'],
     });
   }
+  if (cursor !== undefined && offset !== undefined) {
+    invalid('INVALID_PAGINATION', 'cursor and offset are mutually exclusive.', {
+      path: ['cursor'],
+    });
+  }
+}
+
+function validateCursor<TRecord extends object>(
+  collection: CollectionDefinition,
+  input: RepositoryCursor<TRecord> | undefined,
+  sort: SortAst | undefined,
+  explicitSort: boolean,
+): RepositoryCursorAxis[] | undefined {
+  if (input === undefined) return undefined;
+  if (!isPlainRecord(input) || Object.keys(input).length === 0) {
+    invalid('INVALID_PAGINATION', 'cursor must be a non-empty object.', {
+      collection: collection.name,
+      path: ['cursor'],
+    });
+  }
+  if (!explicitSort || !sort || sort.items.length === 0) {
+    invalid('INVALID_PAGINATION', 'cursor requires an explicit stable sort.', {
+      collection: collection.name,
+      path: ['sort'],
+    });
+  }
+  const axes: RepositoryCursorAxis[] = [];
+  for (const [index, item] of sort.items.entries()) {
+    if (item.kind !== 'field' || item.path.length !== 1) {
+      invalid(
+        'INVALID_PAGINATION',
+        'Cursor V1 supports direct scalar Field sort only.',
+        { collection: collection.name, path: ['sort', index] },
+      );
+    }
+    const name = item.path[0];
+    const field = scalarField(collection, name, ['sort', index, 'path', 0]);
+    if (field.nullable !== false) {
+      invalid(
+        'INVALID_PAGINATION',
+        `Cursor Field "${field.name}" must be non-nullable.`,
+        {
+          collection: collection.name,
+          field: field.name,
+          path: ['sort', index],
+        },
+      );
+    }
+    if (!Object.hasOwn(input, name)) {
+      invalid(
+        'INVALID_PAGINATION',
+        `cursor must include sort Field "${name}".`,
+        { collection: collection.name, field: name, path: ['cursor', name] },
+      );
+    }
+    const value = (input as Readonly<Record<string, unknown>>)[name];
+    if (value === null || value === undefined) {
+      invalid(
+        'INVALID_PAGINATION',
+        `Cursor value for Field "${name}" must not be null.`,
+        { collection: collection.name, field: name, path: ['cursor', name] },
+      );
+    }
+    if (!validCursorValue(field, value)) {
+      invalid(
+        'INVALID_PAGINATION',
+        `Cursor value is invalid for Field "${name}" of type "${field.type}".`,
+        { collection: collection.name, field: name, path: ['cursor', name] },
+      );
+    }
+    axes.push({ field: name, direction: item.direction, value });
+  }
+  const sortFields = new Set(axes.map((axis) => axis.field));
+  for (const name of Object.keys(input)) {
+    if (!sortFields.has(name)) {
+      invalid(
+        'INVALID_PAGINATION',
+        `cursor Field "${name}" is not part of sort.`,
+        { collection: collection.name, field: name, path: ['cursor', name] },
+      );
+    }
+  }
+  if (
+    !uniqueConstraints(collection).some((constraint) =>
+      constraint.fields.every((field) => sortFields.has(field)),
+    )
+  ) {
+    invalid(
+      'INVALID_PAGINATION',
+      'cursor sort must include a primary or unique tie-breaker.',
+      { collection: collection.name, path: ['sort'] },
+    );
+  }
+  return axes;
+}
+
+function validCursorValue(field: FieldDefinition, value: unknown): boolean {
+  if (
+    field.type === 'increments' ||
+    field.type === 'integer' ||
+    field.type === 'bigInt'
+  ) {
+    return (
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      typeof value === 'bigint' ||
+      (field.type === 'bigInt' && typeof value === 'string')
+    );
+  }
+  if (
+    field.type === 'decimal' ||
+    field.type === 'float' ||
+    field.type === 'double'
+  ) {
+    return (
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      typeof value === 'string'
+    );
+  }
+  if (field.type === 'boolean') return typeof value === 'boolean';
+  if (field.type === 'date' || field.type === 'datetime') {
+    return typeof value === 'string' || value instanceof Date;
+  }
+  return typeof value === 'string';
 }
 
 function validateDistinct(

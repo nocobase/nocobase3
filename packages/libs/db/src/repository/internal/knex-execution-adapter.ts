@@ -39,6 +39,7 @@ import type {
   RepositoryExecutedManyMutation,
   RepositoryExecutionAdapter,
   RepositoryAggregatePlan,
+  RepositoryCursorAxis,
   RepositoryGroupByPlan,
   RepositoryFilterPlan,
   RepositoryReadPlan,
@@ -606,6 +607,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       alias,
       client,
     );
+    applyCursor(query, plan.cursor, (field) =>
+      qualified(alias, column(plan.collection, field)),
+    );
     for (const item of plan.sort?.items ?? []) {
       await this.applySort(query, plan.collection, item, alias);
     }
@@ -631,6 +635,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       }
       const alias = unusedInternalAlias(usedAliases, `_distinct_sort_${index}`);
       return {
+        field: item.path[0],
         alias,
         column: qualified(rootAlias, column(plan.collection, item.path[0])),
         direction: item.direction,
@@ -687,6 +692,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         ),
       )
       .where(qualified(resultAlias, rankAlias), 1);
+    const sortAliasByField = new Map(
+      sortFields.map((field) => [field.field, field.alias]),
+    );
+    applyCursor(query, plan.cursor, (field) => {
+      const internal = sortAliasByField.get(field);
+      if (!internal) throw new Error('Distinct cursor Field was not mapped.');
+      return qualified(resultAlias, internal);
+    });
     for (const field of sortFields) {
       applyOrderBy(
         query,
@@ -2117,6 +2130,32 @@ function applyFilter(
   if (!root || root.items.length === 0) return;
   query.where(function applyRoot(): void {
     applyGroupItems(this, collection, root, graph, sourceAlias, client, depth);
+  });
+}
+
+function applyCursor(
+  query: Knex.QueryBuilder,
+  cursor: readonly RepositoryCursorAxis[] | undefined,
+  resolveField: (field: string) => string,
+): void {
+  if (!cursor || cursor.length === 0) return;
+  query.andWhere(function cursorBoundary(this: Knex.QueryBuilder): void {
+    for (const [index, axis] of cursor.entries()) {
+      this.orWhere(function cursorBranch(this: Knex.QueryBuilder): void {
+        for (const previous of cursor.slice(0, index)) {
+          this.andWhere(
+            resolveField(previous.field),
+            '=',
+            previous.value as Knex.Value,
+          );
+        }
+        this.andWhere(
+          resolveField(axis.field),
+          axis.direction === 'asc' ? '>' : '<',
+          axis.value as Knex.Value,
+        );
+      });
+    }
   });
 }
 

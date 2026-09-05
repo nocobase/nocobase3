@@ -186,6 +186,7 @@ export type {
   Repository,
   RepositoryAggregateNumeric,
   RepositoryContext,
+  RepositoryCursor,
   RepositoryFilter,
   RepositoryMutationDescription,
   RepositoryMutationScalarValue,

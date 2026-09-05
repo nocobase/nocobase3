@@ -18,7 +18,7 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 |    5 | Aggregate                | 已实现：根级 `count`、`sum`、`avg`、`min`、`max` Builder 与 JSON AST；固定空集合、精度和 filter 输入集合规则                                    |
 |    6 | GroupBy                  | 已实现：复用 Aggregate Builder/AST，支持直接标量分组、结果 `having`、聚合别名排序和 Builder 返回类型推导                                        |
 |    7 | Distinct                 | 已实现：`distinct: ['country', 'role']` 按组合选择完整代表记录，sort 决定代表行、分页作用于去重结果，不公开 `distinctOn`                        |
-|    8 | 统一分页                 | 共用 Cursor 模型与字典序条件，依次实现根级 cursor、relation-local limit 和 relation-local cursor                                                |
+|    8 | 统一分页                 | 进行中：根级 cursor 已实现；继续复用 Cursor 模型与字典序条件实现 relation-local limit 和 relation-local cursor                                  |
 |    9 | Streaming                | 查询契约稳定后定义 AsyncIterable、背压、取消和连接释放；V1 先限制为根级记录流                                                                   |
 
 ## 已冻结的组合原则

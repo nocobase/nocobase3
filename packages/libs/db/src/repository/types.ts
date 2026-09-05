@@ -697,9 +697,13 @@ export interface FindManyOptions<
     keyof TRecord & string,
     ...(keyof TRecord & string)[],
   ];
+  readonly cursor?: RepositoryCursor<TRecord>;
   readonly limit?: number;
   readonly offset?: number;
 }
+
+export type RepositoryCursor<TRecord extends object = RepositoryRecord> =
+  Readonly<Partial<TRecord>>;
 
 export type FindOneOptions<TRecord extends object> =
   RepositoryReadOptions<TRecord> &

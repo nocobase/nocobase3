@@ -159,6 +159,7 @@
         "Repository",
         "RepositoryAggregateNumeric",
         "RepositoryContext",
+        "RepositoryCursor",
         "RepositoryErrorCode",
         "RepositoryErrorOptions",
         "RepositoryFilter",
