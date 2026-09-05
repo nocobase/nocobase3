@@ -23,9 +23,11 @@ await projects.updateOne({
 });
 ```
 
-嵌套 update/upsert/delete 的 Filter 也使用这份 context，仍受当前父记录的关系作用域约束。预校验使用相同的变量解析规则，数据库执行阶段的失败仍按事务回滚。JSON payload 的变量消歧规则见[Values 变量与字面量](./mutations.md#values-变量与字面量)。
+嵌套 update/upsert/delete 的 Filter 也使用这份 context，仍受当前父记录的关系作用域约束。预校验使用相同的变量解析规则，数据库执行阶段的失败仍按事务回滚。JSON payload 的变量消歧规则见[Values 变量与字面量](./values.md#变量与-literal)。
 
 关系操作放在 `values` 的关系字段内，可使用 Builder、纯 JSON 或混合输入。字段和关系必须已定义；不能凭字段名推断关系，也不能照搬其他 ORM 的 `where` 或 `connectOrCreate`。
+
+关系输入可使用明确值或显式变量；变量仅解析字段值，不替换字段名、关系名或操作结构。完整规则见 [Values](./values.md)。
 
 示例沿用[概览](./overview.md)：`projects = db.repository('projects')`；owner 是指向 users 的可空 belongsTo，tasks 是通过可空 `tasks.projectId` 建立的 hasMany，tags 是经 projectTags 的 belongsToMany。所有字符串主键由调用方提供；被 connect 的目标必须已存在。各片段独立展示操作。
 
@@ -254,6 +256,6 @@ payload 语义：
 
 ## 验证与故障处理
 
-先通过 [describeMutation／validateMutation](./mutations.md#描述能力与执行前校验)核对允许操作、目标唯一键及 through 必填字段。单次根 mutation 的关联写入属于同一事务；在已有事务内调用时复用外层事务，错误必须传播才能整体回滚，见[事务](./transactions.md)。
+先通过 [describeMutation／validateMutation](./methods/mutation-validation.md#描述能力与执行前校验)核对允许操作、目标唯一键及 through 必填字段。单次根 mutation 的关联写入属于同一事务；在已有事务内调用时复用外层事务，错误必须传播才能整体回滚，见[事务](./transactions.md)。
 
 至少测试：目标不存在、重复 selector、越过关系范围、不可空外键解除、through 必填缺失、多层失败回滚。新增关系操作后用 [Select](./select.md) 验证目标数据和关系；对 disconnect／delete 还需独立查询目标表，确认二者语义没有混淆。

@@ -18,7 +18,7 @@ Repository 基于解析后的 Collection 定义访问记录，识别逻辑字段
 
 Repository 不创建 Schema，也不替代业务权限、租户隔离或输入授权。调用方必须明确允许访问的 Collection、字段和记录范围。
 
-Collection 不要求存在 `id`，也不要求存在主键。字段名称不决定类型：`id` 可以是 string、uuid、integer 等声明类型，甚至不是唯一字段。基础查询和不带 select 的批量标量操作不要求主键；需要定位或重读记录的单条写入要求可用的完整非空主键或无条件唯一选择器。没有可用标识时不会猜测 id，见[写入限制](./mutations.md)。
+Collection 不要求存在 `id`，也不要求存在主键。字段名称不决定类型：`id` 可以是 string、uuid、integer 等声明类型，甚至不是唯一字段。基础查询和不带 select 的批量标量操作不要求主键；需要定位或重读记录的单条写入要求可用的完整非空主键或无条件唯一选择器。没有可用标识时不会猜测 id，见[写入限制](./values.md)。
 
 ## 获取 Repository
 
@@ -51,6 +51,75 @@ await db.transaction(async (connection) => {
 `projects.owner` 是指向 users 的 belongsTo，foreignKey 为 ownerId，targetKey 为 id；`projects.tasks` 是指向 tasks 的 hasMany，sourceKey 为 id，foreignKey 为 projectId；`projects.tags` 是经 projectTags 的 belongsToMany，sourceKey/targetKey 均为 id，foreignKey 为 projectId，otherKey 为 tagId。这里的 id 是示例显式声明的字段，不是默认值；其他模型必须填各自真实的关系键。除字段本身外，必须保留这些 Relation Metadata。
 
 其他必填字段应由调用方提供或在 Schema 中定义默认值。示例中 version 由 Repository 初始化，不手动写入。
+
+### 在隔离数据库中准备示例模型
+
+下面代码只在空的开发／测试数据库执行一次；它提供方法页的最小 Schema 前提。生产环境应将固定定义写进自包含 Migration，不能从文档或运行时模型动态导入迁移。
+
+```ts
+await db.connection().builder.createCollections([
+  {
+    name: 'users',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('name').notNull();
+      c.string('email').unique().notNull();
+    },
+  },
+  {
+    name: 'tasks',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('title').notNull();
+      c.string('status').notNull().defaultTo('draft');
+      c.integer('priority').nullable();
+      c.integer('points').notNull().defaultTo(0);
+      c.string('projectId').nullable();
+    },
+  },
+  {
+    name: 'tags',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('label').notNull();
+    },
+  },
+  {
+    name: 'projectTags',
+    definition: (c) => {
+      c.string('projectId').notNull();
+      c.string('tagId').notNull();
+      c.string('role').nullable();
+      c.unique(['projectId', 'tagId']);
+    },
+  },
+  {
+    name: 'projects',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('name').notNull();
+      c.string('status').notNull().defaultTo('draft');
+      c.string('country').nullable();
+      c.string('role').nullable();
+      c.decimal('budget').notNull().defaultTo(0);
+      c.json('metadata').nullable();
+      c.integer('version').notNull();
+      c.optimisticLock('version');
+      c.string('ownerId').nullable();
+      c.belongsTo('owner', 'users').foreignKey('ownerId').targetKey('id');
+      c.hasMany('tasks', 'tasks').sourceKey('id').foreignKey('projectId');
+      c.belongsToMany('tags', 'tags')
+        .sourceKey('id')
+        .targetKey('id')
+        .through('projectTags')
+        .foreignKey('projectId')
+        .otherKey('tagId');
+    },
+  },
+]);
+```
+
+示例中的所有 id 都是显式声明的 string 字段。非 id 自增主键见 [createOne](./methods/create-one.md#非-id-主键)；无主键、复合身份和 nullable unique 的执行边界见 [Values](./values.md#身份与受管理字段)及 [identity-features 测试](../../../tests/integration/repository/identity-features.test.ts)。
 
 ## 最小读写示例
 
@@ -85,30 +154,52 @@ console.log(created.record, rows, updated.record);
 
 创建和更新返回结果对象，记录位于 `record`；查询直接返回记录或数组。`findOne()` 取匹配结果中的第一条，并不是唯一查询；单条更新和删除则校验实际命中数量。
 
-## 按任务阅读
+## 方法导航
 
-| 任务                     | 方法或输入                             | 文档                                                                                                   |
-| ------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 查询记录、计数、判断存在 | findOne/findMany/count/exists          | [查询](./queries.md)                                                                                   |
-| 组合条件                 | filter                                 | [Filter](./filter.md)、[JSON Filter](./json-filter.md)                                                 |
-| 选择字段和嵌套关系       | select                                 | [Select](./select.md)                                                                                  |
-| 定义结果顺序             | sort                                   | [Sort](./sort.md)                                                                                      |
-| 分页或去重               | limit/offset/cursor/direction/distinct | [分页](./pagination.md)                                                                                |
-| 创建、更新、删除、upsert | values                                 | [写入](./mutations.md)                                                                                 |
-| 操作关系和中间表         | 关系 values                            | [关系写入](./relation-mutations.md)                                                                    |
-| 统计与分组               | aggregate/groupBy/combine              | [聚合](./aggregates.md)                                                                                |
-| 原子执行多个操作         | transaction/ifVersion                  | [事务](./transactions.md)                                                                              |
-| 分批消费大量根记录       | stream                                 | [Streaming](./streaming.md)                                                                            |
-| 核对签名或执行任务       | 类型参考、任务步骤                     | [API 参考](../reference/repository-api.md)、[Agent 指南](../agent/implement-repository-data-access.md) |
+| 任务                 | 方法页                                                                  | 返回                          |
+| -------------------- | ----------------------------------------------------------------------- | ----------------------------- |
+| 读取一条             | [findOne](./methods/find-one.md)                                        | 记录或 undefined              |
+| 读取列表             | [findMany](./methods/find-many.md)                                      | 数组                          |
+| 统计行数             | [count](./methods/count.md)                                             | number                        |
+| 判断存在             | [exists](./methods/exists.md)                                           | boolean                       |
+| 流式消费             | [stream](./methods/stream.md)                                           | AsyncIterable                 |
+| 创建一条             | [createOne](./methods/create-one.md)                                    | record/createdTargets/version |
+| 批量创建             | [createMany](./methods/create-many.md)                                  | createdCount，可选 records    |
+| 更新一条             | [updateOne](./methods/update-one.md)                                    | record/createdTargets/version |
+| 批量更新             | [updateMany](./methods/update-many.md)                                  | updatedCount，可选 records    |
+| 唯一条件创建或更新   | [upsertOne](./methods/upsert-one.md)                                    | record/createdTargets/version |
+| 删除一条             | [deleteOne](./methods/delete-one.md)                                    | deleted，可选 record          |
+| 批量删除             | [deleteMany](./methods/delete-many.md)                                  | deletedCount，可选 records    |
+| 计算统计量           | [aggregate](./methods/aggregate.md)                                     | 聚合别名对象                  |
+| 分组统计             | [groupBy](./methods/group-by.md)                                        | 分组结果数组                  |
+| 能力描述、输入预校验 | [describeMutation / validateMutation](./methods/mutation-validation.md) | 能力描述／valid 与 errors     |
+
+14 个数据方法各有一页，两个辅助方法合为一页，共 16 个公开方法。方法页包含数据前提、参数、返回、代表性示例和错误边界；纯类型速查见 [API 参考](../reference/repository-api.md)。
+
+## 共享能力导航
+
+| 能力                               | 文档                                          |
+| ---------------------------------- | --------------------------------------------- |
+| 条件、关系量词、JSON 路径与数组    | [Filter](./filter.md)                         |
+| 赋值、变量、literal、原子更新      | [Values](./values.md)                         |
+| 标量、关系、关系聚合和 combine     | [Select](./select.md)                         |
+| 字段、关系与聚合排序               | [Sort](./sort.md)                             |
+| offset、cursor、方向与关系局部页面 | [Pagination](./pagination.md)                 |
+| 每组代表记录与关系去重             | [Distinct](./distinct.md)                     |
+| 变量解析与支持范围                 | [Context](./context.md)                       |
+| 七种关系操作和 through payload     | [Relation mutations](./relation-mutations.md) |
+| 原子多步执行、版本冲突             | [Transactions](./transactions.md)             |
+
+Agent 从[任务指南](../agent/implement-repository-data-access.md)定位方法，再按需阅读共享能力，避免把提案当成当前契约。
 
 ## 四类输入
 
-| 输入   | 含义                     | 可用形式                                         |
-| ------ | ------------------------ | ------------------------------------------------ |
-| filter | 选择记录                 | 等值简写、Builder、JSON AST                      |
-| values | 创建或修改数据           | 标量对象；关系和数值原子操作可用 Builder 或 JSON |
-| select | 选择字段、关系、关系聚合 | Builder、JSON AST                                |
-| sort   | 定义结果顺序             | Builder、JSON AST                                |
+| 输入   | 含义                     | 可用形式                                                       |
+| ------ | ------------------------ | -------------------------------------------------------------- |
+| filter | 选择记录                 | 等值简写、Builder、JSON AST                                    |
+| values | 创建或修改数据           | 对象或根级 callback；标量变量、关系和原子操作可用 Builder/JSON |
+| select | 选择字段、关系、关系聚合 | Builder、JSON AST                                              |
+| sort   | 定义结果顺序             | Builder、JSON AST                                              |
 
 根级条件名是 `filter`，不是 Prisma 的 `where`。简单 Filter 对象仅表示等值 AND，不支持任意 Prisma 操作符对象。JSON 不能携带 callback；普通值本身也不一定可 JSON 序列化，例如 bigint、Date。
 

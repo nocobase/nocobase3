@@ -9,18 +9,21 @@ description: 按业务任务选择 Repository 查询、写入、关系、分页�
 
 ## 按任务最小阅读
 
-| 任务                         | 先读                                                      | 按需补充                                                                                            |
-| ---------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 查询单条或列表               | [queries](../repository/queries.md)                       | [filter](../repository/filter.md)、[select](../repository/select.md)、[sort](../repository/sort.md) |
-| 翻页、反向翻页或去重         | [pagination](../repository/pagination.md)                 | sort、select                                                                                        |
-| 创建、更新、删除             | [mutations](../repository/mutations.md)                   | [transactions](../repository/transactions.md)                                                       |
-| 写关联记录或 through payload | [relation-mutations](../repository/relation-mutations.md) | mutations、transactions                                                                             |
-| JSON 条件                    | [json-filter](../repository/json-filter.md)               | filter                                                                                              |
-| 统计和分组                   | [aggregates](../repository/aggregates.md)                 | filter、pagination                                                                                  |
-| 大结果流式消费               | [streaming](../repository/streaming.md)                   | transactions                                                                                        |
-| 核对签名、包装结果           | [API reference](../reference/repository-api.md)           | 对应主题                                                                                            |
+| 任务             | 先读方法                                                                                                                                               | 按需补充                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| 单条读取         | [findOne](../repository/methods/find-one.md)                                                                                                           | filter、select                                                                                                  |
+| 列表、翻页、去重 | [findMany](../repository/methods/find-many.md)                                                                                                         | [pagination](../repository/pagination.md)、[distinct](../repository/distinct.md)、[sort](../repository/sort.md) |
+| 计数、存在性     | [count](../repository/methods/count.md)、[exists](../repository/methods/exists.md)                                                                     | filter、事务一致性                                                                                              |
+| 创建             | [createOne](../repository/methods/create-one.md)、[createMany](../repository/methods/create-many.md)                                                   | [values](../repository/values.md)、[context](../repository/context.md)                                          |
+| 更新与 upsert    | [updateOne](../repository/methods/update-one.md)、[updateMany](../repository/methods/update-many.md)、[upsertOne](../repository/methods/upsert-one.md) | values、[transactions](../repository/transactions.md)                                                           |
+| 删除             | [deleteOne](../repository/methods/delete-one.md)、[deleteMany](../repository/methods/delete-many.md)                                                   | 作用域与外键约束                                                                                                |
+| 关系写入         | [relation-mutations](../repository/relation-mutations.md)                                                                                              | 对应根方法、through payload                                                                                     |
+| JSON 条件        | [filter](../repository/filter.md#json-字段条件)                                                                                                        | 字段与方言能力                                                                                                  |
+| 统计、分组       | [aggregate](../repository/methods/aggregate.md)、[groupBy](../repository/methods/group-by.md)                                                          | [select](../repository/select.md#关系聚合与独立分支)                                                            |
+| 流式消费         | [stream](../repository/methods/stream.md)                                                                                                              | transactions                                                                                                    |
+| 能力描述与预校验 | [mutation-validation](../repository/methods/mutation-validation.md)                                                                                    | 实际执行时的错误处理                                                                                            |
 
-首次使用先读[概览](../repository/overview.md)。需要数据库层自由 join/子查询时转向 [Query 指南](./implement-data-access.md)；Schema 变更转向 [Migration 指南](./implement-schema-change.md)。
+方法页包含参数、返回、完整调用和错误边界；共享主题维护 Filter/Values/Select 等规则。根级与嵌套关系写入均支持显式 values 变量，嵌套 Filter 共用顶层 context；支持范围和限制以 Values 与关系写入文档为准。
 
 ## 实施步骤
 

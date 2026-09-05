@@ -3,9 +3,13 @@ title: Repository Streaming：逐条消费根记录
 description: 通过 Repository stream 返回的 AsyncIterable 消费根记录，了解过滤排序、前向游标、提前退出和资源释放，以及 PostgreSQL 驱动依赖和当前使用限制。
 ---
 
-# Repository Streaming：逐条消费根记录
+# stream：逐条消费根记录
 
 需要逐条消费较大结果集、不想先拿到完整数组时使用 stream。返回 AsyncIterable，不是 Promise<Record[]>；底层缓冲和读取批次由驱动管理，不代表数据库每次只取一行。
+
+## 参数与返回
+
+可选 filter、select、sort、distinct、cursor、direction、limit、context；方向只支持 forward。返回 AsyncIterable，无结果时迭代零次，不返回 records 包装。
 
 ## 使用前检查
 
@@ -16,7 +20,7 @@ description: 通过 Repository stream 返回的 AsyncIterable 消费根记录，
 
 ## 逐条读取
 
-模型和 db 前提见[概览](./overview.md)。
+模型和 db 前提见[概览](../overview.md)。
 
 ```ts
 for await (const project of db.repository('projects').stream({
@@ -57,10 +61,14 @@ for await (const project of db.repository('projects').stream({
 | offset                                   | 不在公开 StreamOptions 中，不要依赖额外属性的运行时行为 |
 | 自定义 stream 批次、自动断点保存         | 未提供专用选项，由应用实现流程                          |
 
-stream 不自动给出下一页 cursor，不保证并发写入下固定快照。断点续读使用已明确排序字段的[前向 cursor](./pagination.md)，并由应用保存进度。
+stream 不自动给出下一页 cursor，不保证并发写入下固定快照。断点续读使用已明确排序字段的[前向 cursor](../pagination.md)，并由应用保存进度。
 
 ## 验证清单
 
 在实际方言和依赖配置上验证：空结果、正常完成、消费端异常、提前 break 后其他查询仍可执行、事务内消费，以及长任务的连接池占用。测试失败不能改为 `findMany()` 再 yield 来声称完成真正流式读取。
 
-继续阅读：[查询](./queries.md)、[分页](./pagination.md)、[事务](./transactions.md)。
+继续阅读：[查询](../methods/find-many.md)、[分页](../pagination.md)、[事务](../transactions.md)。
+
+## 验证依据
+
+行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

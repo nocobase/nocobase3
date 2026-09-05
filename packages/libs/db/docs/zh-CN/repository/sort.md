@@ -61,7 +61,7 @@ const records = await db.repository('projects').findMany({
 - 不支持 `.field('tasks.priority')` 直接穿过 to-many。需显式使用 `.relation('tasks').max('priority')` 等聚合。
 - 关系聚合支持 `count / sum / avg / min / max`；`count()` 不接受字段，sum／avg 要求数值字段，min／max 要求可排序字段。
 - 聚合关系路径可先经过若干 to-one 关系，最后必须是一个 to-many 关系。
-- 排序不会自动把关系或聚合值加入返回结果。需要返回这些数据时，另配 [Select](./select.md) 或[关系聚合](./aggregates.md)。
+- 排序不会自动把关系或聚合值加入返回结果。需要返回这些数据时，另配 [Select](./select.md) 或[关系聚合](./select.md#关系聚合与独立分支)。
 - 当前关系聚合 Sort 没有局部 Filter 参数；不要认为 include 分支中的 Filter 会改变根排序聚合范围。
 
 对应聚合 AST 节点：
@@ -99,14 +99,14 @@ count 节点使用 `aggregate: 'count'` 且省略 `field`。
 
 ## 与其他能力组合
 
-| 使用位置                   | 约束                                                  |
-| -------------------------- | ----------------------------------------------------- |
-| 普通 `findMany`／`findOne` | 支持字段、关系路径、关系聚合排序                      |
-| to-many include            | 在目标 Collection 上解析局部 sort，不改变父记录顺序   |
-| to-one include             | 不接受关系局部非空 sort                               |
-| Cursor                     | 仅非空、不可空的直接标量字段排序，须有唯一决胜项      |
-| Distinct                   | 仅直接标量排序，须有唯一决胜项；不接受关系路径／聚合  |
-| GroupBy                    | 使用自己的分组结果排序输入，见[聚合](./aggregates.md) |
+| 使用位置                   | 约束                                                        |
+| -------------------------- | ----------------------------------------------------------- |
+| 普通 `findMany`／`findOne` | 支持字段、关系路径、关系聚合排序                            |
+| to-many include            | 在目标 Collection 上解析局部 sort，不改变父记录顺序         |
+| to-one include             | 不接受关系局部非空 sort                                     |
+| Cursor                     | 仅非空、不可空的直接标量字段排序，须有唯一决胜项            |
+| Distinct                   | 仅直接标量排序，须有唯一决胜项；不接受关系路径／聚合        |
+| GroupBy                    | 使用自己的分组结果排序输入，见[分组](./methods/group-by.md) |
 
 Cursor 和 Distinct 的完整规则见[分页与去重](./pagination.md)。
 

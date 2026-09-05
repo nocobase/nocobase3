@@ -84,18 +84,37 @@ Collection-aware 记录和关系访问请优先阅读下一节 Repository；本�
 
 ## Repository
 
-- [Repository 概览](./repository/overview.md)：定位、模型前提、最小调用与任务导航。
-- [查询](./repository/queries.md)：findOne/findMany/count/exists 及空结果语义。
-- [Filter](./repository/filter.md)：等值简写、Builder、AST、关系条件和 context 变量。
-- [JSON Filter](./repository/json-filter.md)：路径、结构比较、数组和 NULL 的方言边界。
-- [Select](./repository/select.md)：标量与嵌套关系选择、类型推导。
-- [Sort](./repository/sort.md)：多字段、关系路径、聚合和 NULL 排序。
-- [分页与 Distinct](./repository/pagination.md)：offset、双向 cursor、关系分页与去重。
-- [根级写入](./repository/mutations.md)：单条、批量、upsert、原子更新及 returning。
-- [关系写入](./repository/relation-mutations.md)：嵌套操作与 belongsToMany through payload。
-- [聚合](./repository/aggregates.md)：aggregate、groupBy、having 和关系 combine。
-- [事务](./repository/transactions.md)：事务绑定、乐观锁、写入保护和回滚。
-- [Streaming](./repository/streaming.md)：流式读取、依赖、提前退出和限制。
+- [Repository 概览](./repository/overview.md)：入口、模型前提、16 个方法与共享能力导航。
+
+### 方法示例
+
+- [findOne](./repository/methods/find-one.md)
+- [findMany](./repository/methods/find-many.md)
+- [count](./repository/methods/count.md)
+- [exists](./repository/methods/exists.md)
+- [stream](./repository/methods/stream.md)
+- [createOne](./repository/methods/create-one.md)
+- [createMany](./repository/methods/create-many.md)
+- [updateOne](./repository/methods/update-one.md)
+- [updateMany](./repository/methods/update-many.md)
+- [upsertOne](./repository/methods/upsert-one.md)
+- [deleteOne](./repository/methods/delete-one.md)
+- [deleteMany](./repository/methods/delete-many.md)
+- [aggregate](./repository/methods/aggregate.md)
+- [groupBy](./repository/methods/group-by.md)
+- [describeMutation / validateMutation](./repository/methods/mutation-validation.md)：能力描述与输入预校验。
+
+### 共享能力
+
+- [filter](./repository/filter.md)
+- [values](./repository/values.md)
+- [select](./repository/select.md)
+- [sort](./repository/sort.md)
+- [pagination](./repository/pagination.md)
+- [distinct](./repository/distinct.md)
+- [context](./repository/context.md)
+- [relation-mutations](./repository/relation-mutations.md)
+- [transactions](./repository/transactions.md)
 - [Repository API 参考](./reference/repository-api.md)：选项、返回结构与公开类型。
 - [Repository Agent 任务指南](./agent/implement-repository-data-access.md)：最小阅读路由、实施步骤与验证。
 

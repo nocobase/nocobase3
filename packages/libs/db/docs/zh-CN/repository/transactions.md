@@ -48,7 +48,7 @@ console.log(created);
 - 等待所有数据库操作结束再返回，不启动未 await 的后台写入。
 - 事务范围是单个连接；它不是跨多个数据库连接的分布式事务。
 
-Repository 方法没有 `transaction` 参数；`context` 用于查询变量，也不是事务载体。
+Repository 方法没有 `transaction` 参数；`context` 用于 Filter 与已支持的 Values 变量解析，也不是事务载体，见 [Context](./context.md)。
 
 ## 内部事务与异常传播
 
@@ -137,7 +137,7 @@ try {
 | 批量更新／删除                 | 非空 filter 或显式 `all: true`，二者互斥 |
 | View Collection 写入           | `READ_ONLY_COLLECTION`                   |
 
-filter 只能约束实际传入的条件，不会自动添加用户权限或租户条件。`validateMutation` 只做输入与元数据校验，不能替代实际版本检查或授权。详细输入见[记录写入](./mutations.md)。
+filter 只能约束实际传入的条件，不会自动添加用户权限或租户条件。`validateMutation` 只做输入与元数据校验，不能替代实际版本检查或授权。详细输入见[记录写入](./values.md)。
 
 ## 验证事务代码
 

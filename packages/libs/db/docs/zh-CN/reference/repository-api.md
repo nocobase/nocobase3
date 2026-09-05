@@ -36,31 +36,33 @@ Repository 泛型依次为记录 TRecord、创建 TCreate、更新 TUpdate；后
 
 ## 查询
 
-| 方法     | options                                                                          | 返回                       |
-| -------- | -------------------------------------------------------------------------------- | -------------------------- |
-| findMany | filter、select、sort、distinct、cursor、direction、limit、offset、context 均可选 | `TRecord[]`，无匹配为 `[]` |
-| findOne  | 至少 filter 或非空 sort；可选 select、context                                    | `TRecord \| undefined`     |
-| count    | 可选 filter、context                                                             | number                     |
-| exists   | 可选 filter、context                                                             | boolean                    |
-| stream   | findMany 除 offset；实际不允许 include 或 backward                               | `AsyncIterable<TRecord>`   |
+| 方法                                           | options                                                                          | 返回                       |
+| ---------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------- |
+| [findMany](../repository/methods/find-many.md) | filter、select、sort、distinct、cursor、direction、limit、offset、context 均可选 | `TRecord[]`，无匹配为 `[]` |
+| [findOne](../repository/methods/find-one.md)   | 至少 filter 或非空 sort；可选 select、context                                    | `TRecord \| undefined`     |
+| [count](../repository/methods/count.md)        | 可选 filter、context                                                             | number                     |
+| [exists](../repository/methods/exists.md)      | 可选 filter、context                                                             | boolean                    |
+| [stream](../repository/methods/stream.md)      | findMany 除 offset；实际不允许 include 或 backward                               | `AsyncIterable<TRecord>`   |
 
-Select Builder 的精确重载可能收窄 TRecord；JSON AST 和普通关系记录 include 有推导边界。不要为 findOne 加未公开的 limit/offset/cursor 参数。详见[查询](../repository/queries.md)和 [Streaming](../repository/streaming.md)。
+Select Builder 的精确重载可能收窄 TRecord；JSON AST 和普通关系记录 include 有推导边界。不要为 findOne 加未公开的 limit/offset/cursor 参数。详见[查询](../repository/methods/find-many.md)和 [Streaming](../repository/methods/stream.md)。
+
+Values 对象与 callback、variable/literal 的当前支持范围见 [Values](../repository/values.md)；嵌套关系输入见[关系写入](../repository/relation-mutations.md)。
 
 ## 根级写入
 
-| 方法       | 必填                        | 可选                       | 返回                       |
-| ---------- | --------------------------- | -------------------------- | -------------------------- |
-| createOne  | values                      | select、context            | SingleMutationResult       |
-| createMany | 非空 values 数组            | select、context            | createdCount，可选 records |
-| updateOne  | filter、values              | ifVersion、select、context | SingleMutationResult       |
-| updateMany | values；filter 或 all:true  | select、context            | updatedCount，可选 records |
-| upsertOne  | 唯一 filter、create、update | ifVersion、select、context | SingleMutationResult       |
-| deleteOne  | filter                      | ifVersion、select、context | deleted:true，可选 record  |
-| deleteMany | filter 或 all:true          | select、context            | deletedCount，可选 records |
+| 方法                                               | 必填                        | 可选                       | 返回                       |
+| -------------------------------------------------- | --------------------------- | -------------------------- | -------------------------- |
+| [createOne](../repository/methods/create-one.md)   | values                      | select、context            | SingleMutationResult       |
+| [createMany](../repository/methods/create-many.md) | 非空 values 数组            | select、context            | createdCount，可选 records |
+| [updateOne](../repository/methods/update-one.md)   | filter、values              | ifVersion、select、context | SingleMutationResult       |
+| [updateMany](../repository/methods/update-many.md) | values；filter 或 all:true  | select、context            | updatedCount，可选 records |
+| [upsertOne](../repository/methods/upsert-one.md)   | 唯一 filter、create、update | ifVersion、select、context | SingleMutationResult       |
+| [deleteOne](../repository/methods/delete-one.md)   | filter                      | ifVersion、select、context | deleted:true，可选 record  |
+| [deleteMany](../repository/methods/delete-many.md) | filter 或 all:true          | select、context            | deletedCount，可选 records |
 
 不提供 upsertMany、createMany 的 skipDuplicates、批量 ifVersion 或批量嵌套关系写入。context 用于显式 Values 变量、根级与嵌套 Filter、返回 select 中的关系 Filter，不自动填充未引用的字段，也不执行隐式权限过滤。根级 upsert 用 create/update，不用 values。select 是返回选择，不是输入字段授权。
 
-根级 values 和 upsert 的 create/update 接受对象或同步 `(v: ValuesBuilder) => 对象`；createMany.values 接受非空数组或返回非空数组的 callback。`v.variable('$input.name')` 等价于 `{ kind: 'variable', path: '$input.name' }`；`v.literal(value)` 等价于 `{ kind: 'literal', value }`。JSON 字段内部不递归解释，解析结果不再次作为表达式执行。详情见[Values 变量与字面量](../repository/mutations.md#values-变量与字面量)。
+根级 values 和 upsert 的 create/update 接受对象或同步 `(v: ValuesBuilder) => 对象`；createMany.values 接受非空数组或返回非空数组的 callback。`v.variable('$input.name')` 等价于 `{ kind: 'variable', path: '$input.name' }`；`v.literal(value)` 等价于 `{ kind: 'literal', value }`。JSON 字段内部不递归解释，解析结果不再次作为表达式执行。详情见[Values 变量与字面量](../repository/values.md#变量与-literal)。
 
 SingleMutationResult 结构：
 
@@ -70,7 +72,7 @@ type CreatedProject = SingleMutationResult<{ id: string; name: string }>;
 // { record, createdTargets: readonly CreatedTargetReference[], version?: string | number }
 ```
 
-createdTargets 记录提供了 clientKey 的嵌套创建引用，不是所有关联记录数组。upsert 返回同一结构，不包含 created 布尔标记。delete returning 返回删除前记录，批量 returning 的 records 为只读数组类型。详见[写入](../repository/mutations.md)。
+createdTargets 记录提供了 clientKey 的嵌套创建引用，不是所有关联记录数组。upsert 返回同一结构，不包含 created 布尔标记。delete returning 返回删除前记录，批量 returning 的 records 为只读数组类型。详见[写入](../repository/values.md)。
 
 ## 关系输入
 
@@ -80,19 +82,19 @@ createOne 的关系输入支持 create/connect；updateOne 的关系输入支持
 
 ## 聚合和分组
 
-| 方法      | 必填                     | 可选                          | 返回                         |
-| --------- | ------------------------ | ----------------------------- | ---------------------------- |
-| aggregate | aggregate Builder 或 AST | filter、context               | 别名到聚合值的对象           |
-| groupBy   | 非空 by、aggregate       | filter、having、sort、context | 分组字段与聚合别名组成的数组 |
+| 方法                                            | 必填                     | 可选                          | 返回                         |
+| ----------------------------------------------- | ------------------------ | ----------------------------- | ---------------------------- |
+| [aggregate](../repository/methods/aggregate.md) | aggregate Builder 或 AST | filter、context               | 别名到聚合值的对象           |
+| [groupBy](../repository/methods/group-by.md)    | 非空 by、aggregate       | filter、having、sort、context | 分组字段与聚合别名组成的数组 |
 
-关系选择通过 RelationSelectBuilder.count/sum/avg/min/max/combine，输出由 RelationSelectionExpression 和 RelationCombineResult 表达；没有根 SelectBuilder.aggregate。详见[聚合](../repository/aggregates.md)。
+关系选择通过 RelationSelectBuilder.count/sum/avg/min/max/combine，输出由 RelationSelectionExpression 和 RelationCombineResult 表达；没有根 SelectBuilder.aggregate。详见[聚合](../repository/select.md#关系聚合与独立分支)。
 
 ## 能力描述与预校验
 
-| 方法             | 输入                                                                                                     | 返回                                     |
-| ---------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| describeMutation | `{ operation: 'createOne' \| 'updateOne' }`                                                              | collection、operation、relations、limits |
-| validateMutation | createOne：operation、values，可选 context；updateOne：operation、filter、values，可选 ifVersion/context | `{ valid, errors }`                      |
+| 方法                                                             | 输入                                                                                                     | 返回                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| [describeMutation](../repository/methods/mutation-validation.md) | `{ operation: 'createOne' \| 'updateOne' }`                                                              | collection、operation、relations、limits |
+| [validateMutation](../repository/methods/mutation-validation.md) | createOne：operation、values，可选 context；updateOne：operation、filter、values，可选 ifVersion/context | `{ valid, errors }`                      |
 
 relations 包含 cardinality、targetCollection、allowedActions、modifyOperations/patchOperations、uniqueFieldSets；多对多还可包含 through 的 collection/writableFields/requiredOnCreate。allowedActions 的 set/clear/patch/replace/modify 是规范化计划动作，不要机械当成 values 的方法名。
 

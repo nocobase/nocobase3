@@ -1,0 +1,68 @@
+---
+title: updateOne：准确更新一条记录
+description: 更新准确匹配的一条记录，包含 values、变量、乐观锁、关系写入和零条或多条匹配错误。
+---
+
+# updateOne：准确更新一条记录
+
+示例沿用[概览的模型](../overview.md#本组文档的示例模型)，假设 `db` 已配置且 Collection 已存在。每个示例独立运行，写入前请按说明准备数据；方法不会创建 Schema。
+
+## 参数与返回
+
+- 必填：`filter / values`。
+- 可选：`ifVersion / select / context`。
+- 返回：`{ record, createdTargets, version? }`。
+
+## 数据前提
+
+```ts
+const projects = db.repository('projects');
+await projects.createOne({ values: { id: 'project-1', name: 'Original' } });
+```
+
+## 更新一条记录
+
+```ts
+const result = await projects.updateOne({
+  filter: (filter) => filter.string('id').eq('project-1'),
+  values: { name: 'Repository usage guide', status: 'active' },
+  ifVersion: 1,
+  select: (select) => select.fields('id', 'name', 'status', 'version'),
+});
+
+console.log(result.record);
+console.log(result.version);
+```
+
+`filter` 可以是等值简写、Builder 或完整 Filter AST，见 [Filter](../filter.md)。它不一定必须是唯一键条件，但执行时必须恰好命中一条：
+
+- 零条：`RECORD_NOT_FOUND`。
+- 多条：`MULTIPLE_RECORDS_MATCHED`，不会更新第一条后返回。
+- 版本不一致：`VERSION_CONFLICT`。
+
+`values` 中省略的字段不修改；显式 `null` 表示写入空值，是否允许由字段和数据库约束决定。`context` 可提供 根级与嵌套 Filter、Values 变量，不用于传递事务，也不是自动写入的字段集合。
+
+## 变量与原子更新
+
+```ts
+await db
+  .repository('tasks')
+  .createOne({ values: { id: 'task-1', title: 'First', points: 2 } });
+const result = await db.repository('tasks').updateOne({
+  filter: { id: 'task-1' },
+  values: (v) => ({
+    points: (points) => points.increment(v.variable('$input.delta')),
+  }),
+  context: { input: { delta: 3 } },
+  select: (s) => s.fields('id', 'points'),
+});
+// result.record: { id: 'task-1', points: 5 }
+```
+
+必须有可用于定位的完整非空主键或无条件唯一选择器；即使 filter 恰好命中一行，也不意味着无唯一身份模型支持单条更新。Filter 不强制等于唯一键条件，但匹配多条时拒绝修改。
+
+关系 create/connect/disconnect/set/update/upsert/delete 的适用类型及组合限制见[关系写入](../relation-mutations.md)。版本管理见[事务与乐观锁](../transactions.md)。
+
+## 验证依据
+
+行为覆盖见 [identity-safety.test.ts](../../../../tests/integration/repository/identity-safety.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
