@@ -271,15 +271,28 @@ export interface SelectNode {
   readonly includes?: readonly SelectIncludeNode[];
 }
 
-export interface SelectIncludeNode {
-  readonly kind: 'include';
-  readonly relation: string;
+export interface RelationSelectBranchNode {
   readonly select: SelectNode;
   readonly filter?: FilterAst;
   readonly sort?: SortAst;
   readonly limit?: number;
   readonly cursor?: RepositoryCursor;
   readonly direction?: RepositoryCursorDirection;
+  readonly distinct?: readonly string[];
+  readonly result?: RelationSelectResultNode;
+}
+
+export type RelationSelectResultNode =
+  | { readonly kind: 'count'; readonly field?: string }
+  | { readonly kind: 'sum' | 'avg' | 'min' | 'max'; readonly field: string }
+  | {
+      readonly kind: 'combine';
+      readonly branches: Readonly<Record<string, RelationSelectBranchNode>>;
+    };
+
+export interface SelectIncludeNode extends RelationSelectBranchNode {
+  readonly kind: 'include';
+  readonly relation: string;
 }
 
 export interface SelectAst {
@@ -296,11 +309,13 @@ export interface SelectBuilder<
   TSelectedKeys extends keyof TRecord = never,
   THasFields extends boolean = false,
   THasIncludes extends boolean = false,
+  TRelationResults extends object = Record<never, never>,
 > {
   readonly [selectBuilderState]?: {
     readonly selectedKeys: TSelectedKeys;
     readonly hasFields: THasFields;
     readonly hasIncludes: THasIncludes;
+    readonly relationResults: TRelationResults;
   };
   fields<const TFields extends readonly (keyof TRecord & string)[]>(
     ...fields: TFields
@@ -308,14 +323,28 @@ export interface SelectBuilder<
     TRecord,
     TSelectedKeys | TFields[number],
     true,
-    THasIncludes
+    THasIncludes,
+    TRelationResults
+  >;
+  include<const TName extends string, TResult>(
+    relation: TName,
+    callback: (
+      select: RelationSelectBuilder,
+    ) => RelationSelectionExpression<TResult>,
+  ): SelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults & Record<TName, TResult>
   >;
   include<TTarget extends object = RepositoryRecord>(
     relation: string,
     callback?: (
       select: RelationSelectBuilder<TTarget>,
-    ) => AnyRelationSelectBuilder<TTarget>,
-  ): SelectBuilder<TRecord, TSelectedKeys, THasFields, true>;
+    ) =>
+      AnyRelationSelectBuilder<TTarget> | RelationSelectionExpression<unknown>,
+  ): SelectBuilder<TRecord, TSelectedKeys, THasFields, true, TRelationResults>;
 }
 
 export interface RelationSelectBuilder<
@@ -323,47 +352,152 @@ export interface RelationSelectBuilder<
   TSelectedKeys extends keyof TRecord = never,
   THasFields extends boolean = false,
   THasIncludes extends boolean = false,
-> extends SelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes> {
+  TRelationResults extends object = Record<never, never>,
+> extends SelectBuilder<
+  TRecord,
+  TSelectedKeys,
+  THasFields,
+  THasIncludes,
+  TRelationResults
+> {
   fields<const TFields extends readonly (keyof TRecord & string)[]>(
     ...fields: TFields
   ): RelationSelectBuilder<
     TRecord,
     TSelectedKeys | TFields[number],
     true,
-    THasIncludes
+    THasIncludes,
+    TRelationResults
+  >;
+  include<const TName extends string, TResult>(
+    relation: TName,
+    callback: (
+      select: RelationSelectBuilder,
+    ) => RelationSelectionExpression<TResult>,
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults & Record<TName, TResult>
   >;
   include<TTarget extends object = RepositoryRecord>(
     relation: string,
     callback?: (
       select: RelationSelectBuilder<TTarget>,
-    ) => AnyRelationSelectBuilder<TTarget>,
-  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, true>;
+    ) =>
+      AnyRelationSelectBuilder<TTarget> | RelationSelectionExpression<unknown>,
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    true,
+    TRelationResults
+  >;
   filter(
     filter: RepositoryFilter<TRecord>,
-  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults
+  >;
   sort(
     sort: RepositorySort<TRecord>,
-  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults
+  >;
   limit(
     limit: number,
-  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults
+  >;
   cursor(
     cursor: RepositoryCursor<TRecord>,
-  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults
+  >;
   direction(
     direction: RepositoryCursorDirection,
-  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults
+  >;
+  distinct(
+    fields: readonly (keyof TRecord & string)[],
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys,
+    THasFields,
+    THasIncludes,
+    TRelationResults
+  >;
+  count(field?: keyof TRecord & string): RelationSelectionExpression<number>;
+  sum(
+    field: keyof TRecord & string,
+  ): RelationSelectionExpression<RepositoryAggregateNumeric | null>;
+  avg(
+    field: keyof TRecord & string,
+  ): RelationSelectionExpression<RepositoryAggregateNumeric | null>;
+  min<TKey extends keyof TRecord & string>(
+    field: TKey,
+  ): RelationSelectionExpression<TRecord[TKey] | null>;
+  max<TKey extends keyof TRecord & string>(
+    field: TKey,
+  ): RelationSelectionExpression<TRecord[TKey] | null>;
+  combine<
+    const TBranches extends Readonly<
+      Record<
+        string,
+        AnyRelationSelectBuilder<TRecord> | RelationSelectionExpression<unknown>
+      >
+    >,
+  >(
+    branches: TBranches,
+  ): RelationSelectionExpression<RelationCombineResult<TRecord, TBranches>>;
 }
+
+declare const relationSelectionType: unique symbol;
+export interface RelationSelectionExpression<T> {
+  readonly kind: 'relationSelectionExpression';
+  readonly [relationSelectionType]?: T;
+}
+export type RelationCombineResult<TRecord extends object, TBranches> = {
+  readonly [
+    K in keyof TBranches
+  ]: TBranches[K] extends RelationSelectionExpression<infer T>
+    ? T
+    : TBranches[K] extends AnySelectBuilder<TRecord>
+      ? SelectedBuilderRecord<TRecord, TBranches[K]>[]
+      : never;
+};
 
 export type AnySelectBuilder<TRecord extends object> = SelectBuilder<
   TRecord,
   keyof TRecord,
   boolean,
-  boolean
+  boolean,
+  object
 >;
 
 export type AnyRelationSelectBuilder<TRecord extends object> =
-  RelationSelectBuilder<TRecord, keyof TRecord, boolean, boolean>;
+  RelationSelectBuilder<TRecord, keyof TRecord, boolean, boolean, object>;
 
 export type SelectedBuilderRecord<
   TRecord extends object,
@@ -373,14 +507,19 @@ export type SelectedBuilderRecord<
     TRecord,
     infer TSelectedKeys,
     infer THasFields,
-    infer THasIncludes
+    infer THasIncludes,
+    infer TRelationResults
   >
     ? THasIncludes extends true
-      ? TRecord
+      ? MergeRelationResults<TRecord, TRelationResults>
       : THasFields extends true
-        ? Pick<TRecord, TSelectedKeys>
-        : TRecord
+        ? MergeRelationResults<Pick<TRecord, TSelectedKeys>, TRelationResults>
+        : MergeRelationResults<TRecord, TRelationResults>
     : TRecord;
+
+type MergeRelationResults<TRecord, TRelations> = keyof TRelations extends never
+  ? TRecord
+  : Omit<TRecord, keyof TRelations> & TRelations;
 
 export type RepositorySelect<TRecord extends object> =
   SelectAst | ((select: SelectBuilder<TRecord>) => AnySelectBuilder<TRecord>);

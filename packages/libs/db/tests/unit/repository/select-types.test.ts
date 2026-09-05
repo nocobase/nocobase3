@@ -93,6 +93,36 @@ function _findUsersWithInclude(repository: UserRepository) {
   });
 }
 
+function _findUsersWithCombine(repository: UserRepository) {
+  return repository.findMany({
+    select: (s) =>
+      s
+        .fields('id')
+        .include('tasks', (tasks) =>
+          tasks.combine({
+            count: tasks.count(),
+            total: tasks.sum('points'),
+            records: tasks.fields('title'),
+          }),
+        )
+        .include('comments', (comments) => comments.count()),
+  });
+}
+
+it('infers relation aggregate and combine outputs with selected root fields', () => {
+  type Row = Awaited<ReturnType<typeof _findUsersWithCombine>>[number];
+  expectTypeOf<Row['id']>().toEqualTypeOf<string>();
+  expectTypeOf<Row['comments']>().toEqualTypeOf<number>();
+  expectTypeOf<Row['tasks']['count']>().toEqualTypeOf<number>();
+  expectTypeOf<Row['tasks']['total']>().toEqualTypeOf<
+    number | string | bigint | null
+  >();
+  expectTypeOf<
+    keyof Row['tasks']['records'][number]
+  >().toEqualTypeOf<'title'>();
+  expectTypeOf<keyof Row>().toEqualTypeOf<'id' | 'tasks' | 'comments'>();
+});
+
 function _deleteSelectedUser(repository: UserRepository) {
   return repository.deleteOne({
     filter: { id: 'user-1' },

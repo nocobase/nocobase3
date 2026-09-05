@@ -1652,13 +1652,35 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     parents: RepositoryRecord[],
     node: SelectIncludeNode,
   ): Promise<void> {
+    if (node.result?.kind === 'combine') {
+      const results = parents.map((): RepositoryRecord => ({}));
+      for (const [name, branch] of Object.entries(node.result.branches)) {
+        const copies = parents.map((parent) => ({ ...parent }));
+        await this.loadRelation(collection, copies, {
+          ...branch,
+          kind: 'include',
+          relation: node.relation,
+        });
+        copies.forEach((copy, index) => {
+          results[index][name] = copy[node.relation];
+        });
+      }
+      parents.forEach((parent, index) => {
+        parent[node.relation] = results[index];
+      });
+      return;
+    }
     const resolved = await this.resolveRelation(collection, node.relation);
     const parentValues = uniqueValues(
       parents.map((parent) => parent[relationHelper(node.relation)]),
     );
     if (parentValues.length === 0) {
       for (const parent of parents)
-        parent[node.relation] = emptyRelation(resolved);
+        parent[node.relation] = node.result
+          ? node.result.kind === 'count'
+            ? 0
+            : null
+          : emptyRelation(resolved);
       return;
     }
 
@@ -1670,6 +1692,16 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       column: column(resolved.target, field),
       alias: field,
     }));
+    const sortFields = (node.sort?.items ?? []).flatMap((item) =>
+      item.kind === 'field' && item.path.length === 1 ? [item.path[0]] : [],
+    );
+    for (const field of [
+      ...sortFields,
+      ...(node.distinct ?? []),
+      ...(node.result?.field ? [node.result.field] : []),
+    ]) {
+      selected.push({ column: column(resolved.target, field), alias: field });
+    }
     const associationField =
       resolved.relation.type === 'belongsTo'
         ? resolved.targetKey
@@ -1754,11 +1786,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       targetAlias,
       client,
     );
-    applyCursor(
-      query,
-      cursorForDirection(relationCursorAxes(node), node.direction),
-      (field) => qualified(targetAlias, column(resolved.target, field)),
-    );
+    if (!node.distinct)
+      applyCursor(
+        query,
+        cursorForDirection(relationCursorAxes(node), node.direction),
+        (field) => qualified(targetAlias, column(resolved.target, field)),
+      );
     for (const item of node.sort?.items ?? []) {
       await this.applySort(
         query,
@@ -1767,7 +1800,113 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         targetAlias,
       );
     }
-    const targets = (await query) as RepositoryRecord[];
+    let scoped = query;
+    const parentKey = relationParentHelper(node.relation);
+    const used = new Set([...selected.map((field) => field.alias), parentKey]);
+    const rankKey = unusedInternalAlias(used, '_relation_rank');
+    const ordering = (alias: string, reverse: boolean): Knex.Raw => {
+      const bindings: Knex.RawBinding[] = [];
+      const sql = (node.sort?.items ?? [])
+        .map((original) => {
+          const item = reverse
+            ? sortForDirection(original, node.direction)
+            : original;
+          if (item.kind !== 'field' || item.path.length !== 1)
+            throw new Error(
+              'Relation ranking requires direct scalar Field sort.',
+            );
+          const name = qualified(alias, item.path[0]);
+          bindings.push(name, name);
+          const last = (item.nulls ?? 'last') === 'last';
+          return `case when ?? is null then ${last ? 1 : 0} else ${last ? 0 : 1} end asc, ?? ${item.direction}`;
+        })
+        .join(', ');
+      return client.raw(
+        sql || '??',
+        sql ? bindings : [qualified(alias, parentKey)],
+      );
+    };
+    if (node.distinct) {
+      const baseAlias = 'relation_distinct_source';
+      const partition = [parentKey, ...node.distinct].map((field) =>
+        qualified(baseAlias, field),
+      );
+      const ranked = client
+        .from(query.clear('order').as(baseAlias))
+        .select(
+          `${baseAlias}.*`,
+          client.raw(
+            `row_number() over (partition by ${partition.map(() => '??').join(', ')} order by ?) as ??`,
+            [...partition, ordering(baseAlias, false), rankKey],
+          ),
+        );
+      const alias = 'relation_distinct';
+      scoped = client
+        .from(ranked.as(alias))
+        .select(`${alias}.*`)
+        .where(qualified(alias, rankKey), 1);
+      applyCursor(
+        scoped,
+        cursorForDirection(relationCursorAxes(node), node.direction),
+        (field) => qualified(alias, field),
+      );
+      scoped.orderByRaw('?', [ordering(alias, true)]);
+    }
+    if (node.result) {
+      let aggregateSource = scoped.clear('order');
+      if (node.limit !== undefined) {
+        const alias = 'relation_page_source';
+        const ranked = client
+          .from(aggregateSource.as(alias))
+          .select(
+            `${alias}.*`,
+            client.raw('row_number() over (partition by ?? order by ?) as ??', [
+              qualified(alias, parentKey),
+              ordering(alias, true),
+              rankKey + '_page',
+            ]),
+          );
+        aggregateSource = client
+          .from(ranked.as('relation_page'))
+          .select('*')
+          .where(rankKey + '_page', '<=', node.limit);
+      }
+      const alias = 'relation_aggregate';
+      const resultKey = unusedInternalAlias(used, '_relation_value');
+      const aggregateQuery = client
+        .from(aggregateSource.as(alias))
+        .select(parentKey)
+        .groupBy(parentKey);
+      const field = node.result.field
+        ? qualified(alias, node.result.field)
+        : '*';
+      if (node.result.kind === 'count')
+        aggregateQuery.count({ [resultKey]: field });
+      if (node.result.kind === 'sum')
+        aggregateQuery.sum({ [resultKey]: field });
+      if (node.result.kind === 'avg')
+        aggregateQuery.avg({ [resultKey]: field });
+      if (node.result.kind === 'min')
+        aggregateQuery.min({ [resultKey]: field });
+      if (node.result.kind === 'max')
+        aggregateQuery.max({ [resultKey]: field });
+      const aggregates = (await aggregateQuery) as RepositoryRecord[];
+      const values = new Map(
+        aggregates.map((row) => [
+          associationKey(row[parentKey]),
+          row[resultKey],
+        ]),
+      );
+      for (const parent of parents) {
+        const value = values.get(
+          associationKey(parent[relationHelper(node.relation)]),
+        );
+        parent[node.relation] =
+          node.result.kind === 'count' ? Number(value ?? 0) : (value ?? null);
+      }
+      return;
+    }
+    const targets = (await scoped) as RepositoryRecord[];
     const grouped = new Map<string, RepositoryRecord[]>();
     for (const target of targets) {
       const key = associationKey(target[relationParentHelper(node.relation)]);

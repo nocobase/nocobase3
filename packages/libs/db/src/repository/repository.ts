@@ -21,6 +21,7 @@ import {
 import {
   DefaultSelectBuilder,
   type SelectBuilderState,
+  type RelationSelectBranchInput,
 } from './select-builder.js';
 import { DefaultSortBuilder, sortExpressionToNode } from './sort-builder.js';
 import type {
@@ -78,6 +79,7 @@ import type {
   RelationUpsertInput,
   RelationUpsertTarget,
   SelectAst,
+  RelationSelectBranchNode,
   SelectBuilder,
   SelectedBuilderRecord,
   SelectIncludeNode,
@@ -1929,7 +1931,11 @@ async function validateSelectInputWithRelations(
   collection: CollectionDefinition,
   select: SelectInputAst | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
+  budget: { nodes: number } = { nodes: 0 },
+  depth: number = 0,
 ): Promise<ValidatedSelect> {
+  if (++budget.nodes > 200 || depth > 20)
+    invalid('INVALID_SELECT', 'Selection exceeds the node or depth limit.', {});
   const fields = validateScalarSelect(collection, select);
   const seen = new Set<string>();
   const includes: SelectIncludeNode[] = [];
@@ -1958,6 +1964,25 @@ async function validateSelectInputWithRelations(
       'relation',
     ]);
     const target = await targetCollection(collections, relation, path);
+    if (node.result) {
+      if (!isToManyRelation(relation))
+        invalid(
+          'INVALID_SELECT',
+          'Relation aggregates require a to-many relation.',
+          { path },
+        );
+      const branch = await validateRelationResult(
+        collections,
+        collection,
+        node.relation,
+        node,
+        context,
+        budget,
+        depth + 1,
+      );
+      includes.push({ kind: 'include', relation: node.relation, ...branch });
+      continue;
+    }
     const nested = await validateSelectInputWithRelations(
       collections,
       target,
@@ -1967,6 +1992,8 @@ async function validateSelectInputWithRelations(
         root: node.select,
       },
       context,
+      budget,
+      depth + 1,
     );
     if (!nested.select) {
       invalid('INVALID_SELECT', 'Included selections must be defined.', {
@@ -2014,6 +2041,7 @@ async function validateSelectInputWithRelations(
       : undefined;
     validatePagination(node.limit, undefined, sort, node.cursor);
     validateCursorDirection(node.direction, node.cursor);
+    const distinct = validateDistinct(target, node.distinct, sort);
     if (isToManyRelation(relation)) {
       validateCursor(target, node.cursor, sort, node.sort !== undefined);
     }
@@ -2026,6 +2054,7 @@ async function validateSelectInputWithRelations(
       limit: node.limit,
       cursor: node.cursor,
       direction: node.direction,
+      distinct,
     });
   }
   return {
@@ -2038,6 +2067,123 @@ async function validateSelectInputWithRelations(
         }
       : undefined,
   };
+}
+
+async function validateRelationResult(
+  collections: Pick<ConnectionCollections, 'get'>,
+  source: CollectionDefinition,
+  relation: string,
+  input: RelationSelectBranchInput,
+  context: Readonly<Record<string, unknown>> | undefined,
+  budget: { nodes: number },
+  depth: number,
+): Promise<RelationSelectBranchNode> {
+  const result = input.result;
+  const validated = await validateSelectInputWithRelations(
+    collections,
+    source,
+    {
+      kind: 'select',
+      version: 1,
+      root: {
+        kind: 'selection',
+        fields: [],
+        includes: [{ ...input, result: undefined, kind: 'include', relation }],
+      },
+    },
+    context,
+    budget,
+    depth,
+  );
+  const scope = validated.select!.root.includes![0];
+  if (!result) return scope;
+  if (result.kind === 'combine') {
+    const entries = Object.entries(result.branches ?? {});
+    if (entries.length === 0 || entries.length > 32)
+      invalid(
+        'INVALID_SELECT',
+        'combine requires between 1 and 32 branches.',
+        {},
+      );
+    const branches: Record<string, RelationSelectBranchNode> = {};
+    for (const [name, branch] of entries) {
+      if (!name || ['__proto__', 'constructor', 'prototype'].includes(name))
+        invalid('INVALID_SELECT', 'Invalid combine branch name.', {});
+      const commonFilter = scope.filter;
+      const target = await targetCollection(
+        collections,
+        relationField(source, relation, []),
+        [],
+      );
+      const ownFilter = await normalizeFilterWithRelations(
+        collections,
+        target,
+        branch.filter,
+        context,
+      );
+      const mergedFilter: FilterAst | undefined =
+        commonFilter && ownFilter
+          ? {
+              kind: 'filter',
+              version: 1,
+              root: {
+                kind: 'group',
+                logic: 'and',
+                items: [commonFilter.root, ownFilter.root],
+              },
+            }
+          : (ownFilter ?? commonFilter);
+      const child = {
+        ...input,
+        ...branch,
+        filter: mergedFilter,
+        sort: branch.sort ?? input.sort,
+        limit: branch.limit ?? input.limit,
+        cursor: branch.cursor ?? input.cursor,
+        direction: branch.direction ?? input.direction,
+        distinct: branch.distinct ?? input.distinct,
+        result: branch.result,
+      };
+      branches[name] = await validateRelationResult(
+        collections,
+        source,
+        relation,
+        child,
+        context,
+        budget,
+        depth + 1,
+      );
+    }
+    return { ...scope, result: { kind: 'combine', branches } };
+  }
+  if (input.select.fields !== undefined || input.select.includes?.length)
+    invalid(
+      'INVALID_SELECT',
+      'Aggregate branches cannot select records or include relations.',
+      {},
+    );
+  const target = await targetCollection(
+    collections,
+    relationField(source, relation, []),
+    [],
+  );
+  validateAggregate(target, {
+    kind: 'aggregate',
+    version: 1,
+    items: [{ ...result, alias: 'value' }],
+  });
+  if (
+    scope.limit !== undefined &&
+    scope.sort?.items.some(
+      (item) => item.kind !== 'field' || item.path.length !== 1,
+    )
+  )
+    invalid(
+      'INVALID_SELECT',
+      'Paginated relation aggregates require direct scalar Field sort.',
+      {},
+    );
+  return { ...scope, result };
 }
 
 interface ValidatedSelect {
