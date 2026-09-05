@@ -41,6 +41,7 @@ import type {
   RepositorySingleMutationMiss,
   RepositoryUpdateManyPlan,
   RepositoryUpdateOnePlan,
+  RepositoryUpsertOnePlan,
 } from './execution-adapter.js';
 
 interface LockedMutationRecord {
@@ -212,6 +213,49 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           version: versionOf(plan.collection, record),
         }
       : 'missing';
+  }
+
+  async upsertOne(
+    plan: RepositoryUpsertOnePlan,
+  ): Promise<RepositoryExecutedMutation | 'conflict'> {
+    return this.inTransaction((adapter) => adapter.executeUpsertOne(plan));
+  }
+
+  private async executeUpsertOne(
+    plan: RepositoryUpsertOnePlan,
+  ): Promise<RepositoryExecutedMutation | 'conflict'> {
+    const selected = await this.lockByUnique(plan.collection, plan.by);
+    if (selected === 'missing') {
+      try {
+        return await this.inSavepoint((adapter) =>
+          adapter.executeCreateOne({
+            collection: plan.collection,
+            fields: plan.fields,
+            values: plan.createValues,
+            relations: plan.createRelations,
+            select: plan.select,
+          }),
+        );
+      } catch (error) {
+        if (!isUniqueConstraintViolation(error)) throw error;
+        const concurrent = await this.lockByUnique(plan.collection, plan.by);
+        if (concurrent === 'missing') throw error;
+      }
+    }
+    const updated = await this.executeUpdateOne({
+      collection: plan.collection,
+      fields: plan.fields,
+      filter: uniqueFilter(plan.by),
+      values: plan.updateValues,
+      ifVersion: plan.ifVersion,
+      relations: plan.updateRelations,
+      select: plan.select,
+    });
+    if (updated === 'conflict') return updated;
+    if (updated === 'missing' || updated === 'multiple') {
+      throw new Error('Upsert target disappeared while updating.');
+    }
+    return updated;
   }
 
   async updateMany(plan: RepositoryUpdateManyPlan): Promise<number> {
@@ -1073,6 +1117,19 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const client = this.getClient();
     if (isTransaction(client)) return execute(this);
     return client.transaction((transaction) =>
+      execute(
+        new KnexRepositoryExecutionAdapter(
+          () => transaction,
+          this.getCollection,
+        ),
+      ),
+    );
+  }
+
+  private async inSavepoint<TResult>(
+    execute: (adapter: KnexRepositoryExecutionAdapter) => Promise<TResult>,
+  ): Promise<TResult> {
+    return this.getClient().transaction((transaction) =>
       execute(
         new KnexRepositoryExecutionAdapter(
           () => transaction,
@@ -2060,6 +2117,32 @@ function versionOf(
 
 function firstReturnedRow(value: unknown): RepositoryRecord | undefined {
   return Array.isArray(value) && isRecord(value[0]) ? value[0] : undefined;
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    const code = record.code;
+    const number = record.errno ?? record.number ?? record.errorNum;
+    if (
+      code === '23505' ||
+      code === 'ER_DUP_ENTRY' ||
+      code === 'SQLITE_CONSTRAINT' ||
+      code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+      code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
+      number === 1 ||
+      number === 1062 ||
+      number === 2601 ||
+      number === 2627
+    ) {
+      return true;
+    }
+    current = record.cause ?? record.originalError;
+  }
+  return false;
 }
 
 function deriveCreatedSelector(

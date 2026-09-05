@@ -200,6 +200,7 @@
         "UpdateRelationFieldMutationBuilder",
         "UpdateRelationFieldMutationInput",
         "UpdateRelationFieldMutationJsonInput",
+        "UpsertOneOptions",
         "ValidateMutationOptions"
       ]
     }

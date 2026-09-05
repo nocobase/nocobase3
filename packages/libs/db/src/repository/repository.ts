@@ -69,6 +69,7 @@ import type {
   UpdateManyResult,
   UpdateRelationFieldMutationInput,
   UpdateOneOptions,
+  UpsertOneOptions,
   ValidateMutationOptions,
 } from './types.js';
 
@@ -353,6 +354,87 @@ export class DefaultRepository<
     if (result === 'multiple') multipleRecordsMatched(collection);
     if (result === 'conflict') versionConflict(collection);
     if (result === 'missing') recordNotFound(collection);
+    return {
+      record: pickSelection(
+        result.record,
+        requestedFields,
+        selection.select,
+      ) as TRecord,
+      createdTargets: result.createdTargets,
+      version: result.version,
+    };
+  }
+
+  async upsertOne(
+    options: UpsertOneOptions<TCreate, TUpdate, TRecord>,
+  ): Promise<SingleMutationResult<TRecord>> {
+    const collection = await this.collection();
+    assertWritableCollection(collection);
+    const filter = await this.normalizeSingleMutationFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
+    const by = uniqueSelectorFromFilter(collection, filter, ['filter']);
+    const [createMutation, updateMutation] = await Promise.all([
+      normalizeModelMutation(
+        this.options.collections,
+        collection,
+        options.create,
+        'createOne',
+      ),
+      normalizeModelMutation(
+        this.options.collections,
+        collection,
+        options.update,
+        'updateOne',
+      ),
+    ]);
+    if (
+      by.fields.some(
+        (field) =>
+          !Object.hasOwn(createMutation.values, field) ||
+          createMutation.values[field] !== by.values[field],
+      )
+    ) {
+      invalid(
+        'INVALID_MUTATION',
+        'Upsert create values must contain the same unique selector values as filter.',
+        { collection: collection.name, path: ['create'] },
+      );
+    }
+    if (
+      by.fields.some(
+        (field) =>
+          Object.hasOwn(updateMutation.values, field) &&
+          updateMutation.values[field] !== by.values[field],
+      )
+    ) {
+      invalid(
+        'INVALID_MUTATION',
+        'Upsert update values must not change the unique selector fields.',
+        { collection: collection.name, path: ['update'] },
+      );
+    }
+    validateIfVersion(collection, options.ifVersion);
+    const selection = await this.validateSelect(
+      collection,
+      options.select,
+      options.context,
+    );
+    const requestedFields = selection.fields;
+    const result = await this.options.adapter.upsertOne({
+      collection,
+      fields: includeExecutionFields(collection, requestedFields),
+      by,
+      createValues: createMutation.values,
+      createRelations: createMutation.relations,
+      updateValues: updateMutation.values,
+      updateRelations: updateMutation.relations,
+      ifVersion: options.ifVersion,
+      select: selection.select,
+    });
+    if (result === 'conflict') versionConflict(collection);
     return {
       record: pickSelection(
         result.record,
@@ -2832,13 +2914,14 @@ function uniqueSelectorFromFilter(
         node.path.length !== 1 ||
         node.operator !== '$eq' ||
         node.value === undefined ||
+        node.value === null ||
         Array.isArray(node.value) ||
         isPlainRecord(node.value),
     )
   ) {
     invalid(
       'INVALID_UNIQUE_SELECTOR',
-      'Relation upsert filter must equal one primary or unique Field set.',
+      'Upsert filter must equal one primary or unique Field set.',
       { collection: collection.name, path },
     );
   }

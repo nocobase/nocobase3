@@ -6,6 +6,7 @@ import type {
   RepositoryRecord,
   SelectAst,
   SortAst,
+  UniqueSelector,
 } from '../types.js';
 
 export interface RepositoryReadPlan {
@@ -43,6 +44,18 @@ export interface RepositoryUpdateOnePlan {
   readonly values: RepositoryRecord;
   readonly ifVersion?: string | number;
   readonly relations?: RelationMutationAst;
+  readonly select?: SelectAst;
+}
+
+export interface RepositoryUpsertOnePlan {
+  readonly collection: CollectionDefinition;
+  readonly fields: readonly string[];
+  readonly by: UniqueSelector;
+  readonly createValues: RepositoryRecord;
+  readonly createRelations?: RelationMutationAst;
+  readonly updateValues: RepositoryRecord;
+  readonly updateRelations?: RelationMutationAst;
+  readonly ifVersion?: string | number;
   readonly select?: SelectAst;
 }
 
@@ -90,6 +103,9 @@ export interface RepositoryExecutionAdapter {
   updateOne(
     plan: RepositoryUpdateOnePlan,
   ): Promise<RepositoryExecutedMutation | RepositorySingleMutationMiss>;
+  upsertOne(
+    plan: RepositoryUpsertOnePlan,
+  ): Promise<RepositoryExecutedMutation | 'conflict'>;
   updateMany(plan: RepositoryUpdateManyPlan): Promise<number>;
   deleteOne(
     plan: RepositoryDeleteOnePlan,

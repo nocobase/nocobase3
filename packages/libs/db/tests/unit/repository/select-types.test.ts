@@ -58,6 +58,18 @@ function _updateSelectedUser(repository: UserRepository) {
   });
 }
 
+function _upsertSelectedUser(repository: UserRepository) {
+  return repository.upsertOne({
+    filter: { email: 'alice@example.com' },
+    create: {
+      name: 'Alice',
+      email: 'alice@example.com',
+    },
+    update: { name: 'Alice Updated' },
+    select: (select) => select.fields('id', 'name'),
+  });
+}
+
 function _findUsersWithAst(repository: UserRepository, select: SelectAst) {
   return repository.findMany({ select });
 }
@@ -108,6 +120,9 @@ it('infers scalar builder selections and preserves fallback result types', () =>
   >();
   expectTypeOf<ReturnType<typeof _updateSelectedUser>>().toEqualTypeOf<
     Promise<SingleMutationResult<Pick<UserRecord, 'id' | 'enabled'>>>
+  >();
+  expectTypeOf<ReturnType<typeof _upsertSelectedUser>>().toEqualTypeOf<
+    Promise<SingleMutationResult<Pick<UserRecord, 'id' | 'name'>>>
   >();
   expectTypeOf<ReturnType<typeof _findUsersWithAst>>().toEqualTypeOf<
     Promise<UserRecord[]>

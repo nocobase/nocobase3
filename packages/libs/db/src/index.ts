@@ -210,6 +210,7 @@ export type {
   UpdateManyResult,
   UpdateMutationValues,
   UpdateOneOptions,
+  UpsertOneOptions,
   UpdateRelationFieldMutationBuilder,
   UpdateRelationFieldMutationInput,
   UpdateRelationFieldMutationJsonInput,

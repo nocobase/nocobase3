@@ -1,24 +1,25 @@
 ---
 title: Repository 写入方法示例
-description: 汇总 Repository 六个写入方法的完整示例，包括关系操作、严格单条筛选、批量安全、上下文变量、乐观锁与返回结果。
+description: 汇总 Repository 写入方法的完整示例，包括关系操作、严格单条筛选、批量安全、上下文变量、乐观锁与返回结果。
 ---
 
 # Repository 写入方法示例
 
-Repository 提供六个按记录基数区分的写入方法：
+Repository 提供七个按记录基数和写入语义区分的方法：
 
 ```ts
 repository.createOne({ values, select });
 repository.createMany({ values });
 
 repository.updateOne({ filter, values, ifVersion, select, context });
+repository.upsertOne({ filter, create, update, ifVersion, select, context });
 repository.updateMany({ filter, values, context });
 
 repository.deleteOne({ filter, ifVersion, context });
 repository.deleteMany({ filter, context });
 ```
 
-其中，`createOne()` 和 `updateOne()` 支持关系写入；批量方法不支持关系写入，
+其中，`createOne()`、`updateOne()` 和 `upsertOne()` 支持关系写入；批量方法不支持关系写入，
 `createMany()` / `updateMany()` 的 `values` 只接受标量字段。`updateOne()` 和
 `deleteOne()` 的 `filter` 必须恰好匹配一条记录。
 
@@ -403,6 +404,37 @@ await projects.updateMany({
 `filter` 和 `all` 互斥，不能同时提供。`values` 必须是非空对象，并且只能包含直接标量
 Field；`updateMany()` 不支持 relation mutation、`select` 或 `ifVersion`。
 
+## `upsertOne()`
+
+按主键或唯一约束创建或更新一条记录：
+
+```ts
+const result = await projects.upsertOne({
+  filter: { externalId: 'project-import-1' },
+
+  create: {
+    externalId: 'project-import-1',
+    name: 'Imported project',
+    owner: { connect: { id: 'user-1' } },
+  },
+
+  update: {
+    name: 'Imported project v2',
+    owner: { connect: { id: 'user-2' } },
+  },
+
+  ifVersion: 2,
+  select: (select) => select.fields('id', 'externalId', 'name', 'version'),
+});
+```
+
+`filter` 必须完全等于一组主键或唯一约束字段，`create` 必须包含相同字段和值，`update`
+不能修改这组字段。记录不
+存在时执行 `create`，忽略 `ifVersion`；记录存在时执行 `update`，并按 `ifVersion` 校验
+optimistic lock。两个分支都支持与 `createOne()` / `updateOne()` 相同的 relation values，
+返回形态均为 `SingleMutationResult`。并发创建遇到唯一冲突时，Repository 回滚创建分支并
+重新执行更新分支。
+
 ## `deleteOne()`
 
 删除恰好一条记录：
@@ -466,14 +498,15 @@ await projects.deleteMany({
 
 ## 方法对照
 
-| 方法           | `values`         | 根记录范围                | 关系写入 | 返回值                       |
-| -------------- | ---------------- | ------------------------- | -------- | ---------------------------- |
-| `createOne()`  | 模型形状         | 一条新记录                | 支持     | `SingleMutationResult`       |
-| `createMany()` | 非空标量记录数组 | 多条新记录                | 不支持   | `{ createdCount }`           |
-| `updateOne()`  | 非空模型形状     | `filter` 恰好匹配一条     | 支持     | `SingleMutationResult`       |
-| `updateMany()` | 非空标量对象     | `filter` 全部匹配或 `all` | 不支持   | `{ updatedCount }`           |
-| `deleteOne()`  | 无               | `filter` 恰好匹配一条     | 不支持   | `{ deleted: true, record? }` |
-| `deleteMany()` | 无               | `filter` 全部匹配或 `all` | 不支持   | `{ deletedCount }`           |
+| 方法           | 输入                   | 根记录范围                | 关系写入 | 返回值                       |
+| -------------- | ---------------------- | ------------------------- | -------- | ---------------------------- |
+| `createOne()`  | 模型形状 `values`      | 一条新记录                | 支持     | `SingleMutationResult`       |
+| `createMany()` | 非空标量 `values` 数组 | 多条新记录                | 不支持   | `{ createdCount }`           |
+| `updateOne()`  | 非空模型形状 `values`  | `filter` 恰好匹配一条     | 支持     | `SingleMutationResult`       |
+| `upsertOne()`  | `create` + `update`    | 唯一 `filter` 创建或更新  | 支持     | `SingleMutationResult`       |
+| `updateMany()` | 非空标量 `values`      | `filter` 全部匹配或 `all` | 不支持   | `{ updatedCount }`           |
+| `deleteOne()`  | 无                     | `filter` 恰好匹配一条     | 不支持   | `{ deleted: true, record? }` |
+| `deleteMany()` | 无                     | `filter` 全部匹配或 `all` | 不支持   | `{ deletedCount }`           |
 
 ## 使用规则
 

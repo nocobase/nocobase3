@@ -647,6 +647,18 @@ export type UpdateOneOptions<
   readonly values: UpdateMutationValues<TUpdate>;
 };
 
+export type UpsertOneOptions<
+  TCreate extends object,
+  TUpdate extends object,
+  TRecord extends object = RepositoryRecord,
+> = SingleMutationSelector<TRecord> & {
+  readonly create: CreateMutationValues<TCreate>;
+  readonly update: UpdateMutationValues<TUpdate>;
+  readonly select?: RepositorySelect<TRecord>;
+  readonly ifVersion?: string | number;
+  readonly context?: RepositoryContext;
+};
+
 export type MutationScope<TRecord extends object> =
   | {
       readonly filter: RepositoryFilter<TRecord>;
@@ -811,6 +823,14 @@ export interface Repository<
   ): Promise<SingleMutationResult<SelectedBuilderRecord<TRecord, TSelection>>>;
   updateOne(
     options: UpdateOneOptions<TUpdate, TRecord>,
+  ): Promise<SingleMutationResult<TRecord>>;
+  upsertOne<TSelection extends AnySelectBuilder<TRecord>>(
+    options: UpsertOneOptions<TCreate, TUpdate, TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<SingleMutationResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  upsertOne(
+    options: UpsertOneOptions<TCreate, TUpdate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>>;
   updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,

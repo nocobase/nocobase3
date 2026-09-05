@@ -365,6 +365,9 @@ interface Repository<
   updateOne(
     options: UpdateOneOptions<TUpdate, TRecord>,
   ): Promise<SingleMutationResult<RepositoryRecord>>;
+  upsertOne(
+    options: UpsertOneOptions<TCreate, TUpdate, TRecord>,
+  ): Promise<SingleMutationResult<RepositoryRecord>>;
   updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,
   ): Promise<UpdateManyResult>;
@@ -439,14 +442,15 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
 | `createOne()`  | 一个新根记录                  | 支持        | `SingleMutationResult`       |
 | `createMany()` | 一个非空的根记录列表          | 不支持      | `{ createdCount }`           |
 | `updateOne()`  | `filter` 必须恰好匹配一条记录 | 支持        | `SingleMutationResult`       |
+| `upsertOne()`  | 唯一 `filter` 创建或更新      | 支持        | `SingleMutationResult`       |
 | `updateMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ updatedCount }`           |
 | `deleteOne()`  | `filter` 必须恰好匹配一条记录 | 不支持      | `{ deleted: true, record? }` |
 | `deleteMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ deletedCount }`           |
 
-这六个名称是 V1 的唯一规范写法，不再提供语义含糊的 `create()`、`update()`、`delete()`
+这些名称是 V1 的唯一规范写法，不再提供语义含糊的 `create()`、`update()`、`delete()`
 别名。Agent 仅根据方法名就能判断单条/批量边界，不需要结合参数猜测。
 
-六个写入方法的可运行示例、关系操作、批量安全和返回结果见
+写入方法的可运行示例、关系操作、批量安全和返回结果见
 [Repository 写入方法示例](./mutation-examples.md)。
 
 - `TRecord`、`TCreate` 和 `TUpdate` 分开建模。数据库生成的主键、创建时间等字段可以只
@@ -461,6 +465,9 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
   批量记录必须先全部校验，再在同一事务中创建；任一记录失败则整批回滚。
 - `createOne()` 和 `updateOne()` 的 `values` 可以按字段使用 Relation Builder 或纯 JSON
   关系操作。
+- `upsertOne()` 的 `filter` 必须完整匹配主键或唯一约束，`create` 必须包含同一组唯一值；
+  create/update 分支分别沿用 `createOne()` / `updateOne()` 的模型形状关系语义。`ifVersion`
+  只约束已存在记录的 update 分支，并发创建唯一冲突会回滚创建分支后重判 update。
 - `updateOne()` 和 `deleteOne()` 的 `filter` 必须恰好匹配一条记录：0 条返回
   `RECORD_NOT_FOUND`，多条返回 `MULTIPLE_RECORDS_MATCHED`。
 - `deleteOne()` 可以通过 `select` 返回删除前快照；快照读取、`ifVersion` 校验和删除在同一事务
@@ -712,7 +719,7 @@ const events = await db.repository('events', 'analytics').findMany({
 Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 
 - 支持 `findMany()`、`findOne()`、`count()`、`exists()`、`createOne()`、`createMany()`、
-  `updateOne()`、`updateMany()`、`deleteOne()`、`deleteMany()`。
+  `updateOne()`、`upsertOne()`、`updateMany()`、`deleteOne()`、`deleteMany()`。
 - `findMany()` 和 `findOne()` 支持 Select AST；列表查询还支持 Filter AST、Sort AST、
   `limit`、`offset` 等常见选项。
 - 支持 equality shorthand、Filter Builder 和完整 Filter AST，并统一规范化成 Filter AST。
@@ -733,7 +740,7 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
   `validateMutation()` 预校验规范 AST；执行事务仍需重新检查数据库当前状态。
 - `createMany()`、`updateMany()` 和 `deleteMany()` 是无关系写入的批量操作；后两者要求
   显式 `filter` 或 `all: true`。
-- `createOne()` 和 `updateOne()` 返回 `SingleMutationResult`；读方法直接返回结果，批量写入
+- `createOne()`、`updateOne()` 和 `upsertOne()` 返回 `SingleMutationResult`；读方法直接返回结果，批量写入
   返回各自的 count object；`deleteOne()` 省略 `select` 时返回 `{ deleted: true }`，提供
   `select` 时同时返回删除前的 `record`。
 - 支持 Collection 显式配置的 increment optimistic lock；关系 mutation 与根字段 mutation
