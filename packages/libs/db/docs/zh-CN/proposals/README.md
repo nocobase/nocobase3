@@ -9,6 +9,10 @@ description: 保留 DB 候选方案与设计演进；Repository 已有正式使�
 
 不得把提案中的接口、类型或示例当作当前 API 生成生产代码。实现业务需求时，以[公开 API 导航](../reference/api-index.md)、正式主题文档和 TypeScript 类型声明为准。
 
+## 精确数值提案
+
+- [BigInt 与 Decimal 精确数值处理](./precise-numeric-values.md)：记录 Query 与 Repository 的精度风险和候选契约，待决策、暂缓实施。
+
 ## Repository 提案
 
 - [Repository 概览](./repository/overview.md)
