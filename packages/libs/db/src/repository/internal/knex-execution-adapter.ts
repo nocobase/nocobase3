@@ -505,7 +505,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       }
       return this.createRecord(
         collection,
-        target.values,
+        target.values as RepositoryRecord,
         target.relations,
         createdTargets,
         target.clientKey,

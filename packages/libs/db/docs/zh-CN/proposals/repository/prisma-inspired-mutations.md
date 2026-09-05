@@ -5,9 +5,11 @@ description: 参考 Prisma 的模型形状输入和 Relation Builder，统一 Re
 
 # Repository 写入 API 改进提案
 
-> **状态：候选设计，尚未实现。** 本文讨论 Repository 下一版写入 API，不是当前运行时
-> 契约。当前已实现的 `unique + values + relations`、Relation Mutation AST 和 Builder 仍以
-> [Repository 概览](./overview.md)与 [Mutation AST](./mutation-ast.md)为准。
+> **状态：分阶段实现中。** 第一阶段已支持在 `createOne()` / `updateOne()` 的 `values`
+> 中使用字段级 Builder 或纯 JSON 表达 `create`、`connect`、`disconnect` 和 `set`，并暂时
+> 保留顶层 `relations`。本文其余的根 `filter`、目标 `update/upsert/delete` 等内容仍是候选
+> 设计；当前完整契约仍以 [Repository 概览](./overview.md)与
+> [Mutation AST](./mutation-ast.md)为准。
 
 ## 背景
 
@@ -574,55 +576,31 @@ tasks: (tasks) =>
     .disconnect({ id: 'task-old' });
 ```
 
-HTTP、CLI、Agent、工作流和持久化配置必须使用纯 JSON 节点，例如：
+HTTP、CLI、Agent、工作流和持久化配置可以直接使用模型形状的纯 JSON `values`：
 
 ```json
 {
-  "kind": "mutationValues",
-  "version": 2,
-  "collection": "projects",
-  "fields": {
-    "name": {
-      "kind": "scalar",
-      "value": "New repository design"
-    },
-    "tasks": {
-      "kind": "relation",
-      "operations": [
-        {
-          "kind": "create",
-          "values": {
-            "title": "New task"
-          }
-        },
-        {
-          "kind": "connect",
-          "by": {
-            "kind": "unique",
-            "fields": ["id"],
-            "values": {
-              "id": "task-existing"
-            }
-          }
-        },
-        {
-          "kind": "disconnect",
-          "by": {
-            "kind": "unique",
-            "fields": ["id"],
-            "values": {
-              "id": "task-old"
-            }
-          }
-        }
-      ]
+  "name": "New repository design",
+  "owner": {
+    "connect": {
+      "id": "user-3"
     }
+  },
+  "tasks": {
+    "create": [{ "title": "New task" }],
+    "connect": [{ "id": "task-existing" }],
+    "disconnect": [{ "id": "task-old" }]
+  },
+  "tags": {
+    "set": [{ "id": "tag-database" }, { "id": "tag-orm" }]
   }
 }
 ```
 
-这里的 JSON 只是 V2 规范方向，节点最终命名应在 Mutation AST V2 中单独冻结。无论入口
-是 Builder 还是 JSON，都必须经过同一条路径：
+Repository 根据 Collection metadata 区分标量 JSON Field 和 relation Field，因此标量 JSON
+值即使含有 `connect` 等同名 key，也不会被误判为关系操作。Builder 和 JSON 可以在同一
+个 `values` 中按字段混用，并归一化到现有 Relation Mutation AST。后续是否公开新的规范
+Mutation AST 版本另行设计。无论入口是 Builder 还是 JSON，都必须经过同一条路径：
 
 ```text
 Builder callback or JSON AST

@@ -9,8 +9,67 @@ import type {
   RelationPatchMutationBuilder,
   RelationReplaceMutationBuilder,
   RelationTargetMutationBuilder,
+  RelationTargetSelector,
+  UpdateRelationFieldMutationBuilder,
   UniqueSelector,
 } from './types.js';
+
+export interface RelationFieldMutationBuilderState {
+  readonly create: readonly CreateTarget[];
+  readonly connect: readonly RelationTargetSelector[];
+  readonly disconnect: true | readonly RelationTargetSelector[] | undefined;
+  readonly set: readonly RelationTargetSelector[] | undefined;
+}
+
+export class DefaultRelationFieldMutationBuilder implements UpdateRelationFieldMutationBuilder {
+  private readonly created: CreateTarget[] = [];
+  private readonly connected: RelationTargetSelector[] = [];
+  private readonly disconnected: RelationTargetSelector[] = [];
+  private clear = false;
+  private replacement: readonly RelationTargetSelector[] | undefined;
+
+  create(
+    values: Readonly<Record<string, unknown>>,
+    options: NestedCreateOptions = {},
+  ): this {
+    this.created.push({
+      kind: 'create',
+      values,
+      clientKey: options.clientKey,
+      relations: normalizeNestedInput(options.relations),
+    });
+    return this;
+  }
+
+  connect(values: RelationTargetSelector): this {
+    this.connected.push(values);
+    return this;
+  }
+
+  disconnect(values?: RelationTargetSelector): this {
+    if (values === undefined) this.clear = true;
+    else this.disconnected.push(values);
+    return this;
+  }
+
+  set(values: readonly RelationTargetSelector[]): this {
+    this.replacement = [...values];
+    return this;
+  }
+
+  toState(): RelationFieldMutationBuilderState {
+    return {
+      create: [...this.created],
+      connect: [...this.connected],
+      disconnect: this.clear
+        ? true
+        : this.disconnected.length > 0
+          ? [...this.disconnected]
+          : undefined,
+      set: this.replacement,
+    };
+  }
+}
 
 export class DefaultRelationMutationBuilder implements RelationMutationBuilder {
   private readonly items: RelationMutationNode[] = [];

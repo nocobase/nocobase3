@@ -8,12 +8,17 @@ import type {
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
 import { DefaultFilterBuilder, getFilterFieldGroup } from './filter-builder.js';
-import { DefaultRelationMutationBuilder } from './relation-mutation-builder.js';
+import {
+  DefaultRelationFieldMutationBuilder,
+  DefaultRelationMutationBuilder,
+  type RelationFieldMutationBuilderState,
+} from './relation-mutation-builder.js';
 import type { RepositoryExecutionAdapter } from './internal/execution-adapter.js';
 import type {
   CreateManyOptions,
   CreateManyResult,
   CreateOneOptions,
+  CreateRelationFieldMutationInput,
   CreateTarget,
   ConnectTarget,
   DeleteManyOptions,
@@ -47,6 +52,7 @@ import type {
   UniqueSelector,
   UpdateManyOptions,
   UpdateManyResult,
+  UpdateRelationFieldMutationInput,
   UpdateOneOptions,
   ValidateMutationOptions,
 } from './types.js';
@@ -203,23 +209,16 @@ export class DefaultRepository<
     try {
       const collection = await this.collection();
       assertWritableCollection(collection);
-      validateValues(
+      await normalizeModelMutation(
+        this.options.collections,
         collection,
         options.values ?? {},
+        options.relations,
         options.operation,
-        Boolean(options.relations),
       );
       if (options.operation === 'updateOne') {
         validateUnique(collection, options.unique);
         validateIfVersion(collection, options.ifVersion);
-      }
-      if (options.relations) {
-        await normalizeRelationMutation(
-          this.options.collections,
-          collection,
-          options.relations,
-          options.operation,
-        );
       }
       return { valid: true, errors: [] };
     } catch (error) {
@@ -233,21 +232,21 @@ export class DefaultRepository<
   ): Promise<SingleMutationResult<TRecord>> {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    const relations = await normalizeRelationMutationInput(
+    const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
+      options.values,
       options.relations,
       'createOne',
     );
-    const values = validateValues(collection, options.values, 'createOne');
     const selection = await this.validateSelect(collection, options.select);
     const requestedFields = selection.fields;
     const executionFields = includeExecutionFields(collection, requestedFields);
     const result = await this.options.adapter.createOne({
       collection,
       fields: executionFields,
-      values,
-      relations,
+      values: mutation.values,
+      relations: mutation.relations,
       select: selection.select,
     });
     return {
@@ -288,29 +287,24 @@ export class DefaultRepository<
   ): Promise<SingleMutationResult<TRecord>> {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    const relations = await normalizeRelationMutationInput(
+    const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
+      options.values ?? {},
       options.relations,
       'updateOne',
     );
     const unique = validateUnique(collection, options.unique);
     validateIfVersion(collection, options.ifVersion);
-    const values = validateValues(
-      collection,
-      options.values ?? {},
-      'updateOne',
-      Boolean(relations),
-    );
     const selection = await this.validateSelect(collection, options.select);
     const requestedFields = selection.fields;
     const result = await this.options.adapter.updateOne({
       collection,
       fields: includeExecutionFields(collection, requestedFields),
       unique,
-      values,
+      values: mutation.values,
       ifVersion: options.ifVersion,
-      relations,
+      relations: mutation.relations,
       select: selection.select,
     });
     if (!result) {
@@ -1345,28 +1339,74 @@ interface MutationValidationState {
   readonly clientKeys: Set<string>;
 }
 
-async function normalizeRelationMutationInput(
-  collections: Pick<ConnectionCollections, 'get'>,
-  collection: CollectionDefinition,
-  input: RelationMutationInput | undefined,
-  operation: 'createOne' | 'updateOne',
-): Promise<RelationMutationAst | undefined> {
-  if (!input) return undefined;
-  const ast =
-    typeof input === 'function'
-      ? input(new DefaultRelationMutationBuilder(collection.name)).toAst()
-      : input;
-  return normalizeRelationMutation(collections, collection, ast, operation);
+interface NormalizedModelMutation {
+  readonly values: RepositoryRecord;
+  readonly relations?: RelationMutationAst;
 }
 
-async function normalizeRelationMutation(
+async function normalizeModelMutation(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
-  ast: RelationMutationAst,
+  input: object | undefined,
+  legacyRelations: RelationMutationInput | RelationMutationAst | undefined,
   operation: 'createOne' | 'updateOne',
   depth = 1,
   state: MutationValidationState = { nodes: 0, clientKeys: new Set() },
-): Promise<RelationMutationAst> {
+): Promise<NormalizedModelMutation> {
+  if (!isPlainRecord(input)) {
+    invalid('INVALID_MUTATION', 'values must be a plain object.', {
+      collection: collection.name,
+      path: ['values'],
+    });
+  }
+  const scalarValues: RepositoryRecord = {};
+  const relationItems: RelationMutationNode[] = [];
+  for (const [fieldName, value] of Object.entries(input)) {
+    const field = directField(collection, fieldName, ['values', fieldName]);
+    if (isScalarField(field)) {
+      scalarValues[fieldName] = value;
+      continue;
+    }
+    relationItems.push(
+      relationFieldInputToNode(
+        collection,
+        field,
+        value as
+          CreateRelationFieldMutationInput | UpdateRelationFieldMutationInput,
+        operation,
+      ),
+    );
+  }
+  const legacyAst = relationMutationInputToAst(collection, legacyRelations);
+  if (legacyAst) validateRelationMutationAstHeader(collection, legacyAst);
+  const combinedItems = [...relationItems, ...(legacyAst?.items ?? [])];
+  const values = validateValues(
+    collection,
+    scalarValues,
+    operation,
+    combinedItems.length > 0,
+  );
+  if (combinedItems.length === 0 && !legacyAst) return { values };
+  const relations = await normalizeRelationMutation(
+    collections,
+    collection,
+    {
+      kind: 'relationMutation',
+      version: 1,
+      collection: legacyAst?.collection ?? collection.name,
+      items: combinedItems,
+    },
+    operation,
+    depth,
+    state,
+  );
+  return { values, relations };
+}
+
+function validateRelationMutationAstHeader(
+  collection: CollectionDefinition,
+  ast: RelationMutationAst,
+): void {
   if (
     !isPlainRecord(ast) ||
     ast.kind !== 'relationMutation' ||
@@ -1378,6 +1418,228 @@ async function normalizeRelationMutation(
       path: ['relations'],
     });
   }
+}
+
+function relationMutationInputToAst(
+  collection: CollectionDefinition,
+  input: RelationMutationInput | RelationMutationAst | undefined,
+): RelationMutationAst | undefined {
+  if (!input) return undefined;
+  return typeof input === 'function'
+    ? input(new DefaultRelationMutationBuilder(collection.name)).toAst()
+    : input;
+}
+
+function relationFieldInputToNode(
+  collection: CollectionDefinition,
+  relation: RelationFieldDefinition,
+  input: CreateRelationFieldMutationInput | UpdateRelationFieldMutationInput,
+  operation: 'createOne' | 'updateOne',
+): RelationMutationNode {
+  const path = ['values', relation.name] as const;
+  const state = relationFieldInputState(collection, relation, input, path);
+  const hasSet = state.set !== undefined;
+  const hasIncremental =
+    state.create.length > 0 ||
+    state.connect.length > 0 ||
+    state.disconnect !== undefined;
+  if (hasSet && hasIncremental) {
+    invalid(
+      'INVALID_MUTATION',
+      'set cannot be combined with create, connect, or disconnect.',
+      { collection: collection.name, relation: relation.name, path },
+    );
+  }
+  if (operation === 'createOne' && (hasSet || state.disconnect !== undefined)) {
+    invalid(
+      'RELATION_ACTION_NOT_ALLOWED',
+      'Only create and connect are allowed in relation values while creating a record.',
+      {
+        collection: collection.name,
+        relation: relation.name,
+        path,
+        details: { allowed: ['create', 'connect'] },
+      },
+    );
+  }
+  if (isToManyRelation(relation)) {
+    if (state.disconnect === true) {
+      invalid(
+        'INVALID_MUTATION',
+        'To-many disconnect requires one or more target selectors.',
+        { collection: collection.name, relation: relation.name, path },
+      );
+    }
+    if (state.set) {
+      return {
+        kind: 'relation',
+        field: relation.name,
+        action: 'replace',
+        targets: state.set.map(connectTarget),
+      };
+    }
+    if (!hasIncremental) {
+      invalid('INVALID_MUTATION', 'Relation mutation must not be empty.', {
+        collection: collection.name,
+        relation: relation.name,
+        path,
+      });
+    }
+    return {
+      kind: 'relation',
+      field: relation.name,
+      action: 'patch',
+      create: state.create,
+      connect: state.connect.map(connectTarget),
+      disconnect: (state.disconnect ?? []).map(selectorFromValues),
+    };
+  }
+  if (hasSet) {
+    invalid(
+      'RELATION_ACTION_NOT_ALLOWED',
+      'set is only available for to-many relations.',
+      {
+        collection: collection.name,
+        relation: relation.name,
+        path: [...path, 'set'],
+      },
+    );
+  }
+  if (state.disconnect === true) {
+    if (state.create.length > 0 || state.connect.length > 0) {
+      invalid(
+        'INVALID_MUTATION',
+        'disconnect cannot be combined with create or connect for a to-one relation.',
+        { collection: collection.name, relation: relation.name, path },
+      );
+    }
+    return { kind: 'relation', field: relation.name, action: 'clear' };
+  }
+  if (state.disconnect !== undefined) {
+    invalid(
+      'INVALID_MUTATION',
+      'To-one disconnect does not accept a target selector.',
+      { collection: collection.name, relation: relation.name, path },
+    );
+  }
+  const targets: Array<ConnectTarget | CreateTarget> = [
+    ...state.create,
+    ...state.connect.map(connectTarget),
+  ];
+  if (targets.length !== 1) {
+    invalid(
+      'INVALID_MUTATION',
+      'To-one relation mutation requires exactly one create or connect target.',
+      { collection: collection.name, relation: relation.name, path },
+    );
+  }
+  return {
+    kind: 'relation',
+    field: relation.name,
+    action: 'set',
+    target: targets[0],
+  };
+}
+
+function relationFieldInputState(
+  collection: CollectionDefinition,
+  relation: RelationFieldDefinition,
+  input: CreateRelationFieldMutationInput | UpdateRelationFieldMutationInput,
+  path: readonly (string | number)[],
+): RelationFieldMutationBuilderState {
+  if (typeof input === 'function') {
+    const builder = new DefaultRelationFieldMutationBuilder();
+    input(builder);
+    return builder.toState();
+  }
+  if (!isPlainRecord(input)) {
+    invalid(
+      'INVALID_MUTATION',
+      `Relation Field "${relation.name}" requires a Builder callback or operation object.`,
+      { collection: collection.name, relation: relation.name, path },
+    );
+  }
+  const allowedKeys = new Set(['create', 'connect', 'disconnect', 'set']);
+  const unknown = Object.keys(input).find((key) => !allowedKeys.has(key));
+  if (unknown) {
+    invalid('INVALID_MUTATION', `Unknown relation operation "${unknown}".`, {
+      collection: collection.name,
+      relation: relation.name,
+      path: [...path, unknown],
+    });
+  }
+  const create = Object.hasOwn(input, 'create')
+    ? recordsInput(input.create, [...path, 'create']).map(createTarget)
+    : [];
+  const connect = Object.hasOwn(input, 'connect')
+    ? recordsInput(input.connect, [...path, 'connect'])
+    : [];
+  let disconnect:
+    true | readonly Readonly<Record<string, unknown>>[] | undefined;
+  if (Object.hasOwn(input, 'disconnect')) {
+    disconnect =
+      input.disconnect === true
+        ? true
+        : recordsInput(input.disconnect, [...path, 'disconnect']);
+  }
+  let set: readonly Readonly<Record<string, unknown>>[] | undefined;
+  if (Object.hasOwn(input, 'set')) {
+    if (!Array.isArray(input.set)) {
+      invalid(
+        'INVALID_MUTATION',
+        'set requires an array of target selectors.',
+        {
+          collection: collection.name,
+          relation: relation.name,
+          path: [...path, 'set'],
+        },
+      );
+    }
+    set = recordsInput(input.set, [...path, 'set']);
+  }
+  return { create, connect, disconnect, set };
+}
+
+function recordsInput(
+  input: unknown,
+  path: readonly (string | number)[],
+): Readonly<Record<string, unknown>>[] {
+  const records = Array.isArray(input) ? input : [input];
+  return records.map((record, index) => {
+    if (!isPlainRecord(record)) {
+      invalid('INVALID_MUTATION', 'Expected a plain object.', {
+        path: Array.isArray(input) ? [...path, index] : path,
+      });
+    }
+    return record;
+  });
+}
+
+function selectorFromValues(
+  values: Readonly<Record<string, unknown>>,
+): UniqueSelector {
+  return { kind: 'unique', fields: Object.keys(values), values };
+}
+
+function connectTarget(
+  values: Readonly<Record<string, unknown>>,
+): ConnectTarget {
+  return { kind: 'connect', by: selectorFromValues(values) };
+}
+
+function createTarget(values: Readonly<Record<string, unknown>>): CreateTarget {
+  return { kind: 'create', values };
+}
+
+async function normalizeRelationMutation(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  ast: RelationMutationAst,
+  operation: 'createOne' | 'updateOne',
+  depth = 1,
+  state: MutationValidationState = { nodes: 0, clientKeys: new Set() },
+): Promise<RelationMutationAst> {
+  validateRelationMutationAstHeader(collection, ast);
   if (ast.collection !== undefined && ast.collection !== collection.name) {
     invalid(
       'INVALID_MUTATION',
@@ -1435,6 +1697,8 @@ async function normalizeRelationMutation(
       );
     }
     seen.add(node.field);
+    const relationName = node.field;
+    const receivedAction: unknown = node.action;
     const relation = relationField(collection, node.field, [...path, 'field']);
     const allowed = await allowedRelationActions(
       collections,
@@ -1450,9 +1714,9 @@ async function normalizeRelationMutation(
     ) {
       invalid('INVALID_MUTATION', 'Unknown relation mutation action.', {
         collection: collection.name,
-        relation: node.field,
+        relation: relationName,
         path: [...path, 'action'],
-        details: { received: node.action },
+        details: { received: receivedAction },
       });
     }
     if (!allowed.includes(node.action)) {
@@ -1700,18 +1964,20 @@ async function normalizeCreateTarget(
     }
     state.clientKeys.add(target.clientKey);
   }
-  const values = validateValues(collection, target.values, 'createOne');
-  const relations = target.relations
-    ? await normalizeRelationMutation(
-        collections,
-        collection,
-        target.relations,
-        'createOne',
-        depth + 1,
-        state,
-      )
-    : undefined;
-  return { ...target, values, relations };
+  const mutation = await normalizeModelMutation(
+    collections,
+    collection,
+    target.values,
+    target.relations,
+    'createOne',
+    depth + 1,
+    state,
+  );
+  return {
+    ...target,
+    values: mutation.values,
+    relations: mutation.relations,
+  };
 }
 
 async function allowedRelationActions(

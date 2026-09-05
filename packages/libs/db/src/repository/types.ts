@@ -1,6 +1,18 @@
 import type { RepositoryErrorCode } from './errors.js';
 
-export type RepositoryRecord = Record<string, unknown>;
+export type RepositoryMutationScalarValue =
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | undefined
+  | Date
+  | Uint8Array
+  | Readonly<Record<string, unknown>>
+  | readonly unknown[];
+
+export type RepositoryRecord = Record<string, RepositoryMutationScalarValue>;
 
 export type RepositoryContext = Readonly<Record<string, unknown>>;
 
@@ -319,6 +331,82 @@ export interface NestedCreateOptions {
   readonly relations?: RelationMutationInput;
 }
 
+export type RelationTargetSelector = Readonly<Record<string, unknown>>;
+
+export type RelationTargetSelectorInput =
+  RelationTargetSelector | readonly RelationTargetSelector[];
+
+export type RelationCreateValues = Readonly<
+  Record<
+    string,
+    RepositoryMutationScalarValue | CreateRelationFieldMutationInput
+  >
+>;
+
+export type RelationCreateValuesInput =
+  RelationCreateValues | readonly RelationCreateValues[];
+
+export interface CreateRelationFieldMutationJsonInput {
+  readonly create?: RelationCreateValuesInput;
+  readonly connect?: RelationTargetSelectorInput;
+}
+
+export type UpdateRelationFieldMutationJsonInput =
+  | {
+      readonly set: readonly RelationTargetSelector[];
+      readonly create?: never;
+      readonly connect?: never;
+      readonly disconnect?: never;
+    }
+  | {
+      readonly set?: never;
+      readonly create?: RelationCreateValuesInput;
+      readonly connect?: RelationTargetSelectorInput;
+      readonly disconnect?: true | RelationTargetSelectorInput;
+    };
+
+export interface CreateRelationFieldMutationBuilder {
+  create(values: RelationCreateValues, options?: NestedCreateOptions): this;
+  connect(values: RelationTargetSelector): this;
+}
+
+export interface UpdateRelationFieldMutationBuilder extends CreateRelationFieldMutationBuilder {
+  disconnect(values?: RelationTargetSelector): this;
+  set(values: readonly RelationTargetSelector[]): this;
+}
+
+export type CreateRelationFieldMutationInput =
+  | CreateRelationFieldMutationJsonInput
+  | ((
+      relation: CreateRelationFieldMutationBuilder,
+    ) => CreateRelationFieldMutationBuilder);
+
+export type UpdateRelationFieldMutationInput =
+  | UpdateRelationFieldMutationJsonInput
+  | ((
+      relation: UpdateRelationFieldMutationBuilder,
+    ) => UpdateRelationFieldMutationBuilder);
+
+type CreateMutationProperty<T> = unknown extends T
+  ? RepositoryMutationScalarValue | CreateRelationFieldMutationInput
+  : T extends object
+    ? T | CreateRelationFieldMutationInput
+    : T;
+
+type UpdateMutationProperty<T> = unknown extends T
+  ? RepositoryMutationScalarValue | UpdateRelationFieldMutationInput
+  : T extends object
+    ? T | UpdateRelationFieldMutationInput
+    : T;
+
+export type CreateMutationValues<TCreate extends object> = {
+  readonly [TKey in keyof TCreate]: CreateMutationProperty<TCreate[TKey]>;
+};
+
+export type UpdateMutationValues<TUpdate extends object> = {
+  readonly [TKey in keyof TUpdate]: UpdateMutationProperty<TUpdate[TKey]>;
+};
+
 export interface RelationTargetMutationBuilder {
   connect(values: Readonly<Record<string, unknown>>): this;
   connectBy(
@@ -377,7 +465,7 @@ export interface FilterOnlyOptions<TRecord extends object> {
 }
 
 export interface CreateOneOptions<TCreate extends object> {
-  readonly values: TCreate;
+  readonly values: CreateMutationValues<TCreate>;
   readonly relations?: RelationMutationInput;
   readonly select?: SelectAst;
 }
@@ -392,11 +480,11 @@ export type UpdateOneOptions<TUpdate extends object> = {
   readonly ifVersion?: string | number;
 } & (
   | {
-      readonly values: TUpdate;
+      readonly values: UpdateMutationValues<TUpdate>;
       readonly relations?: RelationMutationInput;
     }
   | {
-      readonly values?: TUpdate;
+      readonly values?: UpdateMutationValues<TUpdate>;
       readonly relations: RelationMutationInput;
     }
 );
@@ -467,7 +555,7 @@ export type ValidateMutationOptions<
 > =
   | {
       readonly operation: 'createOne';
-      readonly values: TCreate;
+      readonly values: CreateMutationValues<TCreate>;
       readonly relations?: RelationMutationAst;
     }
   | ({
@@ -476,11 +564,11 @@ export type ValidateMutationOptions<
       readonly ifVersion?: string | number;
     } & (
       | {
-          readonly values: TUpdate;
+          readonly values: UpdateMutationValues<TUpdate>;
           readonly relations?: RelationMutationAst;
         }
       | {
-          readonly values?: TUpdate;
+          readonly values?: UpdateMutationValues<TUpdate>;
           readonly relations: RelationMutationAst;
         }
     ));
