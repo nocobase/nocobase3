@@ -28,7 +28,13 @@ const projects = await repository.findMany({
           .sort((sort) => [
             sort.field('priority').desc(),
             sort.field('createdAt').asc(),
-          ]),
+          ])
+          .cursor({
+            priority: 3,
+            createdAt: '2026-09-05T08:00:00.000Z',
+            id: 10,
+          })
+          .limit(10),
       ),
 });
 ```
@@ -40,6 +46,7 @@ const projects = await repository.findMany({
 - `.include('owner')` 省略 callback 时，返回目标 Collection 的默认全部标量 Field；
 - relation-local `.filter()` 接受 Filter shorthand、Filter Builder 或 Filter AST；
 - relation-local `.sort()` 接受 Sort Builder 或 Sort AST；
+- relation-local `.cursor()` 和 `.limit()` 只用于 to-many relation；
 - 根 filter/sort 仍放在 Repository operation 顶层；
 - 同一层重复 Field 或 include 会被拒绝。
 
@@ -65,6 +72,8 @@ export interface SelectIncludeNode {
   readonly select: SelectNode;
   readonly filter?: FilterAst;
   readonly sort?: SortAst;
+  readonly cursor?: RepositoryCursor;
+  readonly limit?: number;
 }
 ```
 
@@ -131,7 +140,9 @@ export interface SelectIncludeNode {
               "nulls": "last"
             }
           ]
-        }
+        },
+        "cursor": { "createdAt": "2026-09-05T08:00:00.000Z", "id": 10 },
+        "limit": 10
       }
     ]
   }
@@ -218,10 +229,11 @@ to-one include 的 local sort 没有可观察意义，因此非空 sort 会被�
 - `fields` 只包含存在且可选择的直接标量 Field；
 - `relation` 是当前 Collection 的直接 relation Field；
 - 每层 Field/include 不重复；
-- relation-local Filter/Sort 在目标 Collection 上解析；
+- relation-local Filter/Sort/Cursor 在目标 Collection 上解析；
 - relation target 存在，relation 基数与 local sort 能力匹配。
 
-V1 不支持 relation-local `limit`/`offset`、聚合投影、计算表达式、别名、raw SQL 或
+V1 支持 to-many relation-local `limit` 和 cursor，但不支持 relation-local `offset`、
+聚合投影、计算表达式、别名、raw SQL 或
 dot-string include。AST 的 relation 嵌套必须通过 `includes` 递归表达。
 
 相关文档：

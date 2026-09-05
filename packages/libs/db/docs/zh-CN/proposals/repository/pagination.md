@@ -5,7 +5,7 @@ description: 使用稳定标量排序和排他 cursor 对 Repository 根查询�
 
 # Repository Cursor Pagination
 
-> **状态：根级 cursor 已实现；relation-local limit/cursor 待后续子阶段接入。**
+> **状态：根级 cursor 和 relation-local limit/cursor 已实现。**
 
 ```ts
 const records = await orders.findMany({
@@ -32,4 +32,24 @@ Cursor 是排他边界：返回结果从 cursor 指向记录的下一条开始�
 - cursor 与 `offset` 互斥；`limit` 可以继续使用。
 - cursor 可以与根 filter、select、distinct 组合，distinct 场景先选择代表行，再应用 cursor。
 
-Relation-local 分页将复用同一套校验和字典序边界，不引入 `cursorByParent`。
+## Relation-local 分页
+
+```ts
+const projects = await repository.findMany({
+  select: (select) =>
+    select.fields('id', 'name').include('tasks', (tasks) =>
+      tasks
+        .fields('id', 'title', 'priority')
+        .sort((sort) => [sort.field('priority').desc(), sort.field('id').asc()])
+        .cursor({ priority: 3, id: 'task-100' })
+        .limit(10),
+    ),
+});
+```
+
+`limit` 对每个父记录独立生效。一个固定 cursor 应用于所有父记录；V1 不提供
+`cursorByParent`。关系数据继续按 relation 层批量加载，不产生逐父记录 N+1 查询；当前
+实现会在一次批量关系查询后按父记录切分 local limit。
+
+Relation-local cursor 与根 cursor 复用相同的稳定 sort、完整 key、非空值和 non-nullable
+字段规则。`limit` 和 cursor 只用于 to-many relation；to-one include 会拒绝这些参数。

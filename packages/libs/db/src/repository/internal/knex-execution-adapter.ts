@@ -1687,25 +1687,33 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       targetAlias,
       client,
     );
+    applyCursor(query, relationCursorAxes(node), (field) =>
+      qualified(targetAlias, column(resolved.target, field)),
+    );
     for (const item of node.sort?.items ?? []) {
       await this.applySort(query, resolved.target, item, targetAlias);
     }
     const targets = (await query) as RepositoryRecord[];
-    if (node.select.includes?.length) {
-      await this.loadRelations(resolved.target, targets, node.select);
-    }
-
     const grouped = new Map<string, RepositoryRecord[]>();
     for (const target of targets) {
       const key = associationKey(target[relationParentHelper(node.relation)]);
       const group = grouped.get(key) ?? [];
-      group.push(projectRow(target, requested, node.select));
+      group.push(target);
       grouped.set(key, group);
     }
+    const selectedTargets = [...grouped.values()].flatMap((group) =>
+      node.limit === undefined ? group : group.slice(0, node.limit),
+    );
+    if (node.select.includes?.length) {
+      await this.loadRelations(resolved.target, selectedTargets, node.select);
+    }
     for (const parent of parents) {
-      const matches =
+      const group =
         grouped.get(associationKey(parent[relationHelper(node.relation)])) ??
         [];
+      const matches = (
+        node.limit === undefined ? group : group.slice(0, node.limit)
+      ).map((target) => projectRow(target, requested, node.select));
       parent[node.relation] = isToOne(resolved.relation)
         ? (matches[0] ?? null)
         : matches;
@@ -2156,6 +2164,22 @@ function applyCursor(
         );
       });
     }
+  });
+}
+
+function relationCursorAxes(
+  node: SelectIncludeNode,
+): RepositoryCursorAxis[] | undefined {
+  if (!node.cursor) return undefined;
+  return node.sort?.items.map((item) => {
+    if (item.kind !== 'field' || item.path.length !== 1) {
+      throw new Error('Relation cursor requires direct Field sort.');
+    }
+    return {
+      field: item.path[0],
+      direction: item.direction,
+      value: node.cursor?.[item.path[0]],
+    };
   });
 }
 

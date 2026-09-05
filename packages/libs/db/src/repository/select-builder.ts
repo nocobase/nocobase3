@@ -1,6 +1,7 @@
 import type {
   RelationSelectBuilder,
   RepositoryFilter,
+  RepositoryCursor,
   RepositoryRecord,
   RepositorySort,
   SelectBuilder,
@@ -12,11 +13,15 @@ export interface SelectBuilderIncludeState {
   readonly select: SelectBuilderState;
   readonly filter?: RepositoryFilter<RepositoryRecord>;
   readonly sort?: RepositorySort<RepositoryRecord>;
+  readonly limit?: number;
+  readonly cursor?: RepositoryCursor;
 }
 
 export interface RelationSelectBuilderState extends SelectBuilderState {
   readonly filter?: RepositoryFilter<RepositoryRecord>;
   readonly sort?: RepositorySort<RepositoryRecord>;
+  readonly limit?: number;
+  readonly cursor?: RepositoryCursor;
 }
 
 export interface SelectBuilderState {
@@ -57,6 +62,8 @@ export class DefaultSelectBuilder<
       },
       filter: state.filter,
       sort: state.sort,
+      limit: state.limit,
+      cursor: state.cursor,
     });
     return this;
   }
@@ -78,6 +85,8 @@ export class DefaultRelationSelectBuilder<
 {
   private relationFilter: RepositoryFilter<TRecord> | undefined;
   private relationSort: RepositorySort<TRecord> | undefined;
+  private relationLimit: number | undefined;
+  private relationCursor: RepositoryCursor<TRecord> | undefined;
 
   filter(filter: RepositoryFilter<TRecord>): this {
     this.relationFilter = filter;
@@ -89,11 +98,23 @@ export class DefaultRelationSelectBuilder<
     return this;
   }
 
+  limit(limit: number): this {
+    this.relationLimit = limit;
+    return this;
+  }
+
+  cursor(cursor: RepositoryCursor<TRecord>): this {
+    this.relationCursor = cursor;
+    return this;
+  }
+
   override toState(): RelationSelectBuilderState {
     return {
       ...super.toState(),
       filter: this.relationFilter,
       sort: this.relationSort,
+      limit: this.relationLimit,
+      cursor: this.relationCursor as RepositoryCursor | undefined,
     };
   }
 }

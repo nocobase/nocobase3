@@ -753,7 +753,7 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 - 支持通过 `context` 传入变量解析上下文。
 - Repository V1 不实现 policy 注入或授权；授权由可信调用边界负责。
 - Select AST 支持直接标量字段、嵌套 relation、relation-local filter 和 to-many local
-  sort。
+  sort/limit/cursor。
 - Sort AST 支持直接字段、纯 to-one relation field 和单个终点 to-many relation
   aggregate。
 - Aggregate 支持根级 `count`、`sum`、`avg`、`min` 和 `max`，并接受 Filter 与 context。
@@ -779,7 +779,7 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
   共用根版本，V1 不设计独立 relation revision。
 - 暂不实现 Model。
 - 暂不实现 Transformer。
-- 暂不实现 relation-local 分页、aggregate-local filter 和带关系的批量创建。
+- 暂不实现 aggregate-local filter 和带关系的批量创建。
 - 暂不支持批量 relation mutation、`belongsToMany` through payload、隐式 reassign、
   `connectOrCreate` 或调用方定义的任意 mutation graph。
 - 暂不把 QueryAdapter 的所有高级 SQL 能力搬进 Repository。

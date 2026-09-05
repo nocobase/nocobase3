@@ -195,6 +195,8 @@ export interface SelectIncludeNode {
   readonly select: SelectNode;
   readonly filter?: FilterAst;
   readonly sort?: SortAst;
+  readonly limit?: number;
+  readonly cursor?: RepositoryCursor;
 }
 
 export interface SelectAst {
@@ -258,6 +260,12 @@ export interface RelationSelectBuilder<
   ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
   sort(
     sort: RepositorySort<TRecord>,
+  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  limit(
+    limit: number,
+  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  cursor(
+    cursor: RepositoryCursor<TRecord>,
   ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
 }
 

@@ -1870,15 +1870,35 @@ async function validateSelectInputWithRelations(
         },
       );
     }
+    if (
+      (node.limit !== undefined || node.cursor !== undefined) &&
+      (relation.type === 'belongsTo' || relation.type === 'hasOne')
+    ) {
+      invalid(
+        'INVALID_PAGINATION',
+        'Relation-local pagination is only available for to-many relations.',
+        {
+          collection: collection.name,
+          relation: relation.name,
+          path,
+        },
+      );
+    }
     const sort = isToManyRelation(relation)
       ? await validateSortWithRelations(collections, target, sortInput)
       : undefined;
+    validatePagination(node.limit, undefined, sort, node.cursor);
+    if (isToManyRelation(relation)) {
+      validateCursor(target, node.cursor, sort, node.sort !== undefined);
+    }
     includes.push({
       kind: 'include',
       relation: node.relation,
       select: nested.select.root,
       filter,
       sort,
+      limit: node.limit,
+      cursor: node.cursor,
     });
   }
   return {
