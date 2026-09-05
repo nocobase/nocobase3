@@ -115,6 +115,23 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
     });
 
     expect(updated.record).toEqual({ name: 'Updated selection' });
+
+    await expect(
+      repository.deleteOne({
+        filter: { id: created.record.id as number },
+        select: (select) =>
+          select
+            .fields('id', 'name')
+            .include('owner', (owner) => owner.fields('name')),
+      }),
+    ).resolves.toEqual({
+      deleted: true,
+      record: {
+        id: created.record.id,
+        name: 'Updated selection',
+        owner: { name: 'Ada' },
+      },
+    });
   });
 
   it('rejects conflicting model-shaped relation operations', async () => {

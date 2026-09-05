@@ -277,6 +277,7 @@ type UpdateManyOptions<
 
 type DeleteOneOptions<TRecord extends object> =
   SingleMutationSelector<TRecord> & {
+    select?: RepositorySelect<TRecord>;
     ifVersion?: string | number;
     context?: RepositoryContext;
   };
@@ -293,9 +294,9 @@ interface UpdateManyResult {
   updatedCount: number;
 }
 
-interface DeleteOneResult {
-  deleted: true;
-}
+type DeleteOneResult<TResult = never> = [TResult] extends [never]
+  ? { deleted: true }
+  : { deleted: true; record: TResult };
 
 interface DeleteManyResult {
   deletedCount: number;
@@ -368,6 +369,7 @@ interface Repository<
     options: UpdateManyOptions<TRecord, TUpdate>,
   ): Promise<UpdateManyResult>;
   deleteOne(options: DeleteOneOptions<TRecord>): Promise<DeleteOneResult>;
+  // 提供 select 时返回 DeleteOneResult<TResult>，其中包含删除前 record。
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
 }
 
@@ -432,14 +434,14 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
 
 写入方法按记录基数对称命名，方法名本身即表达选择方式、关系能力和结果形态：
 
-| 方法           | 根记录作用域                  | V1 关系写入 | 结果                   |
-| -------------- | ----------------------------- | ----------- | ---------------------- |
-| `createOne()`  | 一个新根记录                  | 支持        | `SingleMutationResult` |
-| `createMany()` | 一个非空的根记录列表          | 不支持      | `{ createdCount }`     |
-| `updateOne()`  | `filter` 必须恰好匹配一条记录 | 支持        | `SingleMutationResult` |
-| `updateMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ updatedCount }`     |
-| `deleteOne()`  | `filter` 必须恰好匹配一条记录 | 不支持      | `{ deleted: true }`    |
-| `deleteMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ deletedCount }`     |
+| 方法           | 根记录作用域                  | V1 关系写入 | 结果                         |
+| -------------- | ----------------------------- | ----------- | ---------------------------- |
+| `createOne()`  | 一个新根记录                  | 支持        | `SingleMutationResult`       |
+| `createMany()` | 一个非空的根记录列表          | 不支持      | `{ createdCount }`           |
+| `updateOne()`  | `filter` 必须恰好匹配一条记录 | 支持        | `SingleMutationResult`       |
+| `updateMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ updatedCount }`           |
+| `deleteOne()`  | `filter` 必须恰好匹配一条记录 | 不支持      | `{ deleted: true, record? }` |
+| `deleteMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ deletedCount }`           |
 
 这六个名称是 V1 的唯一规范写法，不再提供语义含糊的 `create()`、`update()`、`delete()`
 别名。Agent 仅根据方法名就能判断单条/批量边界，不需要结合参数猜测。
@@ -461,6 +463,8 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
   关系操作。
 - `updateOne()` 和 `deleteOne()` 的 `filter` 必须恰好匹配一条记录：0 条返回
   `RECORD_NOT_FOUND`，多条返回 `MULTIPLE_RECORDS_MATCHED`。
+- `deleteOne()` 可以通过 `select` 返回删除前快照；快照读取、`ifVersion` 校验和删除在同一事务
+  中完成。省略 `select` 时仍只返回 `{ deleted: true }`。
 - `updateOne()` 必须提供非空 `values`。`deleteOne()` 只删除根记录，不在同一输入里混入
   relation mutation；关系限制和级联行为由 Collection metadata 与数据库约束决定。
 - `createMany()`、`updateMany()` 和 `deleteMany()` 返回与操作对应的明确计数字段，不使用
@@ -730,7 +734,8 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 - `createMany()`、`updateMany()` 和 `deleteMany()` 是无关系写入的批量操作；后两者要求
   显式 `filter` 或 `all: true`。
 - `createOne()` 和 `updateOne()` 返回 `SingleMutationResult`；读方法直接返回结果，批量写入
-  返回各自的 count object，`deleteOne()` 返回 `{ deleted: true }`。
+  返回各自的 count object；`deleteOne()` 省略 `select` 时返回 `{ deleted: true }`，提供
+  `select` 时同时返回删除前的 `record`。
 - 支持 Collection 显式配置的 increment optimistic lock；关系 mutation 与根字段 mutation
   共用根版本，V1 不设计独立 relation revision。
 - 暂不实现 Model。

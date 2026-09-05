@@ -261,21 +261,17 @@ export interface RelationSelectBuilder<
   ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
 }
 
-type AnySelectBuilder<TRecord extends object> = SelectBuilder<
+export type AnySelectBuilder<TRecord extends object> = SelectBuilder<
   TRecord,
   keyof TRecord,
   boolean,
   boolean
 >;
 
-type AnyRelationSelectBuilder<TRecord extends object> = RelationSelectBuilder<
-  TRecord,
-  keyof TRecord,
-  boolean,
-  boolean
->;
+export type AnyRelationSelectBuilder<TRecord extends object> =
+  RelationSelectBuilder<TRecord, keyof TRecord, boolean, boolean>;
 
-type SelectedBuilderRecord<
+export type SelectedBuilderRecord<
   TRecord extends object,
   TSelection extends AnySelectBuilder<TRecord>,
 > =
@@ -671,6 +667,7 @@ export type UpdateManyOptions<
 
 export type DeleteOneOptions<TRecord extends object = RepositoryRecord> =
   SingleMutationSelector<TRecord> & {
+    readonly select?: RepositorySelect<TRecord>;
     readonly ifVersion?: string | number;
     readonly context?: RepositoryContext;
   };
@@ -700,9 +697,9 @@ export interface UpdateManyResult {
   readonly updatedCount: number;
 }
 
-export interface DeleteOneResult {
-  readonly deleted: true;
-}
+export type DeleteOneResult<TResult = never> = [TResult] extends [never]
+  ? { readonly deleted: true }
+  : { readonly deleted: true; readonly record: TResult };
 
 export interface DeleteManyResult {
   readonly deletedCount: number;
@@ -818,6 +815,14 @@ export interface Repository<
   updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,
   ): Promise<UpdateManyResult>;
+  deleteOne<TSelection extends AnySelectBuilder<TRecord>>(
+    options: DeleteOneOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<DeleteOneResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  deleteOne(
+    options: DeleteOneOptions<TRecord> & { readonly select: SelectAst },
+  ): Promise<DeleteOneResult<TRecord>>;
   deleteOne(options: DeleteOneOptions<TRecord>): Promise<DeleteOneResult>;
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
 }

@@ -185,8 +185,16 @@ describeIntegrationDatabases('scalar Repository', (context) => {
       repository.deleteOne({
         filter: { id: id as number },
         ifVersion: 2,
+        select: (select) => select.fields('orderNo', 'status', 'version'),
       }),
-    ).resolves.toEqual({ deleted: true });
+    ).resolves.toEqual({
+      deleted: true,
+      record: {
+        orderNo: 'SO-001',
+        status: 'paid',
+        version: 2,
+      },
+    });
     await expect(repository.count()).resolves.toBe(0);
   });
 
@@ -247,6 +255,15 @@ describeIntegrationDatabases('scalar Repository', (context) => {
         filter: { status: 'draft' },
       }),
     ).rejects.toMatchObject({ code: 'MULTIPLE_RECORDS_MATCHED' });
+    await expect(
+      repository.deleteOne({
+        filter: (filter) => filter.string('orderNo').eq('SO-001'),
+        select: selection(['missing']),
+      }),
+    ).rejects.toMatchObject({ code: 'FIELD_NOT_FOUND', field: 'missing' });
+    await expect(
+      repository.exists({ filter: { orderNo: 'SO-001' } }),
+    ).resolves.toBe(true);
     await expect(
       repository.deleteOne({
         filter: (filter) => filter.string('orderNo').eq('SO-001'),

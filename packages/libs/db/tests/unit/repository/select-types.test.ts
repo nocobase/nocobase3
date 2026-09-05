@@ -1,4 +1,5 @@
 import type {
+  DeleteOneResult,
   Repository,
   SelectAst,
   SingleMutationResult,
@@ -77,6 +78,24 @@ function _findUsersWithInclude(repository: UserRepository) {
   });
 }
 
+function _deleteSelectedUser(repository: UserRepository) {
+  return repository.deleteOne({
+    filter: { id: 'user-1' },
+    select: (select) => select.fields('id', 'email'),
+  });
+}
+
+function _deleteUserWithoutSelect(repository: UserRepository) {
+  return repository.deleteOne({ filter: { id: 'user-1' } });
+}
+
+function _deleteUserWithAst(repository: UserRepository, select: SelectAst) {
+  return repository.deleteOne({
+    filter: { id: 'user-1' },
+    select,
+  });
+}
+
 it('infers scalar builder selections and preserves fallback result types', () => {
   expectTypeOf<ReturnType<typeof _findSelectedUsers>>().toEqualTypeOf<
     Promise<Array<Pick<UserRecord, 'id' | 'name'>>>
@@ -101,5 +120,14 @@ it('infers scalar builder selections and preserves fallback result types', () =>
   >().toEqualTypeOf<Promise<Array<Pick<UserRecord, 'id' | 'email'>>>>();
   expectTypeOf<ReturnType<typeof _findUsersWithInclude>>().toEqualTypeOf<
     Promise<UserRecord[]>
+  >();
+  expectTypeOf<ReturnType<typeof _deleteSelectedUser>>().toEqualTypeOf<
+    Promise<DeleteOneResult<Pick<UserRecord, 'id' | 'email'>>>
+  >();
+  expectTypeOf<ReturnType<typeof _deleteUserWithoutSelect>>().toEqualTypeOf<
+    Promise<DeleteOneResult>
+  >();
+  expectTypeOf<ReturnType<typeof _deleteUserWithAst>>().toEqualTypeOf<
+    Promise<DeleteOneResult<UserRecord>>
   >();
 });

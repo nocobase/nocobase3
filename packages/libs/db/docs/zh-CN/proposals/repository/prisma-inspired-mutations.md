@@ -440,8 +440,8 @@ Collection 启用 optimistic lock 时，每条成功更新的根记录都必须�
 
 ## `deleteOne()`
 
-`deleteOne()` 使用与 `updateOne()` 相同的严格单条 filter 语义。建议允许 `select` 返回删除前
-快照：
+`deleteOne()` 使用与 `updateOne()` 相同的严格单条 filter 语义，并已支持通过 `select` 返回
+删除前快照：
 
 ```ts
 const result = await projects.deleteOne({
@@ -540,7 +540,7 @@ type UpdateManyOptions<
 interface DeleteOneOptions<TRecord extends object> {
   readonly filter: RepositoryFilter<TRecord>;
   readonly ifVersion?: string | number;
-  readonly select?: SelectAst;
+  readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
 }
 
@@ -661,13 +661,15 @@ interface SingleMutationResult<TResult> {
 - `version` 是根记录 mutation 后的最新 optimistic lock 版本；
 - 批量方法只返回明确的 `createdCount`、`updatedCount` 或 `deletedCount`。
 
-`deleteOne()` 建议使用独立 envelope：
+`deleteOne()` 使用独立 envelope；省略 `select` 时不包含 `record`：
 
 ```ts
-interface DeleteOneResult<TResult> {
-  readonly record: TResult;
-  readonly deleted: true;
-}
+type DeleteOneResult<TResult = never> = [TResult] extends [never]
+  ? { readonly deleted: true }
+  : {
+      readonly record: TResult;
+      readonly deleted: true;
+    };
 ```
 
 ## 校验与错误
@@ -751,8 +753,7 @@ await projects.updateOne({
 
 ## 后续问题
 
-- `deleteOne()` 是否默认返回完整删除前记录，还是必须显式提供 `select`；
 - `belongsToMany` through payload 是否继续强制通过 through Collection Repository 修改；
 - Mutation AST V2 是否保留 `operations` 数组，或按操作名分组以方便表单生成与 JSON Schema。
 
-本文的核心写入示例对应当前实现；候选结果形态和上述后续问题不属于当前稳定契约。
+本文的核心写入示例对应当前实现；上述后续问题不属于当前稳定契约。

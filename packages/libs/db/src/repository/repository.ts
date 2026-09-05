@@ -29,6 +29,7 @@ import type {
   DeleteManyResult,
   DeleteOneOptions,
   DeleteOneResult,
+  AnySelectBuilder,
   DescribeMutationOptions,
   FilterAst,
   FilterConditionNode,
@@ -57,6 +58,8 @@ import type {
   RelationUpsertInput,
   RelationUpsertTarget,
   SelectAst,
+  SelectBuilder,
+  SelectedBuilderRecord,
   SelectIncludeNode,
   SingleMutationResult,
   SortAst,
@@ -383,9 +386,20 @@ export class DefaultRepository<
     };
   }
 
+  async deleteOne<TSelection extends AnySelectBuilder<TRecord>>(
+    options: DeleteOneOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<DeleteOneResult<SelectedBuilderRecord<TRecord, TSelection>>>;
+  async deleteOne(
+    options: DeleteOneOptions<TRecord> & { readonly select: SelectAst },
+  ): Promise<DeleteOneResult<TRecord>>;
+  async deleteOne(options: DeleteOneOptions<TRecord>): Promise<DeleteOneResult>;
   async deleteOne(
     options: DeleteOneOptions<TRecord>,
-  ): Promise<DeleteOneResult> {
+  ): Promise<
+    DeleteOneResult | { readonly deleted: true; readonly record: TRecord }
+  > {
     const collection = await this.collection();
     assertWritableCollection(collection);
     const filter = await this.normalizeSingleMutationFilter(
@@ -394,14 +408,31 @@ export class DefaultRepository<
       options.context,
     );
     validateIfVersion(collection, options.ifVersion);
+    const selection = options.select
+      ? await this.validateSelect(collection, options.select, options.context)
+      : undefined;
     const result = await this.options.adapter.deleteOne({
       collection,
       filter,
       ifVersion: options.ifVersion,
+      fields: selection
+        ? includeExecutionFields(collection, selection.fields)
+        : undefined,
+      select: selection?.select,
     });
     if (result === 'conflict') versionConflict(collection);
     if (result === 'multiple') multipleRecordsMatched(collection);
     if (result === 'missing') recordNotFound(collection);
+    if (typeof result !== 'string' && selection) {
+      return {
+        deleted: true,
+        record: pickSelection(
+          result.record,
+          selection.fields,
+          selection.select,
+        ) as TRecord,
+      };
+    }
     return { deleted: true };
   }
 

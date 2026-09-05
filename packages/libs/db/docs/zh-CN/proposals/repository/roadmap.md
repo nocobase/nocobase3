@@ -12,7 +12,7 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 | 阶段 | 能力                     | V1 边界                                                                                                                                         |
 | ---: | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 |    1 | 标量 Select 返回类型推导 | 已实现：Builder 的直接标量 `fields()` 推导 `findMany()`、`findOne()`、`createOne()` 和 `updateOne()` 返回类型；动态 Select AST 保持完整记录类型 |
-|    2 | Delete returning/select  | `deleteOne()` 通过 `select` 返回删除前快照；批量删除 returning 留到阶段 4                                                                       |
+|    2 | Delete returning/select  | 已实现：`deleteOne()` 通过 `select` 返回删除前快照；批量删除 returning 留到阶段 4                                                               |
 |    3 | 根级 `upsertOne()`       | 基于主键或唯一约束执行 create/update；进入实现前冻结并发、关系 values 和 optimistic lock 语义                                                   |
 |    4 | 批量 mutation returning  | 为批量 create/update/delete 定义跨数据库一致的 `records`、顺序、上限和降级策略                                                                  |
 |    5 | Aggregate                | 根级 `count`、`sum`、`avg`、`min`、`max`；固定空集合、精度和输入集合规则                                                                        |

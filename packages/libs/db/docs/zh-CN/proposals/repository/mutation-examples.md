@@ -418,17 +418,20 @@ const result = await projects.deleteOne({
     tenantId: 'tenant-1',
   },
   ifVersion: 3,
+  select: (select) => select.fields('id', 'name', 'status'),
 });
 
 result;
-// { deleted: true }
+// {
+//   deleted: true,
+//   record: { id: 'project-1', name: 'Repository redesign', status: 'archived' },
+// }
 ```
 
 `deleteOne()` 与 `updateOne()` 使用相同的严格单条 `filter` 语义。提供 `ifVersion` 时，版本
-比较和删除在同一个事务中完成。
-
-`deleteOne()` 当前不接受 `select`，也不返回删除前记录。关系限制、外键约束和级联行为由
-Collection metadata 与数据库约束决定。
+比较和删除在同一个事务中完成。提供 `select` 时，Repository 在同一事务内锁定记录、读取
+删除前快照并删除；省略 `select` 时保持 `{ deleted: true }`。关系限制、外键约束和级联行为
+由 Collection metadata 与数据库约束决定。
 
 ## `deleteMany()`
 
@@ -463,14 +466,14 @@ await projects.deleteMany({
 
 ## 方法对照
 
-| 方法           | `values`         | 根记录范围                | 关系写入 | 返回值                 |
-| -------------- | ---------------- | ------------------------- | -------- | ---------------------- |
-| `createOne()`  | 模型形状         | 一条新记录                | 支持     | `SingleMutationResult` |
-| `createMany()` | 非空标量记录数组 | 多条新记录                | 不支持   | `{ createdCount }`     |
-| `updateOne()`  | 非空模型形状     | `filter` 恰好匹配一条     | 支持     | `SingleMutationResult` |
-| `updateMany()` | 非空标量对象     | `filter` 全部匹配或 `all` | 不支持   | `{ updatedCount }`     |
-| `deleteOne()`  | 无               | `filter` 恰好匹配一条     | 不支持   | `{ deleted: true }`    |
-| `deleteMany()` | 无               | `filter` 全部匹配或 `all` | 不支持   | `{ deletedCount }`     |
+| 方法           | `values`         | 根记录范围                | 关系写入 | 返回值                       |
+| -------------- | ---------------- | ------------------------- | -------- | ---------------------------- |
+| `createOne()`  | 模型形状         | 一条新记录                | 支持     | `SingleMutationResult`       |
+| `createMany()` | 非空标量记录数组 | 多条新记录                | 不支持   | `{ createdCount }`           |
+| `updateOne()`  | 非空模型形状     | `filter` 恰好匹配一条     | 支持     | `SingleMutationResult`       |
+| `updateMany()` | 非空标量对象     | `filter` 全部匹配或 `all` | 不支持   | `{ updatedCount }`           |
+| `deleteOne()`  | 无               | `filter` 恰好匹配一条     | 不支持   | `{ deleted: true, record? }` |
+| `deleteMany()` | 无               | `filter` 全部匹配或 `all` | 不支持   | `{ deletedCount }`           |
 
 ## 使用规则
 

@@ -33,6 +33,7 @@ import type {
   RepositoryCreateOnePlan,
   RepositoryDeleteManyPlan,
   RepositoryDeleteOnePlan,
+  RepositoryDeletedMutation,
   RepositoryExecutedMutation,
   RepositoryExecutionAdapter,
   RepositoryFilterPlan,
@@ -237,13 +238,17 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   async deleteOne(
     plan: RepositoryDeleteOnePlan,
-  ): Promise<'deleted' | RepositorySingleMutationMiss> {
+  ): Promise<
+    'deleted' | RepositoryDeletedMutation | RepositorySingleMutationMiss
+  > {
     return this.inTransaction((adapter) => adapter.executeDeleteOne(plan));
   }
 
   private async executeDeleteOne(
     plan: RepositoryDeleteOnePlan,
-  ): Promise<'deleted' | RepositorySingleMutationMiss> {
+  ): Promise<
+    'deleted' | RepositoryDeletedMutation | RepositorySingleMutationMiss
+  > {
     const selected = await this.lockByFilter(plan.collection, plan.filter);
     if (selected === 'missing' || selected === 'multiple') return selected;
     if (
@@ -252,10 +257,21 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     ) {
       return 'conflict';
     }
+    const snapshot = plan.fields
+      ? await this.findOne({
+          collection: plan.collection,
+          fields: plan.fields,
+          select: plan.select,
+          filter: uniqueFilter(selected.unique),
+        })
+      : undefined;
+    if (plan.fields && !snapshot) return 'missing';
     const query = tableQuery(this.getClient(), plan.collection).delete();
     applyUnique(query, plan.collection, selected.unique);
     applyVersion(query, plan.collection, plan.ifVersion);
-    if (affectedCount(await query) > 0) return 'deleted';
+    if (affectedCount(await query) > 0) {
+      return snapshot ? { record: snapshot } : 'deleted';
+    }
     return plan.ifVersion === undefined ? 'missing' : 'conflict';
   }
 

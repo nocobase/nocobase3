@@ -57,6 +57,8 @@ export interface RepositoryDeleteOnePlan {
   readonly collection: CollectionDefinition;
   readonly filter: FilterAst;
   readonly ifVersion?: string | number;
+  readonly fields?: readonly string[];
+  readonly select?: SelectAst;
 }
 
 export interface RepositoryDeleteManyPlan {
@@ -69,6 +71,10 @@ export interface RepositoryExecutedMutation {
   readonly record: RepositoryRecord;
   readonly createdTargets: readonly CreatedTargetReference[];
   readonly version?: string | number;
+}
+
+export interface RepositoryDeletedMutation {
+  readonly record: RepositoryRecord;
 }
 
 export type RepositorySingleMutationMiss = 'missing' | 'multiple' | 'conflict';
@@ -87,6 +93,8 @@ export interface RepositoryExecutionAdapter {
   updateMany(plan: RepositoryUpdateManyPlan): Promise<number>;
   deleteOne(
     plan: RepositoryDeleteOnePlan,
-  ): Promise<'deleted' | RepositorySingleMutationMiss>;
+  ): Promise<
+    'deleted' | RepositoryDeletedMutation | RepositorySingleMutationMiss
+  >;
   deleteMany(plan: RepositoryDeleteManyPlan): Promise<number>;
 }
