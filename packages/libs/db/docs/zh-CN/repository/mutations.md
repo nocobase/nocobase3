@@ -13,19 +13,21 @@ description: 使用 Repository 创建、更新、删除和 upsert 记录，掌�
 
 主键和唯一键来自实际 Collection 约束，不依赖字段名 id 或 bigint 类型。createOne/updateOne/deleteOne 执行时需要可用于定位、重读的完整非空主键或无条件唯一选择器；nullable unique 的 NULL 不能作为记录标识，条件唯一约束不能当作全表唯一标识。createMany/updateMany/deleteMany 不带 select 的标量路径不要求主键。不要由一次 filter 恰好命中一条推断无唯一标识的单条写入已经支持。
 
-| 方法         | 输入重点                               | 返回结果                               |
-| ------------ | -------------------------------------- | -------------------------------------- |
-| `createOne`  | `values`，可选 `select`                | `{ record, createdTargets, version? }` |
-| `createMany` | 非空 `values` 数组，可选 `select`      | `{ createdCount, records? }`           |
-| `updateOne`  | 非空 `filter`、`values`                | `{ record, createdTargets, version? }` |
-| `updateMany` | `filter` 或 `all: true`、标量 `values` | `{ updatedCount, records? }`           |
-| `upsertOne`  | 唯一 `filter`、`create`、`update`      | `{ record, createdTargets, version? }` |
-| `deleteOne`  | 非空 `filter`                          | `{ deleted: true, record? }`           |
-| `deleteMany` | `filter` 或 `all: true`                | `{ deletedCount, records? }`           |
+| 方法         | 输入重点                                    | 返回结果                               |
+| ------------ | ------------------------------------------- | -------------------------------------- |
+| `createOne`  | `values`，可选 `select / context`           | `{ record, createdTargets, version? }` |
+| `createMany` | 非空 `values` 数组，可选 `select / context` | `{ createdCount, records? }`           |
+| `updateOne`  | 非空 `filter`、`values`                     | `{ record, createdTargets, version? }` |
+| `updateMany` | `filter` 或 `all: true`、标量 `values`      | `{ updatedCount, records? }`           |
+| `upsertOne`  | 唯一 `filter`、`create`、`update`           | `{ record, createdTargets, version? }` |
+| `deleteOne`  | 非空 `filter`                               | `{ deleted: true, record? }`           |
+| `deleteMany` | `filter` 或 `all: true`                     | `{ deletedCount, records? }`           |
 
 表中删除和批量结果的 `record`／`records` 仅在传入 `select` 时出现。单条创建、更新和 upsert 始终返回 `record`，不是直接返回记录；`createdTargets` 是使用 `clientKey` 标记的嵌套创建引用，没有标记时通常为空数组。
 
 ## 创建一条记录
+
+`createOne` 和 `createMany` 均支持可选 `context`，用于返回 `select` 中各层关系 Filter 的变量解析。变量路径以 `$` 开头，例如 `filter.variable('$viewerCode')` 对应 `context: { viewerCode: 'user-a' }`。context 不自动填充 values、不作为事务对象，也不自动应用权限条件；变量缺失或类型不符合字段要求时，在写入前报错。
 
 ```ts
 const result = await projects.createOne({

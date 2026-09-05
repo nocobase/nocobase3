@@ -998,6 +998,7 @@ export interface CreateOneOptions<
 > {
   readonly values: CreateMutationValues<TCreate>;
   readonly select?: RepositorySelect<TRecord>;
+  readonly context?: RepositoryContext;
 }
 
 export interface CreateManyOptions<
@@ -1006,6 +1007,7 @@ export interface CreateManyOptions<
 > {
   readonly values: readonly [TCreate, ...TCreate[]];
   readonly select?: RepositorySelect<TRecord>;
+  readonly context?: RepositoryContext;
 }
 
 export interface SingleMutationSelector<TRecord extends object> {

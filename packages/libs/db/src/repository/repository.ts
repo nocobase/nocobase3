@@ -483,7 +483,11 @@ export class DefaultRepository<
       options.values,
       'createOne',
     );
-    const selection = await this.validateSelect(collection, options.select);
+    const selection = await this.validateSelect(
+      collection,
+      options.select,
+      options.context,
+    );
     const requestedFields = selection.fields;
     const executionFields = includeExecutionFields(collection, requestedFields);
     const result = await this.options.adapter.createOne({
@@ -535,7 +539,7 @@ export class DefaultRepository<
       validateValues(collection, record, 'createMany'),
     );
     const selection = options.select
-      ? await this.validateSelect(collection, options.select)
+      ? await this.validateSelect(collection, options.select, options.context)
       : undefined;
     if (selection) assertBulkReturningIdentity(collection);
     const result = await this.options.adapter.createMany({

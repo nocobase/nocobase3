@@ -48,15 +48,15 @@ Select Builder 的精确重载可能收窄 TRecord；JSON AST 和普通关系记
 
 | 方法       | 必填                        | 可选                       | 返回                       |
 | ---------- | --------------------------- | -------------------------- | -------------------------- |
-| createOne  | values                      | select                     | SingleMutationResult       |
-| createMany | 非空 values 数组            | select                     | createdCount，可选 records |
+| createOne  | values                      | select、context            | SingleMutationResult       |
+| createMany | 非空 values 数组            | select、context            | createdCount，可选 records |
 | updateOne  | filter、values              | ifVersion、select、context | SingleMutationResult       |
 | updateMany | values；filter 或 all:true  | select、context            | updatedCount，可选 records |
 | upsertOne  | 唯一 filter、create、update | ifVersion、select、context | SingleMutationResult       |
 | deleteOne  | filter                      | ifVersion、select、context | deleted:true，可选 record  |
 | deleteMany | filter 或 all:true          | select、context            | deletedCount，可选 records |
 
-不提供 upsertMany、createMany 的 skipDuplicates、批量 ifVersion 或批量嵌套关系写入。createOne/createMany 没有 context 选项。根级 upsert 用 create/update，不用 values。select 是返回选择，不是输入字段授权。
+不提供 upsertMany、createMany 的 skipDuplicates、批量 ifVersion 或批量嵌套关系写入。createOne/createMany 的 context 用于返回 select 中的关系 Filter 变量解析，不自动填充 values，也不执行隐式权限过滤。根级 upsert 用 create/update，不用 values。select 是返回选择，不是输入字段授权。
 
 SingleMutationResult 结构：
 

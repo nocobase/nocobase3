@@ -45,6 +45,7 @@ function _findSelectedUser(repository: UserRepository) {
 
 function _createSelectedUser(repository: UserRepository) {
   return repository.createOne({
+    context: { viewer: { accountCode: 'A' } },
     values: {
       name: 'Alice',
       email: 'alice@example.com',
@@ -143,6 +144,7 @@ function _deleteUserWithAst(repository: UserRepository, select: SelectAst) {
 
 function _createSelectedUsers(repository: UserRepository) {
   return repository.createMany({
+    context: { viewer: { accountCode: 'A' } },
     values: [
       { name: 'Alice', email: 'alice@example.com' },
       { name: 'Bob', email: 'bob@example.com' },
