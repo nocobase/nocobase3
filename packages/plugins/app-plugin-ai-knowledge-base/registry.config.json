@@ -1,0 +1,130 @@
+{
+  "name": "nocobase-ai-knowledge-base",
+  "homepage": "https://www.nocobase.com",
+  "items": [
+    {
+      "name": "providers",
+      "type": "registry:lib",
+      "title": "NocoBase AI Knowledge Base Providers",
+      "description": "Application-owned service adapter, current DTOs, error and pagination normalization, and stale-safe resource hooks.",
+      "dependencies": [
+        "@nocobase/app-portal-sdk@^0.0.1-beta.1",
+        "react@^19.0.0"
+      ],
+      "registryDependencies": [],
+      "docs": "Requires @nocobase/app-plugin-ai-knowledge-base. Import the service contract, provider, hooks, and types through index.ts. The source is application-owned and upgrades must be reviewed with a three-way merge.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-ai-knowledge-base": ">=0.1.0-beta.1 <0.2.0"
+          }
+        }
+      },
+      "source": {
+        "root": "registry/providers",
+        "target": "client/extensions/nocobase-ai-knowledge-base-providers",
+        "include": ["."]
+      }
+    },
+    {
+      "name": "components",
+      "type": "registry:component",
+      "title": "NocoBase AI Knowledge Base Components",
+      "description": "Application-owned controlled knowledge-base, document, upload, retrieval, and segment components with locale resources.",
+      "dependencies": [
+        "@nocobase/i18n@^0.0.2-beta.0",
+        "@refinedev/core@^5.0.0",
+        "lucide-react@^0.487.0",
+        "react@^19.0.0"
+      ],
+      "registryDependencies": [
+        "@nocobase-ai-knowledge-base/providers",
+        "alert",
+        "avatar",
+        "badge",
+        "breadcrumb",
+        "button",
+        "card",
+        "combobox",
+        "dialog",
+        "dropdown-menu",
+        "empty",
+        "input",
+        "input-group",
+        "item",
+        "popover",
+        "select",
+        "separator",
+        "sheet",
+        "skeleton",
+        "switch",
+        "table",
+        "tabs",
+        "textarea",
+        "toggle",
+        "toggle-group",
+        "tooltip"
+      ],
+      "docs": "Install providers first (remote shadcn resolves it recursively). Import controlled components through index.ts and register locales in the consuming application. The source is application-owned and upgrades use a three-way merge.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-ai-knowledge-base": ">=0.1.0-beta.1 <0.2.0"
+          }
+        }
+      },
+      "source": {
+        "root": "registry/components",
+        "target": "client/extensions/nocobase-ai-knowledge-base-components",
+        "include": ["."]
+      }
+    },
+    {
+      "name": "workspace",
+      "type": "registry:block",
+      "title": "NocoBase AI Knowledge Base Workspace",
+      "description": "Application-owned complete knowledge-base management, document, upload, retrieval, and nested segment workspace composition.",
+      "dependencies": [
+        "@nocobase/app-client@^1.0.0-beta.5",
+        "@nocobase/app-plugin-ai-employee@^0.1.0-beta.1",
+        "@nocobase/app-portal-sdk@^0.0.1-beta.1",
+        "@refinedev/core@^5.0.0",
+        "lucide-react@^0.487.0",
+        "react@^19.0.0",
+        "react-router@^7.0.0"
+      ],
+      "registryDependencies": [
+        "@nocobase-ai-knowledge-base/providers",
+        "@nocobase-ai-knowledge-base/components",
+        "alert",
+        "alert-dialog",
+        "button",
+        "card",
+        "input",
+        "label",
+        "sheet",
+        "switch",
+        "textarea"
+      ],
+      "docs": "Requires the enabled @nocobase/app-plugin-ai-knowledge-base runtime and the providers and components items. Compose the exported pages in application-owned routes; installation does not register routes or enable the plugin. Preserve application edits through a three-way merge on upgrade.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-ai-knowledge-base": ">=0.1.0-beta.1 <0.2.0"
+          }
+        }
+      },
+      "source": {
+        "root": "registry/workspace",
+        "target": "client/extensions/nocobase-ai-knowledge-base-workspace",
+        "include": ["."]
+      }
+    }
+  ]
+}
