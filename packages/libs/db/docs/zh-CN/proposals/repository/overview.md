@@ -7,6 +7,8 @@ description: Collection-aware Repository 的分批实现设计与当前运行时
 
 > **状态：V1 运行时已实现。** 公共类型、`RepositoryError`、`db.repository()` 和 `connection.repository()` 已导出；标量 CRUD、关系 selection/filter/sort、Relation Mutation、optimistic lock 和结果 envelope 均可执行，并已通过 SQLite、PostgreSQL、MySQL、Oracle 与 MSSQL 集成测试。本页同时记录 V1 契约与后续边界。
 
+后续高级查询和写入能力的实现顺序与 V1 范围见 [Repository 后续能力路线](./roadmap.md)。
+
 `Repository` 是应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：
 
 | API               | 层级         | 输入名                          | 是否读取 Collection metadata | 当前状态 |
