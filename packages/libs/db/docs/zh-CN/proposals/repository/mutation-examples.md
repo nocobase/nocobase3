@@ -30,43 +30,17 @@ repository.deleteMany({ filter, context });
 `createOne()` 和 `updateOne()` 可以通过 `select` 指定写入后回读的记录形状：
 
 ```ts
-import type { SelectAst } from '@nocobase/db';
+import type { SelectBuilder } from '@nocobase/db';
 
-const projectSelect = {
-  kind: 'select',
-  version: 1,
-  root: {
-    kind: 'selection',
-    fields: ['id', 'name', 'status', 'version'],
-    relations: [
-      {
-        kind: 'relation',
-        field: 'owner',
-        select: {
-          kind: 'selection',
-          fields: ['id', 'name'],
-        },
-      },
-      {
-        kind: 'relation',
-        field: 'tasks',
-        select: {
-          kind: 'selection',
-          fields: ['id', 'title'],
-        },
-      },
-      {
-        kind: 'relation',
-        field: 'tags',
-        select: {
-          kind: 'selection',
-          fields: ['id', 'name'],
-        },
-      },
-    ],
-  },
-} satisfies SelectAst;
+const projectSelect = (select: SelectBuilder) =>
+  select
+    .fields('id', 'name', 'status', 'version')
+    .include('owner', (owner) => owner.fields('id', 'name'))
+    .include('tasks', (tasks) => tasks.fields('id', 'title'))
+    .include('tags', (tags) => tags.fields('id', 'name'));
 ```
+
+需要通过 HTTP、CLI 或持久化配置传递时，也可以使用等价的纯 JSON Select AST。
 
 ## `createOne()`
 

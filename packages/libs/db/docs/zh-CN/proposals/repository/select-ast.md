@@ -1,16 +1,74 @@
 ---
-title: Select AST 提案
-description: Repository Select AST 的设计与当前运行时能力。
+title: Select AST 与 Select Builder
+description: Repository Select Builder、可序列化 Select AST 及关系加载语义。
 ---
 
-# Select AST
+# Select AST 与 Select Builder
 
-> **状态：V1 运行时已实现。** 支持四种关系基数、嵌套 selection、relation-local filter/sort 和批量组装，并可用于单记录 mutation 的事务内最终回读。
+> **状态：V1 已实现。** `findMany()`、`findOne()`、`createOne()` 和 `updateOne()` 同时接受
+> Select Builder 与 Select AST；执行 adapter 只接收规范化后的 AST。
 
-Select AST 是 Repository 查询结果形状的结构化表示。它统一描述根 Collection 的标量
-字段投影、关系加载、嵌套关系投影，以及关系节点自己的筛选和排序。
+Select 描述返回字段和需要加载的 relation。根记录筛选与排序仍由 operation 顶层的
+`filter`、`sort` 决定。
 
-TypeScript、HTTP、CLI、file sync 和未来持久化配置应尽量使用同一结构：
+## Builder 写法
+
+TypeScript 调用优先使用 Builder：
+
+```ts
+const projects = await repository.findMany({
+  select: (select) =>
+    select
+      .fields('id', 'name')
+      .include('owner', (owner) => owner.fields('id', 'name'))
+      .include('tasks', (tasks) =>
+        tasks
+          .fields('id', 'title', 'priority')
+          .filter({ status: 'pending' })
+          .sort((sort) => [
+            sort.field('priority').desc(),
+            sort.field('createdAt').asc(),
+          ]),
+      ),
+});
+```
+
+规则：
+
+- `.fields()` 只选择当前 Collection 的直接标量 Field；
+- `.include()` 选择直接 relation，并把 callback 作用域切换到目标 Collection；
+- `.include('owner')` 省略 callback 时，返回目标 Collection 的默认全部标量 Field；
+- relation-local `.filter()` 接受 Filter shorthand、Filter Builder 或 Filter AST；
+- relation-local `.sort()` 接受 Sort Builder 或 Sort AST；
+- 根 filter/sort 仍放在 Repository operation 顶层；
+- 同一层重复 Field 或 include 会被拒绝。
+
+## AST 形态
+
+```ts
+export interface SelectAst {
+  readonly kind: 'select';
+  readonly version: 1;
+  readonly collection?: string;
+  readonly root: SelectNode;
+}
+
+export interface SelectNode {
+  readonly kind: 'selection';
+  readonly fields?: readonly string[];
+  readonly includes?: readonly SelectIncludeNode[];
+}
+
+export interface SelectIncludeNode {
+  readonly kind: 'include';
+  readonly relation: string;
+  readonly select: SelectNode;
+  readonly filter?: FilterAst;
+  readonly sort?: SortAst;
+}
+```
+
+完整 JSON 示例：
 
 ```json
 {
@@ -20,25 +78,25 @@ TypeScript、HTTP、CLI、file sync 和未来持久化配置应尽量使用同�
   "root": {
     "kind": "selection",
     "fields": ["id", "orderNo", "amount"],
-    "relations": [
+    "includes": [
       {
-        "kind": "relation",
-        "field": "customer",
+        "kind": "include",
+        "relation": "customer",
         "select": {
           "kind": "selection",
           "fields": ["id", "name"]
         }
       },
       {
-        "kind": "relation",
-        "field": "items",
+        "kind": "include",
+        "relation": "items",
         "select": {
           "kind": "selection",
-          "fields": ["id", "quantity"],
-          "relations": [
+          "fields": ["id", "quantity", "createdAt"],
+          "includes": [
             {
-              "kind": "relation",
-              "field": "product",
+              "kind": "include",
+              "relation": "product",
               "select": {
                 "kind": "selection",
                 "fields": ["id", "name"]
@@ -46,15 +104,29 @@ TypeScript、HTTP、CLI、file sync 和未来持久化配置应尽量使用同�
             }
           ]
         },
+        "filter": {
+          "kind": "filter",
+          "version": 1,
+          "root": {
+            "kind": "group",
+            "logic": "and",
+            "items": [
+              {
+                "kind": "condition",
+                "path": ["quantity"],
+                "operator": "$gt",
+                "value": 0
+              }
+            ]
+          }
+        },
         "sort": {
           "kind": "sort",
           "version": 1,
           "items": [
             {
-              "by": {
-                "kind": "field",
-                "field": "createdAt"
-              },
+              "kind": "field",
+              "path": ["createdAt"],
               "direction": "desc",
               "nulls": "last"
             }
@@ -66,500 +138,78 @@ TypeScript、HTTP、CLI、file sync 和未来持久化配置应尽量使用同�
 }
 ```
 
-## 设计目标
+Builder 只存在于 TypeScript 输入层；HTTP、CLI、Agent 和持久化配置使用上述纯 JSON AST。
 
-Select AST 要满足以下目标：
+## 默认字段与返回形状
 
-- 可序列化，TypeScript、HTTP、CLI 和持久化配置使用同一棵选择树。
-- 可解释，标量字段和 relation 节点使用不同属性，不依赖 dot-string 猜测语义。
-- 可校验，运行时根据 Collection metadata 校验字段、关系、目标 Collection 和基数。
-- 可推导，TypeScript 可以根据选择树推导最终返回结构。
-- 可组合，relation 节点可以递归包含 Select AST、Filter AST 和 Sort AST。
-- 可执行，编译器可以生成批量关系加载计划，避免 N+1 查询和根记录重复。
-- 与数据库解耦，不暴露 tableName、columnName、join、raw SQL 或方言参数。
+| 输入               | 语义                                                      |
+| ------------------ | --------------------------------------------------------- |
+| `select` 整体省略  | 返回根 Collection 的全部直接非 relation Field，不加载关系 |
+| `.fields()` 未调用 | 返回当前节点的全部直接非 relation Field                   |
+| `.fields()` 无参数 | 不返回显式标量 Field，可以只返回 include                  |
+| `.include()` 省略  | 不加载 relation                                           |
 
-`select` 描述返回什么；它不负责决定根记录是否匹配，也不负责根记录的顺序。根查询的
-筛选和排序仍分别使用 Filter AST 和 Sort AST。
+Repository 可以在内部补读主键、source key 或 foreign key 以组装关系，但未显式选择的辅助字段
+不会出现在最终结果中。
 
-## TypeScript 草案
-
-```ts
-export interface SelectAst {
-  kind: 'select';
-  version: 1;
-  collection?: string;
-  root: SelectNode;
-}
-
-export interface SelectNode {
-  kind: 'selection';
-  fields?: readonly string[];
-  relations?: readonly SelectRelationNode[];
-}
-
-export interface SelectRelationNode {
-  kind: 'relation';
-  field: string;
-  select: SelectNode;
-  filter?: FilterAst;
-  sort?: SortAst;
-}
-```
-
-这里的 `FilterAst` 和 `SortAst` 都相对于 relation 的目标 Collection 解析，而不是根
-Collection。详细设计分别见 [Filter AST](./filter-ast.md) 和 [Sort AST](./sort-ast.md)。
-
-V1 不在 relation 节点中加入 `limit` 和 `offset`。对每个父记录分别分页需要窗口函数、
-横向连接或等价的批量加载策略，不能把根查询的分页参数直接下推到整个目标 Collection。
-这项能力应在跨数据库执行语义明确后再扩展。
-
-## 根节点与规范形态
-
-Select AST 的根节点始终是 `selection`：
-
-```json
-{
-  "kind": "select",
-  "version": 1,
-  "collection": "orders",
-  "root": {
-    "kind": "selection",
-    "fields": ["id", "orderNo"]
-  }
-}
-```
-
-AST 中不接受以下简写：
-
-```json
-["id", "orderNo"]
-```
-
-```json
-{
-  "id": true,
-  "orderNo": true
-}
-```
-
-```json
-{
-  "fields": ["id", "customer.name"]
-}
-```
-
-统一的 `kind`、`version`、`root` 和节点形态可以让消费端只处理一种协议，也能让错误
-路径精确指向 `root.relations[1].select.fields[0]`。
-
-## 标量字段投影
-
-当前 selection 节点的直接标量字段放在 `fields`：
-
-```json
-{
-  "kind": "selection",
-  "fields": ["id", "orderNo", "amount"]
-}
-```
-
-字段使用当前 Collection 上的 Field 逻辑名。V1 不允许：
-
-- relation Field 混入 `fields`；
-- `customer.name` 之类的 relation path；
-- tableName 或 columnName；
-- `*` 通配符；
-- raw expression、函数或别名；
-- 重复字段。
-
-默认语义：
-
-| 输入                | 语义                                                      |
-| ------------------- | --------------------------------------------------------- |
-| `select` 整体省略   | 返回根 Collection 的全部直接非 relation Field，不加载关系 |
-| `fields` 省略       | 返回当前节点的全部直接非 relation Field                   |
-| `fields: []`        | 不返回当前节点的显式标量字段，可以只返回所选择的 relation |
-| `relations` 省略/空 | 不加载 relation                                           |
-
-这里的默认集合只来自 Collection：所有直接非 relation Field 都返回，不依据 UI schema、
-字段名称或物理表结构推测“应用字段”。这不是数据库的 `SELECT *`，relation 必须显式选择。
-
-当 `fields: []` 但选择了 relation 时，Repository 可以在内部读取主键、source key 或
-foreign key 以完成关系组装；这些依赖字段若未被显式选择，必须在最终返回前移除。
-
-## Relation 节点
-
-关系使用显式 `relation` 节点：
-
-```json
-{
-  "kind": "relation",
-  "field": "customer",
-  "select": {
-    "kind": "selection",
-    "fields": ["id", "name"]
-  }
-}
-```
-
-`field` 必须是父 selection 对应 Collection 上的直接 relation Field。嵌套关系通过递归
-节点表达，不使用 dot-string：
-
-```json
-{
-  "kind": "relation",
-  "field": "items",
-  "select": {
-    "kind": "selection",
-    "fields": ["id", "quantity"],
-    "relations": [
-      {
-        "kind": "relation",
-        "field": "product",
-        "select": {
-          "kind": "selection",
-          "fields": ["id", "name"]
-        }
-      }
-    ]
-  }
-}
-```
-
-relation 节点的 `select` 必填。即使希望返回目标 Collection 的默认标量字段，也要显式
-写空的规范 selection：
-
-```json
-{
-  "kind": "relation",
-  "field": "customer",
-  "select": {
-    "kind": "selection"
-  }
-}
-```
-
-这样 AST 中每一级返回形状都有明确节点，也为 relation-local filter 和 sort 提供稳定的
-目标 Collection 作用域。
-
-同一个 selection 节点中，每个 relation Field 最多出现一次。以下形态应拒绝，而不是
-静默合并：
-
-```json
-{
-  "kind": "selection",
-  "relations": [
-    {
-      "kind": "relation",
-      "field": "items",
-      "select": { "kind": "selection", "fields": ["id"] }
-    },
-    {
-      "kind": "relation",
-      "field": "items",
-      "select": { "kind": "selection", "fields": ["quantity"] }
-    }
-  ]
-}
-```
-
-要求调用方提交一棵无重复关系节点的规范树，可以避免两个节点的 filter、sort 和字段
-投影如何合并产生歧义。旧 `appends` 路径的兼容 adapter 可以先合并路径，再生成规范 AST。
-
-## Relation 返回形状
-
-Relation Field 的 metadata 决定返回基数：
+Relation metadata 决定返回基数：
 
 | relation 类型              | 返回形状              | 无匹配时 |
 | -------------------------- | --------------------- | -------- |
 | `belongsTo`、`hasOne`      | 目标记录对象或 `null` | `null`   |
 | `hasMany`、`belongsToMany` | 目标记录数组          | `[]`     |
 
-已请求的 relation key 必须存在于结果中，不能因为没有关联记录而省略。没有在 Select AST 中
-请求的 relation 则不应出现在结果中。
+选择 to-many relation 不改变根记录的数量、根分页或 `count()` 语义；实现使用批量关系加载避免
+N+1，并按父记录组装数组。
 
-选择 to-many relation 不得改变根记录的基数。即使底层使用 join，Repository 也必须保证：
+## Relation-local filter 与 sort
 
-- 每条根记录只在根结果中出现一次；
-- 根 `limit` 和 `offset` 作用于去重后的根记录；
-- 根 `count()` 不受关系展开影响；
-- relation 数组在父记录下独立组装。
+Relation-local filter 只限制返回的关联记录，不筛选根记录：
 
-## Relation Filter
-
-Relation 节点可以使用目标 Collection 的 Filter AST 限制返回的关联记录：
-
-```json
-{
-  "kind": "relation",
-  "field": "items",
-  "select": {
-    "kind": "selection",
-    "fields": ["id", "quantity"]
-  },
-  "filter": {
-    "kind": "filter",
-    "version": 1,
-    "root": {
-      "kind": "group",
-      "logic": "and",
-      "items": [
-        {
-          "kind": "condition",
-          "path": ["quantity"],
-          "operator": "$gt",
-          "value": 0
-        }
-      ]
-    }
-  }
-}
+```ts
+select: (select) =>
+  select
+    .fields('id', 'orderNo')
+    .include('items', (items) =>
+      items
+        .fields('id', 'quantity')
+        .filter((filter) => filter.number('quantity').gt(0)),
+    );
 ```
 
-这个 filter 只决定每条订单返回哪些 `items`，不决定订单本身是否进入根结果。需要筛选
-“至少存在一条 quantity 大于 0 的 item 的订单”时，必须在根 Filter AST 使用 relation
-quantifier。两种语义不能隐式互换。
+需要筛选“至少存在一条有效 item 的订单”时，应在根 Filter Builder 使用 relation
+quantifier。
 
-## Relation Sort
+Relation-local sort 只适用于 to-many include：
 
-Relation 节点的 Sort AST 只排序该 relation 返回的记录：
-
-```json
-{
-  "kind": "relation",
-  "field": "items",
-  "select": {
-    "kind": "selection",
-    "fields": ["id", "createdAt"]
-  },
-  "sort": {
-    "kind": "sort",
-    "version": 1,
-    "items": [
-      {
-        "by": {
-          "kind": "field",
-          "field": "createdAt"
-        },
-        "direction": "desc",
-        "nulls": "last"
-      }
-    ]
-  }
-}
+```ts
+select: (select) =>
+  select.include('items', (items) =>
+    items
+      .fields('id', 'createdAt')
+      .sort((sort) => sort.field('createdAt').desc().nullsLast()),
+  );
 ```
 
-这里的 `createdAt` 根据 `items` 的目标 Collection metadata 解析。它不会排序根 orders。
-要按 `customer.name` 或 `items` 的聚合值排序根 orders，应在根查询使用 Sort AST 的
-`relationField` 或 `relationAggregate` target，详见 [Sort AST](./sort-ast.md)。
+to-one include 的 local sort 没有可观察意义，因此非空 sort 会被拒绝。
 
-to-one relation 节点可以带 sort，但它没有可观察的数组排序效果，V1 应拒绝这种无意义
-输入。relation-local sort 只适用于 to-many relation。
+## 校验与边界
 
-## 完整示例
+运行时根据每一级 Collection metadata 校验：
 
-查询已付款订单，选择客户和数量大于 0 的订单项，并按订单项创建时间倒序排列：
+- `collection` 与当前 Repository 或 relation target 一致；
+- `fields` 只包含存在且可选择的直接标量 Field；
+- `relation` 是当前 Collection 的直接 relation Field；
+- 每层 Field/include 不重复；
+- relation-local Filter/Sort 在目标 Collection 上解析；
+- relation target 存在，relation 基数与 local sort 能力匹配。
 
-```json
-{
-  "select": {
-    "kind": "select",
-    "version": 1,
-    "collection": "orders",
-    "root": {
-      "kind": "selection",
-      "fields": ["id", "orderNo", "amount"],
-      "relations": [
-        {
-          "kind": "relation",
-          "field": "customer",
-          "select": {
-            "kind": "selection",
-            "fields": ["id", "name"]
-          }
-        },
-        {
-          "kind": "relation",
-          "field": "items",
-          "select": {
-            "kind": "selection",
-            "fields": ["id", "quantity", "createdAt"],
-            "relations": [
-              {
-                "kind": "relation",
-                "field": "product",
-                "select": {
-                  "kind": "selection",
-                  "fields": ["id", "name"]
-                }
-              }
-            ]
-          },
-          "filter": {
-            "kind": "filter",
-            "version": 1,
-            "root": {
-              "kind": "group",
-              "logic": "and",
-              "items": [
-                {
-                  "kind": "condition",
-                  "path": ["quantity"],
-                  "operator": "$gt",
-                  "value": 0
-                }
-              ]
-            }
-          },
-          "sort": {
-            "kind": "sort",
-            "version": 1,
-            "items": [
-              {
-                "by": {
-                  "kind": "field",
-                  "field": "createdAt"
-                },
-                "direction": "desc",
-                "nulls": "last"
-              }
-            ]
-          }
-        }
-      ]
-    }
-  },
-  "filter": {
-    "kind": "filter",
-    "version": 1,
-    "collection": "orders",
-    "root": {
-      "kind": "group",
-      "logic": "and",
-      "items": [
-        {
-          "kind": "condition",
-          "path": ["status"],
-          "operator": "$eq",
-          "value": "paid"
-        }
-      ]
-    }
-  }
-}
-```
+V1 不支持 relation-local `limit`/`offset`、聚合投影、计算表达式、别名、raw SQL 或
+dot-string include。AST 的 relation 嵌套必须通过 `includes` 递归表达。
 
-外层的 `select` 和 `filter` 是 Repository operation options，不是另一个 AST 包装层。
+相关文档：
 
-## V1 授权边界
-
-Repository V1 只根据 Collection 校验字段、关系、目标 Collection 和结构预算，不注入或
-执行 policy。授权由 HTTP、CLI、service 等可信调用边界在调用 Repository 前完成；
-`context` 只用于 Filter 变量解析，不能充当授权上下文。
-
-未来若引入 Repository policy，应在独立阶段收紧 Select、Filter 和 Sort，并保持现有 AST
-结构不变。本提案不预先规定 policy provider、字段裁剪或记录过滤的具体协议。
-
-选择树还应受资源预算限制，例如最大深度、relation 节点总数和预计加载记录数。超过
-预算应给出可解释错误，不能因为 AST 合法就允许无限递归或指数级加载。
-
-## 加载与编译
-
-Select AST 不规定必须使用 join。Repository 可以根据 relation 类型、分页和方言
-能力选择：
-
-- to-one join；
-- 批量 `IN` 查询；
-- 关联表批量查询；
-- DataLoader 风格分组；
-- 方言等价的 eager-loading 计划。
-
-无论使用哪种策略，都必须保持同一外部语义：
-
-- 不产生 N+1 查询；
-- 不改变根记录基数和分页；
-- relation-local filter 和 sort 只作用于目标节点；
-- 共享 relation 前缀只加载一次；
-- 返回字段严格等于选择结果；
-- 相同输入在支持的数据库上产生一致结果形状。
-
-## `fields` / `appends` 兼容
-
-NocoBase 既有边界可能继续接收：
-
-```json
-{
-  "fields": ["id", "orderNo"],
-  "appends": ["customer", "items.product.name"]
-}
-```
-
-这类输入应由兼容 adapter 转换为 Select AST，再进入 metadata 校验和查询编译：
-
-```text
-legacy fields / appends
-  -> normalize paths
-  -> merge shared relation prefixes
-  -> build Select AST
-  -> validate against Collection
-  -> compile loading plan
-```
-
-`appends` 不是 Repository V1 的主代码 API。尤其不要继续扩展
-`relation(option=value)` 之类的字符串内嵌参数；关系 filter、sort 和 select 都应使用
-结构化节点。
-
-## 校验流程
-
-Repository 编译 Select AST 时建议按以下顺序校验：
-
-```text
-Select AST
-  -> validate kind and version
-  -> resolve root collection
-  -> validate direct scalar fields
-  -> resolve each relation field and target collection
-  -> recursively validate target selection
-  -> validate relation-local Filter AST
-  -> validate relation-local Sort AST
-  -> detect duplicate nodes, cycles and budget overflow
-  -> add hidden dependency fields to execution plan
-  -> compile batched relation loading plan
-  -> strip hidden fields and assemble result shape
-```
-
-任何一步失败都应给出 AST 路径、Collection 和 Field 逻辑名，不应降级成 raw SQL 或静默
-忽略未知字段。
-
-## V1 边界
-
-Select AST V1 建议支持：
-
-- 根和嵌套节点的直接标量字段投影；
-- to-one 与 to-many relation selection；
-- relation-local Filter AST；
-- to-many relation-local Sort AST；
-- `fields` / `appends` 到 Select AST 的边界兼容转换；
-- Collection、深度和节点数量校验；
-- 不改变根基数的批量关系加载。
-
-V1 暂不支持：
-
-- relation-local `limit`、`offset` 或 cursor；
-- 字段别名、表达式、聚合字段和 raw selection；
-- wildcard、排除列表或同时存在 include/exclude 的双重语义；
-- polymorphic relation 的不明确目标选择；
-- 通过 Select AST 写入、连接或断开 relation；
-- 旧式 appends 字符串中的内嵌 option 语法。
-
-## Agent 注意事项
-
-- 本页是规划文档，不代表当前代码已经可用。
-- AST 使用完整 key：`kind`、`version`、`collection`、`root`、`fields`、`relations`、
-  `field`、`select`、`filter`、`sort`。
-- 标量字段放 `fields`，relation 放 `relations`；不要把 relation path 混入 `fields`。
-- 每个 relation 使用独立节点，嵌套关系递归写 `select.relations`，不使用 dot-string。
-- 同一 selection 节点中不要重复声明同一个 relation Field。
-- relation-local filter 和 sort 相对于目标 Collection 解析。
-- relation-local filter 只过滤返回的关联记录，不过滤父记录。
-- 省略 `select` 不加载任何 relation。
-- 不在 AST 中放 raw SQL、tableName、columnName、join 类型或方言 option。
+- [Select/Sort 输入改进提案](./prisma-inspired-select-sort-input.md)
+- [Filter AST](./filter-ast.md)
+- [Sort AST 与 Sort Builder](./sort-ast.md)
+- [Repository 概览](./overview.md)

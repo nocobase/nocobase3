@@ -5,7 +5,7 @@ description: 参考 Prisma Next 的 Collection Builder，统一 Repository Selec
 
 # Repository Select 与 Sort 输入改进提案
 
-> **状态：契约已定稿，等待分阶段实现。** 本次直接调整 beta 阶段的 Select/Sort V1 AST，
+> **状态：已实现。** 本次直接调整 beta 阶段的 Select/Sort V1 AST，
 > 不保留旧 AST 兼容层，也不改变现有查询、关系加载、稳定排序和跨数据库语义。
 
 ## Select
@@ -207,7 +207,7 @@ Builder 是 TypeScript 便利层；AST 是 HTTP、CLI、Agent、持久化配置�
 
 ## 实现阶段
 
-1. 定稿并提交本契约；
-2. 调整 Select AST，实现 Select Builder，迁移测试并提交；
-3. 调整 Sort AST，实现 Sort Builder，迁移测试并提交；
-4. 更新 Repository 概览、Select/Sort 专题和写入示例，完整验证后提交。
+1. 已定稿并提交本契约；
+2. 已调整 Select AST，实现 Select Builder 并迁移测试；
+3. 已调整 Sort AST，实现 Sort Builder 并迁移测试；
+4. 已同步 Repository 概览、Select/Sort 专题和写入示例。

@@ -172,33 +172,38 @@ type RepositoryFilter<TRecord extends object> =
   | FilterAst
   | ((filter: FilterBuilder<TRecord>) => FilterNode);
 
-interface NonEmptySortAst extends SortAst {
-  items: readonly [SortItemNode, ...SortItemNode[]];
-}
+type RepositorySelect<TRecord extends object> =
+  SelectAst | ((select: SelectBuilder<TRecord>) => SelectBuilder<TRecord>);
 
-interface RepositoryReadOptions {
-  select?: SelectAst;
+type RepositorySort<TRecord extends object> =
+  | SortAst
+  | ((
+      sort: SortBuilder<TRecord>,
+    ) => SortExpression | readonly SortExpression[]);
+
+interface RepositoryReadOptions<TRecord extends object> {
+  select?: RepositorySelect<TRecord>;
   context?: RepositoryContext;
 }
 
 interface FindManyOptions<
   TRecord extends object,
-> extends RepositoryReadOptions {
+> extends RepositoryReadOptions<TRecord> {
   filter?: RepositoryFilter<TRecord>;
-  sort?: SortAst;
+  sort?: RepositorySort<TRecord>;
   limit?: number;
   offset?: number;
 }
 
-type FindOneOptions<TRecord extends object> = RepositoryReadOptions &
+type FindOneOptions<TRecord extends object> = RepositoryReadOptions<TRecord> &
   (
     | {
         filter: RepositoryFilter<TRecord>;
-        sort?: SortAst;
+        sort?: RepositorySort<TRecord>;
       }
     | {
         filter?: RepositoryFilter<TRecord>;
-        sort: NonEmptySortAst;
+        sort: NonEmptyRepositorySort<TRecord>;
       }
   );
 
@@ -207,9 +212,9 @@ interface FilterOnlyOptions<TRecord extends object> {
   context?: RepositoryContext;
 }
 
-interface CreateOneOptions<TCreate extends object> {
+interface CreateOneOptions<TCreate extends object, TRecord extends object> {
   values: CreateMutationValues<TCreate>;
-  select?: SelectAst;
+  select?: RepositorySelect<TRecord>;
 }
 
 interface CreateManyOptions<TCreate extends object> {
@@ -224,7 +229,7 @@ type UpdateOneOptions<
   TUpdate extends object,
   TRecord extends object,
 > = SingleMutationSelector<TRecord> & {
-  select?: SelectAst;
+  select?: RepositorySelect<TRecord>;
   ifVersion?: string | number;
   context?: RepositoryContext;
   values: UpdateMutationValues<TUpdate>;
@@ -513,43 +518,15 @@ const orderRepository = db.repository<OrderRecord, CreateOrder, UpdateOrder>(
 );
 
 const orders = await orderRepository.findMany({
-  select: {
-    kind: 'select',
-    version: 1,
-    root: {
-      kind: 'selection',
-      fields: ['id', 'orderNo', 'amount', 'createdAt'],
-      relations: [
-        {
-          kind: 'relation',
-          field: 'customer',
-          select: {
-            kind: 'selection',
-            fields: ['id', 'name'],
-          },
-        },
-        {
-          kind: 'relation',
-          field: 'items',
-          select: {
-            kind: 'selection',
-            fields: ['id', 'productName', 'quantity'],
-          },
-          sort: {
-            kind: 'sort',
-            version: 1,
-            items: [
-              {
-                by: { kind: 'field', field: 'createdAt' },
-                direction: 'desc',
-                nulls: 'last',
-              },
-            ],
-          },
-        },
-      ],
-    },
-  },
+  select: (select) =>
+    select
+      .fields('id', 'orderNo', 'amount', 'createdAt')
+      .include('customer', (customer) => customer.fields('id', 'name'))
+      .include('items', (items) =>
+        items
+          .fields('id', 'productName', 'quantity')
+          .sort((sort) => sort.field('createdAt').desc().nullsLast()),
+      ),
   filter: (filter) =>
     filter.and([
       filter.string('status').eq('paid'),
@@ -559,29 +536,15 @@ const orders = await orderRepository.findMany({
 });
 ```
 
-`findOne()` 使用同一套 Select AST 和 Sort AST：
+`findOne()` 使用同一套 Select/Sort Builder：
 
 ```ts
 const order = await orderRepository.findOne({
   filter: { orderNo: 'SO-001' },
-  select: {
-    kind: 'select',
-    version: 1,
-    root: {
-      kind: 'selection',
-      fields: ['id', 'orderNo'],
-      relations: [
-        {
-          kind: 'relation',
-          field: 'customer',
-          select: {
-            kind: 'selection',
-            fields: ['id', 'name'],
-          },
-        },
-      ],
-    },
-  },
+  select: (select) =>
+    select
+      .fields('id', 'orderNo')
+      .include('customer', (customer) => customer.fields('id', 'name')),
 });
 ```
 
