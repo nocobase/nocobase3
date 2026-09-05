@@ -1,6 +1,6 @@
 # NocoBase 3 的主题切换
 
-状态：待审核方案。本文规定拟实现的产品行为和应用内约定；文中的新增文件、字段和操作方式均为设计建议，审核后再实施。
+状态：方案已审核通过，功能待实现。本文规定已确认的产品行为和应用内约定，作为后续实现依据。
 
 ## 1. 目标与范围
 
@@ -241,14 +241,41 @@ document.documentElement.dataset.theme = 'ocean';
 
 | localStorage key | 内容 | 初始默认值 |
 | --- | --- | --- |
-| `nocobase-theme` | `system`、`light` 或 `dark`，继续交给 `next-themes` 管理 | `system` |
-| `nocobase-theme-preset` | 当前清单中的主题 ID | `default` |
+| `nocobase:<scope>:theme:color-scheme` | `system`、`light` 或 `dark`，交给 `next-themes` 管理 | `system` |
+| `nocobase:<scope>:theme:preset` | 当前清单中的主题 ID | `default` |
 
 保存值使用简单字符串，无需增加版本化 JSON、迁移或历史数据兼容层。
 
-第一版沿用当前亮暗模式的浏览器同源共享范围：同一 origin 下的 App 共用这两个 key，不按账号或 URL 路径隔离。因此退出或更换账号不会重置外观，同源不同路径的 App 也可能共享偏好。不同设备、浏览器或 origin 之间不共享。
+两项偏好均按 App 的规范化挂载路径隔离，统一使用 `theme` 命名空间。通过 v3 已有的 `resolveAppBase()` 获取路径，无需增加 App 标识 API：
 
-这是本方案的一项待审核产品选择。如果要求同源多 App 各自保存偏好，应在实现前统一调整两个 key 的作用域，不只隔离主题预设。
+```ts
+import { resolveAppBase } from '@nocobase/app-client';
+
+const appPath = resolveAppBase().replace(/^\/+|\/+$/g, '');
+const scope = appPath ? encodeURIComponent(appPath) : '%2F';
+const colorSchemeStorageKey = `nocobase:${scope}:theme:color-scheme`;
+const themePresetStorageKey = `nocobase:${scope}:theme:preset`;
+```
+
+scope 的生成规则是：去掉规范化挂载路径首尾的 `/`，再进行 URL 编码；根路径去掉斜杠后为空，使用保留值 `%2F`。
+
+| App 挂载路径 | scope | 主题预设 key |
+| --- | --- | --- |
+| `/crm/` | `crm` | `nocobase:crm:theme:preset` |
+| `/erp/` | `erp` | `nocobase:erp:theme:preset` |
+| `/team/crm/` | `team%2Fcrm` | `nocobase:team%2Fcrm:theme:preset` |
+| `/` | `%2F` | `nocobase:%2F:theme:preset` |
+| `/root/` | `root` | `nocobase:root:theme:preset` |
+
+当前 Host 的常规挂载规则是 `/${appName}`；`/team/crm/` 表示自定义的嵌套部署路径。仅去掉首尾斜杠，中间的斜杠保留并编码，避免不同路径合并为相同 scope。根路径不用 `root` 作为 scope，避免与实际的 `/root/` 应用重名。
+
+例如 CRM 的显示模式 key 为 `nocobase:crm:theme:color-scheme`。将隔离后的显示模式 key 传给 `next-themes` 的 `storageKey`，预设状态只读写和监听自己的 key。
+
+`resolveAppBase()` 优先读取服务端注入的 `APP_BASE_PATH`，开发环境回退到 Vite 的 `BASE_URL`，并统一前后斜杠。使用完整挂载路径，不使用当前页面的 `location.pathname`，也不截取路径第一段。在 `/crm/`、`/crm/settings` 和 `/crm/orders/123` 中应得到相同 scope。
+
+同一 App 的页面和标签页共享偏好，同源不同路径的 App 互不影响。localStorage 已按 origin 隔离，key 无需重复域名。第一版不按账号隔离，退出或更换账号不会重置外观；不同设备、浏览器或 origin 之间不共享。
+
+挂载路径变化后使用新的存储范围；同一路径被另一个 App 接替时，可能读取该路径以前保存的偏好。第一版接受这一部署路径语义，不增加独立实例 ID。重置某个 App 的偏好只删除它自己的 key，不调用 `localStorage.clear()`。
 
 其他行为：
 
@@ -256,9 +283,9 @@ document.documentElement.dataset.theme = 'ocean';
 - 保存的预设不在当前清单中：本次加载按默认预设显示，UI 与 DOM 一致。
 - 保存的显示模式无效：按 `system` 处理。
 - 读取或写入存储失败：页面正常工作，当次选择仍生效；不因此中断启动。
-- 同源标签页收到这两个 key 的变化或清除事件时，按相同规则更新显示；不通过无条件回写形成同步循环。
+- 同一 App 的其他标签页收到这两个 key 的变化或清除事件时，按相同规则更新显示；忽略其他 App 的 key，不通过无条件回写形成同步循环。
 
-无效值回退用于处理删除主题、浏览器数据被修改或共享偏好与当前 App 清单不匹配的正常情况，不为开发期主题建立 ID 别名和迁移记录。
+无效值回退用于处理删除主题、浏览器数据被修改或同一路径重新部署后清单不匹配的正常情况，不为开发期主题建立 ID 别名和迁移记录。
 
 ### 5.3 首屏恢复
 
@@ -266,11 +293,13 @@ document.documentElement.dataset.theme = 'ocean';
 
 建议在 App 本地的 HTML 构建／开发处理环节接入主题启动初始化：
 
-1. 在加载画面首次绘制前，读取并校验保存的模式和主题预设。
+1. 在加载画面首次绘制前，确保实际 App 挂载路径可用，按统一规则生成两个存储 key，再读取并校验保存的模式和主题预设。
 2. 解析 `system` 的实际亮暗模式，设置根节点 class、`data-theme` 和浏览器原生控件使用的 `color-scheme`。
 3. 同时确保主题 Token CSS 在首次绘制时可用；仅提前设置属性不足以解决样式尚未加载的问题。
 4. 加载画面的背景和文字使用同一套主题 Token，去掉独立的配色来源。
-5. React 挂载后从相同的偏好初始化。随后由 `next-themes` 持续管理亮暗模式，App 状态持续管理主题预设。
+5. React 挂载后使用相同的 scope、存储 key 和偏好初始化。随后由 `next-themes` 持续管理亮暗模式，App 状态持续管理主题预设。
+
+当前服务端在第一个模块脚本前注入运行时配置。主题初始化不能在 `APP_BASE_PATH` 可用之前抢先使用构建路径或默认路径读取存储；HTML 接入需要确保运行时配置先于主题初始化，且二者均早于加载画面绘制。开发和生产环境分别验证该顺序。
 
 启动初始化使用主题清单和默认值生成或共享的数据，不在 `index.html` 手写第二份主题 ID 列表，也不复制两份需要分别维护的主题颜色。只在 React 的 `useEffect` 中恢复不满足本节要求。
 
@@ -318,7 +347,8 @@ AI 定位目标主题后，修改其 CSS，并同时检查浅色和深色效果�
 - 浅色、深色和跟随系统三个选项均可选择；系统变化只在跟随系统时影响实际模式。
 - 模式和预设独立切换，Header、独立页面及面板选中状态一致。
 - 刷新后恢复所选预设和模式；无效值和存储不可用不会导致页面无法使用。
-- 同源标签页对偏好变化和清除的响应符合保存范围约定。
+- 同源两个 App 的模式和预设互不影响；同一 App 多标签页正确响应自己的偏好变化和清除。
+- 同一 App 的首页、深层路由和带查询参数的页面使用相同 scope；嵌套挂载路径和根路径也正确隔离。
 - 新增主题后，面板无需改代码即可展示；删除已选主题后按默认预设显示。
 - 首屏加载画面、应用页面和启动错误页面使用一致的主题，不发生可见的错误主题闪现。
 - 面板能够通过键盘操作，中文和英文等已有语言的文案完整。
@@ -346,15 +376,15 @@ pnpm --filter @nocobase/app-template-hub check
 
 在已生成应用内维护主题时，运行该应用的相应检查。交付说明包含关键测试结果、视觉验证范围和未执行检查的原因。
 
-## 8. 本次审核重点
+## 8. 已确认的设计决策
 
-本文建议将以下内容作为第一版约定：
+以下内容已审核通过，作为第一版约定：
 
 1. 功能整体由 App 模板维护，继续使用 `next-themes` 管理亮暗模式。
 2. 主题预设与显示模式独立，使用 `data-theme` 和根节点 class 表达。
 3. 使用静态主题清单和独立 CSS 文件，预览颜色复用 CSS。
 4. 右上角使用 Popover、三段模式选择和两列主题卡片；默认附带默认与海洋两个主题。
-5. 使用两个 localStorage key，第一版按浏览器同源共享，不按账号和路径隔离。
+5. 使用 `nocobase:<scope>:theme:color-scheme` 和 `nocobase:<scope>:theme:preset`。scope 去掉规范化 App 挂载路径首尾的 `/` 后编码，根路径使用 `%2F`；同源不同 App 隔离，同一 App 多标签页共享，不按账号隔离。
 6. 首屏恢复与加载画面一致性纳入第一版验收；AI 主题指引随实现同步补齐。
 
-清单字段、主题 ID 约定、预览选择器、存储范围和状态调用方式会影响后续 App 开发，属于需要审核的应用级约定。本文审核通过后再实施代码；后续发现需新增或改变约定时再说明具体调整。
+清单字段、主题 ID 约定、预览选择器和存储范围按本文实施。后续如需新增或改变应用级 API 或约定，应说明具体调整并在获得批准后实施。
