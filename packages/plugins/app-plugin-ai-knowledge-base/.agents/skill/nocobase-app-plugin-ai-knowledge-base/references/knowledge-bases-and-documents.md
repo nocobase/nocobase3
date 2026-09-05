@@ -13,7 +13,7 @@
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `LOCAL`    | Accepts direct document upload; splits/stores segments; builds vectors; search filters vector rows by `knowledgeBaseOuterId`; default provider `NocobaseLocalVectorStoreProvider`.                                                                               |
 | `READONLY` | Direct upload is rejected. Default provider `NocobaseReadonlyVectorStoreProvider`. Built-in search uses the selected vector database without the LOCAL outer-ID filter. The service's full vector rebuild returns without writing because rebuild is LOCAL-only. |
-| `EXTERNAL` | Direct upload is rejected. Uses supplied `externalProvider`. The built-in `KnowledgeBaseFeatureService.search` skips EXTERNAL bases, so retrieval requires another integrated external provider path; this package does not expose a provider-registration API.  |
+| `EXTERNAL` | Direct upload is rejected. Uses the selected vector-store provider registered through `aiManager.features.vectorStoreProvider` and passes `vectorStoreProps` to that provider's service.                                                                         |
 
 Only the direct upload method explicitly enforces LOCAL. The compatibility JSON finalize route currently lacks that check; do not use it to bypass type behavior.
 
