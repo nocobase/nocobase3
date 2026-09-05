@@ -145,11 +145,11 @@ const result = await projects.findMany({
 
 场景编号供后续自动化测试使用；当前列出的是相关覆盖，不代表文档片段已逐个自动执行。
 
-| 场景  | 后续测试重点                         | 已有相关覆盖                              |
-| ----- | ------------------------------------ | ----------------------------------------- |
-| FM-01 | 重复排序值、双向游标、空页、非法组合 | scalar.test.ts、identity-features.test.ts |
-| FM-02 | 父记录保留、空关系形状、投影隔离     | relations.test.ts                         |
+| 场景  | 后续测试重点                         | 已有相关覆盖                                                              |
+| ----- | ------------------------------------ | ------------------------------------------------------------------------- |
+| FM-01 | 重复排序值、双向游标、空页、非法组合 | capabilities/pagination.test.ts、identity/key-types-and-returning.test.ts |
+| FM-02 | 父记录保留、空关系形状、投影隔离     | relations/select.test.ts                                                  |
 
 ## 验证依据
 
-行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [read-contracts.test.ts](../../../../tests/integration/repository/methods/read-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

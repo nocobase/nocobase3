@@ -59,4 +59,4 @@ const result = await tasks.groupBy({
 
 ## 验证依据
 
-行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [group-by.test.ts](../../../../tests/integration/repository/methods/group-by.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

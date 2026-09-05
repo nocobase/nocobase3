@@ -3,16 +3,16 @@ import type {
   Repository,
   SingleMutationResult,
   ValuesBuilder,
-} from '../../../src/index.js';
+} from '../../../../src/index.js';
 import {
   DefaultValuesBuilder,
   resolveMutationValue,
   validateResolvedMutationValue,
-} from '../../../src/repository/values.js';
+} from '../../../../src/repository/values.js';
 import {
   isNumericMutation,
   normalizeNumericMutation,
-} from '../../../src/repository/numeric-mutation.js';
+} from '../../../../src/repository/numeric-mutation.js';
 
 const builder = new DefaultValuesBuilder();
 const path = ['values', 'payload'];

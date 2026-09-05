@@ -98,4 +98,4 @@ const result = await db.repository('tasks').updateOne({
 
 ## 验证依据
 
-行为覆盖见 [identity-safety.test.ts](../../../../tests/integration/repository/identity-safety.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [safety.test.ts](../../../../tests/integration/repository/identity/safety.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

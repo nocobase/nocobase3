@@ -51,4 +51,4 @@ const records = await db.repository('projects').findMany({
 
 空数组、重复字段、不稳定或不支持的排序报 INVALID_DISTINCT 或字段能力错误。cursor 组合还需满足[分页规则](./pagination.md)。测试应验证相同字段组合只保留一条完整记录、代表行选取、每父记录独立去重，以及 backward 不改变代表行。
 
-验证依据：[scalar.test.ts](../../../tests/integration/repository/scalar.test.ts)、[identity-features.test.ts](../../../tests/integration/repository/identity-features.test.ts)。
+验证依据：[distinct.test.ts](../../../tests/integration/repository/capabilities/distinct.test.ts)、[key-types-and-returning.test.ts](../../../tests/integration/repository/identity/key-types-and-returning.test.ts)。

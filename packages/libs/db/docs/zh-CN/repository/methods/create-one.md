@@ -103,7 +103,7 @@ const deleted = await tickets.deleteOne({
 // deleted: { deleted: true, record: { reference: 'EXT-A' } }
 ```
 
-这里 reference 提供重读和写入定位所需的唯一身份，不会自动新增 id。只有 unique 而没有主键，仍不支持当前批量 select returning。相同语义的数据库测试见 [identity.test.ts](../../../../tests/integration/repository/identity.test.ts)。
+这里 reference 提供重读和写入定位所需的唯一身份，不会自动新增 id。只有 unique 而没有主键，仍不支持当前批量 select returning。相同语义的数据库测试见 [keys-and-relations.test.ts](../../../../tests/integration/repository/identity/keys-and-relations.test.ts)。
 
 ## 嵌套创建与失败
 
@@ -124,4 +124,4 @@ const result = await db.repository('projects').createOne({
 
 ## 验证依据
 
-行为覆盖见 [identity-features.test.ts](../../../../tests/integration/repository/identity-features.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [key-types-and-returning.test.ts](../../../../tests/integration/repository/identity/key-types-and-returning.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

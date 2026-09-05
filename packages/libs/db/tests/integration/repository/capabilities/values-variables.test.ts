@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import type { Repository, ValuesBuilder } from '../../../src/index.js';
+import type { Repository, ValuesBuilder } from '../../../../src/index.js';
 import {
   describeIntegrationDatabases,
   type IntegrationTestContext,
-} from '../helpers.js';
+} from '../../helpers.js';
 
 interface Entry {
   code: string;

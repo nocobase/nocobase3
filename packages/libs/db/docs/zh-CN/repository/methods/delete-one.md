@@ -53,4 +53,4 @@ select 可以读取关系快照，但不是删除关系的配置。外键级联�
 
 ## 验证依据
 
-行为覆盖见 [mutations.test.ts](../../../../tests/integration/repository/mutations.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [write-contracts.test.ts](../../../../tests/integration/repository/methods/write-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

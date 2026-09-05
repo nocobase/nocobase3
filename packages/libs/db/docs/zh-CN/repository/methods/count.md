@@ -107,8 +107,8 @@ const parents = await projects.count({
 
 ## 测试映射
 
-CT-01 对应 scalar.test.ts 的计数、上下文和分页能力；CT-02 对应 relations.test.ts 的关系量词及 mutations.test.ts 的关系条件聚合能力。后续应将本页具体数据和预期结果补为独立断言；相关能力覆盖不等于这些组合已有专门测试。
+CT-01 对应 methods/read-contracts.test.ts 的计数、上下文和分页能力；CT-02 对应 relations/filter.test.ts 的关系量词及 relations/aggregate-filter.test.ts 的关系条件聚合能力。后续应将本页具体数据和预期结果补为独立断言；相关能力覆盖不等于这些组合已有专门测试。
 
 ## 验证依据
 
-行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [read-contracts.test.ts](../../../../tests/integration/repository/methods/read-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

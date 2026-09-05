@@ -59,4 +59,4 @@ const result = await db.repository('projects').validateMutation({
 
 ## 验证依据
 
-行为覆盖见 [values-variables.test.ts](../../../../tests/integration/repository/values-variables.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [values-variables.test.ts](../../../../tests/integration/repository/capabilities/values-variables.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

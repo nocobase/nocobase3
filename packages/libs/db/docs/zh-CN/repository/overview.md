@@ -119,7 +119,7 @@ await db.connection().builder.createCollections([
 ]);
 ```
 
-示例中的所有 id 都是显式声明的 string 字段。非 id 自增主键见 [createOne](./methods/create-one.md#非-id-主键)；无主键、复合身份和 nullable unique 的执行边界见 [Values](./values.md#身份与受管理字段)及 [identity-features 测试](../../../tests/integration/repository/identity-features.test.ts)。
+示例中的所有 id 都是显式声明的 string 字段。非 id 自增主键见 [createOne](./methods/create-one.md#非-id-主键)；无主键、复合身份和 nullable unique 的执行边界见 [Values](./values.md#身份与受管理字段)及 [身份测试目录](../../../tests/integration/repository/identity)。
 
 ## 最小读写示例
 

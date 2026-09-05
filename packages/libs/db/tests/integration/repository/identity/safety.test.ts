@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { describeIntegrationDatabases } from '../helpers.js';
+import { describeIntegrationDatabases } from '../../helpers.js';
 
 describeIntegrationDatabases('Repository identity safety', (context) => {
   it('rejects keyless single mutations without leaving side effects', async () => {

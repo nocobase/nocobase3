@@ -98,4 +98,4 @@ await db.transaction(async (connection) => {
 
 事务来自回调 Connection；context 仍仅提供变量。失败传播规则见[事务](./transactions.md)。
 
-验证依据：[创建返回上下文](../../../tests/integration/repository/create-context.test.ts)、[Values 变量](../../../tests/integration/repository/values-variables.test.ts)。
+验证依据：[创建返回上下文](../../../tests/integration/repository/capabilities/create-context.test.ts)、[Values 变量](../../../tests/integration/repository/capabilities/values-variables.test.ts)。

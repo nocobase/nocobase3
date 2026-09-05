@@ -135,4 +135,4 @@ await db.repository('tasks').updateOne({
 
 操作结构必须由调用方明确声明，变量解析出的对象不能变成 increment/connect 等操作。根级 upsert 两个分支都会预校验，即使最终只执行一个分支。
 
-验证依据：[变量与 callback](../../../tests/integration/repository/values-variables.test.ts)、[原子更新](../../../tests/unit/repository/numeric-mutation.test.ts)。
+验证依据：[变量与 callback](../../../tests/integration/repository/capabilities/values-variables.test.ts)、[原子更新](../../../tests/unit/repository/values/atomic.test.ts)。

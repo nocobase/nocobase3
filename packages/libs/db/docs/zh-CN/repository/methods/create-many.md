@@ -75,4 +75,4 @@ const result = await db.repository('eventLogs').createMany({
 
 ## 验证依据
 
-行为覆盖见 [create-context.test.ts](../../../../tests/integration/repository/create-context.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [create-context.test.ts](../../../../tests/integration/repository/capabilities/create-context.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

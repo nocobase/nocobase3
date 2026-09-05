@@ -3,8 +3,8 @@ import type {
   RepositoryRecord,
   RepositorySelect,
   SelectAst,
-} from '../../../src/index.js';
-import { describeIntegrationDatabases } from '../helpers.js';
+} from '../../../../src/index.js';
+import { describeIntegrationDatabases } from '../../helpers.js';
 
 describeIntegrationDatabases('Repository create context', (context) => {
   const ast: SelectAst = {

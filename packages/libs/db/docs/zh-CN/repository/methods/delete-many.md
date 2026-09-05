@@ -47,4 +47,4 @@ await db.repository('projects').deleteMany({ all: true });
 
 ## 验证依据
 
-行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [write-contracts.test.ts](../../../../tests/integration/repository/methods/write-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

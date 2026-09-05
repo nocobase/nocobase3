@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import type { ValuesBuilder } from '../../../src/index.js';
+import type { ValuesBuilder } from '../../../../src/index.js';
 import {
   describeIntegrationDatabases,
   type IntegrationTestContext,
-} from '../helpers.js';
+} from '../../helpers.js';
 
 async function fixture(context: IntegrationTestContext): Promise<void> {
   await context.builder.createCollections([

@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import {
   DefaultRelationSelectBuilder,
   DefaultSelectBuilder,
-} from '../../../src/repository/select-builder.js';
+} from '../../../../src/repository/select-builder.js';
 
 it('keeps relation selection branches independent and honors callback returns', () => {
   const tasks = new DefaultRelationSelectBuilder();

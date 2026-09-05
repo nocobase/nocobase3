@@ -3,8 +3,8 @@ import type {
   FilterBuilder,
   FilterNode,
   FilterLiteral,
-} from '../../../src/index.js';
-import { describeIntegrationDatabases } from '../helpers.js';
+} from '../../../../src/index.js';
+import { describeIntegrationDatabases } from '../../helpers.js';
 
 describeIntegrationDatabases('Repository JSON filters', (context) => {
   it('compares JSON structures, typed array members, paths, and nulls in SQL', async () => {

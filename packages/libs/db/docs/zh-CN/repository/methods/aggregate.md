@@ -65,4 +65,4 @@ const result = await db.repository('tasks').aggregate({
 
 ## 验证依据
 
-行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [aggregate.test.ts](../../../../tests/integration/repository/methods/aggregate.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { describeIntegrationDatabases } from '../helpers.js';
+import { describeIntegrationDatabases } from '../../helpers.js';
 
 describeIntegrationDatabases('Repository explicit identity', (context) => {
   it('replaces hasMany targets by complete composite identities', async () => {

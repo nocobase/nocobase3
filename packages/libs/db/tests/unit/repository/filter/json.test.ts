@@ -3,8 +3,8 @@ import { expect, it } from 'vitest';
 import {
   compileJsonCondition,
   validateJsonCondition,
-} from '../../../src/repository/json-filter.js';
-import { DefaultFilterBuilder } from '../../../src/repository/filter-builder.js';
+} from '../../../../src/repository/json-filter.js';
+import { DefaultFilterBuilder } from '../../../../src/repository/filter-builder.js';
 
 it('keeps JSON paths immutable and all user SQL data bound', () => {
   const json = new DefaultFilterBuilder().json('payload');

@@ -4,8 +4,8 @@ import type {
   FieldDefinition,
   Repository,
   NumericMutationBuilder,
-} from '../../../src/index.js';
-import { normalizeNumericMutation } from '../../../src/repository/numeric-mutation.js';
+} from '../../../../src/index.js';
+import { normalizeNumericMutation } from '../../../../src/repository/numeric-mutation.js';
 
 const collection: CollectionDefinition = { name: 'accounts' };
 const field: FieldDefinition = { name: 'balance', type: 'decimal' };

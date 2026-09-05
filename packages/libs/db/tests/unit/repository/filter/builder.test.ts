@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DefaultFilterBuilder } from '../../../src/repository/filter-builder.js';
+import { DefaultFilterBuilder } from '../../../../src/repository/filter-builder.js';
 
 describe('DefaultFilterBuilder', () => {
   it('builds canonical serializable scalar nodes', () => {
