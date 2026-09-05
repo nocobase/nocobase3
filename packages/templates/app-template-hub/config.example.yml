@@ -22,6 +22,21 @@ auth:
 #   # Use the same generated value as auth.secret, or another unique secret.
 #   secret: replace-with-a-unique-secret
 
+# User mailbox OAuth and Provider configuration.
+# Set MAIL_CREDENTIAL_ENCRYPTION_KEY to a stable random value of at least 32
+# characters before connecting accounts.
+# mail:
+#   providers:
+#     google:
+#       type: gmail
+#       clientId: replace-with-google-oauth-client-id
+#       clientSecret: replace-with-google-oauth-client-secret
+#     microsoft-365:
+#       type: microsoft
+#       tenant: common
+#       clientId: replace-with-microsoft-entra-client-id
+#       clientSecret: replace-with-microsoft-entra-client-secret
+
 notification:
   channels:
     - type: in-app
