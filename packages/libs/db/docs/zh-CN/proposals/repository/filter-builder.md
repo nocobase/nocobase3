@@ -77,6 +77,9 @@ await db.repository('orders').findMany({
 
 Filter Builder 生成的是结构化 Filter AST。HTTP、CLI、file sync 或持久化配置可以直接使用 AST 形态，详见 [Filter AST](./filter-ast.md)。
 
+简单 equality JSON shorthand、复杂 Builder 和完整 Filter AST 的输入分层方案见
+[Repository Filter 输入改进提案](./prisma-inspired-filter-input.md)。
+
 ## 不提供的简称 API
 
 为了让 Agent 更容易稳定生成代码，V1 不设计这些简称：

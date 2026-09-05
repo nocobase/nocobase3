@@ -633,6 +633,8 @@ await db.repository('users').findMany({
 ```
 
 Filter Builder 的详细设计见 [Filter Builder](./filter-builder.md)，结构化 AST 见 [Filter AST](./filter-ast.md)。
+参考 Prisma Next 增加简单 equality JSON shorthand 的方案见
+[Repository Filter 输入改进提案](./prisma-inspired-filter-input.md)。
 
 ## 关系写入
 
