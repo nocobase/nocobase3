@@ -2,6 +2,7 @@ import type {
   RelationSelectBuilder,
   RepositoryFilter,
   RepositoryCursor,
+  RepositoryCursorDirection,
   RepositoryRecord,
   RepositorySort,
   SelectBuilder,
@@ -15,6 +16,7 @@ export interface SelectBuilderIncludeState {
   readonly sort?: RepositorySort<RepositoryRecord>;
   readonly limit?: number;
   readonly cursor?: RepositoryCursor;
+  readonly direction?: RepositoryCursorDirection;
 }
 
 export interface RelationSelectBuilderState extends SelectBuilderState {
@@ -22,6 +24,7 @@ export interface RelationSelectBuilderState extends SelectBuilderState {
   readonly sort?: RepositorySort<RepositoryRecord>;
   readonly limit?: number;
   readonly cursor?: RepositoryCursor;
+  readonly direction?: RepositoryCursorDirection;
 }
 
 export interface SelectBuilderState {
@@ -64,6 +67,7 @@ export class DefaultSelectBuilder<
       sort: state.sort,
       limit: state.limit,
       cursor: state.cursor,
+      direction: state.direction,
     });
     return this;
   }
@@ -87,6 +91,12 @@ export class DefaultRelationSelectBuilder<
   private relationSort: RepositorySort<TRecord> | undefined;
   private relationLimit: number | undefined;
   private relationCursor: RepositoryCursor<TRecord> | undefined;
+  private relationDirection: RepositoryCursorDirection | undefined;
+
+  direction(direction: RepositoryCursorDirection): this {
+    this.relationDirection = direction;
+    return this;
+  }
 
   filter(filter: RepositoryFilter<TRecord>): this {
     this.relationFilter = filter;
@@ -115,6 +125,7 @@ export class DefaultRelationSelectBuilder<
       sort: this.relationSort,
       limit: this.relationLimit,
       cursor: this.relationCursor as RepositoryCursor | undefined,
+      direction: this.relationDirection,
     };
   }
 }

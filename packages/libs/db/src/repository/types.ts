@@ -230,6 +230,7 @@ export interface SelectIncludeNode {
   readonly sort?: SortAst;
   readonly limit?: number;
   readonly cursor?: RepositoryCursor;
+  readonly direction?: RepositoryCursorDirection;
 }
 
 export interface SelectAst {
@@ -299,6 +300,9 @@ export interface RelationSelectBuilder<
   ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
   cursor(
     cursor: RepositoryCursor<TRecord>,
+  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  direction(
+    direction: RepositoryCursorDirection,
   ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
 }
 
@@ -747,6 +751,7 @@ export interface FindManyOptions<
     ...(keyof TRecord & string)[],
   ];
   readonly cursor?: RepositoryCursor<TRecord>;
+  readonly direction?: RepositoryCursorDirection;
   readonly limit?: number;
   readonly offset?: number;
 }
@@ -758,6 +763,8 @@ export type StreamOptions<TRecord extends object> = Omit<
 
 export type RepositoryCursor<TRecord extends object = RepositoryRecord> =
   Readonly<Partial<TRecord>>;
+
+export type RepositoryCursorDirection = 'forward' | 'backward';
 
 export type FindOneOptions<TRecord extends object> =
   RepositoryReadOptions<TRecord> &

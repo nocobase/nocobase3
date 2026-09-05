@@ -30,6 +30,7 @@ export interface RepositoryReadPlan {
   readonly sort?: SortAst;
   readonly distinct?: readonly string[];
   readonly cursor?: readonly RepositoryCursorAxis[];
+  readonly direction?: 'forward' | 'backward';
   readonly limit?: number;
   readonly offset?: number;
 }

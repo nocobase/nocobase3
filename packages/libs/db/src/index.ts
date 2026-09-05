@@ -194,6 +194,7 @@ export type {
   RepositoryAggregateNumeric,
   RepositoryContext,
   RepositoryCursor,
+  RepositoryCursorDirection,
   RepositoryFilter,
   RepositoryMutationDescription,
   RepositoryMutationScalarValue,

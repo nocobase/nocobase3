@@ -120,6 +120,7 @@ export class DefaultRepository<
     );
     const sort = await this.validateSort(collection, options.sort);
     validatePagination(options.limit, options.offset, sort, options.cursor);
+    validateCursorDirection(options.direction, options.cursor);
     const distinct = validateDistinct(collection, options.distinct, sort);
     const cursor = validateCursor(
       collection,
@@ -135,6 +136,7 @@ export class DefaultRepository<
       sort,
       distinct,
       cursor,
+      direction: options.direction,
       limit: options.limit,
       offset: options.offset,
     })) as TRecord[];
@@ -176,6 +178,14 @@ export class DefaultRepository<
     );
     const sort = await this.validateSort(collection, options.sort);
     validatePagination(options.limit, undefined, sort, options.cursor);
+    validateCursorDirection(options.direction, options.cursor);
+    if (options.direction === 'backward') {
+      invalid(
+        'INVALID_STREAM',
+        'Backward cursor pages require buffered findMany results.',
+        { path: ['direction'] },
+      );
+    }
     const distinct = validateDistinct(collection, options.distinct, sort);
     const cursor = validateCursor(
       collection,
@@ -1947,6 +1957,7 @@ async function validateSelectInputWithRelations(
       ? await validateSortWithRelations(collections, target, sortInput)
       : undefined;
     validatePagination(node.limit, undefined, sort, node.cursor);
+    validateCursorDirection(node.direction, node.cursor);
     if (isToManyRelation(relation)) {
       validateCursor(target, node.cursor, sort, node.sort !== undefined);
     }
@@ -1958,6 +1969,7 @@ async function validateSelectInputWithRelations(
       sort,
       limit: node.limit,
       cursor: node.cursor,
+      direction: node.direction,
     });
   }
   return {
@@ -3559,6 +3571,26 @@ async function targetCollection(
     );
   }
   return target;
+}
+
+function validateCursorDirection(
+  direction: unknown,
+  cursor: object | undefined,
+): void {
+  if (
+    direction !== undefined &&
+    direction !== 'forward' &&
+    direction !== 'backward'
+  ) {
+    invalid('INVALID_PAGINATION', 'direction must be forward or backward.', {
+      path: ['direction'],
+    });
+  }
+  if (direction !== undefined && cursor === undefined) {
+    invalid('INVALID_PAGINATION', 'direction requires a cursor.', {
+      path: ['direction'],
+    });
+  }
 }
 
 function validatePagination(

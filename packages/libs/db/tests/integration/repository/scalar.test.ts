@@ -309,6 +309,49 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     ).rejects.toMatchObject({ code: 'INVALID_PAGINATION' });
   });
 
+  it('reads the nearest preceding cursor page without changing distinct representatives', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+    await repository.createMany({
+      values: [
+        { orderNo: 'A', status: 'one', amount: 10 },
+        { orderNo: 'B', status: 'two', amount: 30 },
+        { orderNo: 'C', status: 'two', amount: 20 },
+        { orderNo: 'D', status: 'three', amount: 40 },
+      ],
+    });
+    expect(
+      await repository.findMany({
+        sort: (sort) => sort.field('id').asc(),
+        cursor: { id: 4 },
+        direction: 'backward',
+        limit: 2,
+        select: (select) => select.fields('orderNo'),
+      }),
+    ).toEqual([{ orderNo: 'B' }, { orderNo: 'C' }]);
+    expect(
+      await repository.findMany({
+        distinct: ['status'],
+        sort: (sort) => [sort.field('amount').desc(), sort.field('id').asc()],
+        cursor: { amount: 10, id: 1 },
+        direction: 'backward',
+        limit: 1,
+        select: (select) => select.fields('orderNo'),
+      }),
+    ).toEqual([{ orderNo: 'B' }]);
+    expect(
+      await repository.findMany({
+        sort: (sort) => sort.field('id').asc(),
+        cursor: { id: 1 },
+        direction: 'backward',
+        limit: 2,
+      }),
+    ).toEqual([]);
+    await expect(
+      repository.findMany({ direction: 'backward', limit: 2 }),
+    ).rejects.toMatchObject({ code: 'INVALID_PAGINATION' });
+  });
+
   it('validates distinct Fields and stable direct sort', async () => {
     await createOrders(context);
     const repository = context.database.repository('repositoryOrders');

@@ -23,6 +23,15 @@ Cursor 是排他边界：返回结果从 cursor 指向记录的下一条开始�
 
 ## V1 规则
 
+Backward pagination is available with `direction: 'backward'`. The default is
+`forward`. An explicit direction requires a cursor. Backward reads the nearest
+preceding page, then restores the caller's original sort order. For an ascending
+sequence A–F, cursor D and limit 2 return B,C backward and E,F forward.
+Distinct representative selection always uses the original sort. Relation-local
+Builder chains use `.cursor(values).direction('backward').limit(10)`; JSON include
+nodes accept the same `direction` property. Streaming rejects backward pages
+because restoring page order requires buffering.
+
 - cursor 必须配合显式的非空稳定 sort。
 - Repository 会像普通列表查询一样自动追加主键 tie-breaker；cursor 必须包含最终 sort 的
   每一个字段，包括自动追加的字段。

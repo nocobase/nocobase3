@@ -481,6 +481,23 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
         select: (select) =>
           select.fields('name').include('tasks', (tasks) =>
             tasks
+              .fields('title')
+              .sort((sort) => sort.field('id').asc())
+              .cursor({ id: cursorId })
+              .direction('backward')
+              .limit(1),
+          ),
+      }),
+    ).resolves.toEqual([
+      { name: 'First paged project', tasks: [{ title: 'First A' }] },
+      { name: 'Second paged project', tasks: [] },
+    ]);
+    await expect(
+      repository.findMany({
+        filter: (filter) => filter.string('name').includes('paged project'),
+        select: (select) =>
+          select.fields('name').include('tasks', (tasks) =>
+            tasks
               .fields('id', 'title')
               .sort((sort) => sort.field('id').asc())
               .cursor({ id: cursorId })

@@ -72,6 +72,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   async findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]> {
     const { query } = await this.buildRead(plan);
     const rows = (await query) as RepositoryRecord[];
+    if (plan.direction === 'backward') rows.reverse();
     if (plan.select?.root.includes?.length) {
       await this.loadRelations(plan.collection, rows, plan.select.root);
     }
@@ -629,11 +630,18 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       alias,
       client,
     );
-    applyCursor(query, plan.cursor, (field) =>
-      qualified(alias, column(plan.collection, field)),
+    applyCursor(
+      query,
+      cursorForDirection(plan.cursor, plan.direction),
+      (field) => qualified(alias, column(plan.collection, field)),
     );
     for (const item of plan.sort?.items ?? []) {
-      await this.applySort(query, plan.collection, item, alias);
+      await this.applySort(
+        query,
+        plan.collection,
+        sortForDirection(item, plan.direction),
+        alias,
+      );
     }
     if (plan.limit !== undefined) query.limit(plan.limit);
     if (plan.offset !== undefined) query.offset(plan.offset);
@@ -717,18 +725,28 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const sortAliasByField = new Map(
       sortFields.map((field) => [field.field, field.alias]),
     );
-    applyCursor(query, plan.cursor, (field) => {
-      const internal = sortAliasByField.get(field);
-      if (!internal) throw new Error('Distinct cursor Field was not mapped.');
-      return qualified(resultAlias, internal);
-    });
+    applyCursor(
+      query,
+      cursorForDirection(plan.cursor, plan.direction),
+      (field) => {
+        const internal = sortAliasByField.get(field);
+        if (!internal) throw new Error('Distinct cursor Field was not mapped.');
+        return qualified(resultAlias, internal);
+      },
+    );
     for (const field of sortFields) {
       applyOrderBy(
         query,
         client,
         qualified(resultAlias, field.alias),
-        field.direction,
-        field.nulls,
+        plan.direction === 'backward'
+          ? reverseDirection(field.direction)
+          : field.direction,
+        plan.direction === 'backward'
+          ? field.nulls === 'first'
+            ? 'last'
+            : 'first'
+          : field.nulls,
       );
     }
     if (plan.limit !== undefined) query.limit(plan.limit);
@@ -1735,11 +1753,18 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       targetAlias,
       client,
     );
-    applyCursor(query, relationCursorAxes(node), (field) =>
-      qualified(targetAlias, column(resolved.target, field)),
+    applyCursor(
+      query,
+      cursorForDirection(relationCursorAxes(node), node.direction),
+      (field) => qualified(targetAlias, column(resolved.target, field)),
     );
     for (const item of node.sort?.items ?? []) {
-      await this.applySort(query, resolved.target, item, targetAlias);
+      await this.applySort(
+        query,
+        resolved.target,
+        sortForDirection(item, node.direction),
+        targetAlias,
+      );
     }
     const targets = (await query) as RepositoryRecord[];
     const grouped = new Map<string, RepositoryRecord[]>();
@@ -1759,8 +1784,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       const group =
         grouped.get(associationKey(parent[relationHelper(node.relation)])) ??
         [];
+      const page =
+        node.limit === undefined ? group : group.slice(0, node.limit);
       const matches = (
-        node.limit === undefined ? group : group.slice(0, node.limit)
+        node.direction === 'backward' ? [...page].reverse() : page
       ).map((target) => projectRow(target, requested, node.select));
       parent[node.relation] = isToOne(resolved.relation)
         ? (matches[0] ?? null)
@@ -2217,6 +2244,35 @@ function applyFilter(
   query.where(function applyRoot(): void {
     applyGroupItems(this, collection, root, graph, sourceAlias, client, depth);
   });
+}
+
+function reverseDirection(direction: 'asc' | 'desc'): 'asc' | 'desc' {
+  return direction === 'asc' ? 'desc' : 'asc';
+}
+
+function sortForDirection(
+  item: SortNode,
+  direction: 'forward' | 'backward' | undefined,
+): SortNode {
+  return direction === 'backward'
+    ? {
+        ...item,
+        direction: reverseDirection(item.direction),
+        nulls: item.nulls === 'first' ? 'last' : 'first',
+      }
+    : item;
+}
+
+function cursorForDirection(
+  axes: readonly RepositoryCursorAxis[] | undefined,
+  direction: 'forward' | 'backward' | undefined,
+): readonly RepositoryCursorAxis[] | undefined {
+  return direction === 'backward'
+    ? axes?.map((axis) => ({
+        ...axis,
+        direction: reverseDirection(axis.direction),
+      }))
+    : axes;
 }
 
 function applyCursor(
