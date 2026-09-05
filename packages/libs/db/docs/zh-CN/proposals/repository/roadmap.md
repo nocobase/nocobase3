@@ -17,7 +17,7 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 |    4 | 批量 mutation returning  | 已实现：显式 `select` 时返回 `records`；create 保持输入顺序，update/delete 按 mutation 前主键排序，省略时保持 count 快路径                      |
 |    5 | Aggregate                | 已实现：根级 `count`、`sum`、`avg`、`min`、`max` Builder 与 JSON AST；固定空集合、精度和 filter 输入集合规则                                    |
 |    6 | GroupBy                  | 已实现：复用 Aggregate Builder/AST，支持直接标量分组、结果 `having`、聚合别名排序和 Builder 返回类型推导                                        |
-|    7 | Distinct                 | `distinct: ['country', 'role']`；按字段组合选择完整记录，不公开 PostgreSQL `distinctOn`                                                         |
+|    7 | Distinct                 | 已实现：`distinct: ['country', 'role']` 按组合选择完整代表记录，sort 决定代表行、分页作用于去重结果，不公开 `distinctOn`                        |
 |    8 | 统一分页                 | 共用 Cursor 模型与字典序条件，依次实现根级 cursor、relation-local limit 和 relation-local cursor                                                |
 |    9 | Streaming                | 查询契约稳定后定义 AsyncIterable、背压、取消和连接释放；V1 先限制为根级记录流                                                                   |
 

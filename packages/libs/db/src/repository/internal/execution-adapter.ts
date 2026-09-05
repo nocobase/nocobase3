@@ -28,6 +28,7 @@ export interface RepositoryReadPlan {
   readonly select?: SelectAst;
   readonly filter?: FilterAst;
   readonly sort?: SortAst;
+  readonly distinct?: readonly string[];
   readonly limit?: number;
   readonly offset?: number;
 }

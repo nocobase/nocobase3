@@ -114,12 +114,14 @@ export class DefaultRepository<
     );
     const sort = await this.validateSort(collection, options.sort);
     validatePagination(options.limit, options.offset, sort);
+    const distinct = validateDistinct(collection, options.distinct, sort);
     return (await this.options.adapter.findMany({
       collection,
       fields: selection.fields,
       select: selection.select,
       filter,
       sort,
+      distinct,
       limit: options.limit,
       offset: options.offset,
     })) as TRecord[];
@@ -3497,6 +3499,76 @@ function validatePagination(
       path: ['offset'],
     });
   }
+}
+
+function validateDistinct(
+  collection: CollectionDefinition,
+  input: readonly string[] | undefined,
+  sort: SortAst | undefined,
+): string[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input) || input.length === 0) {
+    invalid('INVALID_DISTINCT', 'distinct must contain at least one Field.', {
+      collection: collection.name,
+      path: ['distinct'],
+    });
+  }
+  const seen = new Set<string>();
+  for (const [index, name] of input.entries()) {
+    const field = scalarField(collection, name, ['distinct', index]);
+    if (!SORTABLE_TYPES.has(field.type)) {
+      invalid(
+        'FIELD_CAPABILITY_NOT_SUPPORTED',
+        `Field "${field.name}" of type "${field.type}" cannot be used for distinct.`,
+        {
+          collection: collection.name,
+          field: field.name,
+          path: ['distinct', index],
+        },
+      );
+    }
+    if (seen.has(name)) {
+      invalid('INVALID_DISTINCT', 'distinct Fields must be unique.', {
+        collection: collection.name,
+        field: name,
+        path: ['distinct', index],
+      });
+    }
+    seen.add(name);
+  }
+  if (
+    sort?.items.some((item) => item.kind !== 'field' || item.path.length !== 1)
+  ) {
+    invalid(
+      'INVALID_DISTINCT',
+      'Distinct V1 supports direct scalar Field sort only.',
+      { collection: collection.name, path: ['sort'] },
+    );
+  }
+  if (!sort || sort.items.length === 0) {
+    invalid(
+      'INVALID_DISTINCT',
+      'distinct requires a stable direct scalar Field sort.',
+      { collection: collection.name, path: ['sort'] },
+    );
+  }
+  const sortedFields = new Set(
+    sort.items.flatMap((item) =>
+      item.kind === 'field' && item.path.length === 1 ? [item.path[0]] : [],
+    ),
+  );
+  if (
+    !uniqueConstraints(collection).some((constraint) =>
+      constraint.fields.every((field) => sortedFields.has(field)),
+    )
+  ) {
+    invalid(
+      'INVALID_DISTINCT',
+      'distinct sort must include a primary or unique tie-breaker.',
+      { collection: collection.name, path: ['sort'] },
+    );
+  }
+  return [...input];
 }
 
 function validateValues(

@@ -586,6 +586,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       plan.select?.root,
     );
     const alias = 'repository_root';
+    if (plan.distinct) {
+      return this.buildDistinctRead(plan, fields, alias);
+    }
     const query = tableQuery(client, plan.collection, alias).select(
       fields.map((field) =>
         client.ref(field.column).withSchema(alias).as(field.alias),
@@ -605,6 +608,93 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     );
     for (const item of plan.sort?.items ?? []) {
       await this.applySort(query, plan.collection, item, alias);
+    }
+    if (plan.limit !== undefined) query.limit(plan.limit);
+    if (plan.offset !== undefined) query.offset(plan.offset);
+    return query;
+  }
+
+  private async buildDistinctRead(
+    plan: RepositoryReadPlan,
+    fields: readonly SelectionColumn[],
+    rootAlias: string,
+  ): Promise<Knex.QueryBuilder> {
+    const distinct = plan.distinct;
+    if (!distinct) throw new Error('Distinct read requires distinct Fields.');
+    const sort = plan.sort?.items ?? [];
+    if (sort.length === 0) throw new Error('Distinct read requires sort.');
+    const client = this.getClient();
+    const usedAliases = new Set(fields.map((field) => field.alias));
+    const sortFields = sort.map((item, index) => {
+      if (item.kind !== 'field' || item.path.length !== 1) {
+        throw new Error('Distinct read requires direct Field sort.');
+      }
+      const alias = unusedInternalAlias(usedAliases, `_distinct_sort_${index}`);
+      return {
+        alias,
+        column: qualified(rootAlias, column(plan.collection, item.path[0])),
+        direction: item.direction,
+        nulls: item.nulls ?? 'last',
+      };
+    });
+    const rankAlias = unusedInternalAlias(usedAliases, '_distinct_rank');
+    const partitionSql = distinct.map(() => '??').join(', ');
+    const orderSql = sortFields
+      .map(
+        (field) =>
+          `case when ?? is null then ${field.nulls === 'last' ? 1 : 0} else ${
+            field.nulls === 'last' ? 0 : 1
+          } end asc, ?? ${field.direction}`,
+      )
+      .join(', ');
+    const rankBindings = [
+      ...distinct.map((field) =>
+        qualified(rootAlias, column(plan.collection, field)),
+      ),
+      ...sortFields.flatMap((field) => [field.column, field.column]),
+      rankAlias,
+    ];
+    const inner = tableQuery(client, plan.collection, rootAlias).select([
+      ...fields.map((field) =>
+        client.ref(field.column).withSchema(rootAlias).as(field.alias),
+      ),
+      ...sortFields.map((field) => client.ref(field.column).as(field.alias)),
+      client.raw(
+        `row_number() over (partition by ${partitionSql} order by ${orderSql}) as ??`,
+        rankBindings,
+      ),
+    ]);
+    const graph = await this.prepareFilterGraph(
+      plan.collection,
+      plan.filter?.root,
+    );
+    applyFilter(
+      inner,
+      plan.collection,
+      plan.filter?.root,
+      graph,
+      rootAlias,
+      client,
+    );
+
+    const resultAlias = 'repository_distinct';
+    const query = client
+      .queryBuilder()
+      .from(inner.as(resultAlias))
+      .select(
+        fields.map((field) =>
+          client.ref(field.alias).withSchema(resultAlias).as(field.alias),
+        ),
+      )
+      .where(qualified(resultAlias, rankAlias), 1);
+    for (const field of sortFields) {
+      applyOrderBy(
+        query,
+        client,
+        qualified(resultAlias, field.alias),
+        field.direction,
+        field.nulls,
+      );
     }
     if (plan.limit !== undefined) query.limit(plan.limit);
     if (plan.offset !== undefined) query.offset(plan.offset);
@@ -1849,6 +1939,17 @@ function uniqueSelectionColumns(
   const result = new Map<string, SelectionColumn>();
   for (const item of columns) result.set(item.alias, item);
   return [...result.values()];
+}
+
+function unusedInternalAlias(used: Set<string>, base: string): string {
+  let alias = base;
+  let suffix = 1;
+  while (used.has(alias)) {
+    alias = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  used.add(alias);
+  return alias;
 }
 
 function uniqueValues(values: readonly unknown[]): unknown[] {

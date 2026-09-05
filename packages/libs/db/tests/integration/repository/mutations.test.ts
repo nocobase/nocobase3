@@ -326,6 +326,41 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
     ).resolves.toEqual({ count: 1, maximumName: 'Ada project' });
   });
 
+  it('loads relations for the representative distinct records', async () => {
+    const fixture = await createMutationFixture(context);
+    const repository = context.database.repository('repositoryProjects');
+    await repository.createOne({
+      values: {
+        name: 'Shared name',
+        owner: { connect: { id: fixture.ada } },
+      },
+    });
+    const latest = await repository.createOne({
+      values: {
+        name: 'Shared name',
+        owner: { connect: { id: fixture.bob } },
+      },
+      select: (select) => select.fields('id'),
+    });
+
+    await expect(
+      repository.findMany({
+        distinct: ['name'],
+        sort: (sort) => sort.field('id').desc(),
+        select: (select) =>
+          select
+            .fields('id', 'name')
+            .include('owner', (owner) => owner.fields('name')),
+      }),
+    ).resolves.toEqual([
+      {
+        id: latest.record.id,
+        name: 'Shared name',
+        owner: { name: 'Bob' },
+      },
+    ]);
+  });
+
   it('updates, upserts, and deletes targets inside the current relation scope', async () => {
     const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');

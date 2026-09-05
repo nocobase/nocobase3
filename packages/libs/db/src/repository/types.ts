@@ -693,6 +693,10 @@ export interface FindManyOptions<
 > extends RepositoryReadOptions<TRecord> {
   readonly filter?: RepositoryFilter<TRecord>;
   readonly sort?: RepositorySort<TRecord>;
+  readonly distinct?: readonly [
+    keyof TRecord & string,
+    ...(keyof TRecord & string)[],
+  ];
   readonly limit?: number;
   readonly offset?: number;
 }
