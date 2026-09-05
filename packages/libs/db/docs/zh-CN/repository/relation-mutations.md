@@ -5,21 +5,28 @@ description: 通过 Repository values 的 Builder 或 JSON 创建、连接、解
 
 # Repository 关系写入
 
+关系操作位于 values 的关系字段内，支持 Builder、JSON 或混合形式。本页沿用[概览的模型](./overview.md#本组文档的示例模型)：`projects = db.repository('projects')`，users 和 tasks 均有显式 string 主键 id；各片段独立展示，写入前准备对应目标记录。
+
 ## 在关系写入中引用 context
 
-根级 values callback 的 `v.variable()` 可用于嵌套字段、关系选择器和 through payload。以下假设 projects 的 owner 关系目标以 accountCode 唯一定位，tasks 支持嵌套创建；实际字段和关系键必须以 Collection 定义为准。
+根级 values callback 的 `v.variable()` 可用于嵌套字段、关系选择器和 through payload。下例要求 project-1 和 user-1 已存在，task-context 尚不存在；owner 通过 users.id 定位，任务的 string 主键由调用方提供。其他模型使用各自明确声明的键，不依赖 id 默认值。
 
 ```ts
 await projects.updateOne({
   filter: { id: 'project-1' },
   values: (v) => ({
-    owner: (owner) => owner.connect({ accountCode: v.variable('$ownerCode') }),
+    owner: (owner) => owner.connect({ id: v.variable('$ownerId') }),
     tasks: (tasks) =>
       tasks.create({
+        id: v.variable('$taskId'),
         title: v.variable('$taskTitle'),
       }),
   }),
-  context: { ownerCode: 'USER-A', taskTitle: 'Implement variables' },
+  context: {
+    ownerId: 'user-1',
+    taskId: 'task-context',
+    taskTitle: 'Implement variables',
+  },
 });
 ```
 

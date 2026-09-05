@@ -41,6 +41,14 @@ console.log(result.record);
 
 上述例子 record 为 `{ id: 'project-1', name: 'Ready' }`。再次删除同一个键会报 RECORD_NOT_FOUND；Filter 匹配多条会报 MULTIPLE_RECORDS_MATCHED，不选择第一条删除。单条删除需要可用的唯一身份，具体见 [Values 的身份限制](../values.md#身份与受管理字段)。
 
+| 匹配数量 | 结果                             | 数据影响                                 |
+| -------- | -------------------------------- | ---------------------------------------- |
+| 0        | RECORD_NOT_FOUND                 | 不删除记录                               |
+| 1        | `{ deleted: true }`，可选 record | 删除该记录；仍须通过版本与数据库约束检查 |
+| 多条     | MULTIPLE_RECORDS_MATCHED         | 不挑选第一条，不批量删除                 |
+
+多条命中时应先明确业务意图：收紧 filter 删除指定记录，或明确选择 deleteMany。不要把删除失败自动改成 `all: true`。与 updateOne 共用的多条命中示例见[单条更新](./update-one.md#普通条件匹配多条时拒绝修改)。
+
 select 可以读取关系快照，但不是删除关系的配置。外键级联行为由显式 Schema 决定；单条根删除与关系字段中的 delete/disconnect 有不同作用域，见[关系写入](../relation-mutations.md)。
 
 ## 验证依据

@@ -176,6 +176,34 @@ console.log(created.record, rows, updated.record);
 
 14 个数据方法各有一页，两个辅助方法合为一页，共 16 个公开方法。方法页包含数据前提、参数、返回、代表性示例和错误边界；纯类型速查见 [API 参考](../reference/repository-api.md)。
 
+### 按场景选择，不按名称猜测
+
+| 需要完成的事情           | 应选入口                                  | 不应替换成                                 |
+| ------------------------ | ----------------------------------------- | ------------------------------------------ |
+| 从多条候选记录中读取一条 | findOne + 显式稳定 sort                   | 假定 findOne 会校验唯一性                  |
+| 修改／删除准确匹配的一条 | updateOne / deleteOne                     | 先 findOne，再用原来的宽泛 Filter 写入     |
+| 有则更新、无则创建       | upsertOne + 完整唯一条件                  | exists 后分别 create/update 并假定没有竞争 |
+| 修改／删除所有匹配记录   | updateMany / deleteMany                   | 用 One 方法隐式挑选一条                    |
+| 只判断存在               | exists                                    | 读取全部记录后检查数组长度                 |
+| 列表和总数               | findMany + count，显式复用 filter/context | 假定 count 自动继承分页或 distinct         |
+| 每个父记录的子列表和统计 | Select 的 relation combine                | 重复 include 同一关系                      |
+| 无唯一身份的日志批量写入 | 不带 select 的 createMany                 | createOne 或批量 returning                 |
+
+### 匹配数量与空结果
+
+下表只描述有效输入的匹配结果；输入、字段能力、身份或数据库约束错误仍会报错。
+
+| 方法                    | 无匹配                                     | 多条匹配                               |
+| ----------------------- | ------------------------------------------ | -------------------------------------- |
+| findOne                 | undefined                                  | 取一条；需要确定结果时显式排序         |
+| findMany                | []                                         | 返回符合分页条件的数组                 |
+| count / exists          | 0 / false                                  | 行数 / true                            |
+| updateOne / deleteOne   | RECORD_NOT_FOUND                           | MULTIPLE_RECORDS_MATCHED，不挑一条写入 |
+| updateMany / deleteMany | 对应计数为 0；请求 select 时 records 为 [] | 操作全部匹配记录                       |
+| upsertOne               | 执行 create 分支                           | 合法唯一条件由约束保证最多一条         |
+
+空 Filter 对象 `{}` 不是“全部记录”的缩写。无条件读取可省略 filter；批量更新／删除必须显式使用 `all: true`。findOne 的无筛选读取必须提供非空 sort。
+
 ## 共享能力导航
 
 | 能力                               | 文档                                          |
@@ -235,3 +263,16 @@ const rows = await db.repository('projects').findMany({
 - 不存在 findUnique/findFirst/connectOrCreate；不支持 native scalar-list、distinctOn、countDistinct、GroupBy 分页。不要由其他 ORM 的习惯推断这些接口。
 
 精确签名以包根入口的 TypeScript 声明为准；设计提案不是当前用法来源。
+
+## 失败后如何处理
+
+| 错误或场景                                   | 建议处理                                             | 不要做                                    |
+| -------------------------------------------- | ---------------------------------------------------- | ----------------------------------------- |
+| VARIABLE_NOT_FOUND / INVALID_CONTEXT         | 核对变量路径和调用 context                           | 把缺失变量替换成 undefined 后继续写入     |
+| INVALID_FILTER / INVALID_MUTATION 等输入错误 | 根据 path 修正输入；需要时用 validateMutation 预校验 | 用类型断言跳过运行时限制                  |
+| MULTIPLE_RECORDS_MATCHED                     | 收紧条件；业务确实需要批量时再选择 Many              | 自动取第一条或自动扩大写入范围            |
+| VERSION_CONFLICT                             | 重新读取，处理业务冲突                               | 去掉 ifVersion 后盲目重试                 |
+| 缺失关系目标或目标不在当前关系范围           | 核对目标存在性、唯一键及归属                         | 自动新建目标或把其他父记录的目标抢过来    |
+| 数据库唯一／外键／非空约束错误               | 让异常传播到事务边界，再处理业务反馈                 | 假定全部驱动错误都有 RepositoryError.code |
+
+`path`、`details` 和 `retryable` 用于辅助诊断，不等同于重试授权。多个步骤需要共同回滚时，使用[同一个事务 Connection](./transactions.md)，不要在失败后继续提交事务。

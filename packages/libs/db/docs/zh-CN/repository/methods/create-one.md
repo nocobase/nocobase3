@@ -73,6 +73,38 @@ const ticket = await db.repository('tickets').createOne({
 
 只有显式自增／生成字段才可依靠数据库提供键值。单条创建需要完整非空主键或无条件唯一选择器用于重读；无任何唯一身份的模型应核对 [createMany](./create-many.md) 的标量路径。
 
+## 无主键但有唯一键
+
+以下独立模型没有 id 或主键，使用显式声明的非空唯一字段 reference。仅在隔离开发／测试数据库声明一次；生产 Schema 变更放入 Migration。
+
+```ts
+await db.connection().builder.createCollection('externalTickets', (c) => {
+  c.string('reference').notNull().unique();
+  c.string('subject').notNull();
+});
+const tickets = db.repository('externalTickets');
+const created = await tickets.createOne({
+  values: { reference: 'EXT-A', subject: 'Original' },
+  select: (s) => s.fields('reference', 'subject'),
+});
+// created.record: { reference: 'EXT-A', subject: 'Original' }
+
+const updated = await tickets.updateOne({
+  filter: { reference: 'EXT-A' },
+  values: { subject: 'Reviewed' },
+  select: (s) => s.fields('reference', 'subject'),
+});
+// updated.record: { reference: 'EXT-A', subject: 'Reviewed' }
+
+const deleted = await tickets.deleteOne({
+  filter: { reference: 'EXT-A' },
+  select: (s) => s.fields('reference'),
+});
+// deleted: { deleted: true, record: { reference: 'EXT-A' } }
+```
+
+这里 reference 提供重读和写入定位所需的唯一身份，不会自动新增 id。只有 unique 而没有主键，仍不支持当前批量 select returning。相同语义的数据库测试见 [identity.test.ts](../../../../tests/integration/repository/identity.test.ts)。
+
 ## 嵌套创建与失败
 
 ```ts

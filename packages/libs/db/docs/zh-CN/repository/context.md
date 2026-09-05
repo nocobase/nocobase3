@@ -63,6 +63,28 @@ const result = await db.repository('projects').updateOne({
 - 每次调用显式传 context，不继承上一次调用的值；同一输入模板可在不同 context 下复用。
 - 不支持变量替换字段名、操作名或整个 mutation 结构。
 
+## 可信身份与外部输入分开传入
+
+context 本身不区分可信与不可信数据。应用可以约定 `actor` 存认证后的身份、`input` 存已校验的请求参数，但这些名称不是 Repository 的保留字段。
+
+```ts
+// authenticatedUser is resolved by the application, not from the request body.
+await db.repository('projects').updateOne({
+  filter: (f) =>
+    f.and([
+      f.string('id').eq(f.variable('$input.projectId')),
+      f.string('ownerId').eq(f.variable('$actor.userId')),
+    ]),
+  values: (v) => ({ name: v.variable('$input.name') }),
+  context: {
+    actor: { userId: authenticatedUser.id },
+    input: { projectId: validatedInput.projectId, name: validatedInput.name },
+  },
+});
+```
+
+此例假设业务只允许 owner 修改项目，因此调用方显式添加 ownerId 条件；它不是通用 ACL 实现。`authenticatedUser` 和 `validatedInput` 由应用准备。不要把请求体整体展开到 actor 上，也不要期待单独传入 actor 就自动限制访问范围。
+
 ## 事务
 
 ```ts

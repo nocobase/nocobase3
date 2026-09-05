@@ -40,7 +40,40 @@ console.log(result.version);
 - 多条：`MULTIPLE_RECORDS_MATCHED`，不会更新第一条后返回。
 - 版本不一致：`VERSION_CONFLICT`。
 
-`values` 中省略的字段不修改；显式 `null` 表示写入空值，是否允许由字段和数据库约束决定。`context` 可提供 根级与嵌套 Filter、Values 变量，不用于传递事务，也不是自动写入的字段集合。
+`values` 中省略的字段不修改；显式 `null` 表示写入空值，是否允许由字段和数据库约束决定。`context` 可提供根级与嵌套 Filter、Values 变量，不用于传递事务，也不是自动写入的字段集合。
+
+## 普通条件匹配多条时拒绝修改
+
+在空的 projects 中独立执行；此例不依赖上面的 project-1：
+
+```ts
+import { RepositoryError } from '@nocobase/db';
+
+const projects = db.repository('projects');
+await projects.createMany({
+  values: [
+    { id: 'multi-a', name: 'A', status: 'draft' },
+    { id: 'multi-b', name: 'B', status: 'draft' },
+  ],
+});
+try {
+  await projects.updateOne({
+    filter: { status: 'draft' },
+    values: { status: 'active' },
+  });
+} catch (error) {
+  if (
+    !(error instanceof RepositoryError) ||
+    error.code !== 'MULTIPLE_RECORDS_MATCHED'
+  ) {
+    throw error;
+  }
+}
+const unchanged = await projects.count({ filter: { status: 'draft' } });
+// unchanged: 2; neither record was updated.
+```
+
+如只需修改 A，将 filter 收紧为 `{ id: 'multi-a' }`。如业务明确要求修改所有 draft，使用 updateMany；不要在捕获多条错误后自动扩大操作范围。先 findOne 再使用原来的 `{ status: 'draft' }` 更新，也不能把宽泛条件变成唯一身份。
 
 ## 变量与原子更新
 
