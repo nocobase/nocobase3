@@ -16,6 +16,39 @@ export type RepositoryRecord = Record<string, RepositoryMutationScalarValue>;
 
 export type RepositoryContext = Readonly<Record<string, unknown>>;
 
+export type NumericMutationOperand = number | bigint | string;
+
+export type NumericMutationOperation =
+  'increment' | 'decrement' | 'multiply' | 'divide';
+
+export type NumericMutationJsonInput = {
+  [TOperation in NumericMutationOperation]: Readonly<
+    Record<TOperation, NumericMutationOperand> &
+      Partial<Record<Exclude<NumericMutationOperation, TOperation>, never>>
+  >;
+}[NumericMutationOperation];
+
+export interface NumericMutationBuilder {
+  increment(value: NumericMutationOperand): NumericMutationJsonInput;
+  decrement(value: NumericMutationOperand): NumericMutationJsonInput;
+  multiply(value: NumericMutationOperand): NumericMutationJsonInput;
+  divide(value: NumericMutationOperand): NumericMutationJsonInput;
+}
+
+export type NumericMutationInput =
+  | NumericMutationJsonInput
+  | ((value: NumericMutationBuilder) => NumericMutationJsonInput);
+
+export type ScalarUpdateValues<TUpdate extends object> = {
+  readonly [TKey in keyof TUpdate]:
+    | TUpdate[TKey]
+    | (unknown extends TUpdate[TKey]
+        ? NumericMutationInput
+        : NonNullable<TUpdate[TKey]> extends number | bigint | string
+          ? NumericMutationInput
+          : never);
+};
+
 export type RepositoryPath = readonly string[];
 
 export type FilterScalar = string | number | boolean | null;
@@ -589,10 +622,7 @@ export type RelationCreateValuesInput =
   RelationCreateValues | readonly RelationCreateValues[];
 
 export type RelationUpdateValues = Readonly<
-  Record<
-    string,
-    RepositoryMutationScalarValue | UpdateRelationFieldMutationInput
-  >
+  Record<string, DynamicUpdateMutationInput>
 >;
 
 export interface RelationUpdateInput {
@@ -675,11 +705,22 @@ type CreateMutationProperty<T> = unknown extends T
     ? T | CreateRelationFieldMutationInput
     : T;
 
-type UpdateMutationProperty<T> = unknown extends T
-  ? RepositoryMutationScalarValue | UpdateRelationFieldMutationInput
-  : T extends object
+type UpdateMutationProperty<T> = RepositoryMutationScalarValue extends T
+  ? DynamicUpdateMutationInput
+  : [NonNullable<T>] extends [object]
     ? T | UpdateRelationFieldMutationInput
-    : T;
+    : NonNullable<T> extends number | bigint | string
+      ? T | NumericMutationInput
+      : T;
+
+/** Collection metadata determines the callback's scalar or relation capabilities at runtime. */
+export type DynamicUpdateMutationInput =
+  | RepositoryMutationScalarValue
+  | UpdateRelationFieldMutationJsonInput
+  | NumericMutationJsonInput
+  | ((
+      value: UpdateRelationFieldMutationBuilder & NumericMutationBuilder,
+    ) => UpdateRelationFieldMutationBuilder | NumericMutationJsonInput);
 
 export type CreateMutationValues<TCreate extends object> = {
   readonly [TKey in keyof TCreate]: CreateMutationProperty<TCreate[TKey]>;
@@ -792,7 +833,7 @@ export type UpdateManyOptions<
   TRecord extends object,
   TUpdate extends object,
 > = MutationScope<TRecord> & {
-  readonly values: TUpdate;
+  readonly values: ScalarUpdateValues<TUpdate>;
   readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
 };

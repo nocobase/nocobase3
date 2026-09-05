@@ -7,6 +7,7 @@ import type {
 } from '../../collection/types.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
 import { RepositoryError } from '../errors.js';
+import { isNumericMutation } from '../numeric-mutation.js';
 import type {
   ConnectTarget,
   CreatedTargetReference,
@@ -364,12 +365,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     }
     if (Object.keys(plan.values).length > 0) {
       const query = tableQuery(this.getClient(), plan.collection).update(
-        mapWrite(plan.collection, plan.values),
+        mapUpdate(this.getClient(), plan.collection, plan.values),
       );
       applyUnique(query, plan.collection, unique);
       applyVersion(query, plan.collection, plan.ifVersion);
       if (affectedCount(await query) === 0) return 'conflict';
-      Object.assign(current, plan.values);
+      Object.assign(
+        current,
+        await this.refreshAtomicValues(plan.collection, unique, plan.values),
+      );
     }
     const createdTargets: CreatedTargetReference[] = [];
     if (plan.relations) {
@@ -455,7 +459,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     const query = tableQuery(this.getClient(), plan.collection).update(
-      mapWrite(plan.collection, plan.values),
+      mapUpdate(this.getClient(), plan.collection, plan.values),
     );
     if (plan.filter) {
       const graph = await this.prepareFilterGraph(
@@ -483,7 +487,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const selected = await this.lockManyByFilter(plan.collection, plan.filter);
     if (selected.length === 0) return { count: 0, records: [] };
     const query = tableQuery(this.getClient(), plan.collection).update(
-      mapWrite(plan.collection, plan.values),
+      mapUpdate(this.getClient(), plan.collection, plan.values),
     );
     applySelectors(
       query,
@@ -1172,7 +1176,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   ): Promise<void> {
     if (Object.keys(target.values).length > 0) {
       const query = tableQuery(this.getClient(), collection).update(
-        mapWrite(collection, target.values as RepositoryRecord),
+        mapUpdate(
+          this.getClient(),
+          collection,
+          target.values as RepositoryRecord,
+        ),
       );
       applyUnique(query, collection, selected.unique);
       if (affectedCount(await query) === 0) {
@@ -1182,7 +1190,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           { collection: collection.name },
         );
       }
-      Object.assign(selected.record, target.values);
+      Object.assign(
+        selected.record,
+        await this.refreshAtomicValues(
+          collection,
+          selected.unique,
+          target.values as RepositoryRecord,
+        ),
+      );
     }
     if (target.relations) {
       await this.applyRelationMutations(
@@ -1199,6 +1214,21 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       incrementVersion(versionQuery, collection);
       await versionQuery;
     }
+  }
+
+  private async refreshAtomicValues(
+    collection: CollectionDefinition,
+    unique: UniqueSelector,
+    values: RepositoryRecord,
+  ): Promise<RepositoryRecord> {
+    if (!Object.values(values).some(isNumericMutation)) return values;
+    const record = await this.findOne({
+      collection,
+      fields: scalarFields(collection).map((field) => field.name),
+      filter: uniqueFilter(unique),
+    });
+    if (!record) throw new Error('Atomic update target disappeared.');
+    return record;
   }
 
   private async lockRelatedTarget(
@@ -2128,6 +2158,36 @@ function mapWrite(
       column(collection, field),
       value,
     ]),
+  );
+}
+
+function mapUpdate(
+  client: Knex,
+  collection: CollectionDefinition,
+  values: RepositoryRecord,
+): Record<string, RepositoryRecord[string] | Knex.Raw> {
+  return Object.fromEntries(
+    Object.entries(values).map(([field, value]) => {
+      const name = column(collection, field);
+      if (
+        !isNumericMutation(value) ||
+        collection.fields?.find((item) => item.name === field)?.type === 'json'
+      )
+        return [name, value];
+      const operator = {
+        increment: '+',
+        decrement: '-',
+        multiply: '*',
+        divide: '/',
+      }[value.operation];
+      return [
+        name,
+        client.raw(`?? ${operator} ?`, [
+          name,
+          typeof value.value === 'bigint' ? String(value.value) : value.value,
+        ]),
+      ];
+    }),
   );
 }
 

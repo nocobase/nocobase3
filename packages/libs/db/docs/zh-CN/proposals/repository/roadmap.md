@@ -9,6 +9,8 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 
 ## 实现顺序
 
+The next iteration is tracked in [Repository V1.1 roadmap](./v1.1-roadmap.md).
+
 | 阶段 | 能力                     | V1 边界                                                                                                                                         |
 | ---: | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 |    1 | 标量 Select 返回类型推导 | 已实现：Builder 的直接标量 `fields()` 推导 `findMany()`、`findOne()`、`createOne()` 和 `updateOne()` 返回类型；动态 Select AST 保持完整记录类型 |

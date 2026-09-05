@@ -10,6 +10,47 @@ import {
 } from '../helpers.js';
 
 describeIntegrationDatabases('Repository relation mutations', (context) => {
+  it('supports atomic nested update and upsert branches without escaping relation scope', async () => {
+    const fixture = await createMutationFixture(context);
+    const projects = context.database.repository('repositoryProjects');
+    const project = await projects.createOne({
+      values: {
+        name: 'Atomic',
+        tasks: { connect: { id: fixture.implementTask } },
+      },
+    });
+    await projects.updateOne({
+      filter: { id: project.record.id as number },
+      values: {
+        tasks: (tasks) =>
+          tasks.update({
+            filter: { id: fixture.implementTask as number },
+            values: { points: (value) => value.increment(5) },
+          }),
+      },
+    });
+    await context.database.repository('repositoryTasks').updateOne({
+      filter: { id: fixture.implementTask as number },
+      values: { externalId: 'atomic-task' },
+    });
+    await projects.updateOne({
+      filter: { id: project.record.id as number },
+      values: {
+        tasks: (tasks) =>
+          tasks.upsert({
+            filter: { externalId: 'atomic-task' },
+            create: { externalId: 'atomic-task', title: 'Unused' },
+            update: { points: { multiply: 2 } },
+          }),
+      },
+    });
+    expect(
+      await context.database.repository('repositoryTasks').findOne({
+        filter: { id: fixture.implementTask as number },
+        select: (select) => select.fields('points'),
+      }),
+    ).toEqual({ points: 10 });
+  });
   it('accepts Builder and JSON relation operations inside values recursively', async () => {
     const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');
@@ -897,6 +938,7 @@ async function createMutationFixture(
       definition: (collection) => {
         collection.increments('id');
         collection.string('title').notNull();
+        collection.integer('points').notNull().defaultTo(0);
         collection.string('externalId').nullable().unique();
         collection.integer('projectId').nullable();
         collection.belongsTo('assignee', 'repositoryUsers').constraints(false);

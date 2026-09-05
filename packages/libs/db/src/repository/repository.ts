@@ -7,6 +7,7 @@ import type {
 } from '../collection/types.js';
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
+import { normalizeNumericMutation } from './numeric-mutation.js';
 import {
   aggregateExpressionToNode,
   DefaultAggregateBuilder,
@@ -3806,6 +3807,7 @@ function validateValues(
       path: ['values'],
     });
   }
+  const normalized: RepositoryRecord = {};
   for (const key of Object.keys(input)) {
     const field = directField(collection, key, ['values', key]);
     if (!isScalarField(field)) {
@@ -3835,8 +3837,14 @@ function validateValues(
         },
       );
     }
+    normalized[key] = normalizeNumericMutation(
+      collection,
+      field,
+      input[key],
+      operation === 'updateOne' || operation === 'updateMany',
+    );
   }
-  return { ...input };
+  return normalized;
 }
 
 function validateUnique(
