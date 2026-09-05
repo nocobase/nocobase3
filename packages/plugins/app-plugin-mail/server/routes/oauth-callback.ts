@@ -37,11 +37,11 @@ export const mailOAuthCallbackRoutes: AppRootRouteContribution<AppPluginApplicat
           errorDescription: context.req.query('error_description'),
         });
         return context.redirect(
-          `${joinBasePath(publicBasePath, '/settings/mail')}?mailAuthorization=success`,
+          `${joinBasePath(publicBasePath, '/dev/mail')}?mailAuthorization=success`,
         );
       } catch {
         return context.redirect(
-          `${joinBasePath(publicBasePath, '/settings/mail')}?mailAuthorization=failure`,
+          `${joinBasePath(publicBasePath, '/dev/mail')}?mailAuthorization=failure`,
         );
       }
     });

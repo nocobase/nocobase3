@@ -20,7 +20,7 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 1. Add an enabled `mail.providers` entry with a stable `type` and `name` plus the Provider OAuth client configuration.
 2. Register the matching Gmail or Microsoft Server Provider plugin.
 3. Grant the intended role access to `mail.settings`.
-4. Open `/settings/mail`, select the Provider, and complete its OAuth redirect.
+4. Open `/dev/mail`, select the Provider, and complete its OAuth redirect.
 5. Verify that the account appears without credential references or token material in the API response.
 
 ## Read synchronized mail
@@ -41,7 +41,7 @@ The first release supports plain text plus optional HTML and intentionally rejec
 
 Start synchronization through `MailService.startSync()` or `POST /api/mail/accounts/:accountId/sync`. Initial synchronization is resumable and bounded by `receivedAfter`, `maxMessages`, and `batchSize`; subsequent runs use the Provider cursor. The Outbox relay is the only component that publishes Queue work, and each Job delegates one bounded step to the sync Operation.
 
-When a Provider cursor expires, Mail Core clears it so the next request starts a fresh initial synchronization. A terminal OAuth failure changes the account to `reauthorizationRequired`; reconnect through the Settings page before retrying.
+When a Provider cursor expires, Mail Core clears it so the next request starts a fresh initial synchronization. A terminal OAuth failure changes the account to `reauthorizationRequired`; reconnect through `/dev/mail` before retrying.
 
 ## Verify and diagnose
 

@@ -3,15 +3,17 @@ import { describe, expect, it } from 'vitest';
 import routes from '../client/routes.js';
 
 describe('Mail client routes', () => {
-  it('contributes lazy Settings and development routes', async () => {
-    expect(routes).toHaveLength(2);
+  it('contributes only the lazy development route', async () => {
+    expect(routes).toHaveLength(1);
     expect(routes.some((contribution) => contribution.parent === 'app')).toBe(
       false,
     );
-    const [settings, dev] = routes;
-
-    expect(settings).toMatchObject({
-      parent: 'settings',
+    expect(
+      routes.some((contribution) => contribution.parent === 'settings'),
+    ).toBe(false);
+    const [dev] = routes;
+    expect(dev).toMatchObject({
+      parent: 'dev',
       routes: [
         {
           name: 'mail',
@@ -21,23 +23,10 @@ describe('Mail client routes', () => {
         },
       ],
     });
-    expect(dev).toMatchObject({
-      parent: 'dev',
-      routes: [
-        {
-          name: 'mail',
-          path: '/mail',
-          componentLoader: expect.any(Function),
-        },
-      ],
-    });
 
-    if (settings?.parent !== 'settings' || dev?.parent !== 'dev') {
+    if (dev?.parent !== 'dev') {
       throw new Error('Missing Mail client route contribution.');
     }
-    await expect(settings.routes[0]?.componentLoader()).resolves.toMatchObject({
-      default: expect.any(Function),
-    });
     await expect(dev.routes[0]?.componentLoader()).resolves.toMatchObject({
       default: expect.any(Function),
     });

@@ -24,6 +24,7 @@ import { Input } from '../components/ui/input.js';
 import { NativeSelect } from '../components/ui/native-select.js';
 import { Textarea } from '../components/ui/textarea.js';
 import MailWorkspacePage from './mail-workspace-page.js';
+import MailSettingsPage from './mail-settings-page.js';
 
 const mail = getMailClient();
 interface ComposeValue {
@@ -450,6 +451,10 @@ export default function MailDevPage(): ReactElement {
 
         <section className='overflow-hidden rounded-xl border bg-card shadow-sm'>
           <MailWorkspacePage />
+        </section>
+
+        <section className='overflow-hidden rounded-xl border bg-card shadow-sm'>
+          <MailSettingsPage />
         </section>
       </div>
     </main>

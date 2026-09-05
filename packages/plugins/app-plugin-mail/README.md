@@ -12,8 +12,8 @@ The first runnable vertical slice provides:
 - authenticated Mail API routes for sending, starting sync, reading sync
   status, and reading synchronized messages;
 - authenticated OAuth start plus a public one-time-state callback;
-- Settings UI for Provider authorization, connected accounts, and bounded
-  initial-sync policy;
+- development workspace controls for Provider authorization, connected
+  accounts, and bounded initial-sync policy;
 - a development-only Mail workspace for account and folder navigation, message
   search and filters, conversation detail, sending, and synchronization;
 - AES-256-GCM encrypted OAuth credential storage with token-rotation support;
@@ -118,7 +118,7 @@ GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 `GET /mail/oauth/callback` is intentionally public because Google and
 Microsoft redirect the browser to it. It accepts only a short-lived,
 single-use state created by the authenticated start endpoint and redirects the
-browser to `/settings/mail` after completion; state and PKCE verifiers are
+browser to `/dev/mail` after completion; state and PKCE verifiers are
 never returned by account APIs.
 
 All Mail APIs require `page:mail.settings/access`. Account ownership is enforced again in

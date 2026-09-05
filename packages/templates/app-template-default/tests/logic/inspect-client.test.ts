@@ -187,15 +187,6 @@ describe('client inspection', () => {
       'sharing-rules',
       'restriction-rules',
     ]);
-    expect(inspection.settings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'mail',
-          path: '/settings/mail',
-          packageName: '@nocobase/app-plugin-mail',
-        }),
-      ]),
-    );
     expect(inspection.devRoutes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

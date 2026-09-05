@@ -168,7 +168,7 @@ export default function MailSettingsPage(): ReactElement {
   const authorizationNotice = readAuthorizationNotice();
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+    <section className='min-h-[calc(100svh-4rem)] bg-muted/20'>
       <MailPageHeader
         actions={
           <Button disabled={loading} onClick={refresh} variant='outline'>
@@ -360,7 +360,7 @@ export default function MailSettingsPage(): ReactElement {
           )}
         </section>
       </div>
-    </main>
+    </section>
   );
 }
 
