@@ -198,7 +198,7 @@ export function compileJsonCondition(
         JSON.stringify([value]),
       ]);
     if (mysql)
-      return client.raw("(? = 'array' and json_contains(?, cast(? as json)))", [
+      return client.raw("(? = 'array' and json_overlaps(?, cast(? as json)))", [
         type,
         source,
         JSON.stringify([value]),

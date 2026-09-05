@@ -18,6 +18,7 @@ describeIntegrationDatabases('Repository JSON filters', (context) => {
       ['object', { b: [1, true, '1', null], a: { label: 'test' } }],
       ['empty', []],
       ['numbers', [1, 2]],
+      ['nestedArray', [[1]]],
       ['booleans', [true]],
       ['strings', ['1']],
       ['text', 'plain text'],
@@ -77,6 +78,7 @@ describeIntegrationDatabases('Repository JSON filters', (context) => {
     expect(await ids((f) => f.json('payload').hasEvery([]))).toEqual([
       'booleans',
       'empty',
+      'nestedArray',
       'numbers',
       'strings',
     ]);
@@ -84,6 +86,7 @@ describeIntegrationDatabases('Repository JSON filters', (context) => {
     expect(await ids((f) => f.json('payload').isEmpty())).toEqual(['empty']);
     expect(await ids((f) => f.json('payload').isNotEmpty())).toEqual([
       'booleans',
+      'nestedArray',
       'numbers',
       'strings',
     ]);
