@@ -204,25 +204,96 @@ export interface SelectAst {
   readonly root: SelectNode;
 }
 
-export interface SelectBuilder<_TRecord extends object = RepositoryRecord> {
-  fields(...fields: readonly string[]): this;
+declare const selectBuilderState: unique symbol;
+
+export interface SelectBuilder<
+  TRecord extends object = RepositoryRecord,
+  TSelectedKeys extends keyof TRecord = never,
+  THasFields extends boolean = false,
+  THasIncludes extends boolean = false,
+> {
+  readonly [selectBuilderState]?: {
+    readonly selectedKeys: TSelectedKeys;
+    readonly hasFields: THasFields;
+    readonly hasIncludes: THasIncludes;
+  };
+  fields<const TFields extends readonly (keyof TRecord & string)[]>(
+    ...fields: TFields
+  ): SelectBuilder<
+    TRecord,
+    TSelectedKeys | TFields[number],
+    true,
+    THasIncludes
+  >;
   include<TTarget extends object = RepositoryRecord>(
     relation: string,
     callback?: (
       select: RelationSelectBuilder<TTarget>,
-    ) => RelationSelectBuilder<TTarget>,
-  ): this;
+    ) => AnyRelationSelectBuilder<TTarget>,
+  ): SelectBuilder<TRecord, TSelectedKeys, THasFields, true>;
 }
 
 export interface RelationSelectBuilder<
   TRecord extends object = RepositoryRecord,
-> extends SelectBuilder<TRecord> {
-  filter(filter: RepositoryFilter<TRecord>): this;
-  sort(sort: RepositorySort<TRecord>): this;
+  TSelectedKeys extends keyof TRecord = never,
+  THasFields extends boolean = false,
+  THasIncludes extends boolean = false,
+> extends SelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes> {
+  fields<const TFields extends readonly (keyof TRecord & string)[]>(
+    ...fields: TFields
+  ): RelationSelectBuilder<
+    TRecord,
+    TSelectedKeys | TFields[number],
+    true,
+    THasIncludes
+  >;
+  include<TTarget extends object = RepositoryRecord>(
+    relation: string,
+    callback?: (
+      select: RelationSelectBuilder<TTarget>,
+    ) => AnyRelationSelectBuilder<TTarget>,
+  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, true>;
+  filter(
+    filter: RepositoryFilter<TRecord>,
+  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
+  sort(
+    sort: RepositorySort<TRecord>,
+  ): RelationSelectBuilder<TRecord, TSelectedKeys, THasFields, THasIncludes>;
 }
 
+type AnySelectBuilder<TRecord extends object> = SelectBuilder<
+  TRecord,
+  keyof TRecord,
+  boolean,
+  boolean
+>;
+
+type AnyRelationSelectBuilder<TRecord extends object> = RelationSelectBuilder<
+  TRecord,
+  keyof TRecord,
+  boolean,
+  boolean
+>;
+
+type SelectedBuilderRecord<
+  TRecord extends object,
+  TSelection extends AnySelectBuilder<TRecord>,
+> =
+  TSelection extends SelectBuilder<
+    TRecord,
+    infer TSelectedKeys,
+    infer THasFields,
+    infer THasIncludes
+  >
+    ? THasIncludes extends true
+      ? TRecord
+      : THasFields extends true
+        ? Pick<TRecord, TSelectedKeys>
+        : TRecord
+    : TRecord;
+
 export type RepositorySelect<TRecord extends object> =
-  SelectAst | ((select: SelectBuilder<TRecord>) => SelectBuilder<TRecord>);
+  SelectAst | ((select: SelectBuilder<TRecord>) => AnySelectBuilder<TRecord>);
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -707,7 +778,17 @@ export interface Repository<
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 > {
+  findMany<TSelection extends AnySelectBuilder<TRecord>>(
+    options: FindManyOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<SelectedBuilderRecord<TRecord, TSelection>[]>;
   findMany(options?: FindManyOptions<TRecord>): Promise<TRecord[]>;
+  findOne<TSelection extends AnySelectBuilder<TRecord>>(
+    options: FindOneOptions<TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<SelectedBuilderRecord<TRecord, TSelection> | undefined>;
   findOne(options: FindOneOptions<TRecord>): Promise<TRecord | undefined>;
   count(options?: FilterOnlyOptions<TRecord>): Promise<number>;
   exists(options?: FilterOnlyOptions<TRecord>): Promise<boolean>;
@@ -717,10 +798,20 @@ export interface Repository<
   validateMutation(
     options: ValidateMutationOptions<TCreate, TUpdate, TRecord>,
   ): Promise<MutationValidationResult>;
+  createOne<TSelection extends AnySelectBuilder<TRecord>>(
+    options: CreateOneOptions<TCreate, TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<SingleMutationResult<SelectedBuilderRecord<TRecord, TSelection>>>;
   createOne(
     options: CreateOneOptions<TCreate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>>;
   createMany(options: CreateManyOptions<TCreate>): Promise<CreateManyResult>;
+  updateOne<TSelection extends AnySelectBuilder<TRecord>>(
+    options: UpdateOneOptions<TUpdate, TRecord> & {
+      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<SingleMutationResult<SelectedBuilderRecord<TRecord, TSelection>>>;
   updateOne(
     options: UpdateOneOptions<TUpdate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>>;

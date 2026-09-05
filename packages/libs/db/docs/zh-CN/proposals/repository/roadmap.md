@@ -9,17 +9,17 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 
 ## 实现顺序
 
-| 阶段 | 能力                     | V1 边界                                                                                                                                 |
-| ---: | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-|    1 | 标量 Select 返回类型推导 | Builder 的直接标量 `fields()` 推导 `findMany()`、`findOne()`、`createOne()` 和 `updateOne()` 返回类型；动态 Select AST 保持完整记录类型 |
-|    2 | Delete returning/select  | `deleteOne()` 通过 `select` 返回删除前快照；批量删除 returning 留到阶段 4                                                               |
-|    3 | 根级 `upsertOne()`       | 基于主键或唯一约束执行 create/update；进入实现前冻结并发、关系 values 和 optimistic lock 语义                                           |
-|    4 | 批量 mutation returning  | 为批量 create/update/delete 定义跨数据库一致的 `records`、顺序、上限和降级策略                                                          |
-|    5 | Aggregate                | 根级 `count`、`sum`、`avg`、`min`、`max`；固定空集合、精度和输入集合规则                                                                |
-|    6 | GroupBy                  | 复用 Aggregate，补充分组键、`having`、聚合别名排序和返回类型                                                                            |
-|    7 | Distinct                 | `distinct: ['country', 'role']`；按字段组合选择完整记录，不公开 PostgreSQL `distinctOn`                                                 |
-|    8 | 统一分页                 | 共用 Cursor 模型与字典序条件，依次实现根级 cursor、relation-local limit 和 relation-local cursor                                        |
-|    9 | Streaming                | 查询契约稳定后定义 AsyncIterable、背压、取消和连接释放；V1 先限制为根级记录流                                                           |
+| 阶段 | 能力                     | V1 边界                                                                                                                                         |
+| ---: | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+|    1 | 标量 Select 返回类型推导 | 已实现：Builder 的直接标量 `fields()` 推导 `findMany()`、`findOne()`、`createOne()` 和 `updateOne()` 返回类型；动态 Select AST 保持完整记录类型 |
+|    2 | Delete returning/select  | `deleteOne()` 通过 `select` 返回删除前快照；批量删除 returning 留到阶段 4                                                                       |
+|    3 | 根级 `upsertOne()`       | 基于主键或唯一约束执行 create/update；进入实现前冻结并发、关系 values 和 optimistic lock 语义                                                   |
+|    4 | 批量 mutation returning  | 为批量 create/update/delete 定义跨数据库一致的 `records`、顺序、上限和降级策略                                                                  |
+|    5 | Aggregate                | 根级 `count`、`sum`、`avg`、`min`、`max`；固定空集合、精度和输入集合规则                                                                        |
+|    6 | GroupBy                  | 复用 Aggregate，补充分组键、`having`、聚合别名排序和返回类型                                                                                    |
+|    7 | Distinct                 | `distinct: ['country', 'role']`；按字段组合选择完整记录，不公开 PostgreSQL `distinctOn`                                                         |
+|    8 | 统一分页                 | 共用 Cursor 模型与字典序条件，依次实现根级 cursor、relation-local limit 和 relation-local cursor                                                |
+|    9 | Streaming                | 查询契约稳定后定义 AsyncIterable、背压、取消和连接释放；V1 先限制为根级记录流                                                                   |
 
 ## 已冻结的组合原则
 

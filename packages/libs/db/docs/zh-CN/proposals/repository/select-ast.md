@@ -152,6 +152,23 @@ Builder 只存在于 TypeScript 输入层；HTTP、CLI、Agent 和持久化配�
 Repository 可以在内部补读主键、source key 或 foreign key 以组装关系，但未显式选择的辅助字段
 不会出现在最终结果中。
 
+## 标量字段类型推导
+
+TypeScript 调用使用 Select Builder 且只选择根级标量 Field 时，Repository 根据
+`.fields()` 的字段字面量推导结果：
+
+```ts
+const users = await repository.findMany({
+  select: (select) => select.fields('id', 'name'),
+});
+
+// Array<Pick<UserRecord, 'id' | 'name'>>
+```
+
+`findMany()`、`findOne()`、`createOne()` 和 `updateOne()` 使用同一条推导规则；单条 mutation
+只缩小 `SingleMutationResult.record`。省略 `select`、传入运行时 Select AST 或包含 relation
+include 时继续返回完整 `TRecord`，relation 的精确返回类型留给后续阶段。
+
 Relation metadata 决定返回基数：
 
 | relation 类型              | 返回形状              | 无匹配时 |
