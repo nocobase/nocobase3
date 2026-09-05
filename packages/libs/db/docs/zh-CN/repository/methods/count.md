@@ -45,6 +45,70 @@ const result = await db.repository('projects').count({
 
 关系条件参见 [Filter](../filter.md)，上下文解析规则参见 [Context](../context.md)。
 
+## 场景 CT-01：列表分页不改变总数
+
+前提：空 projects，沿用概览模型。数据准备与查询连续执行，期间没有并发写入。
+
+```ts
+import type { RepositoryFilter } from '@nocobase/db';
+
+const projects = db.repository('projects');
+await projects.createMany({
+  values: [
+    { id: 'ct-a', name: 'A', status: 'active' },
+    { id: 'ct-b', name: 'B', status: 'active' },
+    { id: 'ct-c', name: 'C', status: 'draft' },
+  ],
+});
+const filter: RepositoryFilter<{ status: string }> = (f) =>
+  f.string('status').eq(f.variable('$status'));
+const context = { status: 'active' };
+const rows = await projects.findMany({
+  filter,
+  context,
+  select: (s) => s.fields('id'),
+  sort: (s) => s.field('id').asc(),
+  limit: 1,
+  offset: 1,
+});
+const total = await projects.count({ filter, context });
+const all = await projects.count();
+// rows: [{ id: 'ct-b' }]; total: 2; all: 3
+```
+
+测试断言：count 不继承 limit/offset，也不继承上一次查询的 Filter；同一个 Filter 模板用 `{ status: 'draft' }` 得到 1，用 `{ status: 'missing' }` 得到 0。缺失 `$status` 应报 VARIABLE_NOT_FOUND，不能当成 0。多次查询是否共享一致快照由事务和数据库隔离级别决定。
+
+## 场景 CT-02：统计父记录，不统计关联目标数
+
+独立场景：空 projects/tasks。创建一个带两条 open 任务的项目和一个不带任务的项目：
+
+```ts
+const projects = db.repository('projects');
+await projects.createOne({
+  values: {
+    id: 'ct-parent-a',
+    name: 'A',
+    tasks: {
+      create: [
+        { id: 'ct-task-a', title: 'A', status: 'open' },
+        { id: 'ct-task-b', title: 'B', status: 'open' },
+      ],
+    },
+  },
+});
+await projects.createOne({ values: { id: 'ct-parent-b', name: 'B' } });
+const parents = await projects.count({
+  filter: (f) => f.relation('tasks').some((t) => t.string('status').eq('open')),
+});
+// parents: 1, not 2
+```
+
+测试断言：一个父记录有多个符合条件的关联目标时仍只计一次；无任务的父记录不匹配 some。统计任务总数应使用 tasks Repository，按父记录返回任务统计应使用关系 Select 的 count/combine。
+
+## 测试映射
+
+CT-01 对应 scalar.test.ts 的计数、上下文和分页能力；CT-02 对应 relations.test.ts 的关系量词及 mutations.test.ts 的关系条件聚合能力。后续应将本页具体数据和预期结果补为独立断言；相关能力覆盖不等于这些组合已有专门测试。
+
 ## 验证依据
 
 行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

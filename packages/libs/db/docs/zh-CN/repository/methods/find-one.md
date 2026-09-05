@@ -72,6 +72,72 @@ const missing = await db
 
 需要选择 owner、tasks 等关系时使用 [Select](../select.md)；变量条件见 [Context](../context.md)。输入无效会报错，不当作空结果。
 
+## 场景 FO-01：同一条件的三种表达得到相同记录
+
+前提：沿用概览模型，在空 projects 中准备下列记录。本节代码连续执行；三个查询只读，不修改数据。
+
+```ts
+import type { FilterAst } from '@nocobase/db';
+
+const projects = db.repository('projects');
+await projects.createMany({
+  values: [
+    { id: 'fo-a', name: 'A', status: 'draft' },
+    { id: 'fo-b', name: 'B', status: 'active' },
+  ],
+});
+const ast: FilterAst = {
+  kind: 'filter',
+  version: 1,
+  root: {
+    kind: 'group',
+    logic: 'and',
+    items: [
+      { kind: 'condition', path: ['id'], operator: '$eq', value: 'fo-b' },
+    ],
+  },
+};
+const shorthand = await projects.findOne({
+  filter: { id: 'fo-b' },
+  select: (s) => s.fields('id', 'name'),
+});
+const builder = await projects.findOne({
+  filter: (f) => f.string('id').eq('fo-b'),
+  select: (s) => s.fields('id', 'name'),
+});
+const json = await projects.findOne({
+  filter: ast,
+  select: (s) => s.fields('id', 'name'),
+});
+// Each result is { id: 'fo-b', name: 'B' }.
+```
+
+测试断言：三个结果深度相等；没有 record 包装；status 等未选择字段不出现；记录总数仍为 2。这里 JSON 指可序列化 Filter AST，不是 Prisma 风格的操作符对象。
+
+## 场景 FO-02：缺失记录与缺失变量是不同结果
+
+沿用 FO-01 数据，运行以下成功查询：
+
+```ts
+const missing = await projects.findOne({
+  filter: (f) => f.string('id').eq(f.variable('$input.code')),
+  context: { input: { code: 'not-found' } },
+  select: (s) => s.fields('id'),
+});
+// missing: undefined
+```
+
+再把 context 改为 `{ input: {} }`，保持 Filter 不变：应拒绝 Promise，错误码为 VARIABLE_NOT_FOUND，`details.variable` 为 `$input.code`，而不是返回 undefined。测试还应确认两次调用都不改变记录数和内容。
+
+## 测试映射
+
+本页场景编号用于后续测试命名和追踪，不表示这些完整文档片段已逐个成为自动化测试。
+
+| 场景  | 后续测试重点                       | 已有相关覆盖                                                   |
+| ----- | ---------------------------------- | -------------------------------------------------------------- |
+| FO-01 | 三种 Filter 同结果、投影字段不泄漏 | scalar.test.ts 的条件与选择测试                                |
+| FO-02 | 合法空结果与变量解析错误分开断言   | scalar.test.ts 的上下文查询；create-context.test.ts 的变量错误 |
+
 ## 验证依据
 
 行为覆盖见 [scalar.test.ts](../../../../tests/integration/repository/scalar.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
