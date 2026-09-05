@@ -170,6 +170,8 @@ t('orders.title');
 
 To reword a plugin's string, add an `overrides` block keyed by that plugin's package name in your locale file. Do not edit the plugin.
 
+The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
+
 ## Plugins
 
 Plugins are registered in `client/plugins.ts` and `server/plugins.ts`. Presence in the array enables a plugin and array order is contribution order.
