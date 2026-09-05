@@ -67,6 +67,16 @@ export type FilterValue =
   FilterLiteral | FilterVariable | readonly (FilterLiteral | FilterVariable)[];
 
 export type FilterOperator =
+  | '$jsonEq'
+  | '$jsonNe'
+  | '$jsonHas'
+  | '$jsonHasSome'
+  | '$jsonHasEvery'
+  | '$jsonEmpty'
+  | '$jsonNotEmpty'
+  | '$jsonDbNull'
+  | '$jsonNull'
+  | '$jsonAnyNull'
   | '$includes'
   | '$notIncludes'
   | '$startsWith'
@@ -101,6 +111,7 @@ export interface FilterConditionNode {
   readonly operator: FilterOperator;
   readonly value?: FilterValue;
   readonly mode?: 'default' | 'insensitive';
+  readonly jsonPath?: readonly (string | number)[];
 }
 
 export interface FilterRelationNode {
@@ -198,8 +209,19 @@ export interface BooleanFilterOperators extends EmptyFilterOperators {
   isFalse(): FilterConditionNode;
 }
 
-/** JSON has no portable filter operators in Repository V1. */
-export type JsonFilterOperators = Readonly<Record<never, never>>;
+export interface JsonFilterOperators {
+  path(path: readonly (string | number)[]): JsonFilterOperators;
+  eq(value: FilterOperand<FilterLiteral>): FilterConditionNode;
+  ne(value: FilterOperand<FilterLiteral>): FilterConditionNode;
+  has(value: FilterOperand<FilterScalar>): FilterConditionNode;
+  hasSome(value: FilterOperand<readonly FilterScalar[]>): FilterConditionNode;
+  hasEvery(value: FilterOperand<readonly FilterScalar[]>): FilterConditionNode;
+  isEmpty(): FilterConditionNode;
+  isNotEmpty(): FilterConditionNode;
+  isDbNull(): FilterConditionNode;
+  isJsonNull(): FilterConditionNode;
+  isAnyNull(): FilterConditionNode;
+}
 
 export interface RelationFilterOperators<TTarget extends object> {
   some(

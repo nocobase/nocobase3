@@ -8,6 +8,7 @@ import type {
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
 import { RepositoryError } from '../errors.js';
 import { isNumericMutation } from '../numeric-mutation.js';
+import { compileJsonCondition, jsonOperators } from '../json-filter.js';
 import type {
   ConnectTarget,
   CreatedTargetReference,
@@ -2385,7 +2386,7 @@ function applyNode(
     );
     return;
   }
-  applyCondition(query, collection, node, boolean, sourceAlias);
+  applyCondition(query, collection, node, boolean, sourceAlias, client);
 }
 
 function applyCondition(
@@ -2394,11 +2395,20 @@ function applyCondition(
   node: FilterConditionNode,
   boolean: 'and' | 'or',
   sourceAlias?: string,
+  client?: Knex,
 ): void {
   const directColumn = column(collection, node.path[0]);
   const name = sourceAlias
     ? qualified(sourceAlias, directColumn)
     : directColumn;
+  if (jsonOperators.includes(node.operator)) {
+    if (!client)
+      throw new Error('JSON filters require a Repository query client.');
+    query[boolean === 'or' ? 'orWhere' : 'where'](
+      compileJsonCondition(client, name, node),
+    );
+    return;
+  }
   const pattern = [
     '$includes',
     '$notIncludes',

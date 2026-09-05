@@ -12,6 +12,8 @@ import type {
   FilterRelationNode,
   FilterVariable,
   JsonFilterOperators,
+  FilterLiteral,
+  FilterScalar,
   NumberFilterOperators,
   RelationFilterOperators,
   RepositoryPath,
@@ -61,14 +63,66 @@ export class DefaultFilterBuilder<
     return new BooleanOperators(normalizePath(path), 'boolean');
   }
 
-  json(_path: string | RepositoryPath): JsonFilterOperators {
-    return {};
+  json(path: string | RepositoryPath): JsonFilterOperators {
+    return new JsonOperators(normalizePath(path));
   }
 
   relation<TTarget extends object = RepositoryRecord>(
     path: string | RepositoryPath,
   ): RelationFilterOperators<TTarget> {
     return new RelationOperators<TTarget>(normalizePath(path));
+  }
+}
+
+class JsonOperators implements JsonFilterOperators {
+  constructor(
+    private readonly fieldPath: RepositoryPath,
+    private readonly jsonPath?: readonly (string | number)[],
+  ) {}
+  path(path: readonly (string | number)[]): JsonFilterOperators {
+    return new JsonOperators(this.fieldPath, [
+      ...(this.jsonPath ?? []),
+      ...path,
+    ]);
+  }
+  eq(value: FilterOperand<FilterLiteral>): FilterConditionNode {
+    return this.node('$jsonEq', value);
+  }
+  ne(value: FilterOperand<FilterLiteral>): FilterConditionNode {
+    return this.node('$jsonNe', value);
+  }
+  has(value: FilterOperand<FilterScalar>): FilterConditionNode {
+    return this.node('$jsonHas', value);
+  }
+  hasSome(value: FilterOperand<readonly FilterScalar[]>): FilterConditionNode {
+    return this.node('$jsonHasSome', value);
+  }
+  hasEvery(value: FilterOperand<readonly FilterScalar[]>): FilterConditionNode {
+    return this.node('$jsonHasEvery', value);
+  }
+  isEmpty(): FilterConditionNode {
+    return this.node('$jsonEmpty');
+  }
+  isNotEmpty(): FilterConditionNode {
+    return this.node('$jsonNotEmpty');
+  }
+  isDbNull(): FilterConditionNode {
+    return this.node('$jsonDbNull');
+  }
+  isJsonNull(): FilterConditionNode {
+    return this.node('$jsonNull');
+  }
+  isAnyNull(): FilterConditionNode {
+    return this.node('$jsonAnyNull');
+  }
+  private node(
+    operator: FilterOperator,
+    value?: FilterConditionNode['value'],
+  ): FilterConditionNode {
+    const node = condition(this.fieldPath, 'json', operator, value);
+    if (this.jsonPath !== undefined)
+      Object.assign(node, { jsonPath: this.jsonPath });
+    return node;
   }
 }
 

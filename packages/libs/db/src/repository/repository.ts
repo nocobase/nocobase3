@@ -8,6 +8,7 @@ import type {
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
+import { jsonOperators, validateJsonCondition } from './json-filter.js';
 import {
   aggregateExpressionToNode,
   DefaultAggregateBuilder,
@@ -889,6 +890,7 @@ export class DefaultRepository<
 }
 
 const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
+  json: jsonOperators,
   string: [
     '$includes',
     '$notIncludes',
@@ -1227,7 +1229,9 @@ function validateFilterNode(
       },
     );
   }
-  validateConditionValue(field, node, path);
+  if (node.jsonPath !== undefined && field.type !== 'json') {
+    invalid('INVALID_FILTER', 'JSON paths require a JSON Field.', { path });
+  }
   if (
     node.mode !== undefined &&
     ((node.mode !== 'default' && node.mode !== 'insensitive') ||
@@ -1248,6 +1252,12 @@ function validateFilterNode(
     );
   }
   const value = resolveFilterValue(node.value, context, [...path, 'value']);
+  if (field.type === 'json') {
+    const resolved = { ...node, value };
+    validateJsonCondition(resolved, path);
+    return resolved;
+  }
+  validateConditionValue(field, node, path);
   validateResolvedConditionValue(field, node.operator, value, path);
   return {
     ...node,
