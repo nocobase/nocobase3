@@ -84,7 +84,18 @@ export interface HubRuntimeStatus {
   readonly error: string | null;
 }
 
+export interface HubAppSummary {
+  readonly app: HubAppRecord;
+  readonly runtime: HubRuntimeStatus;
+  readonly currentVersion: string | null;
+  readonly hasReleases: boolean;
+  readonly hasPendingDeployment: boolean;
+}
+
 export interface HubAppDetail {
+  readonly hasReleases: boolean;
+  readonly hasPendingDeployment: boolean;
+  readonly currentVersion: string | null;
   readonly app: HubAppRecord;
   readonly deployment: {
     readonly desiredReleaseId: string | null;
@@ -97,10 +108,15 @@ export interface HubAppDetail {
     readonly error: string | null;
     readonly updatedAt: Date;
   };
-  readonly deployments: readonly HubDeploymentRecord[];
   readonly runtime: HubRuntimeStatus;
-  readonly releases: readonly HubReleaseRecord[];
   readonly hostUrl: string | null;
+}
+
+export interface HubDeploymentListItem extends HubDeploymentRecord {
+  readonly release: {
+    readonly version: string;
+    readonly checksum: string;
+  } | null;
 }
 
 export interface CreateHubAppInput {
@@ -142,7 +158,7 @@ export interface UpdateHubSettingsInput {
 }
 
 export interface HubService {
-  listApps(): Promise<readonly HubAppDetail[]>;
+  listApps(): Promise<readonly HubAppSummary[]>;
   getApp(appId: string): Promise<HubAppDetail>;
   createApp(input: CreateHubAppInput): Promise<HubAppDetail>;
   listReleases(appId: string): Promise<readonly HubReleaseRecord[]>;
@@ -160,7 +176,7 @@ export interface HubService {
     appId: string,
     input: UpdateHubSettingsInput,
   ): Promise<HubAppDetail>;
-  listDeployments(appId: string): Promise<readonly HubDeploymentRecord[]>;
+  listDeployments(appId: string): Promise<readonly HubDeploymentListItem[]>;
   getDeployment(
     appId: string,
     deploymentId: string,
@@ -172,6 +188,7 @@ export interface HubService {
   ): Promise<HubDeploymentRecord>;
   refresh(appId: string): Promise<HubAppDetail>;
   start(appId: string): Promise<HubAppDetail>;
+  restart(appId: string): Promise<HubAppDetail>;
   stop(appId: string): Promise<HubAppDetail>;
   remove(appId: string): Promise<void>;
   hostStatus(): Promise<HostStatus>;

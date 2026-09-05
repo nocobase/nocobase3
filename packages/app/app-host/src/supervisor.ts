@@ -54,6 +54,9 @@ export interface AppHostSupervisorOptions {
   maxAutomaticRestarts?: number;
   automaticRestartWindowMs?: number;
   automaticRestartBaseDelayMs?: number;
+  entrypoint?: string;
+  tsxCli?: string;
+  tsconfig?: string;
 }
 
 export interface AppHostSupervisorInfo {
@@ -122,59 +125,51 @@ export class AppHostSupervisor {
   private readonly maxAutomaticRestarts: number;
   private readonly automaticRestartWindowMs: number;
   private readonly automaticRestartBaseDelayMs: number;
+  private readonly entrypoint?: string;
+  private readonly tsxCli?: string;
+  private readonly tsconfig?: string;
   private status: AppHostSupervisorStatus;
   private managedChild: ManagedChild | null = null;
   private startPromise: Promise<URL> | null = null;
   private stopPromise: Promise<void> | null = null;
   private activeLeases = 0;
   private shuttingDown = false;
+  private shutdownPromise: Promise<void> | null = null;
   private session: string | null = null;
   private lastDeploymentSet: HostDeploymentSet | null = null;
   private automaticRestartTimer: NodeJS.Timeout | null = null;
   private automaticRestartAttempts: number[] = [];
+  private readonly handleShutdownSignal: () => void = () => {
+    this.shutdown().catch((error: unknown) => {
+      console.error('Failed to shutdown app-host child process', error);
+    });
+  };
 
   private constructor(options: AppHostSupervisorOptions = {}) {
-    this.mode = resolveAppHostMode(options.mode ?? process.env.APP_HOST_MODE);
-    this.enabled = options.enabled ?? process.env.APP_HOST_ENABLED !== 'false';
-    this.externalUrl = normalizeUrl(
-      options.targetUrl ?? process.env.APP_HOST_URL,
-    );
+    this.mode = resolveAppHostMode(options.mode);
+    this.enabled = options.enabled ?? true;
+    this.externalUrl = normalizeUrl(options.targetUrl);
     this.driver = this.resolveDriver(options);
-    this.appDeploymentsDir =
-      options.appDeploymentsDir ?? process.env.APP_DEPLOYMENTS_DIR;
-    this.appVolumesDir = options.appVolumesDir ?? process.env.APP_VOLUMES_DIR;
-    this.configPath = options.configPath ?? process.env.APP_HOST_CONFIG_PATH;
-    this.host = options.host ?? process.env.APP_HOST_BIND ?? '127.0.0.1';
-    this.configuredPort = options.port ?? numberFromEnv('APP_HOST_PORT');
-    this.startTimeoutMs =
-      options.startTimeoutMs ??
-      numberFromEnv('APP_HOST_START_TIMEOUT_MS') ??
-      DEFAULT_START_TIMEOUT_MS;
-    this.ipcTimeoutMs =
-      options.ipcTimeoutMs ??
-      numberFromEnv('APP_HOST_IPC_TIMEOUT_MS') ??
-      DEFAULT_IPC_TIMEOUT_MS;
+    this.appDeploymentsDir = options.appDeploymentsDir;
+    this.appVolumesDir = options.appVolumesDir;
+    this.configPath = options.configPath;
+    this.host = options.host ?? '127.0.0.1';
+    this.configuredPort = options.port;
+    this.entrypoint = options.entrypoint;
+    this.tsxCli = options.tsxCli;
+    this.tsconfig = options.tsconfig;
+    this.startTimeoutMs = options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
+    this.ipcTimeoutMs = options.ipcTimeoutMs ?? DEFAULT_IPC_TIMEOUT_MS;
     this.shutdownTimeoutMs =
-      options.shutdownTimeoutMs ??
-      numberFromEnv('APP_HOST_SHUTDOWN_TIMEOUT_MS') ??
-      DEFAULT_SHUTDOWN_TIMEOUT_MS;
-    this.healthPath =
-      options.healthPath ??
-      process.env.APP_HOST_HEALTH_PATH ??
-      DEFAULT_HEALTH_PATH;
-    this.autoRestart =
-      options.autoRestart ?? process.env.APP_HOST_AUTO_RESTART !== 'false';
+      options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
+    this.healthPath = options.healthPath ?? DEFAULT_HEALTH_PATH;
+    this.autoRestart = options.autoRestart ?? true;
     this.maxAutomaticRestarts =
-      options.maxAutomaticRestarts ??
-      numberFromEnv('APP_HOST_MAX_AUTOMATIC_RESTARTS') ??
-      DEFAULT_MAX_AUTOMATIC_RESTARTS;
+      options.maxAutomaticRestarts ?? DEFAULT_MAX_AUTOMATIC_RESTARTS;
     this.automaticRestartWindowMs =
-      options.automaticRestartWindowMs ??
-      numberFromEnv('APP_HOST_AUTOMATIC_RESTART_WINDOW_MS') ??
-      DEFAULT_AUTOMATIC_RESTART_WINDOW_MS;
+      options.automaticRestartWindowMs ?? DEFAULT_AUTOMATIC_RESTART_WINDOW_MS;
     this.automaticRestartBaseDelayMs =
       options.automaticRestartBaseDelayMs ??
-      numberFromEnv('APP_HOST_AUTOMATIC_RESTART_BASE_DELAY_MS') ??
       DEFAULT_AUTOMATIC_RESTART_BASE_DELAY_MS;
     this.status =
       !this.enabled || this.driver === 'disabled'
@@ -183,36 +178,29 @@ export class AppHostSupervisor {
           ? 'external'
           : 'stopped';
 
-    process.once('SIGINT', () => {
-      this.shutdown().catch((error) => {
-        console.error('Failed to shutdown app-host child process', error);
-      });
-    });
-    process.once('SIGTERM', () => {
-      this.shutdown().catch((error) => {
-        console.error('Failed to shutdown app-host child process', error);
-      });
-    });
+    process.once('SIGINT', this.handleShutdownSignal);
+    process.once('SIGTERM', this.handleShutdownSignal);
 
-    if (options.prestart ?? process.env.APP_HOST_PRESTART === 'true') {
+    if (options.prestart) {
       this.ensureStarted().catch((error) => {
         console.error('Failed to prestart app-host child process', error);
       });
     }
   }
 
-  static getInstance(
-    options: AppHostSupervisorOptions = {},
-  ): AppHostSupervisor {
-    if (!AppHostSupervisor.instance) {
-      AppHostSupervisor.instance = new AppHostSupervisor(options);
+  static initialize(options: AppHostSupervisorOptions = {}): AppHostSupervisor {
+    if (AppHostSupervisor.instance) {
+      throw new Error('AppHostSupervisor is already initialized');
     }
-
+    AppHostSupervisor.instance = new AppHostSupervisor(options);
     return AppHostSupervisor.instance;
   }
 
-  static resetInstance(): void {
-    AppHostSupervisor.instance = null;
+  static getInstance(): AppHostSupervisor {
+    if (!AppHostSupervisor.instance) {
+      throw new Error('AppHostSupervisor is not initialized');
+    }
+    return AppHostSupervisor.instance;
   }
 
   getStatus(): AppHostSupervisorStatus {
@@ -248,6 +236,9 @@ export class AppHostSupervisor {
   }
 
   async ensureStarted(): Promise<URL> {
+    if (this.shuttingDown) {
+      throw new Error('App host supervisor is shut down');
+    }
     if (!this.enabled) {
       throw new Error('App host is disabled');
     }
@@ -371,13 +362,17 @@ export class AppHostSupervisor {
     return client;
   }
 
-  async shutdown(): Promise<void> {
-    if (this.shuttingDown) {
-      return;
-    }
-
+  shutdown(): Promise<void> {
+    if (this.shutdownPromise) return this.shutdownPromise;
     this.shuttingDown = true;
-    await this.stop('App host supervisor shutdown');
+    process.off('SIGINT', this.handleShutdownSignal);
+    process.off('SIGTERM', this.handleShutdownSignal);
+    this.shutdownPromise = this.stop('App host supervisor shutdown').then(
+      () => {
+        AppHostSupervisor.instance = null;
+      },
+    );
+    return this.shutdownPromise;
   }
 
   private updateLastDeploymentSet(
@@ -412,6 +407,10 @@ export class AppHostSupervisor {
 
     this.status = 'starting';
     const port = await this.resolvePort();
+    if (this.shuttingDown) {
+      this.status = 'stopped';
+      throw new Error('App host supervisor is shut down');
+    }
     const targetUrl = new URL(`http://${this.host}:${port}`);
     this.session = this.mode === 'managed' ? randomUUID() : null;
     const launchOptions = this.resolveLaunchOptions(port);
@@ -545,14 +544,14 @@ export class AppHostSupervisor {
   }
 
   private resolveDriver(options: AppHostSupervisorOptions): AppHostDriver {
-    if (!(options.enabled ?? process.env.APP_HOST_ENABLED !== 'false')) {
+    if (!this.enabled || options.driver === 'disabled') {
       return 'disabled';
     }
-    if (options.targetUrl ?? process.env.APP_HOST_URL) {
+    if (this.externalUrl) {
       return 'external';
     }
 
-    const driver = options.driver ?? process.env.APP_HOST_DRIVER ?? 'node';
+    const driver = options.driver ?? 'node';
     return driver === 'tsx' ? 'tsx' : 'node';
   }
 
@@ -588,7 +587,7 @@ export class AppHostSupervisor {
   }
 
   private resolveNodeLaunchOptions(port: number): AppHostLaunchOptions {
-    const entrypoint = resolveNodeAppHostEntrypoint();
+    const entrypoint = resolveNodeAppHostEntrypoint(this.entrypoint);
     if (!entrypoint) {
       this.status = 'failed';
       throw new Error(
@@ -605,8 +604,8 @@ export class AppHostSupervisor {
   }
 
   private resolveTsxLaunchOptions(port: number): AppHostLaunchOptions {
-    const entrypoint = resolveTsxAppHostEntrypoint();
-    const tsxCli = resolveTsxCli();
+    const entrypoint = resolveTsxAppHostEntrypoint(this.entrypoint);
+    const tsxCli = resolveTsxCli(this.tsxCli);
     if (!entrypoint) {
       this.status = 'failed';
       throw new Error('The app-host source entrypoint does not exist.');
@@ -618,8 +617,7 @@ export class AppHostSupervisor {
       );
     }
 
-    const tsconfig =
-      process.env.APP_HOST_TSCONFIG ?? process.env.SERVER_TSCONFIG_PATH;
+    const tsconfig = this.tsconfig;
     const args =
       this.mode === 'managed'
         ? [tsxCli]
@@ -645,8 +643,7 @@ export class AppHostSupervisor {
       return this.configuredPort;
     }
 
-    const appPort = numberFromEnv('APP_PORT') ?? DEFAULT_APP_HOST_PORT - 10;
-    return await findAvailablePort(appPort + 10, this.host);
+    return await findAvailablePort(DEFAULT_APP_HOST_PORT, this.host);
   }
 
   private pipeChildLogs(child: ChildProcess): void {
@@ -682,8 +679,7 @@ export class AppHostSupervisor {
   }
 }
 
-function resolveNodeAppHostEntrypoint(): string | null {
-  const explicit = process.env.APP_HOST_ENTRY;
+function resolveNodeAppHostEntrypoint(explicit?: string): string | null {
   if (explicit && existsSync(path.resolve(process.cwd(), explicit))) {
     return path.resolve(process.cwd(), explicit);
   }
@@ -696,8 +692,7 @@ function resolveNodeAppHostEntrypoint(): string | null {
   return null;
 }
 
-function resolveTsxAppHostEntrypoint(): string | null {
-  const explicit = process.env.APP_HOST_ENTRY;
+function resolveTsxAppHostEntrypoint(explicit?: string): string | null {
   if (explicit && existsSync(path.resolve(process.cwd(), explicit))) {
     return path.resolve(process.cwd(), explicit);
   }
@@ -715,8 +710,7 @@ function resolveTsxAppHostEntrypoint(): string | null {
   return null;
 }
 
-function resolveTsxCli(): string | null {
-  const explicit = process.env.APP_HOST_TSX_CLI;
+function resolveTsxCli(explicit?: string): string | null {
   if (explicit && existsSync(path.resolve(process.cwd(), explicit))) {
     return path.resolve(process.cwd(), explicit);
   }
@@ -751,16 +745,6 @@ export function sanitizeAppHostChildNodeOptions(value: unknown): string {
         ),
     )
     .join(' ');
-}
-
-function numberFromEnv(name: string): number | undefined {
-  const value = process.env[name];
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 async function findAvailablePort(

@@ -12,13 +12,37 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { c as createTar } from 'tar';
 import type { ArtifactReference } from '../dist/index.js';
 import { sanitizeAppHostChildNodeOptions } from '../dist/supervisor.js';
 import { AppHostSupervisor } from '../dist/supervisor.js';
 
 describe('AppHostSupervisor', () => {
+  it('uses explicit options instead of ambient supervisor configuration', async () => {
+    vi.stubEnv('APP_HOST_ENABLED', 'false');
+    vi.stubEnv('APP_HOST_MODE', 'invalid');
+    vi.stubEnv('APP_HOST_URL', 'http://ambient.invalid');
+    vi.stubEnv('APP_HOST_DRIVER', 'tsx');
+    vi.stubEnv('APP_DEPLOYMENTS_DIR', '/ambient/deployments');
+    try {
+      const supervisor = AppHostSupervisor.initialize({ mode: 'managed' });
+      try {
+        expect(supervisor.getInfo()).toMatchObject({
+          mode: 'managed',
+          driver: 'node',
+          status: 'stopped',
+          targetUrl: undefined,
+          appDeploymentsDir: undefined,
+        });
+      } finally {
+        await supervisor.shutdown();
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('removes preserve symlink flags from app-host child NODE_OPTIONS', () => {
     expect(
       sanitizeAppHostChildNodeOptions(
@@ -35,11 +59,50 @@ describe('AppHostSupervisor', () => {
     ).toBe('');
   });
 
+  it('uses an explicit singleton lifecycle', async () => {
+    expect(() => AppHostSupervisor.getInstance()).toThrow(
+      'AppHostSupervisor is not initialized',
+    );
+
+    const supervisor = AppHostSupervisor.initialize({ enabled: false });
+    expect(AppHostSupervisor.getInstance()).toBe(supervisor);
+    expect(() => AppHostSupervisor.initialize({ enabled: false })).toThrow(
+      'AppHostSupervisor is already initialized',
+    );
+
+    await supervisor.shutdown();
+    expect(() => AppHostSupervisor.getInstance()).toThrow(
+      'AppHostSupervisor is not initialized',
+    );
+  });
+
+  it('shares instance shutdown and allows initialization after cleanup', async () => {
+    const sigintListeners = process.listenerCount('SIGINT');
+    const sigtermListeners = process.listenerCount('SIGTERM');
+    const supervisor = AppHostSupervisor.initialize({ enabled: false });
+    const stopped = Promise.withResolvers<void>();
+    const stop = vi.spyOn(supervisor, 'stop').mockReturnValue(stopped.promise);
+    const shutdown = supervisor.shutdown();
+    expect(supervisor.shutdown()).toBe(shutdown);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(() => AppHostSupervisor.initialize()).toThrow('already initialized');
+    stopped.resolve();
+    await shutdown;
+    expect(process.listenerCount('SIGINT')).toBe(sigintListeners);
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermListeners);
+    await expect(supervisor.ensureStarted()).rejects.toThrow('is shut down');
+
+    const next = AppHostSupervisor.initialize({ enabled: false });
+    await supervisor.shutdown();
+    expect(AppHostSupervisor.getInstance()).toBe(next);
+    await next.shutdown();
+    stop.mockRestore();
+  });
+
   it('manages a spawned host through authenticated IPC', async () => {
-    AppHostSupervisor.resetInstance();
     const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));
     const fixture = await createManagedFixture(volumesDir);
-    const supervisor = AppHostSupervisor.getInstance({
+    const supervisor = AppHostSupervisor.initialize({
       mode: 'managed',
       driver: 'tsx',
       appDeploymentsDir: fixture.appDeploymentsDir,
@@ -89,16 +152,14 @@ describe('AppHostSupervisor', () => {
       expect(removed.deployments).toEqual([]);
     } finally {
       await supervisor.shutdown();
-      AppHostSupervisor.resetInstance();
       await rm(volumesDir, { recursive: true, force: true });
     }
   });
 
   it('restarts a crashed managed host and replays its deployment set', async () => {
-    AppHostSupervisor.resetInstance();
     const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));
     const fixture = await createManagedFixture(volumesDir);
-    const supervisor = AppHostSupervisor.getInstance({
+    const supervisor = AppHostSupervisor.initialize({
       mode: 'managed',
       driver: 'tsx',
       appDeploymentsDir: fixture.appDeploymentsDir,
@@ -144,7 +205,6 @@ describe('AppHostSupervisor', () => {
       });
     } finally {
       await supervisor.shutdown();
-      AppHostSupervisor.resetInstance();
       await rm(volumesDir, { recursive: true, force: true });
     }
   });

@@ -17,7 +17,53 @@ This version uses an in-process deployment runner rather than a separate durable
 
 Set `HUB_HOST_ENABLED=false` only for processes that need Hub metadata without starting its local managed Host, such as composition-only tests.
 
+## Host supervision configuration
+
+Hub configures its child-process supervisor through `hub.host` in the Hub's
+configuration file. The supervisor receives resolved options and does not read
+`APP_HOST_*` settings from the parent environment.
+
+```yaml
+hub:
+  host:
+    enabled: true
+    driver: node
+    host: 127.0.0.1
+    # port: 13010 # Omit to find an available port starting at 13010.
+    startTimeoutMs: 30000
+    ipcTimeoutMs: 300000
+    shutdownTimeoutMs: 30000
+    autoRestart: true
+    maxAutomaticRestarts: 5
+    automaticRestartWindowMs: 60000
+    automaticRestartBaseDelayMs: 250
+```
+
+Paths remain configurable through `appDeploymentsDir`, `appVolumesDir`, and
+`configPath`; their defaults are under the Hub storage directory. Advanced
+development overrides are `entrypoint`, `tsxCli`, and `tsconfig`.
+Environment overrides use `HUB_HOST_*`, for example `HUB_HOST_PORT`,
+`HUB_HOST_START_TIMEOUT_MS`, `HUB_HOST_AUTO_RESTART`, `HUB_HOST_ENTRY`,
+`HUB_HOST_TSX_CLI`, and `HUB_HOST_TSCONFIG`. Directory overrides are
+`HUB_HOST_DEPLOYMENTS_DIR`, `HUB_HOST_VOLUMES_DIR`, and `HUB_HOST_CONFIG_PATH`.
+The default driver is `node` in production and `tsx` otherwise.
+
+This does not change standalone Host configuration: a directly launched Host
+still reads its own top-level `host` configuration and `APP_HOST_*` environment
+mappings. It does not instantiate a supervisor; process supervision belongs to
+Docker, systemd, or another external process manager. In Hub-managed mode, Hub
+passes the selected port and paths to the child process.
+
 ## Verification
+
+The application catalog returns lightweight summaries using three database
+queries and one shared Host status snapshot, independent of the number of Apps.
+It does not load release templates or deployment histories. Opening an App
+loads only its overview. Releases and deployment history load when their tabs
+are selected; deployment rows include the release version and checksum without
+requiring the Releases tab's dataset. Configuration loads only for Configuration,
+Resources, or deployment dialogs. Deployment polling refreshes the overview and
+the visible deployment history, not inactive tabs. Histories remain unpaginated.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-hub lint

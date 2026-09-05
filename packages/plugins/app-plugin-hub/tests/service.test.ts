@@ -21,7 +21,7 @@ import {
 } from '@nocobase/db';
 import { c as createTar } from 'tar';
 import { parse as parseYaml } from 'yaml';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202609010001_create_hub_app_tables.js';
 import {
@@ -62,8 +62,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         host: {
           enabled: true,
           driver: 'tsx',
-          deploymentsDir: path.join(rootDir, 'app-deployments'),
-          volumesDir: path.join(rootDir, 'app-volumes'),
+          appDeploymentsDir: path.join(rootDir, 'app-deployments'),
+          appVolumesDir: path.join(rootDir, 'app-volumes'),
           configPath: path.join(rootDir, 'hub', 'host-config.yml'),
         },
       },
@@ -90,9 +90,75 @@ describe('@nocobase/app-plugin-hub service', () => {
         activation: 'eager',
         config: { mode: 'file' },
       },
-      deployments: [],
-      releases: [],
+      hasReleases: false,
+      hasPendingDeployment: false,
+      currentVersion: null,
     });
+  });
+
+  it('restarts only the requested App without creating a deployment', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await expect(service.restart('customer')).rejects.toMatchObject({
+      code: 'APP_NOT_DEPLOYED',
+    });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+    const before = await service.getApp('customer');
+    host.targetedOperations = [];
+    const after = await service.restart('customer');
+    expect(host.targetedOperations).toEqual([
+      'stop:customer',
+      'start:customer',
+    ]);
+    expect(after.app.currentDeploymentId).toBe(before.app.currentDeploymentId);
+    expect(after.deployment.activation).toBe(before.deployment.activation);
+    expect(after.runtime.state).toBe('running');
+    expect(await service.listDeployments('customer')).toHaveLength(1);
+    await service.stop('customer');
+    await expect(service.restart('customer')).rejects.toMatchObject({
+      code: 'APP_NOT_RUNNING',
+    });
+  });
+
+  it('lists lightweight summaries with one shared Host status request', async () => {
+    await service.createApp({ id: 'first', name: 'First' });
+    await service.createApp({ id: 'second', name: 'Second' });
+    const status = vi.spyOn(service, 'hostStatus');
+    const releases = vi.spyOn(service, 'listReleases');
+    const deployments = vi.spyOn(service, 'listDeployments');
+    const apps = await service.listApps();
+    expect(apps).toHaveLength(2);
+    expect(status).toHaveBeenCalledTimes(1);
+    expect(releases).not.toHaveBeenCalled();
+    expect(deployments).not.toHaveBeenCalled();
+    for (const app of apps) {
+      expect(app).toMatchObject({
+        currentVersion: null,
+        hasReleases: false,
+        hasPendingDeployment: false,
+      });
+      expect(app).not.toHaveProperty('releases');
+      expect(app).not.toHaveProperty('deployments');
+      expect(app).not.toHaveProperty('deployment');
+    }
+    status.mockRejectedValue(new Error('Host offline'));
+    const offline = await service.listApps();
+    expect(status).toHaveBeenCalledTimes(2);
+    expect(offline.every((app) => app.runtime.state === 'unknown')).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it('does not contact Host for an empty catalog', async () => {
+    const status = vi.spyOn(service, 'hostStatus');
+    expect(await service.listApps()).toEqual([]);
+    expect(status).not.toHaveBeenCalled();
+    status.mockRestore();
   });
 
   it('stores a Release config example as the deployment template', async () => {
@@ -121,6 +187,12 @@ describe('@nocobase/app-plugin-hub service', () => {
       cacheHit: false,
     });
     expect(detail.app.currentDeploymentId).toBe(queued.id);
+    expect(detail.currentVersion).toBe('1.2.3');
+    expect(detail).not.toHaveProperty('releases');
+    expect(detail).not.toHaveProperty('deployments');
+    expect(
+      (await service.listDeployments('customer'))[0]?.release,
+    ).toMatchObject({ version: '1.2.3', checksum: release.checksum });
     expect(host.lastDeploymentSet?.deployments).toEqual([
       expect.objectContaining({
         appId: 'customer',

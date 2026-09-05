@@ -15,12 +15,17 @@ import {
   hubServiceToken,
   type CreateHubAppInput,
   type DeployHubAppInput,
-  type HubAppDetail,
-  type HubReleaseRecord,
   type RollbackHubAppInput,
   type UpdateHubConfigInput,
   type UpdateHubSettingsInput,
 } from '../tokens.js';
+import {
+  appSummaryResponse,
+  appDetailResponse,
+  releaseResponse,
+  deploymentResponse,
+  deploymentListResponse,
+} from './responses.js';
 
 const SYSTEM_ADMINISTRATOR = 'system-administrator';
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
@@ -54,28 +59,31 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
     routes.get('/apps', async (context) =>
       respond(context, async () =>
-        (await hub.listApps()).map(releaseMetadataForApp),
+        (await hub.listApps()).map(appSummaryResponse),
       ),
     );
     routes.post('/apps', async (context) => {
       const input = await context.req.json<CreateHubAppInput>();
-      return await respond(context, () => hub.createApp(input));
+      return await respond(context, async () => {
+        const app = await hub.createApp(input);
+        return { id: app.app.id };
+      });
     });
     routes.get('/apps/:appId', async (context) =>
       respond(context, async () =>
-        releaseMetadataForApp(await hub.getApp(context.req.param('appId'))),
+        appDetailResponse(await hub.getApp(context.req.param('appId'))),
       ),
     );
     routes.get('/apps/:appId/releases', async (context) =>
       respond(context, async () =>
         (await hub.listReleases(context.req.param('appId'))).map(
-          releaseMetadata,
+          releaseResponse,
         ),
       ),
     );
     routes.get('/apps/:appId/releases/:releaseId', async (context) =>
       respond(context, async () =>
-        releaseMetadata(
+        releaseResponse(
           await hub.getRelease(
             context.req.param('appId'),
             context.req.param('releaseId'),
@@ -99,7 +107,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     );
     routes.post('/apps/:appId/releases', async (context) =>
       respond(context, async () => {
-        return releaseMetadata(
+        return releaseResponse(
           await hub.createRelease(context.req.param('appId'), {
             bytes: await readBody(context.req.raw, MAX_ARTIFACT_SIZE),
           }),
@@ -121,26 +129,39 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
     routes.put('/apps/:appId/settings', async (context) => {
       const input = await context.req.json<UpdateHubSettingsInput>();
-      return await respond(context, () =>
-        hub.updateSettings(context.req.param('appId'), input),
-      );
+      return await respond(context, async () => {
+        await hub.updateSettings(context.req.param('appId'), input);
+        return { success: true };
+      });
     });
     routes.post('/apps/:appId/deploy', async (context) => {
       const input = await context.req.json<DeployHubAppInput>();
       return await respond(
         context,
-        () => hub.deploy(context.req.param('appId'), input),
+        async () => {
+          const deployment = await hub.deploy(
+            context.req.param('appId'),
+            input,
+          );
+          return { id: deployment.id, status: deployment.status };
+        },
         202,
       );
     });
     routes.get('/apps/:appId/deployments', async (context) =>
-      respond(context, () => hub.listDeployments(context.req.param('appId'))),
+      respond(context, async () =>
+        (await hub.listDeployments(context.req.param('appId'))).map(
+          deploymentListResponse,
+        ),
+      ),
     );
     routes.get('/apps/:appId/deployments/:deploymentId', async (context) =>
-      respond(context, () =>
-        hub.getDeployment(
-          context.req.param('appId'),
-          context.req.param('deploymentId'),
+      respond(context, async () =>
+        deploymentResponse(
+          await hub.getDeployment(
+            context.req.param('appId'),
+            context.req.param('deploymentId'),
+          ),
         ),
       ),
     );
@@ -148,18 +169,39 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const input = await context.req.json<RollbackHubAppInput>();
       return await respond(
         context,
-        () => hub.rollback(context.req.param('appId'), input),
+        async () => {
+          const deployment = await hub.rollback(
+            context.req.param('appId'),
+            input,
+          );
+          return { id: deployment.id, status: deployment.status };
+        },
         202,
       );
     });
     routes.post('/apps/:appId/stop', async (context) =>
-      respond(context, () => hub.stop(context.req.param('appId'))),
+      respond(context, async () => {
+        await hub.stop(context.req.param('appId'));
+        return { success: true };
+      }),
     );
     routes.post('/apps/:appId/start', async (context) =>
-      respond(context, () => hub.start(context.req.param('appId'))),
+      respond(context, async () => {
+        await hub.start(context.req.param('appId'));
+        return { success: true };
+      }),
+    );
+    routes.post('/apps/:appId/restart', async (context) =>
+      respond(context, async () => {
+        await hub.restart(context.req.param('appId'));
+        return { success: true };
+      }),
     );
     routes.post('/apps/:appId/refresh', async (context) =>
-      respond(context, () => hub.refresh(context.req.param('appId'))),
+      respond(context, async () => {
+        await hub.refresh(context.req.param('appId'));
+        return { success: true };
+      }),
     );
     routes.delete('/apps/:appId', async (context) =>
       respond(context, () => hub.remove(context.req.param('appId'))),
@@ -193,24 +235,6 @@ async function respond<T>(
 function preventSensitiveResponseCaching(context: Context): void {
   context.header('Cache-Control', 'no-store');
   context.header('Pragma', 'no-cache');
-}
-
-type HubReleaseMetadata = Omit<HubReleaseRecord, 'configTemplate'> & {
-  readonly hasConfigTemplate: boolean;
-};
-
-function releaseMetadata(release: HubReleaseRecord): HubReleaseMetadata {
-  const { configTemplate, ...metadata } = release;
-  return { ...metadata, hasConfigTemplate: configTemplate !== null };
-}
-
-function releaseMetadataForApp(app: HubAppDetail): Omit<
-  HubAppDetail,
-  'releases'
-> & {
-  readonly releases: readonly HubReleaseMetadata[];
-} {
-  return { ...app, releases: app.releases.map(releaseMetadata) };
 }
 
 async function readBody(request: Request, limit: number): Promise<Uint8Array> {

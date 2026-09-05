@@ -18,7 +18,6 @@ import type {
   HostManagementService,
   HostStatus,
 } from '@nocobase/app-host/management';
-import { AppHostSupervisor } from '@nocobase/app-host/supervisor';
 import type { DatabaseConnection, DatabaseManager, Row } from '@nocobase/db';
 import {
   createDriveManager,
@@ -34,11 +33,13 @@ import type {
   CreateHubReleaseInput,
   DeployHubAppInput,
   HubAppDetail,
+  HubAppSummary,
   HubAppRecord,
   HubConfigBinding,
   HubConfigDocument,
   HubConfigMode,
   HubDeploymentRecord,
+  HubDeploymentListItem,
   HubRuntimeStatus,
   HubReleaseRecord,
   RollbackHubAppInput,
@@ -60,7 +61,7 @@ const EMBEDDED_ENTRY_PATH = 'dist/server/embedded.js';
 export interface DefaultHubServiceOptions {
   readonly database: DatabaseManager;
   readonly config: HubPluginConfig;
-  readonly hostController?: HubHostController;
+  readonly hostController: HubHostController;
 }
 
 export interface HubHostController {
@@ -73,7 +74,6 @@ export interface HubHostController {
   stopDeployment(appId: string): Promise<HostStatus>;
   removeDeployment(appId: string): Promise<HostStatus>;
   getManagementClient(): Promise<HostManagementService>;
-  shutdown(): Promise<void>;
 }
 
 export class HubError extends Error {
@@ -90,7 +90,6 @@ export class HubError extends Error {
 export class DefaultHubService implements HubService {
   private readonly disk: NocoBaseDriveDisk;
   private readonly hostController: HubHostController;
-  private readonly ownsHostController: boolean;
   private readonly locks = new Map<string, Promise<unknown>>();
   private revision = 0;
   private currentHostUrl: string | null = null;
@@ -102,18 +101,7 @@ export class DefaultHubService implements HubService {
       disks: { artifact: options.config.artifact },
     });
     this.disk = drive.use('artifact');
-    this.ownsHostController = options.hostController === undefined;
-    this.hostController =
-      options.hostController ??
-      AppHostSupervisor.getInstance({
-        mode: 'managed',
-        enabled: options.config.host.enabled,
-        driver: options.config.host.driver,
-        appDeploymentsDir: options.config.host.deploymentsDir,
-        appVolumesDir: options.config.host.volumesDir,
-        configPath: options.config.host.configPath,
-        prestart: false,
-      });
+    this.hostController = options.hostController;
   }
 
   public async prepare(): Promise<void> {
@@ -121,20 +109,56 @@ export class DefaultHubService implements HubService {
       recursive: true,
       mode: 0o700,
     });
-    await mkdir(this.options.config.host.volumesDir, {
+    await mkdir(this.options.config.host.appVolumesDir, {
       recursive: true,
       mode: 0o700,
     });
     await this.writeHostConfig();
   }
 
-  public async listApps(): Promise<readonly HubAppDetail[]> {
+  public async listApps(): Promise<readonly HubAppSummary[]> {
     const apps = await this.query()
       .selectFrom('hubApps')
-      .selectAll()
-      .orderBy('createdAt', 'desc')
+      .leftJoin(
+        'hubAppDeployments as current',
+        'hubApps.currentDeploymentId',
+        'current.id',
+      )
+      .leftJoin('hubAppReleases as release', 'current.releaseId', 'release.id')
+      .selectAll('hubApps')
+      .select('release.version as currentVersion')
+      .orderBy('hubApps.createdAt', 'desc')
       .execute<Row>();
-    return await Promise.all(apps.map((row) => this.detail(decodeApp(row))));
+    if (!apps.length) return [];
+    const [releases, pending] = await Promise.all([
+      this.query()
+        .selectFrom('hubAppReleases')
+        .select('appId')
+        .distinct()
+        .execute<Row>(),
+      this.query()
+        .selectFrom('hubAppDeployments')
+        .select('appId')
+        .distinct()
+        .where('status', 'in', ['queued', 'deploying'])
+        .execute<Row>(),
+    ]);
+    const releasedApps = new Set(releases.map((row) => row.appId));
+    const pendingApps = new Set(pending.map((row) => row.appId));
+    const status = this.hostStatus();
+    return await Promise.all(
+      apps.map(async (row): Promise<HubAppSummary> => {
+        const app = decodeApp(row);
+        return {
+          app,
+          runtime: await this.runtimeStatus(app.id, status),
+          currentVersion:
+            typeof row.currentVersion === 'string' ? row.currentVersion : null,
+          hasReleases: releasedApps.has(app.id),
+          hasPendingDeployment: pendingApps.has(app.id),
+        };
+      }),
+    );
   }
 
   public async getApp(appId: string): Promise<HubAppDetail> {
@@ -414,6 +438,44 @@ export class DefaultHubService implements HubService {
     });
   }
 
+  public async restart(appId: string): Promise<HubAppDetail> {
+    return await this.withLock(appId, async () => {
+      const app = await this.requireApp(appId);
+      const deployment = await this.currentDeployment(app);
+      if (!deployment) {
+        throw new HubError('App is not deployed.', 'APP_NOT_DEPLOYED', 409);
+      }
+      const runtime = await this.runtimeStatus(appId);
+      if (runtime.state !== 'running') {
+        throw new HubError(
+          'App must be running before it can be restarted.',
+          'APP_NOT_RUNNING',
+          409,
+        );
+      }
+      const spec = await this.createDeploymentSpec(app, deployment, 'running');
+      try {
+        await this.hostController.stopDeployment(appId);
+        const status = await this.hostController.startDeployment(spec);
+        const observed = status.deployments.find(
+          (item) => item.appId === appId,
+        );
+        if (observed?.observedState !== 'running') {
+          throw new Error(
+            observed?.error ?? 'Host did not report a running application.',
+          );
+        }
+      } catch (error) {
+        throw new HubError(
+          `Restart failed: ${error instanceof Error ? error.message : String(error)}`,
+          'RESTART_FAILED',
+          503,
+        );
+      }
+      return await this.getApp(appId);
+    });
+  }
+
   public async remove(appId: string): Promise<void> {
     await this.withLock(appId, async () => {
       const app = await this.requireApp(appId);
@@ -435,11 +497,11 @@ export class DefaultHubService implements HubService {
       });
       await Promise.allSettled([
         ...releases.map((release) => this.disk.delete(release.artifactKey)),
-        rm(path.join(this.options.config.host.deploymentsDir, appId), {
+        rm(path.join(this.options.config.host.appDeploymentsDir, appId), {
           recursive: true,
           force: true,
         }),
-        rm(path.join(this.options.config.host.volumesDir, appId), {
+        rm(path.join(this.options.config.host.appVolumesDir, appId), {
           recursive: true,
           force: true,
         }),
@@ -534,8 +596,6 @@ export class DefaultHubService implements HubService {
   public async shutdown(): Promise<void> {
     await this.startupReconciliation;
     await Promise.allSettled(this.locks.values());
-    await this.hostController.shutdown();
-    if (this.ownsHostController) AppHostSupervisor.resetInstance();
     this.currentHostUrl = null;
   }
 
@@ -544,14 +604,38 @@ export class DefaultHubService implements HubService {
   }
 
   private async detail(app: HubAppRecord): Promise<HubAppDetail> {
-    const deployments = await this.listDeployments(app.id);
-    const current = app.currentDeploymentId
-      ? (deployments.find((item) => item.id === app.currentDeploymentId) ??
-        null)
-      : null;
+    const current = await this.currentDeployment(app);
+    const [release, pending, currentRelease] = await Promise.all([
+      this.query()
+        .selectFrom('hubAppReleases')
+        .select('id')
+        .where('appId', '=', app.id)
+        .limit(1)
+        .executeTakeFirst<Row>(),
+      this.query()
+        .selectFrom('hubAppDeployments')
+        .select('id')
+        .where('appId', '=', app.id)
+        .where('status', 'in', ['queued', 'deploying'])
+        .limit(1)
+        .executeTakeFirst<Row>(),
+      current
+        ? this.query()
+            .selectFrom('hubAppReleases')
+            .select('version')
+            .where('id', '=', current.releaseId)
+            .executeTakeFirst<Row>()
+        : undefined,
+    ]);
     const runtime = await this.runtimeStatus(app.id);
     return {
       app,
+      hasReleases: Boolean(release),
+      hasPendingDeployment: Boolean(pending),
+      currentVersion:
+        typeof currentRelease?.version === 'string'
+          ? currentRelease.version
+          : null,
       deployment: {
         desiredReleaseId: current?.releaseId ?? null,
         observedReleaseId: current?.releaseId ?? null,
@@ -563,9 +647,7 @@ export class DefaultHubService implements HubService {
         error: runtime.error,
         updatedAt: current?.finishedAt ?? app.updatedAt,
       },
-      deployments,
       runtime,
-      releases: await this.listReleases(app.id),
       hostUrl: this.currentHostUrl,
     };
   }
@@ -587,15 +669,33 @@ export class DefaultHubService implements HubService {
 
   public async listDeployments(
     appId: string,
-  ): Promise<readonly HubDeploymentRecord[]> {
+  ): Promise<readonly HubDeploymentListItem[]> {
     await this.requireApp(appId);
     const rows = await this.query()
       .selectFrom('hubAppDeployments')
-      .selectAll()
-      .where('appId', '=', appId)
-      .orderBy('createdAt', 'desc')
+      .leftJoin(
+        'hubAppReleases as release',
+        'hubAppDeployments.releaseId',
+        'release.id',
+      )
+      .selectAll('hubAppDeployments')
+      .select([
+        'release.version as releaseVersion',
+        'release.checksum as releaseChecksum',
+      ])
+      .where('hubAppDeployments.appId', '=', appId)
+      .orderBy('hubAppDeployments.createdAt', 'desc')
       .execute<Row>();
-    return rows.map(decodeDeployment);
+    return rows.map((row) => ({
+      ...decodeDeployment(row),
+      release:
+        typeof row.releaseVersion === 'string'
+          ? {
+              version: row.releaseVersion,
+              checksum: String(row.releaseChecksum),
+            }
+          : null,
+    }));
   }
 
   public async getDeployment(
@@ -643,7 +743,7 @@ export class DefaultHubService implements HubService {
     return (
       deployment.config.path ??
       path.join(
-        this.options.config.host.volumesDir,
+        this.options.config.host.appVolumesDir,
         deployment.appId,
         'config.yml',
       )
@@ -658,9 +758,12 @@ export class DefaultHubService implements HubService {
       : null;
   }
 
-  private async runtimeStatus(appId: string): Promise<HubRuntimeStatus> {
+  private async runtimeStatus(
+    appId: string,
+    snapshot?: Promise<HostStatus>,
+  ): Promise<HubRuntimeStatus> {
     try {
-      const status = await this.hostStatus();
+      const status = await (snapshot ?? this.hostStatus());
       const item = status.deployments.find(
         (candidate) => candidate.appId === appId,
       );
@@ -763,7 +866,7 @@ export class DefaultHubService implements HubService {
     validateYamlConfig(content);
     const configPath =
       binding?.path ??
-      path.join(this.options.config.host.volumesDir, app.id, 'config.yml');
+      path.join(this.options.config.host.appVolumesDir, app.id, 'config.yml');
     await writeTextAtomic(configPath, content);
     return { mode: 'file', path: configPath };
   }
@@ -851,8 +954,8 @@ export class DefaultHubService implements HubService {
         mode: 'managed',
         server: { host: '127.0.0.1', port: 3000 },
         artifact: normalizeArtifactConfig(this.options.config.artifact),
-        appDeploymentsDir: this.options.config.host.deploymentsDir,
-        appVolumesDir: this.options.config.host.volumesDir,
+        appDeploymentsDir: this.options.config.host.appDeploymentsDir,
+        appVolumesDir: this.options.config.host.appVolumesDir,
       },
     };
     await writeStructuredConfigAtomic(

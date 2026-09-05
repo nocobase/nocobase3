@@ -84,6 +84,14 @@ describe('@nocobase/app-plugin-hub API routes', () => {
       hasConfigTemplate: true,
     });
     expect(listBody.data[0]).not.toHaveProperty('configTemplate');
+    expect(Object.keys(listBody.data[0] ?? {}).sort()).toEqual([
+      'checksum',
+      'createdAt',
+      'hasConfigTemplate',
+      'id',
+      'size',
+      'version',
+    ]);
 
     const configResponse = await router.request(
       '/hub/apps/customer/releases/release-1/config-template',

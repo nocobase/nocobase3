@@ -130,6 +130,10 @@ interface ReleaseRecord {
   readonly createdAt: string;
 }
 interface DeploymentRecord {
+  readonly release: {
+    readonly version: string;
+    readonly checksum: string;
+  } | null;
   readonly id: string;
   readonly releaseId: string;
   readonly kind: 'deploy' | 'rollback';
@@ -140,14 +144,14 @@ interface DeploymentRecord {
   readonly cacheHit: boolean | null;
   readonly error: string | null;
   readonly createdAt: string;
-  readonly finishedAt: string | null;
 }
 interface AppDetail {
+  readonly hasReleases: boolean;
+  readonly hasPendingDeployment: boolean;
+  readonly currentVersion: string | null;
   readonly app: {
     readonly id: string;
     readonly name: string;
-    readonly description: string | null;
-    readonly createdAt: string;
     readonly updatedAt: string;
     readonly currentDeploymentId: string | null;
   };
@@ -155,17 +159,13 @@ interface AppDetail {
   readonly runtime: {
     readonly hostAvailable: boolean;
     readonly state: string;
-    readonly error: string | null;
   };
   readonly deployment: {
     readonly desiredReleaseId: string | null;
     readonly observedReleaseId: string | null;
-    readonly desiredState: string;
     readonly observedState: string;
     readonly activation: ActivationPolicy;
     readonly basePath: string;
-    readonly config: { readonly mode: string };
-    readonly error: string | null;
     readonly updatedAt: string;
   };
   readonly releases: readonly ReleaseRecord[];
@@ -174,6 +174,14 @@ interface AppDetail {
 interface ApiResponse<T> {
   readonly data: T;
 }
+interface AppSummary {
+  readonly app: AppDetail['app'];
+  readonly runtime: AppDetail['runtime'];
+  readonly currentVersion: string | null;
+  readonly hasReleases: boolean;
+  readonly hasPendingDeployment: boolean;
+}
+type AppOverview = Omit<AppDetail, 'releases' | 'deployments'>;
 interface ConfigResponse {
   readonly mode: 'file' | 'external';
   readonly content: string | null;
@@ -221,7 +229,14 @@ const TAB_LABELS: Readonly<Record<DetailTab, string>> = {
 
 export default function HubPage(): ReactElement {
   const client = useService(appApiClientToken);
-  const [apps, setApps] = useState<readonly AppDetail[]>([]);
+  const [apps, setApps] = useState<readonly AppSummary[]>([]);
+  const [detail, setDetail] = useState<AppOverview>();
+  const [releases, setReleases] = useState<readonly ReleaseRecord[]>([]);
+  const [deployments, setDeployments] = useState<readonly DeploymentRecord[]>(
+    [],
+  );
+  const [panelKey, setPanelKey] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
   const [tab, setTab] = useState<DetailTab>('deployments');
   const [view, setView] = useState<ViewMode>('grid');
@@ -240,6 +255,9 @@ export default function HubPage(): ReactElement {
   const [deployOpen, setDeployOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<
+    'start' | 'stop' | 'restart'
+  >();
   const [createOpen, setCreateOpen] = useState(false);
   const [newAppId, setNewAppId] = useState('');
   const [newAppName, setNewAppName] = useState('');
@@ -247,7 +265,13 @@ export default function HubPage(): ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
-  const selected = apps.find((entry) => entry.app.id === selectedId);
+  const selected = useMemo(
+    () =>
+      detail && detail.app.id === selectedId
+        ? { ...detail, releases, deployments }
+        : undefined,
+    [detail, selectedId, releases, deployments],
+  );
   const releaseId =
     selectedReleaseId ??
     selected?.deployment.desiredReleaseId ??
@@ -264,18 +288,42 @@ export default function HubPage(): ReactElement {
       : apps;
   }, [apps, query]);
 
-  const loadApps = useCallback(async (): Promise<void> => {
+  const loadApps = useCallback(async (): Promise<readonly AppSummary[]> => {
     const response =
-      await client.request<ApiResponse<readonly AppDetail[]>>('hub/apps');
+      await client.request<ApiResponse<readonly AppSummary[]>>('hub/apps');
     setApps(response.data);
+    return response.data;
   }, [client]);
+  const loadDetail = useCallback(async (): Promise<void> => {
+    if (!selectedId) return;
+    const response = await client.request<ApiResponse<AppOverview>>(
+      `hub/apps/${selectedId}`,
+    );
+    setDetail(response.data);
+  }, [client, selectedId]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedId) return;
+    void client
+      .request<ApiResponse<AppOverview>>(`hub/apps/${selectedId}`)
+      .then((response) => {
+        if (!cancelled) setDetail(response.data);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(readError(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, selectedId]);
   const loadConfig = useCallback(
-    async (appId: string): Promise<void> => {
+    async (appId: string): Promise<ConfigResponse> => {
       const response = await client.request<ApiResponse<ConfigResponse>>(
         `hub/apps/${appId}/config`,
       );
       setConfigMode(response.data.mode);
       setConfigContent(response.data.content ?? '');
+      return response.data;
     },
     [client],
   );
@@ -299,32 +347,65 @@ export default function HubPage(): ReactElement {
       .finally(() => setLoading(false));
   }, [loadApps]);
   useEffect(() => {
-    const pending = apps.some((app) =>
-      app.deployments.some(
-        (item) => item.status === 'queued' || item.status === 'deploying',
-      ),
-    );
+    const pending = selectedId
+      ? selected?.hasPendingDeployment
+      : apps.some((app) => app.hasPendingDeployment);
     if (!pending) return;
-    const timer = window.setInterval(() => {
-      void loadApps().catch((reason: unknown) => setError(readError(reason)));
+    const timer = window.setTimeout(() => {
+      void (
+        selectedId
+          ? loadDetail().then(() => {
+              if (tab === 'deployments')
+                setRefreshVersion((value) => value + 1);
+            })
+          : loadApps()
+      ).catch((reason: unknown) => setError(readError(reason)));
     }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [apps, loadApps]);
+    return () => window.clearTimeout(timer);
+  }, [apps, selected, selectedId, loadApps, loadDetail, tab]);
   useEffect(() => {
     if (!selectedAppId) return;
-    // Configuration loading is an intentional external synchronization boundary.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadConfig(selectedAppId).catch((reason: unknown) =>
-      setError(readError(reason)),
-    );
-  }, [loadConfig, selectedAppId, selectedCurrentDeploymentId]);
+    let cancelled = false;
+    const key = `${selectedAppId}:${tab}:${refreshVersion}:${selectedCurrentDeploymentId}`;
+    const load = async (): Promise<void> => {
+      if (tab === 'deployments') {
+        const response = await client.request<
+          ApiResponse<readonly DeploymentRecord[]>
+        >(`hub/apps/${selectedAppId}/deployments`);
+        if (!cancelled) setDeployments(response.data);
+      } else if (tab === 'releases') {
+        const response = await client.request<
+          ApiResponse<readonly ReleaseRecord[]>
+        >(`hub/apps/${selectedAppId}/releases`);
+        if (!cancelled) setReleases(response.data);
+      } else if (tab === 'configuration' || tab === 'resources') {
+        const response = await client.request<ApiResponse<ConfigResponse>>(
+          `hub/apps/${selectedAppId}/config`,
+        );
+        if (!cancelled) {
+          setConfigMode(response.data.mode);
+          setConfigContent(response.data.content ?? '');
+        }
+      }
+      if (!cancelled) setPanelKey(key);
+    };
+    void load().catch((reason: unknown) => {
+      if (!cancelled) setError(readError(reason));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, tab, selectedAppId, selectedCurrentDeploymentId, refreshVersion]);
 
   const perform = async (work: () => Promise<void>): Promise<void> => {
     setBusy(true);
     setError(undefined);
     try {
       await work();
-      await loadApps();
+      const summaries = await loadApps();
+      if (summaries.some((app) => app.app.id === selectedId))
+        await loadDetail();
+      setRefreshVersion((value) => value + 1);
     } catch (reason) {
       setError(readError(reason));
     } finally {
@@ -333,13 +414,17 @@ export default function HubPage(): ReactElement {
   };
   const selectApp = (id: string, hasReleases?: boolean): void => {
     const app = apps.find((entry) => entry.app.id === id);
+    setDetail(undefined);
+    setReleases([]);
+    setDeployments([]);
+    setPanelKey('');
     setSelectedId(id);
     setSelectedReleaseId(undefined);
-    const releases = hasReleases ?? Boolean(app?.releases.length);
+    const releases = hasReleases ?? Boolean(app?.hasReleases);
     setTab(
       !releases
         ? 'development'
-        : app?.deployments.length
+        : app?.app.currentDeploymentId
           ? 'deployments'
           : 'releases',
     );
@@ -351,7 +436,18 @@ export default function HubPage(): ReactElement {
         {error ? (
           <ErrorBanner message={error} onClose={() => setError(undefined)} />
         ) : null}
-        {!selected ? (
+        {selectedId && !selected ? (
+          <div
+            role='status'
+            className='flex items-center gap-2 py-8 text-muted-foreground'
+          >
+            <LoaderCircle className='size-4 animate-spin' />
+            Loading application…
+            <Button variant='ghost' onClick={() => setSelectedId(undefined)}>
+              Back
+            </Button>
+          </div>
+        ) : !selected ? (
           <Catalog
             apps={filtered}
             total={apps.length}
@@ -366,12 +462,21 @@ export default function HubPage(): ReactElement {
         ) : (
           <Detail
             app={selected}
+            panelLoading={
+              panelKey !==
+              `${selectedAppId}:${tab}:${refreshVersion}:${selectedCurrentDeploymentId}`
+            }
             tab={tab}
             release={release}
             configMode={configMode}
             configContent={configContent}
             busy={busy}
-            onBack={() => setSelectedId(undefined)}
+            onBack={() => {
+              setSelectedId(undefined);
+              void loadApps().catch((reason: unknown) =>
+                setError(readError(reason)),
+              );
+            }}
             onTab={setTab}
             onRelease={setSelectedReleaseId}
             onRefresh={() =>
@@ -381,13 +486,8 @@ export default function HubPage(): ReactElement {
                 });
               })
             }
-            onStart={() =>
-              void perform(async () => {
-                await client.request(`hub/apps/${selected.app.id}/start`, {
-                  method: 'POST',
-                });
-              })
-            }
+            onStart={() => setLifecycleAction('start')}
+            onRestart={() => setLifecycleAction('restart')}
             onSaveSettings={(activation) =>
               void perform(async () => {
                 await client.request(`hub/apps/${selected.app.id}/settings`, {
@@ -408,26 +508,32 @@ export default function HubPage(): ReactElement {
               })
             }
             onRemove={() => setRemoveOpen(true)}
-            onStop={() =>
-              void perform(async () => {
-                await client.request(`hub/apps/${selected.app.id}/stop`, {
-                  method: 'POST',
-                });
-              })
-            }
+            onStop={() => setLifecycleAction('stop')}
             onDeploy={() => {
-              if (!releaseId) return;
               setBusy(true);
               setError(undefined);
-              void loadReleaseConfig(selected.app.id, releaseId)
-                .then((template) => {
-                  setDeploymentReleaseId(releaseId);
-                  setDeploymentMode(template !== null ? 'file' : configMode);
-                  setDeploymentContent(
-                    template ?? (configMode === 'file' ? configContent : ''),
+              void Promise.all([
+                client.request<ApiResponse<readonly ReleaseRecord[]>>(
+                  `hub/apps/${selected.app.id}/releases`,
+                ),
+                loadConfig(selected.app.id),
+              ])
+                .then(async ([response, config]) => {
+                  setReleases(response.data);
+                  const targetId = releaseId ?? response.data[0]?.id;
+                  if (!targetId) return;
+                  const template = await loadReleaseConfig(
+                    selected.app.id,
+                    targetId,
                   );
-                  setDeploymentBaseline(configContent);
-                  setDeploymentBaselineMode(configMode);
+                  setDeploymentReleaseId(targetId);
+                  setDeploymentMode(template !== null ? 'file' : config.mode);
+                  setDeploymentContent(
+                    template ??
+                      (config.mode === 'file' ? (config.content ?? '') : ''),
+                  );
+                  setDeploymentBaseline(config.content ?? '');
+                  setDeploymentBaselineMode(config.mode);
                   setRollbackDeploymentId(undefined);
                   setDeployOpen(true);
                 })
@@ -441,17 +547,24 @@ export default function HubPage(): ReactElement {
               if (!target) return;
               setBusy(true);
               setError(undefined);
-              void loadReleaseConfig(selected.app.id, target.releaseId)
-                .then((template) => {
+              void Promise.all([
+                loadReleaseConfig(selected.app.id, target.releaseId),
+                loadConfig(selected.app.id),
+                client.request<ApiResponse<ReleaseRecord>>(
+                  `hub/apps/${selected.app.id}/releases/${target.releaseId}`,
+                ),
+              ])
+                .then(([template, config, release]) => {
+                  setReleases([release.data]);
                   setDeploymentReleaseId(target.releaseId);
                   setDeploymentMode(target.config.mode);
                   setDeploymentContent(
                     target.config.mode === 'file'
-                      ? (template ?? configContent)
+                      ? (template ?? config.content ?? '')
                       : '',
                   );
-                  setDeploymentBaseline(configContent);
-                  setDeploymentBaselineMode(configMode);
+                  setDeploymentBaseline(config.content ?? '');
+                  setDeploymentBaselineMode(config.mode);
                   setRollbackDeploymentId(deploymentId);
                   setDeployOpen(true);
                 })
@@ -483,6 +596,51 @@ export default function HubPage(): ReactElement {
             })
           }
         />
+      ) : null}
+      {lifecycleAction && selected ? (
+        <AppDialog
+          title={`${lifecycleAction === 'start' ? 'Start' : lifecycleAction === 'stop' ? 'Stop' : 'Restart'} ${selected.app.name}?`}
+          description={
+            lifecycleAction === 'start'
+              ? 'Start this application using its current release and configuration.'
+              : lifecycleAction === 'stop'
+                ? 'This application will be unavailable until you start it again. Its deployment and data will be retained.'
+                : 'Stop and start this application using its current release and configuration. Access will be briefly interrupted; other applications will not be restarted.'
+          }
+          onClose={() => {
+            if (!busy) setLifecycleAction(undefined);
+          }}
+        >
+          <div className='mt-6 flex justify-end gap-2'>
+            <Button
+              variant='outline'
+              disabled={busy}
+              onClick={() => setLifecycleAction(undefined)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={busy}
+              variant={lifecycleAction === 'stop' ? 'destructive' : 'default'}
+              onClick={() =>
+                void perform(async () => {
+                  await client.request(
+                    `hub/apps/${selected.app.id}/${lifecycleAction}`,
+                    { method: 'POST' },
+                  );
+                  setLifecycleAction(undefined);
+                })
+              }
+            >
+              {busy ? <LoaderCircle className='size-4 animate-spin' /> : null}
+              {lifecycleAction === 'start'
+                ? 'Start'
+                : lifecycleAction === 'stop'
+                  ? 'Stop'
+                  : 'Restart'}
+            </Button>
+          </div>
+        </AppDialog>
       ) : null}
       {deployOpen && selected ? (
         <DeploymentDialog
@@ -590,7 +748,7 @@ function Catalog({
   onCreate,
   onSelect,
 }: {
-  readonly apps: readonly AppDetail[];
+  readonly apps: readonly AppSummary[];
   readonly total: number;
   readonly loading: boolean;
   readonly query: string;
@@ -710,10 +868,10 @@ function AppCard({
   app,
   onClick,
 }: {
-  readonly app: AppDetail;
+  readonly app: AppSummary;
   readonly onClick: () => void;
 }): ReactElement {
-  const active = findRelease(app, app.deployment.observedReleaseId);
+  const version = app.currentVersion;
   return (
     <Card className='group relative overflow-hidden p-0 transition hover:border-primary/40 hover:shadow-md'>
       <Button
@@ -734,14 +892,14 @@ function AppCard({
         </CardHeader>
         <CardContent className='flex items-center gap-2 px-3.5 pt-1 pb-3 text-[11px] text-muted-foreground'>
           <span className='font-medium text-foreground'>
-            {active ? `v${active.version}` : 'Not deployed'}
+            {version ? `v${version}` : 'Not deployed'}
           </span>
           <span aria-hidden='true'>·</span>
-          <span>{formatDate(app.deployment.updatedAt)}</span>
+          <span>{formatDate(app.app.updatedAt)}</span>
         </CardContent>
       </Button>
       <div className='pointer-events-none absolute top-4 right-4'>
-        <StatusBadge state={app.deployment.observedState} />
+        <StatusBadge state={app.runtime.state} />
       </div>
       <ChevronRight className='pointer-events-none absolute right-3 bottom-3 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
     </Card>
@@ -751,10 +909,10 @@ function AppListRow({
   app,
   onClick,
 }: {
-  readonly app: AppDetail;
+  readonly app: AppSummary;
   readonly onClick: () => void;
 }): ReactElement {
-  const active = findRelease(app, app.deployment.observedReleaseId);
+  const version = app.currentVersion;
   return (
     <TableRow className='cursor-pointer' onClick={onClick}>
       <TableCell>
@@ -769,10 +927,10 @@ function AppListRow({
         </div>
       </TableCell>
       <TableCell>
-        <StatusBadge state={app.deployment.observedState} />
+        <StatusBadge state={app.runtime.state} />
       </TableCell>
       <TableCell className='text-sm text-muted-foreground'>
-        {active ? `v${active.version}` : 'Not deployed'}
+        {version ? `v${version}` : 'Not deployed'}
       </TableCell>
       <TableCell>
         <Button
@@ -792,6 +950,7 @@ function AppListRow({
 }
 
 function Detail({
+  panelLoading,
   app,
   tab,
   release,
@@ -803,6 +962,7 @@ function Detail({
   onRelease,
   onRefresh,
   onStart,
+  onRestart,
   onSaveSettings,
   onSaveConfiguration,
   onRemove,
@@ -811,6 +971,7 @@ function Detail({
   onRollback,
   onUpload,
 }: {
+  readonly panelLoading: boolean;
   readonly app: AppDetail;
   readonly tab: DetailTab;
   readonly release: ReleaseRecord | undefined;
@@ -822,6 +983,7 @@ function Detail({
   readonly onRelease: (id: string) => void;
   readonly onRefresh: () => void;
   readonly onStart: () => void;
+  readonly onRestart: () => void;
   readonly onSaveSettings: (activation: ActivationPolicy) => void;
   readonly onSaveConfiguration: (content: string) => void;
   readonly onRemove: () => void;
@@ -832,7 +994,7 @@ function Detail({
 }): ReactElement {
   const deployed = hasDeployment(app);
   const detailTabs: readonly DetailTab[] = [
-    ...(app.releases.length === 0 ? (['development'] as const) : []),
+    ...(!app.hasReleases ? (['development'] as const) : []),
     'deployments',
     'releases',
     'resources',
@@ -841,18 +1003,17 @@ function Detail({
   ];
   const activeTab = detailTabs.includes(tab)
     ? tab
-    : app.releases.length === 0
+    : !app.hasReleases
       ? 'development'
-      : app.deployments.length
+      : deployed
         ? 'deployments'
         : 'releases';
   const visitUrl = applicationUrl(app);
   const running = app.deployment.observedState === 'running';
   const registered = app.deployment.observedState === 'registered';
-  const transitioning = app.deployments.some(
-    (item) => item.status === 'queued' || item.status === 'deploying',
-  );
-  const activeRelease = findRelease(app, app.deployment.observedReleaseId);
+  const transitioning =
+    app.hasPendingDeployment ||
+    ['starting', 'stopping', 'pending'].includes(app.runtime.state);
   return (
     <>
       <Button
@@ -883,8 +1044,8 @@ function Detail({
                     <span>
                       Release{' '}
                       <strong className='font-medium text-foreground'>
-                        {activeRelease
-                          ? `v${activeRelease.version}`
+                        {app.currentVersion
+                          ? `v${app.currentVersion}`
                           : 'Not deployed'}
                       </strong>
                     </span>
@@ -924,14 +1085,29 @@ function Detail({
                   </Button>
                 )}
                 <Button
-                  disabled={busy || !deployed || running || transitioning}
-                  onClick={onStart}
+                  disabled={
+                    busy ||
+                    !deployed ||
+                    !app.runtime.hostAvailable ||
+                    transitioning
+                  }
+                  onClick={running ? onRestart : onStart}
                   variant='outline'
                 >
-                  <Play className='size-4' /> Start
+                  {running ? (
+                    <RefreshCw className='size-4' />
+                  ) : (
+                    <Play className='size-4' />
+                  )}{' '}
+                  {running ? 'Restart' : 'Start'}
                 </Button>
                 <Button
-                  disabled={busy || !running}
+                  disabled={
+                    busy ||
+                    !running ||
+                    !app.runtime.hostAvailable ||
+                    transitioning
+                  }
                   onClick={onStop}
                   variant='outline'
                 >
@@ -948,50 +1124,62 @@ function Detail({
             </TabsList>
           </header>
           <div className='p-6'>
-            <TabsContent value='deployments'>
-              <Deployments
-                app={app}
-                busy={busy || transitioning}
-                onDeploy={onDeploy}
-                onRollback={onRollback}
-              />
-            </TabsContent>
-            <TabsContent value='releases'>
-              <Releases
-                app={app}
-                selected={release?.id}
-                onSelect={onRelease}
-                onUpload={onUpload}
-              />
-            </TabsContent>
-            {app.releases.length === 0 ? (
-              <TabsContent value='development'>
-                <Development appId={app.app.id} />
-              </TabsContent>
-            ) : null}
-            <TabsContent value='resources'>
-              <Resources mode={configMode} content={configContent} />
-            </TabsContent>
-            {deployed ? (
-              <TabsContent value='configuration'>
-                <Configuration
-                  key={`${app.app.id}:${app.app.currentDeploymentId}`}
-                  mode={configMode}
-                  content={configContent}
-                  busy={busy || transitioning}
-                  onSave={onSaveConfiguration}
-                />
-              </TabsContent>
-            ) : null}
-            <TabsContent value='settings'>
-              <Settings
-                key={app.deployment.activation}
-                activation={app.deployment.activation}
-                busy={busy}
-                onSave={onSaveSettings}
-                onRemove={onRemove}
-              />
-            </TabsContent>
+            {panelLoading ? (
+              <div
+                role='status'
+                className='flex items-center gap-2 text-muted-foreground'
+              >
+                <LoaderCircle className='size-4 animate-spin' />
+                Loading…
+              </div>
+            ) : (
+              <>
+                <TabsContent value='deployments'>
+                  <Deployments
+                    app={app}
+                    busy={busy || transitioning}
+                    onDeploy={onDeploy}
+                    onRollback={onRollback}
+                  />
+                </TabsContent>
+                <TabsContent value='releases'>
+                  <Releases
+                    app={app}
+                    selected={release?.id}
+                    onSelect={onRelease}
+                    onUpload={onUpload}
+                  />
+                </TabsContent>
+                {!app.hasReleases ? (
+                  <TabsContent value='development'>
+                    <Development appId={app.app.id} />
+                  </TabsContent>
+                ) : null}
+                <TabsContent value='resources'>
+                  <Resources mode={configMode} content={configContent} />
+                </TabsContent>
+                {deployed ? (
+                  <TabsContent value='configuration'>
+                    <Configuration
+                      key={`${app.app.id}:${app.app.currentDeploymentId}`}
+                      mode={configMode}
+                      content={configContent}
+                      busy={busy || transitioning}
+                      onSave={onSaveConfiguration}
+                    />
+                  </TabsContent>
+                ) : null}
+                <TabsContent value='settings'>
+                  <Settings
+                    key={app.deployment.activation}
+                    activation={app.deployment.activation}
+                    busy={busy}
+                    onSave={onSaveSettings}
+                    onRemove={onRemove}
+                  />
+                </TabsContent>
+              </>
+            )}
           </div>
         </Tabs>
       </section>
@@ -1017,10 +1205,7 @@ function Deployments({
         title='No deployments yet'
         description='Deploy a release to create the first deployment.'
         action={
-          <Button
-            disabled={busy || app.releases.length === 0}
-            onClick={onDeploy}
-          >
+          <Button disabled={busy || !app.hasReleases} onClick={onDeploy}>
             <Play className='size-4' /> Deploy
           </Button>
         }
@@ -1037,7 +1222,7 @@ function Deployments({
             deployment using the selected release and configuration.
           </p>
         </div>
-        <Button disabled={busy || app.releases.length === 0} onClick={onDeploy}>
+        <Button disabled={busy || !app.hasReleases} onClick={onDeploy}>
           <Play className='size-4' /> Deploy
         </Button>
       </div>
@@ -1056,7 +1241,7 @@ function Deployments({
           </TableHeader>
           <TableBody>
             {app.deployments.map((deployment) => {
-              const deployedRelease = findRelease(app, deployment.releaseId);
+              const deployedRelease = deployment.release;
               const current = deployment.id === app.app.currentDeploymentId;
               return (
                 <TableRow
@@ -2622,12 +2807,6 @@ function StatusBadge({ state }: { readonly state: string }): ReactElement {
       {stateLabel(state)}
     </Badge>
   );
-}
-function findRelease(
-  app: AppDetail,
-  id: string | null,
-): ReleaseRecord | undefined {
-  return app.releases.find((item) => item.id === id);
 }
 function applicationUrl(app: AppDetail): string | null {
   if (!app.hostUrl || !hasDeployment(app)) return null;
