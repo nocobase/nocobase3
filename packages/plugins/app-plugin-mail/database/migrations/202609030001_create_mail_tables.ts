@@ -113,9 +113,12 @@ const migration: MigrationDefinition = defineMigration({
       collection.index(['accountId', 'sortAt', 'id'], {
         name: 'mail_messages_account_sort_idx',
       });
-      collection.index(['accountId', 'providerConversationId'], {
-        name: 'mail_messages_account_conversation_idx',
-      });
+      collection.index(
+        ['accountId', 'providerConversationId', 'sortAt', 'id'],
+        {
+          name: 'mail_messages_account_conversation_idx',
+        },
+      );
     });
 
     await builder.createCollection('mailMessageFolders', (collection) => {

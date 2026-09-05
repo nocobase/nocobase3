@@ -197,6 +197,7 @@ describe('Mail client components', () => {
     );
 
     expect(screen.getByText(/Hello team/)).toBeInTheDocument();
+    expect(screen.queryByText(/bad\(\)/)).not.toBeInTheDocument();
     expect(document.querySelector('script')).not.toBeInTheDocument();
   });
 });

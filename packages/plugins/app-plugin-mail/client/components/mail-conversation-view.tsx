@@ -103,11 +103,15 @@ function plainMessageBody(message: MailMessage): string {
   if (!message.html) return '';
   if (typeof DOMParser === 'undefined') {
     return message.html
+      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
       .replace(/<[^>]*>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
   }
   const document = new DOMParser().parseFromString(message.html, 'text/html');
+  for (const element of document.querySelectorAll('script, style')) {
+    element.remove();
+  }
   return document.body.textContent?.trim() ?? '';
 }
 

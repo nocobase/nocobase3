@@ -80,6 +80,8 @@ export default function MailWorkspacePage(): ReactElement {
           setSelected(undefined);
           setConversation([]);
           setConversationCursor(undefined);
+          setLoadingMessages(false);
+          setLoadingConversation(false);
         }
       })
       .catch(requestError)
@@ -133,6 +135,7 @@ export default function MailWorkspacePage(): ReactElement {
       .then(() => {
         if (messageRequestIdRef.current !== requestId) return undefined;
         setLoadingMessages(true);
+        setLoadingConversation(false);
         setError(undefined);
         return mail.listMessages(messageQuery);
       })
@@ -297,6 +300,7 @@ export default function MailWorkspacePage(): ReactElement {
               folders: t('workspace.folders', { defaultValue: 'Folders' }),
             }}
             onAccountChange={(value) => {
+              if (value === accountId) return;
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
               accountIdRef.current = value;
@@ -305,11 +309,13 @@ export default function MailWorkspacePage(): ReactElement {
               setSmartView('all');
             }}
             onFolderChange={(value) => {
+              if (value === folderId) return;
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
               setFolderId(value);
             }}
             onSmartViewChange={(value) => {
+              if (value === smartView) return;
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
               setSmartView(value);

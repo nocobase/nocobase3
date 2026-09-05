@@ -233,7 +233,7 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
 function isWorkspaceReadRequest(method: string, path: string): boolean {
   if (method !== 'GET') return false;
-  const mailPath = path.slice(path.indexOf('/mail'));
+  const mailPath = path.slice(path.lastIndexOf('/mail'));
   return (
     mailPath === '/mail/accounts' ||
     mailPath === '/mail/messages' ||

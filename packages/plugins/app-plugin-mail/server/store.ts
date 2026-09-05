@@ -1591,8 +1591,11 @@ function parseMessageCursor(
     if (
       typeof value.sortAt !== 'string' ||
       value.sortAt.length === 0 ||
+      Number.isNaN(Date.parse(value.sortAt)) ||
       typeof value.id !== 'string' ||
-      value.id.length === 0
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value.id,
+      )
     ) {
       throw new TypeError('Mail page cursor is invalid.');
     }
