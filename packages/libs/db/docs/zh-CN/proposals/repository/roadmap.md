@@ -5,14 +5,14 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 
 # Repository 后续能力路线
 
-> **状态：规划中。** 本文只冻结实现顺序和各阶段的 V1 边界；复杂能力在进入对应阶段前再补充针对性设计。
+> **状态：V1 路线已完成。** 本文记录实现顺序、已交付边界和暂不纳入 V1 的能力。
 
 ## 实现顺序
 
 | 阶段 | 能力                     | V1 边界                                                                                                                                         |
 | ---: | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 |    1 | 标量 Select 返回类型推导 | 已实现：Builder 的直接标量 `fields()` 推导 `findMany()`、`findOne()`、`createOne()` 和 `updateOne()` 返回类型；动态 Select AST 保持完整记录类型 |
-|    2 | Delete returning/select  | 已实现：`deleteOne()` 通过 `select` 返回删除前快照；批量删除 returning 留到阶段 4                                                               |
+|    2 | Delete returning/select  | 已实现：`deleteOne()` 通过 `select` 返回删除前快照；`deleteMany()` returning 已在阶段 4 完成                                                    |
 |    3 | 根级 `upsertOne()`       | 已实现：基于主键或唯一约束执行 create/update，支持关系 values、optimistic lock 和并发创建冲突重试                                               |
 |    4 | 批量 mutation returning  | 已实现：显式 `select` 时返回 `records`；create 保持输入顺序，update/delete 按 mutation 前主键排序，省略时保持 count 快路径                      |
 |    5 | Aggregate                | 已实现：根级 `count`、`sum`、`avg`、`min`、`max` Builder 与 JSON AST；固定空集合、精度和 filter 输入集合规则                                    |
