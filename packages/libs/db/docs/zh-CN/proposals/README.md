@@ -18,3 +18,4 @@ description: 收录尚未实现或导出的 DB 设计提案；不得把提案接
 - [Sort AST](./repository/sort-ast.md)
 - [Mutation AST](./repository/mutation-ast.md)
 - [表单到 Mutation AST](./repository/form-mutation.md)
+- [Repository 写入 API 改进](./repository/prisma-inspired-mutations.md)：参考 Prisma 的模型形状输入和 Relation Builder，讨论下一版候选契约。

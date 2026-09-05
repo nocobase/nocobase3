@@ -477,6 +477,10 @@ Mutation AST 的节点、唯一选择器、Fluent Builder、有界嵌套、Agent
 [Mutation AST](./mutation-ast.md)。大表单的前端编译流程见
 [表单到 Mutation AST](./form-mutation.md)。
 
+下一版将标量值和字段级 Relation Builder 合并到同一个 `values` 对象、统一使用严格基数
+`filter` 的候选方案，见 [Repository 写入 API 改进提案](./prisma-inspired-mutations.md)。该方案
+尚未实现，不替代本页记录的 V1 契约。
+
 `describeMutation()` 和 `validateMutation()` 是关系 Mutation AST 的发现与预校验入口，
 因此 V1 的 `operation` 只包含支持 `relations` 的 `createOne` 和 `updateOne`，不泛化成六种
 CRUD 方法的第二套执行 API。

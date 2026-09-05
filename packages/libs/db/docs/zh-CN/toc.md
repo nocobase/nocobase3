@@ -164,6 +164,7 @@ description: 按当前用法、任务、开发维护、内部实现、未来提�
 - [Sort AST 提案](./proposals/repository/sort-ast.md)：候选的排序表达模型。
 - [Mutation AST 提案](./proposals/repository/mutation-ast.md)：候选的精简关系写入、Fluent Builder 和 Agent 协议。
 - [表单到 Mutation AST 提案](./proposals/repository/form-mutation.md)：将前端大表单变化编译为 Repository mutation。
+- [Repository 写入 API 改进提案](./proposals/repository/prisma-inspired-mutations.md)：参考 Prisma 的模型形状输入和字段级 Relation Builder，讨论下一版写入契约。
 
 ## 历史归档
 
