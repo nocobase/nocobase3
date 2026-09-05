@@ -36,9 +36,7 @@ describe('application shell', () => {
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
-    expect(
-      screen.getByRole('button', { name: /Switch to .* theme/ }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
@@ -92,9 +90,7 @@ describe('application shell', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Application navigation' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Switch to .* theme/ }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
 });
 

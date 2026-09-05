@@ -15,8 +15,8 @@
         width: 100%;
         align-items: center;
         justify-content: center;
-        background: oklch(0.985 0 0);
-        color: oklch(0.18 0 0);
+        background: var(--background);
+        color: var(--foreground);
       }
 
       .portal-bootstrap-loading [data-slot='loading-indicator'] {
@@ -42,13 +42,6 @@
       @keyframes portal-bootstrap-reveal {
         to {
           opacity: 1;
-        }
-      }
-
-      @media (prefers-color-scheme: dark) {
-        .portal-bootstrap-loading {
-          background: oklch(0.145 0 0);
-          color: oklch(0.9 0 0);
         }
       }
 

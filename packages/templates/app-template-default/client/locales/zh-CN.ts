@@ -1,6 +1,15 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  appearance: {
+    title: '外观',
+    mode: '颜色模式',
+    preset: '主题',
+    light: '浅色',
+    dark: '深色',
+    system: '跟随系统',
+    themes: { default: '默认', ocean: '海洋' },
+  },
   app: {
     title: 'NocoBase',
   },

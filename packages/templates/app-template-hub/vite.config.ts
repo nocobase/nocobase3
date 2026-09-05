@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'path';
 
 import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
+import { themeBootstrap } from './scripts/theme-bootstrap.js';
 
 const portalTemplate = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
@@ -81,6 +82,7 @@ export default createPortalViteConfig(({ command }) => {
     define: defineEnv,
     envPrefix: ['VITE_'],
     plugins: [
+      themeBootstrap(__dirname, viteBase),
       ...(annotationsEnabled
         ? [
             agentAnnotations({
