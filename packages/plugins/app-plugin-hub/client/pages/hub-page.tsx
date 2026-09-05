@@ -146,6 +146,7 @@ interface DeploymentRecord {
   readonly createdAt: string;
 }
 interface AppDetail {
+  readonly enabled: boolean;
   readonly hasReleases: boolean;
   readonly hasPendingDeployment: boolean;
   readonly currentVersion: string | null;
@@ -263,6 +264,7 @@ export default function HubPage(): ReactElement {
   const [newAppName, setNewAppName] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshingApps, setRefreshingApps] = useState(false);
   const [error, setError] = useState<string>();
 
   const selected = useMemo(
@@ -340,29 +342,27 @@ export default function HubPage(): ReactElement {
   const selectedCurrentDeploymentId = selected?.app.currentDeploymentId;
 
   useEffect(() => {
-    // Initial loading synchronizes the page with the Hub service.
+    if (selectedId) return;
+    // Load the catalog only while it is visible.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadApps()
       .catch((reason: unknown) => setError(readError(reason)))
       .finally(() => setLoading(false));
-  }, [loadApps]);
+  }, [loadApps, selectedId]);
   useEffect(() => {
-    const pending = selectedId
-      ? selected?.hasPendingDeployment
-      : apps.some((app) => app.hasPendingDeployment);
+    if (!selectedId) return;
+    const pending =
+      selected?.hasPendingDeployment || selected?.runtime.state === 'pending';
     if (!pending) return;
     const timer = window.setTimeout(() => {
-      void (
-        selectedId
-          ? loadDetail().then(() => {
-              if (tab === 'deployments')
-                setRefreshVersion((value) => value + 1);
-            })
-          : loadApps()
-      ).catch((reason: unknown) => setError(readError(reason)));
+      void loadDetail()
+        .then(() => {
+          if (tab === 'deployments') setRefreshVersion((value) => value + 1);
+        })
+        .catch((reason: unknown) => setError(readError(reason)));
     }, 1_500);
     return () => window.clearTimeout(timer);
-  }, [apps, selected, selectedId, loadApps, loadDetail, tab]);
+  }, [selected, selectedId, loadDetail, tab]);
   useEffect(() => {
     if (!selectedAppId) return;
     let cancelled = false;
@@ -397,14 +397,15 @@ export default function HubPage(): ReactElement {
     };
   }, [client, tab, selectedAppId, selectedCurrentDeploymentId, refreshVersion]);
 
-  const perform = async (work: () => Promise<void>): Promise<void> => {
+  const perform = async (
+    work: () => Promise<void>,
+    refreshDetail: boolean = true,
+  ): Promise<void> => {
     setBusy(true);
     setError(undefined);
     try {
       await work();
-      const summaries = await loadApps();
-      if (summaries.some((app) => app.app.id === selectedId))
-        await loadDetail();
+      if (refreshDetail && selectedId) await loadDetail();
       setRefreshVersion((value) => value + 1);
     } catch (reason) {
       setError(readError(reason));
@@ -452,6 +453,14 @@ export default function HubPage(): ReactElement {
             apps={filtered}
             total={apps.length}
             loading={loading}
+            refreshing={refreshingApps}
+            onRefresh={() => {
+              setRefreshingApps(true);
+              setError(undefined);
+              void loadApps()
+                .catch((reason: unknown) => setError(readError(reason)))
+                .finally(() => setRefreshingApps(false));
+            }}
             query={query}
             view={view}
             onQuery={setQuery}
@@ -473,9 +482,6 @@ export default function HubPage(): ReactElement {
             busy={busy}
             onBack={() => {
               setSelectedId(undefined);
-              void loadApps().catch((reason: unknown) =>
-                setError(readError(reason)),
-              );
             }}
             onTab={setTab}
             onRelease={setSelectedReleaseId}
@@ -593,7 +599,7 @@ export default function HubPage(): ReactElement {
               setNewAppId('');
               setNewAppName('');
               setCreateOpen(false);
-            })
+            }, false)
           }
         />
       ) : null}
@@ -729,7 +735,7 @@ export default function HubPage(): ReactElement {
               });
               setSelectedId(undefined);
               setRemoveOpen(false);
-            })
+            }, false)
           }
         />
       ) : null}
@@ -741,6 +747,8 @@ function Catalog({
   apps,
   total,
   loading,
+  refreshing,
+  onRefresh,
   query,
   view,
   onQuery,
@@ -751,6 +759,8 @@ function Catalog({
   readonly apps: readonly AppSummary[];
   readonly total: number;
   readonly loading: boolean;
+  readonly refreshing: boolean;
+  readonly onRefresh: () => void;
   readonly query: string;
   readonly view: ViewMode;
   readonly onQuery: (value: string) => void;
@@ -772,11 +782,8 @@ function Catalog({
             Create, deploy, and operate applications from a single workspace.
           </p>
         </div>
-        <Button onClick={onCreate}>
-          <Plus className='size-4' /> New application
-        </Button>
       </header>
-      <div className='mb-5 flex items-center gap-3'>
+      <div className='mb-5 flex flex-wrap items-center gap-3'>
         <label className='flex h-10 min-w-0 max-w-md flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
           <Search className='size-4 text-muted-foreground' />
           <Input
@@ -786,19 +793,33 @@ function Catalog({
             value={query}
           />
         </label>
-        <div className='flex h-10 items-center rounded-lg border bg-background p-1'>
-          <ViewButton
-            active={view === 'grid'}
-            label='Grid view'
-            onClick={() => onView('grid')}
-            icon={<Grid2X2 />}
-          />
-          <ViewButton
-            active={view === 'list'}
-            label='List view'
-            onClick={() => onView('list')}
-            icon={<List />}
-          />
+        <div className='ml-auto flex items-center gap-3'>
+          <div className='flex h-10 items-center rounded-lg border bg-background p-1'>
+            <ViewButton
+              active={view === 'grid'}
+              label='Grid view'
+              onClick={() => onView('grid')}
+              icon={<Grid2X2 />}
+            />
+            <ViewButton
+              active={view === 'list'}
+              label='List view'
+              onClick={() => onView('list')}
+              icon={<List />}
+            />
+          </div>
+          <Button
+            className='h-10'
+            variant='outline'
+            disabled={loading || refreshing}
+            onClick={onRefresh}
+          >
+            <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
+            Refresh
+          </Button>
+          <Button className='h-10' onClick={onCreate}>
+            <Plus className='size-4' /> New application
+          </Button>
         </div>
       </div>
       {loading ? (
@@ -1010,10 +1031,14 @@ function Detail({
         : 'releases';
   const visitUrl = applicationUrl(app);
   const running = app.deployment.observedState === 'running';
-  const registered = app.deployment.observedState === 'registered';
+  const visitAllowed =
+    app.runtime.hostAvailable &&
+    (running ||
+      (app.runtime.state === 'stopped' &&
+        app.enabled &&
+        app.deployment.activation === 'lazy'));
   const transitioning =
-    app.hasPendingDeployment ||
-    ['starting', 'stopping', 'pending'].includes(app.runtime.state);
+    app.hasPendingDeployment || app.runtime.state === 'pending';
   return (
     <>
       <Button
@@ -1068,7 +1093,7 @@ function Detail({
                   />{' '}
                   Refresh status
                 </Button>
-                {visitUrl && (running || registered) ? (
+                {visitUrl && visitAllowed ? (
                   <Button
                     className='cursor-pointer'
                     disabled={busy}
@@ -2796,13 +2821,13 @@ function StatusBadge({ state }: { readonly state: string }): ReactElement {
           ? 'bg-amber-500/10 text-amber-700'
           : state === 'succeeded'
             ? 'bg-emerald-500/10 text-emerald-700'
-            : state === 'registered'
+            : state === 'stopped'
               ? 'bg-sky-500/10 text-sky-700'
               : 'bg-muted text-muted-foreground';
   return (
     <Badge className={`self-center gap-1.5 whitespace-nowrap ${style}`}>
       <span
-        className={`size-1.5 rounded-full ${state === 'running' || state === 'succeeded' ? 'bg-emerald-500' : state === 'failed' ? 'bg-destructive' : state === 'pending' || state === 'queued' || state === 'deploying' ? 'bg-amber-500' : state === 'registered' ? 'bg-sky-500' : 'bg-slate-400'}`}
+        className={`size-1.5 rounded-full ${state === 'running' || state === 'succeeded' ? 'bg-emerald-500' : state === 'failed' ? 'bg-destructive' : state === 'pending' || state === 'queued' || state === 'deploying' ? 'bg-amber-500' : state === 'stopped' ? 'bg-sky-500' : 'bg-neutral-400'}`}
       />
       {stateLabel(state)}
     </Badge>
@@ -2857,8 +2882,6 @@ function initials(value: string): string {
     .toUpperCase();
 }
 function stateLabel(value: string): string {
-  if (value === 'registered') return 'Ready';
-  if (value === 'pending') return 'Updating';
   return value ? `${value[0]?.toUpperCase()}${value.slice(1)}` : 'Unknown';
 }
 function deploymentPhaseLabel(value: string): string {

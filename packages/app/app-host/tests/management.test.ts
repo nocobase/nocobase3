@@ -39,6 +39,54 @@ afterEach(async () => {
 });
 
 describe('managed host reconciliation', () => {
+  it('reports pending while startup is in progress and other Apps are queued', async () => {
+    const { deploymentsDir, volumesDir, artifact, artifactDir } =
+      await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: deploymentsDir,
+      appVolumesDir: volumesDir,
+      artifact: fsArtifact(artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const gate = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
+    const replace = host.registry.replaceDefinition.bind(host.registry);
+    vi.spyOn(host.registry, 'replaceDefinition').mockImplementationOnce(
+      async (...args) => {
+        entered.resolve();
+        await gate.promise;
+        return replace(...args);
+      },
+    );
+    const set = deploymentSet(1, artifact, { activation: 'eager' });
+    set.deployments.push({
+      ...set.deployments[0]!,
+      id: 'second',
+      appId: 'second',
+      artifact: { ...artifact, appId: 'second' },
+      basePath: '/second',
+    });
+    const pending = host.management.applyDeploymentSet(set);
+    try {
+      await Promise.race([entered.promise, pending]);
+      const status = await host.management.getStatus();
+      expect(status.deployments.map((item) => item.observedState)).toEqual([
+        'pending',
+        'pending',
+      ]);
+    } finally {
+      gate.resolve();
+      await pending;
+    }
+    expect(
+      (await host.management.getStatus()).deployments.every(
+        (item) => item.observedState === 'running',
+      ),
+    ).toBe(true);
+  });
+
   it('resolves a local artifact and reconciles eager, idempotent, and stopped states', async () => {
     const { deploymentsDir, volumesDir, artifact, artifactDir } =
       await createFixture();
@@ -175,7 +223,7 @@ describe('managed host reconciliation', () => {
     const repeated = await host.management.applyDeployment(deployment);
     expect(repeated.deployments[0]).toMatchObject({
       appId: 'customer',
-      observedState: 'registered',
+      observedState: 'stopped',
       cacheHit: true,
     });
     expect(host.registry.definition('customer')?.rootDir).toBe(
@@ -226,7 +274,7 @@ describe('managed host reconciliation', () => {
     const rollback = await host.management.applyDeployment(
       deploymentSet(1, fixture.artifact).deployments[0]!,
     );
-    expect(rollback.deployments[0]?.observedState).toBe('registered');
+    expect(rollback.deployments[0]?.observedState).toBe('stopped');
     expect(rollback.deployments[0]?.cacheHit).toBe(false);
     expect(host.registry.definition('customer')?.rootDir).toBe(
       revisionDirectory(deploymentsDir, fixture.artifact),
@@ -332,7 +380,7 @@ describe('managed host reconciliation', () => {
     const result = await host.management.applyDeploymentSet(
       deploymentSet(1, artifact),
     );
-    expect(result.status.deployments[0]?.observedState).toBe('registered');
+    expect(result.status.deployments[0]?.observedState).toBe('stopped');
     expect(host.registry.has('customer')).toBe(true);
     expect(host.registry.isActive('customer')).toBe(false);
     expect(host.registry.definition('customer')?.configPath).toBeUndefined();

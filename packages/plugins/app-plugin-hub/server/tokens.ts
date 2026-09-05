@@ -8,7 +8,7 @@ import {
 } from '@nocobase/service-provider';
 
 export type HubObservedState =
-  'registered' | 'running' | 'stopped' | 'failed' | 'unknown';
+  'pending' | 'running' | 'stopped' | 'failed' | 'unknown';
 export type HubDeploymentStatus =
   'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled';
 export type HubDeploymentPhase =

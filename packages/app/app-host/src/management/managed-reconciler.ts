@@ -83,7 +83,19 @@ export class ManagedReconciler {
       this.assertDeploymentIdentity(running);
       const revision = this.nextRevision();
       if (this.registry.has(deployment.appId)) {
-        const app = await this.registry.ensureActive(deployment.appId);
+        this.markPending(revision, running);
+        let app;
+        try {
+          app = await this.registry.ensureActive(deployment.appId);
+        } catch (error) {
+          const status = this.requireStatus(deployment.appId);
+          this.statuses.set(status.id, {
+            ...status,
+            observedState: 'failed',
+            error: rootErrorMessage(error),
+          });
+          throw error;
+        }
         this.statuses.set(deployment.id, {
           id: deployment.id,
           appId: deployment.appId,
@@ -152,7 +164,9 @@ export class ManagedReconciler {
               ? 'failed'
               : app
                 ? 'running'
-                : status.observedState,
+                : status.observedState === 'running'
+                  ? 'stopped'
+                  : status.observedState,
         } satisfies HostDeploymentStatus;
       })
       .sort((a, b) => a.id.localeCompare(b.id));
@@ -200,6 +214,11 @@ export class ManagedReconciler {
     if (accepted) {
       this.desiredRevision = deploymentSet.revision;
       this.lastSetPayload = setPayload;
+      for (const spec of deploymentSet.deployments) {
+        if (!this.statuses.has(spec.id) && spec.desiredState === 'running') {
+          this.markPending(deploymentSet.revision, spec);
+        }
+      }
       const desiredIds = new Set(
         deploymentSet.deployments.map((spec) => spec.id),
       );
@@ -241,6 +260,7 @@ export class ManagedReconciler {
       return;
     }
 
+    this.markPending(revision, spec);
     try {
       if (!this.registry.backendKinds().includes(spec.backend)) {
         throw new Error(
@@ -279,7 +299,7 @@ export class ManagedReconciler {
         id: spec.id,
         appId: spec.appId,
         desiredState: spec.desiredState,
-        observedState: result.app ? 'running' : 'registered',
+        observedState: result.app ? 'running' : 'stopped',
         revision,
         cacheHit: artifact.cacheHit,
         app: result.app,
@@ -297,6 +317,19 @@ export class ManagedReconciler {
         error: rootErrorMessage(error),
       });
     }
+  }
+
+  private markPending(revision: number, spec: HostDeploymentSpec): void {
+    this.statuses.set(spec.id, {
+      id: spec.id,
+      appId: spec.appId,
+      desiredState: spec.desiredState,
+      observedState: 'pending',
+      revision,
+      cacheHit: null,
+      app: this.registry.snapshot(spec.appId) ?? null,
+      error: null,
+    });
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {

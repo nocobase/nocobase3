@@ -44,7 +44,7 @@ export interface AppScope extends AppLifecycle {
   readonly dataDir?: string;
   /** Optional configuration file path supplied by the host. */
   readonly configPath?: string;
-  /** Fully resolved environment supplied by the host when available. */
+  /** Explicit configuration environment. Embedded Apps default to an empty map. */
   readonly env?: EnvMap;
   /** Fully resolved application paths supplied by the host when available. */
   readonly paths?: AppPathOptions;

@@ -19,6 +19,7 @@ interface AppSummaryResponse {
   hasPendingDeployment: boolean;
 }
 interface AppDetailResponse extends AppSummaryResponse {
+  enabled: boolean;
   deployment: Pick<
     HubAppDetail['deployment'],
     | 'desiredReleaseId'
@@ -72,6 +73,7 @@ export function appDetailResponse(value: HubAppDetail): AppDetailResponse {
   const deployment = value.deployment;
   return {
     ...appSummaryResponse(value),
+    enabled: value.app.enabled,
     deployment: {
       desiredReleaseId: deployment.desiredReleaseId,
       observedReleaseId: deployment.observedReleaseId,

@@ -36,7 +36,7 @@ export interface HostDeploymentSet {
 }
 
 export type DeploymentObservedState =
-  'registered' | 'running' | 'stopped' | 'failed';
+  'pending' | 'running' | 'stopped' | 'failed';
 
 export interface HostDeploymentStatus {
   id: string;
