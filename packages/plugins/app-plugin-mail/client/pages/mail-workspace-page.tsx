@@ -42,6 +42,7 @@ export default function MailWorkspacePage(): ReactElement {
   const [reloadVersion, setReloadVersion] = useState(0);
   const conversationRequestIdRef = useRef(0);
   const messageRequestIdRef = useRef(0);
+  const accountIdRef = useRef('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
 
   const requestError = useCallback(
@@ -62,12 +63,24 @@ export default function MailWorkspacePage(): ReactElement {
     void mail
       .listAccounts()
       .then((nextAccounts) => {
+        const nextAccountId = nextAccounts.some(
+          (account) => account.id === accountIdRef.current,
+        )
+          ? accountIdRef.current
+          : (nextAccounts[0]?.id ?? '');
         setAccounts(nextAccounts);
-        setAccountId((current) =>
-          nextAccounts.some((account) => account.id === current)
-            ? current
-            : (nextAccounts[0]?.id ?? ''),
-        );
+        if (nextAccountId !== accountIdRef.current) {
+          messageRequestIdRef.current += 1;
+          conversationRequestIdRef.current += 1;
+          accountIdRef.current = nextAccountId;
+          setAccountId(nextAccountId);
+          setFolders([]);
+          setMessages([]);
+          setNextCursor(undefined);
+          setSelected(undefined);
+          setConversation([]);
+          setConversationCursor(undefined);
+        }
       })
       .catch(requestError)
       .finally(() => setLoadingAccounts(false));
@@ -286,6 +299,7 @@ export default function MailWorkspacePage(): ReactElement {
             onAccountChange={(value) => {
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
+              accountIdRef.current = value;
               setAccountId(value);
               setFolderId(undefined);
               setSmartView('all');
