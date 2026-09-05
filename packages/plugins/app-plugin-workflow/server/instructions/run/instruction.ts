@@ -20,6 +20,7 @@ import {
   type WorkflowInstructionResult,
 } from '../base.js';
 import { logRunExecution } from '../../engine/inspector.js';
+import type { WorkflowRunServices } from '../../engine/run-services.js';
 
 export type WorkflowRunJsonValue =
   | null
@@ -31,30 +32,16 @@ export type WorkflowRunJsonValue =
 
 export type WorkflowRunArgs = Record<string, unknown>;
 
-/**
- * Everything a run script gets besides its declared `args`.
- *
- * D5: exactly three members. `transaction` is not provided and no field is
- * reserved for it — a script that needs a transaction opens one through
- * `runtime.app` and owns its boundary.
- */
-export interface WorkflowRunRuntime {
-  /**
-   * The application instance.
-   *
-   * Still `unknown` after T5: the repository has no `Application` (or equivalent)
-   * type to point at — `app-host` exposes a registry and a runtime record, not an
-   * application object — so anything narrower here would be invented rather than
-   * observed. It is tightened when an application type actually exists.
-   */
-  readonly app: unknown;
+/** Execution-scoped capabilities passed to a Workflow run module. */
+export interface WorkflowRunOptions {
+  readonly services: WorkflowRunServices;
   readonly signal: AbortSignal;
   readonly logger: WorkflowLogger;
 }
 
 export type WorkflowRunFunction = (
   args: unknown,
-  runtime: WorkflowRunRuntime,
+  options: WorkflowRunOptions,
 ) => unknown;
 
 export interface WorkflowRunModule {
@@ -266,11 +253,17 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
     const startedAt = performance.now();
     let result: unknown;
     try {
-      result = await module.run(args, {
-        app: this.processor.app,
+      if (!this.processor.services) {
+        throw new Error(
+          `Run node "${this.node.key}" has no application services bound to it`,
+        );
+      }
+      const options: WorkflowRunOptions = Object.freeze({
+        services: this.processor.services,
         signal,
         logger: this.processor.logger,
       });
+      result = await module.run(args, options);
       logRunExecution(this.processor.logger, {
         workflowId: this.processor.workflow.id,
         executionId: this.processor.execution.id,

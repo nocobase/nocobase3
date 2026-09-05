@@ -4,6 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { DatabaseManager } from '@nocobase/db';
+import {
+  createServiceToken,
+  ServiceContainer,
+} from '@nocobase/service-provider';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -20,6 +24,7 @@ import {
 import { buildWorkflowArtifact } from '../build/artifact-builder.js';
 import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 import { pendingInstruction } from './fixtures/instructions.js';
+import { createWorkflowRunServices } from '../server/engine/run-services.js';
 import {
   createTestDatabase,
   createTestWorkflow,
@@ -33,7 +38,8 @@ const SOURCE_ROOT = fileURLToPath(
 const OUTSIDE_ROOT = fileURLToPath(
   new URL('./fixtures/outside', import.meta.url),
 );
-const app = { name: 'test-app' };
+const container = new ServiceContainer();
+const services = createWorkflowRunServices(container);
 const roots: string[] = [];
 
 function runInstructions(): Map<string, WorkflowInstructionClass> {
@@ -88,7 +94,7 @@ describe('run instruction', () => {
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
-      app,
+      services,
     });
     await dispatcher.trigger(workflow, context, {
       eventKey: key,
@@ -167,7 +173,7 @@ describe('run instruction', () => {
         execution.hash
           ? store.materialize(execution.workflowKey, execution.hash)
           : Promise.resolve(null),
-      app,
+      services,
     });
 
     await dispatcher.trigger(
@@ -239,26 +245,45 @@ describe('run instruction', () => {
     expect(invalid.nodeRuns[0].error).toMatch(/BigInt/);
   });
 
-  it('passes the processor application, signal, and logger to the module', async () => {
+  it('passes services, signal, and contextual logger in frozen options', async () => {
     const { nodeRuns } = await runSingleNode(
-      'runtime',
-      { module: './runtime' },
+      'services',
+      { module: './services' },
       {
-        './runtime':
-          'export const run = (_args, runtime) => ({ app: runtime.app.name, signal: runtime.signal instanceof AbortSignal, logger: typeof runtime.logger.info });',
+        './services':
+          'export const run = (_args, options) => ({ keys: Object.keys(options).sort(), frozen: Object.isFrozen(options), serviceKeys: Object.keys(options.services).sort(), servicesFrozen: Object.isFrozen(options.services), signal: options.signal instanceof AbortSignal, logger: typeof options.logger.info });',
       },
     );
     expect(nodeRuns[0].result).toEqual({
-      app: 'test-app',
+      keys: ['logger', 'services', 'signal'],
+      frozen: true,
+      serviceKeys: ['has', 'resolve'],
+      servicesFrozen: true,
       signal: true,
       logger: 'function',
     });
   });
 
-  it('keeps abort semantics while the module is awaiting', async () => {
+  it('resolves application services by their original tokens', () => {
+    const token = createServiceToken<{ readonly value: string }>(
+      '@nocobase/app-plugin-workflow/tests/service',
+    );
+    const bound = { value: 'resolved' };
+    const testContainer = new ServiceContainer();
+    testContainer.instance(token, bound);
+
+    const runServices = createWorkflowRunServices(testContainer);
+
+    expect(runServices.has(token)).toBe(true);
+    expect(runServices.resolve(token)).toBe(bound);
+    expect(runServices).not.toHaveProperty('instance');
+    expect(runServices).not.toHaveProperty('singleton');
+  });
+
+  it('lets a run stop in-flight work through the Workflow abort signal', async () => {
     const resourceRoot = await createArtifactRoot({
       './slow':
-        'export const run = (_args, runtime) => new Promise((resolve, reject) => { runtime.signal.addEventListener("abort", () => reject(runtime.signal.reason), { once: true }); setTimeout(resolve, 2000); });',
+        'export const run = (_args, options) => new Promise((resolve, reject) => { options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true }); setTimeout(resolve, 2000); });',
     });
     const workflow = await createTestWorkflow(database, {
       key: 'aborted',
@@ -269,6 +294,7 @@ describe('run instruction', () => {
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
+      services,
     });
     await dispatcher.trigger(
       workflow,
@@ -299,6 +325,7 @@ describe('run instruction', () => {
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
+      services,
       logger: { debug: vi.fn(), info, warn: vi.fn(), error: vi.fn() },
     });
     await dispatcher.trigger(
@@ -331,6 +358,7 @@ describe('run instruction', () => {
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(SOURCE_ROOT),
+      services,
     });
     await dispatcher.trigger(
       workflow,
