@@ -93,6 +93,8 @@ repository.deleteMany({ all: true });
 | `deleteOne()`  | `filter` 恰好匹配一条     | 不支持           | 删除前记录和 `{ deleted: true }` |
 | `deleteMany()` | `filter` 全部匹配或 `all` | 不支持           | `{ deletedCount }`               |
 
+六个方法的完整调用示例见 [Repository 写入方法示例](./mutation-examples.md)。
+
 ### 参数词汇
 
 | 参数        | 含义                                                           |

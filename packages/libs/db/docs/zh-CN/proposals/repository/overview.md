@@ -427,6 +427,9 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
 这六个名称是 V1 的唯一规范写法，不再提供语义含糊的 `create()`、`update()`、`delete()`
 别名。Agent 仅根据方法名就能判断单条/批量边界，不需要结合参数猜测。
 
+六个写入方法的可运行示例、关系操作、批量安全和返回结果见
+[Repository 写入方法示例](./mutation-examples.md)。
+
 - `TRecord`、`TCreate` 和 `TUpdate` 分开建模。数据库生成的主键、创建时间等字段可以只
   出现在 `TRecord` 中；必填创建字段可以放在 `TCreate` 中；可修改字段放在
   `TUpdate` 中。未提供静态类型时，它们分别退化为记录的部分字段。
