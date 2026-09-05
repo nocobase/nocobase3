@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import type {
+  FilterAst,
   RelationMutationAst,
   SelectAst,
   SelectRelationNode,
@@ -150,6 +151,166 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
         },
       }),
     ).rejects.toMatchObject({ code: 'FIELD_NOT_WRITABLE', field: 'tasks' });
+  });
+
+  it('updates, upserts, and deletes targets inside the current relation scope', async () => {
+    const fixture = await createMutationFixture(context);
+    const repository = context.database.repository('repositoryProjects');
+    const first = await repository.createOne({
+      values: {
+        name: 'Target mutations',
+        profile: { connect: { id: fixture.profile } },
+        tasks: {
+          connect: [{ id: fixture.implementTask }, { id: fixture.reviewTask }],
+        },
+        tags: { connect: { id: fixture.databaseTag } },
+      },
+      select: selection(['id']),
+    });
+
+    const updated = await repository.updateOne({
+      filter: (filter) => filter.number('id').eq(first.record.id as number),
+      values: {
+        profile: (profile) =>
+          profile.update({ values: { summary: 'Updated profile' } }),
+        tasks: (tasks) =>
+          tasks
+            .update({
+              filter: (filter) =>
+                filter.number('id').eq(fixture.implementTask as number),
+              values: {
+                title: 'Implemented',
+                assignee: { connect: { id: fixture.bob } },
+              },
+            })
+            .upsert({
+              filter: (filter) =>
+                filter.string('externalId').eq('task-imported'),
+              create: {
+                externalId: 'task-imported',
+                title: 'Imported task',
+              },
+              update: { title: 'Updated imported task' },
+            })
+            .delete({
+              filter: (filter) =>
+                filter.number('id').eq(fixture.reviewTask as number),
+            }),
+        tags: {
+          update: {
+            filter: equalFilter('label', 'database'),
+            values: { label: 'database-updated' },
+          },
+        },
+      },
+      select: projectSelection(),
+    });
+
+    expect(updated.record).toMatchObject({
+      profile: { summary: 'Updated profile' },
+      tasks: [
+        { title: 'Implemented', assignee: { name: 'Bob' } },
+        { title: 'Imported task', assignee: null },
+      ],
+      tags: [{ label: 'database-updated' }],
+    });
+    await expect(
+      context.database.repository('repositoryTasks').findOne({
+        filter: (filter) =>
+          filter.number('id').eq(fixture.reviewTask as number),
+      }),
+    ).resolves.toBeUndefined();
+
+    await repository.updateOne({
+      filter: (filter) => filter.number('id').eq(first.record.id as number),
+      values: {
+        tasks: {
+          upsert: {
+            filter: equalFilter('externalId', 'task-imported'),
+            create: {
+              externalId: 'task-imported',
+              title: 'Should not be created',
+            },
+            update: { title: 'Updated imported task' },
+          },
+        },
+      },
+    });
+    const afterUpsert = await repository.findOne({
+      filter: (filter) => filter.number('id').eq(first.record.id as number),
+      select: projectSelection(),
+    });
+    expect(afterUpsert?.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: 'Updated imported task' }),
+      ]),
+    );
+
+    await expect(
+      repository.updateOne({
+        filter: (filter) => filter.number('id').eq(first.record.id as number),
+        values: {
+          tasks: {
+            update: {
+              filter: (filter) => filter.string('title').notEmpty(),
+              values: { title: 'Ambiguous' },
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'MULTIPLE_RELATION_TARGETS_MATCHED' });
+
+    await context.database.repository('repositoryTasks').createOne({
+      values: {
+        externalId: 'outside-task',
+        title: 'Outside relation scope',
+      },
+    });
+    await expect(
+      repository.updateOne({
+        filter: (filter) => filter.number('id').eq(first.record.id as number),
+        values: {
+          tasks: {
+            upsert: {
+              filter: equalFilter('externalId', 'outside-task'),
+              create: {
+                externalId: 'outside-task',
+                title: 'Duplicate outside task',
+              },
+              update: { title: 'Must stay outside' },
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'RELATION_UPSERT_TARGET_OUTSIDE_SCOPE' });
+
+    await repository.updateOne({
+      filter: (filter) => filter.number('id').eq(first.record.id as number),
+      values: {
+        tags: {
+          delete: { filter: equalFilter('label', 'database-updated') },
+        },
+      },
+    });
+    await expect(
+      context.database.repository('repositoryTagsForMutation').findOne({
+        filter: (filter) => filter.string('label').eq('database-updated'),
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      context.database.repository('repositoryProjectTags').count(),
+    ).resolves.toBe(0);
+
+    await repository.updateOne({
+      filter: (filter) => filter.number('id').eq(first.record.id as number),
+      values: { profile: (profile) => profile.delete() },
+    });
+    await expect(
+      repository.findOne({
+        filter: (filter) => filter.number('id').eq(first.record.id as number),
+        select: projectSelection(),
+      }),
+    ).resolves.toMatchObject({ profile: null });
   });
 
   it('creates a root with connected, created, and nested relation targets', async () => {
@@ -325,7 +486,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           field: 'owner',
           cardinality: 'one',
           targetCollection: 'repositoryUsers',
-          allowedActions: ['set', 'clear'],
+          allowedActions: ['set', 'modify', 'clear'],
           patchOperations: undefined,
           uniqueFieldSets: [
             { fields: ['id'], primary: true },
@@ -337,14 +498,24 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           cardinality: 'many',
           targetCollection: 'repositoryTasks',
           allowedActions: ['patch', 'replace'],
-          patchOperations: ['connect', 'create', 'disconnect'],
-          uniqueFieldSets: [{ fields: ['id'], primary: true }],
+          patchOperations: [
+            'connect',
+            'create',
+            'disconnect',
+            'update',
+            'upsert',
+            'delete',
+          ],
+          uniqueFieldSets: [
+            { fields: ['id'], primary: true },
+            { fields: ['externalId'], primary: false },
+          ],
         },
         {
           field: 'profile',
           cardinality: 'one',
           targetCollection: 'repositoryProjectProfiles',
-          allowedActions: ['set', 'clear'],
+          allowedActions: ['set', 'modify', 'clear'],
           patchOperations: undefined,
           uniqueFieldSets: [{ fields: ['id'], primary: true }],
         },
@@ -353,8 +524,18 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
           cardinality: 'many',
           targetCollection: 'repositoryTagsForMutation',
           allowedActions: ['patch', 'replace'],
-          patchOperations: ['connect', 'create', 'disconnect'],
-          uniqueFieldSets: [{ fields: ['id'], primary: true }],
+          patchOperations: [
+            'connect',
+            'create',
+            'disconnect',
+            'update',
+            'upsert',
+            'delete',
+          ],
+          uniqueFieldSets: [
+            { fields: ['id'], primary: true },
+            { fields: ['label'], primary: false },
+          ],
         },
       ],
       limits: { maxDepth: 3, maxNodes: 100 },
@@ -402,6 +583,7 @@ async function createMutationFixture(
       definition: (collection) => {
         collection.increments('id');
         collection.string('title').notNull();
+        collection.string('externalId').nullable().unique();
         collection.integer('projectId').nullable();
         collection.belongsTo('assignee', 'repositoryUsers').constraints(false);
       },
@@ -418,7 +600,7 @@ async function createMutationFixture(
       name: 'repositoryTagsForMutation',
       definition: (collection) => {
         collection.increments('id');
-        collection.string('label').notNull();
+        collection.string('label').notNull().unique();
       },
     },
     {
@@ -544,4 +726,16 @@ function relation(
 
 function unique(field: string, value: unknown): UniqueSelector {
   return { kind: 'unique', fields: [field], values: { [field]: value } };
+}
+
+function equalFilter(field: string, value: string): FilterAst {
+  return {
+    kind: 'filter',
+    version: 1,
+    root: {
+      kind: 'group',
+      logic: 'and',
+      items: [{ kind: 'condition', path: [field], operator: '$eq', value }],
+    },
+  };
 }

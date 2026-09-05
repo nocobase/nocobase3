@@ -260,7 +260,11 @@ export interface RelationMutationAst {
 }
 
 export type RelationMutationNode =
-  RelationSetNode | RelationClearNode | RelationPatchNode | RelationReplaceNode;
+  | RelationSetNode
+  | RelationClearNode
+  | RelationPatchNode
+  | RelationReplaceNode
+  | RelationModifyNode;
 
 export interface RelationSetNode {
   readonly kind: 'relation';
@@ -282,6 +286,18 @@ export interface RelationPatchNode {
   readonly connect?: readonly ConnectTarget[];
   readonly create?: readonly CreateTarget[];
   readonly disconnect?: readonly UniqueSelector[];
+  readonly update?: readonly RelationUpdateTarget[];
+  readonly upsert?: readonly RelationUpsertTarget[];
+  readonly delete?: readonly RelationDeleteTarget[];
+}
+
+export interface RelationModifyNode {
+  readonly kind: 'relation';
+  readonly field: string;
+  readonly action: 'modify';
+  readonly update?: RelationUpdateTarget;
+  readonly upsert?: RelationUpsertTarget;
+  readonly delete?: RelationDeleteTarget;
 }
 
 export interface RelationReplaceNode {
@@ -301,6 +317,23 @@ export interface CreateTarget {
   readonly clientKey?: string;
   readonly values: Readonly<Record<string, unknown>>;
   readonly relations?: RelationMutationAst;
+}
+
+export interface RelationUpdateTarget {
+  readonly filter?: FilterAst;
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly relations?: RelationMutationAst;
+}
+
+export interface RelationUpsertTarget {
+  readonly filter?: FilterAst;
+  readonly by?: UniqueSelector;
+  readonly create: CreateTarget;
+  readonly update: RelationUpdateTarget;
+}
+
+export interface RelationDeleteTarget {
+  readonly filter?: FilterAst;
 }
 
 export interface RelationMutationBuilder {
@@ -346,6 +379,37 @@ export type RelationCreateValues = Readonly<
 export type RelationCreateValuesInput =
   RelationCreateValues | readonly RelationCreateValues[];
 
+export type RelationUpdateValues = Readonly<
+  Record<
+    string,
+    RepositoryMutationScalarValue | UpdateRelationFieldMutationInput
+  >
+>;
+
+export interface RelationUpdateInput {
+  readonly filter?: RepositoryFilter<RepositoryRecord>;
+  readonly values: RelationUpdateValues;
+}
+
+export interface RelationUpsertInput {
+  readonly filter?: RepositoryFilter<RepositoryRecord>;
+  readonly create: RelationCreateValues;
+  readonly update: RelationUpdateValues;
+}
+
+export interface RelationDeleteInput {
+  readonly filter?: RepositoryFilter<RepositoryRecord>;
+}
+
+export type RelationUpdateInputList =
+  RelationUpdateInput | readonly RelationUpdateInput[];
+
+export type RelationUpsertInputList =
+  RelationUpsertInput | readonly RelationUpsertInput[];
+
+export type RelationDeleteInputList =
+  RelationDeleteInput | readonly RelationDeleteInput[];
+
 export interface CreateRelationFieldMutationJsonInput {
   readonly create?: RelationCreateValuesInput;
   readonly connect?: RelationTargetSelectorInput;
@@ -357,12 +421,18 @@ export type UpdateRelationFieldMutationJsonInput =
       readonly create?: never;
       readonly connect?: never;
       readonly disconnect?: never;
+      readonly update?: never;
+      readonly upsert?: never;
+      readonly delete?: never;
     }
   | {
       readonly set?: never;
       readonly create?: RelationCreateValuesInput;
       readonly connect?: RelationTargetSelectorInput;
       readonly disconnect?: true | RelationTargetSelectorInput;
+      readonly update?: RelationUpdateInputList;
+      readonly upsert?: RelationUpsertInputList;
+      readonly delete?: true | RelationDeleteInputList;
     };
 
 export interface CreateRelationFieldMutationBuilder {
@@ -373,6 +443,9 @@ export interface CreateRelationFieldMutationBuilder {
 export interface UpdateRelationFieldMutationBuilder extends CreateRelationFieldMutationBuilder {
   disconnect(values?: RelationTargetSelector): this;
   set(values: readonly RelationTargetSelector[]): this;
+  update(input: RelationUpdateInput): this;
+  upsert(input: RelationUpsertInput): this;
+  delete(input?: RelationDeleteInput): this;
 }
 
 export type CreateRelationFieldMutationInput =
@@ -599,8 +672,12 @@ export interface RepositoryRelationMutationDescription {
   readonly field: string;
   readonly cardinality: 'one' | 'many';
   readonly targetCollection: string;
-  readonly allowedActions: readonly ('set' | 'clear' | 'patch' | 'replace')[];
-  readonly patchOperations?: readonly ('connect' | 'create' | 'disconnect')[];
+  readonly allowedActions: readonly (
+    'set' | 'clear' | 'patch' | 'replace' | 'modify'
+  )[];
+  readonly patchOperations?: readonly (
+    'connect' | 'create' | 'disconnect' | 'update' | 'upsert' | 'delete'
+  )[];
   readonly uniqueFieldSets: readonly RepositoryUniqueFieldSetDescription[];
 }
 

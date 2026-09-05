@@ -20,6 +20,9 @@ import type {
   RepositoryRecord,
   RelationMutationAst,
   RelationMutationNode,
+  RelationDeleteTarget,
+  RelationUpdateTarget,
+  RelationUpsertTarget,
   SelectNode,
   SelectRelationNode,
   SortItemNode,
@@ -484,6 +487,27 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await this.clearRelation(resolved, source, sourceUnique);
       return;
     }
+    if (node.action === 'modify') {
+      if (node.update) {
+        await this.updateRelatedTarget(
+          resolved,
+          source,
+          node.update,
+          createdTargets,
+        );
+      } else if (node.upsert) {
+        await this.upsertRelatedTarget(
+          resolved,
+          source,
+          sourceUnique,
+          node.upsert,
+          createdTargets,
+        );
+      } else if (node.delete) {
+        await this.deleteRelatedTarget(resolved, source, node.delete);
+      }
+      return;
+    }
     const connect =
       node.action === 'patch' ? (node.connect ?? []) : node.targets;
     const create = node.action === 'patch' ? (node.create ?? []) : [];
@@ -518,6 +542,243 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       const target = await this.findTarget(resolved.target, selector);
       await this.disconnectRelation(resolved, source, sourceUnique, target);
     }
+    for (const target of node.update ?? []) {
+      await this.updateRelatedTarget(resolved, source, target, createdTargets);
+    }
+    for (const target of node.upsert ?? []) {
+      await this.upsertRelatedTarget(
+        resolved,
+        source,
+        sourceUnique,
+        target,
+        createdTargets,
+      );
+    }
+    for (const target of node.delete ?? []) {
+      await this.deleteRelatedTarget(resolved, source, target);
+    }
+  }
+
+  private async updateRelatedTarget(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    target: RelationUpdateTarget,
+    createdTargets: CreatedTargetReference[],
+  ): Promise<void> {
+    const selected = await this.lockRelatedTarget(
+      resolved,
+      source,
+      target.filter,
+    );
+    if (selected === 'missing') relationTargetNotFound(resolved);
+    if (selected === 'multiple') multipleRelationTargetsMatched(resolved);
+    await this.updateTargetRecord(
+      resolved.target,
+      selected,
+      target,
+      createdTargets,
+    );
+  }
+
+  private async upsertRelatedTarget(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    sourceUnique: UniqueSelector,
+    target: RelationUpsertTarget,
+    createdTargets: CreatedTargetReference[],
+  ): Promise<void> {
+    const selected = await this.lockRelatedTarget(
+      resolved,
+      source,
+      target.filter,
+    );
+    if (selected === 'multiple') multipleRelationTargetsMatched(resolved);
+    if (selected !== 'missing') {
+      await this.updateTargetRecord(
+        resolved.target,
+        selected,
+        target.update,
+        createdTargets,
+      );
+      return;
+    }
+    if (
+      target.by &&
+      (await this.lockByUnique(resolved.target, target.by)) !== 'missing'
+    ) {
+      throw new RepositoryError(
+        'RELATION_UPSERT_TARGET_OUTSIDE_SCOPE',
+        'Relation upsert target exists outside the current relation scope.',
+        {
+          collection: resolved.source.name,
+          relation: resolved.relation.name,
+        },
+      );
+    }
+    const created = await this.resolveMutationTarget(
+      resolved.target,
+      target.create,
+      createdTargets,
+      resolved,
+      source,
+    );
+    await this.connectRelation(resolved, source, sourceUnique, created.record);
+  }
+
+  private async deleteRelatedTarget(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    target: RelationDeleteTarget,
+  ): Promise<void> {
+    const selected = await this.lockRelatedTarget(
+      resolved,
+      source,
+      target.filter,
+    );
+    if (selected === 'missing') relationTargetNotFound(resolved);
+    if (selected === 'multiple') multipleRelationTargetsMatched(resolved);
+    await this.removeTargetEdgesForDelete(resolved, selected.record);
+    const query = tableQuery(this.getClient(), resolved.target).delete();
+    applyUnique(query, resolved.target, selected.unique);
+    if (affectedCount(await query) === 0) relationTargetNotFound(resolved);
+  }
+
+  private async removeTargetEdgesForDelete(
+    resolved: ResolvedRepositoryRelation,
+    target: RepositoryRecord,
+  ): Promise<void> {
+    if (resolved.relation.type === 'belongsTo') {
+      if (resolved.relation.nullable === false) {
+        relationActionNotAllowed(resolved, 'delete');
+      }
+      await tableQuery(this.getClient(), resolved.source)
+        .where(resolved.sourceColumn, target[resolved.targetKey] as Knex.Value)
+        .update({ [resolved.sourceColumn]: null });
+      return;
+    }
+    if (resolved.relation.type === 'belongsToMany') {
+      await tableQuery(this.getClient(), resolved.through!)
+        .where(
+          column(resolved.through!, resolved.throughTargetForeignKey!),
+          target[resolved.targetKey] as Knex.Value,
+        )
+        .delete();
+    }
+  }
+
+  private async updateTargetRecord(
+    collection: CollectionDefinition,
+    selected: LockedMutationRecord,
+    target: RelationUpdateTarget,
+    createdTargets: CreatedTargetReference[],
+  ): Promise<void> {
+    if (Object.keys(target.values).length > 0) {
+      const query = tableQuery(this.getClient(), collection).update(
+        mapWrite(collection, target.values as RepositoryRecord),
+      );
+      applyUnique(query, collection, selected.unique);
+      if (affectedCount(await query) === 0) {
+        throw new RepositoryError(
+          'RELATION_TARGET_NOT_FOUND',
+          'Relation target was not found while updating.',
+          { collection: collection.name },
+        );
+      }
+      Object.assign(selected.record, target.values);
+    }
+    if (target.relations) {
+      await this.applyRelationMutations(
+        collection,
+        selected.record,
+        selected.unique,
+        target.relations,
+        createdTargets,
+      );
+    }
+    if (collection.optimisticLock) {
+      const versionQuery = tableQuery(this.getClient(), collection);
+      applyUnique(versionQuery, collection, selected.unique);
+      incrementVersion(versionQuery, collection);
+      await versionQuery;
+    }
+  }
+
+  private async lockRelatedTarget(
+    resolved: ResolvedRepositoryRelation,
+    source: RepositoryRecord,
+    filter: FilterAst | undefined,
+  ): Promise<LockedMutationRecord | 'missing' | 'multiple'> {
+    const client = this.getClient();
+    const targetAlias = 'repository_relation_target';
+    const fields = scalarFields(resolved.target).map((field) => field.name);
+    const query = tableQuery(client, resolved.target, targetAlias).select(
+      fields.map((field) =>
+        client
+          .ref(column(resolved.target, field))
+          .withSchema(targetAlias)
+          .as(field),
+      ),
+    );
+    if (resolved.relation.type === 'belongsTo') {
+      const sourceQuery = tableQuery(client, resolved.source).select(
+        resolved.sourceColumn,
+      );
+      applyUnique(
+        sourceQuery,
+        resolved.source,
+        selectorFromRecord(resolved.source, source),
+      );
+      query.whereIn(
+        qualified(targetAlias, column(resolved.target, resolved.targetKey)),
+        sourceQuery,
+      );
+    } else if (
+      resolved.relation.type === 'hasOne' ||
+      resolved.relation.type === 'hasMany'
+    ) {
+      query.where(
+        qualified(
+          targetAlias,
+          column(resolved.target, resolved.targetForeignKey!),
+        ),
+        source[resolved.sourceKey] as Knex.Value,
+      );
+    } else {
+      const throughAlias = 'repository_relation_through';
+      query
+        .join(
+          collectionReference(client, resolved.through!, throughAlias),
+          qualified(targetAlias, column(resolved.target, resolved.targetKey)),
+          qualified(
+            throughAlias,
+            column(resolved.through!, resolved.throughTargetForeignKey!),
+          ),
+        )
+        .where(
+          qualified(
+            throughAlias,
+            column(resolved.through!, resolved.throughSourceForeignKey!),
+          ),
+          source[resolved.sourceKey] as Knex.Value,
+        );
+    }
+    const graph = await this.prepareFilterGraph(resolved.target, filter?.root);
+    applyFilter(
+      query,
+      resolved.target,
+      filter?.root,
+      graph,
+      targetAlias,
+      client,
+    );
+    query.limit(2).forUpdate();
+    const rows = (await query) as RepositoryRecord[];
+    if (rows.length === 0) return 'missing';
+    if (rows.length > 1) return 'multiple';
+    return {
+      record: rows[0],
+      unique: selectorFromRecord(resolved.target, rows[0]),
+    };
   }
 
   private async resolveMutationTarget(
@@ -1854,6 +2115,30 @@ function relationActionNotAllowed(
       collection: resolved.source.name,
       relation: resolved.relation.name,
       details: { received: action },
+    },
+  );
+}
+
+function relationTargetNotFound(resolved: ResolvedRepositoryRelation): never {
+  throw new RepositoryError(
+    'RELATION_TARGET_NOT_FOUND',
+    'Relation target was not found in the current relation scope.',
+    {
+      collection: resolved.source.name,
+      relation: resolved.relation.name,
+    },
+  );
+}
+
+function multipleRelationTargetsMatched(
+  resolved: ResolvedRepositoryRelation,
+): never {
+  throw new RepositoryError(
+    'MULTIPLE_RELATION_TARGETS_MATCHED',
+    'Relation target filter matched more than one record in the current relation scope.',
+    {
+      collection: resolved.source.name,
+      relation: resolved.relation.name,
     },
   );
 }

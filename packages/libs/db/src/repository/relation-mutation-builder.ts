@@ -7,9 +7,12 @@ import type {
   RelationMutationInput,
   RelationMutationNode,
   RelationPatchMutationBuilder,
+  RelationDeleteInput,
   RelationReplaceMutationBuilder,
   RelationTargetMutationBuilder,
   RelationTargetSelector,
+  RelationUpdateInput,
+  RelationUpsertInput,
   UpdateRelationFieldMutationBuilder,
   UniqueSelector,
 } from './types.js';
@@ -19,6 +22,9 @@ export interface RelationFieldMutationBuilderState {
   readonly connect: readonly RelationTargetSelector[];
   readonly disconnect: true | readonly RelationTargetSelector[] | undefined;
   readonly set: readonly RelationTargetSelector[] | undefined;
+  readonly update: readonly RelationUpdateInput[];
+  readonly upsert: readonly RelationUpsertInput[];
+  readonly delete: readonly RelationDeleteInput[];
 }
 
 export class DefaultRelationFieldMutationBuilder implements UpdateRelationFieldMutationBuilder {
@@ -27,6 +33,9 @@ export class DefaultRelationFieldMutationBuilder implements UpdateRelationFieldM
   private readonly disconnected: RelationTargetSelector[] = [];
   private clear = false;
   private replacement: readonly RelationTargetSelector[] | undefined;
+  private readonly updates: RelationUpdateInput[] = [];
+  private readonly upserts: RelationUpsertInput[] = [];
+  private readonly deletes: RelationDeleteInput[] = [];
 
   create(
     values: Readonly<Record<string, unknown>>,
@@ -57,6 +66,21 @@ export class DefaultRelationFieldMutationBuilder implements UpdateRelationFieldM
     return this;
   }
 
+  update(input: RelationUpdateInput): this {
+    this.updates.push(input);
+    return this;
+  }
+
+  upsert(input: RelationUpsertInput): this {
+    this.upserts.push(input);
+    return this;
+  }
+
+  delete(input: RelationDeleteInput = {}): this {
+    this.deletes.push(input);
+    return this;
+  }
+
   toState(): RelationFieldMutationBuilderState {
     return {
       create: [...this.created],
@@ -67,6 +91,9 @@ export class DefaultRelationFieldMutationBuilder implements UpdateRelationFieldM
           ? [...this.disconnected]
           : undefined,
       set: this.replacement,
+      update: [...this.updates],
+      upsert: [...this.upserts],
+      delete: [...this.deletes],
     };
   }
 }

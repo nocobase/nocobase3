@@ -8,7 +8,8 @@ description: 参考 Prisma 的模型形状输入和 Relation Builder，统一 Re
 > **状态：分阶段实现中。** 已支持在 `createOne()` / `updateOne()` 的 `values`
 > 中使用字段级 Builder 或纯 JSON 表达 `create`、`connect`、`disconnect` 和 `set`，并暂时
 > 保留顶层 `relations`；`updateOne()` / `deleteOne()` 已支持严格基数的根 `filter`，并暂时
-> 保留 `unique`。本文其余的目标 `update/upsert/delete` 等内容仍是候选设计；当前完整契约仍以 [Repository 概览](./overview.md)与
+> 保留 `unique`；关系目标 `update/upsert/delete` 也已实现。`deleteOne()` 返回删除前快照、
+> `createMany()` 参数改名等内容仍是候选设计；当前完整契约仍以 [Repository 概览](./overview.md)与
 > [Mutation AST](./mutation-ast.md)为准。
 
 ## 背景
@@ -699,7 +700,7 @@ values.tasks.operations[3].values.assignee
 | 写入对象                      | 直接模型字段对象                | `{ values: 模型字段对象 }`         |
 | Relation Builder              | 字段 callback                   | 字段 callback                      |
 | 单条普通 filter               | 更新第一条或返回 `null`         | 必须恰好匹配一条                   |
-| 关系目标 update/upsert/delete | 当前实现未开放                  | 作为 capability 限制的后续完整能力 |
+| 关系目标 update/upsert/delete | 当前实现未开放                  | capability 限制的已实现能力        |
 | 批量 relation mutation        | 不支持                          | 不支持                             |
 | 动态 JSON 协议                | 不是主要公开入口                | 必须支持                           |
 | optimistic lock               | 没有同等 Repository 契约        | 保留 `ifVersion` 与 `version`      |
@@ -737,15 +738,13 @@ await projects.updateOne({
 });
 ```
 
-建议按以下阶段推进：
+实现阶段：
 
-1. 先冻结 Mutation Values AST V2、Relation Builder capability 和错误码；
-2. 实现 Builder 到规范 AST 的纯转换，并增加 type-level 与 runtime validation 测试；
-3. 让现有执行器接收 V2 AST，先覆盖 V1 已有的 `create/connect/disconnect/set` 能力；
-4. 将根单条定位从 `unique` 迁移为严格基数 `filter`，补齐并发和五种数据库测试；
-5. 再独立增加 relation `update/upsert/delete`，不要和输入形态迁移绑在一次发布中；
-6. 更新 Form Mutation Compiler 设计，使表单直接生成字段形状的规范 JSON AST；
-7. 在明确的破坏性版本中移除顶层 `relations`，不长期保留两套等价写法。
+1. 已完成：字段形状 `values`、Builder/JSON 双输入及 `create/connect/disconnect/set`；
+2. 已完成：严格基数的根 `filter`；
+3. 已完成：relation target `update/upsert/delete`；
+4. 待完成：更新 Form Mutation Compiler，使表单直接生成字段形状的规范 JSON；
+5. 待完成：在明确的破坏性版本中移除顶层 `relations` 和 `unique` 兼容入口。
 
 ## 待确认问题
 

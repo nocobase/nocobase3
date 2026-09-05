@@ -5,17 +5,20 @@ description: Repository 关系写入 V1 协议、Fluent Builder、有界嵌套�
 
 # Mutation AST
 
-> **状态：V1 运行时已实现。** Relation Mutation Builder/AST、四类关系写入、事务内最终回读、`createdTargets`、有界 nested create、能力描述/校验与 optimistic lock 均可执行，并已通过 SQLite、PostgreSQL、MySQL、Oracle 与 MSSQL 集成测试。
+> **状态：运行时已实现。** Relation Mutation Builder/AST、模型形状 `values`、目标
+> `update/upsert/delete`、事务内最终回读、`createdTargets`、有界嵌套、能力描述/校验与
+> optimistic lock 均可执行。
 
-Mutation AST 是 Repository 关系写入的规范化协议。V1 只解决两类问题：
+Mutation AST 是 Repository 关系写入的内部规范化协议，覆盖三类问题：
 
 - 连接、断开或替换关系；
 - 创建目标记录并立即连接。
+- 在当前关系作用域内更新、upsert 或删除一个目标。
 
-更新或删除目标实体、更新 `belongsToMany` 中间表记录、重新分配关系和 upsert 不属于 V1。
-这些操作先通过目标或中间 Collection 的 Repository 显式完成，以控制 Agent 的选择空间。
+更新 `belongsToMany` 中间表 payload 和隐式重新分配关系仍不属于当前协议。
 
-根记录标量和关系操作始终分开：
+推荐把根标量和关系操作放在同一个模型形状的 `values` 中；以下顶层 `relations` AST 仍作为
+兼容和内部规范化形式保留：
 
 ```ts
 await db.repository('projects').updateOne({
@@ -49,8 +52,8 @@ await db.repository('projects').updateOne({
 });
 ```
 
-`values` 只接受根 Collection 可写的直接标量字段；`relations` 只接受关系操作。不能根据
-嵌套对象是否有 `id`、值是否为 `null` 或数组是否为空猜测写入意图。
+Repository 根据 Collection metadata 区分标量和 relation Field，不根据输入对象形状猜测。
+因此标量 JSON Field 中的 `connect` 等同名 key 仍是普通 JSON 数据。
 
 ## 设计目标
 
@@ -68,20 +71,24 @@ await db.repository('projects').updateOne({
 
 V1 只保留以下 action：
 
-| 作用域  | action    | 语义                                                 |
-| ------- | --------- | ---------------------------------------------------- |
-| to-one  | `set`     | 设置为已有目标，或创建目标后设置                     |
-| to-one  | `clear`   | 解除关系但保留目标记录                               |
-| to-many | `patch`   | 增量 connect/create/disconnect，未提到的关系保持不变 |
-| to-many | `replace` | 将完整关系集合替换为提交集合                         |
+| 作用域  | action    | 语义                                                |
+| ------- | --------- | --------------------------------------------------- |
+| to-one  | `set`     | 设置为已有目标，或创建目标后设置                    |
+| to-one  | `clear`   | 解除关系但保留目标记录                              |
+| to-many | `patch`   | 增量 connect/create/disconnect/update/upsert/delete |
+| to-many | `replace` | 将完整关系集合替换为提交集合                        |
+| to-one  | `modify`  | update、upsert 或 delete 当前唯一关系目标           |
 
 To-many 的子操作只有：
 
-| 子操作       | 语义               |
-| ------------ | ------------------ |
-| `connect`    | 连接已有目标       |
-| `create`     | 创建目标并连接     |
-| `disconnect` | 解除关系但保留目标 |
+| 子操作       | 语义                                   |
+| ------------ | -------------------------------------- |
+| `connect`    | 连接已有目标                           |
+| `create`     | 创建目标并连接                         |
+| `disconnect` | 解除关系但保留目标                     |
+| `update`     | 更新关系作用域内恰好一个目标           |
+| `upsert`     | 唯一目标存在则更新，不存在则创建并连接 |
+| `delete`     | 删除关系作用域内恰好一个目标           |
 
 V1 不使用“新增关系数据”“重置关系数据”之类可能混淆目标记录和关系边的术语。
 
@@ -116,8 +123,8 @@ type RelationMutationInput =
   | ((relations: RelationMutationBuilder) => RelationMutationBuilder);
 ```
 
-`createOne()` 和 `updateOne()` 接受规范 AST，也可以接受生成同一 AST 的 Fluent Builder。
-HTTP、CLI、Agent tool 和持久化配置只使用 AST。
+`createOne()` 和 `updateOne()` 推荐在 `values` 的 relation Field 中使用 Fluent Builder 或纯
+JSON 操作对象；两者都会归一化为同一 AST。顶层 `relations` 暂时保留以兼容已有调用方。
 
 批量 `createMany()` 和 `updateMany()` 不接受 `relations`。否则同一个 target 应被所有
 source 共享还是为每条 source 分别创建、to-one 应关联哪条 source 等行为都不明确。

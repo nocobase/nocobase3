@@ -45,6 +45,12 @@ import type {
   RelationMutationAst,
   RelationMutationInput,
   RelationMutationNode,
+  RelationDeleteInput,
+  RelationDeleteTarget,
+  RelationUpdateInput,
+  RelationUpdateTarget,
+  RelationUpsertInput,
+  RelationUpsertTarget,
   SelectAst,
   SelectRelationNode,
   SingleMutationResult,
@@ -186,8 +192,21 @@ export class DefaultRepository<
             : options.operation === 'createOne'
               ? (['connect', 'create'] as const)
               : canDisconnect
-                ? (['connect', 'create', 'disconnect'] as const)
-                : (['connect', 'create'] as const),
+                ? ([
+                    'connect',
+                    'create',
+                    'disconnect',
+                    'update',
+                    'upsert',
+                    'delete',
+                  ] as const)
+                : ([
+                    'connect',
+                    'create',
+                    'update',
+                    'upsert',
+                    'delete',
+                  ] as const),
           uniqueFieldSets: uniqueConstraints(target).map((constraint) => ({
             fields: constraint.fields,
             primary: constraint.type === 'primary',
@@ -1401,7 +1420,8 @@ async function normalizeModelMutation(
       continue;
     }
     relationItems.push(
-      relationFieldInputToNode(
+      await relationFieldInputToNode(
+        collections,
         collection,
         field,
         value as
@@ -1463,27 +1483,38 @@ function relationMutationInputToAst(
     : input;
 }
 
-function relationFieldInputToNode(
+async function relationFieldInputToNode(
+  collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
   relation: RelationFieldDefinition,
   input: CreateRelationFieldMutationInput | UpdateRelationFieldMutationInput,
   operation: 'createOne' | 'updateOne',
-): RelationMutationNode {
+): Promise<RelationMutationNode> {
   const path = ['values', relation.name] as const;
   const state = relationFieldInputState(collection, relation, input, path);
   const hasSet = state.set !== undefined;
   const hasIncremental =
     state.create.length > 0 ||
     state.connect.length > 0 ||
-    state.disconnect !== undefined;
+    state.disconnect !== undefined ||
+    state.update.length > 0 ||
+    state.upsert.length > 0 ||
+    state.delete.length > 0;
   if (hasSet && hasIncremental) {
     invalid(
       'INVALID_MUTATION',
-      'set cannot be combined with create, connect, or disconnect.',
+      'set cannot be combined with incremental relation operations.',
       { collection: collection.name, relation: relation.name, path },
     );
   }
-  if (operation === 'createOne' && (hasSet || state.disconnect !== undefined)) {
+  if (
+    operation === 'createOne' &&
+    (hasSet ||
+      state.disconnect !== undefined ||
+      state.update.length > 0 ||
+      state.upsert.length > 0 ||
+      state.delete.length > 0)
+  ) {
     invalid(
       'RELATION_ACTION_NOT_ALLOWED',
       'Only create and connect are allowed in relation values while creating a record.',
@@ -1495,6 +1526,41 @@ function relationFieldInputToNode(
       },
     );
   }
+  const targetCollectionDefinition = await targetCollection(
+    collections,
+    relation,
+    path,
+  );
+  const update = await Promise.all(
+    state.update.map((target, index) =>
+      relationUpdateInputToTarget(
+        collections,
+        targetCollectionDefinition,
+        target,
+        [...path, 'update', index],
+      ),
+    ),
+  );
+  const upsert = await Promise.all(
+    state.upsert.map((target, index) =>
+      relationUpsertInputToTarget(
+        collections,
+        targetCollectionDefinition,
+        target,
+        [...path, 'upsert', index],
+      ),
+    ),
+  );
+  const deleteTargets = await Promise.all(
+    state.delete.map((target, index) =>
+      relationDeleteInputToTarget(
+        collections,
+        targetCollectionDefinition,
+        target,
+        [...path, 'delete', index],
+      ),
+    ),
+  );
   if (isToManyRelation(relation)) {
     if (state.disconnect === true) {
       invalid(
@@ -1525,6 +1591,9 @@ function relationFieldInputToNode(
       create: state.create,
       connect: state.connect.map(connectTarget),
       disconnect: (state.disconnect ?? []).map(selectorFromValues),
+      update,
+      upsert,
+      delete: deleteTargets,
     };
   }
   if (hasSet) {
@@ -1539,7 +1608,13 @@ function relationFieldInputToNode(
     );
   }
   if (state.disconnect === true) {
-    if (state.create.length > 0 || state.connect.length > 0) {
+    if (
+      state.create.length > 0 ||
+      state.connect.length > 0 ||
+      update.length > 0 ||
+      upsert.length > 0 ||
+      deleteTargets.length > 0
+    ) {
       invalid(
         'INVALID_MUTATION',
         'disconnect cannot be combined with create or connect for a to-one relation.',
@@ -1554,6 +1629,30 @@ function relationFieldInputToNode(
       'To-one disconnect does not accept a target selector.',
       { collection: collection.name, relation: relation.name, path },
     );
+  }
+  const modifications = [
+    ...update.map((target) => ({ update: target })),
+    ...upsert.map((target) => ({ upsert: target })),
+    ...deleteTargets.map((target) => ({ delete: target })),
+  ];
+  if (modifications.length > 0) {
+    if (
+      modifications.length !== 1 ||
+      state.create.length > 0 ||
+      state.connect.length > 0
+    ) {
+      invalid(
+        'INVALID_MUTATION',
+        'To-one relation mutation requires exactly one operation.',
+        { collection: collection.name, relation: relation.name, path },
+      );
+    }
+    return {
+      kind: 'relation',
+      field: relation.name,
+      action: 'modify',
+      ...modifications[0],
+    };
   }
   const targets: Array<ConnectTarget | CreateTarget> = [
     ...state.create,
@@ -1592,7 +1691,15 @@ function relationFieldInputState(
       { collection: collection.name, relation: relation.name, path },
     );
   }
-  const allowedKeys = new Set(['create', 'connect', 'disconnect', 'set']);
+  const allowedKeys = new Set([
+    'create',
+    'connect',
+    'disconnect',
+    'set',
+    'update',
+    'upsert',
+    'delete',
+  ]);
   const unknown = Object.keys(input).find((key) => !allowedKeys.has(key));
   if (unknown) {
     invalid('INVALID_MUTATION', `Unknown relation operation "${unknown}".`, {
@@ -1630,7 +1737,29 @@ function relationFieldInputState(
     }
     set = recordsInput(input.set, [...path, 'set']);
   }
-  return { create, connect, disconnect, set };
+  const update = Object.hasOwn(input, 'update')
+    ? typedRecordsInput<RelationUpdateInput>(input.update, [...path, 'update'])
+    : [];
+  const upsert = Object.hasOwn(input, 'upsert')
+    ? typedRecordsInput<RelationUpsertInput>(input.upsert, [...path, 'upsert'])
+    : [];
+  const deleteTargets = Object.hasOwn(input, 'delete')
+    ? input.delete === true
+      ? [{}]
+      : typedRecordsInput<RelationDeleteInput>(input.delete, [
+          ...path,
+          'delete',
+        ])
+    : [];
+  return {
+    create,
+    connect,
+    disconnect,
+    set,
+    update,
+    upsert,
+    delete: deleteTargets,
+  };
 }
 
 function recordsInput(
@@ -1646,6 +1775,99 @@ function recordsInput(
     }
     return record;
   });
+}
+
+function typedRecordsInput<T extends object>(
+  input: unknown,
+  path: readonly (string | number)[],
+): T[] {
+  return recordsInput(input, path) as T[];
+}
+
+async function relationUpdateInputToTarget(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  input: RelationUpdateInput,
+  path: readonly (string | number)[],
+): Promise<RelationUpdateTarget> {
+  if (!isPlainRecord(input) || !isPlainRecord(input.values)) {
+    invalid('INVALID_MUTATION', 'Relation update requires values.', {
+      collection: collection.name,
+      path,
+    });
+  }
+  const filter = input.filter
+    ? await normalizeFilterWithRelations(
+        collections,
+        collection,
+        input.filter,
+        undefined,
+      )
+    : undefined;
+  return { filter, values: input.values };
+}
+
+async function relationUpsertInputToTarget(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  input: RelationUpsertInput,
+  path: readonly (string | number)[],
+): Promise<RelationUpsertTarget> {
+  if (
+    !isPlainRecord(input) ||
+    !isPlainRecord(input.create) ||
+    !isPlainRecord(input.update)
+  ) {
+    invalid(
+      'INVALID_MUTATION',
+      'Relation upsert requires create and update values.',
+      { collection: collection.name, path },
+    );
+  }
+  const filter = input.filter
+    ? await normalizeFilterWithRelations(
+        collections,
+        collection,
+        input.filter,
+        undefined,
+      )
+    : undefined;
+  return {
+    filter,
+    by: filter
+      ? uniqueSelectorFromFilter(collection, filter, [...path, 'filter'])
+      : undefined,
+    create: { kind: 'create', values: input.create },
+    update: { values: input.update },
+  };
+}
+
+async function relationDeleteInputToTarget(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  input: RelationDeleteInput,
+  path: readonly (string | number)[],
+): Promise<RelationDeleteTarget> {
+  const filterInput = input.filter;
+  if (!isPlainRecord(input)) {
+    invalid(
+      'INVALID_MUTATION',
+      'Relation delete requires an operation object.',
+      {
+        collection: collection.name,
+        path,
+      },
+    );
+  }
+  const filter = filterInput
+    ? await normalizeFilterWithRelations(
+        collections,
+        collection,
+        filterInput,
+        undefined,
+      )
+    : undefined;
+  return { filter };
 }
 
 function selectorFromValues(
@@ -1743,7 +1965,8 @@ async function normalizeRelationMutation(
       node.action !== 'set' &&
       node.action !== 'clear' &&
       node.action !== 'patch' &&
-      node.action !== 'replace'
+      node.action !== 'replace' &&
+      node.action !== 'modify'
     ) {
       invalid('INVALID_MUTATION', 'Unknown relation mutation action.', {
         collection: collection.name,
@@ -1783,7 +2006,10 @@ async function normalizeRelationMutation(
       if (
         (node.connect !== undefined && !Array.isArray(node.connect)) ||
         (node.create !== undefined && !Array.isArray(node.create)) ||
-        (node.disconnect !== undefined && !Array.isArray(node.disconnect))
+        (node.disconnect !== undefined && !Array.isArray(node.disconnect)) ||
+        (node.update !== undefined && !Array.isArray(node.update)) ||
+        (node.upsert !== undefined && !Array.isArray(node.upsert)) ||
+        (node.delete !== undefined && !Array.isArray(node.delete))
       ) {
         invalid(
           'INVALID_MUTATION',
@@ -1824,6 +2050,56 @@ async function normalizeRelationMutation(
             targetIndex,
           ]),
       );
+      const update = await Promise.all(
+        (node.update ?? []).map((targetNode, targetIndex) =>
+          normalizeRelationUpdateTarget(
+            collections,
+            target,
+            targetNode,
+            true,
+            depth,
+            state,
+            [...path, 'update', targetIndex],
+          ),
+        ),
+      );
+      const upsert = await Promise.all(
+        (node.upsert ?? []).map((targetNode, targetIndex) =>
+          normalizeRelationUpsertTarget(
+            collections,
+            target,
+            targetNode,
+            true,
+            depth,
+            state,
+            [...path, 'upsert', targetIndex],
+          ),
+        ),
+      );
+      const deleteTargets = await Promise.all(
+        (node.delete ?? []).map((targetNode, targetIndex) =>
+          normalizeRelationDeleteTarget(collections, target, targetNode, true, [
+            ...path,
+            'delete',
+            targetIndex,
+          ]),
+        ),
+      );
+      if (
+        operation === 'createOne' &&
+        (update.length > 0 || upsert.length > 0 || deleteTargets.length > 0)
+      ) {
+        invalid(
+          'RELATION_ACTION_NOT_ALLOWED',
+          'Only connect and create are allowed while creating a source record.',
+          {
+            collection: collection.name,
+            relation: relation.name,
+            path,
+            details: { allowed: ['connect', 'create'] },
+          },
+        );
+      }
       if (operation === 'createOne' && disconnect.length > 0) {
         invalid(
           'RELATION_ACTION_NOT_ALLOWED',
@@ -1854,7 +2130,15 @@ async function normalizeRelationMutation(
           },
         );
       }
-      if (connect.length + create.length + disconnect.length === 0) {
+      if (
+        connect.length +
+          create.length +
+          disconnect.length +
+          update.length +
+          upsert.length +
+          deleteTargets.length ===
+        0
+      ) {
         invalid('INVALID_MUTATION', 'Relation patch must not be empty.', {
           collection: collection.name,
           relation: relation.name,
@@ -1884,8 +2168,16 @@ async function normalizeRelationMutation(
           },
         );
       }
-      items.push({ ...node, connect, create, disconnect });
-    } else {
+      items.push({
+        ...node,
+        connect,
+        create,
+        disconnect,
+        update,
+        upsert,
+        delete: deleteTargets,
+      });
+    } else if (node.action === 'replace') {
       if (!Array.isArray(node.targets)) {
         invalid(
           'INVALID_MUTATION',
@@ -1917,6 +2209,52 @@ async function normalizeRelationMutation(
         path,
       );
       items.push({ ...node, targets });
+    } else {
+      const operationCount =
+        Number(node.update !== undefined) +
+        Number(node.upsert !== undefined) +
+        Number(node.delete !== undefined);
+      if (operationCount !== 1) {
+        invalid(
+          'INVALID_MUTATION',
+          'Relation modify requires exactly one update, upsert, or delete operation.',
+          { collection: collection.name, relation: relation.name, path },
+        );
+      }
+      items.push({
+        ...node,
+        update: node.update
+          ? await normalizeRelationUpdateTarget(
+              collections,
+              target,
+              node.update,
+              false,
+              depth,
+              state,
+              [...path, 'update'],
+            )
+          : undefined,
+        upsert: node.upsert
+          ? await normalizeRelationUpsertTarget(
+              collections,
+              target,
+              node.upsert,
+              false,
+              depth,
+              state,
+              [...path, 'upsert'],
+            )
+          : undefined,
+        delete: node.delete
+          ? await normalizeRelationDeleteTarget(
+              collections,
+              target,
+              node.delete,
+              false,
+              [...path, 'delete'],
+            )
+          : undefined,
+      });
     }
   }
   return {
@@ -2013,14 +2351,212 @@ async function normalizeCreateTarget(
   };
 }
 
+async function normalizeRelationUpdateTarget(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  target: RelationUpdateTarget,
+  filterRequired: boolean,
+  depth: number,
+  state: MutationValidationState,
+  path: readonly (string | number)[],
+): Promise<RelationUpdateTarget> {
+  if (!isPlainRecord(target) || !isPlainRecord(target.values)) {
+    invalid('INVALID_MUTATION', 'Expected a relation update target.', {
+      collection: collection.name,
+      path,
+    });
+  }
+  const filter = await normalizeRelationTargetFilter(
+    collections,
+    collection,
+    target.filter,
+    filterRequired,
+    path,
+  );
+  const mutation = await normalizeModelMutation(
+    collections,
+    collection,
+    target.values,
+    target.relations,
+    'updateOne',
+    depth + 1,
+    state,
+  );
+  return {
+    filter,
+    values: mutation.values,
+    relations: mutation.relations,
+  };
+}
+
+async function normalizeRelationUpsertTarget(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  target: RelationUpsertTarget,
+  filterRequired: boolean,
+  depth: number,
+  state: MutationValidationState,
+  path: readonly (string | number)[],
+): Promise<RelationUpsertTarget> {
+  if (!isPlainRecord(target) || !target.create || !target.update) {
+    invalid('INVALID_MUTATION', 'Expected a relation upsert target.', {
+      collection: collection.name,
+      path,
+    });
+  }
+  const filter = await normalizeRelationTargetFilter(
+    collections,
+    collection,
+    target.filter,
+    filterRequired,
+    path,
+  );
+  const by = filter
+    ? uniqueSelectorFromFilter(collection, filter, [...path, 'filter'])
+    : undefined;
+  const create = await normalizeCreateTarget(
+    collections,
+    collection,
+    target.create,
+    depth,
+    state,
+    [...path, 'create'],
+  );
+  if (
+    by &&
+    by.fields.some(
+      (field) =>
+        !Object.hasOwn(create.values, field) ||
+        create.values[field] !== by.values[field],
+    )
+  ) {
+    invalid(
+      'INVALID_MUTATION',
+      'Relation upsert create values must contain the same unique selector values as filter.',
+      { collection: collection.name, path: [...path, 'create'] },
+    );
+  }
+  return {
+    filter,
+    by,
+    create,
+    update: await normalizeRelationUpdateTarget(
+      collections,
+      collection,
+      target.update,
+      false,
+      depth,
+      state,
+      [...path, 'update'],
+    ),
+  };
+}
+
+async function normalizeRelationDeleteTarget(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  target: RelationDeleteTarget,
+  filterRequired: boolean,
+  path: readonly (string | number)[],
+): Promise<RelationDeleteTarget> {
+  const filter = target.filter;
+  if (!isPlainRecord(target)) {
+    invalid('INVALID_MUTATION', 'Expected a relation delete target.', {
+      collection: collection.name,
+      path,
+    });
+  }
+  return {
+    filter: await normalizeRelationTargetFilter(
+      collections,
+      collection,
+      filter,
+      filterRequired,
+      path,
+    ),
+  };
+}
+
+async function normalizeRelationTargetFilter(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  filter: FilterAst | undefined,
+  required: boolean,
+  path: readonly (string | number)[],
+): Promise<FilterAst | undefined> {
+  if (!filter) {
+    if (required) {
+      invalid(
+        'INVALID_FILTER',
+        'To-many relation target operations require a filter.',
+        { collection: collection.name, path: [...path, 'filter'] },
+      );
+    }
+    return undefined;
+  }
+  const normalized = await normalizeFilterWithRelations(
+    collections,
+    collection,
+    filter,
+    undefined,
+  );
+  if (!normalized || normalized.root.items.length === 0) {
+    invalid('INVALID_FILTER', 'Relation target filter must not be empty.', {
+      collection: collection.name,
+      path: [...path, 'filter'],
+    });
+  }
+  return normalized;
+}
+
+function uniqueSelectorFromFilter(
+  collection: CollectionDefinition,
+  filter: FilterAst,
+  path: readonly (string | number)[],
+): UniqueSelector {
+  const nodes = filter.root.items;
+  if (
+    filter.root.logic !== 'and' ||
+    nodes.length === 0 ||
+    nodes.some(
+      (node) =>
+        node.kind !== 'condition' ||
+        node.path.length !== 1 ||
+        node.operator !== '$eq' ||
+        node.value === undefined ||
+        Array.isArray(node.value) ||
+        isPlainRecord(node.value),
+    )
+  ) {
+    invalid(
+      'INVALID_UNIQUE_SELECTOR',
+      'Relation upsert filter must equal one primary or unique Field set.',
+      { collection: collection.name, path },
+    );
+  }
+  const conditions = nodes as readonly FilterConditionNode[];
+  return validateUnique(
+    collection,
+    {
+      kind: 'unique',
+      fields: conditions.map((node) => node.path[0]),
+      values: Object.fromEntries(
+        conditions.map((node) => [node.path[0], node.value]),
+      ),
+    },
+    path,
+  );
+}
+
 async function allowedRelationActions(
   collections: Pick<ConnectionCollections, 'get'>,
   source: CollectionDefinition,
   relation: RelationFieldDefinition,
   operation: 'createOne' | 'updateOne',
-): Promise<Array<'set' | 'clear' | 'patch' | 'replace'>> {
+): Promise<Array<'set' | 'clear' | 'patch' | 'replace' | 'modify'>> {
   if (relation.type === 'belongsTo' || relation.type === 'hasOne') {
-    const actions: Array<'set' | 'clear'> = ['set'];
+    const actions: Array<'set' | 'clear' | 'modify'> = ['set'];
+    if (operation === 'updateOne') actions.push('modify');
     if (
       operation === 'updateOne' &&
       (await relationCanDisconnect(collections, source, relation))
