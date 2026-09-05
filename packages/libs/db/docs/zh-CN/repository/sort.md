@@ -63,6 +63,7 @@ const records = await db.repository('projects').findMany({
 - 聚合关系路径可先经过若干 to-one 关系，最后必须是一个 to-many 关系。
 - 排序不会自动把关系或聚合值加入返回结果。需要返回这些数据时，另配 [Select](./select.md) 或[关系聚合](./select.md#关系聚合与独立分支)。
 - 当前关系聚合 Sort 没有局部 Filter 参数；不要认为 include 分支中的 Filter 会改变根排序聚合范围。
+- 空关系用于 Sort 时，`count` 和 `sum` 的排序值为 0，`avg / min / max` 为 null。因此 `sum().desc().nullsFirst()` 不会把空关系提前；它按 0 参与排序。这与关系 Select 的空集合 `sum` 返回 null 不同。
 
 对应聚合 AST 节点：
 

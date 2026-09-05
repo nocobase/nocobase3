@@ -60,6 +60,12 @@ describeIntegrationDatabases(
         },
       });
       const aggregates = rows[0].books as Record<string, unknown>;
+      expect({
+        sum: Number(aggregates.sum),
+        avg: Number(aggregates.avg),
+        min: Number(aggregates.min),
+        max: Number(aggregates.max),
+      }).toEqual({ sum: 440, avg: 220, min: 180, max: 260 });
       expect(Number(aggregates.sum)).toBe(
         Number(aggregates.min) + Number(aggregates.max),
       );

@@ -116,6 +116,13 @@ Use the package's supported Node 24+ runtime, matching the ABI used to build nat
 - Added [createMany](./methods/create-many.test.ts): empty/invalid input, database constraint rollback, context resolution and exact returning/default results.
 - These cover specific gaps in the matrix above, not all remaining method contracts. Read-only collection behavior, deeper validation limits, relation matrices and concurrency remain follow-up work.
 
+### Phase 2b: relation reads
+
+- [Filter matrix](./relations/filter-matrix.test.ts) independently covers some/none/empty/notEmpty on all four relation cardinalities, plus multi-hop relation predicates, logical groups, context and count/exists wiring.
+- [Sort matrix](./relations/sort-matrix.test.ts) covers sum/avg/min/max in both directions, explicit null placement, tied belongsToMany counts before pagination and missing to-one targets. Existing Sort semantics coalesce empty sum to zero; Select sum remains null on an empty relation.
+- [Batch loading](./relations/batch-loading.test.ts) verifies bounded SELECT query count when parent rows grow from 1 to 15, nested shared targets and exact projections. This establishes the measured graph only, not a universal query-count guarantee.
+- [Aggregate Select](./relations/aggregate-select.test.ts) now asserts exact nonempty sum/avg/min/max values in addition to relationships between aggregates.
+
 1. **Structural baseline (this phase):** partition files, extract fixed fixtures, retain assertions, repair documentation links and establish this map.
 2. **Public contracts and safety:** add independent method cases and documentation scenarios, then split transitional workflows where useful. Prioritize write scope, cardinality, identity and atomic rollback.
 3. **Relation matrix:** fill Filter/Select/Sort and applicable Values operations by relation type; add exact aggregate checks, isolation and limit boundaries.
