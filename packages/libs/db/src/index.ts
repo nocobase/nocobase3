@@ -105,6 +105,15 @@ export { UnsupportedCapabilityError } from './schema/capabilities.js';
 
 export { RepositoryError } from './repository/errors.js';
 export type {
+  AggregateAst,
+  AggregateBuilder,
+  AggregateExpression,
+  AggregateFunction,
+  AggregateNode,
+  AggregateOptions,
+  AggregateResult,
+  AggregateSelection,
+  AggregateSelectionResult,
   BooleanFilterOperators,
   ConnectTarget,
   CreateManyOptions,
@@ -172,6 +181,7 @@ export type {
   RelationUpsertInputList,
   RelationUpsertTarget,
   Repository,
+  RepositoryAggregateNumeric,
   RepositoryContext,
   RepositoryFilter,
   RepositoryMutationDescription,

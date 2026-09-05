@@ -7,6 +7,10 @@ import type {
 } from '../collection/types.js';
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
+import {
+  aggregateExpressionToNode,
+  DefaultAggregateBuilder,
+} from './aggregate-builder.js';
 import { DefaultFilterBuilder, getFilterFieldGroup } from './filter-builder.js';
 import {
   DefaultRelationFieldMutationBuilder,
@@ -19,6 +23,13 @@ import {
 import { DefaultSortBuilder, sortExpressionToNode } from './sort-builder.js';
 import type { RepositoryExecutionAdapter } from './internal/execution-adapter.js';
 import type {
+  AggregateAst,
+  AggregateBuilder,
+  AggregateNode,
+  AggregateOptions,
+  AggregateResult,
+  AggregateSelection,
+  AggregateSelectionResult,
   CreateManyOptions,
   CreateManyResult,
   CreateOneOptions,
@@ -167,6 +178,29 @@ export class DefaultRepository<
         options.context,
       ),
     });
+  }
+
+  async aggregate<TSelection extends AggregateSelection>(
+    options: AggregateOptions<TRecord> & {
+      readonly aggregate: (aggregate: AggregateBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<AggregateSelectionResult<TSelection>>;
+  async aggregate(
+    options: AggregateOptions<TRecord> & { readonly aggregate: AggregateAst },
+  ): Promise<AggregateResult>;
+  async aggregate(options: AggregateOptions<TRecord>): Promise<AggregateResult>;
+  async aggregate(
+    options: AggregateOptions<TRecord>,
+  ): Promise<AggregateResult> {
+    const collection = await this.collection();
+    const aggregate = normalizeAggregateInput(collection, options.aggregate);
+    validateAggregate(collection, aggregate);
+    const filter = await this.normalizeFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
+    return this.options.adapter.aggregate({ collection, aggregate, filter });
   }
 
   async describeMutation(
@@ -1284,6 +1318,135 @@ function normalizeSortInput<TRecord extends object>(
     collection: collection.name,
     items,
   };
+}
+
+function normalizeAggregateInput<TRecord extends object>(
+  collection: CollectionDefinition,
+  input: AggregateOptions<TRecord>['aggregate'],
+): AggregateAst {
+  if (typeof input !== 'function') return input;
+  const builder = new DefaultAggregateBuilder<TRecord>();
+  const selection = input(builder);
+  if (!selection || typeof selection !== 'object' || Array.isArray(selection)) {
+    invalid(
+      'INVALID_AGGREGATE',
+      'Aggregate callbacks must return an object of Aggregate Builder expressions.',
+      { collection: collection.name, path: ['aggregate'] },
+    );
+  }
+  let items: AggregateNode[];
+  try {
+    items = Object.entries(selection).map(([alias, expression]) =>
+      aggregateExpressionToNode(alias, expression),
+    );
+  } catch (error) {
+    invalid(
+      'INVALID_AGGREGATE',
+      'Aggregate callbacks must return Aggregate Builder expressions.',
+      { collection: collection.name, path: ['aggregate'], cause: error },
+    );
+  }
+  return {
+    kind: 'aggregate',
+    version: 1,
+    collection: collection.name,
+    items,
+  };
+}
+
+function validateAggregate(
+  collection: CollectionDefinition,
+  aggregate: AggregateAst,
+): void {
+  if (
+    !aggregate ||
+    typeof aggregate !== 'object' ||
+    aggregate.kind !== 'aggregate' ||
+    aggregate.version !== 1 ||
+    !Array.isArray(aggregate.items)
+  ) {
+    invalid(
+      'INVALID_AGGREGATE',
+      'Expected a Repository Aggregate AST version 1.',
+      { collection: collection.name, path: ['aggregate'] },
+    );
+  }
+  if (
+    aggregate.collection !== undefined &&
+    aggregate.collection !== collection.name
+  ) {
+    invalid(
+      'INVALID_AGGREGATE',
+      'Aggregate Collection does not match Repository.',
+      { collection: collection.name, path: ['aggregate', 'collection'] },
+    );
+  }
+  if (aggregate.items.length === 0) {
+    invalid(
+      'INVALID_AGGREGATE',
+      'Aggregate must contain at least one selection.',
+      { collection: collection.name, path: ['aggregate', 'items'] },
+    );
+  }
+  const aliases = new Set<string>();
+  for (const [index, item] of aggregate.items.entries()) {
+    const path = ['aggregate', 'items', index] as const;
+    if (!item || typeof item !== 'object') {
+      invalid('INVALID_AGGREGATE', 'Expected an aggregate selection.', {
+        collection: collection.name,
+        path,
+      });
+    }
+    if (
+      item.kind !== 'count' &&
+      item.kind !== 'sum' &&
+      item.kind !== 'avg' &&
+      item.kind !== 'min' &&
+      item.kind !== 'max'
+    ) {
+      invalid('INVALID_AGGREGATE', 'Unknown aggregate function.', {
+        collection: collection.name,
+        path: [...path, 'kind'],
+      });
+    }
+    if (typeof item.alias !== 'string' || item.alias.length === 0) {
+      invalid('INVALID_AGGREGATE', 'Aggregate alias must not be empty.', {
+        collection: collection.name,
+        path: [...path, 'alias'],
+      });
+    }
+    if (aliases.has(item.alias)) {
+      invalid('INVALID_AGGREGATE', 'Aggregate aliases must be unique.', {
+        collection: collection.name,
+        path: [...path, 'alias'],
+      });
+    }
+    aliases.add(item.alias);
+    if (item.kind !== 'count' && typeof item.field !== 'string') {
+      invalid('INVALID_AGGREGATE', 'Value aggregates require a Field.', {
+        collection: collection.name,
+        path: [...path, 'field'],
+      });
+    }
+    if (item.field === undefined) continue;
+    const field = scalarField(collection, item.field, [...path, 'field']);
+    const supported =
+      item.kind === 'count' ||
+      (item.kind === 'sum' || item.kind === 'avg'
+        ? FILTER_GROUP_BY_TYPE[field.type] === 'number'
+        : SORTABLE_TYPES.has(field.type));
+    if (!supported) {
+      invalid(
+        'FIELD_CAPABILITY_NOT_SUPPORTED',
+        `Aggregate "${item.kind}" is not supported for Field "${field.name}" of type "${field.type}".`,
+        {
+          collection: collection.name,
+          field: field.name,
+          path: [...path, 'field'],
+        },
+      );
+    }
+  }
 }
 
 function validateSortAst(

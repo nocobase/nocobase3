@@ -299,6 +299,33 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
     });
   });
 
+  it('applies relation filters to root aggregates', async () => {
+    const fixture = await createMutationFixture(context);
+    const repository = context.database.repository('repositoryProjects');
+    await repository.createOne({
+      values: {
+        name: 'Ada project',
+        owner: { connect: { id: fixture.ada } },
+      },
+    });
+    await repository.createOne({
+      values: {
+        name: 'Bob project',
+        owner: { connect: { id: fixture.bob } },
+      },
+    });
+
+    await expect(
+      repository.aggregate({
+        filter: (filter) => filter.string('owner.name').eq('Ada'),
+        aggregate: (aggregate) => ({
+          count: aggregate.count(),
+          maximumName: aggregate.max('name'),
+        }),
+      }),
+    ).resolves.toEqual({ count: 1, maximumName: 'Ada project' });
+  });
+
   it('updates, upserts, and deletes targets inside the current relation scope', async () => {
     const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');

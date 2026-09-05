@@ -38,6 +38,7 @@ import type {
   RepositoryExecutedMutation,
   RepositoryExecutedManyMutation,
   RepositoryExecutionAdapter,
+  RepositoryAggregatePlan,
   RepositoryFilterPlan,
   RepositoryReadPlan,
   RepositorySingleMutationMiss,
@@ -115,6 +116,47 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       client,
     );
     return (await query.first()) !== undefined;
+  }
+
+  async aggregate(plan: RepositoryAggregatePlan): Promise<RepositoryRecord> {
+    const client = this.getClient();
+    const alias = 'repository_root';
+    const query = tableQuery(client, plan.collection, alias);
+    const selections = plan.aggregate.items.map((item, index) => {
+      const resultAlias = `aggregate_${index}`;
+      const field =
+        item.field !== undefined
+          ? qualified(alias, column(plan.collection, item.field))
+          : '*';
+      if (item.kind === 'count') query.count({ [resultAlias]: field });
+      if (item.kind === 'sum') query.sum({ [resultAlias]: field });
+      if (item.kind === 'avg') query.avg({ [resultAlias]: field });
+      if (item.kind === 'min') query.min({ [resultAlias]: field });
+      if (item.kind === 'max') query.max({ [resultAlias]: field });
+      return { item, resultAlias };
+    });
+    const graph = await this.prepareFilterGraph(
+      plan.collection,
+      plan.filter?.root,
+    );
+    applyFilter(
+      query,
+      plan.collection,
+      plan.filter?.root,
+      graph,
+      alias,
+      client,
+    );
+    const row = (await query.first()) as RepositoryRecord | undefined;
+    return Object.fromEntries(
+      selections.map(({ item, resultAlias }) => {
+        const value = row?.[resultAlias];
+        return [
+          item.alias,
+          item.kind === 'count' ? Number(value ?? 0) : (value ?? null),
+        ];
+      }),
+    );
   }
 
   async createOne(

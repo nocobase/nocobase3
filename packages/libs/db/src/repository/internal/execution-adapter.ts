@@ -1,5 +1,6 @@
 import type { CollectionDefinition } from '../../collection/types.js';
 import type {
+  AggregateAst,
   FilterAst,
   CreatedTargetReference,
   RelationMutationAst,
@@ -8,6 +9,12 @@ import type {
   SortAst,
   UniqueSelector,
 } from '../types.js';
+
+export interface RepositoryAggregatePlan {
+  readonly collection: CollectionDefinition;
+  readonly aggregate: AggregateAst;
+  readonly filter?: FilterAst;
+}
 
 export interface RepositoryReadPlan {
   readonly collection: CollectionDefinition;
@@ -109,6 +116,7 @@ export interface RepositoryExecutionAdapter {
   findOne(plan: RepositoryReadPlan): Promise<RepositoryRecord | undefined>;
   count(plan: RepositoryFilterPlan): Promise<number>;
   exists(plan: RepositoryFilterPlan): Promise<boolean>;
+  aggregate(plan: RepositoryAggregatePlan): Promise<RepositoryRecord>;
   createOne(plan: RepositoryCreateOnePlan): Promise<RepositoryExecutedMutation>;
   createMany(
     plan: RepositoryCreateManyPlan,

@@ -136,6 +136,18 @@ function _deleteSelectedUsers(repository: UserRepository) {
   });
 }
 
+function _aggregateUsers(repository: UserRepository) {
+  return repository.aggregate({
+    filter: { enabled: true },
+    aggregate: (aggregate) => ({
+      count: aggregate.count(),
+      enabledCount: aggregate.count('enabled'),
+      minimumId: aggregate.min('id'),
+      maximumName: aggregate.max('name'),
+    }),
+  });
+}
+
 it('infers scalar builder selections and preserves fallback result types', () => {
   expectTypeOf<ReturnType<typeof _findSelectedUsers>>().toEqualTypeOf<
     Promise<Array<Pick<UserRecord, 'id' | 'name'>>>
@@ -181,5 +193,13 @@ it('infers scalar builder selections and preserves fallback result types', () =>
   >();
   expectTypeOf<ReturnType<typeof _deleteSelectedUsers>>().toEqualTypeOf<
     Promise<DeleteManyResult<Pick<UserRecord, 'id' | 'email'>>>
+  >();
+  expectTypeOf<ReturnType<typeof _aggregateUsers>>().toEqualTypeOf<
+    Promise<{
+      readonly count: number;
+      readonly enabledCount: number;
+      readonly minimumId: string | null;
+      readonly maximumName: string | null;
+    }>
   >();
 });

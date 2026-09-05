@@ -33,6 +33,15 @@
         "validateSeeds"
       ],
       "types": [
+        "AggregateAst",
+        "AggregateBuilder",
+        "AggregateExpression",
+        "AggregateFunction",
+        "AggregateNode",
+        "AggregateOptions",
+        "AggregateResult",
+        "AggregateSelection",
+        "AggregateSelectionResult",
         "BooleanFilterOperators",
         "BuilderExecOptions",
         "BuilderResult",
@@ -145,6 +154,7 @@
         "RelationUpsertInputList",
         "RelationUpsertTarget",
         "Repository",
+        "RepositoryAggregateNumeric",
         "RepositoryContext",
         "RepositoryErrorCode",
         "RepositoryErrorOptions",

@@ -350,6 +350,7 @@ interface Repository<
 
   count(options?: FilterOnlyOptions<TRecord>): Promise<number>;
   exists(options?: FilterOnlyOptions<TRecord>): Promise<boolean>;
+  aggregate(options: AggregateOptions<TRecord>): Promise<AggregateResult>;
 
   describeMutation(
     options: DescribeMutationOptions,
@@ -389,6 +390,7 @@ type RepositoryErrorCode =
   | 'INVALID_FILTER'
   | 'INVALID_SELECT'
   | 'INVALID_SORT'
+  | 'INVALID_AGGREGATE'
   | 'INVALID_MUTATION'
   | 'INVALID_UNIQUE_SELECTOR'
   | 'RECORD_NOT_FOUND'
@@ -433,10 +435,14 @@ interface RepositoryErrorShape {
   简写。直接字段、to-one relation field 和 to-many relation aggregate 使用不同节点。
 - `count()` 统计符合筛选条件的记录总数，`exists()` 只判断是否至少存在一条；二者忽略
   Select、Sort 和分页，因此只接受 `filter` 与 `context`。
+- `aggregate()` 使用 Aggregate Builder 或 JSON AST 定义带别名的 `count`、`sum`、`avg`、
+  `min` 和 `max`，输入集合只受 `filter` 影响。
 
 Select AST 的结果形状、relation filter/sort、批量加载和兼容转换见
 [Select AST](./select-ast.md)。Sort AST 的直接字段、关系字段、关系聚合、NULL 和稳定排序
 语义见 [Sort AST](./sort-ast.md)。
+Aggregate 的 Builder、JSON AST、空集合和精度语义见
+[Repository Aggregate](./aggregate.md)。
 
 ### 写入语义与安全边界
 
@@ -726,7 +732,7 @@ const events = await db.repository('events', 'analytics').findMany({
 
 Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 
-- 支持 `findMany()`、`findOne()`、`count()`、`exists()`、`createOne()`、`createMany()`、
+- 支持 `findMany()`、`findOne()`、`count()`、`exists()`、`aggregate()`、`createOne()`、`createMany()`、
   `updateOne()`、`upsertOne()`、`updateMany()`、`deleteOne()`、`deleteMany()`。
 - `findMany()` 和 `findOne()` 支持 Select AST；列表查询还支持 Filter AST、Sort AST、
   `limit`、`offset` 等常见选项。
@@ -737,6 +743,7 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
   sort。
 - Sort AST 支持直接字段、纯 to-one relation field 和单个终点 to-many relation
   aggregate。
+- Aggregate 支持根级 `count`、`sum`、`avg`、`min` 和 `max`，并接受 Filter 与 context。
 - `createOne()` 和 `updateOne()` 使用模型形状 `values`：标量字段直接写值，relation Field
   可以使用 Builder 或等价纯 JSON。
 - relation Field 支持 `create`、`connect`、`disconnect`、`set`、`update`、`upsert` 和

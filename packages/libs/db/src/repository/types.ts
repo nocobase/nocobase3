@@ -377,6 +377,76 @@ export type NonEmptyRepositorySort<TRecord extends object> =
       sort: SortBuilder<TRecord>,
     ) => SortExpression | readonly [SortExpression, ...SortExpression[]]);
 
+export type AggregateFunction = 'count' | 'sum' | 'avg' | 'min' | 'max';
+
+export type AggregateNode =
+  | {
+      readonly kind: 'count';
+      readonly alias: string;
+      readonly field?: string;
+    }
+  | {
+      readonly kind: Exclude<AggregateFunction, 'count'>;
+      readonly alias: string;
+      readonly field: string;
+    };
+
+export interface AggregateAst {
+  readonly kind: 'aggregate';
+  readonly version: 1;
+  readonly collection?: string;
+  readonly items: readonly AggregateNode[];
+}
+
+declare const aggregateExpressionType: unique symbol;
+
+export interface AggregateExpression<T = unknown> {
+  readonly kind: 'aggregateExpression';
+  readonly [aggregateExpressionType]?: T;
+}
+
+export type RepositoryAggregateNumeric = number | string | bigint;
+
+export interface AggregateBuilder<TRecord extends object = RepositoryRecord> {
+  count(field?: keyof TRecord & string): AggregateExpression<number>;
+  sum(
+    field: keyof TRecord & string,
+  ): AggregateExpression<RepositoryAggregateNumeric | null>;
+  avg(
+    field: keyof TRecord & string,
+  ): AggregateExpression<RepositoryAggregateNumeric | null>;
+  min<TKey extends keyof TRecord & string>(
+    field: TKey,
+  ): AggregateExpression<TRecord[TKey] | null>;
+  max<TKey extends keyof TRecord & string>(
+    field: TKey,
+  ): AggregateExpression<TRecord[TKey] | null>;
+}
+
+export type AggregateSelection = Readonly<
+  Record<string, AggregateExpression<unknown>>
+>;
+
+export type AggregateSelectionResult<TSelection extends AggregateSelection> = {
+  readonly [
+    TKey in keyof TSelection
+  ]: TSelection[TKey] extends AggregateExpression<infer TValue>
+    ? TValue
+    : never;
+};
+
+export type AggregateResult = Readonly<
+  Record<string, RepositoryMutationScalarValue>
+>;
+
+export interface AggregateOptions<TRecord extends object> {
+  readonly filter?: RepositoryFilter<TRecord>;
+  readonly aggregate:
+    | AggregateAst
+    | ((aggregate: AggregateBuilder<TRecord>) => AggregateSelection);
+  readonly context?: RepositoryContext;
+}
+
 export interface UniqueSelector {
   readonly kind: 'unique';
   readonly fields: readonly string[];
@@ -807,6 +877,15 @@ export interface Repository<
   findOne(options: FindOneOptions<TRecord>): Promise<TRecord | undefined>;
   count(options?: FilterOnlyOptions<TRecord>): Promise<number>;
   exists(options?: FilterOnlyOptions<TRecord>): Promise<boolean>;
+  aggregate<TSelection extends AggregateSelection>(
+    options: AggregateOptions<TRecord> & {
+      readonly aggregate: (aggregate: AggregateBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<AggregateSelectionResult<TSelection>>;
+  aggregate(
+    options: AggregateOptions<TRecord> & { readonly aggregate: AggregateAst },
+  ): Promise<AggregateResult>;
+  aggregate(options: AggregateOptions<TRecord>): Promise<AggregateResult>;
   describeMutation(
     options: DescribeMutationOptions,
   ): Promise<RepositoryMutationDescription>;
