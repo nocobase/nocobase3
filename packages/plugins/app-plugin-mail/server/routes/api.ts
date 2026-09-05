@@ -44,10 +44,18 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       authentication.required(),
       authorization.middleware(),
       async (context, next) => {
-        const allowed = await context.get('authz').can({
+        const authz = context.get('authz');
+        const settingsAllowed = await authz.can({
           resource: { type: 'page', id: 'mail.settings' },
           action: 'access',
         });
+        const workspaceAllowed =
+          isWorkspaceReadRequest(context.req.method, context.req.path) &&
+          (await authz.can({
+            resource: { type: 'page', id: 'mail' },
+            action: 'access',
+          }));
+        const allowed = settingsAllowed || workspaceAllowed;
         if (!allowed) {
           const t = getRequestTranslator(context, MAIL_NAMESPACE);
           return context.json(
@@ -124,6 +132,14 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         ),
       }),
     );
+    routes.get('/accounts/:accountId/folders', async (context) =>
+      context.json({
+        data: await mail.listFolders(
+          operationContext(context),
+          context.req.param('accountId'),
+        ),
+      }),
+    );
     routes.post('/messages/send', async (context) => {
       const input = await readComposeInput(context.req.raw);
       return context.json(
@@ -161,8 +177,11 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
     routes.get('/messages', async (context) => {
       const accountId = context.req.query('accountId');
+      const folderId = context.req.query('folderId');
       const input: MailListMessagesInput = {
         accountIds: accountId ? [accountId] : undefined,
+        folderIds: folderId ? [folderId] : undefined,
+        conversationId: context.req.query('conversationId'),
         query: context.req.query('query'),
         cursor: context.req.query('cursor'),
         limit: optionalInteger(context.req.query('limit'), 'limit'),
@@ -173,6 +192,21 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.listMessages(operationContext(context), input),
       });
     });
+    routes.get(
+      '/accounts/:accountId/conversations/:conversationId/messages',
+      async (context) =>
+        context.json({
+          data: await mail.listConversationMessages(
+            operationContext(context),
+            context.req.param('accountId'),
+            context.req.param('conversationId'),
+            {
+              cursor: context.req.query('cursor'),
+              limit: optionalInteger(context.req.query('limit'), 'limit'),
+            },
+          ),
+        }),
+    );
     routes.get('/accounts/:accountId/messages/:messageId', async (context) => {
       const t = getRequestTranslator(context, MAIL_NAMESPACE);
       const message = await mail.getMessage(
@@ -196,6 +230,18 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     router.route('/mail', routes);
     return router;
   });
+
+function isWorkspaceReadRequest(method: string, path: string): boolean {
+  if (method !== 'GET') return false;
+  const mailPath = path.slice(path.indexOf('/mail'));
+  return (
+    mailPath === '/mail/accounts' ||
+    mailPath === '/mail/messages' ||
+    /^\/mail\/accounts\/[^/]+\/folders$/.test(mailPath) ||
+    /^\/mail\/accounts\/[^/]+\/messages\/[^/]+$/.test(mailPath) ||
+    /^\/mail\/accounts\/[^/]+\/conversations\/[^/]+\/messages$/.test(mailPath)
+  );
+}
 
 function operationContext(context: {
   get(

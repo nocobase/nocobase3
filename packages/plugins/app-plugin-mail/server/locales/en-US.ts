@@ -2,7 +2,7 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   errors: {
-    accessDenied: 'Mail settings access is required.',
+    accessDenied: 'Mail access is required.',
     idempotencyConflict:
       'The idempotency key is already associated with another request.',
     invalidRequest: 'The mail request is invalid.',

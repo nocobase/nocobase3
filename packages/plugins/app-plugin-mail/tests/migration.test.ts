@@ -21,6 +21,7 @@ const COLLECTIONS = [
   ['mailIdentities', 'mail_identities'],
   ['mailFolders', 'mail_folders'],
   ['mailMessages', 'mail_messages'],
+  ['mailMessageFolders', 'mail_message_folders'],
   ['mailSyncStates', 'mail_sync_states'],
   ['mailSyncRuns', 'mail_sync_runs'],
   ['mailSubmissions', 'mail_submissions'],
@@ -61,12 +62,25 @@ describe('mail database migration', () => {
         expect.objectContaining({
           name: 'mail_messages_account_provider_unique',
         }),
+        expect.objectContaining({ name: 'mail_messages_account_sort_idx' }),
       ]),
     );
     await expect(client.raw('PRAGMA index_list(mail_outbox)')).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'mail_outbox_deduplication_unique' }),
         expect.objectContaining({ name: 'mail_outbox_ready_idx' }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA index_list(mail_message_folders)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'mail_message_folders_message_folder_unique',
+        }),
+        expect.objectContaining({
+          name: 'mail_message_folders_account_folder_idx',
+        }),
       ]),
     );
     await expect(

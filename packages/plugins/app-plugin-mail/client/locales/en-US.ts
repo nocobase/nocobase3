@@ -2,12 +2,32 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   nav: {
+    workspace: 'Mail',
     settings: 'Mail',
     dev: 'Mail playground',
   },
   actions: {
     refresh: 'Refresh',
     reloadAccounts: 'Reload accounts',
+  },
+  workspace: {
+    title: 'Mail',
+    allMail: 'All mail',
+    search: 'Search mail',
+    unreadOnly: 'Unread',
+    starredOnly: 'Starred',
+    folders: 'Folders',
+    noAccounts:
+      'Connect a mail account in Settings to view synchronized messages.',
+    empty: 'No messages match this mailbox view.',
+    selectMessage: 'Select a message to read it.',
+    conversation: '{{count}} messages in this conversation',
+    attachmentCount: '{{count}} attachments',
+    unknownSender: 'Unknown sender',
+    noSubject: '(no subject)',
+    loadMore: 'Load more',
+    loadEarlier: 'Load earlier messages',
+    loading: 'Loading mail…',
   },
   settings: {
     eyebrow: 'Communication',

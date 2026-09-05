@@ -1,4 +1,5 @@
 import {
+  defineAppRoutes,
   defineDevRoutes,
   defineSettingsRoutes,
   type AppClientRouteContribution,
@@ -6,8 +7,18 @@ import {
 import { Mail, Wrench } from 'lucide-react';
 
 export const MAIL_SETTINGS_RESOURCE: string = 'mail.settings';
+export const MAIL_WORKSPACE_RESOURCE: string = 'mail';
 
 const routes: readonly AppClientRouteContribution[] = [
+  defineAppRoutes([
+    {
+      name: 'mail',
+      path: '/mail',
+      auth: 'required',
+      access: { resource: MAIL_WORKSPACE_RESOURCE, action: 'access' },
+      componentLoader: () => import('./pages/mail-workspace-page.js'),
+    },
+  ]),
   defineSettingsRoutes([
     {
       name: 'mail',

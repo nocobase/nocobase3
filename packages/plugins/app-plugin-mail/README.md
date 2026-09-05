@@ -14,6 +14,8 @@ The first runnable vertical slice provides:
 - authenticated OAuth start plus a public one-time-state callback;
 - Settings UI for Provider authorization, connected accounts, and bounded
   initial-sync policy;
+- an authenticated Mail workspace with an application-sidebar entry, account
+  and folder navigation, message search and filters, and conversation detail;
 - a development-only playground for sending mail, triggering sync, and
   inspecting synchronized messages;
 - AES-256-GCM encrypted OAuth credential storage with token-rotation support;
@@ -30,11 +32,12 @@ The first runnable vertical slice provides:
 - resumable Provider folder discovery with cursor reconciliation for folder
   additions and removals;
 - idempotent message upserts by `(accountId, providerMessageId)`;
+- indexed message-folder relations and Provider-native conversation lookup;
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
-The MVP does not provide an end-user inbox, push webhooks, scheduled sync,
-subscription renewal, or outbound attachments. Gmail and Microsoft
+The MVP does not provide message mutations from the workspace, push webhooks,
+scheduled sync, subscription renewal, or outbound attachments. Gmail and Microsoft
 implementations live in separate Provider plugins; Mail Core owns OAuth
 transactions and encrypted credential storage, while Provider plugins own
 protocol calls and token refresh behavior.
@@ -105,11 +108,13 @@ GET  /api/mail/accounts
 GET  /api/mail/providers
 POST /api/mail/authorizations
 GET  /api/mail/accounts/:accountId/identities
+GET  /api/mail/accounts/:accountId/folders
 POST /api/mail/messages/send
 POST /api/mail/accounts/:accountId/sync
 GET  /api/mail/sync-runs/:syncRunId
 GET  /api/mail/messages
 GET  /api/mail/accounts/:accountId/messages/:messageId
+GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 ```
 
 `GET /mail/oauth/callback` is intentionally public because Google and
@@ -118,10 +123,17 @@ single-use state created by the authenticated start endpoint and redirects the
 browser to `/settings/mail` after completion; state and PKCE verifiers are
 never returned by account APIs.
 
-Account ownership is enforced again in `MailService`; Route authentication is
-not treated as ownership authorization. Inactive accounts cannot send or
-synchronize. Public responses omit credential references, Provider cursors,
-leases, and internal error messages.
+Mailbox read APIs require `page:mail/access` or
+`page:mail.settings/access`. OAuth, synchronization, and sending APIs require
+`page:mail.settings/access`. Account ownership is enforced again in
+`MailService`; Route authentication is not treated as ownership authorization.
+Inactive accounts cannot send or synchronize. Public responses omit credential
+references, Provider cursors, leases, and internal error messages.
+
+The `/mail` workspace opens a complete conversation only when a Provider
+supplies its stable identifier (`threadId` for Gmail or `conversationId` for
+Microsoft Graph). Messages without that identifier open independently; the
+core does not infer a conversation from a matching subject.
 
 ## Verification
 

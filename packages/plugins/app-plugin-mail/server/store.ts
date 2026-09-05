@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 
 import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
@@ -10,6 +11,7 @@ import type {
   MailFolder,
   MailIdentity,
   MailListMessagesInput,
+  MailListConversationMessagesInput,
   MailMessage,
   MailMessageSummary,
   MailOutboxRecord,
@@ -102,12 +104,20 @@ interface MessageRow extends Row {
   html?: string | null;
   receivedAt?: string | null;
   sentAt?: string | null;
+  sortAt: string;
   read: boolean | number;
   starred: boolean | number;
   draft: boolean | number;
   attachments: readonly NormalizedMailAttachment[] | string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface MessageFolderRow extends Row {
+  id: string;
+  accountId: string;
+  messageId: string;
+  providerFolderId: string;
 }
 
 interface SyncStateRow extends Row {
@@ -358,31 +368,66 @@ export class DatabaseMailStore implements MailStore {
       : owned;
     if (requested.length === 0) return { items: [] };
     const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
-    const offset = parseOffset(input.cursor);
+    const cursor = parseMessageCursor(input.cursor);
     let query = this.database
       .query()
       .selectFrom<MessageRow>('mailMessages')
-      .selectAll()
+      .selectAll('mailMessages')
       .where(
-        'accountId',
+        'mailMessages.accountId',
         'in',
         requested.map((account) => account.id),
       );
+    if (input.folderIds?.length) {
+      query = query
+        .innerJoin(
+          'mailMessageFolders',
+          'mailMessages.id',
+          'mailMessageFolders.messageId',
+        )
+        .where('mailMessageFolders.providerFolderId', 'in', input.folderIds)
+        .distinct();
+    }
+    if (input.conversationId)
+      query = query.where(
+        'mailMessages.providerConversationId',
+        '=',
+        input.conversationId,
+      );
     if (input.unread !== undefined)
-      query = query.where('read', '=', !input.unread);
+      query = query.where('mailMessages.read', '=', !input.unread);
     if (input.starred !== undefined)
-      query = query.where('starred', '=', input.starred);
-    if (input.query) query = query.where('subject', 'like', `%${input.query}%`);
+      query = query.where('mailMessages.starred', '=', input.starred);
+    if (input.query)
+      query = query.where((builder) =>
+        builder.eb.or([
+          builder.eb('mailMessages.subject', 'like', `%${input.query}%`),
+          builder.eb('mailMessages.preview', 'like', `%${input.query}%`),
+        ]),
+      );
+    if (cursor) {
+      query = query.where((builder) =>
+        builder.eb.or([
+          builder.eb('mailMessages.sortAt', '<', cursor.sortAt),
+          builder.eb.and([
+            builder.eb('mailMessages.sortAt', '=', cursor.sortAt),
+            builder.eb('mailMessages.id', '<', cursor.id),
+          ]),
+        ]),
+      );
+    }
     const rows = await query
-      .orderBy('receivedAt', 'desc')
-      .orderBy('id', 'desc')
+      .orderBy('mailMessages.sortAt', 'desc')
+      .orderBy('mailMessages.id', 'desc')
       .limit(limit + 1)
-      .offset(offset)
       .execute<MessageRow>();
     const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit);
+    const lastItem = items.at(-1);
     return {
-      items: rows.slice(0, limit).map((row) => toMailMessage(row)),
-      nextCursor: hasMore ? String(offset + limit) : undefined,
+      items: items.map((row) => toMailMessage(row)),
+      nextCursor:
+        hasMore && lastItem ? encodeMessageCursor(lastItem) : undefined,
     };
   }
 
@@ -401,6 +446,48 @@ export class DatabaseMailStore implements MailStore {
       .where('accountId', '=', accountId)
       .executeTakeFirst<MessageRow>();
     return row ? toMailMessage(row) : undefined;
+  }
+
+  public async listConversationMessages(
+    userId: string,
+    accountId: string,
+    conversationId: string,
+    input: MailListConversationMessagesInput = {},
+  ): Promise<MailPage<MailMessage>> {
+    const account = await this.getAccount(accountId);
+    if (!account || account.userId !== userId) return { items: [] };
+    const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+    const cursor = parseMessageCursor(input.cursor);
+    let query = this.database
+      .query()
+      .selectFrom<MessageRow>('mailMessages')
+      .selectAll()
+      .where('accountId', '=', accountId)
+      .where('providerConversationId', '=', conversationId);
+    if (cursor) {
+      query = query.where((builder) =>
+        builder.eb.or([
+          builder.eb('sortAt', '<', cursor.sortAt),
+          builder.eb.and([
+            builder.eb('sortAt', '=', cursor.sortAt),
+            builder.eb('id', '<', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    const rows = await query
+      .orderBy('sortAt', 'desc')
+      .orderBy('id', 'desc')
+      .limit(limit + 1)
+      .execute<MessageRow>();
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit);
+    const lastItem = items.at(-1);
+    return {
+      items: [...items].reverse().map(toMailMessage),
+      nextCursor:
+        hasMore && lastItem ? encodeMessageCursor(lastItem) : undefined,
+    };
   }
 
   public async getSyncCursor(
@@ -541,6 +628,11 @@ export class DatabaseMailStore implements MailStore {
           );
         }
         await staleFolders.execute();
+        await removeStaleMessageFolders(
+          connection.query,
+          input.run.accountId,
+          input.completeProviderFolderIds,
+        );
       }
       await upsertMessages(
         connection.query,
@@ -938,14 +1030,29 @@ async function upsertMessages(
   accountId: string,
   messages: readonly NormalizedMailMessage[],
 ): Promise<void> {
+  const uniqueMessages = [
+    ...new Map(
+      messages.map((message) => [message.providerMessageId, message]),
+    ).values(),
+  ];
+  if (uniqueMessages.length === 0) return;
   const now = new Date().toISOString();
-  for (const message of messages) {
-    const existing = await query
-      .selectFrom<MessageRow>('mailMessages')
-      .select(['id', 'createdAt'])
-      .where('accountId', '=', accountId)
-      .where('providerMessageId', '=', message.providerMessageId)
-      .executeTakeFirst<Pick<MessageRow, 'id' | 'createdAt'>>();
+  const existingRows = await query
+    .selectFrom<MessageRow>('mailMessages')
+    .select(['id', 'providerMessageId', 'createdAt'])
+    .where('accountId', '=', accountId)
+    .where(
+      'providerMessageId',
+      'in',
+      uniqueMessages.map((message) => message.providerMessageId),
+    )
+    .execute<Pick<MessageRow, 'id' | 'providerMessageId' | 'createdAt'>>();
+  const existingByProviderId = new Map(
+    existingRows.map((row) => [row.providerMessageId, row]),
+  );
+  const rows: MessageRow[] = [];
+  for (const message of uniqueMessages) {
+    const existing = existingByProviderId.get(message.providerMessageId);
     const row = toMessageRow(
       accountId,
       message,
@@ -953,15 +1060,104 @@ async function upsertMessages(
       existing?.createdAt ?? now,
       now,
     );
+    rows.push(row);
     if (existing) {
       await query
         .updateTable<MessageRow>('mailMessages')
         .set(row)
         .where('id', '=', existing.id)
         .execute();
-    } else {
-      await query.insertInto<MessageRow>('mailMessages').values(row).execute();
     }
+  }
+  const newRows = rows.filter(
+    (row) => !existingByProviderId.has(row.providerMessageId),
+  );
+  for (const batch of chunks(newRows, 25)) {
+    await query.insertInto<MessageRow>('mailMessages').values(batch).execute();
+  }
+  const messageIds = rows.map((row) => row.id);
+  await query
+    .deleteFrom<MessageFolderRow>('mailMessageFolders')
+    .where('messageId', 'in', messageIds)
+    .execute();
+  const folderRows = rows.flatMap((row) =>
+    [
+      ...new Set(
+        parseJson<readonly string[]>(
+          row.providerFolderIds,
+          'message folder IDs',
+        ),
+      ),
+    ].map((providerFolderId): MessageFolderRow => ({
+      id: randomUUID(),
+      accountId,
+      messageId: row.id,
+      providerFolderId,
+    })),
+  );
+  for (const batch of chunks(folderRows, 100)) {
+    await query
+      .insertInto<MessageFolderRow>('mailMessageFolders')
+      .values(batch)
+      .execute();
+  }
+}
+
+async function removeStaleMessageFolders(
+  query: QueryAdapter,
+  accountId: string,
+  completeProviderFolderIds: readonly string[],
+): Promise<void> {
+  let staleRowsQuery = query
+    .selectFrom<MessageFolderRow>('mailMessageFolders')
+    .selectAll()
+    .where('accountId', '=', accountId);
+  if (completeProviderFolderIds.length > 0) {
+    staleRowsQuery = staleRowsQuery.where(
+      'providerFolderId',
+      'not in',
+      completeProviderFolderIds,
+    );
+  }
+  const staleRows = await staleRowsQuery.execute<MessageFolderRow>();
+  if (staleRows.length === 0) return;
+  for (const batch of chunks(staleRows, 200)) {
+    await query
+      .deleteFrom<MessageFolderRow>('mailMessageFolders')
+      .where(
+        'id',
+        'in',
+        batch.map((row) => row.id),
+      )
+      .execute();
+  }
+  const affectedMessageIds = new Set(staleRows.map((row) => row.messageId));
+  const remainingRows: MessageFolderRow[] = [];
+  for (const batch of chunks([...affectedMessageIds], 500)) {
+    remainingRows.push(
+      ...(await query
+        .selectFrom<MessageFolderRow>('mailMessageFolders')
+        .selectAll()
+        .where('messageId', 'in', batch)
+        .execute<MessageFolderRow>()),
+    );
+  }
+  const remainingByMessageId = new Map<string, string[]>();
+  for (const row of remainingRows) {
+    const folderIds = remainingByMessageId.get(row.messageId) ?? [];
+    folderIds.push(row.providerFolderId);
+    remainingByMessageId.set(row.messageId, folderIds);
+  }
+  for (const messageId of affectedMessageIds) {
+    await query
+      .updateTable<MessageRow>('mailMessages')
+      .set({
+        providerFolderIds: JSON.stringify(
+          remainingByMessageId.get(messageId) ?? [],
+        ),
+      })
+      .where('id', '=', messageId)
+      .execute();
   }
 }
 
@@ -1000,6 +1196,22 @@ async function deleteMessages(
   providerMessageIds: readonly string[],
 ): Promise<void> {
   if (providerMessageIds.length === 0) return;
+  const messages = await query
+    .selectFrom<MessageRow>('mailMessages')
+    .select('id')
+    .where('accountId', '=', accountId)
+    .where('providerMessageId', 'in', providerMessageIds)
+    .execute<Pick<MessageRow, 'id'>>();
+  if (messages.length > 0) {
+    await query
+      .deleteFrom<MessageFolderRow>('mailMessageFolders')
+      .where(
+        'messageId',
+        'in',
+        messages.map((message) => message.id),
+      )
+      .execute();
+  }
   await query
     .deleteFrom<MessageRow>('mailMessages')
     .where('accountId', '=', accountId)
@@ -1028,6 +1240,11 @@ async function removeMessagesFromFolders(
       .updateTable<MessageRow>('mailMessages')
       .set({ providerFolderIds: JSON.stringify(providerFolderIds) })
       .where('id', '=', row.id)
+      .execute();
+    await query
+      .deleteFrom<MessageFolderRow>('mailMessageFolders')
+      .where('messageId', '=', row.id)
+      .where('providerFolderId', '=', removal.providerFolderId)
       .execute();
   }
 }
@@ -1198,6 +1415,7 @@ function toMessageRow(
     html: message.html,
     receivedAt: message.receivedAt,
     sentAt: message.sentAt,
+    sortAt: message.receivedAt ?? message.sentAt ?? createdAt,
     read: message.read,
     starred: message.starred,
     draft: message.draft,
@@ -1351,10 +1569,46 @@ function jsonOrNull(value: unknown): string | null {
   return value === undefined ? null : JSON.stringify(value);
 }
 
-function parseOffset(cursor: string | undefined): number {
-  if (!cursor) return 0;
-  const value = Number(cursor);
-  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+interface MessageCursor {
+  readonly sortAt: string;
+  readonly id: string;
+}
+
+function encodeMessageCursor(row: MessageRow): string {
+  return Buffer.from(
+    JSON.stringify({ sortAt: row.sortAt, id: row.id } satisfies MessageCursor),
+  ).toString('base64url');
+}
+
+function parseMessageCursor(
+  cursor: string | undefined,
+): MessageCursor | undefined {
+  if (!cursor) return undefined;
+  try {
+    const value = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as Partial<MessageCursor>;
+    if (
+      typeof value.sortAt !== 'string' ||
+      value.sortAt.length === 0 ||
+      typeof value.id !== 'string' ||
+      value.id.length === 0
+    ) {
+      throw new TypeError('Mail page cursor is invalid.');
+    }
+    return { sortAt: value.sortAt, id: value.id };
+  } catch (error) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError('Mail page cursor is invalid.', { cause: error });
+  }
+}
+
+function chunks<T>(values: readonly T[], size: number): readonly T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }
 
 function toIsoString(value: unknown): string {

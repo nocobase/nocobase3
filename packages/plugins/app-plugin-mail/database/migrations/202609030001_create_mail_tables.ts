@@ -100,6 +100,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.text('html');
       collection.datetime('receivedAt');
       collection.datetime('sentAt');
+      collection.datetime('sortAt', { nullable: false });
       collection.boolean('read', { nullable: false, defaultValue: false });
       collection.boolean('starred', { nullable: false, defaultValue: false });
       collection.boolean('draft', { nullable: false, defaultValue: false });
@@ -109,8 +110,24 @@ const migration: MigrationDefinition = defineMigration({
       collection.unique(['accountId', 'providerMessageId'], {
         name: 'mail_messages_account_provider_unique',
       });
-      collection.index(['accountId', 'receivedAt'], {
-        name: 'mail_messages_account_received_idx',
+      collection.index(['accountId', 'sortAt', 'id'], {
+        name: 'mail_messages_account_sort_idx',
+      });
+      collection.index(['accountId', 'providerConversationId'], {
+        name: 'mail_messages_account_conversation_idx',
+      });
+    });
+
+    await builder.createCollection('mailMessageFolders', (collection) => {
+      collection.uuid('id').primary();
+      collection.uuid('accountId', { nullable: false });
+      collection.uuid('messageId', { nullable: false });
+      collection.string('providerFolderId', { length: 500, nullable: false });
+      collection.unique(['messageId', 'providerFolderId'], {
+        name: 'mail_message_folders_message_folder_unique',
+      });
+      collection.index(['accountId', 'providerFolderId', 'messageId'], {
+        name: 'mail_message_folders_account_folder_idx',
       });
     });
 
@@ -202,6 +219,7 @@ const migration: MigrationDefinition = defineMigration({
     await builder.dropCollection('mailSubmissions');
     await builder.dropCollection('mailSyncRuns');
     await builder.dropCollection('mailSyncStates');
+    await builder.dropCollection('mailMessageFolders');
     await builder.dropCollection('mailMessages');
     await builder.dropCollection('mailFolders');
     await builder.dropCollection('mailIdentities');

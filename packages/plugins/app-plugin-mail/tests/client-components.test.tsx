@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   MailAccountCard,
+  MailboxSidebar,
+  MailConversationView,
   MailProviderCard,
   MailSyncPolicyFields,
 } from '../client/components/index.js';
@@ -100,4 +102,124 @@ describe('Mail client components', () => {
       batchSize: 100,
     });
   });
+
+  it('switches mailbox sidebar views and provider folders', () => {
+    const onFolderChange = vi.fn();
+    const onSmartViewChange = vi.fn();
+    render(
+      <MailboxSidebar
+        accountId='account-1'
+        accounts={[
+          {
+            id: 'account-1',
+            userId: 'user-1',
+            provider: { type: 'gmail', name: 'google' },
+            address: 'user@example.com',
+            scopes: [],
+            status: 'active',
+            isDefault: true,
+          },
+        ]}
+        folders={[
+          {
+            id: 'folder-1',
+            accountId: 'account-1',
+            providerFolderId: 'INBOX',
+            type: 'inbox',
+            name: 'Inbox',
+            unreadCount: 3,
+            kind: 'label',
+          },
+        ]}
+        labels={{
+          account: 'Account',
+          allMail: 'All mail',
+          unread: 'Unread',
+          starred: 'Starred',
+          folders: 'Folders',
+        }}
+        onAccountChange={vi.fn()}
+        onFolderChange={onFolderChange}
+        onSmartViewChange={onSmartViewChange}
+        smartView='all'
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Inbox/ }));
+    expect(onSmartViewChange).toHaveBeenCalledWith('all');
+    expect(onFolderChange).toHaveBeenCalledWith('INBOX');
+  });
+
+  it('renders every synchronized message in a provider conversation', () => {
+    render(
+      <MailConversationView
+        labels={{
+          attachmentCount: (count) => `${count} attachments`,
+          conversation: (count) => `${count} messages`,
+          loadMore: 'Load more',
+          noSubject: '(no subject)',
+          selectMessage: 'Select a message',
+          unknownSender: 'Unknown sender',
+        }}
+        messages={[
+          conversationMessage('message-1', 'Alice', 'First message'),
+          conversationMessage('message-2', 'Bob', 'Second message'),
+        ]}
+        onLoadMore={vi.fn()}
+        subject='Project update'
+      />,
+    );
+
+    expect(screen.getByText('2 messages')).toBeInTheDocument();
+    expect(screen.getByText('First message')).toBeInTheDocument();
+    expect(screen.getByText('Second message')).toBeInTheDocument();
+  });
+
+  it('renders HTML-only messages as safe plain text', () => {
+    render(
+      <MailConversationView
+        labels={{
+          attachmentCount: (count) => `${count} attachments`,
+          conversation: (count) => `${count} messages`,
+          loadMore: 'Load more',
+          noSubject: '(no subject)',
+          selectMessage: 'Select a message',
+          unknownSender: 'Unknown sender',
+        }}
+        messages={[
+          {
+            ...conversationMessage('message-1', 'Alice', ''),
+            html: '<p>Hello <strong>team</strong></p><script>bad()</script>',
+          },
+        ]}
+        onLoadMore={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Hello team/)).toBeInTheDocument();
+    expect(document.querySelector('script')).not.toBeInTheDocument();
+  });
 });
+
+function conversationMessage(id: string, name: string, text: string) {
+  return {
+    id,
+    accountId: 'account-1',
+    providerMessageId: id,
+    conversationId: 'conversation-1',
+    folderIds: ['INBOX'],
+    from: { name, address: `${name.toLowerCase()}@example.com` },
+    to: [],
+    cc: [],
+    bcc: [],
+    replyTo: [],
+    references: [],
+    subject: 'Project update',
+    text,
+    read: true,
+    starred: false,
+    draft: false,
+    hasAttachments: false,
+    attachments: [],
+  } as const;
+}

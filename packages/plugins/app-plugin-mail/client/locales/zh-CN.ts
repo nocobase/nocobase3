@@ -2,12 +2,31 @@ import type { MailResource } from './en-US.js';
 
 const zhCN: MailResource = {
   nav: {
+    workspace: '邮件',
     settings: '邮件',
     dev: '邮件开发工具',
   },
   actions: {
     refresh: '刷新',
     reloadAccounts: '重新加载账户',
+  },
+  workspace: {
+    title: '邮件',
+    allMail: '全部邮件',
+    search: '搜索邮件',
+    unreadOnly: '未读',
+    starredOnly: '星标',
+    folders: '文件夹',
+    noAccounts: '请先在设置中连接邮箱账户，再查看已同步邮件。',
+    empty: '当前邮箱范围没有匹配的邮件。',
+    selectMessage: '请选择一封邮件查看内容。',
+    conversation: '此会话共 {{count}} 封邮件',
+    attachmentCount: '{{count}} 个附件',
+    unknownSender: '未知发件人',
+    noSubject: '（无主题）',
+    loadMore: '加载更多',
+    loadEarlier: '加载更早邮件',
+    loading: '正在加载邮件…',
   },
   settings: {
     eyebrow: '通信',

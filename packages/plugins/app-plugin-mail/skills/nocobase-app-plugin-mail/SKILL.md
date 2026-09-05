@@ -12,7 +12,8 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 - Register `@nocobase/app-plugin-mail/client` and `@nocobase/app-plugin-mail/server` in the App composition roots.
 - Import Server contracts from `@nocobase/app-plugin-mail/server`, `@nocobase/app-plugin-mail/server/types`, or `@nocobase/app-plugin-mail/server/tokens`.
 - Import public UI from `@nocobase/app-plugin-mail/client/components`.
-- Use `/api/mail/*` only through an authenticated identity with `page:mail.settings/access`.
+- Use mailbox read APIs only through an authenticated identity with `page:mail/access` or `page:mail.settings/access`.
+- Require `page:mail.settings/access` for OAuth, account management, synchronization, and sending APIs.
 - Configure concrete Providers through the Gmail and Microsoft Provider plugins; do not instantiate their adapters from App code.
 
 ## Configure and connect an account
@@ -22,6 +23,12 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 3. Grant the intended role access to `mail.settings`.
 4. Open `/settings/mail`, select the Provider, and complete its OAuth redirect.
 5. Verify that the account appears without credential references or token material in the API response.
+
+## Read synchronized mail
+
+Grant `mail/access` and open `/mail` to use the workspace registered in the application sidebar. The workspace lists the authenticated user's accounts and Provider folders, then loads synchronized messages through the public API. Opening a message loads its complete Provider conversation when a stable conversation identifier exists.
+
+Do not group unrelated messages by normalized subject. Gmail `threadId` and Microsoft Graph `conversationId` are normalized to `conversationId`; messages without one remain standalone. Folder filtering uses the indexed message-folder relation rather than scanning the JSON projection stored on each message.
 
 OAuth callback state is short-lived and single-use. Never bypass it, persist raw tokens in App collections, or expose the Mail Core tables directly.
 

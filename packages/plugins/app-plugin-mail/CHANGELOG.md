@@ -13,6 +13,9 @@
   concrete Provider plugins.
 - Add Mail settings and development pages for account authorization, bounded
   synchronization, test sending, and synchronized-message inspection.
+- Add an application-sidebar Mail workspace with account and folder
+  navigation, indexed folder filtering, and Provider-native conversation
+  detail.
 - Recover interrupted pending sends, terminal OAuth failures, and expired sync
   cursors; paginate folder discovery and renew long-running sync leases.
 - Add Server error translations, local shadcn UI primitives, and an App-facing

@@ -25,7 +25,7 @@ describe('mail API routes', () => {
     expect(response.status).toBe(401);
   });
 
-  it('enforces the same Mail settings permission as the client route', async () => {
+  it('enforces Mail workspace or settings access', async () => {
     const router = await createRouter(true, service(), false);
     const response = await router.request('/mail/accounts');
 
@@ -33,9 +33,31 @@ describe('mail API routes', () => {
     expect(await response.json()).toEqual({
       error: {
         code: 'MAIL_ACCESS_DENIED',
-        message: 'Mail settings access is required.',
+        message: 'Mail access is required.',
       },
     });
+  });
+
+  it('keeps workspace access read-only', async () => {
+    const listAccounts = vi.fn<MailService['listAccounts']>(async () => []);
+    const sendMessage = vi.fn<MailService['sendMessage']>();
+    const router = await createRouter(
+      true,
+      service({ listAccounts, sendMessage }),
+      ['mail'],
+    );
+
+    const accountsResponse = await router.request('/mail/accounts');
+    const sendResponse = await router.request('/mail/messages/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(accountsResponse.status).toBe(200);
+    expect(sendResponse.status).toBe(403);
+    expect(listAccounts).toHaveBeenCalledOnce();
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('translates API errors from the request locale', async () => {
@@ -48,7 +70,7 @@ describe('mail API routes', () => {
     expect(await response.json()).toEqual({
       error: {
         code: 'MAIL_ACCESS_DENIED',
-        message: '需要邮件设置访问权限。',
+        message: '需要邮件访问权限。',
       },
     });
   });
@@ -101,6 +123,52 @@ describe('mail API routes', () => {
         provider: { type: 'gmail', name: 'google' },
         redirectUri: 'https://mail.example.com/test/mail/oauth/callback',
       },
+    );
+  });
+
+  it('maps mailbox folders, filters, and conversations onto the Mail service', async () => {
+    const listFolders = vi.fn<MailService['listFolders']>(async () => []);
+    const listMessages = vi.fn<MailService['listMessages']>(async () => ({
+      items: [],
+    }));
+    const listConversationMessages = vi.fn<
+      MailService['listConversationMessages']
+    >(async () => ({ items: [] }));
+    const router = await createRouter(
+      true,
+      service({ listFolders, listMessages, listConversationMessages }),
+    );
+
+    await router.request('/mail/accounts/account-1/folders');
+    await router.request(
+      '/mail/messages?accountId=account-1&folderId=inbox&conversationId=thread-1&unread=true&limit=25',
+    );
+    await router.request(
+      '/mail/accounts/account-1/conversations/thread-1/messages?cursor=25&limit=25',
+    );
+
+    expect(listFolders).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      'account-1',
+    );
+    expect(listMessages).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        accountIds: ['account-1'],
+        folderIds: ['inbox'],
+        conversationId: 'thread-1',
+        query: undefined,
+        cursor: undefined,
+        limit: 25,
+        unread: true,
+        starred: undefined,
+      },
+    );
+    expect(listConversationMessages).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      'account-1',
+      'thread-1',
+      { cursor: '25', limit: 25 },
     );
   });
 
@@ -167,7 +235,7 @@ describe('mail API routes', () => {
 async function createRouter(
   authenticated: boolean,
   mail: MailService,
-  allowed = true,
+  allowed: boolean | readonly string[] = true,
 ): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(authenticationToken, {
@@ -187,7 +255,12 @@ async function createRouter(
   } as Auth);
   container.instance(authorizationToken, {
     middleware: () => async (context, next) => {
-      context.set('authz', { can: async () => allowed });
+      context.set('authz', {
+        can: async (input: { resource: { id: string } }) =>
+          typeof allowed === 'boolean'
+            ? allowed
+            : allowed.includes(input.resource.id),
+      });
       await next();
     },
   } as unknown as AppAuthorization);
@@ -235,11 +308,13 @@ function service(overrides: Partial<MailService> = {}): MailService {
       isDefault: true,
     }),
     listAccounts: async () => [],
+    listFolders: async () => [],
     listIdentities: async () => [],
     startSync: async (_context, input) => syncRun(input.accountId, 'user-1'),
     getSyncRun: async () => undefined,
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,
+    listConversationMessages: async () => ({ items: [] }),
     sendMessage: async (_context, input) => ({
       id: input.idempotencyKey,
       accountId: input.accountId,

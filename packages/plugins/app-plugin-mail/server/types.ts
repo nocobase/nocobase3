@@ -324,6 +324,11 @@ export interface MailListConversationsInput {
   readonly limit?: number;
 }
 
+export interface MailListConversationMessagesInput {
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
 export interface MailListJobsInput {
   readonly accountIds?: readonly string[];
   readonly types?: readonly MailJobType[];
@@ -393,6 +398,10 @@ export interface MailService {
   listAccounts(
     context: MailOperationContext,
   ): Promise<readonly MailAccountView[]>;
+  listFolders(
+    context: MailOperationContext,
+    accountId: string,
+  ): Promise<readonly MailFolder[]>;
   listIdentities(
     context: MailOperationContext,
     accountId: string,
@@ -414,6 +423,12 @@ export interface MailService {
     accountId: string,
     messageId: string,
   ): Promise<MailMessage | undefined>;
+  listConversationMessages(
+    context: MailOperationContext,
+    accountId: string,
+    conversationId: string,
+    input?: MailListConversationMessagesInput,
+  ): Promise<MailPage<MailMessage>>;
   sendMessage(
     context: MailOperationContext,
     input: MailComposeInput,
@@ -848,6 +863,12 @@ export interface MailStore {
     accountId: string,
     messageId: string,
   ): Promise<MailMessage | undefined>;
+  listConversationMessages(
+    userId: string,
+    accountId: string,
+    conversationId: string,
+    input?: MailListConversationMessagesInput,
+  ): Promise<MailPage<MailMessage>>;
   getSyncCursor(accountId: string): Promise<MailSyncCursor | undefined>;
   clearSyncCursor(accountId: string): Promise<void>;
   createSyncRun(input: MailCreateSyncRunInput): Promise<MailSyncRun>;

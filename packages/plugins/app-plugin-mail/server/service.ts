@@ -6,6 +6,8 @@ import type {
   MailAuthorizationStartResult,
   MailCompleteAuthorizationInput,
   MailListMessagesInput,
+  MailListConversationMessagesInput,
+  MailFolder,
   MailMessage,
   MailMessageSummary,
   MailOperationContext,
@@ -227,6 +229,14 @@ export class DefaultMailService implements MailService {
     );
   }
 
+  public async listFolders(
+    context: MailOperationContext,
+    accountId: string,
+  ): Promise<readonly MailFolder[]> {
+    await this.requireOwnedAccount(context, accountId);
+    return this.dependencies.store.listFolders(accountId);
+  }
+
   public async listIdentities(
     context: MailOperationContext,
     accountId: string,
@@ -292,6 +302,21 @@ export class DefaultMailService implements MailService {
       context.actorId,
       accountId,
       messageId,
+    );
+  }
+
+  public async listConversationMessages(
+    context: MailOperationContext,
+    accountId: string,
+    conversationId: string,
+    input: MailListConversationMessagesInput = {},
+  ): Promise<MailPage<MailMessage>> {
+    await this.requireOwnedAccount(context, accountId);
+    return this.dependencies.store.listConversationMessages(
+      context.actorId,
+      accountId,
+      conversationId,
+      input,
     );
   }
 

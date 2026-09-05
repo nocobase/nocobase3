@@ -35,11 +35,13 @@ describe('MailClient', () => {
     await client.listMessages({
       accountId: 'account/1',
       query: 'from:alice',
+      folderId: 'inbox',
+      conversationId: 'thread/1',
       unread: true,
       limit: 20,
     });
     expect(request).toHaveBeenLastCalledWith(
-      'mail/messages?accountId=account%2F1&query=from%3Aalice&unread=true&limit=20',
+      'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&conversationId=thread%2F1&unread=true&limit=20',
     );
 
     await client.startSync({

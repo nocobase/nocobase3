@@ -303,6 +303,177 @@ describe('mail MVP runtime', () => {
     expect(next.mode).toBe('incremental');
   });
 
+  it('filters synchronized messages by folder and provider conversation', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [
+        {
+          providerFolderId: 'inbox',
+          type: 'inbox',
+          name: 'Inbox',
+          kind: 'folder',
+        },
+        {
+          providerFolderId: 'sent',
+          type: 'sent',
+          name: 'Sent',
+          kind: 'folder',
+        },
+      ],
+      messages: [
+        {
+          ...message('thread-message-1', 'Project update'),
+          providerConversationId: 'conversation-1',
+        },
+        {
+          ...message('thread-message-2', 'Re: Project update'),
+          providerConversationId: 'conversation-1',
+          providerFolderIds: ['sent'],
+          receivedAt: '2026-09-04T00:00:00.000Z',
+        },
+        message('standalone-message', 'Standalone'),
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'cursor-1' },
+    });
+
+    const inbox = await store.listMessages('user-1', {
+      accountIds: ['account-1'],
+      folderIds: ['inbox'],
+    });
+    const conversation = await store.listConversationMessages(
+      'user-1',
+      'account-1',
+      'conversation-1',
+    );
+
+    expect(inbox.items.map((item) => item.providerMessageId)).toEqual(
+      expect.arrayContaining(['thread-message-1', 'standalone-message']),
+    );
+    expect(inbox.items).toHaveLength(2);
+    expect(conversation.items.map((item) => item.providerMessageId)).toEqual([
+      'thread-message-1',
+      'thread-message-2',
+    ]);
+  });
+
+  it('uses stable keyset cursors for mailbox and conversation pages', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [
+        {
+          ...message('thread-message-1', 'Project update'),
+          providerConversationId: 'conversation-1',
+          receivedAt: '2026-09-01T00:00:00.000Z',
+        },
+        {
+          ...message('thread-message-2', 'Re: Project update'),
+          providerConversationId: 'conversation-1',
+          receivedAt: '2026-09-02T00:00:00.000Z',
+        },
+        {
+          ...message('thread-message-3', 'Re: Project update'),
+          providerConversationId: 'conversation-1',
+          receivedAt: '2026-09-03T00:00:00.000Z',
+        },
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'cursor-1' },
+    });
+
+    const mailboxFirst = await store.listMessages('user-1', {
+      accountIds: ['account-1'],
+      limit: 1,
+    });
+    const mailboxSecond = await store.listMessages('user-1', {
+      accountIds: ['account-1'],
+      cursor: mailboxFirst.nextCursor,
+      limit: 1,
+    });
+    const conversationFirst = await store.listConversationMessages(
+      'user-1',
+      'account-1',
+      'conversation-1',
+      { limit: 1 },
+    );
+    const conversationSecond = await store.listConversationMessages(
+      'user-1',
+      'account-1',
+      'conversation-1',
+      { cursor: conversationFirst.nextCursor, limit: 1 },
+    );
+
+    expect([
+      mailboxFirst.items[0].providerMessageId,
+      mailboxSecond.items[0].providerMessageId,
+    ]).toEqual(['thread-message-3', 'thread-message-2']);
+    expect([
+      conversationFirst.items[0].providerMessageId,
+      conversationSecond.items[0].providerMessageId,
+    ]).toEqual(['thread-message-3', 'thread-message-2']);
+    await expect(
+      store.listMessages('user-1', { cursor: 'not-a-cursor' }),
+    ).rejects.toThrow(TypeError);
+  });
+
+  it('keeps message folder JSON aligned after folder reconciliation', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [
+        {
+          providerFolderId: 'inbox',
+          type: 'inbox',
+          name: 'Inbox',
+          kind: 'folder',
+        },
+        {
+          providerFolderId: 'archive',
+          type: 'archive',
+          name: 'Archive',
+          kind: 'folder',
+        },
+      ],
+      messages: [
+        {
+          ...message('message-1', 'Project update'),
+          providerFolderIds: ['inbox', 'archive'],
+        },
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'cursor-1' },
+    });
+    const pending = await store.createSyncRun({
+      id: 'sync-folder-reconciliation',
+      accountId: 'account-1',
+      requestedBy: 'user-1',
+      mode: 'initial',
+      policy: { maxMessages: 100, batchSize: 10 },
+    });
+    const running = await store.claimSyncRun(
+      pending.id,
+      pending.revision,
+      pending.phase,
+      'folder-reconciliation-lease',
+      new Date(Date.now() + 10_000).toISOString(),
+    );
+    expect(running).toBeDefined();
+    await store.commitSyncStep({
+      run: running!,
+      folders: [],
+      completeProviderFolderIds: ['inbox'],
+      messages: [],
+      phase: 'history',
+      status: 'running',
+      createNextTask: false,
+    });
+
+    const stored = await store.listMessages('user-1', {
+      accountIds: ['account-1'],
+    });
+    expect(stored.items[0].folderIds).toEqual(['inbox']);
+  });
+
   it('persists a retry Outbox without advancing the failed page checkpoint', async () => {
     const adapters = resolver({
       ...baseAdapter(),

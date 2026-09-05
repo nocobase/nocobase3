@@ -95,6 +95,7 @@ function service(overrides: Partial<MailService> = {}): MailService {
       throw new Error('Not implemented.');
     },
     listAccounts: async () => [],
+    listFolders: async () => [],
     listIdentities: async () => [],
     startSync: async () => {
       throw new Error('Not implemented.');
@@ -102,6 +103,7 @@ function service(overrides: Partial<MailService> = {}): MailService {
     getSyncRun: async () => undefined,
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,
+    listConversationMessages: async () => ({ items: [] }),
     sendMessage: async () => {
       throw new Error('Not implemented.');
     },

@@ -3,6 +3,7 @@ import type {
   MailAccountView,
   MailAuthorizationStartResult,
   MailComposeInput,
+  MailFolder,
   MailIdentity,
   MailListMessagesInput,
   MailMessage,
@@ -20,6 +21,7 @@ export type {
   MailAddress,
   MailAuthorizationStartResult,
   MailComposeInput,
+  MailFolder,
   MailIdentity,
   MailInitialSyncPolicy,
   MailMessage,
@@ -48,9 +50,10 @@ export interface MailAuthorizationRequest {
 
 export interface MailMessagesQuery extends Pick<
   MailListMessagesInput,
-  'query' | 'cursor' | 'limit'
+  'query' | 'cursor' | 'limit' | 'conversationId'
 > {
   readonly accountId?: string;
+  readonly folderId?: string;
   readonly unread?: boolean;
   readonly starred?: boolean;
 }
@@ -83,6 +86,14 @@ export class MailClient {
     return this.client
       .request<DataResponse<readonly MailIdentity[]>>(
         `mail/accounts/${encodeURIComponent(accountId)}/identities`,
+      )
+      .then((response) => response.data);
+  }
+
+  public listFolders(accountId: string): Promise<readonly MailFolder[]> {
+    return this.client
+      .request<DataResponse<readonly MailFolder[]>>(
+        `mail/accounts/${encodeURIComponent(accountId)}/folders`,
       )
       .then((response) => response.data);
   }
@@ -125,6 +136,23 @@ export class MailClient {
     return this.client
       .request<DataResponse<MailMessage>>(
         `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}`,
+      )
+      .then((response) => response.data);
+  }
+
+  public listConversationMessages(
+    accountId: string,
+    conversationId: string,
+    input: Pick<MailListMessagesInput, 'cursor' | 'limit'> = {},
+  ): Promise<MailPage<MailMessage>> {
+    const parameters = new URLSearchParams();
+    for (const [key, value] of Object.entries(input)) {
+      if (value !== undefined) parameters.set(key, String(value));
+    }
+    const query = parameters.size > 0 ? `?${parameters.toString()}` : '';
+    return this.client
+      .request<DataResponse<MailPage<MailMessage>>>(
+        `mail/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}/messages${query}`,
       )
       .then((response) => response.data);
   }
