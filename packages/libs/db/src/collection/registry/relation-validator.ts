@@ -3,6 +3,7 @@ import type {
   CollectionDefinition,
   RelationFieldDefinition,
 } from '../types.js';
+import { requiredRelationOptions } from '../relation-contract.js';
 
 export interface CollectionRelationValidationIssue {
   readonly code: 'COLLECTION_RELATION_INVALID';
@@ -71,6 +72,17 @@ export class CollectionRelationValidator {
     const collectionName = collection.name ?? '<unknown>';
     for (const relation of relations(collection.fields)) {
       const path = ['relations', relation.name] as const;
+      for (const option of requiredRelationOptions(relation.type)) {
+        if (!relation[option]?.trim()) {
+          issues.push(
+            issue(
+              collectionName,
+              [...path, option],
+              `Relation requires an explicit ${option}.`,
+            ),
+          );
+        }
+      }
       const target = await this.provider.get(relation.target);
       if (!target) {
         issues.push(
@@ -82,10 +94,7 @@ export class CollectionRelationValidator {
         );
         continue;
       }
-      const sourceKey =
-        relation.type === 'belongsTo'
-          ? relation.sourceKey
-          : (relation.sourceKey ?? 'id');
+      const sourceKey = relation.sourceKey;
       if (sourceKey && !scalarField(collection.fields, sourceKey)) {
         issues.push(
           issue(
@@ -95,10 +104,7 @@ export class CollectionRelationValidator {
           ),
         );
       }
-      const targetKey =
-        relation.type === 'belongsTo' || relation.type === 'belongsToMany'
-          ? (relation.targetKey ?? 'id')
-          : relation.targetKey;
+      const targetKey = relation.targetKey;
       if (targetKey && !scalarField(target.fields, targetKey)) {
         issues.push(
           issue(
@@ -106,6 +112,27 @@ export class CollectionRelationValidator {
             [...path, 'targetKey'],
             `Relation targetKey "${targetKey}" does not exist on Collection "${relation.target}".`,
           ),
+        );
+      }
+      if (relation.type === 'belongsTo') {
+        checkKeyTypes(
+          collection,
+          relation.foreignKey,
+          target,
+          targetKey,
+          collectionName,
+          [...path, 'foreignKey'],
+          issues,
+        );
+      } else if (relation.type === 'hasOne' || relation.type === 'hasMany') {
+        checkKeyTypes(
+          collection,
+          sourceKey,
+          target,
+          relation.foreignKey,
+          collectionName,
+          [...path, 'foreignKey'],
+          issues,
         );
       }
       if (
@@ -132,6 +159,24 @@ export class CollectionRelationValidator {
             ),
           );
         } else {
+          checkKeyTypes(
+            collection,
+            sourceKey,
+            through,
+            relation.foreignKey,
+            collectionName,
+            [...path, 'foreignKey'],
+            issues,
+          );
+          checkKeyTypes(
+            target,
+            targetKey,
+            through,
+            relation.otherKey,
+            collectionName,
+            [...path, 'otherKey'],
+            issues,
+          );
           for (const [property, field] of [
             ['foreignKey', relation.foreignKey],
             ['otherKey', relation.otherKey],
@@ -149,6 +194,53 @@ export class CollectionRelationValidator {
         }
       }
     }
+  }
+}
+
+function checkKeyTypes(
+  source: CollectionDefinition,
+  sourceKey: string | undefined,
+  target: CollectionDefinition,
+  targetKey: string | undefined,
+  collection: string,
+  path: readonly string[],
+  issues: CollectionRelationValidationIssue[],
+): void {
+  const left = source.fields?.find(
+    (field) => field.name === sourceKey && !('target' in field),
+  );
+  const right = target.fields?.find(
+    (field) => field.name === targetKey && !('target' in field),
+  );
+  if (!left || !right) return;
+  // Physical inspectors may normalize integer widths or UUIDs differently across dialects.
+  const family = (type: string): string => {
+    if (
+      [
+        'increments',
+        'integer',
+        'bigInt',
+        'float',
+        'double',
+        'decimal',
+      ].includes(type)
+    )
+      return 'number';
+    if (['string', 'text', 'uuid'].includes(type)) return 'string';
+    return type;
+  };
+  if (
+    left.type !== 'native' &&
+    right.type !== 'native' &&
+    family(left.type) !== family(right.type)
+  ) {
+    issues.push(
+      issue(
+        collection,
+        path,
+        `Relation keys "${source.name}.${sourceKey}" (${left.type}) and "${target.name}.${targetKey}" (${right.type}) have incompatible types.`,
+      ),
+    );
   }
 }
 

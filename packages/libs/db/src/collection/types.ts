@@ -419,7 +419,7 @@ export interface CollectionDefinitionBuilder {
   description(description: string): this;
   optimisticLock(field: string): this;
   field(field: AnyFieldDefinition): FieldDefinitionBuilder;
-  increments(name?: string): FieldDefinitionBuilder;
+  increments(name: string): FieldDefinitionBuilder;
   integer(
     name: string,
     options?: Partial<FieldDefinition>,

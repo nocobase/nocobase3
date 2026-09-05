@@ -3,6 +3,7 @@ import type {
   FieldMetadata,
   RelationMetadata,
 } from './document.js';
+import { requiredRelationOptions } from '../collection/relation-contract.js';
 import {
   CollectionMetadataValidationError,
   type CollectionMetadataIssue,
@@ -273,14 +274,39 @@ function readRelations(
       issues,
     );
     const target = readName(value, 'target', relationPath, issues, true);
+    const required = type ? requiredRelationOptions(type) : [];
     const relation: Partial<RelationMetadata> = {
       type,
       target,
-      sourceKey: readName(value, 'sourceKey', relationPath, issues),
-      targetKey: readName(value, 'targetKey', relationPath, issues),
-      foreignKey: readName(value, 'foreignKey', relationPath, issues),
-      otherKey: readName(value, 'otherKey', relationPath, issues),
-      through: readName(value, 'through', relationPath, issues),
+      sourceKey: readName(
+        value,
+        'sourceKey',
+        relationPath,
+        issues,
+        required.includes('sourceKey'),
+      ),
+      targetKey: readName(
+        value,
+        'targetKey',
+        relationPath,
+        issues,
+        required.includes('targetKey'),
+      ),
+      foreignKey: readName(value, 'foreignKey', relationPath, issues, true),
+      otherKey: readName(
+        value,
+        'otherKey',
+        relationPath,
+        issues,
+        required.includes('otherKey'),
+      ),
+      through: readName(
+        value,
+        'through',
+        relationPath,
+        issues,
+        required.includes('through'),
+      ),
       title: readOptionalString(value, 'title', relationPath, issues),
       description: readOptionalString(
         value,

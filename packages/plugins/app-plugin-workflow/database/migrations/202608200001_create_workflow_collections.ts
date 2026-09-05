@@ -17,9 +17,13 @@ export default defineMigration({
       collection.json('parameterValues').notNull().defaultTo({});
       collection
         .hasMany('nodes', 'workflowNodes')
+        .sourceKey('id')
         .foreignKey('workflowId')
         .onDelete('cascade');
-      collection.hasMany('runs', 'workflowRuns').foreignKey('workflowId');
+      collection
+        .hasMany('runs', 'workflowRuns')
+        .sourceKey('id')
+        .foreignKey('workflowId');
       collection.boolean('current');
       collection
         .hasMany('revisions', 'workflows')
@@ -60,6 +64,7 @@ export default defineMigration({
       collection.text('description');
       collection
         .belongsTo('workflow', 'workflows')
+        .targetKey('id')
         .foreignKey('workflowId')
         .foreignKeyType('bigInt')
         .notNull()
@@ -83,6 +88,7 @@ export default defineMigration({
       collection.bigInt('id').primary().autoIncrement().notNull();
       collection
         .belongsTo('workflow', 'workflows')
+        .targetKey('id')
         .foreignKey('workflowId')
         .foreignKeyType('bigInt')
         .notNull()
@@ -92,6 +98,7 @@ export default defineMigration({
       collection.string('eventKey').notNull().unique({ mode: 'index' });
       collection
         .hasMany('nodeRuns', 'workflowNodeRuns')
+        .sourceKey('id')
         .foreignKey('workflowRunId')
         .onDelete('cascade');
       collection.json('input').notNull().defaultTo({});
@@ -117,6 +124,7 @@ export default defineMigration({
       collection.bigInt('id').primary().autoIncrement().notNull();
       collection
         .belongsTo('workflowRun', 'workflowRuns')
+        .targetKey('id')
         .foreignKey('workflowRunId')
         .foreignKeyType('bigInt')
         .notNull()
@@ -124,6 +132,7 @@ export default defineMigration({
         .onDelete('cascade');
       collection
         .belongsTo('node', 'workflowNodes')
+        .targetKey('id')
         .foreignKey('nodeId')
         .foreignKeyType('bigInt')
         .notNull()

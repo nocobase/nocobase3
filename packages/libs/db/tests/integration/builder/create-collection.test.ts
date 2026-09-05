@@ -37,6 +37,7 @@ describeIntegrationDatabases('collection creation', (context) => {
       collection.increments('id');
       collection
         .belongsTo('customer', 'customers')
+        .targetKey('id')
         .foreignKey('customerId')
         .foreignKeyType('integer')
         .unsigned()

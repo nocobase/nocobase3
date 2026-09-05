@@ -13,7 +13,10 @@ describeIntegrationDatabases('relation fields', (context) => {
         name: 'authors',
         definition: (collection) => {
           collection.increments('id');
-          collection.hasMany('books', 'books').foreignKey('authorId');
+          collection
+            .hasMany('books', 'books')
+            .sourceKey('id')
+            .foreignKey('authorId');
         },
       },
       {
@@ -23,6 +26,8 @@ describeIntegrationDatabases('relation fields', (context) => {
           collection.bigInt('authorId');
           collection
             .belongsTo('author', 'authors')
+            .targetKey('id')
+            .foreignKeyType('bigInt')
             .foreignKey('authorId')
             .constraints(false);
         },
@@ -48,13 +53,18 @@ describeIntegrationDatabases('relation fields', (context) => {
     await context.database.transaction(async (connection) => {
       await connection.builder.createCollection('teams', (collection) => {
         collection.increments('id');
-        collection.hasMany('members', 'members').foreignKey('teamId');
+        collection
+          .hasMany('members', 'members')
+          .sourceKey('id')
+          .foreignKey('teamId');
       });
       await connection.builder.createCollection('members', (collection) => {
         collection.increments('id');
         collection.bigInt('teamId');
         collection
           .belongsTo('team', 'teams')
+          .targetKey('id')
+          .foreignKeyType('bigInt')
           .foreignKey('teamId')
           .constraints(false);
       });
@@ -70,7 +80,10 @@ describeIntegrationDatabases('relation fields', (context) => {
       context.database.transaction(async (connection) => {
         await connection.builder.createCollection('articles', (collection) => {
           collection.increments('id');
-          collection.hasMany('comments', 'missingComments');
+          collection
+            .hasMany('comments', 'missingComments')
+            .sourceKey('id')
+            .foreignKey('postId');
         });
       }),
     ).rejects.toMatchObject({
@@ -91,6 +104,7 @@ describeIntegrationDatabases('relation fields', (context) => {
       collection.increments('id');
       collection
         .belongsTo('customer', 'customers')
+        .targetKey('id')
         .foreignKey('customerId')
         .foreignKeyType('integer')
         .unsigned()
@@ -141,10 +155,18 @@ describeIntegrationDatabases('relation fields', (context) => {
     });
     await context.builder.createCollection('customers', (collection) => {
       collection.increments('id');
-      collection.hasOne('profile', 'profiles').foreignKey('customerId');
-      collection.hasMany('orders', 'orders').foreignKey('customerId');
+      collection
+        .hasOne('profile', 'profiles')
+        .sourceKey('id')
+        .foreignKey('customerId');
+      collection
+        .hasMany('orders', 'orders')
+        .sourceKey('id')
+        .foreignKey('customerId');
       collection
         .belongsToMany('products', 'products')
+        .sourceKey('id')
+        .targetKey('id')
         .through('orderProducts')
         .foreignKey('customerId')
         .otherKey('productId');

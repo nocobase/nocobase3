@@ -205,6 +205,8 @@ describe('CollectionResolver', () => {
       },
       relations: {
         customer: {
+          targetKey: 'id',
+          foreignKey: 'customerId',
           type: 'belongsTo',
           target: 'customers',
           sourceKey: 'id',
@@ -416,8 +418,14 @@ describe('CollectionResolver', () => {
       name: 'orders',
       fields: { missing: { title: 'Missing' } },
       relations: {
-        customerId: { type: 'belongsTo', target: 'customers' },
+        customerId: {
+          targetKey: 'id',
+          foreignKey: 'customerIdId',
+          type: 'belongsTo',
+          target: 'customers',
+        },
         owner: {
+          targetKey: 'id',
           type: 'belongsTo',
           target: 'users',
           sourceKey: 'missingSource',

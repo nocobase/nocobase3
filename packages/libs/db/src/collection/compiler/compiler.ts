@@ -1,4 +1,8 @@
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
+import {
+  requireRelationOption,
+  validateRelationOptions,
+} from '../relation-contract.js';
 import type { NamingStrategy } from '../../naming/strategy.js';
 import type {
   AnyFieldDefinition,
@@ -517,6 +521,7 @@ export class CollectionCompiler {
     collection?: CollectionDefinition,
   ): ColumnSchemaDefinition[] {
     const relation = relationField(field);
+    if (relation) validateRelationOptions(relation);
     if (
       relation &&
       (relation.type === 'hasOne' ||
@@ -530,10 +535,15 @@ export class CollectionCompiler {
       if (this.relationUsesExistingField(relation, collection)) {
         return [];
       }
+      if (!relation.foreignKeyType) {
+        throw new Error(
+          `Relation "${relation.name}" requires an existing scalar foreignKey Field or an explicit foreignKeyType.`,
+        );
+      }
       return [
         {
           name: this.columnName(relation, collection),
-          type: relation.foreignKeyType ?? 'bigInt',
+          type: relation.foreignKeyType,
           nullable: relation.nullable ?? true,
           unsigned: relation.unsigned,
           db: relation.db,
@@ -640,6 +650,14 @@ export class CollectionCompiler {
             : undefined,
         };
       case 'foreignKey': {
+        if (
+          !constraint.references.fields?.length ||
+          constraint.references.fields.length !== constraint.fields.length
+        ) {
+          throw new Error(
+            'Foreign key references.fields must explicitly match the number of local fields.',
+          );
+        }
         const target = context.collections?.[constraint.references.collection];
         const targetTable = this.effectiveTableName(
           constraint.references.collection,
@@ -660,7 +678,7 @@ export class CollectionCompiler {
             ),
           references: {
             table: targetTable,
-            columns: (constraint.references.fields ?? ['id']).map((field) =>
+            columns: constraint.references.fields.map((field) =>
               this.resolveColumn(field, target?.fields ?? [], target),
             ),
           },
@@ -681,7 +699,7 @@ export class CollectionCompiler {
       fields: [field.name],
       references: {
         collection: field.target,
-        fields: [field.targetKey ?? 'id'],
+        fields: [requireRelationOption(field, 'targetKey')],
       },
       onDelete: field.onDelete,
       onUpdate: field.onUpdate,
@@ -735,7 +753,9 @@ export class CollectionCompiler {
           collection,
         );
       }
-      return this.namingFor(collection).relationForeignKey(relation.name);
+      throw new Error(
+        `Relation "${relation.name}" requires an explicit foreignKey.`,
+      );
     }
     return this.namingFor(collection).fieldToColumnName(field.name);
   }

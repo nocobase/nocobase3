@@ -6,6 +6,10 @@ import type {
   RelationFieldDefinition,
 } from '../../collection/types.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
+import {
+  requireRelationOption,
+  validateRelationOptions,
+} from '../../collection/relation-contract.js';
 import { RepositoryError } from '../errors.js';
 import {
   createdRecordSelector as deriveCreatedSelector,
@@ -896,7 +900,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const deferred: RelationMutationNode[] = [];
     for (const node of relations?.items ?? []) {
       const resolved = await this.resolveRelation(collection, node.field);
-      if (resolved.relation.type === 'belongsTo' && node.action === 'set') {
+      if (resolved.type === 'belongsTo' && node.action === 'set') {
         const target = await this.resolveMutationTarget(
           resolved.target,
           node.target,
@@ -1173,7 +1177,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     sourceUnique: UniqueSelector,
     target: RepositoryRecord,
   ): Promise<void> {
-    if (resolved.relation.type === 'belongsTo') {
+    if (resolved.type === 'belongsTo') {
       if (resolved.relation.nullable === false) {
         relationActionNotAllowed(resolved, 'delete');
       }
@@ -1184,10 +1188,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await query;
       return;
     }
-    if (resolved.relation.type === 'belongsToMany') {
-      await tableQuery(this.getClient(), resolved.through!)
+    if (resolved.type === 'belongsToMany') {
+      await tableQuery(this.getClient(), resolved.through)
         .where(
-          column(resolved.through!, resolved.throughTargetForeignKey!),
+          column(resolved.through, resolved.throughTargetForeignKey),
           target[resolved.targetKey] as Knex.Value,
         )
         .delete();
@@ -1273,7 +1277,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           .as(field),
       ),
     );
-    if (resolved.relation.type === 'belongsTo') {
+    if (resolved.type === 'belongsTo') {
       const sourceQuery = tableQuery(client, resolved.source).select(
         resolved.sourceColumn,
       );
@@ -1286,14 +1290,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         qualified(targetAlias, column(resolved.target, resolved.targetKey)),
         sourceQuery,
       );
-    } else if (
-      resolved.relation.type === 'hasOne' ||
-      resolved.relation.type === 'hasMany'
-    ) {
+    } else if (resolved.type === 'hasOne' || resolved.type === 'hasMany') {
       query.where(
         qualified(
           targetAlias,
-          column(resolved.target, resolved.targetForeignKey!),
+          column(resolved.target, resolved.targetForeignKey),
         ),
         source[resolved.sourceKey] as Knex.Value,
       );
@@ -1301,17 +1302,17 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       const throughAlias = 'repository_relation_through';
       query
         .join(
-          collectionReference(client, resolved.through!, throughAlias),
+          collectionReference(client, resolved.through, throughAlias),
           qualified(targetAlias, column(resolved.target, resolved.targetKey)),
           qualified(
             throughAlias,
-            column(resolved.through!, resolved.throughTargetForeignKey!),
+            column(resolved.through, resolved.throughTargetForeignKey),
           ),
         )
         .where(
           qualified(
             throughAlias,
-            column(resolved.through!, resolved.throughSourceForeignKey!),
+            column(resolved.through, resolved.throughSourceForeignKey),
           ),
           source[resolved.sourceKey] as Knex.Value,
         );
@@ -1347,11 +1348,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       if (
         source &&
         resolved &&
-        (resolved.relation.type === 'hasOne' ||
-          resolved.relation.type === 'hasMany')
+        (resolved.type === 'hasOne' || resolved.type === 'hasMany')
       ) {
         additionalPhysicalValues[
-          column(collection, resolved.targetForeignKey!)
+          column(collection, resolved.targetForeignKey)
         ] = source[resolved.sourceKey];
       }
       return this.createRecord(
@@ -1393,7 +1393,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     target: RepositoryRecord,
     through?: RepositoryRecord,
   ): Promise<void> {
-    if (resolved.relation.type === 'belongsTo') {
+    if (resolved.type === 'belongsTo') {
       const query = tableQuery(this.getClient(), resolved.source).update({
         [resolved.sourceColumn]: target[resolved.targetKey],
       });
@@ -1401,12 +1401,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await query;
       return;
     }
-    if (
-      resolved.relation.type === 'hasOne' ||
-      resolved.relation.type === 'hasMany'
-    ) {
+    if (resolved.type === 'hasOne' || resolved.type === 'hasMany') {
       const sourceValue = source[resolved.sourceKey];
-      const current = target[resolved.targetForeignKey!];
+      const targetUnique = selectorFromRecord(resolved.target, target);
+      const current = target[resolved.targetForeignKey];
       if (
         current !== null &&
         current !== undefined &&
@@ -1421,47 +1419,43 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           },
         );
       }
-      if (resolved.relation.type === 'hasOne') {
+      if (resolved.type === 'hasOne') {
         const existing = tableQuery(this.getClient(), resolved.target)
           .where(
-            column(resolved.target, resolved.targetForeignKey!),
+            column(resolved.target, resolved.targetForeignKey),
             sourceValue as Knex.Value,
           )
-          .whereNot(
-            column(resolved.target, resolved.targetKey),
-            target[resolved.targetKey] as Knex.Value,
+          .whereNot((query) =>
+            applyUnique(query, resolved.target, targetUnique),
           );
         if (await existing.clone().first()) {
           if (!relationForeignKeyNullable(resolved)) {
             relationActionNotAllowed(resolved, 'set');
           }
           await existing.update({
-            [column(resolved.target, resolved.targetForeignKey!)]: null,
+            [column(resolved.target, resolved.targetForeignKey)]: null,
           });
         }
       }
-      await tableQuery(this.getClient(), resolved.target)
-        .where(
-          column(resolved.target, resolved.targetKey),
-          target[resolved.targetKey] as Knex.Value,
-        )
-        .update({
-          [column(resolved.target, resolved.targetForeignKey!)]: sourceValue,
-        });
+      const query = tableQuery(this.getClient(), resolved.target);
+      applyUnique(query, resolved.target, targetUnique);
+      await query.update({
+        [column(resolved.target, resolved.targetForeignKey)]: sourceValue,
+      });
       return;
     }
     const edge = {
-      [column(resolved.through!, resolved.throughSourceForeignKey!)]:
+      [column(resolved.through, resolved.throughSourceForeignKey)]:
         source[resolved.sourceKey],
-      [column(resolved.through!, resolved.throughTargetForeignKey!)]:
+      [column(resolved.through, resolved.throughTargetForeignKey)]:
         target[resolved.targetKey],
     };
-    const exists = await tableQuery(this.getClient(), resolved.through!)
+    const exists = await tableQuery(this.getClient(), resolved.through)
       .where(edge)
       .first();
     if (!exists) {
-      const values = withInitialVersion(resolved.through!, through ?? {});
-      for (const field of scalarFields(resolved.through!)) {
+      const values = withInitialVersion(resolved.through, through ?? {});
+      for (const field of scalarFields(resolved.through)) {
         if (
           field.name === resolved.throughSourceForeignKey ||
           field.name === resolved.throughTargetForeignKey ||
@@ -1478,25 +1472,25 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
             `Through Field "${field.name}" is required for a new relationship.`,
             {
               field: field.name,
-              collection: resolved.through!.name,
+              collection: resolved.through.name,
               relation: resolved.relation.name,
             },
           );
       }
-      await tableQuery(this.getClient(), resolved.through!).insert({
-        ...mapWrite(resolved.through!, values),
+      await tableQuery(this.getClient(), resolved.through).insert({
+        ...mapWrite(resolved.through, values),
         ...edge,
       });
     } else if (through && Object.keys(through).length > 0) {
       const changes: Record<string, RepositoryRecord[string] | Knex.Raw> =
-        mapWrite(resolved.through!, through);
-      const version = resolved.through!.optimisticLock?.field;
+        mapWrite(resolved.through, through);
+      const version = resolved.through.optimisticLock?.field;
       if (version)
-        changes[column(resolved.through!, version)] = this.getClient().raw(
+        changes[column(resolved.through, version)] = this.getClient().raw(
           '?? + 1',
-          [column(resolved.through!, version)],
+          [column(resolved.through, version)],
         );
-      await tableQuery(this.getClient(), resolved.through!)
+      await tableQuery(this.getClient(), resolved.through)
         .where(edge)
         .update(changes);
     }
@@ -1507,7 +1501,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     source: RepositoryRecord,
     sourceUnique: UniqueSelector,
   ): Promise<void> {
-    if (resolved.relation.type === 'belongsTo') {
+    if (resolved.type === 'belongsTo') {
       if (resolved.relation.nullable === false)
         relationActionNotAllowed(resolved, 'clear');
       const query = tableQuery(this.getClient(), resolved.source).update({
@@ -1517,16 +1511,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await query;
       return;
     }
-    if (resolved.relation.type !== 'hasOne')
-      relationActionNotAllowed(resolved, 'clear');
+    if (resolved.type !== 'hasOne') relationActionNotAllowed(resolved, 'clear');
     if (!relationForeignKeyNullable(resolved))
       relationActionNotAllowed(resolved, 'clear');
     await tableQuery(this.getClient(), resolved.target)
       .where(
-        column(resolved.target, resolved.targetForeignKey!),
+        column(resolved.target, resolved.targetForeignKey),
         source[resolved.sourceKey] as Knex.Value,
       )
-      .update({ [column(resolved.target, resolved.targetForeignKey!)]: null });
+      .update({ [column(resolved.target, resolved.targetForeignKey)]: null });
   }
 
   private async disconnectRelation(
@@ -1535,35 +1528,34 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     _sourceUnique: UniqueSelector,
     target: RepositoryRecord,
   ): Promise<void> {
-    if (resolved.relation.type === 'belongsToMany') {
-      await tableQuery(this.getClient(), resolved.through!)
+    if (resolved.type === 'belongsToMany') {
+      await tableQuery(this.getClient(), resolved.through)
         .where(
-          column(resolved.through!, resolved.throughSourceForeignKey!),
+          column(resolved.through, resolved.throughSourceForeignKey),
           source[resolved.sourceKey] as Knex.Value,
         )
         .where(
-          column(resolved.through!, resolved.throughTargetForeignKey!),
+          column(resolved.through, resolved.throughTargetForeignKey),
           target[resolved.targetKey] as Knex.Value,
         )
         .delete();
       return;
     }
-    if (
-      resolved.relation.type !== 'hasMany' ||
-      !relationForeignKeyNullable(resolved)
-    ) {
+    if (resolved.type !== 'hasMany' || !relationForeignKeyNullable(resolved)) {
       relationActionNotAllowed(resolved, 'patch');
     }
-    await tableQuery(this.getClient(), resolved.target)
+    const query = tableQuery(this.getClient(), resolved.target);
+    applyUnique(
+      query,
+      resolved.target,
+      selectorFromRecord(resolved.target, target),
+    );
+    await query
       .where(
-        column(resolved.target, resolved.targetKey),
-        target[resolved.targetKey] as Knex.Value,
-      )
-      .where(
-        column(resolved.target, resolved.targetForeignKey!),
+        column(resolved.target, resolved.targetForeignKey),
         source[resolved.sourceKey] as Knex.Value,
       )
-      .update({ [column(resolved.target, resolved.targetForeignKey!)]: null });
+      .update({ [column(resolved.target, resolved.targetForeignKey)]: null });
   }
 
   private async replaceRelation(
@@ -1575,62 +1567,58 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       through?: RepositoryRecord;
     }[],
   ): Promise<void> {
-    const desiredValues = new Map(
-      desired.map(({ record: target }) => [
-        associationKey(target[resolved.targetKey]),
-        target[resolved.targetKey],
-      ]),
-    );
-    if (resolved.relation.type === 'belongsToMany') {
-      const current = (await tableQuery(this.getClient(), resolved.through!)
+    if (resolved.type === 'belongsTo')
+      relationActionNotAllowed(resolved, 'replace');
+    if (resolved.type === 'belongsToMany') {
+      const desiredValues = new Map(
+        desired.map(({ record: target }) => [
+          associationKey(target[resolved.targetKey]),
+          target[resolved.targetKey],
+        ]),
+      );
+      const current = (await tableQuery(this.getClient(), resolved.through)
         .select(
           this.getClient()
-            .ref(column(resolved.through!, resolved.throughTargetForeignKey!))
+            .ref(column(resolved.through, resolved.throughTargetForeignKey))
             .as('target'),
         )
         .where(
-          column(resolved.through!, resolved.throughSourceForeignKey!),
+          column(resolved.through, resolved.throughSourceForeignKey),
           source[resolved.sourceKey] as Knex.Value,
         )) as Array<{ target: unknown }>;
       for (const edge of current) {
         if (!desiredValues.has(associationKey(edge.target))) {
-          await tableQuery(this.getClient(), resolved.through!)
+          await tableQuery(this.getClient(), resolved.through)
             .where(
-              column(resolved.through!, resolved.throughSourceForeignKey!),
+              column(resolved.through, resolved.throughSourceForeignKey),
               source[resolved.sourceKey] as Knex.Value,
             )
             .where(
-              column(resolved.through!, resolved.throughTargetForeignKey!),
+              column(resolved.through, resolved.throughTargetForeignKey),
               edge.target as Knex.Value,
             )
             .delete();
         }
       }
     } else {
+      const selectors = desired.map(({ record }) =>
+        selectorFromRecord(resolved.target, record),
+      );
+      const remaining = tableQuery(this.getClient(), resolved.target).where(
+        column(resolved.target, resolved.targetForeignKey),
+        source[resolved.sourceKey] as Knex.Value,
+      );
+      if (selectors.length) {
+        remaining.whereNot((query) =>
+          applySelectors(query, resolved.target, selectors),
+        );
+      }
       if (!relationForeignKeyNullable(resolved)) {
-        const current = await tableQuery(this.getClient(), resolved.target)
-          .where(
-            column(resolved.target, resolved.targetForeignKey!),
-            source[resolved.sourceKey] as Knex.Value,
-          )
-          .whereNotIn(column(resolved.target, resolved.targetKey), [
-            ...desiredValues.values(),
-          ] as Knex.Value[])
-          .first();
+        const current = await remaining.first();
         if (current) relationActionNotAllowed(resolved, 'replace');
       } else {
-        let query = tableQuery(this.getClient(), resolved.target).where(
-          column(resolved.target, resolved.targetForeignKey!),
-          source[resolved.sourceKey] as Knex.Value,
-        );
-        if (desiredValues.size > 0) {
-          query = query.whereNotIn(
-            column(resolved.target, resolved.targetKey),
-            [...desiredValues.values()] as Knex.Value[],
-          );
-        }
-        await query.update({
-          [column(resolved.target, resolved.targetForeignKey!)]: null,
+        await remaining.update({
+          [column(resolved.target, resolved.targetForeignKey)]: null,
         });
       }
     }
@@ -1759,10 +1747,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       selected.push({ column: column(resolved.target, field), alias: field });
     }
     const associationField =
-      resolved.relation.type === 'belongsTo'
+      resolved.type === 'belongsTo'
         ? resolved.targetKey
-        : resolved.relation.type === 'hasOne' ||
-            resolved.relation.type === 'hasMany'
+        : resolved.type === 'hasOne' || resolved.type === 'hasMany'
           ? resolved.targetForeignKey
           : undefined;
     if (associationField) {
@@ -1788,19 +1775,16 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         client.ref(field.column).withSchema(targetAlias).as(field.alias),
       ),
     );
-    if (resolved.relation.type === 'belongsTo') {
+    if (resolved.type === 'belongsTo') {
       query.whereIn(
         qualified(targetAlias, column(resolved.target, resolved.targetKey)),
         parentValues as Knex.Value[],
       );
-    } else if (
-      resolved.relation.type === 'hasOne' ||
-      resolved.relation.type === 'hasMany'
-    ) {
+    } else if (resolved.type === 'hasOne' || resolved.type === 'hasMany') {
       query.whereIn(
         qualified(
           targetAlias,
-          column(resolved.target, resolved.targetForeignKey!),
+          column(resolved.target, resolved.targetForeignKey),
         ),
         parentValues as Knex.Value[],
       );
@@ -1808,23 +1792,23 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       const throughAlias = 'repository_through';
       query
         .join(
-          collectionReference(client, resolved.through!, throughAlias),
+          collectionReference(client, resolved.through, throughAlias),
           qualified(targetAlias, column(resolved.target, resolved.targetKey)),
           qualified(
             throughAlias,
-            column(resolved.through!, resolved.throughTargetForeignKey!),
+            column(resolved.through, resolved.throughTargetForeignKey),
           ),
         )
         .whereIn(
           qualified(
             throughAlias,
-            column(resolved.through!, resolved.throughSourceForeignKey!),
+            column(resolved.through, resolved.throughSourceForeignKey),
           ),
           parentValues as Knex.Value[],
         )
         .select(
           client
-            .ref(column(resolved.through!, resolved.throughSourceForeignKey!))
+            .ref(column(resolved.through, resolved.throughSourceForeignKey))
             .withSchema(throughAlias)
             .as(relationParentHelper(node.relation)),
         );
@@ -2081,30 +2065,33 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         { collection: relation.target, relation: relation.name },
       );
     }
-    const sourceKey = relation.sourceKey ?? 'id';
-    const targetKey = relation.targetKey ?? 'id';
+    validateRelationOptions(relation);
     if (relation.type === 'belongsTo') {
       return {
+        type: 'belongsTo',
         source,
         relation,
         target,
-        sourceKey,
-        targetKey,
-        sourceColumn: relation.foreignKey
-          ? column(source, relation.foreignKey)
-          : naming(source).relationForeignKey(relation.name),
+        targetKey: requireRelationOption(relation, 'targetKey'),
+        sourceColumn: column(
+          source,
+          requireRelationOption(relation, 'foreignKey'),
+        ),
       };
     }
     if (relation.type === 'hasOne' || relation.type === 'hasMany') {
       if (!relation.foreignKey)
         missingRelationOption(source, relation, 'foreignKey');
       return {
+        type: relation.type,
         source,
         relation,
         target,
-        sourceKey,
-        targetKey,
-        sourceColumn: column(source, sourceKey),
+        sourceKey: requireRelationOption(relation, 'sourceKey'),
+        sourceColumn: column(
+          source,
+          requireRelationOption(relation, 'sourceKey'),
+        ),
         targetForeignKey: relation.foreignKey,
       };
     }
@@ -2121,13 +2108,17 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     return {
+      type: 'belongsToMany',
       source,
       relation,
       target,
       through,
-      sourceKey,
-      targetKey,
-      sourceColumn: column(source, sourceKey),
+      sourceKey: requireRelationOption(relation, 'sourceKey'),
+      targetKey: requireRelationOption(relation, 'targetKey'),
+      sourceColumn: column(
+        source,
+        requireRelationOption(relation, 'sourceKey'),
+      ),
       throughSourceForeignKey: relation.foreignKey,
       throughTargetForeignKey: relation.otherKey,
     };
@@ -2139,18 +2130,39 @@ interface SelectionColumn {
   readonly alias: string;
 }
 
-interface ResolvedRepositoryRelation {
+interface ResolvedRepositoryRelationBase {
   readonly source: CollectionDefinition;
   readonly relation: RelationFieldDefinition;
   readonly target: CollectionDefinition;
   readonly through?: CollectionDefinition;
-  readonly sourceKey: string;
-  readonly targetKey: string;
   readonly sourceColumn: string;
   readonly targetForeignKey?: string;
   readonly throughSourceForeignKey?: string;
   readonly throughTargetForeignKey?: string;
 }
+
+type ResolvedRepositoryRelation = ResolvedRepositoryRelationBase &
+  (
+    | { readonly type: 'belongsTo'; readonly targetKey: string }
+    | {
+        readonly type: 'hasOne';
+        readonly sourceKey: string;
+        readonly targetForeignKey: string;
+      }
+    | {
+        readonly type: 'hasMany';
+        readonly sourceKey: string;
+        readonly targetForeignKey: string;
+      }
+    | {
+        readonly type: 'belongsToMany';
+        readonly sourceKey: string;
+        readonly targetKey: string;
+        readonly through: CollectionDefinition;
+        readonly throughSourceForeignKey: string;
+        readonly throughTargetForeignKey: string;
+      }
+  );
 
 type RelationGraph = WeakMap<FilterRelationNode, ResolvedRepositoryRelation>;
 
@@ -2838,7 +2850,7 @@ function joinRelation(
   throughAlias: string,
   client: Knex,
 ): void {
-  if (resolved.relation.type === 'belongsTo') {
+  if (resolved.type === 'belongsTo') {
     query.join(
       collectionReference(client, resolved.target, targetAlias),
       qualified(targetAlias, column(resolved.target, resolved.targetKey)),
@@ -2846,15 +2858,12 @@ function joinRelation(
     );
     return;
   }
-  if (
-    resolved.relation.type === 'hasOne' ||
-    resolved.relation.type === 'hasMany'
-  ) {
+  if (resolved.type === 'hasOne' || resolved.type === 'hasMany') {
     query.join(
       collectionReference(client, resolved.target, targetAlias),
       qualified(
         targetAlias,
-        column(resolved.target, resolved.targetForeignKey!),
+        column(resolved.target, resolved.targetForeignKey),
       ),
       qualified(sourceAlias, column(resolved.source, resolved.sourceKey)),
     );
@@ -2862,10 +2871,10 @@ function joinRelation(
   }
   query
     .join(
-      collectionReference(client, resolved.through!, throughAlias),
+      collectionReference(client, resolved.through, throughAlias),
       qualified(
         throughAlias,
-        column(resolved.through!, resolved.throughSourceForeignKey!),
+        column(resolved.through, resolved.throughSourceForeignKey),
       ),
       qualified(sourceAlias, column(resolved.source, resolved.sourceKey)),
     )
@@ -2874,7 +2883,7 @@ function joinRelation(
       qualified(targetAlias, column(resolved.target, resolved.targetKey)),
       qualified(
         throughAlias,
-        column(resolved.through!, resolved.throughTargetForeignKey!),
+        column(resolved.through, resolved.throughTargetForeignKey),
       ),
     );
 }
@@ -2887,7 +2896,7 @@ function correlateRelation(
   throughAlias: string,
   client: Knex,
 ): void {
-  switch (resolved.relation.type) {
+  switch (resolved.type) {
     case 'belongsTo':
       query.whereRaw('?? = ??', [
         qualified(targetAlias, column(resolved.target, resolved.targetKey)),
@@ -2899,7 +2908,7 @@ function correlateRelation(
       query.whereRaw('?? = ??', [
         qualified(
           targetAlias,
-          column(resolved.target, resolved.targetForeignKey!),
+          column(resolved.target, resolved.targetForeignKey),
         ),
         qualified(sourceAlias, column(resolved.source, resolved.sourceKey)),
       ]);
@@ -2907,17 +2916,17 @@ function correlateRelation(
     case 'belongsToMany':
       query
         .join(
-          collectionReference(client, resolved.through!, throughAlias),
+          collectionReference(client, resolved.through, throughAlias),
           qualified(
             throughAlias,
-            column(resolved.through!, resolved.throughTargetForeignKey!),
+            column(resolved.through, resolved.throughTargetForeignKey),
           ),
           qualified(targetAlias, column(resolved.target, resolved.targetKey)),
         )
         .whereRaw('?? = ??', [
           qualified(
             throughAlias,
-            column(resolved.through!, resolved.throughSourceForeignKey!),
+            column(resolved.through, resolved.throughSourceForeignKey),
           ),
           qualified(sourceAlias, column(resolved.source, resolved.sourceKey)),
         ]);

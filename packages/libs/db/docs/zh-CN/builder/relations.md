@@ -26,7 +26,7 @@ description: 定义 belongsTo、hasOne、hasMany 和 belongsToMany metadata，�
 | 创建数据库约束   | `constraints()`、`onDelete()`、`onUpdate()`                       |
 | 配置本地字段     | `notNull()`、`nullable()`、`defaultTo()`、`index()`、`unsigned()` |
 
-不是每个关系都需要设置所有参数。优先依靠约定，只在外键位置、字段名或约束行为需要偏离默认值时配置。
+关系键没有默认值，也不从主键或字段名推断。必须显式配置：belongsTo 的 foreignKey/targetKey；hasOne/hasMany 的 sourceKey/foreignKey；belongsToMany 的 sourceKey/targetKey/through/foreignKey/otherKey。Builder 链式配置可以暂时未完成，但编译和 Metadata 校验会拒绝缺失的必要属性。
 
 ## 定义 belongsTo
 
@@ -36,6 +36,7 @@ await builder.createCollection('orders', (collection) => {
   collection
     .belongsTo('customer', 'customers')
     .foreignKey('customerId')
+    .targetKey('id')
     .foreignKeyType('integer')
     .unsigned()
     .constraints(true)
@@ -45,27 +46,38 @@ await builder.createCollection('orders', (collection) => {
 
 `belongsTo` 会创建本地外键列。默认会创建索引，但只有显式 `.constraints(true)` 时才创建数据库外键约束。
 
-`belongsTo` 会先尝试通过逻辑 `foreignKey` 找到已有字段；没有 `foreignKey` 时，会自己创建本地外键列，默认列名是 `<field>_id`，并会受命名策略影响：
+推荐先声明标量外键字段，再由 belongsTo 引用。字段类型不由关系名或 `id` 名称决定：
 
 ```ts
-collection.belongsTo('createdBy', 'users');
+collection.string('creatorAccount');
+collection
+  .belongsTo('createdBy', 'users')
+  .foreignKey('creatorAccount')
+  .targetKey('account');
 ```
 
-固定命名规则会创建 `created_by_id`。
+这里明确关联本地 creatorAccount 与 users.account；不要求 users 有 id 或 bigint 主键。
 
 如果写了：
 
 ```ts
-collection.belongsTo('createdBy', 'users').foreignKey('createdById');
+collection
+  .belongsTo('createdBy', 'users')
+  .foreignKey('createdById')
+  .targetKey('id')
+  .foreignKeyType('integer');
 ```
 
-`foreignKey` 表示当前 Collection 里的逻辑字段名，不是物理列名。如果没有同名逻辑字段定义，会按固定规则推导成本地列 `created_by_id`。
+`foreignKey` 表示逻辑字段名，不是物理列名。如果没有同名标量字段，必须显式配置 foreignKeyType 才能创建该列；不再默认 bigInt。物理名称仍遵循已配置的 naming。
 
 如果需要让关系复用已有的本地字段，应显式定义该逻辑字段，再用 `foreignKey()` 引用：
 
 ```ts
 collection.bigInt('createdById');
-collection.belongsTo('createdBy', 'users').foreignKey('createdById');
+collection
+  .belongsTo('createdBy', 'users')
+  .foreignKey('createdById')
+  .targetKey('id');
 ```
 
 最终关系使用 `created_by_id`，并且不会重复创建外键列。
@@ -75,8 +87,14 @@ collection.belongsTo('createdBy', 'users').foreignKey('createdById');
 ```ts
 await builder.createCollection('customers', (collection) => {
   collection.increments('id');
-  collection.hasOne('profile', 'profiles').foreignKey('customerId');
-  collection.hasMany('orders', 'orders').foreignKey('customerId');
+  collection
+    .hasOne('profile', 'profiles')
+    .sourceKey('id')
+    .foreignKey('customerId');
+  collection
+    .hasMany('orders', 'orders')
+    .sourceKey('id')
+    .foreignKey('customerId');
 });
 ```
 
@@ -89,6 +107,8 @@ await builder.createCollection('customers', (collection) => {
 ```ts
 collection
   .belongsToMany('products', 'products')
+  .sourceKey('id')
+  .targetKey('id')
   .through('orderProducts')
   .foreignKey('customerId')
   .otherKey('productId');
@@ -117,12 +137,17 @@ collection
 
 ```ts
 collection.bigInt('createdById');
-collection.belongsTo('createdBy', 'users').foreignKey('createdById');
+collection
+  .belongsTo('createdBy', 'users')
+  .foreignKey('createdById')
+  .targetKey('id');
 ```
 
 ## 使用注意事项
 
 - 只有 `belongsTo` 默认创建本地物理列。
+- 没有默认 id、默认关联键或默认外键类型；id 只是普通字段名，可以是 string、uuid、integer 等声明的类型，也可以不是主键。
+- 普通物理外键同样需要显式 references.field 或 references.fields；复合外键两端字段数量必须相同。
 - `belongsTo` 的外键约束需要显式 `constraints(true)`。
 - 不要期望 `belongsToMany` 自动创建中间表。
 - 需要跨 MySQL 时，整型外键和自增主键的 unsigned 属性要匹配。

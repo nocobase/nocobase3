@@ -38,6 +38,8 @@ describe('CollectionBuilder createCollection', () => {
         collection.bigInt('id').primary().autoIncrement();
         collection
           .belongsTo('customer', 'customers')
+          .targetKey('id')
+          .foreignKeyType('bigInt')
           .foreignKey('customerId')
           .index();
         collection.decimal('amount', { precision: 12, scale: 2 }).notNull();
@@ -72,6 +74,8 @@ describe('CollectionBuilder createCollection', () => {
               type: 'belongsTo',
               target: 'customers',
               foreignKey: 'customerId',
+              targetKey: 'id',
+              foreignKeyType: 'bigInt',
               index: true,
             },
             {

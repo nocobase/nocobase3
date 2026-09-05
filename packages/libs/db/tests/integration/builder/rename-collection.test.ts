@@ -33,7 +33,11 @@ describeIntegrationDatabases('collection rename', (context) => {
     });
     await context.builder.createCollection('posts', (collection) => {
       collection.increments('id');
-      collection.belongsTo('author', 'users');
+      collection
+        .belongsTo('author', 'users')
+        .targetKey('id')
+        .foreignKey('authorId')
+        .foreignKeyType('bigInt');
     });
 
     await expect(

@@ -234,6 +234,7 @@ describe('CollectionRegistry', () => {
         name: 'users',
         relations: {
           department: {
+            targetKey: 'id',
             type: 'belongsTo',
             target: 'departments',
             foreignKey: 'departmentId',
@@ -248,6 +249,7 @@ describe('CollectionRegistry', () => {
         name: 'departments',
         relations: {
           owner: {
+            targetKey: 'id',
             type: 'belongsTo',
             target: 'users',
             foreignKey: 'ownerId',
@@ -309,17 +311,23 @@ describe('CollectionRegistry', () => {
         name: 'orders',
         relations: {
           owner: {
+            targetKey: 'id',
             type: 'belongsTo',
             target: 'missing',
             foreignKey: 'ownerId',
           },
           items: {
+            sourceKey: 'id',
             type: 'hasMany',
             target: 'items',
             targetKey: 'missingId',
             foreignKey: 'missingOrderId',
           },
           products: {
+            sourceKey: 'id',
+            targetKey: 'id',
+            foreignKey: 'orderId',
+            otherKey: 'productId',
             type: 'belongsToMany',
             target: 'products',
             through: 'missingThrough',

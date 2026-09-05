@@ -33,6 +33,8 @@ description: 按业务任务选择 Repository 查询、写入、关系、分页�
 
 ## 必须核对的护栏
 
+- 不假定存在 id，不按名称推断字段类型、主键或自增。关系键必须显式配置，不回退到 id、主键或 unique；关联条件与目标记录的唯一选择器是不同概念。
+
 - 参数用 filter/values/select/sort；root upsert 用 filter/create/update。
 - findOne 是取第一条；updateOne/deleteOne 需要恰好命中一条；upsertOne 需要唯一等值条件。
 - 全表 updateMany/deleteMany 只能在任务明确允许时使用 all:true，不能为了修复报错自动扩大条件范围。

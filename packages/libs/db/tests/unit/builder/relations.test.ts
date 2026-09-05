@@ -11,6 +11,7 @@ describe('CollectionBuilder relation fields', () => {
         collection.increments('id');
         collection
           .belongsTo('customer', 'customers')
+          .targetKey('id')
           .foreignKey('customerId')
           .foreignKeyType('integer')
           .constraints(true)
@@ -57,6 +58,8 @@ describe('CollectionBuilder relation fields', () => {
         collection.bigInt('createdById');
         collection
           .belongsTo('createdBy', 'users')
+          .targetKey('id')
+          .foreignKeyType('bigInt')
           .foreignKey('createdById')
           .constraints(true);
       },
@@ -105,10 +108,18 @@ describe('CollectionBuilder relation fields', () => {
       'customers',
       (collection) => {
         collection.increments('id');
-        collection.hasOne('profile', 'profiles').foreignKey('customerId');
-        collection.hasMany('orders', 'orders').foreignKey('customerId');
+        collection
+          .hasOne('profile', 'profiles')
+          .sourceKey('id')
+          .foreignKey('customerId');
+        collection
+          .hasMany('orders', 'orders')
+          .sourceKey('id')
+          .foreignKey('customerId');
         collection
           .belongsToMany('products', 'products')
+          .sourceKey('id')
+          .targetKey('id')
           .through('orderProducts')
           .foreignKey('customerId')
           .otherKey('productId');

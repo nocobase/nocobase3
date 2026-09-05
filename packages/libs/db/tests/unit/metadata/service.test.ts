@@ -167,6 +167,7 @@ describe('CollectionMetadataService', () => {
   it('invalidates old and new relation dependencies after successful validation', async () => {
     const fixture = createService();
     const first = await fixture.service.setRelation('orders', 'customer', {
+      targetKey: 'id',
       type: 'belongsTo',
       target: 'customers',
       through: 'customerOrders',
@@ -178,6 +179,7 @@ describe('CollectionMetadataService', () => {
       'orders',
       'customer',
       {
+        targetKey: 'id',
         type: 'belongsTo',
         target: 'accounts',
         through: 'accountOrders',
@@ -215,6 +217,7 @@ describe('CollectionMetadataService', () => {
       fields: { amount: { title: 'Amount' } },
       relations: {
         customer: {
+          targetKey: 'id',
           type: 'belongsTo',
           target: 'customers',
           foreignKey: 'customerId',
@@ -253,7 +256,12 @@ describe('CollectionMetadataService', () => {
         title: 'Orders',
         fields: { legacy: { title: 'Legacy' } },
         relations: {
-          customer: { type: 'belongsTo', target: 'customers' },
+          customer: {
+            targetKey: 'id',
+            foreignKey: 'customerId',
+            type: 'belongsTo',
+            target: 'customers',
+          },
         },
       },
       { expectedRevision: null },

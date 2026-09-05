@@ -10,7 +10,12 @@ describe('CollectionBuilder naming', () => {
         collection.increments('id');
         collection.string('orderNo');
         collection.datetime('createdAt');
-        collection.belongsTo('createdBy', 'users').constraints(true);
+        collection
+          .belongsTo('createdBy', 'users')
+          .targetKey('id')
+          .foreignKey('createdBy_id')
+          .foreignKeyType('bigInt')
+          .constraints(true);
         collection.unique(['orderNo', 'createdAt']);
       },
       { dryRun: true },
@@ -67,7 +72,11 @@ describe('CollectionBuilder naming', () => {
       (collection) => {
         collection.naming({ underscored: false, tablePrefix: 'legacy_' });
         collection.datetime('createdAt');
-        collection.belongsTo('createdBy', 'users');
+        collection
+          .belongsTo('createdBy', 'users')
+          .targetKey('id')
+          .foreignKey('createdBy_id')
+          .foreignKeyType('bigInt');
       },
       { dryRun: true },
     );

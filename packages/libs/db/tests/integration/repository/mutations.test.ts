@@ -1091,7 +1091,12 @@ async function createMutationFixture(
         collection.integer('points').notNull().defaultTo(0);
         collection.string('externalId').nullable().unique();
         collection.integer('projectId').nullable();
-        collection.belongsTo('assignee', 'repositoryUsers').constraints(false);
+        collection
+          .belongsTo('assignee', 'repositoryUsers')
+          .targetKey('id')
+          .foreignKey('assigneeId')
+          .foreignKeyType('bigInt')
+          .constraints(false);
       },
     },
     {
@@ -1128,13 +1133,24 @@ async function createMutationFixture(
         collection.json('metadata').nullable();
         collection.integer('version').notNull();
         collection.optimisticLock('version');
-        collection.belongsTo('owner', 'repositoryUsers').constraints(false);
-        collection.hasMany('tasks', 'repositoryTasks').foreignKey('projectId');
+        collection
+          .belongsTo('owner', 'repositoryUsers')
+          .targetKey('id')
+          .foreignKey('ownerId')
+          .foreignKeyType('bigInt')
+          .constraints(false);
+        collection
+          .hasMany('tasks', 'repositoryTasks')
+          .sourceKey('id')
+          .foreignKey('projectId');
         collection
           .hasOne('profile', 'repositoryProjectProfiles')
+          .sourceKey('id')
           .foreignKey('projectId');
         collection
           .belongsToMany('tags', 'repositoryTagsForMutation')
+          .sourceKey('id')
+          .targetKey('id')
           .through('repositoryProjectTags')
           .foreignKey('projectId')
           .otherKey('tagId');

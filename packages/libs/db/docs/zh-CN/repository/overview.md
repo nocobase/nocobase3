@@ -18,6 +18,8 @@ Repository 基于解析后的 Collection 定义访问记录，识别逻辑字段
 
 Repository 不创建 Schema，也不替代业务权限、租户隔离或输入授权。调用方必须明确允许访问的 Collection、字段和记录范围。
 
+Collection 不要求存在 `id`，也不要求存在主键。字段名称不决定类型：`id` 可以是 string、uuid、integer 等声明类型，甚至不是唯一字段。基础查询和不带 select 的批量标量操作不要求主键；需要定位或重读记录的单条写入要求可用的完整非空主键或无条件唯一选择器。没有可用标识时不会猜测 id，见[写入限制](./mutations.md)。
+
 ## 获取 Repository
 
 以下示例假设 `db` 是已配置的 `DatabaseManager`，Collection 已存在且能由 `connection.collections` 解析。
@@ -46,7 +48,7 @@ await db.transaction(async (connection) => {
 | `tags`        | string 主键 `id`、string `label`                                                                                                                                                                                                 |
 | `projectTags` | `projectId/tagId`：string 关系键；`role`：可空 string payload；为关系键组合声明唯一约束                                                                                                                                          |
 
-`projects.owner` 是指向 users 的 belongsTo，foreignKey 为 ownerId；`projects.tasks` 是指向 tasks 的 hasMany，foreignKey 为 projectId；`projects.tags` 是经 projectTags 的 belongsToMany，foreignKey 为 projectId，otherKey 为 tagId。除字段本身外，必须保留这些 Relation Metadata。
+`projects.owner` 是指向 users 的 belongsTo，foreignKey 为 ownerId，targetKey 为 id；`projects.tasks` 是指向 tasks 的 hasMany，sourceKey 为 id，foreignKey 为 projectId；`projects.tags` 是经 projectTags 的 belongsToMany，sourceKey/targetKey 均为 id，foreignKey 为 projectId，otherKey 为 tagId。这里的 id 是示例显式声明的字段，不是默认值；其他模型必须填各自真实的关系键。除字段本身外，必须保留这些 Relation Metadata。
 
 其他必填字段应由调用方提供或在 Schema 中定义默认值。示例中 version 由 Repository 初始化，不手动写入。
 

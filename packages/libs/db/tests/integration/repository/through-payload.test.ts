@@ -31,6 +31,8 @@ describeIntegrationDatabases(
             c.increments('id');
             c.string('name');
             c.belongsToMany('members', 'payloadMembers')
+              .sourceKey('id')
+              .targetKey('id')
               .through('payloadMemberships')
               .foreignKey('teamId')
               .otherKey('memberId');

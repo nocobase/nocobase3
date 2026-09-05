@@ -20,6 +20,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
       collection.index(['status'], { name: statusIndex });
       collection
         .belongsTo('customer', 'customers')
+        .targetKey('id')
         .foreignKey('customerId')
         .foreignKeyType('integer')
         .unsigned()

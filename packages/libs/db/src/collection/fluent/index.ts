@@ -66,7 +66,7 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     return builder;
   }
 
-  increments(name = 'id'): FieldDefinitionBuilder {
+  increments(name: string): FieldDefinitionBuilder {
     return this.field({
       name,
       type: 'increments',

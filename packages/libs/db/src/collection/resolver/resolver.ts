@@ -93,7 +93,6 @@ export function resolveCollection(
   const relations = resolveRelations(
     input.metadata?.relations,
     columns,
-    strategy,
     issues,
   );
   const view = resolveView(input, issues);
@@ -676,7 +675,6 @@ function resolveIndexKey(
 function resolveRelations(
   metadata: Record<string, RelationMetadata> | undefined,
   columns: ResolvedColumns,
-  strategy: DefaultNamingStrategy,
   issues: CollectionResolutionIssue[],
 ): RelationFieldDefinition[] {
   if (!metadata) return [];
@@ -703,7 +701,7 @@ function resolveRelations(
       );
     }
 
-    let foreignKey = relation.foreignKey;
+    const foreignKey = relation.foreignKey;
     if (relation.type === 'belongsTo') {
       if (foreignKey) {
         if (!columns.byLogicalName.has(foreignKey)) {
@@ -716,17 +714,13 @@ function resolveRelations(
           );
         }
       } else {
-        const physicalForeignKey = strategy.relationForeignKey(name);
-        foreignKey = columns.logicalNameByPhysicalName.get(physicalForeignKey);
-        if (!foreignKey) {
-          issues.push(
-            issue(
-              'COLLECTION_RELATION_INVALID',
-              [...path, 'foreignKey'],
-              `belongsTo relation "${name}" has no local Field mapped to deterministic physical foreign key "${physicalForeignKey}".`,
-            ),
-          );
-        }
+        issues.push(
+          issue(
+            'COLLECTION_RELATION_INVALID',
+            [...path, 'foreignKey'],
+            `belongsTo relation "${name}" requires an explicit foreignKey.`,
+          ),
+        );
       }
     }
 

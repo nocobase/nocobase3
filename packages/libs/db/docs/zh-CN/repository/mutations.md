@@ -11,6 +11,8 @@ description: 使用 Repository 创建、更新、删除和 upsert 记录，掌�
 
 ## 按任务选择方法
 
+主键和唯一键来自实际 Collection 约束，不依赖字段名 id 或 bigint 类型。createOne/updateOne/deleteOne 执行时需要可用于定位、重读的完整非空主键或无条件唯一选择器；nullable unique 的 NULL 不能作为记录标识，条件唯一约束不能当作全表唯一标识。createMany/updateMany/deleteMany 不带 select 的标量路径不要求主键。不要由一次 filter 恰好命中一条推断无唯一标识的单条写入已经支持。
+
 | 方法         | 输入重点                               | 返回结果                               |
 | ------------ | -------------------------------------- | -------------------------------------- |
 | `createOne`  | `values`，可选 `select`                | `{ record, createdTargets, version? }` |

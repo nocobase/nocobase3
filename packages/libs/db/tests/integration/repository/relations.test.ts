@@ -512,8 +512,12 @@ async function createRelationFixture(
         collection.string('name').notNull();
         collection
           .hasOne('profile', 'repositoryProfiles')
+          .sourceKey('id')
           .foreignKey('authorId');
-        collection.hasMany('books', 'repositoryBooks').foreignKey('authorId');
+        collection
+          .hasMany('books', 'repositoryBooks')
+          .sourceKey('id')
+          .foreignKey('authorId');
       },
     },
     {
@@ -555,13 +559,19 @@ async function createRelationFixture(
         collection.integer('authorId').notNull();
         collection
           .belongsTo('author', 'repositoryAuthors')
+          .targetKey('id')
           .foreignKey('authorId')
           .constraints(false);
         collection
           .belongsTo('publisher', 'repositoryPublishers')
+          .targetKey('id')
+          .foreignKey('publisherId')
+          .foreignKeyType('integer')
           .constraints(false);
         collection
           .belongsToMany('tags', 'repositoryTags')
+          .sourceKey('id')
+          .targetKey('id')
           .through('repositoryBookTags')
           .foreignKey('bookId')
           .otherKey('tagId');

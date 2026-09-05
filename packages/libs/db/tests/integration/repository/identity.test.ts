@@ -2,6 +2,173 @@ import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('Repository explicit identity', (context) => {
+  it('replaces hasMany targets by complete composite identities', async () => {
+    await context.database.transaction(async (connection) => {
+      await connection.builder.createCollection('teams', (c) => {
+        c.string('code').primary().notNull();
+        c.hasMany('members', 'teamMembers')
+          .sourceKey('code')
+          .foreignKey('team');
+      });
+      await connection.builder.createCollection('teamMembers', (c) => {
+        c.string('account').notNull();
+        c.string('region').notNull();
+        c.string('team').nullable();
+        c.primary(['account', 'region']);
+      });
+    });
+    const teams = context.database.repository('teams');
+    const members = context.database.repository('teamMembers');
+    await members.createMany({
+      values: [
+        { account: 'same', region: 'east' },
+        { account: 'same', region: 'west' },
+      ],
+    });
+    await teams.createOne({
+      values: {
+        code: 'T',
+        members: {
+          connect: [
+            { account: 'same', region: 'east' },
+            { account: 'same', region: 'west' },
+          ],
+        },
+      },
+    });
+    await teams.updateOne({
+      filter: { code: 'T' },
+      values: { members: { set: [{ account: 'same', region: 'west' }] } },
+    });
+    expect(
+      await members.findMany({ sort: (s) => s.field('region').asc() }),
+    ).toEqual([
+      { account: 'same', region: 'east', team: null },
+      { account: 'same', region: 'west', team: 'T' },
+    ]);
+    await teams.updateOne({
+      filter: { code: 'T' },
+      values: { members: { disconnect: { account: 'same', region: 'west' } } },
+    });
+    expect(await members.count({ filter: { team: 'T' } })).toBe(0);
+  });
+  it('reads and mutates explicit string relations without id fields or hasMany targetKey', async () => {
+    await context.database.transaction(async (connection) => {
+      await connection.builder.createCollection(
+        'businessProjects',
+        (collection) => {
+          collection.string('code').primary().notNull();
+          collection.string('account').unique().notNull();
+          collection
+            .hasMany('tasks', 'businessTasks')
+            .sourceKey('account')
+            .foreignKey('projectAccount');
+          collection
+            .hasOne('featured', 'businessTasks')
+            .sourceKey('account')
+            .foreignKey('featuredAccount');
+          collection
+            .belongsToMany('tags', 'businessTags')
+            .sourceKey('account')
+            .targetKey('label')
+            .through('businessEdges')
+            .foreignKey('projectAccount')
+            .otherKey('tagLabel');
+        },
+      );
+      await connection.builder.createCollection(
+        'businessTasks',
+        (collection) => {
+          collection.string('taskNo').primary().notNull();
+          collection.string('projectAccount').nullable();
+          collection.string('featuredAccount').nullable();
+          collection
+            .belongsTo('project', 'businessProjects')
+            .foreignKey('projectAccount')
+            .targetKey('account');
+        },
+      );
+      await connection.builder.createCollection(
+        'businessTags',
+        (collection) => {
+          collection.string('code').primary().notNull();
+          collection.string('label').unique().notNull();
+        },
+      );
+      await connection.builder.createCollection(
+        'businessEdges',
+        (collection) => {
+          collection.string('projectAccount').notNull();
+          collection.string('tagLabel').notNull();
+          collection.string('role').nullable();
+          collection.unique(['projectAccount', 'tagLabel']);
+        },
+      );
+    });
+    const projects = context.database.repository('businessProjects');
+    const tasks = context.database.repository('businessTasks');
+    await tasks.createMany({ values: [{ taskNo: 'T1' }, { taskNo: 'T2' }] });
+    await projects.createOne({
+      values: {
+        code: 'P1',
+        account: 'business-A',
+        tasks: { connect: { taskNo: 'T1' } },
+        tags: {
+          create: {
+            values: { code: 'tag-A', label: 'database' },
+            through: { role: 'owner' },
+          },
+        },
+      },
+    });
+    await projects.updateOne({
+      filter: { code: 'P1' },
+      values: {
+        tasks: { connect: { taskNo: 'T2' } },
+        featured: { connect: { taskNo: 'T1' } },
+      },
+    });
+    await projects.updateOne({
+      filter: { code: 'P1' },
+      values: {
+        tasks: { set: [{ taskNo: 'T2' }] },
+        featured: { connect: { taskNo: 'T2' } },
+      },
+    });
+    expect(await tasks.findOne({ filter: { taskNo: 'T1' } })).toMatchObject({
+      projectAccount: null,
+      featuredAccount: null,
+    });
+    expect(
+      await tasks.findOne({
+        filter: { taskNo: 'T2' },
+        select: (s) =>
+          s.fields('taskNo').include('project', (p) => p.fields('code')),
+      }),
+    ).toEqual({ taskNo: 'T2', project: { code: 'P1' } });
+    const selected = await projects.findOne({
+      filter: { code: 'P1' },
+      select: (s) =>
+        s
+          .fields('code')
+          .include('tasks', (t) => t.count())
+          .include('tags', (t) => t.fields('label')),
+    });
+    expect(selected).toEqual({
+      code: 'P1',
+      tasks: 1,
+      tags: [{ label: 'database' }],
+    });
+    await projects.updateOne({
+      filter: { code: 'P1' },
+      values: { tasks: { disconnect: { taskNo: 'T2' } }, tags: { set: [] } },
+    });
+    expect(await tasks.findOne({ filter: { taskNo: 'T2' } })).toMatchObject({
+      projectAccount: null,
+    });
+    expect(await context.database.repository('businessEdges').count()).toBe(0);
+  });
+
   it('writes using a string unique key without a primary key or an id field', async () => {
     await context.builder.createCollection('accounts', (collection) => {
       collection.string('account').notNull().unique();
