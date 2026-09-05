@@ -569,6 +569,20 @@ const FILTER_GROUP_BY_TYPE: Readonly<Record<string, string>> = {
   json: 'json',
 };
 
+const FILTER_SHORTHAND_TYPES: ReadonlySet<string> = new Set([
+  'string',
+  'uuid',
+  'text',
+  'increments',
+  'integer',
+  'bigInt',
+  'decimal',
+  'float',
+  'double',
+  'time',
+  'boolean',
+]);
+
 const SORTABLE_TYPES = new Set([
   'increments',
   'integer',
@@ -589,11 +603,24 @@ function normalizeScalarFilter<TRecord extends object>(
   input: RepositoryFilter<TRecord> | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
 ): FilterAst | undefined {
-  if (!input) return undefined;
-  const ast =
-    typeof input === 'function'
-      ? wrapFilter(input(new DefaultFilterBuilder<TRecord>()), collection.name!)
-      : input;
+  if (input === undefined) return undefined;
+  let ast: FilterAst;
+  if (typeof input === 'function') {
+    ast = wrapFilter(
+      input(new DefaultFilterBuilder<TRecord>()),
+      collection.name!,
+    );
+  } else {
+    if (!isPlainRecord(input)) {
+      invalid('INVALID_FILTER', 'Expected a Repository Filter input.', {
+        collection: collection.name,
+        path: ['filter'],
+      });
+    }
+    ast = isFilterAstInput(collection, input)
+      ? (input as unknown as FilterAst)
+      : filterShorthandToAst(collection, input);
+  }
   if (
     ast.kind !== 'filter' ||
     ast.version !== 1 ||
@@ -612,6 +639,120 @@ function normalizeScalarFilter<TRecord extends object>(
   }
   const root = validateFilterGroup(collection, ast.root, context, ['root']);
   return { kind: 'filter', version: 1, collection: collection.name, root };
+}
+
+function isFilterAstInput(
+  collection: CollectionDefinition,
+  input: Readonly<Record<string, unknown>>,
+): boolean {
+  const keys = Object.keys(input);
+  const fieldNames = new Set(
+    (collection.fields ?? []).map((field) => field.name),
+  );
+  if (
+    keys.length > 0 &&
+    keys.every(
+      (key) => fieldNames.has(key) && isFilterShorthandValue(input[key]),
+    )
+  ) {
+    return false;
+  }
+  return (
+    input.kind === 'filter' ||
+    Object.hasOwn(input, 'root') ||
+    (Object.hasOwn(input, 'kind') && Object.hasOwn(input, 'version'))
+  );
+}
+
+function isFilterShorthandValue(value: unknown): boolean {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  );
+}
+
+function filterShorthandToAst(
+  collection: CollectionDefinition,
+  input: Readonly<Record<string, unknown>>,
+): FilterAst {
+  const entries = Object.entries(input);
+  if (entries.length === 0) {
+    invalid('INVALID_FILTER', 'Filter shorthand must not be empty.', {
+      collection: collection.name,
+      path: ['filter'],
+    });
+  }
+  return {
+    kind: 'filter',
+    version: 1,
+    collection: collection.name,
+    root: {
+      kind: 'group',
+      logic: 'and',
+      items: entries.map(([name, value]) =>
+        filterShorthandCondition(collection, name, value),
+      ),
+    },
+  };
+}
+
+function filterShorthandCondition(
+  collection: CollectionDefinition,
+  name: string,
+  value: unknown,
+): FilterConditionNode {
+  const path = ['filter', name] as const;
+  const field = scalarField(collection, name, path);
+  if (!FILTER_SHORTHAND_TYPES.has(field.type)) {
+    invalid(
+      'FIELD_CAPABILITY_NOT_SUPPORTED',
+      `Filter shorthand is not supported for Field "${name}" of type "${field.type}".`,
+      { collection: collection.name, field: name, path },
+    );
+  }
+  if (value === undefined) {
+    invalid(
+      'INVALID_FILTER',
+      `Filter shorthand value for Field "${name}" must not be undefined.`,
+      { collection: collection.name, field: name, path },
+    );
+  }
+  if (field.type === 'boolean') {
+    if (value === null) {
+      return { kind: 'condition', path: [name], operator: '$empty' };
+    }
+    if (typeof value !== 'boolean') {
+      invalid(
+        'INVALID_FILTER',
+        `Filter value is invalid for Field "${name}" of type "boolean".`,
+        { collection: collection.name, field: name, path },
+      );
+    }
+    return {
+      kind: 'condition',
+      path: [name],
+      operator: value ? '$isTruly' : '$isFalsy',
+    };
+  }
+  if (
+    value !== null &&
+    typeof value !== 'string' &&
+    typeof value !== 'number'
+  ) {
+    invalid(
+      'INVALID_FILTER',
+      `Filter shorthand requires a string, number, boolean, or null value for Field "${name}".`,
+      { collection: collection.name, field: name, path },
+    );
+  }
+  return {
+    kind: 'condition',
+    path: [name],
+    operator: '$eq',
+    value,
+  };
 }
 
 function wrapFilter(node: FilterNode, collection: string): FilterAst {

@@ -62,7 +62,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
     });
 
     const updated = await repository.updateOne({
-      filter: (filter) => filter.number('id').eq(first.record.id as number),
+      filter: { id: first.record.id as number },
       ifVersion: 1,
       values: {
         name: 'After update',
@@ -164,16 +164,14 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
         tasks: (tasks) =>
           tasks
             .update({
-              filter: (filter) =>
-                filter.number('id').eq(fixture.implementTask as number),
+              filter: { id: fixture.implementTask as number },
               values: {
                 title: 'Implemented',
                 assignee: { connect: { id: fixture.bob } },
               },
             })
             .upsert({
-              filter: (filter) =>
-                filter.string('externalId').eq('task-imported'),
+              filter: { externalId: 'task-imported' },
               create: {
                 externalId: 'task-imported',
                 title: 'Imported task',
@@ -181,12 +179,11 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
               update: { title: 'Updated imported task' },
             })
             .delete({
-              filter: (filter) =>
-                filter.number('id').eq(fixture.reviewTask as number),
+              filter: { id: fixture.reviewTask as number },
             }),
         tags: {
           update: {
-            filter: equalFilter('label', 'database'),
+            filter: { label: 'database' },
             values: { label: 'database-updated' },
           },
         },
@@ -214,7 +211,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
       values: {
         tasks: {
           upsert: {
-            filter: equalFilter('externalId', 'task-imported'),
+            filter: { externalId: 'task-imported' },
             create: {
               externalId: 'task-imported',
               title: 'Should not be created',
@@ -276,7 +273,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
       filter: (filter) => filter.number('id').eq(first.record.id as number),
       values: {
         tags: {
-          delete: { filter: equalFilter('label', 'database-updated') },
+          delete: { filter: { label: 'database-updated' } },
         },
       },
     });
@@ -445,7 +442,7 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
   });
 
   it('describes and validates executable relation capabilities', async () => {
-    await createMutationFixture(context);
+    const fixture = await createMutationFixture(context);
     const repository = context.database.repository('repositoryProjects');
 
     await expect(
@@ -528,6 +525,25 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
     ).resolves.toMatchObject({
       valid: false,
       errors: [{ code: 'RELATION_ACTION_NOT_ALLOWED', relation: 'owner' }],
+    });
+    await expect(
+      repository.validateMutation({
+        operation: 'updateOne',
+        filter: { name: 'Project' },
+        values: { name: 'Updated project' },
+      }),
+    ).resolves.toEqual({ valid: true, errors: [] });
+    await expect(
+      repository.findMany({ filter: { metadata: '{}' } }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_CAPABILITY_NOT_SUPPORTED',
+      field: 'metadata',
+    });
+    await expect(
+      repository.findMany({ filter: { owner: fixture.ada as number } }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_CAPABILITY_NOT_SUPPORTED',
+      field: 'owner',
     });
   });
 });

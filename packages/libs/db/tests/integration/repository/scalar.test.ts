@@ -46,6 +46,76 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     ).resolves.toMatchObject({ orderNo: 'SO-002', status: 'paid' });
   });
 
+  it('normalizes equality shorthand with implicit AND and strict null semantics', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+    await repository.createMany({
+      values: [
+        {
+          orderNo: 'SO-001',
+          status: 'draft',
+          amount: 50,
+          note: '',
+          enabled: false,
+        },
+        {
+          orderNo: 'SO-002',
+          status: 'paid',
+          amount: 120,
+          note: null,
+          enabled: true,
+        },
+        {
+          orderNo: 'SO-003',
+          status: 'paid',
+          amount: 240,
+          note: 'priority',
+          enabled: null,
+        },
+      ],
+    });
+
+    await expect(
+      repository.findMany({
+        filter: { status: 'paid', enabled: true },
+        select: selection(['orderNo']),
+      }),
+    ).resolves.toEqual([{ orderNo: 'SO-002' }]);
+    await expect(
+      repository.findMany({
+        filter: { note: null },
+        select: selection(['orderNo']),
+      }),
+    ).resolves.toEqual([{ orderNo: 'SO-002' }]);
+    await expect(
+      repository.findMany({
+        filter: { enabled: null },
+        select: selection(['orderNo']),
+      }),
+    ).resolves.toEqual([{ orderNo: 'SO-003' }]);
+    await expect(
+      repository.findOne({
+        filter: { enabled: false },
+        select: selection(['orderNo']),
+      }),
+    ).resolves.toEqual({ orderNo: 'SO-001' });
+  });
+
+  it('rejects unsafe or unsupported filter shorthand', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+
+    await expect(repository.findMany({ filter: {} })).rejects.toMatchObject({
+      code: 'INVALID_FILTER',
+    });
+    await expect(
+      repository.findMany({ filter: { orderNo: undefined } }),
+    ).rejects.toMatchObject({ code: 'INVALID_FILTER', field: 'orderNo' });
+    await expect(
+      repository.findMany({ filter: { missing: 'SO-001' } }),
+    ).rejects.toMatchObject({ code: 'FIELD_NOT_FOUND', field: 'missing' });
+  });
+
   it('runs scalar mutations with logical unique selectors and optimistic locking', async () => {
     await createOrders(context);
     const repository = context.database.repository('repositoryOrders');
@@ -62,7 +132,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     const id = created.record.id;
 
     const updated = await repository.updateOne({
-      filter: (filter) => filter.number('id').eq(id as number),
+      filter: { id: id as number },
       ifVersion: 1,
       values: { status: 'paid' },
       select: selection(['orderNo', 'status']),
@@ -88,7 +158,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     });
     await expect(
       repository.updateMany({
-        filter: (filter) => filter.string('status').eq('draft'),
+        filter: { status: 'draft' },
         values: { status: 'cancelled' },
       }),
     ).resolves.toEqual({ updatedCount: 2 });
@@ -101,13 +171,13 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     ).resolves.toEqual([{ version: 2 }, { version: 2 }]);
     await expect(
       repository.deleteMany({
-        filter: (filter) => filter.string('status').eq('cancelled'),
+        filter: { status: 'cancelled' },
       }),
     ).resolves.toEqual({ deletedCount: 2 });
 
     await expect(
       repository.deleteOne({
-        filter: (filter) => filter.number('id').eq(id as number),
+        filter: { id: id as number },
         ifVersion: 2,
       }),
     ).resolves.toEqual({ deleted: true });
@@ -142,7 +212,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
 
     await expect(
       repository.updateOne({
-        filter: (filter) => filter.string('status').eq('draft'),
+        filter: { status: 'draft' },
         values: { status: 'cancelled' },
       }),
     ).rejects.toMatchObject({ code: 'MULTIPLE_RECORDS_MATCHED' });
@@ -168,7 +238,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
 
     await expect(
       repository.deleteOne({
-        filter: (filter) => filter.string('status').eq('draft'),
+        filter: { status: 'draft' },
       }),
     ).rejects.toMatchObject({ code: 'MULTIPLE_RECORDS_MATCHED' });
     await expect(
@@ -228,6 +298,7 @@ async function createOrders(context: IntegrationTestContext): Promise<void> {
     collection.string('status').notNull();
     collection.integer('amount').notNull();
     collection.string('note').nullable();
+    collection.boolean('enabled').nullable();
     collection.integer('version').notNull();
     collection.optimisticLock('version');
   });

@@ -135,6 +135,8 @@ export type {
   FilterOperand,
   FilterRelationNode,
   FilterScalar,
+  FilterShorthand,
+  FilterShorthandValue,
   FilterValue,
   FilterVariable,
   FindManyOptions,

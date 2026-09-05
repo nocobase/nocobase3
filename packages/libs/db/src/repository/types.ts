@@ -170,8 +170,18 @@ export interface FilterBuilder<_TRecord extends object = RepositoryRecord> {
   ): RelationFilterOperators<TTarget>;
 }
 
+export type FilterShorthandValue = string | number | boolean | null;
+
+export type FilterShorthand<TRecord extends object> = Readonly<
+  Partial<{
+    [TKey in keyof TRecord]: FilterShorthandValue;
+  }>
+>;
+
 export type RepositoryFilter<TRecord extends object> =
-  FilterAst | ((filter: FilterBuilder<TRecord>) => FilterNode);
+  | FilterShorthand<TRecord>
+  | FilterAst
+  | ((filter: FilterBuilder<TRecord>) => FilterNode);
 
 export interface SelectNode {
   readonly kind: 'selection';
