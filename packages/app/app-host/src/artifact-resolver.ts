@@ -79,6 +79,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
       targetDir,
       false,
       true,
+      reference.checksum.toLowerCase(),
     );
     if (!artifact)
       throw new Error(
@@ -410,6 +411,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     targetDir: string,
     updateLastUsed: boolean,
     identifyByChecksum: boolean,
+    installedFingerprint?: string,
   ): Promise<ResolvedArtifact | null> {
     const metadata = await readInstalledArtifactMetadata(targetDir);
     if (
@@ -423,6 +425,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     const definition = await this.catalog.discoverAt(
       reference.appId,
       targetDir,
+      { fingerprint: installedFingerprint },
     );
     assertArtifactIdentity(definition, reference);
     if (updateLastUsed) {

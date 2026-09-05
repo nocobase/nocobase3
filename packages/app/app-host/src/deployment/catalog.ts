@@ -82,12 +82,20 @@ export class DeploymentCatalog {
     return definitions.sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  async discoverAt(appId: string, rootDir: string): Promise<AppDefinition> {
+  async discoverAt(
+    appId: string,
+    rootDir: string,
+    options: { fingerprint?: string } = {},
+  ): Promise<AppDefinition> {
     if (!this.isValidAppId(appId)) {
       throw new Error(`Invalid app ID "${appId}"`);
     }
 
-    const definition = await this.readDefinition(appId, path.resolve(rootDir));
+    const definition = await this.readDefinition(
+      appId,
+      path.resolve(rootDir),
+      options.fingerprint,
+    );
     if (!definition) {
       throw new Error(`Deployment for app "${appId}" has no server entrypoint`);
     }
@@ -97,6 +105,7 @@ export class DeploymentCatalog {
   private async readDefinition(
     appId: string,
     rootDir: string,
+    installedFingerprint?: string,
   ): Promise<AppDefinition | null> {
     const packageJson = await this.readAppPackage(rootDir);
     const client = await this.resolveClient(rootDir);
@@ -110,7 +119,9 @@ export class DeploymentCatalog {
 
     const version =
       packageJson?.app?.version ?? packageJson?.version ?? 'local';
-    const fingerprint = await this.calculateFingerprint(appId, rootDir);
+    // Immutable installed revisions already have a content-addressed identity.
+    const fingerprint =
+      installedFingerprint ?? (await this.calculateFingerprint(appId, rootDir));
 
     return {
       id: appId,

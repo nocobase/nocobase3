@@ -21,6 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { c as createTar } from 'tar';
+import { DeploymentCatalog } from '../dist/deployment/catalog.js';
 import {
   createAppHost,
   type AppHost,
@@ -55,10 +56,20 @@ describe('managed host reconciliation', () => {
     await rm(path.join(fixture.artifactDir, fixture.artifact.key));
     const restored = createAppHost(options);
     hosts.push(restored);
-    expect(
-      (await restored.management.restoreDeploymentSet(set)).status
-        .deployments[0]?.observedState,
-    ).toBe('running');
+    const discover = vi.spyOn(DeploymentCatalog.prototype, 'discoverAt');
+    try {
+      expect(
+        (await restored.management.restoreDeploymentSet(set)).status
+          .deployments[0]?.observedState,
+      ).toBe('running');
+      expect(discover).toHaveBeenCalledWith(
+        fixture.artifact.appId,
+        revisionDirectory(fixture.deploymentsDir, fixture.artifact),
+        { fingerprint: fixture.artifact.checksum.toLowerCase() },
+      );
+    } finally {
+      discover.mockRestore();
+    }
     await restored.close();
     hosts.pop();
     await rm(revisionDirectory(fixture.deploymentsDir, fixture.artifact), {

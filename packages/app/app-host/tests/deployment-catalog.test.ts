@@ -8,10 +8,13 @@
  */
 
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import * as fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeploymentCatalog } from '../dist/deployment/catalog.js';
+
+vi.mock('node:fs/promises', { spy: true });
 
 const tempDirs: string[] = [];
 
@@ -46,6 +49,33 @@ afterEach(async () => {
 });
 
 describe('DeploymentCatalog', () => {
+  it('reads an installed revision without scanning its contents', async () => {
+    const { deploymentsDir, appDir } = await createAppWorkspace([
+      'dist/server/embedded.js',
+      'dist/node_modules/dependency/index.js',
+    ]);
+    const catalog = new DeploymentCatalog({ deploymentsDir });
+    const scan = vi
+      .spyOn(fs, 'readdir')
+      .mockRejectedValue(new Error('Unexpected scan'));
+    try {
+      const definition = await catalog.discoverAt('customer', appDir, {
+        fingerprint: 'installed-checksum',
+      });
+      expect(definition.code?.fingerprint).toBe('installed-checksum');
+      expect(definition.release?.fingerprint).toBe('installed-checksum');
+      expect(scan).not.toHaveBeenCalled();
+      await rm(path.join(appDir, 'dist/server/embedded.js'));
+      await expect(
+        catalog.discoverAt('customer', appDir, {
+          fingerprint: 'installed-checksum',
+        }),
+      ).rejects.toThrow('has no server entrypoint');
+    } finally {
+      scan.mockRestore();
+    }
+  });
+
   it('discovers an app from dist/server/embedded.js', async () => {
     const { deploymentsDir, appDir } = await createAppWorkspace(
       ['dist/server/embedded.js'],

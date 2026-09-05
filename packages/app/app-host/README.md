@@ -193,7 +193,9 @@ and does not activate it. Configuration reload errors propagate to the caller.
 
 Managed host startup uses `restoreDeploymentSet` to register installed local
 revisions and activate eager Apps asynchronously. Restoration does not download
-or extract artifacts, create Hub deployment records, or prune revisions. Missing
+or extract artifacts, scan revision contents, create Hub deployment records, or prune revisions.
+It reads the installed metadata and entrypoint declarations, using the artifact
+checksum as the immutable revision fingerprint. Missing
 installed revisions require an explicit deployment. Lazy Apps remain inactive.
 
 The `lifecycle` fixture is a complete lifecycle example. It registers a
