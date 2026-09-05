@@ -5,12 +5,12 @@ description: 参考 Prisma Next 的 where shorthand 与 Builder 分层，设计 
 
 # Repository Filter 输入改进提案
 
-> **状态：设计提案，尚未实现。** 本文只调整 Filter 输入形态，不改变现有 Filter Builder、
+> **状态：第一阶段已实现。** 本文只调整 Filter 输入形态，不改变现有 Filter Builder、
 > Filter AST、严格单条 mutation 或批量写入安全语义。
 
 ## 问题
 
-Repository 当前接受 Builder callback 或完整 Filter AST：
+Repository 原先只接受 Builder callback 或完整 Filter AST：
 
 ```ts
 type RepositoryFilter<TRecord extends object> =
@@ -69,7 +69,7 @@ db.orm.User.where((user) =>
 
 值得借鉴的是“简单对象 + 复杂 Builder + 内部 AST”的分层，而不是链式执行 API。
 
-## 推荐设计
+## 已实现设计
 
 ```ts
 type RepositoryFilter<TRecord extends object> =
@@ -146,9 +146,9 @@ type FilterShorthand<TRecord extends object> = Readonly<
 >;
 ```
 
-正式静态类型应按 schema 只保留支持 shorthand 的标量 Field；动态 Repository 在运行时根据
-Collection metadata 校验。日期和 JSON 第一阶段继续使用 Builder 或 Filter AST，避免为
-“简写”引入新的跨数据库相等语义。
+当前公共类型按 record key 限制字段名，动态 Repository 在运行时根据 Collection metadata
+校验 Field 类型和值。日期、datetime、JSON、blob、native 和 relation Field 不支持
+shorthand，避免为“简写”引入新的跨数据库相等语义。
 
 ## 复杂条件保持 Builder
 
@@ -198,7 +198,7 @@ filter: {
 }
 ```
 
-如果动态调用方以后确实需要手写复杂紧凑 JSON，再独立设计 Compact Filter V2。
+复杂紧凑 JSON DSL（Compact Filter V2）暂不实现；复杂条件继续使用 Builder 或完整 AST。
 
 ## Relation target filter
 
@@ -253,13 +253,12 @@ await projects.updateOne({
 - 所有 Field 必须在执行查询前根据 Collection metadata 校验；
 - `context` 仍只解析变量，不代表已授权。
 
-## 分阶段实现
+## 实现状态
 
-1. 增加直接标量 equality `FilterShorthand`，统一规范化为 Filter AST，并覆盖根 Filter 与
-   relation target Filter；
-2. 更新示例与 HTTP/CLI/Agent schema，明确 shorthand、Builder、AST 的使用边界；
-3. 根据真实需求再评估 `$and/$or`、scalar operator、relation quantifier 和 variable 的
-   Compact Filter V2，不提前扩张 DSL。
+- 已增加直接标量 equality `FilterShorthand`，并统一规范化为 Filter AST；
+- 已覆盖 read、根 mutation、`validateMutation()` 与 relation target Filter；
+- Builder、完整 Filter AST、严格单条 mutation 与显式 `all: true` 语义保持不变；
+- Compact Filter V2 不在当前实现范围内。
 
 ## 结论
 

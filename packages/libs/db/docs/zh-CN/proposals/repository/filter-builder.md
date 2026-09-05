@@ -7,7 +7,7 @@ description: Collection-aware Filter Builder 的设计与当前运行时能力�
 
 > **状态：V1 运行时已实现。** Relation Builder 支持 `some`、`none`、`exists`、`notExists`、`empty` 和 `notEmpty`；字段能力严格来自 resolved Collection Field type。
 
-`Filter Builder` 是未来 Repository 的筛选条件 DSL。它面向 Collection metadata，而不是数据库物理 schema。目标是让开发者和 Agent 都能写出可解释、可校验、可序列化、能跨数据库编译的筛选条件。
+`Filter Builder` 是 Repository 的复杂筛选条件 DSL。它面向 Collection metadata，而不是数据库物理 schema。目标是让开发者和 Agent 都能写出可解释、可校验、可序列化、能跨数据库编译的筛选条件。
 
 ## 基本原则
 
@@ -48,11 +48,22 @@ await db.repository('orders').findMany({
 
 ## 入口形态
 
-Repository 操作通过 `filter` callback 接收 Filter Builder：
+简单的直接标量 equality 使用 JSON shorthand：
 
 ```ts
 await db.repository('orders').findMany({
-  filter: (filter) => filter.string('status').eq('paid'),
+  filter: { status: 'paid', tenantId: 'tenant-1' },
+});
+```
+
+多个 Field 隐式使用 `AND`。空对象和 `undefined` 会被拒绝；日期、JSON、relation 以及比较、
+逻辑组合等复杂条件不使用 shorthand。
+
+复杂条件通过 `filter` callback 接收 Filter Builder：
+
+```ts
+await db.repository('orders').findMany({
+  filter: (filter) => filter.number('amount').gte(100),
 });
 ```
 
@@ -77,8 +88,8 @@ await db.repository('orders').findMany({
 
 Filter Builder 生成的是结构化 Filter AST。HTTP、CLI、file sync 或持久化配置可以直接使用 AST 形态，详见 [Filter AST](./filter-ast.md)。
 
-简单 equality JSON shorthand、复杂 Builder 和完整 Filter AST 的输入分层方案见
-[Repository Filter 输入改进提案](./prisma-inspired-filter-input.md)。
+Repository 已支持简单 equality JSON shorthand、复杂 Builder 和完整 Filter AST 三层输入，
+具体边界见 [Repository Filter 输入改进提案](./prisma-inspired-filter-input.md)。
 
 ## 不提供的简称 API
 
@@ -277,8 +288,8 @@ Filter Builder V1 不规划：
 - callable builder，例如 `filter('name')`。
 - 简称方法，例如 `filter.rel()`、`filter.var()`。
 - 通用 `filter.field()` 作为主入口。
-- object shorthand，例如 `{ status: 'paid' }`。
 - `$and` / `$or` 这类直接暴露给代码作者的特殊 key。
+- 带 operator 或 relation 的复杂 JSON DSL，例如 `{ amount: { $gte: 100 } }`。
 - generic `not()` 节点。
 - raw SQL filter。
 - to-many relation 的直接字段路径。
@@ -289,8 +300,8 @@ Filter Builder V1 不规划：
 ## Agent 注意事项
 
 - 本页 V1 Filter Builder 接口已导出并由 Repository 运行时执行。
-- Agent 写 TypeScript 代码时，优先使用 Filter Builder。
-- Agent 生成 HTTP / CLI / 持久化配置时，可以输出 Filter AST。
+- 简单 equality 优先使用 shorthand；比较、逻辑组合、变量与关系条件使用 Filter Builder。
+- Agent 生成 HTTP / CLI / 持久化配置时，简单条件可以输出 shorthand，复杂条件输出 Filter AST。
 - 选择方法组之前必须先根据 Collection metadata 确认终点字段类型。
 - 日期字段必须使用 `filter.date()`，不要使用 `filter.number()`。
 - to-many relation 必须使用 `filter.relation().some()`、`none()`、`empty()`、`notEmpty()`、`exists()` 或 `notExists()`。

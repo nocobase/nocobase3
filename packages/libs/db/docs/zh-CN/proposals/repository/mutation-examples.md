@@ -201,7 +201,7 @@ await projects.createMany({
 
 ```ts
 const result = await projects.updateOne({
-  filter: (filter) => filter.string('id').eq('project-1'),
+  filter: { id: 'project-1' },
 
   values: {
     name: 'New repository design',
@@ -226,13 +226,13 @@ const result = await projects.updateOne({
           id: 'task-old',
         })
         .update({
-          filter: (filter) => filter.string('id').eq('task-update'),
+          filter: { id: 'task-update' },
           values: {
             title: 'Updated title',
           },
         })
         .upsert({
-          filter: (filter) => filter.string('externalId').eq('external-1'),
+          filter: { externalId: 'external-1' },
           create: {
             externalId: 'external-1',
             title: 'Created title',
@@ -242,7 +242,7 @@ const result = await projects.updateOne({
           },
         })
         .delete({
-          filter: (filter) => filter.string('id').eq('task-delete'),
+          filter: { id: 'task-delete' },
         }),
 
     tags: (tags) => tags.set([{ id: 'tag-database' }, { id: 'tag-orm' }]),
@@ -275,7 +275,7 @@ result.version;
 
 ```ts
 await projects.updateOne({
-  filter: (filter) => filter.string('id').eq('project-1'),
+  filter: { id: 'project-1' },
   values: {
     tags: (tags) => tags.set([]),
   },
@@ -290,7 +290,7 @@ HTTP、CLI、Agent tool 和动态表单可以提交等价的纯 JSON `values`：
 
 ```ts
 await projects.updateOne({
-  filter: projectFilterAst,
+  filter: { id: 'project-1' },
   values: {
     name: 'New repository design',
     owner: {
@@ -305,13 +305,13 @@ await projects.updateOne({
       disconnect: [{ id: 'task-old' }],
       update: [
         {
-          filter: taskUpdateFilterAst,
+          filter: { id: 'task-update' },
           values: { title: 'Updated title' },
         },
       ],
       upsert: [
         {
-          filter: taskUpsertFilterAst,
+          filter: { externalId: 'external-1' },
           create: {
             externalId: 'external-1',
             title: 'Created title',
@@ -319,7 +319,7 @@ await projects.updateOne({
           update: { title: 'Updated title' },
         },
       ],
-      delete: [{ filter: taskDeleteFilterAst }],
+      delete: [{ filter: { id: 'task-delete' } }],
     },
     tags: {
       set: [{ id: 'tag-database' }, { id: 'tag-orm' }],
@@ -330,8 +330,8 @@ await projects.updateOne({
 });
 ```
 
-这里的 `projectFilterAst` 和各个 target filter 是可序列化的 Filter AST。JSON 边界不提交
-Builder callback，也不直接提交 Repository 内部 Relation Mutation AST。
+这里的根 Filter 和 target Filter 都是 equality shorthand。JSON 边界的复杂条件仍使用完整
+Filter AST，不提交 Builder callback，也不直接提交 Repository 内部 Relation Mutation AST。
 
 ### `filter` 的严格单条语义
 
@@ -339,7 +339,7 @@ Builder callback，也不直接提交 Repository 内部 Relation Mutation AST。
 
 ```ts
 await projects.updateOne({
-  filter: (filter) => filter.string('slug').eq('repository-redesign'),
+  filter: { slug: 'repository-redesign' },
   values: {
     status: 'active',
   },
@@ -382,7 +382,7 @@ await projects.updateOne({
 
 ```ts
 await projects.updateOne({
-  filter: (filter) => filter.string('id').eq('project-1'),
+  filter: { id: 'project-1' },
   ifVersion: 2,
   values: {
     status: 'active',
@@ -509,6 +509,7 @@ await projects.deleteMany({
 - `upsert.filter` 必须等价于主键或唯一约束，`create` 必须携带相同的唯一字段值；
 - 批量方法不支持关系写入；全量更新或删除必须显式提供 `all: true`；
 - `context` 只解析 Filter 变量，不承担授权；
+- 简单 equality Filter 使用 shorthand；比较、逻辑组合、变量或关系筛选使用 Builder 或完整 AST；
 - Builder 和纯 JSON `values` 共享相同语义，并归一化为 Repository 内部执行协议。
 
 更深入的设计与内部执行说明见：

@@ -159,8 +159,18 @@ type RepositoryRecord = Record<string, unknown>;
 
 type RepositoryContext = Readonly<Record<string, unknown>>;
 
+type FilterShorthandValue = string | number | boolean | null;
+
+type FilterShorthand<TRecord extends object> = Readonly<
+  Partial<{
+    [TKey in keyof TRecord]: FilterShorthandValue;
+  }>
+>;
+
 type RepositoryFilter<TRecord extends object> =
-  FilterAst | ((filter: FilterBuilder<TRecord>) => FilterNode);
+  | FilterShorthand<TRecord>
+  | FilterAst
+  | ((filter: FilterBuilder<TRecord>) => FilterNode);
 
 interface NonEmptySortAst extends SortAst {
   items: readonly [SortItemNode, ...SortItemNode[]];
@@ -553,7 +563,7 @@ const orders = await orderRepository.findMany({
 
 ```ts
 const order = await orderRepository.findOne({
-  filter: (filter) => filter.string('orderNo').eq('SO-001'),
+  filter: { orderNo: 'SO-001' },
   select: {
     kind: 'select',
     version: 1,
@@ -604,15 +614,23 @@ const rows = await db.repository('orders').findMany({
       fields: ['id', 'orderNo', 'createdAt'],
     },
   },
-  filter: (filter) => filter.string('status').eq('paid'),
+  filter: { status: 'paid' },
 });
 ```
 
 如果查询必须感知 Collection metadata、关系路径、字段 operator group 或变量，应优先走 Repository，而不是让 `db.query()` 变得更重。
 
-## Filter Builder
+## Repository Filter
 
-Repository 的筛选条件不推荐继续以旧的 object filter 形态作为主要代码 API，而是使用 Agent 友好的 Filter Builder：
+简单的直接标量 equality 使用 shorthand：
+
+```ts
+await db.repository('users').findMany({
+  filter: { enabled: true, tenantId: 'tenant-1' },
+});
+```
+
+复杂比较、逻辑组合、变量或关系筛选使用 Filter Builder：
 
 ```ts
 await db.repository('users').findMany({
@@ -633,7 +651,7 @@ await db.repository('users').findMany({
 ```
 
 Filter Builder 的详细设计见 [Filter Builder](./filter-builder.md)，结构化 AST 见 [Filter AST](./filter-ast.md)。
-参考 Prisma Next 增加简单 equality JSON shorthand 的方案见
+参考 Prisma Next 实现简单 equality JSON shorthand 的方案见
 [Repository Filter 输入改进提案](./prisma-inspired-filter-input.md)。
 
 ## 关系写入
@@ -642,7 +660,7 @@ Filter Builder 的详细设计见 [Filter Builder](./filter-builder.md)，结构
 
 ```ts
 await db.repository('projects').updateOne({
-  filter: (filter) => filter.string('id').eq('project-1'),
+  filter: { id: 'project-1' },
   values: {
     name: 'NocoBase v3',
     owner: (owner) => owner.connect({ id: 'user-owner' }),
@@ -680,7 +698,7 @@ await db.transaction(async (connection) => {
   });
 
   await connection.repository('orders').updateMany({
-    filter: (filter) => filter.string('status').eq('paid'),
+    filter: { status: 'paid' },
     values: {
       status: 'completed',
     },
@@ -728,7 +746,7 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
   `updateOne()`、`updateMany()`、`deleteOne()`、`deleteMany()`。
 - `findMany()` 和 `findOne()` 支持 Select AST；列表查询还支持 Filter AST、Sort AST、
   `limit`、`offset` 等常见选项。
-- 支持 Filter Builder，并把 Builder 结果规范化成 Filter AST。
+- 支持 equality shorthand、Filter Builder 和完整 Filter AST，并统一规范化成 Filter AST。
 - 支持通过 `context` 传入变量解析上下文。
 - Repository V1 不实现 policy 注入或授权；授权由可信调用边界负责。
 - Select AST 支持直接标量字段、嵌套 relation、relation-local filter 和 to-many local
@@ -767,15 +785,15 @@ Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 - 返回字段和 relation 使用 Select AST；不要在主代码 API 中使用 `fields` / `appends`
   顶层兼容参数。
 - 排序使用 Sort AST；不要使用字符串、tuple 或 object map 简写。
-- 筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder。
+- 简单 equality 筛选使用 shorthand；比较、逻辑组合、变量与关系筛选使用 Filter Builder。
 - 根标量与关系写入都放在模型形状 `values` 中；relation Field 使用明确的操作对象，不要
   根据嵌套对象、`null` 或空数组猜测 relation 操作。
-- HTTP / CLI / Agent tool / 持久化配置使用 Select AST、Filter AST、Sort AST 和
-  纯 JSON `values`；字段级 Fluent Builder 只作为手写 TypeScript 的便利入口，内部 Mutation
-  AST 不作为主要公开输入。
+- HTTP / CLI / Agent tool / 持久化配置的简单 Filter 使用 shorthand，复杂 Filter 使用完整
+  Filter AST；写入使用纯 JSON `values`。字段级 Fluent Builder 只作为手写 TypeScript 的便利
+  入口，内部 Mutation AST 不作为主要公开输入。
 - 关系 mutation 只用于 `createOne()` 和 `updateOne()`，不要放入 `createMany()` 或
   `updateMany()`。
 - 不要让 Agent 猜 relation 能力；先调用 `describeMutation()`，执行前使用
   `validateMutation()`。
-- 不要把旧的 object shorthand 当作 Repository V1 的主 API。
+- 不要把 `{ amount: { $gte: 100 } }` 这类 Compact Filter 当作已支持能力。
 - 不要让 `db.query()` 读取 Collection metadata；这是 Repository 的职责。

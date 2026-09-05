@@ -7,9 +7,16 @@ description: Repository Filter AST 的设计与当前运行时能力。
 
 > **状态：V1 运行时已实现。** 直接标量与 Relation Filter AST 均可执行，关系量词通过相关子查询编译。
 
-Filter AST 是 Repository Filter Builder 的结构化结果。它用于在代码、HTTP、CLI、file sync 和未来持久化场景之间传递同一套筛选条件。
+Filter AST 是 Repository Filter Builder 和 equality shorthand 统一规范化后的结构化表示。它也可
+用于在代码、HTTP、CLI、file sync 和未来持久化场景之间传递完整筛选条件。
 
-Filter Builder 更适合 TypeScript 代码：
+```text
+简单 equality shorthand ─┐
+Filter Builder ────────────┼─> Filter AST -> validate -> execute
+完整 Filter AST ───────────┘
+```
+
+复杂条件在 TypeScript 代码中更适合使用 Filter Builder：
 
 ```ts
 filter.and([
@@ -303,7 +310,7 @@ await db.repository('orders').findMany({
 - 不把变量拼接进 SQL 字符串。
 - 不要求 TypeScript 代码作者直接写 `{{$user.id}}`。
 
-## Object DSL 兼容
+## JSON 输入边界
 
 NocoBase 既有能力中已经存在 object filter 形态，例如：
 
@@ -319,13 +326,20 @@ NocoBase 既有能力中已经存在 object filter 形态，例如：
 }
 ```
 
-Repository V1 不建议把这种 object filter 形态作为主要代码 API，但可以把它作为兼容层或序列化目标之一。推荐方向是：
+Repository V1 不接受这种带 operator 的旧 object filter 作为主要输入。当前 JSON 输入分为：
+
+- 简单 equality 使用 shorthand，例如 `{ status: 'paid' }`；
+- 复杂可序列化条件使用完整 Filter AST；
+- 旧 object filter 如需兼容，应在 Repository 边界外显式转换。
+
+内部方向是：
 
 ```text
 Filter Builder -> Filter AST -> compiler -> QueryAdapter / existing NocoBase filter object
 ```
 
-也就是说，Filter AST 是 Repository 内部更稳定、更可解释的中间表示；旧 object filter 可以由 adapter 生成或消费，但不应成为 Agent 写 TypeScript 代码的首选形态。
+也就是说，Filter AST 是 Repository 内部更稳定、更可解释的中间表示；当前不增加
+Compact Filter V2。
 
 ## 完整示例
 
