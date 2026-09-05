@@ -21,7 +21,7 @@ This directory is the application's browser client. Read the application's root 
 - Register plugins with `pnpm plugin:register` and `pnpm plugin:unregister`. Edit `plugins.ts` by hand only to reorder entries or pass a plugin its options; array order is contribution order and presence enables the plugin.
 - To customize a plugin's page, use a plugin option, an `extensions/*/extension.ts` source extension, or `route-overrides.ts`. Do not declare a duplicate path such as `/login`. An override replaces only `componentLoader`, keeps it lazy, includes a `componentEntry`, and default-exports the component. One route takes one override across all three mechanisms.
 - Authentication UI belongs in `extensions/nocobase-auth-ui/`. Use `AuthLink` from `@nocobase/app-plugin-authentication/client/ui` and the plugin's `client/actions` hooks. Do not call auth endpoints directly from a page or create a second session store.
-- Style with semantic Tailwind tokens — `bg-background`, `text-foreground`, `border-border` — so pages follow both themes. Never hard-code colors, and never restyle one page in isolation; change the tokens in `styles.css` if the look must change.
+- Style with semantic Tailwind tokens — `bg-background`, `text-foreground`, `border-border` — so pages follow both themes. Never hard-code colors, and never restyle one page in isolation; change the tokens in `theme/themes/*.css` if the look must change.
 - Every user-visible string goes through a translation key.
 - React provider layers are outer-to-inner: `root`, `application`, `extension`. Applications use the first two; plugins own the extension layer. `before` and `after` order only within one layer.
 

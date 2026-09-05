@@ -59,13 +59,13 @@ Use the tokens, not literal colors:
 | `bg-primary`, `text-primary-foreground`    | `bg-blue-600`, `text-white`   |
 | `bg-destructive`, `text-destructive`       | `bg-red-500`                  |
 
-Tokens are defined in `client/styles.css` for both themes. A literal color looks fine in whichever theme you happened to be viewing and breaks in the other — this is the most common styling defect in this codebase.
+Tokens are defined in `client/theme/themes/*.css` for both themes. A literal color looks fine in whichever theme you happened to be viewing and breaks in the other — this is the most common styling defect in this codebase.
 
 ## Consistency is application-wide
 
 **The application must look like one product.** Before writing a component, look at how nearby pages handle the same problem: spacing scale, heading sizes, card versus plain section, where actions sit. Match it.
 
-**If a change genuinely calls for a different look, change it everywhere.** Edit the design tokens in `client/styles.css`, or update the shared component every page uses, so the whole application moves together.
+**If a change genuinely calls for a different look, change it everywhere.** Edit the design tokens in `client/theme/themes/*.css`, or update the shared component every page uses, so the whole application moves together.
 
 **Never restyle only the part you are working on.** A page with its own spacing scale, its own button treatment, or its own palette is a defect. If you believe the application's style should change, say so and change it globally — do not fork the look of one page.
 
@@ -98,3 +98,5 @@ Every user-visible string goes through a translation key. See [internationalizat
 - No literal color classes.
 - Interactive elements are reachable and operable by keyboard.
 - Loading, empty, and error states all render.
+
+For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).

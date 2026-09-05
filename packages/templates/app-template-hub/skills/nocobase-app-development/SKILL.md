@@ -65,6 +65,8 @@ Read the page for the task in front of you. Do not read all of them.
 
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
 
+For creating, editing or removing theme presets, read [themes](references/themes.md).
+
 ## Where to work
 
 Business code belongs in a small, stable set of places:
