@@ -208,6 +208,21 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(await readFile(configPath, 'utf8')).toBe(content);
   });
 
+  it('updates the recovery startup policy without a runtime operation', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    await service.deploy('customer', { releaseId: release.id });
+    await waitForLatestDeployment(service, 'customer');
+    const operations = [...host.targetedOperations];
+    await service.updateSettings('customer', { activation: 'lazy' });
+    expect(host.lastDeploymentSet?.deployments[0]?.activation).toBe('lazy');
+    await service.updateSettings('customer', { activation: 'eager' });
+    expect(host.lastDeploymentSet?.deployments[0]?.activation).toBe('eager');
+    expect(host.targetedOperations).toEqual(operations);
+  });
+
   it('persists application startup settings and starts a stopped app', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     await service.updateSettings('customer', { activation: 'lazy' });
@@ -861,6 +876,12 @@ async function waitForDeployment(
 }
 
 class FakeHostController implements HubHostController {
+  updateStartupPolicy(appId: string, activation: 'lazy' | 'eager'): void {
+    const deployment = this.lastDeploymentSet?.deployments.find(
+      (item) => item.appId === appId,
+    );
+    if (deployment) deployment.activation = activation;
+  }
   restoreDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): ReturnType<FakeHostController['applyDeploymentSet']> {

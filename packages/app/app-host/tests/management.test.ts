@@ -14,7 +14,6 @@ import {
   readFile,
   readdir,
   rm,
-  symlink,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -243,25 +242,6 @@ describe('managed host reconciliation', () => {
     await host.management.applyDeployment(deployment);
     await host.management.applyDeployment(
       deploymentSet(1, replacement).deployments[0]!,
-    );
-    const publicStorageDir = path.join(
-      volumesDir,
-      'customer',
-      'storage',
-      'app',
-      'public',
-    );
-    const publicStorageLink = path.join(
-      revisionDirectory(deploymentsDir, artifact),
-      'public',
-      'storage',
-    );
-    await mkdir(publicStorageDir, { recursive: true });
-    await mkdir(path.dirname(publicStorageLink), { recursive: true });
-    await symlink(
-      path.relative(path.dirname(publicStorageLink), publicStorageDir),
-      publicStorageLink,
-      'dir',
     );
     await rm(path.join(artifactDir, artifact.key));
 

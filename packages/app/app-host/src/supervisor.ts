@@ -303,7 +303,19 @@ export class AppHostSupervisor {
     const management = await this.getManagementClient();
     const result = await management.applyDeploymentSet(deploymentSet);
     if (result.status.desiredRevision === deploymentSet.revision) {
-      this.lastDeploymentSet = structuredClone(deploymentSet);
+      const previous = this.lastDeploymentSet?.deployments ?? [];
+      this.lastDeploymentSet = {
+        revision: deploymentSet.revision,
+        deployments: deploymentSet.deployments.flatMap((deployment) => {
+          const retained = this.deploymentSucceeded(
+            result.status,
+            deployment.appId,
+          )
+            ? deployment
+            : previous.find((item) => item.appId === deployment.appId);
+          return retained ? [structuredClone(retained)] : [];
+        }),
+      };
     }
     return result;
   }
@@ -321,18 +333,34 @@ export class AppHostSupervisor {
   async applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
     const management = await this.getManagementClient();
     const status = await management.applyDeployment(deployment);
-    this.updateLastDeploymentSet(status.desiredRevision, deployment);
+    if (this.deploymentSucceeded(status, deployment.appId)) {
+      this.updateLastDeploymentSet(status.desiredRevision, deployment);
+    }
     return status;
   }
 
   async startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
     const management = await this.getManagementClient();
     const status = await management.startDeployment(deployment);
-    this.updateLastDeploymentSet(status.desiredRevision, {
-      ...deployment,
-      desiredState: 'running',
-    });
+    if (this.deploymentSucceeded(status, deployment.appId)) {
+      this.updateLastDeploymentSet(status.desiredRevision, {
+        ...deployment,
+        desiredState: 'running',
+      });
+    }
     return status;
+  }
+
+  updateStartupPolicy(
+    appId: string,
+    activation: NonNullable<HostDeploymentSpec['activation']>,
+  ): void {
+    if (!this.lastDeploymentSet) return;
+    this.mapLastDeploymentSet(this.lastDeploymentSet.revision, (deployments) =>
+      deployments.map((deployment) =>
+        deployment.appId === appId ? { ...deployment, activation } : deployment,
+      ),
+    );
   }
 
   async stopDeployment(appId: string): Promise<HostStatus> {
@@ -397,6 +425,14 @@ export class AppHostSupervisor {
         structuredClone(deployment),
       ],
     };
+  }
+
+  private deploymentSucceeded(status: HostStatus, appId: string): boolean {
+    const deployment = status.deployments.find((item) => item.appId === appId);
+    return (
+      deployment?.observedState === 'running' ||
+      deployment?.observedState === 'stopped'
+    );
   }
 
   private mapLastDeploymentSet(

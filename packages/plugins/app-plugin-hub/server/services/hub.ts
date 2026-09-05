@@ -74,6 +74,7 @@ export interface HubHostController {
   ): Promise<{ readonly status: HostStatus }>;
   applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
   startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  updateStartupPolicy(appId: string, activation: 'lazy' | 'eager'): void;
   stopDeployment(appId: string): Promise<HostStatus>;
   removeDeployment(appId: string): Promise<HostStatus>;
   getManagementClient(): Promise<HostManagementService>;
@@ -383,8 +384,10 @@ export class DefaultHubService implements HubService {
   ): Promise<HubAppDetail> {
     return await this.withLock(appId, async () => {
       assertActivation(input.activation);
+      await this.startupReconciliation;
       await this.requireApp(appId);
       await this.updateApp(appId, { startupMode: input.activation });
+      this.hostController.updateStartupPolicy(appId, input.activation);
       return await this.getApp(appId);
     });
   }
