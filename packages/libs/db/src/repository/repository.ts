@@ -204,7 +204,7 @@ export class DefaultRepository<
   }
 
   async validateMutation(
-    options: ValidateMutationOptions<TCreate, TUpdate>,
+    options: ValidateMutationOptions<TCreate, TUpdate, TRecord>,
   ): Promise<MutationValidationResult> {
     try {
       const collection = await this.collection();
@@ -217,7 +217,13 @@ export class DefaultRepository<
         options.operation,
       );
       if (options.operation === 'updateOne') {
-        validateUnique(collection, options.unique);
+        if (options.unique) validateUnique(collection, options.unique);
+        else
+          await this.normalizeSingleMutationFilter(
+            collection,
+            options.filter,
+            options.context,
+          );
         validateIfVersion(collection, options.ifVersion);
       }
       return { valid: true, errors: [] };
@@ -283,7 +289,7 @@ export class DefaultRepository<
   }
 
   async updateOne(
-    options: UpdateOneOptions<TUpdate>,
+    options: UpdateOneOptions<TUpdate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>> {
     const collection = await this.collection();
     assertWritableCollection(collection);
@@ -294,7 +300,16 @@ export class DefaultRepository<
       options.relations,
       'updateOne',
     );
-    const unique = validateUnique(collection, options.unique);
+    const unique = options.unique
+      ? validateUnique(collection, options.unique)
+      : undefined;
+    const filter = unique
+      ? undefined
+      : await this.normalizeSingleMutationFilter(
+          collection,
+          options.filter,
+          options.context,
+        );
     validateIfVersion(collection, options.ifVersion);
     const selection = await this.validateSelect(collection, options.select);
     const requestedFields = selection.fields;
@@ -302,22 +317,23 @@ export class DefaultRepository<
       collection,
       fields: includeExecutionFields(collection, requestedFields),
       unique,
+      filter,
       values: mutation.values,
       ifVersion: options.ifVersion,
       relations: mutation.relations,
       select: selection.select,
     });
-    if (!result) {
-      await this.throwUpdateMiss(collection, unique, options.ifVersion);
-    }
+    if (result === 'multiple') multipleRecordsMatched(collection);
+    if (result === 'conflict') versionConflict(collection);
+    if (result === 'missing') recordNotFound(collection);
     return {
       record: pickSelection(
-        result!.record,
+        result.record,
         requestedFields,
         selection.select,
       ) as TRecord,
-      createdTargets: result!.createdTargets,
-      version: result!.version,
+      createdTargets: result.createdTargets,
+      version: result.version,
     };
   }
 
@@ -343,17 +359,30 @@ export class DefaultRepository<
     };
   }
 
-  async deleteOne(options: DeleteOneOptions): Promise<DeleteOneResult> {
+  async deleteOne(
+    options: DeleteOneOptions<TRecord>,
+  ): Promise<DeleteOneResult> {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    const unique = validateUnique(collection, options.unique);
+    const unique = options.unique
+      ? validateUnique(collection, options.unique)
+      : undefined;
+    const filter = unique
+      ? undefined
+      : await this.normalizeSingleMutationFilter(
+          collection,
+          options.filter,
+          options.context,
+        );
     validateIfVersion(collection, options.ifVersion);
     const result = await this.options.adapter.deleteOne({
       collection,
       unique,
+      filter,
       ifVersion: options.ifVersion,
     });
     if (result === 'conflict') versionConflict(collection);
+    if (result === 'multiple') multipleRecordsMatched(collection);
     if (result === 'missing') recordNotFound(collection);
     return { deleted: true };
   }
@@ -454,19 +483,23 @@ export class DefaultRepository<
     return normalized;
   }
 
-  private async throwUpdateMiss(
+  private async normalizeSingleMutationFilter<T extends object>(
     collection: CollectionDefinition,
-    unique: UniqueSelector,
-    ifVersion: string | number | undefined,
-  ): Promise<never> {
-    if (ifVersion !== undefined) {
-      const exists = await this.options.adapter.exists({
-        collection,
-        filter: uniqueFilter(unique),
-      });
-      if (exists) versionConflict(collection);
+    filter: RepositoryFilter<T> | undefined,
+    context: Readonly<Record<string, unknown>> | undefined,
+  ): Promise<FilterAst> {
+    const normalized = await this.normalizeFilter(collection, filter, context);
+    if (!normalized || normalized.root.items.length === 0) {
+      invalid(
+        'INVALID_FILTER',
+        'Single mutations require a non-empty filter.',
+        {
+          collection: collection.name,
+          path: ['filter'],
+        },
+      );
     }
-    return recordNotFound(collection);
+    return normalized;
   }
 }
 
@@ -2379,23 +2412,6 @@ function pickSelection(
   return result;
 }
 
-function uniqueFilter(unique: UniqueSelector): FilterAst {
-  return {
-    kind: 'filter',
-    version: 1,
-    root: {
-      kind: 'group',
-      logic: 'and',
-      items: unique.fields.map((field) => ({
-        kind: 'condition',
-        path: [field],
-        operator: '$eq',
-        value: unique.values[field] as FilterValue,
-      })),
-    },
-  };
-}
-
 function relationNotSupported(
   collection: CollectionDefinition,
   path?: readonly (string | number)[],
@@ -2411,6 +2427,14 @@ function recordNotFound(collection: CollectionDefinition): never {
   return invalid('RECORD_NOT_FOUND', 'Repository record was not found.', {
     collection: collection.name,
   });
+}
+
+function multipleRecordsMatched(collection: CollectionDefinition): never {
+  return invalid(
+    'MULTIPLE_RECORDS_MATCHED',
+    'Single mutation filter matched more than one Repository record.',
+    { collection: collection.name, path: ['filter'] },
+  );
 }
 
 function versionConflict(collection: CollectionDefinition): never {

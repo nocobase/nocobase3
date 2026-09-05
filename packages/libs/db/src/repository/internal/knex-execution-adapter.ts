@@ -34,9 +34,15 @@ import type {
   RepositoryExecutionAdapter,
   RepositoryFilterPlan,
   RepositoryReadPlan,
+  RepositorySingleMutationMiss,
   RepositoryUpdateManyPlan,
   RepositoryUpdateOnePlan,
 } from './execution-adapter.js';
+
+interface LockedMutationRecord {
+  readonly record: RepositoryRecord;
+  readonly unique: UniqueSelector;
+}
 
 export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapter {
   constructor(
@@ -147,28 +153,31 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   async updateOne(
     plan: RepositoryUpdateOnePlan,
-  ): Promise<RepositoryExecutedMutation | undefined> {
+  ): Promise<RepositoryExecutedMutation | RepositorySingleMutationMiss> {
     return this.inTransaction((adapter) => adapter.executeUpdateOne(plan));
   }
 
   private async executeUpdateOne(
     plan: RepositoryUpdateOnePlan,
-  ): Promise<RepositoryExecutedMutation | undefined> {
-    const current = await this.lockByUnique(plan.collection, plan.unique);
-    if (!current) return undefined;
+  ): Promise<RepositoryExecutedMutation | RepositorySingleMutationMiss> {
+    const selected = plan.unique
+      ? await this.lockByUnique(plan.collection, plan.unique)
+      : await this.lockByFilter(plan.collection, plan.filter!);
+    if (selected === 'missing' || selected === 'multiple') return selected;
+    const { record: current, unique } = selected;
     if (
       plan.ifVersion !== undefined &&
       versionOf(plan.collection, current) !== plan.ifVersion
     ) {
-      return undefined;
+      return 'conflict';
     }
     if (Object.keys(plan.values).length > 0) {
       const query = tableQuery(this.getClient(), plan.collection).update(
         mapWrite(plan.collection, plan.values),
       );
-      applyUnique(query, plan.collection, plan.unique);
+      applyUnique(query, plan.collection, unique);
       applyVersion(query, plan.collection, plan.ifVersion);
-      if (affectedCount(await query) === 0) return undefined;
+      if (affectedCount(await query) === 0) return 'conflict';
       Object.assign(current, plan.values);
     }
     const createdTargets: CreatedTargetReference[] = [];
@@ -176,23 +185,23 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await this.applyRelationMutations(
         plan.collection,
         current,
-        plan.unique,
+        unique,
         plan.relations,
         createdTargets,
       );
     }
     if (plan.collection.optimisticLock) {
       const versionQuery = tableQuery(this.getClient(), plan.collection);
-      applyUnique(versionQuery, plan.collection, plan.unique);
+      applyUnique(versionQuery, plan.collection, unique);
       applyVersion(versionQuery, plan.collection, plan.ifVersion);
       incrementVersion(versionQuery, plan.collection);
-      if (affectedCount(await versionQuery) === 0) return undefined;
+      if (affectedCount(await versionQuery) === 0) return 'conflict';
     }
     const record = await this.findOne({
       collection: plan.collection,
       fields: plan.fields,
       select: plan.select,
-      filter: uniqueFilter(plan.unique),
+      filter: uniqueFilter(unique),
     });
     return record
       ? {
@@ -200,7 +209,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           createdTargets,
           version: versionOf(plan.collection, record),
         }
-      : undefined;
+      : 'missing';
   }
 
   async updateMany(plan: RepositoryUpdateManyPlan): Promise<number> {
@@ -227,22 +236,25 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   async deleteOne(
     plan: RepositoryDeleteOnePlan,
-  ): Promise<'deleted' | 'missing' | 'conflict'> {
+  ): Promise<'deleted' | RepositorySingleMutationMiss> {
     return this.inTransaction((adapter) => adapter.executeDeleteOne(plan));
   }
 
   private async executeDeleteOne(
     plan: RepositoryDeleteOnePlan,
-  ): Promise<'deleted' | 'missing' | 'conflict'> {
-    if (plan.ifVersion !== undefined) {
-      const existing = await this.findByUnique(plan.collection, plan.unique);
-      if (!existing) return 'missing';
-      if (versionOf(plan.collection, existing) !== plan.ifVersion) {
-        return 'conflict';
-      }
+  ): Promise<'deleted' | RepositorySingleMutationMiss> {
+    const selected = plan.unique
+      ? await this.lockByUnique(plan.collection, plan.unique)
+      : await this.lockByFilter(plan.collection, plan.filter!);
+    if (selected === 'missing' || selected === 'multiple') return selected;
+    if (
+      plan.ifVersion !== undefined &&
+      versionOf(plan.collection, selected.record) !== plan.ifVersion
+    ) {
+      return 'conflict';
     }
     const query = tableQuery(this.getClient(), plan.collection).delete();
-    applyUnique(query, plan.collection, plan.unique);
+    applyUnique(query, plan.collection, selected.unique);
     applyVersion(query, plan.collection, plan.ifVersion);
     if (affectedCount(await query) > 0) return 'deleted';
     return plan.ifVersion === undefined ? 'missing' : 'conflict';
@@ -316,7 +328,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async lockByUnique(
     collection: CollectionDefinition,
     unique: UniqueSelector,
-  ): Promise<RepositoryRecord | undefined> {
+  ): Promise<LockedMutationRecord | 'missing'> {
     const fields = scalarFields(collection).map((field) => field.name);
     const query = tableQuery(this.getClient(), collection).select(
       fields.map((field) =>
@@ -326,7 +338,31 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     applyUnique(query, collection, unique);
     query.forUpdate();
     const rows = (await query) as RepositoryRecord[];
-    return rows[0];
+    return rows[0] ? { record: rows[0], unique } : 'missing';
+  }
+
+  private async lockByFilter(
+    collection: CollectionDefinition,
+    filter: FilterAst,
+  ): Promise<LockedMutationRecord | 'missing' | 'multiple'> {
+    const client = this.getClient();
+    const alias = 'repository_root';
+    const fields = scalarFields(collection).map((field) => field.name);
+    const query = tableQuery(client, collection, alias).select(
+      fields.map((field) =>
+        client.ref(column(collection, field)).withSchema(alias).as(field),
+      ),
+    );
+    const graph = await this.prepareFilterGraph(collection, filter.root);
+    applyFilter(query, collection, filter.root, graph, alias, client);
+    query.limit(2).forUpdate();
+    const rows = (await query) as RepositoryRecord[];
+    if (rows.length === 0) return 'missing';
+    if (rows.length > 1) return 'multiple';
+    return {
+      record: rows[0],
+      unique: selectorFromRecord(collection, rows[0]),
+    };
   }
 
   private async createRecord(

@@ -474,20 +474,34 @@ export interface CreateManyOptions<TCreate extends object> {
   readonly records: readonly [TCreate, ...TCreate[]];
 }
 
-export type UpdateOneOptions<TUpdate extends object> = {
-  readonly unique: UniqueSelector;
+export type SingleMutationSelector<TRecord extends object> =
+  | {
+      readonly filter: RepositoryFilter<TRecord>;
+      readonly unique?: never;
+    }
+  | {
+      /** @deprecated Use filter. */
+      readonly unique: UniqueSelector;
+      readonly filter?: never;
+    };
+
+export type UpdateOneOptions<
+  TUpdate extends object,
+  TRecord extends object = RepositoryRecord,
+> = SingleMutationSelector<TRecord> & {
   readonly select?: SelectAst;
   readonly ifVersion?: string | number;
+  readonly context?: RepositoryContext;
 } & (
-  | {
-      readonly values: UpdateMutationValues<TUpdate>;
-      readonly relations?: RelationMutationInput;
-    }
-  | {
-      readonly values?: UpdateMutationValues<TUpdate>;
-      readonly relations: RelationMutationInput;
-    }
-);
+    | {
+        readonly values: UpdateMutationValues<TUpdate>;
+        readonly relations?: RelationMutationInput;
+      }
+    | {
+        readonly values?: UpdateMutationValues<TUpdate>;
+        readonly relations: RelationMutationInput;
+      }
+  );
 
 export type MutationScope<TRecord extends object> =
   | {
@@ -507,10 +521,11 @@ export type UpdateManyOptions<
   readonly context?: RepositoryContext;
 };
 
-export interface DeleteOneOptions {
-  readonly unique: UniqueSelector;
-  readonly ifVersion?: string | number;
-}
+export type DeleteOneOptions<TRecord extends object = RepositoryRecord> =
+  SingleMutationSelector<TRecord> & {
+    readonly ifVersion?: string | number;
+    readonly context?: RepositoryContext;
+  };
 
 export type DeleteManyOptions<TRecord extends object> =
   MutationScope<TRecord> & {
@@ -552,6 +567,7 @@ export interface DescribeMutationOptions {
 export type ValidateMutationOptions<
   TCreate extends object,
   TUpdate extends object,
+  TRecord extends object = RepositoryRecord,
 > =
   | {
       readonly operation: 'createOne';
@@ -560,18 +576,19 @@ export type ValidateMutationOptions<
     }
   | ({
       readonly operation: 'updateOne';
-      readonly unique: UniqueSelector;
       readonly ifVersion?: string | number;
-    } & (
-      | {
-          readonly values: UpdateMutationValues<TUpdate>;
-          readonly relations?: RelationMutationAst;
-        }
-      | {
-          readonly values?: UpdateMutationValues<TUpdate>;
-          readonly relations: RelationMutationAst;
-        }
-    ));
+      readonly context?: RepositoryContext;
+    } & SingleMutationSelector<TRecord> &
+      (
+        | {
+            readonly values: UpdateMutationValues<TUpdate>;
+            readonly relations?: RelationMutationAst;
+          }
+        | {
+            readonly values?: UpdateMutationValues<TUpdate>;
+            readonly relations: RelationMutationAst;
+          }
+      ));
 
 export interface RepositoryUniqueFieldSetDescription {
   readonly fields: readonly string[];
@@ -626,18 +643,18 @@ export interface Repository<
     options: DescribeMutationOptions,
   ): Promise<RepositoryMutationDescription>;
   validateMutation(
-    options: ValidateMutationOptions<TCreate, TUpdate>,
+    options: ValidateMutationOptions<TCreate, TUpdate, TRecord>,
   ): Promise<MutationValidationResult>;
   createOne(
     options: CreateOneOptions<TCreate>,
   ): Promise<SingleMutationResult<TRecord>>;
   createMany(options: CreateManyOptions<TCreate>): Promise<CreateManyResult>;
   updateOne(
-    options: UpdateOneOptions<TUpdate>,
+    options: UpdateOneOptions<TUpdate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>>;
   updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,
   ): Promise<UpdateManyResult>;
-  deleteOne(options: DeleteOneOptions): Promise<DeleteOneResult>;
+  deleteOne(options: DeleteOneOptions<TRecord>): Promise<DeleteOneResult>;
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
 }

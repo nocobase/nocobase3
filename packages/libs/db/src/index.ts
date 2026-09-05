@@ -176,6 +176,7 @@ export type {
   SelectNode,
   SelectRelationNode,
   SingleMutationResult,
+  SingleMutationSelector,
   SortAst,
   SortDirection,
   SortFieldTarget,

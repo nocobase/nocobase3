@@ -40,7 +40,8 @@ export interface RepositoryCreateManyPlan {
 export interface RepositoryUpdateOnePlan {
   readonly collection: CollectionDefinition;
   readonly fields: readonly string[];
-  readonly unique: UniqueSelector;
+  readonly unique?: UniqueSelector;
+  readonly filter?: FilterAst;
   readonly values: RepositoryRecord;
   readonly ifVersion?: string | number;
   readonly relations?: RelationMutationAst;
@@ -56,7 +57,8 @@ export interface RepositoryUpdateManyPlan {
 
 export interface RepositoryDeleteOnePlan {
   readonly collection: CollectionDefinition;
-  readonly unique: UniqueSelector;
+  readonly unique?: UniqueSelector;
+  readonly filter?: FilterAst;
   readonly ifVersion?: string | number;
 }
 
@@ -72,6 +74,8 @@ export interface RepositoryExecutedMutation {
   readonly version?: string | number;
 }
 
+export type RepositorySingleMutationMiss = 'missing' | 'multiple' | 'conflict';
+
 /** Internal adapter boundary. Plans contain logical Collection and Field names only. */
 export interface RepositoryExecutionAdapter {
   findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]>;
@@ -82,10 +86,10 @@ export interface RepositoryExecutionAdapter {
   createMany(plan: RepositoryCreateManyPlan): Promise<number>;
   updateOne(
     plan: RepositoryUpdateOnePlan,
-  ): Promise<RepositoryExecutedMutation | undefined>;
+  ): Promise<RepositoryExecutedMutation | RepositorySingleMutationMiss>;
   updateMany(plan: RepositoryUpdateManyPlan): Promise<number>;
   deleteOne(
     plan: RepositoryDeleteOnePlan,
-  ): Promise<'deleted' | 'missing' | 'conflict'>;
+  ): Promise<'deleted' | RepositorySingleMutationMiss>;
   deleteMany(plan: RepositoryDeleteManyPlan): Promise<number>;
 }

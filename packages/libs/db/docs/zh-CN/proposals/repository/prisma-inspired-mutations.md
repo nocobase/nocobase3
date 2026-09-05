@@ -5,10 +5,10 @@ description: 参考 Prisma 的模型形状输入和 Relation Builder，统一 Re
 
 # Repository 写入 API 改进提案
 
-> **状态：分阶段实现中。** 第一阶段已支持在 `createOne()` / `updateOne()` 的 `values`
+> **状态：分阶段实现中。** 已支持在 `createOne()` / `updateOne()` 的 `values`
 > 中使用字段级 Builder 或纯 JSON 表达 `create`、`connect`、`disconnect` 和 `set`，并暂时
-> 保留顶层 `relations`。本文其余的根 `filter`、目标 `update/upsert/delete` 等内容仍是候选
-> 设计；当前完整契约仍以 [Repository 概览](./overview.md)与
+> 保留顶层 `relations`；`updateOne()` / `deleteOne()` 已支持严格基数的根 `filter`，并暂时
+> 保留 `unique`。本文其余的目标 `update/upsert/delete` 等内容仍是候选设计；当前完整契约仍以 [Repository 概览](./overview.md)与
 > [Mutation AST](./mutation-ast.md)为准。
 
 ## 背景

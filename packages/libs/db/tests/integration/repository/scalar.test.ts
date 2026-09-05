@@ -114,6 +114,76 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     await expect(repository.count()).resolves.toBe(0);
   });
 
+  it('enforces exact cardinality for filter-based single mutations', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+    await repository.createMany({
+      records: [
+        { orderNo: 'SO-001', status: 'draft', amount: 50 },
+        { orderNo: 'SO-002', status: 'draft', amount: 100 },
+        { orderNo: 'SO-003', status: 'paid', amount: 200 },
+      ],
+    });
+
+    await expect(
+      repository.updateOne({
+        filter: (filter) =>
+          filter.string('orderNo').eq(filter.variable('$orderNo')),
+        context: { orderNo: 'SO-003' },
+        ifVersion: 1,
+        values: { amount: 250 },
+        select: selection(['orderNo', 'amount']),
+      }),
+    ).resolves.toEqual({
+      record: { orderNo: 'SO-003', amount: 250 },
+      createdTargets: [],
+      version: 2,
+    });
+
+    await expect(
+      repository.updateOne({
+        filter: (filter) => filter.string('status').eq('draft'),
+        values: { status: 'cancelled' },
+      }),
+    ).rejects.toMatchObject({ code: 'MULTIPLE_RECORDS_MATCHED' });
+    await expect(
+      repository.count({
+        filter: (filter) => filter.string('status').eq('draft'),
+      }),
+    ).resolves.toBe(2);
+
+    await expect(
+      repository.updateOne({
+        filter: (filter) => filter.string('orderNo').eq('missing'),
+        values: { amount: 0 },
+      }),
+    ).rejects.toMatchObject({ code: 'RECORD_NOT_FOUND' });
+    await expect(
+      repository.updateOne({
+        filter: (filter) => filter.string('orderNo').eq('SO-003'),
+        ifVersion: 1,
+        values: { amount: 0 },
+      }),
+    ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
+
+    await expect(
+      repository.deleteOne({
+        filter: (filter) => filter.string('status').eq('draft'),
+      }),
+    ).rejects.toMatchObject({ code: 'MULTIPLE_RECORDS_MATCHED' });
+    await expect(
+      repository.deleteOne({
+        filter: (filter) => filter.string('orderNo').eq('SO-001'),
+        ifVersion: 1,
+      }),
+    ).resolves.toEqual({ deleted: true });
+    await expect(
+      repository.deleteOne({
+        filter: (filter) => filter.string('orderNo').eq('missing'),
+      }),
+    ).rejects.toMatchObject({ code: 'RECORD_NOT_FOUND' });
+  });
+
   it('validates Collection Field capabilities and preserves transaction binding', async () => {
     await createOrders(context);
     const repository = context.database.repository('repositoryOrders');

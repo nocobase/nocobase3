@@ -206,20 +206,27 @@ interface CreateManyOptions<TCreate extends object> {
   records: readonly [TCreate, ...TCreate[]];
 }
 
-type UpdateOneOptions<TUpdate extends object> = {
-  unique: UniqueSelector;
+type SingleMutationSelector<TRecord extends object> =
+  | { filter: RepositoryFilter<TRecord>; unique?: never }
+  | { unique: UniqueSelector; filter?: never }; // deprecated compatibility
+
+type UpdateOneOptions<
+  TRecord extends object,
+  TUpdate extends object,
+> = SingleMutationSelector<TRecord> & {
   select?: SelectAst;
   ifVersion?: string | number;
+  context?: RepositoryContext;
 } & (
-  | {
-      values: TUpdate;
-      relations?: RelationMutationInput;
-    }
-  | {
-      values?: TUpdate;
-      relations: RelationMutationInput;
-    }
-);
+    | {
+        values: TUpdate;
+        relations?: RelationMutationInput;
+      }
+    | {
+        values?: TUpdate;
+        relations: RelationMutationInput;
+      }
+  );
 
 type RelationMutationInput =
   | RelationMutationAst
@@ -268,10 +275,11 @@ type UpdateManyOptions<
   context?: RepositoryContext;
 };
 
-interface DeleteOneOptions {
-  unique: UniqueSelector;
-  ifVersion?: string | number;
-}
+type DeleteOneOptions<TRecord extends object> =
+  SingleMutationSelector<TRecord> & {
+    ifVersion?: string | number;
+    context?: RepositoryContext;
+  };
 
 type DeleteManyOptions<TRecord extends object> = MutationScope<TRecord> & {
   context?: RepositoryContext;
@@ -424,14 +432,14 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
 
 写入方法按记录基数对称命名，方法名本身即表达选择方式、关系能力和结果形态：
 
-| 方法           | 根记录作用域                        | V1 关系写入 | 结果                   |
-| -------------- | ----------------------------------- | ----------- | ---------------------- |
-| `createOne()`  | 一个新根记录                        | 支持        | `SingleMutationResult` |
-| `createMany()` | 一个非空的根记录列表                | 不支持      | `{ createdCount }`     |
-| `updateOne()`  | `UniqueSelector` 唯一定位的一条记录 | 支持        | `SingleMutationResult` |
-| `updateMany()` | 显式 `filter` 或 `all: true`        | 不支持      | `{ updatedCount }`     |
-| `deleteOne()`  | `UniqueSelector` 唯一定位的一条记录 | 不支持      | `{ deleted: true }`    |
-| `deleteMany()` | 显式 `filter` 或 `all: true`        | 不支持      | `{ deletedCount }`     |
+| 方法           | 根记录作用域                  | V1 关系写入 | 结果                   |
+| -------------- | ----------------------------- | ----------- | ---------------------- |
+| `createOne()`  | 一个新根记录                  | 支持        | `SingleMutationResult` |
+| `createMany()` | 一个非空的根记录列表          | 不支持      | `{ createdCount }`     |
+| `updateOne()`  | `filter` 必须恰好匹配一条记录 | 支持        | `SingleMutationResult` |
+| `updateMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ updatedCount }`     |
+| `deleteOne()`  | `filter` 必须恰好匹配一条记录 | 不支持      | `{ deleted: true }`    |
+| `deleteMany()` | 显式 `filter` 或 `all: true`  | 不支持      | `{ deletedCount }`     |
 
 这六个名称是 V1 的唯一规范写法，不再提供语义含糊的 `create()`、`update()`、`delete()`
 别名。Agent 仅根据方法名就能判断单条/批量边界，不需要结合参数猜测。
@@ -446,11 +454,11 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
   `select` 只控制 `record`，不裁剪 envelope 的其他字段。
 - `createMany()` 接受非空 `records`，V1 只创建根记录的直接标量字段，不接受 `relations`。
   批量记录必须先全部校验，再在同一事务中创建；任一记录失败则整批回滚。
-- `createOne()` 和 `updateOne()` 可以通过 Mutation AST 或等价 Fluent Builder 写入关系；
-  根 `values` 仍只接受当前 Collection 可写的直接标量字段。
-- `updateOne()` 和 `deleteOne()` 通过与主键或唯一约束匹配的逻辑 Field 集合定位一条记录；一般 Filter AST
-  不能替代唯一选择器。没有匹配记录时返回结构化 `RECORD_NOT_FOUND` 错误，而不是
-  `undefined` 或成功计数 `0`。
+- `createOne()` 和 `updateOne()` 的 `values` 可以按字段使用 Relation Builder 或纯 JSON
+  关系操作；顶层 `relations` 暂作为兼容入口保留。
+- `updateOne()` 和 `deleteOne()` 的 `filter` 必须恰好匹配一条记录：0 条返回
+  `RECORD_NOT_FOUND`，多条返回 `MULTIPLE_RECORDS_MATCHED`。`unique` 暂作为迁移期兼容
+  入口保留。
 - `updateOne()` 必须至少提供 `values` 或 `relations`。`deleteOne()` 只删除根记录，不在同一
   输入里混入 relation mutation；关系限制和级联行为由 Collection metadata 与数据库约束
   决定。
@@ -461,8 +469,8 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
 - `updateMany()` 和 `deleteMany()` 必须明确提供 `filter`。确实需要作用于整个 Collection
   时，调用方必须显式写 `all: true`；`filter` 和 `all` 互斥。空 group、缺失 filter 或把
   变量解析成空条件都不能被当作全量操作。
-- 数据库生成字段、只读字段、relation 字段和未知字段出现在根 `values` 时，应在执行查询
-  前报错。连接、创建目标、断开和替换关系使用独立的 Mutation AST 节点；目标实体或中间
+- 数据库生成字段、只读字段和未知字段出现在根 `values` 时，应在执行查询前报错。relation
+  Field 则根据 Collection metadata 归一化为独立 Mutation AST 节点；目标实体或中间
   记录更新不属于 V1。
 - 包含关系的 mutation 必须先整体校验，再在一个事务中执行根记录、目标记录和中间关系
   写入。省略 relation 节点表示不修改，清空必须使用显式 `clear` 或空 `replace`。
