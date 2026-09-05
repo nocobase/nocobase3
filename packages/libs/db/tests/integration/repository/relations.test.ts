@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import type {
   FilterAst,
   SelectAst,
-  SelectRelationNode,
+  SelectIncludeNode,
   SortAst,
 } from '../../../src/index.js';
 import {
@@ -124,6 +124,101 @@ describeIntegrationDatabases('Repository relation reads', (context) => {
       { name: 'Bob', books: [] },
       { name: 'Cara', books: [] },
     ]);
+  });
+
+  it('normalizes Select Builder input to the same relation graph as Select AST', async () => {
+    await createRelationFixture(context);
+    const authors = context.database.repository('repositoryAuthors');
+    const selectAst = selection(
+      ['name'],
+      [
+        relation(
+          'books',
+          selectionNode(
+            ['title'],
+            [relation('publisher', selectionNode(['name']))],
+          ),
+          filterAst('pages', '$gt', 100),
+          sorting('pages', 'desc'),
+        ),
+      ],
+    );
+    const astResult = await authors.findMany({
+      select: selectAst,
+      sort: sorting('id', 'asc'),
+    });
+    const builderResult = await authors.findMany({
+      select: (select) =>
+        select.fields('name').include('books', (books) =>
+          books
+            .fields('title')
+            .filter((filter) => filter.number('pages').gt(100))
+            .sort(sorting('pages', 'desc'))
+            .include('publisher', (publisher) => publisher.fields('name')),
+        ),
+      sort: sorting('id', 'asc'),
+    });
+
+    expect(builderResult).toEqual(astResult);
+  });
+
+  it('supports shorthand filters and default scalar fields in included selections', async () => {
+    await createRelationFixture(context);
+    const result = await context.database
+      .repository('repositoryAuthors')
+      .findMany({
+        select: (select) =>
+          select
+            .fields('name')
+            .include('books', (books) =>
+              books.filter({ pages: 180 }).include('publisher'),
+            ),
+        sort: sorting('id', 'asc'),
+      });
+
+    expect(result).toEqual([
+      {
+        name: 'Ada',
+        books: [
+          {
+            id: 1,
+            title: 'Alpha',
+            pages: 180,
+            authorId: 1,
+            publisherId: 1,
+            publisher: { id: 1, name: 'North' },
+          },
+        ],
+      },
+      { name: 'Bob', books: [] },
+      { name: 'Cara', books: [] },
+    ]);
+  });
+
+  it('validates duplicate and unknown Select Builder entries', async () => {
+    await createRelationFixture(context);
+    const authors = context.database.repository('repositoryAuthors');
+
+    await expect(
+      authors.findMany({
+        select: (select) => select.fields('name', 'name'),
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_SELECT', field: 'name' });
+    await expect(
+      authors.findMany({
+        select: (select) => select.include('books').include('books'),
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_SELECT', relation: 'books' });
+    await expect(
+      authors.findMany({
+        select: (select) => select.fields('missing'),
+      }),
+    ).rejects.toMatchObject({ code: 'FIELD_NOT_FOUND', field: 'missing' });
+    await expect(
+      authors.findMany({
+        select: (select) => select.include('missing'),
+      }),
+    ).rejects.toMatchObject({ code: 'FIELD_NOT_FOUND', field: 'missing' });
   });
 
   it('filters through relation quantifiers and direct to-one paths', async () => {
@@ -323,29 +418,29 @@ async function createRelationFixture(
 
 function selection(
   fields: readonly string[],
-  relations?: readonly SelectRelationNode[],
+  includes?: readonly SelectIncludeNode[],
 ): SelectAst {
   return {
     kind: 'select',
     version: 1,
-    root: selectionNode(fields, relations),
+    root: selectionNode(fields, includes),
   };
 }
 
 function selectionNode(
   fields: readonly string[],
-  relations?: readonly SelectRelationNode[],
+  includes?: readonly SelectIncludeNode[],
 ): SelectAst['root'] {
-  return { kind: 'selection', fields, relations };
+  return { kind: 'selection', fields, includes };
 }
 
 function relation(
-  field: string,
+  relation: string,
   select: SelectAst['root'],
   filter?: FilterAst,
   sort?: SortAst,
-): SelectRelationNode {
-  return { kind: 'relation', field, select, filter, sort };
+): SelectIncludeNode {
+  return { kind: 'include', relation, select, filter, sort };
 }
 
 function sorting(field: string, direction: 'asc' | 'desc'): SortAst {

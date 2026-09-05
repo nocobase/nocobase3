@@ -186,12 +186,12 @@ export type RepositoryFilter<TRecord extends object> =
 export interface SelectNode {
   readonly kind: 'selection';
   readonly fields?: readonly string[];
-  readonly relations?: readonly SelectRelationNode[];
+  readonly includes?: readonly SelectIncludeNode[];
 }
 
-export interface SelectRelationNode {
-  readonly kind: 'relation';
-  readonly field: string;
+export interface SelectIncludeNode {
+  readonly kind: 'include';
+  readonly relation: string;
   readonly select: SelectNode;
   readonly filter?: FilterAst;
   readonly sort?: SortAst;
@@ -203,6 +203,26 @@ export interface SelectAst {
   readonly collection?: string;
   readonly root: SelectNode;
 }
+
+export interface SelectBuilder<_TRecord extends object = RepositoryRecord> {
+  fields(...fields: readonly string[]): this;
+  include<TTarget extends object = RepositoryRecord>(
+    relation: string,
+    callback?: (
+      select: RelationSelectBuilder<TTarget>,
+    ) => RelationSelectBuilder<TTarget>,
+  ): this;
+}
+
+export interface RelationSelectBuilder<
+  TRecord extends object = RepositoryRecord,
+> extends SelectBuilder<TRecord> {
+  filter(filter: RepositoryFilter<TRecord>): this;
+  sort(sort: SortAst): this;
+}
+
+export type RepositorySelect<TRecord extends object> =
+  SelectAst | ((select: SelectBuilder<TRecord>) => SelectBuilder<TRecord>);
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -466,40 +486,46 @@ export type UpdateMutationValues<TUpdate extends object> = {
   readonly [TKey in keyof TUpdate]: UpdateMutationProperty<TUpdate[TKey]>;
 };
 
-export interface RepositoryReadOptions {
-  readonly select?: SelectAst;
+export interface RepositoryReadOptions<
+  TRecord extends object = RepositoryRecord,
+> {
+  readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
 }
 
 export interface FindManyOptions<
   TRecord extends object,
-> extends RepositoryReadOptions {
+> extends RepositoryReadOptions<TRecord> {
   readonly filter?: RepositoryFilter<TRecord>;
   readonly sort?: SortAst;
   readonly limit?: number;
   readonly offset?: number;
 }
 
-export type FindOneOptions<TRecord extends object> = RepositoryReadOptions &
-  (
-    | {
-        readonly filter: RepositoryFilter<TRecord>;
-        readonly sort?: SortAst;
-      }
-    | {
-        readonly filter?: RepositoryFilter<TRecord>;
-        readonly sort: NonEmptySortAst;
-      }
-  );
+export type FindOneOptions<TRecord extends object> =
+  RepositoryReadOptions<TRecord> &
+    (
+      | {
+          readonly filter: RepositoryFilter<TRecord>;
+          readonly sort?: SortAst;
+        }
+      | {
+          readonly filter?: RepositoryFilter<TRecord>;
+          readonly sort: NonEmptySortAst;
+        }
+    );
 
 export interface FilterOnlyOptions<TRecord extends object> {
   readonly filter?: RepositoryFilter<TRecord>;
   readonly context?: RepositoryContext;
 }
 
-export interface CreateOneOptions<TCreate extends object> {
+export interface CreateOneOptions<
+  TCreate extends object,
+  TRecord extends object = RepositoryRecord,
+> {
   readonly values: CreateMutationValues<TCreate>;
-  readonly select?: SelectAst;
+  readonly select?: RepositorySelect<TRecord>;
 }
 
 export interface CreateManyOptions<TCreate extends object> {
@@ -514,7 +540,7 @@ export type UpdateOneOptions<
   TUpdate extends object,
   TRecord extends object = RepositoryRecord,
 > = SingleMutationSelector<TRecord> & {
-  readonly select?: SelectAst;
+  readonly select?: RepositorySelect<TRecord>;
   readonly ifVersion?: string | number;
   readonly context?: RepositoryContext;
   readonly values: UpdateMutationValues<TUpdate>;
@@ -658,7 +684,7 @@ export interface Repository<
     options: ValidateMutationOptions<TCreate, TUpdate, TRecord>,
   ): Promise<MutationValidationResult>;
   createOne(
-    options: CreateOneOptions<TCreate>,
+    options: CreateOneOptions<TCreate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>>;
   createMany(options: CreateManyOptions<TCreate>): Promise<CreateManyResult>;
   updateOne(

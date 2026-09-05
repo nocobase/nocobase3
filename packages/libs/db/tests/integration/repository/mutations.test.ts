@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import type {
   FilterAst,
   SelectAst,
-  SelectRelationNode,
+  SelectIncludeNode,
 } from '../../../src/index.js';
 import {
   describeIntegrationDatabases,
@@ -87,6 +87,34 @@ describeIntegrationDatabases('Repository relation mutations', (context) => {
       },
       version: 2,
     });
+  });
+
+  it('supports Select Builder input for createOne() and updateOne()', async () => {
+    const fixture = await createMutationFixture(context);
+    const repository = context.database.repository('repositoryProjects');
+    const created = await repository.createOne({
+      values: {
+        name: 'Builder selection',
+        owner: { connect: { id: fixture.ada } },
+      },
+      select: (select) =>
+        select
+          .fields('id', 'name')
+          .include('owner', (owner) => owner.fields('name')),
+    });
+
+    expect(created.record).toMatchObject({
+      name: 'Builder selection',
+      owner: { name: 'Ada' },
+    });
+
+    const updated = await repository.updateOne({
+      filter: { id: created.record.id as number },
+      values: { name: 'Updated selection' },
+      select: (select) => select.fields('name'),
+    });
+
+    expect(updated.record).toEqual({ name: 'Updated selection' });
   });
 
   it('rejects conflicting model-shaped relation operations', async () => {
@@ -685,24 +713,24 @@ function projectSelection(): SelectAst {
 
 function selection(
   fields: readonly string[],
-  relations?: readonly SelectRelationNode[],
+  includes?: readonly SelectIncludeNode[],
 ): SelectAst {
   return {
     kind: 'select',
     version: 1,
-    root: { kind: 'selection', fields, relations },
+    root: { kind: 'selection', fields, includes },
   };
 }
 
 function relation(
-  field: string,
+  relation: string,
   fields: readonly string[],
-  relations?: readonly SelectRelationNode[],
-): SelectRelationNode {
+  includes?: readonly SelectIncludeNode[],
+): SelectIncludeNode {
   return {
-    kind: 'relation',
-    field,
-    select: { kind: 'selection', fields, relations },
+    kind: 'include',
+    relation,
+    select: { kind: 'selection', fields, includes },
   };
 }
 

@@ -12,6 +12,10 @@ import {
   DefaultRelationFieldMutationBuilder,
   type RelationFieldMutationBuilderState,
 } from './relation-mutation-builder.js';
+import {
+  DefaultSelectBuilder,
+  type SelectBuilderState,
+} from './select-builder.js';
 import type { RepositoryExecutionAdapter } from './internal/execution-adapter.js';
 import type {
   CreateManyOptions,
@@ -41,6 +45,7 @@ import type {
   RepositoryFilter,
   RepositoryMutationDescription,
   RepositoryRecord,
+  RepositorySelect,
   RelationMutationAst,
   RelationMutationNode,
   RelationDeleteInput,
@@ -50,7 +55,7 @@ import type {
   RelationUpsertInput,
   RelationUpsertTarget,
   SelectAst,
-  SelectRelationNode,
+  SelectIncludeNode,
   SingleMutationResult,
   SortAst,
   UniqueSelector,
@@ -254,7 +259,7 @@ export class DefaultRepository<
   }
 
   async createOne(
-    options: CreateOneOptions<TCreate>,
+    options: CreateOneOptions<TCreate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>> {
     const collection = await this.collection();
     assertWritableCollection(collection);
@@ -324,7 +329,11 @@ export class DefaultRepository<
       options.context,
     );
     validateIfVersion(collection, options.ifVersion);
-    const selection = await this.validateSelect(collection, options.select);
+    const selection = await this.validateSelect(
+      collection,
+      options.select,
+      options.context,
+    );
     const requestedFields = selection.fields;
     const result = await this.options.adapter.updateOne({
       collection,
@@ -442,7 +451,7 @@ export class DefaultRepository<
 
   private async validateSelect(
     collection: CollectionDefinition,
-    select: SelectAst | undefined,
+    select: RepositorySelect<TRecord> | undefined,
     context?: Readonly<Record<string, unknown>>,
   ): Promise<ValidatedSelect> {
     return validateSelectWithRelations(
@@ -979,9 +988,37 @@ function resolveVariable(
   return current;
 }
 
+interface SelectInputAst {
+  readonly kind: 'select';
+  readonly version: 1;
+  readonly collection?: string;
+  readonly root: SelectBuilderState;
+}
+
+function normalizeSelectInput<TRecord extends object>(
+  collection: CollectionDefinition,
+  input: RepositorySelect<TRecord> | undefined,
+): SelectInputAst | undefined {
+  if (input === undefined) return undefined;
+  if (typeof input !== 'function') return input;
+  const builder = new DefaultSelectBuilder<TRecord>();
+  const result = input(builder);
+  if (result !== builder) {
+    invalid('INVALID_SELECT', 'Select callbacks must return their builder.', {
+      collection: collection.name,
+    });
+  }
+  return {
+    kind: 'select',
+    version: 1,
+    collection: collection.name,
+    root: builder.toState(),
+  };
+}
+
 function validateScalarSelect(
   collection: CollectionDefinition,
-  select: SelectAst | undefined,
+  select: SelectInputAst | undefined,
 ): string[] {
   if (!select) return scalarFields(collection).map((field) => field.name);
   if (
@@ -1247,38 +1284,55 @@ async function normalizeRelationFilterNode(
   };
 }
 
-async function validateSelectWithRelations(
+async function validateSelectWithRelations<TRecord extends object>(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
-  select: SelectAst | undefined,
+  input: RepositorySelect<TRecord> | undefined,
+  context: Readonly<Record<string, unknown>> | undefined,
+): Promise<ValidatedSelect> {
+  return validateSelectInputWithRelations(
+    collections,
+    collection,
+    normalizeSelectInput(collection, input),
+    context,
+  );
+}
+
+async function validateSelectInputWithRelations(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  select: SelectInputAst | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
 ): Promise<ValidatedSelect> {
   const fields = validateScalarSelect(collection, select);
   const seen = new Set<string>();
-  const relations: SelectRelationNode[] = [];
-  for (const [index, node] of (select?.root.relations ?? []).entries()) {
-    const path = ['root', 'relations', index] as const;
-    if (node.kind !== 'relation') {
-      invalid('INVALID_SELECT', 'Expected a relation selection node.', {
+  const includes: SelectIncludeNode[] = [];
+  for (const [index, node] of (select?.root.includes ?? []).entries()) {
+    const path = ['root', 'includes', index] as const;
+    if (node.kind !== 'include') {
+      invalid('INVALID_SELECT', 'Expected an include selection node.', {
         collection: collection.name,
         path,
       });
     }
-    if (seen.has(node.field)) {
+    if (seen.has(node.relation)) {
       invalid(
         'INVALID_SELECT',
-        `Relation "${node.field}" is selected more than once.`,
+        `Relation "${node.relation}" is included more than once.`,
         {
           collection: collection.name,
-          relation: node.field,
+          relation: node.relation,
           path,
         },
       );
     }
-    seen.add(node.field);
-    const relation = relationField(collection, node.field, [...path, 'field']);
+    seen.add(node.relation);
+    const relation = relationField(collection, node.relation, [
+      ...path,
+      'relation',
+    ]);
     const target = await targetCollection(collections, relation, path);
-    const nested = await validateSelectWithRelations(
+    const nested = await validateSelectInputWithRelations(
       collections,
       target,
       {
@@ -1288,6 +1342,12 @@ async function validateSelectWithRelations(
       },
       context,
     );
+    if (!nested.select) {
+      invalid('INVALID_SELECT', 'Included selections must be defined.', {
+        collection: target.name,
+        path: [...path, 'select'],
+      });
+    }
     const filter = await normalizeFilterWithRelations(
       collections,
       target,
@@ -1311,9 +1371,10 @@ async function validateSelectWithRelations(
     const sort = isToManyRelation(relation)
       ? await validateSortWithRelations(collections, target, node.sort)
       : undefined;
-    relations.push({
-      ...node,
-      select: nested.select?.root ?? { ...node.select, fields: nested.fields },
+    includes.push({
+      kind: 'include',
+      relation: node.relation,
+      select: nested.select.root,
       filter,
       sort,
     });
@@ -1324,7 +1385,7 @@ async function validateSelectWithRelations(
       ? {
           ...select,
           collection: collection.name,
-          root: { ...select.root, fields, relations },
+          root: { ...select.root, fields, includes },
         }
       : undefined,
   };
@@ -3085,8 +3146,8 @@ function pickSelection(
   select: SelectAst | undefined,
 ): RepositoryRecord {
   const result = pick(record, fields);
-  for (const relation of select?.root.relations ?? []) {
-    result[relation.field] = record[relation.field];
+  for (const relation of select?.root.includes ?? []) {
+    result[relation.relation] = record[relation.relation];
   }
   return result;
 }

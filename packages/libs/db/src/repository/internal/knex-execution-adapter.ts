@@ -24,7 +24,7 @@ import type {
   RelationUpdateTarget,
   RelationUpsertTarget,
   SelectNode,
-  SelectRelationNode,
+  SelectIncludeNode,
   SortItemNode,
   UniqueSelector,
 } from '../types.js';
@@ -57,7 +57,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   async findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]> {
     const rows = (await await this.buildRead(plan)) as RepositoryRecord[];
-    if (plan.select?.root.relations?.length) {
+    if (plan.select?.root.includes?.length) {
       await this.loadRelations(plan.collection, rows, plan.select.root);
     }
     return rows.map((row) => projectRow(row, plan.fields, plan.select?.root));
@@ -1075,11 +1075,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       column: column(collection, field),
       alias: field,
     }));
-    for (const node of select?.relations ?? []) {
-      const resolved = await this.resolveRelation(collection, node.field);
+    for (const node of select?.includes ?? []) {
+      const resolved = await this.resolveRelation(collection, node.relation);
       selected.push({
         column: resolved.sourceColumn,
-        alias: relationHelper(node.field),
+        alias: relationHelper(node.relation),
       });
     }
     return uniqueSelectionColumns(selected);
@@ -1091,7 +1091,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     select: SelectNode,
   ): Promise<void> {
     if (rows.length === 0) return;
-    for (const node of select.relations ?? []) {
+    for (const node of select.includes ?? []) {
       await this.loadRelation(collection, rows, node);
     }
   }
@@ -1099,15 +1099,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async loadRelation(
     collection: CollectionDefinition,
     parents: RepositoryRecord[],
-    node: SelectRelationNode,
+    node: SelectIncludeNode,
   ): Promise<void> {
-    const resolved = await this.resolveRelation(collection, node.field);
+    const resolved = await this.resolveRelation(collection, node.relation);
     const parentValues = uniqueValues(
-      parents.map((parent) => parent[relationHelper(node.field)]),
+      parents.map((parent) => parent[relationHelper(node.relation)]),
     );
     if (parentValues.length === 0) {
       for (const parent of parents)
-        parent[node.field] = emptyRelation(resolved);
+        parent[node.relation] = emptyRelation(resolved);
       return;
     }
 
@@ -1129,17 +1129,17 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (associationField) {
       selected.push({
         column: column(resolved.target, associationField),
-        alias: relationParentHelper(node.field),
+        alias: relationParentHelper(node.relation),
       });
     }
-    for (const child of node.select.relations ?? []) {
+    for (const child of node.select.includes ?? []) {
       const childRelation = await this.resolveRelation(
         resolved.target,
-        child.field,
+        child.relation,
       );
       selected.push({
         column: childRelation.sourceColumn,
-        alias: relationHelper(child.field),
+        alias: relationHelper(child.relation),
       });
     }
 
@@ -1187,7 +1187,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           client
             .ref(column(resolved.through!, resolved.throughSourceForeignKey!))
             .withSchema(throughAlias)
-            .as(relationParentHelper(node.field)),
+            .as(relationParentHelper(node.relation)),
         );
     }
 
@@ -1207,21 +1207,22 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await this.applySort(query, resolved.target, item, targetAlias);
     }
     const targets = (await query) as RepositoryRecord[];
-    if (node.select.relations?.length) {
+    if (node.select.includes?.length) {
       await this.loadRelations(resolved.target, targets, node.select);
     }
 
     const grouped = new Map<string, RepositoryRecord[]>();
     for (const target of targets) {
-      const key = associationKey(target[relationParentHelper(node.field)]);
+      const key = associationKey(target[relationParentHelper(node.relation)]);
       const group = grouped.get(key) ?? [];
       group.push(projectRow(target, requested, node.select));
       grouped.set(key, group);
     }
     for (const parent of parents) {
       const matches =
-        grouped.get(associationKey(parent[relationHelper(node.field)])) ?? [];
-      parent[node.field] = isToOne(resolved.relation)
+        grouped.get(associationKey(parent[relationHelper(node.relation)])) ??
+        [];
+      parent[node.relation] = isToOne(resolved.relation)
         ? (matches[0] ?? null)
         : matches;
     }
@@ -1494,8 +1495,8 @@ function projectRow(
   select: SelectNode | undefined,
 ): RepositoryRecord {
   const result = Object.fromEntries(fields.map((field) => [field, row[field]]));
-  for (const relation of select?.relations ?? []) {
-    result[relation.field] = row[relation.field];
+  for (const relation of select?.includes ?? []) {
+    result[relation.relation] = row[relation.relation];
   }
   return result;
 }
