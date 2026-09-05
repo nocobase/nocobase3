@@ -2,7 +2,6 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   nav: {
-    workspace: 'Mail',
     settings: 'Mail',
     dev: 'Mail playground',
   },

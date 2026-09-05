@@ -1,4 +1,4 @@
-import { Inbox, RefreshCw, Send } from 'lucide-react';
+import { RefreshCw, Send } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -13,7 +13,6 @@ import {
   mailErrorMessage,
   type MailAccountView,
   type MailIdentity,
-  type MailMessageSummary,
   type MailSubmissionView,
   type MailSyncMode,
   type MailSyncRunView,
@@ -24,6 +23,7 @@ import { Card } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
 import { NativeSelect } from '../components/ui/native-select.js';
 import { Textarea } from '../components/ui/textarea.js';
+import MailWorkspacePage from './mail-workspace-page.js';
 
 const mail = getMailClient();
 interface ComposeValue {
@@ -38,7 +38,6 @@ export default function MailDevPage(): ReactElement {
   const [accountId, setAccountId] = useState('');
   const [identities, setIdentities] = useState<readonly MailIdentity[]>([]);
   const [identityId, setIdentityId] = useState('');
-  const [messages, setMessages] = useState<readonly MailMessageSummary[]>([]);
   const [compose, setCompose] = useState<ComposeValue>({
     to: '',
     subject: '',
@@ -75,7 +74,6 @@ export default function MailDevPage(): ReactElement {
         if (nextAccounts.length === 0) {
           setIdentities([]);
           setIdentityId('');
-          setMessages([]);
         }
       })
       .catch((cause: unknown) =>
@@ -98,11 +96,8 @@ export default function MailDevPage(): ReactElement {
       return;
     }
     let active = true;
-    void Promise.all([
-      mail.listIdentities(accountId),
-      mail.listMessages({ accountId, limit: 20 }),
-    ]).then(
-      ([nextIdentities, page]) => {
+    void mail.listIdentities(accountId).then(
+      (nextIdentities) => {
         if (!active) return;
         setIdentities(nextIdentities);
         setIdentityId(
@@ -110,7 +105,6 @@ export default function MailDevPage(): ReactElement {
             nextIdentities[0]?.id ??
             '',
         );
-        setMessages(page.items);
       },
       (cause: unknown) => {
         if (active)
@@ -139,9 +133,6 @@ export default function MailDevPage(): ReactElement {
           setSyncRun(nextRun);
           if (!['pending', 'running'].includes(nextRun.status)) {
             setBusy(undefined);
-            void mail
-              .listMessages({ accountId: nextRun.accountId, limit: 20 })
-              .then((page) => setMessages(page.items));
           }
         },
         (cause: unknown) => {
@@ -458,54 +449,7 @@ export default function MailDevPage(): ReactElement {
         </div>
 
         <section className='overflow-hidden rounded-xl border bg-card shadow-sm'>
-          <div className='flex items-center gap-2 border-b px-5 py-4'>
-            <Inbox aria-hidden='true' className='size-5 text-primary' />
-            <h2 className='font-semibold'>
-              {t('dev.messages.title', {
-                defaultValue: 'Synchronized messages',
-              })}
-            </h2>
-          </div>
-          {messages.length === 0 ? (
-            <div className='p-10 text-center text-sm text-muted-foreground'>
-              {t('dev.messages.empty', {
-                defaultValue:
-                  'No local messages are available. Run a synchronization first.',
-              })}
-            </div>
-          ) : (
-            <div className='divide-y'>
-              {messages.map((message) => (
-                <article className='px-5 py-4' key={message.id}>
-                  <div className='flex items-start justify-between gap-4'>
-                    <div className='min-w-0'>
-                      <p className='truncate font-medium'>
-                        {message.subject ||
-                          t('dev.messages.noSubject', {
-                            defaultValue: '(no subject)',
-                          })}
-                      </p>
-                      <p className='mt-0.5 truncate text-sm text-muted-foreground'>
-                        {message.from?.name ||
-                          message.from?.address ||
-                          t('dev.messages.unknownSender', {
-                            defaultValue: 'Unknown sender',
-                          })}
-                      </p>
-                      {message.preview ? (
-                        <p className='mt-2 line-clamp-2 text-sm text-muted-foreground'>
-                          {message.preview}
-                        </p>
-                      ) : null}
-                    </div>
-                    <time className='shrink-0 text-xs text-muted-foreground'>
-                      {formatDate(message.receivedAt ?? message.sentAt)}
-                    </time>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+          <MailWorkspacePage />
         </section>
       </div>
     </main>
@@ -544,8 +488,4 @@ function dateDaysAgo(days: number): string {
 
 function createIdempotencyKey(): string {
   return `mail-dev-${globalThis.crypto.randomUUID()}`;
-}
-
-function formatDate(value: string | undefined): string {
-  return value ? new Date(value).toLocaleString() : '—';
 }

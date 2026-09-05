@@ -110,11 +110,6 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-mail:mail',
-        path: '/mail',
-      },
-      {
-        auth: 'required',
         id: '@nocobase/app-plugin-notification-provider:demo',
         path: '/notification-provider',
       },

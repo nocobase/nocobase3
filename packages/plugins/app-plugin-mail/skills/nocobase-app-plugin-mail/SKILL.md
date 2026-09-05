@@ -12,8 +12,7 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 - Register `@nocobase/app-plugin-mail/client` and `@nocobase/app-plugin-mail/server` in the App composition roots.
 - Import Server contracts from `@nocobase/app-plugin-mail/server`, `@nocobase/app-plugin-mail/server/types`, or `@nocobase/app-plugin-mail/server/tokens`.
 - Import public UI from `@nocobase/app-plugin-mail/client/components`.
-- Use mailbox read APIs only through an authenticated identity with `page:mail/access` or `page:mail.settings/access`.
-- Require `page:mail.settings/access` for OAuth, account management, synchronization, and sending APIs.
+- Require an authenticated identity with `page:mail.settings/access` for every Mail API.
 - Configure concrete Providers through the Gmail and Microsoft Provider plugins; do not instantiate their adapters from App code.
 
 ## Configure and connect an account
@@ -26,7 +25,7 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 
 ## Read synchronized mail
 
-Grant `mail/access` and open `/mail` to use the workspace registered in the application sidebar. The workspace lists the authenticated user's accounts and Provider folders, then loads synchronized messages through the public API. Opening a message loads its complete Provider conversation when a stable conversation identifier exists.
+Open `/dev/mail` in development to use the Mail workspace. It lists the authenticated user's accounts and Provider folders, then loads synchronized messages through the public API. Opening a message loads its complete Provider conversation when a stable conversation identifier exists. The plugin intentionally does not register a production `/mail` route or application-sidebar resource.
 
 Do not group unrelated messages by normalized subject. Gmail `threadId` and Microsoft Graph `conversationId` are normalized to `conversationId`; messages without one remain standalone. Folder filtering uses the indexed message-folder relation rather than scanning the JSON projection stored on each message.
 

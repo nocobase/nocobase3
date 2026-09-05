@@ -25,7 +25,7 @@ describe('mail API routes', () => {
     expect(response.status).toBe(401);
   });
 
-  it('enforces Mail workspace or settings access', async () => {
+  it('enforces Mail settings access', async () => {
     const router = await createRouter(true, service(), false);
     const response = await router.request('/mail/accounts');
 
@@ -36,28 +36,6 @@ describe('mail API routes', () => {
         message: 'Mail access is required.',
       },
     });
-  });
-
-  it('keeps workspace access read-only', async () => {
-    const listAccounts = vi.fn<MailService['listAccounts']>(async () => []);
-    const sendMessage = vi.fn<MailService['sendMessage']>();
-    const router = await createRouter(
-      true,
-      service({ listAccounts, sendMessage }),
-      ['mail'],
-    );
-
-    const accountsResponse = await router.request('/mail/accounts');
-    const sendResponse = await router.request('/mail/messages/send', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-
-    expect(accountsResponse.status).toBe(200);
-    expect(sendResponse.status).toBe(403);
-    expect(listAccounts).toHaveBeenCalledOnce();
-    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('translates API errors from the request locale', async () => {
@@ -235,7 +213,7 @@ describe('mail API routes', () => {
 async function createRouter(
   authenticated: boolean,
   mail: MailService,
-  allowed: boolean | readonly string[] = true,
+  allowed = true,
 ): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(authenticationToken, {
@@ -256,10 +234,7 @@ async function createRouter(
   container.instance(authorizationToken, {
     middleware: () => async (context, next) => {
       context.set('authz', {
-        can: async (input: { resource: { id: string } }) =>
-          typeof allowed === 'boolean'
-            ? allowed
-            : allowed.includes(input.resource.id),
+        can: async () => allowed,
       });
       await next();
     },

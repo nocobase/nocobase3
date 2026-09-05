@@ -241,7 +241,7 @@ export default function MailWorkspacePage(): ReactElement {
   };
 
   return (
-    <main className='flex min-h-[calc(100svh-4rem)] flex-col bg-background'>
+    <section className='flex min-h-[calc(100svh-4rem)] flex-col bg-background'>
       <header className='flex flex-wrap items-center gap-3 border-b px-4 py-3'>
         <h1 className='mr-auto text-lg font-semibold'>
           {t('workspace.title', { defaultValue: 'Mail' })}
@@ -375,6 +375,6 @@ export default function MailWorkspacePage(): ReactElement {
           />
         </div>
       )}
-    </main>
+    </section>
   );
 }

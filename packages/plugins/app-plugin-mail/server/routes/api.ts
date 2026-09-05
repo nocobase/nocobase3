@@ -44,18 +44,10 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       authentication.required(),
       authorization.middleware(),
       async (context, next) => {
-        const authz = context.get('authz');
-        const settingsAllowed = await authz.can({
+        const allowed = await context.get('authz').can({
           resource: { type: 'page', id: 'mail.settings' },
           action: 'access',
         });
-        const workspaceAllowed =
-          isWorkspaceReadRequest(context.req.method, context.req.path) &&
-          (await authz.can({
-            resource: { type: 'page', id: 'mail' },
-            action: 'access',
-          }));
-        const allowed = settingsAllowed || workspaceAllowed;
         if (!allowed) {
           const t = getRequestTranslator(context, MAIL_NAMESPACE);
           return context.json(
@@ -230,18 +222,6 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     router.route('/mail', routes);
     return router;
   });
-
-function isWorkspaceReadRequest(method: string, path: string): boolean {
-  if (method !== 'GET') return false;
-  const mailPath = path.slice(path.lastIndexOf('/mail'));
-  return (
-    mailPath === '/mail/accounts' ||
-    mailPath === '/mail/messages' ||
-    /^\/mail\/accounts\/[^/]+\/folders$/.test(mailPath) ||
-    /^\/mail\/accounts\/[^/]+\/messages\/[^/]+$/.test(mailPath) ||
-    /^\/mail\/accounts\/[^/]+\/conversations\/[^/]+\/messages$/.test(mailPath)
-  );
-}
 
 function operationContext(context: {
   get(

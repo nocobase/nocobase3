@@ -3,21 +3,12 @@ import { describe, expect, it } from 'vitest';
 import routes from '../client/routes.js';
 
 describe('Mail client routes', () => {
-  it('contributes lazy workspace, Settings, and development routes', async () => {
-    const [workspace, settings, dev] = routes;
-
-    expect(workspace).toMatchObject({
-      parent: 'app',
-      routes: [
-        {
-          name: 'mail',
-          path: '/mail',
-          auth: 'required',
-          access: { resource: 'mail', action: 'access' },
-          componentLoader: expect.any(Function),
-        },
-      ],
-    });
+  it('contributes lazy Settings and development routes', async () => {
+    expect(routes).toHaveLength(2);
+    expect(routes.some((contribution) => contribution.parent === 'app')).toBe(
+      false,
+    );
+    const [settings, dev] = routes;
 
     expect(settings).toMatchObject({
       parent: 'settings',
@@ -41,16 +32,9 @@ describe('Mail client routes', () => {
       ],
     });
 
-    if (
-      workspace?.parent !== 'app' ||
-      settings?.parent !== 'settings' ||
-      dev?.parent !== 'dev'
-    ) {
+    if (settings?.parent !== 'settings' || dev?.parent !== 'dev') {
       throw new Error('Missing Mail client route contribution.');
     }
-    await expect(workspace.routes[0]?.componentLoader()).resolves.toMatchObject(
-      { default: expect.any(Function) },
-    );
     await expect(settings.routes[0]?.componentLoader()).resolves.toMatchObject({
       default: expect.any(Function),
     });

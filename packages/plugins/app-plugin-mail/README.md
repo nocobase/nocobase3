@@ -14,10 +14,8 @@ The first runnable vertical slice provides:
 - authenticated OAuth start plus a public one-time-state callback;
 - Settings UI for Provider authorization, connected accounts, and bounded
   initial-sync policy;
-- an authenticated Mail workspace with an application-sidebar entry, account
-  and folder navigation, message search and filters, and conversation detail;
-- a development-only playground for sending mail, triggering sync, and
-  inspecting synchronized messages;
+- a development-only Mail workspace for account and folder navigation, message
+  search and filters, conversation detail, sending, and synchronization;
 - AES-256-GCM encrypted OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
   explicit `unknown` result for indeterminate Provider submissions;
@@ -123,14 +121,12 @@ single-use state created by the authenticated start endpoint and redirects the
 browser to `/settings/mail` after completion; state and PKCE verifiers are
 never returned by account APIs.
 
-Mailbox read APIs require `page:mail/access` or
-`page:mail.settings/access`. OAuth, synchronization, and sending APIs require
-`page:mail.settings/access`. Account ownership is enforced again in
+All Mail APIs require `page:mail.settings/access`. Account ownership is enforced again in
 `MailService`; Route authentication is not treated as ownership authorization.
 Inactive accounts cannot send or synchronize. Public responses omit credential
 references, Provider cursors, leases, and internal error messages.
 
-The `/mail` workspace opens a complete conversation only when a Provider
+The `/dev/mail` workspace opens a complete conversation only when a Provider
 supplies its stable identifier (`threadId` for Gmail or `conversationId` for
 Microsoft Graph). Messages without that identifier open independently; the
 core does not infer a conversation from a matching subject.

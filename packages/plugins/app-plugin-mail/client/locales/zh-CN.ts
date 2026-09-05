@@ -2,7 +2,6 @@ import type { MailResource } from './en-US.js';
 
 const zhCN: MailResource = {
   nav: {
-    workspace: '邮件',
     settings: '邮件',
     dev: '邮件开发工具',
   },
