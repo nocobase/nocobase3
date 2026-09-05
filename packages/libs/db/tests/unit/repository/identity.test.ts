@@ -6,6 +6,21 @@ import {
 } from '../../../src/repository/internal/identity.js';
 
 describe('Repository record identity', () => {
+  it.each([9007199254740993n, '9007199254740993'])(
+    'preserves exact generated values beyond safe integers: %s',
+    (value) => {
+      const collection: CollectionDefinition = {
+        fields: [{ name: 'sequence', type: 'bigInt', autoIncrement: true }],
+        constraints: [{ type: 'primary', fields: ['sequence'] }],
+      };
+      expect(createdRecordSelector(collection, {}, [value]).values).toEqual({
+        sequence: value,
+      });
+      expect(recordSelector(collection, { sequence: value }).values).toEqual({
+        sequence: value,
+      });
+    },
+  );
   it('preserves string identifiers and does not interpret their names', () => {
     const collection: CollectionDefinition = {
       fields: [{ name: 'id', type: 'string' }],
