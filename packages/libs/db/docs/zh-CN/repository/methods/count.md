@@ -107,8 +107,8 @@ const parents = await projects.count({
 
 ## 测试映射
 
-CT-01 对应 methods/read-contracts.test.ts 的计数、上下文和分页能力；CT-02 对应 relations/filter.test.ts 的关系量词及 relations/aggregate-filter.test.ts 的关系条件聚合能力。后续应将本页具体数据和预期结果补为独立断言；相关能力覆盖不等于这些组合已有专门测试。
+CT-01 / CT-02 已落为独立集成测试，使用与文档相同的关键数据和预期结果。测试通过底层查询准备数据，隔离被测查询 API；不是直接执行 Markdown 代码块，也不代表覆盖了所有关系类型和参数组合。
 
 ## 验证依据
 
-行为覆盖见 [read-contracts.test.ts](../../../../tests/integration/repository/methods/read-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [count.test.ts](../../../../tests/integration/repository/methods/count.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

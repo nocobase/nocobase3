@@ -131,13 +131,8 @@ const missing = await projects.findOne({
 
 ## 测试映射
 
-本页场景编号用于后续测试命名和追踪，不表示这些完整文档片段已逐个成为自动化测试。
-
-| 场景  | 后续测试重点                       | 已有相关覆盖                                                                                |
-| ----- | ---------------------------------- | ------------------------------------------------------------------------------------------- |
-| FO-01 | 三种 Filter 同结果、投影字段不泄漏 | capabilities/filter.test.ts、methods/read-contracts.test.ts                                 |
-| FO-02 | 合法空结果与变量解析错误分开断言   | methods/read-contracts.test.ts 的上下文查询；capabilities/create-context.test.ts 的变量错误 |
+FO-01 / FO-02 已落为独立集成测试，使用与文档相同的关键数据和预期结果。测试通过底层查询准备数据，隔离被测查询 API；不是直接执行 Markdown 代码块，也不代表覆盖了所有关系类型和参数组合。
 
 ## 验证依据
 
-行为覆盖见 [read-contracts.test.ts](../../../../tests/integration/repository/methods/read-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [find-one.test.ts](../../../../tests/integration/repository/methods/find-one.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

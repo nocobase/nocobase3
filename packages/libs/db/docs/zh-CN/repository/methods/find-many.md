@@ -143,13 +143,8 @@ const result = await projects.findMany({
 
 ## 测试映射
 
-场景编号供后续自动化测试使用；当前列出的是相关覆盖，不代表文档片段已逐个自动执行。
-
-| 场景  | 后续测试重点                         | 已有相关覆盖                                                              |
-| ----- | ------------------------------------ | ------------------------------------------------------------------------- |
-| FM-01 | 重复排序值、双向游标、空页、非法组合 | capabilities/pagination.test.ts、identity/key-types-and-returning.test.ts |
-| FM-02 | 父记录保留、空关系形状、投影隔离     | relations/select.test.ts                                                  |
+FM-01 / FM-02 已落为独立集成测试，使用与文档相同的关键数据和预期结果。测试通过底层查询准备数据，隔离被测查询 API；不是直接执行 Markdown 代码块，也不代表覆盖了所有关系类型和参数组合。
 
 ## 验证依据
 
-行为覆盖见 [read-contracts.test.ts](../../../../tests/integration/repository/methods/read-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [find-many.test.ts](../../../../tests/integration/repository/methods/find-many.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

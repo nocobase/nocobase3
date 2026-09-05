@@ -109,6 +109,13 @@ Use the package's supported Node 24+ runtime, matching the ABI used to build nat
 
 ## Follow-up phases
 
+### Phase 2a: independent queries and write safety
+
+- Implemented FO-01/02, FM-01/02, CT-01/02 and EX-01/02 in [findOne](./methods/find-one.test.ts), [findMany](./methods/find-many.test.ts), [count](./methods/count.test.ts) and [exists](./methods/exists.test.ts). The fixture contains the relevant project/task subset of the documented schema; data is seeded with physical queries rather than the API under test.
+- Added [write safety](./methods/write-safety.test.ts): independent zero/multiple-match and stale-version rejections, invalid returning projection, missing/empty/conflicting bulk scope, zero-match returning and explicit all-record mutation. Rejections compare complete physical row snapshots.
+- Added [createMany](./methods/create-many.test.ts): empty/invalid input, database constraint rollback, context resolution and exact returning/default results.
+- These cover specific gaps in the matrix above, not all remaining method contracts. Read-only collection behavior, deeper validation limits, relation matrices and concurrency remain follow-up work.
+
 1. **Structural baseline (this phase):** partition files, extract fixed fixtures, retain assertions, repair documentation links and establish this map.
 2. **Public contracts and safety:** add independent method cases and documentation scenarios, then split transitional workflows where useful. Prioritize write scope, cardinality, identity and atomic rollback.
 3. **Relation matrix:** fill Filter/Select/Sort and applicable Values operations by relation type; add exact aggregate checks, isolation and limit boundaries.

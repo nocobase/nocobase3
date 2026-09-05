@@ -93,8 +93,8 @@ const absent = await projects.exists({
 
 ## 测试映射
 
-EX-01 与 methods/read-contracts.test.ts 的 exists 能力相关；EX-02 的变量复用与 capabilities/create-context.test.ts 有相关覆盖。两组具体 exists 场景作为后续测试依据，不把其他方法的覆盖视为 exists 组合已验证。
+EX-01 / EX-02 已落为独立集成测试，使用与文档相同的关键数据和预期结果。测试通过底层查询准备数据，隔离被测查询 API；不是直接执行 Markdown 代码块，也不代表覆盖了所有关系类型和参数组合。
 
 ## 验证依据
 
-行为覆盖见 [read-contracts.test.ts](../../../../tests/integration/repository/methods/read-contracts.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [exists.test.ts](../../../../tests/integration/repository/methods/exists.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
