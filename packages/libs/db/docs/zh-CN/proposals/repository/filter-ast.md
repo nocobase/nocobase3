@@ -5,6 +5,8 @@ description: Repository Filter AST 的设计与当前运行时能力。
 
 # Filter AST
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：V1 运行时已实现。** 直接标量与 Relation Filter AST 均可执行，关系量词通过相关子查询编译。
 
 Filter AST 是 Repository Filter Builder 和 equality shorthand 统一规范化后的结构化表示。它也可

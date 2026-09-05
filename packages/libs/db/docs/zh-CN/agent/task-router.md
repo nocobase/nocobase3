@@ -19,7 +19,7 @@ description: 根据业务目标选择 @nocobase/db 的 Migration、Seed、Query�
 | 更新 title、description 或 relation metadata | `connection.collectionMetadata`                 | [Collection Metadata](../collection-metadata/overview.md)                |
 | 接入外部数据库                               | External Connection + Metadata Store            | [接入外部数据库](./connect-external-database.md)                         |
 | 使用方言特有能力                             | 检查能力后使用 `connection.client()`            | [DatabaseConnection](../database/database-connection.md)                 |
-| Collection-aware Repository CRUD             | 当前不可用                                      | Query 不是 Repository                                                    |
+| Collection-aware 记录和关系 CRUD             | `db.repository(collection)`                     | [Repository 任务指南](./implement-repository-data-access.md)             |
 
 ## 常见任务组合
 
@@ -28,6 +28,8 @@ description: 根据业务目标选择 @nocobase/db 的 Migration、Seed、Query�
 - 先阅读[实现 Schema 变更](./implement-schema-change.md)，再按需进入 [Builder](../builder/overview.md) 和 [Migration 测试](../migration/testing.md)。
 
 ### 编写业务查询
+
+- Collection-aware 查询与嵌套写入先阅读 [Repository 数据访问指南](./implement-repository-data-access.md)。
 
 - 先阅读[实现数据访问](./implement-data-access.md)，再按需进入 Select、Where、Mutation 或 Transaction 专题。
 

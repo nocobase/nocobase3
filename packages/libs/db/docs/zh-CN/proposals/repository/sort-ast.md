@@ -5,6 +5,8 @@ description: Repository Sort Builder、扁平可序列化 Sort AST 及稳定排�
 
 # Sort AST 与 Sort Builder
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：V1 已实现。** 支持直接 Field、to-one Field path、to-many aggregate、
 > relation-local sort、NULL 顺序和自动稳定 tie-breaker。
 

@@ -5,6 +5,8 @@ description: Collection-aware Repository 的分批实现设计与当前运行时
 
 # Repository 概览
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：V1 运行时已实现。** 公共类型、`RepositoryError`、`db.repository()` 和 `connection.repository()` 已导出；标量 CRUD、关系 selection/filter/sort、Relation Mutation、optimistic lock 和结果 envelope 均可执行，并已通过 SQLite、PostgreSQL、MySQL、Oracle 与 MSSQL 集成测试。本页同时记录 V1 契约与后续边界。
 
 后续高级查询和写入能力的实现顺序与 V1 范围见 [Repository 后续能力路线](./roadmap.md)。

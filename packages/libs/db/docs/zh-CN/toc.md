@@ -22,7 +22,7 @@ description: 按当前用法、任务、开发维护、内部实现、未来提�
 | `agent/`                | 按业务任务选择当前公开 API    | 可以；精确接口以类型声明为准 |
 | `development/`          | 维护 DB 包、Migration 和 Seed | 仅用于对应维护任务           |
 | `internals/`            | 当前内部实现和诊断            | 不应据此绕过公开 API         |
-| `proposals/`            | 尚未实现的设计                | 不可以                       |
+| `proposals/`            | 候选设计与演进记录            | 不作为当前 API 契约          |
 | `archive/`              | 已被替代的历史材料            | 不可以                       |
 
 ## 开始使用
@@ -71,6 +71,8 @@ description: 按当前用法、任务、开发维护、内部实现、未来提�
 
 ## QueryAdapter
 
+Collection-aware 记录和关系访问请优先阅读下一节 Repository；本节是数据库层查询组合。
+
 - [QueryAdapter 概览](./query/overview.md)：选择数据库层查询入口并理解 Query 与 Repository 的边界。
 - [select 查询](./query/select.md)：选择字段、设置别名、分页并使用终止方法。
 - [where 条件](./query/where.md)：使用三参条件、ExpressionBuilder、exists 和子查询。
@@ -79,6 +81,23 @@ description: 按当前用法、任务、开发维护、内部实现、未来提�
 - [数据写入](./query/mutations.md)：执行 insert、update、delete 并防止意外全表操作。
 - [Query 命名归一化](./query/naming.md)：理解 identifier 转换、结果 key 和 Collection naming 边界。
 - [Query 编译与清除条件](./query/compile.md)：检查编译 SQL、复用不可变 Query Builder 并清除查询片段。
+
+## Repository
+
+- [Repository 概览](./repository/overview.md)：定位、模型前提、最小调用与任务导航。
+- [查询](./repository/queries.md)：findOne/findMany/count/exists 及空结果语义。
+- [Filter](./repository/filter.md)：等值简写、Builder、AST、关系条件和 context 变量。
+- [JSON Filter](./repository/json-filter.md)：路径、结构比较、数组和 NULL 的方言边界。
+- [Select](./repository/select.md)：标量与嵌套关系选择、类型推导。
+- [Sort](./repository/sort.md)：多字段、关系路径、聚合和 NULL 排序。
+- [分页与 Distinct](./repository/pagination.md)：offset、双向 cursor、关系分页与去重。
+- [根级写入](./repository/mutations.md)：单条、批量、upsert、原子更新及 returning。
+- [关系写入](./repository/relation-mutations.md)：嵌套操作与 belongsToMany through payload。
+- [聚合](./repository/aggregates.md)：aggregate、groupBy、having 和关系 combine。
+- [事务](./repository/transactions.md)：事务绑定、乐观锁、写入保护和回滚。
+- [Streaming](./repository/streaming.md)：流式读取、依赖、提前退出和限制。
+- [Repository API 参考](./reference/repository-api.md)：选项、返回结构与公开类型。
+- [Repository Agent 任务指南](./agent/implement-repository-data-access.md)：最小阅读路由、实施步骤与验证。
 
 ## Collections 与 Metadata
 
@@ -152,12 +171,12 @@ description: 按当前用法、任务、开发维护、内部实现、未来提�
 - [Schema Inspector 方言行为](./internals/schema-inspector/dialects.md)：比较五种数据库的 schema 范围和不完整读取语义。
 - [分页、完整性与错误](./internals/schema-inspector/pagination-and-errors.md)：理解 filter、cursor、inspection status 和稳定错误码。
 
-## 未来提案
+## 设计提案与演进记录
 
-> 以下接口尚未实现或导出，不能用于当前业务代码。
+> Repository 已实现，使用上述正式文档。以下链接保留设计过程和候选方案，其中部分内容已实现、部分仍未支持，不能整体当作当前 API 契约。
 
-- [未来提案入口](./proposals/README.md)：了解 Proposal 与当前 API 的边界。
-- [Repository 提案](./proposals/repository/overview.md)：候选的 Collection-aware 查询与写入层。
+- [设计提案与演进记录入口](./proposals/README.md)：了解 Proposal 与当前 API 的边界。
+- [Repository 提案](./proposals/repository/overview.md)：Collection-aware 查询与写入层的设计记录；当前用法见正式文档。
 - [Filter Builder 提案](./proposals/repository/filter-builder.md)：候选的可组合筛选 DSL。
 - [Filter AST 提案](./proposals/repository/filter-ast.md)：候选的筛选条件序列化模型。
 - [Select AST 提案](./proposals/repository/select-ast.md)：候选的字段与 Relation 选择模型。

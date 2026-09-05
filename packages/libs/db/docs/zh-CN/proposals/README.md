@@ -1,11 +1,11 @@
 ---
-title: 未来提案
-description: 收录尚未实现或导出的 DB 设计提案；不得把提案接口当作当前 API 生成生产代码。
+title: 设计提案与演进记录
+description: 保留 DB 候选方案与设计演进；Repository 已有正式使用文档，提案中已实现和未实现内容不得整体视为当前公开 API 契约。
 ---
 
-# 未来提案
+# 设计提案与演进记录
 
-本目录收录仍在讨论、尚未成为运行时能力的设计。每篇提案必须明确标出运行时可用性和导出状态。
+本目录保留设计讨论、候选方案和实现路线，不作为当前业务代码的使用手册。Repository 已实现，当前入口是 [Repository 正式文档](../repository/overview.md)与 [API 参考](../reference/repository-api.md)。下列材料可能混合已实现与未实现的设计，需逐项核对。
 
 不得把提案中的接口、类型或示例当作当前 API 生成生产代码。实现业务需求时，以[公开 API 导航](../reference/api-index.md)、正式主题文档和 TypeScript 类型声明为准。
 

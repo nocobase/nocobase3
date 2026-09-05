@@ -5,6 +5,8 @@ description: Collection-aware Filter Builder 的设计与当前运行时能力�
 
 # Filter Builder
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：V1 运行时已实现。** Relation Builder 支持 `some`、`none`、`exists`、`notExists`、`empty` 和 `notEmpty`；字段能力严格来自 resolved Collection Field type。
 
 `Filter Builder` 是 Repository 的复杂筛选条件 DSL。它面向 Collection metadata，而不是数据库物理 schema。目标是让开发者和 Agent 都能写出可解释、可校验、可序列化、能跨数据库编译的筛选条件。

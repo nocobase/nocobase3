@@ -15,7 +15,7 @@ description: 生成 @nocobase/db 业务代码时必须遵守的 API、事务、M
 | `connection.builder()`                      | `connection.builder`                |
 | `db.query`                                  | `db.query()`                        |
 | `connection.query()`                        | `connection.query`                  |
-| `db.repository()`                           | 当前未实现；按任务使用 Query        |
+| `db.repository()` 不传 Collection           | 使用 `db.repository('projects')`    |
 | `connection.metadataStore`                  | `connection.collectionMetadata`     |
 | `connection.client`                         | `await connection.client()`         |
 | `connection.driver === 'pg'` 判断数据库类型 | `connection.dialect === 'postgres'` |
@@ -25,7 +25,7 @@ description: 生成 @nocobase/db 业务代码时必须遵守的 API、事务、M
 ## 事务
 
 - 事务内只使用回调参数里的 `connection`。
-- 不在 `db.transaction()` 回调里调用外层 `db.query()`、`db.builder()` 或 `db.connection()`。
+- 不在 `db.transaction()` 回调里调用外层 `db.query()`、`db.builder()`、`db.repository()` 或 `db.connection()`。
 - Metadata 事务也必须通过事务 Connection 的 `collectionMetadata` 和 `collections` 完成。
 - 抛错是触发回滚的一部分；不要吞掉异常后假设事务仍会回滚。
 
@@ -77,4 +77,4 @@ description: 生成 @nocobase/db 业务代码时必须遵守的 API、事务、M
 
 ## 规划能力
 
-Repository、Select AST、Filter Builder、Filter AST、Sort AST、Mutation AST 和 Writable File Metadata Store 当前未实现。设计材料不能复制到运行时代码。
+Repository 与 Filter/Select/Sort Builder、AST 已公开；用法见 [Repository 指南](./implement-repository-data-access.md)。不要从历史提案生成未公开的根级 relations 参数、findUnique/connectOrCreate 等接口。Writable File Metadata Store 仍属规划能力，不能复制设计材料作为运行时代码。

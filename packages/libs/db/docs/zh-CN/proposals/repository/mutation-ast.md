@@ -5,6 +5,8 @@ description: Repository 关系写入 V1 协议、Fluent Builder、有界嵌套�
 
 # Mutation AST
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：运行时已实现。** Relation Mutation Builder/AST、模型形状 `values`、目标
 > `update/upsert/delete`、事务内最终回读、`createdTargets`、有界嵌套、能力描述/校验与
 > optimistic lock 均可执行。

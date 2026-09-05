@@ -5,6 +5,8 @@ description: 使用 Aggregate Builder 或 JSON AST 对 Repository 记录执行 c
 
 # Repository Aggregate
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：V1 已实现。**
 
 ## Builder 示例

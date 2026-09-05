@@ -5,6 +5,8 @@ description: 参考 Prisma 的模型形状输入和 Relation Builder，统一 Re
 
 # Repository 写入 API 改进提案
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：核心写入契约已实现。** `createOne()` / `updateOne()` 的 `values` 支持字段级
 > Builder 和纯 JSON，覆盖 `create`、`connect`、`disconnect`、`set`、`update`、`upsert`
 > 和 `delete`；`updateOne()` / `deleteOne()` 使用严格基数的根 `filter`。顶层

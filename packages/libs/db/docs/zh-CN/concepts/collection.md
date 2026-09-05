@@ -79,7 +79,7 @@ await connection.builder.createCollection('orders', {
 
 ## 当前查询边界
 
-`connection.query` 是数据库层查询接口，只使用 Connection naming，不读取 Collection Metadata 或 Collection 局部 naming。当前没有已实现的 Collection-aware Repository API；相关内容仅存在于 [Repository 提案](../proposals/repository/overview.md)。
+`connection.query` 是数据库层查询接口，只使用 Connection naming，不读取 Collection Metadata 或 Collection 局部 naming。需要解析 Collection 逻辑字段、局部命名与关系时，使用 `connection.repository(name)`；见 [Repository 正式文档](../repository/overview.md)。
 
 ## 使用规则
 

@@ -5,6 +5,8 @@ description: Repository 查询与写入高级能力的实现顺序、V1 边界�
 
 # Repository 后续能力路线
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：V1 路线已完成。** 本文记录实现顺序、已交付边界和暂不纳入 V1 的能力。
 
 ## 实现顺序

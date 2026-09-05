@@ -9,13 +9,14 @@ description: DatabaseConnection 的 dialect、builder、query、collections、tr
 
 ## 常用能力
 
-| API               | 形状       | 名称语义                | 作用                       |
-| ----------------- | ---------- | ----------------------- | -------------------------- |
-| `dialect`         | 属性       | —                       | 判断数据库方言             |
-| `builder`         | 属性       | Collection/Field 逻辑名 | Schema 与 Metadata Builder |
-| `query`           | 属性       | Connection 查询标识符   | 数据库层查询和 DML         |
-| `collections`     | 属性       | Collection 逻辑名       | 解析和缓存完整 Collection  |
-| `transaction(fn)` | Async 方法 | —                       | 当前连接事务               |
+| API                | 形状       | 名称语义                | 作用                       |
+| ------------------ | ---------- | ----------------------- | -------------------------- |
+| `dialect`          | 属性       | —                       | 判断数据库方言             |
+| `builder`          | 属性       | Collection/Field 逻辑名 | Schema 与 Metadata Builder |
+| `query`            | 属性       | Connection 查询标识符   | 数据库层查询和 DML         |
+| `repository(name)` | 方法       | Collection/Field 逻辑名 | 记录、关系查询和写入       |
+| `collections`      | 属性       | Collection 逻辑名       | 解析和缓存完整 Collection  |
+| `transaction(fn)`  | Async 方法 | —                       | 当前连接事务               |
 
 ## 专项能力
 
@@ -55,6 +56,7 @@ await db.connection('analytics').transaction(async (connection) => {
 
 - [Builder](../builder/overview.md)
 - [Query](../query/overview.md)
+- [Repository](../repository/overview.md)
 - [Collections](../collections/overview.md)
 - [事务](./transactions.md)
 - [Schema Inspector](../schema-inspector/overview.md)

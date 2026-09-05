@@ -91,11 +91,11 @@ await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 
 如果 Connection 的 `tablePrefix` 是 `app_`，上面的表和列会分别归一化为 `app_orders` 和 `order_no`。示例中的 Collection 局部前缀恰好与 Connection 一致；如果它们不同，Query 仍只使用 Connection 配置，无法从 Collection Metadata 得知局部覆盖。
 
-当前包不提供 `db.repository()`。需要了解候选的应用层查询设计时，可以阅读 [Repository 提案](../proposals/repository/overview.md)；提案中的接口不能用于当前运行时代码。
+需要识别 Collection 级命名、关系和 Filter 时，使用 `db.repository('orders')`；需要数据库层 join 和子查询组合时继续使用 Query。当前用法见 [Repository 概览](../repository/overview.md)。
 
 ## 当前边界
 
-- 不提供 `db.repository()` 或 Collection-aware Filter。
+- Query 本身不提供 Collection-aware Filter；该能力由 Repository 提供。
 - QueryAdapter 是数据库层查询接口，不是 Collection-aware 查询接口。
 - QueryAdapter 不提供 raw SQL API。确实需要数据库专用能力时，可以通过 `await connection.client()` 获取底层 client；该逃生口不保证跨数据库可移植，也不会应用高层 Schema guard。
 - 复杂业务查询应在业务模块中封装，并明确其方言和命名假设。

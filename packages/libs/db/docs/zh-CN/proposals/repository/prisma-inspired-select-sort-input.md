@@ -5,6 +5,8 @@ description: 参考 Prisma Next 的 Collection Builder，统一 Repository Selec
 
 # Repository Select 与 Sort 输入改进提案
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：已实现。** 本次直接调整 beta 阶段的 Select/Sort V1 AST，
 > 不保留旧 AST 兼容层，也不改变现有查询、关系加载、稳定排序和跨数据库语义。
 

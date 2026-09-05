@@ -5,6 +5,8 @@ description: 前端大表单将 initialValues、values 和 changeSet 编译为�
 
 # 表单到 Repository Mutation
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：编译器尚未实现，Repository 接收契约已实现。** Form Mutation Compiler 应输出
 > 可序列化的模型形状 `values`，不再要求前端构造内部 Relation Mutation AST。
 

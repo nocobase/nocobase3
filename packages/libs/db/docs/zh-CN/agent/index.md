@@ -15,6 +15,7 @@ description: 根据 Schema、数据访问、Seed、Metadata 和外部数据库�
 | ------------------------------- | ----------------------------------------------------------------- |
 | 创建或修改业务 Schema           | [实现 Schema 变更](./implement-schema-change.md)                  |
 | 编写运行时查询和事务            | [实现数据访问](./implement-data-access.md)                        |
+| Collection 记录和关系读写       | [Repository 数据访问](./implement-repository-data-access.md)      |
 | 添加安装默认数据                | [实现 Seed 数据](./implement-seed-data.md)                        |
 | 读取 Collection 或维护 Metadata | [Collection 与 Metadata](./work-with-collections-and-metadata.md) |
 | 接入外部数据库                  | [接入外部数据库](./connect-external-database.md)                  |

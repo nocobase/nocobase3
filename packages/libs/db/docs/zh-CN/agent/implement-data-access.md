@@ -5,6 +5,8 @@ description: Agent 编写 select、insert、update、delete 和事务代码时�
 
 # 使用 Query 和 Transaction 实现数据访问
 
+本页面向数据库层查询组合。Collection-aware CRUD、关系和嵌套写入请先读 [Repository 数据访问指南](./implement-repository-data-access.md)，无需用 Query 手动重建已有的关系能力。
+
 `QueryAdapter` 是数据库层 Query Builder，不是 ORM 或 Collection-aware Repository。它使用 Connection 级命名规则，但不读取 Collection Metadata 或 Collection 级 naming override。
 
 ## 获取 Query
@@ -88,7 +90,7 @@ await analytics.transaction(async (connection) => {
 - 需要自动读取 Collection relation、title 或 Collection 级 naming override：Query 不具备这些能力。
 - 需要创建或修改 Schema：使用 Migration 中的 Builder。
 - 需要检查数据库物理对象：使用 Schema Inspector。
-- 需要 Repository：当前尚未实现，不要生成规划接口。
+- 需要 Collection-aware CRUD：使用 [Repository](../repository/overview.md)。
 
 ## 完成条件
 

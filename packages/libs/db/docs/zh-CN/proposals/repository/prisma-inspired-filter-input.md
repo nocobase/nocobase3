@@ -5,6 +5,8 @@ description: 参考 Prisma Next 的 where shorthand 与 Builder 分层，设计 
 
 # Repository Filter 输入改进提案
 
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
 > **状态：第一阶段已实现。** 本文只调整 Filter 输入形态，不改变现有 Filter Builder、
 > Filter AST、严格单条 mutation 或批量写入安全语义。
 

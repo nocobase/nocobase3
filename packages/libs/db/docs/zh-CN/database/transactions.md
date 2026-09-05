@@ -80,4 +80,4 @@ await analytics.transaction(async (connection) => {
 - 需要 Builder、Query 混合操作时，也应全部走同一个事务 connection。
 - 如果事务抛错，底层 driver 应回滚事务。
 - 测试事务行为时使用真实数据库集成测试。
-- Repository 当前尚未实现，不要生成 `connection.repository()`。
+- 事务内使用回调 Connection 的 `connection.repository('projects')`；不要复用事务外的 Repository。嵌套写入与 ifVersion 见 [Repository 事务](../repository/transactions.md)。

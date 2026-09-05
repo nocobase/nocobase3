@@ -190,4 +190,4 @@ const orders = await db
 
 本页描述的是 `db.query()` 的数据库层 `where`。它面向 table / column query identifier，不读取 Collection metadata。
 
-当前包不提供 `db.repository()`，QueryAdapter 也不会根据 Collection Metadata 校验字段类型或操作符分组。需要了解候选设计时可阅读 [Filter Builder 提案](../proposals/repository/filter-builder.md)，但提案接口不能用于当前代码。
+QueryAdapter 不会根据 Collection Metadata 校验字段类型或操作符分组。需要该能力时使用 `db.repository(name)` 的 [Filter](../repository/filter.md)；两层条件语法不同，不要把 Query where 与 Repository filter 混用。

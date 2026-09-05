@@ -113,6 +113,8 @@ const orders = await db
 
 `db.query()` 是数据库层 Query Adapter，不读取 Collection Metadata，也不是 Repository。
 
+需要按 Collection 逻辑字段查询、加载关系或嵌套写入时，使用 `db.repository('orders')`。完整的创建、读取与更新示例见 [Repository 概览](./repository/overview.md)；其中使用已存在的 Collection，不在业务请求里重复创建 Schema。
+
 ## 5. 执行事务
 
 ```ts

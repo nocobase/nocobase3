@@ -140,7 +140,7 @@ Query 不读取 Collection Metadata，因此不会自动应用 Collection 对 `u
 2. 检查返回值是否存在，并读取其中的 `schema` 和 `tableName`；
 3. 只有必须使用完整物理名称时，进入 `connection.client()` 这一底层、Adapter-specific 的边界。
 
-不要把 `getPhysical()` 返回的 `tableName` 再传给普通 Query。当前没有已实现的 Collection-aware Repository API。
+不要把 `getPhysical()` 返回的 `tableName` 再传给普通 Query。需要 Collection-aware 命名映射时使用 [Repository](../repository/overview.md)，传入 Collection 和字段逻辑名。
 
 ## 使用注意事项
 
