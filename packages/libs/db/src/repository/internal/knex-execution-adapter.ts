@@ -7,6 +7,10 @@ import type {
 } from '../../collection/types.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
 import { RepositoryError } from '../errors.js';
+import {
+  createdRecordSelector as deriveCreatedSelector,
+  recordSelector as selectorFromRecord,
+} from './identity.js';
 import { isNumericMutation } from '../numeric-mutation.js';
 import { compileJsonCondition, jsonOperators } from '../json-filter.js';
 import type {
@@ -3047,67 +3051,6 @@ function isUniqueConstraintViolation(error: unknown): boolean {
     current = record.cause ?? record.originalError;
   }
   return false;
-}
-
-function deriveCreatedSelector(
-  collection: CollectionDefinition,
-  values: RepositoryRecord,
-  returned: unknown,
-): UniqueSelector {
-  const constraints = (collection.constraints ?? []).filter(
-    (constraint) =>
-      constraint.type === 'primary' || constraint.type === 'unique',
-  );
-  for (const constraint of constraints) {
-    const selectorValues: RepositoryRecord = {};
-    let complete = true;
-    for (const field of constraint.fields) {
-      let value = values[field];
-      if (value === undefined && constraint.type === 'primary') {
-        value = Array.isArray(returned) ? returned[0] : undefined;
-      }
-      if (value === undefined || isRecord(value)) {
-        complete = false;
-        break;
-      }
-      selectorValues[field] = value;
-    }
-    if (complete) {
-      return {
-        kind: 'unique',
-        fields: constraint.fields,
-        values: selectorValues,
-      };
-    }
-  }
-  throw new Error(
-    'Created Repository record has no reloadable unique selector.',
-  );
-}
-
-function selectorFromRecord(
-  collection: CollectionDefinition,
-  record: RepositoryRecord,
-): UniqueSelector {
-  const constraint = (collection.constraints ?? []).find(
-    (candidate) =>
-      (candidate.type === 'primary' || candidate.type === 'unique') &&
-      candidate.fields.every((field) => record[field] !== undefined),
-  );
-  if (
-    !constraint ||
-    constraint.type === 'foreignKey' ||
-    constraint.type === 'check'
-  ) {
-    throw new Error('Repository record has no usable unique selector.');
-  }
-  return {
-    kind: 'unique',
-    fields: constraint.fields,
-    values: Object.fromEntries(
-      constraint.fields.map((field) => [field, record[field]]),
-    ),
-  };
 }
 
 function selectorFromFields(

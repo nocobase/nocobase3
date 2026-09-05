@@ -7,6 +7,7 @@ import type {
 } from '../collection/types.js';
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
+import { identityConstraints } from './internal/identity.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
 import { jsonOperators, validateJsonCondition } from './json-filter.js';
 import {
@@ -4227,7 +4228,10 @@ function validateUnique(
     new Set(selector.fields).size !== selector.fields.length ||
     selector.fields.length !== keys.length ||
     selector.fields.some((field) => !Object.hasOwn(selector.values, field)) ||
-    selector.fields.some((field) => selector.values[field] === undefined)
+    selector.fields.some(
+      (field) =>
+        selector.values[field] === undefined || selector.values[field] === null,
+    )
   ) {
     invalid(
       'INVALID_UNIQUE_SELECTOR',
@@ -4353,14 +4357,7 @@ function isRelationField(
 function uniqueConstraints(
   collection: CollectionDefinition,
 ): Array<Extract<ConstraintDefinition, { type: 'primary' | 'unique' }>> {
-  return (collection.constraints ?? []).filter(
-    (
-      constraint,
-    ): constraint is Extract<
-      ConstraintDefinition,
-      { type: 'primary' | 'unique' }
-    > => constraint.type === 'primary' || constraint.type === 'unique',
-  );
+  return identityConstraints(collection);
 }
 
 function includeExecutionFields(
@@ -4368,7 +4365,9 @@ function includeExecutionFields(
   fields: readonly string[],
 ): string[] {
   const result = [...fields];
-  const identity = uniqueConstraints(collection)[0]?.fields ?? [];
+  const identity = uniqueConstraints(collection).flatMap(
+    (constraint) => constraint.fields,
+  );
   for (const field of identity) {
     if (!result.includes(field)) result.push(field);
   }
