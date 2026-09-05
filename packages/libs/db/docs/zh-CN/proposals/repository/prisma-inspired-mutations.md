@@ -5,12 +5,12 @@ description: 参考 Prisma 的模型形状输入和 Relation Builder，统一 Re
 
 # Repository 写入 API 改进提案
 
-> **状态：分阶段实现中。** 已支持在 `createOne()` / `updateOne()` 的 `values`
-> 中使用字段级 Builder 或纯 JSON 表达 `create`、`connect`、`disconnect` 和 `set`，并暂时
-> 保留顶层 `relations`；`updateOne()` / `deleteOne()` 已支持严格基数的根 `filter`，并暂时
-> 保留 `unique`；关系目标 `update/upsert/delete` 也已实现。`deleteOne()` 返回删除前快照、
-> `createMany()` 参数改名等内容仍是候选设计；当前完整契约仍以 [Repository 概览](./overview.md)与
-> [Mutation AST](./mutation-ast.md)为准。
+> **状态：核心写入契约已实现。** `createOne()` / `updateOne()` 的 `values` 支持字段级
+> Builder 和纯 JSON，覆盖 `create`、`connect`、`disconnect`、`set`、`update`、`upsert`
+> 和 `delete`；`updateOne()` / `deleteOne()` 使用严格基数的根 `filter`。顶层
+> `relations`、单条 `unique` 和 `createMany.records` 已完成迁移。`deleteOne()` 返回删除前
+> 快照仍是候选设计；当前完整契约以 [Repository 概览](./overview.md) 与
+> [Mutation AST](./mutation-ast.md) 为准。
 
 ## 背景
 
@@ -670,7 +670,7 @@ interface DeleteOneResult<TResult> {
 
 ## 校验与错误
 
-除现有 Repository 错误外，下一版至少需要明确：
+当前实现包含以下稳定错误：
 
 | code                                   | 含义                                    |
 | -------------------------------------- | --------------------------------------- |
@@ -712,7 +712,7 @@ Graph，而不是复制其方法名或“第一条匹配记录”语义。
 
 ## 与当前 V1 的迁移
 
-当前 V1：
+迁移前接口：
 
 ```ts
 await projects.updateOne({
@@ -725,7 +725,7 @@ await projects.updateOne({
 });
 ```
 
-候选 V2：
+当前接口：
 
 ```ts
 await projects.updateOne({
@@ -743,17 +743,14 @@ await projects.updateOne({
 1. 已完成：字段形状 `values`、Builder/JSON 双输入及 `create/connect/disconnect/set`；
 2. 已完成：严格基数的根 `filter`；
 3. 已完成：relation target `update/upsert/delete`；
-4. 待完成：更新 Form Mutation Compiler，使表单直接生成字段形状的规范 JSON；
-5. 待完成：在明确的破坏性版本中移除顶层 `relations` 和 `unique` 兼容入口。
+4. 已完成：收口 Form Mutation Compiler 的文档契约，使表单生成字段形状的规范 JSON；仓库
+   当前没有独立 compiler 实现，后续引入时遵循该契约；
+5. 已完成：移除顶层 `relations`、单条 `unique` 和 `createMany.records`。
 
-## 待确认问题
+## 后续问题
 
 - `deleteOne()` 是否默认返回完整删除前记录，还是必须显式提供 `select`；
-- `createMany()` 是否把 `records` 改名为 `values`，以及是否值得承担这个破坏性变化；
-- relation `update/delete` 的普通 filter 是否允许恰好匹配一条，还是只接受可证明唯一的 filter；
-- `clientKey` 在字段级 `.create()` 中采用第二参数、包装对象还是独立 Builder 方法；
 - `belongsToMany` through payload 是否继续强制通过 through Collection Repository 修改；
-- relation target delete 是否属于 Repository 基础能力，还是只能由更高层 policy-aware service 开放；
 - Mutation AST V2 是否保留 `operations` 数组，或按操作名分组以方便表单生成与 JSON Schema。
 
-在这些问题冻结前，本文示例只用于讨论下一版接口，不能用于生产代码。
+本文的核心写入示例对应当前实现；候选结果形态和上述后续问题不属于当前稳定契约。

@@ -6,7 +6,6 @@ import type {
   RepositoryRecord,
   SelectAst,
   SortAst,
-  UniqueSelector,
 } from '../types.js';
 
 export interface RepositoryReadPlan {
@@ -40,8 +39,7 @@ export interface RepositoryCreateManyPlan {
 export interface RepositoryUpdateOnePlan {
   readonly collection: CollectionDefinition;
   readonly fields: readonly string[];
-  readonly unique?: UniqueSelector;
-  readonly filter?: FilterAst;
+  readonly filter: FilterAst;
   readonly values: RepositoryRecord;
   readonly ifVersion?: string | number;
   readonly relations?: RelationMutationAst;
@@ -57,8 +55,7 @@ export interface RepositoryUpdateManyPlan {
 
 export interface RepositoryDeleteOnePlan {
   readonly collection: CollectionDefinition;
-  readonly unique?: UniqueSelector;
-  readonly filter?: FilterAst;
+  readonly filter: FilterAst;
   readonly ifVersion?: string | number;
 }
 

@@ -7,12 +7,12 @@ description: Collection-aware Repository 的分批实现设计与当前运行时
 
 > **状态：V1 运行时已实现。** 公共类型、`RepositoryError`、`db.repository()` 和 `connection.repository()` 已导出；标量 CRUD、关系 selection/filter/sort、Relation Mutation、optimistic lock 和结果 envelope 均可执行，并已通过 SQLite、PostgreSQL、MySQL、Oracle 与 MSSQL 集成测试。本页同时记录 V1 契约与后续边界。
 
-`Repository` 是未来的应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：
+`Repository` 是应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：
 
 | API               | 层级         | 输入名                          | 是否读取 Collection metadata | 当前状态 |
 | ----------------- | ------------ | ------------------------------- | ---------------------------- | -------- |
 | `db.query()`      | 数据库查询层 | table / column query identifier | 否                           | 已实现   |
-| `db.repository()` | 应用数据层   | Collection / Field 逻辑名       | 是                           | 规划中   |
+| `db.repository()` | 应用数据层   | Collection / Field 逻辑名       | 是                           | 已实现   |
 
 Repository 会面向 Collection 工作，理解字段类型、关系、约束、应用层元信息和未来的数据转换规则。它适合承载常规 CRUD、关系筛选、HTTP / CLI 数据访问，以及 Agent 需要理解业务数据模型的场景。
 
@@ -105,10 +105,11 @@ V1 使用固定 Field type capability matrix：
 | `time`                                               | time          | 是       | 是                                |
 | `json`                                               | 暂无 operator | 否       | 是                                |
 | `blob` / `native`                                    | 不支持        | 否       | 是                                |
-| `belongsTo` / `hasOne` / `hasMany` / `belongsToMany` | relation      | 专用节点 | 仅 Mutation AST                   |
+| `belongsTo` / `hasOne` / `hasMany` / `belongsToMany` | relation      | 专用节点 | `values` 中的字段级关系操作       |
 
 generated、virtual 和 auto-increment Field 不接受普通写入；optimistic lock Field 只由
-Repository 管理；relation Field 不能混入普通 `values`。View 和 materialized view 在
+Repository 管理；relation Field 在 `createOne()` / `updateOne()` 的模型形状 `values` 中使用
+字段级 Builder 或纯 JSON 操作对象。View 和 materialized view 在
 Repository V1 中只读。
 
 ### Collection optimistic lock 配置
@@ -148,10 +149,10 @@ Repository 的查询和写入都通过它绑定的 `DatabaseConnection` 执行�
 `connection.repository()` 必须复用该事务 connection，不能回到外层 `DatabaseManager` 或
 另一条 connection。
 
-## 规划接口
+## V1 接口
 
-Repository 可以先保持克制，但接口必须把结果选择、筛选、排序、分页、
-变量上下文和写入作用域表达完整。下面的类型是 V1 的目标契约，不是当前实现：
+Repository 保持克制，但接口把结果选择、筛选、排序、分页、变量上下文和写入作用域表达
+完整。下面的类型摘录当前 V1 契约：
 
 ```ts
 type RepositoryRecord = Record<string, unknown>;
@@ -197,65 +198,47 @@ interface FilterOnlyOptions<TRecord extends object> {
 }
 
 interface CreateOneOptions<TCreate extends object> {
-  values: TCreate;
-  relations?: RelationMutationInput;
+  values: CreateMutationValues<TCreate>;
   select?: SelectAst;
 }
 
 interface CreateManyOptions<TCreate extends object> {
-  records: readonly [TCreate, ...TCreate[]];
+  values: readonly [TCreate, ...TCreate[]];
 }
 
-type SingleMutationSelector<TRecord extends object> =
-  | { filter: RepositoryFilter<TRecord>; unique?: never }
-  | { unique: UniqueSelector; filter?: never }; // deprecated compatibility
+interface SingleMutationSelector<TRecord extends object> {
+  filter: RepositoryFilter<TRecord>;
+}
 
 type UpdateOneOptions<
-  TRecord extends object,
   TUpdate extends object,
+  TRecord extends object,
 > = SingleMutationSelector<TRecord> & {
   select?: SelectAst;
   ifVersion?: string | number;
   context?: RepositoryContext;
-} & (
-    | {
-        values: TUpdate;
-        relations?: RelationMutationInput;
-      }
-    | {
-        values?: TUpdate;
-        relations: RelationMutationInput;
-      }
-  );
-
-type RelationMutationInput =
-  | RelationMutationAst
-  | ((relations: RelationMutationBuilder) => RelationMutationBuilder);
+  values: UpdateMutationValues<TUpdate>;
+};
 
 interface DescribeMutationOptions {
   operation: 'createOne' | 'updateOne';
 }
 
-type ValidateMutationOptions<TCreate extends object, TUpdate extends object> =
+type ValidateMutationOptions<
+  TCreate extends object,
+  TUpdate extends object,
+  TRecord extends object,
+> =
   | {
       operation: 'createOne';
-      values: TCreate;
-      relations?: RelationMutationAst;
+      values: CreateMutationValues<TCreate>;
     }
-  | ({
+  | {
       operation: 'updateOne';
-      unique: UniqueSelector;
+      filter: RepositoryFilter<TRecord>;
       ifVersion?: string | number;
-    } & (
-      | {
-          values: TUpdate;
-          relations?: RelationMutationAst;
-        }
-      | {
-          values?: TUpdate;
-          relations: RelationMutationAst;
-        }
-    ));
+      values: UpdateMutationValues<TUpdate>;
+    };
 
 type MutationScope<TRecord extends object> =
   | {
@@ -354,7 +337,7 @@ interface Repository<
     options: DescribeMutationOptions,
   ): Promise<RepositoryMutationDescription>;
   validateMutation(
-    options: ValidateMutationOptions<TCreate, TUpdate>,
+    options: ValidateMutationOptions<TCreate, TUpdate, TRecord>,
   ): Promise<MutationValidationResult>;
 
   createOne(
@@ -362,12 +345,12 @@ interface Repository<
   ): Promise<SingleMutationResult<RepositoryRecord>>;
   createMany(options: CreateManyOptions<TCreate>): Promise<CreateManyResult>;
   updateOne(
-    options: UpdateOneOptions<TUpdate>,
+    options: UpdateOneOptions<TUpdate, TRecord>,
   ): Promise<SingleMutationResult<RepositoryRecord>>;
   updateMany(
     options: UpdateManyOptions<TRecord, TUpdate>,
   ): Promise<UpdateManyResult>;
-  deleteOne(options: DeleteOneOptions): Promise<DeleteOneResult>;
+  deleteOne(options: DeleteOneOptions<TRecord>): Promise<DeleteOneResult>;
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
 }
 
@@ -452,28 +435,26 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
   `select` 回读的最终记录，`createdTargets` 是 nested create 的 `clientKey` 到真实唯一键
   引用列表，没有 nested create 时也是空数组；启用 optimistic lock 时返回最新 `version`。
   `select` 只控制 `record`，不裁剪 envelope 的其他字段。
-- `createMany()` 接受非空 `records`，V1 只创建根记录的直接标量字段，不接受 `relations`。
+- `createMany()` 接受非空 `values` 列表，只创建根记录的直接标量字段。
   批量记录必须先全部校验，再在同一事务中创建；任一记录失败则整批回滚。
 - `createOne()` 和 `updateOne()` 的 `values` 可以按字段使用 Relation Builder 或纯 JSON
-  关系操作；顶层 `relations` 暂作为兼容入口保留。
+  关系操作。
 - `updateOne()` 和 `deleteOne()` 的 `filter` 必须恰好匹配一条记录：0 条返回
-  `RECORD_NOT_FOUND`，多条返回 `MULTIPLE_RECORDS_MATCHED`。`unique` 暂作为迁移期兼容
-  入口保留。
-- `updateOne()` 必须至少提供 `values` 或 `relations`。`deleteOne()` 只删除根记录，不在同一
-  输入里混入 relation mutation；关系限制和级联行为由 Collection metadata 与数据库约束
-  决定。
+  `RECORD_NOT_FOUND`，多条返回 `MULTIPLE_RECORDS_MATCHED`。
+- `updateOne()` 必须提供非空 `values`。`deleteOne()` 只删除根记录，不在同一输入里混入
+  relation mutation；关系限制和级联行为由 Collection metadata 与数据库约束决定。
 - `createMany()`、`updateMany()` 和 `deleteMany()` 返回与操作对应的明确计数字段，不使用
   容易混淆的统一 `affectedCount`。V1 的批量方法都不接受关系操作。
-- `updateOne()` 和 `updateMany()` 的 `values` 不能是空对象；只有 `updateOne()` 可以省略
-  `values`，且此时必须存在非空 `relations`。
+- `updateOne()` 和 `updateMany()` 的 `values` 不能是空对象。
 - `updateMany()` 和 `deleteMany()` 必须明确提供 `filter`。确实需要作用于整个 Collection
   时，调用方必须显式写 `all: true`；`filter` 和 `all` 互斥。空 group、缺失 filter 或把
   变量解析成空条件都不能被当作全量操作。
 - 数据库生成字段、只读字段和未知字段出现在根 `values` 时，应在执行查询前报错。relation
-  Field 则根据 Collection metadata 归一化为独立 Mutation AST 节点；目标实体或中间
-  记录更新不属于 V1。
+  Field 根据 Collection metadata 归一化为内部 Mutation AST 节点；关系作用域内的目标
+  `update/upsert/delete` 已支持，`belongsToMany` through payload 仍不属于 V1。
 - 包含关系的 mutation 必须先整体校验，再在一个事务中执行根记录、目标记录和中间关系
-  写入。省略 relation 节点表示不修改，清空必须使用显式 `clear` 或空 `replace`。
+  写入。省略 relation Field 表示不修改；to-one 清空使用 `disconnect`，to-many 完整替换
+  使用 `set`，包括以空数组清空关系。
 - Collection 启用 optimistic lock 后，`ifVersion` 比较和 mutation 必须原子执行；版本不匹配
   返回稳定的 `VERSION_CONFLICT`，记录不存在返回 `RECORD_NOT_FOUND`。成功的
   `updateOne()`（包括仅修改关系）和 `updateMany()` 都递增根版本。`deleteOne()` 可先比较
@@ -481,17 +462,16 @@ Select AST 的结果形状、relation filter/sort、批量加载和兼容转换�
 - 调用方传入 `ifVersion` 而 Collection 未配置 optimistic lock 时应返回校验错误；未传时仍
   允许写入，由可信调用边界决定是否强制客户端提供。Repository 不猜测版本 Field。
 
-Mutation AST 的节点、唯一选择器、Fluent Builder、有界嵌套、Agent 工作流和执行边界见
+内部 Mutation AST、字段级 Builder、有界嵌套、Agent 工作流和执行边界见
 [Mutation AST](./mutation-ast.md)。大表单的前端编译流程见
-[表单到 Mutation AST](./form-mutation.md)。
+[表单到 Repository Mutation](./form-mutation.md)。
 
-下一版将标量值和字段级 Relation Builder 合并到同一个 `values` 对象、统一使用严格基数
-`filter` 的候选方案，见 [Repository 写入 API 改进提案](./prisma-inspired-mutations.md)。该方案
-尚未实现，不替代本页记录的 V1 契约。
+模型形状 `values`、字段级 Relation Builder 与严格单条 `filter` 的设计取舍见
+[Repository 写入 API 改进提案](./prisma-inspired-mutations.md)。
 
-`describeMutation()` 和 `validateMutation()` 是关系 Mutation AST 的发现与预校验入口，
-因此 V1 的 `operation` 只包含支持 `relations` 的 `createOne` 和 `updateOne`，不泛化成六种
-CRUD 方法的第二套执行 API。
+`describeMutation()` 和 `validateMutation()` 是模型形状 mutation 的发现与预校验入口，
+因此 V1 的 `operation` 只包含支持字段级关系操作的 `createOne` 和 `updateOne`，不泛化成
+六种 CRUD 方法的第二套执行 API。
 
 `context` 是只读变量解析上下文。Repository V1 不把 `context.user` 等值解释为授权信息，
 也不在内部注入 policy；HTTP、CLI、service 等调用边界必须在调用 Repository 前完成授权。
@@ -653,39 +633,32 @@ Filter Builder 的详细设计见 [Filter Builder](./filter-builder.md)，结构
 
 ## 关系写入
 
-手写 TypeScript 可以使用 Fluent Builder：
+手写 TypeScript 可以在 `values` 的 relation Field 上使用 Fluent Builder：
 
 ```ts
 await db.repository('projects').updateOne({
-  unique: {
-    kind: 'unique',
-    fields: ['id'],
-    values: { id: 'project-1' },
-  },
+  filter: (filter) => filter.string('id').eq('project-1'),
   values: {
     name: 'NocoBase v3',
+    owner: (owner) => owner.connect({ id: 'user-owner' }),
+    members: (members) =>
+      members
+        .connect({ id: 'user-new' })
+        .disconnect({ id: 'user-old' })
+        .create({ name: 'Invited user' }),
+    tags: (tags) => tags.set([{ id: 'tag-1' }, { id: 'tag-2' }]),
   },
-  relations: (relations) =>
-    relations
-      .set('owner', (owner) => owner.connect({ id: 'user-owner' }))
-      .patch('members', (members) =>
-        members
-          .connect({ id: 'user-new' })
-          .disconnect({ id: 'user-old' })
-          .create({ name: 'Invited user' }),
-      )
-      .replace('tags', (tags) =>
-        tags.connect({ id: 'tag-1' }).connect({ id: 'tag-2' }),
-      ),
 });
 ```
 
-Builder 只负责生成规范 Mutation AST。HTTP、CLI、Agent tool、持久化配置和动态表单直接
-提交 AST，不生成 Fluent 代码。大表单通常在前端用 `initialValues`、当前 `values`、
-`dirty/changeSet` 和字段提交策略编译 AST；后端不把前端初始快照当作数据库当前状态。
+Builder 只负责生成字段操作描述，Repository 将它与等价的纯 JSON `values` 归一化为内部
+Mutation AST。HTTP、CLI、Agent tool、持久化配置和动态表单直接提交纯 JSON `values`，
+不生成 Fluent 代码，也不直接提交内部 AST。大表单通常在前端用 `initialValues`、当前
+`values`、`dirty/changeSet` 和字段提交策略编译写入参数；后端不把前端初始快照当作数据库
+当前状态。
 
 完整协议见 [Mutation AST](./mutation-ast.md)，表单流程见
-[表单到 Mutation AST](./form-mutation.md)。
+[表单到 Repository Mutation](./form-mutation.md)。
 
 ## 事务中的 Repository
 
@@ -744,7 +717,7 @@ const events = await db.repository('events', 'analytics').findMany({
 
 ## V1 边界
 
-Repository V1 建议先只覆盖常规 CRUD 和 Collection-aware AST：
+Repository V1 当前覆盖常规 CRUD 和 Collection-aware AST：
 
 - 支持 `findMany()`、`findOne()`、`count()`、`exists()`、`createOne()`、`createMany()`、
   `updateOne()`、`updateMany()`、`deleteOne()`、`deleteMany()`。
@@ -757,12 +730,13 @@ Repository V1 建议先只覆盖常规 CRUD 和 Collection-aware AST：
   sort。
 - Sort AST 支持直接字段、纯 to-one relation field 和单个终点 to-many relation
   aggregate。
-- Mutation AST 支持单记录 `createOne()` 和 `updateOne()` 的显式关系写入，并提供生成同一
-  AST 的 Fluent Builder。
-- Mutation AST V1 支持 `set`、`clear`、`patch`、`replace`，以及仅包含 connect/create 的
-  有界 nested create；目标和 `belongsToMany` edge 的更新先使用对应 Collection
-  Repository。V1 不支持 target delete、隐式 reassign、connect-or-create 或任意 mutation
-  graph。
+- `createOne()` 和 `updateOne()` 使用模型形状 `values`：标量字段直接写值，relation Field
+  可以使用 Builder 或等价纯 JSON。
+- relation Field 支持 `create`、`connect`、`disconnect`、`set`、`update`、`upsert` 和
+  `delete`；nested create/connect 受深度和节点预算限制，目标 update/delete 自动限制在
+  当前 relation scope。
+- 内部 Mutation AST 只作为 Repository 的规范化和执行协议，不是 HTTP、CLI、Agent tool
+  或表单的主要公开输入。
 - Agent 应先使用 `describeMutation()` 发现关系基数、允许 action、唯一约束和预算，再通过
   `validateMutation()` 预校验规范 AST；执行事务仍需重新检查数据库当前状态。
 - `createMany()`、`updateMany()` 和 `deleteMany()` 是无关系写入的批量操作；后两者要求
@@ -774,6 +748,8 @@ Repository V1 建议先只覆盖常规 CRUD 和 Collection-aware AST：
 - 暂不实现 Model。
 - 暂不实现 Transformer。
 - 暂不实现 relation-local 分页、aggregate-local filter 和带关系的批量创建。
+- 暂不支持批量 relation mutation、`belongsToMany` through payload、隐式 reassign、
+  `connectOrCreate` 或调用方定义的任意 mutation graph。
 - 暂不把 QueryAdapter 的所有高级 SQL 能力搬进 Repository。
 - 暂不提供 raw filter。
 
@@ -781,16 +757,17 @@ Repository V1 建议先只覆盖常规 CRUD 和 Collection-aware AST：
 
 ## Agent 注意事项
 
-- 本页接口均为规划接口，当前代码中还没有实现。
-- Agent 写未来 Repository 代码时，应使用 Collection / Field 逻辑名。
+- 本页 V1 接口已经实现；标为“暂不支持”的能力仍不能生成或执行。
+- Agent 写 Repository 代码时，应使用 Collection / Field 逻辑名。
 - 返回字段和 relation 使用 Select AST；不要在主代码 API 中使用 `fields` / `appends`
   顶层兼容参数。
 - 排序使用 Sort AST；不要使用字符串、tuple 或 object map 简写。
 - 筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder。
-- 根标量写入放 `values`，关系写入使用 Mutation AST；不要根据嵌套对象、`null` 或空数组
-  猜测 relation 操作。
+- 根标量与关系写入都放在模型形状 `values` 中；relation Field 使用明确的操作对象，不要
+  根据嵌套对象、`null` 或空数组猜测 relation 操作。
 - HTTP / CLI / Agent tool / 持久化配置使用 Select AST、Filter AST、Sort AST 和
-  Mutation AST；Fluent Builder 只作为手写 TypeScript 的便利入口。
+  纯 JSON `values`；字段级 Fluent Builder 只作为手写 TypeScript 的便利入口，内部 Mutation
+  AST 不作为主要公开输入。
 - 关系 mutation 只用于 `createOne()` 和 `updateOne()`，不要放入 `createMany()` 或
   `updateMany()`。
 - 不要让 Agent 猜 relation 能力；先调用 `describeMutation()`，执行前使用

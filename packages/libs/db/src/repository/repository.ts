@@ -10,7 +10,6 @@ import { RepositoryError } from './errors.js';
 import { DefaultFilterBuilder, getFilterFieldGroup } from './filter-builder.js';
 import {
   DefaultRelationFieldMutationBuilder,
-  DefaultRelationMutationBuilder,
   type RelationFieldMutationBuilderState,
 } from './relation-mutation-builder.js';
 import type { RepositoryExecutionAdapter } from './internal/execution-adapter.js';
@@ -43,7 +42,6 @@ import type {
   RepositoryMutationDescription,
   RepositoryRecord,
   RelationMutationAst,
-  RelationMutationInput,
   RelationMutationNode,
   RelationDeleteInput,
   RelationDeleteTarget,
@@ -237,18 +235,15 @@ export class DefaultRepository<
       await normalizeModelMutation(
         this.options.collections,
         collection,
-        options.values ?? {},
-        options.relations,
+        options.values,
         options.operation,
       );
       if (options.operation === 'updateOne') {
-        if (options.unique) validateUnique(collection, options.unique);
-        else
-          await this.normalizeSingleMutationFilter(
-            collection,
-            options.filter,
-            options.context,
-          );
+        await this.normalizeSingleMutationFilter(
+          collection,
+          options.filter,
+          options.context,
+        );
         validateIfVersion(collection, options.ifVersion);
       }
       return { valid: true, errors: [] };
@@ -267,7 +262,6 @@ export class DefaultRepository<
       this.options.collections,
       collection,
       options.values,
-      options.relations,
       'createOne',
     );
     const selection = await this.validateSelect(collection, options.select);
@@ -296,13 +290,13 @@ export class DefaultRepository<
   ): Promise<CreateManyResult> {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    if (options.records.length === 0) {
-      invalid('INVALID_MUTATION', 'createMany() records must not be empty.', {
+    if (options.values.length === 0) {
+      invalid('INVALID_MUTATION', 'createMany() values must not be empty.', {
         collection: collection.name,
-        path: ['records'],
+        path: ['values'],
       });
     }
-    const records = options.records.map((record) =>
+    const records = options.values.map((record) =>
       validateValues(collection, record, 'createMany'),
     );
     return {
@@ -321,27 +315,20 @@ export class DefaultRepository<
     const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
-      options.values ?? {},
-      options.relations,
+      options.values,
       'updateOne',
     );
-    const unique = options.unique
-      ? validateUnique(collection, options.unique)
-      : undefined;
-    const filter = unique
-      ? undefined
-      : await this.normalizeSingleMutationFilter(
-          collection,
-          options.filter,
-          options.context,
-        );
+    const filter = await this.normalizeSingleMutationFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
     validateIfVersion(collection, options.ifVersion);
     const selection = await this.validateSelect(collection, options.select);
     const requestedFields = selection.fields;
     const result = await this.options.adapter.updateOne({
       collection,
       fields: includeExecutionFields(collection, requestedFields),
-      unique,
       filter,
       values: mutation.values,
       ifVersion: options.ifVersion,
@@ -389,20 +376,14 @@ export class DefaultRepository<
   ): Promise<DeleteOneResult> {
     const collection = await this.collection();
     assertWritableCollection(collection);
-    const unique = options.unique
-      ? validateUnique(collection, options.unique)
-      : undefined;
-    const filter = unique
-      ? undefined
-      : await this.normalizeSingleMutationFilter(
-          collection,
-          options.filter,
-          options.context,
-        );
+    const filter = await this.normalizeSingleMutationFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
     validateIfVersion(collection, options.ifVersion);
     const result = await this.options.adapter.deleteOne({
       collection,
-      unique,
       filter,
       ifVersion: options.ifVersion,
     });
@@ -1406,7 +1387,6 @@ async function normalizeModelMutation(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
   input: object | undefined,
-  legacyRelations: RelationMutationInput | RelationMutationAst | undefined,
   operation: 'createOne' | 'updateOne',
   depth = 1,
   state: MutationValidationState = { nodes: 0, clientKeys: new Set() },
@@ -1436,24 +1416,21 @@ async function normalizeModelMutation(
       ),
     );
   }
-  const legacyAst = relationMutationInputToAst(collection, legacyRelations);
-  if (legacyAst) validateRelationMutationAstHeader(collection, legacyAst);
-  const combinedItems = [...relationItems, ...(legacyAst?.items ?? [])];
   const values = validateValues(
     collection,
     scalarValues,
     operation,
-    combinedItems.length > 0,
+    relationItems.length > 0,
   );
-  if (combinedItems.length === 0 && !legacyAst) return { values };
+  if (relationItems.length === 0) return { values };
   const relations = await normalizeRelationMutation(
     collections,
     collection,
     {
       kind: 'relationMutation',
       version: 1,
-      collection: legacyAst?.collection ?? collection.name,
-      items: combinedItems,
+      collection: collection.name,
+      items: relationItems,
     },
     operation,
     depth,
@@ -1477,16 +1454,6 @@ function validateRelationMutationAstHeader(
       path: ['relations'],
     });
   }
-}
-
-function relationMutationInputToAst(
-  collection: CollectionDefinition,
-  input: RelationMutationInput | RelationMutationAst | undefined,
-): RelationMutationAst | undefined {
-  if (!input) return undefined;
-  return typeof input === 'function'
-    ? input(new DefaultRelationMutationBuilder(collection.name)).toAst()
-    : input;
 }
 
 async function relationFieldInputToNode(
@@ -2376,7 +2343,6 @@ async function normalizeCreateTarget(
     collections,
     collection,
     target.values,
-    target.relations,
     'createOne',
     depth + 1,
     state,
@@ -2414,7 +2380,6 @@ async function normalizeRelationUpdateTarget(
     collections,
     collection,
     target.values,
-    target.relations,
     'updateOne',
     depth + 1,
     state,
@@ -2776,7 +2741,7 @@ function validateValues(
     if (!isScalarField(field)) {
       invalid(
         'FIELD_NOT_WRITABLE',
-        `Relation Field "${key}" belongs in relations.`,
+        `Relation Field "${key}" is not writable in bulk mutation values.`,
         {
           collection: collection.name,
           field: key,

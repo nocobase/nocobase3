@@ -336,32 +336,8 @@ export interface RelationDeleteTarget {
   readonly filter?: FilterAst;
 }
 
-export interface RelationMutationBuilder {
-  set(
-    field: string,
-    target: (
-      builder: RelationTargetMutationBuilder,
-    ) => RelationTargetMutationBuilder,
-  ): this;
-  clear(field: string): this;
-  patch(
-    field: string,
-    targets: (
-      builder: RelationPatchMutationBuilder,
-    ) => RelationPatchMutationBuilder,
-  ): this;
-  replace(
-    field: string,
-    targets: (
-      builder: RelationReplaceMutationBuilder,
-    ) => RelationReplaceMutationBuilder,
-  ): this;
-  toAst(): RelationMutationAst;
-}
-
 export interface NestedCreateOptions {
   readonly clientKey?: string;
-  readonly relations?: RelationMutationInput;
 }
 
 export type RelationTargetSelector = Readonly<Record<string, unknown>>;
@@ -480,32 +456,6 @@ export type UpdateMutationValues<TUpdate extends object> = {
   readonly [TKey in keyof TUpdate]: UpdateMutationProperty<TUpdate[TKey]>;
 };
 
-export interface RelationTargetMutationBuilder {
-  connect(values: Readonly<Record<string, unknown>>): this;
-  connectBy(
-    fields: readonly string[],
-    values: Readonly<Record<string, unknown>>,
-  ): this;
-  create(
-    values: Readonly<Record<string, unknown>>,
-    options?: NestedCreateOptions,
-  ): this;
-}
-
-export interface RelationPatchMutationBuilder extends RelationTargetMutationBuilder {
-  disconnect(values: Readonly<Record<string, unknown>>): this;
-  disconnectBy(
-    fields: readonly string[],
-    values: Readonly<Record<string, unknown>>,
-  ): this;
-}
-
-export type RelationReplaceMutationBuilder = RelationTargetMutationBuilder;
-
-export type RelationMutationInput =
-  | RelationMutationAst
-  | ((relations: RelationMutationBuilder) => RelationMutationBuilder);
-
 export interface RepositoryReadOptions {
   readonly select?: SelectAst;
   readonly context?: RepositoryContext;
@@ -539,24 +489,16 @@ export interface FilterOnlyOptions<TRecord extends object> {
 
 export interface CreateOneOptions<TCreate extends object> {
   readonly values: CreateMutationValues<TCreate>;
-  readonly relations?: RelationMutationInput;
   readonly select?: SelectAst;
 }
 
 export interface CreateManyOptions<TCreate extends object> {
-  readonly records: readonly [TCreate, ...TCreate[]];
+  readonly values: readonly [TCreate, ...TCreate[]];
 }
 
-export type SingleMutationSelector<TRecord extends object> =
-  | {
-      readonly filter: RepositoryFilter<TRecord>;
-      readonly unique?: never;
-    }
-  | {
-      /** @deprecated Use filter. */
-      readonly unique: UniqueSelector;
-      readonly filter?: never;
-    };
+export interface SingleMutationSelector<TRecord extends object> {
+  readonly filter: RepositoryFilter<TRecord>;
+}
 
 export type UpdateOneOptions<
   TUpdate extends object,
@@ -565,16 +507,8 @@ export type UpdateOneOptions<
   readonly select?: SelectAst;
   readonly ifVersion?: string | number;
   readonly context?: RepositoryContext;
-} & (
-    | {
-        readonly values: UpdateMutationValues<TUpdate>;
-        readonly relations?: RelationMutationInput;
-      }
-    | {
-        readonly values?: UpdateMutationValues<TUpdate>;
-        readonly relations: RelationMutationInput;
-      }
-  );
+  readonly values: UpdateMutationValues<TUpdate>;
+};
 
 export type MutationScope<TRecord extends object> =
   | {
@@ -645,23 +579,13 @@ export type ValidateMutationOptions<
   | {
       readonly operation: 'createOne';
       readonly values: CreateMutationValues<TCreate>;
-      readonly relations?: RelationMutationAst;
     }
   | ({
       readonly operation: 'updateOne';
       readonly ifVersion?: string | number;
       readonly context?: RepositoryContext;
-    } & SingleMutationSelector<TRecord> &
-      (
-        | {
-            readonly values: UpdateMutationValues<TUpdate>;
-            readonly relations?: RelationMutationAst;
-          }
-        | {
-            readonly values?: UpdateMutationValues<TUpdate>;
-            readonly relations: RelationMutationAst;
-          }
-      ));
+      readonly values: UpdateMutationValues<TUpdate>;
+    } & SingleMutationSelector<TRecord>);
 
 export interface RepositoryUniqueFieldSetDescription {
   readonly fields: readonly string[];

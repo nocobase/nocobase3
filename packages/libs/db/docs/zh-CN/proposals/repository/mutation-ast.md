@@ -17,37 +17,15 @@ Mutation AST 是 Repository 关系写入的内部规范化协议，覆盖三类�
 
 更新 `belongsToMany` 中间表 payload 和隐式重新分配关系仍不属于当前协议。
 
-推荐把根标量和关系操作放在同一个模型形状的 `values` 中；以下顶层 `relations` AST 仍作为
-兼容和内部规范化形式保留：
+公开输入把根标量和关系操作放在同一个模型形状的 `values` 中；Repository 内部再归一化为
+Relation Mutation AST：
 
 ```ts
 await db.repository('projects').updateOne({
-  unique: {
-    kind: 'unique',
-    fields: ['id'],
-    values: { id: 'project-1' },
-  },
+  filter: (filter) => filter.string('id').eq('project-1'),
   values: {
     name: 'NocoBase v3',
-  },
-  relations: {
-    kind: 'relationMutation',
-    version: 1,
-    items: [
-      {
-        kind: 'relation',
-        field: 'owner',
-        action: 'set',
-        target: {
-          kind: 'connect',
-          by: {
-            kind: 'unique',
-            fields: ['id'],
-            values: { id: 'user-1' },
-          },
-        },
-      },
-    ],
+    owner: { connect: { id: 'user-1' } },
   },
 });
 ```
@@ -57,8 +35,8 @@ Repository 根据 Collection metadata 区分标量和 relation Field，不根据
 
 ## 设计目标
 
-- 可序列化：TypeScript、HTTP、CLI、Agent tool 和表单编译使用同一规范结构。
-- 选择少：Agent 只需区分 to-one/to-many、existing/new 和 patch/replace。
+- 可序列化：HTTP、CLI、Agent tool 和表单编译都可提交模型形状的纯 JSON `values`。
+- 选择少：Agent 只需区分 to-one/to-many、existing/new 和字段级操作。
 - 无歧义：清空和省略、断开和删除、增量修改和完整替换具有不同结构。
 - 可发现：Agent 可以先查询当前 Collection 允许的 action、唯一约束和预算。
 - 可校验：执行前根据 Collection 和数据库当前状态验证整棵 AST。
@@ -98,33 +76,20 @@ V1 不使用“新增关系数据”“重置关系数据”之类可能混淆�
 
 ```ts
 interface CreateOneOptions<TCreate extends object> {
-  values: TCreate;
-  relations?: RelationMutationInput;
+  values: CreateMutationValues<TCreate>;
   select?: SelectAst;
 }
 
-type UpdateOneOptions<TUpdate extends object> = {
-  unique: UniqueSelector;
+type UpdateOneOptions<TRecord extends object, TUpdate extends object> = {
+  filter: RepositoryFilter<TRecord>;
   select?: SelectAst;
   ifVersion?: string | number;
-} & (
-  | {
-      values: TUpdate;
-      relations?: RelationMutationInput;
-    }
-  | {
-      values?: TUpdate;
-      relations: RelationMutationInput;
-    }
-);
-
-type RelationMutationInput =
-  | RelationMutationAst
-  | ((relations: RelationMutationBuilder) => RelationMutationBuilder);
+  values: UpdateMutationValues<TUpdate>;
+};
 ```
 
-`createOne()` 和 `updateOne()` 推荐在 `values` 的 relation Field 中使用 Fluent Builder 或纯
-JSON 操作对象；两者都会归一化为同一 AST。顶层 `relations` 暂时保留以兼容已有调用方。
+`createOne()` 和 `updateOne()` 在 `values` 的 relation Field 中使用 Fluent Builder 或纯 JSON
+操作对象；两者都会归一化为同一内部 AST。
 
 批量 `createMany()` 和 `updateMany()` 不接受 `relations`。否则同一个 target 应被所有
 source 共享还是为每条 source 分别创建、to-one 应关联哪条 source 等行为都不明确。
@@ -160,7 +125,7 @@ envelope；批量 mutation 继续返回各自的 count object。
 同一 mutation tree 中的 `clientKey` 必须唯一；每个成功创建的 key 恰好对应一个结果项。
 未提供 `clientKey` 的目标仍会创建，但不出现在该数组中。
 
-## TypeScript 草案
+## 内部 TypeScript 结构（节选）
 
 ```ts
 export interface RelationMutationAst {
@@ -177,7 +142,11 @@ export interface UniqueSelector {
 }
 
 export type RelationMutationNode =
-  RelationSetNode | RelationClearNode | RelationPatchNode | RelationReplaceNode;
+  | RelationSetNode
+  | RelationClearNode
+  | RelationPatchNode
+  | RelationReplaceNode
+  | RelationModifyNode;
 
 export interface RelationSetNode {
   kind: 'relation';
@@ -199,6 +168,18 @@ export interface RelationPatchNode {
   connect?: readonly ConnectTarget[];
   create?: readonly CreateTarget[];
   disconnect?: readonly UniqueSelector[];
+  update?: readonly RelationUpdateTarget[];
+  upsert?: readonly RelationUpsertTarget[];
+  delete?: readonly RelationDeleteTarget[];
+}
+
+export interface RelationModifyNode {
+  kind: 'relation';
+  field: string;
+  action: 'modify';
+  update?: RelationUpdateTarget;
+  upsert?: RelationUpsertTarget;
+  delete?: RelationDeleteTarget;
 }
 
 export interface RelationReplaceNode {
@@ -219,18 +200,25 @@ export interface CreateTarget {
   values: Readonly<Record<string, unknown>>;
   relations?: RelationMutationAst;
 }
+
+export interface RelationUpdateTarget {
+  filter?: FilterAst;
+  values: Readonly<Record<string, unknown>>;
+  relations?: RelationMutationAst;
+}
 ```
 
-只有 `CreateTarget` 可以继续携带 `relations`。这为订单 → 明细 → 产品等大表单保留递归
-能力，同时避免 V1 成为可在任意节点更新或删除数据的通用 mutation graph。
+`CreateTarget` 和 `RelationUpdateTarget` 可以继续携带内部 `relations`。公开输入仍在嵌套目标
+的模型形状 `values` 中表达关系字段，Repository 递归拆分后生成这些内部节点。这为订单 →
+明细 → 产品等大表单保留递归能力，同时避免 V1 成为调用方可任意编排的 mutation graph。
 
 正式类型应根据静态 Collection schema 推导 relation 字段和目标创建类型。动态 Repository
 退化为通用记录，并在运行时完成同样的 metadata 校验。
 
-## 唯一选择器
+## 唯一选择器与目标 filter
 
-已有记录只能通过与主键或唯一约束完全匹配的逻辑 Field 集合定位，不能使用一般 Filter
-AST，也不能把数据库物理 constraint/index name 放进 Repository 输入：
+`connect`、`disconnect` 和 `set` 的已有目标通过与主键或唯一约束完全匹配的逻辑 Field 集合
+定位，不能把数据库物理 constraint/index name 放进 Repository 输入：
 
 ```json
 {
@@ -259,6 +247,10 @@ AST，也不能把数据库物理 constraint/index name 放进 Repository 输入
 或唯一约束完全匹配。Repository 按 Collection constraint 中的 Field 顺序规范化 `fields`，
 但不暴露该约束的物理名称。规范 AST 不接受裸 ID；静态 Fluent Builder 可以把
 `connect({ id })` 规范化成主键 selector。
+
+目标 `update/delete` 使用 Filter AST，并要求在当前 relation scope 内恰好匹配一条；to-many
+必须显式提供 filter，to-one 可以省略。`upsert.filter` 还必须等价于一个主键或唯一约束，
+其 `create` 分支必须携带相同的唯一字段值。
 
 ## Action 语义
 
@@ -389,8 +381,9 @@ AST，也不能把数据库物理 constraint/index name 放进 Repository 输入
 }
 ```
 
-大表单中的完整多选器通常生成 `replace`；“添加一个标签”或“移除一个成员”等局部动作
-生成 `patch`。
+公开输入中，大表单的完整多选器生成字段级 `set`，Repository 将其规范化为内部 `replace`；
+“添加一个标签”或“移除一个成员”等局部动作生成字段级 `connect/disconnect`，再规范化为
+内部 `patch`。
 
 ## 有界嵌套关系
 
@@ -432,15 +425,15 @@ AST 结构支持在新建目标内继续创建或连接关系：
 }
 ```
 
-每层 `relations` 都相对于当前新建目标的 Collection 解析，不使用 `items.product` 之类的
-dot path。V1 的嵌套节点仍只能使用 create 场景能力：
+每层内部 `relations` 都相对于当前新建目标的 Collection 解析，不使用 `items.product` 之类
+的 dot path。新建 source 的嵌套节点只使用 create 场景能力：
 
 - to-one `set.connect` / `set.create`；
 - to-many `patch.connect` / `patch.create`。
 
-嵌套中不允许 `clear`、`disconnect`、`replace`、update 或 delete，因为刚创建的 source
-没有旧关系。默认预算建议为 `maxDepth: 3`、`maxNodes: 100`，实际值由服务端配置。Planner
-必须检测循环和预算超限。
+新建 source 的嵌套中不允许 `clear`、`disconnect`、`replace`、update 或 delete，因为它没有
+旧关系；关系目标 `update/upsert` 的 `values` 则按 update 场景递归规范化。默认预算为
+`maxDepth: 3`、`maxNodes: 100`，实际值由服务端配置。Planner 必须检测循环和预算超限。
 
 V1 将新记录关系限制为一棵树。`clientKey` 只用于错误和结果映射，不能从其他分支引用刚
 创建的节点；因此不会形成调用方定义的任意有向图。
@@ -453,51 +446,45 @@ V1 将新记录关系限制为一棵树。`clientKey` 只用于错误和结果�
 await db.repository('orders').createOne({
   values: {
     orderNo: 'SO-001',
-  },
-  relations: (relations) =>
-    relations
-      .set('customer', (customer) => customer.connect({ id: 'customer-1' }))
-      .patch('items', (items) =>
-        items.create(
-          { quantity: 2 },
-          {
-            relations: (relations) =>
-              relations.set('product', (product) =>
-                product.connect({ id: 'product-1' }),
-              ),
-          },
-        ),
-      )
-      .patch('tags', (tags) =>
-        tags.connect({ id: 'tag-1' }).create({ name: 'New tag' }),
+    customer: (customer) => customer.connect({ id: 'customer-1' }),
+    items: (items) =>
+      items.create(
+        {
+          quantity: 2,
+          product: (product) => product.connect({ id: 'product-1' }),
+        },
+        { clientKey: 'item-local-1' },
       ),
+    tags: (tags) => tags.connect({ id: 'tag-1' }).create({ name: 'New tag' }),
+  },
 });
 ```
 
 `updateOne()` 可以使用：
 
 ```ts
-relations
-  .set('owner', (owner) => owner.connect({ id: 'user-owner' }))
-  .clear('reviewer')
-  .patch('members', (members) =>
-    members.connect({ id: 'user-new' }).disconnect({ id: 'user-old' }),
-  )
-  .replace('tags', (tags) =>
-    tags.connect({ id: 'tag-1' }).connect({ id: 'tag-2' }),
-  );
+await db.repository('projects').updateOne({
+  filter: (filter) => filter.string('id').eq('project-1'),
+  values: {
+    owner: (owner) => owner.connect({ id: 'user-owner' }),
+    reviewer: (reviewer) => reviewer.disconnect(),
+    members: (members) =>
+      members.connect({ id: 'user-new' }).disconnect({ id: 'user-old' }),
+    tags: (tags) => tags.set([{ id: 'tag-1' }, { id: 'tag-2' }]),
+  },
+});
 ```
 
-非主键唯一 Field 集合使用 `connectBy(fields, values)`。Builder 只构造 AST，不执行查询，也
-不能提供 AST 中不存在的另一套关系语义：
+Builder 只构造字段操作描述，不执行查询，也不能提供内部 AST 中不存在的另一套关系语义：
 
 ```text
-Fluent Builder -> RelationMutationAst -> validation -> mutation plan
+model-shaped values + field Builder/JSON -> RelationMutationAst -> validation -> mutation plan
 ```
 
 ## 大表单编译
 
-动态大表单不生成 Fluent 代码。前端 Form Mutation Compiler 直接生成规范 AST：
+动态大表单不生成 Fluent 代码。前端 Form Mutation Compiler 直接生成模型形状的纯 JSON
+`values`：
 
 ```text
 服务端 `SingleMutationResult.record` + `version`
@@ -525,16 +512,16 @@ Fluent Builder -> RelationMutationAst -> validation -> mutation plan
 不提交给后端，也不能作为并发依据。后端只接收 mutation 和可选 `ifVersion`，并根据
 数据库当前状态重新校验。
 
-只有完整加载的关系集合才能生成 `replace`。分页、懒加载或调用边界裁剪后的部分列表只能根据
-显式行级 changeSet 生成 `patch`。更完整的表单流程见
-[表单到 Mutation AST](./form-mutation.md)。
+只有完整加载的关系集合才能生成字段级 `set`。分页、懒加载或调用边界裁剪后的部分列表只能
+根据显式行级 changeSet 生成 `connect/disconnect/create/update/upsert/delete`。更完整的
+表单流程见 [表单到 Repository Mutation](./form-mutation.md)。
 
 ## Agent 工作流
 
 只提供 AST 结构不足以让 Agent 稳定写入。Repository 边界还应提供发现和预校验能力：
 
 ```text
-describeMutation -> build AST -> validateMutation -> execute -> verify result
+describeMutation -> build model-shaped values -> validateMutation -> execute -> verify result
 ```
 
 概念接口为：
@@ -547,23 +534,15 @@ interface DescribeMutationOptions {
 type ValidateMutationOptions =
   | {
       operation: 'createOne';
-      values: Readonly<Record<string, unknown>>;
-      relations?: RelationMutationAst;
+      values: CreateMutationValues;
     }
-  | ({
+  | {
       operation: 'updateOne';
-      unique: UniqueSelector;
+      filter: RepositoryFilter;
       ifVersion?: string | number;
-    } & (
-      | {
-          values: Readonly<Record<string, unknown>>;
-          relations?: RelationMutationAst;
-        }
-      | {
-          values?: Readonly<Record<string, unknown>>;
-          relations: RelationMutationAst;
-        }
-    ));
+      context?: RepositoryContext;
+      values: UpdateMutationValues;
+    };
 
 interface MutationValidationResult {
   valid: boolean;
@@ -585,7 +564,8 @@ interface MutationValidationResult {
       "field": "owner",
       "cardinality": "one",
       "targetCollection": "users",
-      "allowedActions": ["set", "clear"],
+      "allowedActions": ["set", "clear", "modify"],
+      "modifyOperations": ["update", "upsert", "delete"],
       "uniqueFieldSets": [{ "fields": ["id"], "primary": true }]
     },
     {
@@ -593,7 +573,14 @@ interface MutationValidationResult {
       "cardinality": "many",
       "targetCollection": "users",
       "allowedActions": ["patch", "replace"],
-      "patchOperations": ["connect", "create", "disconnect"]
+      "patchOperations": [
+        "connect",
+        "create",
+        "disconnect",
+        "update",
+        "upsert",
+        "delete"
+      ]
     }
   ],
   "limits": {
@@ -606,16 +593,16 @@ interface MutationValidationResult {
 `validateMutation()` 可以检查结构、Collection、唯一约束、冲突和预算，但不能承诺
 执行一定成功。目标存在性、当前关系和并发状态仍需在执行事务中重新检查。
 
-错误应包含稳定 code、AST path、逻辑名称和修复信息：
+错误应包含稳定 code、输入 path、逻辑名称和修复信息：
 
 ```json
 {
   "code": "RELATION_ACTION_NOT_ALLOWED",
-  "path": ["relations", "items", 1, "action"],
+  "path": ["values", "owner", "delete"],
   "collection": "projects",
   "relation": "owner",
-  "received": "patch",
-  "allowed": ["set", "clear"],
+  "received": "delete",
+  "allowed": ["create", "connect", "disconnect", "update", "upsert"],
   "retryable": false
 }
 ```
@@ -707,12 +694,13 @@ mutation 提供请求级幂等键，避免响应丢失后的重试创建重复�
 
 V1 支持：
 
-- `createOne()` 的 to-one `set.connect` / `set.create`；
-- `createOne()` 的 to-many `patch.connect` / `patch.create`；
-- `updateOne()` 的 `set`、`clear`、`patch` 和 `replace`；
+- `createOne()` / `updateOne()` 的模型形状 `values` 与字段级 Builder/JSON 双输入；
+- `createOne()` 的 relation Field `connect/create`；
+- `updateOne()` 的 relation Field `create/connect/disconnect/set/update/upsert/delete`；
 - 主键与唯一 Field 集合 selector；
 - 只包含 connect/create 的有界 nested create；
-- Fluent Builder 到规范 AST 的转换；
+- scoped target update/upsert/delete，以及目标 `values` 中的嵌套关系更新；
+- 字段级 Builder/JSON 到内部规范 AST 的转换；
 - `describeMutation()`、`validateMutation()` 和结构化错误；
 - Collection、冲突、并发和资源预算校验；
 - 根、嵌套目标和关系边的单事务执行；
@@ -721,28 +709,29 @@ V1 支持：
 V1 暂不支持：
 
 - 批量 `createMany()` / `updateMany()` 的 relation mutation；
-- 更新或删除已关联目标；目标更新使用目标 Collection Repository；
 - `belongsToMany` edge values/update；中间记录更新使用 through Collection Repository；
-- 一般 Filter AST 作为 source 或 target selector；
 - 隐式 reassign / move；
-- `connectOrCreate`、upsert 或调用方定义的任意 mutation graph；
+- `connectOrCreate` 或调用方定义的任意 mutation graph；
 - 跨 DatabaseConnection 的 relation；
 - raw SQL、物理名称或调用方指定执行顺序；
 - 把 `null`、空数组、是否有 `id` 等数据形状当作隐式操作。
 - Repository policy 注入或授权；授权由可信调用边界负责。
 
-这些限制不封死长期扩展：后续可以增加 `updateTarget`、`updateEdge`、显式 move 和
-connect-or-create，但应作为独立、可发现的 capability，而不是改变 V1 action 的含义。
+这些限制不封死长期扩展：后续可以增加 `updateEdge`、显式 move 和 connect-or-create，但应
+作为独立、可发现的 capability，而不是改变 V1 action 的含义。
 
 ## Agent 注意事项
 
 - 本页 V1 接口已实现；标为“暂不支持”的能力仍不能生成或执行。
-- 根标量放 `values`，relation 写入放 `relations`。
-- To-one 使用 `set` / `clear`；to-many 增量操作使用 `patch`，完整状态使用 `replace`。
-- 已有目标只用与主键或唯一约束匹配的逻辑 Field 集合 selector；新目标只用 `create`。
-- `disconnect` 只解除关系，不更新或删除目标。
-- Nested relations 只出现在 `CreateTarget`，并且仍只允许 connect/create。
+- 根标量和 relation Field 都放在模型形状 `values` 中。
+- To-one 使用 `connect` / `disconnect`，to-many 增量操作使用
+  `create/connect/disconnect/update/upsert/delete`，完整状态使用 `set`。
+- `connect/disconnect/set` 的已有目标只用与主键或唯一约束匹配的逻辑 Field 集合 selector；
+  target update/delete 使用当前关系作用域内必须恰好匹配一条的 `filter`。
+- `disconnect` 只解除关系，`delete` 才删除目标。
+- Nested create 只允许 connect/create；target update/upsert 的 `values` 可以继续递归关系操作。
 - 先调用 `describeMutation`，执行前调用 `validateMutation`，不能猜 relation capability。
-- HTTP、CLI、Agent tool 和动态表单使用规范 AST；Fluent 只用于手写 TypeScript。
-- 大表单在前端编译 AST，默认不提交 `initialValues`。
+- HTTP、CLI、Agent tool 和动态表单使用纯 JSON `values`；字段级 Fluent Builder 只用于手写
+  TypeScript，Relation Mutation AST 是 Repository 内部协议。
+- 大表单在前端编译 Repository mutation，默认不提交 `initialValues`。
 - 不在 AST 中放 raw SQL、物理名称、through 外键或执行顺序。

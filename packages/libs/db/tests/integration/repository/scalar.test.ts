@@ -9,7 +9,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     await createOrders(context);
     const repository = context.database.repository('repositoryOrders');
     await repository.createMany({
-      records: [
+      values: [
         { orderNo: 'SO-001', status: 'draft', amount: 50, note: '' },
         { orderNo: 'SO-002', status: 'paid', amount: 120, note: null },
         { orderNo: 'SO-003', status: 'paid', amount: 240, note: 'priority' },
@@ -62,7 +62,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     const id = created.record.id;
 
     const updated = await repository.updateOne({
-      unique: unique('id', id),
+      filter: (filter) => filter.number('id').eq(id as number),
       ifVersion: 1,
       values: { status: 'paid' },
       select: selection(['orderNo', 'status']),
@@ -74,14 +74,14 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     });
     await expect(
       repository.updateOne({
-        unique: unique('id', id),
+        filter: (filter) => filter.number('id').eq(id as number),
         ifVersion: 1,
         values: { status: 'stale' },
       }),
     ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
 
     await repository.createMany({
-      records: [
+      values: [
         { orderNo: 'SO-002', status: 'draft', amount: 100 },
         { orderNo: 'SO-003', status: 'draft', amount: 200 },
       ],
@@ -107,7 +107,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
 
     await expect(
       repository.deleteOne({
-        unique: unique('id', id),
+        filter: (filter) => filter.number('id').eq(id as number),
         ifVersion: 2,
       }),
     ).resolves.toEqual({ deleted: true });
@@ -118,7 +118,7 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     await createOrders(context);
     const repository = context.database.repository('repositoryOrders');
     await repository.createMany({
-      records: [
+      values: [
         { orderNo: 'SO-001', status: 'draft', amount: 50 },
         { orderNo: 'SO-002', status: 'draft', amount: 100 },
         { orderNo: 'SO-003', status: 'paid', amount: 200 },
@@ -200,10 +200,10 @@ describeIntegrationDatabases('scalar Repository', (context) => {
     ).rejects.toMatchObject({ code: 'FIELD_NOT_WRITABLE' });
     await expect(
       repository.updateOne({
-        unique: unique('status', 'draft'),
+        filter: (filter) => filter.string('missing').eq('draft'),
         values: { amount: 2 },
       }),
-    ).rejects.toMatchObject({ code: 'INVALID_UNIQUE_SELECTOR' });
+    ).rejects.toMatchObject({ code: 'FIELD_NOT_FOUND' });
 
     await expect(
       context.database.transaction(async (connection) => {
@@ -265,20 +265,5 @@ function sorting(
     kind: 'sort' as const,
     version: 1 as const,
     items: [{ by: { kind: 'field' as const, field }, direction }],
-  };
-}
-
-function unique(
-  field: string,
-  value: unknown,
-): {
-  readonly kind: 'unique';
-  readonly fields: readonly [string];
-  readonly values: Readonly<Record<string, unknown>>;
-} {
-  return {
-    kind: 'unique' as const,
-    fields: [field],
-    values: { [field]: value },
   };
 }

@@ -163,9 +163,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async executeUpdateOne(
     plan: RepositoryUpdateOnePlan,
   ): Promise<RepositoryExecutedMutation | RepositorySingleMutationMiss> {
-    const selected = plan.unique
-      ? await this.lockByUnique(plan.collection, plan.unique)
-      : await this.lockByFilter(plan.collection, plan.filter!);
+    const selected = await this.lockByFilter(plan.collection, plan.filter);
     if (selected === 'missing' || selected === 'multiple') return selected;
     const { record: current, unique } = selected;
     if (
@@ -246,9 +244,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async executeDeleteOne(
     plan: RepositoryDeleteOnePlan,
   ): Promise<'deleted' | RepositorySingleMutationMiss> {
-    const selected = plan.unique
-      ? await this.lockByUnique(plan.collection, plan.unique)
-      : await this.lockByFilter(plan.collection, plan.filter!);
+    const selected = await this.lockByFilter(plan.collection, plan.filter);
     if (selected === 'missing' || selected === 'multiple') return selected;
     if (
       plan.ifVersion !== undefined &&

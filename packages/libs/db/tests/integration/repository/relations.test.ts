@@ -313,7 +313,7 @@ async function createRelationFixture(
     values: { label: 'typescript' },
   });
   await bookTags.createMany({
-    records: [
+    values: [
       { bookId: alpha.record.id, tagId: databaseTag.record.id },
       { bookId: alpha.record.id, tagId: typescriptTag.record.id },
       { bookId: gamma.record.id, tagId: databaseTag.record.id },
