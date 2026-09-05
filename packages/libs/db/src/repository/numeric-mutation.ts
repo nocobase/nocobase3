@@ -34,6 +34,9 @@ const numericTypes: ReadonlySet<string> = new Set([
   'double',
 ]);
 
+// Only normalized operations are executable; similarly shaped JSON remains data.
+const normalizedOperations: WeakSet<object> = new WeakSet();
+
 class DefaultNumericMutationBuilder implements NumericMutationBuilder {
   increment(value: NumericMutationOperandInput): NumericMutationJsonInput {
     return { increment: value };
@@ -55,11 +58,7 @@ export function isNumericMutation(
   return (
     typeof value === 'object' &&
     value !== null &&
-    'kind' in value &&
-    value.kind === 'numericMutation' &&
-    'operation' in value &&
-    operations.includes(value.operation as NumericMutationOperation) &&
-    'value' in value
+    normalizedOperations.has(value)
   );
 }
 
@@ -162,5 +161,11 @@ export function normalizeNumericMutation(
   }
   if (operation === 'divide' && Number(operand) === 0)
     return fail('Numeric update division by zero is not allowed.', variable);
-  return { kind: 'numericMutation', operation, value: operand };
+  const node: NumericMutationNode = {
+    kind: 'numericMutation',
+    operation,
+    value: operand,
+  };
+  normalizedOperations.add(node);
+  return node;
 }

@@ -21,16 +21,18 @@ const projects: Repository<Project> = db.repository<Project>('projects');
 
 Repository 泛型依次为记录 TRecord、创建 TCreate、更新 TUpdate；后两者默认 Partial<TRecord>，并不代表实际 Schema 没有必填字段。动态 Repository 依赖运行时 Collection 校验。
 
-| 公开类型                                      | 用途                                            |
-| --------------------------------------------- | ----------------------------------------------- |
-| RepositoryFilter / FilterBuilder / FilterAst  | 等值简写、条件 Builder 或序列化 AST             |
-| RepositorySelect / SelectBuilder / SelectAst  | 标量、关系及关系聚合选择                        |
-| RepositorySort / SortBuilder / SortAst        | 字段与关系聚合排序                              |
-| RepositoryCursor / RepositoryCursorDirection  | 排序轴取值，forward/backward                    |
-| CreateMutationValues / UpdateMutationValues   | 模型形状写入，关系 Builder/JSON                 |
-| NumericMutationInput / NumericMutationBuilder | 单个数值原子操作                                |
-| AggregateBuilder / AggregateAst               | count/sum/avg/min/max 选择                      |
-| RepositoryContext                             | Filter 变量上下文，不是事务对象或自动权限上下文 |
+| 公开类型                                                | 用途                                                      |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| RepositoryFilter / FilterBuilder / FilterAst            | 等值简写、条件 Builder 或序列化 AST                       |
+| RepositorySelect / SelectBuilder / SelectAst            | 标量、关系及关系聚合选择                                  |
+| RepositorySort / SortBuilder / SortAst                  | 字段与关系聚合排序                                        |
+| RepositoryCursor / RepositoryCursorDirection            | 排序轴取值，forward/backward                              |
+| CreateMutationValues / UpdateMutationValues             | 模型形状写入，关系 Builder/JSON                           |
+| MutationValuesInput / ValuesBuilder                     | 根级 values callback，variable/literal 构造工具           |
+| MutationVariable / MutationLiteral / MutationValueInput | 可序列化变量引用、显式字面量与字段输入                    |
+| NumericMutationInput / NumericMutationBuilder           | 单个数值原子操作                                          |
+| AggregateBuilder / AggregateAst                         | count/sum/avg/min/max 选择                                |
+| RepositoryContext                                       | Filter 与 Values 变量上下文，不是事务对象或自动权限上下文 |
 
 ## 查询
 
@@ -56,7 +58,9 @@ Select Builder 的精确重载可能收窄 TRecord；JSON AST 和普通关系记
 | deleteOne  | filter                      | ifVersion、select、context | deleted:true，可选 record  |
 | deleteMany | filter 或 all:true          | select、context            | deletedCount，可选 records |
 
-不提供 upsertMany、createMany 的 skipDuplicates、批量 ifVersion 或批量嵌套关系写入。createOne/createMany 的 context 用于返回 select 中的关系 Filter 变量解析，不自动填充 values，也不执行隐式权限过滤。根级 upsert 用 create/update，不用 values。select 是返回选择，不是输入字段授权。
+不提供 upsertMany、createMany 的 skipDuplicates、批量 ifVersion 或批量嵌套关系写入。context 用于显式 Values 变量、根级与嵌套 Filter、返回 select 中的关系 Filter，不自动填充未引用的字段，也不执行隐式权限过滤。根级 upsert 用 create/update，不用 values。select 是返回选择，不是输入字段授权。
+
+根级 values 和 upsert 的 create/update 接受对象或同步 `(v: ValuesBuilder) => 对象`；createMany.values 接受非空数组或返回非空数组的 callback。`v.variable('$input.name')` 等价于 `{ kind: 'variable', path: '$input.name' }`；`v.literal(value)` 等价于 `{ kind: 'literal', value }`。JSON 字段内部不递归解释，解析结果不再次作为表达式执行。详情见[Values 变量与字面量](../repository/mutations.md#values-变量与字面量)。
 
 SingleMutationResult 结构：
 
@@ -85,10 +89,10 @@ createOne 的关系输入支持 create/connect；updateOne 的关系输入支持
 
 ## 能力描述与预校验
 
-| 方法             | 输入                                                                                       | 返回                                     |
-| ---------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| describeMutation | `{ operation: 'createOne' \| 'updateOne' }`                                                | collection、operation、relations、limits |
-| validateMutation | createOne：operation、values；updateOne：operation、filter、values，可选 ifVersion/context | `{ valid, errors }`                      |
+| 方法             | 输入                                                                                                     | 返回                                     |
+| ---------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| describeMutation | `{ operation: 'createOne' \| 'updateOne' }`                                                              | collection、operation、relations、limits |
+| validateMutation | createOne：operation、values，可选 context；updateOne：operation、filter、values，可选 ifVersion/context | `{ valid, errors }`                      |
 
 relations 包含 cardinality、targetCollection、allowedActions、modifyOperations/patchOperations、uniqueFieldSets；多对多还可包含 through 的 collection/writableFields/requiredOnCreate。allowedActions 的 set/clear/patch/replace/modify 是规范化计划动作，不要机械当成 values 的方法名。
 

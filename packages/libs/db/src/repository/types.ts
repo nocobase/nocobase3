@@ -16,12 +16,14 @@ export type RepositoryRecord = Record<string, RepositoryMutationScalarValue>;
 
 export type RepositoryContext = Readonly<Record<string, unknown>>;
 
-export type MutationVariable = FilterVariable;
+export type MutationVariable = {
+  readonly [K in keyof FilterVariable]: FilterVariable[K];
+};
 
-export interface MutationLiteral<T = RepositoryMutationScalarValue> {
+export type MutationLiteral<T = RepositoryMutationScalarValue> = {
   readonly kind: 'literal';
   readonly value: T;
-}
+};
 
 export interface ValuesBuilder {
   variable(path: string): MutationVariable;
@@ -846,7 +848,10 @@ export type RelationTargetSelectorInput =
 export type RelationCreateValues = Readonly<
   Record<
     string,
-    RepositoryMutationScalarValue | CreateRelationFieldMutationInput
+    | RepositoryMutationScalarValue
+    | MutationVariable
+    | MutationLiteral
+    | CreateRelationFieldMutationInput
   >
 >;
 
@@ -953,6 +958,8 @@ type UpdateMutationProperty<T> = RepositoryMutationScalarValue extends T
 /** Collection metadata determines the callback's scalar or relation capabilities at runtime. */
 export type DynamicUpdateMutationInput =
   | RepositoryMutationScalarValue
+  | MutationVariable
+  | MutationLiteral
   | UpdateRelationFieldMutationJsonInput
   | NumericMutationJsonInput
   | ((

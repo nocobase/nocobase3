@@ -5,6 +5,26 @@ description: 通过 Repository values 的 Builder 或 JSON 创建、连接、解
 
 # Repository 关系写入
 
+## 在关系写入中引用 context
+
+根级 values callback 的 `v.variable()` 可用于嵌套字段、关系选择器和 through payload。以下假设 projects 的 owner 关系目标以 accountCode 唯一定位，tasks 支持嵌套创建；实际字段和关系键必须以 Collection 定义为准。
+
+```ts
+await projects.updateOne({
+  filter: { id: 'project-1' },
+  values: (v) => ({
+    owner: (owner) => owner.connect({ accountCode: v.variable('$ownerCode') }),
+    tasks: (tasks) =>
+      tasks.create({
+        title: v.variable('$taskTitle'),
+      }),
+  }),
+  context: { ownerCode: 'USER-A', taskTitle: 'Implement variables' },
+});
+```
+
+嵌套 update/upsert/delete 的 Filter 也使用这份 context，仍受当前父记录的关系作用域约束。预校验使用相同的变量解析规则，数据库执行阶段的失败仍按事务回滚。JSON payload 的变量消歧规则见[Values 变量与字面量](./mutations.md#values-变量与字面量)。
+
 关系操作放在 `values` 的关系字段内，可使用 Builder、纯 JSON 或混合输入。字段和关系必须已定义；不能凭字段名推断关系，也不能照搬其他 ORM 的 `where` 或 `connectOrCreate`。
 
 示例沿用[概览](./overview.md)：`projects = db.repository('projects')`；owner 是指向 users 的可空 belongsTo，tasks 是通过可空 `tasks.projectId` 建立的 hasMany，tags 是经 projectTags 的 belongsToMany。所有字符串主键由调用方提供；被 connect 的目标必须已存在。各片段独立展示操作。

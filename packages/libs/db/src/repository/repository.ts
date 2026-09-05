@@ -2571,6 +2571,8 @@ async function normalizeModelMutation(
         value as
           CreateRelationFieldMutationInput | UpdateRelationFieldMutationInput,
         operation,
+        state.context,
+        [...path, fieldName],
       ),
     );
   }
@@ -2622,8 +2624,9 @@ async function relationFieldInputToNode(
   relation: RelationFieldDefinition,
   input: CreateRelationFieldMutationInput | UpdateRelationFieldMutationInput,
   operation: 'createOne' | 'updateOne',
+  context: RepositoryContext | undefined,
+  path: readonly (string | number)[],
 ): Promise<RelationMutationNode> {
-  const path = ['values', relation.name] as const;
   const state = relationFieldInputState(collection, relation, input, path);
   const hasSet = state.set !== undefined;
   const hasIncremental =
@@ -2686,6 +2689,7 @@ async function relationFieldInputToNode(
         targetCollectionDefinition,
         target,
         [...path, 'update', index],
+        context,
       ),
     ),
   );
@@ -2696,6 +2700,7 @@ async function relationFieldInputToNode(
         targetCollectionDefinition,
         target,
         [...path, 'upsert', index],
+        context,
       ),
     ),
   );
@@ -2706,6 +2711,7 @@ async function relationFieldInputToNode(
         targetCollectionDefinition,
         target,
         [...path, 'delete', index],
+        context,
       ),
     ),
   );
@@ -2937,6 +2943,7 @@ async function relationUpdateInputToTarget(
   collection: CollectionDefinition,
   input: RelationUpdateInput,
   path: readonly (string | number)[],
+  context?: RepositoryContext,
 ): Promise<RelationUpdateTarget> {
   if (!isPlainRecord(input) || !isPlainRecord(input.values)) {
     invalid('INVALID_MUTATION', 'Relation update requires values.', {
@@ -2949,7 +2956,7 @@ async function relationUpdateInputToTarget(
         collections,
         collection,
         input.filter,
-        undefined,
+        context,
       )
     : undefined;
   return { filter, values: input.values };
@@ -2960,6 +2967,7 @@ async function relationUpsertInputToTarget(
   collection: CollectionDefinition,
   input: RelationUpsertInput,
   path: readonly (string | number)[],
+  context?: RepositoryContext,
 ): Promise<RelationUpsertTarget> {
   if (
     !isPlainRecord(input) ||
@@ -2977,7 +2985,7 @@ async function relationUpsertInputToTarget(
         collections,
         collection,
         input.filter,
-        undefined,
+        context,
       )
     : undefined;
   return {
@@ -2995,6 +3003,7 @@ async function relationDeleteInputToTarget(
   collection: CollectionDefinition,
   input: RelationDeleteInput,
   path: readonly (string | number)[],
+  context?: RepositoryContext,
 ): Promise<RelationDeleteTarget> {
   if (!isPlainRecord(input)) {
     invalid(
@@ -3013,7 +3022,7 @@ async function relationDeleteInputToTarget(
         collections,
         collection,
         filterInput,
-        undefined,
+        context,
       )
     : undefined;
   return { filter };
@@ -3168,13 +3177,19 @@ async function normalizeRelationMutation(
     }
     const target = await targetCollection(collections, relation, path);
     if (node.action === 'set') {
-      await validateThroughPayload(collections, relation, node.target, path);
+      const through = await validateThroughPayload(
+        collections,
+        relation,
+        node.target,
+        path,
+        state.context,
+      );
       items.push({
         ...node,
         target: await normalizeMutationTarget(
           collections,
           target,
-          node.target,
+          { ...node.target, through },
           depth,
           state,
           [...path, 'target'],
@@ -3201,26 +3216,42 @@ async function normalizeRelationMutation(
           },
         );
       }
-      for (const targetNode of [
-        ...(node.connect ?? []),
-        ...(node.create ?? []),
-      ])
-        await validateThroughPayload(collections, relation, targetNode, path);
-      const connect: ConnectTarget[] = (node.connect ?? []).map(
-        (targetNode: ConnectTarget, targetIndex: number) =>
-          normalizeConnectTarget(target, targetNode, [
-            ...path,
-            'connect',
-            targetIndex,
-          ]),
+      const connect: ConnectTarget[] = await Promise.all(
+        (node.connect ?? []).map(
+          async (targetNode: ConnectTarget, targetIndex: number) =>
+            normalizeConnectTarget(
+              target,
+              {
+                ...targetNode,
+                through: await validateThroughPayload(
+                  collections,
+                  relation,
+                  targetNode,
+                  [...path, 'connect', targetIndex],
+                  state.context,
+                ),
+              },
+              [...path, 'connect', targetIndex],
+              state.context,
+            ),
+        ),
       );
       const create = await Promise.all(
         (node.create ?? []).map(
-          (targetNode: CreateTarget, targetIndex: number) =>
+          async (targetNode: CreateTarget, targetIndex: number) =>
             normalizeCreateTarget(
               collections,
               target,
-              targetNode,
+              {
+                ...targetNode,
+                through: await validateThroughPayload(
+                  collections,
+                  relation,
+                  targetNode,
+                  [...path, 'create', targetIndex],
+                  state.context,
+                ),
+              },
               depth,
               state,
               [...path, 'create', targetIndex],
@@ -3229,11 +3260,12 @@ async function normalizeRelationMutation(
       );
       const disconnect = (node.disconnect ?? []).map(
         (selector: UniqueSelector, targetIndex: number) =>
-          validateUnique(target, selector, [
-            ...path,
-            'disconnect',
-            targetIndex,
-          ]),
+          validateUnique(
+            target,
+            selector,
+            [...path, 'disconnect', targetIndex],
+            state.context,
+          ),
       );
       const update = await Promise.all(
         (node.update ?? []).map((targetNode, targetIndex) =>
@@ -3380,15 +3412,17 @@ async function normalizeRelationMutation(
             targetNode: ConnectTarget | CreateTarget,
             targetIndex: number,
           ) => {
-            await validateThroughPayload(collections, relation, targetNode, [
-              ...path,
-              'targets',
-              targetIndex,
-            ]);
+            const through = await validateThroughPayload(
+              collections,
+              relation,
+              targetNode,
+              [...path, 'targets', targetIndex],
+              state.context,
+            );
             return normalizeMutationTarget(
               collections,
               target,
-              targetNode,
+              { ...targetNode, through },
               depth,
               state,
               [...path, 'targets', targetIndex],
@@ -3489,7 +3523,7 @@ async function normalizeMutationTarget(
     });
   }
   return target.kind === 'connect'
-    ? normalizeConnectTarget(collection, target, path)
+    ? normalizeConnectTarget(collection, target, path, state.context)
     : normalizeCreateTarget(
         collections,
         collection,
@@ -3504,6 +3538,7 @@ function normalizeConnectTarget(
   collection: CollectionDefinition,
   target: ConnectTarget,
   path: readonly (string | number)[],
+  context?: RepositoryContext,
 ): ConnectTarget {
   if (!isPlainRecord(target) || target.kind !== 'connect') {
     invalid('INVALID_MUTATION', 'Expected a connect target.', {
@@ -3513,7 +3548,7 @@ function normalizeConnectTarget(
   }
   return {
     kind: 'connect',
-    by: validateUnique(collection, target.by, [...path, 'by']),
+    by: validateUnique(collection, target.by, [...path, 'by'], context),
     through: target.through,
   };
 }
@@ -3552,6 +3587,7 @@ async function normalizeCreateTarget(
     'createOne',
     depth + 1,
     state,
+    [...path, 'values'],
   );
   return {
     ...target,
@@ -3589,6 +3625,7 @@ async function normalizeRelationUpdateTarget(
     'updateOne',
     depth + 1,
     state,
+    [...path, 'values'],
   );
   return {
     filter,
@@ -3803,7 +3840,8 @@ async function validateThroughPayload(
   relation: RelationFieldDefinition,
   target: ConnectTarget | CreateTarget,
   path: readonly (string | number)[],
-): Promise<void> {
+  context?: RepositoryContext,
+): Promise<RepositoryRecord | undefined> {
   if (target.through === undefined) return;
   if (relation.type !== 'belongsToMany' || !relation.through)
     invalid(
@@ -3843,7 +3881,10 @@ async function validateThroughPayload(
         { field: name, path: [...path, 'through', name] },
       );
   }
-  validateValues(through, target.through, 'createOne');
+  return validateValues(through, target.through, 'createOne', false, context, [
+    ...path,
+    'through',
+  ]);
 }
 
 async function relationCanDisconnect(
@@ -4256,6 +4297,7 @@ function validateUnique(
   collection: CollectionDefinition,
   selector: UniqueSelector,
   path: readonly (string | number)[] = ['unique'],
+  context?: RepositoryContext,
 ): UniqueSelector {
   if (
     !selector ||
@@ -4300,12 +4342,34 @@ function validateUnique(
       { collection: collection.name, path: [...path, 'fields'] },
     );
   }
+  const values = Object.fromEntries(
+    constraint.fields.map((name) => {
+      const resolved = resolveMutationValue(selector.values[name], context, [
+        ...path,
+        'values',
+        name,
+      ]);
+      const value = resolved.expression
+        ? validateResolvedMutationValue(
+            scalarField(collection, name, [...path, 'values', name]),
+            resolved,
+            collection.name,
+            [...path, 'values', name],
+          )
+        : resolved.value;
+      if (value === null || value === undefined)
+        invalid(
+          'INVALID_UNIQUE_SELECTOR',
+          'Unique values must not be null or undefined.',
+          { path: [...path, 'values', name] },
+        );
+      return [name, value];
+    }),
+  );
   return {
     kind: 'unique',
     fields: constraint.fields,
-    values: Object.fromEntries(
-      constraint.fields.map((field) => [field, selector.values[field]]),
-    ),
+    values,
   };
 }
 
