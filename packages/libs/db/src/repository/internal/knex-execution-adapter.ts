@@ -39,6 +39,7 @@ import type {
   RepositoryExecutedManyMutation,
   RepositoryExecutionAdapter,
   RepositoryAggregatePlan,
+  RepositoryGroupByPlan,
   RepositoryFilterPlan,
   RepositoryReadPlan,
   RepositorySingleMutationMiss,
@@ -50,6 +51,12 @@ import type {
 interface LockedMutationRecord {
   readonly record: RepositoryRecord;
   readonly unique: UniqueSelector;
+}
+
+interface GroupByOutput {
+  readonly name: string;
+  readonly internal: string;
+  readonly aggregate?: 'count' | 'sum' | 'avg' | 'min' | 'max';
 }
 
 export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapter {
@@ -156,6 +163,99 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           item.kind === 'count' ? Number(value ?? 0) : (value ?? null),
         ];
       }),
+    );
+  }
+
+  async groupBy(plan: RepositoryGroupByPlan): Promise<RepositoryRecord[]> {
+    const client = this.getClient();
+    const rootAlias = 'repository_root';
+    const resultAlias = 'repository_group';
+    const inner = tableQuery(client, plan.collection, rootAlias);
+    const outputs: GroupByOutput[] = plan.by.map((field, index) => ({
+      name: field,
+      internal: `group_${index}`,
+      aggregate: undefined,
+    }));
+    for (const output of outputs) {
+      const field = qualified(rootAlias, column(plan.collection, output.name));
+      inner.select(client.ref(field).as(output.internal)).groupBy(field);
+    }
+    for (const [index, item] of plan.aggregate.items.entries()) {
+      const internal = `aggregate_${index}`;
+      const field =
+        item.field !== undefined
+          ? qualified(rootAlias, column(plan.collection, item.field))
+          : '*';
+      if (item.kind === 'count') inner.count({ [internal]: field });
+      if (item.kind === 'sum') inner.sum({ [internal]: field });
+      if (item.kind === 'avg') inner.avg({ [internal]: field });
+      if (item.kind === 'min') inner.min({ [internal]: field });
+      if (item.kind === 'max') inner.max({ [internal]: field });
+      outputs.push({ name: item.alias, internal, aggregate: item.kind });
+    }
+    const graph = await this.prepareFilterGraph(
+      plan.collection,
+      plan.filter?.root,
+    );
+    applyFilter(
+      inner,
+      plan.collection,
+      plan.filter?.root,
+      graph,
+      rootAlias,
+      client,
+    );
+
+    const query = client
+      .queryBuilder()
+      .from(inner.as(resultAlias))
+      .select(
+        outputs.map((output) =>
+          client.ref(output.internal).withSchema(resultAlias),
+        ),
+      );
+    const internalByName = new Map(
+      outputs.map((output) => [output.name, output.internal]),
+    );
+    if (plan.having) {
+      applyFilter(
+        query,
+        internalGroupResultCollection(plan, outputs),
+        mapFilterFields(plan.having.root, internalByName),
+        new WeakMap(),
+        resultAlias,
+        client,
+      );
+    }
+    for (const item of plan.sort?.items ?? []) {
+      if (item.kind !== 'field' || item.path.length !== 1) {
+        throw new Error('GroupBy sort must target a direct result Field.');
+      }
+      const internal = internalByName.get(item.path[0]);
+      if (!internal) throw new Error('GroupBy sort Field was not mapped.');
+      applyOrderBy(
+        query,
+        client,
+        qualified(resultAlias, internal),
+        item.direction,
+        item.nulls ?? 'last',
+      );
+    }
+    const rows = (await query) as RepositoryRecord[];
+    return rows.map((row) =>
+      Object.fromEntries(
+        outputs.map((output) => {
+          const value = row[output.internal];
+          return [
+            output.name,
+            output.aggregate === 'count'
+              ? Number(value ?? 0)
+              : output.aggregate
+                ? (value ?? null)
+                : value,
+          ];
+        }),
+      ),
     );
   }
 
@@ -1782,6 +1882,60 @@ function projectRow(
     result[relation.relation] = row[relation.relation];
   }
   return result;
+}
+
+function internalGroupResultCollection(
+  plan: RepositoryGroupByPlan,
+  outputs: readonly GroupByOutput[],
+): CollectionDefinition {
+  const fields = outputs.map((output, index): FieldDefinition => {
+    if (index < plan.by.length) {
+      const source = plan.collection.fields?.find(
+        (field): field is FieldDefinition =>
+          field.name === output.name && isScalarField(field),
+      );
+      if (!source) throw new Error('GroupBy source Field was not found.');
+      return { ...source, name: output.internal };
+    }
+    const aggregate = plan.aggregate.items[index - plan.by.length];
+    if (!aggregate) throw new Error('GroupBy aggregate was not found.');
+    if (aggregate.kind === 'min' || aggregate.kind === 'max') {
+      const source = plan.collection.fields?.find(
+        (field): field is FieldDefinition =>
+          field.name === aggregate.field && isScalarField(field),
+      );
+      if (!source) throw new Error('GroupBy aggregate Field was not found.');
+      return { ...source, name: output.internal, nullable: true };
+    }
+    return {
+      name: output.internal,
+      type: aggregate.kind === 'count' ? 'integer' : 'decimal',
+      nullable: aggregate.kind !== 'count',
+    };
+  });
+  return {
+    name: plan.collection.name,
+    naming: { underscored: false },
+    fields,
+  };
+}
+
+function mapFilterFields(
+  node: FilterGroupNode,
+  fields: ReadonlyMap<string, string>,
+): FilterGroupNode {
+  return {
+    ...node,
+    items: node.items.map((item) => {
+      if (item.kind === 'group') return mapFilterFields(item, fields);
+      if (item.kind === 'relation') {
+        throw new Error('GroupBy having does not support Relation filters.');
+      }
+      const field = fields.get(item.path[0]);
+      if (!field) throw new Error('GroupBy having Field was not mapped.');
+      return { ...item, path: [field] };
+    }),
+  };
 }
 
 function missingRelationOption(

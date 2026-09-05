@@ -52,4 +52,5 @@ await orders.aggregate({
   `number`、`string` 或 `bigint`。
 - Aggregate 统计完整的 filter 结果，不接受 `select`、`sort`、`limit`、`offset` 或
   relation-local 选项。
-- V1 不包含 `countDistinct`、relation aggregate 或 GroupBy；GroupBy 在下一阶段复用本协议。
+- V1 不包含 `countDistinct` 或 relation aggregate；分组统计见
+  [Repository GroupBy](./group-by.md)。

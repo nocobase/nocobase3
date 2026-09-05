@@ -447,6 +447,30 @@ export interface AggregateOptions<TRecord extends object> {
   readonly context?: RepositoryContext;
 }
 
+export type GroupByResult = Readonly<
+  Record<string, RepositoryMutationScalarValue>
+>;
+
+export type GroupBySelectionResult<
+  TRecord extends object,
+  TBy extends readonly (keyof TRecord & string)[],
+  TSelection extends AggregateSelection,
+> = Readonly<Pick<TRecord, TBy[number]>> & AggregateSelectionResult<TSelection>;
+
+export interface GroupByOptions<
+  TRecord extends object,
+  TResult extends object = RepositoryRecord,
+> {
+  readonly by: readonly [keyof TRecord & string, ...(keyof TRecord & string)[]];
+  readonly aggregate:
+    | AggregateAst
+    | ((aggregate: AggregateBuilder<TRecord>) => AggregateSelection);
+  readonly filter?: RepositoryFilter<TRecord>;
+  readonly having?: RepositoryFilter<TResult>;
+  readonly sort?: RepositorySort<TResult>;
+  readonly context?: RepositoryContext;
+}
+
 export interface UniqueSelector {
   readonly kind: 'unique';
   readonly fields: readonly string[];
@@ -886,6 +910,25 @@ export interface Repository<
     options: AggregateOptions<TRecord> & { readonly aggregate: AggregateAst },
   ): Promise<AggregateResult>;
   aggregate(options: AggregateOptions<TRecord>): Promise<AggregateResult>;
+  groupBy<
+    const TBy extends readonly [
+      keyof TRecord & string,
+      ...(keyof TRecord & string)[],
+    ],
+    TSelection extends AggregateSelection,
+  >(
+    options: GroupByOptions<
+      TRecord,
+      GroupBySelectionResult<TRecord, TBy, TSelection>
+    > & {
+      readonly by: TBy;
+      readonly aggregate: (aggregate: AggregateBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<Array<GroupBySelectionResult<TRecord, TBy, TSelection>>>;
+  groupBy(
+    options: GroupByOptions<TRecord> & { readonly aggregate: AggregateAst },
+  ): Promise<GroupByResult[]>;
+  groupBy(options: GroupByOptions<TRecord>): Promise<GroupByResult[]>;
   describeMutation(
     options: DescribeMutationOptions,
   ): Promise<RepositoryMutationDescription>;

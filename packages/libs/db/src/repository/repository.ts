@@ -52,6 +52,9 @@ import type {
   FilterVariable,
   FindManyOptions,
   FindOneOptions,
+  GroupByOptions,
+  GroupByResult,
+  GroupBySelectionResult,
   MutationValidationError,
   MutationValidationResult,
   Repository,
@@ -201,6 +204,57 @@ export class DefaultRepository<
       options.context,
     );
     return this.options.adapter.aggregate({ collection, aggregate, filter });
+  }
+
+  async groupBy<
+    const TBy extends readonly [
+      keyof TRecord & string,
+      ...(keyof TRecord & string)[],
+    ],
+    TSelection extends AggregateSelection,
+  >(
+    options: GroupByOptions<
+      TRecord,
+      GroupBySelectionResult<TRecord, TBy, TSelection>
+    > & {
+      readonly by: TBy;
+      readonly aggregate: (aggregate: AggregateBuilder<TRecord>) => TSelection;
+    },
+  ): Promise<Array<GroupBySelectionResult<TRecord, TBy, TSelection>>>;
+  async groupBy(
+    options: GroupByOptions<TRecord> & { readonly aggregate: AggregateAst },
+  ): Promise<GroupByResult[]>;
+  async groupBy(options: GroupByOptions<TRecord>): Promise<GroupByResult[]>;
+  async groupBy(options: GroupByOptions<TRecord>): Promise<GroupByResult[]> {
+    const collection = await this.collection();
+    const by = validateGroupByFields(collection, options.by);
+    const aggregate = normalizeAggregateInput(collection, options.aggregate);
+    validateAggregate(collection, aggregate);
+    const resultCollection = groupByResultCollection(collection, by, aggregate);
+    const filter = await this.normalizeFilter(
+      collection,
+      options.filter,
+      options.context,
+    );
+    const having = await normalizeFilterWithRelations(
+      this.options.collections,
+      resultCollection,
+      options.having,
+      options.context,
+    );
+    const sort = await validateSortWithRelations(
+      this.options.collections,
+      resultCollection,
+      options.sort,
+    );
+    return this.options.adapter.groupBy({
+      collection,
+      by,
+      aggregate,
+      filter,
+      having,
+      sort,
+    });
   }
 
   async describeMutation(
@@ -1447,6 +1501,91 @@ function validateAggregate(
       );
     }
   }
+}
+
+function validateGroupByFields(
+  collection: CollectionDefinition,
+  input: readonly string[],
+): string[] {
+  if (!Array.isArray(input) || input.length === 0) {
+    invalid('INVALID_GROUP_BY', 'GroupBy requires at least one Field.', {
+      collection: collection.name,
+      path: ['by'],
+    });
+  }
+  const seen = new Set<string>();
+  for (const [index, name] of input.entries()) {
+    const field = scalarField(collection, name, ['by', index]);
+    if (!SORTABLE_TYPES.has(field.type)) {
+      invalid(
+        'FIELD_CAPABILITY_NOT_SUPPORTED',
+        `Field "${field.name}" of type "${field.type}" cannot be grouped.`,
+        {
+          collection: collection.name,
+          field: field.name,
+          path: ['by', index],
+        },
+      );
+    }
+    if (seen.has(name)) {
+      invalid('INVALID_GROUP_BY', 'GroupBy Fields must be unique.', {
+        collection: collection.name,
+        field: name,
+        path: ['by', index],
+      });
+    }
+    seen.add(name);
+  }
+  return [...input];
+}
+
+function groupByResultCollection(
+  collection: CollectionDefinition,
+  by: readonly string[],
+  aggregate: AggregateAst,
+): CollectionDefinition {
+  const fields: FieldDefinition[] = by.map((name) => ({
+    ...scalarField(collection, name, ['by']),
+  }));
+  const names = new Set(by);
+  for (const [index, item] of aggregate.items.entries()) {
+    if (names.has(item.alias)) {
+      invalid(
+        'INVALID_GROUP_BY',
+        'Aggregate aliases must not conflict with GroupBy Fields.',
+        {
+          collection: collection.name,
+          field: item.alias,
+          path: ['aggregate', 'items', index, 'alias'],
+        },
+      );
+    }
+    names.add(item.alias);
+    if (item.kind === 'min' || item.kind === 'max') {
+      fields.push({
+        ...scalarField(collection, item.field, [
+          'aggregate',
+          'items',
+          index,
+          'field',
+        ]),
+        name: item.alias,
+        nullable: true,
+      });
+    } else {
+      fields.push({
+        name: item.alias,
+        type: item.kind === 'count' ? 'integer' : 'decimal',
+        nullable: item.kind !== 'count',
+      });
+    }
+  }
+  return {
+    name: collection.name,
+    naming: { underscored: false },
+    fields,
+    constraints: [{ type: 'primary', fields: [...by] }],
+  };
 }
 
 function validateSortAst(

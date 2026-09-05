@@ -148,6 +148,18 @@ function _aggregateUsers(repository: UserRepository) {
   });
 }
 
+function _groupUsers(repository: UserRepository) {
+  return repository.groupBy({
+    by: ['enabled'] as const,
+    aggregate: (aggregate) => ({
+      count: aggregate.count(),
+      maximumName: aggregate.max('name'),
+    }),
+    having: (filter) => filter.number('count').gt(1),
+    sort: (sort) => sort.field('count').desc(),
+  });
+}
+
 it('infers scalar builder selections and preserves fallback result types', () => {
   expectTypeOf<ReturnType<typeof _findSelectedUsers>>().toEqualTypeOf<
     Promise<Array<Pick<UserRecord, 'id' | 'name'>>>
@@ -201,5 +213,15 @@ it('infers scalar builder selections and preserves fallback result types', () =>
       readonly minimumId: string | null;
       readonly maximumName: string | null;
     }>
+  >();
+  expectTypeOf<ReturnType<typeof _groupUsers>>().toEqualTypeOf<
+    Promise<
+      Array<
+        Readonly<Pick<UserRecord, 'enabled'>> & {
+          readonly count: number;
+          readonly maximumName: string | null;
+        }
+      >
+    >
   >();
 });

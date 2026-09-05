@@ -16,6 +16,12 @@ export interface RepositoryAggregatePlan {
   readonly filter?: FilterAst;
 }
 
+export interface RepositoryGroupByPlan extends RepositoryAggregatePlan {
+  readonly by: readonly string[];
+  readonly having?: FilterAst;
+  readonly sort?: SortAst;
+}
+
 export interface RepositoryReadPlan {
   readonly collection: CollectionDefinition;
   readonly fields: readonly string[];
@@ -117,6 +123,7 @@ export interface RepositoryExecutionAdapter {
   count(plan: RepositoryFilterPlan): Promise<number>;
   exists(plan: RepositoryFilterPlan): Promise<boolean>;
   aggregate(plan: RepositoryAggregatePlan): Promise<RepositoryRecord>;
+  groupBy(plan: RepositoryGroupByPlan): Promise<RepositoryRecord[]>;
   createOne(plan: RepositoryCreateOnePlan): Promise<RepositoryExecutedMutation>;
   createMany(
     plan: RepositoryCreateManyPlan,
