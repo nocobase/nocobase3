@@ -206,6 +206,8 @@ export type {
   RepositorySort,
   RepositoryUniqueFieldSetDescription,
   RelationSelectBuilder,
+  RelationConnectInput,
+  RelationCreateInput,
   RelationSelectBranchNode,
   RelationSelectResultNode,
   RelationSelectionExpression,

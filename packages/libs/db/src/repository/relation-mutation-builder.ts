@@ -36,12 +36,20 @@ export class DefaultRelationFieldMutationBuilder implements UpdateRelationFieldM
       kind: 'create',
       values,
       clientKey: options.clientKey,
+      through: options.through,
     });
     return this;
   }
 
-  connect(values: RelationTargetSelector): this {
-    this.connected.push(values);
+  connect(
+    values: RelationTargetSelector,
+    options?: Pick<NestedCreateOptions, 'through'>,
+  ): this {
+    this.connected.push(
+      options?.through === undefined
+        ? values
+        : { where: values, through: options.through },
+    );
     return this;
   }
 

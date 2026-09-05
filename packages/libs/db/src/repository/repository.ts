@@ -360,10 +360,43 @@ export class DefaultRepository<
           collection,
           relation,
         );
+        const throughCollection =
+          relation.type === 'belongsToMany' && relation.through
+            ? await this.options.collections.get(relation.through)
+            : undefined;
+        const throughFields = throughCollection
+          ? scalarFields(throughCollection).filter(
+              (field) =>
+                ![
+                  relation.foreignKey,
+                  relation.otherKey,
+                  ...primaryFields(throughCollection),
+                ].includes(field.name) &&
+                field.type !== 'increments' &&
+                !field.autoIncrement &&
+                field.db?.generated === undefined &&
+                field.name !== throughCollection.optimisticLock?.field,
+            )
+          : [];
         return {
           field: relation.name,
           cardinality: toOne ? ('one' as const) : ('many' as const),
           targetCollection: relation.target,
+          ...(throughCollection
+            ? {
+                through: {
+                  collection: throughCollection.name!,
+                  writableFields: throughFields.map((field) => field.name),
+                  requiredOnCreate: throughFields
+                    .filter(
+                      (field) =>
+                        field.nullable === false &&
+                        field.defaultValue === undefined,
+                    )
+                    .map((field) => field.name),
+                },
+              }
+            : {}),
           allowedActions: await allowedRelationActions(
             this.options.collections,
             collection,
@@ -2958,10 +2991,40 @@ function selectorFromValues(
 function connectTarget(
   values: Readonly<Record<string, unknown>>,
 ): ConnectTarget {
+  if (Object.hasOwn(values, 'through') && Object.hasOwn(values, 'where')) {
+    if (
+      !isPlainRecord(values.where) ||
+      !isPlainRecord(values.through) ||
+      Object.keys(values).some((key) => !['where', 'through'].includes(key))
+    )
+      invalid(
+        'INVALID_MUTATION',
+        'Through connect requires { where, through }.',
+        {},
+      );
+    return {
+      kind: 'connect',
+      by: selectorFromValues(values.where),
+      through: values.through,
+    };
+  }
   return { kind: 'connect', by: selectorFromValues(values) };
 }
 
 function createTarget(values: Readonly<Record<string, unknown>>): CreateTarget {
+  if (Object.hasOwn(values, 'through') && Object.hasOwn(values, 'values')) {
+    if (
+      !isPlainRecord(values.values) ||
+      !isPlainRecord(values.through) ||
+      Object.keys(values).some((key) => !['values', 'through'].includes(key))
+    )
+      invalid(
+        'INVALID_MUTATION',
+        'Through create requires { values, through }.',
+        {},
+      );
+    return { kind: 'create', values: values.values, through: values.through };
+  }
   return { kind: 'create', values };
 }
 
@@ -3068,6 +3131,7 @@ async function normalizeRelationMutation(
     }
     const target = await targetCollection(collections, relation, path);
     if (node.action === 'set') {
+      await validateThroughPayload(collections, relation, node.target, path);
       items.push({
         ...node,
         target: await normalizeMutationTarget(
@@ -3100,6 +3164,11 @@ async function normalizeRelationMutation(
           },
         );
       }
+      for (const targetNode of [
+        ...(node.connect ?? []),
+        ...(node.create ?? []),
+      ])
+        await validateThroughPayload(collections, relation, targetNode, path);
       const connect: ConnectTarget[] = (node.connect ?? []).map(
         (targetNode: ConnectTarget, targetIndex: number) =>
           normalizeConnectTarget(target, targetNode, [
@@ -3270,15 +3339,24 @@ async function normalizeRelationMutation(
       }
       const targets = await Promise.all(
         node.targets.map(
-          (targetNode: ConnectTarget | CreateTarget, targetIndex: number) =>
-            normalizeMutationTarget(
+          async (
+            targetNode: ConnectTarget | CreateTarget,
+            targetIndex: number,
+          ) => {
+            await validateThroughPayload(collections, relation, targetNode, [
+              ...path,
+              'targets',
+              targetIndex,
+            ]);
+            return normalizeMutationTarget(
               collections,
               target,
               targetNode,
               depth,
               state,
               [...path, 'targets', targetIndex],
-            ),
+            );
+          },
         ),
       );
       assertDistinctSelectors(
@@ -3399,6 +3477,7 @@ function normalizeConnectTarget(
   return {
     kind: 'connect',
     by: validateUnique(collection, target.by, [...path, 'by']),
+    through: target.through,
   };
 }
 
@@ -3496,6 +3575,12 @@ async function normalizeRelationUpsertTarget(
       path,
     });
   }
+  if (target.create.through !== undefined)
+    invalid(
+      'INVALID_MUTATION',
+      'Through payload is supported by connect, create, and set only.',
+      { path },
+    );
   const filter = await normalizeRelationTargetFilter(
     collections,
     collection,
@@ -3673,16 +3758,55 @@ async function relationCanConnect(
   if (!relation.through || !relation.foreignKey || !relation.otherKey)
     return false;
   const through = await collections.get(relation.through);
-  if (!through) return false;
-  return scalarFields(through).every(
-    (field) =>
-      field.name === relation.foreignKey ||
-      field.name === relation.otherKey ||
-      field.nullable !== false ||
-      field.defaultValue !== undefined ||
-      field.type === 'increments' ||
-      field.autoIncrement,
-  );
+  return Boolean(through);
+}
+
+async function validateThroughPayload(
+  collections: Pick<ConnectionCollections, 'get'>,
+  relation: RelationFieldDefinition,
+  target: ConnectTarget | CreateTarget,
+  path: readonly (string | number)[],
+): Promise<void> {
+  if (target.through === undefined) return;
+  if (relation.type !== 'belongsToMany' || !relation.through)
+    invalid(
+      'INVALID_MUTATION',
+      'Through payload requires a belongsToMany relation.',
+      { path },
+    );
+  const through = await collections.get(relation.through);
+  if (!through)
+    invalid('COLLECTION_NOT_FOUND', 'Through Collection was not found.', {
+      path,
+    });
+  if (!isPlainRecord(target.through))
+    invalid('INVALID_MUTATION', 'Through payload must be a plain object.', {
+      path,
+    });
+  const managed = new Set([
+    relation.foreignKey,
+    relation.otherKey,
+    ...primaryFields(through),
+  ]);
+  for (const name of Object.keys(target.through)) {
+    if (managed.has(name))
+      invalid(
+        'INVALID_MUTATION',
+        'Through relationship and primary keys are managed by Repository.',
+        { field: name, path: [...path, 'through', name] },
+      );
+    const field = scalarField(through, name, [...path, 'through', name]);
+    if (
+      target.through[name] === undefined ||
+      (target.through[name] === null && field.nullable === false)
+    )
+      invalid(
+        'INVALID_MUTATION',
+        'Through payload contains an undefined or non-nullable null value.',
+        { field: name, path: [...path, 'through', name] },
+      );
+  }
+  validateValues(through, target.through, 'createOne');
 }
 
 async function relationCanDisconnect(

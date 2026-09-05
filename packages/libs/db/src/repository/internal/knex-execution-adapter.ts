@@ -1027,29 +1027,32 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const desired: Array<{
       record: RepositoryRecord;
       unique: UniqueSelector;
+      through?: RepositoryRecord;
     }> = [];
     for (const target of [...connect, ...create]) {
-      desired.push(
-        await this.resolveMutationTarget(
+      desired.push({
+        ...(await this.resolveMutationTarget(
           resolved.target,
           target,
           createdTargets,
           resolved,
           source,
-        ),
-      );
+        )),
+        through: target.through,
+      });
     }
     if (node.action === 'replace') {
-      await this.replaceRelation(
-        resolved,
-        source,
-        sourceUnique,
-        desired.map((target) => target.record),
-      );
+      await this.replaceRelation(resolved, source, sourceUnique, desired);
       return;
     }
     for (const target of desired) {
-      await this.connectRelation(resolved, source, sourceUnique, target.record);
+      await this.connectRelation(
+        resolved,
+        source,
+        sourceUnique,
+        target.record,
+        target.through,
+      );
     }
     for (const selector of node.disconnect ?? []) {
       const target = await this.findTarget(resolved.target, selector);
@@ -1384,6 +1387,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     source: RepositoryRecord,
     sourceUnique: UniqueSelector,
     target: RepositoryRecord,
+    through?: RepositoryRecord,
   ): Promise<void> {
     if (resolved.relation.type === 'belongsTo') {
       const query = tableQuery(this.getClient(), resolved.source).update({
@@ -1451,8 +1455,47 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const exists = await tableQuery(this.getClient(), resolved.through!)
       .where(edge)
       .first();
-    if (!exists)
-      await tableQuery(this.getClient(), resolved.through!).insert(edge);
+    if (!exists) {
+      const values = withInitialVersion(resolved.through!, through ?? {});
+      for (const field of scalarFields(resolved.through!)) {
+        if (
+          field.name === resolved.throughSourceForeignKey ||
+          field.name === resolved.throughTargetForeignKey ||
+          field.nullable !== false ||
+          field.defaultValue !== undefined ||
+          field.type === 'increments' ||
+          field.autoIncrement ||
+          field.db?.generated !== undefined
+        )
+          continue;
+        if (values[field.name] === undefined || values[field.name] === null)
+          throw new RepositoryError(
+            'INVALID_MUTATION',
+            `Through Field "${field.name}" is required for a new relationship.`,
+            {
+              field: field.name,
+              collection: resolved.through!.name,
+              relation: resolved.relation.name,
+            },
+          );
+      }
+      await tableQuery(this.getClient(), resolved.through!).insert({
+        ...mapWrite(resolved.through!, values),
+        ...edge,
+      });
+    } else if (through && Object.keys(through).length > 0) {
+      const changes: Record<string, RepositoryRecord[string] | Knex.Raw> =
+        mapWrite(resolved.through!, through);
+      const version = resolved.through!.optimisticLock?.field;
+      if (version)
+        changes[column(resolved.through!, version)] = this.getClient().raw(
+          '?? + 1',
+          [column(resolved.through!, version)],
+        );
+      await tableQuery(this.getClient(), resolved.through!)
+        .where(edge)
+        .update(changes);
+    }
   }
 
   private async clearRelation(
@@ -1523,10 +1566,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     resolved: ResolvedRepositoryRelation,
     source: RepositoryRecord,
     sourceUnique: UniqueSelector,
-    desired: readonly RepositoryRecord[],
+    desired: readonly {
+      record: RepositoryRecord;
+      through?: RepositoryRecord;
+    }[],
   ): Promise<void> {
     const desiredValues = new Map(
-      desired.map((target) => [
+      desired.map(({ record: target }) => [
         associationKey(target[resolved.targetKey]),
         target[resolved.targetKey],
       ]),
@@ -1585,7 +1631,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       }
     }
     for (const target of desired) {
-      await this.connectRelation(resolved, source, sourceUnique, target);
+      await this.connectRelation(
+        resolved,
+        source,
+        sourceUnique,
+        target.record,
+        target.through,
+      );
     }
   }
 

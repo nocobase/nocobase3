@@ -768,6 +768,7 @@ export interface RelationReplaceNode {
 export interface ConnectTarget {
   readonly kind: 'connect';
   readonly by: UniqueSelector;
+  readonly through?: RepositoryRecord;
 }
 
 export interface CreateTarget {
@@ -775,6 +776,7 @@ export interface CreateTarget {
   readonly clientKey?: string;
   readonly values: Readonly<Record<string, unknown>>;
   readonly relations?: RelationMutationAst;
+  readonly through?: RepositoryRecord;
 }
 
 export interface RelationUpdateTarget {
@@ -796,12 +798,25 @@ export interface RelationDeleteTarget {
 
 export interface NestedCreateOptions {
   readonly clientKey?: string;
+  readonly through?: RepositoryRecord;
 }
+
+export type RelationConnectInput = {
+  readonly where: RelationTargetSelector;
+  readonly through: RepositoryRecord;
+};
+
+export type RelationCreateInput = {
+  readonly values: RelationCreateValues;
+  readonly through: RepositoryRecord;
+};
 
 export type RelationTargetSelector = Readonly<Record<string, unknown>>;
 
 export type RelationTargetSelectorInput =
-  RelationTargetSelector | readonly RelationTargetSelector[];
+  | RelationTargetSelector
+  | RelationConnectInput
+  | readonly (RelationTargetSelector | RelationConnectInput)[];
 
 export type RelationCreateValues = Readonly<
   Record<
@@ -811,7 +826,9 @@ export type RelationCreateValues = Readonly<
 >;
 
 export type RelationCreateValuesInput =
-  RelationCreateValues | readonly RelationCreateValues[];
+  | RelationCreateValues
+  | RelationCreateInput
+  | readonly (RelationCreateValues | RelationCreateInput)[];
 
 export type RelationUpdateValues = Readonly<
   Record<string, DynamicUpdateMutationInput>
@@ -868,7 +885,10 @@ export type UpdateRelationFieldMutationJsonInput =
 
 export interface CreateRelationFieldMutationBuilder {
   create(values: RelationCreateValues, options?: NestedCreateOptions): this;
-  connect(values: RelationTargetSelector): this;
+  connect(
+    values: RelationTargetSelector,
+    options?: Pick<NestedCreateOptions, 'through'>,
+  ): this;
 }
 
 export interface UpdateRelationFieldMutationBuilder extends CreateRelationFieldMutationBuilder {
@@ -1103,6 +1123,11 @@ export interface RepositoryRelationMutationDescription {
   readonly field: string;
   readonly cardinality: 'one' | 'many';
   readonly targetCollection: string;
+  readonly through?: {
+    readonly collection: string;
+    readonly writableFields: readonly string[];
+    readonly requiredOnCreate: readonly string[];
+  };
   readonly allowedActions: readonly (
     'set' | 'clear' | 'patch' | 'replace' | 'modify'
   )[];

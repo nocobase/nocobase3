@@ -138,6 +138,8 @@
         "QueryAdapter",
         "RelationClearNode",
         "RelationCombineResult",
+        "RelationConnectInput",
+        "RelationCreateInput",
         "RelationCreateValues",
         "RelationCreateValuesInput",
         "RelationDeleteInput",
