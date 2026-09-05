@@ -212,6 +212,7 @@
         "SqliteConnectionConfig",
         "StreamOptions",
         "StringFilterOperators",
+        "StringFilterOptions",
         "TextFilterOperators",
         "TimeFilterOperators",
         "UniqueSelector",

@@ -225,6 +225,7 @@ export type {
   SortNode,
   SortRelationBuilder,
   StringFilterOperators,
+  StringFilterOptions,
   StreamOptions,
   TextFilterOperators,
   TimeFilterOperators,

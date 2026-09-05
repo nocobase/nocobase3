@@ -69,6 +69,8 @@ export type FilterValue =
 export type FilterOperator =
   | '$includes'
   | '$notIncludes'
+  | '$startsWith'
+  | '$endsWith'
   | '$eq'
   | '$ne'
   | '$gt'
@@ -98,6 +100,7 @@ export interface FilterConditionNode {
   readonly path: RepositoryPath;
   readonly operator: FilterOperator;
   readonly value?: FilterValue;
+  readonly mode?: 'default' | 'insensitive';
 }
 
 export interface FilterRelationNode {
@@ -129,10 +132,34 @@ export interface EmptyFilterOperators {
 }
 
 export interface StringFilterOperators extends EmptyFilterOperators {
-  includes(value: FilterOperand<string>): FilterConditionNode;
-  notIncludes(value: FilterOperand<string>): FilterConditionNode;
-  eq(value: FilterOperand<string | null>): FilterConditionNode;
-  ne(value: FilterOperand<string | null>): FilterConditionNode;
+  includes(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode;
+  notIncludes(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode;
+  startsWith(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode;
+  endsWith(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode;
+  eq(
+    value: FilterOperand<string | null>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode;
+  ne(
+    value: FilterOperand<string | null>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode;
+}
+
+export interface StringFilterOptions {
+  readonly mode?: 'default' | 'insensitive';
 }
 
 export type TextFilterOperators = StringFilterOperators;

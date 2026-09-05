@@ -2399,6 +2399,35 @@ function applyCondition(
   const name = sourceAlias
     ? qualified(sourceAlias, directColumn)
     : directColumn;
+  const pattern = [
+    '$includes',
+    '$notIncludes',
+    '$startsWith',
+    '$endsWith',
+  ].includes(node.operator);
+  if (pattern || (node.mode === 'insensitive' && node.value !== null)) {
+    const text = stringFilterValue(node.value);
+    const escaped = text.replace(/[!%_[]/g, '!$&');
+    const operand = pattern
+      ? `${node.operator === '$startsWith' ? '' : '%'}${escaped}${node.operator === '$endsWith' ? '' : '%'}`
+      : text;
+    const operator = pattern
+      ? node.operator === '$notIncludes'
+        ? 'not like'
+        : 'like'
+      : node.operator === '$ne'
+        ? '<>'
+        : '=';
+    const expression =
+      node.mode === 'insensitive'
+        ? `lower(??) ${operator} lower(?)`
+        : `?? ${operator} ?`;
+    query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
+      `${expression}${pattern ? " escape '!'" : ''}`,
+      [name, operand],
+    );
+    return;
+  }
   switch (node.operator) {
     case '$eq':
       if (node.value === null) {

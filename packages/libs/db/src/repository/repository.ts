@@ -889,9 +889,36 @@ export class DefaultRepository<
 }
 
 const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
-  string: ['$includes', '$notIncludes', '$eq', '$ne', '$empty', '$notEmpty'],
-  uuid: ['$includes', '$notIncludes', '$eq', '$ne', '$empty', '$notEmpty'],
-  text: ['$includes', '$notIncludes', '$eq', '$ne', '$empty', '$notEmpty'],
+  string: [
+    '$includes',
+    '$notIncludes',
+    '$startsWith',
+    '$endsWith',
+    '$eq',
+    '$ne',
+    '$empty',
+    '$notEmpty',
+  ],
+  uuid: [
+    '$includes',
+    '$notIncludes',
+    '$startsWith',
+    '$endsWith',
+    '$eq',
+    '$ne',
+    '$empty',
+    '$notEmpty',
+  ],
+  text: [
+    '$includes',
+    '$notIncludes',
+    '$startsWith',
+    '$endsWith',
+    '$eq',
+    '$ne',
+    '$empty',
+    '$notEmpty',
+  ],
   increments: [
     '$eq',
     '$ne',
@@ -1201,6 +1228,25 @@ function validateFilterNode(
     );
   }
   validateConditionValue(field, node, path);
+  if (
+    node.mode !== undefined &&
+    ((node.mode !== 'default' && node.mode !== 'insensitive') ||
+      !['string', 'text', 'uuid'].includes(field.type) ||
+      ![
+        '$eq',
+        '$ne',
+        '$includes',
+        '$notIncludes',
+        '$startsWith',
+        '$endsWith',
+      ].includes(node.operator))
+  ) {
+    invalid(
+      'INVALID_FILTER',
+      'String comparison mode requires a supported textual operator.',
+      { field: field.name, path: [...path, 'mode'] },
+    );
+  }
   const value = resolveFilterValue(node.value, context, [...path, 'value']);
   validateResolvedConditionValue(field, node.operator, value, path);
   return {

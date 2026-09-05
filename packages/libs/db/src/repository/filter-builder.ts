@@ -17,6 +17,7 @@ import type {
   RepositoryPath,
   RepositoryRecord,
   StringFilterOperators,
+  StringFilterOptions,
   TextFilterOperators,
   TimeFilterOperators,
 } from './types.js';
@@ -87,20 +88,57 @@ class BaseOperators implements EmptyFilterOperators {
 }
 
 class StringOperators extends BaseOperators implements StringFilterOperators {
-  includes(value: FilterOperand<string>): FilterConditionNode {
-    return condition(this.path, this.group, '$includes', value);
+  includes(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode {
+    return this.build('$includes', value, options);
   }
 
-  notIncludes(value: FilterOperand<string>): FilterConditionNode {
-    return condition(this.path, this.group, '$notIncludes', value);
+  notIncludes(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode {
+    return this.build('$notIncludes', value, options);
   }
 
-  eq(value: FilterOperand<string | null>): FilterConditionNode {
-    return condition(this.path, this.group, '$eq', value);
+  eq(
+    value: FilterOperand<string | null>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode {
+    return this.build('$eq', value, options);
   }
 
-  ne(value: FilterOperand<string | null>): FilterConditionNode {
-    return condition(this.path, this.group, '$ne', value);
+  ne(
+    value: FilterOperand<string | null>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode {
+    return this.build('$ne', value, options);
+  }
+
+  startsWith(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode {
+    return this.build('$startsWith', value, options);
+  }
+
+  endsWith(
+    value: FilterOperand<string>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode {
+    return this.build('$endsWith', value, options);
+  }
+
+  private build(
+    operator: FilterOperator,
+    value: FilterOperand<string | null>,
+    options?: StringFilterOptions,
+  ): FilterConditionNode {
+    const node = condition(this.path, this.group, operator, value);
+    if (options?.mode !== undefined)
+      Object.assign(node, { mode: options.mode });
+    return node;
   }
 }
 

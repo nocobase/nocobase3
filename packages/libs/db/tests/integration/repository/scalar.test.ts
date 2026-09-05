@@ -5,6 +5,75 @@ import {
 } from '../helpers.js';
 
 describeIntegrationDatabases('scalar Repository', (context) => {
+  it('filters textual values with explicit case folding and literal patterns', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+    await repository.createMany({
+      values: [
+        { orderNo: 'A', status: 'NB-Chen_100%', amount: 1 },
+        { orderNo: 'B', status: 'nb-chenX100Y', amount: 2 },
+        { orderNo: 'C', status: 'Other', amount: 3 },
+      ],
+    });
+    const select = (select: import('../../../src/index.js').SelectBuilder) =>
+      select.fields('orderNo');
+    expect(
+      await repository.findMany({
+        filter: (filter) =>
+          filter.string('status').eq('NB-CHEN_100%', { mode: 'insensitive' }),
+        select,
+      }),
+    ).toEqual([{ orderNo: 'A' }]);
+    expect(
+      await repository.findMany({
+        filter: (filter) =>
+          filter.string('status').includes('_100%', { mode: 'insensitive' }),
+        select,
+      }),
+    ).toEqual([{ orderNo: 'A' }]);
+    expect(
+      await repository.findMany({
+        filter: (filter) =>
+          filter.string('status').startsWith('nb-', { mode: 'insensitive' }),
+        select,
+      }),
+    ).toEqual([{ orderNo: 'A' }, { orderNo: 'B' }]);
+    expect(
+      await repository.findMany({
+        filter: (filter) =>
+          filter.string('status').endsWith('100%', { mode: 'insensitive' }),
+        select,
+      }),
+    ).toEqual([{ orderNo: 'A' }]);
+    expect(
+      await repository.findMany({
+        filter: (filter) =>
+          filter.string('status').notIncludes('chen', { mode: 'insensitive' }),
+        select,
+      }),
+    ).toEqual([{ orderNo: 'C' }]);
+    await expect(
+      repository.findMany({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: {
+            kind: 'group',
+            logic: 'and',
+            items: [
+              {
+                kind: 'condition',
+                path: ['amount'],
+                operator: '$eq',
+                value: 1,
+                mode: 'insensitive',
+              },
+            ],
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
+  });
   it('executes atomic updates with returning, nulls, version checks, and rollback', async () => {
     await createOrders(context);
     const repository = context.database.repository('repositoryOrders');
