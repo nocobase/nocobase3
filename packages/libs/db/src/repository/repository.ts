@@ -16,6 +16,7 @@ import {
   DefaultSelectBuilder,
   type SelectBuilderState,
 } from './select-builder.js';
+import { DefaultSortBuilder, sortExpressionToNode } from './sort-builder.js';
 import type { RepositoryExecutionAdapter } from './internal/execution-adapter.js';
 import type {
   CreateManyOptions,
@@ -46,6 +47,7 @@ import type {
   RepositoryMutationDescription,
   RepositoryRecord,
   RepositorySelect,
+  RepositorySort,
   RelationMutationAst,
   RelationMutationNode,
   RelationDeleteInput,
@@ -58,6 +60,7 @@ import type {
   SelectIncludeNode,
   SingleMutationResult,
   SortAst,
+  SortNode,
   UniqueSelector,
   UpdateManyOptions,
   UpdateManyResult,
@@ -118,8 +121,7 @@ export class DefaultRepository<
       options.filter,
       options.context,
     );
-    const sort = await this.validateSort(collection, options.sort);
-    if (!filter && (!options.sort || options.sort.items.length === 0)) {
+    if (!filter && !options.sort) {
       invalid(
         'INVALID_FILTER',
         'findOne() requires filter or non-empty sort.',
@@ -128,6 +130,7 @@ export class DefaultRepository<
         },
       );
     }
+    const sort = await this.validateSort(collection, options.sort, !filter);
     return (await this.options.adapter.findOne({
       collection,
       fields: selection.fields,
@@ -464,12 +467,14 @@ export class DefaultRepository<
 
   private async validateSort(
     collection: CollectionDefinition,
-    sort: SortAst | undefined,
+    sort: RepositorySort<TRecord> | undefined,
+    requireNonEmpty = false,
   ): Promise<SortAst | undefined> {
     return validateSortWithRelations(
       this.options.collections,
       collection,
       sort,
+      requireNonEmpty,
     );
   }
 
@@ -1060,11 +1065,36 @@ function validateScalarSelect(
   return [...fields];
 }
 
-function validateScalarSort(
+function normalizeSortInput<TRecord extends object>(
   collection: CollectionDefinition,
-  sort: SortAst | undefined,
+  input: RepositorySort<TRecord> | undefined,
 ): SortAst | undefined {
-  if (!sort) return undefined;
+  if (input === undefined) return undefined;
+  if (typeof input !== 'function') return input;
+  const result = input(new DefaultSortBuilder<TRecord>());
+  const expressions = Array.isArray(result) ? result : [result];
+  let items: SortNode[];
+  try {
+    items = expressions.map(sortExpressionToNode);
+  } catch (error) {
+    invalid(
+      'INVALID_SORT',
+      'Sort callbacks must return Sort Builder expressions.',
+      { collection: collection.name, cause: error },
+    );
+  }
+  return {
+    kind: 'sort',
+    version: 1,
+    collection: collection.name,
+    items,
+  };
+}
+
+function validateSortAst(
+  collection: CollectionDefinition,
+  sort: SortAst,
+): void {
   if (
     sort.kind !== 'sort' ||
     sort.version !== 1 ||
@@ -1080,45 +1110,6 @@ function validateScalarSort(
       path: ['collection'],
     });
   }
-  sort.items.forEach((item, index) => {
-    if (item.by.kind !== 'field') {
-      relationNotSupported(collection, ['items', index, 'by']);
-    }
-    const field = scalarField(collection, item.by.field, [
-      'items',
-      index,
-      'by',
-      'field',
-    ]);
-    if (!SORTABLE_TYPES.has(field.type)) {
-      invalid(
-        'FIELD_CAPABILITY_NOT_SUPPORTED',
-        `Field "${field.name}" of type "${field.type}" is not sortable.`,
-        {
-          collection: collection.name,
-          field: field.name,
-          path: ['items', index, 'by'],
-        },
-      );
-    }
-    if (item.direction !== 'asc' && item.direction !== 'desc') {
-      invalid('INVALID_SORT', 'Sort direction must be asc or desc.', {
-        collection: collection.name,
-        path: ['items', index, 'direction'],
-      });
-    }
-    if (
-      item.nulls !== undefined &&
-      item.nulls !== 'first' &&
-      item.nulls !== 'last'
-    ) {
-      invalid('INVALID_SORT', 'Sort nulls must be first or last.', {
-        collection: collection.name,
-        path: ['items', index, 'nulls'],
-      });
-    }
-  });
-  return { ...sort, collection: collection.name };
 }
 
 async function normalizeFilterWithRelations<TRecord extends object>(
@@ -1354,8 +1345,9 @@ async function validateSelectInputWithRelations(
       node.filter,
       context,
     );
+    const sortInput = normalizeSortInput(target, node.sort);
     if (
-      node.sort?.items.length &&
+      sortInput?.items.length &&
       (relation.type === 'belongsTo' || relation.type === 'hasOne')
     ) {
       invalid(
@@ -1369,7 +1361,7 @@ async function validateSelectInputWithRelations(
       );
     }
     const sort = isToManyRelation(relation)
-      ? await validateSortWithRelations(collections, target, node.sort)
+      ? await validateSortWithRelations(collections, target, sortInput)
       : undefined;
     includes.push({
       kind: 'include',
@@ -1396,11 +1388,19 @@ interface ValidatedSelect {
   readonly select?: SelectAst;
 }
 
-async function validateSortWithRelations(
+async function validateSortWithRelations<TRecord extends object>(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
-  sort: SortAst | undefined,
+  input: RepositorySort<TRecord> | undefined,
+  requireNonEmpty = false,
 ): Promise<SortAst | undefined> {
+  const sort = normalizeSortInput(collection, input);
+  if (requireNonEmpty && (!sort || sort.items.length === 0)) {
+    invalid('INVALID_FILTER', 'findOne() requires filter or non-empty sort.', {
+      collection: collection.name,
+      path: ['sort'],
+    });
+  }
   if (!sort) {
     const fields = primaryFields(collection);
     return fields.length
@@ -1409,16 +1409,60 @@ async function validateSortWithRelations(
           version: 1,
           collection: collection.name,
           items: fields.map((field) => ({
-            by: { kind: 'field', field },
+            kind: 'field',
+            path: [field],
             direction: 'asc',
           })),
         }
       : undefined;
   }
-  const directItems = sort.items.filter((item) => item.by.kind === 'field');
-  validateScalarSort(collection, { ...sort, items: directItems });
+  validateSortAst(collection, sort);
   const seen = new Set<string>();
   for (const [index, item] of sort.items.entries()) {
+    if (item.kind !== 'field' && item.kind !== 'aggregate') {
+      invalid('INVALID_SORT', 'Unknown Sort node kind.', {
+        collection: collection.name,
+        path: ['items', index, 'kind'],
+      });
+    }
+    if (item.kind === 'field' && !Array.isArray(item.path)) {
+      invalid('INVALID_SORT', 'Field sort path must be an array.', {
+        collection: collection.name,
+        path: ['items', index, 'path'],
+      });
+    }
+    if (item.kind === 'aggregate') {
+      if (!Array.isArray(item.relation)) {
+        invalid('INVALID_SORT', 'Aggregate relation path must be an array.', {
+          collection: collection.name,
+          path: ['items', index, 'relation'],
+        });
+      }
+      if (
+        item.aggregate !== 'count' &&
+        item.aggregate !== 'sum' &&
+        item.aggregate !== 'avg' &&
+        item.aggregate !== 'min' &&
+        item.aggregate !== 'max'
+      ) {
+        invalid('INVALID_SORT', 'Unknown sort aggregate.', {
+          collection: collection.name,
+          path: ['items', index, 'aggregate'],
+        });
+      }
+      if (item.aggregate === 'count' && item.field !== undefined) {
+        invalid('INVALID_SORT', 'Count sort does not accept a Field.', {
+          collection: collection.name,
+          path: ['items', index, 'field'],
+        });
+      }
+      if (item.aggregate !== 'count' && typeof item.field !== 'string') {
+        invalid('INVALID_SORT', 'Value aggregate sorts require a Field.', {
+          collection: collection.name,
+          path: ['items', index, 'field'],
+        });
+      }
+    }
     if (item.direction !== 'asc' && item.direction !== 'desc') {
       invalid('INVALID_SORT', 'Sort direction must be asc or desc.', {
         collection: collection.name,
@@ -1435,28 +1479,37 @@ async function validateSortWithRelations(
         path: ['items', index, 'nulls'],
       });
     }
-    const identity = JSON.stringify(item.by);
+    const identity =
+      item.kind === 'field'
+        ? JSON.stringify({ kind: item.kind, path: item.path })
+        : JSON.stringify({
+            kind: item.kind,
+            relation: item.relation,
+            aggregate: item.aggregate,
+            field: item.field,
+          });
     if (seen.has(identity)) {
       invalid('INVALID_SORT', 'Sort targets must not be repeated.', {
         collection: collection.name,
-        path: ['items', index, 'by'],
+        path: ['items', index],
       });
     }
     seen.add(identity);
-    if (item.by.kind === 'field') continue;
+    if (item.kind === 'field') {
+      await validateFieldSortNode(collections, collection, item, index);
+      continue;
+    }
     let current = collection;
     let terminal: RelationFieldDefinition | undefined;
-    for (const [relationIndex, name] of item.by.relation.entries()) {
+    for (const [relationIndex, name] of item.relation.entries()) {
       terminal = relationField(current, name, [
         'items',
         index,
-        'by',
         'relation',
         relationIndex,
       ]);
       if (
-        item.by.kind === 'relationAggregate' &&
-        relationIndex < item.by.relation.length - 1 &&
+        relationIndex < item.relation.length - 1 &&
         terminal.type !== 'belongsTo' &&
         terminal.type !== 'hasOne'
       ) {
@@ -1466,22 +1519,7 @@ async function validateSortWithRelations(
           {
             collection: current.name,
             relation: terminal.name,
-            path: ['items', index, 'by', 'relation', relationIndex],
-          },
-        );
-      }
-      if (
-        item.by.kind === 'relationField' &&
-        terminal.type !== 'belongsTo' &&
-        terminal.type !== 'hasOne'
-      ) {
-        invalid(
-          'INVALID_SORT',
-          'relationField may traverse to-one relations only.',
-          {
-            collection: current.name,
-            relation: terminal.name,
-            path: ['items', index, 'by'],
+            path: ['items', index, 'relation', relationIndex],
           },
         );
       }
@@ -1490,67 +1528,44 @@ async function validateSortWithRelations(
     if (!terminal) {
       invalid('INVALID_SORT', 'Relation sort path must not be empty.', {
         collection: collection.name,
-        path: ['items', index, 'by', 'relation'],
+        path: ['items', index, 'relation'],
       });
     }
-    if (item.by.kind === 'relationField') {
-      const field = scalarField(current, item.by.field, [
-        'items',
-        index,
-        'by',
-        'field',
-      ]);
-      if (!SORTABLE_TYPES.has(field.type)) {
+    if (terminal.type === 'belongsTo' || terminal.type === 'hasOne') {
+      invalid(
+        'INVALID_SORT',
+        'Aggregate sort requires a to-many terminal relation.',
+        {
+          collection: collection.name,
+          relation: terminal.name,
+          path: ['items', index],
+        },
+      );
+    }
+    if (item.aggregate !== 'count') {
+      const field = scalarField(current, item.field, ['items', index, 'field']);
+      const allowed =
+        item.aggregate === 'sum' || item.aggregate === 'avg'
+          ? FILTER_GROUP_BY_TYPE[field.type] === 'number'
+          : SORTABLE_TYPES.has(field.type);
+      if (!allowed) {
         invalid(
           'FIELD_CAPABILITY_NOT_SUPPORTED',
-          'Relation Field is not sortable.',
+          `Aggregate "${item.aggregate}" is not supported for Field "${field.name}" of type "${field.type}".`,
           {
             collection: current.name,
             field: field.name,
-            path: ['items', index, 'by', 'field'],
+            path: ['items', index, 'field'],
           },
         );
-      }
-    } else {
-      if (terminal.type === 'belongsTo' || terminal.type === 'hasOne') {
-        invalid(
-          'INVALID_SORT',
-          'relationAggregate requires a to-many terminal relation.',
-          {
-            collection: collection.name,
-            relation: terminal.name,
-            path: ['items', index, 'by'],
-          },
-        );
-      }
-      if (item.by.aggregate !== 'count') {
-        const field = scalarField(current, item.by.field, [
-          'items',
-          index,
-          'by',
-          'field',
-        ]);
-        const allowed =
-          item.by.aggregate === 'sum' || item.by.aggregate === 'avg'
-            ? FILTER_GROUP_BY_TYPE[field.type] === 'number'
-            : SORTABLE_TYPES.has(field.type);
-        if (!allowed) {
-          invalid(
-            'FIELD_CAPABILITY_NOT_SUPPORTED',
-            `Aggregate "${item.by.aggregate}" is not supported for Field "${field.name}" of type "${field.type}".`,
-            {
-              collection: current.name,
-              field: field.name,
-              path: ['items', index, 'by', 'field'],
-            },
-          );
-        }
       }
     }
   }
   const items = [...sort.items];
   const direct = new Set(
-    items.flatMap((item) => (item.by.kind === 'field' ? [item.by.field] : [])),
+    items.flatMap((item) =>
+      item.kind === 'field' && item.path.length === 1 ? [item.path[0]] : [],
+    ),
   );
   const alreadyUnique = uniqueConstraints(collection).some((constraint) =>
     constraint.fields.every((field) => direct.has(field)),
@@ -1558,11 +1573,69 @@ async function validateSortWithRelations(
   if (!alreadyUnique) {
     for (const field of primaryFields(collection)) {
       if (!direct.has(field)) {
-        items.push({ by: { kind: 'field', field }, direction: 'asc' });
+        items.push({ kind: 'field', path: [field], direction: 'asc' });
       }
     }
   }
   return { ...sort, collection: collection.name, items };
+}
+
+async function validateFieldSortNode(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  item: Extract<SortNode, { readonly kind: 'field' }>,
+  index: number,
+): Promise<void> {
+  if (item.path.length === 0) {
+    invalid('INVALID_SORT', 'Field sort path must not be empty.', {
+      collection: collection.name,
+      path: ['items', index, 'path'],
+    });
+  }
+  let current = collection;
+  for (const [relationIndex, name] of item.path.slice(0, -1).entries()) {
+    const relation = relationField(current, name, [
+      'items',
+      index,
+      'path',
+      relationIndex,
+    ]);
+    if (relation.type !== 'belongsTo' && relation.type !== 'hasOne') {
+      invalid(
+        'INVALID_SORT',
+        'Field sort paths may traverse to-one relations only.',
+        {
+          collection: current.name,
+          relation: relation.name,
+          path: ['items', index, 'path', relationIndex],
+        },
+      );
+    }
+    current = await targetCollection(collections, relation, [
+      'items',
+      index,
+      'path',
+      relationIndex,
+    ]);
+  }
+  const fieldIndex = item.path.length - 1;
+  const field = scalarField(current, item.path[fieldIndex], [
+    'items',
+    index,
+    'path',
+    fieldIndex,
+  ]);
+  if (!SORTABLE_TYPES.has(field.type)) {
+    invalid(
+      'FIELD_CAPABILITY_NOT_SUPPORTED',
+      `Field "${field.name}" of type "${field.type}" is not sortable.`,
+      {
+        collection: current.name,
+        field: field.name,
+        path: ['items', index],
+      },
+    );
+  }
 }
 
 function primaryFields(collection: CollectionDefinition): string[] {
@@ -3150,17 +3223,6 @@ function pickSelection(
     result[relation.relation] = record[relation.relation];
   }
   return result;
-}
-
-function relationNotSupported(
-  collection: CollectionDefinition,
-  path?: readonly (string | number)[],
-): never {
-  return invalid(
-    'FIELD_CAPABILITY_NOT_SUPPORTED',
-    'Relation Repository operations are not available in the scalar execution slice.',
-    { collection: collection.name, path },
-  );
 }
 
 function recordNotFound(collection: CollectionDefinition): never {

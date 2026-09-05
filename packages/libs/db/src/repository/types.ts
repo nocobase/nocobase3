@@ -218,7 +218,7 @@ export interface RelationSelectBuilder<
   TRecord extends object = RepositoryRecord,
 > extends SelectBuilder<TRecord> {
   filter(filter: RepositoryFilter<TRecord>): this;
-  sort(sort: SortAst): this;
+  sort(sort: RepositorySort<TRecord>): this;
 }
 
 export type RepositorySelect<TRecord extends object> =
@@ -228,53 +228,87 @@ export type SortDirection = 'asc' | 'desc';
 
 export type SortNullsPosition = 'first' | 'last';
 
-export interface SortFieldTarget {
+export interface SortFieldNode {
   readonly kind: 'field';
-  readonly field: string;
-}
-
-export interface SortRelationFieldTarget {
-  readonly kind: 'relationField';
-  readonly relation: RepositoryPath;
-  readonly field: string;
-}
-
-export interface SortRelationCountTarget {
-  readonly kind: 'relationAggregate';
-  readonly relation: RepositoryPath;
-  readonly aggregate: 'count';
-  readonly field?: never;
-}
-
-export interface SortRelationValueAggregateTarget {
-  readonly kind: 'relationAggregate';
-  readonly relation: RepositoryPath;
-  readonly aggregate: 'sum' | 'avg' | 'min' | 'max';
-  readonly field: string;
-}
-
-export type SortTarget =
-  | SortFieldTarget
-  | SortRelationFieldTarget
-  | SortRelationCountTarget
-  | SortRelationValueAggregateTarget;
-
-export interface SortItemNode {
-  readonly by: SortTarget;
+  readonly path: RepositoryPath;
   readonly direction: SortDirection;
   readonly nulls?: SortNullsPosition;
 }
+
+export type SortAggregateNode =
+  | {
+      readonly kind: 'aggregate';
+      readonly relation: RepositoryPath;
+      readonly aggregate: 'count';
+      readonly field?: never;
+      readonly direction: SortDirection;
+      readonly nulls?: SortNullsPosition;
+    }
+  | {
+      readonly kind: 'aggregate';
+      readonly relation: RepositoryPath;
+      readonly aggregate: 'sum' | 'avg' | 'min' | 'max';
+      readonly field: string;
+      readonly direction: SortDirection;
+      readonly nulls?: SortNullsPosition;
+    };
+
+export type SortNode = SortFieldNode | SortAggregateNode;
 
 export interface SortAst {
   readonly kind: 'sort';
   readonly version: 1;
   readonly collection?: string;
-  readonly items: readonly SortItemNode[];
+  readonly items: readonly SortNode[];
 }
 
 export interface NonEmptySortAst extends SortAst {
-  readonly items: readonly [SortItemNode, ...SortItemNode[]];
+  readonly items: readonly [SortNode, ...SortNode[]];
 }
+
+export interface SortExpression {
+  readonly kind: 'sortExpression';
+}
+
+export interface SortNullsBuilder extends SortExpression {
+  nullsFirst(): SortExpression;
+  nullsLast(): SortExpression;
+}
+
+export interface SortFieldBuilder {
+  asc(): SortNullsBuilder;
+  desc(): SortNullsBuilder;
+}
+
+export interface SortAggregateBuilder {
+  asc(): SortNullsBuilder;
+  desc(): SortNullsBuilder;
+}
+
+export interface SortRelationBuilder {
+  count(): SortAggregateBuilder;
+  sum(field: string): SortAggregateBuilder;
+  avg(field: string): SortAggregateBuilder;
+  min(field: string): SortAggregateBuilder;
+  max(field: string): SortAggregateBuilder;
+}
+
+export interface SortBuilder<_TRecord extends object = RepositoryRecord> {
+  field(path: string | RepositoryPath): SortFieldBuilder;
+  relation(path: string | RepositoryPath): SortRelationBuilder;
+}
+
+export type RepositorySort<TRecord extends object> =
+  | SortAst
+  | ((
+      sort: SortBuilder<TRecord>,
+    ) => SortExpression | readonly SortExpression[]);
+
+export type NonEmptyRepositorySort<TRecord extends object> =
+  | NonEmptySortAst
+  | ((
+      sort: SortBuilder<TRecord>,
+    ) => SortExpression | readonly [SortExpression, ...SortExpression[]]);
 
 export interface UniqueSelector {
   readonly kind: 'unique';
@@ -497,7 +531,7 @@ export interface FindManyOptions<
   TRecord extends object,
 > extends RepositoryReadOptions<TRecord> {
   readonly filter?: RepositoryFilter<TRecord>;
-  readonly sort?: SortAst;
+  readonly sort?: RepositorySort<TRecord>;
   readonly limit?: number;
   readonly offset?: number;
 }
@@ -507,11 +541,11 @@ export type FindOneOptions<TRecord extends object> =
     (
       | {
           readonly filter: RepositoryFilter<TRecord>;
-          readonly sort?: SortAst;
+          readonly sort?: RepositorySort<TRecord>;
         }
       | {
           readonly filter?: RepositoryFilter<TRecord>;
-          readonly sort: NonEmptySortAst;
+          readonly sort: NonEmptyRepositorySort<TRecord>;
         }
     );
 

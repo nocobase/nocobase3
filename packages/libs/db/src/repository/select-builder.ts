@@ -2,8 +2,8 @@ import type {
   RelationSelectBuilder,
   RepositoryFilter,
   RepositoryRecord,
+  RepositorySort,
   SelectBuilder,
-  SortAst,
 } from './types.js';
 
 export interface SelectBuilderIncludeState {
@@ -11,12 +11,12 @@ export interface SelectBuilderIncludeState {
   readonly relation: string;
   readonly select: SelectBuilderState;
   readonly filter?: RepositoryFilter<RepositoryRecord>;
-  readonly sort?: SortAst;
+  readonly sort?: RepositorySort<RepositoryRecord>;
 }
 
 export interface RelationSelectBuilderState extends SelectBuilderState {
   readonly filter?: RepositoryFilter<RepositoryRecord>;
-  readonly sort?: SortAst;
+  readonly sort?: RepositorySort<RepositoryRecord>;
 }
 
 export interface SelectBuilderState {
@@ -77,14 +77,14 @@ export class DefaultRelationSelectBuilder<
   implements RelationSelectBuilder<TRecord>
 {
   private relationFilter: RepositoryFilter<TRecord> | undefined;
-  private relationSort: SortAst | undefined;
+  private relationSort: RepositorySort<TRecord> | undefined;
 
   filter(filter: RepositoryFilter<TRecord>): this {
     this.relationFilter = filter;
     return this;
   }
 
-  sort(sort: SortAst): this {
+  sort(sort: RepositorySort<TRecord>): this {
     this.relationSort = sort;
     return this;
   }

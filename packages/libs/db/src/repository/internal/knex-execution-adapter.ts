@@ -25,7 +25,7 @@ import type {
   RelationUpsertTarget,
   SelectNode,
   SelectIncludeNode,
-  SortItemNode,
+  SortNode,
   UniqueSelector,
 } from '../types.js';
 import type {
@@ -1252,31 +1252,33 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async applySort(
     query: Knex.QueryBuilder,
     collection: CollectionDefinition,
-    item: SortItemNode,
+    item: SortNode,
     sourceAlias: string,
   ): Promise<void> {
     const client = this.getClient();
-    if (item.by.kind === 'field') {
+    if (item.kind === 'field' && item.path.length === 1) {
       applyOrderBy(
         query,
         client,
-        qualified(sourceAlias, column(collection, item.by.field)),
+        qualified(sourceAlias, column(collection, item.path[0])),
         item.direction,
         item.nulls ?? 'last',
       );
       return;
     }
-    const path = await this.resolveRelationPath(collection, item.by.relation);
+    const relationPath =
+      item.kind === 'field' ? item.path.slice(0, -1) : item.relation;
+    const path = await this.resolveRelationPath(collection, relationPath);
     const value = relationSortSubquery(
       client,
       path,
       sourceAlias,
-      item.by.kind === 'relationField'
-        ? { kind: 'field', field: item.by.field }
+      item.kind === 'field'
+        ? { kind: 'field', field: item.path[item.path.length - 1] }
         : {
             kind: 'aggregate',
-            aggregate: item.by.aggregate,
-            field: item.by.field,
+            aggregate: item.aggregate,
+            field: item.field,
           },
     );
     applyOrderBy(query, client, value, item.direction, item.nulls ?? 'last');

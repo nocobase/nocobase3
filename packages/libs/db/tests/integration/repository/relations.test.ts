@@ -153,7 +153,7 @@ describeIntegrationDatabases('Repository relation reads', (context) => {
           books
             .fields('title')
             .filter((filter) => filter.number('pages').gt(100))
-            .sort(sorting('pages', 'desc'))
+            .sort((sort) => sort.field('pages').desc())
             .include('publisher', (publisher) => publisher.fields('name')),
         ),
       sort: sorting('id', 'asc'),
@@ -219,6 +219,69 @@ describeIntegrationDatabases('Repository relation reads', (context) => {
         select: (select) => select.include('missing'),
       }),
     ).rejects.toMatchObject({ code: 'FIELD_NOT_FOUND', field: 'missing' });
+  });
+
+  it('sorts with Field paths and relation aggregates from Sort Builder input', async () => {
+    await createRelationFixture(context);
+    const books = context.database.repository('repositoryBooks');
+    const authors = context.database.repository('repositoryAuthors');
+
+    await expect(
+      books.findMany({
+        select: selection(['title']),
+        sort: (sort) => sort.field('publisher.name').asc().nullsLast(),
+      }),
+    ).resolves.toEqual([
+      { title: 'Alpha' },
+      { title: 'Gamma' },
+      { title: 'Beta' },
+    ]);
+
+    await expect(
+      authors.findMany({
+        select: selection(['name']),
+        sort: (sort) => [
+          sort.relation('books').count().desc(),
+          sort.field('name').asc(),
+        ],
+      }),
+    ).resolves.toEqual([{ name: 'Ada' }, { name: 'Bob' }, { name: 'Cara' }]);
+
+    await expect(
+      authors.findMany({
+        select: selection(['name']),
+        sort: (sort) => sort.relation('books').max('pages').desc().nullsLast(),
+      }),
+    ).resolves.toEqual([{ name: 'Ada' }, { name: 'Bob' }, { name: 'Cara' }]);
+  });
+
+  it('validates invalid and duplicate Sort Builder expressions', async () => {
+    await createRelationFixture(context);
+    const authors = context.database.repository('repositoryAuthors');
+
+    await expect(
+      authors.findMany({
+        sort: (sort) => sort.field('books.title').asc(),
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_SORT', relation: 'books' });
+    await expect(
+      authors.findMany({
+        sort: (sort) => sort.relation('profile').count().desc(),
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_SORT', relation: 'profile' });
+    await expect(
+      authors.findMany({
+        sort: (sort) => sort.relation('books').sum('title').desc(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_CAPABILITY_NOT_SUPPORTED',
+      field: 'title',
+    });
+    await expect(
+      authors.findMany({
+        sort: (sort) => [sort.field('name').asc(), sort.field('name').desc()],
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_SORT' });
   });
 
   it('filters through relation quantifiers and direct to-one paths', async () => {
@@ -447,7 +510,7 @@ function sorting(field: string, direction: 'asc' | 'desc'): SortAst {
   return {
     kind: 'sort',
     version: 1,
-    items: [{ by: { kind: 'field', field }, direction }],
+    items: [{ kind: 'field', path: [field], direction }],
   };
 }
 
@@ -461,7 +524,8 @@ function relationFieldSort(
     version: 1,
     items: [
       {
-        by: { kind: 'relationField', relation: relationPath, field },
+        kind: 'field',
+        path: [...relationPath, field],
         direction,
       },
     ],
@@ -477,11 +541,9 @@ function relationCountSort(
     version: 1,
     items: [
       {
-        by: {
-          kind: 'relationAggregate',
-          relation: relationPath,
-          aggregate: 'count',
-        },
+        kind: 'aggregate',
+        relation: relationPath,
+        aggregate: 'count',
         direction,
       },
     ],

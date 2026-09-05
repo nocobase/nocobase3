@@ -44,6 +44,12 @@ describeIntegrationDatabases('scalar Repository', (context) => {
         filter: (filter) => filter.string('orderNo').eq('SO-002'),
       }),
     ).resolves.toMatchObject({ orderNo: 'SO-002', status: 'paid' });
+    await expect(
+      repository.findOne({
+        select: (select) => select.fields('orderNo', 'amount'),
+        sort: (sort) => sort.field('amount').desc(),
+      }),
+    ).resolves.toEqual({ orderNo: 'SO-003', amount: 240 });
   });
 
   it('normalizes equality shorthand with implicit AND and strict null semantics', async () => {
@@ -327,7 +333,8 @@ function sorting(
   readonly version: 1;
   readonly items: readonly [
     {
-      readonly by: { readonly kind: 'field'; readonly field: string };
+      readonly kind: 'field';
+      readonly path: readonly [string];
       readonly direction: 'asc' | 'desc';
     },
   ];
@@ -335,6 +342,6 @@ function sorting(
   return {
     kind: 'sort' as const,
     version: 1 as const,
-    items: [{ by: { kind: 'field' as const, field }, direction }],
+    items: [{ kind: 'field' as const, path: [field] as const, direction }],
   };
 }
