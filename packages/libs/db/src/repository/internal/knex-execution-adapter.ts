@@ -13,6 +13,7 @@ import {
 } from '../../collection/relation-contract.js';
 import { RepositoryError } from '../errors.js';
 import { booleanStorageValue, decodeBooleanValue } from '../boolean.js';
+import { normalizeCharValue } from '../char.js';
 import { spoolRows } from './row-spool.js';
 import { isTemporalType, normalizeTemporalValue } from '../temporal.js';
 import { temporalBinding, temporalProjection } from './temporal-sql.js';
@@ -2512,6 +2513,13 @@ function decodeScalarRow(
 ): RepositoryRecord {
   const result = decodeBooleanRow(collection, row);
   for (const field of scalarFields(collection)) {
+    if (field.type === 'char' && Object.hasOwn(result, field.name))
+      result[field.name] = normalizeCharValue(
+        field,
+        result[field.name],
+        'INVALID_STORED_VALUE',
+        ['select', field.name],
+      );
     if (isTemporalType(field.type) && Object.hasOwn(result, field.name)) {
       result[field.name] = normalizeTemporalValue(
         field,
@@ -3047,6 +3055,22 @@ function applyCondition(
     : directColumn;
   const field = collection.fields?.find((item) => item.name === node.path[0]);
   if (
+    field?.type === 'char' &&
+    query.client.config.client === 'oracledb' &&
+    (node.operator === '$eq' || node.operator === '$ne') &&
+    typeof node.value === 'string' &&
+    node.mode !== 'insensitive'
+  ) {
+    whereValue(
+      query,
+      boolean,
+      name,
+      node.operator === '$eq' ? '=' : '!=',
+      bindQueryValue(query, collection, node.path[0], node.value),
+    );
+    return;
+  }
+  if (
     field?.type === 'boolean' &&
     (node.operator === '$eq' || node.operator === '$ne') &&
     node.value !== null &&
@@ -3494,6 +3518,18 @@ function bindQueryValue(
   value: unknown,
 ): unknown {
   const field = scalarFields(collection).find((item) => item.name === name);
+  if (
+    field?.type === 'char' &&
+    query.client.config.client === 'oracledb' &&
+    typeof value === 'string'
+  ) {
+    const nativeType = field.db?.nativeType;
+    if (
+      typeof nativeType === 'string' &&
+      /^(?:n?char|character)\(\d+(?: (?:byte|char))?\)$/i.test(nativeType)
+    )
+      return query.client.raw(`cast(? as ${nativeType})`, [value]);
+  }
   if (field?.type === 'boolean')
     return booleanStorageValue(
       String(query.client.config.client),
@@ -3781,5 +3817,7 @@ function isTextualField(
   field: string,
 ): boolean {
   const type = collection.fields?.find((item) => item.name === field)?.type;
-  return type === 'string' || type === 'uuid' || type === 'text';
+  return (
+    type === 'string' || type === 'char' || type === 'uuid' || type === 'text'
+  );
 }

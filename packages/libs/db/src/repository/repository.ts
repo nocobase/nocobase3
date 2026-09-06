@@ -13,6 +13,7 @@ import { snapshotQueryInput } from './internal/input-snapshot.js';
 import { identityConstraints } from './internal/identity.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
 import { normalizeBooleanValue } from './boolean.js';
+import { normalizeCharValue } from './char.js';
 import {
   evaluateValues,
   resolveMutationValue,
@@ -927,6 +928,16 @@ export class DefaultRepository<
 }
 
 const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
+  char: [
+    '$includes',
+    '$notIncludes',
+    '$startsWith',
+    '$endsWith',
+    '$eq',
+    '$ne',
+    '$empty',
+    '$notEmpty',
+  ],
   json: jsonOperators,
   string: [
     '$includes',
@@ -1013,6 +1024,7 @@ const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
 };
 
 const FILTER_GROUP_BY_TYPE: Readonly<Record<string, string>> = {
+  char: 'string',
   string: 'string',
   uuid: 'string',
   text: 'text',
@@ -1031,6 +1043,7 @@ const FILTER_GROUP_BY_TYPE: Readonly<Record<string, string>> = {
 };
 
 const FILTER_SHORTHAND_TYPES: ReadonlySet<string> = new Set([
+  'char',
   'string',
   'uuid',
   'text',
@@ -1045,6 +1058,7 @@ const FILTER_SHORTHAND_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 const SORTABLE_TYPES = new Set([
+  'char',
   'increments',
   'integer',
   'bigInt',
@@ -1347,7 +1361,7 @@ function validateFilterNode(
   if (
     node.mode !== undefined &&
     ((node.mode !== 'default' && node.mode !== 'insensitive') ||
-      !['string', 'text', 'uuid'].includes(field.type) ||
+      !['string', 'char', 'text', 'uuid'].includes(field.type) ||
       ![
         '$eq',
         '$ne',
@@ -1364,6 +1378,16 @@ function validateFilterNode(
     );
   }
   let value = resolveFilterValue(node.value, context, [...path, 'value']);
+  if (
+    field.type === 'char' &&
+    value !== null &&
+    value !== undefined &&
+    ['$eq', '$ne'].includes(node.operator)
+  )
+    value = normalizeCharValue(field, value, 'INVALID_FILTER', [
+      ...path,
+      'value',
+    ]);
   if (
     isTemporalType(field.type) &&
     value !== undefined &&
@@ -1420,6 +1444,7 @@ function validateResolvedConditionValue(
   const valid = (() => {
     switch (field.type) {
       case 'string':
+      case 'char':
       case 'uuid':
       case 'text':
       case 'time':
@@ -4277,7 +4302,12 @@ function validateCursor<TRecord extends object>(
             'cursor',
             name,
           ])
-        : value,
+        : field.type === 'char'
+          ? normalizeCharValue(field, value, 'INVALID_PAGINATION', [
+              'cursor',
+              name,
+            ])
+          : value,
     });
   }
   const sortFields = new Set(axes.map((axis) => axis.field));
@@ -4548,19 +4578,26 @@ function validateUnique(
       const field = scalarField(collection, name, [...path, 'values', name]);
       return [
         name,
-        field.type === 'boolean'
-          ? normalizeBooleanValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
+        field.type === 'char'
+          ? normalizeCharValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
               ...path,
               'values',
               name,
             ])
-          : isTemporalType(field.type)
-            ? normalizeTemporalValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
+          : field.type === 'boolean'
+            ? normalizeBooleanValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
                 ...path,
                 'values',
                 name,
               ])
-            : value,
+            : isTemporalType(field.type)
+              ? normalizeTemporalValue(
+                  field,
+                  value,
+                  'INVALID_UNIQUE_SELECTOR',
+                  [...path, 'values', name],
+                )
+              : value,
       ];
     }),
   );

@@ -9,6 +9,8 @@ Status: design proposal, not an implemented portability contract. Recorded on 20
 
 ## Decision summary
 
+Implementation stage 2: user-approved logical `char` and `c.char(name, { length })` are now supported. Resolver preserves `char` instead of automatically exposing it as `string`; explicit compatible string/UUID metadata remains supported. Repository validates CHAR strings without trimming/padding them, and Oracle equality uses CHAR-typed operands. SQLite remains declaration-based rather than a native fixed-width engine. See [CHAR usage](../repository/char-values.md). This supersedes the earlier decision below to defer a logical CHAR type; broader string length and Unicode portability decisions remain pending.
+
 Implementation stage 1: Inspector now exposes `char` separately and reports optional `lengthUnit` (`characters`, `bytes`, or `utf16CodeUnits`), `maxByteLength`, `characterSet`, `collation`, and `collationSchema` when available. Missing properties mean unknown/not reported, not unlimited capacity. SQLite retains declaration-based classification and adds column `affinity` plus table `strict`; a declared CHAR width is not enforced. Oracle charset/collation discovery remains pending rather than guessed.
 
 Resolver exposes existing physical CHAR as logical `string` for current Repository compatibility, while preserving `db.physicalDataType = 'char'`, native type, and physical capabilities. It does not trim/pad values or change native comparisons. Oracle CHAR equality with VARCHAR-bound operands can require explicit trailing spaces; this is tested as native behavior. No `c.char()` or new portable logical length policy is introduced.

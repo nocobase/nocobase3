@@ -111,6 +111,7 @@ export function validateResolvedMutationValue(
     if (value === null) return field.nullable !== false && !field.primaryKey;
     switch (field.type) {
       case 'string':
+      case 'char':
       case 'text':
       case 'uuid':
       case 'time':

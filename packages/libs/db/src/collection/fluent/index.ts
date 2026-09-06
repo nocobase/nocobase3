@@ -96,6 +96,13 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     return this.field({ name, type: 'string', ...options });
   }
 
+  char(
+    name: string,
+    options: Partial<FieldDefinition> & { length: number },
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'char' });
+  }
+
   text(
     name: string,
     options: Partial<FieldDefinition> = {},

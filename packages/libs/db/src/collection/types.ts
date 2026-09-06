@@ -5,6 +5,7 @@ export type FieldType =
   | 'integer'
   | 'bigInt'
   | 'string'
+  | 'char'
   | 'text'
   | 'boolean'
   | 'decimal'
@@ -434,6 +435,10 @@ export interface CollectionDefinitionBuilder {
   string(
     name: string,
     options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  char(
+    name: string,
+    options: Partial<FieldDefinition> & { length: number },
   ): FieldDefinitionBuilder;
   text(
     name: string,

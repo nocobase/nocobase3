@@ -4,6 +4,7 @@ import type {
 } from '../collection/types.js';
 import { RepositoryError } from './errors.js';
 import { normalizeBooleanValue } from './boolean.js';
+import { normalizeCharValue } from './char.js';
 import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import { resolveMutationValue } from './values.js';
 import type {
@@ -72,6 +73,13 @@ export function normalizeNumericMutation(
   context?: RepositoryContext,
   path: readonly (string | number)[] = ['values', field.name],
 ): RepositoryMutationScalarValue {
+  if (field.type === 'char')
+    return normalizeCharValue(
+      field,
+      resolveMutationValue(input, context, path).value,
+      'INVALID_MUTATION',
+      path,
+    );
   if (field.type === 'boolean')
     return normalizeBooleanValue(
       field,

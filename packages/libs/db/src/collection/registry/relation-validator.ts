@@ -226,7 +226,7 @@ function checkKeyTypes(
       ].includes(type)
     )
       return 'number';
-    if (['string', 'text', 'uuid'].includes(type)) return 'string';
+    if (['string', 'char', 'text', 'uuid'].includes(type)) return 'string';
     return type;
   };
   if (

@@ -262,6 +262,18 @@ export class KnexSchemaAdapter implements SchemaAdapter {
               ? table.specificType(column.name, 'number(18, 0)')
               : table.bigInteger(column.name);
           break;
+        case 'char':
+          if (!Number.isSafeInteger(column.length) || column.length! < 1)
+            throw new Error('CHAR columns require a positive integer length.');
+          builder = table.specificType(
+            column.name,
+            this.dialect === 'mssql'
+              ? `nchar(${column.length})`
+              : this.dialect === 'oracle'
+                ? `char(${column.length} char)`
+                : `char(${column.length})`,
+          );
+          break;
         case 'string':
           builder = table.string(column.name, column.length);
           break;

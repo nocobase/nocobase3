@@ -367,8 +367,7 @@ function resolveColumn(
       : undefined;
   return pruneUndefined<FieldDefinition>({
     name,
-    // Existing CHAR columns remain usable as strings without losing physical semantics.
-    type: column.dataType === 'char' ? 'string' : column.dataType,
+    type: column.dataType,
     nullable: column.nullable,
     defaultValue,
     autoIncrement: column.autoIncrement,
@@ -404,6 +403,7 @@ function applyFieldMetadata(
     if (fieldMetadata.type !== undefined) {
       const compatible =
         field.type === fieldMetadata.type ||
+        (fieldMetadata.type === 'string' && field.type === 'char') ||
         (['integer', 'bigInt'].includes(fieldMetadata.type) &&
           field.type === 'decimal' &&
           field.scale === 0 &&
@@ -415,7 +415,9 @@ function applyFieldMetadata(
           field.type === 'float') ||
         (fieldMetadata.type === 'float' && field.type === 'double') ||
         (fieldMetadata.type === 'uuid' &&
-          (field.type === 'string' || field.type === 'blob')) ||
+          (field.type === 'string' ||
+            field.type === 'char' ||
+            field.type === 'blob')) ||
         (['date', 'time', 'datetime', 'datetimeTz'].includes(
           fieldMetadata.type,
         ) &&

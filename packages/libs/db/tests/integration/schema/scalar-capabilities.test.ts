@@ -83,7 +83,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
     expect(collection?.fields).toContainEqual(
       expect.objectContaining({
         name: 'fixed',
-        type: 'string',
+        type: 'char',
         db: expect.objectContaining({ physicalDataType: 'char' }),
       }),
     );

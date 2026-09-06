@@ -399,6 +399,34 @@ export class CollectionCompiler {
     }
 
     for (const field of changes.alterFields ?? []) {
+      const previous = existingFields.find((item) => item.name === field.name);
+      if (previous?.type === 'char' || field.changes.type === 'char') {
+        if (
+          Object.keys(field.changes).every((key) =>
+            ['title', 'description'].includes(key),
+          )
+        )
+          continue;
+        const merged = {
+          ...previous,
+          ...field.changes,
+          name: field.name,
+        } as FieldDefinition;
+        if (
+          field.changes.length !== undefined ||
+          field.changes.type !== undefined
+        )
+          merged.db = field.changes.db;
+        const [definition] = this.compileFieldColumns(merged, current);
+        // Existing primary keys are constraints, not new column declarations.
+        delete definition.primaryKey;
+        operations.push({
+          type: 'alterColumn',
+          column: definition.name,
+          changes: definition,
+        });
+        continue;
+      }
       const oldColumnName = this.resolveColumn(
         field.name,
         existingFields,
@@ -552,6 +580,29 @@ export class CollectionCompiler {
     }
 
     const scalarField = field as FieldDefinition;
+    if (scalarField.type === 'char') {
+      if (!Number.isSafeInteger(scalarField.length) || scalarField.length! < 1)
+        throw new Error(
+          `CHAR Field "${scalarField.name}" requires a positive integer length.`,
+        );
+      if (
+        scalarField.defaultValue !== undefined &&
+        scalarField.defaultValue !== null &&
+        typeof scalarField.defaultValue !== 'string'
+      )
+        throw new Error(
+          `CHAR Field "${scalarField.name}" requires a string default.`,
+        );
+      if (
+        typeof scalarField.defaultValue === 'string' &&
+        ([...scalarField.defaultValue].length > scalarField.length! ||
+          /[\uD800-\uDFFF]/u.test(scalarField.defaultValue) ||
+          scalarField.defaultValue.includes('\0'))
+      )
+        throw new Error(
+          `CHAR Field "${scalarField.name}" has an invalid or overlong default.`,
+        );
+    }
     return [
       {
         name: this.columnName(scalarField, collection),
