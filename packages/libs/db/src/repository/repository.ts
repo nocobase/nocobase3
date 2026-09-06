@@ -231,7 +231,7 @@ export class DefaultRepository<
       options.filter,
       options.context,
     );
-    if (!filter && !options.sort) {
+    if (!filter && options.sort === undefined) {
       invalid(
         'INVALID_FILTER',
         'findOne() requires filter or non-empty sort.',
@@ -1885,6 +1885,9 @@ function validateSortAst(
   sort: SortAst,
 ): void {
   if (
+    !sort ||
+    typeof sort !== 'object' ||
+    Array.isArray(sort) ||
     sort.kind !== 'sort' ||
     sort.version !== 1 ||
     !Array.isArray(sort.items)
@@ -2392,6 +2395,7 @@ async function validateSortWithRelations<TRecord extends object>(
   requireNonEmpty = false,
 ): Promise<SortAst | undefined> {
   const sort = normalizeSortInput(collection, input);
+  if (sort !== undefined) validateSortAst(collection, sort);
   if (requireNonEmpty && (!sort || sort.items.length === 0)) {
     invalid('INVALID_FILTER', 'findOne() requires filter or non-empty sort.', {
       collection: collection.name,
@@ -2413,27 +2417,48 @@ async function validateSortWithRelations<TRecord extends object>(
         }
       : undefined;
   }
-  validateSortAst(collection, sort);
   const seen = new Set<string>();
   for (const [index, item] of sort.items.entries()) {
-    if (item.kind !== 'field' && item.kind !== 'aggregate') {
+    if (
+      !item ||
+      typeof item !== 'object' ||
+      Array.isArray(item) ||
+      (item.kind !== 'field' && item.kind !== 'aggregate')
+    ) {
       invalid('INVALID_SORT', 'Unknown Sort node kind.', {
         collection: collection.name,
         path: ['items', index, 'kind'],
       });
     }
-    if (item.kind === 'field' && !Array.isArray(item.path)) {
-      invalid('INVALID_SORT', 'Field sort path must be an array.', {
-        collection: collection.name,
-        path: ['items', index, 'path'],
-      });
+    if (
+      item.kind === 'field' &&
+      (!Array.isArray(item.path) ||
+        item.path.some((part) => typeof part !== 'string' || part.length === 0))
+    ) {
+      invalid(
+        'INVALID_SORT',
+        'Field sort path must contain non-empty strings.',
+        {
+          collection: collection.name,
+          path: ['items', index, 'path'],
+        },
+      );
     }
     if (item.kind === 'aggregate') {
-      if (!Array.isArray(item.relation)) {
-        invalid('INVALID_SORT', 'Aggregate relation path must be an array.', {
-          collection: collection.name,
-          path: ['items', index, 'relation'],
-        });
+      if (
+        !Array.isArray(item.relation) ||
+        item.relation.some(
+          (part) => typeof part !== 'string' || part.length === 0,
+        )
+      ) {
+        invalid(
+          'INVALID_SORT',
+          'Aggregate relation path must contain non-empty strings.',
+          {
+            collection: collection.name,
+            path: ['items', index, 'relation'],
+          },
+        );
       }
       if (
         item.aggregate !== 'count' &&
