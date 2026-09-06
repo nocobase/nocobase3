@@ -1,6 +1,6 @@
 export const themePresets = [
   { id: 'default', labelKey: 'appearance.themes.default' },
-  { id: 'ocean', labelKey: 'appearance.themes.ocean' },
+  { id: 'compact', labelKey: 'appearance.themes.compact' },
 ] as const;
 
 export type ThemePresetId = (typeof themePresets)[number]['id'];

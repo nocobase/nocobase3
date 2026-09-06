@@ -87,6 +87,43 @@ function declarations(root: Root, selector: string): Record<string, string> {
 }
 
 describe('theme token contract', () => {
+  it('keeps compact identical to default except for dimensions', () => {
+    const readPreset = (id: string) =>
+      postcss.parse(
+        readFileSync(
+          new URL(`../../client/theme/themes/${id}.css`, import.meta.url),
+          'utf8',
+        ),
+      );
+    const defaultCss = readPreset('default');
+    const compactCss = readPreset('compact');
+    const withoutDimensions = (values: Record<string, string>) =>
+      Object.fromEntries(
+        Object.entries(values).filter(
+          ([key]) =>
+            key !== '--spacing' &&
+            key !== '--radius' &&
+            !key.startsWith('--text-'),
+        ),
+      );
+    for (const mode of ['', '.dark']) {
+      expect(
+        withoutDimensions(
+          declarations(compactCss, `:root${mode}[data-theme='compact']`),
+        ),
+      ).toEqual(
+        withoutDimensions(
+          declarations(defaultCss, `:root${mode}[data-theme='default']`),
+        ),
+      );
+    }
+    const compact = declarations(compactCss, ":root[data-theme='compact']");
+    const standard = declarations(defaultCss, ":root[data-theme='default']");
+    expect(parseFloat(compact['--spacing'])).toBeLessThan(
+      parseFloat(standard['--spacing']),
+    );
+  });
+
   for (const { id } of themePresets) {
     it(`${id} defines complete tokens for the page and isolated previews`, () => {
       const root = postcss.parse(

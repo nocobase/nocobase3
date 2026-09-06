@@ -42,7 +42,7 @@ export default function Fixture() {
               <h1 className='text-3xl'>Theme tokens · 主题样式</h1>
               <p data-testid='body'>Body text · 中文内容与 English text</p>
               <p className='font-serif'>Serif text</p>
-              <code>const theme = 'ocean';</code>
+              <code>const theme = 'compact';</code>
               <div className='flex flex-wrap gap-2'>
                 <Button>Default action</Button>
                 <Button size='sm'>Small action</Button>

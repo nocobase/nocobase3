@@ -26,11 +26,11 @@ describe('application appearance storage', () => {
 
   it('restores both preferences before React without reading another app', () => {
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
-    localStorage.setItem('nocobase:crm:theme:preset', 'ocean');
-    initializeTheme('/crm/', ['default', 'ocean']);
-    expect(document.documentElement).toHaveAttribute('data-theme', 'ocean');
+    localStorage.setItem('nocobase:crm:theme:preset', 'compact');
+    initializeTheme('/crm/', ['default', 'compact']);
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     expect(document.documentElement).toHaveClass('light');
-    initializeTheme('/erp/', ['default', 'ocean']);
+    initializeTheme('/erp/', ['default', 'compact']);
     expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     expect(document.documentElement).toHaveClass('dark');
   });
@@ -38,7 +38,7 @@ describe('application appearance storage', () => {
   it('falls back on invalid values and unavailable storage', () => {
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'invalid');
     localStorage.setItem('nocobase:crm:theme:preset', 'deleted');
-    initializeTheme('/crm/', ['default', 'ocean']);
+    initializeTheme('/crm/', ['default', 'compact']);
     expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     expect(document.documentElement).toHaveClass('dark');
     const spy = vi
@@ -46,7 +46,9 @@ describe('application appearance storage', () => {
       .mockImplementation(() => {
         throw new Error('blocked');
       });
-    expect(() => initializeTheme('/crm/', ['default', 'ocean'])).not.toThrow();
+    expect(() =>
+      initializeTheme('/crm/', ['default', 'compact']),
+    ).not.toThrow();
     spy.mockRestore();
   });
 });
