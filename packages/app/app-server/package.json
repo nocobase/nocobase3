@@ -209,6 +209,7 @@
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/api-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
