@@ -12,36 +12,36 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./supervisor": {
-      "types": "./dist/supervisor.d.ts",
-      "import": "./dist/supervisor.js"
+      "types": "./src/supervisor.ts",
+      "import": "./src/supervisor.ts"
     },
     "./catalog": {
-      "types": "./dist/deployment/catalog.d.ts",
-      "import": "./dist/deployment/catalog.js"
+      "types": "./src/deployment/catalog.ts",
+      "import": "./src/deployment/catalog.ts"
     },
     "./deployment": {
-      "types": "./dist/deployment/index.d.ts",
-      "import": "./dist/deployment/index.js"
+      "types": "./src/deployment/index.ts",
+      "import": "./src/deployment/index.ts"
     },
     "./registry": {
-      "types": "./dist/app-registry.d.ts",
-      "import": "./dist/app-registry.js"
+      "types": "./src/app-registry.ts",
+      "import": "./src/app-registry.ts"
     },
     "./artifacts": {
-      "types": "./dist/artifact-resolver.d.ts",
-      "import": "./dist/artifact-resolver.js"
+      "types": "./src/artifact-resolver.ts",
+      "import": "./src/artifact-resolver.ts"
     },
     "./management": {
-      "types": "./dist/management/index.d.ts",
-      "import": "./dist/management/index.js"
+      "types": "./src/management/index.ts",
+      "import": "./src/management/index.ts"
     },
     "./types": {
-      "types": "./dist/app-types.d.ts",
-      "import": "./dist/app-types.js"
+      "types": "./src/app-types.ts",
+      "import": "./src/app-types.ts"
     }
   },
   "bin": {
@@ -87,6 +87,40 @@
     "vitest": "catalog:"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./supervisor": {
+        "types": "./dist/supervisor.d.ts",
+        "import": "./dist/supervisor.js"
+      },
+      "./catalog": {
+        "types": "./dist/deployment/catalog.d.ts",
+        "import": "./dist/deployment/catalog.js"
+      },
+      "./deployment": {
+        "types": "./dist/deployment/index.d.ts",
+        "import": "./dist/deployment/index.js"
+      },
+      "./registry": {
+        "types": "./dist/app-registry.d.ts",
+        "import": "./dist/app-registry.js"
+      },
+      "./artifacts": {
+        "types": "./dist/artifact-resolver.d.ts",
+        "import": "./dist/artifact-resolver.js"
+      },
+      "./management": {
+        "types": "./dist/management/index.d.ts",
+        "import": "./dist/management/index.js"
+      },
+      "./types": {
+        "types": "./dist/app-types.d.ts",
+        "import": "./dist/app-types.js"
+      }
+    }
   }
 }
