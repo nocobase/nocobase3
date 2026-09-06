@@ -65,6 +65,13 @@ const records = await orders.findMany({
   filter: { status: 'draft' },
   limit: 20,
 });
+
+for await (const record of orders.findMany({
+  filter: { status: 'draft' },
+  limit: 20,
+})) {
+  console.log(record);
+}
 const result = await orders.createOne({
   values: { id: 'order-1', status: 'draft' },
 });
@@ -76,6 +83,13 @@ Responses use `{ data: result }`, including complete mutation results (`record`,
 `createdTargets`, and optional `version`). Missing `findOne` records return
 `{ data: null }`, which the client converts to `undefined`. Delete success also
 returns JSON (`{ data: { deleted: true } }`), not an empty 204 response.
+
+`findMany()` also supports asynchronous iteration. Awaiting the query sends
+`Accept: application/json` and returns the complete array. Iterating it sends
+`Accept: application/x-ndjson`; the route consumes the database query as an
+`AsyncIterable` and returns framed `record`, `error`, and `end` lines. The same
+query instance supports only one consumption mode. Stopping iteration cancels
+the response and closes the database iterator.
 
 The adapter requires `application/json`, limits request bodies to 1 MiB, checks
 the options envelope, and delegates AST, field, and mutation validation to the

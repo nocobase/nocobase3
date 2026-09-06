@@ -22,6 +22,12 @@ interface Order {
   version: number;
 }
 
+async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
+  const values: T[] = [];
+  for await (const value of iterable) values.push(value);
+  return values;
+}
+
 const actions: RepositoryApiAction[] = [
   'findMany',
   'findOne',
@@ -217,6 +223,27 @@ describe('Repository API routes', () => {
         data: { id: 'c', status: 'paid', version: 1 },
       },
       { type: 'end' },
+    ]);
+  });
+
+  it('streams findMany records through the public API client', async () => {
+    await database.repository('orders').createMany({
+      values: [
+        { id: 'a', status: 'draft' },
+        { id: 'b', status: 'paid' },
+        { id: 'c', status: 'paid' },
+      ],
+    });
+
+    await expect(
+      collect(
+        client()
+          .repository<Order>('sales/orders')
+          .findMany({ filter: { status: 'paid' } }),
+      ),
+    ).resolves.toEqual([
+      { id: 'b', status: 'paid', version: 1 },
+      { id: 'c', status: 'paid', version: 1 },
     ]);
   });
 
