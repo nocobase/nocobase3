@@ -8,6 +8,7 @@ import type {
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
 import { DefaultRepositoryQuery } from './query.js';
+import { snapshotQueryInput } from './internal/input-snapshot.js';
 import { identityConstraints } from './internal/identity.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
 import {
@@ -34,6 +35,7 @@ import { DefaultSortBuilder, sortExpressionToNode } from './sort-builder.js';
 import type {
   RepositoryCursorAxis,
   RepositoryExecutionAdapter,
+  RepositoryReadPlan,
 } from './internal/execution-adapter.js';
 import type {
   AggregateAst,
@@ -95,7 +97,6 @@ import type {
   SingleMutationResult,
   SortAst,
   SortNode,
-  StreamOptions,
   UniqueSelector,
   UpdateManyOptions,
   UpdateManyResult,
@@ -120,14 +121,16 @@ export class DefaultRepository<
 
   findMany(options: FindManyOptions<TRecord> = {}): RepositoryQuery<TRecord> {
     return new DefaultRepositoryQuery(
-      () => this.executeMany(options),
-      () => this.executeStream(options)[Symbol.asyncIterator](),
+      () => this.executeMany(snapshotQueryInput(options)),
+      () =>
+        this.executeStream(snapshotQueryInput(options))[Symbol.asyncIterator](),
     );
   }
 
-  private async executeMany(
+  private async prepareRead(
     options: FindManyOptions<TRecord>,
-  ): Promise<TRecord[]> {
+  ): Promise<RepositoryReadPlan> {
+    this.options.adapter.assertReadable();
     const collection = await this.collection();
     const selection = await this.validateSelect(
       collection,
@@ -149,7 +152,7 @@ export class DefaultRepository<
       sort,
       options.sort !== undefined,
     );
-    return (await this.options.adapter.findMany({
+    return {
       collection,
       fields: selection.fields,
       select: selection.select,
@@ -160,70 +163,23 @@ export class DefaultRepository<
       direction: options.direction,
       limit: options.limit,
       offset: options.offset,
-    })) as TRecord[];
+    };
   }
 
-  stream<TSelection extends AnySelectBuilder<TRecord>>(
-    options: StreamOptions<TRecord> & {
-      readonly select: (select: SelectBuilder<TRecord>) => TSelection;
-    },
-  ): AsyncIterable<SelectedBuilderRecord<TRecord, TSelection>>;
-  stream(options?: StreamOptions<TRecord>): AsyncIterable<TRecord>;
-  stream(options: StreamOptions<TRecord> = {}): AsyncIterable<TRecord> {
-    return this.executeStream(options);
+  private async executeMany(
+    options: FindManyOptions<TRecord>,
+  ): Promise<TRecord[]> {
+    return (await this.options.adapter.findMany(
+      await this.prepareRead(options),
+    )) as TRecord[];
   }
 
   private async *executeStream(
     options: FindManyOptions<TRecord>,
   ): AsyncIterable<TRecord> {
-    const collection = await this.collection();
-    const selection = await this.validateSelect(
-      collection,
-      options.select,
-      options.context,
-    );
-    if (selection.select?.root.includes?.length) {
-      invalid(
-        'INVALID_STREAM',
-        'Streaming does not support relation include.',
-        {
-          collection: collection.name,
-          path: ['select'],
-        },
-      );
-    }
-    const filter = await this.normalizeFilter(
-      collection,
-      options.filter,
-      options.context,
-    );
-    const sort = await this.validateSort(collection, options.sort);
-    validatePagination(options.limit, undefined, sort, options.cursor);
-    validateCursorDirection(options.direction, options.cursor);
-    if (options.direction === 'backward') {
-      invalid(
-        'INVALID_STREAM',
-        'Backward cursor pages require buffered findMany results.',
-        { path: ['direction'] },
-      );
-    }
-    const distinct = validateDistinct(collection, options.distinct, sort);
-    const cursor = validateCursor(
-      collection,
-      options.cursor,
-      sort,
-      options.sort !== undefined,
-    );
-    for await (const record of this.options.adapter.stream({
-      collection,
-      fields: selection.fields,
-      select: selection.select,
-      filter,
-      sort,
-      distinct,
-      cursor,
-      limit: options.limit,
-    })) {
+    for await (const record of this.options.adapter.stream(
+      await this.prepareRead(options),
+    )) {
       yield record as TRecord;
     }
   }

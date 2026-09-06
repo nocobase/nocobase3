@@ -259,7 +259,7 @@ function _groupUsers(repository: UserRepository) {
 }
 
 function _streamSelectedUsers(repository: UserRepository) {
-  return repository.stream({
+  return repository.findMany({
     select: (select) => select.fields('id', 'name'),
   });
 }
@@ -329,6 +329,6 @@ it('infers scalar builder selections and preserves fallback result types', () =>
     >
   >();
   expectTypeOf<ReturnType<typeof _streamSelectedUsers>>().toEqualTypeOf<
-    AsyncIterable<Pick<UserRecord, 'id' | 'name'>>
+    RepositoryQuery<Pick<UserRecord, 'id' | 'name'>>
   >();
 });

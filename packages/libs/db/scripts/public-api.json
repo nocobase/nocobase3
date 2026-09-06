@@ -223,7 +223,6 @@
         "SortRelationBuilder",
         "SqlBool",
         "SqliteConnectionConfig",
-        "StreamOptions",
         "StringFilterOperators",
         "StringFilterOptions",
         "TextFilterOperators",

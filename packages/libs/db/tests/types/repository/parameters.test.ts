@@ -44,7 +44,7 @@ function invalidParameters(repository: Repository<Entry>): void {
   void repository.findMany({ distinct: ['missing'] });
   // @ts-expect-error Cursor fields belong to the record type.
   void repository.findMany({ cursor: { missing: 1 } });
-  // @ts-expect-error Streaming has no offset option.
+  // @ts-expect-error Streaming is consumed through findMany, not a separate public API.
   void repository.stream({ offset: 1 });
   // @ts-expect-error GroupBy keys must be nonempty.
   void repository.groupBy({ by: [], aggregate: (a) => ({ n: a.count() }) });

@@ -15,7 +15,7 @@ describeIntegrationDatabases('Repository methods/stream', (context) => {
     });
 
     const records: Array<{ id: unknown; orderNo: unknown }> = [];
-    for await (const record of repository.stream({
+    for await (const record of repository.findMany({
       filter: { status: 'paid' },
       sort: (sort) => sort.field('id').asc(),
       select: (select) => select.fields('id', 'orderNo'),
@@ -27,7 +27,7 @@ describeIntegrationDatabases('Repository methods/stream', (context) => {
       { id: 3, orderNo: 'SO-003' },
     ]);
 
-    for await (const record of repository.stream({
+    for await (const record of repository.findMany({
       sort: (sort) => sort.field('id').asc(),
       select: (select) => select.fields('id'),
     })) {

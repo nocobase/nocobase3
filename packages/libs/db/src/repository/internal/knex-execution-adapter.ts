@@ -12,6 +12,7 @@ import {
   validateRelationOptions,
 } from '../../collection/relation-contract.js';
 import { RepositoryError } from '../errors.js';
+import { spoolRows } from './row-spool.js';
 import {
   createdRecordSelector as deriveCreatedSelector,
   recordSelector as selectorFromRecord,
@@ -80,6 +81,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   ) {}
 
   async findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]> {
+    this.assertReadable();
     const { query } = await this.buildRead(plan);
     const rows = (await query) as RepositoryRecord[];
     if (plan.direction === 'backward') rows.reverse();
@@ -90,9 +92,53 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   }
 
   async *stream(plan: RepositoryReadPlan): AsyncIterable<RepositoryRecord> {
-    if (plan.select?.root.includes?.length) {
-      throw new Error('Repository stream does not support relation include.');
+    this.assertReadable();
+    const includes = plan.select?.root.includes?.length;
+    const source = this.streamRoots(plan);
+    const roots =
+      includes || plan.direction === 'backward'
+        ? spoolRows(source, plan.direction === 'backward')
+        : source;
+    let batch: RepositoryRecord[] = [];
+    for await (const row of roots) {
+      this.assertReadable();
+      if (!includes) {
+        yield projectRow(row, plan.fields, plan.select?.root);
+        continue;
+      }
+      batch.push(row);
+      if (batch.length === 100) {
+        await this.loadRelations(plan.collection, batch, plan.select.root);
+        for (const record of batch) {
+          this.assertReadable();
+          yield projectRow(record, plan.fields, plan.select?.root);
+        }
+        batch = [];
+      }
     }
+    if (batch.length) {
+      this.assertReadable();
+      await this.loadRelations(plan.collection, batch, plan.select!.root);
+      for (const record of batch) {
+        this.assertReadable();
+        yield projectRow(record, plan.fields, plan.select?.root);
+      }
+    }
+  }
+
+  assertReadable(): void {
+    const client = this.getClient();
+    if (isTransaction(client) && client.isCompleted()) {
+      throw new RepositoryError(
+        'QUERY_TRANSACTION_COMPLETED',
+        'Consume Repository queries before their transaction completes.',
+      );
+    }
+  }
+
+  private async *streamRoots(
+    plan: RepositoryReadPlan,
+  ): AsyncIterable<RepositoryRecord> {
     const { query } = await this.buildRead(plan);
     const source = query.stream() as Readable & AsyncIterable<RepositoryRecord>;
     // Knex releases the acquired connection from its close listener. Do not
@@ -103,7 +149,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     });
     try {
       for await (const row of source) {
-        yield projectRow(row, plan.fields, plan.select?.root);
+        yield row;
       }
     } finally {
       source.destroy();

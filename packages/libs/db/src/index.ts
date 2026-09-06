@@ -240,7 +240,6 @@ export type {
   SortRelationBuilder,
   StringFilterOperators,
   StringFilterOptions,
-  StreamOptions,
   TextFilterOperators,
   TimeFilterOperators,
   UniqueSelector,

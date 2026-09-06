@@ -37,7 +37,7 @@ describeIntegrationDatabases(
       });
       expect(expected).toEqual([{ title: 'C' }]);
       const rows = [];
-      for await (const row of tasks.stream({
+      for await (const row of tasks.findMany({
         ...options,
         select: (s) => s.fields('title'),
       }))
@@ -45,7 +45,7 @@ describeIntegrationDatabases(
       expect(rows).toEqual(expected);
       for (const limit of [0, 1]) {
         const empty = [];
-        for await (const row of tasks.stream({
+        for await (const row of tasks.findMany({
           filter: { status: 'missing' },
           limit,
         }))
@@ -75,7 +75,9 @@ describeIntegrationDatabases(
       async (options, code) => {
         await createDocumentationFixture(context);
         const tasks = context.database.repository('tasks');
-        const iterator = tasks.stream(options as never)[Symbol.asyncIterator]();
+        const iterator = tasks
+          .findMany(options as never)
+          [Symbol.asyncIterator]();
         await expect(iterator.next()).rejects.toMatchObject({ code });
         expect(await tasks.count()).toBe(0);
       },

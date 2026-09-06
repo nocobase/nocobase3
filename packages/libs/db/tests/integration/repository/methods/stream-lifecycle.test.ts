@@ -11,7 +11,7 @@ describeIntegrationDatabases('Repository stream lifecycle', (context) => {
     await seedDocumentationProjects(context, 'stream');
     const iterator = context.database
       .repository('projects')
-      .stream()
+      .findMany()
       [Symbol.asyncIterator]();
     expect((await iterator.next()).done).toBe(false);
     const release = vi.spyOn(context.db.client, 'releaseConnection');
@@ -33,7 +33,7 @@ describeIntegrationDatabases('Repository stream lifecycle', (context) => {
     await tasks.findMany();
     // Leave Collection metadata intact to exercise a physical database failure.
     await context.db.schema.dropTable(context.table('tasks'));
-    const iterator = tasks.stream()[Symbol.asyncIterator]();
+    const iterator = tasks.findMany()[Symbol.asyncIterator]();
     await expect(iterator.next()).rejects.toThrow();
     expect(await context.database.repository('projects').count()).toBe(3);
   });
@@ -44,7 +44,7 @@ describeIntegrationDatabases('Repository stream lifecycle', (context) => {
     const projects = context.database.repository('projects');
     const error = new Error('Consumer failed');
     const consume = async () => {
-      for await (const row of projects.stream({
+      for await (const row of projects.findMany({
         select: (s) => s.fields('id'),
         sort: (s) => s.field('id').asc(),
       })) {
@@ -62,7 +62,7 @@ describeIntegrationDatabases('Repository stream lifecycle', (context) => {
     const projects = context.database.repository('projects');
     for (const id of ['stream-a', 'stream-b']) {
       const iterator = projects
-        .stream({
+        .findMany({
           filter: (f) => f.string('id').eq(f.variable('$id')),
           context: { id },
           select: (s) => s.fields('id'),
@@ -79,22 +79,24 @@ describeIntegrationDatabases('Repository stream lifecycle', (context) => {
     expect(await projects.count()).toBe(3);
   });
 
-  it('rejects backward streaming and missing context during iteration without changing data', async () => {
+  it('supports backward iteration and rejects missing context without changing data', async () => {
     await createDocumentationFixture(context);
     await seedDocumentationProjects(context, 'stream');
     const projects = context.database.repository('projects');
     const backward = projects
-      .stream({
+      .findMany({
         sort: (s) => s.field('id').asc(),
         cursor: { id: 'stream-b' },
         direction: 'backward',
       })
       [Symbol.asyncIterator]();
-    await expect(backward.next()).rejects.toMatchObject({
-      code: 'INVALID_STREAM',
+    expect(await backward.next()).toMatchObject({
+      done: false,
+      value: { id: 'stream-a' },
     });
+    expect(await backward.next()).toMatchObject({ done: true });
     const missing = projects
-      .stream({ filter: (f) => f.string('id').eq(f.variable('$id')) })
+      .findMany({ filter: (f) => f.string('id').eq(f.variable('$id')) })
       [Symbol.asyncIterator]();
     await expect(missing.next()).rejects.toMatchObject({
       code: 'VARIABLE_NOT_FOUND',

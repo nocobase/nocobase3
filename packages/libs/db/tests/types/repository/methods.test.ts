@@ -1,5 +1,5 @@
 import { expect, expectTypeOf, it } from 'vitest';
-import type { Repository } from '../../../src/index.js';
+import type { Repository, RepositoryQuery } from '../../../src/index.js';
 
 function _validCalls(repository: Repository<{ code: string; points: number }>) {
   return {
@@ -9,7 +9,7 @@ function _validCalls(repository: Repository<{ code: string; points: number }>) {
     }),
     count: repository.count({ context: { input: {} } }),
     exists: repository.exists(),
-    stream: repository.stream({ select: (s) => s.fields('code') }),
+    stream: repository.findMany({ select: (s) => s.fields('code') }),
   };
 }
 
@@ -40,7 +40,7 @@ it('preserves method result shapes and rejects invalid method input at compile t
   expectTypeOf<Results['count']>().toEqualTypeOf<Promise<number>>();
   expectTypeOf<Results['exists']>().toEqualTypeOf<Promise<boolean>>();
   expectTypeOf<Results['stream']>().toEqualTypeOf<
-    AsyncIterable<{ code: string }>
+    RepositoryQuery<{ code: string }>
   >();
   expect(invalidCalls).toBeTypeOf('function');
 });

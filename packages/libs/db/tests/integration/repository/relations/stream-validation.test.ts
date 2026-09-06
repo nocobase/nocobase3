@@ -5,19 +5,21 @@ import { createMutationFixture } from '../fixtures/mutations.js';
 describeIntegrationDatabases(
   'Repository relations/stream-validation',
   (context) => {
-    it('rejects relation includes in streaming root queries', async () => {
+    it('validates nested selection before emitting root records', async () => {
       await createMutationFixture(context);
       const repository = context.database.repository('repositoryProjects');
-      const stream = repository.stream({
+      const stream = repository.findMany({
         select: (select) =>
-          select.fields('id').include('owner', (owner) => owner.fields('name')),
+          select
+            .fields('id')
+            .include('owner', (owner) => owner.fields('missing')),
       });
 
       await expect(async () => {
         for await (const _record of stream) {
           // Validation fails before a record is read.
         }
-      }).rejects.toMatchObject({ code: 'INVALID_STREAM' });
+      }).rejects.toMatchObject({ code: 'FIELD_NOT_FOUND' });
     });
   },
 );
