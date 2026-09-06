@@ -93,7 +93,9 @@ const records = await db.repository('projects').findMany({ filter });
 - `date.on()`／`notOn()` 仅支持 date，不支持 datetime。
 - date 值用 `YYYY-MM-DD`；datetime 值用带时区的 ISO 时间字符串。Builder 的 Date 输入会转为完整 ISO 时间，因此仅用于 datetime；date 字段应明确传日期字符串。AST 应使用字符串。
 - `between([start, end])` 是 **左闭右开**区间 `[start, end)`；`notBefore` 是 `>=`，`notAfter` 是 `<=`。
-- boolean 简写和 Builder 最终使用同一组 SQL 操作符。当前 MySQL 布尔 Filter 的既有回归仍待修复，不能把切换输入形式当作已验证的绕过方式。
+- Boolean shorthand and Builder inputs use the same SQL operators. Explicit boolean declarations are preserved through field metadata, so MySQL `TINYINT(1)` storage can retain boolean semantics without guessing that every external TINYINT column is boolean. See [supplemental logical types](../reference/collection-metadata-document.md#supplemental-logical-types).
+
+Oracle stores empty VARCHAR strings as SQL NULL. Consequently, `eq(null)` also matches values originally inserted as `''` on Oracle; the original distinction cannot be recovered by a Filter. Text `empty()` / `notEmpty()` use length-aware predicates for Oracle CLOBs. Oracle date-only and time-only semantics likewise require explicit logical metadata; Builder maintains this metadata automatically.
 
 ## 大小写不敏感和文本匹配
 

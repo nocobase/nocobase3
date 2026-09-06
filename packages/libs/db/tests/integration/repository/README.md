@@ -64,7 +64,7 @@ Reuse the integration harness and CI matrix for PostgreSQL, MySQL, Oracle and MS
 
 ### Shared-target Select combinations
 
-[Shared-target Select](./relations/select-shared-targets.test.ts) covers deep sibling projections in both branch orders, shared owners and targets, exact field isolation, belongsToMany local filter/sort/limit, tied compound forward/backward cursors, per-parent Distinct before limit and nested combine results. Its fixture uses explicitly declared non-id string primary/source/target keys and physical inserts. Cursor with Distinct and invalid local cursors are now covered in [relation pagination boundaries](./relations/pagination-boundaries.test.ts); PostgreSQL/MySQL execution passed. Oracle/MSSQL and larger graph stress remain.
+[Shared-target Select](./relations/select-shared-targets.test.ts) covers deep sibling projections in both branch orders, shared owners and targets, exact field isolation, belongsToMany local filter/sort/limit, tied compound forward/backward cursors, per-parent Distinct before limit and nested combine results. Its fixture uses explicitly declared non-id string primary/source/target keys and physical inserts. Cursor with Distinct and invalid local cursors are covered in [relation pagination boundaries](./relations/pagination-boundaries.test.ts). The five-database acceptance run includes both suites; larger graph stress remains separate work.
 
 [Nested combine budgets](./relations/select-combine-budget.test.ts) checks cumulative depth 20/21 and validation nodes 200/201 across nested groups and ordinary sibling includes. Each group is independently legal, but the total graph can exhaust the shared budget. Rejected projections leave nested mutation rows and optimistic versions unchanged, and later valid queries get a fresh budget. These counts refer to validation work, not simply JSON nodes or selected fields.
 
@@ -76,7 +76,7 @@ Non-null hasMany currently disallows the replace action, including an unchanged 
 
 - [Relation Filter scope](./relations/filter-scope.test.ts) distinguishes independent some predicates from same-child conjunctions, nested OR scope, parent counts and shared-target-safe bulk updates. [Filter variables](./capabilities/filter-variables.test.ts) covers frozen input reuse, nested context paths, null/zero, date endpoint binding and rejection before writes for missing or mistyped values.
 
-- [Scalar Filter matrix](./capabilities/filter-scalars.test.ts) verifies exact Builder/serialized-AST results for numeric comparisons, string/text predicates, boolean null/false distinctions and half-open date ranges. [Field types](./capabilities/filter-field-types.test.ts) adds numeric storage types, time and UTC datetime SQL behavior. [Literal patterns](./capabilities/filter-patterns.test.ts) covers escaping and insensitive inequality. [Filter fixture](./fixtures/filter.ts) uses an explicit string code key and physical setup. Timezone-offset equivalence and Oracle/MSSQL execution remain future work; PostgreSQL/MySQL results are recorded below.
+- [Scalar Filter matrix](./capabilities/filter-scalars.test.ts) verifies exact Builder/serialized-AST results for numeric comparisons, string/text predicates, boolean null/false distinctions and half-open date ranges. [Field types](./capabilities/filter-field-types.test.ts) adds numeric storage types, time and UTC datetime SQL behavior. [Literal patterns](./capabilities/filter-patterns.test.ts) covers escaping and insensitive inequality. [Filter fixture](./fixtures/filter.ts) uses an explicit string code key and physical setup. All five database backends run these suites; exhaustive timezone-offset equivalence remains future work.
 
 - [JSON combinations](./capabilities/filter-json-combinations.test.ts) covers typed/duplicate/empty membership operands, missing paths, nulls, structural equality, logical scope and variable-driven writes. [Direct paths](./relations/filter-paths.test.ts) covers multi-hop to-one paths and capability rejection. [Nested invalid inputs](./relations/filter-invalid-nested.test.ts) covers callback returns and variable paths. Public input constraints are checked in types/repository/filter.test.ts. Empty logical groups and Filter resource budgets need explicit design before freezing limits; BigInt/Decimal transport remains deferred.
 - Sort Builder covers copied paths, independent null-position branches and serializable aggregate nodes; Aggregate Builder covers aliases and forged expressions.
@@ -103,15 +103,34 @@ The planned specialty pass is implemented for the contracts currently defined. T
 | Streaming                     | [Parameter composition](./methods/stream-parameters.test.ts), [lifecycle](./methods/stream-lifecycle.test.ts)                                                    | Filter/context + Distinct + forward cursor + limit parity, empty streams, invalid inputs, close/release and consumer/driver failure                             |
 | Concurrent writes             | [Write invariants](./methods/concurrent-writes.test.ts)                                                                                                          | Two callers sharing one observed version yield one success and one conflict; competing creates preserve unique identity without fixing winner or driver wording |
 
-### Validation snapshot
+### Validation snapshot — 2026-09-06
 
-- Full DB package on SQLite after unified findMany consumption: 902 passed, one PostgreSQL-only skip, 165 files.
-- Repository unit/integration/type suites on SQLite: 571 passed, one PostgreSQL-only skip, 100 files. The parameter-specialty pass added 128 cases; unified query consumption added 18 more.
-- Full Repository integration on PostgreSQL 16 + MySQL 8.4: 1016 passed, five known MySQL boolean failures, one PostgreSQL-only test skipped on MySQL, 83 files. The final keyless-iteration and late-relation-failure cases were added afterwards and rerun in the two affected suites across SQLite/PostgreSQL/MySQL: all 21 tests passed.
-- PostgreSQL/MySQL query-consumption, relation-iteration and driver-stream lifecycle subset: all 32 tests passed. The DB development dependency pg-query-stream enables these tests; it does not install application drivers automatically.
-- DB lint/typecheck/build passed. App-server lint/typecheck/build and 136 tests passed. Queue lint/typecheck/build and seven tests passed after the lockfile's Knex peer-resolution change.
-- Test containers use the isolated `codex-filter-regression` Compose project and are stopped after validation. Oracle and MSSQL were not executed in this pass.
-- Type tests require `pnpm typecheck`; a Vitest pass does not evaluate negative compile-time assertions.
+Full DB package acceptance, including every integration suite: **3,325 passed, zero failed, four database-specific skips, 166 files**.
+
+| Scope                           | Passed | Failed | Skipped |
+| ------------------------------- | -----: | -----: | ------: |
+| Shared unit/type-test execution |    324 |      0 |       0 |
+| SQLite integration              |    600 |      0 |       1 |
+| PostgreSQL 16 integration       |    601 |      0 |       0 |
+| MySQL 8.4 integration           |    600 |      0 |       1 |
+| Oracle Free 23 integration      |    600 |      0 |       1 |
+| SQL Server 2022 integration     |    600 |      0 |       1 |
+
+All four skips are the same existing PostgreSQL-specific bigint-string transport scenario, executed successfully on PostgreSQL and not applicable to the other four backends. No failures were converted to skips. BigInt/Decimal transport redesign remains deferred.
+
+Reproduce from the DB package directory with Node 24+ and all services ready:
+
+```sh
+INTEGRATION_DB_CONNECTIONS=all pnpm exec vitest run
+```
+
+The SQL Server matrix runs test files serially to isolate DDL fixtures; explicit concurrent-write tests still run concurrent operations. See [five-database acceptance](../README.md#five-database-acceptance).
+
+- DB lint, formatting, typecheck, build, public API baseline, example typecheck and playground typecheck passed.
+- All 26 DB/dependent packages passed typechecking. App-server lint/build and all 136 tests passed.
+- Type tests require `pnpm typecheck`; a Vitest pass alone does not evaluate negative compile-time assertions.
+- Test services use the dedicated `codex-filter-regression` Compose project; services are stopped after acceptance and volumes retained.
+- PostgreSQL still emits a non-failing concurrent-client query deprecation warning; the pg 9 follow-up is recorded below.
 
 ### Unified findMany consumption
 
@@ -119,16 +138,26 @@ The public stream method and StreamOptions are removed. [Query unit tests](../..
 
 Scalar forward iteration uses driver streaming. Relations/backward results spool root rows to a private temporary file, close the root stream, then load relation batches on the same connection. [Buffer tests](../../unit/repository/row-spool.test.ts) verify Date/Buffer/bigint preservation, forward/reverse order, and cleanup on completion, empty input, early return and producer/consumer failure. This mode needs temporary disk space and reads all roots before first output; it does not collect the complete root array or issue repeated offset queries. Abrupt process termination may leave files for operational cleanup.
 
+Oracle stream rows use object format and consume CLOB/BLOB values before delivery or spooling, matching the array read path. The lifecycle suite also injects a driver setup rejection after connection acquisition and verifies error propagation and subsequent connection usability across all five databases.
+
+### Cross-database fixes and evidence
+
+- [Logical type lifecycle](../builder/logical-types.test.ts) verifies explicit boolean/JSON/date metadata, type changes, addition/removal, compatible metadata patches, and rejection before persisting incompatible patches. The physical inspector still treats external MySQL TINYINT as integer unless metadata explicitly supplements it.
+- Schema compilation tests ensure a named primary key is emitted once on all five dialects, including Oracle and SQL Server, which reject duplicate declarations.
+- Oracle Filter tests preserve date-only semantics, use explicit ISO timestamp conversion, classify decimal FLOAT storage, handle empty text/CLOBs with length predicates, and escape literal patterns according to the dialect. Oracle empty strings become SQL NULL; this physical behavior is explicit in shorthand/null assertions.
+- SQL Server UUID results use lowercase canonical strings. To-many mutation target locking uses a linked-target subquery, avoiding invalid lock hints after JOIN conditions; Oracle limited locks use ROWNUM without nesting FOR UPDATE inside pagination SQL.
+- [Bulk write bindings](./methods/create-many.test.ts) verifies objects/arrays in JSON fields, Uint8Array data, and explicit binary NULL with and without returning, plus subsequent updates. Driver parameter binding does not change BigInt/Decimal transport policy.
+- SQL Server inspection does not retry a deadlock victim inside an already rolled-back transaction. The test runner serializes files when SQL Server is selected to avoid independent DDL fixtures contending on shared catalogs; explicit concurrent-write test operations remain concurrent.
+
 DB lint/typecheck/build, API baseline, examples and playground checks passed. Type checking also passed for DB and all 25 downstream packages. Existing stream-named test files now exercise findMany asynchronous iteration; their names denote execution behavior, not a public stream API.
 
 ### Deliberately unresolved contracts
 
-1. **MySQL boolean introspection:** a declared boolean becomes TINYINT(1), while the inspector deliberately classifies TINYINT as integer. Metadata does not preserve a logical scalar type. The four boolean matrix cases and one shorthand case remain real failures, not skips. Decide an unambiguous mapping before changing the schema contract.
-2. **Numeric transport and version inputs:** BigInt/Decimal transport remains deferred. This pass does not invent coercion rules for string versus numeric versions, or freeze behavior for forged null/fractional/nonfinite version values.
-3. **Mutation diagnostic precision:** non-null physical constraints currently raise driver errors; structural validation does not guarantee required fields, existence or current-version validity. Some upsert scalar diagnostics still use `values` rather than `create`/`update`. Tests assert shared stable details without endorsing the imprecise branch path.
-4. **Relation overlap:** same-row/different-selector and cross-operation target overlap still need explicit semantics. Existing duplicate-selector, reassignment, through and rollback contracts remain covered.
-5. **Resource/concurrency guarantees:** empty logical-group policy, Filter budgets, very large driver parameter limits, savepoint continuation and concurrent absent-key upsert retry policy are not specified by these tests. Concurrent tests validate the final state and optimistic rejection, not deterministic scheduling.
-6. **Driver follow-up:** the broad PostgreSQL run emitted a pg warning about a query started while another query is executing. No extra failures resulted; tracing the source before pg 9 is separate follow-up work.
+1. **Numeric transport and version inputs:** BigInt/Decimal transport remains deferred. This pass does not invent coercion rules for string versus numeric versions, or freeze behavior for forged null/fractional/nonfinite version values.
+2. **Mutation diagnostic precision:** non-null physical constraints currently raise driver errors; structural validation does not guarantee required fields, existence or current-version validity. Some upsert scalar diagnostics still use `values` rather than `create`/`update`. Tests assert shared stable details without endorsing the imprecise branch path.
+3. **Relation overlap:** same-row/different-selector and cross-operation target overlap still need explicit semantics. Existing duplicate-selector, reassignment, through and rollback contracts remain covered.
+4. **Resource/concurrency guarantees:** empty logical-group policy, Filter budgets, very large driver parameter limits, savepoint continuation and concurrent absent-key upsert retry policy are not specified by these tests. Concurrent tests validate the final state and optimistic rejection, not deterministic scheduling.
+5. **Driver follow-up:** the broad PostgreSQL run emitted a pg warning about a query started while another query is executing. No extra failures resulted; tracing the source before pg 9 is separate follow-up work.
 
 ## Maintenance rules
 

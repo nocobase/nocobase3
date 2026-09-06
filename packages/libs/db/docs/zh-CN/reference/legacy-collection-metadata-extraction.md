@@ -37,7 +37,7 @@ if (result.document) {
 - 普通字段的 `title` 和 `description`；
 - `belongsTo`、`hasOne`、`hasMany`、`belongsToMany` relation 的当前可表示属性。
 
-表、列、类型、默认值、索引和约束属于物理 Schema，不会复制到 Metadata Document。旧应用层属性也不会重新加入当前文档模型。
+Tables, columns, native types, defaults, indexes, and constraints remain physical schema facts and are not copied into Metadata. Explicit `boolean`, `json`, `date`, and `time` declarations are retained as [supplemental logical types](./collection-metadata-document.md#supplemental-logical-types), subject to physical compatibility checks during resolution. Other removed legacy properties are not restored.
 
 ## 结果与诊断
 

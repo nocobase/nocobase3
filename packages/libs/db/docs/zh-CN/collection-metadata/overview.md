@@ -7,6 +7,8 @@ description: 区分 Metadata Store、connection.collectionMetadata、defineColle
 
 数据库物理 Schema 能表达表、列、类型和约束，但不能完整表达 Collection title、description 和应用 relation。Collection Metadata 保存这些补充语义。
 
+Metadata also preserves explicit logical types when native storage is ambiguous, such as a MySQL boolean stored as `TINYINT(1)` or an Oracle date-only field stored as `DATE`. These supplements must match compatible physical storage; see [supplemental logical types](../reference/collection-metadata-document.md#supplemental-logical-types).
+
 ## 三个不同入口
 
 | 名称                            | 作用                                                  |

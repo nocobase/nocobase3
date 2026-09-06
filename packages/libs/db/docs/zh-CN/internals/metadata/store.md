@@ -41,7 +41,7 @@ interface CollectionMetadataDocument {
 }
 ```
 
-`fields` 只补充标题和描述；`relations` 保存关系类型、目标 Collection、关联 key 和展示信息。文档必须通过 `validateCollectionMetadataDocument()` 的严格校验，未知属性不会被静默保留。
+`fields` supplements titles, descriptions, and explicitly declared logical types (`boolean`, `json`, `date`, `time`). `relations` stores relation types, target collections, explicit keys, and presentation metadata. Documents must pass `validateCollectionMetadataDocument()`; unknown properties are rejected. Physical compatibility is checked during Collection resolution. See [the logical type contract](../../reference/collection-metadata-document.md#supplemental-logical-types).
 
 ## Store 接口
 
