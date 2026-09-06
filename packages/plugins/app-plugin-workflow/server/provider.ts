@@ -46,7 +46,7 @@ export class WorkflowProvider<
           database: container.resolve(databaseManagerToken),
           queue: container.resolve(queueManagerToken),
           queueName: `workflow:${this.app.appName}`,
-          app: this.app,
+          services: this.app.container,
           sourceRoot: workflow.sourceRoot,
           distRoot: workflow.distRoot,
           artifactDisk: resolveWorkflowArtifactDisk(workflow, drive),

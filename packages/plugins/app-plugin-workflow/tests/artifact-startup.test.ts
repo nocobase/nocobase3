@@ -13,6 +13,7 @@ import {
   createSyncQueueConfig,
   type NocoBaseQueueManager,
 } from '@nocobase/queue';
+import { ServiceContainer } from '@nocobase/service-provider';
 import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
@@ -110,6 +111,7 @@ function createService(
   return new WorkflowService({
     database: f.database,
     queue: f.queue,
+    services: new ServiceContainer(),
     sourceRoot: path.join(f.root, 'server/workflows'),
     distRoot: f.distRoot,
     artifactDisk: {
