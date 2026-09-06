@@ -16,19 +16,20 @@ describeIntegrationDatabases('Repository methods/group-by', (context) => {
       ],
     });
 
-    await expect(
-      repository.groupBy({
-        by: ['status'],
-        filter: (filter) => filter.string('status').ne('cancelled'),
-        aggregate: (aggregate) => ({
-          count: aggregate.count(),
-          totalAmount: aggregate.sum('amount'),
-          maximumAmount: aggregate.max('amount'),
-        }),
-        having: (filter) => filter.number('count').gte(2),
-        sort: (sort) => sort.field('totalAmount').desc(),
+    const rows = await repository.groupBy({
+      by: ['status'],
+      filter: (filter) => filter.string('status').ne('cancelled'),
+      aggregate: (aggregate) => ({
+        count: aggregate.count(),
+        totalAmount: aggregate.sum('amount'),
+        maximumAmount: aggregate.max('amount'),
       }),
-    ).resolves.toEqual([
+      having: (filter) => filter.number('count').gte(2),
+      sort: (sort) => sort.field('totalAmount').desc(),
+    });
+    expect(
+      rows.map((row) => ({ ...row, totalAmount: Number(row.totalAmount) })),
+    ).toEqual([
       { status: 'paid', count: 2, totalAmount: 360, maximumAmount: 240 },
       { status: 'draft', count: 2, totalAmount: 120, maximumAmount: 70 },
     ]);

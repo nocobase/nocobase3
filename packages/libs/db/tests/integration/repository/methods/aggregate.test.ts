@@ -25,7 +25,11 @@ describeIntegrationDatabases('Repository methods/aggregate', (context) => {
         maximumAmount: aggregate.max('amount'),
       }),
     });
-    expect(aggregate).toMatchObject({
+    expect({
+      ...aggregate,
+      totalAmount: Number(aggregate.totalAmount),
+      averageAmount: Number(aggregate.averageAmount),
+    }).toEqual({
       count: 2,
       notedCount: 1,
       totalAmount: 360,

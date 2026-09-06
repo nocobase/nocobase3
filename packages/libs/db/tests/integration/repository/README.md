@@ -87,6 +87,14 @@ Non-null hasMany currently disallows the replace action, including an unchanged 
 
 ## Next work, in order
 
+### Cross-driver issues requiring an explicit contract
+
+Latest targeted Filter run (17 integration files, including aggregate/groupBy Filter wiring): PostgreSQL 16 passed 154 tests; MySQL 8.4 passed 149 and failed 5 boolean cases. The MySQL failures remain real failures, not skips. SQLite full-package regression passed 756 tests with one PostgreSQL-only skip. Temporary PostgreSQL/MySQL containers were run in the isolated `codex-filter-regression` Compose project and stopped after validation.
+
+MySQL 8.4 stores a declared boolean as TINYINT(1), and the inspector intentionally classifies TINYINT as integer (the shared inspector test asserts this). Metadata currently stores field labels, not logical scalar types. Consequently boolean Builder operators and boolean shorthand reject these fields after introspection. Do not hide this failure with skips or infer that every TINYINT(1) is boolean; decide whether to preserve logical scalar types or define another unambiguous mapping before changing the schema contract.
+
+The Filter field-type regression uses database-native physical setup for MySQL datetime values while keeping ISO/Date Filter operands. Small aggregate results are compared numerically only inside tests, since PostgreSQL/MySQL legitimately return sum/avg as strings. No runtime precision coercion is introduced.
+
 1. Relation-local pagination/Distinct combinations and all-null/grouping aggregates.
 2. Malformed AST/version/collection diagnostics, invalid numeric pagination and reusable-input isolation.
 3. Cross-database execution of the new cases, then controlled concurrent version/unique-key tests against confirmed guarantees.
