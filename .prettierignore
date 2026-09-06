@@ -12,6 +12,20 @@ packages/templates/app-template-default/client-old/
 packages/templates/app-template-default/registry/
 packages/tools/create-plugin/template/
 
+# 文档站的这五个目录是从 @rspress/core 的 ejectable theme 逐字复制过来的，升级 rspress 时靠和上游同名文件
+# 做 diff 来判断改了什么，格式化会把每个文件整体重写、让 diff 失去意义。docs/.prettierignore 里列的是同一批
+# 路径——两份都要有：这份管从仓库根跑的 prettier（pre-commit hook、pnpm format:all），那份管在 docs/ 里跑的。
+# docs 的其余文件用的是和全仓一样的 @nocobase/dev-config 预设，正常格式化。
+docs/theme/components/Nav/
+docs/theme/components/NavHamburger/
+docs/theme/components/NavScreen/
+docs/theme/components/Search/
+docs/theme/components/HomeHero/
+
+# 内部文档只在团队内部读，是拿来讨论和记录的散文，不是产物。Prettier 会按自己的规则重排表格对齐、
+# 折行和列表缩进，对着人写的中文段落做这些没有收益，反而会在 review 里制造和内容无关的 diff。
+internal-docs/
+
 # changeset 文件由 changesets 生成和消费，格式由它自己决定。
 # 项目的 singleQuote 会把 `"@nocobase/core": minor` 改成单引号，
 # 与 changesets 实际生成的格式不符。
