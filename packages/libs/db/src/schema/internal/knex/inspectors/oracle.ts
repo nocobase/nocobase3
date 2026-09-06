@@ -655,9 +655,17 @@ export class OracleSchemaInspector extends BaseSchemaInspector {
       return { status: 'complete', warnings: [] };
     }
     const objectType = kind === 'view' ? 'VIEW' : 'MATERIALIZED_VIEW';
+    // Ordinary view SQL is already in the catalog; GET_DDL reconstructs it
+    // through Oracle's substantially more expensive metadata machinery.
     const rows = oracleRows<OracleViewDefinitionRow>(
-      await knex.raw(
-        `
+      kind === 'view'
+        ? await knex.raw(
+            `select text_vc as definition, text_length as definition_length
+             from user_views where view_name = ?`,
+            [tableName],
+          )
+        : await knex.raw(
+            `
           select
             dbms_lob.substr(ddl, 4000, 1) as definition,
             dbms_lob.getlength(ddl) as definition_length
@@ -665,11 +673,14 @@ export class OracleSchemaInspector extends BaseSchemaInspector {
             select dbms_metadata.get_ddl(?, ?, ?) as ddl from dual
           )
         `,
-        [objectType, tableName, schema],
-      ),
+            [objectType, tableName, schema],
+          ),
     );
     const rawDefinition = optionalString(rows[0]?.definition);
-    const definition = rawDefinition?.match(/\bAS\s+([\s\S]+)$/iu)?.[1]?.trim();
+    const definition =
+      kind === 'view'
+        ? rawDefinition
+        : rawDefinition?.match(/\bAS\s+([\s\S]+)$/iu)?.[1]?.trim();
     const truncated = Number(rows[0]?.definition_length ?? 0) > 4000;
     return {
       definition: definition ?? rawDefinition,

@@ -206,6 +206,34 @@ describeIntegrationDatabases('schema inspector', (context) => {
     });
   });
 
+  it.skipIf(context.spec.dialect !== 'oracle')(
+    'preserves Oracle view SQL aliases and reports truncated catalog definitions',
+    async () => {
+      const inspector = context.database.connection().schemaInspector;
+      const tableName = context.table('aliasedView');
+      const definition = `select 'literal AS intact' as "value" from dual`;
+      await context.db.raw(`create view ?? as ${definition}`, [tableName]);
+      const view = await inspector.getPhysicalCollection({ tableName });
+      expect(view?.viewDefinition).toBe(definition);
+      expect(view?.inspection.aspects.viewDefinition).toBe('complete');
+
+      const longName = context.table('longView');
+      const longDefinition = `select 1 as "value" /* ${'x'.repeat(4200)} */ from dual`;
+      await context.db.raw(`create view ?? as ${longDefinition}`, [longName]);
+      const longView = await inspector.getPhysicalCollection({
+        tableName: longName,
+      });
+      expect(longView?.viewDefinition).toBe(longDefinition.slice(0, 4000));
+      expect(longView?.inspection.aspects.viewDefinition).toBe('partial');
+      expect(longView?.inspection.warnings).toContainEqual({
+        code: 'ORACLE_VIEW_DEFINITION_TRUNCATED',
+        message:
+          'Oracle view definition exceeded 4000 characters and was truncated.',
+        aspect: 'viewDefinition',
+      });
+    },
+  );
+
   it('preserves advanced dialect-specific physical schema details', async () => {
     const tableName = context.table('advancedSchema');
     const indexName = context.identifier('advanced_expression_index');

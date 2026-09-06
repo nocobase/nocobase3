@@ -1158,9 +1158,20 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     ),
   ): Promise<RepositoryRecord> {
     const fields = scalarFields(collection).map((field) => field.name);
-    const query = tableQuery(this.getClient(), collection).insert(
-      physicalValues,
-    );
+    const client = this.getClient();
+    if (isOracleClient(client) && Object.keys(physicalValues).length === 0) {
+      const defaultField = scalarFields(collection).find(
+        (field) => field.db?.generated === undefined,
+      );
+      if (defaultField) {
+        // Knex's empty Oracle insert miscompiles an array of RETURNING columns.
+        // An explicit DEFAULT keeps generation in the database without that path.
+        physicalValues = {
+          [column(collection, defaultField.name)]: client.raw('default'),
+        };
+      }
+    }
+    const query = tableQuery(client, collection).insert(physicalValues);
     const returned = (await query.returning(
       fields.map((field) => column(collection, field)),
     )) as unknown;
