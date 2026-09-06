@@ -11,11 +11,28 @@ description: 保留 DB 候选方案与设计演进；Repository 已有正式使�
 
 ## 精确数值提案
 
+- [Numeric field types and schema inspection](./numeric-field-types.md): proposed five-database mappings, Inspector capabilities, and metadata compatibility; SQLite semantics and exact-value transport remain separate decisions.
 - [BigInt 与 Decimal 精确数值处理](./precise-numeric-values.md)：记录 Query 与 Repository 的精度风险和候选契约，待决策、暂缓实施。
 
 ## Date and time field types
 
 - [Date and time field type mappings](./date-time-field-types.md): proposed five-database mappings for `date`, `time`, `datetime`, and `datetimeTz`, with current behavior and open decisions.
+
+## String field types
+
+- [String field types and schema inspection](./string-field-types.md): proposed Inspector `char/string/text` categories, separate Collection decisions, length units, Unicode and collation boundaries, and metadata responsibilities.
+
+## Boolean field type
+
+- [Boolean fields and schema inspection](./boolean-field-type.md): native versus numeric boolean storage, five-database Inspector rules, metadata resolution, strict codecs, and constraint boundaries.
+
+## Enum and set field types
+
+- [Enum and set field types](./enum-set-field-types.md): shared allowed-value contracts, enum string storage, PostgreSQL array/other-database JSON set storage, member changes, and Inspector/query boundaries.
+
+## JSON field type
+
+- [JSON fields and JSONB storage preference](./json-field-type.md): top-level `jsonb` preference, five-database fallback, Inspector/metadata ownership, and pending value, NULL, and query contracts.
 
 ## Repository 提案
 
