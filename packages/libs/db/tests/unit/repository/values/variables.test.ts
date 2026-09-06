@@ -1,9 +1,4 @@
-import { expect, expectTypeOf, it } from 'vitest';
-import type {
-  Repository,
-  SingleMutationResult,
-  ValuesBuilder,
-} from '../../../../src/index.js';
+import { expect, it } from 'vitest';
 import {
   DefaultValuesBuilder,
   resolveMutationValue,
@@ -130,27 +125,4 @@ it('validates resolved field data without coercion or JSON expression execution'
   const cyclic: Record<string, unknown> = {};
   cyclic.self = cyclic;
   expect(() => validate('json', cyclic)).toThrow();
-});
-
-function _selectedCreate(
-  repository: Repository<{ code: string; title: string; points: number }>,
-) {
-  return repository.createOne({
-    values: (v) => {
-      expectTypeOf(v).toEqualTypeOf<ValuesBuilder>();
-      return {
-        code: v.variable('$code'),
-        title: v.literal('Title'),
-        points: 1,
-      };
-    },
-    context: { code: 'A' },
-    select: (s) => s.fields('code'),
-  });
-}
-
-it('preserves select inference with a values callback', () => {
-  expectTypeOf<ReturnType<typeof _selectedCreate>>().toEqualTypeOf<
-    Promise<SingleMutationResult<{ code: string }>>
-  >();
 });

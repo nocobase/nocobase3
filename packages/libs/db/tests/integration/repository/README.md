@@ -26,7 +26,7 @@ Some existing tests intentionally remain transitional:
 
 - `methods/read-contracts.test.ts` and `methods/write-contracts.test.ts` retain multi-method workflows. Add independent method contracts before splitting their assertions into individual method files.
 - `relations/values/nested-operations.test.ts` retains cross-relation workflows. Follow-up tests should use relation-type-specific files when behavior differs by cardinality or foreign-key ownership.
-- Unit Values tests still contain a few embedded type checks. Move those during the type-test phase without losing their negative compile-time checks.
+- Values callback/atomic type checks now live in `tests/types/repository/values.test.ts`, preserving their negative compile-time checks.
 - Existing fixtures seed through Repository calls. Preserve that baseline for this move; future mutation-specific tests should use independent setup and physical-row checks when circular verification could hide a defect.
 
 ## Method contracts
@@ -132,6 +132,15 @@ Use the package's supported Node 24+ runtime, matching the ABI used to build nat
 - [Shared targets](./relations/values/shared-targets.test.ts) verifies repeated connect/payload updates and clearing one parent's edges without changing another parent's edge or the target. A late missing connect rolls back root changes, new targets and edge payloads together.
 - [Limits](./relations/values/limits.test.ts) verifies depth 3 versus 4 and 100 versus 101 relation nodes, both validation and execution. Validation writes nothing; over-limit execution leaves no physical rows. The node counter counts relation nodes, not every target record.
 - Non-null foreign-key cases, duplicate selectors within one operation and concurrency are still follow-up work; these tests do not make all cells in the audit complete.
+
+### Phase 4: Builders, types and stream lifecycle
+
+- Unit suites now cover Sort path copying and independent null-position expressions, all relation aggregate Sort nodes, Aggregate aliases and forged-expression rejection, and all seven relation Values operations with independent operation lists.
+- Values type assertions have moved out of runtime unit files. Method type tests cover selected findOne/stream results, boolean/count results, required query/write scope, nonempty bulk create and invalid selected fields. Run `pnpm typecheck` to enforce the negative assertions.
+- [Stream lifecycle](./methods/stream-lifecycle.test.ts) covers consumer failure, database read failure, explicit iterator return, independent context, invalid backward streaming and missing variables. It also checks that no connection release is deferred beyond iterator cleanup into the next event-loop turn.
+- These tests exposed delayed Knex stream closure racing pool teardown. A separate runtime fix waits for the close event before iterator cleanup returns. PostgreSQL still requires its existing streaming dependency setup; SQLite validation does not prove the other drivers passed.
+
+Remaining work is explicit: non-null relation constraints and duplicate-selector matrices, deeper local pagination/Distinct combinations, read-only collection method contracts, more normalization diagnostics and confirmed concurrency semantics. Do not interpret the growing test count as complete coverage.
 
 1. **Structural baseline (this phase):** partition files, extract fixed fixtures, retain assertions, repair documentation links and establish this map.
 2. **Public contracts and safety:** add independent method cases and documentation scenarios, then split transitional workflows where useful. Prioritize write scope, cardinality, identity and atomic rollback.

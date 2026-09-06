@@ -1,9 +1,7 @@
-import { expect, it, expectTypeOf } from 'vitest';
+import { expect, it } from 'vitest';
 import type {
   CollectionDefinition,
   FieldDefinition,
-  Repository,
-  NumericMutationBuilder,
 } from '../../../../src/index.js';
 import { normalizeNumericMutation } from '../../../../src/repository/numeric-mutation.js';
 
@@ -51,31 +49,4 @@ it('preserves decimal precision, rejects invalid operands, and treats JSON as da
       normalizeNumericMutation(collection, field, input, true),
     ).toThrow();
   }
-});
-
-function typedAtomicUpdates(
-  repository: Repository<{ id: number; balance: number; enabled: boolean }>,
-): void {
-  void repository.updateOne({
-    filter: { id: 1 },
-    values: {
-      balance: (value) => {
-        expectTypeOf(value).toEqualTypeOf<NumericMutationBuilder>();
-        return value.increment(1);
-      },
-    },
-  });
-  void repository.updateMany({
-    all: true,
-    values: { balance: (value) => value.multiply(2) },
-  });
-  void repository.updateOne({
-    filter: { id: 1 },
-    // @ts-expect-error Boolean fields do not accept numeric operations.
-    values: { enabled: { increment: 1 } },
-  });
-}
-
-it('exposes contextual numeric Builder types', () => {
-  expect(typedAtomicUpdates).toBeTypeOf('function');
 });
