@@ -266,7 +266,12 @@ export abstract class BaseSchemaInspector implements SchemaInspector {
       try {
         return await action();
       } catch (error) {
-        if (this.dialect === 'mssql' && isMssqlDeadlock(error) && attempt < 4) {
+        if (
+          this.dialect === 'mssql' &&
+          isMssqlDeadlock(error) &&
+          attempt < 4 &&
+          (await this.canRetryDeadlock())
+        ) {
           await delay(25 * attempt);
           continue;
         }
@@ -285,6 +290,10 @@ export abstract class BaseSchemaInspector implements SchemaInspector {
         });
       }
     }
+  }
+
+  protected async canRetryDeadlock(): Promise<boolean> {
+    return true;
   }
 }
 

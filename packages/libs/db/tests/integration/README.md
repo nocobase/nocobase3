@@ -16,6 +16,7 @@ tests/
     metadata/
     migration/
     query/
+    repository/
     schema/
     seed/
 ```
@@ -25,6 +26,10 @@ tests/
 Schemas. `metadata/` covers persistent Store, compare-and-swap, pagination, and
 transaction behavior. `query/`, `migration/`, `schema/`, and `seed/` cover their
 corresponding public APIs against real SQL execution.
+
+`repository/` covers method contracts, parameter capabilities, identity,
+relations, nested mutations, and array/iterator consumption. See its
+[coverage and validation index](./repository/README.md).
 
 Reusable typed scenario inputs live under `tests/fixtures/`. Resolver fixtures
 pair physical Schema with supplemental Metadata and expected results;
@@ -85,6 +90,50 @@ For an ad hoc database combination, set `INTEGRATION_DB_CONNECTIONS` on a direct
 INTEGRATION_DB_CONNECTIONS=postgres,mysql pnpm exec vitest run tests/integration
 INTEGRATION_DB_CONNECTIONS=oracle pnpm exec vitest run tests/integration
 ```
+
+## Five-database acceptance
+
+DB changes must pass the complete package suite, including all integration
+tests, on SQLite, PostgreSQL, MySQL, Oracle, and SQL Server. A SQLite-only or
+Repository-only run is useful while iterating, but is not final acceptance.
+
+With all four database services available, run from this package directory
+using Node 24 or later:
+
+```bash
+INTEGRATION_DB_CONNECTIONS=all pnpm exec vitest run
+pnpm lint
+pnpm typecheck
+pnpm build
+pnpm api:check
+pnpm typecheck:examples
+pnpm typecheck:playground
+```
+
+The all-database invocation runs shared unit/type-test files once and repeats
+the integration scenarios per configured database. Type assertions additionally
+require `typecheck`. Missing drivers or unavailable services are failures, not
+reasons to skip a database. A database-specific scenario may be conditional
+only when its contract explicitly belongs to that database; the PostgreSQL
+bigint-string transport scenario is one such case.
+
+When the selected matrix includes SQL Server, the package configuration runs
+test files serially: concurrent DDL fixtures can deadlock on shared catalog
+rows even when their application table names differ. Do not override this
+with file parallelism or run multiple matrix processes against the same
+database. Concurrent-write scenarios still run concurrent operations inside
+their test. Other database selections retain file parallelism.
+
+A catalog deadlock inside a SQL Server transaction is not retried by the
+inspector: SQL Server has rolled back the entire transaction, so retrying only
+the read would incorrectly report earlier DDL as missing. The original driver
+error remains the cause of `SCHEMA_INSPECTION_FAILED`. Nontransactional catalog
+reads retain bounded retries.
+
+Use a dedicated Compose project for local validation. Stop its services after
+the run and retain volumes unless their deletion was explicitly requested.
+The `test:db:down` command above removes data volumes and is not a routine
+cleanup command for a shared or user-owned test environment.
 
 Default Docker connection settings:
 

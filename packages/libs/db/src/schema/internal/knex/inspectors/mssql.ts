@@ -116,6 +116,12 @@ export class MssqlSchemaInspector extends BaseSchemaInspector {
     super(options.connectionName, 'mssql');
   }
 
+  protected override async canRetryDeadlock(): Promise<boolean> {
+    // SQL Server rolls back a deadlock victim's entire transaction. Retrying
+    // only inspection could silently lose earlier DDL and report missing tables.
+    return !(await this.options.resolveClient()).isTransaction;
+  }
+
   protected async inspectSchemas(): Promise<PhysicalSchemaInfo[]> {
     const knex = await this.options.resolveClient();
     const current = await this.currentSchema(knex);

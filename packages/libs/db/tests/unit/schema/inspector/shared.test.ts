@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import knex from 'knex';
+import { MssqlSchemaInspector } from '../../../../src/schema/internal/knex/inspectors/mssql.js';
 import { BaseSchemaInspector } from '../../../../src/schema/inspector/base.js';
 import {
   decodePhysicalCollectionCursor,
@@ -215,6 +217,33 @@ describe('BaseSchemaInspector option validation', () => {
 });
 
 describe('BaseSchemaInspector error normalization', () => {
+  it('does not retry inspection inside a rolled-back SQL Server transaction', async () => {
+    const client = knex({ client: 'mssql' });
+    const failure = Object.assign(new Error('deadlock victim'), {
+      number: 1205,
+    });
+    const raw = vi.spyOn(client, 'raw').mockImplementation(() => {
+      throw failure;
+    });
+    Object.defineProperty(client, 'isTransaction', { value: true });
+    const inspector = new MssqlSchemaInspector({
+      connectionName: 'mssql',
+      resolveClient: async () => client,
+    });
+    try {
+      await expect(
+        inspector.getPhysicalCollection({ tableName: 'just_created' }),
+      ).rejects.toMatchObject({
+        code: 'SCHEMA_INSPECTION_FAILED',
+        cause: failure,
+      });
+      expect(raw).toHaveBeenCalledTimes(1);
+    } finally {
+      raw.mockRestore();
+      await client.destroy();
+    }
+  });
+
   it('retries transient SQL Server catalog deadlocks with a finite limit', async () => {
     const recovered = new DeadlockingMssqlSchemaInspector(2);
     await expect(recovered.listSchemas()).resolves.toEqual([
