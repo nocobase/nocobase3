@@ -14,6 +14,41 @@ import type {
 
 describe('CollectionResolver', () => {
   it.each([
+    ['integer', true, true],
+    [undefined, true, false],
+    ['integer', false, false],
+  ] as const)(
+    'validates bigInt auto-increment storage with affinity %s and autoIncrement %s',
+    (affinity, autoIncrement, compatible) => {
+      const resolve = () =>
+        resolveCollection({
+          physical: physicalCollection({
+            tableName: 'items',
+            columns: [
+              column('id', 1, {
+                dataType: 'integer',
+                nativeType: 'INTEGER',
+                affinity,
+                autoIncrement,
+              }),
+            ],
+          }),
+          metadata: {
+            version: 1,
+            name: 'items',
+            fields: { id: { type: 'bigInt' } },
+          },
+          context: emptyContext(),
+        });
+      if (compatible)
+        expect(resolve().collection.fields).toContainEqual(
+          expect.objectContaining({ name: 'id', type: 'bigInt' }),
+        );
+      else expect(resolve).toThrow(CollectionResolutionError);
+    },
+  );
+
+  it.each([
     ['date', 'datetime', 'DATE', undefined, true],
     ['date', 'datetime', 'timestamp', undefined, false],
     ['time', 'string', 'varchar2(16)', 16, true],

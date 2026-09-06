@@ -216,9 +216,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           // or passing a row to the disk spool.
           for (const [field, value] of Object.entries(row)) {
             if (!(value instanceof Readable)) continue;
-            const lob = value as Readable & { type: object };
+            const lob = value;
             const textual =
-              lob.type === oracleDriver.CLOB || lob.type === oracleDriver.NCLOB;
+              'type' in lob &&
+              (lob.type === oracleDriver.CLOB ||
+                lob.type === oracleDriver.NCLOB);
             const chunks: Buffer[] = [];
             for await (const chunk of lob as AsyncIterable<Buffer>)
               chunks.push(chunk);

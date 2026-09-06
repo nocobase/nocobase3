@@ -40,15 +40,7 @@ import {
   resolveTemplateKind,
   resolveTemplateSource,
 } from './lib/template.ts';
-import {
-  buildHubConfigFile,
-  buildHubEnvFile,
-  DEFAULT_HUB_HOST,
-  DEFAULT_HUB_PORT,
-  finalizeHub,
-  HUB_STATE_DIR,
-  readEnvExample,
-} from './lib/hub.ts';
+import { buildHubEnvFile, readEnvExample } from './lib/hub.ts';
 
 export interface CreateAppOptions {
   argv: string[];
@@ -243,8 +235,8 @@ interface CreateHubOptions {
  *
  * A hub is a Portal host that serves built apps and proxies an upstream NocoBase API. It has no database, so none of
  * the app flow's database work applies: no dialect, no driver dependency, no `config.yml`. What it needs instead is
- * `.env` for its own settings, `.nb3/hub.json` so the `nb3 hub` commands can find it, and the runtime directories it
- * writes into — the same scaffolding `nb3 hub create` performs, so a hub is identical whichever command produced it.
+ * `.env` for its own settings, since a hub is configured through the environment, and `app-dist/` for the apps it
+ * serves. It is run through its own `pnpm build` and `pnpm start`.
  *
  * `ensureAllowBuilds` still runs. The hub depends on `esbuild`, which needs its install script, and pnpm 11 skips
  * that for any package missing from `allowBuilds`.
@@ -264,11 +256,6 @@ async function createHub(options: CreateHubOptions): Promise<void> {
       templateDirectory: template.directory,
       extraFiles: {
         '.env': buildHubEnvFile({ example: envExample, name }),
-        [path.join(HUB_STATE_DIR, 'hub.json')]: buildHubConfigFile({
-          host: DEFAULT_HUB_HOST,
-          name,
-          port: DEFAULT_HUB_PORT,
-        }),
         // Where a hub keeps the built apps it serves. Empty until something is deployed, so it needs a placeholder to
         // exist in a fresh checkout at all.
         [path.join('app-dist', '.gitkeep')]: '',
@@ -278,7 +265,6 @@ async function createHub(options: CreateHubOptions): Promise<void> {
     await removeDirectory(template.directory);
   }
 
-  await finalizeHub(targetDirectory);
   await ensureAllowBuilds(targetDirectory);
 
   log.success(`Created hub ${name} from ${template.name}@${template.version}.`);

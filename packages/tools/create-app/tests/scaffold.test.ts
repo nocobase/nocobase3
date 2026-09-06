@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -48,7 +48,11 @@ async function createTemplate(
   );
 
   for (const [name, contents] of Object.entries(files)) {
-    await writeFile(path.join(directory, name), contents, 'utf8');
+    const target = path.join(directory, name);
+
+    // Fixtures name real template paths such as `client/runtime.ts`, so the directory has to exist first.
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, contents, 'utf8');
   }
 
   return directory;
@@ -121,14 +125,79 @@ describe('scaffoldFromTemplate', () => {
     expect(manifest.publishConfig).toBeUndefined();
     expect(manifest.repository).toBeUndefined();
 
-    // A generated app must not keep the template's identity: without this it would be labelled "Default Template".
-    expect(manifest.displayName).toBeUndefined();
+    // `vite.config.ts` defines __PORTAL_TEMPLATE_NAME__ from displayName, and the shell renders it in the sidebar
+    // footer. Dropping it made every generated app fall back to the shell's "Default Template" literal.
+    expect(manifest.displayName).toBe('crm');
     expect(manifest.description).toBeUndefined();
 
     // The version records which template the app came from, so it is kept rather than reset.
     expect(manifest.version).toBe('0.0.1-beta.2');
     // Ranges were already resolved when the tarball was packed; rewriting them would undo that.
     expect(manifest.dependencies.knex).toBe('^3.1.0');
+  });
+
+  /**
+   * The client reads its i18n namespace from `client/runtime.ts` while the server reads the same namespace from
+   * `package.json`, so a name left behind in the source splits `APP_NS` in half. It also fails `client:inspect`,
+   * which compares the two and refuses to run when they disagree.
+   */
+  it('rewrites the template package name in the sources that embed it', async () => {
+    const templateDirectory = await createTemplate({
+      'client/runtime.ts':
+        "const appRuntime = defineAppRuntime({\n  packageName: '@nocobase/app-template-default',\n});\n",
+      'client/service-provider.ts':
+        "  public readonly name: string = '@nocobase/app-template-default/client';\n",
+      'server/providers/app-example.ts':
+        "createServiceToken('@nocobase/app-template-default/example-service');\n",
+    });
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const read = (relative: string) =>
+      readFile(path.join(targetDirectory, relative), 'utf8');
+
+    expect(await read('client/runtime.ts')).toContain("packageName: 'crm'");
+    expect(await read('client/service-provider.ts')).toContain("'crm/client'");
+    expect(await read('server/providers/app-example.ts')).toContain(
+      "'crm/example-service'",
+    );
+
+    for (const relative of [
+      'client/runtime.ts',
+      'client/service-provider.ts',
+      'server/providers/app-example.ts',
+    ]) {
+      expect(await read(relative)).not.toContain('app-template-default');
+    }
+  });
+
+  /**
+   * `MIGRATION.md` names the upstream template a derived application merges from. That reference is correct and
+   * rewriting it to the app's own name would make the document describe something that does not exist.
+   */
+  it('leaves the template name in documentation alone', async () => {
+    const templateDirectory = await createTemplate({
+      'MIGRATION.md':
+        'Merge source changes from `@nocobase/app-template-default`.\n',
+    });
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    expect(
+      await readFile(path.join(targetDirectory, 'MIGRATION.md'), 'utf8'),
+    ).toContain('@nocobase/app-template-default');
   });
 
   /**
@@ -364,7 +433,6 @@ describe('gitignore handling', () => {
     expect(contents).toContain('node_modules');
     expect(contents).toContain('/config.yml');
     expect(contents).toContain('/.nocobase/');
-    expect(contents).toContain('/.nb3/');
     expect(contents).toContain('/.agents/');
   });
 

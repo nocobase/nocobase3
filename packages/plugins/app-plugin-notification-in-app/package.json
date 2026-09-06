@@ -1,8 +1,8 @@
 {
   "name": "@nocobase/app-plugin-notification-in-app",
   "displayName": "In-app Notification App Plugin",
-  "description": "Provides an authenticated in-app inbox and contributes its notification Channel when the core Server plugin is registered.",
-  "version": "0.2.0-beta.3",
+  "description": "Provides an authenticated in-app inbox, notification Channel, and development-only Client inbox page.",
+  "version": "0.2.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -12,9 +12,7 @@
   "files": [
     "dist",
     "README.md",
-    "registry",
-    "registry.config.json",
-    "public/r"
+    "skills"
   ],
   "main": "./dist/server/index.js",
   "types": "./dist/server/index.d.ts",
@@ -26,6 +24,22 @@
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./realtime": {
+      "types": "./shared/realtime.ts",
+      "import": "./shared/realtime.ts"
     },
     "./package.json": "./package.json"
   },
@@ -40,14 +54,23 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./realtime": {
+        "types": "./dist/shared/realtime.d.ts",
+        "import": "./dist/shared/realtime.js"
+      },
       "./package.json": "./package.json"
-    }
-  },
-  "nocobase": {
-    "registry": {
-      "items": {
-        "in-app-ui": "./registry/in-app-ui"
-      }
     }
   },
   "scripts": {
@@ -55,21 +78,25 @@
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "registry:build": "node ../../../scripts/registry.mjs build --package .",
-    "registry:materialize": "node ../../../scripts/registry.mjs materialize --package .",
-    "prepack": "pnpm registry:build && pnpm build",
+    "prepack": "pnpm build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/session": "workspace:^",
-    "hono": "catalog:"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "hono": "catalog:",
+    "lucide-react": "^0.487.0",
+    "tailwind-merge": "^3.2.0"
   },
   "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-authentication": "workspace:*",
     "@nocobase/app-plugin-notification": "workspace:*",
     "@nocobase/app-server": "workspace:*",
@@ -77,18 +104,34 @@
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/i18n": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "eslint": "catalog:",
+    "jsdom": "catalog:",
     "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "shadcn": "^4.13.1",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "^1.2.5",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
-    "@nocobase/service-provider": "workspace:^"
+    "@nocobase/service-provider": "workspace:^",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router": "^7.0.0"
   }
 }

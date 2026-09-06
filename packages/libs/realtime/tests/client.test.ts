@@ -5,6 +5,7 @@ import { createRealtimeClient, type RealtimeEvent } from '../src/client.js';
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 it('connects lazily, dispatches events, and restores topics after reconnecting', () => {
@@ -52,8 +53,14 @@ it('connects lazily, dispatches events, and restores topics after reconnecting',
   const errors: string[] = [];
   const client = createRealtimeClient({ resolveUrl: () => '/main/ws' });
   client.onError((event) => errors.push(event.code));
+  const opened = vi.fn();
+  const listenerError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  client.onOpen(opened);
   expect(sockets).toHaveLength(0);
 
+  const unsubscribeThrowing = client.subscribe('notifications:in-app', () => {
+    throw new Error('listener failed');
+  });
   const unsubscribe = client.subscribe<{ readonly kind: string }>(
     'notifications:in-app',
     (event) => events.push(event),
@@ -66,6 +73,7 @@ it('connects lazily, dispatches events, and restores topics after reconnecting',
     id: 'subscribe:notifications:in-app',
     topic: 'notifications:in-app',
   });
+  expect(opened).toHaveBeenCalledOnce();
 
   sockets[0]?.message({
     type: 'event',
@@ -79,6 +87,7 @@ it('connects lazily, dispatches events, and restores topics after reconnecting',
     message: 'Sign in first.',
   });
   expect(events).toHaveLength(1);
+  expect(listenerError).toHaveBeenCalledOnce();
   expect(errors).toEqual(['AUTHENTICATION_REQUIRED']);
 
   client.reconnect();
@@ -88,13 +97,29 @@ it('connects lazily, dispatches events, and restores topics after reconnecting',
     id: 'subscribe:notifications:in-app',
     topic: 'notifications:in-app',
   });
+  expect(opened).toHaveBeenCalledTimes(2);
 
   vi.advanceTimersByTime(300_000);
   expect(sentMessages.at(-1)).toEqual({ type: 'ping' });
 
+  const unsubscribeOther = client.subscribe('notifications:other', vi.fn());
+  unsubscribeThrowing();
   unsubscribe();
   expect(sentMessages.at(-1)).toEqual({
     type: 'unsubscribe',
     topic: 'notifications:in-app',
   });
+
+  const unsubscribeReplacement = client.subscribe(
+    'notifications:in-app',
+    vi.fn(),
+  );
+  expect(sentMessages.at(-1)).toEqual({
+    type: 'subscribe',
+    id: 'subscribe:notifications:in-app',
+    topic: 'notifications:in-app',
+  });
+
+  unsubscribeReplacement();
+  unsubscribeOther();
 });

@@ -1,5 +1,11 @@
 # AGENTS.md
 
+This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 Skills here; follow the nearest `AGENTS.md` and repository-local NocoBase 3 Skill instead.
+
+## Before Creating or Updating a Pull Request
+
+Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing. If no changeset is needed, explain why in the PR description; documentation-only, test-only, and other changes that do not affect published output are exempt.
+
 ## Repository Layout
 
 Every published package lives under `packages/`, grouped into six directories by what the package is. The grouping is a convention for readers: pnpm resolves packages by name, so which directory a package sits in changes nothing about how it is depended on or filtered.
@@ -14,6 +20,8 @@ Every published package lives under `packages/`, grouped into six directories by
 | `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `cli`, and `create-app`            |
 
 `packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
+
+`docs/` is the seventh workspace member and the one exception to the table above. It is the documentation site rather than something an application depends on, so it sits at the repository root rather than under `packages/`, and it is the only workspace package that sets `private: true`. That placement is what keeps it out of `pnpm pack:check`, which discovers publishable packages by descending into `packages/<category>/` and would otherwise reject it for being private. See the "Documentation Site" section below before changing anything under it.
 
 ## Selecting and Using Shared Development Configuration
 
@@ -198,6 +206,68 @@ It does not apply to `packages/app` and `packages/libs`. They compose the runtim
 
 `pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
 
+## Declaring Dependencies by How They Are Used
+
+Server code that ships goes in `dependencies`. Client code, build tooling, tests, and type-only imports go in `devDependencies` — or in `peerDependencies` when the consuming application must provide a single shared copy. `pnpm deps:check` enforces the server half and runs in CI.
+
+The asymmetry is not a style preference. It follows from the two halves being deployed differently.
+
+**The server half is deployed unbundled.** `pnpm build` emits `dist/server` with its bare imports intact, then generates `dist/package.json` by walking `dependencies` and installs a `node_modules` beside it. That tree is what a deployed server resolves against, and `devDependencies` are not part of it. A server module importing something declared only as a devDependency therefore resolves in every development checkout and is absent exactly once — on the deployed server. `@nocobase/app-plugin-workflow` shipped this: `server/loader/source-parser.ts` imports `typescript`, the engine reaches that module through a static import chain, and `typescript` sat in `devDependencies`. Nothing warned at install time; the application crashed on start with `Cannot find package 'typescript'`, an error naming nothing that points back at the manifest.
+
+**The client half is bundled by the application.** A plugin's `client/` is compiled by the consuming application's Vite build, which resolves those imports at build time and inlines them into `dist/client`. Nothing resolves them again at runtime, so a `dependencies` entry buys the bundle nothing — and costs something real, because the same walk that builds `dist/package.json` drags every one of them into the server deployment to be installed and never required. `lucide-react` and `@xyflow/react` alone were 44 MB of that, in a tree whose server code references neither.
+
+So the question is where the importing code runs, and then what the import actually is:
+
+- **A server value import belongs in `dependencies`.** `import ts from 'typescript'` in `server/` needs it even though TypeScript sounds like build tooling.
+- **A client import belongs in `devDependencies`.** `react`, `lucide-react`, `@base-ui/react`, `clsx`, and everything else reached only from `client/` — the application bundles them, and it declares its own copies.
+- **A type-only import belongs in `devDependencies` wherever it lives.** `import type { Config } from 'x'` and `import { type A, type B } from 'x'` are erased before anything runs.
+- **A dynamic `import()` counts as a value import.** Deferring the load changes when a package is needed, not whether.
+- **The `files` field decides whether code ships at all.** A test, an eval harness, or a build script excluded from `files` never reaches a consumer, so its imports are correctly devDependencies.
+
+`registry/` is excluded for a stronger reason than `client/`: it is shadcn-style source copied into an application and compiled there against that application's own `react` and `@/` alias. The plugin cannot resolve those imports at all, so declaring them would claim dependencies it does not have.
+
+`peerDependencies` is the third answer, for a package the application must supply exactly one copy of. `@nocobase/i18n` is the shape to copy: it exports a server entry and a client entry from one package, so `i18next` is an ordinary dependency while `react`, `hono`, and `react-i18next` are optional peers — a server-only consumer installs none of them, and a browser consumer gets the application's single copy rather than a second one that would leave `useTranslation` reading an empty provider. Mark such a peer `optional` in `peerDependenciesMeta` so the consumer that legitimately does not need it gets no warning.
+
+When the check reports something, there are two correct fixes and picking the wrong one is worse than the original: declare it in `dependencies` if server code genuinely imports it, or stop importing it from server code if it is client or build-time code that leaked across. Adding a declaration to silence the check trades a startup crash for a dependency every deployment carries forever.
+
+`pnpm plugin:create` emits a generated plugin's `AGENTS.md` carrying this rule, so a plugin created tomorrow is told where a dependency goes before anyone adds one. When the rule changes here, change `packages/tools/create-plugin/template/AGENTS.md` in the same commit — the two are kept in step by a test, but only for the files' existence, not their content.
+
+## Documentation Site
+
+`docs/` is a Rspress site copied from the v2 repository so that its custom theme, plugins, and checking scripts stay comparable with what they were ported from. It is a workspace member (`pnpm --filter @nocobase/docs <script>`), but it deliberately does not follow the shared-configuration rules the packages under `packages/` follow.
+
+### Vendored theme components are excluded from both tools
+
+`theme/components/{Nav,NavHamburger,NavScreen,Search,HomeHero}` are copied from Rspress's ejectable theme and kept byte-for-byte. Diffing them against the new upstream copy is the whole of a Rspress upgrade, which only works while they are unmodified.
+
+Both tools skip them: for ESLint through `VENDORED_FROM_RSPRESS` in `docs/eslint.config.mjs`, which feeds the config's `ignores`, and for Prettier through **two** ignore files. The same five paths appear in `docs/.prettierignore`, which applies when Prettier runs inside the directory, and in the root `.prettierignore`, which applies when it runs from the repository root — the pre-commit hook and `pnpm format:all` both do. Miss either one and the files get reformatted by whichever entry point was left uncovered.
+
+Formatting them would rewrite every one on the first run; linting them reports on code this repository does not own, where the only actionable response is the edit that destroys the diff. Fix a real problem in one of these files by fixing it upstream and re-copying, not by patching the copy. Everything outside those five directories is this repository's own code, is formatted and linted normally, and is held to zero errors.
+
+When a copied file needs a deliberate local change, keep it and give it a header naming exactly what was changed and why — `Search/SearchPanel.tsx` and `Search/SuggestItem.tsx` are the two that carry one today. The directory stays excluded either way; the header is what tells the next person which differences are intentional.
+
+### Formatting and linting for everything else
+
+Prettier is the repository baseline, `@nocobase/dev-config/prettier`, referenced from `package.json` the same way every other package references it. Nothing about this directory is special to Prettier beyond the five vendored paths described above.
+
+ESLint is this package's own flat config rather than a `dev-config` factory, because what it lints is a Rspress theme and a set of Node build scripts, neither of which the factories are shaped for. The root `eslint.config.js` enumerates the package roots it applies to and matches nothing here, so running ESLint over a file in this directory _from the repository root_ exits zero without evaluating a single rule — it looks like a pass and checks nothing. Two things follow. `pnpm lint` at the repository root is fine, because it runs each package's own `lint` script rather than one ESLint over everything. And `lint-staged.config.mjs` lists this directory in `SELF_LINTING_DIRECTORIES`, which is what makes the pre-commit hook run its ESLint from inside it; a new self-linting directory has to be added there or its rules silently stop running at commit time. The directory also pins ESLint 9 while the root is on 10, so the binary has to come from its own `node_modules` regardless.
+
+The upstream copy of this site also carried Biome. It was dropped: its formatter duplicated Prettier over the same files with different settings, and the lint rules that were earning their place — hook dependency lists, conditionally called hooks, missing keys in rendered lists — are now covered by `eslint-plugin-react-hooks`. Removing it was a simplification only because that plugin came in with it.
+
+### Dependencies
+
+pnpm resolves strictly, so a dependency has to be declared even when the upstream copy relied on the flat `node_modules` a Yarn install produced. `clsx`, `body-scroll-lock`, and `js-yaml` are all imported by code that never declared them and are listed in this package as a result. When a copied file fails to resolve an import that works upstream, the cause is usually this and the fix is a declaration, not a change to the file.
+
+React is the other divergence. The upstream copy pins React 18 through a `resolutions` field, which pnpm does not read at all, and Rspress 2.x depends on React 19 itself. This package uses React 19 and does not carry the pin; translating it would mean a root `pnpm.overrides` entry, which applies repository-wide and would drag every other package down to 18.
+
+### Content and languages
+
+Only the framework was copied — `docs/docs/` holds the pages this repository writes for itself. The framework carries translations for ten languages (`cn en ja es pt de fr ru id vi`) in `rspress.config.ts` and `theme/locales.ts`, but a language is only built if it has a directory under `docs/docs/`. Today that is `cn` and `en`. Adding a language means creating the directory; the translations are already there.
+
+`cn` is the baseline the structural checks in `check.sh` compare every other language against, so a page added to another language without its `cn` counterpart fails the tree and meta alignment checks.
+
+Dead-link checking runs during build, but only over links in Markdown bodies. The home page's hero actions and feature cards live in frontmatter, so a route named there can be missing without failing the build — those need checking by hand.
+
 ## Language
 
 Anything a person outside the team can read is written in English. Anything only the team reads may be written in Chinese.
@@ -218,6 +288,8 @@ Chinese is fine for:
 The distinction is the audience, not the file type. A comment inside a workflow is read by maintainers and stays English along with the rest of the code; the Feishu message that same workflow sends never leaves the team, so it stays Chinese.
 
 The workflow files under `.github/workflows/` still carry Chinese comments written before this rule existed. Translate the ones you touch; there is no need to convert the rest in a single pass.
+
+`internal-docs/` is also excluded from Prettier in the root `.prettierignore`. It is prose written for the team to read and argue with, not an artefact, and reflowing a hand-written Chinese paragraph or realigning a table it wrote by hand buys nothing while filling a review with diff unrelated to the change. Write it however reads best.
 
 ## TypeScript Requirements for Library Development
 

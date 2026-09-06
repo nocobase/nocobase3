@@ -16,7 +16,7 @@ import {
 import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
-} from '../server/loader/artifact-builder.js';
+} from '../build/artifact-builder.js';
 import { WorkflowService } from '../server/service.js';
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
@@ -226,6 +226,12 @@ describe('application workflow Artifact lazy synchronization', () => {
     await expect(
       fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
     ).resolves.toEqual(expect.arrayContaining(['workflow.json', 'server']));
+    await firstRepository.setStatus(first.id as string, false);
+    await expect(firstRepository.enable(v1)).resolves.toMatchObject({
+      id: String(first.id),
+      enabled: true,
+      hash: v1,
+    });
     await firstRepository.setStatus(first.id as string, false);
     await expect(
       firstRepository.enable(first.id as string),

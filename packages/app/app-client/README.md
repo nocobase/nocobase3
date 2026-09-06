@@ -106,6 +106,13 @@ An application owns:
 - finalized `app.refineConfig` after startup;
 - finalized React render configuration consumed by `AppClientRoot`.
 
+The application owns a separate lazy realtime service under `realtimeClientToken`. By default,
+its WebSocket endpoint is the `/ws` sibling of `api.baseURL`; deployments with
+a different topology can set `api.realtimeURL` explicitly. Consumers that keep
+durable state should use `onOpen()` to refetch after the initial connection and
+reconnection. Topic events remain lightweight invalidation signals rather than
+authoritative state.
+
 Create an application directly when the default helper is sufficient:
 
 ```ts

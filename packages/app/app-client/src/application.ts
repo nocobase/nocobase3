@@ -58,7 +58,14 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
       return createApiClient({ baseURL: baseURL ?? resolveAppUrl('/api') });
     });
     this.app.container.singleton(realtimeClientToken, (): RealtimeClient =>
-      createRealtimeClient({ resolveUrl: () => resolveAppUrl('/ws') }),
+      createRealtimeClient({
+        resolveUrl: () => {
+          const realtimeURL = this.app.config.get<string>('api.realtimeURL');
+          const baseURL =
+            this.app.config.get<string>('api.baseURL') ?? resolveAppUrl('/api');
+          return realtimeURL ?? `${baseURL.replace(/\/+$/u, '')}/../ws`;
+        },
+      }),
     );
   }
 

@@ -83,13 +83,16 @@ describe('app client runtime', () => {
 
   it('uses the default template Application and static plugin declarations', async () => {
     const runtime = await resolveAppRuntime(appRuntime, {
-      rawConfig: { app: { title: 'NocoBase' } },
+      rawConfig: { app: { title: 'Configured application' } },
     });
     const app = createApp(runtime);
 
     expect(app).toBeInstanceOf(ClientApplication);
     await expect(app.start()).resolves.toBeUndefined();
-    expect(app.config.get('app.title')).toBe('NocoBase');
+    expect(app.config.get('app.title')).toBe('Configured application');
+    expect(app.refineConfig.options?.title).toEqual({
+      text: 'Configured application',
+    });
     expect(app.refineConfig.authProvider).toBeDefined();
     await app.shutdown();
   });

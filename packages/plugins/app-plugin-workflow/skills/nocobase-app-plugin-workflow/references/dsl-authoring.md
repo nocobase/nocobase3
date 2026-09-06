@@ -54,9 +54,10 @@ import {
   ConditionInstruction,
   defineWorkflow,
   RunInstruction,
+  type WorkflowSourceAst,
 } from '@nocobase/app-plugin-workflow';
 
-export default defineWorkflow({
+const workflow: WorkflowSourceAst = defineWorkflow({
   title: 'Quotation decision',
   description: 'Calculates a quotation and routes high-value cases.',
   inputSchema: {
@@ -124,7 +125,11 @@ export default defineWorkflow({
     }),
   ],
 });
+
+export default workflow;
 ```
+
+Bind the `defineWorkflow()` result to a `const` annotated `WorkflowSourceAst` and default-export that binding. The application's server tsconfig enables `isolatedDeclarations`, and its `server/**/*.ts` include covers `workflow.ts`, so a bare `export default defineWorkflow({ ... })` fails `pnpm typecheck` with `error TS9037: Default exports can't be inferred with --isolatedDeclarations.` The annotated binding keeps the explicit `WorkflowSourceAst` type in the module's own declaration and compiles cleanly.
 
 The common successor `recordDecision` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST.
 
@@ -205,12 +210,12 @@ From `packages/templates/app-template-default` (or the corresponding initialized
    pnpm exec workflow check server/workflows/<stable-key>
    ```
 
-   Expect `Workflow check passed: ... (<n> nodes)`. This is only the six-phase DSL/IR check described below.
+   Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below.
 
 3. Build the complete Workflow Artifacts:
 
    ```bash
-   pnpm exec tsx --tsconfig tsconfig.node.json ./scripts/build-workflows.ts
+   pnpm exec workflow build
    ```
 
    The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
@@ -237,7 +242,7 @@ Keep those stages separate: source check does not prove run-entry buildability; 
 | `inputSchema` |       no | object-root Input Schema; default is `{ type: 'object' }`          |
 | `nodes`       |      yes | ordered array of node expressions; may be empty                    |
 
-There is no top-level `trigger`, `start`, node map, or edge list. The default export must be the direct/derived value returned by `defineWorkflow()` and the evaluated AST must be JSON-compatible: no functions, symbols, BigInt, Date, Map, class instances, circular references, or non-finite numbers.
+There is no top-level `trigger`, `start`, node map, or edge list. The module default-exports a const annotated `WorkflowSourceAst` that holds the direct/derived value returned by `defineWorkflow()`, so the module still type-checks under the application's `isolatedDeclarations` server build. The evaluated AST must be JSON-compatible: no functions, symbols, BigInt, Date, Map, class instances, circular references, or non-finite numbers.
 
 ## Input Schema
 
@@ -396,13 +401,12 @@ pnpm exec workflow check <package-or-workflow.ts>
 The checker performs, in order:
 
 1. `typecheck`: strict NodeNext TypeScript with the `source` export condition.
-2. `bundle`: esbuild bundles the workflow and imports; authoring imports are redirected to the canonical DSL entry.
-3. `evaluate`: a bounded VM evaluates the bundle and requires a valid default AST export.
-4. `schema`: Input Schema, parameters, node config, condition expression, and result schemas.
-5. `semantic`: registered types, unique/safe keys, branches, declared parameters, and visible result references.
-6. `compile`: flat IR topology must have one start, one owner per non-start node, no missing targets, cycles, or unreachable nodes.
+2. `evaluate`: a bounded disposable Node process loads the declarative TypeScript module and requires a valid default AST export.
+3. `schema`: Input Schema, parameters, node config, condition expression, and result schemas.
+4. `semantic`: registered types, unique/safe keys, branches, declared parameters, and visible result references.
+5. `compile`: flat IR topology must have one start, one owner per non-start node, no missing targets, cycles, or unreachable nodes.
 
-`check` does not scan the complete package or write the database. In particular, it does not prove that `config.module` exists or verify its named `run` export. Its `bundle` phase bundles and evaluates `workflow.ts`, not the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
+`check` does not scan the complete package or write the database. In particular, it does not prove that `config.module` exists or verify its named `run` export. It evaluates `workflow.ts` but does not load the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
 
 The default app's Artifact build scans each direct Workflow package and writes immutable Artifacts to its configured dist root. In development it copies the package's source resources. In production the normal server TypeScript build runs first, and the Artifact build collects that package-relative JavaScript output without rebundling or renaming modules. Runtime module loading enforces containment and checks the named `run` export. Runtime loading materializes new revisions; activation and enablement are separate management concerns.
 
@@ -420,6 +424,7 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 ## Error-prevention checklist
 
 - No legacy YAML, `trigger`, `start`, node map, numeric branch, or edge-list syntax.
+- `workflow.ts` binds `defineWorkflow()` to a const annotated with the exported `WorkflowSourceAst` type and default-exports that binding; it never default-exports a bare call expression, which fails the application's `isolatedDeclarations` typecheck (`TS9037`).
 - Import only Instruction classes exported by installed plugins and registered by the application.
 - No invented nodes/operators/config fields.
 - All objects and evaluated helpers produce JSON-only values.
@@ -429,4 +434,4 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 - Every branch belongs to the node contract.
 - Every run script is static, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
-- The real six-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.
+- The real five-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.

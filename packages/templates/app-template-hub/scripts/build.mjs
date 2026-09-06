@@ -3,22 +3,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { findWorkspacePackageDirectory } from './workspace-packages.mjs';
-
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
 const distDir = path.join(rootDir, 'dist');
-const envOutputPath = path.join(distDir, '.env');
-const appPackage = JSON.parse(
+// Read rather than written as a literal: this script ships into generated applications, whose name is their own.
+const appPackageName = JSON.parse(
   fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'),
-);
-const configuredPluginNames = Object.keys(appPackage.nocobase?.plugins ?? {});
-const workspacePluginNames = configuredPluginNames.filter(
-  (packageName) =>
-    findWorkspacePackageDirectory(rootDir, packageName) !== undefined,
-);
+).name;
+const envOutputPath = path.join(distDir, '.env');
 const serverEnvKeys = new Set([
   'NODE_ENV',
   'APP_BASE_PATH',
@@ -179,11 +173,11 @@ const writeDistEnv = () => {
   );
 };
 
-const run = (label, command, args) => {
+const run = (label, command, args, options = {}) => {
   console.log(`\n> ${label}`);
 
   const result = spawn.sync(command, args, {
-    cwd: rootDir,
+    cwd: options.cwd ?? rootDir,
     stdio: 'inherit',
   });
 
@@ -201,33 +195,19 @@ fs.rmSync(distDir, { recursive: true, force: true });
 run('Typecheck client', 'pnpm', ['exec', 'tsc']);
 run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
 run('Build client', 'pnpm', ['exec', 'refine', 'build']);
-// Both templates build this same set of plugins, and `pnpm -r build` runs the two templates concurrently. Each
-// plugin's build clears its `dist` before tsc refills it, so one template can observe the other's empty `dist` and
-// fail with a misleading "Missing .../dist". The recursive build already orders plugins before templates — every one
-// of them is a declared dependency — so this step is only needed when a template is built on its own.
+// `^...` selects every workspace package this one depends on, transitively, which is exactly the set whose `dist`
+// the steps below read. Spelling the set out by hand drifted instead: `@nocobase/config` was missing from the list
+// and a template built on its own failed at "Generate server package" with `Missing ../../libs/config/dist`.
+//
+// Only needed when a template is built alone. `pnpm -r build` already orders dependencies first, and it runs the two
+// templates concurrently — where each plugin's build clears its `dist` before tsc refills it, so one template can
+// observe the other's empty `dist` and fail with a misleading "Missing .../dist".
+//
+// In a generated application there is no workspace to select from, so pnpm matches nothing and exits successfully.
 if (process.env.NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD !== '1') {
   run('Build server workspace dependencies', 'pnpm', [
     '--filter',
-    '@nocobase/db',
-    '--filter',
-    '@nocobase/i18n',
-    '--filter',
-    '@nocobase/app-server',
-    '--filter',
-    '@nocobase/caching',
-    '--filter',
-    '@nocobase/drive',
-    '--filter',
-    '@nocobase/snowflake',
-    '--filter',
-    '@nocobase/logging',
-    '--filter',
-    '@nocobase/queue',
-    '--filter',
-    '@nocobase/service-provider',
-    '--filter',
-    '@nocobase/session',
-    ...workspacePluginNames.flatMap((packageName) => ['--filter', packageName]),
+    `${appPackageName}^...`,
     'build',
   ]);
 }
@@ -240,10 +220,8 @@ run('Rewrite server path aliases', 'pnpm', [
 ]);
 run('Build workflow artifacts', 'pnpm', [
   'exec',
-  'tsx',
-  '--tsconfig',
-  'tsconfig.node.json',
-  './scripts/build-workflows.ts',
+  'workflow',
+  'build',
   '--resource-root',
   './dist/server/workflows',
 ]);
@@ -251,14 +229,25 @@ writeDistEnv();
 run('Generate server package', 'node', [
   './scripts/build-server-dist-package.mjs',
 ]);
-run('Install server production dependencies', 'npm', [
-  'install',
-  '--omit=dev',
-  '--package-lock=false',
-  '--prefix',
-  './dist',
-]);
-run('Clean server dependency bins', 'node', ['./scripts/clean-dist-bin.mjs']);
+// Installed with pnpm, matching the rest of this project, and run with `dist` as the working directory rather than
+// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `build-server-dist-package.mjs`
+// wrote a `pnpm-workspace.yaml` there carrying it. `--dir` leaves the process in the application root, where pnpm
+// reads the root's settings instead, finds the drivers undecided, and rewrites every entry in the generated file to
+// "set this to true or false" before stopping.
+//
+// `allowBuilds` is what lets the native driver compile. Without it the install still reports success and the failure
+// surfaces only on the deployed server, as a missing bindings file that names nothing pointing back here.
+//
+// `--no-lockfile` because `dist/package.json` is generated fresh on every build, and the tree is installed once at
+// deploy time from a manifest whose versions are already resolved. `--ignore-workspace` would defeat the point: it
+// makes pnpm skip the generated file as well. Nothing is needed to keep the install local — a directory holding a
+// `pnpm-workspace.yaml` is a pnpm root in its own right.
+run(
+  'Install server production dependencies',
+  'pnpm',
+  ['install', '--prod', '--no-lockfile'],
+  { cwd: distDir },
+);
 
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',

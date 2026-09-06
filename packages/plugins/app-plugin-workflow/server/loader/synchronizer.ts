@@ -8,13 +8,13 @@ import {
   computeWorkflowArtifactDigest,
   type WorkflowArtifactDefinition,
   type WorkflowArtifactDigestFile,
-} from './artifact-builder.js';
+} from './artifact.js';
 import type { WorkflowArtifactStore } from './artifact-store.js';
 import {
   activateWorkflowSource,
   materializeWorkflowSource,
 } from './source-materializer.js';
-import { validateWorkflowFlatIrTopology } from './source-compiler.js';
+import { validateWorkflowFlatIrTopology } from '../engine/node-results.js';
 import type { WorkflowId } from '../engine/types.js';
 import { asId } from '../engine/utils.js';
 

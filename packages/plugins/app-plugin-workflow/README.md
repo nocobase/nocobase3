@@ -4,15 +4,29 @@ Provides the complete optional Workflow capability. Browser-safe graph helpers
 live in `client/`; server code is organized by responsibility under
 `server/collections`, `server/engine`, `server/instructions`, `server/loader`,
 `server/repositories`, and `server/routes`, with `server/service.ts` as the
-domain service entry.
+domain service entry. TypeScript source loading, checking, package scanning,
+and Artifact generation live behind the build boundary and are not loaded by
+the server runtime.
 
 The package root is the workflow authoring entry (`defineWorkflow`, `condition`,
 `terminate`, and `run`). Application integration uses the deliberately small `./server`
-entry, application build tooling uses `./build`, and browser management UI uses
-`./client`. Runtime loading and synchronization modules are package-internal.
+entry, application build tooling uses the `workflow` command, and browser
+management UI uses `./client`. Runtime loading and synchronization modules are
+package-internal; `./build` remains public for applications that need to supply
+custom Instruction contracts.
 
-Applications build their source-owned workflow packages through the public
-build API:
+Applications build their source-owned workflow packages through the installed
+command:
+
+```bash
+pnpm exec workflow build \
+  --source-root server/workflows \
+  --dist-root dist/server/workflows \
+  --resource-root dist/server/workflows
+```
+
+Applications with custom Instructions can use the public build API and pass
+the same contracts that their server plugins register at runtime:
 
 ```ts
 import { buildApplicationWorkflows } from '@nocobase/app-plugin-workflow/build';
@@ -20,7 +34,7 @@ import { buildApplicationWorkflows } from '@nocobase/app-plugin-workflow/build';
 await buildApplicationWorkflows({
   sourceRoot: 'server/workflows',
   distRoot: 'dist/server/workflows',
-  resourceRoot: 'dist/server/workflows',
+  instructions,
 });
 ```
 
@@ -30,6 +44,13 @@ build first and point `resourceRoot` at its compiled workflow tree. Artifacts
 then retain the same relative paths with `.js` resources. The plugin owns
 workflow discovery, validation, resource collection, and Artifact emission; it
 does not compile run modules separately or maintain a module-path manifest.
+
+The CLI evaluates each declarative `workflow.ts` in a bounded disposable Node
+process, so it does not need a separate bundler. TypeScript is provided by the
+application's existing build toolchain for source checking. The CLI and its
+build modules remain part of the published package so applications can build
+Workflow Artifacts, but the production `./server` runtime module graph does not
+load those modules or TypeScript.
 
 The client contributes Workflows and Workflow runs under the application's
 Automation settings group. Their record detail routes stay inside the settings

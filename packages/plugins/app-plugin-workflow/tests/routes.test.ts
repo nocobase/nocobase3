@@ -2,16 +2,25 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
+import { databaseManagerToken } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowProviderConfig } from '../server/provider.js';
+import type { WorkflowService } from '../server/service.js';
 import { createNodeRunRoutes } from '../server/routes/node-runs.js';
 import { apiRoutes } from '../server/routes/index.js';
 import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
 import { createWorkflowDefinitionRoutes } from '../server/routes/workflows.js';
+import serverLocales from '../server/locales/index.js';
+import { internalWorkflowServiceToken } from '../server/tokens.js';
+import { createTestDatabase } from './helpers.js';
+import { createWorkflowI18nRuntime } from './i18n.js';
+
+const i18n = await createWorkflowI18nRuntime(serverLocales);
 
 describe('@nocobase/app-plugin-workflow routes', () => {
   it('registers the protected workflow API routes', async () => {
@@ -110,12 +119,50 @@ describe('@nocobase/app-plugin-workflow routes', () => {
     });
     const app = createTestApp(workflow);
 
-    const response = await app.request('/api/workflows/artifact-hash/enable', {
+    const hash = 'a'.repeat(64);
+    const hashResponse = await app.request(`/api/workflows/${hash}/enable`, {
+      method: 'POST',
+    });
+    const idResponse = await app.request('/api/workflows/42/enable', {
       method: 'POST',
     });
 
-    expect(response.status).toBe(200);
-    expect(workflow.workflows.enable).toHaveBeenCalledWith('artifact-hash');
+    expect(hashResponse.status).toBe(200);
+    expect(idResponse.status).toBe(200);
+    expect(workflow.workflows.enable).toHaveBeenNthCalledWith(1, hash);
+    expect(workflow.workflows.enable).toHaveBeenNthCalledWith(2, '42');
+  });
+
+  it('rejects invalid workflow identifiers before database dispatch', async () => {
+    const database = await createTestDatabase();
+    const application = createWorkflowApplication({
+      required: () => async (_context, next) => next(),
+    } as unknown as Auth);
+    const ensureArtifactMaterialized = vi.fn(async () => undefined);
+    application.container.instance(databaseManagerToken, database);
+    application.container.instance(internalWorkflowServiceToken, {
+      discoverArtifacts: async () => [],
+      ensureArtifactMaterialized,
+    } as unknown as WorkflowService);
+    const router = await apiRoutes.createRouter(application);
+    const app = new Hono();
+    app.use('*', createI18nMiddleware(i18n));
+    app.route('/api', router);
+
+    try {
+      const response = await app.request(
+        '/api/workflows/not-an-id-or-hash/enable',
+        { method: 'POST' },
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        message: 'The workflow request is invalid.',
+      });
+      expect(ensureArtifactMaterialized).not.toHaveBeenCalled();
+    } finally {
+      await database.destroy();
+    }
   });
 
   it('does not apply its authentication boundary to later Route contributions', async () => {
@@ -145,7 +192,10 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       } as unknown as Auth),
     );
 
-    const response = await router.request('/workflows');
+    const app = new Hono();
+    app.use('*', createI18nMiddleware(i18n));
+    app.route('/', router);
+    const response = await app.request('/workflows');
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
@@ -169,6 +219,26 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       message: 'enabled must be a boolean',
     });
   });
+
+  it('translates validation errors from the request locale', async () => {
+    const app = new Hono();
+    const workflow = createWorkflowRepositories();
+    registerTestRoutes(app, workflow);
+
+    const response = await app.request('/api/workflows/definition-1/status', {
+      method: 'PATCH',
+      headers: {
+        'accept-language': 'zh-CN',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ enabled: 'yes' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      message: 'enabled 必须为布尔值',
+    });
+  });
 });
 
 interface TestRepositories {
@@ -184,6 +254,7 @@ function createTestApp(repositories: TestRepositories): Hono {
 }
 
 function registerTestRoutes(app: Hono, repositories: TestRepositories): void {
+  app.use('*', createI18nMiddleware(i18n));
   app.route('/api', createWorkflowDefinitionRoutes(repositories.workflows));
   app.route('/api', createWorkflowRunRoutes(repositories.workflowRuns));
   app.route('/api', createNodeRunRoutes(repositories.workflowRuns));

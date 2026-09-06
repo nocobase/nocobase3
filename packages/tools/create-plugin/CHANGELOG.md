@@ -1,5 +1,16 @@
 # @nocobase/create-plugin
 
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- 813da59: Generate `AGENTS.md` and `CLAUDE.md` in every new plugin, documenting where a dependency goes: server runtime imports in `dependencies`, client and build-time imports in `devDependencies`, and packages the application must own a single copy of in `peerDependencies`. A plugin created without that guidance reintroduces the browser packages in `dependencies` that this repository has just finished removing.
+
+### Patch Changes
+
+- Updated dependencies [813da59]
+  - @nocobase/dev-config@0.1.0-beta.4
+
 ## 0.1.0-beta.2
 
 ### Minor Changes

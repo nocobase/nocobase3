@@ -458,6 +458,12 @@ function applyFieldMetadata(
     if (fieldMetadata.type !== undefined) {
       const compatible =
         field.type === fieldMetadata.type ||
+        // SQLite stores every auto-incrementing primary key as INTEGER,
+        // including keys declared with the logical bigInt type.
+        (fieldMetadata.type === 'bigInt' &&
+          field.type === 'integer' &&
+          field.autoIncrement === true &&
+          field.db?.affinity === 'integer') ||
         (fieldMetadata.type === 'enum' &&
           ['string', 'text'].includes(field.type) &&
           Array.isArray(fieldMetadata.values) &&

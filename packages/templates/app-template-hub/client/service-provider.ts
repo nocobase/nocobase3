@@ -4,9 +4,24 @@ import { ServiceProvider } from '@nocobase/service-provider';
 
 export class DefaultClientServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-template-hub/client';
+  private previousDocumentTitle: string | undefined;
 
   public override boot(): Promise<void> {
-    this.app.refine.setOptions({ title: { text: 'NocoBase' } });
+    const configuredTitle = this.app.config.get<unknown>('app.title');
+    const title =
+      typeof configuredTitle === 'string' && configuredTitle.trim()
+        ? configuredTitle.trim()
+        : 'NocoBase';
+    this.app.refine.setOptions({ title: { text: title } });
+    this.previousDocumentTitle = document.title;
+    document.title = title;
+    return Promise.resolve();
+  }
+
+  public override shutdown(): Promise<void> {
+    if (this.previousDocumentTitle !== undefined) {
+      document.title = this.previousDocumentTitle;
+    }
     return Promise.resolve();
   }
 }

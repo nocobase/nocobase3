@@ -35,10 +35,6 @@ Application owns
   storage, filename, token, and preview mechanics
 ```
 
-The File plugin intentionally ships no business tables, attachment endpoints,
-or application pages. Never depend on `/file-demo`, `/api/attachments`,
-`fileDemo*` collections, or plugin-internal source paths.
-
 ## Application workflow
 
 1. Confirm `@nocobase/app-plugin-file` is installed and registered so its
