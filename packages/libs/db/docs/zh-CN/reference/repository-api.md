@@ -36,13 +36,14 @@ Repository 泛型依次为记录 TRecord、创建 TCreate、更新 TUpdate；后
 
 ## 查询
 
-| 方法                                           | options                                                                          | 返回                       |
-| ---------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------- |
-| [findMany](../repository/methods/find-many.md) | filter、select、sort、distinct、cursor、direction、limit、offset、context 均可选 | `TRecord[]`，无匹配为 `[]` |
-| [findOne](../repository/methods/find-one.md)   | 至少 filter 或非空 sort；可选 select、context                                    | `TRecord \| undefined`     |
-| [count](../repository/methods/count.md)        | 可选 filter、context                                                             | number                     |
-| [exists](../repository/methods/exists.md)      | 可选 filter、context                                                             | boolean                    |
-| [stream](../repository/methods/stream.md)      | findMany 除 offset；实际不允许 include 或 backward                               | `AsyncIterable<TRecord>`   |
+`RepositoryQuery<T>` extends `PromiseLike<T[]>` and `AsyncIterable<T>` and offers catch/finally. findMany is lazy; its then/catch/finally methods return native promises. There is no public stream method or StreamOptions type. Repeated promise consumption shares an execution, while mixed modes or repeated iteration raise QUERY_ALREADY_CONSUMED. Transaction-bound consumption after completion raises QUERY_TRANSACTION_COMPLETED.
+
+| 方法                                           | options                                                                    | 返回                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [findMany](../repository/methods/find-many.md) | Optional filter/select/sort/distinct/cursor/direction/limit/offset/context | `RepositoryQuery<TRecord>`; await yields `TRecord[]`, for-await yields `TRecord` |
+| [findOne](../repository/methods/find-one.md)   | 至少 filter 或非空 sort；可选 select、context                              | `TRecord \| undefined`                                                           |
+| [count](../repository/methods/count.md)        | 可选 filter、context                                                       | number                                                                           |
+| [exists](../repository/methods/exists.md)      | 可选 filter、context                                                       | boolean                                                                          |
 
 Select Builder 的精确重载可能收窄 TRecord；JSON AST 和普通关系记录 include 有推导边界。不要为 findOne 加未公开的 limit/offset/cursor 参数。详见[查询](../repository/methods/find-many.md)和 [Streaming](../repository/methods/stream.md)。
 

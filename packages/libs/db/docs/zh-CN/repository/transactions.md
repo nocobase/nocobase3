@@ -9,6 +9,8 @@ description: 在事务 Connection 内绑定 Repository，协调多次查询和�
 
 ## 多次调用使用一个事务 Connection
 
+`findMany()` is lazy. Consume transaction-bound queries inside the callback, using either await or for-await. Starting consumption after commit/rollback raises `QUERY_TRANSACTION_COMPLETED`. An async callback returning a query directly assimilates it as a thenable and returns an array, not an unconsumed query. Relation iteration closes the root stream before loading each relation batch on the transaction connection; isolation remains the database transaction's configured isolation level.
+
 ```ts
 const created = await db.transaction(async (connection) => {
   const projects = connection.repository('projects');

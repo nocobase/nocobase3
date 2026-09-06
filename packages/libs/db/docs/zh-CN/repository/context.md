@@ -34,15 +34,15 @@ const result = await db.repository('projects').updateOne({
 
 ## 方法覆盖
 
-| 方法                                 | 用途                                             |
-| ------------------------------------ | ------------------------------------------------ |
-| findOne/findMany/count/exists/stream | 查询条件及适用的返回关系 Filter                  |
-| aggregate/groupBy                    | 根 Filter、适用的 having                         |
-| createOne/createMany                 | Values 变量和返回 Select 的关系 Filter           |
-| updateOne/updateMany/upsertOne       | 根级与嵌套 Filter、Values／分支变量、返回 Select |
-| deleteOne/deleteMany                 | 根 Filter 和返回 Select                          |
-| validateMutation                     | createOne/updateOne 输入预校验                   |
-| describeMutation                     | 不接收 context，描述元数据能力                   |
+| 方法                           | 用途                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| findOne/findMany/count/exists  | Query filters and selected relation filters; findMany supports both consumption modes |
+| aggregate/groupBy              | 根 Filter、适用的 having                                                              |
+| createOne/createMany           | Values 变量和返回 Select 的关系 Filter                                                |
+| updateOne/updateMany/upsertOne | 根级与嵌套 Filter、Values／分支变量、返回 Select                                      |
+| deleteOne/deleteMany           | 根 Filter 和返回 Select                                                               |
+| validateMutation               | createOne/updateOne 输入预校验                                                        |
+| describeMutation               | 不接收 context，描述元数据能力                                                        |
 
 关系 mutation 内部的 Filter、嵌套 values／selector／through 变量与返回 Select 的多层关系 Filter 共用顶层 context。createMany/updateMany 仍不支持嵌套关系写入；变量能力不扩大各方法允许的操作范围。
 

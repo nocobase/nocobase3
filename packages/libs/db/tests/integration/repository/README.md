@@ -105,13 +105,21 @@ The planned specialty pass is implemented for the contracts currently defined. T
 
 ### Validation snapshot
 
-- Full DB package on SQLite: 884 passed, one PostgreSQL-only skip, 161 files.
-- Repository unit/integration/type suites on SQLite: 553 passed, one PostgreSQL-only skip, 96 files. This pass added 128 cases to the previous 425-passing Repository baseline.
-- Full Repository integration on PostgreSQL 16 + MySQL 8.4: 990 passed, five known MySQL boolean failures, one PostgreSQL-only test skipped on MySQL, 81 files. This run preceded the final eight all-record consent cases; those were separately rerun with all 56 write-safety tests passing across both drivers.
-- PostgreSQL/MySQL stream + lifecycle + concurrent-write subset: all 26 tests passed after adding `pg-query-stream` as a DB development dependency. The dependency is for this package's test environment; it does not automatically install PostgreSQL streaming support in applications consuming the published package.
+- Full DB package on SQLite after unified findMany consumption: 902 passed, one PostgreSQL-only skip, 165 files.
+- Repository unit/integration/type suites on SQLite: 571 passed, one PostgreSQL-only skip, 100 files. The parameter-specialty pass added 128 cases; unified query consumption added 18 more.
+- Full Repository integration on PostgreSQL 16 + MySQL 8.4: 1016 passed, five known MySQL boolean failures, one PostgreSQL-only test skipped on MySQL, 83 files. The final keyless-iteration and late-relation-failure cases were added afterwards and rerun in the two affected suites across SQLite/PostgreSQL/MySQL: all 21 tests passed.
+- PostgreSQL/MySQL query-consumption, relation-iteration and driver-stream lifecycle subset: all 32 tests passed. The DB development dependency pg-query-stream enables these tests; it does not install application drivers automatically.
 - DB lint/typecheck/build passed. App-server lint/typecheck/build and 136 tests passed. Queue lint/typecheck/build and seven tests passed after the lockfile's Knex peer-resolution change.
 - Test containers use the isolated `codex-filter-regression` Compose project and are stopped after validation. Oracle and MSSQL were not executed in this pass.
 - Type tests require `pnpm typecheck`; a Vitest pass does not evaluate negative compile-time assertions.
+
+### Unified findMany consumption
+
+The public stream method and StreamOptions are removed. [Query unit tests](../../unit/repository/query.test.ts) cover laziness, promise reuse, mode exclusion, cleanup and async thenable assimilation. [Consumption integration](./methods/find-many-consumption.test.ts) covers snapshot timing, both pagination directions, offset/distinct, empty projections, unique-only/keyless collections and transaction completion. [Relation iteration](./relations/find-many-iteration.test.ts) covers four cardinalities, deep includes, combine, local options, shared-target batching, one root query for 205 rows, and failure after the first 100 records have been delivered.
+
+Scalar forward iteration uses driver streaming. Relations/backward results spool root rows to a private temporary file, close the root stream, then load relation batches on the same connection. [Buffer tests](../../unit/repository/row-spool.test.ts) verify Date/Buffer/bigint preservation, forward/reverse order, and cleanup on completion, empty input, early return and producer/consumer failure. This mode needs temporary disk space and reads all roots before first output; it does not collect the complete root array or issue repeated offset queries. Abrupt process termination may leave files for operational cleanup.
+
+DB lint/typecheck/build, API baseline, examples and playground checks passed. Type checking also passed for DB and all 25 downstream packages. Existing stream-named test files now exercise findMany asynchronous iteration; their names denote execution behavior, not a public stream API.
 
 ### Deliberately unresolved contracts
 

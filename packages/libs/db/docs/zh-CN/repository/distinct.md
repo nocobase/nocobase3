@@ -5,7 +5,7 @@ description: 使用 distinct 字段数组保留每组完整代表行，说明排
 
 # Repository Distinct：选择每组代表记录
 
-示例沿用[概览](./overview.md)模型；distinct 是 findMany/stream 或关系选择的选项，不是独立 Repository 方法。
+Examples use the [overview](./overview.md) model. Distinct is a findMany or relation-selection option, not a separate Repository method; both await and asynchronous iteration support it.
 
 ## distinct：每组保留一条记录
 

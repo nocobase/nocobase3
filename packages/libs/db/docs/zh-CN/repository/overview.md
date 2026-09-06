@@ -156,23 +156,23 @@ console.log(created.record, rows, updated.record);
 
 ## 方法导航
 
-| 任务                 | 方法页                                                                  | 返回                          |
-| -------------------- | ----------------------------------------------------------------------- | ----------------------------- |
-| 读取一条             | [findOne](./methods/find-one.md)                                        | 记录或 undefined              |
-| 读取列表             | [findMany](./methods/find-many.md)                                      | 数组                          |
-| 统计行数             | [count](./methods/count.md)                                             | number                        |
-| 判断存在             | [exists](./methods/exists.md)                                           | boolean                       |
-| 流式消费             | [stream](./methods/stream.md)                                           | AsyncIterable                 |
-| 创建一条             | [createOne](./methods/create-one.md)                                    | record/createdTargets/version |
-| 批量创建             | [createMany](./methods/create-many.md)                                  | createdCount，可选 records    |
-| 更新一条             | [updateOne](./methods/update-one.md)                                    | record/createdTargets/version |
-| 批量更新             | [updateMany](./methods/update-many.md)                                  | updatedCount，可选 records    |
-| 唯一条件创建或更新   | [upsertOne](./methods/upsert-one.md)                                    | record/createdTargets/version |
-| 删除一条             | [deleteOne](./methods/delete-one.md)                                    | deleted，可选 record          |
-| 批量删除             | [deleteMany](./methods/delete-many.md)                                  | deletedCount，可选 records    |
-| 计算统计量           | [aggregate](./methods/aggregate.md)                                     | 聚合别名对象                  |
-| 分组统计             | [groupBy](./methods/group-by.md)                                        | 分组结果数组                  |
-| 能力描述、输入预校验 | [describeMutation / validateMutation](./methods/mutation-validation.md) | 能力描述／valid 与 errors     |
+| 任务                    | 方法页                                                                  | 返回                                         |
+| ----------------------- | ----------------------------------------------------------------------- | -------------------------------------------- |
+| 读取一条                | [findOne](./methods/find-one.md)                                        | 记录或 undefined                             |
+| Read a list             | [findMany](./methods/find-many.md)                                      | `RepositoryQuery<T>`; await returns an array |
+| 统计行数                | [count](./methods/count.md)                                             | number                                       |
+| 判断存在                | [exists](./methods/exists.md)                                           | boolean                                      |
+| Incremental consumption | [findMany asynchronous iteration](./methods/stream.md)                  | `RepositoryQuery<T>` via for-await           |
+| 创建一条                | [createOne](./methods/create-one.md)                                    | record/createdTargets/version                |
+| 批量创建                | [createMany](./methods/create-many.md)                                  | createdCount，可选 records                   |
+| 更新一条                | [updateOne](./methods/update-one.md)                                    | record/createdTargets/version                |
+| 批量更新                | [updateMany](./methods/update-many.md)                                  | updatedCount，可选 records                   |
+| 唯一条件创建或更新      | [upsertOne](./methods/upsert-one.md)                                    | record/createdTargets/version                |
+| 删除一条                | [deleteOne](./methods/delete-one.md)                                    | deleted，可选 record                         |
+| 批量删除                | [deleteMany](./methods/delete-many.md)                                  | deletedCount，可选 records                   |
+| 计算统计量              | [aggregate](./methods/aggregate.md)                                     | 聚合别名对象                                 |
+| 分组统计                | [groupBy](./methods/group-by.md)                                        | 分组结果数组                                 |
+| 能力描述、输入预校验    | [describeMutation / validateMutation](./methods/mutation-validation.md) | 能力描述／valid 与 errors                    |
 
 14 个数据方法各有一页，两个辅助方法合为一页，共 16 个公开方法。方法页包含数据前提、参数、返回、代表性示例和错误边界；纯类型速查见 [API 参考](../reference/repository-api.md)。
 

@@ -85,7 +85,7 @@ const rows = await db.repository<ProjectRecord>('projects').findMany({
 
 ## 限制与验证
 
-选择图最多 200 个校验节点、深度 20；combine 每个最多 32 个分支，复杂组合可能更早耗尽校验预算。未知字段、错误 relation、重复字段和不支持的局部选项会拒绝执行。Streaming 不允许任何 include。
+Selections allow at most 200 validation nodes and depth 20; each combine allows at most 32 branches. Cumulative nested work can exhaust the budget earlier. Unknown fields, invalid relations, duplicate fields and unsupported local options are rejected. Includes and combine are supported by both await and asynchronous iteration; see [iteration buffering](./methods/stream.md).
 
 验证应覆盖：未关联父记录的 null/[]、过滤后空关系、根记录不被局部 filter 移除、未请求字段不泄漏、嵌套路径与 Builder/AST 结果一致。
 

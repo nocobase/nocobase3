@@ -11,7 +11,13 @@ description: 列出 findMany 的参数、数组返回、关系读取、默认排
 
 - 必填：无，可直接 `findMany()`。
 - 可选：`filter / select / sort / distinct / cursor / direction / limit / offset / context`。
-- 返回：记录数组，无匹配为 `[]`。
+- Returns a lazy `RepositoryQuery<T>`: `await` produces `T[]` (or `[]` when empty); `for await` yields the same selected records. Both modes support all findMany options, including relations and backward pagination.
+
+## Consumption lifecycle
+
+Constructing a query does not execute SQL. Repeated await/then/catch/finally calls reuse one execution. A query may instead be iterated once; mixing modes or repeating iteration raises `QUERY_ALREADY_CONSUMED`. Create a new query to execute again. An async function returning the query automatically consumes it as a thenable.
+
+Plain options and context are snapshotted when promise consumption or iterator acquisition begins. Transaction-bound queries must be consumed before their transaction ends. See [asynchronous iteration](./stream.md) for relation batching, temporary disk buffering, cleanup and driver requirements.
 
 ## 查询列表
 

@@ -17,6 +17,60 @@ async function collect<T>(rows: AsyncIterable<T>): Promise<T[]> {
 }
 
 describeIntegrationDatabases('Repository findMany consumption', (context) => {
+  it('iterates unique-only and keyless collections without inventing a primary key', async () => {
+    await context.builder.createCollections([
+      {
+        name: 'queryParents',
+        definition: (c) => {
+          c.string('code').notNull().unique();
+          c.hasMany('children', 'queryChildren')
+            .sourceKey('code')
+            .foreignKey('parentCode');
+        },
+      },
+      {
+        name: 'queryChildren',
+        definition: (c) => {
+          c.string('parentCode').notNull();
+          c.string('title').notNull();
+        },
+      },
+    ]);
+    await context
+      .db(context.table('queryParents'))
+      .insert([{ code: 'P' }, { code: 'Q' }]);
+    await context.db(context.table('queryChildren')).insert([
+      { parent_code: 'P', title: 'A' },
+      { parent_code: 'P', title: 'B' },
+    ]);
+    const parents = context.database.repository('queryParents');
+    expect(
+      await collect(
+        parents.findMany({
+          sort: (s) => s.field('code').asc(),
+          select: (s) =>
+            s
+              .fields('code')
+              .include('children', (c) =>
+                c.fields('title').sort((s) => s.field('title').desc()),
+              ),
+        }),
+      ),
+    ).toEqual([
+      { code: 'P', children: [{ title: 'B' }, { title: 'A' }] },
+      { code: 'Q', children: [] },
+    ]);
+    expect(
+      await collect(
+        context.database.repository('queryChildren').findMany({
+          sort: (s) => s.field('title').asc(),
+          offset: 1,
+          select: (s) => s.fields('title'),
+        }),
+      ),
+    ).toEqual([{ title: 'B' }]);
+  });
+
   it('defers SQL and snapshots context at consumption instead of capturing construction-time values', async () => {
     await createDocumentationFixture(context);
     await seedDocumentationProjects(context, 'q');

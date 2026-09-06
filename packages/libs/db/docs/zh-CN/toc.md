@@ -92,7 +92,7 @@ Collection-aware 记录和关系访问请优先阅读下一节 Repository；本�
 - [findMany](./repository/methods/find-many.md)
 - [count](./repository/methods/count.md)
 - [exists](./repository/methods/exists.md)
-- [stream](./repository/methods/stream.md)
+- [findMany asynchronous iteration](./repository/methods/stream.md)
 - [createOne](./repository/methods/create-one.md)
 - [createMany](./repository/methods/create-many.md)
 - [updateOne](./repository/methods/update-one.md)

@@ -68,7 +68,7 @@ backward 取边界之前最近的一页，**返回数组仍保持调用者原来
 
 继续向前取下一页通常使用当前页最后一条；向后取上一页通常使用当前页第一条。只提取 sort 轴，不要把含其他字段的整条记录当 cursor。无更多记录时返回 `[]`；如需判断还有一页，可请求页面大小加一，并自行截取，注意 backward 时应保留靠近边界的记录。
 
-显式 `direction` 必须伴随 cursor，第一页省略两者。Streaming 不支持 backward，见 [Streaming](./methods/stream.md)。
+An explicit direction requires a cursor; omit both on the first page. Both await and asynchronous iteration support forward/backward pages with the same ordering. Backward iteration buffers roots before restoring the final order; see [asynchronous iteration](./methods/stream.md).
 
 ## 关系局部分页
 

@@ -15,6 +15,36 @@ async function collect<T>(query: AsyncIterable<T>): Promise<T[]> {
 describeIntegrationDatabases(
   'Repository relation iteration parity',
   (context) => {
+    it('propagates a later relation batch failure after earlier rows were delivered', async () => {
+      await createRelationFixture(context);
+      const books = context.database.repository('repositoryBooks');
+      const alpha = await books.findOne({ filter: { title: 'Alpha' } });
+      await context.db(context.table('repositoryBooks')).insert(
+        Array.from({ length: 102 }, (_, i) => ({
+          title: `Batch-${i}`,
+          pages: i,
+          author_id: alpha!.authorId,
+        })),
+      );
+      let delivered = 0;
+      const consume = async () => {
+        for await (const row of books.findMany({
+          select: (s) =>
+            s.fields('title').include('author', (a) => a.fields('name')),
+        })) {
+          expect(row.author).toBeDefined();
+          delivered++;
+          if (delivered === 100)
+            await context.db.schema.dropTable(
+              context.table('repositoryAuthors'),
+            );
+        }
+      };
+      await expect(consume()).rejects.toThrow();
+      expect(delivered).toBe(100);
+      expect(await books.count()).toBe(105);
+    });
+
     it('matches four cardinalities, nested projections, relation filters, relation sorting and combine', async () => {
       await createRelationFixture(context);
       const books = context.database.repository('repositoryBooks');
