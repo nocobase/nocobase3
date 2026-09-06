@@ -8,8 +8,9 @@ it.each(['float', 'FLOAT(12)', ' float '])(
   },
 );
 
-it('does not infer precision-dependent FLOAT aliases for other dialects', () => {
-  for (const dialect of ['mysql', 'postgres', 'oracle'] as const) {
+it('recognizes MySQL FLOAT while leaving unresolved aliases in other dialects unchanged', () => {
+  expect(normalizePhysicalDataType('mysql', 'float')).toBe('float');
+  for (const dialect of ['postgres', 'oracle'] as const) {
     expect(normalizePhysicalDataType(dialect, 'float')).toBe('native');
   }
 });
