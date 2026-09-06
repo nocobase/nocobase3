@@ -16,10 +16,12 @@ import serviceProviderExample from '@nocobase/app-plugin-service-provider-exampl
 import workflow from '@nocobase/app-plugin-workflow/server';
 import systemInfo from '@nocobase/app-plugin-system-info/server';
 import skillsExample from '@nocobase/app-plugin-skills-example/server';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 import {
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
+import scheduledWorkflowExample from '@nocobase/app-plugin-scheduled-workflow-example/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -40,6 +42,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   workflow,
   systemInfo,
   skillsExample,
+  scheduler,
+  scheduledWorkflowExample,
 ]);
 
 export default serverPlugins;

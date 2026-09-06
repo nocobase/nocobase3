@@ -1,0 +1,76 @@
+diff --git a/build/chunk-4ZB4DOZ2.js b/build/chunk-4ZB4DOZ2.js
+index a34204f78f67bebaa2043fe9a07342ae559f049c..ec18c4fb7829677e3b2c1151832058fb72054f0d 100644
+--- a/build/chunk-4ZB4DOZ2.js
++++ b/build/chunk-4ZB4DOZ2.js
+@@ -421,7 +421,9 @@ var JobExecutionRuntime = class {
+       priority: job.priority ?? DEFAULT_PRIORITY,
+       acquiredAt: new Date(job.acquiredAt),
+       stalledCount: job.stalledCount ?? 0,
+-      ...job.scheduleId ? { scheduleId: job.scheduleId } : {}
++      ...job.scheduleId ? { scheduleId: job.scheduleId } : {},
++      ...job.scheduledFor ? { scheduledFor: new Date(job.scheduledFor) } : {},
++      ...job.scheduleRunNumber ? { scheduleRunNumber: job.scheduleRunNumber } : {}
+     };
+   }
+   async #executeJob(instance, payload, context, options) {
+@@ -905,6 +907,8 @@ var JobDispatchRuntime = class {
+       groupId: request.overrides?.groupId,
+       createdAt,
+       ...request.scheduleId ? { scheduleId: request.scheduleId } : {},
++      ...request.scheduledFor ? { scheduledFor: request.scheduledFor } : {},
++      ...request.scheduleRunNumber ? { scheduleRunNumber: request.scheduleRunNumber } : {},
+       ...request.kind === "single" && request.overrides?.dedup ? {
+         dedup: {
+           ...request.overrides.dedup,
+diff --git a/build/index.js b/build/index.js
+index cb5190636acd14a03f7ca2a57b23583f8f8f3f6d..39e495f7b68501a4de98370c6a2f83a64f87668c 100644
+--- a/build/index.js
++++ b/build/index.js
+@@ -543,7 +543,9 @@ var WorkerSession = class {
+         payload: schedule.payload,
+         jobOptions: JobClass?.options,
+         overrides: { adapter: () => this.#adapter },
+-        scheduleId: schedule.id
++        scheduleId: schedule.id,
++        scheduledFor: schedule.nextRunAt,
++        scheduleRunNumber: schedule.runCount + 1
+       });
+     }
+   }
+@@ -864,7 +866,9 @@ var Schedule = class _Schedule {
+       payload: payload ?? this.#data.payload,
+       jobOptions: JobClass?.options,
+       overrides: { adapter: () => adapter },
+-      scheduleId: this.#data.id
++      scheduleId: this.#data.id,
++      scheduledFor: /* @__PURE__ */ new Date(),
++      scheduleRunNumber: this.#data.runCount + 1
+     });
+     const now = /* @__PURE__ */ new Date();
+     const newRunCount = this.#data.runCount + 1;
+diff --git a/build/job-qekZ3hvO.d.ts b/build/job-qekZ3hvO.d.ts
+index c504c53bfb85358beed8e18aad655ae6175354ef..6f2c2ac13e219b1891613426422a2af75059be29 100644
+--- a/build/job-qekZ3hvO.d.ts
++++ b/build/job-qekZ3hvO.d.ts
+@@ -563,6 +563,10 @@ interface JobData {
+     groupId?: string;
+     /** Schedule that caused this Job to be dispatched, when applicable. */
+     scheduleId?: string;
++    /** Scheduled window that caused this Job to be dispatched. */
++    scheduledFor?: Date;
++    /** One-based claim count for the Schedule occurrence. */
++    scheduleRunNumber?: number;
+     /**
+      * Timestamp (ms) when the job was dispatched.
+      * Used to compute queue wait time in OTel instrumentation.
+@@ -740,6 +744,10 @@ interface JobContext {
+     stalledCount: number;
+     /** Schedule that caused this Job to be dispatched, when applicable. */
+     scheduleId?: string;
++    /** Scheduled window that caused this Job to be dispatched. */
++    scheduledFor?: Date;
++    /** One-based claim count for the Schedule occurrence. */
++    scheduleRunNumber?: number;
+ }
+ /**
+  * Type representing a Job class constructor.

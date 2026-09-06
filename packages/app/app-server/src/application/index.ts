@@ -26,6 +26,10 @@ import type {
   AppServerPluginLocalesLoader,
   ResolvedAppServerPlugins,
 } from '../plugins/index.js';
+import {
+  AppScheduleDefinitionContributions,
+  appScheduleDefinitionContributionsToken,
+} from '../plugins/index.js';
 import { i18nToken, registerAppLocales } from '../i18n/index.js';
 
 export type ApplicationFetchHandler = (
@@ -111,6 +115,10 @@ export class Application<
     this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;
     this.container = new ServiceContainer();
+    this.container.instance(
+      appScheduleDefinitionContributionsToken,
+      new AppScheduleDefinitionContributions(),
+    );
     this.usesDefaultWebSocket = options.websocket === undefined;
     this.websocketFactory = options.websocket ?? createRealtimeWebSocketHandler;
     this.websocket = async (request, env) => {
@@ -163,6 +171,12 @@ export class Application<
         this.localeContributions.push({
           packageName: plugin.definition.packageName,
           load: plugin.definition.locales,
+        });
+      }
+      if (plugin.metadata.scheduleDefinitionsLocation) {
+        this.container.resolve(appScheduleDefinitionContributionsToken).add({
+          packageName: plugin.definition.packageName,
+          location: plugin.metadata.scheduleDefinitionsLocation,
         });
       }
     }

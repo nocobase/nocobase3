@@ -60,6 +60,9 @@
       "@nocobase/app-plugin-system-info": {
         "enabled": true
       },
+      "@nocobase/app-plugin-scheduler": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-workflow": {
         "enabled": true
       }
@@ -90,6 +93,7 @@
     "@nocobase/app-plugin-service-provider-example": "workspace:^",
     "@nocobase/app-plugin-skills-example": "workspace:^",
     "@nocobase/app-plugin-system-info": "workspace:^",
+    "@nocobase/app-plugin-scheduler": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server": "workspace:^",
@@ -219,6 +223,7 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
+    "scheduler:sync": "tsx --tsconfig tsconfig.server.json ./scripts/scheduler-sync.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "plugin:register": "nb3 app plugin register",
     "plugin:inspect": "nb3 app plugin inspect",
