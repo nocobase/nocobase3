@@ -40,9 +40,10 @@ export function ThemeSettings(): ReactElement {
       >
         <Palette aria-hidden='true' className='size-5' />
       </PopoverTrigger>
+      {/* Keep the panel width independent of density; its content still uses theme tokens. */}
       <PopoverContent
         align='end'
-        className='w-80 max-w-[calc(100vw-2rem)] gap-4 p-4'
+        className='w-xs max-w-[calc(100vw-2rem)] gap-4 p-4'
       >
         <div className='flex items-center justify-between'>
           <PopoverTitle className='text-sm font-semibold text-foreground'>
@@ -61,7 +62,7 @@ export function ThemeSettings(): ReactElement {
                 <label
                   key={mode}
                   className={cn(
-                    'relative flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all select-none',
+                    'relative flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors select-none',
                     isSelected
                       ? 'bg-background text-foreground shadow-xs'
                       : 'text-muted-foreground hover:bg-background/40 hover:text-foreground',
@@ -76,7 +77,7 @@ export function ThemeSettings(): ReactElement {
                     className='sr-only'
                   />
                   <ModeIcon aria-hidden='true' className='size-3.5 shrink-0' />
-                  <span>
+                  <span className='whitespace-nowrap'>
                     {t('appearance.' + mode, {
                       defaultValue: mode[0].toUpperCase() + mode.slice(1),
                     })}
@@ -140,7 +141,7 @@ export function ThemeSettings(): ReactElement {
                       </div>
                     </div>
                   </div>
-                  <div className='mt-auto flex h-5 items-center justify-between px-0.5'>
+                  <div className='mt-auto flex min-h-5 items-center justify-between gap-2 px-0.5'>
                     <span
                       className={cn(
                         'text-xs transition-colors',
@@ -157,7 +158,7 @@ export function ThemeSettings(): ReactElement {
                     {isSelected && (
                       <span
                         aria-hidden='true'
-                        className='flex size-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground'
+                        className='flex size-3.5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground'
                       >
                         <Check className='size-2 stroke-[3]' />
                       </span>
