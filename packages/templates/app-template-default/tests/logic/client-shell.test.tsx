@@ -32,6 +32,18 @@ describe('application shell', () => {
       'aria-current',
       'page',
     );
+    expect(
+      screen.getByRole('complementary', { name: 'Application navigation' }),
+    ).toHaveClass(
+      'bg-sidebar',
+      'text-sidebar-foreground',
+      'border-sidebar-border',
+    );
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveClass(
+      'bg-sidebar-primary',
+      'text-sidebar-primary-foreground',
+      'focus-visible:ring-sidebar-ring',
+    );
     // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),

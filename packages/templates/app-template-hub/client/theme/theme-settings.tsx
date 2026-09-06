@@ -118,10 +118,10 @@ export function ThemeSettings(): ReactElement {
                     className='theme-preview relative mb-2 flex h-16 overflow-hidden rounded-lg border border-border/80 bg-background shadow-2xs'
                   >
                     {/* Mini Sidebar */}
-                    <div className='flex w-6 flex-col gap-1 border-r border-border/50 bg-muted/60 p-1'>
-                      <div className='size-2 rounded-xs bg-primary' />
-                      <div className='h-1 w-full rounded-xs bg-muted-foreground/30' />
-                      <div className='h-1 w-full rounded-xs bg-muted-foreground/20' />
+                    <div className='flex w-6 flex-col gap-1 border-r border-sidebar-border/50 bg-sidebar p-1'>
+                      <div className='size-2 rounded-xs bg-sidebar-primary-foreground' />
+                      <div className='h-1 w-full rounded-xs bg-sidebar-foreground/30' />
+                      <div className='h-1 w-full rounded-xs bg-sidebar-foreground/20' />
                     </div>
                     {/* Mini Main Content Area */}
                     <div className='flex flex-1 flex-col p-1.5'>
