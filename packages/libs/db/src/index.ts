@@ -257,3 +257,24 @@ export type {
   RepositoryErrorCode,
   RepositoryErrorOptions,
 } from './repository/errors.js';
+
+export {
+  buildWritePolicy,
+  buildUpsertWritePolicy,
+  type WritePolicy,
+  type WritePolicyInput,
+  type WritePolicyBuilder,
+  type FieldWritePolicy,
+  type FieldWritePolicyInput,
+  type FieldWritePolicyBuilder,
+  type RelationWritePolicy,
+  type RelationWritePolicyBuilder,
+  type RelationCreateWritePolicy,
+  type RelationCreateWritePolicyBuilder,
+  type ThroughWritePolicy,
+  type ThroughWritePolicyBuilder,
+  type UpsertWritePolicy,
+  type UpsertWritePolicyInput,
+  type UpsertWritePolicyBuilder,
+  type RelationWriteOperation,
+} from './repository/write-policy.js';

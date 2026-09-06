@@ -7,6 +7,8 @@ description: 通过 Repository values 的 Builder 或 JSON 创建、连接、解
 
 关系操作位于 values 的关系字段内，支持 Builder、JSON 或混合形式。本页沿用[概览的模型](./overview.md#本组文档的示例模型)：`projects = db.repository('projects')`，users 和 tasks 均有显式 string 主键 id；各片段独立展示，写入前准备对应目标记录。
 
+服务端 [`writePolicy`](./write-policy.md) 可限制普通字段、每种关系操作、嵌套 create/update/upsert 字段和 through payload。内部 Repository 默认 `true`；API routes 默认 `false`，须显式配置白名单。前端不接受该参数。
+
 ## 在关系写入中引用 context
 
 根级 values callback 的 `v.variable()` 可用于嵌套字段、关系选择器和 through payload。下例要求 project-1 和 user-1 已存在，task-context 尚不存在；owner 通过 users.id 定位，任务的 string 主键由调用方提供。其他模型使用各自明确声明的键，不依赖 id 默认值。

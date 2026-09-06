@@ -253,3 +253,15 @@ pnpm --filter @nocobase/app-plugin-repository-example check
 Tests run a real SQLite migration and rollback, inspect physical schema and relationship metadata, invoke CRUD, relationship mutations and aggregate/groupBy actions through the HTTP client, verify all authentication boundaries, relation scope, rollback, target lifetime, constraints and version conflicts, and exercise browser pages against the same real HTTP/SQLite fixture. Authentication sessions are stubbed in those fixtures; the real authentication middleware is executed.
 
 The plugin uses shared development presets and plugin-local shadcn primitives. Its styles use the host's theme tokens and are included by the Default Template's enabled-plugin Tailwind scan.
+
+Repository route actions use configuration objects (`findMany: { maxLimit: 100 }`,
+`findOne: {}`). API create/update writes default to `writePolicy: false`. Each server
+endpoint declares its own field and relation-operation allowlist, using objects or
+synchronous callback builders. Nested task create/update/upsert branches have separate
+field rules; task creation explicitly permits `assignee.connect`. Many-to-many tag
+operations permit only the `role` through field. Prefer relation `connect` when the
+endpoint exposes it; direct foreign-key fields are not implicitly writable. Keep
+policies on the server and never include them in client request options. New demos
+need an explicit server policy and route tests. Authentication guards every endpoint.
+Internal `db.repository` calls default to `writePolicy: true`, so custom HTTP handlers
+must pass a server-owned policy themselves.

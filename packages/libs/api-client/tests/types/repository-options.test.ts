@@ -90,6 +90,28 @@ it('exposes JSON output types and contextual builder types', () => {
   const acceptGroups: Parameters<typeof repository.groupBy>[0] = groups;
   void [accept, acceptUpdate, acceptGroups];
   const invalidInputs = () => {
+    buildCreateOneOptions({
+      values: {},
+      // @ts-expect-error relationship policy belongs to the server
+      writePolicy: false,
+    });
+    buildUpdateOneOptions({
+      filter: { id: 'one' },
+      values: {},
+      // @ts-expect-error relationship policy belongs to the server
+      writePolicy: { tasks: { operations: ['create'] } },
+    });
+    repository.createOne({
+      values: {},
+      // @ts-expect-error Remote Repository cannot grant relationship writes
+      writePolicy: false,
+    });
+    repository.updateOne({
+      filter: { id: 'one' },
+      values: {},
+      // @ts-expect-error Remote Repository cannot grant relationship writes
+      writePolicy: false,
+    });
     // @ts-expect-error filter is required for findOne
     buildFindOneOptions<Order>({});
     // @ts-expect-error select fields must belong to Order

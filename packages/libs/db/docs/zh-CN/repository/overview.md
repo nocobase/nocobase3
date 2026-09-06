@@ -7,6 +7,8 @@ description: 使用 Repository 查询和修改 Collection 记录，按任务选�
 
 Repository 基于解析后的 Collection 定义访问记录，识别逻辑字段、关系和命名映射。这是当前公开 API 的使用文档，不需要先阅读设计提案。
 
+服务端 [`writePolicy`](./write-policy.md) 可限制普通字段、每种关系操作、嵌套 create/update/upsert 字段和 through payload。内部 Repository 默认 `true`；API routes 默认 `false`，须显式配置白名单。前端不接受该参数。
+
 ## 选择正确入口
 
 | 任务                                     | 使用                                                        |

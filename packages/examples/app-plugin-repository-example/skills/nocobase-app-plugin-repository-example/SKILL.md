@@ -41,3 +41,15 @@ Every signed-in user can manage all example records. The API has no per-role or 
 The plugin owns its migrations, components, routes and locale strings. An application reaches it through public package exports; do not import private source paths. The plugin seed inserts 4 customers, 5 contacts, 6 products, 4 orders and 8 order items with stable demo IDs, plus 4 numeric counters, 24 findMany records and the prefixed relationship baseline from separate seeds. Completed seeds are skipped; user edits and deletions remain intact. All inserts are transactional, and existing identities are never overwritten. For schema changes create a new self-contained migration after the existing one has shipped.
 
 Verify migration success, authenticated navigation, a customer/product/order/item lifecycle, relation details, and conflict handling. The plugin's `check` runs lint, formatting, typecheck, real database/HTTP/page tests and build. The README documents the complete API and schema.
+
+Repository route actions use configuration objects (`findMany: { maxLimit: 100 }`,
+`findOne: {}`). API create/update writes default to `writePolicy: false`. Each server
+endpoint declares its own field and relation-operation allowlist, using objects or
+synchronous callback builders. Nested task create/update/upsert branches have separate
+field rules; task creation explicitly permits `assignee.connect`. Many-to-many tag
+operations permit only the `role` through field. Prefer relation `connect` when the
+endpoint exposes it; direct foreign-key fields are not implicitly writable. Keep
+policies on the server and never include them in client request options. New demos
+need an explicit server policy and route tests. Authentication guards every endpoint.
+Internal `db.repository` calls default to `writePolicy: true`, so custom HTTP handlers
+must pass a server-owned policy themselves.

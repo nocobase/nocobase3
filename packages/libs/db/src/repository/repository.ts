@@ -1,3 +1,17 @@
+import {
+  normalizeWritePolicy,
+  normalizeFieldWritePolicy,
+  buildUpsertWritePolicy,
+  assertWriteEnabled,
+  invalidWritePolicy,
+  type WritePolicy,
+  type FieldWritePolicy,
+  type ThroughWritePolicy,
+} from './write-policy.js';
+import {
+  assertMutationWritePolicy,
+  assertFieldWrites,
+} from './write-policy-check.js';
 import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import type {
   AnyFieldDefinition,
@@ -426,15 +440,38 @@ export class DefaultRepository<
     options: ValidateMutationOptions<TCreate, TUpdate, TRecord>,
   ): Promise<MutationValidationResult> {
     try {
+      const policyInput =
+        options.writePolicy === undefined ? true : options.writePolicy;
+      assertWriteEnabled(policyInput);
+      const writePolicy =
+        policyInput === true
+          ? true
+          : normalizeWritePolicy(
+              policyInput,
+              options.operation === 'createOne' ? 'create' : 'update',
+            );
       const collection = await this.collection();
       assertWritableCollection(collection);
-      await normalizeModelMutation(
+      await validateWritePolicyMetadata(
+        this.options.collections,
+        collection,
+        writePolicy,
+      );
+      const mutation = await normalizeModelMutation(
         this.options.collections,
         collection,
         evaluateValues(options.values),
         options.operation,
         1,
         { nodes: 0, clientKeys: new Set(), context: options.context },
+      );
+      assertMutationWritePolicy(
+        mutation,
+        writePolicy,
+        ['values'],
+        [],
+        options.operation === 'createOne' ? 'create' : 'update',
+        collection.name,
       );
       if (options.operation === 'updateOne') {
         await this.normalizeSingleMutationFilter(
@@ -454,8 +491,18 @@ export class DefaultRepository<
   async createOne(
     options: CreateOneOptions<TCreate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>> {
+    const policyInput =
+      options.writePolicy === undefined ? true : options.writePolicy;
+    assertWriteEnabled(policyInput);
+    const writePolicy =
+      policyInput === true ? true : normalizeWritePolicy(policyInput, 'create');
     const collection = await this.collection();
     assertWritableCollection(collection);
+    await validateWritePolicyMetadata(
+      this.options.collections,
+      collection,
+      writePolicy,
+    );
     const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
@@ -463,6 +510,14 @@ export class DefaultRepository<
       'createOne',
       1,
       { nodes: 0, clientKeys: new Set(), context: options.context },
+    );
+    assertMutationWritePolicy(
+      mutation,
+      writePolicy,
+      ['values'],
+      [],
+      'create',
+      collection.name,
     );
     const selection = await this.validateSelect(
       collection,
@@ -508,8 +563,15 @@ export class DefaultRepository<
     | CreateManyResult
     | { readonly createdCount: number; readonly records: readonly TRecord[] }
   > {
+    const policyInput =
+      options.writePolicy === undefined ? true : options.writePolicy;
+    assertWriteEnabled(policyInput);
+    const writePolicy =
+      policyInput === true ? true : normalizeFieldWritePolicy(policyInput);
     const collection = await this.collection();
     assertWritableCollection(collection);
+    if (writePolicy !== true)
+      validatePolicyFields(collection, writePolicy, ['writePolicy']);
     const input = evaluateValues(options.values);
     if (!Array.isArray(input) || input.length === 0) {
       invalid('INVALID_MUTATION', 'createMany() values must not be empty.', {
@@ -522,6 +584,16 @@ export class DefaultRepository<
         'values',
         index,
       ]),
+    );
+    records.forEach((values, index) =>
+      assertFieldWrites(
+        values,
+        writePolicy,
+        ['values', index],
+        [],
+        'create',
+        collection.name,
+      ),
     );
     const selection = options.select
       ? await this.validateSelect(collection, options.select, options.context)
@@ -546,8 +618,18 @@ export class DefaultRepository<
   async updateOne(
     options: UpdateOneOptions<TUpdate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>> {
+    const policyInput =
+      options.writePolicy === undefined ? true : options.writePolicy;
+    assertWriteEnabled(policyInput);
+    const writePolicy =
+      policyInput === true ? true : normalizeWritePolicy(policyInput, 'update');
     const collection = await this.collection();
     assertWritableCollection(collection);
+    await validateWritePolicyMetadata(
+      this.options.collections,
+      collection,
+      writePolicy,
+    );
     const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
@@ -555,6 +637,14 @@ export class DefaultRepository<
       'updateOne',
       1,
       { nodes: 0, clientKeys: new Set(), context: options.context },
+    );
+    assertMutationWritePolicy(
+      mutation,
+      writePolicy,
+      ['values'],
+      [],
+      'update',
+      collection.name,
     );
     const filter = await this.normalizeSingleMutationFilter(
       collection,
@@ -594,8 +684,27 @@ export class DefaultRepository<
   async upsertOne(
     options: UpsertOneOptions<TCreate, TUpdate, TRecord>,
   ): Promise<SingleMutationResult<TRecord>> {
+    const policyInput =
+      options.writePolicy === undefined ? true : options.writePolicy;
+    assertWriteEnabled(policyInput);
+    const writePolicy =
+      policyInput === true ? true : buildUpsertWritePolicy(policyInput);
     const collection = await this.collection();
     assertWritableCollection(collection);
+    if (writePolicy !== true) {
+      await validateWritePolicyMetadata(
+        this.options.collections,
+        collection,
+        writePolicy.create,
+        ['writePolicy', 'create'],
+      );
+      await validateWritePolicyMetadata(
+        this.options.collections,
+        collection,
+        writePolicy.update,
+        ['writePolicy', 'update'],
+      );
+    }
     const filter = await this.normalizeSingleMutationFilter(
       collection,
       options.filter,
@@ -622,6 +731,19 @@ export class DefaultRepository<
         ['update'],
       ),
     ]);
+    assertMutationWritePolicy(
+      createMutation,
+      writePolicy === true ? true : writePolicy.create,
+      ['create'],
+      [],
+      'create',
+      collection.name,
+    );
+    assertMutationWritePolicy(
+      updateMutation,
+      writePolicy === true ? true : writePolicy.update,
+      ['update'],
+    );
     if (
       by.fields.some(
         (field) =>
@@ -697,8 +819,15 @@ export class DefaultRepository<
     | UpdateManyResult
     | { readonly updatedCount: number; readonly records: readonly TRecord[] }
   > {
+    const policyInput =
+      options.writePolicy === undefined ? true : options.writePolicy;
+    assertWriteEnabled(policyInput);
+    const writePolicy =
+      policyInput === true ? true : normalizeFieldWritePolicy(policyInput);
     const collection = await this.collection();
     assertWritableCollection(collection);
+    if (writePolicy !== true)
+      validatePolicyFields(collection, writePolicy, ['writePolicy']);
     const filter = await this.normalizeMutationFilter(
       collection,
       options.filter,
@@ -711,6 +840,14 @@ export class DefaultRepository<
       'updateMany',
       false,
       options.context,
+    );
+    assertFieldWrites(
+      values,
+      writePolicy,
+      ['values'],
+      [],
+      'update',
+      collection.name,
     );
     const selection = options.select
       ? await this.validateSelect(collection, options.select, options.context)
@@ -2719,6 +2856,99 @@ function primaryFields(collection: CollectionDefinition): string[] {
       (constraint) => constraint.type === 'primary',
     )?.fields ?? []
   );
+}
+
+function validatePolicyFields(
+  collection: CollectionDefinition,
+  policy: FieldWritePolicy,
+  path: readonly (string | number)[],
+  managed: readonly string[] = [],
+): void {
+  for (const [index, name] of (policy.fields || []).entries()) {
+    const field = collection.fields?.find((field) => field.name === name);
+    if (
+      !field ||
+      !isScalarField(field) ||
+      field.type === 'increments' ||
+      field.autoIncrement ||
+      field.db?.generated !== undefined ||
+      collection.optimisticLock?.field === name ||
+      managed.includes(name)
+    ) {
+      invalidWritePolicy(
+        `Field "${name}" is not a writable scalar field of "${collection.name}".`,
+        [...path, 'fields', index],
+      );
+    }
+  }
+}
+async function validateWritePolicyMetadata(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  policy: true | WritePolicy,
+  path: readonly (string | number)[] = ['writePolicy'],
+): Promise<void> {
+  if (policy === true) return;
+  validatePolicyFields(collection, policy, path);
+  for (const [name, rule] of Object.entries(policy.relations || {})) {
+    const relation = collection.fields?.find((field) => field.name === name);
+    const rulePath = [...path, 'relations', name];
+    if (!relation || isScalarField(relation))
+      invalidWritePolicy(
+        `Relation "${name}" does not exist on "${collection.name}".`,
+        rulePath,
+      );
+    const target = await targetCollection(collections, relation, rulePath);
+    for (const operation of ['create', 'update'] as const) {
+      const config = rule[operation];
+      if (config)
+        await validateWritePolicyMetadata(collections, target, config, [
+          ...rulePath,
+          operation,
+        ]);
+    }
+    if (rule.upsert) {
+      await validateWritePolicyMetadata(
+        collections,
+        target,
+        rule.upsert.create,
+        [...rulePath, 'upsert', 'create'],
+      );
+      await validateWritePolicyMetadata(
+        collections,
+        target,
+        rule.upsert.update,
+        [...rulePath, 'upsert', 'update'],
+      );
+    }
+    for (const operation of ['create', 'connect', 'set'] as const) {
+      const config: ThroughWritePolicy | undefined = rule[operation];
+      if (!config?.through) continue;
+      if (relation.type !== 'belongsToMany' || !relation.through)
+        invalidWritePolicy('through requires a belongsToMany relation.', [
+          ...rulePath,
+          operation,
+          'through',
+        ]);
+      const through = await collections.get(relation.through);
+      if (!through)
+        invalidWritePolicy('Through collection does not exist.', [
+          ...rulePath,
+          operation,
+          'through',
+        ]);
+      validatePolicyFields(
+        through,
+        config.through,
+        [...rulePath, operation, 'through'],
+        [
+          relation.foreignKey,
+          relation.otherKey,
+          ...primaryFields(through),
+        ].filter((name): name is string => typeof name === 'string'),
+      );
+    }
+  }
 }
 
 const MUTATION_LIMITS = { maxDepth: 3, maxNodes: 100 } as const;

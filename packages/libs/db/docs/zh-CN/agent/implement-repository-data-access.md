@@ -7,6 +7,8 @@ description: 按业务任务选择 Repository 查询、写入、关系、分页�
 
 本页是 Agent 的任务入口，不重复主题页完整契约。当前 Repository 已实现；不要因旧设计材料中的“规划接口”声明而改用错误层级，也不要从 Prisma 经验猜测新接口。
 
+服务端 [`writePolicy`](../repository/write-policy.md) 可限制普通字段、每种关系操作、嵌套 create/update/upsert 字段和 through payload。内部 Repository 默认 `true`；API routes 默认 `false`，须显式配置白名单。前端不接受该参数。
+
 ## 按任务最小阅读
 
 | 任务                    | 先读方法                                                                                                                                               | 按需补充                                                                                                        |

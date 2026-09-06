@@ -1,3 +1,8 @@
+import type {
+  WritePolicyInput,
+  FieldWritePolicyInput,
+  UpsertWritePolicyInput,
+} from './write-policy.js';
 import type { RepositoryErrorCode } from './errors.js';
 import type {
   RepositoryRecord,
@@ -84,6 +89,8 @@ export interface CreateOneOptions<
   readonly values: MutationValuesInput<CreateMutationValues<TCreate>>;
   readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
+  /** Server-only policy; omitted or true adds no write restrictions, false denies the mutation. */
+  readonly writePolicy?: boolean | WritePolicyInput;
 }
 
 export interface CreateManyOptions<
@@ -95,6 +102,7 @@ export interface CreateManyOptions<
   >;
   readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
+  readonly writePolicy?: boolean | FieldWritePolicyInput;
 }
 
 export interface SingleMutationSelector<TRecord extends object> {
@@ -108,6 +116,8 @@ export type UpdateOneOptions<
   readonly select?: RepositorySelect<TRecord>;
   readonly ifVersion?: string | number;
   readonly context?: RepositoryContext;
+  /** Server-only policy; omitted or true adds no write restrictions, false denies the mutation. */
+  readonly writePolicy?: boolean | WritePolicyInput;
   readonly values: MutationValuesInput<UpdateMutationValues<TUpdate>>;
 };
 
@@ -121,6 +131,8 @@ export type UpsertOneOptions<
   readonly select?: RepositorySelect<TRecord>;
   readonly ifVersion?: string | number;
   readonly context?: RepositoryContext;
+  /** Server-only policy; omitted or true adds no write restrictions, false denies the mutation. */
+  readonly writePolicy?: boolean | UpsertWritePolicyInput;
 };
 
 export type MutationScope<TRecord extends object> =
@@ -140,6 +152,7 @@ export type UpdateManyOptions<
   readonly values: MutationValuesInput<ScalarUpdateValues<TUpdate>>;
   readonly select?: RepositorySelect<TRecord>;
   readonly context?: RepositoryContext;
+  readonly writePolicy?: boolean | FieldWritePolicyInput;
 };
 
 export type DeleteOneOptions<TRecord extends object = RepositoryRecord> =
@@ -196,11 +209,15 @@ export type ValidateMutationOptions<
       readonly operation: 'createOne';
       readonly values: MutationValuesInput<CreateMutationValues<TCreate>>;
       readonly context?: RepositoryContext;
+      /** Server-only policy; omitted or true adds no write restrictions, false denies the mutation. */
+      readonly writePolicy?: boolean | WritePolicyInput;
     }
   | ({
       readonly operation: 'updateOne';
       readonly ifVersion?: string | number;
       readonly context?: RepositoryContext;
+      /** Server-only policy; omitted or true adds no write restrictions, false denies the mutation. */
+      readonly writePolicy?: boolean | WritePolicyInput;
       readonly values: MutationValuesInput<UpdateMutationValues<TUpdate>>;
     } & SingleMutationSelector<TRecord>);
 

@@ -111,6 +111,34 @@ describe('Relationship writes through Repository HTTP', () => {
     });
   });
 
+  it('rejects operations outside the example server allowlist without changing records', async () => {
+    const projects = f.api.repository(relationRepositories.projects);
+    const before = await loadRelationProjectState(f.api, 'project-1');
+    await expect(
+      projects.updateOne({
+        filter: { id: 'project-1' },
+        values: {
+          name: 'Must not change',
+          owner: { update: { values: { name: 'Must not change owner' } } },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'RELATION_WRITE_FORBIDDEN' });
+    await expect(
+      projects.updateOne({
+        filter: { id: 'project-1' },
+        values: {
+          tasks: {
+            update: {
+              filter: { id: 'task-edit' },
+              values: { assignee: { connect: { id: 'user-2' } } },
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'RELATION_WRITE_FORBIDDEN' });
+    expect(await loadRelationProjectState(f.api, 'project-1')).toEqual(before);
+  });
+
   it('keeps relation scope and root mutation rollback guarantees over HTTP', async () => {
     const projects = f.api.repository<
       RelationProject,

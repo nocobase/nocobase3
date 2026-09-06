@@ -305,7 +305,11 @@ describe('Repository pages with real HTTP and SQLite', () => {
     await show('orders');
     const orders = repository(f.api, 'orders');
     const created = await orders.createOne({
-      values: { id: 'order', number: 'SO-001', customerId: 'customer' },
+      values: {
+        id: 'order',
+        number: 'SO-001',
+        customer: { connect: { id: 'customer' } },
+      },
     });
     const user = userEvent.setup();
     await user.click(
@@ -408,7 +412,7 @@ describe('Repository pages with real HTTP and SQLite', () => {
         name: 'Eva Park',
         email: 'eva@northstar.example',
         phone: '123',
-        customerId: 'customer-1',
+        customer: { connect: { id: 'customer-1' } },
       },
     });
     await show('contacts', 'en-US', 'contact-1');

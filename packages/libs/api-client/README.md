@@ -277,3 +277,10 @@ An empty input set returns count 0 and null for SUM/AVG/MIN/MAX; empty grouped
 results are `[]`. BigInt results are serialized as decimal strings to avoid
 precision loss, dates as ISO strings, and dialect-specific numeric strings are
 preserved. These methods do not use `findMany` pagination or NDJSON streaming.
+
+`writePolicy` is a server-only option. Remote Repository options and their builders
+do not expose it, and HTTP requests containing it are rejected. Frontend code sends
+`values`; the server declares the allowed fields and relation operations in
+`defineRepositoryApiRoutes`, for example
+`updateOne: { writePolicy: { fields: ['name'], relations: { tasks: { update: { fields: ['title'] } } } } }`.
+Server API create/update actions default to denying writes until a policy is configured.

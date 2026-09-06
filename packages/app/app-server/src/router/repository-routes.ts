@@ -1,5 +1,8 @@
 import {
   databaseManagerToken,
+  buildWritePolicy,
+  type WritePolicy,
+  type WritePolicyInput,
   RepositoryError,
   type AggregateOptions,
   type GroupByOptions,
@@ -29,6 +32,28 @@ export type RepositoryApiAction =
   | 'updateOne'
   | 'deleteOne';
 
+/** An enabled endpoint with no configurable options. */
+export type RepositoryApiEmptyActionOptions = Readonly<Record<string, never>>;
+export interface RepositoryApiFindManyOptions {
+  /** Default and maximum limit. Defaults to 100. */
+  readonly maxLimit?: number;
+}
+export interface RepositoryApiWriteOptions {
+  /** Server-owned policy. HTTP input cannot override this value. */
+  readonly writePolicy?: false | WritePolicyInput;
+}
+export interface RepositoryApiActions {
+  readonly findMany?: RepositoryApiFindManyOptions;
+  readonly findOne?: RepositoryApiEmptyActionOptions;
+  readonly count?: RepositoryApiEmptyActionOptions;
+  readonly exists?: RepositoryApiEmptyActionOptions;
+  readonly aggregate?: RepositoryApiEmptyActionOptions;
+  readonly groupBy?: RepositoryApiEmptyActionOptions;
+  readonly createOne?: RepositoryApiWriteOptions;
+  readonly updateOne?: RepositoryApiWriteOptions;
+  readonly deleteOne?: RepositoryApiEmptyActionOptions;
+}
+
 export interface RepositoryApiExposure {
   /** The name passed to api.repository(name). */
   readonly name: string;
@@ -36,9 +61,7 @@ export interface RepositoryApiExposure {
   readonly collection?: string;
   /** Database connection name; defaults to the application's default connection. */
   readonly connection?: string;
-  readonly actions: readonly RepositoryApiAction[];
-  /** Default and maximum findMany limit. Defaults to 100. */
-  readonly maxLimit?: number;
+  readonly actions: RepositoryApiActions;
 }
 
 export interface DefineRepositoryApiRoutesOptions {
@@ -80,31 +103,76 @@ const repositoryStreamMediaType = 'application/x-ndjson';
 export function defineRepositoryApiRoutes(
   options: DefineRepositoryApiRoutesOptions,
 ): AppApiRouteContribution<RepositoryApiRoutesApplication> {
+  assertConfig(options, ['repositories'], 'Repository API configuration');
+  if (!Array.isArray(options.repositories))
+    throw new Error('repositories must be an array.');
   const names = new Set<string>();
   const repositories = options.repositories.map((entry) => {
-    if (!entry.name || entry.name.includes('*') || names.has(entry.name)) {
+    assertConfig(
+      entry,
+      ['name', 'collection', 'connection', 'actions'],
+      'Repository API exposure',
+    );
+    if (
+      typeof entry.name !== 'string' ||
+      !entry.name ||
+      entry.name.includes('*') ||
+      names.has(entry.name)
+    ) {
       throw new Error(
         'Repository API names must be non-empty, unique, and contain no wildcard.',
       );
     }
     names.add(entry.name);
-    const maxLimit = entry.maxLimit ?? 100;
-    if (!Number.isSafeInteger(maxLimit) || maxLimit <= 0) {
-      throw new Error(
-        'Repository API maxLimit must be a positive safe integer.',
-      );
-    }
     const collection = entry.collection ?? entry.name;
-    if (!collection)
+    if (typeof collection !== 'string' || !collection)
       throw new Error('Repository API collection must not be empty.');
-    const actions = [...entry.actions];
     if (
-      new Set(actions).size !== actions.length ||
-      actions.some((action) => !Object.hasOwn(allowedOptions, action))
-    ) {
-      throw new Error('Repository API actions must be supported and unique.');
-    }
-    return { ...entry, collection, maxLimit, actions };
+      entry.connection !== undefined &&
+      (typeof entry.connection !== 'string' || !entry.connection)
+    )
+      throw new Error('Repository API connection must not be empty.');
+    assertConfig(
+      entry.actions,
+      Object.keys(allowedOptions),
+      'Repository API actions',
+    );
+    const actions = Object.entries(entry.actions).map(([key, config]) => {
+      const action = key as RepositoryApiAction;
+      const keys =
+        action === 'findMany'
+          ? ['maxLimit']
+          : action === 'createOne' || action === 'updateOne'
+            ? ['writePolicy']
+            : [];
+      assertConfig(config, keys, `Repository API action ${action}`);
+      const maxLimit =
+        action === 'findMany' && config.maxLimit !== undefined
+          ? config.maxLimit
+          : 100;
+      if (
+        typeof maxLimit !== 'number' ||
+        !Number.isSafeInteger(maxLimit) ||
+        maxLimit <= 0
+      )
+        throw new Error(
+          'Repository API maxLimit must be a positive safe integer.',
+        );
+      const policyInput =
+        config.writePolicy === undefined ? false : config.writePolicy;
+      const writePolicy: false | WritePolicy =
+        policyInput === false
+          ? false
+          : buildWritePolicy(policyInput as WritePolicyInput);
+      if (action === 'createOne') assertCreateAllowance(writePolicy);
+      return { action, maxLimit, writePolicy };
+    });
+    return {
+      name: entry.name,
+      collection,
+      connection: entry.connection,
+      actions,
+    };
   });
 
   return defineApiRoutes((app: RepositoryApiRoutesApplication): Hono => {
@@ -115,7 +183,17 @@ export function defineRepositoryApiRoutes(
         const status = repositoryErrorStatus(error);
         if (status !== undefined) {
           return context.json(
-            { code: error.code, message: error.message },
+            {
+              code: error.code,
+              message: error.message,
+              ...([
+                'WRITE_FORBIDDEN',
+                'FIELD_WRITE_FORBIDDEN',
+                'RELATION_WRITE_FORBIDDEN',
+              ].includes(error.code)
+                ? { path: error.path, details: error.details }
+                : {}),
+            },
             status,
           );
         }
@@ -128,7 +206,7 @@ export function defineRepositoryApiRoutes(
       const repository = app.container
         .resolve(databaseManagerToken)
         .repository(entry.collection, entry.connection);
-      for (const action of entry.actions) {
+      for (const { action, maxLimit, writePolicy } of entry.actions) {
         router.post(
           `/${encodeURIComponent(entry.name)}:${action}`,
           bodyLimit({
@@ -143,11 +221,11 @@ export function defineRepositoryApiRoutes(
               ),
           }),
           async (context) => {
-            const input = await readInput(context, action, entry.maxLimit);
+            const input = await readInput(context, action, maxLimit);
             if (action === 'findMany' && acceptsRepositoryStream(context)) {
               return streamFindMany(context, repository, input);
             }
-            const data = await execute(repository, action, input);
+            const data = await execute(repository, action, input, writePolicy);
             if (action === 'aggregate' || action === 'groupBy') {
               return context.body(
                 JSON.stringify({ data }, (_key, value: unknown) =>
@@ -339,6 +417,7 @@ async function execute(
   repository: Repository,
   action: RepositoryApiAction,
   input: RepositoryRecord,
+  writePolicy: false | WritePolicy,
 ): Promise<unknown> {
   // HTTP validates the envelope; Repository validates ASTs, fields, and mutations.
   const read = input as FindManyOptions<RepositoryRecord>;
@@ -367,9 +446,14 @@ async function execute(
     case 'exists':
       return repository.exists(input);
     case 'createOne':
-      return repository.createOne({ select: read.select, values });
+      return repository.createOne({
+        select: read.select,
+        values,
+        writePolicy,
+      });
     case 'updateOne':
       return repository.updateOne({
+        writePolicy,
         select: read.select,
         filter,
         values: input.values as UpdateOneOptions<
@@ -394,8 +478,12 @@ function fail(status: 400 | 415, code: string, message: string): never {
 
 function repositoryErrorStatus(
   error: RepositoryError,
-): 400 | 404 | 409 | undefined {
+): 400 | 403 | 404 | 409 | undefined {
   switch (error.code) {
+    case 'WRITE_FORBIDDEN':
+    case 'FIELD_WRITE_FORBIDDEN':
+    case 'RELATION_WRITE_FORBIDDEN':
+      return 403;
     case 'RECORD_NOT_FOUND':
     case 'RELATION_TARGET_NOT_FOUND':
       return 404;
@@ -412,5 +500,36 @@ function repositoryErrorStatus(
       return undefined;
     default:
       return 400;
+  }
+}
+
+function assertConfig(
+  value: unknown,
+  keys: readonly string[],
+  label: string,
+): asserts value is Record<string, unknown> {
+  if (
+    !isObject(value) ||
+    (Object.getPrototypeOf(value) !== Object.prototype &&
+      Object.getPrototypeOf(value) !== null)
+  )
+    throw new Error(`${label} must be a plain configuration object.`);
+  for (const key of Object.keys(value))
+    if (!keys.includes(key))
+      throw new Error(`${label}: unsupported option ${key}.`);
+}
+
+function assertCreateAllowance(policy: false | WritePolicy): void {
+  if (policy === false) return;
+  for (const rule of Object.values(policy.relations || {})) {
+    if (
+      Object.keys(rule).some(
+        (operation) => operation !== 'create' && operation !== 'connect',
+      )
+    )
+      throw new Error(
+        'createOne writePolicy only supports create and connect relation operations.',
+      );
+    if (rule.create) assertCreateAllowance(rule.create);
   }
 }

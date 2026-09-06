@@ -7,6 +7,8 @@ description: 批量创建标量记录，说明非空数组与 callback、可选 
 
 示例沿用[概览的模型](../overview.md#本组文档的示例模型)，假设 `db` 已配置且 Collection 已存在。每个示例独立运行，写入前请按说明准备数据；方法不会创建 Schema。
 
+可选服务端参数 [`writePolicy`](../write-policy.md) 默认为 `true`，可设置 `false` 拒绝整次写入，或使用对象／同步 callback 限制输入。仅支持普通字段白名单，不支持关系规则。HTTP API routes 的默认值为 `false`，前端不能传入此参数。
+
 ## 参数与返回
 
 - 必填：非空 `values` 数组，或返回该数组的同步 callback。

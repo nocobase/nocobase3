@@ -7,6 +7,8 @@ description: 集中说明 describeMutation 和 validateMutation 的参数、关�
 
 示例沿用[概览的模型](../overview.md#本组文档的示例模型)，假设 `db` 已配置且 Collection 已存在。每个示例独立运行，写入前请按说明准备数据；方法不会创建 Schema。
 
+可选服务端参数 [`writePolicy`](../write-policy.md) 默认为 `true`，可设置 `false` 拒绝整次写入，或使用对象／同步 callback 限制输入。支持字段、关系操作及嵌套字段的白名单。HTTP API routes 的默认值为 `false`，前端不能传入此参数。
+
 ## 参数与返回
 
 | 方法                     | 输入                                              | 返回                                     |

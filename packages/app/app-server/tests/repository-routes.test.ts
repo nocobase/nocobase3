@@ -8,6 +8,7 @@ import {
   createDatabaseManager,
   databaseManagerToken,
   type DatabaseManager,
+  type WritePolicyBuilder,
   RepositoryError,
   type RepositoryQuery,
 } from '@nocobase/db';
@@ -17,7 +18,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   defineRepositoryApiRoutes,
-  type RepositoryApiAction,
+  type RepositoryApiActions,
+  type DefineRepositoryApiRoutesOptions,
 } from '../src/router/index.js';
 import { defineServerPlugin } from '../src/plugins/index.js';
 
@@ -33,17 +35,17 @@ async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
   return values;
 }
 
-const actions: RepositoryApiAction[] = [
-  'findMany',
-  'findOne',
-  'count',
-  'aggregate',
-  'groupBy',
-  'exists',
-  'createOne',
-  'updateOne',
-  'deleteOne',
-];
+const actions: RepositoryApiActions = {
+  findMany: {},
+  findOne: {},
+  count: {},
+  aggregate: {},
+  groupBy: {},
+  exists: {},
+  createOne: { writePolicy: { fields: ['id', 'status'] } },
+  updateOne: { writePolicy: { fields: ['id', 'status'] } },
+  deleteOne: {},
+};
 
 describe('Repository API routes', () => {
   let database: DatabaseManager;
@@ -64,8 +66,12 @@ describe('Repository API routes', () => {
     });
     const contribution = defineRepositoryApiRoutes({
       repositories: [
-        { name: 'sales/orders', collection: 'orders', actions, maxLimit: 2 },
-        { name: 'catalog', collection: 'orders', actions: ['findOne'] },
+        {
+          name: 'sales/orders',
+          collection: 'orders',
+          actions: { ...actions, findMany: { maxLimit: 2 } },
+        },
+        { name: 'catalog', collection: 'orders', actions: { findOne: {} } },
       ],
     });
     router = new Hono();
@@ -156,6 +162,314 @@ describe('Repository API routes', () => {
     ).toMatchObject({ deleted: true, record: { id: 'built' } });
   });
 
+  it('keeps relation policy server-owned, action-specific and frozen at declaration', async () => {
+    await database.builder().createCollection('policyChildren', (c) => {
+      c.string('id').primary();
+      c.string('parentId').nullable();
+      c.string('label');
+    });
+    await database.builder().createCollection('policyParents', (c) => {
+      c.string('id').primary();
+      c.hasMany('children', 'policyChildren')
+        .sourceKey('id')
+        .foreignKey('parentId');
+    });
+    const policy = {
+      fields: ['id'],
+      relations: { children: { create: { fields: ['id', 'label'] } } },
+    };
+    const configure = vi.fn((a: WritePolicyBuilder) =>
+      a.relation('children', (c) => c.update((w) => w.fields('label'))),
+    );
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'policyParents',
+          actions: {
+            createOne: { writePolicy: policy },
+            updateOne: { writePolicy: configure },
+          },
+        },
+        {
+          name: 'policyClosed',
+          collection: 'policyParents',
+          actions: { createOne: {}, updateOne: {} },
+        },
+      ],
+    });
+    expect(configure).toHaveBeenCalledTimes(1);
+    policy.fields.length = 0;
+    policy.relations.children.create.fields.length = 0;
+    router.route('/api', await contribution.createRouter({ container }));
+    const api = client();
+    const parents = api.repository('policyParents');
+    await parents.createOne({
+      values: {
+        id: 'parent',
+        children: { create: { id: 'child', label: 'Original' } },
+      },
+    });
+    await parents.updateOne({
+      filter: { id: 'parent' },
+      values: {
+        children: {
+          update: { filter: { id: 'child' }, values: { label: 'Updated' } },
+        },
+      },
+    });
+    expect(configure).toHaveBeenCalledTimes(1);
+    await expect(
+      parents.updateOne({
+        filter: { id: 'parent' },
+        values: {
+          children: {
+            update: {
+              filter: { id: 'child' },
+              values: { label: 'Must roll back', parentId: 'other' },
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'FIELD_WRITE_FORBIDDEN' });
+    await expect(
+      parents.updateOne({
+        filter: { id: 'parent' },
+        values: { children: { create: { id: 'second' } } },
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'RELATION_WRITE_FORBIDDEN' });
+    await expect(
+      api.repository('policyClosed').createOne({
+        values: { id: 'closed', children: { create: { id: 'denied' } } },
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'WRITE_FORBIDDEN' });
+    const rejected = await router.request('/api/policyClosed:updateOne', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filter: { id: 'parent' },
+        values: { children: { delete: { filter: { id: 'child' } } } },
+      }),
+    });
+    expect(rejected.status).toBe(403);
+    expect(await rejected.json()).toMatchObject({
+      code: 'WRITE_FORBIDDEN',
+      path: ['writePolicy'],
+    });
+    for (const action of ['createOne', 'updateOne']) {
+      const response = await router.request(`/api/policyClosed:${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...(action === 'updateOne' ? { filter: { id: 'parent' } } : {}),
+          values: { id: 'injected' },
+          writePolicy: { relations: { children: { delete: {} } } },
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        code: 'UNSUPPORTED_REPOSITORY_OPTION',
+      });
+    }
+    expect(await database.repository('policyParents').count()).toBe(1);
+    expect(await database.repository('policyChildren').findMany()).toEqual([
+      { id: 'child', parentId: 'parent', label: 'Updated' },
+    ]);
+  });
+
+  it('enforces through field rules through the production HTTP adapter', async () => {
+    await database.builder().createCollections([
+      {
+        name: 'policyTags',
+        definition: (c) => {
+          c.string('id').primary();
+        },
+      },
+      {
+        name: 'policyLinks',
+        definition: (c) => {
+          c.increments('id');
+          c.string('parentId');
+          c.string('tagId');
+          c.string('role').nullable();
+          c.integer('weight').defaultTo(0);
+        },
+      },
+      {
+        name: 'policyOwners',
+        definition: (c) => {
+          c.string('id').primary();
+          c.belongsToMany('tags', 'policyTags')
+            .sourceKey('id')
+            .targetKey('id')
+            .through('policyLinks')
+            .foreignKey('parentId')
+            .otherKey('tagId');
+        },
+      },
+    ]);
+    await database
+      .repository('policyTags')
+      .createOne({ values: { id: 'tag' } });
+    await database
+      .repository('policyOwners')
+      .createOne({ values: { id: 'parent' } });
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'policyOwners',
+          actions: {
+            updateOne: {
+              writePolicy: (w) =>
+                w.relation('tags', (r) =>
+                  r.connect((e) => e.through((t) => t.fields('role'))),
+                ),
+            },
+          },
+        },
+      ],
+    });
+    router.route('/api', await contribution.createRouter({ container }));
+    const owners = client().repository('policyOwners');
+    await expect(
+      owners.updateOne({
+        filter: { id: 'parent' },
+        values: {
+          tags: {
+            connect: {
+              where: { id: 'tag' },
+              through: { role: 'allowed', weight: 99 },
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'FIELD_WRITE_FORBIDDEN' });
+    expect(await database.repository('policyLinks').count()).toBe(0);
+    await owners.updateOne({
+      filter: { id: 'parent' },
+      values: {
+        tags: {
+          connect: { where: { id: 'tag' }, through: { role: 'allowed' } },
+        },
+      },
+    });
+    expect(await database.repository('policyLinks').findMany()).toMatchObject([
+      { role: 'allowed', weight: 0 },
+    ]);
+  });
+
+  it('denies missing or false policies even for empty values and exposes field diagnostics', async () => {
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'missingPolicy',
+          collection: 'orders',
+          actions: { createOne: {}, updateOne: {} },
+        },
+        {
+          name: 'falsePolicy',
+          collection: 'orders',
+          actions: {
+            createOne: { writePolicy: false },
+            updateOne: { writePolicy: false },
+          },
+        },
+        {
+          name: 'fieldsPolicy',
+          collection: 'orders',
+          actions: { createOne: { writePolicy: { fields: ['id'] } } },
+        },
+      ],
+    });
+    router.route('/api', await contribution.createRouter({ container }));
+    for (const name of ['missingPolicy', 'falsePolicy']) {
+      for (const action of ['createOne', 'updateOne']) {
+        const response = await router.request(`/api/${name}:${action}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            ...(action === 'updateOne' ? { filter: { id: 'absent' } } : {}),
+            values: {},
+          }),
+        });
+        expect(response.status).toBe(403);
+        expect(await response.json()).toMatchObject({
+          code: 'WRITE_FORBIDDEN',
+          path: ['writePolicy'],
+        });
+      }
+    }
+    const response = await router.request('/api/fieldsPolicy:createOne', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ values: { id: 'forbidden', status: 'paid' } }),
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      path: ['values', 'status'],
+      details: { field: 'status', allowedFields: ['id'] },
+    });
+    expect(
+      await database
+        .repository('orders')
+        .exists({ filter: { id: 'forbidden' } }),
+    ).toBe(false);
+  });
+
+  it.each([
+    { actions: ['count'] },
+    { actions: { count: true } },
+    { actions: { count: false } },
+    { actions: { count: null } },
+    { actions: { findMany: { maxLimit: null } } },
+    { actions: { count: undefined } },
+    { actions: { count: { maxLimit: 5 } } },
+    { actions: { findMany: { maxLimit: -1 } } },
+    { actions: { findMany: { writePolicy: false } } },
+    { actions: { deleteOne: { writePolicy: {} } } },
+    { actions: { createOne: { writePolicy: true } } },
+    {
+      actions: {
+        createOne: { writePolicy: { relations: { tasks: { update: {} } } } },
+      },
+    },
+    {
+      actions: {
+        createOne: {
+          writePolicy: { tasks: { operations: ['update'] } },
+        },
+      },
+    },
+    {
+      actions: {
+        createOne: {
+          writePolicy: {
+            tasks: {
+              operations: ['create'],
+              relations: { owner: { operations: ['delete'] } },
+            },
+          },
+        },
+      },
+    },
+    {
+      actions: {
+        updateOne: {
+          writePolicy: { tasks: { operations: ['unknown'] } },
+        },
+      },
+    },
+    { actions: { missing: {} } },
+    { actions: { count: {} }, maxLimit: 10 },
+    { actions: {}, writePolicy: {} },
+  ])('rejects invalid route configuration at declaration: %j', (invalid) => {
+    expect(() =>
+      defineRepositoryApiRoutes({
+        repositories: [{ name: 'orders', ...invalid }],
+      } as unknown as DefineRepositoryApiRoutesOptions),
+    ).toThrow();
+  });
+
   it('round-trips relation builders, client keys, nested filters and numeric updates through HTTP', async () => {
     await database.builder().createCollection('builderChildren', (c) => {
       c.string('id').primary();
@@ -170,7 +484,36 @@ describe('Repository API routes', () => {
         .foreignKey('parentId');
     });
     const contribution = defineRepositoryApiRoutes({
-      repositories: [{ name: 'builderParents', actions }],
+      repositories: [
+        {
+          name: 'builderParents',
+          actions: {
+            ...actions,
+            createOne: {
+              writePolicy: {
+                fields: ['id', 'metadata'],
+                relations: {
+                  children: { create: { fields: ['id', 'points'] } },
+                },
+              },
+            },
+            updateOne: {
+              writePolicy: {
+                relations: {
+                  children: {
+                    update: { fields: ['points'] },
+                    upsert: {
+                      create: { fields: ['id', 'points'] },
+                      update: { fields: ['points'] },
+                    },
+                    delete: {},
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
     });
     router.route('/api', await contribution.createRouter({ container }));
     const parents = client().repository('builderParents');
@@ -460,7 +803,7 @@ describe('Repository API routes', () => {
     // Router repositories are resolved at construction time, so mount a fresh contribution.
     const contribution = defineRepositoryApiRoutes({
       repositories: [
-        { name: 'bigints', collection: 'orders', actions: ['aggregate'] },
+        { name: 'bigints', collection: 'orders', actions: { aggregate: {} } },
       ],
     });
     const repository = database.repository('orders');
@@ -629,7 +972,11 @@ describe('Repository API routes', () => {
     vi.spyOn(database, 'repository').mockReturnValue(repository);
     const contribution = defineRepositoryApiRoutes({
       repositories: [
-        { name: 'stream-error', collection: 'orders', actions: ['findMany'] },
+        {
+          name: 'stream-error',
+          collection: 'orders',
+          actions: { findMany: {} },
+        },
       ],
     });
     router.route('/api', await contribution.createRouter({ container }));
@@ -746,7 +1093,7 @@ describe('Repository API routes', () => {
     );
     vi.spyOn(database, 'repository').mockReturnValue(repository);
     const contribution = defineRepositoryApiRoutes({
-      repositories: [{ name: 'broken', actions: ['count'] }],
+      repositories: [{ name: 'broken', actions: { count: {} } }],
     });
     router.route('/api', await contribution.createRouter({ container }));
     await expect(
@@ -768,7 +1115,7 @@ describe('Repository API routes', () => {
         name: 'external',
         collection: 'orders',
         connection: 'secondary',
-        actions: ['count'] as RepositoryApiAction[],
+        actions: { count: {} } as RepositoryApiActions,
       },
     ];
     const contribution = defineRepositoryApiRoutes({ repositories: entries });
@@ -778,7 +1125,7 @@ describe('Repository API routes', () => {
     });
     expect(contribution.scope).toBe('api');
     expect(resolve).not.toHaveBeenCalled();
-    entries[0]!.actions.push('deleteOne');
+    entries[0]!.actions = { count: {}, deleteOne: {} };
     entries[0]!.collection = 'changed';
     const routes = await contribution.createRouter({ container });
     expect(resolve).toHaveBeenCalledWith('orders', 'secondary');
@@ -800,29 +1147,35 @@ describe('Repository API routes', () => {
     for (const name of ['', '*', 'orders*']) {
       expect(() =>
         defineRepositoryApiRoutes({
-          repositories: [{ name, actions: ['count'] }],
+          repositories: [{ name, actions: { count: {} } }],
         }),
       ).toThrow();
     }
     expect(() =>
       defineRepositoryApiRoutes({
-        repositories: [{ name: 'orders', actions: ['count', 'count'] }],
-      }),
-    ).toThrow();
-    expect(() =>
-      defineRepositoryApiRoutes({
-        repositories: [{ name: 'orders', actions: ['count'], maxLimit: 0 }],
+        repositories: [
+          { name: 'orders', actions: { unknown: {} } as RepositoryApiActions },
+        ],
       }),
     ).toThrow();
     expect(() =>
       defineRepositoryApiRoutes({
         repositories: [
-          { name: 'orders', actions: [] },
-          { name: 'orders', actions: [] },
+          { name: 'orders', actions: { findMany: { maxLimit: 0 } } },
         ],
       }),
     ).toThrow();
-    const empty = defineRepositoryApiRoutes({ repositories: [] });
+    expect(() =>
+      defineRepositoryApiRoutes({
+        repositories: [
+          { name: 'orders', actions: {} },
+          { name: 'orders', actions: {} },
+        ],
+      }),
+    ).toThrow();
+    const empty = defineRepositoryApiRoutes({
+      repositories: [{ name: 'disabled', actions: {} }],
+    });
     expect(
       (
         await (

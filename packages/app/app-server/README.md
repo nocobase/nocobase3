@@ -15,23 +15,25 @@ const repositoryRoutes = defineRepositoryApiRoutes({
   repositories: [
     {
       name: 'orders',
-      actions: [
-        'findMany',
-        'findOne',
-        'count',
-        'exists',
-        'createOne',
-        'updateOne',
-        'deleteOne',
-        'aggregate',
-        'groupBy',
-      ],
-      maxLimit: 100,
+      actions: {
+        findMany: { maxLimit: 100 },
+        findOne: {},
+        count: {},
+        exists: {},
+        createOne: { writePolicy: { fields: ['id', 'status'] } },
+        updateOne: { writePolicy: { fields: ['status'] } },
+        deleteOne: {},
+        aggregate: {},
+        groupBy: {},
+      },
     },
     {
       name: 'sales/orders',
       collection: 'orders',
-      actions: ['findMany', 'findOne'],
+      actions: {
+        findMany: { maxLimit: 100 },
+        findOne: {},
+      },
     },
   ],
 });
@@ -47,11 +49,81 @@ Applications may also include the contribution directly in their route array.
 The Collection must already exist; this helper does not create schema or run
 migrations. No repositories are exposed automatically.
 
-Each entry requires `name` and an explicit `actions` array. `collection` defaults
+Each entry requires `name` and an explicit `actions` object. `collection` defaults
 to `name`; optional `connection` selects a configured database connection. Names
-must be unique and non-empty and cannot contain `*`. Empty action arrays expose
-nothing. `maxLimit` defaults to 100 and is both the default and maximum
+must be unique and non-empty and cannot contain `*`. Empty action objects expose
+nothing. `actions.findMany.maxLimit` defaults to 100 and is both the default and maximum
 `findMany` limit. A limit of zero returns an empty list.
+
+Action values must be configuration objects: `{}` enables an endpoint with defaults,
+while an omitted action registers no endpoint. Boolean values and the former action
+arrays are rejected. Unknown configuration keys fail at declaration time. Configure
+pagination only in `actions.findMany.maxLimit`.
+
+`createOne` and `updateOne` default to `writePolicy: false`, including when the
+option is missing. They require explicit server-owned field and relation allowlists
+to accept writes; API route policies cannot be `true`.
+
+```ts
+defineRepositoryApiRoutes({
+  repositories: [
+    {
+      name: 'projects',
+      actions: {
+        findMany: { maxLimit: 100 },
+        findOne: {},
+        count: {},
+        exists: {},
+        createOne: {
+          writePolicy: {
+            fields: ['id', 'name', 'status'],
+            relations: {
+              tasks: { create: { fields: ['id', 'title'] } },
+            },
+          },
+        },
+        updateOne: {
+          writePolicy: (write) =>
+            write
+              .fields('name', 'status')
+              .relation('tasks', (tasks) =>
+                tasks.update((task) =>
+                  task
+                    .fields('title')
+                    .relation('assignee', (a) => a.connect().disconnect()),
+                ),
+              ),
+        },
+      },
+    },
+  ],
+});
+```
+
+`writePolicy` accepts an object or synchronous callback returning its own builder.
+Callbacks run once at declaration and produce detached, frozen snapshots. Policies
+can be reused with `buildWritePolicy` from `@nocobase/db`. Missing `fields` and
+`relations` each mean `false`. There are no wildcards, inherited grants or implicit
+merges. Each nested `create` and `update` has its own field and relation rules.
+Relation `upsert` is independent and requires both `create` and `update` branch
+policies. `connect`, `disconnect`, `set` and `delete` use operation objects; many-to-many
+`create`, `connect` and `set` can allow through payload with
+`through: { fields: ['role'] }`. `createOne` only allows `create` and `connect`
+relations throughout its create tree.
+
+`false` rejects the whole write, even empty values. An empty object policy `{}`
+allows no caller-supplied fields or relations but can allow default-only creation.
+Scalar foreign keys are covered by `fields`; JSON fields are controlled as a whole.
+Managed relation keys, defaults and versions do not require client field grants.
+Read actions and root `deleteOne` have no write policy; `deleteOne: {}` enables deletion.
+
+HTTP input rejects client-supplied `writePolicy`; the adapter always injects its
+server configuration. `WRITE_FORBIDDEN`, `FIELD_WRITE_FORBIDDEN` and
+`RELATION_WRITE_FORBIDDEN` return HTTP 403 with diagnostic `path` and `details`.
+The entire mutation is checked before writes. Internal `db.repository` calls default
+to `writePolicy: true`; custom HTTP handlers must supply their own explicit policy.
+User authorization, row-level access, target access and database cascades remain
+separate concerns. See the [complete write policy reference](../../libs/db/docs/zh-CN/repository/write-policy.md).
 
 The application adds `/api`. Each action uses
 `POST /api/<encodeURIComponent(name)>:<action>` with a JSON object containing
