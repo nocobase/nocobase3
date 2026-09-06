@@ -166,7 +166,7 @@ function EntityWorkspace({
         kind: 'sort' as const,
         version: 1 as const,
         items: [{ kind: 'field', path: ['id'], direction: 'asc' }],
-      },
+      } as const,
     };
     void Promise.all([repo.findMany(options), repo.count({ filter })])
       .then(([records, total]) => {

@@ -37,7 +37,7 @@ export function atomicUpdate(
                   path: ['value'],
                   operator: '$gte',
                   value: change.decrement,
-                },
+                } as const,
               ]
             : []),
         ],

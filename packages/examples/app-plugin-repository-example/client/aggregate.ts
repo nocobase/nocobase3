@@ -134,12 +134,15 @@ export async function loadAggregate(
         root: {
           kind: 'group',
           logic: 'or',
-          items: groups.slice(offset, offset + 100).map((row) => ({
-            kind: 'condition',
-            path: ['id'],
-            operator: '$eq',
-            value: row.productId,
-          })),
+          items: groups.slice(offset, offset + 100).map(
+            (row) =>
+              ({
+                kind: 'condition',
+                path: ['id'],
+                operator: '$eq',
+                value: row.productId,
+              }) as const,
+          ),
         },
       } as const,
     };
@@ -175,7 +178,24 @@ export async function loadAggregate(
             result: { kind: 'count' },
             ...(query.status === 'all'
               ? {}
-              : { filter: { status: query.status } }),
+              : {
+                  filter: {
+                    kind: 'filter',
+                    version: 1,
+                    root: {
+                      kind: 'group',
+                      logic: 'and',
+                      items: [
+                        {
+                          kind: 'condition',
+                          path: ['status'],
+                          operator: '$eq',
+                          value: query.status,
+                        },
+                      ],
+                    },
+                  } as const,
+                }),
           },
         ],
       },

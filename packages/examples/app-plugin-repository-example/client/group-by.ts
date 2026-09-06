@@ -169,12 +169,15 @@ export async function loadGroupByExamples(
           root: {
             kind: 'group',
             logic: 'or',
-            items: ids.slice(offset, offset + 100).map((id) => ({
-              kind: 'condition',
-              path: ['id'],
-              operator: '$eq',
-              value: id,
-            })),
+            items: ids.slice(offset, offset + 100).map(
+              (id) =>
+                ({
+                  kind: 'condition',
+                  path: ['id'],
+                  operator: '$eq',
+                  value: id,
+                }) as const,
+            ),
           },
         },
         select: {
