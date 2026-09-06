@@ -3,24 +3,13 @@ import { RepositoryError } from './errors.js';
 import { normalizeEnumValue } from './enum.js';
 import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import type {
-  MutationLiteral,
-  MutationVariable,
   RepositoryContext,
   RepositoryMutationScalarValue,
   ValuesBuilder,
 } from './types.js';
 
-export class DefaultValuesBuilder implements ValuesBuilder {
-  variable(path: string): MutationVariable {
-    return { kind: 'variable', path };
-  }
-
-  literal<T extends RepositoryMutationScalarValue>(
-    value: T,
-  ): MutationLiteral<T> {
-    return { kind: 'literal', value };
-  }
-}
+export { DefaultValuesBuilder } from '@nocobase/repository-input/internal/value-builders';
+import { DefaultValuesBuilder } from '@nocobase/repository-input/internal/value-builders';
 
 export function evaluateValues(input: unknown): unknown {
   return typeof input === 'function'

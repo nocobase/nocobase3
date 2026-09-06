@@ -1,4 +1,9 @@
-import { createApiClient, ApiClientError } from '@nocobase/api-client';
+import {
+  createApiClient,
+  ApiClientError,
+  buildFindManyOptions,
+  buildGroupByOptions,
+} from '@nocobase/api-client';
 import {
   createDatabaseManager,
   databaseManagerToken,
@@ -86,6 +91,160 @@ describe('Repository API routes', () => {
       body: JSON.stringify(input),
     });
   }
+
+  it('executes all remote actions with builders and accepts options helpers over raw HTTP', async () => {
+    const api = client();
+    const orders = api.repository<Order>('sales/orders');
+    const created = await orders.createOne({
+      values: (v) => ({ id: 'built', status: v.literal('paid') }),
+      select: (s) => s.fields('id', 'status', 'version'),
+    });
+    expect(created.record).toMatchObject({ id: 'built', status: 'paid' });
+    expect(
+      await orders.findOne({
+        filter: (f) => f.string('id').eq('built'),
+        select: (s) => s.fields('id'),
+      }),
+    ).toEqual({ id: 'built' });
+    expect(
+      await orders.count({ filter: (f) => f.string('status').eq('paid') }),
+    ).toBe(1);
+    expect(
+      await orders.exists({ filter: (f) => f.string('id').eq('built') }),
+    ).toBe(true);
+    const options = buildFindManyOptions<Order>({
+      filter: (f) => f.string('status').eq('paid'),
+      select: (s) => s.fields('id'),
+      sort: (s) => s.field('id').asc(),
+    });
+    expect(
+      await api.request({
+        path: '/sales%2Forders:findMany',
+        method: 'POST',
+        json: options,
+      }),
+    ).toEqual({ data: [{ id: 'built' }] });
+    expect(await collect(orders.findMany(options))).toEqual([{ id: 'built' }]);
+    expect(
+      await orders.aggregate({
+        aggregate: (a) => ({ count: a.count(), total: a.sum('version') }),
+      }),
+    ).toEqual({ count: 1, total: 1 });
+    const groups = buildGroupByOptions<Order>({
+      by: ['status'],
+      aggregate: (a) => ({ count: a.count() }),
+      having: (f) => f.number('count').gte(1),
+      sort: (s) => s.field('count').desc(),
+    });
+    expect(await orders.groupBy(groups)).toEqual([
+      { status: 'paid', count: 1 },
+    ]);
+    expect(
+      await orders.updateOne({
+        filter: (f) => f.string('id').eq('built'),
+        values: (v) => ({ status: v.literal('shipped') }),
+        select: (s) => s.fields('status'),
+        ifVersion: 1,
+      }),
+    ).toMatchObject({ record: { status: 'shipped' } });
+    expect(
+      await orders.deleteOne({
+        filter: (f) => f.string('id').eq('built'),
+        select: (s) => s.fields('id'),
+        ifVersion: 2,
+      }),
+    ).toMatchObject({ deleted: true, record: { id: 'built' } });
+  });
+
+  it('round-trips relation builders, client keys, nested filters and numeric updates through HTTP', async () => {
+    await database.builder().createCollection('builderChildren', (c) => {
+      c.string('id').primary();
+      c.string('parentId').nullable();
+      c.integer('points').defaultTo(0);
+    });
+    await database.builder().createCollection('builderParents', (c) => {
+      c.string('id').primary();
+      c.json('metadata');
+      c.hasMany('children', 'builderChildren')
+        .sourceKey('id')
+        .foreignKey('parentId');
+    });
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [{ name: 'builderParents', actions }],
+    });
+    router.route('/api', await contribution.createRouter({ container }));
+    const parents = client().repository('builderParents');
+    const created = await parents.createOne({
+      values: {
+        id: 'parent',
+        metadata: { update: { arbitrary: 'data' }, increment: 3 },
+        children: (r) =>
+          r.create({ id: 'child', points: 2 }, { clientKey: 'local-child' }),
+      },
+      select: (s) =>
+        s
+          .fields('id', 'metadata')
+          .include('children', (c) => c.fields('id', 'points')),
+    });
+    expect(created.createdTargets).toEqual([
+      {
+        clientKey: 'local-child',
+        collection: 'builderChildren',
+        unique: { kind: 'unique', fields: ['id'], values: { id: 'child' } },
+      },
+    ]);
+    expect(created.record).toMatchObject({
+      children: [{ id: 'child', points: 2 }],
+    });
+    const metadata: unknown =
+      typeof created.record.metadata === 'string'
+        ? JSON.parse(created.record.metadata)
+        : created.record.metadata;
+    expect(metadata).toEqual({ update: { arbitrary: 'data' }, increment: 3 });
+    await parents.updateOne({
+      filter: (f) => f.string('id').eq('parent'),
+      values: {
+        children: (r) =>
+          r.update({
+            filter: (f) => f.string('id').eq('child'),
+            values: { points: (n) => n.increment(3) },
+          }),
+      },
+    });
+    expect(
+      await parents.findOne({
+        filter: { id: 'parent' },
+        select: (s) =>
+          s.fields('id').include('children', (c) =>
+            c.combine({
+              records: c
+                .fields('id', 'points')
+                .filter((f) => f.number('points').gte(3))
+                .sort((s) => s.field('points').desc()),
+              total: c.sum('points'),
+            }),
+          ),
+      }),
+    ).toEqual({
+      id: 'parent',
+      children: { records: [{ id: 'child', points: 5 }], total: 5 },
+    });
+    await expect(
+      parents.createOne({
+        values: {
+          id: 'invalid',
+          children: {
+            create: {
+              kind: 'relationCreate',
+              version: 1,
+              values: { id: 'bad' },
+              clientKey: 42,
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'INVALID_MUTATION' });
+  });
 
   it('supports anonymous client calls for all seven actions against a real database', async () => {
     const orders = client().repository<Order>('sales/orders');

@@ -1,48 +1,38 @@
+import type {
+  FilterAst,
+  SelectAst,
+  SortAst,
+  AggregateAst,
+  RepositoryFilter,
+  RepositorySelect,
+  RepositorySort,
+  AggregateOptions,
+  MutationValuesInput,
+  CreateMutationValues,
+  UpdateMutationValues,
+  BuiltMutationValues,
+  JsonValueOf,
+} from '@nocobase/repository-input';
+import {
+  buildFindManyOptions,
+  buildFindOneOptions,
+  buildCountOptions,
+  buildExistsOptions,
+  buildAggregateOptions,
+  buildGroupByOptions,
+  buildCreateOneOptions,
+  buildUpdateOneOptions,
+  buildDeleteOneOptions,
+} from './repository-options.js';
 import { ApiClientError } from './errors.js';
 import type { ApiRequestOptions } from './types.js';
 
-export interface RemoteFilterAst {
-  readonly kind: 'filter';
-  readonly version: 1;
-  readonly collection?: string;
-  readonly root: Readonly<Record<string, unknown>>;
-}
-
-export interface RemoteSelectAst {
-  readonly kind: 'select';
-  readonly version: 1;
-  readonly collection?: string;
-  readonly root: Readonly<Record<string, unknown>>;
-}
-
-export interface RemoteSortAst {
-  readonly kind: 'sort';
-  readonly version: 1;
-  readonly collection?: string;
-  readonly items: readonly Readonly<Record<string, unknown>>[];
-}
-
+export type RemoteFilterAst = FilterAst;
+export type RemoteSelectAst = SelectAst;
+export type RemoteSortAst = SortAst;
+export type RemoteAggregateAst = AggregateAst;
 export type RemoteRepositoryFilter<TRecord extends object> =
-  Readonly<Partial<TRecord>> | RemoteFilterAst;
-
-/** JSON aggregate expressions; callbacks and database context cannot cross HTTP. */
-export interface RemoteAggregateAst {
-  readonly kind: 'aggregate';
-  readonly version: 1;
-  readonly collection?: string;
-  readonly items: readonly (
-    | {
-        readonly kind: 'count';
-        readonly alias: string;
-        readonly field?: string;
-      }
-    | {
-        readonly kind: 'sum' | 'avg' | 'min' | 'max';
-        readonly alias: string;
-        readonly field: string;
-      }
-  )[];
-}
+  RepositoryFilter<TRecord>;
 
 /** SQL scalar values serialized over JSON; bigint and date values become strings. */
 export type RemoteAggregateResult = Readonly<
@@ -51,7 +41,7 @@ export type RemoteAggregateResult = Readonly<
 
 export interface RemoteAggregateOptions<TRecord extends object> {
   readonly filter?: RemoteRepositoryFilter<TRecord>;
-  readonly aggregate: RemoteAggregateAst;
+  readonly aggregate: AggregateOptions<TRecord>['aggregate'];
 }
 
 export interface RemoteGroupByOptions<
@@ -59,25 +49,26 @@ export interface RemoteGroupByOptions<
 > extends RemoteAggregateOptions<TRecord> {
   readonly by: readonly [keyof TRecord & string, ...(keyof TRecord & string)[]];
   readonly having?: RemoteRepositoryFilter<RemoteAggregateResult>;
-  readonly sort?: RemoteSortAst;
+  readonly sort?: RepositorySort<RemoteAggregateResult>;
 }
 
-export interface RemoteRepositoryReadOptions<_TRecord extends object> {
-  readonly select?: RemoteSelectAst;
+export interface RemoteRepositoryReadOptions<TRecord extends object> {
+  readonly select?: RepositorySelect<TRecord>;
 }
 
 export interface RemoteFindManyOptions<
   TRecord extends object,
 > extends RemoteRepositoryReadOptions<TRecord> {
   readonly filter?: RemoteRepositoryFilter<TRecord>;
-  readonly sort?: RemoteSortAst;
+  readonly sort?: RepositorySort<TRecord>;
   readonly distinct?: readonly [
     keyof TRecord & string,
     ...(keyof TRecord & string)[],
   ];
   readonly limit?: number;
   readonly offset?: number;
-  readonly cursor?: Readonly<Partial<TRecord>>;
+  readonly cursor?:
+    Readonly<Partial<TRecord>> | JsonValueOf<Readonly<Partial<TRecord>>>;
   readonly direction?: 'forward' | 'backward';
 }
 
@@ -85,7 +76,7 @@ export interface RemoteFindOneOptions<
   TRecord extends object,
 > extends RemoteRepositoryReadOptions<TRecord> {
   readonly filter: RemoteRepositoryFilter<TRecord>;
-  readonly sort?: RemoteSortAst;
+  readonly sort?: RepositorySort<TRecord>;
 }
 
 export interface RemoteFilterOnlyOptions<TRecord extends object> {
@@ -96,7 +87,9 @@ export interface RemoteCreateOneOptions<
   TCreate extends object,
   TRecord extends object,
 > extends RemoteRepositoryReadOptions<TRecord> {
-  readonly values: TCreate;
+  readonly values:
+    | MutationValuesInput<CreateMutationValues<TCreate>>
+    | BuiltMutationValues<CreateMutationValues<TCreate>>;
   readonly idempotencyKey?: string;
 }
 
@@ -105,7 +98,9 @@ export interface RemoteUpdateOneOptions<
   TUpdate extends object,
 > extends RemoteRepositoryReadOptions<TRecord> {
   readonly filter: RemoteRepositoryFilter<TRecord>;
-  readonly values: TUpdate;
+  readonly values:
+    | MutationValuesInput<UpdateMutationValues<TUpdate>>
+    | BuiltMutationValues<UpdateMutationValues<TUpdate>>;
   readonly ifVersion?: string | number;
   readonly idempotencyKey?: string;
 }
@@ -237,7 +232,7 @@ export function createRemoteRepository<
     findMany: (
       input: RemoteFindManyOptions<TRecord> = {},
     ): RemoteRepositoryQuery<TRecord> => {
-      const snapshot = snapshotJson(input);
+      const snapshot = buildFindManyOptions<TRecord>(input);
       return new DefaultRemoteRepositoryQuery(
         () => call('findMany', snapshot),
         () =>
@@ -253,27 +248,32 @@ export function createRemoteRepository<
     ): Promise<TRecord | undefined> =>
       (await call<TRecord | null, RemoteFindOneOptions<TRecord>>(
         'findOne',
-        input,
+        buildFindOneOptions<TRecord>(input),
       )) ?? undefined,
     aggregate: (
       input: RemoteAggregateOptions<TRecord>,
-    ): Promise<RemoteAggregateResult> => call('aggregate', input),
+    ): Promise<RemoteAggregateResult> =>
+      call('aggregate', buildAggregateOptions<TRecord>(input)),
     groupBy: (
       input: RemoteGroupByOptions<TRecord>,
-    ): Promise<RemoteAggregateResult[]> => call('groupBy', input),
+    ): Promise<RemoteAggregateResult[]> =>
+      call('groupBy', buildGroupByOptions<TRecord>(input)),
     count: (input: RemoteFilterOnlyOptions<TRecord> = {}): Promise<number> =>
-      call('count', input),
+      call('count', buildCountOptions<TRecord>(input)),
     exists: (input: RemoteFilterOnlyOptions<TRecord> = {}): Promise<boolean> =>
-      call('exists', input),
+      call('exists', buildExistsOptions<TRecord>(input)),
     createOne: (
       input: RemoteCreateOneOptions<TCreate, TRecord>,
-    ): Promise<RemoteMutationResult<TRecord>> => call('createOne', input),
+    ): Promise<RemoteMutationResult<TRecord>> =>
+      call('createOne', buildCreateOneOptions<TCreate, TRecord>(input)),
     updateOne: (
       input: RemoteUpdateOneOptions<TRecord, TUpdate>,
-    ): Promise<RemoteMutationResult<TRecord>> => call('updateOne', input),
+    ): Promise<RemoteMutationResult<TRecord>> =>
+      call('updateOne', buildUpdateOneOptions<TRecord, TUpdate>(input)),
     deleteOne: (
       input: RemoteDeleteOneOptions<TRecord>,
-    ): Promise<RemoteDeleteResult<TRecord>> => call('deleteOne', input),
+    ): Promise<RemoteDeleteResult<TRecord>> =>
+      call('deleteOne', buildDeleteOneOptions<TRecord>(input)),
   };
 }
 
@@ -478,8 +478,4 @@ function queryConsumptionError(): Error & { readonly code: string } {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function snapshotJson<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
 }

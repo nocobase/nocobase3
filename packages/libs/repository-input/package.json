@@ -1,0 +1,111 @@
+{
+  "name": "@nocobase/repository-input",
+  "version": "0.0.1",
+  "description": "Portable Repository input contracts and JSON builders for browser and server applications.",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./internal/filter-builder": {
+      "types": "./src/filter-builder.ts",
+      "import": "./src/filter-builder.ts"
+    },
+    "./internal/select-builder": {
+      "types": "./src/select-builder.ts",
+      "import": "./src/select-builder.ts"
+    },
+    "./internal/sort-builder": {
+      "types": "./src/sort-builder.ts",
+      "import": "./src/sort-builder.ts"
+    },
+    "./internal/aggregate-builder": {
+      "types": "./src/aggregate-builder.ts",
+      "import": "./src/aggregate-builder.ts"
+    },
+    "./internal/relation-mutation-builder": {
+      "types": "./src/relation-mutation-builder.ts",
+      "import": "./src/relation-mutation-builder.ts"
+    },
+    "./internal/errors": {
+      "types": "./src/errors.ts",
+      "import": "./src/errors.ts"
+    },
+    "./internal/value-builders": {
+      "types": "./src/value-builders.ts",
+      "import": "./src/value-builders.ts"
+    },
+    "./internal/json": {
+      "types": "./src/json.ts",
+      "import": "./src/json.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./internal/filter-builder": {
+        "types": "./dist/filter-builder.d.ts",
+        "import": "./dist/filter-builder.js"
+      },
+      "./internal/select-builder": {
+        "types": "./dist/select-builder.d.ts",
+        "import": "./dist/select-builder.js"
+      },
+      "./internal/sort-builder": {
+        "types": "./dist/sort-builder.d.ts",
+        "import": "./dist/sort-builder.js"
+      },
+      "./internal/aggregate-builder": {
+        "types": "./dist/aggregate-builder.d.ts",
+        "import": "./dist/aggregate-builder.js"
+      },
+      "./internal/relation-mutation-builder": {
+        "types": "./dist/relation-mutation-builder.d.ts",
+        "import": "./dist/relation-mutation-builder.js"
+      },
+      "./internal/errors": {
+        "types": "./dist/errors.d.ts",
+        "import": "./dist/errors.js"
+      },
+      "./internal/value-builders": {
+        "types": "./dist/value-builders.d.ts",
+        "import": "./dist/value-builders.js"
+      },
+      "./internal/json": {
+        "types": "./dist/json.d.ts",
+        "import": "./dist/json.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

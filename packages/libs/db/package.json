@@ -60,7 +60,8 @@
   },
   "dependencies": {
     "@nocobase/service-provider": "workspace:^",
-    "knex": "catalog:"
+    "knex": "catalog:",
+    "@nocobase/repository-input": "workspace:^"
   },
   "devDependencies": {
     "@hono/node-server": "catalog:",

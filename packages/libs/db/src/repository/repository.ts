@@ -3252,6 +3252,30 @@ function connectTarget(
 }
 
 function createTarget(values: Readonly<Record<string, unknown>>): CreateTarget {
+  if (values.kind === 'relationCreate' && values.version === 1) {
+    if (
+      !isPlainRecord(values.values) ||
+      (values.clientKey !== undefined &&
+        typeof values.clientKey !== 'string') ||
+      (values.through !== undefined && !isPlainRecord(values.through)) ||
+      Object.keys(values).some(
+        (key) =>
+          !['kind', 'version', 'values', 'clientKey', 'through'].includes(key),
+      )
+    ) {
+      invalid(
+        'INVALID_MUTATION',
+        'Expected a relationCreate version 1 envelope.',
+        {},
+      );
+    }
+    return {
+      kind: 'create',
+      values: values.values,
+      clientKey: values.clientKey,
+      through: values.through,
+    };
+  }
   if (Object.hasOwn(values, 'through') && Object.hasOwn(values, 'values')) {
     if (
       !isPlainRecord(values.values) ||

@@ -10,9 +10,7 @@ import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import { resolveMutationValue } from './values.js';
 import type {
   NumericMutationBuilder,
-  NumericMutationJsonInput,
   NumericMutationOperand,
-  NumericMutationOperandInput,
   RepositoryContext,
   NumericMutationOperation,
   RepositoryMutationScalarValue,
@@ -41,20 +39,7 @@ const numericTypes: ReadonlySet<string> = new Set([
 // Only normalized operations are executable; similarly shaped JSON remains data.
 const normalizedOperations: WeakSet<object> = new WeakSet();
 
-class DefaultNumericMutationBuilder implements NumericMutationBuilder {
-  increment(value: NumericMutationOperandInput): NumericMutationJsonInput {
-    return { increment: value };
-  }
-  decrement(value: NumericMutationOperandInput): NumericMutationJsonInput {
-    return { decrement: value };
-  }
-  multiply(value: NumericMutationOperandInput): NumericMutationJsonInput {
-    return { multiply: value };
-  }
-  divide(value: NumericMutationOperandInput): NumericMutationJsonInput {
-    return { divide: value };
-  }
-}
+import { DefaultNumericMutationBuilder } from '@nocobase/repository-input/internal/value-builders';
 
 export function isNumericMutation(
   value: unknown,

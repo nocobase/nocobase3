@@ -40,3 +40,29 @@ export type {
   ApiRequestOptions,
   CreateApiClientOptions,
 } from './types.js';
+
+export * from './repository-options.js';
+export {
+  buildFilter,
+  buildSelect,
+  buildSort,
+  buildAggregate,
+  buildCreateValues,
+  buildUpdateValues,
+} from '@nocobase/repository-input';
+export type {
+  FilterBuilder,
+  FilterNode,
+  SelectBuilder,
+  RelationSelectBuilder,
+  SortBuilder,
+  SortExpression,
+  AggregateBuilder,
+  AggregateExpression,
+  ValuesBuilder,
+  NumericMutationBuilder,
+  CreateRelationFieldMutationBuilder,
+  UpdateRelationFieldMutationBuilder,
+  JsonValue,
+  JsonValueOf,
+} from '@nocobase/repository-input';
