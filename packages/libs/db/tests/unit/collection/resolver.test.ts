@@ -18,6 +18,12 @@ describe('CollectionResolver', () => {
     ['date', 'datetime', 'timestamp', undefined, false],
     ['time', 'string', 'varchar2(16)', 16, true],
     ['time', 'string', 'varchar2(4)', 4, false],
+    ['datetimeTz', 'datetime', 'datetime(3)', undefined, true],
+    ['datetimeTz', 'datetime', 'timestamp without time zone', undefined, false],
+    ['datetime', 'datetimeTz', 'timestamp with time zone', undefined, false],
+    ['datetimeTz', 'text', 'TEXT', undefined, true],
+    ['datetimeTz', 'integer', 'integer', undefined, false],
+    ['datetimeTz', 'datetimeTz', 'datetimeoffset(3)', undefined, true],
   ] as const)(
     'validates supplemental %s against %s storage %s',
     (logical, physical, nativeType, length, compatible) => {
@@ -45,6 +51,8 @@ describe('CollectionResolver', () => {
   );
 
   it.each([
+    ['integer', 'decimal', true],
+    ['bigInt', 'decimal', true],
     ['boolean', 'integer', true],
     ['boolean', 'decimal', true],
     ['boolean', 'string', false],
@@ -58,7 +66,13 @@ describe('CollectionResolver', () => {
         resolveCollection({
           physical: physicalCollection({
             tableName: 'items',
-            columns: [column('value', 1, { dataType: physical, scale: 0 })],
+            columns: [
+              column('value', 1, {
+                dataType: physical,
+                scale: 0,
+                nativeType: physical === 'decimal' ? 'NUMBER(38,0)' : physical,
+              }),
+            ],
           }),
           metadata: {
             version: 1,

@@ -343,6 +343,11 @@ function dateCondition(
 function normalizeDateOperand(
   value: FilterOperand<string | Date>,
 ): string | FilterVariable {
+  if (value instanceof Date && !Number.isFinite(value.getTime()))
+    throw new RepositoryError(
+      'INVALID_FILTER',
+      'Date operands must be valid Date instances.',
+    );
   return value instanceof Date ? value.toISOString() : value;
 }
 

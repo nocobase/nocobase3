@@ -56,26 +56,29 @@ Migration 必须保持自包含：不要导入或遍历会继续变化的运行�
 
 先按业务语义选择通用字段；不要从目标数据库的物理类型反推 DSL。
 
-| 业务数据           | 推荐 Fluent API    | 选择建议                                      |
-| ------------------ | ------------------ | --------------------------------------------- |
-| 普通自增整数主键   | `increments(name)` | 字段名必须显式提供，不默认 id                 |
-| 普通整数           | `integer()`        | 计数、排序值或范围适中的 ID                   |
-| 大整数             | `bigInt()`         | 大范围 ID 或必须匹配目标 BigInt 主键的外键    |
-| 短文本、编号、状态 | `string()`         | 有明确上限时设置 `length`                     |
-| 长文本             | `text()`           | 不适合固定短长度的正文                        |
-| 布尔状态           | `boolean()`        | 配合 `notNull()` 和明确默认值                 |
-| 金额和精确小数     | `decimal()`        | 使用 `precision` 和 `scale`；金额不要用浮点数 |
-| 完整日期时间       | `datetime()`       | 时间点、创建时间和更新时间                    |
-| 结构化附加数据     | `json()`           | 不需要关系完整性和高频关联查询的数据          |
-| 二进制数据         | `blob()`           | 小型二进制内容；大文件通常交给文件存储        |
-| UUID               | `uuid()`           | 外部标识符或 UUID 主键                        |
-| 数据库原生类型     | `native()`         | 仅在目标方言明确且通用类型无法表达时使用      |
+| 业务数据           | 推荐 Fluent API        | 选择建议                                      |
+| ------------------ | ---------------------- | --------------------------------------------- |
+| 普通自增整数主键   | `increments(name)`     | 字段名必须显式提供，不默认 id                 |
+| 普通整数           | `integer()`            | 计数、排序值或范围适中的 ID                   |
+| 大整数             | `bigInt()`             | 大范围 ID 或必须匹配目标 BigInt 主键的外键    |
+| 短文本、编号、状态 | `string()`             | 有明确上限时设置 `length`                     |
+| 长文本             | `text()`               | 不适合固定短长度的正文                        |
+| 布尔状态           | `boolean()`            | 配合 `notNull()` 和明确默认值                 |
+| 金额和精确小数     | `decimal()`            | 使用 `precision` 和 `scale`；金额不要用浮点数 |
+| Local date-time    | `datetime()`           | Calendar components without time zone         |
+| Instant            | `datetimeTz()`         | Creation/payment timestamps normalized to UTC |
+| Date / time        | `date()` / `time()`    | Date-only or time-of-day values               |
+| Floating point     | `float()` / `double()` | Approximate numeric values                    |
+| 结构化附加数据     | `json()`               | 不需要关系完整性和高频关联查询的数据          |
+| 二进制数据         | `blob()`               | 小型二进制内容；大文件通常交给文件存储        |
+| UUID               | `uuid()`               | 外部标识符或 UUID 主键                        |
+| 数据库原生类型     | `native()`             | 仅在目标方言明确且通用类型无法表达时使用      |
 
 需要 Collection Relation Metadata 时，使用 `belongsTo()`、`hasOne()`、`hasMany()` 或 `belongsToMany()`，不要用 JSON 模拟关系。关系的外键归属和约束行为见[关系字段](./relations.md)。
 
-## 使用没有 Fluent shortcut 的字段
+## Equivalent field declarations
 
-类型系统和 Schema Adapter 还支持 `float`、`double`、`date`、`time`，但当前没有同名 Fluent 方法。使用 `field()` 或 Object DSL：
+`float()`, `double()`, `date()`, `time()`, and `datetimeTz()` are available shortcuts. `field()` remains the uniform object-based entry point. See [date and time values](../repository/temporal-values.md) for storage mappings and read/write boundaries.
 
 ```ts
 await builder.createCollection('events', (collection) => {
@@ -98,17 +101,13 @@ collection.native('ipAddress', 'inet');
 
 以下方法当前不存在：
 
-| 不存在的写法              | 当前表达方式                                                |
-| ------------------------- | ----------------------------------------------------------- |
-| `collection.float()`      | `collection.field({ name, type: 'float' })`                 |
-| `collection.double()`     | `collection.field({ name, type: 'double' })`                |
-| `collection.date()`       | `collection.field({ name, type: 'date' })`                  |
-| `collection.time()`       | `collection.field({ name, type: 'time' })`                  |
-| `collection.timestamp()`  | `collection.datetime()`                                     |
-| `collection.timestamps()` | 显式创建 `createdAt`、`updatedAt` 等字段                    |
-| `collection.binary()`     | `collection.blob()`                                         |
-| `collection.enum()`       | 通常使用 `string()` 并在上层校验；方言 Enum 使用 `native()` |
-| `collection.jsonb()`      | 使用 `json()`；必须绑定 PostgreSQL 时使用 `native()`        |
+| 不存在的写法              | 当前表达方式                                                              |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `collection.timestamp()`  | Choose `datetime()` for local components or `datetimeTz()` for an instant |
+| `collection.timestamps()` | 显式创建 `createdAt`、`updatedAt` 等字段                                  |
+| `collection.binary()`     | `collection.blob()`                                                       |
+| `collection.enum()`       | 通常使用 `string()` 并在上层校验；方言 Enum 使用 `native()`               |
+| `collection.jsonb()`      | 使用 `json()`；必须绑定 PostgreSQL 时使用 `native()`                      |
 
 遇到不确定的方法名时先查公开 Types，不要根据 Knex、Sequelize、Prisma 或其他 ORM 的习惯生成 API。
 

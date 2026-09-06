@@ -13,6 +13,8 @@ import {
 } from '../../collection/relation-contract.js';
 import { RepositoryError } from '../errors.js';
 import { spoolRows } from './row-spool.js';
+import { isTemporalType, normalizeTemporalValue } from '../temporal.js';
+import { temporalBinding, temporalProjection } from './temporal-sql.js';
 import {
   createdRecordSelector as deriveCreatedSelector,
   recordSelector as selectorFromRecord,
@@ -90,7 +92,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (plan.select?.root.includes?.length) {
       await this.loadRelations(plan.collection, rows, plan.select.root);
     }
-    return rows.map((row) => projectRow(row, plan.fields, plan.select?.root));
+    return rows.map((row) =>
+      projectRow(
+        decodeTemporalRow(plan.collection, row),
+        plan.fields,
+        plan.select?.root,
+      ),
+    );
   }
 
   async *stream(plan: RepositoryReadPlan): AsyncIterable<RepositoryRecord> {
@@ -105,7 +113,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     for await (const row of roots) {
       this.assertReadable();
       if (!includes) {
-        yield projectRow(row, plan.fields, plan.select?.root);
+        yield projectRow(
+          decodeTemporalRow(plan.collection, row),
+          plan.fields,
+          plan.select?.root,
+        );
         continue;
       }
       batch.push(row);
@@ -113,7 +125,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         await this.loadRelations(plan.collection, batch, plan.select.root);
         for (const record of batch) {
           this.assertReadable();
-          yield projectRow(record, plan.fields, plan.select?.root);
+          yield projectRow(
+            decodeTemporalRow(plan.collection, record),
+            plan.fields,
+            plan.select?.root,
+          );
         }
         batch = [];
       }
@@ -123,7 +139,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await this.loadRelations(plan.collection, batch, plan.select!.root);
       for (const record of batch) {
         this.assertReadable();
-        yield projectRow(record, plan.fields, plan.select?.root);
+        yield projectRow(
+          decodeTemporalRow(plan.collection, record),
+          plan.fields,
+          plan.select?.root,
+        );
       }
     }
   }
@@ -283,8 +303,21 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       if (item.kind === 'count') query.count({ [resultAlias]: field });
       if (item.kind === 'sum') query.sum({ [resultAlias]: field });
       if (item.kind === 'avg') query.avg({ [resultAlias]: field });
-      if (item.kind === 'min') query.min({ [resultAlias]: field });
-      if (item.kind === 'max') query.max({ [resultAlias]: field });
+      if (item.kind === 'min' || item.kind === 'max') {
+        const source = scalarFields(plan.collection).find(
+          (source) => source.name === item.field,
+        );
+        query.select(
+          client.raw('? as ??', [
+            temporalProjection(
+              client,
+              source,
+              client.raw(`${item.kind}(??)`, [field]),
+            ),
+            resultAlias,
+          ]),
+        );
+      }
       return { item, resultAlias };
     });
     const graph = await this.prepareFilterGraph(
@@ -302,7 +335,22 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const row = (await query.first()) as RepositoryRecord | undefined;
     return Object.fromEntries(
       selections.map(({ item, resultAlias }) => {
-        const value = row?.[resultAlias];
+        let value = row?.[resultAlias];
+        const source = scalarFields(plan.collection).find(
+          (source) => source.name === item.field,
+        );
+        if (
+          source &&
+          isTemporalType(source.type) &&
+          value != null &&
+          (item.kind === 'min' || item.kind === 'max')
+        )
+          value = normalizeTemporalValue(
+            source,
+            value,
+            'FIELD_CAPABILITY_NOT_SUPPORTED',
+            ['aggregate', item.alias],
+          );
         return [
           item.alias,
           item.kind === 'count' ? Number(value ?? 0) : (value ?? null),
@@ -351,12 +399,18 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       client,
     );
 
+    const outputCollection = internalGroupResultCollection(plan, outputs);
     const query = client
       .queryBuilder()
       .from(inner.as(resultAlias))
       .select(
         outputs.map((output) =>
-          client.ref(output.internal).withSchema(resultAlias),
+          selectColumn(
+            client,
+            outputCollection,
+            { column: output.internal, alias: output.internal },
+            resultAlias,
+          ),
         ),
       );
     const internalByName = new Map(
@@ -390,7 +444,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     return rows.map((row) =>
       Object.fromEntries(
         outputs.map((output) => {
-          const value = row[output.internal];
+          const value = decodeTemporalRow(outputCollection, row)[
+            output.internal
+          ];
           return [
             output.name,
             output.aggregate === 'count'
@@ -442,6 +498,23 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       return this.inTransaction((adapter) =>
         adapter.executeCreateManyReturning(plan),
       );
+    }
+    if (
+      isOracleClient(this.getClient()) &&
+      scalarFields(plan.collection).some((field) => isTemporalType(field.type))
+    ) {
+      return this.inTransaction(async (adapter) => {
+        const client = adapter.getClient();
+        for (const record of plan.records)
+          await tableQuery(client, plan.collection).insert(
+            mapWrite(
+              client,
+              plan.collection,
+              withInitialVersion(plan.collection, record),
+            ),
+          );
+        return { count: plan.records.length };
+      });
     }
     const records = plan.records.map((record) =>
       mapWrite(
@@ -743,7 +816,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     }
     const query = tableQuery(client, plan.collection, alias).select(
       fields.map((field) =>
-        client.ref(field.column).withSchema(alias).as(field.alias),
+        selectColumn(client, plan.collection, field, alias),
       ),
     );
     const graph = await this.prepareFilterGraph(
@@ -762,6 +835,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       query,
       cursorForDirection(plan.cursor, plan.direction),
       (field) => qualified(alias, column(plan.collection, field)),
+      (field, value) => bindQueryValue(query, plan.collection, field, value),
     );
     for (const item of plan.sort?.items ?? []) {
       await this.applySort(
@@ -819,7 +893,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     ];
     const inner = tableQuery(client, plan.collection, rootAlias).select([
       ...fields.map((field) =>
-        client.ref(field.column).withSchema(rootAlias).as(field.alias),
+        selectColumn(client, plan.collection, field, rootAlias),
       ),
       ...sortFields.map((field) => client.ref(field.column).as(field.alias)),
       client.raw(
@@ -861,6 +935,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         if (!internal) throw new Error('Distinct cursor Field was not mapped.');
         return qualified(resultAlias, internal);
       },
+      (field, value) => bindQueryValue(query, plan.collection, field, value),
     );
     for (const field of sortFields) {
       applyOrderBy(
@@ -900,7 +975,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const fields = scalarFields(collection).map((field) => field.name);
     const query = tableQuery(this.getClient(), collection).select(
       fields.map((field) =>
-        this.getClient().ref(column(collection, field)).as(field),
+        selectColumn(this.getClient(), collection, {
+          column: column(collection, field),
+          alias: field,
+        }),
       ),
     );
     applyUnique(query, collection, unique);
@@ -918,7 +996,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const fields = scalarFields(collection).map((field) => field.name);
     const query = tableQuery(client, collection, alias).select(
       fields.map((field) =>
-        client.ref(column(collection, field)).withSchema(alias).as(field),
+        selectColumn(
+          client,
+          collection,
+          { column: column(collection, field), alias: field },
+          alias,
+        ),
       ),
     );
     const graph = await this.prepareFilterGraph(collection, filter.root);
@@ -942,7 +1025,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const fields = scalarFields(collection).map((field) => field.name);
     const query = tableQuery(client, collection, alias).select(
       fields.map((field) =>
-        client.ref(column(collection, field)).withSchema(alias).as(field),
+        selectColumn(
+          client,
+          collection,
+          { column: column(collection, field), alias: field },
+          alias,
+        ),
       ),
     );
     if (filter) {
@@ -1070,7 +1158,16 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       fields.map((field) => column(collection, field)),
     )) as unknown;
     const returnedRow = firstReturnedRow(returned);
-    if (returnedRow) return mapRow(collection, fields, returnedRow);
+    if (returnedRow) {
+      const mapped = mapRow(collection, fields, returnedRow);
+      // Supplied temporal identities are already canonical; raw RETURNING values
+      // may have been converted to a host-zone Date by the driver.
+      for (const field of scalarFields(collection)) {
+        if (isTemporalType(field.type) && Object.hasOwn(values, field.name))
+          mapped[field.name] = values[field.name];
+      }
+      return mapped;
+    }
     const selector = deriveCreatedSelector(collection, values, returned);
     const record = await this.findOne({
       collection,
@@ -1889,7 +1986,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const client = this.getClient();
     const query = tableQuery(client, resolved.target, targetAlias).select(
       uniqueSelectionColumns(selected).map((field) =>
-        client.ref(field.column).withSchema(targetAlias).as(field.alias),
+        selectColumn(client, resolved.target, field, targetAlias),
       ),
     );
     if (resolved.type === 'belongsTo') {
@@ -1948,6 +2045,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         query,
         cursorForDirection(relationCursorAxes(node), node.direction),
         (field) => qualified(targetAlias, column(resolved.target, field)),
+        (field, value) => bindQueryValue(query, resolved.target, field, value),
       );
     for (const item of node.sort?.items ?? []) {
       await this.applySort(
@@ -2055,9 +2153,25 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         ]),
       );
       for (const parent of parents) {
-        const value = values.get(
+        let value = values.get(
           associationKey(parent[relationHelper(node.relation)]),
         );
+        const resultField = node.result.field;
+        const source = scalarFields(resolved.target).find(
+          (field) => field.name === resultField,
+        );
+        if (
+          source &&
+          isTemporalType(source.type) &&
+          value != null &&
+          (node.result.kind === 'min' || node.result.kind === 'max')
+        )
+          value = normalizeTemporalValue(
+            source,
+            value,
+            'FIELD_CAPABILITY_NOT_SUPPORTED',
+            ['select', node.relation],
+          );
         parent[node.relation] =
           node.result.kind === 'count' ? Number(value ?? 0) : (value ?? null);
       }
@@ -2085,7 +2199,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         node.limit === undefined ? group : group.slice(0, node.limit);
       const matches = (
         node.direction === 'backward' ? [...page].reverse() : page
-      ).map((target) => projectRow(target, requested, node.select));
+      ).map((target) =>
+        projectRow(
+          decodeTemporalRow(resolved.target, target),
+          requested,
+          node.select,
+        ),
+      );
       parent[node.relation] = isToOne(resolved.relation)
         ? (matches[0] ?? null)
         : matches;
@@ -2182,6 +2302,26 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         { collection: relation.target, relation: relation.name },
       );
     }
+    const keys = [
+      ...scalarFields(source).filter(
+        (item) =>
+          item.name === relation.sourceKey ||
+          (relation.type === 'belongsTo' && item.name === relation.foreignKey),
+      ),
+      ...scalarFields(target).filter(
+        (item) =>
+          item.name === relation.targetKey ||
+          (relation.type !== 'belongsTo' &&
+            relation.type !== 'belongsToMany' &&
+            item.name === relation.foreignKey),
+      ),
+    ];
+    if (keys.some((item) => isTemporalType(item.type)))
+      throw new RepositoryError(
+        'FIELD_CAPABILITY_NOT_SUPPORTED',
+        'V1 temporal fields cannot be used as Repository relation join keys.',
+        { collection: source.name, relation: relation.name },
+      );
     validateRelationOptions(relation);
     if (relation.type === 'belongsTo') {
       return {
@@ -2245,6 +2385,41 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 interface SelectionColumn {
   readonly column: string;
   readonly alias: string;
+}
+
+function selectColumn(
+  client: Knex,
+  collection: CollectionDefinition,
+  selection: SelectionColumn,
+  alias?: string,
+): Knex.Raw {
+  const field = scalarFields(collection).find(
+    (item) => column(collection, item.name) === selection.column,
+  );
+  const expression = temporalProjection(
+    client,
+    field,
+    alias ? qualified(alias, selection.column) : selection.column,
+  );
+  return client.raw('? as ??', [expression, selection.alias]);
+}
+
+function decodeTemporalRow(
+  collection: CollectionDefinition,
+  row: RepositoryRecord,
+): RepositoryRecord {
+  const result = { ...row };
+  for (const field of scalarFields(collection)) {
+    if (isTemporalType(field.type) && Object.hasOwn(result, field.name)) {
+      result[field.name] = normalizeTemporalValue(
+        field,
+        result[field.name],
+        'FIELD_CAPABILITY_NOT_SUPPORTED',
+        ['select', field.name],
+      );
+    }
+  }
+  return result;
 }
 
 interface ResolvedRepositoryRelationBase {
@@ -2528,6 +2703,8 @@ function writeValue(
   value: RepositoryRecord[string],
 ): RepositoryRecord[string] | Knex.Raw {
   const field = collection.fields?.find((item) => item.name === name);
+  if (field && isScalarField(field) && isTemporalType(field.type))
+    return temporalBinding(client, field, value);
   // SQLite's multi-row UNION path bypasses Knex's object serialization.
   if (field?.type === 'json' && value !== null && typeof value === 'object')
     return JSON.stringify(value);
@@ -2635,6 +2812,7 @@ function applyCursor(
   query: Knex.QueryBuilder,
   cursor: readonly RepositoryCursorAxis[] | undefined,
   resolveField: (field: string) => string,
+  bind: (field: string, value: unknown) => unknown = (_field, value) => value,
 ): void {
   if (!cursor || cursor.length === 0) return;
   query.andWhere(function cursorBoundary(this: Knex.QueryBuilder): void {
@@ -2644,13 +2822,13 @@ function applyCursor(
           this.andWhere(
             resolveField(previous.field),
             '=',
-            previous.value as Knex.Value,
+            bind(previous.field, previous.value) as Knex.Value,
           );
         }
         this.andWhere(
           resolveField(axis.field),
           axis.direction === 'asc' ? '>' : '<',
-          axis.value as Knex.Value,
+          bind(axis.field, axis.value) as Knex.Value,
         );
       });
     }
@@ -2759,8 +2937,9 @@ function applyCondition(
   const field = collection.fields?.find((item) => item.name === node.path[0]);
   if (
     client &&
-    isOracleClient(client) &&
-    field?.type === 'datetime' &&
+    field &&
+    isScalarField(field) &&
+    isTemporalType(field.type) &&
     node.value !== null &&
     node.value !== undefined
   ) {
@@ -2768,19 +2947,15 @@ function applyCondition(
       {
         $eq: '=',
         $ne: '<>',
+        $dateOn: '=',
+        $dateNotOn: '<>',
         $dateBefore: '<',
         $dateAfter: '>',
         $dateNotBefore: '>=',
         $dateNotAfter: '<=',
       };
-    const operand = (value: FilterValue): Knex.Raw => {
-      if (typeof value !== 'string')
-        throw new Error('Expected a normalized datetime filter value.');
-      return client.raw(
-        'to_timestamp_tz(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM\')',
-        [new Date(value).toISOString().replace('Z', '+00:00')],
-      );
-    };
+    const operand = (value: FilterValue): Knex.Raw | string | null =>
+      temporalBinding(client, field, value);
     if (node.operator === '$dateBetween') {
       const [start, end] = node.value as readonly FilterValue[];
       whereCallback(query, boolean, function datetimeRange(): void {
@@ -3150,9 +3325,30 @@ function applyUnique(
     query.where(
       column(collection, field),
       '=',
-      unique.values[field] as Knex.Value,
+      bindQueryValue(
+        query,
+        collection,
+        field,
+        unique.values[field],
+      ) as Knex.Value,
     );
   }
+}
+
+function bindQueryValue(
+  query: Knex.QueryBuilder,
+  collection: CollectionDefinition,
+  name: string,
+  value: unknown,
+): unknown {
+  const field = scalarFields(collection).find((item) => item.name === name);
+  return field && isTemporalType(field.type)
+    ? temporalBinding(
+        { client: query.client, raw: query.client.raw.bind(query.client) },
+        field,
+        value,
+      )
+    : value;
 }
 
 function applySelectors(

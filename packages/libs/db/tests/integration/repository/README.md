@@ -4,6 +4,8 @@ This is the current test-maintenance index, not a specification of new behavior.
 
 ## Ownership and execution
 
+Temporal contracts are covered by [canonical values](../../unit/repository/temporal.test.ts), [native SQL boundaries](../../unit/repository/temporal-sql.test.ts), and [cross-database temporal workflows](./capabilities/temporal-values.test.ts). These cover UTC normalization, zone-free components, precision rejection, session time zones, returning, aggregate/combine, cursors, and explicit rejection of temporal relation join keys.
+
 | Layer        | Location                                   | Responsibility                                                                   |
 | ------------ | ------------------------------------------ | -------------------------------------------------------------------------------- |
 | Unit         | [unit/repository](../../unit/repository)   | Builder expressions, variables, identity and diagnostics without a live database |

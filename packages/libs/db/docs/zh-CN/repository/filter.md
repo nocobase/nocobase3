@@ -91,7 +91,7 @@ const records = await db.repository('projects').findMany({ filter });
 - `eq(null)`／`ne(null)` 用于支持这些方法的字段，分别匹配数据库 NULL／非 NULL。字符串 `eq(null)` 不等价于 `empty()`。
 - `ne('value')` 和 `notIncludes('value')` 遵循 SQL NULL 语义，不会自动把 NULL 行算入“不等于”。需要包含 NULL 时显式 OR 一个空值条件。
 - `date.on()`／`notOn()` 仅支持 date，不支持 datetime。
-- date 值用 `YYYY-MM-DD`；datetime 值用带时区的 ISO 时间字符串。Builder 的 Date 输入会转为完整 ISO 时间，因此仅用于 datetime；date 字段应明确传日期字符串。AST 应使用字符串。
+- Use `YYYY-MM-DD` for date, zone-free ISO components for datetime, and explicit offsets or `Z` for datetimeTz. Builder Date operands apply only to datetimeTz; AST values should be strings. See [date and time values](./temporal-values.md).
 - `between([start, end])` 是 **左闭右开**区间 `[start, end)`；`notBefore` 是 `>=`，`notAfter` 是 `<=`。
 - Boolean shorthand and Builder inputs use the same SQL operators. Explicit boolean declarations are preserved through field metadata, so MySQL `TINYINT(1)` storage can retain boolean semantics without guessing that every external TINYINT column is boolean. See [supplemental logical types](../reference/collection-metadata-document.md#supplemental-logical-types).
 

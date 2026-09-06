@@ -1,11 +1,11 @@
 ---
 title: Date and time field type mappings
-description: Proposed mappings for date, time, datetime, and datetimeTz across five databases, with logical semantics, current behavior, and open decisions.
+description: Finalized V1 mappings for date, time, datetime, and datetimeTz across five databases, with metadata, inspection, value boundaries, and validation history.
 ---
 
 # Date and time field type mappings
 
-Status: implementation baseline approved for staged work, not yet a fully implemented public API contract. Recorded on 2026-09-06. Completion is tracked below; do not generate production code from unfinished stages.
+Status: V1 implemented and validated on 2026-09-06 within the boundaries below. This is the design record; use the [formal temporal guide](../repository/temporal-values.md) for the supported public API.
 
 ## Logical types
 
@@ -37,7 +37,7 @@ Status: implementation baseline approved for staged work, not yet a fully implem
 - **Oracle:** `DATE` includes hours, minutes, and seconds; logical `date` needs a date-only invariant. Oracle has no standalone SQL time-of-day type, so propose canonical text for `time`. `VARCHAR2(18)` accommodates `HH:mm:ss` plus up to nine fractional digits; this storage capacity does not decide the portable precision. Prefer explicit `WITH TIME ZONE` over `WITH LOCAL TIME ZONE` for the new instant mapping, while normalizing inputs and outputs to UTC.
 - **SQL Server:** use `DATETIME2` for local date-time and `DATETIMEOFFSET` for instants. Do not use `timestamp`: it is a synonym for `rowversion`, not a temporal type.
 
-Application validation is required for logical restrictions. Whether to add physical check constraints for direct SQL writers remains an implementation decision. Native time-zone-aware storage in Oracle and SQL Server may retain offsets, but the portable API deliberately does not promise offset preservation.
+Application validation is required for logical restrictions. Automatic physical check constraints for direct SQL writers are deferred. Native time-zone-aware storage in Oracle and SQL Server may retain offsets, but the portable API deliberately does not promise offset preservation.
 
 ## Current implementation, before this proposal
 
@@ -94,6 +94,8 @@ Always retain `nativeType`. Add `fractionalSecondsPrecision` as a physical colum
 2. Complete field types, Builder helpers, physical mappings, metadata lifecycle, and Resolver compatibility. Do not publish a new type as fully supported before Repository wiring is ready.
 3. Implement temporal codecs and Repository paths, validate supported drivers and consumers, and update formal usage documentation. Report unavailable live databases separately from passing tests.
 
-Progress: baseline, Inspector, metadata type persistence, Builder mappings/helpers, and Resolver merging implemented. SQLite full-package tests and PostgreSQL 16/MySQL 8.4 Builder/Inspector integration tests pass; Oracle and SQL Server do not yet have live validation in this work. Repository codecs and formal usage updates remain pending. Native intervals previously matched the broad integer prefix; inspection now keeps them native. Metadata-backed renames still require atomic Store/DDL support and remain rejected by the existing guard; metadata-free rename tests explicitly opt out of synchronization. Commit each verified stage. Existing persisted schemas are not automatically migrated, and historical migrations are not rewritten.
+Progress: Inspector, metadata, Builder, Resolver, and V1 Repository codecs are implemented. Five-database temporal integration checks and a non-UTC Node-host run pass. PostgreSQL/MySQL Repository regression and Oracle/SQL Server Schema/Builder plus selected Repository regression pass. Formal usage is documented in [date and time values](../repository/temporal-values.md).
+
+Implementation findings: Oracle `TIMESTAMP WITH TIME ZONE` cannot be a primary/unique constraint column; new table declarations reject it before DDL. Oracle temporal bulk insertion uses individual inserts within one transaction to avoid Knex double-conversion. SQL Server projections require canonical fractional-second padding. Temporal relation join keys are explicitly unsupported in V1; ordinary temporal relation values and projections are supported. Native intervals previously matched the broad integer prefix; inspection now keeps them native. Metadata-backed renames still require atomic Store/DDL support and remain rejected by the existing guard. Existing persisted schemas are not automatically migrated, and historical migrations are not rewritten.
 
 Keep this proposal separate from the deferred [BigInt and Decimal transport proposal](./precise-numeric-values.md). Update formal usage documentation only after the corresponding behavior is implemented and verified.

@@ -3,6 +3,7 @@ import type {
   FieldDefinition,
 } from '../collection/types.js';
 import { RepositoryError } from './errors.js';
+import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import { resolveMutationValue } from './values.js';
 import type {
   NumericMutationBuilder,
@@ -70,6 +71,13 @@ export function normalizeNumericMutation(
   context?: RepositoryContext,
   path: readonly (string | number)[] = ['values', field.name],
 ): RepositoryMutationScalarValue {
+  if (isTemporalType(field.type))
+    return normalizeTemporalValue(
+      field,
+      resolveMutationValue(input, context, path).value,
+      'INVALID_MUTATION',
+      path,
+    );
   const fail = (message: string, variable?: string): never => {
     throw new RepositoryError('INVALID_MUTATION', message, {
       collection: collection.name,

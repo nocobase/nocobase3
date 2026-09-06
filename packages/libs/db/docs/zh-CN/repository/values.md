@@ -9,6 +9,8 @@ values 描述写入字段。方法参数、返回值和完整流程见 [createOn
 
 ## 三种输入形式
 
+Temporal values follow the [date/time contract](./temporal-values.md): `datetime` is zone-free, `datetimeTz` is an instant, and outputs are canonical strings. Do not rely on driver-local `Date` conversion.
+
 普通对象：
 
 ```ts

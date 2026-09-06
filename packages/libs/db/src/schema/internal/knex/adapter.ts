@@ -27,12 +27,14 @@ export class KnexSchemaAdapter implements SchemaAdapter {
   }
 
   async execute(operations: SchemaOperation[]): Promise<void> {
+    this.assertExecutable(operations);
     for (const operation of operations) {
       await this.executeOperation(operation);
     }
   }
 
   async compile(operations: SchemaOperation[]): Promise<string[]> {
+    this.assertExecutable(operations);
     const sql: string[] = [];
     for (const operation of operations) {
       const builder = this.toKnexBuilder(operation);
@@ -40,6 +42,38 @@ export class KnexSchemaAdapter implements SchemaAdapter {
       sql.push(...applyIdempotentSql(operation, extractSql(commands)));
     }
     return sql;
+  }
+
+  assertExecutable(operations: SchemaOperation[]): void {
+    if (this.dialect !== 'oracle') return;
+    for (const operation of operations) {
+      if (operation.type !== 'createTable') continue;
+      const restricted = new Set(
+        operation.table.columns
+          .filter(
+            (column) =>
+              column.type === 'datetimeTz' ||
+              /^timestamp(?:\(\d+\))? with time zone$/i.test(
+                column.db?.nativeType ?? '',
+              ),
+          )
+          .map((column) => column.name),
+      );
+      if (
+        operation.table.columns.some(
+          (column) => restricted.has(column.name) && column.primaryKey,
+        ) ||
+        operation.table.constraints.some(
+          (constraint) =>
+            (constraint.type === 'primary' || constraint.type === 'unique') &&
+            constraint.columns.some((column) => restricted.has(column)),
+        )
+      ) {
+        throw new Error(
+          'Oracle TIMESTAMP WITH TIME ZONE columns cannot be primary or unique keys.',
+        );
+      }
+    }
   }
 
   private async executeOperation(operation: SchemaOperation): Promise<void> {
@@ -241,10 +275,16 @@ export class KnexSchemaAdapter implements SchemaAdapter {
           builder = table.decimal(column.name, column.precision, column.scale);
           break;
         case 'float':
-          builder = table.float(column.name);
+          builder =
+            this.dialect === 'oracle'
+              ? table.specificType(column.name, 'binary_float')
+              : table.float(column.name);
           break;
         case 'double':
-          builder = table.double(column.name);
+          builder =
+            this.dialect === 'oracle'
+              ? table.specificType(column.name, 'binary_double')
+              : table.double(column.name);
           break;
         case 'date':
           builder =

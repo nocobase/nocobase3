@@ -2,6 +2,17 @@ import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('Declared temporal field types', (context) => {
+  it('rejects Oracle instant primary keys before creating a table', async () => {
+    if (context.spec.dialect !== 'oracle') return;
+    await expect(
+      context.builder.createCollection('invalidTimeKey', (c) =>
+        c.datetimeTz('instant').primary(),
+      ),
+    ).rejects.toThrow('cannot be primary or unique');
+    expect(
+      await context.db.schema.hasTable(context.table('invalidTimeKey')),
+    ).toBe(false);
+  });
   it('persists semantic types and resolves all four physical representations', async () => {
     await context.builder.createCollection('events', (c) => {
       c.string('code').primary();

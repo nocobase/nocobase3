@@ -20,6 +20,8 @@ Schema Inspector 是 Connection 上的只读物理数据库接口。它不使用
 
 精确参数和返回类型以公开的 `SchemaInspector` TypeScript 声明为准。
 
+Temporal columns expose `dataType`, the retained `nativeType`, and optional `fractionalSecondsPrecision` (separate from numeric precision/scale). Native instant-bearing types normalize to `datetimeTz`; zone-free timestamps normalize to `datetime`. PostgreSQL `timetz` remains `native`, Oracle `DATE` remains `datetime`, and SQL Server `timestamp` remains `blob`. SQLite text values are never guessed to be dates. See [temporal mappings](../repository/temporal-values.md#physical-storage-and-metadata).
+
 ## 最小示例
 
 ```ts

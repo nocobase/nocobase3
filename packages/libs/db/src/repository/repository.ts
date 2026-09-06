@@ -1,3 +1,4 @@
+import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import type {
   AnyFieldDefinition,
   CollectionDefinition,
@@ -972,6 +973,8 @@ const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
   float: ['$eq', '$ne', '$gt', '$gte', '$lt', '$lte', '$empty', '$notEmpty'],
   double: ['$eq', '$ne', '$gt', '$gte', '$lt', '$lte', '$empty', '$notEmpty'],
   date: [
+    '$eq',
+    '$ne',
     '$dateOn',
     '$dateNotOn',
     '$dateBefore',
@@ -983,6 +986,19 @@ const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
     '$notEmpty',
   ],
   datetime: [
+    '$eq',
+    '$ne',
+    '$dateBefore',
+    '$dateAfter',
+    '$dateNotBefore',
+    '$dateNotAfter',
+    '$dateBetween',
+    '$empty',
+    '$notEmpty',
+  ],
+  datetimeTz: [
+    '$eq',
+    '$ne',
     '$dateBefore',
     '$dateAfter',
     '$dateNotBefore',
@@ -1007,6 +1023,7 @@ const FILTER_GROUP_BY_TYPE: Readonly<Record<string, string>> = {
   double: 'number',
   date: 'date',
   datetime: 'date',
+  datetimeTz: 'date',
   time: 'time',
   boolean: 'boolean',
   json: 'json',
@@ -1038,6 +1055,7 @@ const SORTABLE_TYPES = new Set([
   'boolean',
   'date',
   'datetime',
+  'datetimeTz',
   'time',
 ]);
 
@@ -1344,7 +1362,25 @@ function validateFilterNode(
       { field: field.name, path: [...path, 'mode'] },
     );
   }
-  const value = resolveFilterValue(node.value, context, [...path, 'value']);
+  let value = resolveFilterValue(node.value, context, [...path, 'value']);
+  if (
+    isTemporalType(field.type) &&
+    value !== undefined &&
+    !['$empty', '$notEmpty'].includes(node.operator)
+  ) {
+    value = Array.isArray(value)
+      ? value.map((item, index) =>
+          normalizeTemporalValue(field, item, 'INVALID_FILTER', [
+            ...path,
+            'value',
+            index,
+          ]),
+        )
+      : normalizeTemporalValue(field, value, 'INVALID_FILTER', [
+          ...path,
+          'value',
+        ]);
+  }
   if (field.type === 'json') {
     const resolved = { ...node, value };
     validateJsonCondition(resolved, path);
@@ -1402,7 +1438,11 @@ function validateResolvedConditionValue(
         );
       case 'date':
       case 'datetime':
-        return validDateLiteral(field.type, value);
+      case 'datetimeTz':
+        return (
+          (value === null && ['$eq', '$ne'].includes(operator)) ||
+          validDateLiteral(field.type, value)
+        );
       default:
         return false;
     }
@@ -1420,9 +1460,11 @@ function validDateLiteral(type: string, value: unknown): boolean {
   if (typeof value !== 'string') return false;
   return type === 'date'
     ? /^\d{4}-\d{2}-\d{2}$/u.test(value)
-    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(
-        value,
-      );
+    : type === 'datetime'
+      ? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/.test(value)
+      : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(
+          value,
+        );
 }
 
 function validateConditionValue(
@@ -1444,7 +1486,7 @@ function validateConditionValue(
   }
   if (
     (node.operator === '$dateOn' || node.operator === '$dateNotOn') &&
-    field.type === 'datetime'
+    (field.type === 'datetime' || field.type === 'datetimeTz')
   ) {
     invalid(
       'FIELD_CAPABILITY_NOT_SUPPORTED',
@@ -2168,9 +2210,9 @@ async function validateSelectInputWithRelations(
     validatePagination(node.limit, undefined, sort, node.cursor);
     validateCursorDirection(node.direction, node.cursor);
     const distinct = validateDistinct(target, node.distinct, sort);
-    if (isToManyRelation(relation)) {
-      validateCursor(target, node.cursor, sort, node.sort !== undefined);
-    }
+    const cursorAxes = isToManyRelation(relation)
+      ? validateCursor(target, node.cursor, sort, node.sort !== undefined)
+      : undefined;
     includes.push({
       kind: 'include',
       relation: node.relation,
@@ -2178,7 +2220,14 @@ async function validateSelectInputWithRelations(
       filter,
       sort,
       limit: node.limit,
-      cursor: node.cursor,
+      cursor: cursorAxes
+        ? Object.fromEntries(
+            cursorAxes.map((axis) => [
+              axis.field,
+              axis.value as RepositoryRecord[string],
+            ]),
+          )
+        : node.cursor,
       direction: node.direction,
       distinct,
     });
@@ -4204,7 +4253,16 @@ function validateCursor<TRecord extends object>(
         { collection: collection.name, field: name, path: ['cursor', name] },
       );
     }
-    axes.push({ field: name, direction: item.direction, value });
+    axes.push({
+      field: name,
+      direction: item.direction,
+      value: isTemporalType(field.type)
+        ? normalizeTemporalValue(field, value, 'INVALID_PAGINATION', [
+            'cursor',
+            name,
+          ])
+        : value,
+    });
   }
   const sortFields = new Set(axes.map((axis) => axis.field));
   for (const name of Object.keys(input)) {
@@ -4471,7 +4529,17 @@ function validateUnique(
           'Unique values must not be null or undefined.',
           { path: [...path, 'values', name] },
         );
-      return [name, value];
+      const field = scalarField(collection, name, [...path, 'values', name]);
+      return [
+        name,
+        isTemporalType(field.type)
+          ? normalizeTemporalValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
+              ...path,
+              'values',
+              name,
+            ])
+          : value,
+      ];
     }),
   );
   return {

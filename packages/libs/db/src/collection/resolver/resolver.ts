@@ -393,6 +393,10 @@ function applyFieldMetadata(
     if (fieldMetadata.type !== undefined) {
       const compatible =
         field.type === fieldMetadata.type ||
+        (['integer', 'bigInt'].includes(fieldMetadata.type) &&
+          field.type === 'decimal' &&
+          field.scale === 0 &&
+          /^number(?:\(|$)/i.test(String(field.db?.nativeType))) ||
         fieldMetadata.type === 'native' ||
         fieldMetadata.type.toLowerCase() ===
           String(field.db?.nativeType).toLowerCase() ||

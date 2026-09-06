@@ -1,5 +1,6 @@
 import type { FieldDefinition } from '../collection/types.js';
 import { RepositoryError } from './errors.js';
+import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import type {
   MutationLiteral,
   MutationVariable,
@@ -104,6 +105,8 @@ export function validateResolvedMutationValue(
   path: readonly (string | number)[],
 ): RepositoryMutationScalarValue {
   const value = resolved.value;
+  if (isTemporalType(field.type))
+    return normalizeTemporalValue(field, value, 'INVALID_MUTATION', path);
   const valid = (() => {
     if (value === null) return field.nullable !== false && !field.primaryKey;
     switch (field.type) {

@@ -20,16 +20,18 @@ Relation 支持的类型和引用属性以 `RelationMetadata` 声明为准。不
 
 ## Supplemental logical types
 
-`FieldMetadata.type` accepts only `boolean`, `json`, `date`, and `time`.
+`FieldMetadata.type` preserves all explicitly declared scalar type names. Builder normalizes `increments` to `integer`; relations remain in `relations`. Empty names, surrounding whitespace, and relation types are rejected. Native/custom names remain declarations, not a promise of Repository codec support.
 
-| Logical type | Compatible inspected storage                                          |
-| ------------ | --------------------------------------------------------------------- |
-| `boolean`    | Boolean, integer, or decimal with scale zero                          |
-| `json`       | JSON, text, or string                                                 |
-| `date`       | Date, or datetime whose native type is Oracle `DATE`                  |
-| `time`       | Time, or string with a declared capacity of at least eight characters |
+| Logical type | Compatible inspected storage                                                             |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `boolean`    | Boolean, integer, or decimal with scale zero                                             |
+| `json`       | JSON, text, or string                                                                    |
+| `date`       | Date, or datetime whose native type is Oracle `DATE`                                     |
+| `time`       | Time, or string with a declared capacity of at least eight characters                    |
+| `datetime`   | Zone-free datetime, or text using the canonical local format                             |
+| `datetimeTz` | Instant-bearing native type, MySQL `DATETIME` with UTC convention, or canonical UTC text |
 
-Builder persists these explicit declarations on create/add/alter and removes them when a field changes to another type or is dropped. For example, `c.boolean('enabled')` retains its meaning on MySQL; an external `TINYINT(1)` without metadata remains an integer. Oracle time fields created by Builder use `VARCHAR2(16)` because Oracle has no standalone SQL `TIME` type.
+Builder persists declared scalar types on create/add/alter and removes metadata when a field is dropped. For example, `c.boolean('enabled')` retains its meaning on MySQL; an external `TINYINT(1)` without metadata remains an integer. Oracle time fields use `VARCHAR2(18)`. The compatibility table highlights semantic supplements, not the complete scalar type inventory; ordinary scalar types must also be compatible with inspected storage. See [date and time values](../repository/temporal-values.md).
 
 ```ts
 const metadata = defineCollectionMetadata({

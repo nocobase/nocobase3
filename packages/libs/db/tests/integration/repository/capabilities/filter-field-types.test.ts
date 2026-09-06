@@ -70,9 +70,9 @@ describeIntegrationDatabases('Repository Filter field types', (context) => {
       c.field({ name: 'clock', type: 'time' }).nullable();
     });
     await context.db(context.table('filterTimes')).insert([
-      { key: 'A', clock: '00:00:00' },
-      { key: 'B', clock: '12:30:00' },
-      { key: 'C', clock: '23:59:59' },
+      { key: 'A', clock: '00:00:00.000' },
+      { key: 'B', clock: '12:30:00.000' },
+      { key: 'C', clock: '23:59:59.000' },
       { key: 'D', clock: null },
     ]);
     const repository = context.database.repository('filterTimes');
@@ -100,7 +100,7 @@ describeIntegrationDatabases('Repository Filter field types', (context) => {
   it('uses half-open datetime bounds with ISO literals and Date operands', async () => {
     await context.builder.createCollection('filterInstants', (c) => {
       c.string('key').primary().notNull();
-      c.datetime('instant').nullable();
+      c.datetimeTz('instant').nullable();
     });
     const first = '2026-09-01T00:00:00.000Z';
     const middle = '2026-09-01T12:00:00.000Z';
