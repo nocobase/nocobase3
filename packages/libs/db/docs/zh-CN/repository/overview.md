@@ -266,13 +266,14 @@ const rows = await db.repository('projects').findMany({
 
 ## 失败后如何处理
 
-| 错误或场景                                   | 建议处理                                             | 不要做                                    |
-| -------------------------------------------- | ---------------------------------------------------- | ----------------------------------------- |
-| VARIABLE_NOT_FOUND / INVALID_CONTEXT         | 核对变量路径和调用 context                           | 把缺失变量替换成 undefined 后继续写入     |
-| INVALID_FILTER / INVALID_MUTATION 等输入错误 | 根据 path 修正输入；需要时用 validateMutation 预校验 | 用类型断言跳过运行时限制                  |
-| MULTIPLE_RECORDS_MATCHED                     | 收紧条件；业务确实需要批量时再选择 Many              | 自动取第一条或自动扩大写入范围            |
-| VERSION_CONFLICT                             | 重新读取，处理业务冲突                               | 去掉 ifVersion 后盲目重试                 |
-| 缺失关系目标或目标不在当前关系范围           | 核对目标存在性、唯一键及归属                         | 自动新建目标或把其他父记录的目标抢过来    |
-| 数据库唯一／外键／非空约束错误               | 让异常传播到事务边界，再处理业务反馈                 | 假定全部驱动错误都有 RepositoryError.code |
+| 错误或场景                                   | 建议处理                                                    | 不要做                                    |
+| -------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------- |
+| VARIABLE_NOT_FOUND / INVALID_CONTEXT         | 核对变量路径和调用 context                                  | 把缺失变量替换成 undefined 后继续写入     |
+| INVALID_FILTER / INVALID_MUTATION 等输入错误 | 根据 path 修正输入；需要时用 validateMutation 预校验        | 用类型断言跳过运行时限制                  |
+| MULTIPLE_RECORDS_MATCHED                     | 收紧条件；业务确实需要批量时再选择 Many                     | 自动取第一条或自动扩大写入范围            |
+| VERSION_CONFLICT                             | 重新读取，处理业务冲突                                      | 去掉 ifVersion 后盲目重试                 |
+| INVALID_STORED_VALUE                         | Inspect and explicitly repair invalid stored boolean values | Coerce arbitrary values to true/false     |
+| 缺失关系目标或目标不在当前关系范围           | 核对目标存在性、唯一键及归属                                | 自动新建目标或把其他父记录的目标抢过来    |
+| 数据库唯一／外键／非空约束错误               | 让异常传播到事务边界，再处理业务反馈                        | 假定全部驱动错误都有 RepositoryError.code |
 
 `path`、`details` 和 `retryable` 用于辅助诊断，不等同于重试授权。多个步骤需要共同回滚时，使用[同一个事务 Connection](./transactions.md)，不要在失败后继续提交事务。

@@ -11,6 +11,8 @@ values 描述写入字段。方法参数、返回值和完整流程见 [createOn
 
 Temporal values follow the [date/time contract](./temporal-values.md): `datetime` is zone-free, `datetimeTz` is an instant, and outputs are canonical strings. Do not rely on driver-local `Date` conversion.
 
+Boolean values follow the [boolean contract](./boolean-values.md): only `true`, `false`, and nullable `null` are accepted. Driver-specific 0/1 representations are decoded internally, not accepted as public inputs.
+
 普通对象：
 
 ```ts

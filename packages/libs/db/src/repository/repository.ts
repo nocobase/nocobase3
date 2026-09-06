@@ -12,6 +12,7 @@ import { DefaultRepositoryQuery } from './query.js';
 import { snapshotQueryInput } from './internal/input-snapshot.js';
 import { identityConstraints } from './internal/identity.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
+import { normalizeBooleanValue } from './boolean.js';
 import {
   evaluateValues,
   resolveMutationValue,
@@ -1789,7 +1790,7 @@ function validateAggregate(
       item.kind === 'count' ||
       (item.kind === 'sum' || item.kind === 'avg'
         ? FILTER_GROUP_BY_TYPE[field.type] === 'number'
-        : SORTABLE_TYPES.has(field.type));
+        : field.type !== 'boolean' && SORTABLE_TYPES.has(field.type));
     if (!supported) {
       invalid(
         'FIELD_CAPABILITY_NOT_SUPPORTED',
@@ -2585,7 +2586,7 @@ async function validateSortWithRelations<TRecord extends object>(
       const allowed =
         item.aggregate === 'sum' || item.aggregate === 'avg'
           ? FILTER_GROUP_BY_TYPE[field.type] === 'number'
-          : SORTABLE_TYPES.has(field.type);
+          : field.type !== 'boolean' && SORTABLE_TYPES.has(field.type);
       if (!allowed) {
         invalid(
           'FIELD_CAPABILITY_NOT_SUPPORTED',
@@ -3922,7 +3923,22 @@ function uniqueSelectorFromFilter(
   filter: FilterAst,
   path: readonly (string | number)[],
 ): UniqueSelector {
-  const nodes = filter.root.items;
+  const nodes = filter.root.items.map((node) => {
+    if (
+      node.kind === 'condition' &&
+      node.path.length === 1 &&
+      collection.fields?.some(
+        (field) => field.name === node.path[0] && field.type === 'boolean',
+      ) &&
+      (node.operator === '$isTruly' || node.operator === '$isFalsy')
+    )
+      return {
+        ...node,
+        operator: '$eq' as const,
+        value: node.operator === '$isTruly',
+      };
+    return node;
+  });
   if (
     filter.root.logic !== 'and' ||
     nodes.length === 0 ||
@@ -4532,13 +4548,19 @@ function validateUnique(
       const field = scalarField(collection, name, [...path, 'values', name]);
       return [
         name,
-        isTemporalType(field.type)
-          ? normalizeTemporalValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
+        field.type === 'boolean'
+          ? normalizeBooleanValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
               ...path,
               'values',
               name,
             ])
-          : value,
+          : isTemporalType(field.type)
+            ? normalizeTemporalValue(field, value, 'INVALID_UNIQUE_SELECTOR', [
+                ...path,
+                'values',
+                name,
+              ])
+            : value,
       ];
     }),
   );

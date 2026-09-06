@@ -5,11 +5,13 @@ description: Proposed boolean mappings across five databases, conservative Inspe
 
 # Boolean fields and schema inspection
 
-Status: design proposal, not a completed cross-database contract. Recorded on 2026-09-06. No runtime changes accompany this document. It shares the metadata/Inspector responsibilities of the [numeric](./numeric-field-types.md), [string](./string-field-types.md), and [date-time](./date-time-field-types.md) proposals.
+Status: partially implemented proposal, not a completed cross-database contract. Recorded on 2026-09-06. Implementation stages below distinguish shipped behavior from pending work. It shares the metadata/Inspector responsibilities of the [numeric](./numeric-field-types.md), [string](./string-field-types.md), and [date-time](./date-time-field-types.md) proposals.
 
 ## Logical contract
 
-Implementation baseline: reuse scalar metadata and keep Oracle NUMBER emulation for this work; do not switch to native Oracle BOOLEAN. Inspector tests distinguish native booleans from numeric/bit representations. SQLite exposes declaration affinity and table STRICT status without claiming boolean enforcement. Strict Repository codecs and generated constraint changes are a separate stage, not completed by Inspector classification.
+Implementation baseline: reuse scalar metadata and keep Oracle NUMBER emulation for this work; do not switch to native Oracle BOOLEAN. Inspector tests distinguish native booleans from numeric/bit representations. SQLite exposes declaration affinity and table STRICT status without claiming boolean enforcement. Inspector classification does not itself implement codecs or constraints.
+
+Implementation stage 2: Repository boolean inputs now accept only `true`, `false`, or nullable `null`. Numeric-backed drivers receive 0/1 bindings. Reads decode native booleans and exact numeric/string 0/1 representations; any other stored value raises `INVALID_STORED_VALUE`. The same contract covers variables, unique selectors, filters, returning, relation projections, grouping, distinct, cursors, and streaming. Public numeric/string inputs remain invalid even when a driver uses those representations internally. Generated CHECK constraints and Builder default validation are not part of this codec stage; externally managed tables are never altered by metadata updates.
 
 Keep one logical `boolean` type. Native BIT, small integers, and NUMBER are physical representations, not additional portable boolean types.
 
