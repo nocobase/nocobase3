@@ -77,6 +77,9 @@ function createDisk(): FileStorageDriveDisk & {
     async getUrl(key) {
       return `/storage/${key}`;
     },
+    async delete(key) {
+      objects.delete(key);
+    },
   };
 }
 
@@ -115,7 +118,37 @@ describe('DriveFileStorage', () => {
     expect(await readStream(opened!.stream)).toBe('hello');
   });
 
-  it('keeps the object and exposes metadata when persistence fails', async () => {
+  it.each([
+    ['.pdf', '.pdf'],
+    ['.XLSX', '.xlsx'],
+  ])(
+    'preserves %s when normalizing a long filename',
+    async (extension, expectedExtname) => {
+      const disk = createDisk();
+      const repository = new MetadataRepository();
+      const storage = new DriveFileStorageFactory({ use: () => disk }).create({
+        disk: 'public',
+        prefix: 'ai-files',
+        metadataRepository: repository,
+      });
+      const filename = `${'a'.repeat(140)}${extension}`;
+
+      const metadata = await storage.write({
+        id: 'long',
+        objectId: 'long',
+        filename,
+        content: new Uint8Array([1]),
+        metadataContext: { createdById: 'user-1' },
+      });
+
+      expect(metadata.filename).toHaveLength(128);
+      expect(metadata.filename.endsWith(extension)).toBe(true);
+      expect(metadata.extname).toBe(expectedExtname);
+      expect(metadata.key).toBe(`ai-files/long-${metadata.filename}`);
+      expect(disk.objects.has(metadata.key)).toBe(true);
+    },
+  );
+  it('exposes object deletion for compensating failed metadata persistence', async () => {
     const disk = createDisk();
     const failure = new Error('database unavailable');
     const storage = new DriveFileStorageFactory({ use: () => disk }).create({
@@ -146,6 +179,8 @@ describe('DriveFileStorage', () => {
       cause: failure,
     });
     expect(disk.objects.has('documents/7-report.pdf')).toBe(true);
+    await storage.deleteObject('documents/7-report.pdf');
+    expect(disk.objects.has('documents/7-report.pdf')).toBe(false);
   });
 });
 

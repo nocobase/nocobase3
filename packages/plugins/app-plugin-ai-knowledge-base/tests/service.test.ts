@@ -1,8 +1,6 @@
-import type { DatabaseConnection } from '@nocobase/db';
 import { describe, expect, it, vi } from 'vitest';
-import { TableRepository } from '../server/repositories/table-repository.js';
 import { normalizeSegmentOptions } from '../server/managers/segment-options.js';
-import { PGVectorProvider } from '../server/providers/vector-database/pg-vector-provider.js';
+import { PGVectorProvider } from '../server/extensions/vector-database/pg-vector-provider.js';
 
 describe('knowledge base compatibility helpers', () => {
   it('normalizes segment bounds', () => {
@@ -16,33 +14,6 @@ describe('knowledge base compatibility helpers', () => {
         chunkOverlap: -1,
       }),
     ).toEqual({ enabled: false, chunkSize: 6000, chunkOverlap: 0 });
-  });
-  it('reads an inserted row through an explicit fallback filter', async () => {
-    const execute = vi.fn().mockResolvedValue({ insertedCount: 1 });
-    const values = vi.fn(() => ({ execute }));
-    const insertInto = vi.fn(() => ({ values }));
-    const executeSelect = vi.fn().mockResolvedValue([{ id: 42, shardNo: 0 }]);
-    const limit = vi.fn(() => ({ execute: executeSelect }));
-    const where = vi.fn(function () {
-      return { where, limit };
-    });
-    const selectAll = vi.fn(() => ({ where, limit }));
-    const selectFrom = vi.fn(() => ({ selectAll }));
-    const database = {
-      query: { insertInto, selectFrom },
-    } as unknown as DatabaseConnection;
-    const repository = new TableRepository<Record<string, unknown>>(
-      database,
-      'aiKnowledgeBaseDocSegmentShards',
-    );
-
-    await expect(
-      repository.create(
-        { knowledgeBaseDocsId: 7, segmentVersion: 3, shardNo: 0 },
-        { knowledgeBaseDocsId: 7, segmentVersion: 3, shardNo: 0 },
-      ),
-    ).resolves.toMatchObject({ id: 42 });
-    expect(where).toHaveBeenCalledTimes(3);
   });
   it('validates safe PGVector table references', () => {
     const provider = new PGVectorProvider();

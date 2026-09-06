@@ -3,22 +3,21 @@ import type {
   DocumentSegmentedWithScore,
   KnowledgeBase,
   KnowledgeBaseFeature,
-  KnowledgeBaseGroup,
   SearchOptions,
 } from '@nocobase/ai-employee';
 
-import type {
-  KnowledgeBaseRecord,
-  VectorStoreConfigRecord,
-} from '../internal-types.js';
 import type { KnowledgeBaseSegmentManager } from '../managers/knowledge-base-segment-manager.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+import type {
+  KnowledgeBaseEntity,
+  KnowledgeBaseRepository,
+  VectorStoreConfigRepository,
+} from '../repository/index.js';
 
 export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
   public constructor(
     private readonly ai: AIManager,
-    private readonly bases: TableRepository<KnowledgeBaseRecord>,
-    private readonly vectorStoreConfigs: TableRepository<VectorStoreConfigRecord>,
+    private readonly bases: KnowledgeBaseRepository,
+    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
     private readonly segments: KnowledgeBaseSegmentManager,
     private readonly renderVectorStoreProps: <T>(value: T) => T = (value) =>
       value,
@@ -32,35 +31,6 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
     return Promise.all(rows.map((row) => this.toKnowledgeBase(row)));
   }
 
-  public async getKnowledgeBaseGroup(
-    keys: string[],
-  ): Promise<KnowledgeBaseGroup[]> {
-    const rows = await this.getKnowledgeBase(keys);
-    const groups = new Map<string, KnowledgeBaseGroup>();
-    for (const row of rows) {
-      const groupKey = JSON.stringify({
-        knowledgeBaseType: row.knowledgeBaseType,
-        vectorStoreProvider: row.vectorStoreProvider,
-        vectorDatabaseKey: row.vectorDatabaseKey,
-        llmService: row.llmService,
-        embeddingModel: row.embeddingModel,
-      });
-      const group = groups.get(groupKey) ?? {
-        vectorStoreConfig: {
-          vectorStoreProvider: row.vectorStoreProvider,
-          vectorDatabaseKey: row.vectorDatabaseKey,
-          llmService: row.llmService,
-          embeddingModel: row.embeddingModel,
-        },
-        knowledgeBaseType: row.knowledgeBaseType,
-        knowledgeBaseList: [],
-      };
-      group.knowledgeBaseList.push(row);
-      groups.set(groupKey, group);
-    }
-    return [...groups.values()];
-  }
-
   public async search(
     options: SearchOptions,
   ): Promise<DocumentSegmentedWithScore[]> {
@@ -72,7 +42,7 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
       },
     });
     const output: DocumentSegmentedWithScore[] = [];
-    const localGroups = new Map<string, KnowledgeBaseRecord[]>();
+    const localGroups = new Map<string, KnowledgeBaseEntity[]>();
 
     for (const base of rows) {
       if (base.knowledgeBaseType === 'LOCAL') {
@@ -108,7 +78,7 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
   }
 
   private async searchBase(
-    base: KnowledgeBaseRecord,
+    base: KnowledgeBaseEntity,
     options: SearchOptions,
   ): Promise<DocumentSegmentedWithScore[]> {
     const props =
@@ -132,7 +102,7 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
   }
 
   private async toKnowledgeBase(
-    row: KnowledgeBaseRecord,
+    row: KnowledgeBaseEntity,
   ): Promise<KnowledgeBase> {
     const config = row.vectorStoreConfigKey
       ? await this.vectorStoreConfigs.findOne({ key: row.vectorStoreConfigKey })

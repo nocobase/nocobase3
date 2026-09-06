@@ -17,6 +17,8 @@
 
 Use exported `normalizeKnowledgeBaseError(error, fallback)`. It returns `{status?,message,conflict,forbidden,unavailable}`; unavailable is true for 204/404 and forbidden for 403, even though current plugin routes do not emit 403 themselves.
 
+For upload failures, verify that the request is authenticated `multipart/form-data` with exactly one `file`, a valid `knowledgeBaseKey`, an allowed extension, and a body no larger than 104857600 bytes. Confirm that the base is LOCAL and has an available allowed storage disk. Storage failures reject the request. Queue-dispatch failure does not reject a completed upload: the returned document has `indexStatus:"ERROR"` and a retryable `errorMessage`; retry vectorization for that document instead of uploading it again.
+
 ## Processing failures
 
 Poll or refresh document fields. `PENDING` means queued; `PROCESSING` means executing; `ERROR` includes `errorMessage` and `segmentErrorMessage`. Verify the `default` queue worker, the 300-second job timeout, source-file durability, document loader availability, and dedup behavior. A retry can call `vectorizeDocuments` for selected IDs; large retries require confirmation.

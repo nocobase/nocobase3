@@ -2,13 +2,11 @@ import { createHash } from 'node:crypto';
 
 import type { DocumentSegmentedWithScore } from '@nocobase/ai-employee';
 
+import type { SegmentQuestion } from '../internal-types.js';
 import type {
-  JsonRecord,
-  SegmentQuestion,
-  SegmentRecord,
-  SegmentShardRecord,
-} from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+  KnowledgeBaseSegmentRepository,
+  KnowledgeBaseSegmentShardRepository,
+} from '../repository/index.js';
 import type { KnowledgeBaseDocumentManager } from './knowledge-base-document-manager.js';
 import type { KnowledgeBaseManager } from './knowledge-base-manager.js';
 import type { KnowledgeBaseStorageManager } from './knowledge-base-storage-manager.js';
@@ -20,8 +18,8 @@ const preview = (value: string): string =>
 
 export class KnowledgeBaseSegmentManager {
   public constructor(
-    private readonly segments: TableRepository<SegmentRecord>,
-    private readonly segmentShards: TableRepository<SegmentShardRecord>,
+    private readonly segments: KnowledgeBaseSegmentRepository,
+    private readonly segmentShards: KnowledgeBaseSegmentShardRepository,
     private readonly knowledgeBases: KnowledgeBaseManager,
     private readonly storage: KnowledgeBaseStorageManager,
     private readonly documents: KnowledgeBaseDocumentManager,
@@ -30,7 +28,7 @@ export class KnowledgeBaseSegmentManager {
   public async getContent(
     documentId: string | number,
     segmentUid: string,
-  ): Promise<JsonRecord | null> {
+  ): Promise<Record<string, unknown> | null> {
     const segment = await this.segments.findOne({
       knowledgeBaseDocsId: documentId,
       uid: segmentUid,
@@ -52,7 +50,7 @@ export class KnowledgeBaseSegmentManager {
       questions?: SegmentQuestion[];
       contentHash: string;
     },
-  ): Promise<JsonRecord> {
+  ): Promise<Record<string, unknown>> {
     const segment = await this.segments.findOne({
       knowledgeBaseDocsId: documentId,
       uid: segmentUid,

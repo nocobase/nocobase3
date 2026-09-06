@@ -4,18 +4,18 @@
 
 - [Knowledge-base types](#knowledge-base-types)
 - [Creation and update](#creation-and-update)
-- [Documents and ZIP](#documents-and-zip)
+- [Documents](#documents)
 - [Statistics and deletion](#statistics-and-deletion)
 
 ## Knowledge-base types
 
-| Type       | Current built-in behavior                                                                                                                                                                                                                                        |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LOCAL`    | Accepts direct document upload; splits/stores segments; builds vectors; search filters vector rows by `knowledgeBaseOuterId`; default provider `NocobaseLocalVectorStoreProvider`.                                                                               |
-| `READONLY` | Direct upload is rejected. Default provider `NocobaseReadonlyVectorStoreProvider`. Built-in search uses the selected vector database without the LOCAL outer-ID filter. The service's full vector rebuild returns without writing because rebuild is LOCAL-only. |
-| `EXTERNAL` | Direct upload is rejected. Uses the selected vector-store provider registered through `aiManager.features.vectorStoreProvider` and passes `vectorStoreProps` to that provider's service.                                                                         |
+| Type       | Current built-in behavior                                                                                                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LOCAL`    | Accepts multipart single-file document upload; splits/stores segments; builds vectors; search filters vector rows by `knowledgeBaseOuterId`; default provider `NocobaseLocalVectorStore`.                                                         |
+| `READONLY` | Upload is rejected. Default provider `NocobaseReadOnlyVectorStore`. Built-in search uses the selected vector database without the LOCAL outer-ID filter. The service's full vector rebuild returns without writing because rebuild is LOCAL-only. |
+| `EXTERNAL` | Upload is rejected. Uses the selected vector-store provider registered through `aiManager.features.vectorStoreProvider` and passes `vectorStoreProps` to that provider's service.                                                                 |
 
-Only the direct upload method explicitly enforces LOCAL. The compatibility JSON finalize route currently lacks that check; do not use it to bypass type behavior.
+The server enforces the LOCAL-only rule before accepting a document.
 
 ## Creation and update
 
@@ -25,23 +25,13 @@ For non-EXTERNAL create, supplying any vector/embedding config field creates `ai
 
 The current service does not validate that a referenced vector database, LLM service, or embedding model exists during base creation/update. Failures surface later during vectorization/retrieval. Validate options first using enabled vector databases and AI model actions.
 
-## Documents and ZIP
+## Documents
 
-Supported extensions are exactly `.doc`, `.docx`, `.md`, `.pdf`, `.txt`, `.zip`, case-normalized from the filename. The server's actual parsing quality depends on the AI document loader. If no raw loader is registered, it falls back to UTF-8 bytes, which is only appropriate for text-like data and not a faithful DOC/PDF parser.
+Each request uploads exactly one file as `multipart/form-data`. Supported extensions are exactly `.pdf`, `.pptx`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm`, `.txt`, `.md`, `.json`, and `.csv`, case-normalized from the filename. MIME type is recorded as metadata, but the filename extension is the acceptance check. Parsing behavior follows the AI document loader: PDF, PowerPoint, Word, Excel, CSV, and text-like formats use their corresponding loader paths; password-protected or malformed documents can fail during asynchronous processing.
 
-The advertised maximum is 104857600 bytes. The default client enforces it after `getUploadStorage`; server multipart does not. MIME is recorded but extension is the acceptance check.
+The maximum is 104857600 bytes (100 MiB). Both clients and the upload route should reject a larger file, but upstream request-body limits should also be configured so oversized bodies are stopped before full buffering. Extension and size checks are capability checks, not content inspection; scan untrusted files and apply deployment-specific malware and content policies.
 
-ZIP behavior:
-
-- directory entries and path segments equal to `..` are skipped;
-- backslashes normalize to slashes and only basename is retained;
-- supported non-ZIP entries are recursively uploaded;
-- an archive with no supported documents fails;
-- nested ZIPs are ignored;
-- all extracted docs are created, but the response is only the first;
-- no bomb/aggregate limits exist.
-
-Document key defaults to a 32-character nanoid. Initial statuses/counts/versions and the queue lifecycle are in [lifecycle-and-jobs](lifecycle-and-jobs.md). The authenticated user ID is stored as creator for uploads.
+The caller selects the knowledge base, not an upload disk. The server uses the allowed disk stored on the knowledge-base record; a missing, unavailable, or disallowed disk causes the upload to fail. One successful request creates and returns one document. Document key defaults to a 32-character nanoid. Initial statuses/counts/versions and the queue lifecycle are in [lifecycle-and-jobs](lifecycle-and-jobs.md). The authenticated user ID is stored as creator for uploads.
 
 ## Statistics and deletion
 

@@ -148,7 +148,6 @@
     "hono": "catalog:",
     "nanoid": "^3.3.18",
     "pg": "^8.23.0",
-    "yauzl": "^2.10.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -169,7 +168,6 @@
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/yauzl": "^2.10.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "eslint": "catalog:",

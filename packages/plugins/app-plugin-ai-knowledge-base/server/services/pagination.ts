@@ -1,5 +1,4 @@
-import type { JsonRecord } from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+import type { TableRepository } from '../repository/table-repository.js';
 
 export interface PageOptions {
   readonly page: number;
@@ -12,12 +11,23 @@ export interface PageResult<T> {
   readonly meta: { count: number; page: number; pageSize: number };
 }
 
-export async function page<T extends Record<string, unknown>>(options: {
+type PageBaseOptions<T extends object> = {
   readonly repository: TableRepository<T>;
   readonly paging: PageOptions;
-  readonly filter?: JsonRecord;
-  readonly transform?: (record: T) => T | JsonRecord;
-}): Promise<PageResult<T | JsonRecord>> {
+  readonly filter?: Record<string, unknown>;
+};
+
+export function page<T extends object>(
+  options: PageBaseOptions<T> & { readonly transform?: undefined },
+): Promise<PageResult<T>>;
+export function page<T extends object, R extends object>(
+  options: PageBaseOptions<T> & { readonly transform: (record: T) => R },
+): Promise<PageResult<R>>;
+export async function page<T extends object, R extends object>(
+  options: PageBaseOptions<T> & {
+    readonly transform?: (record: T) => R;
+  },
+): Promise<PageResult<T | R>> {
   const filter = options.filter ?? {};
   const rows = await options.repository.find({
     filter,

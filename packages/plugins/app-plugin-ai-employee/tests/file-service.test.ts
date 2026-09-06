@@ -44,6 +44,7 @@ describe('AIFileService', () => {
           stream: Readable.from(['hello']),
           contentType: 'text/plain',
         }),
+        deleteObject: async () => undefined,
       };
     const service = new AIFileService(
       fileStorage,
@@ -93,6 +94,7 @@ describe('AIFileService', () => {
           stream: Readable.from([Buffer.from('hello')]),
           contentType: 'text/plain',
         }),
+        deleteObject: async () => undefined,
       };
     const service = new AIFileService(
       fileStorage,

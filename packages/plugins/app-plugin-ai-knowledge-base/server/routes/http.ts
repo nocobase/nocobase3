@@ -2,7 +2,7 @@ import type { AuthEnv } from '@nocobase/app-plugin-authentication/server';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 
-import type { JsonRecord } from '../internal-types.js';
+import { KnowledgeBaseUploadError } from '../document-upload.js';
 import type { PageOptions } from '../services/pagination.js';
 
 export type KnowledgeBaseRouteContext = Context<AuthEnv>;
@@ -14,21 +14,26 @@ export function data(
 ): Response {
   return context.json({ data: value }, status as 200);
 }
-
 export function error(
   context: KnowledgeBaseRouteContext,
   status: number,
   message: string,
+  code?: string,
 ): Response {
-  return context.json({ errors: [{ message }] }, status as 400);
+  return context.json(
+    code
+      ? { code, message, errors: [{ code, message }] }
+      : { errors: [{ message }] },
+    status as 400,
+  );
 }
 
 export async function body(
   context: KnowledgeBaseRouteContext,
-): Promise<JsonRecord> {
+): Promise<Record<string, unknown>> {
   const type = context.req.header('content-type') ?? '';
   return type.includes('application/json')
-    ? await context.req.json<JsonRecord>()
+    ? await context.req.json<Record<string, unknown>>()
     : {};
 }
 
@@ -71,6 +76,9 @@ export function userId(
 export function createRouteGroup(): Hono<AuthEnv> {
   const routes = new Hono<AuthEnv>();
   routes.onError((cause, context) => {
+    if (cause instanceof KnowledgeBaseUploadError) {
+      return error(context, cause.status, cause.message, cause.code);
+    }
     const status =
       Number((cause as Error & { status?: number }).status) ||
       (/not found/i.test(cause.message) ? 404 : 500);

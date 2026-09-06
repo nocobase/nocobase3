@@ -1,19 +1,16 @@
 import type { AIManager } from '@nocobase/ai-employee';
 
 import type {
-  JsonRecord,
-  KnowledgeBaseDocumentRecord,
-  KnowledgeBaseRecord,
-  VectorStoreConfigRecord,
-} from '../internal-types.js';
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseEntity,
+  KnowledgeBaseRepository,
+  VectorStoreConfigRepository,
+} from '../repository/index.js';
 import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
 import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
-import type { TableRepository } from '../repositories/table-repository.js';
 import type { PageOptions, PageResult } from './pagination.js';
 
 const BUILT_IN_PROVIDER_NAMES = new Set([
-  'NocobaseLocalVectorStoreProvider',
-  'NocobaseReadonlyVectorStoreProvider',
   'NocobaseLocalVectorStore',
   'NocobaseReadOnlyVectorStore',
 ]);
@@ -23,13 +20,15 @@ export class KnowledgeBaseService {
     private readonly ai: AIManager,
     private readonly manager: KnowledgeBaseManager,
     private readonly documentManager: KnowledgeBaseDocumentManager,
-    private readonly bases: TableRepository<KnowledgeBaseRecord>,
-    private readonly vectorStoreConfigs: TableRepository<VectorStoreConfigRecord>,
-    private readonly documents: TableRepository<KnowledgeBaseDocumentRecord>,
+    private readonly bases: KnowledgeBaseRepository,
+    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
+    private readonly documents: KnowledgeBaseDocumentRepository,
     private readonly allowedStorageDisks: readonly string[],
   ) {}
 
-  public async list(options: PageOptions): Promise<PageResult<JsonRecord>> {
+  public async list(
+    options: PageOptions,
+  ): Promise<PageResult<Record<string, unknown>>> {
     const rows = await this.bases.find({
       sort: ['-createdAt'],
       ...(options.paginate
@@ -40,7 +39,7 @@ export class KnowledgeBaseService {
         : {}),
     });
     const data = await Promise.all(
-      rows.map(async (row): Promise<JsonRecord> => {
+      rows.map(async (row): Promise<Record<string, unknown>> => {
         const config = row.vectorStoreConfigKey
           ? await this.vectorStoreConfigs.findOne({
               key: row.vectorStoreConfigKey,
@@ -69,17 +68,17 @@ export class KnowledgeBaseService {
   }
 
   public create(options: {
-    readonly values: JsonRecord;
+    readonly values: Record<string, unknown>;
     readonly userId?: string | number;
-  }): Promise<KnowledgeBaseRecord> {
+  }): Promise<KnowledgeBaseEntity> {
     return this.manager.create(options.values);
   }
 
   public update(options: {
     readonly id: string | number;
-    readonly values: JsonRecord;
+    readonly values: Record<string, unknown>;
     readonly userId?: string | number;
-  }): Promise<KnowledgeBaseRecord | null> {
+  }): Promise<KnowledgeBaseEntity | null> {
     return this.manager.update(options.id, options.values);
   }
 
@@ -106,7 +105,7 @@ export class KnowledgeBaseService {
     readonly query: string;
     readonly topK?: number;
     readonly score?: number;
-  }): Promise<JsonRecord[]> {
+  }): Promise<Record<string, unknown>[]> {
     const results = await this.ai.features.knowledgeBase.search({
       knowledgeBaseKeys: [options.knowledgeBaseKey],
       query: options.query,
@@ -148,7 +147,7 @@ export class KnowledgeBaseService {
 
   public async checkVectorStoreChanged(options: {
     readonly key: string;
-  }): Promise<JsonRecord | null> {
+  }): Promise<Record<string, unknown> | null> {
     const base = await this.bases.findOne({ key: options.key });
     return base
       ? {

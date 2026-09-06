@@ -5,8 +5,10 @@ import type {
   NewFileMetadata,
 } from '@nocobase/ai-employee';
 
-import type { TableRepository } from '../repositories/table-repository.js';
-import type { JsonRecord, SegmentShardRecord } from '../internal-types.js';
+import type {
+  KnowledgeBaseSegmentShardEntity,
+  KnowledgeBaseSegmentShardRepository,
+} from '../repository/index.js';
 
 export interface KnowledgeBaseSegmentShardMetadataCreateContext {
   readonly knowledgeBaseKey: string;
@@ -15,13 +17,13 @@ export interface KnowledgeBaseSegmentShardMetadataCreateContext {
   readonly segmentVersion: number;
   readonly segmentCount: number;
   readonly contentHash: string;
-  readonly meta?: JsonRecord;
+  readonly meta?: Record<string, unknown>;
   readonly createdById?: string | number;
 }
 
 export function mapKnowledgeBaseSegmentShardMetadata(
-  entity: SegmentShardRecord,
-): FileMetadata<SegmentShardRecord> {
+  entity: KnowledgeBaseSegmentShardEntity,
+): FileMetadata<KnowledgeBaseSegmentShardEntity> {
   return {
     id: entity.id,
     disk: entity.disk,
@@ -36,17 +38,17 @@ export function mapKnowledgeBaseSegmentShardMetadata(
 }
 
 export class KnowledgeBaseSegmentShardMetadataRepository implements FileMetadataRepository<
-  SegmentShardRecord,
+  KnowledgeBaseSegmentShardEntity,
   KnowledgeBaseSegmentShardMetadataCreateContext
 > {
   public constructor(
-    private readonly repository: TableRepository<SegmentShardRecord>,
+    private readonly repository: KnowledgeBaseSegmentShardRepository,
   ) {}
 
   public async create(
     metadata: NewFileMetadata,
     context: KnowledgeBaseSegmentShardMetadataCreateContext,
-  ): Promise<FileMetadata<SegmentShardRecord>> {
+  ): Promise<FileMetadata<KnowledgeBaseSegmentShardEntity>> {
     const entity = await this.repository.create(
       {
         ...(metadata.id !== undefined ? { id: metadata.id } : {}),
@@ -78,7 +80,7 @@ export class KnowledgeBaseSegmentShardMetadataRepository implements FileMetadata
 
   public async findById(
     id: FileMetadataId,
-  ): Promise<FileMetadata<SegmentShardRecord> | null> {
+  ): Promise<FileMetadata<KnowledgeBaseSegmentShardEntity> | null> {
     const entity = await this.repository.findById(id);
     return entity ? mapKnowledgeBaseSegmentShardMetadata(entity) : null;
   }

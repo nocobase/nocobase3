@@ -1,24 +1,27 @@
 import { nanoid } from 'nanoid';
 
+import type { SegmentOptions } from '../internal-types.js';
+
 import type {
-  JsonRecord,
-  KnowledgeBaseDocumentRecord,
-  KnowledgeBaseRecord,
-  SegmentOptions,
-  VectorStoreConfigRecord,
-} from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseEntity,
+  KnowledgeBaseRepository,
+  VectorStoreConfigEntity,
+  VectorStoreConfigRepository,
+} from '../repository/index.js';
 import { normalizeSegmentOptions } from './segment-options.js';
 
 export class KnowledgeBaseManager {
   public constructor(
-    private readonly bases: TableRepository<KnowledgeBaseRecord>,
-    private readonly documents: TableRepository<KnowledgeBaseDocumentRecord>,
-    private readonly vectorStoreConfigs: TableRepository<VectorStoreConfigRecord>,
+    private readonly bases: KnowledgeBaseRepository,
+    private readonly documents: KnowledgeBaseDocumentRepository,
+    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
     private readonly allowedStorageDisks: readonly string[],
   ) {}
 
-  public async create(values: JsonRecord): Promise<KnowledgeBaseRecord> {
+  public async create(
+    values: Record<string, unknown>,
+  ): Promise<KnowledgeBaseEntity> {
     const type = String(values.knowledgeBaseType ?? 'LOCAL');
     if (!['LOCAL', 'READONLY', 'EXTERNAL'].includes(type)) {
       throw new Error('Invalid knowledgeBaseType');
@@ -58,14 +61,14 @@ export class KnowledgeBaseManager {
       vectorStoreConfigKey,
       disk,
       key: String(values.key ?? nanoid(32)),
-      knowledgeBaseType: type as KnowledgeBaseRecord['knowledgeBaseType'],
+      knowledgeBaseType: type as KnowledgeBaseEntity['knowledgeBaseType'],
       knowledgeBaseOuterId: String(values.knowledgeBaseOuterId ?? nanoid(32)),
       vectorStoreProvider: String(
         values.vectorStoreProvider ??
           (type === 'LOCAL'
-            ? 'NocobaseLocalVectorStoreProvider'
+            ? 'NocobaseLocalVectorStore'
             : type === 'READONLY'
-              ? 'NocobaseReadonlyVectorStoreProvider'
+              ? 'NocobaseReadOnlyVectorStore'
               : String(values.externalProvider ?? '')),
       ),
       segmentOptions: normalizeSegmentOptions(values.segmentOptions),
@@ -79,11 +82,11 @@ export class KnowledgeBaseManager {
 
   public async update(
     id: string | number,
-    values: JsonRecord,
-  ): Promise<KnowledgeBaseRecord | null> {
+    values: Record<string, unknown>,
+  ): Promise<KnowledgeBaseEntity | null> {
     const base = await this.bases.findById(id);
     if (!base) return null;
-    const configValues: Partial<VectorStoreConfigRecord> = {};
+    const configValues: Partial<VectorStoreConfigEntity> = {};
     if (values.llmService !== undefined) {
       configValues.llmService = String(values.llmService);
     }
@@ -138,7 +141,7 @@ export class KnowledgeBaseManager {
     return this.bases.findById(id);
   }
 
-  public async require(key: string): Promise<KnowledgeBaseRecord> {
+  public async require(key: string): Promise<KnowledgeBaseEntity> {
     const base = await this.bases.findOne({ key });
     if (!base) throw new Error(`Knowledge base #${key} not found`);
     return base;

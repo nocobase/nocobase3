@@ -2,16 +2,15 @@ import type { VectorStore } from '@langchain/core/vectorstores';
 import type { AIManager } from '@nocobase/ai-employee';
 
 import type {
-  VectorDatabaseRecord,
-  VectorStoreConfigRecord,
-} from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+  VectorDatabaseRepository,
+  VectorStoreConfigRepository,
+} from '../repository/index.js';
 
 export class VectorStoreManager {
   public constructor(
     private readonly ai: AIManager,
-    private readonly vectorStoreConfigs: TableRepository<VectorStoreConfigRecord>,
-    private readonly vectorDatabases: TableRepository<VectorDatabaseRecord>,
+    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
+    private readonly vectorDatabases: VectorDatabaseRepository,
   ) {}
 
   private readonly stores = new Map<string, Promise<VectorStore>>();

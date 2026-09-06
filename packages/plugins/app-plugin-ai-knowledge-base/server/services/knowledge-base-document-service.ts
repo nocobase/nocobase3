@@ -1,22 +1,27 @@
-import type {
-  JsonRecord,
-  KnowledgeBaseDocumentRecord,
-  KnowledgeBaseRecord,
-} from '../internal-types.js';
+import {
+  assertKnowledgeBaseDocumentUploadSize,
+  KNOWLEDGE_BASE_DOCUMENT_UPLOAD_CONSTRAINTS,
+  type KnowledgeBaseDocumentUploadConstraints,
+  type KnowledgeBaseDocumentUploadFile,
+} from '../document-upload.js';
 import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+import type {
+  KnowledgeBaseDocumentEntity,
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseRepository,
+} from '../repository/index.js';
 import { page, type PageOptions, type PageResult } from './pagination.js';
 
 export class KnowledgeBaseDocumentService {
   public constructor(
     private readonly manager: KnowledgeBaseDocumentManager,
-    private readonly documents: TableRepository<KnowledgeBaseDocumentRecord>,
-    private readonly bases: TableRepository<KnowledgeBaseRecord>,
+    private readonly documents: KnowledgeBaseDocumentRepository,
+    private readonly bases: KnowledgeBaseRepository,
   ) {}
 
   public list(
     options: PageOptions & { knowledgeBaseKey?: string },
-  ): Promise<PageResult<JsonRecord>> {
+  ): Promise<PageResult<Record<string, unknown>>> {
     return page({
       repository: this.documents,
       paging: options,
@@ -29,31 +34,25 @@ export class KnowledgeBaseDocumentService {
 
   public async get(options: {
     readonly id: string | number;
-  }): Promise<JsonRecord | null> {
+  }): Promise<Record<string, unknown> | null> {
     const record = await this.documents.findById(options.id);
     return record ? { ...record, accessAbility: 'readWrite' } : null;
   }
 
-  public upload(options: {
+  public async upload(options: {
     readonly knowledgeBaseKey: string;
-    readonly file: { name: string; type?: string; bytes: Uint8Array };
+    readonly file: KnowledgeBaseDocumentUploadFile;
     readonly userId?: string | number;
-  }): Promise<KnowledgeBaseDocumentRecord> {
+  }): Promise<KnowledgeBaseDocumentEntity> {
+    assertKnowledgeBaseDocumentUploadSize(options.file.size);
+    const bytes = new Uint8Array(await options.file.arrayBuffer());
     return this.manager.upload(
       options.knowledgeBaseKey,
-      options.file,
-      options.userId,
-    );
-  }
-
-  public finalizeUpload(options: {
-    readonly knowledgeBaseKey: string;
-    readonly values: JsonRecord;
-    readonly userId?: string | number;
-  }): Promise<KnowledgeBaseDocumentRecord> {
-    return this.manager.finalizeUpload(
-      options.knowledgeBaseKey,
-      options.values,
+      {
+        name: options.file.name,
+        type: options.file.type,
+        bytes,
+      },
       options.userId,
     );
   }
@@ -90,25 +89,16 @@ export class KnowledgeBaseDocumentService {
 
   public async getUploadStorage(options: {
     readonly knowledgeBaseKey: string;
-  }): Promise<JsonRecord | null> {
+  }): Promise<KnowledgeBaseDocumentUploadConstraints | null> {
     const base = await this.bases.findOne({ key: options.knowledgeBaseKey });
     return base
       ? {
-          disk: base.disk,
-          name: 'default',
-          title: 'Default storage',
-          type: 'local',
-          rules: { size: 100 * 1024 * 1024 },
+          acceptedExtensions: [
+            ...KNOWLEDGE_BASE_DOCUMENT_UPLOAD_CONSTRAINTS.acceptedExtensions,
+          ],
+          maxFileSizeBytes:
+            KNOWLEDGE_BASE_DOCUMENT_UPLOAD_CONSTRAINTS.maxFileSizeBytes,
         }
       : null;
-  }
-
-  public getZipFilenameEncodingOptions(): JsonRecord {
-    return {
-      options: [
-        { value: 'utf8', label: 'UTF-8', isDefault: true },
-        { value: 'gbk', label: 'GBK' },
-      ],
-    };
   }
 }

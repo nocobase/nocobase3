@@ -6,13 +6,14 @@ import { DocumentLoader, type AIManager } from '@nocobase/ai-employee';
 import { nanoid } from 'nanoid';
 
 import { KnowledgeBaseDocumentMetadataRepository } from '../file-storage/index.js';
+import type { SegmentQuestion } from '../internal-types.js';
+
 import type {
-  JsonRecord,
-  KnowledgeBaseDocumentRecord,
-  SegmentQuestion,
-  SegmentRecord,
-} from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+  KnowledgeBaseDocumentEntity,
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseSegmentEntity,
+  KnowledgeBaseSegmentRepository,
+} from '../repository/index.js';
 import type { KnowledgeBaseDocumentManager } from './knowledge-base-document-manager.js';
 import type { KnowledgeBaseManager } from './knowledge-base-manager.js';
 import type { KnowledgeBaseSegmentManager } from './knowledge-base-segment-manager.js';
@@ -32,8 +33,8 @@ type WritableVectorStore = {
 export class KnowledgeBaseVectorizationManager {
   public constructor(
     private readonly ai: AIManager,
-    private readonly documents: TableRepository<KnowledgeBaseDocumentRecord>,
-    private readonly segments: TableRepository<SegmentRecord>,
+    private readonly documents: KnowledgeBaseDocumentRepository,
+    private readonly segments: KnowledgeBaseSegmentRepository,
     private readonly knowledgeBases: KnowledgeBaseManager,
     private readonly documentManager: KnowledgeBaseDocumentManager,
     private readonly segmentManager: KnowledgeBaseSegmentManager,
@@ -122,7 +123,7 @@ export class KnowledgeBaseVectorizationManager {
           string,
           { title: string; content: string; questions: SegmentQuestion[] }
         > = {};
-        const pending: Array<Partial<SegmentRecord>> = [];
+        const pending: Array<Partial<KnowledgeBaseSegmentEntity>> = [];
         batch.forEach((item, index) => {
           const uid = nanoid(32);
           const content = item.pageContent.replace(/\r\n/g, '\n');
@@ -148,7 +149,7 @@ export class KnowledgeBaseVectorizationManager {
             questionCount: questions.length,
             enabled: true,
             segmentVersion: version,
-            meta: item.metadata as JsonRecord,
+            meta: item.metadata as Record<string, unknown>,
           });
         });
         const json = JSON.stringify({
@@ -276,7 +277,7 @@ export class KnowledgeBaseVectorizationManager {
   }
 
   private async loadDocument(
-    document: KnowledgeBaseDocumentRecord,
+    document: KnowledgeBaseDocumentEntity,
   ): Promise<Document[]> {
     const base = await this.knowledgeBases.require(document.knowledgeBaseKey);
     const metadata = await new KnowledgeBaseDocumentMetadataRepository(

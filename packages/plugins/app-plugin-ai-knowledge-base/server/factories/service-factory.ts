@@ -1,5 +1,4 @@
-import type { AIManager, FileStorageFactory } from '@nocobase/ai-employee';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { AIManager } from '@nocobase/ai-employee';
 import {
   createServiceToken,
   type ServiceToken,
@@ -10,27 +9,16 @@ import { KnowledgeBaseDocumentService } from '../services/knowledge-base-documen
 import { KnowledgeBaseSegmentService } from '../services/knowledge-base-segment-service.js';
 import { KnowledgeBaseService } from '../services/knowledge-base-service.js';
 import { VectorDatabaseService } from '../services/vector-database-service.js';
-import { KnowledgeBaseManagerFactory } from './manager-factory.js';
+import type { KnowledgeBaseManagerFactory } from './manager-factory.js';
 import type { KnowledgeBaseRepositoryFactory } from './repository-factory.js';
 
 export class KnowledgeBaseServiceFactory {
   public constructor(
     private readonly ai: AIManager,
-    fileStorageFactory: FileStorageFactory,
-    queue: NocoBaseQueueManager,
+    private readonly managers: KnowledgeBaseManagerFactory,
     private readonly repositories: KnowledgeBaseRepositoryFactory,
     private readonly allowedStorageDisks: readonly string[],
-  ) {
-    this.managers = new KnowledgeBaseManagerFactory(
-      ai,
-      fileStorageFactory,
-      queue,
-      repositories,
-      allowedStorageDisks,
-    );
-  }
-
-  public readonly managers: KnowledgeBaseManagerFactory;
+  ) {}
   private knowledgeBaseService: KnowledgeBaseService | undefined;
   private documentService: KnowledgeBaseDocumentService | undefined;
   private segmentService: KnowledgeBaseSegmentService | undefined;
@@ -96,7 +84,6 @@ export class KnowledgeBaseServiceFactory {
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.managers.dispose();
     this.knowledgeBaseService = undefined;
     this.documentService = undefined;
     this.segmentService = undefined;

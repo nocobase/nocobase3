@@ -5,12 +5,9 @@ import type {
 } from '@nocobase/ai-employee';
 
 import type { VectorStoreManager } from '../../managers/vector-store-manager.js';
-import { LocalVectorStoreService } from '../../services/local-vector-store-service.js';
+import { LocalVectorStoreService } from '../../services/vector-store-service.js';
 
-export const LOCAL_VECTOR_STORE_PROVIDER_NAME =
-  'NocobaseLocalVectorStoreProvider';
-export const LEGACY_LOCAL_VECTOR_STORE_PROVIDER_NAME =
-  'NocobaseLocalVectorStore';
+export const LOCAL_VECTOR_STORE_PROVIDER_NAME = 'NocobaseLocalVectorStore';
 
 export class LocalVectorStoreProvider implements VectorStoreProvider {
   public readonly providerName: string = LOCAL_VECTOR_STORE_PROVIDER_NAME;

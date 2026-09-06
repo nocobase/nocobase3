@@ -15,12 +15,8 @@ export default {
     'Change the search or clear the current filter.',
   Characters: 'Characters',
   'Choose a file to upload.': 'Choose a file to upload.',
-  'Choose filename encodings for a selected ZIP archive before upload.':
-    'Choose filename encodings for a selected ZIP archive before upload.',
   'Choose one of the supported file types: {{types}}.':
     'Choose one of the supported file types: {{types}}.',
-  'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.':
-    'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.',
   'Chunk overlap': 'Chunk overlap',
   'Chunk size': 'Chunk size',
   Close: 'Close',
@@ -86,7 +82,6 @@ export default {
   'Go to previous page': 'Go to previous page',
   'Hit test failed.': 'Hit test failed.',
   'Hit tests': 'Hit tests',
-  'How to read ZIP filenames': 'How to read ZIP filenames',
   ID: 'ID',
   'Increase {{label}} by 100': 'Increase {{label}} by 100',
   'Input matching text': 'Input matching text',
@@ -102,8 +97,6 @@ export default {
     'Knowledge base unavailable or not authorized.',
   'Knowledge base workspace': 'Knowledge base workspace',
   'Knowledge bases': 'Knowledge bases',
-  'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.':
-    'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.',
   'List view': 'List view',
   'Loading more knowledge bases…': 'Loading more knowledge bases…',
   'Loading upload requirements. Try again in a moment.':
@@ -123,8 +116,6 @@ export default {
   'No segments': 'No segments',
   'No.': 'No.',
   'Open result {{number}}': 'Open result {{number}}',
-  'Open the upload dialog or review selected-file states before adding source documents, including filename encoding choices for ZIP archives.':
-    'Open the upload dialog or review selected-file states before adding source documents, including filename encoding choices for ZIP archives.',
   'Open upload dialog': 'Open upload dialog',
   'Open {{name}}': 'Open {{name}}',
   'Page {{page}} of {{pages}}': 'Page {{page}} of {{pages}}',
@@ -194,7 +185,6 @@ export default {
   Send: 'Send',
   Settings: 'Settings',
   Shared: 'Shared',
-  'Show ZIP filename encoding options': 'Show ZIP filename encoding options',
   Size: 'Size',
   'Someone else updated this segment': 'Someone else updated this segment',
   'Split document': 'Split document',
@@ -214,8 +204,6 @@ export default {
     'The requested knowledge-base data could not be loaded.',
   'The segment changed and is no longer available. Refresh the document list.':
     'The segment changed and is no longer available. Refresh the document list.',
-  'The upload task was submitted. Indexing may take a few moments.':
-    'The upload task was submitted. Indexing may take a few moments.',
   'There are no knowledge bases available to this user.':
     'There are no knowledge bases available to this user.',
   'This document has no segments yet.': 'This document has no segments yet.',
@@ -233,8 +221,6 @@ export default {
     'This submits asynchronous vectorization tasks for {{count}} {{item}}.',
   'Top K': 'Top K',
   'Try again': 'Try again',
-  'Type an encoding name, then press Enter to add it.':
-    'Type an encoding name, then press Enter to add it.',
   'Unable to check the knowledge base plugin':
     'Unable to check the knowledge base plugin',
   'Unable to load more knowledge bases.':
@@ -251,9 +237,9 @@ export default {
   'Updated at': 'Updated at',
   Upload: 'Upload',
   'Upload a document': 'Upload a document',
-  'Upload a ZIP archive to import multiple documents in one go.':
-    'Upload a ZIP archive to import multiple documents in one go.',
   'Upload document': 'Upload document',
+  'Upload one supported document at a time.':
+    'Upload one supported document at a time.',
   'Upload failed': 'Upload failed',
   'Upload panel': 'Upload panel',
   'Upload requirements are unavailable. The document was not submitted.':
@@ -262,9 +248,6 @@ export default {
   'Uploading documents is unavailable for this knowledge base.':
     'Uploading documents is unavailable for this knowledge base.',
   'Uploading…': 'Uploading…',
-  'Uses UTF-8 and {{encoding}} by default':
-    'Uses UTF-8 and {{encoding}} by default',
-  'Uses UTF-8 by default': 'Uses UTF-8 by default',
   Vectorize: 'Vectorize',
   View: 'View',
   'View layout': 'View layout',
@@ -278,10 +261,6 @@ export default {
   'Your draft is retained. Server content: {{content}}':
     'Your draft is retained. Server content: {{content}}',
   'Your draft: {{content}}': 'Your draft: {{content}}',
-  'ZIP encoding options unavailable': 'ZIP encoding options unavailable',
-  'ZIP file selected': 'ZIP file selected',
-  'ZIP filename encoding help': 'ZIP filename encoding help',
-  'ZIP filename encodings': 'ZIP filename encodings',
   '{{count}} chars': '{{count}} chars',
   '{{count}} row(s)': '{{count}} row(s)',
   '{{count}} segments': '{{count}} segments',

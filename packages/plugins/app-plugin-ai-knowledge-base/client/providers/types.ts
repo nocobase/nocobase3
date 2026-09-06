@@ -91,20 +91,38 @@ export type KnowledgeBaseSegment = {
   questions?: KnowledgeBaseSegmentQuestion[];
 };
 
-export type ZipFilenameEncodingOption = {
-  value: string;
-  label: string;
-  description?: string;
-  isDefault?: boolean;
-};
+export const SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS: readonly [
+  '.pdf',
+  '.pptx',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.xlsm',
+  '.txt',
+  '.md',
+  '.json',
+  '.csv',
+] = [
+  '.pdf',
+  '.pptx',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.xlsm',
+  '.txt',
+  '.md',
+  '.json',
+  '.csv',
+];
 
 export type UploadConstraints = {
-  acceptedExtensions?: string[];
+  acceptedExtensions: string[];
   maxFileSizeBytes?: number;
 };
 
-export type UploadResult =
-  KnowledgeBaseDocument | { taskId: RecordId; message?: string };
+export type UploadResult = KnowledgeBaseDocument;
 
 export type PagedRequestMode =
   { mode: 'all' } | { mode: 'server'; page: number; pageSize: number };
@@ -150,10 +168,6 @@ export const isLocalKnowledgeBase = (value: KnowledgeBase) =>
 export const canMaintainKnowledgeBaseDocuments = (
   value: KnowledgeBase | undefined,
 ) => !!value && isLocalKnowledgeBase(value);
-
-export const isAsyncUploadResult = (
-  value: UploadResult,
-): value is { taskId: RecordId; message?: string } => 'taskId' in value;
 
 /** Server-computed access may tailor an affordance; it never authorizes a request. */
 export const canMaintainKnowledgeBaseDocument = (

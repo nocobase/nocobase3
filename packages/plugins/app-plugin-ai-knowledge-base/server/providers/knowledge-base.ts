@@ -4,6 +4,7 @@ import {
 } from '@nocobase/app-plugin-ai-employee/server/config';
 import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/tokens';
 import { driveConfig } from '@nocobase/app-server/drive';
+import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import { fileStorageFactoryToken, type AIManager } from '@nocobase/ai-employee';
@@ -11,22 +12,18 @@ import { databaseManagerToken } from '@nocobase/db';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { KnowledgeBaseFeatureImpl } from '../features/knowledge-base-feature.js';
-import {
-  LEGACY_LOCAL_VECTOR_STORE_PROVIDER_NAME,
-  LocalVectorStoreProvider,
-} from './vector-store/local-vector-store-provider.js';
+import { LocalVectorStoreProvider } from '../extensions/vector-store/local-provider.js';
 import {
   PG_VECTOR_PROVIDER_NAME,
   PGVectorProvider,
-} from './vector-database/pg-vector-provider.js';
-import {
-  LEGACY_READONLY_VECTOR_STORE_PROVIDER_NAME,
-  ReadonlyVectorStoreProvider,
-} from './vector-store/readonly-vector-store-provider.js';
-import { VectorDatabaseFeatureImpl } from '../features/vector-database-feature.js';
+} from '../extensions/vector-database/pg-vector-provider.js';
+import { ReadonlyVectorStoreProvider } from '../extensions/vector-store/readonly-store-provider.js';
 import { VectorDatabaseProviderFeatureImpl } from '../features/vector-database-provider-feature.js';
 import { VectorStoreProviderFeatureImpl } from '../features/vector-store-provider-feature.js';
-import type { KnowledgeBaseManagerFactory } from '../factories/manager-factory.js';
+import {
+  managerFactoryToken,
+  KnowledgeBaseManagerFactory,
+} from '../factories/manager-factory.js';
 import {
   repositoryFactoryToken,
   KnowledgeBaseRepositoryFactory,
@@ -42,7 +39,6 @@ import {
 import type { KnowledgeBaseVectorizationExecutor } from '../internal-types.js';
 
 const AI_FEATURE_KEYS = [
-  'vectorDatabase',
   'vectorDatabaseProvider',
   'vectorStoreProvider',
   'knowledgeBase',
@@ -51,7 +47,6 @@ const AI_FEATURE_KEYS = [
 export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-plugin-ai-knowledge-base';
   private boundExecutor: KnowledgeBaseVectorizationExecutor | undefined;
-  private vectorProvider: PGVectorProvider | undefined;
   private featuresEnabled = false;
 
   public override register(): void {
@@ -66,35 +61,49 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
           this.app.container.resolve(databaseManagerToken).connection(),
         ),
     );
-    this.app.container.singleton(serviceFactoryToken, () => {
-      const ai = this.app.container.resolve(aiManagerToken);
-      return new KnowledgeBaseServiceFactory(
-        ai,
+    this.app.container.singleton(managerFactoryToken, () => {
+      const logger = this.app.container
+        .resolve(loggingToken)
+        .getLogger()
+        .child({ module: 'ai-knowledge-base' });
+      return new KnowledgeBaseManagerFactory(
+        this.app.container.resolve(aiManagerToken),
         this.app.container.resolve(fileStorageFactoryToken),
         this.app.container.resolve(queueManagerToken),
         this.app.container.resolve(repositoryFactoryToken),
         allowedStorageDisks,
+        {
+          warn(message, details): void {
+            logger.warn(details, message);
+          },
+        },
       );
     });
+    this.app.container.singleton(
+      serviceFactoryToken,
+      () =>
+        new KnowledgeBaseServiceFactory(
+          this.app.container.resolve(aiManagerToken),
+          this.app.container.resolve(managerFactoryToken),
+          this.app.container.resolve(repositoryFactoryToken),
+          allowedStorageDisks,
+        ),
+    );
   }
 
   public override boot(): Promise<void> {
     const ai = this.app.container.resolve(aiManagerToken);
     const repositories = this.app.container.resolve(repositoryFactoryToken);
+    const managers = this.app.container.resolve(managerFactoryToken);
     const services = this.app.container.resolve(serviceFactoryToken);
-    const managers = services.managers;
     const executor = services.vectorization;
     bindKnowledgeBaseVectorizationExecutor(executor);
     this.boundExecutor = executor;
 
     const vectorDatabaseProvider = new VectorDatabaseProviderFeatureImpl();
     const vectorStoreProvider = new VectorStoreProviderFeatureImpl();
-    this.vectorProvider = new PGVectorProvider();
 
     ai.features.enableFeatures({
-      vectorDatabase: new VectorDatabaseFeatureImpl(
-        repositories.vectorDatabases,
-      ),
       vectorDatabaseProvider,
       vectorStoreProvider,
       knowledgeBase: new KnowledgeBaseFeatureImpl(
@@ -107,7 +116,7 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
     ai.features.vectorDatabaseProvider.register({
       name: PG_VECTOR_PROVIDER_NAME,
       spec: 'PGVector',
-      provider: this.vectorProvider,
+      provider: new PGVectorProvider(),
     });
     this.registerBuiltInVectorStoreProviders(ai, managers);
     this.featuresEnabled = true;
@@ -116,9 +125,13 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
 
   public override async shutdown(): Promise<void> {
     if (this.featuresEnabled) {
-      this.app.container
-        .resolve(aiManagerToken)
-        .features.disableFeatures([...AI_FEATURE_KEYS]);
+      const features = this.app.container.resolve(aiManagerToken).features;
+      const vectorDatabaseProviders =
+        features.vectorDatabaseProvider.listProviders();
+      await Promise.all(
+        vectorDatabaseProviders.map(({ provider }) => provider.dispose()),
+      );
+      features.disableFeatures([...AI_FEATURE_KEYS]);
       this.featuresEnabled = false;
     }
     if (this.boundExecutor) {
@@ -126,8 +139,7 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
       this.boundExecutor = undefined;
     }
     this.app.container.resolveIfCreated(serviceFactoryToken)?.dispose();
-    await this.vectorProvider?.dispose();
-    this.vectorProvider = undefined;
+    this.app.container.resolveIfCreated(managerFactoryToken)?.dispose();
     this.app.container.resolveIfCreated(repositoryFactoryToken)?.dispose();
   }
 
@@ -139,15 +151,5 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
     const readonly = new ReadonlyVectorStoreProvider(managers.vectorStores);
     ai.features.vectorStoreProvider.register(local);
     ai.features.vectorStoreProvider.register(readonly);
-    ai.features.vectorStoreProvider.register({
-      providerName: LEGACY_LOCAL_VECTOR_STORE_PROVIDER_NAME,
-      createVectorStoreService: (props) =>
-        local.createVectorStoreService(props),
-    });
-    ai.features.vectorStoreProvider.register({
-      providerName: LEGACY_READONLY_VECTOR_STORE_PROVIDER_NAME,
-      createVectorStoreService: (props) =>
-        readonly.createVectorStoreService(props),
-    });
   }
 }

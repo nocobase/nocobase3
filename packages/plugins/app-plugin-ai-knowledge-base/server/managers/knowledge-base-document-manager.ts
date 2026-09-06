@@ -1,131 +1,130 @@
 import { nanoid } from 'nanoid';
 
+import {
+  assertKnowledgeBaseDocumentUploadSize,
+  KnowledgeBaseUploadError,
+  SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS,
+} from '../document-upload.js';
 import type {
-  JsonRecord,
-  KnowledgeBaseDocumentRecord,
-  KnowledgeBaseRecord,
   KnowledgeBaseVectorizationDispatcher,
-  SegmentRecord,
-  SegmentShardRecord,
+  KnowledgeBaseWarningLogger,
 } from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
-import { extractZipFiles } from '../zip.js';
+import type {
+  KnowledgeBaseDocumentEntity,
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseRepository,
+  KnowledgeBaseSegmentRepository,
+  KnowledgeBaseSegmentShardRepository,
+} from '../repository/index.js';
 import type { KnowledgeBaseManager } from './knowledge-base-manager.js';
 import type { KnowledgeBaseStorageManager } from './knowledge-base-storage-manager.js';
 
-const EXTENSIONS = new Set(['.doc', '.docx', '.md', '.pdf', '.txt', '.zip']);
-
+const EXTENSIONS = new Set<string>(
+  SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS,
+);
 export class KnowledgeBaseDocumentManager {
   public constructor(
-    private readonly bases: TableRepository<KnowledgeBaseRecord>,
-    private readonly documents: TableRepository<KnowledgeBaseDocumentRecord>,
-    private readonly segments: TableRepository<SegmentRecord>,
-    private readonly segmentShards: TableRepository<SegmentShardRecord>,
+    private readonly bases: KnowledgeBaseRepository,
+    private readonly documents: KnowledgeBaseDocumentRepository,
+    private readonly segments: KnowledgeBaseSegmentRepository,
+    private readonly segmentShards: KnowledgeBaseSegmentShardRepository,
     private readonly knowledgeBases: KnowledgeBaseManager,
     private readonly storage: KnowledgeBaseStorageManager,
     private readonly vectorizationDispatcher: KnowledgeBaseVectorizationDispatcher,
+    private readonly warningLogger: KnowledgeBaseWarningLogger,
   ) {}
 
   public async upload(
     knowledgeBaseKey: string,
     file: { name: string; type?: string; bytes: Uint8Array },
     actorId?: string | number,
-  ): Promise<KnowledgeBaseDocumentRecord> {
-    const base = await this.knowledgeBases.require(knowledgeBaseKey);
+  ): Promise<KnowledgeBaseDocumentEntity> {
+    let base;
+    try {
+      base = await this.knowledgeBases.require(knowledgeBaseKey);
+    } catch (cause) {
+      if (cause instanceof Error && /not found/i.test(cause.message)) {
+        throw new KnowledgeBaseUploadError(
+          'KNOWLEDGE_BASE_NOT_FOUND',
+          `Knowledge base #${knowledgeBaseKey} not found`,
+          404,
+          { cause },
+        );
+      }
+      throw cause;
+    }
     if (base.knowledgeBaseType !== 'LOCAL') {
-      throw new Error('Only LOCAL knowledge bases accept documents');
+      throw new KnowledgeBaseUploadError(
+        'LOCAL_KNOWLEDGE_BASE_REQUIRED',
+        'Only LOCAL knowledge bases accept documents.',
+        400,
+      );
     }
     const ext = this.extension(file.name);
     if (!EXTENSIONS.has(ext)) {
-      throw new Error(`Unsupported file type: ${ext || 'none'}`);
-    }
-    if (ext === '.zip') {
-      const extracted = (await extractZipFiles(file.bytes)).filter(
-        (entry) =>
-          EXTENSIONS.has(this.extension(entry.name)) &&
-          this.extension(entry.name) !== '.zip',
+      throw new KnowledgeBaseUploadError(
+        'UNSUPPORTED_FILE_TYPE',
+        `Unsupported file type: ${ext || 'none'}`,
+        415,
       );
-      if (!extracted.length) {
-        throw new Error('ZIP archive contains no supported documents');
-      }
-      const created: KnowledgeBaseDocumentRecord[] = [];
-      for (const entry of extracted) {
-        created.push(
-          await this.upload(
-            knowledgeBaseKey,
-            { name: entry.name, bytes: entry.bytes },
-            actorId,
-          ),
+    }
+    assertKnowledgeBaseDocumentUploadSize(file.bytes.byteLength);
+    const key = nanoid(32);
+    let metadata;
+    try {
+      metadata = await this.storage.writeDocument(base, {
+        objectId: key,
+        filename: file.name,
+        content: file.bytes,
+        size: file.bytes.byteLength,
+        mimeType: file.type,
+        metadataContext: {
+          key,
+          knowledgeBaseKey: base.key,
+          title: file.name,
+          segmentOptions: base.segmentOptions,
+          createdById: actorId,
+        },
+      });
+    } catch (cause) {
+      throw new KnowledgeBaseUploadError(
+        'STORAGE_UNAVAILABLE',
+        'Document storage is unavailable.',
+        503,
+        { cause },
+      );
+    }
+    try {
+      await this.dispatchVectorization(metadata.entity.id);
+    } catch (dispatchError) {
+      const errorMessage =
+        'Vectorization could not be queued. Retry vectorization later.';
+      this.warningLogger.warn(
+        'Knowledge base document vectorization dispatch failed.',
+        { documentId: metadata.entity.id, error: dispatchError },
+      );
+      try {
+        await this.documents.update(
+          { id: metadata.entity.id },
+          { indexStatus: 'ERROR', errorMessage },
+        );
+      } catch (statusUpdateError) {
+        this.warningLogger.warn(
+          'Knowledge base document ERROR status persistence failed after vectorization dispatch failure.',
+          {
+            documentId: metadata.entity.id,
+            dispatchError,
+            statusUpdateError,
+          },
         );
       }
-      return created[0];
+      return {
+        ...metadata.entity,
+        indexStatus: 'ERROR',
+        errorMessage,
+      };
     }
-    const key = nanoid(32);
-    const metadata = await this.storage.createDocumentStorage(base).write({
-      objectId: key,
-      filename: file.name,
-      content: file.bytes,
-      size: file.bytes.byteLength,
-      mimeType: file.type,
-      metadataContext: {
-        key,
-        knowledgeBaseKey: base.key,
-        title: file.name,
-        segmentOptions: base.segmentOptions,
-        createdById: actorId,
-      },
-    });
-    await this.dispatchVectorization(metadata.entity.id);
     return metadata.entity;
-  }
-
-  public async finalizeUpload(
-    knowledgeBaseKey: string,
-    values: JsonRecord,
-    actorId?: string | number,
-  ): Promise<KnowledgeBaseDocumentRecord> {
-    const base = await this.knowledgeBases.require(knowledgeBaseKey);
-    const filename = String(values.title ?? values.filename ?? 'file');
-    const extname = String(
-      values.extname ?? this.extension(filename),
-    ).toLowerCase();
-    if (!EXTENSIONS.has(extname)) {
-      throw new Error(`Unsupported file type: ${extname || 'none'}`);
-    }
-    const disk = this.storage.requireAllowedStorageDisk(
-      values.disk ?? base.disk,
-    );
-    if (disk !== base.disk) {
-      throw new Error(
-        `Upload disk "${disk}" does not match knowledge base disk "${base.disk}".`,
-      );
-    }
-    const record = await this.documents.create({
-      key: String(values.key ?? nanoid(32)),
-      title: filename,
-      filename: String(values.filename ?? filename),
-      extname,
-      size: Number(values.size ?? 0),
-      mimetype: String(values.mimetype ?? 'application/octet-stream'),
-      path: String(values.path ?? ''),
-      ...(values.url ? { url: String(values.url) } : {}),
-      disk,
-      meta: this.jsonRecord(values.meta),
-      knowledgeBaseKey,
-      indexStatus: 'PENDING',
-      errorMessage: null,
-      characterCount: 0,
-      segmentCount: 0,
-      segmentVersion: 0,
-      segmentRevision: 0,
-      segmentStatus: 'PENDING',
-      segmentErrorMessage: null,
-      segmentOptions: base.segmentOptions,
-      enabled: true,
-      createdById: actorId,
-    });
-    await this.dispatchVectorization(record.id);
-    return record;
   }
 
   public async dispatchVectorization(
@@ -164,12 +163,6 @@ export class KnowledgeBaseDocumentManager {
         ),
       },
     );
-  }
-
-  private jsonRecord(value: unknown): JsonRecord {
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as JsonRecord)
-      : {};
   }
 
   private extension(filename: string): string {

@@ -1,6 +1,7 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { createKnowledgeBaseService } from '../client/providers/service/knowledge-base-factory.ts';
+import { SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS } from '../client/providers/types.ts';
 
 type Call = {
   resource: string;
@@ -135,24 +136,164 @@ test('directory, detail, document, retrieval, and segment reads use the server r
   });
 });
 
-test('multipart upload sends the knowledge base key in query and form data', async () => {
-  const { calls, client } = recordingClient(({ action }) => {
-    if (action === 'getUploadStorage')
-      return { data: { disk: 'local', type: 'local', rules: { size: 1024 } } };
-    if (action === 'upload') return { data: document };
+const uploadConstraints = {
+  acceptedExtensions: [...SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS],
+  maxFileSizeBytes: 1024,
+};
+
+function uploadClient(response: unknown = document) {
+  return recordingClient(({ action }) => {
+    if (action === 'getUploadStorage') return { data: uploadConstraints };
+    if (action === 'upload') return { data: response };
     return { data: [] };
   });
+}
+
+test('upload constraints expose the exact eleven supported extensions and size limit', async () => {
+  const { calls, client } = recordingClient(() => ({
+    data: {
+      ...uploadConstraints,
+      disk: 'private-storage',
+      type: 's3-compatible',
+    },
+  }));
+  const service = createKnowledgeBaseService(client);
+  const signal = new AbortController().signal;
+
+  const constraints = await service.getUploadConstraints({
+    knowledgeBaseKey: 'handbook',
+    signal,
+  });
+
+  expect(constraints).toEqual(uploadConstraints);
+  expect(constraints).not.toHaveProperty('disk');
+  expect(constraints).not.toHaveProperty('type');
+  expect(calls).toEqual([
+    {
+      resource: 'aiKnowledgeBaseDocs',
+      action: 'getUploadStorage',
+      options: {
+        method: 'GET',
+        query: { knowledgeBaseKey: 'handbook' },
+        signal,
+        unwrap: 'none',
+      },
+    },
+  ]);
+});
+
+test('upload constraints use the exact local fallback without legacy storage fields', async () => {
+  const { client } = recordingClient(() => ({
+    data: {
+      disk: 'private-storage',
+      type: 's3-compatible',
+      rules: { size: 2048 },
+    },
+  }));
+  const service = createKnowledgeBaseService(client);
+
+  await expect(
+    service.getUploadConstraints({ knowledgeBaseKey: 'handbook' }),
+  ).resolves.toEqual({
+    acceptedExtensions: [...SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS],
+  });
+});
+
+test('upload constraints normalize case and discard unsupported advertised extensions', async () => {
+  const { client } = recordingClient(() => ({
+    data: {
+      acceptedExtensions: ['.PDF', '.zip', ' .XLSX ', '.PDF'],
+      maxFileSizeBytes: 2048,
+    },
+  }));
+  const service = createKnowledgeBaseService(client);
+
+  await expect(
+    service.getUploadConstraints({ knowledgeBaseKey: 'handbook' }),
+  ).resolves.toEqual({
+    acceptedExtensions: ['.pdf', '.xlsx'],
+    maxFileSizeBytes: 2048,
+  });
+});
+
+test('upload always sends multipart form data containing only the knowledge base key and file', async () => {
+  const { calls, client } = uploadClient();
   const service = createKnowledgeBaseService(client);
   const file = new File(['content'], 'guide.txt', { type: 'text/plain' });
+  const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-  await service.uploadDocument({ knowledgeBaseKey: 'handbook', file });
+  await expect(
+    service.uploadDocument({ knowledgeBaseKey: 'handbook', file }),
+  ).resolves.toEqual(document);
 
-  const upload = calls.find(({ action }) => action === 'upload');
+  expect(calls.map(({ resource, action }) => `${resource}:${action}`)).toEqual([
+    'aiKnowledgeBaseDocs:getUploadStorage',
+    'aiKnowledgeBaseDocs:upload',
+  ]);
+  const upload = calls[1];
   expect(upload?.options?.query).toEqual({ knowledgeBaseKey: 'handbook' });
   expect(upload?.options?.body).toBeInstanceOf(FormData);
   const form = upload?.options?.body as FormData;
+  expect(Array.from(form.keys())).toEqual(['knowledgeBaseKey', 'file']);
   expect(form.get('knowledgeBaseKey')).toBe('handbook');
-  expect((form.get('file') as File).name).toBe('guide.txt');
+  expect(form.get('file')).toBe(file);
+  expect(calls.some(({ resource }) => resource === 'storages')).toBe(false);
+  expect(fetchSpy).not.toHaveBeenCalled();
+  fetchSpy.mockRestore();
+  expect(service).not.toHaveProperty('getZipFilenameEncodingOptions');
+});
+
+test.each(
+  SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS.flatMap((extension) => [
+    extension,
+    extension.toUpperCase(),
+  ]),
+)('accepts the supported document extension %s', async (extension) => {
+  const { calls, client } = uploadClient();
+  const service = createKnowledgeBaseService(client);
+  const file = new File(['content'], `document${extension}`);
+
+  await expect(
+    service.uploadDocument({ knowledgeBaseKey: 'handbook', file }),
+  ).resolves.toEqual(document);
+  expect(calls.filter(({ action }) => action === 'upload')).toHaveLength(1);
+});
+
+test.each(['.zip', '.rar', '.7z', '.png', '.exe', ''])(
+  'rejects unsupported document extension %s before upload',
+  async (extension) => {
+    const { calls, client } = uploadClient();
+    const service = createKnowledgeBaseService(client);
+    const file = new File(['content'], `document${extension}`);
+
+    await expect(
+      service.uploadDocument({ knowledgeBaseKey: 'handbook', file }),
+    ).rejects.toThrow(`Unsupported file type: ${extension || 'no extension'}.`);
+    expect(calls.filter(({ action }) => action === 'upload')).toHaveLength(0);
+  },
+);
+
+test('rejects a file larger than the advertised limit before upload', async () => {
+  const { calls, client } = uploadClient();
+  const service = createKnowledgeBaseService(client);
+  const file = new File([new Uint8Array(1025)], 'large.pdf');
+
+  await expect(
+    service.uploadDocument({ knowledgeBaseKey: 'handbook', file }),
+  ).rejects.toThrow('This file exceeds the server upload limit.');
+  expect(calls.filter(({ action }) => action === 'upload')).toHaveLength(0);
+});
+
+test('requires upload responses to be document records instead of task results', async () => {
+  const { client } = uploadClient({ taskId: 42, message: 'queued' });
+  const service = createKnowledgeBaseService(client);
+  const file = new File(['content'], 'guide.pdf');
+
+  await expect(
+    service.uploadDocument({ knowledgeBaseKey: 'handbook', file }),
+  ).rejects.toThrow(
+    'Knowledge Base API response is missing required field: document.id.',
+  );
 });
 
 test('segment updates preserve the latest content hash in the request body', async () => {

@@ -19,7 +19,6 @@ import type {
   SegmentRequest,
   UploadConstraints,
   UploadResult,
-  ZipFilenameEncodingOption,
 } from '../types.js';
 
 /**
@@ -84,19 +83,10 @@ export interface KnowledgeBaseService {
     knowledgeBaseKey: string;
     signal?: AbortSignal;
   }): Promise<UploadConstraints>;
-  /** Request only after a ZIP is selected; an empty selection must remain omitted from upload. */
-  getZipFilenameEncodingOptions(request: {
-    knowledgeBaseKey: string;
-    signal?: AbortSignal;
-  }): Promise<ZipFilenameEncodingOption[]>;
-  /**
-   * The adapter owns multipart/S3 branching. Multipart must include knowledgeBaseKey
-   * in both the query and FormData; an S3 finalize payload must be flat.
-   */
+  /** Uploads one document as multipart data containing only its knowledge-base key and file. */
   uploadDocument(request: {
     knowledgeBaseKey: string;
     file: File;
-    zipFilenameEncodings?: string[];
   }): Promise<UploadResult>;
 
   vectorizeDocuments(request: {

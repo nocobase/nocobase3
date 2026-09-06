@@ -3,39 +3,39 @@ import { createHash } from 'node:crypto';
 import type { AIManager } from '@nocobase/ai-employee';
 import { nanoid } from 'nanoid';
 
-import { PG_VECTOR_PROVIDER_NAME } from '../providers/vector-database/pg-vector-provider.js';
+import { PG_VECTOR_PROVIDER_NAME } from '../extensions/vector-database/pg-vector-provider.js';
 import type {
-  JsonRecord,
-  KnowledgeBaseRecord,
-  VectorDatabaseRecord,
-  VectorStoreConfigRecord,
-} from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+  KnowledgeBaseEntity,
+  KnowledgeBaseRepository,
+  VectorDatabaseEntity,
+  VectorDatabaseRepository,
+  VectorStoreConfigRepository,
+} from '../repository/index.js';
 import { page, type PageOptions, type PageResult } from './pagination.js';
 
 export class VectorDatabaseService {
   public constructor(
     private readonly ai: AIManager,
-    private readonly vectors: TableRepository<VectorDatabaseRecord>,
-    private readonly bases: TableRepository<KnowledgeBaseRecord>,
-    private readonly vectorStoreConfigs: TableRepository<VectorStoreConfigRecord>,
+    private readonly vectors: VectorDatabaseRepository,
+    private readonly bases: KnowledgeBaseRepository,
+    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
   ) {}
 
-  public list(options: PageOptions): Promise<PageResult<JsonRecord>> {
+  public list(options: PageOptions): Promise<PageResult<VectorDatabaseEntity>> {
     return page({ repository: this.vectors, paging: options });
   }
 
   public get(options: {
     readonly id: string | number;
-  }): Promise<VectorDatabaseRecord | null> {
+  }): Promise<VectorDatabaseEntity | null> {
     return this.vectors.findById(options.id);
   }
 
   public async create(options: {
-    readonly values: JsonRecord;
-  }): Promise<VectorDatabaseRecord> {
+    readonly values: Record<string, unknown>;
+  }): Promise<VectorDatabaseEntity> {
     const provider = String(options.values.provider ?? PG_VECTOR_PROVIDER_NAME);
-    const connectProps = options.values.connectProps as JsonRecord;
+    const connectProps = options.values.connectProps as Record<string, unknown>;
     const providers = this.ai.features.vectorDatabaseProvider;
     providers.validateConnectParams(provider, connectProps);
     const check = await providers.beforeCreate(provider, connectProps, {
@@ -59,13 +59,13 @@ export class VectorDatabaseService {
 
   public async update(options: {
     readonly id: string | number;
-    readonly values: JsonRecord;
-  }): Promise<VectorDatabaseRecord | null> {
+    readonly values: Record<string, unknown>;
+  }): Promise<VectorDatabaseEntity | null> {
     const existing = await this.vectors.findById(options.id);
     if (!existing) return null;
     const provider = String(options.values.provider ?? existing.provider);
     const connectProps = (options.values.connectProps ??
-      existing.connectProps) as JsonRecord;
+      existing.connectProps) as Record<string, unknown>;
     this.ai.features.vectorDatabaseProvider.validateConnectParams(
       provider,
       connectProps,
@@ -113,7 +113,7 @@ export class VectorDatabaseService {
       .map(({ name, spec }) => ({ name, spec }));
   }
 
-  public findEnabled(): Promise<VectorDatabaseRecord[]> {
+  public findEnabled(): Promise<VectorDatabaseEntity[]> {
     return this.vectors.find({
       filter: { enabled: true },
       sort: ['name'],
@@ -139,7 +139,7 @@ export class VectorDatabaseService {
 
   public async findRelatedKnowledgeBases(options: {
     readonly vectorDatabaseKey?: string;
-  }): Promise<KnowledgeBaseRecord[]> {
+  }): Promise<KnowledgeBaseEntity[]> {
     if (!options.vectorDatabaseKey) return [];
     const configs = await this.vectorStoreConfigs.find({
       filter: { vectorDatabaseKey: options.vectorDatabaseKey },
@@ -153,7 +153,7 @@ export class VectorDatabaseService {
   }
 }
 
-function hashConnectProps(connectProps: JsonRecord): string {
+function hashConnectProps(connectProps: Record<string, unknown>): string {
   return createHash('sha256')
     .update(JSON.stringify(connectProps))
     .digest('hex');

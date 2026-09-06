@@ -1,13 +1,5 @@
 import type { DatabaseConnection, Row, SelectQuery } from '@nocobase/db';
 
-const JSON_FIELDS: Record<string, readonly string[]> = {
-  aiKnowledgeBase: ['vectorStoreProps', 'segmentOptions'],
-  aiKnowledgeBaseDocs: ['meta', 'segmentOptions'],
-  aiKnowledgeBaseDocSegments: ['meta'],
-  aiKnowledgeBaseDocSegmentShards: ['meta'],
-  aiVectorDatabases: ['connectProps'],
-};
-
 export type Filter = Record<string, unknown>;
 
 function applyFilter(query: SelectQuery, filter: Filter): SelectQuery {
@@ -25,10 +17,11 @@ function applyFilter(query: SelectQuery, filter: Filter): SelectQuery {
   return result;
 }
 
-export class TableRepository<T extends Record<string, unknown>> {
+export class TableRepository<T extends object> {
   public constructor(
     private readonly database: DatabaseConnection,
     public readonly table: string,
+    private readonly jsonFields: readonly string[] = [],
   ) {}
 
   public async find(
@@ -166,7 +159,7 @@ export class TableRepository<T extends Record<string, unknown>> {
 
   private encode(value: Record<string, unknown>): Record<string, unknown> {
     const encoded = { ...value };
-    for (const field of JSON_FIELDS[this.table] ?? []) {
+    for (const field of this.jsonFields) {
       if (
         encoded[field] !== undefined &&
         encoded[field] !== null &&
@@ -180,7 +173,7 @@ export class TableRepository<T extends Record<string, unknown>> {
 
   private decode(value: T): T {
     const decoded = { ...value } as Record<string, unknown>;
-    for (const field of JSON_FIELDS[this.table] ?? []) {
+    for (const field of this.jsonFields) {
       if (typeof decoded[field] === 'string') {
         try {
           decoded[field] = JSON.parse(decoded[field]);

@@ -15,6 +15,7 @@ describe('knowledge base feature registries', () => {
         testConnection: vi.fn().mockResolvedValue({ success: true }),
         beforeCreate: vi.fn().mockResolvedValue({ status: 0 }),
         createVectorStore: vi.fn().mockResolvedValue({ kind: 'custom' }),
+        dispose: vi.fn().mockResolvedValue(undefined),
       };
     const feature = new VectorDatabaseProviderFeatureImpl();
     feature.register({ name: 'custom', spec: 'Custom', provider });

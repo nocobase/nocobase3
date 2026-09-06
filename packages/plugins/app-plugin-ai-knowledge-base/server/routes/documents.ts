@@ -1,10 +1,14 @@
 import type { AuthEnv } from '@nocobase/app-plugin-authentication/server';
 import type { Hono } from 'hono';
 
+import {
+  assertKnowledgeBaseDocumentUploadSize,
+  type KnowledgeBaseDocumentUploadFile,
+  KnowledgeBaseUploadError,
+} from '../document-upload.js';
 import type { KnowledgeBaseDocumentService } from '../services/knowledge-base-document-service.js';
 import {
   createRouteGroup,
-  body,
   data,
   error,
   ids,
@@ -36,38 +40,51 @@ export function createDocumentRoutes(options: {
       : error(context, 404, 'Document not found');
   });
   routes.post('/aiKnowledgeBaseDocs:upload', async (context) => {
-    const queryKey = scalar(context, 'knowledgeBaseKey') ?? '';
     const contentType = context.req.header('content-type') ?? '';
-    if (contentType.includes('multipart/form-data')) {
-      const form = await context.req.formData();
-      const file = form.get('file');
-      const knowledgeBaseKey =
-        queryKey || String(form.get('knowledgeBaseKey') ?? '');
-      if (!(file instanceof File) || !knowledgeBaseKey) {
-        return error(context, 400, 'knowledgeBaseKey and file are required');
-      }
-      return data(
-        context,
-        await options.service.upload({
-          knowledgeBaseKey,
-          file: {
-            name: file.name,
-            type: file.type,
-            bytes: new Uint8Array(await file.arrayBuffer()),
-          },
-          userId: userId(context),
-        }),
+    if (!isMultipartFormData(contentType)) {
+      throw new KnowledgeBaseUploadError(
+        'UNSUPPORTED_UPLOAD_CONTENT_TYPE',
+        'Document upload requires multipart/form-data.',
+        415,
       );
     }
-    const values = await body(context);
-    const knowledgeBaseKey = queryKey || String(values.knowledgeBaseKey ?? '');
-    if (!knowledgeBaseKey)
-      return error(context, 400, 'knowledgeBaseKey is required');
+
+    let form: FormData;
+    try {
+      form = await context.req.formData();
+    } catch (cause) {
+      throw new KnowledgeBaseUploadError(
+        'UPLOAD_INPUT_INVALID',
+        'A valid multipart upload body is required.',
+        400,
+        { cause },
+      );
+    }
+
+    const fileEntries: Array<readonly [string, unknown]> = [];
+    for (const [name, value] of form.entries()) {
+      if (isUploadFile(value)) fileEntries.push([name, value]);
+    }
+    const fileEntry = fileEntries.length === 1 ? fileEntries[0] : undefined;
+    const file = fileEntry?.[0] === 'file' ? fileEntry[1] : undefined;
+    const queryKey = scalar(context, 'knowledgeBaseKey')?.trim();
+    const formValue = form.get('knowledgeBaseKey');
+    const formKey = typeof formValue === 'string' ? formValue.trim() : '';
+    const knowledgeBaseKey = queryKey || formKey;
+    if (!isUploadFile(file) || !knowledgeBaseKey) {
+      throw new KnowledgeBaseUploadError(
+        'UPLOAD_INPUT_INVALID',
+        'knowledgeBaseKey and file are required.',
+        400,
+      );
+    }
+    assertKnowledgeBaseDocumentUploadSize(file.size);
+
     return data(
       context,
-      await options.service.finalizeUpload({
+      await options.service.upload({
         knowledgeBaseKey,
-        values,
+        file,
         userId: userId(context),
       }),
     );
@@ -96,11 +113,28 @@ export function createDocumentRoutes(options: {
       ? data(context, storage)
       : error(context, 404, 'Knowledge base not found');
   });
-  routes.get(
-    '/aiKnowledgeBaseDocs:getZipFilenameEncodingOptions',
-    async (context) =>
-      data(context, options.service.getZipFilenameEncodingOptions()),
-  );
-
   return routes;
+}
+
+function isMultipartFormData(contentType: string): boolean {
+  const [mediaType] = contentType.split(';', 1);
+  if (mediaType?.trim().toLowerCase() !== 'multipart/form-data') return false;
+  const boundary = contentType.match(
+    /(?:^|;)\s*boundary\s*=\s*(?:"([^"]+)"|([^;\s]+))/iu,
+  );
+  return Boolean(boundary?.[1] ?? boundary?.[2]);
+}
+
+function isUploadFile(
+  value: unknown,
+): value is File & KnowledgeBaseDocumentUploadFile {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<KnowledgeBaseDocumentUploadFile>;
+  return (
+    typeof candidate.name === 'string' &&
+    Number.isSafeInteger(candidate.size) &&
+    candidate.size !== undefined &&
+    candidate.size >= 0 &&
+    typeof candidate.arrayBuffer === 'function'
+  );
 }

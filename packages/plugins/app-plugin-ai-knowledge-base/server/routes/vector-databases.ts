@@ -2,7 +2,7 @@ import type { AuthEnv } from '@nocobase/app-plugin-authentication/server';
 import type { Hono } from 'hono';
 
 import type { VectorDatabaseService } from '../services/vector-database-service.js';
-import { PG_VECTOR_PROVIDER_NAME } from '../providers/vector-database/pg-vector-provider.js';
+import { PG_VECTOR_PROVIDER_NAME } from '../extensions/vector-database/pg-vector-provider.js';
 import {
   createRouteGroup,
   body,

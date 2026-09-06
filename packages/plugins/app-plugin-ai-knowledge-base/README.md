@@ -2,7 +2,9 @@
 
 AI knowledge-base plugin for NocoBase Apps. It exposes authenticated action APIs under both `/api` and the compatibility `/v2/api` prefix, persists documents, segments, and shards, registers AI Manager features, provides the built-in PGVector provider, and ships plugin-owned Client management pages.
 
-Server internals are intentionally private. The App container owns only lazy RepositoryFactory and ServiceFactory bindings. The ServiceFactory owns a property-cached ManagerFactory, while repositories, domain managers, services, AI feature adapters, queue execution, vector stores, and PGVector pools are created and disposed through those internal lifecycle boundaries.
+Server internals are intentionally private. The App container owns lazy RepositoryFactory, ManagerFactory, and ServiceFactory bindings. The ServiceFactory consumes the container-owned ManagerFactory instead of constructing it, while repositories, domain managers, services, AI feature adapters, queue execution, vector stores, and PGVector pools are created and disposed through those internal lifecycle boundaries.
+
+Document upload is an authenticated, multipart, single-file operation for LOCAL knowledge bases. The accepted filename extensions are exactly `.pdf`, `.pptx`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm`, `.txt`, `.md`, `.json`, and `.csv`; the maximum file size is 100 MiB. The server stores the file on the disk configured for the knowledge base, creates one document, and attempts to dispatch vectorization to the asynchronous queue. It always returns that single document after successful storage; a queue-dispatch failure marks the document `ERROR` with a retryable message rather than turning the completed upload into a 500. Parsing, segmentation, embedding, and vector persistence remain asynchronous, so clients must observe document status until it reaches `SUCCESS` or `ERROR`.
 
 ## Runtime and editable Registry source
 

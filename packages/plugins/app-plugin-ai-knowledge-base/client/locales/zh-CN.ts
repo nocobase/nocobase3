@@ -15,12 +15,8 @@ export default {
     '请调整搜索条件或清除当前筛选。',
   Characters: '字符数',
   'Choose a file to upload.': '请选择要上传的文件。',
-  'Choose filename encodings for a selected ZIP archive before upload.':
-    '上传前为已选择的 ZIP 压缩包选择文件名编码。',
   'Choose one of the supported file types: {{types}}.':
     '请选择以下支持的文件类型之一：{{types}}。',
-  'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.':
-    '选择一个或多个编码，或输入编码名称，以解码 ZIP 压缩包中的文件名。',
   'Chunk overlap': '分段重叠长度',
   'Chunk size': '分段长度',
   Close: '关闭',
@@ -85,7 +81,6 @@ export default {
   'Go to previous page': '上一页',
   'Hit test failed.': '命中测试失败。',
   'Hit tests': '命中测试',
-  'How to read ZIP filenames': '如何读取 ZIP 文件名',
   ID: 'ID',
   'Increase {{label}} by 100': '将{{label}}增加 100',
   'Input matching text': '输入匹配文本',
@@ -99,8 +94,6 @@ export default {
   'Knowledge base unavailable or not authorized.': '知识库不可用或您无权访问。',
   'Knowledge base workspace': '知识库工作区',
   'Knowledge bases': '知识库',
-  'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.':
-    '请留空编码选择，或请 Portal 管理员开放受支持的服务器能力。',
   'List view': '列表视图',
   'Loading more knowledge bases…': '正在加载更多知识库…',
   'Loading upload requirements. Try again in a moment.':
@@ -120,8 +113,6 @@ export default {
   'No segments': '暂无分段',
   'No.': '序号',
   'Open result {{number}}': '打开结果 {{number}}',
-  'Open the upload dialog or review selected-file states before adding source documents, including filename encoding choices for ZIP archives.':
-    '添加源文档前可打开上传对话框，或查看已选文件状态及 ZIP 压缩包文件名编码选择。',
   'Open upload dialog': '打开上传对话框',
   'Open {{name}}': '打开 {{name}}',
   'Page {{page}} of {{pages}}': '第 {{page}} / {{pages}} 页',
@@ -191,7 +182,6 @@ export default {
   Send: '发送',
   Settings: '设置',
   Shared: '共享',
-  'Show ZIP filename encoding options': '显示 ZIP 文件名编码选项',
   Size: '大小',
   'Someone else updated this segment': '其他人已更新此分段',
   'Split document': '分段文档',
@@ -210,8 +200,6 @@ export default {
     '无法加载所请求的知识库数据。',
   'The segment changed and is no longer available. Refresh the document list.':
     '分段已变更且不再可用，请刷新文档列表。',
-  'The upload task was submitted. Indexing may take a few moments.':
-    '已提交上传任务，索引可能需要一些时间。',
   'There are no knowledge bases available to this user.':
     '当前用户没有可访问的知识库。',
   'This document has no segments yet.': '此文档暂未生成分段。',
@@ -228,8 +216,6 @@ export default {
     '将为 {{count}} 个{{item}}提交异步向量化任务。',
   'Top K': 'Top K',
   'Try again': '再试一次',
-  'Type an encoding name, then press Enter to add it.':
-    '输入编码名称后按 Enter 添加。',
   'Unable to check the knowledge base plugin': '无法检查知识库插件状态',
   'Unable to load more knowledge bases.': '无法加载更多知识库。',
   'Unable to load this view': '无法加载当前视图',
@@ -243,9 +229,8 @@ export default {
   'Updated at': '更新时间',
   Upload: '上传',
   'Upload a document': '上传文档',
-  'Upload a ZIP archive to import multiple documents in one go.':
-    '上传 ZIP 压缩包即可一次导入多个文档。',
   'Upload document': '上传文档',
+  'Upload one supported document at a time.': '每次上传一个支持的文档。',
   'Upload failed': '上传失败',
   'Upload panel': '上传面板',
   'Upload requirements are unavailable. The document was not submitted.':
@@ -254,8 +239,6 @@ export default {
   'Uploading documents is unavailable for this knowledge base.':
     '此知识库不支持上传文档。',
   'Uploading…': '正在上传…',
-  'Uses UTF-8 and {{encoding}} by default': '默认使用 UTF-8 和 {{encoding}}',
-  'Uses UTF-8 by default': '默认使用 UTF-8',
   Vectorize: '向量化',
   View: '查看',
   'View layout': '视图布局',
@@ -269,10 +252,6 @@ export default {
   'Your draft is retained. Server content: {{content}}':
     '已保留您的草稿。服务器内容：{{content}}',
   'Your draft: {{content}}': '您的草稿：{{content}}',
-  'ZIP encoding options unavailable': 'ZIP 文件名编码选项不可用',
-  'ZIP file selected': '已选择 ZIP 文件',
-  'ZIP filename encoding help': 'ZIP 文件名编码帮助',
-  'ZIP filename encodings': 'ZIP 文件名编码',
   '{{count}} chars': '{{count}} 个字符',
   '{{count}} row(s)': '共 {{count}} 行',
   '{{count}} segments': '{{count}} 个分段',

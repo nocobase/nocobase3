@@ -1,4 +1,10 @@
-import type { FileStorage, FileStorageFactory } from '@nocobase/ai-employee';
+import {
+  FileMetadataPersistenceError,
+  type FileMetadata,
+  type FileStorage,
+  type FileStorageFactory,
+  type WriteFileInput,
+} from '@nocobase/ai-employee';
 
 import {
   KnowledgeBaseDocumentMetadataRepository,
@@ -8,29 +14,40 @@ import {
   type KnowledgeBaseSegmentShardMetadataCreateContext,
 } from '../file-storage/index.js';
 import type {
-  JsonRecord,
-  KnowledgeBaseDocumentRecord,
-  KnowledgeBaseRecord,
-  SegmentShardRecord,
-} from '../internal-types.js';
-import type { TableRepository } from '../repositories/table-repository.js';
+  KnowledgeBaseDocumentEntity,
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseEntity,
+  KnowledgeBaseSegmentShardEntity,
+  KnowledgeBaseSegmentShardRepository,
+} from '../repository/index.js';
+
+import type { KnowledgeBaseWarningLogger } from '../internal-types.js';
+
+const defaultWarningLogger: KnowledgeBaseWarningLogger = {
+  warn(message, details): void {
+    console.warn(message, details);
+  },
+};
 
 export class KnowledgeBaseStorageManager {
   public constructor(
     private readonly fileStorageFactory: FileStorageFactory,
-    private readonly documents: TableRepository<KnowledgeBaseDocumentRecord>,
-    private readonly segmentShards: TableRepository<SegmentShardRecord>,
+    private readonly documents: KnowledgeBaseDocumentRepository,
+    private readonly segmentShards: KnowledgeBaseSegmentShardRepository,
     private readonly allowedStorageDisks: readonly string[],
+    private readonly warningLogger: KnowledgeBaseWarningLogger = defaultWarningLogger,
   ) {}
 
   public createDocumentStorage(
-    base: KnowledgeBaseRecord,
+    base: KnowledgeBaseEntity,
   ): FileStorage<
-    KnowledgeBaseDocumentRecord,
+    KnowledgeBaseDocumentEntity,
     KnowledgeBaseDocumentMetadataCreateContext
   > {
-    if (!base.disk) {
-      throw new Error(`Knowledge base "${base.key}" has no storage disk.`);
+    if (!base.disk || !this.allowedStorageDisks.includes(base.disk)) {
+      throw new Error(
+        `Knowledge base "${base.key}" has no available storage disk.`,
+      );
     }
     return this.fileStorageFactory.create({
       disk: base.disk,
@@ -41,10 +58,41 @@ export class KnowledgeBaseStorageManager {
     });
   }
 
+  public async writeDocument(
+    base: KnowledgeBaseEntity,
+    input: WriteFileInput<KnowledgeBaseDocumentMetadataCreateContext>,
+  ): Promise<FileMetadata<KnowledgeBaseDocumentEntity>> {
+    const storage = this.createDocumentStorage(base);
+    try {
+      return await storage.write(input);
+    } catch (cause) {
+      if (cause instanceof FileMetadataPersistenceError) {
+        try {
+          if (!storage.deleteObject) {
+            throw new Error('File storage does not support object deletion.', {
+              cause,
+            });
+          }
+          await storage.deleteObject(cause.metadata.key);
+        } catch (cleanupError) {
+          this.warningLogger.warn(
+            'Knowledge base document object cleanup failed after metadata persistence failure.',
+            {
+              disk: cause.metadata.disk,
+              path: cause.metadata.key,
+              error: cleanupError,
+            },
+          );
+        }
+      }
+      throw cause;
+    }
+  }
+
   public createSegmentShardStorage(
-    base: KnowledgeBaseRecord,
+    base: KnowledgeBaseEntity,
   ): FileStorage<
-    SegmentShardRecord,
+    KnowledgeBaseSegmentShardEntity,
     KnowledgeBaseSegmentShardMetadataCreateContext
   > {
     if (!base.disk) {
@@ -60,9 +108,9 @@ export class KnowledgeBaseStorageManager {
   }
 
   public async readShardContents(
-    base: KnowledgeBaseRecord,
-    shard: SegmentShardRecord,
-  ): Promise<Record<string, JsonRecord>> {
+    base: KnowledgeBaseEntity,
+    shard: KnowledgeBaseSegmentShardEntity,
+  ): Promise<Record<string, Record<string, unknown>>> {
     const storage = this.createSegmentShardStorage(base);
     const opened = await storage.openMetadata(
       mapKnowledgeBaseSegmentShardMetadata(shard),
@@ -77,14 +125,14 @@ export class KnowledgeBaseStorageManager {
     }
     const payload = JSON.parse(
       Buffer.concat(chunks).toString('utf8'),
-    ) as JsonRecord;
+    ) as Record<string, unknown>;
     const storedSegments = this.jsonRecord(payload.segments) as Record<
       string,
-      JsonRecord
+      Record<string, unknown>
     >;
     const persistedSegments = this.jsonRecord(shard.meta.segments) as Record<
       string,
-      JsonRecord
+      Record<string, unknown>
     >;
     return { ...storedSegments, ...persistedSegments };
   }
@@ -101,9 +149,9 @@ export class KnowledgeBaseStorageManager {
     return disk;
   }
 
-  private jsonRecord(value: unknown): JsonRecord {
+  private jsonRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as JsonRecord)
+      ? (value as Record<string, unknown>)
       : {};
   }
 }

@@ -1,6 +1,11 @@
 import type { AIManager, FileStorageFactory } from '@nocobase/ai-employee';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
+import {
+  createServiceToken,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 
+import type { KnowledgeBaseWarningLogger } from '../internal-types.js';
 import { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
 import { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
 import { KnowledgeBaseSegmentManager } from '../managers/knowledge-base-segment-manager.js';
@@ -17,6 +22,7 @@ export class KnowledgeBaseManagerFactory {
     private readonly queue: NocoBaseQueueManager,
     private readonly repositories: KnowledgeBaseRepositoryFactory,
     private readonly allowedStorageDisks: readonly string[],
+    private readonly warningLogger: KnowledgeBaseWarningLogger,
   ) {}
 
   private knowledgeBaseManager: KnowledgeBaseManager | undefined;
@@ -48,6 +54,7 @@ export class KnowledgeBaseManagerFactory {
       this.knowledgeBases,
       this.storage,
       this.dispatcher,
+      this.warningLogger,
     ));
   }
 
@@ -69,6 +76,7 @@ export class KnowledgeBaseManagerFactory {
       this.repositories.documents,
       this.repositories.segmentShards,
       this.allowedStorageDisks,
+      this.warningLogger,
     ));
   }
 
@@ -120,3 +128,8 @@ export class KnowledgeBaseManagerFactory {
     }
   }
 }
+
+export const managerFactoryToken: ServiceToken<KnowledgeBaseManagerFactory> =
+  createServiceToken<KnowledgeBaseManagerFactory>(
+    '@nocobase/app-plugin-ai-knowledge-base/manager-factory',
+  );

@@ -71,6 +71,7 @@ export interface FileStorage<TEntity = unknown, TCreateContext = void> {
   write(input: WriteFileInput<TCreateContext>): Promise<FileMetadata<TEntity>>;
   open(id: FileMetadataId): Promise<OpenedFile<TEntity> | null>;
   openMetadata(metadata: FileMetadata<TEntity>): Promise<OpenedFile<TEntity>>;
+  deleteObject?(key: string): Promise<void>;
 }
 
 export interface CreateFileStorageOptions<TEntity, TCreateContext> {
@@ -93,6 +94,7 @@ export interface FileStorageDriveDisk {
   ): Promise<void>;
   getStream(key: string): Promise<NodeJS.ReadableStream>;
   getUrl(key: string): Promise<string>;
+  delete(key: string): Promise<void>;
 }
 
 export interface FileStorageDriveManager {
@@ -203,6 +205,10 @@ export class DriveFileStorage<TEntity, TCreateContext> implements FileStorage<
       contentType: metadata.mimeType || 'application/octet-stream',
     };
   }
+
+  public deleteObject(key: string): Promise<void> {
+    return this.driveDisk.delete(key);
+  }
 }
 
 export class DriveFileStorageFactory implements FileStorageFactory {
@@ -268,13 +274,20 @@ export function requireDisk(disk: string): string {
 
 export function normalizeFilename(filename: string): string {
   const basename = filename.split(/[/\\]/).pop()?.trim() || 'file';
-  return (
+  const normalized =
     basename
       .replace(/[^\w. -]+/g, '-')
       .replace(/\s+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 128) || 'file'
-  );
+      .replace(/^-+|-+$/g, '') || 'file';
+  if (normalized.length <= 128) return normalized;
+
+  const extname = path.extname(normalized);
+  if (extname && extname.length < 128) {
+    const stem = normalized.slice(0, -extname.length);
+    return `${stem.slice(0, 128 - extname.length)}${extname}`;
+  }
+
+  return normalized.slice(0, 128);
 }
 
 async function readFileStorageContent(

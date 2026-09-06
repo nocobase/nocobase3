@@ -25,7 +25,7 @@ Segment UIDs are 32-character nanoids. Questions receive 16-character nanoids an
 
 Job name: `KnowledgeBaseVectorization`; queue: `default`; timeout: 300000 ms. Dispatch uses group and dedup ID `ai-kb-doc:<documentId>` with a 300000 ms dedup TTL. Dispatch itself returns before processing completes.
 
-The current upload HTTP response is a document record after dispatch. The exported client also accepts `{taskId,message?}` for compatible async upload implementations. Always branch with `isAsyncUploadResult()`.
+The upload HTTP response is the single created document record after dispatch. Use its ID and status fields for observation. The queue remains asynchronous: a resolved upload request confirms that the source file was stored, the document was created, and dispatch succeeded, but not that vectorization completed. If dispatch itself fails after document creation, the request fails and a PENDING record may remain; reconcile the document list before retrying so the same source file is not uploaded twice.
 
 ## Rebuild and cleanup
 

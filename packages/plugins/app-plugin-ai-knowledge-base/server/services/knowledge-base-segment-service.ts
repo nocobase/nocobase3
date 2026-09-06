@@ -1,27 +1,26 @@
+import type { SegmentOptions, SegmentQuestion } from '../internal-types.js';
+
 import type {
-  JsonRecord,
-  KnowledgeBaseDocumentRecord,
-  SegmentOptions,
-  SegmentQuestion,
-  SegmentRecord,
-} from '../internal-types.js';
+  KnowledgeBaseSegmentEntity,
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseSegmentRepository,
+} from '../repository/index.js';
 import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
 import type { KnowledgeBaseSegmentManager } from '../managers/knowledge-base-segment-manager.js';
 import { normalizeSegmentOptions } from '../managers/segment-options.js';
-import type { TableRepository } from '../repositories/table-repository.js';
 import { page, type PageOptions, type PageResult } from './pagination.js';
 
 export class KnowledgeBaseSegmentService {
   public constructor(
     private readonly manager: KnowledgeBaseSegmentManager,
     private readonly documentManager: KnowledgeBaseDocumentManager,
-    private readonly segments: TableRepository<SegmentRecord>,
-    private readonly documents: TableRepository<KnowledgeBaseDocumentRecord>,
+    private readonly segments: KnowledgeBaseSegmentRepository,
+    private readonly documents: KnowledgeBaseDocumentRepository,
   ) {}
 
   public list(
     options: PageOptions & { documentId: string | number },
-  ): Promise<PageResult<JsonRecord>> {
+  ): Promise<PageResult<KnowledgeBaseSegmentEntity>> {
     return page({
       repository: this.segments,
       paging: options,
@@ -32,7 +31,7 @@ export class KnowledgeBaseSegmentService {
   public get(options: {
     readonly documentId: string | number;
     readonly segmentUid: string;
-  }): Promise<JsonRecord | null> {
+  }): Promise<Record<string, unknown> | null> {
     return this.manager.getContent(options.documentId, options.segmentUid);
   }
 
@@ -44,7 +43,7 @@ export class KnowledgeBaseSegmentService {
     readonly content?: string;
     readonly questions?: readonly SegmentQuestion[];
     readonly userId?: string | number;
-  }): Promise<JsonRecord> {
+  }): Promise<Record<string, unknown>> {
     return this.manager.updateContent(options.documentId, options.segmentUid, {
       contentHash: options.expectedContentHash,
       ...(options.title !== undefined ? { title: options.title } : {}),
@@ -57,7 +56,7 @@ export class KnowledgeBaseSegmentService {
     readonly documentId: string | number;
     readonly segmentUid: string;
     readonly enabled: boolean;
-  }): Promise<JsonRecord | null> {
+  }): Promise<Record<string, unknown> | null> {
     const segment = await this.segments.findOne({
       knowledgeBaseDocsId: options.documentId,
       uid: options.segmentUid,
@@ -95,7 +94,7 @@ export class KnowledgeBaseSegmentService {
 
   public async regenerate(options: {
     readonly documentId: string | number;
-    readonly segmentOptions?: SegmentOptions | JsonRecord;
+    readonly segmentOptions?: SegmentOptions | Record<string, unknown>;
   }): Promise<void> {
     if (options.segmentOptions) {
       await this.documents.update(

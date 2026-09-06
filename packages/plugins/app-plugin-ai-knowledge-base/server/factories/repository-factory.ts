@@ -4,78 +4,65 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type {
-  KnowledgeBaseDocumentRecord,
-  KnowledgeBaseRecord,
-  SegmentRecord,
-  SegmentShardRecord,
-  VectorDatabaseRecord,
-  VectorStoreConfigRecord,
-} from '../internal-types.js';
-import { TableRepository } from '../repositories/table-repository.js';
+import {
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseRepository,
+  KnowledgeBaseSegmentRepository,
+  KnowledgeBaseSegmentShardRepository,
+  VectorDatabaseRepository,
+  VectorStoreConfigRepository,
+} from '../repository/index.js';
 
 export class KnowledgeBaseRepositoryFactory {
   public constructor(private readonly database: DatabaseConnection) {}
 
-  private knowledgeBaseRepository:
-    TableRepository<KnowledgeBaseRecord> | undefined;
-  private documentRepository:
-    TableRepository<KnowledgeBaseDocumentRecord> | undefined;
-  private segmentRepository: TableRepository<SegmentRecord> | undefined;
+  private knowledgeBaseRepository: KnowledgeBaseRepository | undefined;
+  private documentRepository: KnowledgeBaseDocumentRepository | undefined;
+  private segmentRepository: KnowledgeBaseSegmentRepository | undefined;
   private segmentShardRepository:
-    TableRepository<SegmentShardRecord> | undefined;
-  private vectorDatabaseRepository:
-    TableRepository<VectorDatabaseRecord> | undefined;
-  private vectorStoreConfigRepository:
-    TableRepository<VectorStoreConfigRecord> | undefined;
+    KnowledgeBaseSegmentShardRepository | undefined;
+  private vectorDatabaseRepository: VectorDatabaseRepository | undefined;
+  private vectorStoreConfigRepository: VectorStoreConfigRepository | undefined;
   private disposed = false;
 
-  public get knowledgeBases(): TableRepository<KnowledgeBaseRecord> {
+  public get knowledgeBases(): KnowledgeBaseRepository {
     this.assertActive();
-    return (this.knowledgeBaseRepository ??= new TableRepository(
+    return (this.knowledgeBaseRepository ??= new KnowledgeBaseRepository(
       this.database,
-      'aiKnowledgeBase',
     ));
   }
 
-  public get documents(): TableRepository<KnowledgeBaseDocumentRecord> {
+  public get documents(): KnowledgeBaseDocumentRepository {
     this.assertActive();
-    return (this.documentRepository ??= new TableRepository(
+    return (this.documentRepository ??= new KnowledgeBaseDocumentRepository(
       this.database,
-      'aiKnowledgeBaseDocs',
     ));
   }
 
-  public get segments(): TableRepository<SegmentRecord> {
+  public get segments(): KnowledgeBaseSegmentRepository {
     this.assertActive();
-    return (this.segmentRepository ??= new TableRepository(
+    return (this.segmentRepository ??= new KnowledgeBaseSegmentRepository(
       this.database,
-      'aiKnowledgeBaseDocSegments',
     ));
   }
 
-  public get segmentShards(): TableRepository<SegmentShardRecord> {
+  public get segmentShards(): KnowledgeBaseSegmentShardRepository {
     this.assertActive();
-    return (this.segmentShardRepository ??= new TableRepository(
+    return (this.segmentShardRepository ??=
+      new KnowledgeBaseSegmentShardRepository(this.database));
+  }
+
+  public get vectorDatabases(): VectorDatabaseRepository {
+    this.assertActive();
+    return (this.vectorDatabaseRepository ??= new VectorDatabaseRepository(
       this.database,
-      'aiKnowledgeBaseDocSegmentShards',
     ));
   }
 
-  public get vectorDatabases(): TableRepository<VectorDatabaseRecord> {
+  public get vectorStoreConfigs(): VectorStoreConfigRepository {
     this.assertActive();
-    return (this.vectorDatabaseRepository ??= new TableRepository(
-      this.database,
-      'aiVectorDatabases',
-    ));
-  }
-
-  public get vectorStoreConfigs(): TableRepository<VectorStoreConfigRecord> {
-    this.assertActive();
-    return (this.vectorStoreConfigRepository ??= new TableRepository(
-      this.database,
-      'aiVectorStoreConfig',
-    ));
+    return (this.vectorStoreConfigRepository ??=
+      new VectorStoreConfigRepository(this.database));
   }
 
   public dispose(): void {

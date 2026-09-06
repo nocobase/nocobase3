@@ -30,7 +30,7 @@ The server resolves these required services when its lazy ServiceFactory is firs
 
 ## Storage and PGVector
 
-Drive Manager is optional in dependency injection. When present, files are stored through a drive-backed manager in the `ai-knowledge-base` scope. When absent, a memory manager is used: uploaded source files and shard files can disappear on process restart and are not shared across replicas.
+Drive Manager is optional in dependency injection. When present, files are stored through the disk configured on each LOCAL knowledge base, within the `ai-knowledge-base` scope; that disk must be in the server's allowed disk list. Upload callers do not choose or override it. When Drive Manager is absent, a memory manager is used: uploaded source files and shard files can disappear on process restart and are not shared across replicas.
 
 PGVector prerequisites:
 
