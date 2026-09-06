@@ -30,6 +30,71 @@ interface UserUpdate {
 
 type UserRepository = Repository<UserRecord, UserCreate, UserUpdate>;
 
+function _findEmptyUsers(repository: UserRepository) {
+  return repository.findMany({ select: (s) => s.fields() });
+}
+
+function _findDefaultUsers(repository: UserRepository) {
+  return repository.findMany({ select: (s) => s });
+}
+
+function _findRecordsOnly(repository: UserRepository) {
+  return repository.findMany({
+    select: (s) =>
+      s.fields().include('tasks', (t) =>
+        t.combine({
+          records: t.fields('title'),
+          empty: t.fields(),
+        }),
+      ),
+  });
+}
+
+function _findAggregatesOnly(repository: UserRepository) {
+  return repository.findMany({
+    select: (s) =>
+      s
+        .fields()
+        .include('tasks', (t) =>
+          t.combine({ count: t.count(), sum: t.sum('points') }),
+        ),
+  });
+}
+
+function _createEmptyUsers(repository: UserRepository) {
+  return repository.createMany({
+    values: [{ name: 'A', email: 'a@example.com' }],
+    select: (s) => s.fields(),
+  });
+}
+
+it('infers empty, default, records-only and aggregate-only selections without extra keys', () => {
+  expectTypeOf<
+    Awaited<ReturnType<typeof _findEmptyUsers>>[number]
+  >().toEqualTypeOf<Pick<UserRecord, never>>();
+  expectTypeOf<ReturnType<typeof _findDefaultUsers>>().toEqualTypeOf<
+    Promise<UserRecord[]>
+  >();
+  type Records = Awaited<ReturnType<typeof _findRecordsOnly>>[number];
+  expectTypeOf<keyof Records>().toEqualTypeOf<'tasks'>();
+  expectTypeOf<
+    keyof Records['tasks']['records'][number]
+  >().toEqualTypeOf<'title'>();
+  expectTypeOf<
+    keyof Records['tasks']['empty'][number]
+  >().toEqualTypeOf<never>();
+  type Aggregates = Awaited<ReturnType<typeof _findAggregatesOnly>>[number];
+  expectTypeOf<keyof Aggregates>().toEqualTypeOf<'tasks'>();
+  expectTypeOf<keyof Aggregates['tasks']>().toEqualTypeOf<'count' | 'sum'>();
+  expectTypeOf<Aggregates['tasks']['count']>().toEqualTypeOf<number>();
+  expectTypeOf<Aggregates['tasks']['sum']>().toEqualTypeOf<
+    number | string | bigint | null
+  >();
+  expectTypeOf<ReturnType<typeof _createEmptyUsers>>().toEqualTypeOf<
+    Promise<CreateManyResult<Pick<UserRecord, never>>>
+  >();
+});
+
 function _findSelectedUsers(repository: UserRepository) {
   return repository.findMany({
     select: (select) => select.fields('id', 'name'),
