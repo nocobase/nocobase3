@@ -73,6 +73,7 @@
     "mysql2": "^3.23.3",
     "oracledb": "catalog:",
     "pg": "^8.23.0",
+    "pg-query-stream": "^4.14.0",
     "tedious": "catalog:",
     "tsx": "catalog:",
     "prettier": "catalog:",
