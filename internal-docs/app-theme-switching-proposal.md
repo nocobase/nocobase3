@@ -13,7 +13,7 @@ description: App 主题的 CSS Token、外观切换、偏好存储与 AI 维护�
 
 用户在页面右上角选择主题，并独立设置浅色、深色或跟随系统。选择立即生效，刷新后保留。
 
-AI 通过修改主题 CSS 创建不同的视觉风格。用户选择完整主题，不需要分别设置字体、字号或颜色。模板默认提供 Default 和 Ocean 两个主题。
+AI 通过修改主题 CSS 创建不同的视觉风格。用户选择完整主题，不需要分别设置字体、字号或颜色。模板默认提供 Default 和 Compact 两个主题。Compact 仅调整间距、行高和圆角等尺寸；颜色、字体和阴影与 Default 保持一致。
 
 主题由 App 模板维护，包含 CSS、静态主题清单、状态、持久化和外观面板。Default 和 Hub 两套模板同步实现；生成应用后，主题由该应用独立维护。
 
@@ -161,7 +161,7 @@ client/
 │   ├── theme-settings.tsx      外观面板
 │   └── themes/
 │       ├── default.css        默认主题 Token
-│       └── ocean.css          海洋主题 Token
+│       └── compact.css        紧凑主题 Token
 └── locales/                   主题名称与界面翻译
 ```
 
@@ -175,23 +175,23 @@ client/
 
 ```css
 /* Partial example; each preset supplies the complete token set. */
-:root[data-theme='ocean'],
-.theme-preview[data-theme='ocean'] {
-  --background: oklch(0.985 0.025 245);
-  --foreground: oklch(0.16 0.025 245);
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
+:root[data-theme='compact'],
+.theme-preview[data-theme='compact'] {
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.16 0 0);
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-heading: var(--font-sans);
   --text-sm: 0.875rem;
-  --text-sm--line-height: 1.5;
-  --spacing: 0.25rem;
-  --radius: 0.5rem;
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 12%);
+  --text-sm--line-height: calc(1.2 / 0.875);
+  --spacing: 0.2rem;
+  --radius: 0.25rem;
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
 }
 
-:root.dark[data-theme='ocean'],
-:root.dark .theme-preview[data-theme='ocean'] {
-  --background: oklch(0.13 0.025 245);
-  --foreground: oklch(0.96 0.025 245);
+:root.dark[data-theme='compact'],
+:root.dark .theme-preview[data-theme='compact'] {
+  --background: oklch(0.13 0 0);
+  --foreground: oklch(0.96 0 0);
 }
 ```
 
@@ -261,7 +261,7 @@ Tailwind 已有的字体、字号和间距名称复用原有工具类机制；�
 显示模式由 `next-themes` 管理，预设由 App 主题模块管理：
 
 ```html
-<html class="dark" data-theme="ocean">
+<html class="dark" data-theme="compact">
 ```
 
 `class` 表示实际亮暗模式，`data-theme` 表示预设。跟随系统时保存值为 `system`，实际 class 为 `light` 或 `dark`。
@@ -273,7 +273,7 @@ Tailwind 已有的字体、字号和间距名称复用原有工具类机制；�
 ```ts
 export const themePresets = [
   { id: 'default', labelKey: 'appearance.themes.default' },
-  { id: 'ocean', labelKey: 'appearance.themes.ocean' },
+  { id: 'compact', labelKey: 'appearance.themes.compact' },
 ] as const;
 
 export type ThemePresetId = (typeof themePresets)[number]['id'];
@@ -369,7 +369,7 @@ AI 不通过修改 `components.json` 或堆叠页面选择器实现主题，不�
 
 - **完整性**：所有主题包含完整 Token，亮暗差异和预览作用域正确；不固定断言品牌颜色字面量。
 - **CSS 编译**：最小样例覆盖标准字体、全部字号及行高、间距、七档圆角和盒阴影，确认工具类保留运行时变量引用。
-- **浏览器效果**：切换 Default / Ocean 与 Light / Dark，检查根节点、预览及 Portal 的实际样式。测试用变量值要有明显差异，避免“切换成功但样式没变”。
+- **浏览器效果**：切换 Default / Compact 与 Light / Dark，检查根节点、预览及 Portal 的实际样式。测试用变量值要有明显差异，避免“切换成功但样式没变”。
 - **字体和排版**：检查中文、英文、代码、标题、长文本、字体加载失败、浏览器缩放和窄屏；无文字裁切、重叠或不可用的交互目标。
 - **间距与阴影**：改变基础间距后检查按钮、输入框、侧边栏和表格；检查浮层阴影、层次与键盘焦点不会互相覆盖。
 - **颜色和圆角**：覆盖正常、悬停、选中、禁用、焦点和错误状态；检查侧边栏、图表样例、Logo、登录页和代表性插件页面。普通文字对比度至少 4.5:1，大字号文字至少 3:1；基础圆角为零时七档都应归零。
