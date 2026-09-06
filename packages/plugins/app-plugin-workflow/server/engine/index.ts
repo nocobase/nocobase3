@@ -21,3 +21,7 @@ export type {
   RunExecutionLogFields,
   RunNodeInspectorProjection,
 } from './inspector.js';
+export {
+  createWorkflowRunServices,
+  type WorkflowRunServices,
+} from './run-services.js';

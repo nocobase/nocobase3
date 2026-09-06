@@ -68,7 +68,7 @@ export default class WorkflowEngine {
       instructions: this.instructions,
       resolveWorkflowResourceRoot: (workflow, execution) =>
         this.resolveWorkflowResourceRoot(workflow, execution),
-      app: options.app,
+      services: options.services,
       ...(this.queueAdapter === null ? {} : { queue: this.queueAdapter }),
       logger: this.logger,
       ...(options.environment === undefined

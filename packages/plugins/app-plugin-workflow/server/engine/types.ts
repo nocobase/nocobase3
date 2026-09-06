@@ -1,5 +1,6 @@
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { WorkflowRunServices } from './run-services.js';
 
 import type {
   WorkflowParameterSchema,
@@ -141,8 +142,8 @@ export interface WorkflowEngineOptions {
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
-  /** Application value exposed to `run` scripts as `runtime.app`. */
-  app?: unknown;
+  /** Read-only application services exposed to `run` modules. */
+  services?: WorkflowRunServices;
   /** Immutable production artifacts. When present, run nodes never read source directories. */
   artifactStore?: WorkflowArtifactStore;
   /** Development-only root containing one source package per workflow key. */
