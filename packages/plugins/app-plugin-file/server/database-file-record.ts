@@ -73,6 +73,10 @@ export function serializeDatabaseDate(value: unknown): string {
     }
     return value.toISOString();
   }
+  // SQLite TEXT affinity can return legacy millisecond timestamps as strings.
+  if (typeof value === 'string' && /^-?\d+(?:\.0+)?$/u.test(value)) {
+    value = Number(value);
+  }
   if (typeof value === 'string' && value.trim()) return value;
   if (typeof value === 'number') {
     const date = new Date(value);

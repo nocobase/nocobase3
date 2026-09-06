@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 
 import {
   fetchInbox,
@@ -14,10 +14,7 @@ describe('in-app notification Client API', () => {
       { data: [], nextCursor: 'next' },
       { count: 3 },
     ];
-    const request = vi.fn(
-      async <T>(_path: string, _init?: RequestInit): Promise<T> =>
-        responses.shift() as T,
-    );
+    const request = vi.fn(async <T>(): Promise<T> => responses.shift() as T);
     const client = createClient(request);
 
     await expect(
@@ -25,16 +22,14 @@ describe('in-app notification Client API', () => {
     ).resolves.toEqual({ data: [], nextCursor: 'next' });
     await expect(fetchUnreadCount(client)).resolves.toBe(3);
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      'notifications/in-app?limit=10&unreadOnly=true&cursor=cursor',
-      { signal: undefined },
-    );
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'notifications/in-app/unread-count',
-      { signal: undefined },
-    );
+    expect(request).toHaveBeenNthCalledWith(1, {
+      path: 'notifications/in-app?limit=10&unreadOnly=true&cursor=cursor',
+      signal: undefined,
+    });
+    expect(request).toHaveBeenNthCalledWith(2, {
+      path: 'notifications/in-app/unread-count',
+      signal: undefined,
+    });
   });
 
   it('uses the injected client and CSRF token for mutations', async () => {
@@ -52,10 +47,7 @@ describe('in-app notification Client API', () => {
       { token: 'csrf-2' },
       { updated: 4 },
     ];
-    const request = vi.fn(
-      async <T>(_path: string, _init?: RequestInit): Promise<T> =>
-        responses.shift() as T,
-    );
+    const request = vi.fn(async <T>(): Promise<T> => responses.shift() as T);
     const client = createClient(request);
 
     await expect(mutateInboxItem(client, 'item/1', 'read')).resolves.toEqual(
@@ -63,30 +55,25 @@ describe('in-app notification Client API', () => {
     );
     await expect(markInboxRead(client)).resolves.toBe(4);
 
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'notifications/in-app/item%2F1',
-      {
-        method: 'POST',
-        headers: { 'x-csrf-token': 'csrf-1' },
-        body: JSON.stringify({ action: 'read' }),
-      },
-    );
-    expect(request).toHaveBeenNthCalledWith(
-      4,
-      'notifications/in-app/read-all',
-      {
-        method: 'POST',
-        headers: { 'x-csrf-token': 'csrf-2' },
-        body: JSON.stringify({}),
-      },
-    );
+    expect(request).toHaveBeenNthCalledWith(2, {
+      path: 'notifications/in-app/item%2F1',
+      method: 'POST',
+      headers: { 'x-csrf-token': 'csrf-1' },
+      json: { action: 'read' },
+    });
+    expect(request).toHaveBeenNthCalledWith(4, {
+      path: 'notifications/in-app/read-all',
+      method: 'POST',
+      headers: { 'x-csrf-token': 'csrf-2' },
+      json: {},
+    });
   });
 });
 
-function createClient(request: AppClient['request']): AppClient {
+function createClient(request: ApiClient['request']): ApiClient {
   return {
     request,
+    repository: vi.fn(),
     stream: async (): Promise<ReadableStream<Uint8Array>> =>
       new ReadableStream<Uint8Array>(),
   };

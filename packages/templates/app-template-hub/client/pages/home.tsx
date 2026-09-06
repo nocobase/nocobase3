@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useGetIdentity } from '@refinedev/core';
 import { useCallback, type ReactElement } from 'react';
 
@@ -14,11 +14,8 @@ interface AppIdentity {
 export default function HomePage(): ReactElement {
   const { data: identity } = useGetIdentity<AppIdentity>();
   // The Application's own API client, so the notice request follows its configured `api.baseURL`.
-  const appClient = useService(appApiClientToken);
-  const loadNotice = useCallback(
-    () => loadSkillsExampleNotice(appClient),
-    [appClient],
-  );
+  const api = useService(apiClientToken);
+  const loadNotice = useCallback(() => loadSkillsExampleNotice(api), [api]);
 
   return (
     <section className='mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-5xl place-items-center px-6 py-10'>

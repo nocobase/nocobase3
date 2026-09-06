@@ -1,6 +1,6 @@
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { ClientApplication } from '@nocobase/app-client';
-import { appApiClientToken } from '@nocobase/app-client';
+import { apiClientToken, realtimeClientToken } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 
 import { createAuthClient } from './auth-client.js';
@@ -12,7 +12,8 @@ export class AuthenticationServiceProvider extends ServiceProvider<ClientApplica
 
   public override boot(): Promise<void> {
     const authClient = createAuthClient({
-      client: this.app.container.resolve(appApiClientToken),
+      api: this.app.container.resolve(apiClientToken),
+      realtime: this.app.container.resolve(realtimeClientToken),
     });
     this.app.refine.setAuthProvider(createAuthProvider(authClient));
     return Promise.resolve();

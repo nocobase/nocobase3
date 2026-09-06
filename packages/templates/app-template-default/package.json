@@ -54,6 +54,9 @@
       "@nocobase/app-plugin-realtime-example": {
         "enabled": true
       },
+      "@nocobase/app-plugin-repository-example": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-routes-example": {
         "enabled": true
       },
@@ -257,5 +260,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "dependencies": {
+    "@nocobase/app-plugin-repository-example": "workspace:^"
   }
 }

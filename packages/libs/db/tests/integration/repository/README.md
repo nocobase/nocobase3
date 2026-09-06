@@ -1,0 +1,188 @@
+# Repository test coverage
+
+This is the current test-maintenance index, not a specification of new behavior. Public usage is documented in [Repository documentation](../../../docs/zh-CN/repository/overview.md). “Covered” refers to the named scenarios, never every possible parameter combination.
+
+## Ownership and execution
+
+Temporal contracts are covered by [canonical values](../../unit/repository/temporal.test.ts), [native SQL boundaries](../../unit/repository/temporal-sql.test.ts), and [cross-database temporal workflows](./capabilities/temporal-values.test.ts). These cover UTC normalization, zone-free components, precision rejection, session time zones, returning, aggregate/combine, cursors, and explicit rejection of temporal relation join keys.
+
+| Layer        | Location                                   | Responsibility                                                                   |
+| ------------ | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| Unit         | [unit/repository](../../unit/repository)   | Builder expressions, variables, identity and diagnostics without a live database |
+| Types        | [types/repository](../../types/repository) | Public input constraints and inferred outputs, enforced by TypeScript            |
+| Methods      | [methods](./methods)                       | Method-specific matching, result and write-safety contracts                      |
+| Capabilities | [capabilities](./capabilities)             | Shared Filter, Values, pagination and Distinct SQL behavior                      |
+| Relations    | [relations](./relations)                   | Relation queries, mutation scope, through data and atomicity                     |
+| Identity     | [identity](./identity)                     | Explicit primary/unique keys, keyless collections and returning requirements     |
+| Fixtures     | [fixtures](./fixtures)                     | Fixed schemas and independent per-test data setup                                |
+
+Keep each assertion in one primary home. Do not duplicate the full Filter/Values matrix for every method. Relation-specific Filter/Select/Sort cases belong under relations.
+
+The original structural baseline was 99 passing Repository tests and one PostgreSQL-only skipped case on SQLite. Counts are validation snapshots, not coverage percentages. Subsequent phases preserve those cases while adding independent contracts.
+
+Run from the package directory with Node 24+ and a matching native-driver ABI:
+
+```sh
+INTEGRATION_DB_CONNECTIONS=sqlite pnpm exec vitest run tests/unit/repository tests/integration/repository tests/types/repository
+pnpm typecheck
+pnpm lint
+pnpm build
+```
+
+Reuse the integration harness and CI matrix for PostgreSQL, MySQL, Oracle and MSSQL. SQLite success does not establish another driver's behavior. Unsupported capabilities must assert documented rejection; missing environment/dependencies are not capability skips.
+
+## Current method coverage
+
+| Area            | Covered scenarios / evidence                                                                                                                                                                                                                                        | Remaining                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Queries         | [findOne](./methods/find-one.test.ts), [findMany](./methods/find-many.test.ts), [count](./methods/count.test.ts), [exists](./methods/exists.test.ts): FO-01/02, FM-01/02, CT-01/02, EX-01/02, projection, missing records/context, stable cursors and parent counts | Additional expression/metadata diagnostic matrices                                             |
+| Write safety    | [write safety](./methods/write-safety.test.ts): zero/multiple matches, stale versions, invalid projection, explicit all-record scope and zero-match returning                                                                                                       | More invalid input combinations and driver-specific constraint failures                        |
+| Bulk create     | [createMany](./methods/create-many.test.ts): empty/invalid input, constraint rollback, context, defaults and exact returning                                                                                                                                        | Larger batches and driver-specific generated/default values                                    |
+| Root upsert     | [upsertOne](./methods/upsert-one.test.ts), [relation upsert](./relations/root-upsert.test.ts): unique selector, both branches, key agreement, version conflict and nested values                                                                                    | Concurrent absent-key upsert retry policy remains unspecified                                  |
+| Read-only views | [read-only](./methods/read-only.test.ts): all seven root writes reject; findOne/findMany/count/exists work; create/update validation reports read-only; source unchanged                                                                                            | Broader relation-to-view and aggregate/stream combinations                                     |
+| Aggregation     | [aggregate](./methods/aggregate.test.ts), [groupBy](./methods/group-by.test.ts), [relation filter](./relations/aggregate-filter.test.ts): exact results, empty sets, aliases, having and invalid fields                                                             | Further collation-specific grouping and large numeric transport                                |
+| Stream          | [stream](./methods/stream.test.ts), [lifecycle](./methods/stream-lifecycle.test.ts): normal completion, break, consumer/driver failure, explicit return, context, backward rejection, no deferred connection release                                                | Oracle/MSSQL execution and future pg 9 warning investigation                                   |
+| Validation      | [mutation validation](./methods/mutation-validation.test.ts), [limits](./relations/values/limits.test.ts): capabilities, no-write validation, depth 3/4 and 100/101 relation-node limits                                                                            | Additional stable diagnostic-path and malformed AST cases                                      |
+| Transactions    | [basic](./transactions.test.ts), [relation transaction boundary](./relations/transaction-boundary.test.ts): callback connection, successful commit/result, earlier calls and nested writes roll back when a later relation error escapes                            | Savepoint and transaction-reuse cases; never infer safe continuation after swallowing an error |
+
+## Current relation coverage
+
+| Area                      | Covered scenarios / evidence                                                                                                                                                                                                                                                                                                                                                                                                                                             | Remaining                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Filter                    | [matrix](./relations/filter-matrix.test.ts): some/none/empty/notEmpty across four cardinalities, multi-hop predicates, logical groups, context and count/exists                                                                                                                                                                                                                                                                                                          | More null/path/operator combinations and mutation filter wiring                                                        |
+| Select                    | [select](./relations/select.test.ts), [limits](./relations/select-limits.test.ts), [isolation](./relations/select-isolation.test.ts), [shared targets](./relations/select-shared-targets.test.ts): four cardinalities, empty shapes, nested include, local options, Builder/AST parity, depth 20/21 and nodes 200/201, reusable selections and deep sibling projections                                                                                                  | Oracle/MSSQL execution and further mixed graph shapes                                                                  |
+| Batch loading             | [batch loading](./relations/batch-loading.test.ts): measured SELECT count unchanged from 1 to 15 parents; shared nested targets and exact projections                                                                                                                                                                                                                                                                                                                    | Other graph shapes, parameter limits and larger batches; no universal query-count guarantee                            |
+| Sort                      | [sort](./relations/sort.test.ts), [matrix](./relations/sort-matrix.test.ts): relation paths, count/sum/avg/min/max, both directions, null positions, ties and root pagination                                                                                                                                                                                                                                                                                            | Further graph shapes. Deep paths/all-null cases are covered below; Sort sum is zero for empty sets                     |
+| Aggregate Select          | [combine](./relations/aggregate-select.test.ts), [limits](./relations/select-limits.test.ts), [isolation](./relations/select-isolation.test.ts), [validation](./relations/select-validation.test.ts), [nested budgets](./relations/select-combine-budget.test.ts): exact aggregates, empty/all-null sets, common AND branch filters, option inheritance/overrides, branch limits, reserved names, malformed structures, mutation rejection and cumulative nested budgets | More cardinality combinations and full nested diagnostic paths                                                         |
+| Local pagination/Distinct | [pagination](./relations/pagination.test.ts), [distinct](./relations/distinct.test.ts), [shared targets](./relations/select-shared-targets.test.ts): per-parent limit, shared forward/backward cursor, root representative relations, belongsToMany compound/tied cursors and per-parent Distinct before limit                                                                                                                                                           | Oracle/MSSQL execution and driver parameter-limit stress                                                               |
+| Returning                 | [select returning](./relations/select-returning.test.ts): relation snapshots from create/update/bulk update/delete                                                                                                                                                                                                                                                                                                                                                       | Additional per-method projection and snapshot combinations                                                             |
+| Basic Values              | [cardinality](./relations/values/cardinality.test.ts), [update/upsert](./relations/values/update-upsert.test.ts), [nested operations](./relations/values/nested-operations.test.ts): all four relation types, create/connect/disconnect/delete/update/upsert, recursive values and target identity                                                                                                                                                                       | Broader replacement/reassignment cases and cross-operation target overlap                                              |
+| Non-null edges            | [non-null edges](./relations/values/non-null-edges.test.ts): belongsTo disconnect/delete, hasOne disconnect, hasMany disconnect/set reject with unchanged rows/version; deleting a child is distinct from nulling its FK                                                                                                                                                                                                                                                 | hasOne replacement and additional physical constraint configurations                                                   |
+| Repeated selectors        | [selector conflicts](./relations/values/selector-conflicts.test.ts): same selector repeated in connect/disconnect/set; connect+disconnect conflict for hasMany/belongsToMany; duplicate clientKey across branches                                                                                                                                                                                                                                                        | Different unique selectors resolving to the same physical row; update/upsert/delete overlap needs an explicit contract |
+| Through/shared targets    | [payload](./relations/through-payload.test.ts), [required payload](./relations/required-through-payload.test.ts), [shared targets](./relations/values/shared-targets.test.ts): required/managed fields, repeated connect, edge isolation, set-empty and target preservation                                                                                                                                                                                              | Shared-target deletion with additional external references and driver constraint policies                              |
+| Variables                 | [variables](./relations/variables.test.ts): nested create/update/upsert/delete, selector and payload variables, missing/invalid context, literal data and parent scope                                                                                                                                                                                                                                                                                                   | More equivalent input pairs and diagnostic paths                                                                       |
+| Atomicity                 | [atomicity](./relations/atomicity.test.ts), [shared targets](./relations/values/shared-targets.test.ts), [transaction boundary](./relations/transaction-boundary.test.ts): version conflicts, reassignment rejection, late failures and full root/target/edge snapshots                                                                                                                                                                                                  | Controlled concurrent mutations on actual deployment databases                                                         |
+| Identity                  | [keys/relations](./identity/keys-and-relations.test.ts), [key types](./identity/key-types-and-returning.test.ts), [safety](./identity/safety.test.ts): non-id keys, string/UUID/bigint/composite identities, unique-only and keyless safety                                                                                                                                                                                                                              | Additional combinations with local pagination and through relations                                                    |
+
+### Shared-target Select combinations
+
+[Shared-target Select](./relations/select-shared-targets.test.ts) covers deep sibling projections in both branch orders, shared owners and targets, exact field isolation, belongsToMany local filter/sort/limit, tied compound forward/backward cursors, per-parent Distinct before limit and nested combine results. Its fixture uses explicitly declared non-id string primary/source/target keys and physical inserts. Cursor with Distinct and invalid local cursors are covered in [relation pagination boundaries](./relations/pagination-boundaries.test.ts). The five-database acceptance run includes both suites; larger graph stress remains separate work.
+
+[Nested combine budgets](./relations/select-combine-budget.test.ts) checks cumulative depth 20/21 and validation nodes 200/201 across nested groups and ordinary sibling includes. Each group is independently legal, but the total graph can exhaust the shared budget. Rejected projections leave nested mutation rows and optimistic versions unchanged, and later valid queries get a fresh budget. These counts refer to validation work, not simply JSON nodes or selected fields.
+
+Non-null hasMany currently disallows the replace action, including an unchanged set. Do not treat SQL-level feasibility as permission granted by Repository's capability contract.
+
+## Unit and type coverage
+
+- [Filter context boundaries](./capabilities/filter-context-boundaries.test.ts) covers own-property-only lookup, inherited getters not invoked, null-prototype contexts, concurrent frozen-AST reuse, and scalar shorthand fields named kind/version/root/collection. Concurrency here tests input isolation, not database write races.
+
+- [Relation Filter scope](./relations/filter-scope.test.ts) distinguishes independent some predicates from same-child conjunctions, nested OR scope, parent counts and shared-target-safe bulk updates. [Filter variables](./capabilities/filter-variables.test.ts) covers frozen input reuse, nested context paths, null/zero, date endpoint binding and rejection before writes for missing or mistyped values.
+
+- [Scalar Filter matrix](./capabilities/filter-scalars.test.ts) verifies exact Builder/serialized-AST results for numeric comparisons, string/text predicates, boolean null/false distinctions and half-open date ranges. [Field types](./capabilities/filter-field-types.test.ts) adds numeric storage types, time and UTC datetime SQL behavior. [Literal patterns](./capabilities/filter-patterns.test.ts) covers escaping and insensitive inequality. [Filter fixture](./fixtures/filter.ts) uses an explicit string code key and physical setup. All five database backends run these suites; exhaustive timezone-offset equivalence remains future work.
+
+- [JSON combinations](./capabilities/filter-json-combinations.test.ts) covers typed/duplicate/empty membership operands, missing paths, nulls, structural equality, logical scope and variable-driven writes. [Direct paths](./relations/filter-paths.test.ts) covers multi-hop to-one paths and capability rejection. [Nested invalid inputs](./relations/filter-invalid-nested.test.ts) covers callback returns and variable paths. Public input constraints are checked in types/repository/filter.test.ts. Empty logical groups and Filter resource budgets need explicit design before freezing limits; BigInt/Decimal transport remains deferred.
+- Sort Builder covers copied paths, independent null-position branches and serializable aggregate nodes; Aggregate Builder covers aliases and forged expressions.
+- Values covers variable/literal resolution, numeric operands and all seven relation Builder operations with copied operation lists.
+- [Select contracts](./capabilities/select.test.ts) cover omitted versus empty fields, accumulated fields, relation-only projections, empty mutation returning and malformed AST rejection before nested writes. Select Builder covers snapshot/branch independence, option copying, aggregate expressions and forged callback returns. Types cover scalar, empty, default, records-only, aggregate-only and mixed combine outputs; ordinary nested include inference remains a documented fallback.
+- Values callback/atomic type assertions have moved to types/repository/values.test.ts. Method type tests reject missing range, empty createMany and invalid selected fields.
+- Passing Vitest alone does not validate expectTypeOf or negative TypeScript assertions; run typecheck.
+
+## Parameter-specialty checklist
+
+The planned specialty pass is implemented for the contracts currently defined. This is not a claim of exhaustive combinations or universal driver support.
+
+| Specialty                     | Added evidence                                                                                                                                                   | Covered boundaries                                                                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Filter and context            | Existing scalar/JSON/path/variable matrices above                                                                                                                | Builder/AST parity, own-property variables, frozen reuse, relation scope, errors before writes                                                                  |
+| Values                        | [Values boundaries](./capabilities/values-boundaries.test.ts)                                                                                                    | Defaults versus explicit null, omitted update fields, malformed objects/callbacks, frozen variable/atomic reuse, unused upsert branches                         |
+| Write range and version       | [Write safety](./methods/write-safety.test.ts), [Values boundaries](./capabilities/values-boundaries.test.ts)                                                    | Only literal `all: true` authorizes all-record writes; zero/multiple matches, stale versions, unversioned collections and physical-state preservation           |
+| Select                        | Existing scalar/relations/combine/returning matrices above                                                                                                       | Empty/default shapes, nested scope, budgets, isolation, mutation rejection and scalar result inference                                                          |
+| Sort                          | [Scalar matrix](./capabilities/sort.test.ts), [AST validation](./capabilities/sort-validation.test.ts), [deep paths](./relations/sort-paths.test.ts)             | Both directions and NULL placements, ties, frozen AST reuse, malformed inputs, two to-one hops, to-one then to-many aggregate, empty/all-null aggregates        |
+| Pagination                    | [Root boundaries](./capabilities/pagination-boundaries.test.ts), [relation boundaries](./relations/pagination-boundaries.test.ts)                                | Negative/fractional/nonfinite/unsafe values, zero/beyond-end pages, absent anchors, mixed directions, invalid cursor types and per-parent shared boundaries     |
+| Distinct                      | [Root tuples](./capabilities/distinct-boundaries.test.ts), [relation boundaries](./relations/pagination-boundaries.test.ts)                                      | NULL tuples, duplicate fields, projection isolation, deduplication before offset/cursor, forward/backward representatives                                       |
+| Aggregate / GroupBy           | [Aggregate boundaries](./capabilities/aggregate-boundaries.test.ts), [group boundaries](./capabilities/group-by-boundaries.test.ts)                              | No rows versus all-null rows, count(field), mixed operands, malformed ASTs, nullable multi-field groups, filter/having context and alias scope                  |
+| API / returning / diagnostics | [Validation boundaries](./methods/validation-boundaries.test.ts), existing bulk/relation returning, [parameter types](../../types/repository/parameters.test.ts) | No-write validation, execution diagnostic agreement, non-id identities, selected mutation output types and prohibited parameter combinations                    |
+| Streaming                     | [Parameter composition](./methods/stream-parameters.test.ts), [lifecycle](./methods/stream-lifecycle.test.ts)                                                    | Filter/context + Distinct + forward cursor + limit parity, empty streams, invalid inputs, close/release and consumer/driver failure                             |
+| Concurrent writes             | [Write invariants](./methods/concurrent-writes.test.ts)                                                                                                          | Two callers sharing one observed version yield one success and one conflict; competing creates preserve unique identity without fixing winner or driver wording |
+
+### Validation snapshot — 2026-09-06
+
+Full DB package acceptance, including every integration suite: **3,325 passed, zero failed, four database-specific skips, 166 files**.
+
+| Scope                           | Passed | Failed | Skipped |
+| ------------------------------- | -----: | -----: | ------: |
+| Shared unit/type-test execution |    324 |      0 |       0 |
+| SQLite integration              |    600 |      0 |       1 |
+| PostgreSQL 16 integration       |    601 |      0 |       0 |
+| MySQL 8.4 integration           |    600 |      0 |       1 |
+| Oracle Free 23 integration      |    600 |      0 |       1 |
+| SQL Server 2022 integration     |    600 |      0 |       1 |
+
+All four skips are the same existing PostgreSQL-specific bigint-string transport scenario, executed successfully on PostgreSQL and not applicable to the other four backends. No failures were converted to skips. BigInt/Decimal transport redesign remains deferred.
+
+Reproduce from the DB package directory with Node 24+ and all services ready:
+
+```sh
+INTEGRATION_DB_CONNECTIONS=all pnpm exec vitest run
+```
+
+The SQL Server matrix runs test files serially to isolate DDL fixtures; explicit concurrent-write tests still run concurrent operations. See [five-database acceptance](../README.md#five-database-acceptance).
+
+- DB lint, formatting, typecheck, build, public API baseline, example typecheck and playground typecheck passed.
+- All 26 DB/dependent packages passed typechecking. App-server lint/build and all 136 tests passed.
+- Type tests require `pnpm typecheck`; a Vitest pass alone does not evaluate negative compile-time assertions.
+- Test services use the dedicated `codex-filter-regression` Compose project; services are stopped after acceptance and volumes retained.
+- PostgreSQL still emits a non-failing concurrent-client query deprecation warning; the pg 9 follow-up is recorded below.
+
+### Unified findMany consumption
+
+The public stream method and StreamOptions are removed. [Query unit tests](../../unit/repository/query.test.ts) cover laziness, promise reuse, mode exclusion, cleanup and async thenable assimilation. [Consumption integration](./methods/find-many-consumption.test.ts) covers snapshot timing, both pagination directions, offset/distinct, empty projections, unique-only/keyless collections and transaction completion. [Relation iteration](./relations/find-many-iteration.test.ts) covers four cardinalities, deep includes, combine, local options, shared-target batching, one root query for 205 rows, and failure after the first 100 records have been delivered.
+
+Scalar forward iteration uses driver streaming. Relations/backward results spool root rows to a private temporary file, close the root stream, then load relation batches on the same connection. [Buffer tests](../../unit/repository/row-spool.test.ts) verify Date/Buffer/bigint preservation, forward/reverse order, and cleanup on completion, empty input, early return and producer/consumer failure. This mode needs temporary disk space and reads all roots before first output; it does not collect the complete root array or issue repeated offset queries. Abrupt process termination may leave files for operational cleanup.
+
+Oracle stream rows use object format and consume CLOB/BLOB values before delivery or spooling, matching the array read path. The lifecycle suite also injects a driver setup rejection after connection acquisition and verifies error propagation and subsequent connection usability across all five databases.
+
+### Cross-database fixes and evidence
+
+- [Logical type lifecycle](../builder/logical-types.test.ts) verifies explicit boolean/JSON/date metadata, type changes, addition/removal, compatible metadata patches, and rejection before persisting incompatible patches. The physical inspector still treats external MySQL TINYINT as integer unless metadata explicitly supplements it.
+- Schema compilation tests ensure a named primary key is emitted once on all five dialects, including Oracle and SQL Server, which reject duplicate declarations.
+- Oracle Filter tests preserve date-only semantics, use explicit ISO timestamp conversion, classify decimal FLOAT storage, handle empty text/CLOBs with length predicates, and escape literal patterns according to the dialect. Oracle empty strings become SQL NULL; this physical behavior is explicit in shorthand/null assertions.
+- SQL Server UUID results use lowercase canonical strings. To-many mutation target locking uses a linked-target subquery, avoiding invalid lock hints after JOIN conditions; Oracle limited locks use ROWNUM without nesting FOR UPDATE inside pagination SQL.
+- [Bulk write bindings](./methods/create-many.test.ts) verifies objects/arrays in JSON fields, Uint8Array data, and explicit binary NULL with and without returning, plus subsequent updates. Driver parameter binding does not change BigInt/Decimal transport policy.
+- SQL Server inspection does not retry a deadlock victim inside an already rolled-back transaction. The test runner serializes files when SQL Server is selected to avoid independent DDL fixtures contending on shared catalogs; explicit concurrent-write test operations remain concurrent.
+
+DB lint/typecheck/build, API baseline, examples and playground checks passed. Type checking also passed for DB and all 25 downstream packages. Existing stream-named test files now exercise findMany asynchronous iteration; their names denote execution behavior, not a public stream API.
+
+### Deliberately unresolved contracts
+
+1. **Numeric transport and version inputs:** BigInt/Decimal transport remains deferred. This pass does not invent coercion rules for string versus numeric versions, or freeze behavior for forged null/fractional/nonfinite version values.
+2. **Mutation diagnostic precision:** non-null physical constraints currently raise driver errors; structural validation does not guarantee required fields, existence or current-version validity. Some upsert scalar diagnostics still use `values` rather than `create`/`update`. Tests assert shared stable details without endorsing the imprecise branch path.
+3. **Relation overlap:** same-row/different-selector and cross-operation target overlap still need explicit semantics. Existing duplicate-selector, reassignment, through and rollback contracts remain covered.
+4. **Resource/concurrency guarantees:** empty logical-group policy, Filter budgets, very large driver parameter limits, savepoint continuation and concurrent absent-key upsert retry policy are not specified by these tests. Concurrent tests validate the final state and optimistic rejection, not deterministic scheduling.
+5. **Driver follow-up:** the broad PostgreSQL run emitted a pg warning about a query started while another query is executing. No extra failures resulted; tracing the source before pg 9 is separate follow-up work.
+
+## Maintenance rules
+
+- Each test owns its setup; never depend on a preceding test. Prefer physical setup/verification when using the API under test would be circular.
+- Explicitly declare primary, unique, source and target keys; never infer them from an id name or numeric type.
+- Assert exact projections and empty shapes. On mutation rejection, compare physical root/target/edge state and managed versions.
+- Test stable codes and relevant diagnostic paths, not incidental driver wording or SQL aliases.
+- Documentation IDs are attached only to tests implementing the corresponding data and expected result; the Markdown blocks themselves are not executed.
+- Keep the old read-contracts/write-contracts smoke workflows while independent cases grow. Split only when doing so improves contract ownership.
+- Validate and commit bounded groups separately. Runtime fixes discovered by tests should have focused regression tests and separate commits.
+
+## Runtime regression found during this work
+
+[Sort validation](./capabilities/sort-validation.test.ts) exposed explicit null/false inputs falling back to default ordering and malformed nodes raising native TypeErrors, including sort-only findOne queries. Sort structures are now validated before nonempty-sort checks and path traversal, returning INVALID_SORT for malformed structures.
+
+[Field-type Filters](./capabilities/filter-field-types.test.ts) covers small exact integer/bigInt/decimal/float/double comparisons, time/null predicates and UTC datetime bounds. SQLite's Knex-emitted FLOAT columns were classified as native, blocking numeric filters; the shared inspector now recognizes FLOAT, with MSSQL's double classification preserved. This does not change BigInt/Decimal transport or promise timezone-offset equivalence.
+
+[Nested Filter validation](./relations/filter-invalid-nested.test.ts) covers relation callback returns, nested AST groups and malformed variable paths. Null callback results and non-string variable paths previously raised native TypeErrors; they now return structured diagnostics before writes.
+
+[Filter validation](./capabilities/filter-validation.test.ts) covers malformed callback/AST structures, invalid paths and numeric operands, plus unchanged physical rows/versions after rejected bulk writes. Tests exposed native TypeErrors during traversal and unknown relation quantifiers being treated as existence checks; structural validation now rejects these with INVALID_FILTER.
+
+Stream lifecycle tests exposed a delayed Knex close listener racing database pool teardown. Repository now waits for the stream close event before finishing iterator cleanup. The fix and changeset were committed separately from Builder/type coverage.
+
+Malformed Select tests exposed native TypeErrors when traversing invalid fields/includes. Repository now validates these structures before traversal and rejects them with INVALID_SELECT before executing writes.
+
+Relation result tests also exposed malformed combine branches being accepted or raising native TypeErrors. Explicit null/false results, non-object branch maps and malformed branch selections now fail with INVALID_SELECT; unknown aggregate functions retain INVALID_AGGREGATE. All seven mutation returning methods (including both upsert branches) preserve root/child rows and managed versions on this rejection.

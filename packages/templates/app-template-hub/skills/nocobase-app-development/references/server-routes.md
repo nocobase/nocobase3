@@ -175,11 +175,11 @@ Declaration modules must not connect to the database, start workers, or execute 
 
 ## Calling from the browser
 
-Resolve `appApiClientToken` and use the application's own client, so the request follows the configured API base URL:
+Resolve `apiClientToken` and use the application's own HTTP client, so the request follows the configured API base URL:
 
 ```tsx
-const appClient = useService(appApiClientToken);
-const data = await appClient.request<OrderList>('orders');
+const api = useService(apiClientToken);
+const data = await api.request<OrderList>({ path: 'orders' });
 ```
 
 The path is relative to `/api`. Do not build the URL by hand or use bare `fetch` — the base path differs between development and deployment.

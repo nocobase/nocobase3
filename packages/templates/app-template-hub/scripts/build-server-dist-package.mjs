@@ -14,7 +14,13 @@ const distPackagePath = path.join(distDir, 'package.json');
 const distWorkspacePath = path.join(distDir, 'pnpm-workspace.yaml');
 const vendorDir = path.join(distDir, 'vendor');
 const runtimeDirs = ['server', 'database', 'scripts'];
-const databaseRuntimeDrivers = ['better-sqlite3', 'pg', 'mysql2'];
+const databaseRuntimeDrivers = [
+  'better-sqlite3',
+  'pg',
+  'mysql2',
+  'oracledb',
+  'tedious',
+];
 
 const toPosix = (value) => value.split(path.sep).join('/');
 
@@ -160,6 +166,7 @@ const writeDistWorkspace = () => {
       '# this application does not need. A package left out here installs without building and fails at runtime.',
       'allowBuilds:',
       '  better-sqlite3: true',
+      '  oracledb: true',
       '  esbuild: true',
       '  tesseract.js: false',
       '',

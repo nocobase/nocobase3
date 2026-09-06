@@ -6,8 +6,8 @@ import {
 
 describeIntegrationDatabases('query joins', (context) => {
   it('supports portable joins with reference and callback conditions', async () => {
-    const customersTable = context.table('queryCustomers');
-    const ordersTable = context.table('queryOrders');
+    const customersTable = 'queryCustomers';
+    const ordersTable = 'queryOrders';
 
     await createJoinCollections(context);
 
@@ -59,11 +59,54 @@ describeIntegrationDatabases('query joins', (context) => {
         .select(['o.orderNo as orderNo', 'c.name as customerName'])
         .execute(),
     ).resolves.toEqual([{ orderNo: 'SO-001', customerName: 'Ada' }]);
+
+    await expect(
+      context.database
+        .query()
+        .selectFrom(ordersTable)
+        .innerJoin(
+          customersTable,
+          `${ordersTable}.customerId`,
+          `${customersTable}.id`,
+        )
+        .select([
+          `${ordersTable}.orderNo as orderNo`,
+          `${customersTable}.name as customerName`,
+        ])
+        .where(`${ordersTable}.status`, '=', 'paid')
+        .execute(),
+    ).resolves.toEqual([{ orderNo: 'SO-001', customerName: 'Ada' }]);
+  });
+
+  it('keeps camelCase join aliases separate from table prefixes', async () => {
+    const customersTable = 'queryCustomers';
+    const ordersTable = 'queryOrders';
+
+    await createJoinCollections(context);
+
+    const compiled = context.database
+      .query()
+      .selectFrom(`${ordersTable} as orderRows`)
+      .leftJoin(`${customersTable} as customerRows`, (join) =>
+        join.onRef('orderRows.customerId', '=', 'customerRows.id'),
+      )
+      .select([
+        'orderRows.orderNo as orderNo',
+        'customerRows.name as customerName',
+      ])
+      .compile();
+
+    expect(compiled.sql).toContain(context.table(ordersTable));
+    expect(compiled.sql).toContain(context.table(customersTable));
+    expect(compiled.sql).toContain('order_rows');
+    expect(compiled.sql).toContain('customer_rows');
+    expect(compiled.sql).not.toContain(`${context.prefix}_order_rows`);
+    expect(compiled.sql).not.toContain(`${context.prefix}_customer_rows`);
   });
 
   it('supports rightJoin, crossJoin, and clearJoins', async () => {
-    const customersTable = context.table('queryCustomers');
-    const ordersTable = context.table('queryOrders');
+    const customersTable = 'queryCustomers';
+    const ordersTable = 'queryOrders';
 
     await createJoinCollections(context);
 
@@ -122,8 +165,8 @@ describeIntegrationDatabases('query joins', (context) => {
   });
 
   it('supports Kysely-style callback joins with grouped OR expressions', async () => {
-    const customersTable = context.table('queryCustomers');
-    const ordersTable = context.table('queryOrders');
+    const customersTable = 'queryCustomers';
+    const ordersTable = 'queryOrders';
 
     await createJoinCollections(context);
 

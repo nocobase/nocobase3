@@ -171,7 +171,7 @@ browser.
 In the owning application page or form, import the public Client API:
 
 ```tsx
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import {
   createFilesClient,
   FileUploadField,
@@ -179,14 +179,14 @@ import {
 } from '@nocobase/app-plugin-file/client';
 import { useMemo, useState } from 'react';
 
-const appClient = useService(appApiClientToken);
+const api = useService(apiClientToken);
 const client = useMemo(
   () =>
     createFilesClient({
-      appClient,
+      api,
       endpoint: `purchase-orders/${encodeURIComponent(orderId)}/attachments`,
     }),
-  [appClient, orderId],
+  [api, orderId],
 );
 
 const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
@@ -205,7 +205,7 @@ const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
 
 `endpoint` is relative to the v3 Application's `/api` root. Do not include
 `/api`, the public base path, an origin, a query string, or a fragment. The
-injected `AppClient` owns Cookie authentication, deployment base paths, request
+injected `ApiClient` owns Cookie authentication, deployment base paths, request
 headers, and multipart transport.
 
 Persist the parent record before constructing its scoped endpoint or enabling

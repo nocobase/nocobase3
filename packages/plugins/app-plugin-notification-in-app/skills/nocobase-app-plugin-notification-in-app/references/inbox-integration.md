@@ -32,7 +32,7 @@ Register `@nocobase/app-plugin-notification-in-app/client` in the application Cl
 
 ## HTTP and realtime behavior
 
-The authenticated inbox API is rooted at `notifications/in-app` relative to the injected `AppClient` API base. Reads include list and unread-count. Writes include read/unread/delete and read-all, each preceded by an authenticated CSRF-token request.
+The authenticated inbox API is rooted at `notifications/in-app` relative to the injected `ApiClient` API base. Reads include list and unread-count. Writes include read/unread/delete and read-all, each preceded by an authenticated CSRF-token request.
 
 The WebSocket topic is user-scoped by the Server. An `inbox.changed` event does not carry authoritative inbox contents; it tells the UI to refetch HTTP state. The UI also refetches when the realtime connection opens so events missed during disconnection are recovered. Window focus is a fallback invalidation.
 

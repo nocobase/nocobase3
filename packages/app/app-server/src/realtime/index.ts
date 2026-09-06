@@ -1,4 +1,4 @@
-export * from './protocol.js';
+export * from '@nocobase/realtime/protocol';
 export * from './provider.js';
 export * from './service.js';
 export * from './types.js';

@@ -3,7 +3,7 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('view collections', (context) => {
   it('creates and replaces views', async () => {
-    const adultUsersView = context.identifier('adult_users');
+    const adultUsersView = context.table('adultUsers');
 
     await context.builder.createCollection('users', (collection) => {
       collection.increments('id');
@@ -16,8 +16,7 @@ describeIntegrationDatabases('view collections', (context) => {
     ]);
 
     await context.builder.createViewCollection('adultUsers', (view) => {
-      view.tableName(adultUsersView);
-      view.string('firstName', { columnName: 'first_name' });
+      view.string('firstName');
       view.as((query) =>
         query.from('users').select('firstName').where('age', '>', 18),
       );
@@ -28,8 +27,7 @@ describeIntegrationDatabases('view collections', (context) => {
     ]);
 
     await context.builder.replaceViewCollection('adultUsers', (view) => {
-      view.tableName(adultUsersView);
-      view.string('firstName', { columnName: 'first_name' });
+      view.string('firstName');
       view.as((query) =>
         query.from('users').select('firstName').where('age', '>', 16),
       );

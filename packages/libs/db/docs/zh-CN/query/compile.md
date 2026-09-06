@@ -1,3 +1,8 @@
+---
+title: Query 编译与清除条件
+description: 使用 compile 检查 SQL 和参数，复用不可变 Query Builder，并通过 clear 方法移除已有查询片段。
+---
+
 # compile 和 clear
 
 `compile()` 用于把 Query 编译成 SQL 和参数，适合调试、dry-run、测试断言和 Agent 解释。
@@ -14,7 +19,7 @@ compiled.sql;
 compiled.parameters;
 ```
 
-在 `underscored: true` 下，`compile()` 输出的是归一化后的物理 identifier：
+启用 `underscored` 时，`compile()` 输出归一化后的物理 identifier：
 
 ```text
 orderNo -> order_no

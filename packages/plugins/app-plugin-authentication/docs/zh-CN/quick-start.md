@@ -102,15 +102,19 @@ HTTP 状态码为 `401`。
 
 ## 5. 创建浏览器客户端
 
+从已经启动的 `ClientApplication`（下例中的 `app`）解析应用级客户端：
+
 ```ts
 import {
   createAuthClient,
   createAuthProvider,
 } from '@nocobase/app-plugin-authentication/client';
-import { createAppClient } from '@nocobase/app-client';
+import { apiClientToken, realtimeClientToken } from '@nocobase/app-client';
 
-export const appClient = createAppClient();
-export const authClient = createAuthClient({ client: appClient });
+export const authClient = createAuthClient({
+  api: app.services.resolve(apiClientToken),
+  realtime: app.services.resolve(realtimeClientToken),
+});
 export const authProvider = createAuthProvider(authClient);
 ```
 

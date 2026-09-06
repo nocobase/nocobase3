@@ -15,10 +15,12 @@ export function defineWorkflows(collection: CollectionDefinitionBuilder): void {
   collection.json('parameterValues').notNull().defaultTo({});
   collection
     .hasMany('nodes', WORKFLOW_COLLECTIONS.nodes)
+    .sourceKey('id')
     .foreignKey('workflowId')
     .onDelete('cascade');
   collection
     .hasMany('runs', WORKFLOW_COLLECTIONS.runs)
+    .sourceKey('id')
     .foreignKey('workflowId');
   collection.boolean('current');
   collection

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
 
 describe('CollectionBuilder alterCollection', () => {
   it('collects fluent alter operations', async () => {
@@ -159,15 +159,8 @@ describe('CollectionBuilder alterCollection', () => {
     const builder = new CollectionBuilder();
 
     await builder.createCollection('users', {
-      tableName: 'app_users',
-      fields: [
-        {
-          name: 'userId',
-          type: 'integer',
-          columnName: 'user_pk',
-          primaryKey: true,
-        },
-      ],
+      naming: { tablePrefix: 'app_' },
+      fields: [{ name: 'userId', type: 'integer', primaryKey: true }],
     });
     await builder.createCollection('orders', {
       fields: [{ name: 'id', type: 'increments', primaryKey: true }],
@@ -176,7 +169,7 @@ describe('CollectionBuilder alterCollection', () => {
     const result = await builder.alterCollection(
       'orders',
       (collection) => {
-        collection.bigInt('createdById').columnName('creator_id');
+        collection.bigInt('createdById');
         collection
           .belongsTo('createdBy', 'users')
           .foreignKey('createdById')
@@ -193,25 +186,25 @@ describe('CollectionBuilder alterCollection', () => {
         expect.objectContaining({
           type: 'addColumn',
           column: expect.objectContaining({
-            name: 'creator_id',
+            name: 'created_by_id',
             type: 'bigInt',
           }),
         }),
         expect.objectContaining({
           type: 'addIndex',
           index: expect.objectContaining({
-            columns: ['creator_id'],
-            name: 'idx_orders_creator_id',
+            columns: ['created_by_id'],
+            name: 'idx_orders_created_by_id',
           }),
         }),
         expect.objectContaining({
           type: 'addConstraint',
           constraint: expect.objectContaining({
             type: 'foreignKey',
-            columns: ['creator_id'],
+            columns: ['created_by_id'],
             references: {
               table: 'app_users',
-              columns: ['user_pk'],
+              columns: ['user_id'],
             },
           }),
         }),

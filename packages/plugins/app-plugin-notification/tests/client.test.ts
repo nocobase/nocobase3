@@ -42,14 +42,14 @@ describe('@nocobase/app-plugin-notification client', () => {
     ]);
   });
 
-  it('loads redacted notification log details through the app client', async () => {
+  it('loads redacted notification log details through the API client', async () => {
     const details = [{ log: { id: 'notification-1' }, deliveries: [] }];
     const request = vi.fn().mockResolvedValue({ data: details });
 
     await expect(
       new NotificationClient({ request }).listLogs(),
     ).resolves.toEqual(details);
-    expect(request).toHaveBeenCalledWith('notifications/logs');
+    expect(request).toHaveBeenCalledWith({ path: 'notifications/logs' });
   });
 
   it('loads safe test targets and sends through the core test route', async () => {
@@ -81,17 +81,19 @@ describe('@nocobase/app-plugin-notification client', () => {
         values: { title: 'Test', body: 'Hello' },
       }),
     ).resolves.toEqual(result);
-    expect(request).toHaveBeenNthCalledWith(1, 'notifications/test/targets', {
+    expect(request).toHaveBeenNthCalledWith(1, {
       headers: { 'x-nocobase-notification-test': '1' },
+      path: 'notifications/test/targets',
     });
-    expect(request).toHaveBeenNthCalledWith(2, 'notifications/test/send', {
-      method: 'POST',
+    expect(request).toHaveBeenNthCalledWith(2, {
       headers: { 'x-nocobase-notification-test': '1' },
-      body: JSON.stringify({
+      json: {
         channel: 'im',
         provider: { name: 'feishu', type: 'feishu-webhook' },
         values: { title: 'Test', body: 'Hello' },
-      }),
+      },
+      method: 'POST',
+      path: 'notifications/test/send',
     });
   });
 

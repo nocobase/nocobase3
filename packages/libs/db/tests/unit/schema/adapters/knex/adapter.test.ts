@@ -1,6 +1,6 @@
 import knex from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
-import { KnexSchemaAdapter } from '../../../../../src/schema/adapters/knex/index.js';
+import { KnexSchemaAdapter } from '../../../../../src/schema/internal/knex/adapter.js';
 
 describe('KnexSchemaAdapter', () => {
   const clients: Array<ReturnType<typeof knex>> = [];
@@ -21,6 +21,38 @@ describe('KnexSchemaAdapter', () => {
     clients.push(client);
     return client;
   }
+
+  it.each(['better-sqlite3', 'pg', 'mysql2', 'oracledb', 'mssql'])(
+    'declares a named primary key exactly once on %s',
+    async (clientName) => {
+      const adapter = new KnexSchemaAdapter(createClient(clientName), {
+        dialect: clientName === 'oracledb' ? 'oracle' : clientName,
+      });
+      const sql = await adapter.compile([
+        {
+          type: 'createTable',
+          table: {
+            name: 'accounts',
+            columns: [
+              {
+                name: 'code',
+                type: 'string',
+                primaryKey: true,
+                nullable: false,
+              },
+            ],
+            constraints: [
+              { type: 'primary', name: 'accounts_pk', columns: ['code'] },
+            ],
+            indexes: [],
+          },
+        },
+      ]);
+      expect(sql.join('\n').match(/primary key/gi)).toHaveLength(1);
+      if (clientName !== 'better-sqlite3')
+        expect(sql.join('\n')).toContain('accounts_pk');
+    },
+  );
 
   it('compiles predicate filters for regular indexes and unique constraints', async () => {
     const adapter = new KnexSchemaAdapter(createClient());

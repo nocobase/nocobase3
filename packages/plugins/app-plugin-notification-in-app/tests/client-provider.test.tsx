@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient, RealtimeClient } from '@nocobase/app-client';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,16 +7,29 @@ const mocks = vi.hoisted(() => ({
   appClient: {
     request: vi.fn(),
     stream: vi.fn(),
-  } as unknown as AppClient,
+    repository: vi.fn(),
+  } satisfies ApiClient,
+  realtime: {
+    connected: false,
+    subscribe: vi.fn(),
+    onOpen: vi.fn(),
+    onError: vi.fn(),
+    reconnect: vi.fn(),
+    close: vi.fn(),
+  } satisfies RealtimeClient,
   cleanup: vi.fn(),
   fetchUnreadCount: vi.fn(),
   subscribe: vi.fn(),
 }));
 
-vi.mock('@nocobase/app-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@nocobase/app-client')>()),
-  useService: () => mocks.appClient,
-}));
+vi.mock('@nocobase/app-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@nocobase/app-client')>();
+  return {
+    ...actual,
+    useService: (token: unknown) =>
+      token === actual.realtimeClientToken ? mocks.realtime : mocks.appClient,
+  };
+});
 
 vi.mock('../client/api.js', () => ({
   fetchUnreadCount: mocks.fetchUnreadCount,
@@ -53,7 +66,7 @@ describe('in-app notification Client Provider', () => {
       await screen.findByRole('button', { name: 'Refresh inbox (4)' }),
     ).toBeInTheDocument();
     expect(mocks.subscribe).toHaveBeenCalledWith(
-      mocks.appClient,
+      mocks.realtime,
       window,
       expect.any(Function),
     );

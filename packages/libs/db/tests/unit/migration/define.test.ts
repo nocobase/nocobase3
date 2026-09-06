@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { defineMigration } from '../../../src/index.js';
 import {
-  defineMigration,
   isDefinedMigration,
   MIGRATION_DEFINITION_SYMBOL,
-} from '../../../src/index.js';
+} from '../../../src/migration/internal/marker.js';
 
 describe('defineMigration', () => {
   it('marks a migration definition for strict loader validation', async () => {

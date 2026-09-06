@@ -10,7 +10,7 @@
 ```text
 浏览器认证页面
   -> AuthClient
-  -> AppClient
+  -> ApiClient + RealtimeClient
   -> /api/auth/*
   -> Auth / Better Auth
   -> NocoBase Database Adapter

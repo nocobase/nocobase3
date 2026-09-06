@@ -8,6 +8,7 @@ export function defineWorkflowNodeRuns(
   collection.bigInt('id').primary().autoIncrement().notNull();
   collection
     .belongsTo('workflowRun', WORKFLOW_COLLECTIONS.runs)
+    .targetKey('id')
     .foreignKey('workflowRunId')
     .foreignKeyType('bigInt')
     .notNull()
@@ -15,6 +16,7 @@ export function defineWorkflowNodeRuns(
     .onDelete('cascade');
   collection
     .belongsTo('node', WORKFLOW_COLLECTIONS.nodes)
+    .targetKey('id')
     .foreignKey('nodeId')
     .foreignKeyType('bigInt')
     .notNull()

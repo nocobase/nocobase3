@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -16,12 +16,12 @@ import {
 } from '../client/llm-service-service.ts';
 
 function createClient(): {
-  readonly client: AppClient;
-  readonly request: ReturnType<typeof vi.fn<AppClient['request']>>;
+  readonly client: ApiClient;
+  readonly request: ReturnType<typeof vi.fn<ApiClient['request']>>;
 } {
-  const request = vi.fn<AppClient['request']>();
-  const stream = vi.fn<AppClient['stream']>();
-  return { client: { request, stream }, request };
+  const request = vi.fn<ApiClient['request']>();
+  const stream = vi.fn<ApiClient['stream']>();
+  return { client: { request, stream } as ApiClient, request };
 }
 
 describe('AI Employee application client transport', () => {
@@ -48,20 +48,22 @@ describe('AI Employee application client transport', () => {
       client,
     );
 
-    expect(request).toHaveBeenNthCalledWith(1, 'ai/aiEmployees:list', {
+    expect(request).toHaveBeenNthCalledWith(1, {
+      path: 'ai/aiEmployees:list',
       method: 'GET',
     });
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'ai/aiEmployees:get?key=atlas%2Fteam',
-      { method: 'GET' },
-    );
+    expect(request).toHaveBeenNthCalledWith(2, {
+      path: 'ai/aiEmployees:get',
+      method: 'GET',
+      query: { key: 'atlas/team' },
+    });
     expect(request).toHaveBeenNthCalledWith(
       3,
-      'ai/aiEmployees:update?key=atlas',
       expect.objectContaining({
+        path: 'ai/aiEmployees:update',
         method: 'PUT',
-        body: expect.any(String),
+        query: { key: 'atlas' },
+        json: expect.any(Object),
       }),
     );
   });
@@ -72,10 +74,11 @@ describe('AI Employee application client transport', () => {
 
     await listEnabledKnowledgeBases(undefined, client);
 
-    expect(request).toHaveBeenCalledWith(
-      'aiKnowledgeBase:list?paginate=false&filter%5Benabled%5D=true',
-      { method: 'GET' },
-    );
+    expect(request).toHaveBeenCalledWith({
+      path: 'aiKnowledgeBase:list',
+      method: 'GET',
+      query: { paginate: false, 'filter[enabled]': true },
+    });
   });
 
   it('routes LLM settings through the plugin AI API mount', async () => {
@@ -96,23 +99,24 @@ describe('AI Employee application client transport', () => {
     await updateLLMService('deepseek/chat', { enabled: true }, client);
     await listProviderModels('deepseek', 'chat model', client);
 
-    expect(request).toHaveBeenNthCalledWith(1, 'ai/llmServices:list', {
+    expect(request).toHaveBeenNthCalledWith(1, {
+      path: 'ai/llmServices:list',
       method: 'GET',
     });
-    expect(request).toHaveBeenNthCalledWith(2, 'ai/ai:listLLMProviders', {
+    expect(request).toHaveBeenNthCalledWith(2, {
+      path: 'ai/ai:listLLMProviders',
       method: 'GET',
     });
-    expect(request).toHaveBeenNthCalledWith(
-      3,
-      'ai/llmServices:update?key=deepseek%2Fchat',
-      {
-        method: 'PUT',
-        body: JSON.stringify({ enabled: true }),
-      },
-    );
-    expect(request).toHaveBeenNthCalledWith(4, 'ai/ai:listProviderModels', {
+    expect(request).toHaveBeenNthCalledWith(3, {
+      path: 'ai/llmServices:update',
+      method: 'PUT',
+      query: { key: 'deepseek/chat' },
+      json: { enabled: true },
+    });
+    expect(request).toHaveBeenNthCalledWith(4, {
+      path: 'ai/ai:listProviderModels',
       method: 'POST',
-      body: JSON.stringify({ llmService: 'deepseek', search: 'chat model' }),
+      json: { llmService: 'deepseek', search: 'chat model' },
     });
   });
 

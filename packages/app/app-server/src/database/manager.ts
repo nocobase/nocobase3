@@ -20,6 +20,7 @@ export function createAppDatabaseManager(
     defineDatabase({
       default: config.default,
       connections: resolveConnections(config.connections, paths),
+      metadataStore: config.metadataStore,
     }),
   );
 }
@@ -55,6 +56,34 @@ function resolveConnections(
         password: '',
         ssl: false,
         schema: ['public'],
+        ...main,
+      },
+    };
+  }
+  if (main.dialect === 'oracle') {
+    return {
+      ...connections,
+      main: {
+        ...main,
+        host: main.host ?? '127.0.0.1',
+        port: main.port ?? 1521,
+        serviceName: main.serviceName || 'FREEPDB1',
+        username: main.username ?? 'nocobase',
+        password: main.password ?? '',
+      },
+    };
+  }
+  if (main.dialect === 'mssql') {
+    return {
+      ...connections,
+      main: {
+        host: '127.0.0.1',
+        port: 1433,
+        database: 'app',
+        username: 'sa',
+        password: '',
+        encrypt: false,
+        trustServerCertificate: false,
         ...main,
       },
     };

@@ -32,11 +32,11 @@ This Skill is published with `@nocobase/app-plugin-notification-in-app`. The plu
 
 # Input Contract
 
-| Input         | Required | Default                                                 | Validation                                                     | Clarification Question                                          |
-| ------------- | -------- | ------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------- |
-| `action`      | yes      | `verify` for existing code; `register` for a new target | `register/verify/diagnose`                                     | "Should I register, verify, or diagnose the inbox?"             |
-| `application` | yes      | infer from one unambiguous workspace application        | application root with Server and Client configuration          | "Which application should register the inbox plugin?"           |
-| `apiConfig`   | no       | the target application's injected `AppClient`           | authenticated client with the intended `baseURL`/`realtimeURL` | "Should this application use its default or a custom API host?" |
+| Input         | Required | Default                                                            | Validation                                                     | Clarification Question                                          |
+| ------------- | -------- | ------------------------------------------------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------- |
+| `action`      | yes      | `verify` for existing code; `register` for a new target            | `register/verify/diagnose`                                     | "Should I register, verify, or diagnose the inbox?"             |
+| `application` | yes      | infer from one unambiguous workspace application                   | application root with Server and Client configuration          | "Which application should register the inbox plugin?"           |
+| `apiConfig`   | no       | the target application's injected `ApiClient` and `RealtimeClient` | authenticated client with the intended `baseURL`/`realtimeURL` | "Should this application use its default or a custom API host?" |
 
 Rules:
 
@@ -57,7 +57,7 @@ Rules:
 2. Inspect the target application's Server plugin list, Client composition, authentication setup, `api.baseURL`, `api.realtimeURL`, and installed package versions.
 3. Register `@nocobase/app-plugin-notification` before `@nocobase/app-plugin-notification-in-app/server` when the application needs the `in-app` Channel contribution.
 4. Register `@nocobase/app-plugin-notification-in-app/client` in the Client composition root. In a development build, verify the page at `/dev/notification-in-app` relative to the App base path.
-5. Keep inbox reads and mutations on the injected `AppClient`. Do not reconstruct `/api` from the browser location or Portal base.
+5. Resolve `apiClientToken` for inbox reads and mutations and `realtimeClientToken` for subscriptions. Do not reconstruct `/api` from the browser location or Portal base.
 6. Keep HTTP state authoritative. On a validated `inbox.changed` event, realtime connection open, or window focus, trigger a bounded HTTP refetch.
 7. Use the public `@nocobase/app-plugin-notification-in-app/realtime` entry for shared topic or event types; do not import Server internals.
 8. Test allowed and denied users, CSRF-protected mutations, pagination, custom API hosts, realtime invalidation, reconnect recovery, and Dev Route registration.
@@ -95,7 +95,7 @@ Rollback guidance:
 - The package's Client entry is registered and contributes `/dev/notification-in-app` in development.
 - The Dev Route and page module are absent from production builds.
 - The page-local Provider mounts only while the inbox page is open.
-- HTTP calls use the injected `AppClient` and honor custom `api.baseURL` configuration.
+- HTTP calls use the injected `ApiClient` and honor custom `api.baseURL` configuration.
 - Realtime connects through the configured application client and uses the public topic constant.
 - Realtime connection open, valid invalidation events, and window focus refetch durable state.
 - Malformed or unrelated realtime payloads do not alter inbox state.

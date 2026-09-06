@@ -170,7 +170,7 @@ The current entries:
 | `@nocobase/service-provider` | `ServiceContainer` keys its `Map` by the token object itself, so two `createServiceToken` calls with the same name produce two keys that never match |
 | `@nocobase/app-server`       | Exports the tokens every server plugin resolves against, such as `queueManagerToken` and `driveManagerToken`                                         |
 | `@nocobase/db`               | Exports `databaseManagerToken` and migration identity                                                                                                |
-| `@nocobase/app-client`       | Exports React contexts and `appApiClientToken`                                                                                                       |
+| `@nocobase/app-client`       | Exports React contexts plus the identity-keyed `apiClientToken` and `realtimeClientToken`                                                            |
 | `@nocobase/app-portal-sdk`   | Exports `nocobaseClient`, a module-level singleton holding session state                                                                             |
 | `@nocobase/i18n`             | Exports the React contexts backing the i18n runtime                                                                                                  |
 | `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                               |

@@ -4,7 +4,7 @@ import { createQueryOrdersCollection, seedQueryOrders } from './helpers.js';
 
 describeIntegrationDatabases('query select', (context) => {
   it('selects rows and uses Kysely-style terminal methods', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await createQueryOrdersCollection(context);
     await seedQueryOrders(context, ordersTable);
@@ -40,7 +40,7 @@ describeIntegrationDatabases('query select', (context) => {
   });
 
   it('supports value, pluck, exists, distinct, selectAll, and immutable clear methods', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await createQueryOrdersCollection(context);
     await seedQueryOrders(context, ordersTable);
@@ -114,7 +114,7 @@ describeIntegrationDatabases('query select', (context) => {
   });
 
   it('requires orderBy when offset is used for portable pagination', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await createQueryOrdersCollection(context);
     await seedQueryOrders(context, ordersTable);

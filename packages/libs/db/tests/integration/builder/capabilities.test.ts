@@ -9,14 +9,21 @@ describeIntegrationDatabases('capability warnings', (context) => {
     const result = await context.builder.createCollection(
       'capabilityEvents',
       (collection) => {
-        collection.dbSchema('public');
+        if (context.spec.dialect !== 'oracle') {
+          collection.dbSchema(
+            context.spec.dialect === 'mssql' ? 'dbo' : 'public',
+          );
+        }
         collection.increments('id');
-        collection.native('ipAddress', 'text', {
-          columnName: 'ip_address',
-          db: {
-            comment: 'Client IP address',
+        collection.native(
+          'ipAddress',
+          context.spec.dialect === 'oracle' ? 'clob' : 'text',
+          {
+            db: {
+              comment: 'Client IP address',
+            },
           },
-        });
+        );
         collection.string('email');
         collection.unique('email', {
           deferrable: 'deferred',
@@ -34,8 +41,15 @@ describeIntegrationDatabases('capability warnings', (context) => {
       ),
     ).toBe(true);
 
-    if (context.spec.dialect === 'postgres') {
+    if (
+      context.spec.dialect === 'postgres' ||
+      context.spec.dialect === 'oracle'
+    ) {
       expect(result.warnings).toEqual([]);
+    } else if (context.spec.dialect === 'mssql') {
+      expect(result.warnings?.map((warning) => warning.code)).toEqual([
+        'UNSUPPORTED_DEFERRABLE_CONSTRAINT',
+      ]);
     } else {
       expect(result.warnings?.map((warning) => warning.code)).toEqual(
         expect.arrayContaining([
@@ -75,7 +89,7 @@ describeIntegrationDatabases('capability warnings', (context) => {
       await context.db.schema.hasTable(context.table('partialUniqueJobs')),
     ).toBe(true);
 
-    if (context.spec.dialect === 'mysql') {
+    if (!context.database.connection().capabilities.partialIndexes) {
       expect(result.warnings).toEqual([
         expect.objectContaining({
           code: 'UNSUPPORTED_PARTIAL_UNIQUE_CONSTRAINT',

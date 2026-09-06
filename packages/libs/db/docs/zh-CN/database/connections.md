@@ -1,6 +1,13 @@
-# 数据库连接
+---
+title: 数据库连接配置
+description: 配置 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server Connection，以及命名和外部 Schema 行为。
+---
+
+# 数据库连接配置
 
 数据库连接由 `createDatabaseManager()` 创建。它返回 `DatabaseManager`，支持默认连接和多个命名连接。
+
+创建流程和默认连接行为见 [`createDatabaseManager()`](./create-database-manager.md)。本页只解释各方言和 Connection 配置。
 
 ## SQLite
 
@@ -51,6 +58,48 @@ const db = createDatabaseManager({
   },
 });
 ```
+
+## Oracle
+
+```ts
+const db = createDatabaseManager({
+  default: 'main',
+  connections: {
+    main: {
+      dialect: 'oracle',
+      host: '127.0.0.1',
+      port: 11521,
+      serviceName: 'FREEPDB1',
+      username: 'nocobase',
+      password: 'nocobase',
+    },
+  },
+});
+```
+
+底层使用 `oracledb` Thin mode，不需要 Oracle Instant Client。`serviceName` 是必填配置，不要用 `database` 代替。
+
+## SQL Server
+
+```ts
+const db = createDatabaseManager({
+  default: 'main',
+  connections: {
+    main: {
+      dialect: 'mssql',
+      host: '127.0.0.1',
+      port: 1433,
+      database: 'nocobase',
+      username: 'sa',
+      password: process.env.DB_PASSWORD,
+      encrypt: true,
+      trustServerCertificate: false,
+    },
+  },
+});
+```
+
+底层使用 Knex 的 `mssql` dialect 和 `tedious` driver。本地 Docker 使用自签名证书时可以设置 `encrypt: false`、`trustServerCertificate: true`；生产环境不要把信任自签名证书作为默认配置。
 
 ## 多连接
 
@@ -105,9 +154,9 @@ orderItems -> tbl_order_items
 createdAt -> created_at
 ```
 
-Collection 可以用 `collection.naming(...)` 覆盖 connection 级配置，也可以用 `tableName`、`columnName` 显式指定物理名。
+Collection 可以用 `collection.naming({ underscored, tablePrefix })` 覆盖 Connection 命名配置。`underscored` 默认是 `true`；`tablePrefix: ''` 表示清除继承的前缀。不能显式指定任意物理名。
 
-更完整的概念见 [命名概念](../concepts/naming.md)，Builder 编译规则见 [Builder 命名映射](../builder/naming.md)。
+更完整的概念见 [命名概念](../concepts/naming/overview.md)，具体配置见 [`underscored` 命名规则](../concepts/naming/underscored.md) 和 [`tablePrefix` 表前缀](../concepts/naming/table-prefix.md)，Builder 编译与兼容边界见[命名与跨数据库兼容](../builder/portability.md)。
 
 ## defineDatabase
 
@@ -127,7 +176,7 @@ const config = defineDatabase({
 const db = createDatabaseManager(config);
 ```
 
-## Agent 注意事项
+## 使用注意事项
 
 - `createDatabaseManager()` 是运行时入口。
 - `defineDatabase()` 只帮助定义配置，不创建 manager。

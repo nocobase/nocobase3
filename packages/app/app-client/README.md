@@ -100,12 +100,13 @@ An application owns:
 - a read-only `app.config`;
 - one application-scoped `ServiceContainer`;
 - ServiceProvider instances and lifecycle state;
-- the API client binding under `appApiClientToken`;
+- the HTTP API client binding under `apiClientToken`;
+- the WebSocket client binding under `realtimeClientToken`;
 - mutable `app.refine` setters during Provider lifecycle;
 - finalized `app.refineConfig` after startup;
 - finalized React render configuration consumed by `AppClientRoot`.
 
-The application API client also owns a lazy realtime connection. By default,
+The application owns a separate lazy realtime service under `realtimeClientToken`. By default,
 its WebSocket endpoint is the `/ws` sibling of `api.baseURL`; deployments with
 a different topology can set `api.realtimeURL` explicitly. Consumers that keep
 durable state should use `onOpen()` to refetch after the initial connection and
@@ -129,6 +130,27 @@ const app = createApp(runtime, (application) => {
 
 The default template constructs `ClientApplication` directly because it adds
 its own router and application-level i18n wrapper.
+
+Resolve HTTP and WebSocket clients independently:
+
+```ts
+import { apiClientToken, realtimeClientToken } from '@nocobase/app-client';
+
+const api = app.services.resolve(apiClientToken);
+const realtime = app.services.resolve(realtimeClientToken);
+type Order = { readonly id: string };
+
+await api.request({ path: 'system-info' });
+await api.repository<Order>('orders').findOne({
+  filter: { id: 'order-1' },
+});
+const unsubscribe = realtime.subscribe('orders:changed', (event) => {
+  console.log(event.payload);
+});
+```
+
+`ApiClient` owns `request()`, `stream()`, and `repository()`. `RealtimeClient`
+owns WebSocket connection lifecycle and subscriptions.
 
 ## ServiceProviders
 
