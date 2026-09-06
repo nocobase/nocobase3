@@ -164,6 +164,8 @@ await projects.updateOne({
 
 - `set` 的目标是已有记录的唯一 selector；`set: []` 清空集合。
 - 同一关系的 set 不能与 create、connect、disconnect、update、upsert、delete 混用。
+- hasMany 的目标外键不可空时，当前不开放 set（包括集合不变或空集合），也不能 disconnect；删除子记录与把外键置空不同，应按 delete 的关系范围和数据库约束单独判断。
+- 同一个 connect、disconnect 或 set 数组不能重复相同 selector；同一 selector 不能同时出现在 connect 和 disconnect。跨嵌套 create 分支的 clientKey 也必须唯一。不同唯一键命中同一物理记录的情况不要依赖隐式去重。
 - to-one 解除使用 `.disconnect()` 或 `{ disconnect: true }`，不能带 selector。
 - to-many 解除必须指定 selector；`.disconnect()` 或 `disconnect: true` 不表示清空集合。
 - belongsTo／hasOne／hasMany 能否解除取决于外键是否可空；belongsToMany 解除删除中间表记录。
