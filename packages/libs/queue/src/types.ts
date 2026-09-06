@@ -82,6 +82,36 @@ export type NocoBaseQueueJobClass<T extends Job = Job> = (new (
 export type NocoBaseQueueJobFactory = (
   JobClass: NocoBaseQueueJobClass,
 ) => Job | Promise<Job>;
+export type NocoBaseQueueNamedJobFactory = (
+  JobClass: NocoBaseQueueJobClass,
+) => Job | Promise<Job>;
+
+export interface NocoBaseQueueJobFactoryRegistry {
+  register(name: string, factory: NocoBaseQueueNamedJobFactory): void;
+  unregister(name: string): void;
+  create(JobClass: NocoBaseQueueJobClass): Job | Promise<Job>;
+}
+
+export function createQueueJobFactoryRegistry(
+  fallback: NocoBaseQueueNamedJobFactory,
+): NocoBaseQueueJobFactoryRegistry {
+  const factories = new Map<string, NocoBaseQueueNamedJobFactory>();
+  return {
+    register(name, factory): void {
+      if (factories.has(name)) {
+        throw new Error(`Queue Job factory is already registered: ${name}`);
+      }
+      factories.set(name, factory);
+    },
+    unregister(name): void {
+      factories.delete(name);
+    },
+    create(JobClass): Job | Promise<Job> {
+      const name = JobClass.options?.name ?? JobClass.name;
+      return (factories.get(name) ?? fallback)(JobClass);
+    },
+  };
+}
 export type NocoBaseQueueDispatchableJobClass<T extends Job = Job> =
   NocoBaseQueueJobClass<T> & {
     dispatch(payload: T extends Job<infer P> ? P : never): unknown;

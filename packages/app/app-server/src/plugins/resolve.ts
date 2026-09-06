@@ -157,7 +157,29 @@ function resolvePlugin(
         return resolvedPath ? [createJobLocation(resolvedPath)] : [];
       }),
     ),
+    scheduleDefinitionsLocation: resolveOptionalModulePath(
+      packageRoot,
+      definition.schedules?.definitions,
+    ),
   };
+}
+
+function resolveOptionalModulePath(
+  packageRoot: string,
+  configuredPath: string | undefined,
+): string | undefined {
+  if (!configuredPath) return undefined;
+  validatePackagePath(configuredPath);
+  const relativePath = configuredPath.slice(2);
+  const candidates = [
+    path.resolve(packageRoot, `${relativePath}.ts`),
+    path.resolve(packageRoot, `${relativePath}.js`),
+    path.resolve(packageRoot, relativePath, 'index.ts'),
+    path.resolve(packageRoot, relativePath, 'index.js'),
+    path.resolve(packageRoot, 'dist', `${relativePath}.js`),
+    path.resolve(packageRoot, 'dist', relativePath, 'index.js'),
+  ];
+  return candidates.find((candidate) => existsSync(candidate));
 }
 
 function createJobLocation(resolvedPath: string): string {

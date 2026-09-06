@@ -57,6 +57,9 @@
       "@nocobase/app-plugin-routes-example": {
         "enabled": true
       },
+      "@nocobase/app-plugin-scheduled-workflow-example": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-service-provider-example": {
         "enabled": true
       },
@@ -64,6 +67,9 @@
         "enabled": true
       },
       "@nocobase/app-plugin-system-info": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-scheduler": {
         "enabled": true
       },
       "@nocobase/app-plugin-workflow": {
@@ -96,6 +102,8 @@
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
+    "@nocobase/app-plugin-scheduled-workflow-example": "workspace:^",
+    "@nocobase/app-plugin-scheduler": "workspace:^",
     "@nocobase/app-plugin-service-provider-example": "workspace:^",
     "@nocobase/app-plugin-skills-example": "workspace:^",
     "@nocobase/app-plugin-system-info": "workspace:^",
@@ -229,6 +237,7 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
+    "scheduler:sync": "tsx --tsconfig tsconfig.server.json ./scripts/scheduler-sync.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "plugin:register": "nb3 app plugin register",
     "plugin:inspect": "nb3 app plugin inspect",

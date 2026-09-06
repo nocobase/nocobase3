@@ -753,6 +753,103 @@ describe('client settings', () => {
     );
   });
 
+  it('extends a group explicitly regardless of contribution order', () => {
+    const owner = {
+      packageName: '@nocobase/app-plugin-owner',
+      routes: defineSettingsRoutes([
+        {
+          name: 'automation',
+          path: '/automation',
+          navigation: { title: 'Automation' },
+          children: [
+            {
+              name: 'workflows',
+              path: '/workflows',
+              navigation: { title: 'Workflows' },
+              componentLoader: page,
+            },
+          ],
+        },
+      ]),
+    };
+    const extension = {
+      packageName: '@nocobase/app-plugin-extension',
+      routes: defineSettingsRoutes([
+        {
+          name: 'automation',
+          path: '/automation',
+          navigation: { title: 'Ignored extension metadata' },
+          extend: true,
+          children: [
+            {
+              name: 'schedules',
+              path: '/schedules',
+              navigation: { title: 'Schedules' },
+              componentLoader: page,
+            },
+          ],
+        },
+      ]),
+    };
+
+    for (const contributions of [
+      [owner, extension],
+      [extension, owner],
+    ]) {
+      const resolved = resolveAppClientContributions(contributions);
+      expect(resolved.settingGroups).toMatchObject([
+        {
+          id: 'automation',
+          packageName: '@nocobase/app-plugin-owner',
+          settings: [
+            { id: 'workflows', path: '/settings/automation/workflows' },
+            {
+              id: 'schedules',
+              path: '/settings/automation/schedules',
+              packageName: '@nocobase/app-plugin-extension',
+            },
+          ],
+        },
+      ]);
+    }
+  });
+
+  it('uses a group extension as the fallback owner when no owner is registered', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-extension',
+        routes: defineSettingsRoutes([
+          {
+            name: 'automation',
+            path: '/automation',
+            navigation: { title: 'Automation' },
+            extend: true,
+            children: [
+              {
+                name: 'schedules',
+                path: '/schedules',
+                componentLoader: page,
+              },
+            ],
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.settingGroups).toMatchObject([
+      {
+        id: 'automation',
+        packageName: '@nocobase/app-plugin-extension',
+        settings: [
+          {
+            id: 'schedules',
+            path: '/settings/automation/schedules',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('rejects duplicate child ids inside one group', () => {
     expect(() =>
       resolveAppClientContributions([

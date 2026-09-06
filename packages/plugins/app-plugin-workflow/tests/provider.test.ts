@@ -8,6 +8,8 @@ import type {
   AppConfigToken,
 } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
+import { scheduleTargetRegistryToken } from '@nocobase/app-plugin-scheduler/server/tokens';
+import { ScheduleTargetRegistry } from '@nocobase/app-plugin-scheduler/server';
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 
 import { WorkflowProvider } from '../server/provider.js';
@@ -62,6 +64,23 @@ describe('WorkflowProvider', () => {
       'Workflow instruction "echo" is already registered.',
     );
   });
+
+  it.each(['scheduler-first', 'workflow-first'] as const)(
+    'registers the Schedule target independently of plugin declaration order: %s',
+    async (order) => {
+      const { container, provider } = createProviderWithDependencies(order);
+      const registry = new ScheduleTargetRegistry();
+      if (order === 'scheduler-first')
+        container.instance(scheduleTargetRegistryToken, registry);
+      provider.register();
+      if (order === 'workflow-first')
+        container.instance(scheduleTargetRegistryToken, registry);
+
+      await provider.boot();
+
+      expect(registry.get('workflow')).toBeDefined();
+    },
+  );
 });
 
 function createProviderWithDependencies(appName: string): {

@@ -92,6 +92,8 @@ export interface AppClientSettingsRouteGroupDefinition {
   readonly path: string;
   readonly navigation: AppClientSettingsRouteNavigation;
   readonly children: readonly AppClientSettingsRoutePageDefinition[];
+  /** Append children to a group owned by another contribution instead of defining the group itself. */
+  readonly extend?: boolean;
 }
 
 /** A child Route contributed to the built-in Settings Route. */
@@ -154,6 +156,7 @@ export interface AppClientRegisteredSetting {
 export interface AppClientRegisteredSettingGroup {
   readonly id: string;
   readonly title: string;
+  readonly path: string;
   readonly surface: AppClientNavigationSurface;
   readonly icon?: AppClientSettingIcon;
   readonly packageName: string;
@@ -600,6 +603,12 @@ export function resolveAppClientContributions(
   const devRouteGroupIds = new Map<string, AppClientRegisteredDevRouteGroup>();
   const reactProviders: AppClientRegisteredReactProvider[] = [];
   const reactProviderIds = new Set<string>();
+  const groupExtensions: Array<{
+    packageName: string;
+    source: AppClientContributionSource;
+    surface: AppClientNavigationSurface;
+    group: AppClientSettingsRouteGroupDefinition;
+  }> = [];
 
   for (const contribution of contributions) {
     const packageName = normalizePackageName(contribution.packageName);
@@ -650,6 +659,15 @@ export function resolveAppClientContributions(
 
       for (const setting of routeContribution.routes) {
         if (isAppClientSettingsRouteGroup(setting)) {
+          if (setting.extend === true) {
+            groupExtensions.push({
+              packageName,
+              source,
+              surface,
+              group: setting,
+            });
+            continue;
+          }
           const group = createRegisteredSettingGroup(
             packageName,
             source,
@@ -703,6 +721,84 @@ export function resolveAppClientContributions(
       reactProviderIds.add(registeredReactProvider.id);
       reactProviders.push(registeredReactProvider);
     }
+  }
+
+  for (const extension of groupExtensions) {
+    const surfaceGroups =
+      extension.surface === 'dev' ? devRouteGroups : settingGroups;
+    const surfacePages = extension.surface === 'dev' ? devRoutes : settings;
+    const surfacePaths =
+      extension.surface === 'dev' ? devRoutePaths : settingPaths;
+    const surfaceGroupIds =
+      extension.surface === 'dev' ? devRouteGroupIds : settingGroupIds;
+    const groupId = normalizeSettingId(
+      extension.group.name,
+      extension.packageName,
+      `${describeSurface(extension.surface)} group extension`,
+    );
+    const owner = surfaceGroupIds.get(groupId);
+    if (!owner) {
+      const fallback = createRegisteredSettingGroup(
+        extension.packageName,
+        extension.source,
+        extension.group,
+        extension.surface,
+      );
+      surfaceGroupIds.set(groupId, fallback);
+      surfaceGroups.push(fallback);
+      for (const child of fallback.settings) {
+        claimSettingPath(
+          child,
+          extension.packageName,
+          surfacePaths,
+          claimedPaths,
+        );
+        surfacePages.push(child);
+      }
+      continue;
+    }
+    const normalizedPath = normalizeRoutePath(
+      extension.group.path,
+      extension.packageName,
+      groupId,
+    );
+    if (normalizedPath !== owner.path) {
+      throw new Error(
+        `Client ${describeSurface(extension.surface)} group extension "${groupId}" from plugin "${extension.packageName}" must use owner path "${owner.path}".`,
+      );
+    }
+    const childIds = new Set(owner.settings.map((setting) => setting.id));
+    const added = extension.group.children.map((child) => {
+      const registered = createRegisteredSetting(
+        extension.packageName,
+        extension.source,
+        child,
+        extension.surface,
+        groupId,
+        owner.path,
+      );
+      if (childIds.has(registered.id)) {
+        throw new Error(
+          `Client ${describeSurface(extension.surface)} group extension "${groupId}" from plugin "${extension.packageName}" defines duplicate child id "${registered.id}".`,
+        );
+      }
+      childIds.add(registered.id);
+      claimSettingPath(
+        registered,
+        extension.packageName,
+        surfacePaths,
+        claimedPaths,
+      );
+      surfacePages.push(registered);
+      return registered;
+    });
+    const merged = Object.freeze({
+      ...owner,
+      settings: Object.freeze([...owner.settings, ...added]),
+    });
+    surfaceGroupIds.set(groupId, merged);
+    const index = surfaceGroups.indexOf(owner);
+    surfaceGroups[index] = merged;
   }
 
   return Object.freeze({
@@ -954,6 +1050,7 @@ function createRegisteredSettingGroup(
       ? {}
       : { icon: group.navigation.icon }),
     id,
+    path: normalizeRoutePath(group.path, packageName, id),
     packageName,
     settings: Object.freeze(children),
     source,

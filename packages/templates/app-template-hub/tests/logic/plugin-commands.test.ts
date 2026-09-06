@@ -32,6 +32,8 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:skills:sync': 'nb3 app plugin skills sync',
   'client:inspect': 'tsx ./scripts/inspect-client.mjs',
   'server:inspect': 'tsx ./scripts/inspect-server.mjs',
+  'scheduler:sync':
+    'tsx --tsconfig tsconfig.server.json ./scripts/scheduler-sync.ts',
 };
 
 describe('documented plugin commands', () => {
@@ -54,6 +56,14 @@ describe('documented plugin commands', () => {
     expect(existsSync(entry)).toBe(true);
     // A generated app only receives what `files` lists, so an unlisted script is present here and missing there.
     expect(appPackage.files).toContain('scripts');
+  });
+
+  it('ships a one-shot Schedule sync command with finalize support', () => {
+    const entry = path.join(appRoot, 'scripts/scheduler-sync.ts');
+    expect(existsSync(entry)).toBe(true);
+    const source = readFileSync(entry, 'utf8');
+    expect(source).toContain("process.argv.includes('--finalize')");
+    expect(source).toContain("kind: 'sync-only'");
   });
 
   it('keeps synchronized Agent state out of source control and publication', () => {

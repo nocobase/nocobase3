@@ -1,6 +1,8 @@
 // @vitest-environment node
 
 import path from 'node:path';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 import { describe, expect, it } from 'vitest';
 
@@ -25,6 +27,7 @@ describe('server plugin definitions', () => {
       routes: [],
       database: undefined,
       queue: undefined,
+      schedules: undefined,
     });
     expect(Object.isFrozen(plugin)).toBe(true);
     expect(Object.isFrozen(plugin.serviceProviders)).toBe(true);
@@ -86,6 +89,7 @@ describe('server plugin definitions', () => {
       queue: {
         jobs: ['./missing/jobs'],
       },
+      schedules: { definitions: './missing/schedules' },
     });
 
     const resolved = resolveAppServerPlugins(
@@ -96,6 +100,7 @@ describe('server plugin definitions', () => {
     expect(resolved?.migrationsDirectory).toBeUndefined();
     expect(resolved?.seedsDirectory).toBeUndefined();
     expect(resolved?.jobLocations).toEqual([]);
+    expect(resolved?.scheduleDefinitionsLocation).toBeUndefined();
   });
 
   it('still rejects unsafe optional contribution paths', () => {
@@ -114,5 +119,45 @@ describe('server plugin definitions', () => {
     ).toThrow(
       'Server plugin path "../outside" must be a safe package-relative path beginning with "./".',
     );
+  });
+
+  it('resolves Schedule definitions from a published dist-only package', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-schedules-dist-'));
+    const packageRoot = path.join(
+      root,
+      'node_modules/@nocobase/app-plugin-schedules-fixture',
+    );
+    try {
+      mkdirSync(path.join(packageRoot, 'dist/server/schedules'), {
+        recursive: true,
+      });
+      writeFileSync(
+        path.join(packageRoot, 'package.json'),
+        JSON.stringify({
+          name: '@nocobase/app-plugin-schedules-fixture',
+          version: '1.0.0',
+          exports: { './package.json': './package.json' },
+        }),
+      );
+      writeFileSync(
+        path.join(packageRoot, 'dist/server/schedules/index.js'),
+        'export default [];\n',
+      );
+      const plugin = defineServerPlugin({
+        packageName: '@nocobase/app-plugin-schedules-fixture',
+        schedules: { definitions: './server/schedules' },
+      });
+
+      const resolved = resolveAppServerPlugins(
+        root,
+        defineServerPlugins([plugin]),
+      ).plugins[0]?.metadata;
+
+      expect(resolved?.scheduleDefinitionsLocation).toBe(
+        path.join(packageRoot, 'dist/server/schedules/index.js'),
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });

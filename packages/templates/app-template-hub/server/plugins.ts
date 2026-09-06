@@ -17,6 +17,7 @@ import {
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
 import systemInfo from '@nocobase/app-plugin-system-info/server';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 import skillsExample from '@nocobase/app-plugin-skills-example/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
@@ -35,6 +36,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   serviceProviderExample,
   workflow,
   systemInfo,
+  scheduler,
   skillsExample,
 ]);
 
