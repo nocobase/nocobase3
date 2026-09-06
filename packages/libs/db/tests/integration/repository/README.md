@@ -72,9 +72,11 @@ Non-null hasMany currently disallows the replace action, including an unchanged 
 
 ## Unit and type coverage
 
+- [Relation Filter scope](./relations/filter-scope.test.ts) distinguishes independent some predicates from same-child conjunctions, nested OR scope, parent counts and shared-target-safe bulk updates. [Filter variables](./capabilities/filter-variables.test.ts) covers frozen input reuse, nested context paths, null/zero, date endpoint binding and rejection before writes for missing or mistyped values.
+
 - [Scalar Filter matrix](./capabilities/filter-scalars.test.ts) verifies exact Builder/serialized-AST results for numeric comparisons, string/text predicates, boolean null/false distinctions and half-open date ranges. Empty strings are tested separately from SQL NULL, including Oracle's storage distinction. [Filter fixture](./fixtures/filter.ts) uses an explicit string code key and physical setup. Time/datetime Builder serialization is covered; their SQL and timezone matrices remain future work.
 
-- Filter Builder serialization and JSON validation/binding are under unit/repository/filter; scalar operator and malformed AST matrices remain incomplete.
+- Filter Builder serialization and JSON validation/binding are under unit/repository/filter. Scalar and malformed AST coverage has expanded; remaining work includes datetime/time SQL semantics, more numeric field types, JSON/array combinations, malformed nested relation callbacks and variable paths, and controlled resource-budget design before adding limit assertions.
 - Sort Builder covers copied paths, independent null-position branches and serializable aggregate nodes; Aggregate Builder covers aliases and forged expressions.
 - Values covers variable/literal resolution, numeric operands and all seven relation Builder operations with copied operation lists.
 - [Select contracts](./capabilities/select.test.ts) cover omitted versus empty fields, accumulated fields, relation-only projections, empty mutation returning and malformed AST rejection before nested writes. Select Builder covers snapshot/branch independence, option copying, aggregate expressions and forged callback returns. Types cover scalar, empty, default, records-only, aggregate-only and mixed combine outputs; ordinary nested include inference remains a documented fallback.
