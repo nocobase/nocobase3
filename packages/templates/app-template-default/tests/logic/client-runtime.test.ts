@@ -115,6 +115,13 @@ describe('app client runtime', () => {
     const resources = app.refineConfig.resources ?? [];
     expect(resources).toContainEqual(
       expect.objectContaining({
+        name: 'repository-example-relation-mutations',
+        list: '/repository-example/relation-mutations',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    expect(resources).toContainEqual(
+      expect.objectContaining({
         name: 'repository-example-atomic',
         list: '/repository-example/atomic',
         meta: expect.objectContaining({ parent: 'repository-example-api' }),

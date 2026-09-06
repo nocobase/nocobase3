@@ -26,11 +26,30 @@ const names = [
   'repositoryExampleOrders',
   'repositoryExampleOrderItems',
   'repositoryExampleAtomicCounters',
+] as const;
+const relationActions: readonly RepositoryApiAction[] = [
+  'findMany',
+  'findOne',
+  'createOne',
+  'updateOne',
 ];
+const relationNames = [
+  'repositoryExampleRelationUsers',
+  'repositoryExampleRelationProjectProfiles',
+  'repositoryExampleRelationTasks',
+  'repositoryExampleRelationTags',
+  'repositoryExampleRelationProjectTags',
+  'repositoryExampleRelationProjects',
+] as const;
 const findManyRepositoryName = 'repositoryExampleFindManyRecords';
 const repositoryRoutes = defineRepositoryApiRoutes({
   repositories: [
     ...names.map((name) => ({ name, actions, maxLimit: 100 })),
+    ...relationNames.map((name) => ({
+      name,
+      actions: relationActions,
+      maxLimit: 100,
+    })),
     {
       name: findManyRepositoryName,
       actions: ['findMany'],
@@ -45,10 +64,12 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(async (app) => {
     const router = new Hono();
     const authentication = app.container.resolve(authenticationToken);
-    for (const name of names) {
+    for (const name of names)
       for (const action of actions)
         router.use(`/${name}:${action}`, authentication.required());
-    }
+    for (const name of relationNames)
+      for (const action of relationActions)
+        router.use(`/${name}:${action}`, authentication.required());
     router.use(
       `/${findManyRepositoryName}:findMany`,
       authentication.required(),

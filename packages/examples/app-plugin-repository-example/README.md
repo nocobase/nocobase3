@@ -16,7 +16,7 @@ Sign in and expand **CRM example** or **Orders example** in the sidebar. Each ch
 
 - **CRM example**: Customers (`/repository-example/crm`), Contacts (`/repository-example/crm/contacts`).
 - **Orders example**: Orders (`/repository-example/orders`), Order items (`/repository-example/orders/items`), Products (`/repository-example/orders/products`).
-- **Repository examples**: `findMany` array/stream (`/repository-example/find-many`), atomic numeric updates (`/repository-example/atomic`), aggregate queries (`/repository-example/aggregate`).
+- **Repository examples**: relationship writes (`/repository-example/relation-mutations`), `findMany` array/stream (`/repository-example/find-many`), atomic numeric updates (`/repository-example/atomic`), aggregate queries (`/repository-example/aggregate`).
 
 View details opens the child route `<list-path>/details/:recordId`, for example `/repository-example/crm/details/demo-customer-1`. Detail URLs load records directly, support refresh, show related records, and provide a Back to list action. Relation headings use singular labels for belongsTo and plural labels for hasMany. Related records link to their detail pages; customer cards show name, company and email, and foreign-key fields display the related name. New and Edit open a right-side drawer with focus management and Escape/Cancel dismissal. Relation and status fields use shadcn Select, with full-width triggers and readable selected labels. Successful saves close the drawer and refresh the list or current detail; errors keep the drawer and entered values visible.
 
@@ -43,9 +43,22 @@ The browser generates UUID IDs for new records; seeded examples use stable `demo
 
 The self-contained migration creates the tables, unique constraints, relationship metadata and foreign keys. The belongsTo side owns each physical foreign key and its supporting index; the inverse hasMany side uses `constraints(false)` to avoid duplicating them. Deleting a customer cascades its contacts; deleting an order cascades its items. Customers referenced by orders and products referenced by items cannot be deleted. Rollback drops the tables in reverse dependency order.
 
+The relationship-write page uses six additional collections. Their logical names are deliberately prefixed so they do not collide with an application's own `users`, `projects`, `tasks`, `tags`, or join tables:
+
+| Logical collection                         | Purpose                                     |
+| ------------------------------------------ | ------------------------------------------- |
+| `repositoryExampleRelationUsers`           | Owner and task-assignee targets             |
+| `repositoryExampleRelationProjects`        | Root records with all four relation types   |
+| `repositoryExampleRelationProjectProfiles` | Unique nullable project key for hasOne      |
+| `repositoryExampleRelationTasks`           | Nullable project key for hasMany            |
+| `repositoryExampleRelationTags`            | Shared belongsToMany targets                |
+| `repositoryExampleRelationProjectTags`     | Join records with a writable `role` payload |
+
+`projects.owner` is belongsTo, `projects.profile` is hasOne, `projects.tasks` is hasMany, and `projects.tags` is belongsToMany through the prefixed join collection. `tasks.assignee` adds one nested belongsTo. The seed supplies stable `project-1`, `project-other`, `user-1`, `user-2`, profile, task and tag records matching the relationship-write documentation's scenarios.
+
 ## Repository HTTP API
 
-`server/routes/index.ts` explicitly exposes these actions for the five CRM/order repositories and the atomic counter repository. Each request is JSON over `POST /api/<repository>:<action>` (with any application mount prefix).
+`server/routes/index.ts` explicitly exposes Repository actions for the five CRM/order repositories, the atomic counter and the relationship examples. Each request is JSON over `POST /api/<repository>:<action>` (with any application mount prefix). The relationship collections expose only `findMany`, `findOne`, `createOne` and `updateOne`, which are the actions used by that page.
 
 | Action      | Visible example                                                         |
 | ----------- | ----------------------------------------------------------------------- |
@@ -80,6 +93,22 @@ await orders.updateOne({
 ```
 
 See `client/model.ts` for the JSON select/filter ASTs and relationship mutation values. `client/pages/repository-page.tsx` drives the same seven actions for each entity. There are no handwritten CRUD HTTP handlers.
+
+## Relationship writes
+
+Open **Repository examples → Relationship writes** at `/repository-example/relation-mutations`. The first panel reads the deterministic seeded graph, including owner, profile, tasks, tags and `projectTags.role` payloads.
+
+**Run complete relationship write** creates a new isolated graph and then applies three root mutations through `api.repository('repositoryExampleRelationProjects')`:
+
+1. `createOne` connects an owner and tag while creating a profile and tasks.
+2. `updateOne` changes the owner and profile, then combines task `create`, `connect`, `disconnect`, `update`, `upsert` and `delete`; tag `connect` and `create` include through payloads.
+3. A separate `updateOne` uses tag `set`, because `set` cannot be mixed with other operations on the same relation.
+
+The result panel selects all four relationships. Lifetime checks independently query removed targets to show that task `disconnect` and tag `set` preserve their targets, while task `delete` removes its target. Omitting the through payload for the retained Documentation tag preserves its existing `secondary` role. Each run uses UUID-derived IDs and adds a new project, so the same page can be run repeatedly without reusing exclusive hasOne/hasMany targets.
+
+Each HTTP root mutation is transactional, but the whole multi-request walkthrough is not one cross-request transaction. The integration test separately verifies that a failing nested `createOne` rolls back its root and child writes, and that relation-scoped update cannot modify `task-outside`, which belongs to `project-other`.
+
+The actual inputs and responses are in `client/relation-mutations.ts` and are shown under **Repository calls**. No example-specific Server handler exists: the prefixed repositories use the same authenticated `defineRepositoryApiRoutes` contribution as the other examples.
 
 ## findMany arrays and streams
 
@@ -221,6 +250,6 @@ Every exposed endpoint installs the authentication plugin's `required()` middlew
 pnpm --filter @nocobase/app-plugin-repository-example check
 ```
 
-Tests run a real SQLite migration and rollback, inspect physical schema and relationship metadata, invoke CRUD and aggregate/groupBy actions through the HTTP client, verify all authentication boundaries, relation constraints and version conflicts, and exercise browser forms against the same real HTTP/SQLite fixture. Authentication sessions are stubbed in those fixtures; the real authentication middleware is executed.
+Tests run a real SQLite migration and rollback, inspect physical schema and relationship metadata, invoke CRUD, relationship mutations and aggregate/groupBy actions through the HTTP client, verify all authentication boundaries, relation scope, rollback, target lifetime, constraints and version conflicts, and exercise browser pages against the same real HTTP/SQLite fixture. Authentication sessions are stubbed in those fixtures; the real authentication middleware is executed.
 
 The plugin uses shared development presets and plugin-local shadcn primitives. Its styles use the host's theme tokens and are included by the Default Template's enabled-plugin Tailwind scan.

@@ -6,6 +6,7 @@ import {
   repository,
   searchFilter,
 } from '../client/model.js';
+import { relationRepositories } from '../client/relation-mutations.js';
 import { createFixture } from './helpers.js';
 
 describe('Repository CRM and order API', () => {
@@ -143,6 +144,33 @@ describe('Repository CRM and order API', () => {
         );
         expect(result.status).toBe(401);
       }
+    for (const repositoryName of Object.values(relationRepositories))
+      for (const action of ['findMany', 'findOne', 'createOne', 'updateOne']) {
+        const result = await f.router.request(
+          `/main/api/${repositoryName}:${action}`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          },
+        );
+        expect(result.status).toBe(401);
+      }
+    expect(
+      (
+        await f.router.request(
+          `/main/api/${relationRepositories.projects}:deleteOne`,
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-test-user': 'tester',
+            },
+            body: JSON.stringify({ filter: { id: 'project-1' } }),
+          },
+        )
+      ).status,
+    ).toBe(404);
     expect((await f.router.request('/main/api/unrelated')).status).toBe(200);
     expect(
       (await f.router.request('/main/api/users:findMany', { method: 'POST' }))

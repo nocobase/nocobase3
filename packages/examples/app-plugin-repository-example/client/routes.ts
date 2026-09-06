@@ -5,6 +5,12 @@ import {
 const routes: readonly AppClientRouteContribution[] = [
   defineAppRoutes([
     {
+      name: 'relation-mutations',
+      path: '/repository-example/relation-mutations',
+      auth: 'required',
+      componentLoader: () => import('./pages/relation-mutations-page.js'),
+    },
+    {
       name: 'find-many',
       path: '/repository-example/find-many',
       auth: 'required',

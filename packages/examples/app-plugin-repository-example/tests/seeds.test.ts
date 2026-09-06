@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { detailSelect, entities, repository } from '../client/model.js';
+import { loadRelationProjectState } from '../client/relation-mutations.js';
 import { createFixture } from './helpers.js';
 
 describe('Repository example seeds', () => {
@@ -50,6 +51,23 @@ describe('Repository example seeds', () => {
         }),
       ]),
     );
+    const relationState = await loadRelationProjectState(f.api, 'project-1');
+    expect(relationState).toMatchObject({
+      project: {
+        name: 'Repository guide',
+        owner: { name: 'Ada' },
+        profile: { id: 'profile-current' },
+        tasks: expect.arrayContaining([
+          expect.objectContaining({ id: 'task-edit' }),
+          expect.objectContaining({ id: 'task-detached' }),
+          expect.objectContaining({ id: 'task-obsolete' }),
+        ]),
+        tags: [{ id: 'tag-docs', label: 'Documentation' }],
+      },
+      through: [
+        { projectId: 'project-1', tagId: 'tag-docs', role: 'secondary' },
+      ],
+    });
     const orders = repository(f.api, 'orders');
     const paid = await orders.findOne({
       filter: { id: 'demo-order-1' },

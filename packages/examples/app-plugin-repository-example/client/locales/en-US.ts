@@ -1,6 +1,39 @@
 import type { LocaleResource } from '@nocobase/i18n';
 const enUS = {
   apiExamples: 'Repository examples',
+  relationMutationsTitle: 'Relationship writes',
+  relationMutationsIntro:
+    'Run a complete Repository HTTP relationship workflow across belongsTo, hasOne, hasMany and belongsToMany. Every button uses api.repository(name); no example-specific mutation endpoint is involved.',
+  relationBaselineTitle: 'Seeded relationship baseline',
+  relationBaselineDescription:
+    'Deterministic records mirror the Repository relationship-write documentation while using plugin-prefixed collection names.',
+  relationSeedHint:
+    'Run the application migrations and seeds to create the relationship example records.',
+  relationRunTitle: 'Complete mutation walkthrough',
+  relationRunDescription:
+    'Creates an isolated project graph, applies incremental relationship operations, then replaces its tag set. Each root mutation is transactional.',
+  relationRunButton: 'Run complete relationship write',
+  relationRunIsolation:
+    'Each run uses new IDs, so earlier examples remain available for inspection.',
+  relationResultTitle: 'Final relationship state',
+  relationResultDescription:
+    'The owner and profile were updated, task operations were applied in relation scope, and set retained only the selected tags.',
+  relationLifetimeTitle: 'Target lifetime checks',
+  relationLifetimeDescription:
+    'disconnect and set remove links but keep targets; delete removes the target record.',
+  relationTraceHint:
+    'Actual Repository names, createOne/updateOne payloads and responses issued by this run.',
+  relationOwnerLabel: 'belongsTo · owner',
+  relationProfileLabel: 'hasOne · profile',
+  relationTasksLabel: 'hasMany · tasks',
+  relationTagsLabel: 'belongsToMany · tags',
+  relationTasks: 'Related tasks',
+  relationPoints: 'Points',
+  relationAssignee: 'Assignee',
+  relationDisconnectCheck:
+    'disconnect: task exists={{exists}}, projectId={{projectId}}',
+  relationDeleteCheck: 'delete: task exists={{exists}}',
+  relationSetCheck: 'set: removed tag exists={{exists}}',
   findManyTitle: 'findMany: array and stream',
   findManyIntro:
     'Run the same Repository query in two consumption modes. Await resolves once with the complete array; async iteration reads framed NDJSON records as they arrive. The database query, filters, sorting and limits stay the same.',

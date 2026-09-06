@@ -1,6 +1,37 @@
 import type { RepositoryExampleResource } from './en-US.js';
 const zhCN: RepositoryExampleResource = {
   apiExamples: 'Repository 示例',
+  relationMutationsTitle: '关系写入',
+  relationMutationsIntro:
+    '通过 Repository HTTP API 完整演示 belongsTo、hasOne、hasMany 和 belongsToMany 写入。所有操作都使用 api.repository(name)，没有示例专用的写入接口。',
+  relationBaselineTitle: '初始化关系数据',
+  relationBaselineDescription:
+    '固定数据与 Repository 关系写入文档保持一致，但 Collection 使用插件专属前缀。',
+  relationSeedHint: '请运行应用 migration 和 seed，创建关系写入示例数据。',
+  relationRunTitle: '完整关系写入流程',
+  relationRunDescription:
+    '创建一套隔离的项目关系图，执行增量关系操作，再替换标签集合；每次根 mutation 各自在事务内完成。',
+  relationRunButton: '运行完整关系写入',
+  relationRunIsolation: '每次运行使用新的 ID，可以继续查看之前生成的示例。',
+  relationResultTitle: '最终关系状态',
+  relationResultDescription:
+    'owner 和 profile 已更新，tasks 在关系作用域内完成增量操作，set 只保留指定标签。',
+  relationLifetimeTitle: '目标记录生命周期',
+  relationLifetimeDescription:
+    'disconnect 和 set 只解除关系并保留目标；delete 会删除目标记录。',
+  relationTraceHint:
+    '展示本次运行实际使用的 Repository 名称、createOne/updateOne 参数和响应。',
+  relationOwnerLabel: 'belongsTo · owner',
+  relationProfileLabel: 'hasOne · profile',
+  relationTasksLabel: 'hasMany · tasks',
+  relationTagsLabel: 'belongsToMany · tags',
+  relationTasks: '关联任务',
+  relationPoints: '积分',
+  relationAssignee: '负责人',
+  relationDisconnectCheck:
+    'disconnect：任务存在={{exists}}，projectId={{projectId}}',
+  relationDeleteCheck: 'delete：任务存在={{exists}}',
+  relationSetCheck: 'set：已解除标签仍存在={{exists}}',
   findManyTitle: 'findMany：数组与流',
   findManyIntro:
     '用两种消费方式执行同一个 Repository 查询。await 一次返回完整数组；异步迭代按到达顺序读取带帧的 NDJSON 记录。数据库查询、筛选、排序和数量限制完全相同。',

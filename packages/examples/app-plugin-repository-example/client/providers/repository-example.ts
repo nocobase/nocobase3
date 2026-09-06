@@ -5,6 +5,15 @@ export class RepositoryExampleServiceProvider extends ServiceProvider<ClientAppl
   public override boot(): Promise<void> {
     this.app.refine.addResources([
       {
+        name: 'repository-example-relation-mutations',
+        list: '/repository-example/relation-mutations',
+        meta: {
+          parent: 'repository-example-api',
+          label: 'relationMutationsTitle',
+          i18nNs: this.name,
+        },
+      },
+      {
         name: 'repository-example-find-many',
         list: '/repository-example/find-many',
         meta: {

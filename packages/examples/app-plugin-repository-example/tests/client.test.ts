@@ -5,6 +5,7 @@ describe('Repository pages', () => {
     expect(routes).toHaveLength(1);
     const pages = routes[0]!.routes;
     expect(pages.map((page) => page.path)).toEqual([
+      '/repository-example/relation-mutations',
       '/repository-example/find-many',
       '/repository-example/aggregate',
       '/repository-example/atomic',
