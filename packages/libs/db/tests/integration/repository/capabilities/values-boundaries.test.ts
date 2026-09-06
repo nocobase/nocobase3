@@ -3,6 +3,34 @@ import { describeIntegrationDatabases } from '../../helpers.js';
 import { createDocumentationFixture } from '../fixtures/documentation.js';
 
 describeIntegrationDatabases('Repository Values boundaries', (context) => {
+  it.each([null, false, [], 'value', 42])(
+    'rejects malformed values and callback returns %j before writes',
+    async (value) => {
+      await createDocumentationFixture(context);
+      const tasks = context.database.repository('tasks');
+      await tasks.createOne({ values: { id: 'A', title: 'Original' } });
+      const before = await context.db(context.table('tasks'));
+      for (const values of [value, () => value]) {
+        await expect(
+          tasks.createOne({ values: values as never }),
+        ).rejects.toMatchObject({ code: 'INVALID_MUTATION' });
+        await expect(
+          tasks.updateOne({ filter: { id: 'A' }, values: values as never }),
+        ).rejects.toMatchObject({ code: 'INVALID_MUTATION' });
+        expect(
+          await tasks.validateMutation({
+            operation: 'createOne',
+            values: values as never,
+          }),
+        ).toMatchObject({
+          valid: false,
+          errors: [{ code: 'INVALID_MUTATION' }],
+        });
+      }
+      expect(await context.db(context.table('tasks'))).toEqual(before);
+    },
+  );
+
   it('distinguishes omitted defaults, explicit null and unchanged update fields', async () => {
     await createDocumentationFixture(context);
     const tasks = context.database.repository('tasks');

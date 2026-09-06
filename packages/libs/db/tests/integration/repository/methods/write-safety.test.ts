@@ -56,6 +56,10 @@ describeIntegrationDatabases('Repository write safety contracts', (context) => {
   for (const method of ['updateMany', 'deleteMany'] as const) {
     it.each([
       ['missing range', {}],
+      ['false is not all-record consent', { all: false }],
+      ['null is not all-record consent', { all: null }],
+      ['string is not all-record consent', { all: 'true' }],
+      ['number is not all-record consent', { all: 1 }],
       ['empty shorthand', { filter: {} }],
       ['empty AST', { filter: emptyAst }],
       ['ambiguous range', { all: true, filter: { status: 'active' } }],
