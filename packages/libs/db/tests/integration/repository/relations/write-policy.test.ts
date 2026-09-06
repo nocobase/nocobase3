@@ -185,8 +185,9 @@ describeIntegrationDatabases('Repository write policy', (context) => {
       .findOne({ filter: { title: 'Created' } });
     expect(task).toMatchObject({
       projectId: root.record.id,
-      assigneeId: fixture.ada,
     });
+    // PostgreSQL returns bigint foreign keys as strings.
+    expect(String(task!.assigneeId)).toBe(String(fixture.ada));
     await expect(
       projects.updateOne({
         filter,
@@ -276,11 +277,12 @@ describeIntegrationDatabases('Repository write policy', (context) => {
         projects.updateOne({ filter, writePolicy: {}, values: { owner } }),
       ).rejects.toMatchObject({ code: 'RELATION_WRITE_FORBIDDEN' });
     }
-    expect(await projects.findOne({ filter })).toMatchObject({
+    const project = await projects.findOne({ filter });
+    expect(project).toMatchObject({
       name: 'Original',
       version: 1,
-      ownerId: fixture.ada,
     });
+    expect(String(project!.ownerId)).toBe(String(fixture.ada));
     expect(
       await context.database
         .repository('repositoryTasks')
