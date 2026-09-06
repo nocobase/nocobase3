@@ -12,6 +12,7 @@ import type { ServiceContainer } from '@nocobase/service-provider';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
+import { stream } from 'hono/streaming';
 
 import { defineApiRoutes, type AppApiRouteContribution } from './routes.js';
 
@@ -62,6 +63,8 @@ const allowedOptions: Record<RepositoryApiAction, readonly string[]> = {
   updateOne: ['filter', 'values', 'select', 'ifVersion'],
   deleteOne: ['filter', 'select', 'ifVersion'],
 };
+
+const repositoryStreamMediaType = 'application/x-ndjson';
 
 /**
  * Exposes only configured Repository endpoints using POST /<name>:<action>.
@@ -135,6 +138,9 @@ export function defineRepositoryApiRoutes(
           }),
           async (context) => {
             const input = await readInput(context, action, entry.maxLimit);
+            if (action === 'findMany' && acceptsRepositoryStream(context)) {
+              return streamFindMany(context, repository, input);
+            }
             const data = await execute(repository, action, input);
             return context.json({ data });
           },
@@ -143,6 +149,77 @@ export function defineRepositoryApiRoutes(
     }
     return router;
   });
+}
+
+async function streamFindMany(
+  context: Context,
+  repository: Repository,
+  input: FindManyOptions<RepositoryRecord>,
+): Promise<Response> {
+  const iterator = repository.findMany(input)[Symbol.asyncIterator]();
+  let first: IteratorResult<RepositoryRecord>;
+  try {
+    first = await iterator.next();
+  } catch (error) {
+    await iterator.return?.();
+    throw error;
+  }
+
+  const firstFrame = first.done ? undefined : recordFrame(first.value);
+  let closePromise: Promise<void> | undefined;
+  const closeIterator = (): Promise<void> => {
+    closePromise ??= Promise.resolve(iterator.return?.()).then(() => undefined);
+    return closePromise;
+  };
+
+  context.header('Content-Type', `${repositoryStreamMediaType}; charset=utf-8`);
+  context.header('Cache-Control', 'no-store');
+  context.header('X-Content-Type-Options', 'nosniff');
+  context.header('Vary', 'Accept', { append: true });
+
+  return stream(
+    context,
+    async (output) => {
+      output.onAbort(closeIterator);
+      try {
+        if (firstFrame !== undefined) await output.writeln(firstFrame);
+        while (!output.aborted) {
+          const result = await iterator.next();
+          if (result.done) break;
+          await output.writeln(recordFrame(result.value));
+        }
+        if (!output.aborted) await output.writeln('{"type":"end"}');
+      } finally {
+        await closeIterator();
+      }
+    },
+    async (error, output) => {
+      if (!output.aborted) await output.writeln(errorFrame(error));
+    },
+  );
+}
+
+function acceptsRepositoryStream(context: Context): boolean {
+  return (context.req.header('accept') ?? '')
+    .split(',')
+    .some(
+      (value) =>
+        value.split(';', 1)[0]?.trim().toLowerCase() ===
+        repositoryStreamMediaType,
+    );
+}
+
+function recordFrame(record: RepositoryRecord): string {
+  return JSON.stringify({ type: 'record', data: record });
+}
+
+function errorFrame(error: Error): string {
+  const exposed =
+    error instanceof RepositoryError &&
+    repositoryErrorStatus(error) !== undefined
+      ? { code: error.code, message: error.message }
+      : { code: 'INTERNAL_ERROR', message: 'Internal server error' };
+  return JSON.stringify({ type: 'error', error: exposed });
 }
 
 async function readInput(

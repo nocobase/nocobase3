@@ -3,6 +3,8 @@ import {
   createDatabaseManager,
   databaseManagerToken,
   type DatabaseManager,
+  RepositoryError,
+  type RepositoryQuery,
 } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -176,6 +178,112 @@ describe('Repository API routes', () => {
     ).toEqual([{ id: 'b' }]);
     expect(await orders.findMany({ limit: 0 })).toEqual([]);
     expect(await orders.count({ filter: { status: 'paid' } })).toBe(2);
+  });
+
+  it('streams findMany records as framed NDJSON', async () => {
+    await database.repository('orders').createMany({
+      values: [
+        { id: 'a', status: 'draft' },
+        { id: 'b', status: 'paid' },
+        { id: 'c', status: 'paid' },
+      ],
+    });
+    const response = await router.request('/api/sales%2Forders:findMany', {
+      method: 'POST',
+      headers: {
+        accept: 'application/x-ndjson',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ filter: { status: 'paid' } }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe(
+      'application/x-ndjson; charset=utf-8',
+    );
+    expect(response.headers.get('vary')).toBe('Accept');
+    expect(
+      (await response.text())
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as unknown),
+    ).toEqual([
+      {
+        type: 'record',
+        data: { id: 'b', status: 'paid', version: 1 },
+      },
+      {
+        type: 'record',
+        data: { id: 'c', status: 'paid', version: 1 },
+      },
+      { type: 'end' },
+    ]);
+  });
+
+  it('returns preflight Repository errors as HTTP errors before streaming starts', async () => {
+    const response = await router.request('/api/sales%2Forders:findMany', {
+      method: 'POST',
+      headers: {
+        accept: 'application/x-ndjson',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ filter: { missingField: 'x' } }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      code: 'FIELD_NOT_FOUND',
+      message: expect.any(String),
+    });
+  });
+
+  it('frames Repository errors that occur after streaming starts', async () => {
+    const repository = database.repository('orders');
+    const streamed = (async function* (): AsyncIterable<
+      Record<string, unknown>
+    > {
+      yield { id: 'a', status: 'paid', version: 1 };
+      throw new RepositoryError('INVALID_FILTER', 'Streaming query failed.');
+    })();
+    vi.spyOn(repository, 'findMany').mockReturnValue(
+      streamed as RepositoryQuery<Record<string, unknown>>,
+    );
+    vi.spyOn(database, 'repository').mockReturnValue(repository);
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        { name: 'stream-error', collection: 'orders', actions: ['findMany'] },
+      ],
+    });
+    router.route('/api', await contribution.createRouter({ container }));
+
+    const response = await router.request('/api/stream-error:findMany', {
+      method: 'POST',
+      headers: {
+        accept: 'application/x-ndjson',
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      (await response.text())
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as unknown),
+    ).toEqual([
+      {
+        type: 'record',
+        data: { id: 'a', status: 'paid', version: 1 },
+      },
+      {
+        type: 'error',
+        error: {
+          code: 'INVALID_FILTER',
+          message: 'Streaming query failed.',
+        },
+      },
+    ]);
   });
 
   it('does not expose undeclared collections or actions and preserves other routes', async () => {
