@@ -201,6 +201,7 @@
     "@nocobase/snowflake": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/realtime": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@sinclair/typebox": "catalog:",

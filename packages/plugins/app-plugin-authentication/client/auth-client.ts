@@ -20,7 +20,7 @@ export class AuthClient {
         ),
       },
     );
-    this.options.client.realtime?.refreshSession();
+    this.options.client.realtime?.reconnect();
     return session;
   }
 
@@ -34,7 +34,7 @@ export class AuthClient {
       method: 'POST',
       body: JSON.stringify({ name, username, email, password }),
     });
-    this.options.client.realtime?.refreshSession();
+    this.options.client.realtime?.reconnect();
     return session;
   }
 
@@ -43,7 +43,7 @@ export class AuthClient {
       method: 'POST',
       body: JSON.stringify({}),
     });
-    this.options.client.realtime?.refreshSession();
+    this.options.client.realtime?.reconnect();
   }
 
   async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
@@ -61,7 +61,7 @@ export class AuthClient {
   }
 
   refreshRealtimeSession(): void {
-    this.options.client.realtime?.refreshSession();
+    this.options.client.realtime?.reconnect();
   }
 
   private async send<T>(path: string, init: RequestInit = {}): Promise<T> {

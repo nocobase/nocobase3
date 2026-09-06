@@ -15,7 +15,12 @@ export {
   type AppClientOptions,
 } from './client.js';
 export { useClientApplication, useService } from './hooks.js';
-export * from './realtime/index.js';
+export type {
+  RealtimeClient,
+  RealtimeErrorEvent,
+  RealtimeEvent,
+  RealtimeListener,
+} from '@nocobase/realtime/client';
 export {
   createAppClientConfig,
   defineAppClientConfig,

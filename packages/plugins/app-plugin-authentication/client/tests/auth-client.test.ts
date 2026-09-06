@@ -6,9 +6,9 @@ import { createAuthClient } from '../auth-client.js';
 describe('AuthClient', () => {
   it('sends a JSON body when signing out', async () => {
     const request = vi.fn<AppClient['request']>().mockResolvedValue(undefined);
-    const refreshSession = vi.fn();
+    const reconnect = vi.fn();
     const client = createAuthClient({
-      client: { request, realtime: { refreshSession } } as AppClient,
+      client: { request, realtime: { reconnect } } as AppClient,
     });
 
     await client.signOut();
@@ -17,7 +17,7 @@ describe('AuthClient', () => {
       method: 'POST',
       body: '{}',
     });
-    expect(refreshSession).toHaveBeenCalledOnce();
+    expect(reconnect).toHaveBeenCalledOnce();
   });
 
   it('sends a reset password request with the token', async () => {
@@ -25,7 +25,7 @@ describe('AuthClient', () => {
     const client = createAuthClient({
       client: {
         request,
-        realtime: { refreshSession: vi.fn() },
+        realtime: { reconnect: vi.fn() },
       } as AppClient,
     });
 

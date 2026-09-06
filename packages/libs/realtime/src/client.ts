@@ -1,9 +1,20 @@
-export interface RealtimeEvent<Payload = unknown> {
-  readonly type: 'event';
-  readonly topic: string;
-  readonly payload: Payload;
-  readonly publishedAt: string;
-}
+import {
+  encodeRealtimeClientMessage,
+  parseRealtimeServerMessage,
+  validateRealtimeTopic,
+  type RealtimeClientMessage,
+  type RealtimeServerMessage,
+} from './protocol.js';
+
+export type RealtimeEvent<Payload = unknown> = Extract<
+  RealtimeServerMessage,
+  { readonly type: 'event' }
+> & { readonly payload: Payload };
+
+export type RealtimeErrorEvent = Extract<
+  RealtimeServerMessage,
+  { readonly type: 'error' }
+>;
 
 export type RealtimeListener<Payload> = (event: RealtimeEvent<Payload>) => void;
 
@@ -14,7 +25,8 @@ export interface RealtimeClient {
     listener: RealtimeListener<Payload>,
   ): () => void;
   onOpen(listener: () => void): () => void;
-  refreshSession(): void;
+  onError(listener: (event: RealtimeErrorEvent) => void): () => void;
+  reconnect(): void;
   close(): void;
 }
 
@@ -22,13 +34,6 @@ export interface RealtimeClientOptions {
   readonly pingInterval?: number;
   readonly reconnectMaxInterval?: number;
   readonly resolveUrl: () => string | undefined;
-}
-
-interface RealtimeWireMessage {
-  readonly type?: string;
-  readonly topic?: string;
-  readonly payload?: unknown;
-  readonly publishedAt?: string;
 }
 
 type UntypedRealtimeListener = RealtimeListener<unknown>;
@@ -42,11 +47,12 @@ export function createRealtimeClient(
   let reconnectCount = 0;
   let manuallyClosed = false;
   const openListeners = new Set<() => void>();
+  const errorListeners = new Set<(event: RealtimeErrorEvent) => void>();
   const topicListeners = new Map<string, Set<UntypedRealtimeListener>>();
 
   const client: RealtimeClient = {
     get connected(): boolean {
-      return socket?.readyState === 1;
+      return socket?.readyState === WebSocket.OPEN;
     },
 
     subscribe<Payload>(
@@ -82,7 +88,14 @@ export function createRealtimeClient(
       };
     },
 
-    refreshSession(): void {
+    onError(listener: (event: RealtimeErrorEvent) => void): () => void {
+      errorListeners.add(listener);
+      return (): void => {
+        errorListeners.delete(listener);
+      };
+    },
+
+    reconnect(): void {
       if (topicListeners.size === 0) return;
       manuallyClosed = false;
       reconnectCount = 0;
@@ -103,7 +116,12 @@ export function createRealtimeClient(
 
   function connect(): void {
     if (typeof WebSocket === 'undefined') return;
-    if (socket?.readyState === WebSocket.CONNECTING || client.connected) return;
+    if (
+      socket?.readyState === WebSocket.CONNECTING ||
+      socket?.readyState === WebSocket.OPEN
+    ) {
+      return;
+    }
     const resolvedUrl = options.resolveUrl();
     if (!resolvedUrl) return;
     const websocketUrl = toWebSocketUrl(resolvedUrl);
@@ -125,19 +143,27 @@ export function createRealtimeClient(
     };
     nextSocket.onmessage = (event: MessageEvent<unknown>): void => {
       if (socket !== nextSocket || typeof event.data !== 'string') return;
-      let message: RealtimeWireMessage;
+      let message: RealtimeServerMessage;
       try {
-        message = JSON.parse(event.data) as RealtimeWireMessage;
+        message = parseRealtimeServerMessage(event.data);
       } catch (error) {
         console.warn('Unable to parse NocoBase realtime message.', error);
         return;
       }
-      if (!isRealtimeEvent(message)) return;
-      for (const listener of topicListeners.get(message.topic) ?? []) {
-        notifyListener(
-          () => listener(message),
-          `Realtime listener for topic "${message.topic}" failed.`,
-        );
+      if (message.type === 'event') {
+        for (const listener of topicListeners.get(message.topic) ?? []) {
+          notifyListener(
+            () => listener(message),
+            `Realtime listener for topic "${message.topic}" failed.`,
+          );
+        }
+      } else if (message.type === 'error') {
+        for (const listener of errorListeners) {
+          notifyListener(
+            () => listener(message),
+            'Realtime error listener failed.',
+          );
+        }
       }
     };
     nextSocket.onerror = (): void => {
@@ -152,9 +178,9 @@ export function createRealtimeClient(
     };
   }
 
-  function send(message: Record<string, unknown>): boolean {
+  function send(message: RealtimeClientMessage): boolean {
     if (!client.connected) return false;
-    socket?.send(JSON.stringify(message));
+    socket?.send(encodeRealtimeClientMessage(message));
     return true;
   }
 
@@ -209,21 +235,6 @@ function toWebSocketUrl(value: string): string | undefined {
   const url = new URL(value, base);
   if (url.protocol === 'http:') url.protocol = 'ws:';
   if (url.protocol === 'https:') url.protocol = 'wss:';
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') return undefined;
   return url.toString();
-}
-
-function validateRealtimeTopic(topic: string): void {
-  if (!/^[a-z][a-z0-9:-]{0,127}$/.test(topic)) {
-    throw new Error('Realtime topic is invalid.');
-  }
-}
-
-function isRealtimeEvent(
-  message: RealtimeWireMessage,
-): message is RealtimeEvent<unknown> {
-  return (
-    message.type === 'event' &&
-    typeof message.topic === 'string' &&
-    typeof message.publishedAt === 'string'
-  );
 }

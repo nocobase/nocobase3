@@ -46,7 +46,8 @@ describe('NotificationInAppProvider', () => {
           return vi.fn();
         }),
         onOpen: vi.fn(() => vi.fn()),
-        refreshSession: vi.fn(),
+        onError: vi.fn(() => vi.fn()),
+        reconnect: vi.fn(),
         close: vi.fn(),
       },
       request: vi.fn(),

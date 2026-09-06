@@ -1,4 +1,7 @@
-import { createRealtimeClient, type RealtimeClient } from './realtime/index.js';
+import {
+  createRealtimeClient,
+  type RealtimeClient,
+} from '@nocobase/realtime/client';
 
 export interface AppClientOptions {
   baseURL?: string;

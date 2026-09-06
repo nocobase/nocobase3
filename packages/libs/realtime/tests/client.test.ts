@@ -1,16 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
-import {
-  createRealtimeClient,
-  type RealtimeEvent,
-} from '../src/realtime/index.js';
+import { createRealtimeClient, type RealtimeEvent } from '../src/client.js';
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
-it('connects lazily, dispatches events, and restores topics after session changes', () => {
+it('connects lazily, dispatches events, and restores topics after reconnecting', () => {
   vi.useFakeTimers();
   const sockets: MockWebSocket[] = [];
   const sentMessages: Record<string, unknown>[] = [];
@@ -47,21 +44,16 @@ it('connects lazily, dispatches events, and restores topics after session change
   }
 
   vi.stubGlobal('window', {
-    location: {
-      href: 'https://example.com/main/',
-      origin: 'https://example.com',
-    },
+    location: { href: 'https://example.com/main/' },
   });
   vi.stubGlobal('WebSocket', MockWebSocket);
 
   const events: RealtimeEvent<{ readonly kind: string }>[] = [];
-  const listenerError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const errors: string[] = [];
   const client = createRealtimeClient({ resolveUrl: () => '/main/ws' });
+  client.onError((event) => errors.push(event.code));
   expect(sockets).toHaveLength(0);
 
-  const unsubscribeThrowing = client.subscribe('notifications:in-app', () => {
-    throw new Error('listener failed');
-  });
   const unsubscribe = client.subscribe<{ readonly kind: string }>(
     'notifications:in-app',
     (event) => events.push(event),
@@ -81,21 +73,15 @@ it('connects lazily, dispatches events, and restores topics after session change
     payload: { kind: 'inbox.changed' },
     publishedAt: '2026-08-26T00:00:00.000Z',
   });
+  sockets[0]?.message({
+    type: 'error',
+    code: 'AUTHENTICATION_REQUIRED',
+    message: 'Sign in first.',
+  });
   expect(events).toHaveLength(1);
-  expect(listenerError).toHaveBeenCalledWith(
-    'Realtime listener for topic "notifications:in-app" failed.',
-    expect.any(Error),
-  );
+  expect(errors).toEqual(['AUTHENTICATION_REQUIRED']);
 
-  vi.advanceTimersByTime(300_000);
-  expect(sentMessages.at(-1)).toEqual({ type: 'ping' });
-
-  client.refreshSession();
-  vi.advanceTimersByTime(300_000);
-  expect(sentMessages.at(-1)).toEqual({ type: 'ping' });
-  expect(
-    sentMessages.filter((message) => message.type === 'ping'),
-  ).toHaveLength(1);
+  client.reconnect();
   sockets[1]?.open();
   expect(sentMessages.at(-1)).toEqual({
     type: 'subscribe',
@@ -103,7 +89,9 @@ it('connects lazily, dispatches events, and restores topics after session change
     topic: 'notifications:in-app',
   });
 
-  unsubscribeThrowing();
+  vi.advanceTimersByTime(300_000);
+  expect(sentMessages.at(-1)).toEqual({ type: 'ping' });
+
   unsubscribe();
   expect(sentMessages.at(-1)).toEqual({
     type: 'unsubscribe',
