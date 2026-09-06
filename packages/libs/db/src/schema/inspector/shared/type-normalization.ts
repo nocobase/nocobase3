@@ -50,7 +50,7 @@ export function normalizePhysicalDataType(
     return 'decimal';
   }
   if (
-    base === 'float' ||
+    (dialect === 'sqlite' && base === 'float') ||
     base === 'real' ||
     base === 'float4' ||
     base === 'binary_float'
