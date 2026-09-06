@@ -62,6 +62,10 @@ Reuse the integration harness and CI matrix for PostgreSQL, MySQL, Oracle and MS
 | Atomicity                 | [atomicity](./relations/atomicity.test.ts), [shared targets](./relations/values/shared-targets.test.ts), [transaction boundary](./relations/transaction-boundary.test.ts): version conflicts, reassignment rejection, late failures and full root/target/edge snapshots                                                                                                                                                         | Controlled concurrent mutations on actual deployment databases                                                         |
 | Identity                  | [keys/relations](./identity/keys-and-relations.test.ts), [key types](./identity/key-types-and-returning.test.ts), [safety](./identity/safety.test.ts): non-id keys, string/UUID/bigint/composite identities, unique-only and keyless safety                                                                                                                                                                                     | Additional combinations with local pagination and through relations                                                    |
 
+### Shared-target Select combinations
+
+[Shared-target Select](./relations/select-shared-targets.test.ts) covers deep sibling projections in both branch orders, shared owners and targets, exact field isolation, belongsToMany local filter/sort/limit, tied compound forward/backward cursors, per-parent Distinct before limit and nested combine results. Its fixture uses explicitly declared non-id string primary/source/target keys and physical inserts. Remaining combinations include cursor with Distinct, invalid local cursors and other-driver execution.
+
 Non-null hasMany currently disallows the replace action, including an unchanged set. Do not treat SQL-level feasibility as permission granted by Repository's capability contract.
 
 ## Unit and type coverage
