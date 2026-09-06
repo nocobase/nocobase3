@@ -1,4 +1,4 @@
-// Kept free of imports: Vite compiles this same implementation into the early HTML script.
+// Shared preference helpers for normal client startup and the React provider.
 export function themeStorageKeys(base: string): {
   mode: string;
   preset: string;

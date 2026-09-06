@@ -1,4 +1,8 @@
-import { AppClientRoot, type ClientApplication } from '@nocobase/app-client';
+import {
+  AppClientRoot,
+  resolveAppBase,
+  type ClientApplication,
+} from '@nocobase/app-client';
 import { resolveAppRuntime } from '@nocobase/app-client/runtime';
 import { createRoot } from 'react-dom/client';
 
@@ -6,6 +10,14 @@ import { createApp } from './app';
 import appRuntime from './runtime';
 import { AppStartupError } from './startup';
 import './styles.css';
+import { initializeTheme } from './theme/theme-preferences';
+import { themePresets } from './theme/theme-presets';
+
+// Restore preferences at normal client startup; first-paint theme matching is deferred.
+initializeTheme(
+  resolveAppBase(),
+  themePresets.map((preset) => preset.id),
+);
 
 const container = document.getElementById('root');
 
