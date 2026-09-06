@@ -87,6 +87,15 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
           this.app.container.resolve(managerFactoryToken),
           this.app.container.resolve(repositoryFactoryToken),
           allowedStorageDisks,
+          {
+            warn: (message, details): void => {
+              this.app.container
+                .resolve(loggingToken)
+                .getLogger()
+                .child({ module: 'ai-knowledge-base' })
+                .warn(details, message);
+            },
+          },
         ),
     );
   }

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   FileMetadataPersistenceError,
   type FileMetadata,
@@ -135,6 +137,74 @@ export class KnowledgeBaseStorageManager {
       Record<string, unknown>
     >;
     return { ...storedSegments, ...persistedSegments };
+  }
+  public async deleteDocumentObject(
+    document: KnowledgeBaseDocumentEntity,
+  ): Promise<void> {
+    const storage = this.fileStorageFactory.create({
+      disk: document.disk,
+      prefix: '',
+      metadataRepository: new KnowledgeBaseDocumentMetadataRepository(
+        this.documents,
+      ),
+    });
+    if (!storage.deleteObject) {
+      throw new Error('File storage does not support object deletion.');
+    }
+    await storage.deleteObject(document.path);
+  }
+
+  public async deleteSegmentShardObject(
+    shard: KnowledgeBaseSegmentShardEntity,
+  ): Promise<void> {
+    const storage = this.fileStorageFactory.create({
+      disk: shard.disk,
+      prefix: '',
+      metadataRepository: new KnowledgeBaseSegmentShardMetadataRepository(
+        this.segmentShards,
+      ),
+    });
+    if (!storage.deleteObject) {
+      throw new Error('File storage does not support object deletion.');
+    }
+    await storage.deleteObject(shard.path);
+  }
+
+  public async replaceShardContents(
+    shard: KnowledgeBaseSegmentShardEntity,
+    contents: Record<string, Record<string, unknown>>,
+  ): Promise<void> {
+    const storage = this.fileStorageFactory.create({
+      disk: shard.disk,
+      prefix: '',
+      metadataRepository: new KnowledgeBaseSegmentShardMetadataRepository(
+        this.segmentShards,
+      ),
+    });
+    if (!storage.replaceObject) {
+      throw new Error('File storage does not support object replacement.');
+    }
+    const payload = JSON.stringify({
+      schemaVersion: 1,
+      knowledgeBaseKey: shard.knowledgeBaseKey,
+      knowledgeBaseDocsId: shard.knowledgeBaseDocsId,
+      segmentVersion: shard.segmentVersion,
+      shardNo: shard.shardNo,
+      segments: contents,
+    });
+    await storage.replaceObject({
+      key: shard.path,
+      content: Buffer.from(payload),
+      mimeType: 'application/json',
+    });
+    await this.segmentShards.update(
+      { id: shard.id },
+      {
+        segmentCount: Object.keys(contents).length,
+        contentHash: createHash('sha256').update(payload).digest('hex'),
+        meta: { ...shard.meta, segments: {} },
+      },
+    );
   }
 
   public requireAllowedStorageDisk(value: unknown): string {

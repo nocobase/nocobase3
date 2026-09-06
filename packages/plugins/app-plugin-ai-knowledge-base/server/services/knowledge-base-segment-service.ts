@@ -66,30 +66,15 @@ export class KnowledgeBaseSegmentService {
       { id: segment.id },
       { enabled: options.enabled },
     );
-    await this.documentManager.dispatchVectorization(
-      segment.knowledgeBaseDocsId,
-      undefined,
-      true,
-    );
+    await this.documentManager.markSegmentsChanged(segment.knowledgeBaseDocsId);
     return this.manager.getContent(segment.knowledgeBaseDocsId, segment.uid);
   }
 
-  public async delete(options: {
+  public delete(options: {
     readonly documentId: string | number;
     readonly segmentUid: string;
   }): Promise<boolean> {
-    const segment = await this.segments.findOne({
-      knowledgeBaseDocsId: options.documentId,
-      uid: options.segmentUid,
-    });
-    if (!segment) return false;
-    await this.segments.destroy({ id: segment.id });
-    await this.documentManager.dispatchVectorization(
-      segment.knowledgeBaseDocsId,
-      undefined,
-      true,
-    );
-    return true;
+    return this.manager.deleteContent(options.documentId, options.segmentUid);
   }
 
   public async regenerate(options: {

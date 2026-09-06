@@ -433,6 +433,7 @@ describe('knowledge base document upload service', () => {
       { upload } as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     await expect(
       service.upload({
@@ -449,6 +450,7 @@ describe('knowledge base document upload service', () => {
     const upload = vi.fn();
     const service = new KnowledgeBaseDocumentService(
       { upload } as never,
+      {} as never,
       {} as never,
       {} as never,
     );

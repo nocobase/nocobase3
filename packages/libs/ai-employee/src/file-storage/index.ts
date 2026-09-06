@@ -66,11 +66,18 @@ export interface OpenedFile<TEntity = unknown> {
   readonly contentType: string;
 }
 
+export interface ReplaceFileObjectInput {
+  readonly key: string;
+  readonly content: FileStorageContent;
+  readonly mimeType?: string;
+}
+
 export interface FileStorage<TEntity = unknown, TCreateContext = void> {
   readonly disk: string;
   write(input: WriteFileInput<TCreateContext>): Promise<FileMetadata<TEntity>>;
   open(id: FileMetadataId): Promise<OpenedFile<TEntity> | null>;
   openMetadata(metadata: FileMetadata<TEntity>): Promise<OpenedFile<TEntity>>;
+  replaceObject?(input: ReplaceFileObjectInput): Promise<void>;
   deleteObject?(key: string): Promise<void>;
 }
 
@@ -204,6 +211,12 @@ export class DriveFileStorage<TEntity, TCreateContext> implements FileStorage<
       stream: await this.driveDisk.getStream(metadata.key),
       contentType: metadata.mimeType || 'application/octet-stream',
     };
+  }
+  public async replaceObject(input: ReplaceFileObjectInput): Promise<void> {
+    const content = await readFileStorageContent(input.content);
+    await this.driveDisk.put(input.key, content, {
+      contentType: input.mimeType?.trim() || 'application/octet-stream',
+    });
   }
 
   public deleteObject(key: string): Promise<void> {

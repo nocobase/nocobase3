@@ -65,17 +65,14 @@ export class KnowledgeBaseSegmentManager {
     if (!shard) throw new Error('Segment shard not found');
     const base = await this.knowledgeBases.require(shard.knowledgeBaseKey);
     const contents = await this.storage.readShardContents(base, shard);
-    const current = contents[segmentUid] ?? {};
+    const current = contents[segment.contentKey] ?? {};
     const title = values.title ?? String(current.title ?? '');
     const content = values.content ?? String(current.content ?? '');
     const questions =
       values.questions ?? (current.questions as SegmentQuestion[]) ?? [];
-    contents[segmentUid] = { ...current, title, content, questions };
+    contents[segment.contentKey] = { ...current, title, content, questions };
     const hash = sha(`${title}\n${content}`);
-    await this.segmentShards.update(
-      { id: shard.id },
-      { meta: { ...shard.meta, segments: contents } },
-    );
+    await this.storage.replaceShardContents(shard, contents);
     await this.segments.update(
       { id: segment.id },
       {
@@ -87,16 +84,28 @@ export class KnowledgeBaseSegmentManager {
           .length,
       },
     );
-    await this.documents.dispatchVectorization(documentId, undefined, true);
+    await this.documents.markSegmentsChanged(documentId);
     return (await this.getContent(documentId, segmentUid))!;
   }
 
-  public async deleteByDocumentIds(
-    ids: string | number | Array<string | number>,
-  ): Promise<void> {
-    const values = Array.isArray(ids) ? ids : [ids];
-    await this.segments.destroy({ knowledgeBaseDocsId: { $in: values } });
-    await this.segmentShards.destroy({ knowledgeBaseDocsId: { $in: values } });
+  public async deleteContent(
+    documentId: string | number,
+    segmentUid: string,
+  ): Promise<boolean> {
+    const segment = await this.segments.findOne({
+      knowledgeBaseDocsId: documentId,
+      uid: segmentUid,
+    });
+    if (!segment) return false;
+    const shard = await this.segmentShards.findById(segment.shardId);
+    if (!shard) throw new Error('Segment shard not found');
+    const base = await this.knowledgeBases.require(shard.knowledgeBaseKey);
+    const contents = await this.storage.readShardContents(base, shard);
+    delete contents[segment.contentKey];
+    await this.storage.replaceShardContents(shard, contents);
+    await this.segments.destroy({ id: segment.id });
+    await this.documents.markSegmentsChanged(documentId);
+    return true;
   }
 
   public async mergeLocalSearchResults(

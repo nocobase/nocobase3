@@ -20,13 +20,7 @@ export class QueueVectorizationDispatcher implements KnowledgeBaseVectorizationD
           : {}),
         rebuildOnly: options.rebuildOnly ?? false,
       },
-      {
-        groupId: `ai-kb-doc:${options.documentId}`,
-        dedup: {
-          id: `ai-kb-doc:${options.documentId}`,
-          ttl: 300_000,
-        },
-      },
+      { groupId: `ai-kb-doc:${options.documentId}` },
     );
   }
 }

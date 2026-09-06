@@ -143,10 +143,62 @@ export class KnowledgeBaseDocumentManager {
     });
   }
 
-  public async deleteDocuments(ids: Array<string | number>): Promise<void> {
+  public async deleteDocuments(
+    documents: readonly KnowledgeBaseDocumentEntity[],
+  ): Promise<void> {
+    if (!documents.length) return;
+    const ids = documents.map((item) => item.id);
+    const shards = await this.segmentShards.find({
+      filter: { knowledgeBaseDocsId: { $in: ids } },
+    });
+    for (const shard of shards) {
+      await this.storage.deleteSegmentShardObject(shard);
+    }
+    for (const document of documents) {
+      await this.storage.deleteDocumentObject(document);
+    }
     await this.segments.destroy({ knowledgeBaseDocsId: { $in: ids } });
     await this.segmentShards.destroy({ knowledgeBaseDocsId: { $in: ids } });
     await this.documents.destroy({ id: { $in: ids } });
+  }
+
+  public async deleteSegmentArtifacts(
+    ids: readonly (string | number)[],
+  ): Promise<void> {
+    if (!ids.length) return;
+    const shards = await this.segmentShards.find({
+      filter: { knowledgeBaseDocsId: { $in: ids } },
+    });
+    for (const shard of shards) {
+      await this.storage.deleteSegmentShardObject(shard);
+    }
+    await this.segments.destroy({ knowledgeBaseDocsId: { $in: ids } });
+    await this.segmentShards.destroy({ knowledgeBaseDocsId: { $in: ids } });
+  }
+  public async markSegmentsChanged(id: string | number): Promise<void> {
+    const document = await this.documents.findById(id);
+    if (!document) return;
+    const segments = await this.segments.find({
+      filter: { knowledgeBaseDocsId: id },
+    });
+    await this.documents.update(
+      { id },
+      {
+        segmentCount: segments.length,
+        characterCount: segments
+          .filter((item) => item.enabled !== false)
+          .reduce((sum, item) => sum + Number(item.charLength || 0), 0),
+        segmentRevision: Number(document.segmentRevision || 0) + 1,
+        segmentUpdatedAt: new Date(),
+        indexStatus: 'PENDING',
+        errorMessage: null,
+      },
+    );
+    await this.refreshStatistics(document.knowledgeBaseKey);
+    await this.vectorizationDispatcher.dispatch({
+      documentId: id,
+      rebuildOnly: true,
+    });
   }
 
   public async refreshStatistics(key: string): Promise<void> {

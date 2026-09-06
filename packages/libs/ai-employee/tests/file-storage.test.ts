@@ -117,6 +117,32 @@ describe('DriveFileStorage', () => {
     expect(opened?.contentType).toBe('text/plain');
     expect(await readStream(opened!.stream)).toBe('hello');
   });
+  it('replaces an existing object without creating new metadata', async () => {
+    const disk = createDisk();
+    const repository = new MetadataRepository();
+    const storage = new DriveFileStorageFactory({ use: () => disk }).create({
+      disk: 'public',
+      prefix: 'ai-files',
+      metadataRepository: repository,
+    });
+    const metadata = await storage.write({
+      id: 'replace',
+      filename: 'shard.json',
+      content: new TextEncoder().encode('{"version":1}'),
+      metadataContext: { createdById: 'user-1' },
+    });
+
+    await storage.replaceObject({
+      key: metadata.key,
+      content: new TextEncoder().encode('{"version":2}'),
+      mimeType: 'application/json',
+    });
+
+    expect(new TextDecoder().decode(disk.objects.get(metadata.key))).toBe(
+      '{"version":2}',
+    );
+    expect(repository.createContext).toEqual({ createdById: 'user-1' });
+  });
 
   it.each([
     ['.pdf', '.pdf'],

@@ -43,8 +43,15 @@ export class KnowledgeBaseVectorizationManager {
 
   public async reindexExistingSegments(id: string | number): Promise<void> {
     const document = await this.documents.findById(id);
-    if (!document) throw new Error(`Knowledge base document #${id} not found`);
-    const base = await this.knowledgeBases.require(document.knowledgeBaseKey);
+    if (!document) return;
+    let base;
+    try {
+      base = await this.knowledgeBases.require(document.knowledgeBaseKey);
+    } catch (error) {
+      if (error instanceof Error && /not found/i.test(error.message)) return;
+      throw error;
+    }
+    const startRevision = Number(document.segmentRevision || 0);
     await this.documents.update(
       { id },
       { indexStatus: 'PROCESSING', errorMessage: null },
@@ -57,6 +64,12 @@ export class KnowledgeBaseVectorizationManager {
         base.knowledgeBaseOuterId,
         id,
       );
+      const current = await this.documents.findById(id);
+      if (!current) return;
+      if (Number(current.segmentRevision || 0) !== startRevision) {
+        await this.documentManager.dispatchVectorization(id, undefined, true);
+        return;
+      }
       const rows = await this.segments.find({
         filter: { knowledgeBaseDocsId: id },
       });
@@ -69,12 +82,23 @@ export class KnowledgeBaseVectorizationManager {
           characterCount: rows
             .filter((row) => row.enabled !== false)
             .reduce((sum, row) => sum + Number(row.charLength || 0), 0),
-          segmentRevision: Number(document.segmentRevision || 0) + 1,
           segmentUpdatedAt: new Date(),
         },
       );
       await this.documentManager.refreshStatistics(base.key);
     } catch (error) {
+      if (!(await this.documents.findById(id))) return;
+      try {
+        await this.knowledgeBases.require(document.knowledgeBaseKey);
+      } catch (staleError) {
+        if (
+          staleError instanceof Error &&
+          /not found/i.test(staleError.message)
+        ) {
+          return;
+        }
+        throw staleError;
+      }
       await this.documents.update(
         { id },
         {
@@ -91,8 +115,14 @@ export class KnowledgeBaseVectorizationManager {
     relatedQuestions: string[] = [],
   ): Promise<void> {
     const document = await this.documents.findById(id);
-    if (!document) throw new Error(`Knowledge base document #${id} not found`);
-    const base = await this.knowledgeBases.require(document.knowledgeBaseKey);
+    if (!document) return;
+    let base;
+    try {
+      base = await this.knowledgeBases.require(document.knowledgeBaseKey);
+    } catch (error) {
+      if (error instanceof Error && /not found/i.test(error.message)) return;
+      throw error;
+    }
     await this.documents.update(
       { id },
       {
@@ -115,9 +145,12 @@ export class KnowledgeBaseVectorizationManager {
               pageContent: loaded.map((item) => item.pageContent).join('\n\n'),
             }),
           ];
-      await this.segmentManager.deleteByDocumentIds(id);
+      const currentBeforeReplace = await this.documents.findById(id);
+      if (!currentBeforeReplace) return;
+      await this.documentManager.deleteSegmentArtifacts([id]);
       const version = Number(document.segmentVersion ?? 0) + 1;
       for (let shardNo = 0; shardNo * 100 < splits.length; shardNo++) {
+        if (!(await this.documents.findById(id))) return;
         const batch = splits.slice(shardNo * 100, shardNo * 100 + 100);
         const contents: Record<
           string,
@@ -178,10 +211,30 @@ export class KnowledgeBaseVectorizationManager {
               createdById: document.createdById,
             },
           });
+        if (!(await this.documents.findById(id))) {
+          await this.storage.deleteSegmentShardObject(metadata.entity);
+          await this.documentManager.deleteSegmentArtifacts([id]);
+          return;
+        }
         await this.segments.createMany(
           pending.map((item) => ({ ...item, shardId: metadata.entity.id })),
         );
       }
+      const currentBeforeRebuild = await this.documents.findById(id);
+      if (!currentBeforeRebuild) {
+        await this.documentManager.deleteSegmentArtifacts([id]);
+        return;
+      }
+      const generatedRevision =
+        Number(currentBeforeRebuild.segmentRevision || 0) + 1;
+      await this.documents.update(
+        { id },
+        {
+          segmentVersion: version,
+          segmentRevision: generatedRevision,
+          segmentUpdatedAt: new Date(),
+        },
+      );
       await this.rebuildVectors(
         base.vectorStoreProvider,
         base.vectorStoreConfigKey,
@@ -189,6 +242,24 @@ export class KnowledgeBaseVectorizationManager {
         base.knowledgeBaseOuterId,
         id,
       );
+      const currentAfterRebuild = await this.documents.findById(id);
+      if (!currentAfterRebuild) {
+        await this.documentManager.deleteSegmentArtifacts([id]);
+        await this.rebuildVectors(
+          base.vectorStoreProvider,
+          base.vectorStoreConfigKey,
+          base.knowledgeBaseType,
+          base.knowledgeBaseOuterId,
+          id,
+        );
+        return;
+      }
+      if (
+        Number(currentAfterRebuild.segmentRevision || 0) !== generatedRevision
+      ) {
+        await this.documentManager.dispatchVectorization(id, undefined, true);
+        return;
+      }
       const characterCount = splits.reduce(
         (sum, item) => sum + item.pageContent.length,
         0,
@@ -198,9 +269,6 @@ export class KnowledgeBaseVectorizationManager {
         {
           indexStatus: 'SUCCESS',
           segmentStatus: 'SUCCESS',
-          segmentVersion: version,
-          segmentRevision: Number(document.segmentRevision ?? 0) + 1,
-          segmentUpdatedAt: new Date(),
           segmentCount: splits.length,
           characterCount,
           errorMessage: null,
@@ -209,6 +277,18 @@ export class KnowledgeBaseVectorizationManager {
       );
       await this.documentManager.refreshStatistics(base.key);
     } catch (error) {
+      if (!(await this.documents.findById(id))) return;
+      try {
+        await this.knowledgeBases.require(document.knowledgeBaseKey);
+      } catch (staleError) {
+        if (
+          staleError instanceof Error &&
+          /not found/i.test(staleError.message)
+        ) {
+          return;
+        }
+        throw staleError;
+      }
       const message = error instanceof Error ? error.message : String(error);
       await this.documents.update(
         { id },

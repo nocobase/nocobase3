@@ -5,6 +5,7 @@ import {
   type KnowledgeBaseDocumentUploadFile,
 } from '../document-upload.js';
 import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
+import type { KnowledgeBaseVectorCleanupManager } from '../managers/knowledge-base-vector-cleanup-manager.js';
 import type {
   KnowledgeBaseDocumentEntity,
   KnowledgeBaseDocumentRepository,
@@ -17,6 +18,7 @@ export class KnowledgeBaseDocumentService {
     private readonly manager: KnowledgeBaseDocumentManager,
     private readonly documents: KnowledgeBaseDocumentRepository,
     private readonly bases: KnowledgeBaseRepository,
+    private readonly vectorCleanup: KnowledgeBaseVectorCleanupManager,
   ) {}
 
   public list(
@@ -60,11 +62,39 @@ export class KnowledgeBaseDocumentService {
   public async destroy(options: {
     readonly ids: readonly (string | number)[];
   }): Promise<void> {
+    const ids = Array.from(
+      new Map(options.ids.map((id) => [String(id), id])).values(),
+    );
     const records = await this.documents.find({
-      filter: { id: { $in: options.ids } },
+      filter: { id: { $in: ids } },
     });
-    await this.manager.deleteDocuments([...options.ids]);
-    for (const key of new Set(records.map((item) => item.knowledgeBaseKey))) {
+    if (records.length !== ids.length) {
+      const error = new Error('Knowledge base document not found');
+      (error as Error & { status?: number }).status = 404;
+      throw error;
+    }
+    const recordsByBase = new Map<string, KnowledgeBaseDocumentEntity[]>();
+    for (const record of records) {
+      const group = recordsByBase.get(record.knowledgeBaseKey) ?? [];
+      group.push(record);
+      recordsByBase.set(record.knowledgeBaseKey, group);
+    }
+    for (const [knowledgeBaseKey, documents] of recordsByBase) {
+      const base = await this.bases.findOne({ key: knowledgeBaseKey });
+      if (!base) {
+        const error = new Error(
+          `Knowledge base #${knowledgeBaseKey} not found`,
+        );
+        (error as Error & { status?: number }).status = 404;
+        throw error;
+      }
+      await this.vectorCleanup.deleteDocumentVectors(
+        base,
+        documents.map((item) => item.id),
+      );
+    }
+    await this.manager.deleteDocuments(records);
+    for (const key of recordsByBase.keys()) {
       await this.manager.refreshStatistics(key);
     }
   }

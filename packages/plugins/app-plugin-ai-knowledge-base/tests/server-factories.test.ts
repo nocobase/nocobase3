@@ -112,6 +112,7 @@ describe('knowledge base factories', () => {
       managers,
       repositories,
       ['local'],
+      warningLogger,
     );
     expect(managers.documents).toBe(managers.documents);
     expect(managers.segments).toBe(managers.segments);
@@ -135,6 +136,7 @@ describe('knowledge base factories', () => {
       managers,
       repositories,
       ['local'],
+      warningLogger,
     );
     const documentRepository = repositories.documents;
     const documentManager = managers.documents;

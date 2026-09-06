@@ -5,6 +5,7 @@ import {
 } from '@nocobase/service-provider';
 
 import type { KnowledgeBaseVectorizationExecutor } from '../internal-types.js';
+import type { KnowledgeBaseWarningLogger } from '../internal-types.js';
 import { KnowledgeBaseDocumentService } from '../services/knowledge-base-document-service.js';
 import { KnowledgeBaseSegmentService } from '../services/knowledge-base-segment-service.js';
 import { KnowledgeBaseService } from '../services/knowledge-base-service.js';
@@ -18,6 +19,7 @@ export class KnowledgeBaseServiceFactory {
     private readonly managers: KnowledgeBaseManagerFactory,
     private readonly repositories: KnowledgeBaseRepositoryFactory,
     private readonly allowedStorageDisks: readonly string[],
+    private readonly warningLogger: KnowledgeBaseWarningLogger,
   ) {}
   private knowledgeBaseService: KnowledgeBaseService | undefined;
   private documentService: KnowledgeBaseDocumentService | undefined;
@@ -32,10 +34,12 @@ export class KnowledgeBaseServiceFactory {
       this.ai,
       this.managers.knowledgeBases,
       this.managers.documents,
+      this.managers.vectorCleanup,
       this.repositories.knowledgeBases,
       this.repositories.vectorStoreConfigs,
       this.repositories.documents,
       this.allowedStorageDisks,
+      this.warningLogger,
     ));
   }
 
@@ -45,6 +49,7 @@ export class KnowledgeBaseServiceFactory {
       this.managers.documents,
       this.repositories.documents,
       this.repositories.knowledgeBases,
+      this.managers.vectorCleanup,
     ));
   }
 

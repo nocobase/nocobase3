@@ -11,6 +11,7 @@ import { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
 import { KnowledgeBaseSegmentManager } from '../managers/knowledge-base-segment-manager.js';
 import { KnowledgeBaseStorageManager } from '../managers/knowledge-base-storage-manager.js';
 import { KnowledgeBaseVectorizationManager } from '../managers/knowledge-base-vectorization-manager.js';
+import { KnowledgeBaseVectorCleanupManager } from '../managers/knowledge-base-vector-cleanup-manager.js';
 import { QueueVectorizationDispatcher } from '../managers/queue-vectorization-dispatcher.js';
 import { VectorStoreManager } from '../managers/vector-store-manager.js';
 import type { KnowledgeBaseRepositoryFactory } from './repository-factory.js';
@@ -32,6 +33,7 @@ export class KnowledgeBaseManagerFactory {
   private vectorizationManager: KnowledgeBaseVectorizationManager | undefined;
   private dispatcherManager: QueueVectorizationDispatcher | undefined;
   private vectorStoreManager: VectorStoreManager | undefined;
+  private vectorCleanupManager: KnowledgeBaseVectorCleanupManager | undefined;
   private disposed = false;
 
   public get knowledgeBases(): KnowledgeBaseManager {
@@ -109,6 +111,12 @@ export class KnowledgeBaseManagerFactory {
     ));
   }
 
+  public get vectorCleanup(): KnowledgeBaseVectorCleanupManager {
+    this.assertActive();
+    return (this.vectorCleanupManager ??= new KnowledgeBaseVectorCleanupManager(
+      this.vectorStores,
+    ));
+  }
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -120,6 +128,7 @@ export class KnowledgeBaseManagerFactory {
     this.vectorizationManager = undefined;
     this.dispatcherManager = undefined;
     this.vectorStoreManager = undefined;
+    this.vectorCleanupManager = undefined;
   }
 
   private assertActive(): void {

@@ -8,6 +8,8 @@ import type {
 } from '../repository/index.js';
 import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
 import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
+import type { KnowledgeBaseVectorCleanupManager } from '../managers/knowledge-base-vector-cleanup-manager.js';
+import type { KnowledgeBaseWarningLogger } from '../internal-types.js';
 import type { PageOptions, PageResult } from './pagination.js';
 
 const BUILT_IN_PROVIDER_NAMES = new Set([
@@ -20,10 +22,12 @@ export class KnowledgeBaseService {
     private readonly ai: AIManager,
     private readonly manager: KnowledgeBaseManager,
     private readonly documentManager: KnowledgeBaseDocumentManager,
+    private readonly vectorCleanup: KnowledgeBaseVectorCleanupManager,
     private readonly bases: KnowledgeBaseRepository,
     private readonly vectorStoreConfigs: VectorStoreConfigRepository,
     private readonly documents: KnowledgeBaseDocumentRepository,
     private readonly allowedStorageDisks: readonly string[],
+    private readonly warningLogger: KnowledgeBaseWarningLogger,
   ) {}
 
   public async list(
@@ -90,12 +94,18 @@ export class KnowledgeBaseService {
       filter: { id: { $in: options.ids } },
     });
     for (const row of rows) {
+      try {
+        await this.vectorCleanup.deleteKnowledgeBaseVectors(row);
+      } catch (error) {
+        this.warningLogger.warn(
+          'Failed to delete knowledge base vectors; continuing knowledge base deletion.',
+          { knowledgeBaseKey: row.key, error },
+        );
+      }
       const documents = await this.documents.find({
         filter: { knowledgeBaseKey: row.key },
       });
-      await this.documentManager.deleteDocuments(
-        documents.map((item) => item.id),
-      );
+      await this.documentManager.deleteDocuments(documents);
     }
     await this.bases.destroy({ id: { $in: options.ids } });
   }
