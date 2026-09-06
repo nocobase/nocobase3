@@ -94,6 +94,6 @@ Always retain `nativeType`. Add `fractionalSecondsPrecision` as a physical colum
 2. Complete field types, Builder helpers, physical mappings, metadata lifecycle, and Resolver compatibility. Do not publish a new type as fully supported before Repository wiring is ready.
 3. Implement temporal codecs and Repository paths, validate supported drivers and consumers, and update formal usage documentation. Report unavailable live databases separately from passing tests.
 
-Progress: baseline finalized; implementation pending. Commit each verified stage. Existing persisted schemas are not automatically migrated, and historical migrations are not rewritten.
+Progress: baseline and Inspector classification/precision implemented. Inspector tests pass on SQLite, PostgreSQL 16, and MySQL 8.4; Oracle and SQL Server have rule-level coverage but no live validation in this stage. Metadata, Builder, Resolver, and Repository work remain pending. Native intervals previously matched the broad integer prefix; inspection now keeps them native. Commit each verified stage. Existing persisted schemas are not automatically migrated, and historical migrations are not rewritten.
 
 Keep this proposal separate from the deferred [BigInt and Decimal transport proposal](./precise-numeric-values.md). Update formal usage documentation only after the corresponding behavior is implemented and verified.

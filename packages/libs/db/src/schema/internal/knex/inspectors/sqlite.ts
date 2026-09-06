@@ -9,6 +9,7 @@ import {
   normalizePhysicalDataType,
   normalizeReferentialAction,
   parseColumnDefault,
+  temporalFractionalSecondsPrecision,
 } from '../../../inspector/shared/type-normalization.js';
 import type {
   PhysicalCheckConstraintSchema,
@@ -148,9 +149,17 @@ export class SqliteSchemaInspector extends BaseSchemaInspector {
             nullable: column.notnull === 0 && column.pk === 0,
             default: parseColumnDefault(column.dflt_value),
             autoIncrement: column.name === autoIncrementColumn,
-            length: modifiers.length,
+            length:
+              temporalFractionalSecondsPrecision('sqlite', column.type) ===
+              undefined
+                ? modifiers.length
+                : undefined,
             precision: modifiers.precision,
             scale: modifiers.scale,
+            fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
+              'sqlite',
+              column.type,
+            ),
             generated:
               column.hidden === 2 || column.hidden === 3
                 ? { stored: column.hidden === 3 }

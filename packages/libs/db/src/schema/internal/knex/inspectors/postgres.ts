@@ -13,6 +13,7 @@ import {
   normalizePhysicalDataType,
   normalizeReferentialAction,
   parseColumnDefault,
+  temporalFractionalSecondsPrecision,
 } from '../../../inspector/shared/type-normalization.js';
 import type {
   PhysicalCheckConstraintSchema,
@@ -183,6 +184,10 @@ export class PostgresSchemaInspector extends BaseSchemaInspector {
           length: modifiers.length,
           precision: modifiers.precision,
           scale: modifiers.scale,
+          fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
+            'postgres',
+            column.native_type,
+          ),
           comment: optionalString(column.comment),
           generated: generated
             ? {
@@ -627,6 +632,8 @@ function parseTypeModifiers(nativeType: string): {
   scale?: number;
 } {
   const match = nativeType.match(/\((\d+)(?:,(\d+))?\)/);
+  if (temporalFractionalSecondsPrecision('postgres', nativeType) !== undefined)
+    return {};
   if (!match) {
     return {};
   }

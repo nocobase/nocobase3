@@ -11,6 +11,8 @@ export function normalizePhysicalDataType(
 ): PhysicalDataType {
   const type = nativeType.trim().toLowerCase();
   const base = type.replace(/\(.*/, '').trim();
+  const temporal = normalizeTemporalType(dialect, type);
+  if (temporal !== undefined) return temporal;
 
   if (dialect === 'mssql') {
     if (/^(n?varchar)\(max\)$/.test(type)) return 'text';
@@ -19,16 +21,17 @@ export function normalizePhysicalDataType(
     if (base === 'timestamp' || base === 'rowversion') return 'blob';
     if (base === 'image') return 'blob';
     if (base === 'ntext') return 'text';
-    if (base === 'smalldatetime' || base === 'datetimeoffset') {
-      return 'datetime';
-    }
     if (base === 'money' || base === 'smallmoney') return 'decimal';
     if (base === 'float') return 'double';
   }
   // Oracle FLOAT is a decimal NUMBER subtype, not an IEEE binary float.
   if (dialect === 'oracle' && base === 'float') return 'decimal';
 
-  if (/^(smallint|integer|int|int2|int4|mediumint|tinyint)/.test(base)) {
+  if (
+    /^(smallint|integer|int|int2|int4|mediumint|tinyint)(?:\s+unsigned)?$/.test(
+      base,
+    )
+  ) {
     return 'integer';
   }
   if (/^(bigint|int8)/.test(base)) {
@@ -63,22 +66,6 @@ export function normalizePhysicalDataType(
   if (/^(double|double precision|float8|binary_double)/.test(base)) {
     return 'double';
   }
-  if (base === 'date' && dialect === 'oracle') {
-    return 'datetime';
-  }
-  if (base === 'date') {
-    return 'date';
-  }
-  if (
-    /^(datetime|timestamp|timestamptz|timestamp with|timestamp without)/.test(
-      base,
-    )
-  ) {
-    return 'datetime';
-  }
-  if (/^time/.test(base)) {
-    return 'time';
-  }
   if (/^(json|jsonb)/.test(base)) {
     return 'json';
   }
@@ -97,6 +84,82 @@ export function normalizePhysicalDataType(
     return 'native';
   }
   return 'native';
+}
+
+function normalizeTemporalType(
+  dialect: 'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql',
+  nativeType: string,
+): PhysicalDataType | undefined {
+  const type = nativeType
+    .replace(/\(\d+\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (type === 'date') return dialect === 'oracle' ? 'datetime' : 'date';
+  switch (dialect) {
+    case 'postgres':
+      if (type === 'timestamptz' || type === 'timestamp with time zone')
+        return 'datetimeTz';
+      if (type === 'timestamp' || type === 'timestamp without time zone')
+        return 'datetime';
+      if (type === 'time' || type === 'time without time zone') return 'time';
+      break;
+    case 'mysql':
+      if (type === 'timestamp') return 'datetimeTz';
+      if (type === 'datetime') return 'datetime';
+      if (type === 'time') return 'time';
+      break;
+    case 'oracle':
+      if (
+        type === 'timestamp with time zone' ||
+        type === 'timestamp with local time zone'
+      )
+        return 'datetimeTz';
+      if (type === 'timestamp') return 'datetime';
+      break;
+    case 'mssql':
+      if (type === 'datetimeoffset') return 'datetimeTz';
+      if (['datetime', 'datetime2', 'smalldatetime'].includes(type))
+        return 'datetime';
+      if (type === 'time') return 'time';
+      break;
+    case 'sqlite':
+      if (type === 'datetime' || type === 'timestamp') return 'datetime';
+      if (type === 'time') return 'time';
+      break;
+  }
+  return undefined;
+}
+
+/** Read declared temporal precision without confusing it with numeric scale. */
+export function temporalFractionalSecondsPrecision(
+  dialect: 'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql',
+  nativeType: string,
+): number | undefined {
+  const type = nativeType.trim().toLowerCase();
+  const temporal = normalizeTemporalType(dialect, type);
+  const offsetTime =
+    dialect === 'postgres' &&
+    /^(timetz|time(?:\(\d+\))? with time zone)$/.test(type);
+  if (
+    !offsetTime &&
+    temporal !== 'time' &&
+    temporal !== 'datetime' &&
+    temporal !== 'datetimeTz'
+  )
+    return undefined;
+  const explicit = type.match(/\((\d+)\)/);
+  if (explicit) return Number(explicit[1]);
+  if (dialect === 'postgres') return 6;
+  if (dialect === 'mysql') return 0;
+  if (dialect === 'oracle') return type === 'date' ? 0 : 6;
+  if (dialect === 'mssql') {
+    if (type === 'smalldatetime') return 0;
+    // DATETIME uses 1/300-second ticks, not an exact decimal precision.
+    if (type === 'datetime') return undefined;
+    return 7;
+  }
+  // SQLite declarations without precision do not define an effective precision.
+  return undefined;
 }
 
 export function parseColumnDefault(

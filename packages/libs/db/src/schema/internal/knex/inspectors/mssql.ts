@@ -13,6 +13,7 @@ import {
   normalizePhysicalDataType,
   normalizeReferentialAction,
   parseColumnDefault,
+  temporalFractionalSecondsPrecision,
 } from '../../../inspector/shared/type-normalization.js';
 import type {
   PhysicalCheckConstraintSchema,
@@ -184,6 +185,10 @@ export class MssqlSchemaInspector extends BaseSchemaInspector {
           length: mssqlColumnLength(column),
           precision: mssqlPrecision(column),
           scale: mssqlScale(column),
+          fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
+            'mssql',
+            nativeType,
+          ),
           comment: optionalString(column.comments),
           generated: computed
             ? {
@@ -629,9 +634,7 @@ function mssqlPrecision(column: MssqlColumnRow): number | undefined {
 }
 
 function mssqlScale(column: MssqlColumnRow): number | undefined {
-  return ['decimal', 'numeric', 'datetime2', 'datetimeoffset', 'time'].includes(
-    column.type_name.toLowerCase(),
-  )
+  return ['decimal', 'numeric'].includes(column.type_name.toLowerCase())
     ? numberValue(column.scale)
     : undefined;
 }

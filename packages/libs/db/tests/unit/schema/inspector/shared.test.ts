@@ -299,7 +299,7 @@ describe('SchemaInspector type normalization', () => {
     expect(normalizePhysicalDataType('mysql', 'tinyint(1)')).toBe('integer');
     expect(normalizePhysicalDataType('postgres', 'jsonb')).toBe('json');
     expect(normalizePhysicalDataType('postgres', 'timestamptz')).toBe(
-      'datetime',
+      'datetimeTz',
     );
     expect(
       normalizePhysicalDataType('postgres', 'time without time zone'),

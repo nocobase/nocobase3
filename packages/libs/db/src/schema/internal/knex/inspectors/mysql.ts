@@ -13,6 +13,7 @@ import {
   normalizePhysicalDataType,
   normalizeReferentialAction,
   parseColumnDefault,
+  temporalFractionalSecondsPrecision,
 } from '../../../inspector/shared/type-normalization.js';
 import type {
   PhysicalCheckConstraintSchema,
@@ -220,6 +221,10 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           length: numberValue(column.character_maximum_length),
           precision: numberValue(column.numeric_precision),
           scale: numberValue(column.numeric_scale),
+          fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
+            'mysql',
+            column.column_type,
+          ),
           comment: optionalString(column.column_comment),
           generated: generated
             ? {

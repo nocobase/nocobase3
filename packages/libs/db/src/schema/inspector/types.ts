@@ -55,6 +55,7 @@ export type PhysicalDataType =
   | 'date'
   | 'time'
   | 'datetime'
+  | 'datetimeTz'
   | 'json'
   | 'blob'
   | 'uuid'
@@ -83,6 +84,8 @@ export interface PhysicalColumnSchema {
   readonly length?: number;
   readonly precision?: number;
   readonly scale?: number;
+  /** Decimal places in fractional seconds, separate from numeric precision. */
+  readonly fractionalSecondsPrecision?: number;
   readonly comment?: string;
   readonly generated?: PhysicalGeneratedColumn;
 }

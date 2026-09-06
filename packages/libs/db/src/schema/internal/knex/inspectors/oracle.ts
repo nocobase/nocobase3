@@ -13,6 +13,7 @@ import {
   normalizePhysicalDataType,
   normalizeReferentialAction,
   parseColumnDefault,
+  temporalFractionalSecondsPrecision,
 } from '../../../inspector/shared/type-normalization.js';
 import type {
   PhysicalCheckConstraintSchema,
@@ -233,8 +234,20 @@ export class OracleSchemaInspector extends BaseSchemaInspector {
             column.identity_column === 'YES' ||
             knexAutoIncrementColumns.has(column.column_name),
           length: oracleColumnLength(column),
-          precision,
-          scale,
+          precision:
+            temporalFractionalSecondsPrecision('oracle', nativeType) ===
+            undefined
+              ? precision
+              : undefined,
+          scale:
+            temporalFractionalSecondsPrecision('oracle', nativeType) ===
+            undefined
+              ? scale
+              : undefined,
+          fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
+            'oracle',
+            nativeType,
+          ),
           comment: optionalString(column.comments),
           generated: generated
             ? { expression: defaultExpression, stored: false }
