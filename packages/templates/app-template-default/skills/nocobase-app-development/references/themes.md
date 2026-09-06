@@ -22,4 +22,4 @@ Storage keys come from `resolveAppBase()`, not the current route or the first pa
 
 ## Verify
 
-Run the theme preference, theme-entry and client-theme tests, then the App's checks. In a browser, verify saved preferences are restored after client startup, all mode/preset combinations, narrow screens, keyboard selection/Escape/focus return, same-App cross-tab sync and isolation from a second App on the same origin. Test unavailable storage and a removed preset. In the source monorepo, apply template framework changes to Default and Hub together.
+Run the theme preference and client-theme tests, then the App's checks. In a browser, verify saved preferences are restored after client startup, all mode/preset combinations, narrow screens, keyboard selection/Escape/focus return, same-App cross-tab sync and isolation from a second App on the same origin. Test unavailable storage and a removed preset. In the source monorepo, apply template framework changes to Default and Hub together.
