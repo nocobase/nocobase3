@@ -1,6 +1,25 @@
 import type { RepositoryExampleResource } from './en-US.js';
 const zhCN: RepositoryExampleResource = {
   apiExamples: 'Repository 示例',
+  findManyTitle: 'findMany：数组与流',
+  findManyIntro:
+    '用两种消费方式执行同一个 Repository 查询。await 一次返回完整数组；异步迭代按到达顺序读取带帧的 NDJSON 记录。数据库查询、筛选、排序和数量限制完全相同。',
+  findManyArrayTitle: '等待完整数组',
+  findManyArrayDescription:
+    'await findMany 发送普通 JSON 请求，得到全部匹配记录后完成。',
+  findManyStreamTitle: '异步迭代数据流',
+  findManyStreamDescription:
+    'for await 发送 NDJSON 请求，将每条解码后的记录依次追加到结果表。',
+  findManyProtocol: 'HTTP 响应',
+  findManyRunArray: '运行数组查询',
+  findManyRunStream: '运行流查询',
+  findManyReceived: '已接收记录',
+  findManyReceivedCount: '已接收 {{count}} 条记录',
+  findManyResults: '结果',
+  findManyRecordTitle: '标题',
+  findManyCategory: '分类',
+  findManyDescription: '描述',
+  findManyEmpty: '运行查询以加载初始化的示例记录。',
   atomicTitle: '数值原子更新',
   atomicIntro:
     '直接在数据库中执行 increment、decrement 和 multiply。请求提交运算，不使用浏览器中可能过期的数值计算结果。所有登录用户共享这些示例计数器。',

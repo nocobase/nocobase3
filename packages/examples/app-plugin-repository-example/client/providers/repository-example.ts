@@ -5,6 +5,15 @@ export class RepositoryExampleServiceProvider extends ServiceProvider<ClientAppl
   public override boot(): Promise<void> {
     this.app.refine.addResources([
       {
+        name: 'repository-example-find-many',
+        list: '/repository-example/find-many',
+        meta: {
+          parent: 'repository-example-api',
+          label: 'findManyTitle',
+          i18nNs: this.name,
+        },
+      },
+      {
         name: 'repository-example-aggregate',
         list: '/repository-example/aggregate',
         meta: {

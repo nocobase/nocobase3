@@ -122,6 +122,13 @@ describe('app client runtime', () => {
     );
     expect(resources).toContainEqual(
       expect.objectContaining({
+        name: 'repository-example-find-many',
+        list: '/repository-example/find-many',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    expect(resources).toContainEqual(
+      expect.objectContaining({
         name: 'repository-example-aggregate',
         list: '/repository-example/aggregate',
         meta: expect.objectContaining({ parent: 'repository-example-api' }),

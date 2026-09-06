@@ -1,6 +1,25 @@
 import type { LocaleResource } from '@nocobase/i18n';
 const enUS = {
   apiExamples: 'Repository examples',
+  findManyTitle: 'findMany: array and stream',
+  findManyIntro:
+    'Run the same Repository query in two consumption modes. Await resolves once with the complete array; async iteration reads framed NDJSON records as they arrive. The database query, filters, sorting and limits stay the same.',
+  findManyArrayTitle: 'Await an array',
+  findManyArrayDescription:
+    'Awaiting findMany sends a normal JSON request and resolves with all matching records.',
+  findManyStreamTitle: 'Iterate a stream',
+  findManyStreamDescription:
+    'Using for await sends an NDJSON request and appends each decoded record to the result table.',
+  findManyProtocol: 'HTTP response',
+  findManyRunArray: 'Run array query',
+  findManyRunStream: 'Run stream query',
+  findManyReceived: 'Records received',
+  findManyReceivedCount: '{{count}} records received',
+  findManyResults: 'Results',
+  findManyRecordTitle: 'Title',
+  findManyCategory: 'Category',
+  findManyDescription: 'Description',
+  findManyEmpty: 'Run this query to load the seeded example records.',
   atomicTitle: 'Atomic numeric updates',
   atomicIntro:
     'Update numbers directly in the database with increment, decrement and multiply. Requests send the operation, never a value calculated from a potentially stale browser snapshot. All signed-in users share these example counters.',

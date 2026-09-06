@@ -135,6 +135,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:find-many',
+        path: '/repository-example/find-many',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:aggregate',
         path: '/repository-example/aggregate',
       },

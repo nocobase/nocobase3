@@ -148,6 +148,29 @@ describe('Repository CRM and order API', () => {
       (await f.router.request('/main/api/users:findMany', { method: 'POST' }))
         .status,
     ).toBe(404);
+    expect(
+      (
+        await f.router.request(
+          '/main/api/repositoryExampleFindManyRecords:findMany',
+          { method: 'POST' },
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await f.router.request(
+          '/main/api/repositoryExampleFindManyRecords:findOne',
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-test-user': 'tester',
+            },
+            body: JSON.stringify({ filter: { id: 'find-many-01' } }),
+          },
+        )
+      ).status,
+    ).toBe(404);
     await expect(
       repository(f.api, 'customers').findMany({ limit: 101 }),
     ).rejects.toMatchObject({ status: 400 });

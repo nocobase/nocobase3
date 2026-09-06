@@ -1,6 +1,6 @@
 # Repository API example
 
-A working CRM and order management plugin demonstrating `defineRepositoryApiRoutes`, the injected API client's remote Repository, relationship selections and mutations, and optimistic locking.
+A working Repository API plugin demonstrating `defineRepositoryApiRoutes`, array and streamed `findMany`, relationship selections and mutations, optimistic locking, atomic updates, and aggregate queries.
 
 ## Open the example
 
@@ -16,6 +16,7 @@ Sign in and expand **CRM example** or **Orders example** in the sidebar. Each ch
 
 - **CRM example**: Customers (`/repository-example/crm`), Contacts (`/repository-example/crm/contacts`).
 - **Orders example**: Orders (`/repository-example/orders`), Order items (`/repository-example/orders/items`), Products (`/repository-example/orders/products`).
+- **Repository examples**: `findMany` array/stream (`/repository-example/find-many`), atomic numeric updates (`/repository-example/atomic`), aggregate queries (`/repository-example/aggregate`).
 
 View details opens the child route `<list-path>/details/:recordId`, for example `/repository-example/crm/details/demo-customer-1`. Detail URLs load records directly, support refresh, show related records, and provide a Back to list action. Relation headings use singular labels for belongsTo and plural labels for hasMany. Related records link to their detail pages; customer cards show name, company and email, and foreign-key fields display the related name. New and Edit open a right-side drawer with focus management and Escape/Cancel dismissal. Relation and status fields use shadcn Select, with full-width triggers and readable selected labels. Successful saves close the drawer and refresh the list or current detail; errors keep the drawer and entered values visible.
 
@@ -29,13 +30,14 @@ The seed uses fixed `demo-*` IDs, `DEMO-*` SKUs and `DEMO-SO-*` order numbers. T
 
 ## Schema and relationships
 
-| Logical collection / API name | Fields                                                     | Relationships                          |
-| ----------------------------- | ---------------------------------------------------------- | -------------------------------------- |
-| `repositoryExampleCustomers`  | `id`, `name`, `company`, `email`, `status`                 | hasMany `contacts`, hasMany `orders`   |
-| `repositoryExampleContacts`   | `id`, `name`, `email`, `phone`, `customerId`               | belongsTo `customer`                   |
-| `repositoryExampleProducts`   | `id`, `name`, unique `sku`, `unitPriceCents`               | hasMany `items`                        |
-| `repositoryExampleOrders`     | `id`, unique `number`, `status`, `customerId`, `version`   | belongsTo `customer`, hasMany `items`  |
-| `repositoryExampleOrderItems` | `id`, `orderId`, `productId`, `quantity`, `unitPriceCents` | belongsTo `order`, belongsTo `product` |
+| Logical collection / API name      | Fields                                                      | Relationships                          |
+| ---------------------------------- | ----------------------------------------------------------- | -------------------------------------- |
+| `repositoryExampleCustomers`       | `id`, `name`, `company`, `email`, `status`                  | hasMany `contacts`, hasMany `orders`   |
+| `repositoryExampleContacts`        | `id`, `name`, `email`, `phone`, `customerId`                | belongsTo `customer`                   |
+| `repositoryExampleProducts`        | `id`, `name`, unique `sku`, `unitPriceCents`                | hasMany `items`                        |
+| `repositoryExampleOrders`          | `id`, unique `number`, `status`, `customerId`, `version`    | belongsTo `customer`, hasMany `items`  |
+| `repositoryExampleOrderItems`      | `id`, `orderId`, `productId`, `quantity`, `unitPriceCents`  | belongsTo `order`, belongsTo `product` |
+| `repositoryExampleFindManyRecords` | `id`, unique `sequence`, `title`, `category`, `description` | —                                      |
 
 The browser generates UUID IDs for new records; seeded examples use stable `demo-*` IDs. Monetary values use integer cents; each item stores its own unit price snapshot, so later product price changes do not rewrite existing orders. The displayed line total is quantity × unit price. Customer statuses are `lead`, `active`, `inactive`; order statuses are `draft`, `confirmed`, `paid`, `cancelled`.
 
@@ -78,6 +80,26 @@ await orders.updateOne({
 ```
 
 See `client/model.ts` for the JSON select/filter ASTs and relationship mutation values. `client/pages/repository-page.tsx` drives the same seven actions for each entity. There are no handwritten CRUD HTTP handlers.
+
+## findMany arrays and streams
+
+Open **Repository examples → findMany: array and stream** at `/repository-example/find-many`. A dedicated migration creates `repositoryExampleFindManyRecords`; its seed inserts 24 deterministic records so ordering and completeness are easy to inspect.
+
+Both panels create the same query with `limit: 24` and ascending `sequence` sorting. Only the way the returned query is consumed changes:
+
+```ts
+const repository = api.repository<FindManyRecord>(
+  'repositoryExampleFindManyRecords',
+);
+
+const records = await repository.findMany(options);
+
+for await (const record of repository.findMany(options)) {
+  consume(record);
+}
+```
+
+Awaiting uses `Accept: application/json` and resolves with the complete array. Async iteration uses `Accept: application/x-ndjson`; the client decodes framed records and yields each one in order. Each call creates a new query because a single query cannot mix the two consumption modes. The collection exposes only `findMany`, is limited to 100 records per request, and is protected by the same required-authentication middleware as the other examples.
 
 ## Atomic numeric updates
 

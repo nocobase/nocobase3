@@ -21,7 +21,7 @@ describe('Repository example seeds', () => {
   }
   it('seeds all entities, exposes related data through HTTP, and preserves edits on replay', async () => {
     const runner = seeder();
-    expect((await runner.run()).executed).toHaveLength(2);
+    expect((await runner.run()).executed).toHaveLength(3);
     for (const [key, count] of [
       ['customers', 4],
       ['contacts', 5],
@@ -31,6 +31,25 @@ describe('Repository example seeds', () => {
     ] as const) {
       expect(await repository(f.api, key).count()).toBe(count);
     }
+    const findManyRecords = await f.api
+      .repository('repositoryExampleFindManyRecords')
+      .findMany({ limit: 100 });
+    expect(findManyRecords).toHaveLength(24);
+    expect(findManyRecords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'find-many-01',
+          sequence: 1,
+          title: 'FindMany record 01',
+          category: 'alpha',
+        }),
+        expect.objectContaining({
+          id: 'find-many-24',
+          sequence: 24,
+          category: 'gamma',
+        }),
+      ]),
+    );
     const orders = repository(f.api, 'orders');
     const paid = await orders.findOne({
       filter: { id: 'demo-order-1' },
@@ -97,7 +116,7 @@ describe('Repository example seeds', () => {
       filter: { id: 'existing-product' },
       values: { sku: 'USER-KEYBOARD' },
     });
-    expect((await runner.run()).executed).toHaveLength(2);
+    expect((await runner.run()).executed).toHaveLength(3);
     expect(await products.count()).toBe(7);
   });
 });

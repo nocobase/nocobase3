@@ -58,7 +58,7 @@ export async function createFixture() {
   };
   router.route('/main/api', await apiRoutes.createRouter(app));
   router.get('/main/api/unrelated', (context) => context.json({ ok: true }));
-  const requests: { path: string; body: unknown }[] = [];
+  const requests: { path: string; body: unknown; accept: string | null }[] = [];
   const api = createApiClient({
     baseURL: 'http://example.test/main/api',
     headers: { 'x-test-user': 'tester' },
@@ -66,6 +66,7 @@ export async function createFixture() {
       requests.push({
         path: String(input),
         body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        accept: new Headers(init?.headers).get('accept'),
       });
       return router.fetch(new Request(input, init));
     },

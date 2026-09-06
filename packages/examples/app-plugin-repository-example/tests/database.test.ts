@@ -68,9 +68,35 @@ it('creates physical collections and relation metadata and rolls them back', asy
         nullable: false,
       }),
     );
+    const findMany = await collections.getPhysical(
+      'repositoryExampleFindManyRecords',
+    );
+    expect(findMany?.tableName).toBe('repository_example_find_many_records');
+    expect(findMany?.columns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          columnName: 'sequence',
+          dataType: 'integer',
+          nullable: false,
+        }),
+        expect.objectContaining({ columnName: 'title', nullable: false }),
+        expect.objectContaining({ columnName: 'category', nullable: false }),
+        expect.objectContaining({
+          columnName: 'description',
+          nullable: false,
+        }),
+      ]),
+    );
+    expect(findMany?.indexes).toContainEqual(
+      expect.objectContaining({
+        unique: true,
+        keys: [expect.objectContaining({ columnName: 'sequence' })],
+      }),
+    );
     const result = await migrator.rollback();
-    expect(result.rolledBack).toHaveLength(2);
+    expect(result.rolledBack).toHaveLength(3);
     for (const name of [
+      'repositoryExampleFindManyRecords',
       'repositoryExampleAtomicCounters',
       'repositoryExampleCustomers',
       'repositoryExampleContacts',

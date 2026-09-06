@@ -26,8 +26,16 @@ const names = [
   'repositoryExampleOrderItems',
   'repositoryExampleAtomicCounters',
 ];
+const findManyRepositoryName = 'repositoryExampleFindManyRecords';
 const repositoryRoutes = defineRepositoryApiRoutes({
-  repositories: names.map((name) => ({ name, actions, maxLimit: 100 })),
+  repositories: [
+    ...names.map((name) => ({ name, actions, maxLimit: 100 })),
+    {
+      name: findManyRepositoryName,
+      actions: ['findMany'],
+      maxLimit: 100,
+    },
+  ],
 });
 
 // This example uses a shared workspace: every signed-in user can manage its
@@ -40,6 +48,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       for (const action of actions)
         router.use(`/${name}:${action}`, authentication.required());
     }
+    router.use(
+      `/${findManyRepositoryName}:findMany`,
+      authentication.required(),
+    );
     router.route('/', await repositoryRoutes.createRouter(app));
     router.route('/', await aggregateRoutes.createRouter(app));
     return router;

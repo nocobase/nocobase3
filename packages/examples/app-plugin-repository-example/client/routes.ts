@@ -5,6 +5,12 @@ import {
 const routes: readonly AppClientRouteContribution[] = [
   defineAppRoutes([
     {
+      name: 'find-many',
+      path: '/repository-example/find-many',
+      auth: 'required',
+      componentLoader: () => import('./pages/find-many-page.js'),
+    },
+    {
       name: 'aggregate',
       path: '/repository-example/aggregate',
       auth: 'required',
