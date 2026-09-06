@@ -949,7 +949,7 @@ describe('DatabaseManager', () => {
       user: 'sa',
       password: 'secret',
       encrypt: true,
-      options: { trustServerCertificate: true },
+      options: { lowerCaseGuids: true, trustServerCertificate: true },
     });
   });
 

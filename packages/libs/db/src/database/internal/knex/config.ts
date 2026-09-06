@@ -242,6 +242,7 @@ function resolveMssqlConnection(
     password: config.password,
     encrypt: config.encrypt ?? false,
     options: {
+      lowerCaseGuids: true,
       trustServerCertificate: config.trustServerCertificate ?? false,
     },
   });

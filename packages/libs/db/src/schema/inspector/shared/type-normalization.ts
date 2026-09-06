@@ -13,6 +13,7 @@ export function normalizePhysicalDataType(
   const base = type.replace(/\(.*/, '').trim();
 
   if (dialect === 'mssql') {
+    if (/^(n?varchar)\(max\)$/.test(type)) return 'text';
     if (base === 'bit') return 'boolean';
     if (base === 'uniqueidentifier') return 'uuid';
     if (base === 'timestamp' || base === 'rowversion') return 'blob';
@@ -24,6 +25,8 @@ export function normalizePhysicalDataType(
     if (base === 'money' || base === 'smallmoney') return 'decimal';
     if (base === 'float') return 'double';
   }
+  // Oracle FLOAT is a decimal NUMBER subtype, not an IEEE binary float.
+  if (dialect === 'oracle' && base === 'float') return 'decimal';
 
   if (/^(smallint|integer|int|int2|int4|mediumint|tinyint)/.test(base)) {
     return 'integer';

@@ -139,7 +139,13 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     definition: TableSchemaDefinition,
   ): void {
     for (const column of definition.columns) {
-      this.buildColumn(table, column);
+      this.buildColumn(
+        table,
+        column,
+        definition.constraints.some(
+          (constraint) => constraint.type === 'primary',
+        ),
+      );
     }
     for (const constraint of definition.constraints) {
       this.buildConstraint(table, constraint);
@@ -186,6 +192,7 @@ export class KnexSchemaAdapter implements SchemaAdapter {
   private buildColumn(
     table: Knex.CreateTableBuilder | Knex.AlterTableBuilder,
     column: ColumnSchemaDefinition,
+    tablePrimaryKey: boolean = false,
   ): Knex.ColumnBuilder {
     let builder: Knex.ColumnBuilder;
     const nativeType = column.db?.nativeType;
@@ -205,8 +212,8 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     } else if (column.autoIncrement || column.type === 'increments') {
       builder =
         column.type === 'bigInt'
-          ? table.bigIncrements(column.name)
-          : table.increments(column.name);
+          ? table.bigIncrements(column.name, { primaryKey: !tablePrimaryKey })
+          : table.increments(column.name, { primaryKey: !tablePrimaryKey });
     } else {
       switch (column.type) {
         case 'integer':
@@ -243,7 +250,10 @@ export class KnexSchemaAdapter implements SchemaAdapter {
           builder = table.date(column.name);
           break;
         case 'time':
-          builder = table.time(column.name);
+          builder =
+            this.dialect === 'oracle'
+              ? table.string(column.name, 16)
+              : table.time(column.name);
           break;
         case 'datetime':
           builder = table.datetime(column.name);
@@ -280,6 +290,7 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     }
     if (
       column.primaryKey &&
+      !tablePrimaryKey &&
       (!column.autoIncrement || this.dialect === 'oracle')
     ) {
       builder.primary();

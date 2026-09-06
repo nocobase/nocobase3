@@ -13,6 +13,68 @@ import type {
 } from '../../../src/schema/inspector/types.js';
 
 describe('CollectionResolver', () => {
+  it.each([
+    ['date', 'datetime', 'DATE', undefined, true],
+    ['date', 'datetime', 'timestamp', undefined, false],
+    ['time', 'string', 'varchar2(16)', 16, true],
+    ['time', 'string', 'varchar2(4)', 4, false],
+  ] as const)(
+    'validates supplemental %s against %s storage %s',
+    (logical, physical, nativeType, length, compatible) => {
+      const resolve = () =>
+        resolveCollection({
+          physical: physicalCollection({
+            tableName: 'items',
+            columns: [
+              column('value', 1, { dataType: physical, nativeType, length }),
+            ],
+          }),
+          metadata: {
+            version: 1,
+            name: 'items',
+            fields: { value: { type: logical } },
+          },
+          context: emptyContext(),
+        });
+      if (compatible)
+        expect(resolve().collection.fields).toContainEqual(
+          expect.objectContaining({ name: 'value', type: logical }),
+        );
+      else expect(resolve).toThrow(CollectionResolutionError);
+    },
+  );
+
+  it.each([
+    ['boolean', 'integer', true],
+    ['boolean', 'decimal', true],
+    ['boolean', 'string', false],
+    ['json', 'text', true],
+    ['json', 'string', true],
+    ['json', 'integer', false],
+  ] as const)(
+    'validates supplemental %s against physical %s',
+    (logical, physical, compatible) => {
+      const resolve = () =>
+        resolveCollection({
+          physical: physicalCollection({
+            tableName: 'items',
+            columns: [column('value', 1, { dataType: physical, scale: 0 })],
+          }),
+          metadata: {
+            version: 1,
+            name: 'items',
+            fields: { value: { type: logical } },
+          },
+          context: emptyContext(),
+        });
+      if (compatible)
+        expect(resolve().collection.fields).toContainEqual(
+          expect.objectContaining({ name: 'value', type: logical }),
+        );
+      else expect(resolve).toThrow(CollectionResolutionError);
+    },
+  );
+
   it('exposes a portable logical unique constraint for a plain unique index', () => {
     const result = resolveCollection({
       physical: physicalCollection({

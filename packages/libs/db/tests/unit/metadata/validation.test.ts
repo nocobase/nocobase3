@@ -193,6 +193,27 @@ describe('validateCollectionMetadataDocument', () => {
     );
   });
 
+  it('accepts only supported supplemental logical types', () => {
+    for (const type of ['boolean', 'json', 'date', 'time']) {
+      expect(
+        validateCollectionMetadataDocument({
+          version: 1,
+          name: 'items',
+          fields: { value: { type } },
+        }).fields?.value,
+      ).toEqual({ type });
+    }
+    for (const type of ['relation', 'integer', null, 1, {}]) {
+      expect(() =>
+        validateCollectionMetadataDocument({
+          version: 1,
+          name: 'items',
+          fields: { value: { type } },
+        }),
+      ).toThrow();
+    }
+  });
+
   it('validates relation types, targets, references, and unknown properties', () => {
     expectIssues(
       {

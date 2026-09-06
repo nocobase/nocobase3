@@ -281,7 +281,10 @@ describe('SchemaInspector type normalization', () => {
     expect(normalizePhysicalDataType('mssql', 'uniqueidentifier')).toBe('uuid');
     expect(normalizePhysicalDataType('mssql', 'datetime2(3)')).toBe('datetime');
     expect(normalizePhysicalDataType('mssql', 'rowversion')).toBe('blob');
-    expect(normalizePhysicalDataType('mssql', 'nvarchar(max)')).toBe('string');
+    expect(normalizePhysicalDataType('mssql', 'nvarchar(max)')).toBe('text');
+    expect(normalizePhysicalDataType('mssql', 'varchar(max)')).toBe('text');
+    expect(normalizePhysicalDataType('mssql', 'nvarchar(255)')).toBe('string');
+    expect(normalizePhysicalDataType('oracle', 'float(126)')).toBe('decimal');
   });
 
   it('preserves default expressions while parsing safe literals', () => {

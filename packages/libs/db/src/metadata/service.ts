@@ -7,6 +7,7 @@ import type { CollectionMetadataStore } from './document-store.js';
 import type { CollectionMetadataStoreCapabilities } from './document-store.js';
 import type {
   CollectionMetadataDocument,
+  FieldMetadata,
   RelationMetadata,
   StoredCollectionMetadata,
 } from './document.js';
@@ -22,6 +23,7 @@ export interface CollectionMetadataPropertiesPatch {
 }
 
 export interface CollectionFieldMetadataPatch {
+  readonly type?: FieldMetadata['type'] | null;
   readonly title?: string | null;
   readonly description?: string | null;
 }
@@ -166,7 +168,7 @@ export class CollectionMetadataService {
     options: UpdateCollectionMetadataOptions = {},
   ): Promise<StoredCollectionMetadata | undefined> {
     validateName(field, 'field');
-    validatePatch(patch, ['title', 'description']);
+    validatePatch(patch, ['type', 'title', 'description']);
     validateNullableString(patch.title, 'title');
     validateNullableString(patch.description, 'description');
     return this.mutate(
@@ -176,6 +178,7 @@ export class CollectionMetadataService {
       (document) => {
         const fields = cloneRecord(document.fields);
         const metadata = { ...(getRecordEntry(fields, field) ?? {}) };
+        applyNullableProperty(metadata, 'type', patch.type);
         applyNullableProperty(metadata, 'title', patch.title);
         applyNullableProperty(metadata, 'description', patch.description);
         if (Object.keys(metadata).length === 0) delete fields[field];

@@ -16,6 +16,8 @@ export interface CollectionMetadataDocument {
 }
 
 export interface FieldMetadata {
+  /** Explicit semantic types whose physical representation is ambiguous. */
+  type?: 'boolean' | 'json' | 'date' | 'time';
   title?: string;
   description?: string;
 }

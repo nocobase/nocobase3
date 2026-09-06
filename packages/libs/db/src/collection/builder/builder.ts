@@ -1394,8 +1394,21 @@ async function syncFieldMetadata(
     }
     return;
   }
-  if (changes.title !== undefined || changes.description !== undefined) {
+  if (
+    changes.type !== undefined ||
+    changes.title !== undefined ||
+    changes.description !== undefined
+  ) {
     await service.updateField(collection, field.name, {
+      type:
+        changes.type === undefined
+          ? undefined
+          : field.type === 'boolean' ||
+              field.type === 'json' ||
+              field.type === 'date' ||
+              field.type === 'time'
+            ? field.type
+            : null,
       title: changes.title,
       description: changes.description,
     });

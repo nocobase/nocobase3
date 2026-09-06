@@ -20,17 +20,17 @@ description: 使用 CollectionMetadataService 更新 Collection、Field 和 Rela
 
 ## API 分组
 
-| API                                                 | 用途                             |
-| --------------------------------------------------- | -------------------------------- |
-| `capabilities`                                      | 读取 Store 可写性和并发能力      |
-| `get(name)`                                         | 读取文档及 revision              |
-| `replaceDocument(document, options?)`               | 替换规范化完整文档               |
-| `removeDocument(name, options?)`                    | 删除一个文档                     |
-| `updateCollection(name, patch, options?)`           | 更新 naming、title、description  |
-| `updateField(collection, field, patch, options?)`   | 更新字段 title、description      |
-| `removeField(collection, field, options?)`          | 删除同名 Field/Relation Metadata |
-| `setRelation(collection, name, relation, options?)` | 新增或替换 relation              |
-| `removeRelation(collection, name, options?)`        | 删除 relation                    |
+| API                                                 | 用途                                      |
+| --------------------------------------------------- | ----------------------------------------- |
+| `capabilities`                                      | 读取 Store 可写性和并发能力               |
+| `get(name)`                                         | 读取文档及 revision                       |
+| `replaceDocument(document, options?)`               | 替换规范化完整文档                        |
+| `removeDocument(name, options?)`                    | 删除一个文档                              |
+| `updateCollection(name, patch, options?)`           | 更新 naming、title、description           |
+| `updateField(collection, field, patch, options?)`   | Patch logical type, title and description |
+| `removeField(collection, field, options?)`          | 删除同名 Field/Relation Metadata          |
+| `setRelation(collection, name, relation, options?)` | 新增或替换 relation                       |
+| `removeRelation(collection, name, options?)`        | 删除 relation                             |
 
 ## 带 revision 更新
 
@@ -50,6 +50,21 @@ if (current) {
 如果另一个写入者已经更新文档，revision 不匹配会抛出 `METADATA_CONFLICT`。重新读取并基于新文档决定是否重试，不要盲目覆盖。
 
 ## 与 Builder 的边界
+
+Supplemental types can also be patched without DDL:
+
+```ts
+await connection.collectionMetadata.updateField('events', 'enabled', {
+  type: 'boolean',
+});
+
+// Remove the supplement and return to the inspected physical type.
+await connection.collectionMetadata.updateField('events', 'enabled', {
+  type: null,
+});
+```
+
+An omitted `type` preserves the existing supplement. The service checks physical compatibility before persisting a patch; an incompatible type does not replace the stored document. See [the logical type matrix](../reference/collection-metadata-document.md#supplemental-logical-types).
 
 - 只更新 title、description 或应用 relation：使用 Metadata Service。
 - 创建、重命名或删除物理 Collection/Field：使用 Builder，业务演进放在 Migration。

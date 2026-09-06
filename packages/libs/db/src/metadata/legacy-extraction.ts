@@ -249,7 +249,14 @@ function extractLegacyField(
     return;
   }
 
-  const metadata = pruneUndefined({
+  const metadata = pruneUndefined<FieldMetadata>({
+    type:
+      input.type === 'boolean' ||
+      input.type === 'json' ||
+      input.type === 'date' ||
+      input.type === 'time'
+        ? input.type
+        : undefined,
     title: readLegacyOptionalString(input, 'title', path, diagnostics),
     description: readLegacyOptionalString(
       input,

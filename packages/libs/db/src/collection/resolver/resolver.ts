@@ -389,6 +389,32 @@ function applyFieldMetadata(
     }
     field.title = fieldMetadata.title;
     field.description = fieldMetadata.description;
+    if (fieldMetadata.type !== undefined) {
+      const compatible =
+        field.type === fieldMetadata.type ||
+        (fieldMetadata.type === 'time' &&
+          field.type === 'string' &&
+          (field.length ?? 0) >= 8) ||
+        (fieldMetadata.type === 'date' &&
+          field.type === 'datetime' &&
+          String(field.db?.nativeType).toLowerCase() === 'date') ||
+        (fieldMetadata.type === 'boolean' &&
+          (field.type === 'integer' ||
+            (field.type === 'decimal' && field.scale === 0))) ||
+        (fieldMetadata.type === 'json' &&
+          (field.type === 'text' || field.type === 'string'));
+      if (!compatible) {
+        issues.push(
+          issue(
+            'COLLECTION_SCHEMA_DRIFT',
+            ['metadata', 'fields', name, 'type'],
+            `Logical type "${fieldMetadata.type}" is incompatible with physical type "${field.type}" for Field "${name}".`,
+          ),
+        );
+      } else {
+        field.type = fieldMetadata.type;
+      }
+    }
     pruneUndefined(field);
   }
 }

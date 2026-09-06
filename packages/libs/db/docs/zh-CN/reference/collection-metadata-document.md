@@ -5,18 +5,46 @@ description: 定义和校验补充 Collection Metadata，并选择公开 Store�
 
 # Collection Metadata Document 用法
 
-`CollectionMetadataDocument` 保存物理 Schema 无法表达的补充信息。表、列、类型、默认值、索引和约束仍以数据库物理 Schema 为准，不应写入 Metadata 文档。
+`CollectionMetadataDocument` supplements the physical schema. Tables, columns, native types, defaults, indexes and constraints remain database-owned facts. An optional field `type` preserves explicitly declared logical semantics where the physical representation is ambiguous; it does not override incompatible storage.
 
-| 内容                    | 用途                                  |
-| ----------------------- | ------------------------------------- |
-| `version`               | 选择文档格式；当前只接受版本 1        |
-| `name`                  | 标识逻辑 Collection                   |
-| `naming`                | 补充 Collection 级命名覆盖            |
-| `title` / `description` | 描述 Collection 的应用语义            |
-| `fields`                | 按逻辑字段名补充 title 和 description |
-| `relations`             | 按逻辑名称声明 relation 及其应用信息  |
+| 内容                    | 用途                                                                   |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `version`               | 选择文档格式；当前只接受版本 1                                         |
+| `name`                  | 标识逻辑 Collection                                                    |
+| `naming`                | 补充 Collection 级命名覆盖                                             |
+| `title` / `description` | 描述 Collection 的应用语义                                             |
+| `fields`                | Supplemental logical type, title and description by logical field name |
+| `relations`             | 按逻辑名称声明 relation 及其应用信息                                   |
 
 Relation 支持的类型和引用属性以 `RelationMetadata` 声明为准。不要在文档里复制物理 Schema 或自定义物理名称。
+
+## Supplemental logical types
+
+`FieldMetadata.type` accepts only `boolean`, `json`, `date`, and `time`.
+
+| Logical type | Compatible inspected storage                                          |
+| ------------ | --------------------------------------------------------------------- |
+| `boolean`    | Boolean, integer, or decimal with scale zero                          |
+| `json`       | JSON, text, or string                                                 |
+| `date`       | Date, or datetime whose native type is Oracle `DATE`                  |
+| `time`       | Time, or string with a declared capacity of at least eight characters |
+
+Builder persists these explicit declarations on create/add/alter and removes them when a field changes to another type or is dropped. For example, `c.boolean('enabled')` retains its meaning on MySQL; an external `TINYINT(1)` without metadata remains an integer. Oracle time fields created by Builder use `VARCHAR2(16)` because Oracle has no standalone SQL `TIME` type.
+
+```ts
+const metadata = defineCollectionMetadata({
+  version: 1,
+  name: 'events',
+  fields: {
+    enabled: { type: 'boolean' },
+    payload: { type: 'json' },
+    day: { type: 'date' },
+    startsAt: { type: 'time' },
+  },
+});
+```
+
+The document validator checks the allowed type names. Collection resolution additionally checks compatibility with inspected columns and reports `COLLECTION_SCHEMA_DRIFT` for incompatible storage. Metadata does not validate existing row contents, create physical check constraints, or define a new BigInt/Decimal transport policy. Callers must ensure external column data satisfies the declared logical semantics.
 
 ## 定义辅助
 
@@ -37,6 +65,7 @@ const metadata = defineCollectionMetadata({
       type: 'belongsTo',
       target: 'customers',
       foreignKey: 'customerId',
+      targetKey: 'customerNo',
     },
   },
 });

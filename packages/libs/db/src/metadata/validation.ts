@@ -21,7 +21,7 @@ const ROOT_KEYS = new Set([
   'relations',
 ]);
 const NAMING_KEYS = new Set(['underscored', 'tablePrefix']);
-const FIELD_KEYS = new Set(['title', 'description']);
+const FIELD_KEYS = new Set(['type', 'title', 'description']);
 const OPTIMISTIC_LOCK_KEYS = new Set(['field', 'strategy']);
 const RELATION_KEYS = new Set([
   'type',
@@ -212,10 +212,32 @@ function readFields(
       continue;
     }
     checkUnknownProperties(value, FIELD_KEYS, fieldPath, issues);
+    if (
+      value.type !== undefined &&
+      value.type !== 'boolean' &&
+      value.type !== 'json' &&
+      value.type !== 'date' &&
+      value.type !== 'time'
+    ) {
+      issues.push(
+        issue(
+          'COLLECTION_METADATA_TYPE_INVALID',
+          [...fieldPath, 'type'],
+          'Supplemental field type must be boolean, json, date, or time.',
+        ),
+      );
+    }
     setRecordEntry(
       fields,
       name,
       pruneUndefined({
+        type:
+          value.type === 'boolean' ||
+          value.type === 'json' ||
+          value.type === 'date' ||
+          value.type === 'time'
+            ? value.type
+            : undefined,
         title: readOptionalString(value, 'title', fieldPath, issues),
         description: readOptionalString(
           value,

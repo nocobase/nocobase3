@@ -26,14 +26,14 @@ CollectionDefinition            完整运行时模型
 典型内容包括：
 
 - Collection 的 `title` 和 `description`；
-- Field 的 `title` 和 `description`；
+- Field title, description, and an explicitly declared [supplemental logical type](../reference/collection-metadata-document.md#supplemental-logical-types);
 - 应用层 Relation；
 - Collection 局部 naming 配置。
 
 下面这些属于物理数据库事实，不应在补充 Metadata 中复制为另一套 Schema：
 
 - 物理表、列和 View；
-- 列类型、Nullability 和默认值；
+- Native column types, nullability, and defaults;
 - Index、Unique、Foreign Key 等数据库约束；
 - 数据库对象 comment。
 
