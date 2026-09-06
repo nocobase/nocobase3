@@ -157,9 +157,10 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
       { packageName: '@nocobase/app-plugin-i18n', order: 4 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
-      { packageName: '@nocobase/app-plugin-notification', order: 7 },
+      { packageName: '@nocobase/app-plugin-mail', order: 5 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 6 },
+      { packageName: '@nocobase/app-plugin-workflow', order: 7 },
+      { packageName: '@nocobase/app-plugin-notification', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -186,6 +187,15 @@ describe('client inspection', () => {
       'sharing-rules',
       'restriction-rules',
     ]);
+    expect(inspection.devRoutes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'mail',
+          path: '/dev/mail',
+          packageName: '@nocobase/app-plugin-mail',
+        }),
+      ]),
+    );
 
     const output = formatAppClientInspection(inspection);
     expect(output).toMatch(/Config declarations/u);

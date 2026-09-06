@@ -7,6 +7,7 @@ import aiKnowledgeBase from '@nocobase/app-plugin-ai-knowledge-base/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
 import install from '@nocobase/app-plugin-install/client';
+import mail from '@nocobase/app-plugin-mail/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
 import routesExample from '@nocobase/app-plugin-routes-example/client';
@@ -25,6 +26,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   authorization(),
   i18n(),
   install(),
+  mail(),
   notificationProvider(),
   notificationInApp(),
   routesExample(),

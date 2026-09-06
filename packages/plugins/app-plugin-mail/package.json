@@ -1,0 +1,150 @@
+{
+  "name": "@nocobase/app-plugin-mail",
+  "displayName": "Mail App Plugin",
+  "description": "Provides mail sending and resumable mailbox synchronization architecture.",
+  "version": "0.0.1",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "sideEffects": false,
+  "main": "./dist/server/index.js",
+  "types": "./dist/server/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
+    },
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
+    },
+    "./server/tokens": {
+      "types": "./server/tokens.ts",
+      "import": "./server/tokens.ts"
+    },
+    "./server/types": {
+      "types": "./server/types.ts",
+      "import": "./server/types.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/components": {
+      "types": "./client/components/index.ts",
+      "import": "./client/components/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./server/tokens": {
+        "types": "./dist/server/tokens.d.ts",
+        "import": "./dist/server/tokens.js"
+      },
+      "./server/types": {
+        "types": "./dist/server/types.d.ts",
+        "import": "./dist/server/types.js"
+      },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/components": {
+        "types": "./dist/client/components/index.d.ts",
+        "import": "./dist/client/components/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "@sinclair/typebox": "catalog:",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "hono": "catalog:",
+    "lucide-react": "^0.487.0",
+    "tailwind-merge": "^3.2.0"
+  },
+  "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-plugin-authentication": "workspace:*",
+    "@nocobase/app-plugin-authorization": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
+    "@nocobase/db": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@nocobase/i18n": "workspace:*",
+    "@nocobase/queue": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "shadcn": "^4.13.1",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "^1.2.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
