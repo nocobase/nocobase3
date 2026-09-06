@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import { sqliteAffinity } from '../../../inspector/shared/column-capabilities.js';
 import {
   BaseSchemaInspector,
   type NormalizedPhysicalCollectionListOptions,
@@ -98,6 +99,15 @@ export class SqliteSchemaInspector extends BaseSchemaInspector {
     const columns = rawRows<SqliteColumnRow>(
       await knex.raw('select * from pragma_table_xinfo(?)', [row.name]),
     );
+    const tableInfo =
+      row.type === 'table'
+        ? rawRows<{ strict: number }>(
+            await knex.raw(
+              'select strict from pragma_table_list(?) where schema = ?',
+              [row.name, 'main'],
+            ),
+          )[0]
+        : undefined;
     const primaryColumns = columns
       .filter((column) => column.pk > 0)
       .sort((left, right) => left.pk - right.pk);
@@ -134,6 +144,8 @@ export class SqliteSchemaInspector extends BaseSchemaInspector {
       schema: 'main',
       tableName: row.name,
       kind: row.type as 'table' | 'view',
+      strict:
+        tableInfo === undefined ? undefined : Number(tableInfo.strict) === 1,
       viewDefinition:
         row.type === 'view' ? extractSqliteViewDefinition(row.sql) : undefined,
       columns: columns
@@ -146,6 +158,7 @@ export class SqliteSchemaInspector extends BaseSchemaInspector {
             ordinalPosition: column.cid + 1,
             dataType: normalizePhysicalDataType('sqlite', column.type),
             nativeType: column.type,
+            affinity: sqliteAffinity(column.type),
             nullable: column.notnull === 0 && column.pk === 0,
             default: parseColumnDefault(column.dflt_value),
             autoIncrement: column.name === autoIncrementColumn,

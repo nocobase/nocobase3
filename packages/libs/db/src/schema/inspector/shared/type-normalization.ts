@@ -22,10 +22,18 @@ export function normalizePhysicalDataType(
     if (base === 'image') return 'blob';
     if (base === 'ntext') return 'text';
     if (base === 'money' || base === 'smallmoney') return 'decimal';
-    if (base === 'float') return 'double';
+    if (base === 'float')
+      return Number(type.match(/\((\d+)\)/)?.[1] ?? 53) <= 24
+        ? 'float'
+        : 'double';
   }
   // Oracle FLOAT is a decimal NUMBER subtype, not an IEEE binary float.
   if (dialect === 'oracle' && base === 'float') return 'decimal';
+  if (dialect === 'postgres' && base === 'bpchar') return 'char';
+  // PostgreSQL catalog "char" is an internal type, not SQL CHAR(n)/bpchar.
+  if (dialect === 'postgres' && (type === 'char' || type === '"char"'))
+    return 'native';
+  if (['char', 'character', 'nchar'].includes(base)) return 'char';
 
   if (
     /^(smallint|integer|int|int2|int4|mediumint|tinyint)(?:\s+unsigned)?$/.test(
@@ -37,15 +45,11 @@ export function normalizePhysicalDataType(
   if (/^(bigint|int8)/.test(base)) {
     return 'bigInt';
   }
-  if (
-    /^(varchar|varchar2|character varying|character|char|nvarchar|nvarchar2|nchar)/.test(
-      base,
-    )
-  ) {
+  if (/^(varchar|varchar2|character varying|nvarchar|nvarchar2)$/.test(base)) {
     return 'string';
   }
   if (
-    /^(text|tinytext|mediumtext|longtext|citext|clob|nclob|long)/.test(base)
+    /^(text|tinytext|mediumtext|longtext|citext|clob|nclob|long)$/.test(base)
   ) {
     return 'text';
   }

@@ -429,7 +429,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
       expect(
         result?.columns.find((column) => column.columnName === 'flag'),
       ).toMatchObject({
-        dataType: 'integer',
+        dataType: 'decimal',
         nativeType: 'NUMBER(1,0)',
       });
       expect(

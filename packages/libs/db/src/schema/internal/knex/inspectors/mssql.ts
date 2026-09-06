@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import { numericCapabilities } from '../../../inspector/shared/column-capabilities.js';
 import {
   BaseSchemaInspector,
   type NormalizedPhysicalCollectionListOptions,
@@ -37,6 +38,7 @@ interface MssqlCollectionRow {
 }
 
 interface MssqlColumnRow {
+  readonly collation_name: string | null;
   readonly column_name: string;
   readonly column_id: number;
   readonly type_name: string;
@@ -174,6 +176,18 @@ export class MssqlSchemaInspector extends BaseSchemaInspector {
           ordinalPosition: Number(column.column_id),
           dataType: normalizePhysicalDataType('mssql', nativeType),
           nativeType,
+          ...numericCapabilities('mssql', nativeType),
+          lengthUnit:
+            mssqlColumnLength(column) === undefined
+              ? undefined
+              : column.type_name.toLowerCase().startsWith('n')
+                ? ('utf16CodeUnits' as const)
+                : ('bytes' as const),
+          maxByteLength:
+            mssqlColumnLength(column) === undefined
+              ? undefined
+              : Number(column.max_length),
+          collation: optionalString(column.collation_name),
           nativeTypeSchema: truthy(column.is_user_defined)
             ? column.type_schema
             : undefined,
@@ -342,6 +356,7 @@ export class MssqlSchemaInspector extends BaseSchemaInspector {
             schema_name(t.schema_id) as type_schema,
             t.is_user_defined,
             c.max_length,
+            c.collation_name,
             c.precision,
             c.scale,
             c.is_nullable,
@@ -626,9 +641,7 @@ function mssqlColumnLength(column: MssqlColumnRow): number | undefined {
 }
 
 function mssqlPrecision(column: MssqlColumnRow): number | undefined {
-  return ['decimal', 'numeric', 'float', 'real'].includes(
-    column.type_name.toLowerCase(),
-  )
+  return ['decimal', 'numeric'].includes(column.type_name.toLowerCase())
     ? numberValue(column.precision)
     : undefined;
 }

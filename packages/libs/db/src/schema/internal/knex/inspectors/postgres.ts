@@ -15,6 +15,7 @@ import {
   parseColumnDefault,
   temporalFractionalSecondsPrecision,
 } from '../../../inspector/shared/type-normalization.js';
+import { numericCapabilities } from '../../../inspector/shared/column-capabilities.js';
 import type {
   PhysicalCheckConstraintSchema,
   PhysicalCollectionIdentifier,
@@ -38,6 +39,9 @@ interface PostgresCollectionRow {
 }
 
 interface PostgresColumnRow {
+  readonly collation: string | null;
+  readonly collation_schema: string | null;
+  readonly character_set: string | null;
   readonly attnum: number;
   readonly column_name: string;
   readonly native_type: string;
@@ -131,6 +135,9 @@ export class PostgresSchemaInspector extends BaseSchemaInspector {
             pg_catalog.format_type(a.atttypid, a.atttypmod) as native_type,
             t.typname as native_type_name,
             tn.nspname as native_type_schema,
+            co.collname as collation,
+            cn.nspname as collation_schema,
+            case when t.typcategory = 'S' then current_setting('server_encoding') end as character_set,
             not a.attnotnull as nullable,
             pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) as default_expression,
             a.attidentity as identity_kind,
@@ -139,6 +146,8 @@ export class PostgresSchemaInspector extends BaseSchemaInspector {
           from pg_catalog.pg_attribute a
           join pg_catalog.pg_type t on t.oid = a.atttypid
           join pg_catalog.pg_namespace tn on tn.oid = t.typnamespace
+          left join pg_catalog.pg_collation co on co.oid = a.attcollation
+          left join pg_catalog.pg_namespace cn on cn.oid = co.collnamespace
           left join pg_catalog.pg_attrdef ad
             on ad.adrelid = a.attrelid and ad.adnum = a.attnum
           where a.attrelid = ?::oid
@@ -176,6 +185,15 @@ export class PostgresSchemaInspector extends BaseSchemaInspector {
           ),
           nativeType: column.native_type,
           nativeTypeSchema: column.native_type_schema,
+          ...numericCapabilities('postgres', column.native_type_name),
+          lengthUnit:
+            modifiers.length !== undefined &&
+            ['bpchar', 'varchar'].includes(column.native_type_name)
+              ? ('characters' as const)
+              : undefined,
+          collation: optionalString(column.collation),
+          collationSchema: optionalString(column.collation_schema),
+          characterSet: optionalString(column.character_set),
           nullable: column.nullable,
           default: parseColumnDefault(defaultExpression),
           autoIncrement:

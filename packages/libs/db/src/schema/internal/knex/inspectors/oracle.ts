@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import { numericCapabilities } from '../../../inspector/shared/column-capabilities.js';
 import {
   BaseSchemaInspector,
   type NormalizedPhysicalCollectionListOptions,
@@ -223,8 +224,18 @@ export class OracleSchemaInspector extends BaseSchemaInspector {
         return {
           columnName: column.column_name,
           ordinalPosition: Number(column.column_id),
-          dataType: oracleDataType(column.data_type, precision, scale),
+          dataType: normalizePhysicalDataType('oracle', column.data_type),
           nativeType,
+          ...numericCapabilities('oracle', nativeType),
+          lengthUnit:
+            column.char_used === 'B'
+              ? ('bytes' as const)
+              : column.char_used === 'C'
+                ? ('characters' as const)
+                : undefined,
+          maxByteLength: /^(N?VARCHAR2|N?CHAR)$/i.test(column.data_type)
+            ? numberValue(column.data_length)
+            : undefined,
           nativeTypeSchema: optionalString(column.data_type_owner),
           nullable: column.nullable === 'Y',
           default: generated
@@ -235,8 +246,9 @@ export class OracleSchemaInspector extends BaseSchemaInspector {
             knexAutoIncrementColumns.has(column.column_name),
           length: oracleColumnLength(column),
           precision:
+            column.data_type.toUpperCase() !== 'FLOAT' &&
             temporalFractionalSecondsPrecision('oracle', nativeType) ===
-            undefined
+              undefined
               ? precision
               : undefined,
           scale:
@@ -731,22 +743,12 @@ function isUnavailableOracleMetadataApi(error: unknown): boolean {
   );
 }
 
-function oracleDataType(
-  nativeType: string,
-  precision: number | undefined,
-  scale: number | undefined,
-): ReturnType<typeof normalizePhysicalDataType> {
-  if (nativeType.toUpperCase() === 'NUMBER' && (scale ?? 0) === 0) {
-    if (precision !== undefined && precision <= 9) return 'integer';
-    if (precision !== undefined && precision <= 18) return 'bigInt';
-  }
-  return normalizePhysicalDataType('oracle', nativeType);
-}
-
 function oracleNativeType(column: OracleColumnRow): string {
   const type = column.data_type;
   const precision = numberValue(column.data_precision);
   const scale = numberValue(column.data_scale);
+  if (type.toUpperCase() === 'FLOAT')
+    return precision === undefined ? type : `${type}(${precision})`;
   if (precision !== undefined) {
     return scale === undefined
       ? `${type}(${precision})`
@@ -754,13 +756,15 @@ function oracleNativeType(column: OracleColumnRow): string {
   }
   const length = oracleColumnLength(column);
   return length !== undefined && /^(N?VARCHAR2|N?CHAR|RAW)$/iu.test(type)
-    ? `${type}(${length})`
+    ? `${type}(${length}${/^(VARCHAR2|CHAR)$/i.test(type) && column.char_used ? (column.char_used === 'B' ? ' BYTE' : ' CHAR') : ''})`
     : type;
 }
 
 function oracleColumnLength(column: OracleColumnRow): number | undefined {
   return /^(N?VARCHAR2|N?CHAR)$/iu.test(column.data_type)
-    ? numberValue(column.char_length)
+    ? numberValue(
+        column.char_used === 'B' ? column.data_length : column.char_length,
+      )
     : undefined;
 }
 

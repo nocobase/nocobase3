@@ -46,6 +46,7 @@ export interface ScanPhysicalCollectionsOptions {
 export type PhysicalDataType =
   | 'integer'
   | 'bigInt'
+  | 'char'
   | 'string'
   | 'text'
   | 'boolean'
@@ -82,6 +83,17 @@ export interface PhysicalColumnSchema {
   readonly autoIncrement: boolean;
   readonly unsigned?: boolean;
   readonly length?: number;
+  /** Unit of the reported physical length, not a portable logical limit. */
+  readonly lengthUnit?: 'characters' | 'bytes' | 'utf16CodeUnits';
+  readonly maxByteLength?: number;
+  readonly characterSet?: string;
+  readonly collation?: string;
+  readonly collationSchema?: string;
+  /** SQLite declaration affinity; not a stored-value type guarantee. */
+  readonly affinity?: 'integer' | 'real' | 'numeric' | 'text' | 'blob';
+  readonly integerBits?: number;
+  /** Significant binary digits, not storage width or decimal precision. */
+  readonly binaryPrecision?: number;
   readonly precision?: number;
   readonly scale?: number;
   /** Decimal places in fractional seconds, separate from numeric precision. */
@@ -177,6 +189,8 @@ export interface PhysicalSchemaInspection {
 }
 
 export interface PhysicalCollectionSchema extends PhysicalCollectionSummary {
+  /** SQLite STRICT table status; undefined for views or unknown status. */
+  readonly strict?: boolean;
   readonly viewDefinition?: string;
   readonly columns: readonly PhysicalColumnSchema[];
   readonly primaryKey?: PhysicalPrimaryKeySchema;

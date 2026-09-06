@@ -111,6 +111,7 @@ export function resolveCollection(
     description: input.metadata?.description,
     db: pruneUndefined({
       schema: input.physical.schema,
+      strict: input.physical.strict,
       comment: input.physical.comment,
       physicalKind:
         input.physical.kind === 'partitionedTable' ||
@@ -340,6 +341,15 @@ function resolveColumn(
   name: string,
 ): FieldDefinition {
   const db = pruneUndefined({
+    physicalDataType: column.dataType,
+    lengthUnit: column.lengthUnit,
+    maxByteLength: column.maxByteLength,
+    characterSet: column.characterSet,
+    collation: column.collation,
+    collationSchema: column.collationSchema,
+    affinity: column.affinity,
+    integerBits: column.integerBits,
+    binaryPrecision: column.binaryPrecision,
     nativeType: column.nativeType,
     nativeTypeSchema: column.nativeTypeSchema,
     comment: column.comment,
@@ -357,7 +367,8 @@ function resolveColumn(
       : undefined;
   return pruneUndefined<FieldDefinition>({
     name,
-    type: column.dataType,
+    // Existing CHAR columns remain usable as strings without losing physical semantics.
+    type: column.dataType === 'char' ? 'string' : column.dataType,
     nullable: column.nullable,
     defaultValue,
     autoIncrement: column.autoIncrement,

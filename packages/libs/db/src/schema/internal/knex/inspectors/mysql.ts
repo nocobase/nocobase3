@@ -15,6 +15,7 @@ import {
   parseColumnDefault,
   temporalFractionalSecondsPrecision,
 } from '../../../inspector/shared/type-normalization.js';
+import { numericCapabilities } from '../../../inspector/shared/column-capabilities.js';
 import type {
   PhysicalCheckConstraintSchema,
   PhysicalCollectionIdentifier,
@@ -37,6 +38,9 @@ interface MysqlCollectionRow {
 }
 
 interface MysqlColumnRow {
+  readonly character_octet_length: number | null;
+  readonly character_set_name: string | null;
+  readonly collation_name: string | null;
   readonly column_name: string;
   readonly ordinal_position: number;
   readonly data_type: string;
@@ -137,6 +141,9 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
             column_default,
             extra,
             character_maximum_length,
+            character_octet_length,
+            character_set_name,
+            collation_name,
             numeric_precision,
             numeric_scale,
             column_comment,
@@ -212,6 +219,13 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           ordinalPosition: Number(column.ordinal_position),
           dataType: normalizePhysicalDataType('mysql', column.data_type),
           nativeType: column.column_type,
+          ...numericCapabilities('mysql', column.column_type),
+          lengthUnit: column.character_set_name
+            ? ('characters' as const)
+            : undefined,
+          maxByteLength: numberValue(column.character_octet_length),
+          characterSet: optionalString(column.character_set_name),
+          collation: optionalString(column.collation_name),
           nullable: column.is_nullable === 'YES',
           default: generated
             ? undefined
