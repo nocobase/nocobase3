@@ -71,4 +71,4 @@ stream 不自动给出下一页 cursor，不保证并发写入下固定快照。
 
 ## 验证依据
 
-行为覆盖见 [stream.test.ts](../../../../tests/integration/repository/methods/stream.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+行为覆盖见 [stream.test.ts](../../../../tests/integration/repository/methods/stream.test.ts) 和 [生命周期与异常清理](../../../../tests/integration/repository/methods/stream-lifecycle.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。

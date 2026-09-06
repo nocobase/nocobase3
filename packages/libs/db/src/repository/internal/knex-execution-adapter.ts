@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import type { Readable } from 'node:stream';
 import type {
   AnyFieldDefinition,
   CollectionDefinition,
@@ -93,15 +94,20 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       throw new Error('Repository stream does not support relation include.');
     }
     const { query } = await this.buildRead(plan);
-    const source = query.stream() as AsyncIterable<RepositoryRecord> & {
-      destroy(error?: Error): void;
-    };
+    const source = query.stream() as Readable & AsyncIterable<RepositoryRecord>;
+    // Knex releases the acquired connection from its close listener. Do not
+    // finish iterator cleanup while that listener can still run after pool teardown.
+    const closed = new Promise<void>((resolve) => {
+      if (source.closed) resolve();
+      else source.once('close', resolve);
+    });
     try {
       for await (const row of source) {
         yield projectRow(row, plan.fields, plan.select?.root);
       }
     } finally {
       source.destroy();
+      await closed;
     }
   }
 
