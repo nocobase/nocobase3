@@ -8,7 +8,7 @@ const zhCN: AppResource = {
     light: '浅色',
     dark: '深色',
     system: '跟随系统',
-    themes: { default: '默认', compact: '紧凑' },
+    themes: { default: '默认', compact: '紧凑', antDesign: 'Ant Design' },
   },
   app: {
     title: 'NocoBase',

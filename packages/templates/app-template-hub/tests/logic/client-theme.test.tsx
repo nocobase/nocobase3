@@ -10,6 +10,39 @@ import {
 } from '../../client/theme/index.ts';
 
 describe('app client theme', () => {
+  it('selects and restores Ant Design independently of color mode', async () => {
+    const view = render(
+      <AppThemeProvider>
+        <ThemeSettings />
+      </AppThemeProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Ant-design' }));
+    expect(document.documentElement).toHaveAttribute(
+      'data-theme',
+      'ant-design',
+    );
+    expect(document.documentElement).toHaveClass('dark');
+    expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe(
+      'ant-design',
+    );
+    await userEvent.click(screen.getByRole('radio', { name: 'Light' }));
+    view.unmount();
+    render(
+      <AppThemeProvider>
+        <ThemeSettings />
+      </AppThemeProvider>,
+    );
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute(
+        'data-theme',
+        'ant-design',
+      );
+      expect(document.documentElement).toHaveClass('light');
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+    expect(screen.getByRole('radio', { name: 'Ant-design' })).toBeChecked();
+  });
   it('omits Ocean and falls back from its saved ID to Default', async () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'ocean');
     render(

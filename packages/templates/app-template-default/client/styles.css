@@ -4,6 +4,7 @@
 @import 'shadcn/tailwind.css';
 @import './theme/themes/default.css';
 @import './theme/themes/compact.css';
+@import './theme/themes/ant-design.css';
 @source "./components/ui";
 
 @custom-variant dark (&:is(.dark *));

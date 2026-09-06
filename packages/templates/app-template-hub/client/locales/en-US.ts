@@ -8,7 +8,7 @@ const enUS = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    themes: { default: 'Default', compact: 'Compact' },
+    themes: { default: 'Default', compact: 'Compact', antDesign: 'Ant Design' },
   },
   app: {
     title: 'NocoBase',
