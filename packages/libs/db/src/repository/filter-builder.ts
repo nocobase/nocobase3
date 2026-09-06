@@ -1,3 +1,4 @@
+import { RepositoryError } from './errors.js';
 import type {
   BooleanFilterOperators,
   DateFilterOperators,
@@ -351,6 +352,13 @@ function relationCondition<TTarget extends object>(
   callback: (filter: FilterBuilder<TTarget>) => FilterNode,
 ): FilterRelationNode {
   const node = callback(new DefaultFilterBuilder<TTarget>());
+  if (typeof node !== 'object' || node === null || Array.isArray(node)) {
+    throw new RepositoryError(
+      'INVALID_FILTER',
+      'Relation Filter callbacks must return a Filter node.',
+      { path: [...path, 'filter'] },
+    );
+  }
   const filter: FilterGroupNode =
     node.kind === 'group'
       ? node

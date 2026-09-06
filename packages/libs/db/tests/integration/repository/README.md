@@ -104,6 +104,8 @@ BigInt/Decimal transport redesign stays deferred. Different database errors and 
 
 ## Runtime regression found during this work
 
+[Nested Filter validation](./relations/filter-invalid-nested.test.ts) covers relation callback returns, nested AST groups and malformed variable paths. Null callback results and non-string variable paths previously raised native TypeErrors; they now return structured diagnostics before writes.
+
 [Filter validation](./capabilities/filter-validation.test.ts) covers malformed callback/AST structures, invalid paths and numeric operands, plus unchanged physical rows/versions after rejected bulk writes. Tests exposed native TypeErrors during traversal and unknown relation quantifiers being treated as existence checks; structural validation now rejects these with INVALID_FILTER.
 
 Stream lifecycle tests exposed a delayed Knex close listener racing database pool teardown. Repository now waits for the stream close event before finishing iterator cleanup. The fix and changeset were committed separately from Builder/type coverage.

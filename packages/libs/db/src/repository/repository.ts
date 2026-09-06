@@ -1519,7 +1519,11 @@ function resolveVariable(
   context: Readonly<Record<string, unknown>> | undefined,
   path: readonly (string | number)[],
 ): unknown {
-  if (!variable.path.startsWith('$') || variable.path.length === 1) {
+  if (
+    typeof variable.path !== 'string' ||
+    !variable.path.startsWith('$') ||
+    variable.path.length === 1
+  ) {
     invalid('INVALID_CONTEXT', 'Variable paths must start with $.', { path });
   }
   let current: unknown = context;
