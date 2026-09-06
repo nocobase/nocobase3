@@ -99,7 +99,11 @@ export function createApiClient(options: CreateApiClientOptions): ApiClient {
     >(
       name: string,
     ): RemoteRepository<TRecord, TCreate, TUpdate> =>
-      createRemoteRepository<TRecord, TCreate, TUpdate>({ name, request }),
+      createRemoteRepository<TRecord, TCreate, TUpdate>({
+        name,
+        request,
+        stream,
+      }),
   };
 }
 

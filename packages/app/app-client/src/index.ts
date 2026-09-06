@@ -16,6 +16,7 @@ export {
   type ApiRequestOptions,
   type CreateApiClientOptions,
   type RemoteRepository,
+  type RemoteRepositoryQuery,
 } from '@nocobase/api-client';
 export { useClientApplication, useService } from './hooks.js';
 export type {

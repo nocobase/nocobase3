@@ -37,6 +37,12 @@ const stream = await api.stream({
 const order = await api.repository<Order>('orders').findOne({
   filter: { id: 'order-1' },
 });
+
+const orders = await api.repository<Order>('orders').findMany();
+
+for await (const order of api.repository<Order>('orders').findMany()) {
+  console.log(order);
+}
 ```
 
 Use `json` for values that the client should serialize as JSON. Use `body` for
@@ -50,3 +56,8 @@ base URL. For example, `api.repository('orders').findOne()` requests
 `POST /api/orders:findOne`. The server decides which repositories and actions
 are exposed and remains responsible for authentication, authorization,
 validation, and query limits.
+
+`findMany()` is lazy and supports one consumption mode. Await it to request a
+complete JSON array, or asynchronously iterate it to request framed NDJSON and
+process records as they arrive. A query cannot be awaited and iterated, or be
+iterated twice; create another query to execute it again.

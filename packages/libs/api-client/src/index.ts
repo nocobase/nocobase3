@@ -15,12 +15,14 @@ export {
   type RemoteRepository,
   type RemoteRepositoryAction,
   type RemoteRepositoryFilter,
+  type RemoteRepositoryQuery,
   type RemoteRepositoryReadOptions,
   type RemoteSelectAst,
   type RemoteSortAst,
   type RemoteUpdateOneOptions,
   type RepositoryApiResponse,
   type RepositoryRequest,
+  type RepositoryStream,
 } from './repository.js';
 export type {
   ApiBodyRequestOptions,
