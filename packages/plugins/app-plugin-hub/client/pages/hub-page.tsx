@@ -524,20 +524,13 @@ export default function HubPage(): ReactElement {
                 ),
                 loadConfig(selected.app.id),
               ])
-                .then(async ([response, config]) => {
+                .then(([response, config]) => {
                   setReleases(response.data);
                   const targetId = releaseId ?? response.data[0]?.id;
                   if (!targetId) return;
-                  const template = await loadReleaseConfig(
-                    selected.app.id,
-                    targetId,
-                  );
                   setDeploymentReleaseId(targetId);
-                  setDeploymentMode(template !== null ? 'file' : config.mode);
-                  setDeploymentContent(
-                    template ??
-                      (config.mode === 'file' ? (config.content ?? '') : ''),
-                  );
+                  setDeploymentMode(config.mode);
+                  setDeploymentContent('');
                   setDeploymentBaseline(config.content ?? '');
                   setDeploymentBaselineMode(config.mode);
                   setRollbackDeploymentId(undefined);
@@ -554,24 +547,16 @@ export default function HubPage(): ReactElement {
               setBusy(true);
               setError(undefined);
               void Promise.all([
-                loadReleaseConfig(selected.app.id, target.releaseId),
                 loadConfig(selected.app.id),
                 client.request<ApiResponse<ReleaseRecord>>(
                   `hub/apps/${selected.app.id}/releases/${target.releaseId}`,
                 ),
               ])
-                .then(([template, config, release]) => {
+                .then(([config, release]) => {
                   setReleases([release.data]);
                   setDeploymentReleaseId(target.releaseId);
                   setDeploymentMode(target.config.mode);
-                  setDeploymentContent(
-                    target.config.mode === 'file'
-                      ? (template ??
-                          (config.mode === 'file'
-                            ? (config.content ?? '')
-                            : ''))
-                      : '',
-                  );
+                  setDeploymentContent('');
                   setDeploymentBaseline(config.content ?? '');
                   setDeploymentBaselineMode(config.mode);
                   setRollbackDeploymentId(deploymentId);
@@ -661,31 +646,8 @@ export default function HubPage(): ReactElement {
           baselineMode={deploymentBaselineMode}
           rollback={Boolean(rollbackDeploymentId)}
           busy={busy}
-          onRelease={(nextReleaseId) => {
-            const nextRelease = selected.releases.find(
-              (item) => item.id === nextReleaseId,
-            );
-            setDeploymentReleaseId(nextReleaseId);
-            if (!nextRelease?.hasConfigTemplate) {
-              setDeploymentContent(
-                deploymentBaselineMode === 'file' ? deploymentBaseline : '',
-              );
-              return;
-            }
-            setBusy(true);
-            void loadReleaseConfig(selected.app.id, nextReleaseId)
-              .then((template) => {
-                setDeploymentContent(
-                  template ??
-                    (deploymentBaselineMode === 'file'
-                      ? deploymentBaseline
-                      : ''),
-                );
-                setDeploymentMode('file');
-              })
-              .catch((reason: unknown) => setError(readError(reason)))
-              .finally(() => setBusy(false));
-          }}
+          onRelease={setDeploymentReleaseId}
+          loadTemplate={loadReleaseConfig}
           onMode={setDeploymentMode}
           onContent={setDeploymentContent}
           onClose={() => setDeployOpen(false)}
@@ -2067,6 +2029,7 @@ function DeploymentDialog({
   rollback,
   busy,
   onRelease,
+  loadTemplate,
   onMode,
   onContent,
   onClose,
@@ -2081,6 +2044,10 @@ function DeploymentDialog({
   readonly rollback: boolean;
   readonly busy: boolean;
   readonly onRelease: (releaseId: string) => void;
+  readonly loadTemplate: (
+    appId: string,
+    releaseId: string,
+  ) => Promise<string | null>;
   readonly onMode: (mode: ConfigMode) => void;
   readonly onContent: (content: string) => void;
   readonly onClose: () => void;
@@ -2088,6 +2055,40 @@ function DeploymentDialog({
 }): ReactElement {
   const firstStep = rollback ? 1 : 0;
   const [step, setStep] = useState(firstStep);
+  const [retry, setRetry] = useState(0);
+  const [templateError, setTemplateError] = useState<string>();
+  const [loadedReleaseId, setLoadedReleaseId] = useState<string>();
+  const editingConfig = step > 0;
+  const configReady = loadedReleaseId === releaseId && releaseId !== undefined;
+  useEffect(() => {
+    if (!editingConfig || !releaseId || loadedReleaseId === releaseId) return;
+    let cancelled = false;
+    void loadTemplate(app.app.id, releaseId)
+      .then((template) => {
+        if (cancelled) return;
+        onContent(template ?? (baselineMode === 'file' ? baselineContent : ''));
+        if (!rollback) onMode(template !== null ? 'file' : baselineMode);
+        setLoadedReleaseId(releaseId);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setTemplateError(readError(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    editingConfig,
+    releaseId,
+    loadedReleaseId,
+    retry,
+    loadTemplate,
+    app.app.id,
+    baselineMode,
+    baselineContent,
+    rollback,
+    onContent,
+    onMode,
+  ]);
   const [visibleConfig, setVisibleConfig] = useState<
     'both' | 'current' | 'new'
   >('both');
@@ -2117,6 +2118,10 @@ function DeploymentDialog({
                 disabled={busy}
                 key={item.id}
                 onClick={() => {
+                  if (item.id !== releaseId) {
+                    setLoadedReleaseId(undefined);
+                    setTemplateError(undefined);
+                  }
                   onRelease(item.id);
                 }}
                 variant='ghost'
@@ -2143,6 +2148,34 @@ function DeploymentDialog({
                 </span>
               </Button>
             ))}
+          </div>
+        ) : !configReady ? (
+          <div className='min-h-80 py-6'>
+            {templateError ? (
+              <Alert className='border-destructive/30 text-destructive'>
+                <AlertCircle />
+                <AlertDescription>
+                  <p>Failed to load configuration template: {templateError}</p>
+                  <Button
+                    variant='outline'
+                    onClick={() => {
+                      setTemplateError(undefined);
+                      setRetry((value) => value + 1);
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div
+                role='status'
+                className='flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground'
+              >
+                <LoaderCircle className='size-4 animate-spin' />
+                Loading configuration template…
+              </div>
+            )}
           </div>
         ) : step === 1 ? (
           <div className='space-y-5'>
@@ -2378,16 +2411,26 @@ function DeploymentDialog({
             disabled={
               !release ||
               busy ||
-              (step === 1 && (mode === 'managed' || validationError !== null))
+              (step === 1 &&
+                (!configReady ||
+                  mode === 'managed' ||
+                  validationError !== null))
             }
-            onClick={() => setStep(step + 1)}
+            onClick={() => {
+              setTemplateError(undefined);
+              setStep(step + 1);
+            }}
           >
             Continue <ChevronRight />
           </Button>
         ) : (
           <Button
             disabled={
-              busy || !release || mode === 'managed' || validationError !== null
+              busy ||
+              !release ||
+              !configReady ||
+              mode === 'managed' ||
+              validationError !== null
             }
             onClick={onComplete}
           >
