@@ -33,6 +33,7 @@ const editorTheme = EditorView.theme({
 const commonExtensions = [basicSetup, yaml(), editorTheme];
 
 export interface ConfigMergeEditorProps {
+  readonly visiblePane?: 'both' | 'current' | 'new';
   readonly current: string;
   readonly value: string;
   readonly readOnly?: boolean;
@@ -40,6 +41,7 @@ export interface ConfigMergeEditorProps {
 }
 
 export function ConfigMergeEditor({
+  visiblePane = 'both',
   current,
   value,
   readOnly = false,
@@ -61,6 +63,7 @@ export function ConfigMergeEditor({
     const merge = new MergeView({
       parent,
       orientation: 'a-b',
+      revertControls: readOnly ? undefined : 'a-to-b',
       highlightChanges: true,
       gutter: true,
       diffConfig: { scanLimit: 1_000, timeout: 500 },
@@ -96,9 +99,14 @@ export function ConfigMergeEditor({
   useEffect(() => replaceDocument(mergeRef.current?.a, current), [current]);
   useEffect(() => replaceDocument(mergeRef.current?.b, value), [value]);
 
+  useEffect(() => {
+    mergeRef.current?.a.requestMeasure();
+    mergeRef.current?.b.requestMeasure();
+  }, [visiblePane]);
+
   return (
     <div
-      className='overflow-hidden rounded-b-xl [&_.cm-mergeView]:h-[360px] [&_.cm-mergeView]:overflow-auto [&_.cm-mergeViewEditor]:min-w-0 [&_.cm-mergeViewEditor]:basis-1/2'
+      className={`overflow-hidden rounded-b-xl [&_.cm-mergeView]:h-[360px] [&_.cm-mergeView]:overflow-auto [&_.cm-mergeViewEditor]:min-w-0 ${visiblePane === 'both' ? '[&_.cm-mergeViewEditor]:basis-1/2' : '[&_.cm-mergeViewEditor]:basis-full [&_.cm-merge-revert]:hidden'} ${visiblePane === 'new' ? '[&_.cm-mergeViewEditor:first-child]:hidden' : visiblePane === 'current' ? '[&_.cm-mergeViewEditor:last-child]:hidden' : ''}`}
       ref={parentRef}
     />
   );

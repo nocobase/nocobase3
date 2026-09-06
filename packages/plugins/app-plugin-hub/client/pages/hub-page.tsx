@@ -3,6 +3,9 @@ import {
   Archive,
   ArrowLeft,
   Boxes,
+  Columns2,
+  PanelLeft,
+  PanelRight,
   Check,
   ChevronRight,
   CircleStop,
@@ -563,7 +566,10 @@ export default function HubPage(): ReactElement {
                   setDeploymentMode(target.config.mode);
                   setDeploymentContent(
                     target.config.mode === 'file'
-                      ? (template ?? config.content ?? '')
+                      ? (template ??
+                          (config.mode === 'file'
+                            ? (config.content ?? '')
+                            : ''))
                       : '',
                   );
                   setDeploymentBaseline(config.content ?? '');
@@ -661,14 +667,20 @@ export default function HubPage(): ReactElement {
             );
             setDeploymentReleaseId(nextReleaseId);
             if (!nextRelease?.hasConfigTemplate) {
-              setDeploymentMode(configMode);
-              setDeploymentContent(configMode === 'file' ? configContent : '');
+              setDeploymentContent(
+                deploymentBaselineMode === 'file' ? deploymentBaseline : '',
+              );
               return;
             }
             setBusy(true);
             void loadReleaseConfig(selected.app.id, nextReleaseId)
               .then((template) => {
-                setDeploymentContent(template ?? '');
+                setDeploymentContent(
+                  template ??
+                    (deploymentBaselineMode === 'file'
+                      ? deploymentBaseline
+                      : ''),
+                );
                 setDeploymentMode('file');
               })
               .catch((reason: unknown) => setError(readError(reason)))
@@ -2076,7 +2088,9 @@ function DeploymentDialog({
 }): ReactElement {
   const firstStep = rollback ? 1 : 0;
   const [step, setStep] = useState(firstStep);
-  const [configView, setConfigView] = useState<'edit' | 'compare'>('edit');
+  const [visibleConfig, setVisibleConfig] = useState<
+    'both' | 'current' | 'new'
+  >('both');
   const release = app.releases.find((item) => item.id === releaseId);
   const validationError =
     mode === 'file' ? validateConfigDocument(content) : null;
@@ -2103,7 +2117,6 @@ function DeploymentDialog({
                 disabled={busy}
                 key={item.id}
                 onClick={() => {
-                  setConfigView('edit');
                   onRelease(item.id);
                 }}
                 variant='ghost'
@@ -2157,19 +2170,13 @@ function DeploymentDialog({
                   <Alert className='border-blue-500/25 bg-blue-500/5'>
                     <Info className='size-4 shrink-0 text-blue-600' />
                     <AlertDescription>
-                      A configuration template from Release v{release.version}{' '}
-                      has been loaded. Replace example values, placeholders,
-                      credentials, and secrets with deployment-ready values
-                      before continuing.
+                      The Release template contains example configuration. If
+                      you use it, replace example values, credentials, and
+                      secrets with deployment-ready values.
                     </AlertDescription>
                   </Alert>
                 ) : null}
-                <Tabs
-                  onValueChange={(value) =>
-                    setConfigView(value as 'edit' | 'compare')
-                  }
-                  value={configView}
-                >
+                <div>
                   <div className='overflow-hidden rounded-xl border'>
                     <div className='flex flex-wrap items-end justify-between gap-3 border-b bg-muted/20 px-4 pt-3'>
                       <div className='pb-3'>
@@ -2178,30 +2185,51 @@ function DeploymentDialog({
                           Deployment configuration
                         </div>
                         <p className='mt-1 text-xs text-muted-foreground'>
-                          {release?.hasConfigTemplate
-                            ? `Based on the template from Release v${release.version}`
-                            : app.app.currentDeploymentId
-                              ? 'Based on the current application configuration'
-                              : 'No Release template is available'}
+                          Edit the configuration that will be used for this
+                          deployment.
                         </p>
                       </div>
-                      <TabsList className='w-auto shrink-0'>
-                        <TabsTrigger className='pb-2' value='edit'>
-                          Edit
-                        </TabsTrigger>
-                        <TabsTrigger className='pb-2' value='compare'>
-                          Compare
-                        </TabsTrigger>
-                      </TabsList>
+                      <div className='pb-3'>
+                        <div
+                          role='group'
+                          aria-label='Configuration layout'
+                          className='inline-flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5'
+                        >
+                          {(
+                            [
+                              [
+                                'current',
+                                'Current configuration only',
+                                PanelLeft,
+                              ],
+                              ['both', 'Side by side', Columns2],
+                              ['new', 'New configuration only', PanelRight],
+                            ] as const
+                          ).map(([value, label, Icon]) => (
+                            <Button
+                              key={value}
+                              size='icon'
+                              variant='ghost'
+                              className={`size-7 rounded-md ${visibleConfig === value ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'}`}
+                              aria-label={label}
+                              aria-pressed={visibleConfig === value}
+                              title={label}
+                              onClick={() => setVisibleConfig(value)}
+                            >
+                              <Icon className='size-4' />
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <TabsContent value='edit'>
-                      <Suspense fallback={<ConfigEditorFallback />}>
-                        <ConfigEditor value={content} onChange={onContent} />
-                      </Suspense>
-                    </TabsContent>
-                    <TabsContent value='compare'>
-                      <div className='grid grid-cols-2 divide-x border-b bg-muted/20'>
-                        <div className='px-4 py-2.5'>
+                    <div>
+                      <div
+                        className={`grid ${visibleConfig === 'both' ? 'grid-cols-2 divide-x' : 'grid-cols-1'} border-b bg-muted/20`}
+                      >
+                        <div
+                          hidden={visibleConfig === 'new'}
+                          className='px-4 py-2.5'
+                        >
                           <p className='text-xs font-medium'>Current</p>
                           <p className='mt-0.5 text-xs text-muted-foreground'>
                             {app.app.currentDeploymentId
@@ -2209,14 +2237,20 @@ function DeploymentDialog({
                               : 'No active configuration'}
                           </p>
                         </div>
-                        <div className='px-4 py-2.5'>
+                        <div
+                          hidden={visibleConfig === 'current'}
+                          className='px-4 py-2.5'
+                        >
                           <p className='text-xs font-medium'>
-                            {release?.hasConfigTemplate
-                              ? 'New · From Release template'
-                              : 'New configuration'}
+                            New configuration
                           </p>
                           <p className='mt-0.5 text-xs text-muted-foreground'>
-                            Deployment-ready configuration · Read-only preview
+                            {release?.hasConfigTemplate
+                              ? `From Release v${release.version} template · Editable`
+                              : baselineMode === 'file' &&
+                                  app.app.currentDeploymentId
+                                ? 'From current configuration · Editable'
+                                : 'No Release template · Editable'}
                           </p>
                         </div>
                       </div>
@@ -2225,13 +2259,14 @@ function DeploymentDialog({
                           current={
                             baselineMode === 'file' ? baselineContent : ''
                           }
-                          readOnly
+                          onChange={onContent}
                           value={content}
+                          visiblePane={visibleConfig}
                         />
                       </Suspense>
-                    </TabsContent>
+                    </div>
                   </div>
-                </Tabs>
+                </div>
               </div>
             ) : null}
             {mode === 'external' ? (
@@ -2307,11 +2342,7 @@ function DeploymentDialog({
                       New configuration
                     </p>
                     <p className='mt-1 text-sm font-medium'>
-                      {rollback
-                        ? release?.hasConfigTemplate
-                          ? 'Config file · Edited Release template'
-                          : 'Config file · Reviewed for rollback'
-                        : `Config file · Release v${release?.version ?? '—'}`}
+                      {`Config file · Release v${release?.version ?? '—'}`}
                     </p>
                   </div>
                 </div>
