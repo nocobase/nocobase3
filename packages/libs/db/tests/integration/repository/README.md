@@ -69,7 +69,7 @@ Non-null hasMany currently disallows the replace action, including an unchanged 
 - Filter Builder serialization and JSON validation/binding are under unit/repository/filter; scalar operator and malformed AST matrices remain incomplete.
 - Sort Builder covers copied paths, independent null-position branches and serializable aggregate nodes; Aggregate Builder covers aliases and forged expressions.
 - Values covers variable/literal resolution, numeric operands and all seven relation Builder operations with copied operation lists.
-- Select Builder covers branch independence. Public scalar/relation/combine output types are in types/repository/select.test.ts.
+- [Select contracts](./capabilities/select.test.ts) cover omitted versus empty fields, accumulated fields, relation-only projections, empty mutation returning and malformed AST rejection before nested writes. Select Builder covers branch independence. Public scalar/relation/combine output types are in types/repository/select.test.ts.
 - Values callback/atomic type assertions have moved to types/repository/values.test.ts. Method type tests reject missing range, empty createMany and invalid selected fields.
 - Passing Vitest alone does not validate expectTypeOf or negative TypeScript assertions; run typecheck.
 
@@ -95,3 +95,5 @@ BigInt/Decimal transport redesign stays deferred. Different database errors and 
 ## Runtime regression found during this work
 
 Stream lifecycle tests exposed a delayed Knex close listener racing database pool teardown. Repository now waits for the stream close event before finishing iterator cleanup. The fix and changeset were committed separately from Builder/type coverage.
+
+Malformed Select tests exposed native TypeErrors when traversing invalid fields/includes. Repository now validates these structures before traversal and rejects them with INVALID_SELECT before executing writes.

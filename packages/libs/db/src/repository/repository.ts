@@ -1514,10 +1514,13 @@ function validateScalarSelect(
   collection: CollectionDefinition,
   select: SelectInputAst | undefined,
 ): string[] {
-  if (!select) return scalarFields(collection).map((field) => field.name);
+  if (select === undefined)
+    return scalarFields(collection).map((field) => field.name);
   if (
+    !isPlainRecord(select) ||
     select.kind !== 'select' ||
     select.version !== 1 ||
+    !isPlainRecord(select.root) ||
     select.root?.kind !== 'selection'
   ) {
     invalid('INVALID_SELECT', 'Expected a Repository Select AST version 1.', {
@@ -1533,10 +1536,31 @@ function validateScalarSelect(
       path: ['collection'],
     });
   }
+  if (select.root.fields !== undefined && !Array.isArray(select.root.fields)) {
+    invalid('INVALID_SELECT', 'Select fields must be an array.', {
+      collection: collection.name,
+      path: ['root', 'fields'],
+    });
+  }
+  if (
+    select.root.includes !== undefined &&
+    !Array.isArray(select.root.includes)
+  ) {
+    invalid('INVALID_SELECT', 'Select includes must be an array.', {
+      collection: collection.name,
+      path: ['root', 'includes'],
+    });
+  }
   const fields =
     select.root.fields ?? scalarFields(collection).map((field) => field.name);
   const seen = new Set<string>();
   for (const [index, field] of fields.entries()) {
+    if (typeof field !== 'string') {
+      invalid('INVALID_SELECT', 'Selected field names must be strings.', {
+        collection: collection.name,
+        path: ['root', 'fields', index],
+      });
+    }
     scalarField(collection, field, ['root', 'fields', index]);
     if (seen.has(field)) {
       invalid(
@@ -2007,7 +2031,11 @@ async function validateSelectInputWithRelations(
   const includes: SelectIncludeNode[] = [];
   for (const [index, node] of (select?.root.includes ?? []).entries()) {
     const path = ['root', 'includes', index] as const;
-    if (node.kind !== 'include') {
+    if (
+      !isPlainRecord(node) ||
+      node.kind !== 'include' ||
+      typeof node.relation !== 'string'
+    ) {
       invalid('INVALID_SELECT', 'Expected an include selection node.', {
         collection: collection.name,
         path,
