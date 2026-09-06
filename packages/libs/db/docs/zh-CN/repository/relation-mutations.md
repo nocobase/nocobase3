@@ -36,7 +36,191 @@ await projects.updateOne({
 
 关系输入可使用明确值或显式变量；变量仅解析字段值，不替换字段名、关系名或操作结构。完整规则见 [Values](./values.md)。
 
-示例沿用[概览](./overview.md)：`projects = db.repository('projects')`；owner 是指向 users 的可空 belongsTo，tasks 是通过可空 `tasks.projectId` 建立的 hasMany，tags 是经 projectTags 的 belongsToMany。所有字符串主键由调用方提供；被 connect 的目标必须已存在。各片段独立展示操作。
+示例沿用[概览](./overview.md)，并增加 projectProfiles：owner 是指向 users 的可空 belongsTo，profile 是通过唯一且可空的 `projectProfiles.projectId` 建立的 hasOne，tasks 是通过可空 `tasks.projectId` 建立的 hasMany，tags 是经 projectTags 建立的 belongsToMany。所有字符串主键由调用方提供；被 connect 的目标必须已存在。各片段独立展示操作。
+
+## 准备完整示例
+
+下面准备一套隔离的示例数据，后续可以直接用固定 id 验证关系写入。代码只应在空的开发／测试数据库执行一次；生产环境应将相同的固定定义写进自包含 Migration。
+
+### 建立 Schema
+
+六个 Collection 覆盖四种关系：
+
+- `projects.owner`：belongsTo
+- `projects.profile`：hasOne
+- `projects.tasks`：hasMany；`tasks.assignee` 再演示一层 belongsTo
+- `projects.tags`：通过 `projectTags` 建立 belongsToMany
+
+```ts
+await db.connection().builder.createCollections([
+  {
+    name: 'users',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('name').notNull();
+      c.string('email').unique().notNull();
+    },
+  },
+  {
+    name: 'projectProfiles',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('summary').notNull();
+      c.string('projectId').nullable();
+      c.unique(['projectId']);
+    },
+  },
+  {
+    name: 'tasks',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('title').notNull();
+      c.string('status').notNull().defaultTo('draft');
+      c.integer('points').notNull().defaultTo(0);
+      c.string('projectId').nullable();
+      c.string('assigneeId').nullable();
+      c.belongsTo('assignee', 'users').targetKey('id').foreignKey('assigneeId');
+    },
+  },
+  {
+    name: 'tags',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('label').unique().notNull();
+    },
+  },
+  {
+    name: 'projectTags',
+    definition: (c) => {
+      c.string('projectId').notNull();
+      c.string('tagId').notNull();
+      c.string('role').nullable();
+      c.unique(['projectId', 'tagId']);
+    },
+  },
+  {
+    name: 'projects',
+    definition: (c) => {
+      c.string('id').primary().notNull();
+      c.string('name').notNull();
+      c.string('status').notNull().defaultTo('draft');
+      c.string('ownerId').nullable();
+      c.belongsTo('owner', 'users').targetKey('id').foreignKey('ownerId');
+      c.hasOne('profile', 'projectProfiles')
+        .sourceKey('id')
+        .foreignKey('projectId');
+      c.hasMany('tasks', 'tasks').sourceKey('id').foreignKey('projectId');
+      c.belongsToMany('tags', 'tags')
+        .sourceKey('id')
+        .targetKey('id')
+        .through('projectTags')
+        .foreignKey('projectId')
+        .otherKey('tagId');
+    },
+  },
+]);
+```
+
+关系键全部显式声明，不依赖字段名推断。`projectProfiles.projectId` 的唯一约束保证一个项目最多有一个 profile；`projectTags` 的组合唯一约束防止同一项目重复关联同一 tag。
+
+### 写入初始化数据
+
+初始化只写标量字段，因此适合使用 `createMany()`；该方法本身不接受嵌套关系写入。这里直接写入外键和中间表记录，后续示例再用关系字段演示增量操作。
+
+```ts
+await db.repository('users').createMany({
+  values: [
+    { id: 'user-1', name: 'Ada', email: 'ada@example.com' },
+    { id: 'user-2', name: 'Bob', email: 'bob@example.com' },
+  ],
+});
+
+await db.repository('tags').createMany({
+  values: [
+    { id: 'tag-db', label: 'Database' },
+    { id: 'tag-docs', label: 'Documentation' },
+    { id: 'tag-orm', label: 'ORM' },
+  ],
+});
+
+await db.repository('projects').createMany({
+  values: [
+    {
+      id: 'project-1',
+      name: 'Repository guide',
+      status: 'draft',
+      ownerId: 'user-1',
+    },
+    {
+      id: 'project-other',
+      name: 'Other project',
+      status: 'draft',
+      ownerId: 'user-2',
+    },
+  ],
+});
+
+await db.repository('projectProfiles').createMany({
+  values: [
+    {
+      id: 'profile-current',
+      summary: 'Current project profile',
+      projectId: 'project-1',
+    },
+    {
+      id: 'profile-existing',
+      summary: 'Unassigned profile',
+      projectId: null,
+    },
+  ],
+});
+
+await db.repository('tasks').createMany({
+  values: [
+    {
+      id: 'task-existing',
+      title: 'Existing unassigned task',
+      projectId: null,
+      assigneeId: 'user-1',
+    },
+    {
+      id: 'task-edit',
+      title: 'Task to edit',
+      projectId: 'project-1',
+      assigneeId: 'user-1',
+    },
+    {
+      id: 'task-detached',
+      title: 'Task to disconnect',
+      projectId: 'project-1',
+      assigneeId: null,
+    },
+    {
+      id: 'task-obsolete',
+      title: 'Task to delete',
+      projectId: 'project-1',
+      assigneeId: null,
+    },
+    {
+      id: 'task-outside',
+      title: 'Task owned by another project',
+      projectId: 'project-other',
+      assigneeId: 'user-2',
+    },
+  ],
+});
+
+await db.repository('projectTags').createMany({
+  values: [
+    { projectId: 'project-1', tagId: 'tag-docs', role: 'secondary' },
+    { projectId: 'project-other', tagId: 'tag-orm', role: 'primary' },
+  ],
+});
+
+const projects = db.repository('projects');
+```
+
+`task-existing` 和 `profile-existing` 尚未关联，可用于 connect；`task-edit / task-detached / task-obsolete` 已属于 project-1；`task-outside` 属于另一个项目，可用于验证关系作用域。`projectTags.role` 则为 through payload 提供可观察的初始值。
 
 ## 先选对操作
 
@@ -61,7 +245,7 @@ await projects.updateOne({
 ```ts
 const result = await projects.createOne({
   values: {
-    id: 'project-1',
+    id: 'project-created',
     name: 'Repository guide',
     status: 'draft',
     owner: (owner) => owner.connect({ id: 'user-1' }),
