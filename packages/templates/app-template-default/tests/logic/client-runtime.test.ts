@@ -94,6 +94,62 @@ describe('app client runtime', () => {
       text: 'Configured application',
     });
     expect(app.refineConfig.authProvider).toBeDefined();
+    expect(app.refineConfig.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'repository-example-customers',
+          list: '/repository-example/crm',
+          meta: expect.objectContaining({
+            i18nNs: '@nocobase/app-plugin-repository-example',
+          }),
+        }),
+        expect.objectContaining({
+          name: 'repository-example-order-list',
+          list: '/repository-example/orders',
+          meta: expect.objectContaining({
+            i18nNs: '@nocobase/app-plugin-repository-example',
+          }),
+        }),
+      ]),
+    );
+    const resources = app.refineConfig.resources ?? [];
+    expect(resources).toContainEqual(
+      expect.objectContaining({
+        name: 'repository-example-atomic',
+        list: '/repository-example/atomic',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    expect(resources).toContainEqual(
+      expect.objectContaining({
+        name: 'repository-example-aggregate',
+        list: '/repository-example/aggregate',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    for (const [group, children] of [
+      [
+        'repository-example-crm',
+        ['repository-example-customers', 'repository-example-contacts'],
+      ],
+      [
+        'repository-example-orders',
+        [
+          'repository-example-order-list',
+          'repository-example-items',
+          'repository-example-products',
+        ],
+      ],
+    ] as const) {
+      expect(
+        resources.find((resource) => resource.name === group)?.list,
+      ).toBeUndefined();
+      expect(
+        resources
+          .filter((resource) => resource.meta?.parent === group)
+          .map((resource) => resource.name),
+      ).toEqual(children);
+    }
     await app.shutdown();
   });
 

@@ -133,6 +133,66 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-system-info:index',
         path: '/system-info',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:aggregate',
+        path: '/repository-example/aggregate',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:atomic',
+        path: '/repository-example/atomic',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:crm',
+        path: '/repository-example/crm',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:orders',
+        path: '/repository-example/orders',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:contacts',
+        path: '/repository-example/crm/contacts',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:items',
+        path: '/repository-example/orders/items',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:products',
+        path: '/repository-example/orders/products',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:crm-detail',
+        path: '/repository-example/crm/details/:recordId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:orders-detail',
+        path: '/repository-example/orders/details/:recordId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:contacts-detail',
+        path: '/repository-example/crm/contacts/details/:recordId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:items-detail',
+        path: '/repository-example/orders/items/details/:recordId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:products-detail',
+        path: '/repository-example/orders/products/details/:recordId',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
@@ -160,6 +220,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
+      { packageName: '@nocobase/app-plugin-repository-example', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
