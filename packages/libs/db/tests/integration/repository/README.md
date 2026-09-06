@@ -72,6 +72,8 @@ Non-null hasMany currently disallows the replace action, including an unchanged 
 
 ## Unit and type coverage
 
+- [Filter context boundaries](./capabilities/filter-context-boundaries.test.ts) covers own-property-only lookup, inherited getters not invoked, null-prototype contexts, concurrent frozen-AST reuse, and scalar shorthand fields named kind/version/root/collection. Concurrency here tests input isolation, not database write races.
+
 - [Relation Filter scope](./relations/filter-scope.test.ts) distinguishes independent some predicates from same-child conjunctions, nested OR scope, parent counts and shared-target-safe bulk updates. [Filter variables](./capabilities/filter-variables.test.ts) covers frozen input reuse, nested context paths, null/zero, date endpoint binding and rejection before writes for missing or mistyped values.
 
 - [Scalar Filter matrix](./capabilities/filter-scalars.test.ts) verifies exact Builder/serialized-AST results for numeric comparisons, string/text predicates, boolean null/false distinctions and half-open date ranges. [Field types](./capabilities/filter-field-types.test.ts) adds numeric storage types, time and UTC datetime SQL behavior. [Literal patterns](./capabilities/filter-patterns.test.ts) covers escaping and insensitive inequality. [Filter fixture](./fixtures/filter.ts) uses an explicit string code key and physical setup. Timezone-offset equivalence and other-driver execution remain future work.
