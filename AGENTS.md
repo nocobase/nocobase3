@@ -116,6 +116,12 @@ Not everything transfers. Each template keeps its own identity and the parts tha
 
 Apply both sides in one change and run each template's `check`. A framework change that lands in only one template is incomplete, and a reviewer cannot tell whether the omission was a decision or an oversight; if it genuinely does not apply, say so in the pull request.
 
+## Application Themes and UI Styling
+
+For creating or editing theme presets, read `packages/templates/app-template-default/skills/nocobase-app-development/references/themes.md` (from the repository root). When working on Hub, use the corresponding reference under `packages/templates/app-template-hub/`.
+
+For application UI styling, including plugin UI rendered in an App, use the shared color, font, size, spacing, radius and shadow contract in `packages/templates/app-template-default/skills/nocobase-app-development/references/theme-tokens.md` (from the repository root), or the corresponding Hub reference. Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+
 ## Database Migration Development
 
 Database migrations are immutable historical records and must be self-contained. Write the exact, deterministic table, field, index, constraint, and metadata synchronization operations directly in each migration. Schema changes must likewise spell out the exact add, alter, rename, or drop operations that the migration performs.
