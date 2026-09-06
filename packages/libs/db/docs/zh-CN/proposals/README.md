@@ -13,6 +13,10 @@ description: 保留 DB 候选方案与设计演进；Repository 已有正式使�
 
 - [BigInt 与 Decimal 精确数值处理](./precise-numeric-values.md)：记录 Query 与 Repository 的精度风险和候选契约，待决策、暂缓实施。
 
+## Date and time field types
+
+- [Date and time field type mappings](./date-time-field-types.md): proposed five-database mappings for `date`, `time`, `datetime`, and `datetimeTz`, with current behavior and open decisions.
+
 ## Repository 提案
 
 - [Repository 概览](./repository/overview.md)
