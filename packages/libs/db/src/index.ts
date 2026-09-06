@@ -207,6 +207,7 @@ export type {
   RepositoryMutationScalarValue,
   RepositoryPath,
   RepositoryReadOptions,
+  RepositoryQuery,
   RepositoryRecord,
   RepositoryRelationMutationDescription,
   RepositorySelect,

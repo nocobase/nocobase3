@@ -7,6 +7,7 @@ import type {
 } from '../collection/types.js';
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { RepositoryError } from './errors.js';
+import { DefaultRepositoryQuery } from './query.js';
 import { identityConstraints } from './internal/identity.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
 import {
@@ -70,6 +71,7 @@ import type {
   MutationValidationError,
   MutationValidationResult,
   Repository,
+  RepositoryQuery,
   RepositoryContext,
   RepositoryCursor,
   RepositoryFilter,
@@ -116,7 +118,16 @@ export class DefaultRepository<
 > implements Repository<TRecord, TCreate, TUpdate> {
   constructor(private readonly options: DefaultRepositoryOptions) {}
 
-  async findMany(options: FindManyOptions<TRecord> = {}): Promise<TRecord[]> {
+  findMany(options: FindManyOptions<TRecord> = {}): RepositoryQuery<TRecord> {
+    return new DefaultRepositoryQuery(
+      () => this.executeMany(options),
+      () => this.executeStream(options)[Symbol.asyncIterator](),
+    );
+  }
+
+  private async executeMany(
+    options: FindManyOptions<TRecord>,
+  ): Promise<TRecord[]> {
     const collection = await this.collection();
     const selection = await this.validateSelect(
       collection,
@@ -163,7 +174,7 @@ export class DefaultRepository<
   }
 
   private async *executeStream(
-    options: StreamOptions<TRecord>,
+    options: FindManyOptions<TRecord>,
   ): AsyncIterable<TRecord> {
     const collection = await this.collection();
     const selection = await this.validateSelect(

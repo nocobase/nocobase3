@@ -1002,6 +1002,13 @@ export interface FindManyOptions<
   readonly offset?: number;
 }
 
+export interface RepositoryQuery<T> extends PromiseLike<T[]>, AsyncIterable<T> {
+  catch<TResult = never>(
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
+  ): Promise<T[] | TResult>;
+  finally(onfinally?: (() => void) | null): Promise<T[]>;
+}
+
 export type StreamOptions<TRecord extends object> = Omit<
   FindManyOptions<TRecord>,
   'offset'
@@ -1216,8 +1223,8 @@ export interface Repository<
     options: FindManyOptions<TRecord> & {
       readonly select: (select: SelectBuilder<TRecord>) => TSelection;
     },
-  ): Promise<SelectedBuilderRecord<TRecord, TSelection>[]>;
-  findMany(options?: FindManyOptions<TRecord>): Promise<TRecord[]>;
+  ): RepositoryQuery<SelectedBuilderRecord<TRecord, TSelection>>;
+  findMany(options?: FindManyOptions<TRecord>): RepositoryQuery<TRecord>;
   stream<TSelection extends AnySelectBuilder<TRecord>>(
     options: StreamOptions<TRecord> & {
       readonly select: (select: SelectBuilder<TRecord>) => TSelection;

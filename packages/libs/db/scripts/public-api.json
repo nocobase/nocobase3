@@ -184,6 +184,7 @@
         "RepositoryMutationDescription",
         "RepositoryMutationScalarValue",
         "RepositoryPath",
+        "RepositoryQuery",
         "RepositoryReadOptions",
         "RepositoryRecord",
         "RepositoryRelationMutationDescription",

@@ -3,6 +3,7 @@ import type {
   DeleteManyResult,
   DeleteOneResult,
   Repository,
+  RepositoryQuery,
   SelectAst,
   SingleMutationResult,
   UpdateManyResult,
@@ -73,7 +74,7 @@ it('infers empty, default, records-only and aggregate-only selections without ex
     Awaited<ReturnType<typeof _findEmptyUsers>>[number]
   >().toEqualTypeOf<Pick<UserRecord, never>>();
   expectTypeOf<ReturnType<typeof _findDefaultUsers>>().toEqualTypeOf<
-    Promise<UserRecord[]>
+    RepositoryQuery<UserRecord>
   >();
   type Records = Awaited<ReturnType<typeof _findRecordsOnly>>[number];
   expectTypeOf<keyof Records>().toEqualTypeOf<'tasks'>();
@@ -265,7 +266,7 @@ function _streamSelectedUsers(repository: UserRepository) {
 
 it('infers scalar builder selections and preserves fallback result types', () => {
   expectTypeOf<ReturnType<typeof _findSelectedUsers>>().toEqualTypeOf<
-    Promise<Array<Pick<UserRecord, 'id' | 'name'>>>
+    RepositoryQuery<Pick<UserRecord, 'id' | 'name'>>
   >();
   expectTypeOf<ReturnType<typeof _findSelectedUser>>().toEqualTypeOf<
     Promise<Pick<UserRecord, 'id' | 'email'> | undefined>
@@ -280,16 +281,16 @@ it('infers scalar builder selections and preserves fallback result types', () =>
     Promise<SingleMutationResult<Pick<UserRecord, 'id' | 'name'>>>
   >();
   expectTypeOf<ReturnType<typeof _findUsersWithAst>>().toEqualTypeOf<
-    Promise<UserRecord[]>
+    RepositoryQuery<UserRecord>
   >();
   expectTypeOf<ReturnType<typeof _findAllUserFields>>().toEqualTypeOf<
-    Promise<UserRecord[]>
+    RepositoryQuery<UserRecord>
   >();
   expectTypeOf<
     ReturnType<typeof _findUsersWithMultipleFieldCalls>
-  >().toEqualTypeOf<Promise<Array<Pick<UserRecord, 'id' | 'email'>>>>();
+  >().toEqualTypeOf<RepositoryQuery<Pick<UserRecord, 'id' | 'email'>>>();
   expectTypeOf<ReturnType<typeof _findUsersWithInclude>>().toEqualTypeOf<
-    Promise<UserRecord[]>
+    RepositoryQuery<UserRecord>
   >();
   expectTypeOf<ReturnType<typeof _deleteSelectedUser>>().toEqualTypeOf<
     Promise<DeleteOneResult<Pick<UserRecord, 'id' | 'email'>>>
