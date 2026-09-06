@@ -26,3 +26,5 @@ This directory is the application's browser client. Read the application's root 
 - React provider layers are outer-to-inner: `root`, `application`, `extension`. Applications use the first two; plugins own the extension layer. `before` and `after` order only within one layer.
 
 Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. Use `pnpm client:inspect` when a contribution does not appear where you expect — it reports composition, not correctness.
+
+For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.

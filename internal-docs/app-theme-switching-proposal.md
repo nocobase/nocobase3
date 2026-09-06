@@ -7,7 +7,7 @@ description: App 主题的 CSS Token、外观切换、偏好存储与 AI 维护�
 
 ## 文档状态
 
-主题切换、亮暗模式和按 App 隔离的偏好存储已实现。完整的颜色、圆角、字体、字号、间距和阴影 Token 接入为待实施设计。
+主题切换、亮暗模式、按 App 隔离的偏好存储，以及颜色、圆角、字体、字号、间距和阴影 Token 已接入两套模板。主题维护和组件样式编写共用一份 AI Token 指引。
 
 ## 目标与范围
 
@@ -146,7 +146,7 @@ AI 通过修改主题 CSS 创建不同的视觉风格。用户选择完整主题
 
 组件使用对应的 `shadow-*` 类。主题可调整阴影层次，也可为深色模式提供不同值。关闭某档阴影时使用有效的零阴影值，例如 `0 0 #0000`，并验证 Tailwind 阴影组合结果。
 
-`shadow-none`、固定阴影和独立的阴影颜色类会影响最终效果，需要检查覆盖关系。内阴影、文字阴影、`drop-shadow` 和焦点环不纳入普通盒阴影档位；不要为了去除阴影而移除键盘焦点提示。
+`shadow-none` 和固定阴影可以绕过主题档位。主题阴影值包含颜色，不依赖独立的 `shadow-black/30` 等颜色类重新着色。内阴影、文字阴影、`drop-shadow` 和焦点环不纳入普通盒阴影档位；不要为了去除阴影而移除键盘焦点提示。
 
 ## CSS 与组件接入
 
@@ -211,7 +211,9 @@ shadcn 颜色使用 `@theme inline` 映射到 `--color-*`，圆角使用同一�
 }
 ```
 
-Tailwind 已有的字体、字号、间距和阴影名称复用原有工具类机制；主题值在根节点和预览选择器中覆盖。不要在 `@theme inline` 中把这些可切换值写成固定常量，也不要写同名变量自引用。
+Tailwind 已有的字体、字号和间距名称复用原有工具类机制；主题值在根节点和预览选择器中覆盖。不要在 `@theme inline` 中把这些可切换值写成固定常量，也不要写同名变量自引用。
+
+命名盒阴影在当前 Tailwind 编译器中会展开为固定值。公共 CSS 取消七档内置阴影的编译期定义，并用同名 `@utility` 转接到 `shadow-(--shadow-档位)`。组件仍使用 `shadow-sm` 等标准类，生成的 CSS 保留运行时变量及 Tailwind 的焦点环组合。主题文件只改阴影值，不复制转接规则。
 
 标题字体通过普通 `@theme` 声明，使 `font-heading` 工具类可用：
 
@@ -320,7 +322,12 @@ const scope = appPath ? encodeURIComponent(appPath) : '%2F';
 
 ## AI 维护流程
 
-主题维护规范放在两套模板的 `skills/nocobase-app-development/references/themes.md`，由 Skill 入口和 `components-and-styling.md` 引导访问。
+两套模板的 `skills/nocobase-app-development/references/theme-tokens.md` 统一说明 Token 名称、含义、值格式、工具类、资源要求和例外。Skill 入口、App 和客户端指引都链接到这份参考，避免维护多份清单。
+
+- 创建或编辑主题：阅读 `themes.md` 和共享 Token 参考，了解如何提供主题值。
+- 编写组件或页面样式：阅读 `components-and-styling.md` 和共享 Token 参考，优先使用语义颜色、标准字号、间距、圆角和阴影类。
+
+允许有明确用途的固定值，但需要说明哪些样式不会跟随主题；不把“变量已声明”等同于“所有组件都会自动适配”。
 
 ### 新增主题
 
@@ -347,7 +354,7 @@ AI 不通过修改 `components.json` 或堆叠页面选择器实现主题，不�
 | 范围 | 接入内容 |
 | --- | --- |
 | `client/theme/themes/*.css` | 完整颜色及非颜色 Token、亮暗和预览作用域 |
-| `client/styles.css` | 颜色与圆角映射、标题字体声明、正文基础样式 |
+| `client/styles.css` | 颜色与圆角映射、标题字体声明、正文基础样式及运行时阴影转接 |
 | `client/shell/app-sidebar.tsx`、`client/layouts/surface-layout.tsx` | 独立侧边栏配色 |
 | `client/theme/theme-settings.tsx` | 迷你侧边栏预览 |
 | 标题、代码区域和基础组件 | 字体接入及影响主题的固定值检查 |
