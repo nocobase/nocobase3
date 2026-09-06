@@ -112,33 +112,35 @@ export function ThemeSettings(): ReactElement {
                     onChange={() => setPreset(item.id)}
                     className='sr-only'
                   />
-                  <div
-                    aria-hidden='true'
-                    data-theme={item.id}
-                    className='theme-preview relative mb-2 flex h-16 overflow-hidden rounded-lg border border-border/80 bg-background shadow-2xs'
-                  >
-                    {/* Mini Sidebar */}
-                    <div className='flex w-6 flex-col gap-1 border-r border-sidebar-border/50 bg-sidebar p-1'>
-                      <div className='size-2 rounded-xs bg-sidebar-primary-foreground' />
-                      <div className='h-1 w-full rounded-xs bg-sidebar-foreground/30' />
-                      <div className='h-1 w-full rounded-xs bg-sidebar-foreground/20' />
-                    </div>
-                    {/* Mini Main Content Area */}
-                    <div className='flex flex-1 flex-col p-1.5'>
-                      <div className='mb-1 flex items-center justify-between border-b border-border/40 pb-1'>
-                        <div className='h-1 w-7 rounded-xs bg-foreground/70' />
-                        <div className='size-1.5 rounded-full bg-primary' />
+                  <div className='mb-2 h-16 w-full'>
+                    <div
+                      aria-hidden='true'
+                      data-theme={item.id}
+                      className='theme-preview relative flex h-full overflow-hidden rounded-lg border border-border/80 bg-background shadow-2xs'
+                    >
+                      {/* Mini Sidebar */}
+                      <div className='flex w-6 flex-col gap-1 border-r border-sidebar-border/50 bg-sidebar p-1'>
+                        <div className='size-2 rounded-xs bg-sidebar-primary-foreground' />
+                        <div className='h-1 w-full rounded-xs bg-sidebar-foreground/30' />
+                        <div className='h-1 w-full rounded-xs bg-sidebar-foreground/20' />
                       </div>
-                      <div className='flex flex-1 flex-col justify-between'>
-                        <div className='h-1 w-full rounded-xs bg-muted' />
-                        <div className='flex items-center justify-between pt-1'>
-                          <div className='h-1 w-6 rounded-xs bg-muted' />
-                          <div className='h-3 w-5 rounded-xs bg-primary shadow-xs' />
+                      {/* Mini Main Content Area */}
+                      <div className='flex flex-1 flex-col p-1.5'>
+                        <div className='mb-1 flex items-center justify-between border-b border-border/40 pb-1'>
+                          <div className='h-1 w-7 rounded-xs bg-foreground/70' />
+                          <div className='size-1.5 rounded-full bg-primary' />
+                        </div>
+                        <div className='flex flex-1 flex-col justify-between'>
+                          <div className='h-1 w-full rounded-xs bg-muted' />
+                          <div className='flex items-center justify-between pt-1'>
+                            <div className='h-1 w-6 rounded-xs bg-muted' />
+                            <div className='h-3 w-5 rounded-xs bg-primary shadow-xs' />
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className='flex items-center justify-between px-0.5'>
+                  <div className='mt-auto flex h-5 items-center justify-between px-0.5'>
                     <span
                       className={cn(
                         'text-xs transition-colors',
