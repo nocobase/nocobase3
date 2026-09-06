@@ -1232,6 +1232,12 @@ function filterShorthandCondition(
 }
 
 function wrapFilter(node: FilterNode, collection: string): FilterAst {
+  if (!isPlainRecord(node)) {
+    invalid('INVALID_FILTER', 'Filter callbacks must return a Filter node.', {
+      collection,
+      path: ['filter'],
+    });
+  }
   return {
     kind: 'filter',
     version: 1,
@@ -1249,6 +1255,16 @@ function validateFilterGroup(
   context: Readonly<Record<string, unknown>> | undefined,
   path: readonly (string | number)[],
 ): FilterGroupNode {
+  if (
+    !isPlainRecord(group) ||
+    group.kind !== 'group' ||
+    !Array.isArray(group.items)
+  ) {
+    invalid('INVALID_FILTER', 'Expected a Filter group with an items array.', {
+      collection: collection.name,
+      path,
+    });
+  }
   if (group.logic !== 'and' && group.logic !== 'or') {
     invalid('INVALID_FILTER', 'Filter group logic must be and or or.', {
       collection: collection.name,
@@ -1270,10 +1286,52 @@ function validateFilterNode(
   context: Readonly<Record<string, unknown>> | undefined,
   path: readonly (string | number)[],
 ): FilterNode {
+  if (
+    !isPlainRecord(node) ||
+    !['group', 'condition', 'relation'].includes(node.kind)
+  ) {
+    invalid(
+      'INVALID_FILTER',
+      'Expected a Filter group, condition or relation node.',
+      {
+        collection: collection.name,
+        path,
+      },
+    );
+  }
   if (node.kind === 'group') {
     return validateFilterGroup(collection, node, context, path);
   }
-  if (node.kind === 'relation' || node.path.length !== 1) return node;
+  if (
+    !Array.isArray(node.path) ||
+    node.path.length === 0 ||
+    node.path.some(
+      (segment) => typeof segment !== 'string' || segment.length === 0,
+    )
+  ) {
+    invalid(
+      'INVALID_FILTER',
+      'Filter paths must contain non-empty string segments.',
+      {
+        collection: collection.name,
+        path: [...path, 'path'],
+      },
+    );
+  }
+  if (node.kind === 'relation') {
+    if (
+      !['exists', 'notExists', 'some', 'none', 'empty', 'notEmpty'].includes(
+        node.quantifier,
+      )
+    ) {
+      invalid('INVALID_FILTER', 'Unknown relation Filter quantifier.', {
+        collection: collection.name,
+        path: [...path, 'quantifier'],
+      });
+    }
+    return node;
+  }
+  if (node.path.length !== 1) return node;
   const field = scalarField(collection, node.path[0], [...path, 'path', 0]);
   const builderGroup = getFilterFieldGroup(node);
   if (
