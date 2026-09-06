@@ -136,17 +136,23 @@ describe('AppHostSupervisor', () => {
       expect(started.deployments[0]?.observedState).toBe('running');
 
       await supervisor.restart('test restart');
-      const recovered = await (
-        await supervisor.getManagementClient()
-      ).getStatus();
-      expect(recovered).toMatchObject({
-        desiredRevision: 3,
-        reconciledRevision: 3,
-      });
-      expect(recovered.deployments[0]).toMatchObject({
-        appId: 'demo',
-        observedState: 'running',
-      });
+      await vi.waitFor(
+        async () => {
+          const recovered = await (
+            await supervisor.getManagementClient()
+          ).getStatus();
+          expect(recovered).toMatchObject({
+            ready: true,
+            desiredRevision: 3,
+            reconciledRevision: 3,
+          });
+          expect(recovered.deployments[0]).toMatchObject({
+            appId: 'demo',
+            observedState: 'running',
+          });
+        },
+        { timeout: 10_000, interval: 50 },
+      );
 
       const removed = await supervisor.removeDeployment('demo');
       expect(removed.deployments).toEqual([]);
