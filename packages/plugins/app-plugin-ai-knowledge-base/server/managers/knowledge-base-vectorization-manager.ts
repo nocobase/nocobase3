@@ -59,7 +59,7 @@ export class KnowledgeBaseVectorizationManager {
     try {
       await this.rebuildVectors(
         base.vectorStoreProvider,
-        base.vectorStoreConfigKey,
+        base.key,
         base.knowledgeBaseType,
         base.knowledgeBaseOuterId,
         id,
@@ -237,7 +237,7 @@ export class KnowledgeBaseVectorizationManager {
       );
       await this.rebuildVectors(
         base.vectorStoreProvider,
-        base.vectorStoreConfigKey,
+        base.key,
         base.knowledgeBaseType,
         base.knowledgeBaseOuterId,
         id,
@@ -247,7 +247,7 @@ export class KnowledgeBaseVectorizationManager {
         await this.documentManager.deleteSegmentArtifacts([id]);
         await this.rebuildVectors(
           base.vectorStoreProvider,
-          base.vectorStoreConfigKey,
+          base.key,
           base.knowledgeBaseType,
           base.knowledgeBaseOuterId,
           id,
@@ -305,16 +305,16 @@ export class KnowledgeBaseVectorizationManager {
 
   private async rebuildVectors(
     providerName: string,
-    vectorStoreConfigKey: string | undefined,
+    knowledgeBaseKey: string,
     knowledgeBaseType: string,
     knowledgeBaseOuterId: string,
     documentId: string | number,
   ): Promise<void> {
-    if (knowledgeBaseType !== 'LOCAL' || !vectorStoreConfigKey) return;
+    if (knowledgeBaseType !== 'LOCAL') return;
     const service =
       await this.ai.features.vectorStoreProvider.createVectorStoreService(
         providerName,
-        [{ key: 'vectorStoreConfigKey', value: vectorStoreConfigKey }],
+        [{ key: 'knowledgeBaseKey', value: knowledgeBaseKey }],
       );
     const store = (await service.getVectorStore()) as WritableVectorStore;
     await store.delete({ filter: { knowledgeBaseDocsId: documentId } });

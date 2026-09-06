@@ -10,14 +10,12 @@ import type { KnowledgeBaseSegmentManager } from '../managers/knowledge-base-seg
 import type {
   KnowledgeBaseEntity,
   KnowledgeBaseRepository,
-  VectorStoreConfigRepository,
 } from '../repository/index.js';
 
 export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
   public constructor(
     private readonly ai: AIManager,
     private readonly bases: KnowledgeBaseRepository,
-    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
     private readonly segments: KnowledgeBaseSegmentManager,
     private readonly renderVectorStoreProps: <T>(value: T) => T = (value) =>
       value,
@@ -28,7 +26,7 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
     const rows = await this.bases.find({
       filter: { key: { $in: keys.map(String) } },
     });
-    return Promise.all(rows.map((row) => this.toKnowledgeBase(row)));
+    return rows.map((row) => this.toKnowledgeBase(row));
   }
 
   public async search(
@@ -46,21 +44,29 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
 
     for (const base of rows) {
       if (base.knowledgeBaseType === 'LOCAL') {
-        if (!base.vectorStoreConfigKey) continue;
-        const group = localGroups.get(base.vectorStoreConfigKey) ?? [];
+        const groupKey = JSON.stringify([
+          base.knowledgeBaseType,
+          base.vectorStoreProvider,
+          base.vectorDatabaseKey,
+          base.llmService,
+          base.embeddingModel,
+        ]);
+        const group = localGroups.get(groupKey) ?? [];
         group.push(base);
-        localGroups.set(base.vectorStoreConfigKey, group);
+        localGroups.set(groupKey, group);
         continue;
       }
       const result = await this.searchBase(base, options);
       output.push(...result);
     }
 
-    for (const [configKey, bases] of localGroups) {
+    for (const bases of localGroups.values()) {
+      const first = bases[0];
+      if (!first) continue;
       const service =
         await this.ai.features.vectorStoreProvider.createVectorStoreService(
-          bases[0].vectorStoreProvider,
-          [{ key: 'vectorStoreConfigKey', value: configKey }],
+          first.vectorStoreProvider,
+          [{ key: 'knowledgeBaseKey', value: first.key }],
         );
       const result = await service.search(options.query, {
         topK: options.topK,
@@ -84,12 +90,7 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
     const props =
       base.knowledgeBaseType === 'EXTERNAL'
         ? this.renderVectorStoreProps(base.vectorStoreProps ?? [])
-        : [
-            {
-              key: 'vectorStoreConfigKey',
-              value: base.vectorStoreConfigKey,
-            },
-          ];
+        : [{ key: 'knowledgeBaseKey', value: base.key }];
     const service =
       await this.ai.features.vectorStoreProvider.createVectorStoreService(
         base.vectorStoreProvider,
@@ -101,12 +102,7 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
     });
   }
 
-  private async toKnowledgeBase(
-    row: KnowledgeBaseEntity,
-  ): Promise<KnowledgeBase> {
-    const config = row.vectorStoreConfigKey
-      ? await this.vectorStoreConfigs.findOne({ key: row.vectorStoreConfigKey })
-      : null;
+  private toKnowledgeBase(row: KnowledgeBaseEntity): KnowledgeBase {
     return {
       knowledgeBaseType: row.knowledgeBaseType,
       knowledgeBaseOuterId: row.knowledgeBaseOuterId,
@@ -114,9 +110,9 @@ export class KnowledgeBaseFeatureImpl implements KnowledgeBaseFeature {
       name: row.name,
       description: row.description ?? '',
       vectorStoreProvider: row.vectorStoreProvider,
-      vectorDatabaseKey: config?.vectorDatabaseKey,
-      llmService: config?.llmService,
-      embeddingModel: config?.embeddingModel,
+      vectorDatabaseKey: row.vectorDatabaseKey ?? undefined,
+      llmService: row.llmService ?? undefined,
+      embeddingModel: row.embeddingModel ?? undefined,
       vectorStoreProps: row.vectorStoreProps,
       enabled: row.enabled,
     };

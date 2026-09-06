@@ -2,25 +2,56 @@ import type { VectorStore } from '@langchain/core/vectorstores';
 import type { AIManager } from '@nocobase/ai-employee';
 
 import type {
+  KnowledgeBaseRepository,
   VectorDatabaseRepository,
-  VectorStoreConfigRepository,
 } from '../repository/index.js';
 
 export class VectorStoreManager {
   public constructor(
     private readonly ai: AIManager,
-    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
+    private readonly knowledgeBases: KnowledgeBaseRepository,
     private readonly vectorDatabases: VectorDatabaseRepository,
   ) {}
 
   private readonly stores = new Map<string, Promise<VectorStore>>();
 
-  public get(vectorStoreConfigKey: string): Promise<VectorStore> {
-    let store = this.stores.get(vectorStoreConfigKey);
+  public async get(knowledgeBaseKey: string): Promise<VectorStore> {
+    const knowledgeBase = await this.knowledgeBases.findOne({
+      key: knowledgeBaseKey,
+    });
+    if (!knowledgeBase) {
+      throw new Error(`Knowledge base ${knowledgeBaseKey} not found`);
+    }
+    const {
+      vectorDatabaseKey,
+      llmService,
+      embeddingModel,
+      vectorStoreConfigHash,
+    } = knowledgeBase;
+    if (
+      !vectorDatabaseKey ||
+      !llmService ||
+      !embeddingModel ||
+      !vectorStoreConfigHash
+    ) {
+      throw new Error(
+        `Vector store config for knowledge base ${knowledgeBaseKey} is missing`,
+      );
+    }
+
+    let store = this.stores.get(vectorStoreConfigHash);
     if (!store) {
-      store = this.create(vectorStoreConfigKey);
-      this.stores.set(vectorStoreConfigKey, store);
-      store.catch(() => this.stores.delete(vectorStoreConfigKey));
+      store = this.create({
+        vectorDatabaseKey,
+        llmService,
+        embeddingModel,
+      });
+      this.stores.set(vectorStoreConfigHash, store);
+      store.catch(() => {
+        if (this.stores.get(vectorStoreConfigHash) === store) {
+          this.stores.delete(vectorStoreConfigHash);
+        }
+      });
     }
     return store;
   }
@@ -29,18 +60,11 @@ export class VectorStoreManager {
     this.stores.clear();
   }
 
-  private async create(vectorStoreConfigKey: string): Promise<VectorStore> {
-    const config = await this.vectorStoreConfigs.findOne({
-      key: vectorStoreConfigKey,
-    });
-    if (!config) {
-      throw new Error(`Vector store config ${vectorStoreConfigKey} not found`);
-    }
-    if (!config.vectorDatabaseKey) {
-      throw new Error(
-        `Vector store config ${vectorStoreConfigKey} has no vector database`,
-      );
-    }
+  private async create(config: {
+    readonly vectorDatabaseKey: string;
+    readonly llmService: string;
+    readonly embeddingModel: string;
+  }): Promise<VectorStore> {
     const vectorDatabase = await this.vectorDatabases.findOne({
       key: config.vectorDatabaseKey,
     });
@@ -48,8 +72,8 @@ export class VectorStoreManager {
       throw new Error(`Vector database ${config.vectorDatabaseKey} not found`);
     }
     const embedding = await this.ai.llmProviderManager.createEmbedding({
-      llmService: String(config.llmService ?? ''),
-      model: String(config.embeddingModel ?? ''),
+      llmService: config.llmService,
+      model: config.embeddingModel,
     });
     return this.ai.features.vectorDatabaseProvider.createVectorStore<
       typeof vectorDatabase.connectProps,

@@ -10,7 +10,6 @@ import {
   KnowledgeBaseSegmentRepository,
   KnowledgeBaseSegmentShardRepository,
   VectorDatabaseRepository,
-  VectorStoreConfigRepository,
 } from '../repository/index.js';
 
 export class KnowledgeBaseRepositoryFactory {
@@ -22,7 +21,6 @@ export class KnowledgeBaseRepositoryFactory {
   private segmentShardRepository:
     KnowledgeBaseSegmentShardRepository | undefined;
   private vectorDatabaseRepository: VectorDatabaseRepository | undefined;
-  private vectorStoreConfigRepository: VectorStoreConfigRepository | undefined;
   private disposed = false;
 
   public get knowledgeBases(): KnowledgeBaseRepository {
@@ -59,12 +57,6 @@ export class KnowledgeBaseRepositoryFactory {
     ));
   }
 
-  public get vectorStoreConfigs(): VectorStoreConfigRepository {
-    this.assertActive();
-    return (this.vectorStoreConfigRepository ??=
-      new VectorStoreConfigRepository(this.database));
-  }
-
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -73,7 +65,6 @@ export class KnowledgeBaseRepositoryFactory {
     this.segmentRepository = undefined;
     this.segmentShardRepository = undefined;
     this.vectorDatabaseRepository = undefined;
-    this.vectorStoreConfigRepository = undefined;
   }
 
   private assertActive(): void {

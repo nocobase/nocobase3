@@ -36,7 +36,7 @@ export class KnowledgeBaseServiceFactory {
       this.managers.documents,
       this.managers.vectorCleanup,
       this.repositories.knowledgeBases,
-      this.repositories.vectorStoreConfigs,
+      this.repositories.vectorDatabases,
       this.repositories.documents,
       this.allowedStorageDisks,
       this.warningLogger,
@@ -69,7 +69,6 @@ export class KnowledgeBaseServiceFactory {
       this.ai,
       this.repositories.vectorDatabases,
       this.repositories.knowledgeBases,
-      this.repositories.vectorStoreConfigs,
     ));
   }
 

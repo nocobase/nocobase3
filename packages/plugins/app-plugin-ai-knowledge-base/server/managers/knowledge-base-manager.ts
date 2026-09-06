@@ -1,82 +1,60 @@
 import { nanoid } from 'nanoid';
 
 import type { SegmentOptions } from '../internal-types.js';
-
 import type {
   KnowledgeBaseDocumentRepository,
   KnowledgeBaseEntity,
   KnowledgeBaseRepository,
-  VectorStoreConfigEntity,
-  VectorStoreConfigRepository,
 } from '../repository/index.js';
+import {
+  buildVectorStoreConfigHash,
+  hasKnowledgeBaseVectorConfigChanged,
+  normalizeKnowledgeBaseVectorConfig,
+  type NormalizedKnowledgeBaseVectorConfig,
+} from '../vector-config.js';
 import { normalizeSegmentOptions } from './segment-options.js';
+
+const BUILT_IN_VECTOR_STORE_PROVIDERS = {
+  LOCAL: 'NocobaseLocalVectorStore',
+  READONLY: 'NocobaseReadOnlyVectorStore',
+} as const;
 
 export class KnowledgeBaseManager {
   public constructor(
     private readonly bases: KnowledgeBaseRepository,
     private readonly documents: KnowledgeBaseDocumentRepository,
-    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
     private readonly allowedStorageDisks: readonly string[],
   ) {}
 
   public async create(
     values: Record<string, unknown>,
   ): Promise<KnowledgeBaseEntity> {
-    const type = String(values.knowledgeBaseType ?? 'LOCAL');
-    if (!['LOCAL', 'READONLY', 'EXTERNAL'].includes(type)) {
-      throw new Error('Invalid knowledgeBaseType');
-    }
-    const vectorStoreConfigKey = String(
-      values.vectorStoreConfigKey ?? nanoid(32),
-    );
-    if (
-      type !== 'EXTERNAL' &&
-      (values.llmService ||
-        values.embeddingModel ||
-        values.vectorDatabaseKey ||
-        values.vectorStoreConfigKey)
-    ) {
-      await this.vectorStoreConfigs.create({
-        key: vectorStoreConfigKey,
-        name: `${String(values.name ?? 'Knowledge base')} vector store`,
-        vectorDatabaseKey: String(
-          values.vectorDatabaseKey ?? values.vectorStoreConfigKey ?? '',
-        ),
-        llmService: String(values.llmService ?? ''),
-        embeddingModel: String(values.embeddingModel ?? ''),
-        enabled: true,
-      });
-    }
+    const type = this.requireKnowledgeBaseType(values.knowledgeBaseType);
+    const vectorConfig =
+      type === 'EXTERNAL'
+        ? normalizeKnowledgeBaseVectorConfig({})
+        : normalizeKnowledgeBaseVectorConfig(values);
+    this.validateVectorConfig(type, vectorConfig);
     const disk = this.requireAllowedStorageDisk(values.disk);
-    const {
-      llmService: _llmService,
-      embeddingModel: _embeddingModel,
-      vectorDatabaseKey: _vectorDatabaseKey,
-      externalProvider: _externalProvider,
-      disk: _disk,
-      ...baseValues
-    } = values;
+    const now = new Date();
+    const baseValues = this.withoutManagedValues(values);
+
     return this.bases.create({
       ...baseValues,
-      vectorStoreConfigKey,
+      ...vectorConfig,
+      vectorStoreConfigHash: buildVectorStoreConfigHash(vectorConfig),
+      vectorStoreUpdatedAt: type === 'EXTERNAL' ? null : now,
       disk,
       key: String(values.key ?? nanoid(32)),
-      knowledgeBaseType: type as KnowledgeBaseEntity['knowledgeBaseType'],
+      knowledgeBaseType: type,
       knowledgeBaseOuterId: String(values.knowledgeBaseOuterId ?? nanoid(32)),
-      vectorStoreProvider: String(
-        values.vectorStoreProvider ??
-          (type === 'LOCAL'
-            ? 'NocobaseLocalVectorStore'
-            : type === 'READONLY'
-              ? 'NocobaseReadOnlyVectorStore'
-              : String(values.externalProvider ?? '')),
-      ),
+      vectorStoreProvider: this.resolveVectorStoreProvider(type, values),
       segmentOptions: normalizeSegmentOptions(values.segmentOptions),
       enabled: values.enabled !== false,
       documentCount: 0,
       characterCount: 0,
       aiEmployeeCount: 0,
-      confirmVectorStoreChanged: new Date(),
+      confirmVectorStoreChanged: now,
     });
   }
 
@@ -86,56 +64,60 @@ export class KnowledgeBaseManager {
   ): Promise<KnowledgeBaseEntity | null> {
     const base = await this.bases.findById(id);
     if (!base) return null;
-    const configValues: Partial<VectorStoreConfigEntity> = {};
-    if (values.llmService !== undefined) {
-      configValues.llmService = String(values.llmService);
-    }
-    if (values.embeddingModel !== undefined) {
-      configValues.embeddingModel = String(values.embeddingModel);
-    }
-    if (
-      values.vectorDatabaseKey !== undefined ||
-      values.vectorStoreConfigKey !== undefined
-    ) {
-      configValues.vectorDatabaseKey = String(
-        values.vectorDatabaseKey ?? values.vectorStoreConfigKey,
-      );
-    }
-    if (Object.keys(configValues).length) {
-      const existing = await this.vectorStoreConfigs.findOne({
-        key: base.vectorStoreConfigKey,
-      });
-      if (existing) {
-        await this.vectorStoreConfigs.update({ id: existing.id }, configValues);
-      } else {
-        await this.vectorStoreConfigs.create({
-          key: base.vectorStoreConfigKey ?? nanoid(32),
-          name: `${base.name} vector store`,
-          embeddingModel: String(configValues.embeddingModel ?? ''),
-          enabled: true,
-          ...configValues,
-        });
-      }
-    }
+
+    const type = this.requireKnowledgeBaseType(
+      values.knowledgeBaseType ?? base.knowledgeBaseType,
+    );
+    const nextVectorConfig =
+      type === 'EXTERNAL'
+        ? normalizeKnowledgeBaseVectorConfig({})
+        : normalizeKnowledgeBaseVectorConfig({
+            vectorDatabaseKey:
+              values.vectorDatabaseKey === undefined
+                ? base.vectorDatabaseKey
+                : values.vectorDatabaseKey,
+            llmService:
+              values.llmService === undefined
+                ? base.llmService
+                : values.llmService,
+            embeddingModel:
+              values.embeddingModel === undefined
+                ? base.embeddingModel
+                : values.embeddingModel,
+          });
+    this.validateVectorConfig(type, nextVectorConfig);
+    const vectorConfigChanged = hasKnowledgeBaseVectorConfigChanged(
+      base,
+      nextVectorConfig,
+    );
     const disk =
       values.disk === undefined
         ? undefined
         : this.requireAllowedStorageDisk(values.disk);
-    const {
-      llmService: _llmService,
-      embeddingModel: _embeddingModel,
-      vectorDatabaseKey: _vectorDatabaseKey,
-      disk: _disk,
-      ...baseValues
-    } = values;
+    const baseValues = this.withoutManagedValues(values);
+
+    const vectorStoreProvider = this.resolveVectorStoreProvider(
+      type,
+      values,
+      base,
+    );
     await this.bases.update(
       { id },
       {
         ...baseValues,
+        vectorStoreProvider,
         ...(disk ? { disk } : {}),
-        segmentOptions: values.segmentOptions
-          ? normalizeSegmentOptions(values.segmentOptions)
-          : undefined,
+        ...(values.segmentOptions !== undefined
+          ? { segmentOptions: normalizeSegmentOptions(values.segmentOptions) }
+          : {}),
+        ...(vectorConfigChanged
+          ? {
+              ...nextVectorConfig,
+              vectorStoreConfigHash:
+                buildVectorStoreConfigHash(nextVectorConfig),
+              vectorStoreUpdatedAt: type === 'EXTERNAL' ? null : new Date(),
+            }
+          : {}),
       },
     );
     return this.bases.findById(id);
@@ -165,6 +147,70 @@ export class KnowledgeBaseManager {
 
   public normalizeSegmentOptions(value: unknown): SegmentOptions {
     return normalizeSegmentOptions(value);
+  }
+
+  private requireKnowledgeBaseType(
+    value: unknown,
+  ): KnowledgeBaseEntity['knowledgeBaseType'] {
+    const type = String(value ?? 'LOCAL');
+    if (!['LOCAL', 'READONLY', 'EXTERNAL'].includes(type)) {
+      throw new Error('Invalid knowledgeBaseType');
+    }
+    return type as KnowledgeBaseEntity['knowledgeBaseType'];
+  }
+
+  private resolveVectorStoreProvider(
+    type: KnowledgeBaseEntity['knowledgeBaseType'],
+    values: Record<string, unknown>,
+    base?: KnowledgeBaseEntity,
+  ): string {
+    const builtIn =
+      BUILT_IN_VECTOR_STORE_PROVIDERS[
+        type as keyof typeof BUILT_IN_VECTOR_STORE_PROVIDERS
+      ];
+    if (builtIn) return builtIn;
+    return String(
+      values.vectorStoreProvider ??
+        values.externalProvider ??
+        (base?.knowledgeBaseType === 'EXTERNAL'
+          ? base.vectorStoreProvider
+          : ''),
+    );
+  }
+
+  private validateVectorConfig(
+    type: KnowledgeBaseEntity['knowledgeBaseType'],
+    config: NormalizedKnowledgeBaseVectorConfig,
+  ): void {
+    if (type === 'EXTERNAL') return;
+    for (const field of [
+      'vectorDatabaseKey',
+      'llmService',
+      'embeddingModel',
+    ] as const) {
+      if (!config[field]) {
+        throw new Error(`${field} is required for ${type} knowledge bases`);
+      }
+    }
+  }
+
+  private withoutManagedValues(
+    values: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const result = { ...values };
+    for (const field of [
+      'vectorDatabaseKey',
+      'llmService',
+      'embeddingModel',
+      'vectorStoreConfigHash',
+      'vectorStoreUpdatedAt',
+      'externalProvider',
+      'disk',
+      'segmentOptions',
+    ]) {
+      delete result[field];
+    }
+    return result;
   }
 
   private requireAllowedStorageDisk(value: unknown): string {

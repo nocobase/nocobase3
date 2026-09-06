@@ -38,11 +38,11 @@ Provider listing currently returns only name/spec, so the public `fields` proper
 
 ## Vector-store configuration
 
-`aiVectorStoreConfig` links a base's `vectorStoreConfigKey` to `vectorDatabaseKey`, `llmService`, and required `embeddingModel`. The list route enriches bases from this record.
+LOCAL/READONLY knowledge bases store `vectorDatabaseKey`, `llmService`, and `embeddingModel` directly on `aiKnowledgeBase`. A stable SHA-256 `vectorStoreConfigHash` covers exactly those three normalized values; incomplete configuration yields `null`. Built-in providers receive `knowledgeBaseKey`, reload the inline configuration, and share the underlying vector store by hash.
 
-Vector rebuild proceeds only for LOCAL bases and silently returns if config key, vector database, LLM service, or model is absent. It creates embeddings through AI Manager, initializes PGVector, deletes vectors filtered by document ID, and adds enabled paragraph/question documents in batches of 10.
+Vector rebuild proceeds only for LOCAL bases. It creates embeddings through AI Manager, initializes PGVector, deletes vectors filtered by document ID, and adds enabled paragraph/question documents in batches of 10. Missing knowledge bases, incomplete inline configuration, or missing vector databases fail explicitly.
 
-Changing database/model/service does not automatically rebuild. The confirmation endpoint only records a timestamp, and the check endpoint always says unchanged in this version. Your application must show an explicit impact confirmation and schedule selected re-vectorization.
+Changing database/model/service does not automatically rebuild. `vectorStoreUpdatedAt` changes only when the normalized three-field configuration changes. The change-status endpoint also compares the related vector database's `updatedAt` against the last confirmation timestamp. Applications should show explicit impact confirmation and schedule selected re-vectorization.
 
 READONLY search can read an existing store without writing; ensure its metadata/content contract matches expected result mapping. EXTERNAL provider execution is outside this package's public extension boundary.
 
@@ -52,11 +52,11 @@ Connection props and their hash are stored in plugin data; hash is not encryptio
 
 Before deleting a vector database:
 
-1. inspect all bases and their vector-store configuration, not only `findRelatedKnowledgeBases`;
+1. inspect all bases whose inline `vectorDatabaseKey` points to the database;
 2. back up vector data/connection config;
 3. disable or migrate dependent bases;
 4. confirm retrieval against the replacement;
 5. delete with explicit approval;
 6. verify no queued job still targets it.
 
-The compatibility relation lookup can under-report because it compares a base config key directly with the vector database key. The destroy route uses the same pattern. Treat its success as insufficient proof of safety.
+The relation lookup and destroy guard both query knowledge bases directly by inline `vectorDatabaseKey`. Keep deletion approval and queued-job checks because an application-level relation check is not a database foreign-key constraint.

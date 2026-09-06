@@ -46,7 +46,6 @@ type KnowledgeBase = {
   aiEmployeeCount?: number;
   enabled: boolean;
   vectorStoreProvider?: string;
-  vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
   disk?: string;
   llmService?: string;
@@ -189,7 +188,6 @@ type KnowledgeBaseMutation = {
   knowledgeBaseType: KnowledgeBaseType;
   enabled?: boolean;
   vectorStoreProvider?: string;
-  vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
   disk?: string;
   llmService?: string;
@@ -442,7 +440,7 @@ const local = await knowledgeBaseService.createKnowledgeBase({
 });
 ```
 
-`name` is required by the client type. The server generates base key, outer ID, and vector-store config key when omitted. A LOCAL base defaults to `NocobaseLocalVectorStore`.
+`name` is required by the client type. The server generates the base key and outer ID when omitted. A LOCAL base defaults to `NocobaseLocalVectorStore`; its vector database key, LLM service, and embedding model are stored directly on the knowledge-base record.
 
 ### Upload and observe processing
 

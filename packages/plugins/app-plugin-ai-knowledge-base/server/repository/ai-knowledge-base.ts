@@ -14,7 +14,11 @@ export interface KnowledgeBaseEntity {
   description?: string;
   vectorStoreProvider: string;
   disk: string;
-  vectorStoreConfigKey?: string;
+  vectorDatabaseKey: string | null;
+  llmService: string | null;
+  embeddingModel: string | null;
+  vectorStoreConfigHash: string | null;
+  vectorStoreUpdatedAt: Date | string | null;
   vectorStoreProps?: Array<{ name?: string; key: string; value: unknown }>;
   segmentOptions: SegmentOptions;
   documentCount: number;

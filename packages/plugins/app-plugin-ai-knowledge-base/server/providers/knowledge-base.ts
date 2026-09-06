@@ -118,7 +118,6 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
       knowledgeBase: new KnowledgeBaseFeatureImpl(
         ai,
         repositories.knowledgeBases,
-        repositories.vectorStoreConfigs,
         managers.segments,
       ),
     });

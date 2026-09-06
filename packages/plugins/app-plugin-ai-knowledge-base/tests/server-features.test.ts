@@ -4,6 +4,8 @@ import type {
 } from '@nocobase/ai-employee';
 import { describe, expect, it, vi } from 'vitest';
 
+import { LocalVectorStoreProvider } from '../server/extensions/vector-store/local-provider.js';
+import { KnowledgeBaseFeatureImpl } from '../server/features/knowledge-base-feature.js';
 import { VectorDatabaseProviderFeatureImpl } from '../server/features/vector-database-provider-feature.js';
 import { VectorStoreProviderFeatureImpl } from '../server/features/vector-store-provider-feature.js';
 
@@ -60,5 +62,113 @@ describe('knowledge base feature registries', () => {
     expect(() => feature.createVectorStoreService('missing')).toThrow(
       'Vector store provider "missing" is not registered',
     );
+  });
+
+  it('returns inline config and groups local searches by inline fields', async () => {
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce([{ content: 'shared', metadata: {}, score: 0.8 }])
+      .mockResolvedValueOnce([{ content: 'other', metadata: {}, score: 0.7 }]);
+    const createVectorStoreService = vi.fn().mockResolvedValue({ search });
+    const rows = [
+      {
+        key: 'kb-1',
+        name: 'One',
+        description: null,
+        knowledgeBaseType: 'LOCAL',
+        knowledgeBaseOuterId: 'outer-1',
+        vectorStoreProvider: 'NocobaseLocalVectorStore',
+        vectorDatabaseKey: 'database',
+        llmService: 'openai',
+        embeddingModel: 'small',
+        enabled: true,
+      },
+      {
+        key: 'kb-2',
+        name: 'Two',
+        knowledgeBaseType: 'LOCAL',
+        knowledgeBaseOuterId: 'outer-2',
+        vectorStoreProvider: 'NocobaseLocalVectorStore',
+        vectorDatabaseKey: 'database',
+        llmService: 'openai',
+        embeddingModel: 'small',
+        enabled: true,
+      },
+      {
+        key: 'kb-3',
+        name: 'Three',
+        knowledgeBaseType: 'LOCAL',
+        knowledgeBaseOuterId: 'outer-3',
+        vectorStoreProvider: 'NocobaseLocalVectorStore',
+        vectorDatabaseKey: 'database',
+        llmService: 'openai',
+        embeddingModel: 'large',
+        enabled: true,
+      },
+    ];
+    const feature = new KnowledgeBaseFeatureImpl(
+      {
+        features: { vectorStoreProvider: { createVectorStoreService } },
+      } as never,
+      { find: vi.fn().mockResolvedValue(rows) } as never,
+      {
+        mergeLocalSearchResults: vi.fn(async (items) => items),
+      } as never,
+    );
+
+    await expect(feature.getKnowledgeBase(['kb-1'])).resolves.toEqual(
+      rows.map((row) =>
+        expect.objectContaining({
+          key: row.key,
+          vectorDatabaseKey: row.vectorDatabaseKey,
+          llmService: row.llmService,
+          embeddingModel: row.embeddingModel,
+        }),
+      ),
+    );
+    await feature.search({
+      knowledgeBaseKeys: rows.map((row) => row.key),
+      query: 'query',
+    });
+
+    expect(createVectorStoreService).toHaveBeenCalledTimes(2);
+    expect(createVectorStoreService).toHaveBeenNthCalledWith(
+      1,
+      'NocobaseLocalVectorStore',
+      [{ key: 'knowledgeBaseKey', value: 'kb-1' }],
+    );
+    expect(search).toHaveBeenNthCalledWith(
+      1,
+      'query',
+      expect.objectContaining({
+        filter: { knowledgeBaseOuterId: { in: ['outer-1', 'outer-2'] } },
+      }),
+    );
+    expect(createVectorStoreService).toHaveBeenNthCalledWith(
+      2,
+      'NocobaseLocalVectorStore',
+      [{ key: 'knowledgeBaseKey', value: 'kb-3' }],
+    );
+  });
+
+  it('requires a knowledge base key and preserves remaining provider props as filters', async () => {
+    const similaritySearchWithScore = vi.fn().mockResolvedValue([]);
+    const get = vi.fn().mockResolvedValue({ similaritySearchWithScore });
+    const provider = new LocalVectorStoreProvider({ get } as never);
+
+    await expect(provider.createVectorStoreService()).rejects.toThrow(
+      'Knowledge base key is required',
+    );
+    const service = await provider.createVectorStoreService([
+      { key: 'knowledgeBaseKey', value: 'kb' },
+      { key: 'tenant', value: 'acme' },
+    ]);
+    await service.search('query', { filter: { status: 'active' } });
+
+    expect(get).toHaveBeenCalledWith('kb');
+    expect(similaritySearchWithScore).toHaveBeenCalledWith('query', undefined, {
+      tenant: 'acme',
+      status: 'active',
+    });
   });
 });

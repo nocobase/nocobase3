@@ -17,7 +17,6 @@ export type KnowledgeBase = {
   aiEmployeeCount?: number;
   enabled: boolean;
   vectorStoreProvider?: string;
-  vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
   disk?: string;
   llmService?: string;
@@ -192,7 +191,6 @@ export type KnowledgeBaseMutation = {
   knowledgeBaseType: KnowledgeBaseType;
   enabled?: boolean;
   vectorStoreProvider?: string;
-  vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
   disk?: string;
   llmService?: string;

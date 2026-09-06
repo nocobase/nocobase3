@@ -41,7 +41,6 @@ export class KnowledgeBaseManagerFactory {
     return (this.knowledgeBaseManager ??= new KnowledgeBaseManager(
       this.repositories.knowledgeBases,
       this.repositories.documents,
-      this.repositories.vectorStoreConfigs,
       this.allowedStorageDisks,
     ));
   }
@@ -106,7 +105,7 @@ export class KnowledgeBaseManagerFactory {
     this.assertActive();
     return (this.vectorStoreManager ??= new VectorStoreManager(
       this.ai,
-      this.repositories.vectorStoreConfigs,
+      this.repositories.knowledgeBases,
       this.repositories.vectorDatabases,
     ));
   }

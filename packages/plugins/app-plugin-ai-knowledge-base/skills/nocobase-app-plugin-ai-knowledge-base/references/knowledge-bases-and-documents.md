@@ -19,10 +19,9 @@ The server enforces the LOCAL-only rule before accepting a document.
 
 ## Creation and update
 
-Keys and outer IDs default to 32-character nanoids; database uniqueness is on key. `enabled` defaults true. Segment options normalize as documented in [application-contracts](application-contracts.md). Counts initialize to zero. `confirmVectorStoreChanged` initializes to the creation time.
+Keys and outer IDs default to 32-character nanoids; database uniqueness is on key. `enabled` defaults true. Segment options normalize as documented in [application-contracts](application-contracts.md). Counts initialize to zero. `vectorStoreUpdatedAt` and `confirmVectorStoreChanged` initialize to the same creation time.
 
-For non-EXTERNAL create, supplying any vector/embedding config field creates `aiVectorStoreConfig`. Updating LLM service, embedding model, or vector database updates/creates that config. Changing these fields does not automatically re-vectorize existing documents. Obtain confirmation, test the new connection/model, then explicitly dispatch selected rebuilds.
-
+LOCAL and READONLY require `vectorDatabaseKey`, `llmService`, and `embeddingModel`. These values are normalized and stored directly on `aiKnowledgeBase`; the server derives a stable SHA-256 `vectorStoreConfigHash`. Updating any of the three fields refreshes the hash and `vectorStoreUpdatedAt` only when the normalized configuration actually changes. Ordinary updates preserve both fields. A configuration change does not automatically re-vectorize documents; obtain confirmation, test the new connection/model, then explicitly dispatch selected rebuilds.
 The current service does not validate that a referenced vector database, LLM service, or embedding model exists during base creation/update. Failures surface later during vectorization/retrieval. Validate options first using enabled vector databases and AI model actions.
 
 ## Documents
@@ -36,5 +35,4 @@ The caller selects the knowledge base, not an upload disk. The server uses the a
 ## Statistics and deletion
 
 Knowledge-base `documentCount` and `characterCount` refresh after successful vectorization and document deletion. Character count sums document character counts. `aiEmployeeCount` is initialized but is not updated by this service.
-
-Deleting a document removes its segment rows, shard rows, shard files, source file, and document row; file errors are swallowed. Deleting a base performs document cleanup then removes the base. Neither path deletes the vector-store config record, and direct delete does not explicitly remove vector-store rows. Verify and clean orphaned external vector/config data through an approved migration/maintenance operation rather than direct application table writes.
+Deleting a document removes its LOCAL vector rows by document ID before removing segment rows, shard rows, shard files, source file, and document row. Deleting a base first attempts LOCAL vector cleanup by `knowledgeBaseOuterId`, then performs document cleanup and removes the base. Cleanup failures during base deletion are logged and deletion continues, so deployments should monitor warnings and verify external vector stores separately.

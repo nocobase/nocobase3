@@ -1,21 +1,29 @@
 import type { AIManager } from '@nocobase/ai-employee';
 
+import type { KnowledgeBaseWarningLogger } from '../internal-types.js';
+import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
+import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
+import type { KnowledgeBaseVectorCleanupManager } from '../managers/knowledge-base-vector-cleanup-manager.js';
 import type {
   KnowledgeBaseDocumentRepository,
   KnowledgeBaseEntity,
   KnowledgeBaseRepository,
-  VectorStoreConfigRepository,
+  VectorDatabaseRepository,
 } from '../repository/index.js';
-import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
-import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
-import type { KnowledgeBaseVectorCleanupManager } from '../managers/knowledge-base-vector-cleanup-manager.js';
-import type { KnowledgeBaseWarningLogger } from '../internal-types.js';
 import type { PageOptions, PageResult } from './pagination.js';
 
 const BUILT_IN_PROVIDER_NAMES = new Set([
   'NocobaseLocalVectorStore',
   'NocobaseReadOnlyVectorStore',
 ]);
+
+function isAfter(
+  source?: Date | string | null,
+  target?: Date | string | null,
+): boolean {
+  if (!source || !target) return false;
+  return new Date(source).getTime() > new Date(target).getTime();
+}
 
 export class KnowledgeBaseService {
   public constructor(
@@ -24,7 +32,7 @@ export class KnowledgeBaseService {
     private readonly documentManager: KnowledgeBaseDocumentManager,
     private readonly vectorCleanup: KnowledgeBaseVectorCleanupManager,
     private readonly bases: KnowledgeBaseRepository,
-    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
+    private readonly vectorDatabases: VectorDatabaseRepository,
     private readonly documents: KnowledgeBaseDocumentRepository,
     private readonly allowedStorageDisks: readonly string[],
     private readonly warningLogger: KnowledgeBaseWarningLogger,
@@ -32,7 +40,7 @@ export class KnowledgeBaseService {
 
   public async list(
     options: PageOptions,
-  ): Promise<PageResult<Record<string, unknown>>> {
+  ): Promise<PageResult<KnowledgeBaseEntity>> {
     const rows = await this.bases.find({
       sort: ['-createdAt'],
       ...(options.paginate
@@ -42,27 +50,8 @@ export class KnowledgeBaseService {
           }
         : {}),
     });
-    const data = await Promise.all(
-      rows.map(async (row): Promise<Record<string, unknown>> => {
-        const config = row.vectorStoreConfigKey
-          ? await this.vectorStoreConfigs.findOne({
-              key: row.vectorStoreConfigKey,
-            })
-          : null;
-        return {
-          ...row,
-          ...(config
-            ? {
-                vectorDatabaseKey: config.vectorDatabaseKey,
-                llmService: config.llmService,
-                embeddingModel: config.embeddingModel,
-              }
-            : {}),
-        };
-      }),
-    );
     return {
-      data,
+      data: rows,
       meta: {
         count: await this.bases.count(),
         page: options.page,
@@ -159,13 +148,26 @@ export class KnowledgeBaseService {
     readonly key: string;
   }): Promise<Record<string, unknown> | null> {
     const base = await this.bases.findOne({ key: options.key });
-    return base
-      ? {
-          key: options.key,
-          changed: false,
-          confirmVectorStoreChanged: base.confirmVectorStoreChanged,
-        }
+    if (!base) return null;
+    const vectorDatabase = base.vectorDatabaseKey
+      ? await this.vectorDatabases.findOne({ key: base.vectorDatabaseKey })
       : null;
+    const confirmedAt =
+      base.confirmVectorStoreChanged ?? base.createdAt ?? null;
+    const vectorStoreChanged = isAfter(base.vectorStoreUpdatedAt, confirmedAt);
+    const vectorDatabaseChanged = isAfter(
+      vectorDatabase?.updatedAt,
+      confirmedAt,
+    );
+    return {
+      key: base.key,
+      changed: vectorStoreChanged || vectorDatabaseChanged,
+      confirmVectorStoreChanged: confirmedAt,
+      vectorStoreChanged,
+      vectorDatabaseChanged,
+      vectorStoreUpdatedAt: base.vectorStoreUpdatedAt,
+      vectorDatabaseUpdatedAt: vectorDatabase?.updatedAt,
+    };
   }
 
   public listStorageDisks(): Array<{ value: string; label: string }> {

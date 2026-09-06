@@ -374,10 +374,12 @@ test('knowledge base management actions use flat create, update, delete, and ena
     { value: 'text-embedding-3-small', label: 'text-embedding-3-small' },
   ]);
 
-  expect(calls[0]).toMatchObject({
+  expect(calls[0]).toEqual({
     resource: 'aiKnowledgeBase',
     action: 'create',
     options: {
+      method: 'POST',
+      unwrap: 'none',
       body: {
         key: 'handbook',
         name: 'Handbook',

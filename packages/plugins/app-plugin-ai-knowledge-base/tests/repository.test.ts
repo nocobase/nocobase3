@@ -7,7 +7,6 @@ import {
   KnowledgeBaseSegmentRepository,
   KnowledgeBaseSegmentShardRepository,
   VectorDatabaseRepository,
-  VectorStoreConfigRepository,
 } from '../server/repository/index.js';
 
 function createWriteDatabase(): {
@@ -46,9 +45,6 @@ describe('knowledge base repositories', () => {
     );
     expect(new VectorDatabaseRepository(database).table).toBe(
       'aiVectorDatabases',
-    );
-    expect(new VectorStoreConfigRepository(database).table).toBe(
-      'aiVectorStoreConfig',
     );
   });
 
@@ -111,24 +107,25 @@ describe('knowledge base repositories', () => {
     },
   );
 
-  it('does not transform vector store config fields', async () => {
+  it('does not transform inline vector config fields', async () => {
     const input = {
-      name: '{"legacy":true}',
+      vectorDatabaseKey: 'vector-database',
+      llmService: 'openai',
       embeddingModel: 'text-embedding',
+      vectorStoreConfigHash: 'hash',
     };
     const write = createWriteDatabase();
-    await new VectorStoreConfigRepository(write.database).createMany([input]);
+    await new KnowledgeBaseRepository(write.database).createMany([input]);
     const inserted = write.values.mock.calls[0]?.[0]?.[0] as Record<
       string,
       unknown
     >;
-    expect(inserted.name).toBe(input.name);
-    expect(typeof inserted.name).toBe('string');
+    expect(inserted).toMatchObject(input);
 
-    const rows = await new VectorStoreConfigRepository(
-      createReadDatabase({ name: '{"legacy":true}' }),
+    const rows = await new KnowledgeBaseRepository(
+      createReadDatabase(input),
     ).find();
-    expect(rows[0]?.name).toBe('{"legacy":true}');
+    expect(rows[0]).toMatchObject(input);
   });
 
   it('preserves malformed legacy JSON values', async () => {

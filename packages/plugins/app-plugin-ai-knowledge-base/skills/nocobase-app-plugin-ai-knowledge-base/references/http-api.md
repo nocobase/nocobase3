@@ -7,7 +7,6 @@
 - [Document actions](#document-actions)
 - [Segment actions](#segment-actions)
 - [Vector-database actions](#vector-database-actions)
-- [Compatibility caveats](#compatibility-caveats)
 
 ## Common contract
 
@@ -41,21 +40,21 @@ await nocobaseClient.action('aiKnowledgeBase', 'list', {
 
 ### `GET /aiKnowledgeBase:list`
 
-Query: pagination fields. Returns bases enriched from `aiVectorStoreConfig` with `vectorDatabaseKey`, `llmService`, and `embeddingModel` when configuration exists. Current route ignores name/key filters even though the default client sends them.
+Query: pagination fields. Returns knowledge-base records with inline `vectorDatabaseKey`, `llmService`, and `embeddingModel`. Current route ignores name/key filters even though the default client sends them.
 
 ### `POST /aiKnowledgeBase:create`
 
-JSON body is `KnowledgeBaseMutation` plus internal compatibility fields when supplied. Server default type is LOCAL when omitted, but application code should always send it. Type must be `LOCAL`, `READONLY`, or `EXTERNAL`. Generates 32-character `key`, `knowledgeBaseOuterId`, and config key when omitted; returns created record.
+JSON body is `KnowledgeBaseMutation`. Server default type is LOCAL when omitted, but application code should always send it. Type must be `LOCAL`, `READONLY`, or `EXTERNAL`. Generates 32-character `key` and `knowledgeBaseOuterId` when omitted; returns the created record.
 
-For non-EXTERNAL bases, a vector-store config is created only when at least one of `llmService`, `embeddingModel`, `vectorDatabaseKey`, or `vectorStoreConfigKey` is supplied. LOCAL provider defaults to `NocobaseLocalVectorStore`; READONLY to `NocobaseReadOnlyVectorStore`; EXTERNAL uses `externalProvider` or an empty string.
+LOCAL and READONLY require non-empty `vectorDatabaseKey`, `llmService`, and `embeddingModel`. Their provider defaults to `NocobaseLocalVectorStore` and `NocobaseReadOnlyVectorStore`, respectively. The three fields are normalized and stored directly on the knowledge-base record; creation computes `vectorStoreConfigHash` and initializes `vectorStoreUpdatedAt` and `confirmVectorStoreChanged` to the same time. EXTERNAL uses `vectorStoreProvider` or `externalProvider`.
 
 ### `POST /aiKnowledgeBase:update?filterByTk=<id>`
 
-JSON body: partial mutation; body `id` is fallback. Missing ID returns 400. Updates vector config for supplied LLM/model/database fields, normalizes supplied segment options, and returns a record or JSON `null` if ID does not exist. It does not return 404 for that null case.
+JSON body: partial mutation; body `id` is fallback. Missing ID returns 400. The server validates the existing record merged with supplied LOCAL/READONLY vector fields. When one of `vectorDatabaseKey`, `llmService`, or `embeddingModel` materially changes, it recomputes `vectorStoreConfigHash` and refreshes `vectorStoreUpdatedAt`; ordinary field updates preserve both values. Supplied segment options are normalized. Returns a record or JSON `null` if ID does not exist.
 
 ### `POST /aiKnowledgeBase:destroy?filterByTk[]=<id>`
 
-One or more IDs required. Accepts comma-separated/repeated variants. Deletes each base's documents/files/segments/shards, then bases. Returns `{"data":{"success":true}}`. It does not refresh or explicitly delete vector-store rows.
+One or more IDs required. Accepts comma-separated/repeated variants. For LOCAL bases, attempts vector deletion by `knowledgeBaseOuterId`; cleanup failures are logged and do not block deletion. Deletes documents/files/segments/shards, then bases. Returns `{"data":{"success":true}}`.
 
 ### `POST /aiKnowledgeBase:runHitTest`
 
@@ -67,7 +66,7 @@ Key may be in query or JSON body. Required; sets `confirmVectorStoreChanged` to 
 
 ### `GET /aiKnowledgeBase:checkVectorStoreChanged?key=<key>`
 
-Required key. Returns `null` if absent; otherwise `{key,changed:false,confirmVectorStoreChanged}`. Current implementation does not calculate change.
+Required key. Returns `null` if absent. Otherwise compares the knowledge base's inline `vectorStoreUpdatedAt` and its vector database's `updatedAt` against `confirmVectorStoreChanged` (falling back to base creation time), and returns `{key,changed,confirmVectorStoreChanged,vectorStoreChanged,vectorDatabaseChanged,vectorStoreUpdatedAt,vectorDatabaseUpdatedAt}`. Comparisons are strict; equal timestamps are unchanged.
 
 ### `GET /aiKnowledgeBase:listExternalVectorStoreProviders`
 
@@ -200,8 +199,4 @@ JSON: optional provider default built-in, `connectProps`. Returns `{success:true
 
 ### `GET /aiVectorDatabases:findRelatedKnowledgeBase?vectorDatabaseKey=<key>`
 
-`key` is an alias. Missing key returns an empty array. Current relation lookup compares base `vectorStoreConfigKey` directly to the supplied vector database key, while normal configurations point through `aiVectorStoreConfig`; this can under-report relationships. Do not use it as the sole deletion safety control.
-
-## Compatibility caveats
-
-The endpoint set is a legacy compatibility contract. Filtering/search parameters sent by the default client are not fully implemented server-side; apply client-side filtering only for UX, never security. Several mutating segment routes ignore the supplied knowledge-base key and locate by document ID/UID. Current authorization is login-only. Wrap or harden these actions before offering them to ordinary users.
+`key` is an alias. Missing key returns an empty array. Relationships are resolved directly from knowledge-base records whose inline `vectorDatabaseKey` matches the supplied key.

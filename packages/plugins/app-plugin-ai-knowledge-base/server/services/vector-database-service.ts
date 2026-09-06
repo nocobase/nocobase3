@@ -9,7 +9,6 @@ import type {
   KnowledgeBaseRepository,
   VectorDatabaseEntity,
   VectorDatabaseRepository,
-  VectorStoreConfigRepository,
 } from '../repository/index.js';
 import { page, type PageOptions, type PageResult } from './pagination.js';
 
@@ -18,7 +17,6 @@ export class VectorDatabaseService {
     private readonly ai: AIManager,
     private readonly vectors: VectorDatabaseRepository,
     private readonly bases: KnowledgeBaseRepository,
-    private readonly vectorStoreConfigs: VectorStoreConfigRepository,
   ) {}
 
   public list(options: PageOptions): Promise<PageResult<VectorDatabaseEntity>> {
@@ -88,15 +86,8 @@ export class VectorDatabaseService {
     for (const id of options.ids) {
       const database = await this.vectors.findById(id);
       if (!database) continue;
-      const configs = await this.vectorStoreConfigs.find({
-        filter: { vectorDatabaseKey: database.key },
-      });
       const related = await this.bases.find({
-        filter: {
-          vectorStoreConfigKey: {
-            $in: configs.map((config) => config.key),
-          },
-        },
+        filter: { vectorDatabaseKey: database.key },
       });
       if (related.length) {
         const error = new Error('Vector database is used by a knowledge base');
@@ -141,14 +132,8 @@ export class VectorDatabaseService {
     readonly vectorDatabaseKey?: string;
   }): Promise<KnowledgeBaseEntity[]> {
     if (!options.vectorDatabaseKey) return [];
-    const configs = await this.vectorStoreConfigs.find({
-      filter: { vectorDatabaseKey: options.vectorDatabaseKey },
-    });
-    if (!configs.length) return [];
     return this.bases.find({
-      filter: {
-        vectorStoreConfigKey: { $in: configs.map((config) => config.key) },
-      },
+      filter: { vectorDatabaseKey: options.vectorDatabaseKey },
     });
   }
 }

@@ -100,8 +100,7 @@ function editKnowledgeBase(record: KnowledgeBase): KnowledgeBaseMutation {
     knowledgeBaseType: record.knowledgeBaseType,
     enabled: record.enabled,
     disk: record.disk,
-    vectorDatabaseKey: record.vectorDatabaseKey ?? record.vectorStoreConfigKey,
-    vectorStoreConfigKey: record.vectorStoreConfigKey,
+    vectorDatabaseKey: record.vectorDatabaseKey,
     llmService: record.llmService,
     embeddingModel: record.embeddingModel,
     vectorStoreProvider: record.vectorStoreProvider,
@@ -269,6 +268,8 @@ export function KnowledgeBaseEditorSheet({
         if (!values.vectorDatabaseKey)
           throw new Error(t('Select a vector database.'));
         if (!values.llmService) throw new Error(t('Select an LLM service.'));
+        if (!values.embeddingModel)
+          throw new Error(t('Select an embedding model.'));
         if (values.knowledgeBaseType === 'LOCAL' && !values.disk) {
           throw new Error(t('Select a file storage disk.'));
         }

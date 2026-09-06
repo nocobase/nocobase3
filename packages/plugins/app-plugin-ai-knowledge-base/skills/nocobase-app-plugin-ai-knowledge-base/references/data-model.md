@@ -9,13 +9,13 @@
 
 ## Ownership
 
-The plugin migration owns six collections. `llmServices` belongs to the AI Employee package. The migration is an immutable historical record once merged; ordinary applications must not edit it.
+The plugin migration history initially creates six collections, then removes the legacy vector-store configuration collection. The final schema owns five collections. `llmServices` belongs to the AI Employee package. Migrations are immutable historical records once merged; ordinary applications must not edit them.
 
 ## Collections
 
 ### `aiKnowledgeBase`
 
-Auto-increment `id`; nullable timestamps; required `knowledgeBaseType` (32), `knowledgeBaseOuterId` (64), `name` (64), `vectorStoreProvider` (128); nullable unique `key` (128), description (512), `disk` (64), `vectorStoreConfigKey` (128), `vectorStoreConfigId` (64), confirmation timestamp, and JSON `vectorStoreProps`. Required JSON `segmentOptions` defaults to `{enabled:true,chunkSize:6000,chunkOverlap:1200}`. Counts default 0; `enabled` defaults true.
+Auto-increment `id`; nullable timestamps; required `knowledgeBaseType` (32), `knowledgeBaseOuterId` (64), `name` (64), and `vectorStoreProvider` (128); nullable unique `key` (128), description (512), and `disk` (128). LOCAL/READONLY vector configuration is stored directly in nullable `vectorDatabaseKey` (128), `llmService`, and `embeddingModel` (128), with nullable `vectorStoreConfigHash` (64), `vectorStoreUpdatedAt`, and `confirmVectorStoreChanged`. `vectorStoreProps` is nullable JSON. Required JSON `segmentOptions` defaults to `{enabled:true,chunkSize:6000,chunkOverlap:1200}`. Counts default 0; `enabled` defaults true.
 
 ### `aiKnowledgeBaseDocs`
 
@@ -33,15 +33,11 @@ Auto-increment `id`; required UID, knowledge-base key, document ID, shard ID/num
 
 Auto-increment `id`; nullable unique key; required name, database spec, provider, JSON `connectProps`; optional connection hash; enabled defaults true.
 
-### `aiVectorStoreConfig`
-
-Auto-increment `id`; nullable unique key; required name and embedding model; optional vector database key/ID and LLM service; enabled defaults true.
-
 ## Relations and deletes
 
-The migration declares indexes/uniques but no foreign-key constraints. Relationships and deletion order are application logic. Migration down drops config, vector databases, segments, shards, documents, then knowledge bases.
+The migrations declare indexes/uniques but no foreign-key constraints. Relationships and deletion order are application logic. The final structural migration removes the legacy configuration fields and collection irreversibly without reading or copying their data.
 
-Knowledge-base deletion explicitly deletes its documents, segment rows, shard files/rows, and source files, then the base. Document deletion performs the same dependent cleanup. Vector rows for a deleted document are removed only when vector-store rebuild/delete is reached; current direct document deletion does not explicitly call the vector store, so orphaned external vector rows are a deployment risk. Vector-database deletion is blocked when a base is detected as related by its configured key.
+Knowledge-base deletion attempts to remove LOCAL vectors by `knowledgeBaseOuterId`, deletes its documents, segment rows, shard files/rows, and source files, then removes the base. Document deletion removes LOCAL vectors by document ID before deleting dependent artifacts. Vector-database deletion is blocked by directly querying knowledge bases whose inline `vectorDatabaseKey` matches the database key.
 
 ## Application guidance
 

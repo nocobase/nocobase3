@@ -116,9 +116,6 @@ function toKnowledgeBase(value: unknown): KnowledgeBase {
     ...(text(item.vectorStoreProvider)
       ? { vectorStoreProvider: text(item.vectorStoreProvider) }
       : {}),
-    ...(text(item.vectorStoreConfigKey)
-      ? { vectorStoreConfigKey: text(item.vectorStoreConfigKey) }
-      : {}),
     ...(text(item.vectorDatabaseKey)
       ? { vectorDatabaseKey: text(item.vectorDatabaseKey) }
       : {}),
@@ -414,7 +411,6 @@ export function normalizeKnowledgeBaseMutation(
   for (const field of [
     'disk',
     'vectorDatabaseKey',
-    'vectorStoreConfigKey',
     'llmService',
     'embeddingModel',
     'vectorStoreProvider',

@@ -17,17 +17,17 @@ export class LocalVectorStoreProvider implements VectorStoreProvider {
   public createVectorStoreService(
     vectorStoreProps: VectorStoreProp[] = [],
   ): Promise<VectorStoreService> {
-    const vectorStoreConfigKey = vectorStoreProps.find(
-      (item) => item.key === 'vectorStoreConfigKey',
+    const knowledgeBaseKey = vectorStoreProps.find(
+      (item) => item.key === 'knowledgeBaseKey',
     )?.value;
-    if (!vectorStoreConfigKey) {
-      return Promise.reject(new Error('Vector store config key is required'));
+    if (!knowledgeBaseKey) {
+      return Promise.reject(new Error('Knowledge base key is required'));
     }
     return Promise.resolve(
       new LocalVectorStoreService(
         this.vectorStores,
-        String(vectorStoreConfigKey),
-        vectorStoreProps.filter((item) => item.key !== 'vectorStoreConfigKey'),
+        String(knowledgeBaseKey),
+        vectorStoreProps.filter((item) => item.key !== 'knowledgeBaseKey'),
       ),
     );
   }

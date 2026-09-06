@@ -13,7 +13,11 @@ const base = {
   key: 'kb-1',
   knowledgeBaseType: 'LOCAL',
   knowledgeBaseOuterId: 'outer-1',
-  vectorStoreConfigKey: 'config-1',
+  vectorDatabaseKey: 'vector-database',
+  llmService: 'openai',
+  embeddingModel: 'text-embedding',
+  vectorStoreConfigHash: 'config-hash',
+  vectorStoreUpdatedAt: new Date('2026-09-02T00:00:00.000Z'),
   vectorStoreProvider: 'NocobaseLocalVectorStore',
   disk: 'private',
 } as const;
@@ -46,13 +50,16 @@ const shard = {
 describe('knowledge base destructive cleanup', () => {
   it('uses the 2.x vector selectors for bases and documents', async () => {
     const deleteVectors = vi.fn().mockResolvedValue(undefined);
+    const getVectorStore = vi.fn().mockResolvedValue({ delete: deleteVectors });
     const cleanup = new KnowledgeBaseVectorCleanupManager({
-      get: vi.fn().mockResolvedValue({ delete: deleteVectors }),
+      get: getVectorStore,
     } as never);
 
     await cleanup.deleteKnowledgeBaseVectors(base as never);
     await cleanup.deleteDocumentVectors(base as never, [7, 8]);
 
+    expect(getVectorStore).toHaveBeenNthCalledWith(1, 'kb-1');
+    expect(getVectorStore).toHaveBeenNthCalledWith(2, 'kb-1');
     expect(deleteVectors.mock.calls).toEqual([
       [{ filter: { knowledgeBaseOuterId: 'outer-1' } }],
       [{ filter: { knowledgeBaseDocsId: 7 } }],
@@ -235,14 +242,13 @@ describe('knowledge base destructive cleanup', () => {
       delete: vi.fn().mockResolvedValue(undefined),
       addDocuments: vi.fn().mockResolvedValue(undefined),
     };
+    const createVectorStoreService = vi.fn().mockResolvedValue({
+      getVectorStore: vi.fn().mockResolvedValue(store),
+    });
     const manager = new KnowledgeBaseVectorizationManager(
       {
         features: {
-          vectorStoreProvider: {
-            createVectorStoreService: vi.fn().mockResolvedValue({
-              getVectorStore: vi.fn().mockResolvedValue(store),
-            }),
-          },
+          vectorStoreProvider: { createVectorStoreService },
         },
       } as never,
       documents as never,
@@ -255,6 +261,10 @@ describe('knowledge base destructive cleanup', () => {
 
     await manager.reindexExistingSegments(document.id);
 
+    expect(createVectorStoreService).toHaveBeenCalledWith(
+      'NocobaseLocalVectorStore',
+      [{ key: 'knowledgeBaseKey', value: 'kb-1' }],
+    );
     expect(dispatchVectorization).toHaveBeenCalledWith(
       document.id,
       undefined,

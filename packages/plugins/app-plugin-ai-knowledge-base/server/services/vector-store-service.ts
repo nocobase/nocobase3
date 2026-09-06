@@ -11,12 +11,12 @@ import type { VectorStoreManager } from '../managers/vector-store-manager.js';
 export class LocalVectorStoreService implements VectorStoreService<VectorStore> {
   public constructor(
     private readonly vectorStores: VectorStoreManager,
-    private readonly vectorStoreConfigKey: string,
+    private readonly knowledgeBaseKey: string,
     private readonly vectorStoreProps: readonly VectorStoreProp[],
   ) {}
 
   public getVectorStore(): Promise<VectorStore> {
-    return this.vectorStores.get(this.vectorStoreConfigKey);
+    return this.vectorStores.get(this.knowledgeBaseKey);
   }
 
   public async search(

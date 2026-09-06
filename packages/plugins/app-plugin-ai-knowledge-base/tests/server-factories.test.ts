@@ -35,7 +35,6 @@ import {
   KnowledgeBaseSegmentRepository,
   KnowledgeBaseSegmentShardRepository,
   VectorDatabaseRepository,
-  VectorStoreConfigRepository,
 } from '../server/repository/index.js';
 import { KnowledgeBaseProvider } from '../server/providers/knowledge-base.js';
 
@@ -83,9 +82,6 @@ describe('knowledge base factories', () => {
     expect(repositories.vectorDatabases).toBeInstanceOf(
       VectorDatabaseRepository,
     );
-    expect(repositories.vectorStoreConfigs).toBeInstanceOf(
-      VectorStoreConfigRepository,
-    );
     expect(
       new Set([
         repositories.knowledgeBases,
@@ -93,9 +89,8 @@ describe('knowledge base factories', () => {
         repositories.segments,
         repositories.segmentShards,
         repositories.vectorDatabases,
-        repositories.vectorStoreConfigs,
       ]).size,
-    ).toBe(6);
+    ).toBe(5);
     expect(repositories.documents).toBe(repositories.documents);
     expect(repositories.documents).not.toBe(repositories.knowledgeBases);
 

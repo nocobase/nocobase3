@@ -32,9 +32,7 @@ export class KnowledgeBaseVectorCleanupManager {
   private async getLocalStore(
     base: KnowledgeBaseEntity,
   ): Promise<DeletableVectorStore | null> {
-    if (base.knowledgeBaseType !== 'LOCAL' || !base.vectorStoreConfigKey) {
-      return null;
-    }
-    return this.vectorStores.get(base.vectorStoreConfigKey);
+    if (base.knowledgeBaseType !== 'LOCAL') return null;
+    return this.vectorStores.get(base.key);
   }
 }
