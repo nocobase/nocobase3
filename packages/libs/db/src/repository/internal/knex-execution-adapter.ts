@@ -367,7 +367,18 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     }));
     for (const output of outputs) {
       const field = qualified(rootAlias, column(plan.collection, output.name));
-      inner.select(client.ref(field).as(output.internal)).groupBy(field);
+      const definition = scalarFields(plan.collection).find(
+        (entry) => entry.name === output.name,
+      );
+      if (definition?.type === 'enum') {
+        // Group by exact identity, independent of database collation. Select a
+        // representative string so binary group keys never leak into results.
+        inner
+          .min({ [output.internal]: field })
+          .groupBy(enumGroupKey(client, field));
+      } else {
+        inner.select(client.ref(field).as(output.internal)).groupBy(field);
+      }
     }
     for (const [index, item] of plan.aggregate.items.entries()) {
       const internal = `aggregate_${index}`;
@@ -3037,6 +3048,25 @@ function applyNode(
     return;
   }
   applyCondition(query, collection, node, boolean, sourceAlias, client);
+}
+
+function enumGroupKey(client: Knex, field: string): Knex.Raw {
+  const expressions: Record<string, string> = {
+    pg: '?? collate "C"',
+    mysql2: 'cast(?? as binary)',
+    mysql: 'cast(?? as binary)',
+    'better-sqlite3': '?? collate binary',
+    sqlite3: '?? collate binary',
+    oracledb: 'utl_raw.cast_to_raw(??)',
+    mssql: 'convert(varbinary(max), cast(?? as nvarchar(max)))',
+  };
+  const expression = expressions[String(client.client.config.client)];
+  if (!expression)
+    throw new RepositoryError(
+      'FIELD_CAPABILITY_NOT_SUPPORTED',
+      'Enum grouping requires a supported database dialect.',
+    );
+  return client.raw(expression, [field]);
 }
 
 function applyCondition(

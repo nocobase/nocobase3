@@ -18,7 +18,7 @@ export interface ApiClient {
   ): Promise<ReadableStream<Uint8Array>>;
 
   repository<
-    TRecord extends object,
+    TRecord extends object = Record<string, unknown>,
     TCreate extends object = Partial<TRecord>,
     TUpdate extends object = Partial<TRecord>,
   >(
@@ -93,7 +93,7 @@ export function createApiClient(options: CreateApiClientOptions): ApiClient {
     request,
     stream,
     repository: <
-      TRecord extends object,
+      TRecord extends object = Record<string, unknown>,
       TCreate extends object = Partial<TRecord>,
       TUpdate extends object = Partial<TRecord>,
     >(

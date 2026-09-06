@@ -3,6 +3,10 @@ export { ApiClientError, type ApiClientErrorOptions } from './errors.js';
 export {
   createRemoteRepository,
   type CreateRemoteRepositoryOptions,
+  type RemoteAggregateAst,
+  type RemoteAggregateOptions,
+  type RemoteAggregateResult,
+  type RemoteGroupByOptions,
   type RemoteCreatedTargetReference,
   type RemoteCreateOneOptions,
   type RemoteDeleteOneOptions,

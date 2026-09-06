@@ -1,9 +1,9 @@
-export const AGGREGATE_PATH = 'repository-example/aggregate';
 export type AggregateStatus =
   'all' | 'draft' | 'confirmed' | 'paid' | 'cancelled';
 export interface AggregateRequest {
   readonly status: AggregateStatus;
   readonly minimumQuantity: number;
+  readonly minimumGroupCount?: number;
 }
 export type AggregateScalar = number | string | null;
 export interface AggregateSummary {

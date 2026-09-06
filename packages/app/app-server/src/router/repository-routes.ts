@@ -1,6 +1,8 @@
 import {
   databaseManagerToken,
   RepositoryError,
+  type AggregateOptions,
+  type GroupByOptions,
   type CreateOneOptions,
   type FindManyOptions,
   type Repository,
@@ -20,6 +22,8 @@ export type RepositoryApiAction =
   | 'findMany'
   | 'findOne'
   | 'count'
+  | 'aggregate'
+  | 'groupBy'
   | 'exists'
   | 'createOne'
   | 'updateOne'
@@ -58,6 +62,8 @@ const allowedOptions: Record<RepositoryApiAction, readonly string[]> = {
   ],
   findOne: ['filter', 'select', 'sort'],
   count: ['filter'],
+  aggregate: ['filter', 'aggregate'],
+  groupBy: ['by', 'filter', 'aggregate', 'having', 'sort'],
   exists: ['filter'],
   createOne: ['values', 'select'],
   updateOne: ['filter', 'values', 'select', 'ifVersion'],
@@ -142,6 +148,15 @@ export function defineRepositoryApiRoutes(
               return streamFindMany(context, repository, input);
             }
             const data = await execute(repository, action, input);
+            if (action === 'aggregate' || action === 'groupBy') {
+              return context.body(
+                JSON.stringify({ data }, (_key, value: unknown) =>
+                  typeof value === 'bigint' ? value.toString() : value,
+                ),
+                200,
+                { 'Content-Type': 'application/json; charset=UTF-8' },
+              );
+            }
             return context.json({ data });
           },
         );
@@ -263,7 +278,15 @@ async function readInput(
       );
     }
   }
-  for (const key of ['filter', 'values', 'select', 'sort', 'cursor']) {
+  for (const key of [
+    'filter',
+    'values',
+    'select',
+    'sort',
+    'cursor',
+    'aggregate',
+    'having',
+  ]) {
     if (Object.hasOwn(input, key) && !isObject(input[key])) {
       fail(400, 'INVALID_REPOSITORY_INPUT', `${key} must be an object.`);
     }
@@ -276,6 +299,22 @@ async function readInput(
   }
   if (['createOne', 'updateOne'].includes(action) && !isObject(input.values)) {
     fail(400, 'INVALID_REPOSITORY_INPUT', 'values is required.');
+  }
+  if (action === 'aggregate' || action === 'groupBy') {
+    if (!isObject(input.aggregate))
+      fail(400, 'INVALID_REPOSITORY_INPUT', 'aggregate is required.');
+  }
+  if (
+    action === 'groupBy' &&
+    (!Array.isArray(input.by) ||
+      input.by.length === 0 ||
+      input.by.some((field) => typeof field !== 'string' || !field))
+  ) {
+    fail(
+      400,
+      'INVALID_REPOSITORY_INPUT',
+      'by must be a non-empty array of field names.',
+    );
   }
   if (action === 'findMany') {
     const limit = input.limit === undefined ? maxLimit : input.limit;
@@ -315,6 +354,14 @@ async function execute(
       );
     case 'findOne':
       return (await repository.findOne({ ...read, filter })) ?? null;
+    case 'aggregate':
+      return repository.aggregate(
+        input as unknown as AggregateOptions<RepositoryRecord>,
+      );
+    case 'groupBy':
+      return repository.groupBy(
+        input as unknown as GroupByOptions<RepositoryRecord>,
+      );
     case 'count':
       return repository.count(input);
     case 'exists':

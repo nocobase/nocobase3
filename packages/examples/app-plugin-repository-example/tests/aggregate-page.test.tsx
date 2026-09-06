@@ -85,9 +85,16 @@ it('renders database results and applies status and HAVING using the Select and 
     '/repository-example/orders/products/details/demo-product-1',
   );
   expect(within(products).queryByText('USB-C Dock')).not.toBeInTheDocument();
-  const request = new URL(f.requests.at(-1)!.path);
-  expect(request.searchParams.get('status')).toBe('paid');
-  expect(request.searchParams.get('minimumQuantity')).toBe('2');
+  const request = f.requests.findLast(
+    (entry) =>
+      entry.path.endsWith(':groupBy') &&
+      JSON.stringify(entry.body).includes('"by":["productId"]'),
+  );
+  expect(request?.body).toMatchObject({
+    by: ['productId'],
+    filter: { root: { items: [{ value: 'paid' }] } },
+    having: { root: { items: [{ value: 2 }] } },
+  });
 });
 it('renders count zero and nullable aggregates for an empty database', async () => {
   await show(false);
@@ -99,9 +106,13 @@ it('renders count zero and nullable aggregates for an empty database', async () 
 });
 it('clears stale results on query failure and recovers on retry', async () => {
   await show();
-  const request = vi
-    .spyOn(f.api, 'request')
-    .mockRejectedValueOnce(new Error('Temporary failure'));
+  const repository = f.api.repository<Record<string, unknown>>(
+    'repositoryExampleOrderItems',
+  );
+  const request = vi.spyOn(f.api, 'repository').mockReturnValueOnce({
+    ...repository,
+    aggregate: vi.fn().mockRejectedValueOnce(new Error('Temporary failure')),
+  });
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'Apply' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -114,4 +125,47 @@ it('clears stale results on query failure and recovers on retry', async () => {
   );
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   request.mockRestore();
+});
+it('filters the additional groupBy panels and exposes their composite request ASTs', async () => {
+  await show();
+  const user = userEvent.setup();
+  const minimum = screen.getByRole('spinbutton', {
+    name: 'Minimum rows per group (new examples)',
+  });
+  await user.clear(minimum);
+  await user.type(minimum, '2');
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled(),
+  );
+  const ranking = screen.getByRole('table', { name: 'Customer order ranking' });
+  expect(within(ranking).getAllByRole('row')).toHaveLength(2);
+  expect(
+    within(ranking).getByRole('link', { name: 'Ada Chen' }),
+  ).toHaveAttribute('href', '/repository-example/crm/details/demo-customer-1');
+  const statuses = screen.getByRole('table', {
+    name: 'Customer × order status',
+  });
+  expect(
+    within(statuses).getByText(
+      'No groups match these filters. Reduce the minimum count or change the status.',
+    ),
+  ).toBeInTheDocument();
+  const prices = screen.getByRole('table', {
+    name: 'Product × item unit price',
+  });
+  expect(
+    within(prices).getByRole('link', { name: 'USB-C Dock' }),
+  ).toBeInTheDocument();
+  expect(
+    within(prices).queryByText('Mechanical Keyboard'),
+  ).not.toBeInTheDocument();
+  const request = f.requests.findLast((entry) =>
+    entry.path.endsWith(':groupBy'),
+  );
+  expect(request?.body).toMatchObject({
+    by: ['productId', 'unitPriceCents'],
+    having: { root: { items: [{ path: ['count'], value: 2 }] } },
+  });
+  expect(screen.getByLabelText('COUNT · item rows')).toHaveTextContent('8');
 });

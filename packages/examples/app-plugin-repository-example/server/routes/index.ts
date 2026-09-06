@@ -1,4 +1,3 @@
-import { aggregateRoutes } from './aggregate.js';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   defineApiRoutes,
@@ -13,6 +12,8 @@ const actions: readonly RepositoryApiAction[] = [
   'findMany',
   'findOne',
   'count',
+  'aggregate',
+  'groupBy',
   'exists',
   'createOne',
   'updateOne',
@@ -53,7 +54,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       authentication.required(),
     );
     router.route('/', await repositoryRoutes.createRouter(app));
-    router.route('/', await aggregateRoutes.createRouter(app));
     return router;
   });
 const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [

@@ -125,41 +125,89 @@ Tests verify authentication, integer validation, concurrent increments without l
 Open **Repository examples → Aggregate queries** at `/repository-example/aggregate`. The page reuses the seeded orders, items, products and customers; no additional migration or seed is required.
 
 - `aggregate`: item row count, summed quantity, average/minimum/maximum unit price in cents.
-- Filtered `aggregate`: order counts for each status. The status field is an enum, which the current Repository cannot use as a `groupBy` field.
+- Enum `groupBy`: order counts by status in a single query, preserving exact enum member identity.
 - `groupBy`: items grouped by `productId`, with row count, summed quantity and average unit price, sorted by quantity descending. Product names, SKUs and detail links accompany each group.
 - `having`: a minimum grouped quantity applies after aggregation, without changing the overall statistics.
 - Relation aggregate selection: the first 50 customers by ID with their matching order count, including zero counts and customer detail links.
 
 The status Select filters every panel, including items through `order.status`. Apply runs the query again; Repository calls shows the actual request and response. Empty sets return count 0 and NULL for SUM/AVG/MIN/MAX. Average price is the unweighted average of item unit prices, not revenue or a quantity-weighted average. Queries run separately, so concurrent edits may be observed between panels.
 
-The plugin owns an authenticated `GET /api/repository-example/aggregate?status=all&minimumQuantity=0` endpoint declared through `defineApiRoutes`. The injected client calls it with `api.request`. It exposes only fixed collections and aggregates, validates the status and integer HAVING threshold (0–1,000,000), and delegates to database Repository methods. The generic `defineRepositoryApiRoutes` HTTP adapter currently supports the seven CRUD actions but does not expose `aggregate` or `groupBy`.
+The page calls `api.repository(name).aggregate()` and `.groupBy()` directly through `defineRepositoryApiRoutes`. Both actions are explicitly enabled and guarded by the plugin's authentication middleware. They use POST requests with Aggregate, Filter and Sort JSON ASTs, matching the database Repository contract. The old example-specific GET aggregate endpoint has been removed. The HTTP adapter validates the envelope and Repository validates fields, aliases and expressions.
 
-The main server calls are in `server/routes/aggregate.ts`:
+The complete client calls are in `client/aggregate.ts`. Product names are fetched in batches of 100 to respect the configured list limit. The request trace shows each actual action and its JSON AST.
 
 ```ts
+const items = api.repository<Record<string, unknown>>(
+  'repositoryExampleOrderItems',
+);
 const summary = await items.aggregate({
-  filter: (f) => f.string('order.status').eq('paid'),
-  aggregate: (a) => ({
-    count: a.count(),
-    quantity: a.sum('quantity'),
-    averagePrice: a.avg('unitPriceCents'),
-    minimumPrice: a.min('unitPriceCents'),
-    maximumPrice: a.max('unitPriceCents'),
-  }),
+  aggregate: {
+    kind: 'aggregate',
+    version: 1,
+    items: [
+      { kind: 'count', alias: 'count' },
+      { kind: 'sum', field: 'quantity', alias: 'quantity' },
+      { kind: 'avg', field: 'unitPriceCents', alias: 'averagePrice' },
+    ],
+  },
 });
 const groups = await items.groupBy({
   by: ['productId'],
-  aggregate: (a) => ({ quantity: a.sum('quantity') }),
-  having: (f) => f.number('quantity').gte(3),
-  sort: (s) => s.field('quantity').desc(),
-});
-const customerCounts = await customers.findMany({
-  limit: 50,
-  select: (s) => s.fields('id', 'name').include('orders', (r) => r.count()),
+  aggregate: {
+    kind: 'aggregate',
+    version: 1,
+    items: [{ kind: 'sum', field: 'quantity', alias: 'quantity' }],
+  },
+  having: {
+    kind: 'filter',
+    version: 1,
+    root: {
+      kind: 'group',
+      logic: 'and',
+      items: [
+        { kind: 'condition', path: ['quantity'], operator: '$gte', value: 3 },
+      ],
+    },
+  },
+  sort: {
+    kind: 'sort',
+    version: 1,
+    items: [{ kind: 'field', path: ['quantity'], direction: 'desc' }],
+  },
 });
 ```
 
 Unmodified seed data yields 8 item rows, quantity 14, average price 14900 cents, minimum 5900 and maximum 32900. Selecting Paid yields 3 item rows and quantity 5; a grouped minimum of 2 retains Keyboard and Mouse. Tests verify these results through real HTTP/SQLite and page interactions, along with authentication, invalid input, empty sets, and failure recovery.
+
+## Additional groupBy examples
+
+The Aggregate page includes three additional interactive panels using the same
+seed data and authenticated Repository HTTP actions:
+
+| Panel                     | Group keys                    | Metrics and ordering                                                                   |
+| ------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
+| Customer order ranking    | `customerId`                  | COUNT, sorted by count descending then customer ID                                     |
+| Customer × order status   | `customerId`, `status`        | COUNT per combination, sorted by count descending then customer ID                     |
+| Product × item unit price | `productId`, `unitPriceCents` | COUNT and SUM(quantity), sorted by quantity descending, product ID and price ascending |
+
+The status Select filters source rows in all panels. **Minimum rows per group**
+applies `HAVING count >= minimum` to these three panels; the existing grouped
+quantity threshold still applies only to the original product summary. Customer
+and product IDs are resolved to names with detail links, in batches of at most 100. Each panel exposes its actual request AST and raw groupBy result.
+
+With unchanged seeds and minimum count 1, customer ranking contains 3 customers,
+customer/status contains 4 groups, and product/price contains 7 groups. Ada has
+2 orders overall but only 1 per status. Keyboard has separate groups at 11900
+and 12900 cents. With minimum count 2, ranking retains Ada, customer/status is
+empty, and product/price retains the USB-C Dock with 2 rows and quantity 2.
+Selecting Paid with minimum count 2 yields no groups in these panels.
+
+These examples demonstrate that WHERE filters before grouping, HAVING filters
+after grouping, multiple keys identify a combination, and COUNT(rows) differs
+from SUM(quantity). Orders without matches do not generate a group; this differs
+from the customer relation-count panel, which also includes zero-order customers.
+`client/group-by.ts` owns the calls and `client/components/group-by-examples.tsx`
+renders the panels. No new schema or seed is needed for these examples.
 
 ## Access and limits
 
@@ -173,6 +221,6 @@ Every exposed endpoint installs the authentication plugin's `required()` middlew
 pnpm --filter @nocobase/app-plugin-repository-example check
 ```
 
-Tests run a real SQLite migration and rollback, inspect physical schema and relationship metadata, invoke all seven actions through the HTTP client, verify all authentication boundaries, relation constraints and version conflicts, and exercise browser forms against the same real HTTP/SQLite fixture. Authentication sessions are stubbed in those fixtures; the real authentication middleware is executed.
+Tests run a real SQLite migration and rollback, inspect physical schema and relationship metadata, invoke CRUD and aggregate/groupBy actions through the HTTP client, verify all authentication boundaries, relation constraints and version conflicts, and exercise browser forms against the same real HTTP/SQLite fixture. Authentication sessions are stubbed in those fixtures; the real authentication middleware is executed.
 
 The plugin uses shared development presets and plugin-local shadcn primitives. Its styles use the host's theme tokens and are included by the Default Template's enabled-plugin Tailwind scan.

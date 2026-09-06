@@ -46,10 +46,22 @@ const zhCN: RepositoryExampleResource = {
   atomicPartial: '部分增量失败，成功请求已提交。请查看结果后再决定是否重试。',
   atomicTraceHint:
     '展示实际的 updateOne 参数与响应，包括失败的更新；不会自动重试。',
+  groupByExamples: '更多 groupBy 示例',
+  groupByMinimumCount: '每组最少条数（新增示例）',
+  groupByEmpty: '没有分组满足当前条件，请降低最少条数或切换订单状态。',
+  groupBy_customerRanking: '客户订单排行',
+  groupBy_customerRankingHint:
+    '按 customerId 分组，COUNT(*) 统计订单条数，HAVING 筛选最少条数；按条数降序、客户 ID 升序排列。没有匹配订单的客户不会产生分组。',
+  groupBy_customerStatus: '客户 × 订单状态',
+  groupBy_customerStatusHint:
+    '按 customerId、status 多字段分组。同一客户可出现在多个状态组中，HAVING 作用于每种组合，而不是客户总数。枚举分组保持精确值，按条数和客户 ID 排序。',
+  groupBy_productPrice: '产品 × 明细成交单价',
+  groupBy_productPriceHint:
+    '按 productId、unitPriceCents 多字段分组，计算 COUNT(*) 和 SUM(quantity)。同一产品的不同成交价分别成组；按数量降序、产品 ID 升序、单价升序排列。金额单位为分，COUNT 是明细条数，不是商品数量。',
   aggregateApply: '应用筛选',
   aggregateTitle: 'Aggregate 聚合查询',
   aggregateIntro:
-    '使用现有订单和明细，在数据库中执行 aggregate、带 HAVING 的 groupBy，以及每个客户的关联订单计数。状态筛选作用于所有面板，最小数量仅筛选产品分组。',
+    '使用现有订单和明细，在数据库中执行 aggregate、带 HAVING 的 groupBy，以及每个客户的关联订单计数。状态筛选作用于所有面板，最小数量仅筛选产品分组。每组最少条数仅作用于下方三组新增 groupBy 示例。',
   aggregateAll: '全部状态',
   aggregateHaving: '分组最小数量（HAVING）',
   aggregateMetrics: '明细聚合统计',
@@ -60,13 +72,13 @@ const zhCN: RepositoryExampleResource = {
   aggregate_maximumPrice: 'MAX · 最高单价（分）',
   aggregateSemantics:
     '平均单价为各条明细单价的算术平均，非订单总额或按数量加权的均价。空集的 count 为 0，SUM/AVG/MIN/MAX 为 NULL。各面板分别查询，可能观察到并发修改。',
-  aggregateStatuses: '按状态统计订单 · aggregate',
+  aggregateStatuses: '按状态分组订单 · groupBy',
   aggregateCustomers: '客户关联聚合',
   aggregateCustomerHint:
     '按 ID 展示前 {{count}} 位客户，包括没有匹配订单的客户。计数使用所选状态。',
   aggregateProducts: '按产品汇总明细',
   aggregateTraceHint:
-    '此插件接口固定调用 Repository.aggregate()、groupBy() 和关联 count 的 findMany()。通用 Repository HTTP 适配器尚未暴露 aggregate/groupBy。',
+    '通过通用 Repository HTTP 的 aggregate/groupBy 动作传递 JSON AST，客户计数使用 findMany 关联查询。展开请求可查看实际聚合表达式。',
   crm: 'CRM 示例',
   ordersTitle: '订单管理示例',
   subtitle: '通过 Repository API 管理客户、关联关系和订单。',

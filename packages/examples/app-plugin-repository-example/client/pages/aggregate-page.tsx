@@ -1,14 +1,16 @@
+import { GroupByExamples } from '../components/group-by-examples.js';
+import type { GroupByExample } from '../group-by.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Link } from 'react-router';
 import {
-  AGGREGATE_PATH,
   type AggregateRequest,
   type AggregateResponse,
   type AggregateScalar,
   type AggregateStatus,
 } from '../../shared/aggregate.js';
+import { loadAggregate, type AggregateCall } from '../aggregate.js';
 import { detailPath } from '../model.js';
 import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
@@ -54,22 +56,25 @@ export default function AggregatePage(): ReactElement {
   const { t } = useTranslation(NS);
   const [status, setStatus] = useState<AggregateStatus>('all');
   const [minimum, setMinimum] = useState('0');
+  const [minimumCount, setMinimumCount] = useState('1');
+  const [examples, setExamples] = useState<GroupByExample[]>([]);
   const [query, setQuery] = useState<AggregateRequest>({
     status: 'all',
     minimumQuantity: 0,
   });
+  const [calls, setCalls] = useState<AggregateCall[]>([]);
   const [data, setData] = useState<AggregateResponse>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
-    void api
-      .request<{ data: AggregateResponse }>({
-        path: AGGREGATE_PATH,
-        query: { ...query },
-      })
+    void loadAggregate(api, query)
       .then((response) => {
-        if (active) setData(response.data);
+        if (active) {
+          setData(response.data);
+          setExamples(response.examples);
+          setCalls(response.calls);
+        }
       })
       .catch((value: unknown) => {
         if (active)
@@ -96,7 +101,11 @@ export default function AggregatePage(): ReactElement {
           event.preventDefault();
           setLoading(true);
           setError('');
-          setQuery({ status, minimumQuantity: Number(minimum) });
+          setQuery({
+            status,
+            minimumQuantity: Number(minimum),
+            minimumGroupCount: Number(minimumCount),
+          });
         }}
       >
         <label className='space-y-2 text-sm'>
@@ -134,6 +143,19 @@ export default function AggregatePage(): ReactElement {
             aria-label={t('aggregateHaving')}
             value={minimum}
             onChange={(event) => setMinimum(event.target.value)}
+          />
+        </label>
+        <label className='space-y-2 text-sm'>
+          <span>{t('groupByMinimumCount')}</span>
+          <Input
+            required
+            type='number'
+            min={1}
+            max={1000000}
+            step={1}
+            aria-label={t('groupByMinimumCount')}
+            value={minimumCount}
+            onChange={(event) => setMinimumCount(event.target.value)}
           />
         </label>
         <Button type='submit' disabled={loading}>
@@ -282,6 +304,7 @@ export default function AggregatePage(): ReactElement {
           </Card>
         </div>
       )}
+      {data && !loading && !error && <GroupByExamples examples={examples} />}
       <details className='rounded-lg border p-4'>
         <summary className='cursor-pointer font-medium'>{t('trace')}</summary>
         <p className='my-3 text-sm text-muted-foreground'>
@@ -292,7 +315,17 @@ export default function AggregatePage(): ReactElement {
             <h3>{t('request')}</h3>
             <pre className='overflow-auto text-xs'>
               {JSON.stringify(
-                { method: 'GET', path: AGGREGATE_PATH, query },
+                {
+                  query,
+                  calls:
+                    loading || error
+                      ? []
+                      : calls.map(({ repository, action, options }) => ({
+                          method: 'POST',
+                          path: `${repository}:${action}`,
+                          options,
+                        })),
+                },
                 null,
                 2,
               )}

@@ -65,7 +65,29 @@ Use equality shorthand or the string Filter Builder's `eq`, `ne`, `empty`, and `
 
 Supported: create/update/upsert branches, variables, nested mutation values, through payload values, ordinary select/returning, relation filters/projections, streaming, `count`, and logical filter composition. Root upsert still selects by a separate supported identity field.
 
-V1 rejects enum primary/unique keys, relation join keys, pattern/case-insensitive filters, enum sorting/cursors, distinct/group keys, and `sum/avg/min/max`. Ordinary records may still be sorted or paginated by another supported field. Enum declaration order does not define an ordering API. Direct SQL writers are not constrained by generated enum membership CHECKs in this version.
+V1 rejects enum primary/unique keys, relation join keys, pattern/case-insensitive filters, enum sorting/cursors, distinct keys, and `sum/avg/min/max`. Ordinary records may still be sorted or paginated by another supported field. Enum declaration order does not define an ordering API. Direct SQL writers are not constrained by generated enum membership CHECKs in this version.
+
+## Grouping
+
+Enum fields support `groupBy` as single or multi-field keys. Groups use exact
+member identity, including case and trailing spaces, independently of the
+physical column collation. SQL NULL forms its own group. Returned keys remain
+strings or null and pass the same stored-member validation as ordinary reads.
+
+```ts
+await articles.groupBy({
+  by: ['status'],
+  aggregate: (a) => ({ count: a.count() }),
+  having: (f) => f.number('count').gte(2),
+  sort: (s) => s.field('count').desc(),
+});
+```
+
+`filter` and `having` can use exact enum equality and null predicates; unknown
+members remain invalid filter operands. Sort by aggregate results or other
+supported grouped fields. Enum sorting itself is still unsupported: grouping
+defines equality, not lexical or declaration-order ranking. Result order is
+unspecified without a supported explicit sort.
 
 ## Member evolution
 

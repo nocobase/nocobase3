@@ -23,6 +23,8 @@ const repositoryRoutes = defineRepositoryApiRoutes({
         'createOne',
         'updateOne',
         'deleteOne',
+        'aggregate',
+        'groupBy',
       ],
       maxLimit: 100,
     },
@@ -78,7 +80,7 @@ const result = await orders.createOne({
 ```
 
 Supported actions are `findMany`, `findOne`, `count`, `exists`, `createOne`,
-`updateOne`, and `deleteOne`. Unconfigured names and actions have no route.
+`updateOne`, `deleteOne`, `aggregate`, and `groupBy`. Unconfigured names and actions have no route.
 Responses use `{ data: result }`, including complete mutation results (`record`,
 `createdTargets`, and optional `version`). Missing `findOne` records return
 `{ data: null }`, which the client converts to `undefined`. Delete success also
@@ -108,3 +110,25 @@ This basic adapter deliberately does **not** install authentication or
 authorization. Configured endpoints accept anonymous requests and have no field
 or record permission filtering. Exposure configuration is not a permission
 policy. No application endpoints are enabled merely by importing this helper.
+
+## Repository aggregate endpoints
+
+Add `aggregate` and `groupBy` to an exposure's `actions` to enable
+`POST /<name>:aggregate` and `POST /<name>:groupBy`. Neither endpoint is enabled
+implicitly. As with other Repository actions, the contribution installs no
+access policy: the owning application or plugin must guard its declared routes.
+
+`aggregate` accepts a required Aggregate AST and an optional `filter`.
+`groupBy` also requires a non-empty `by` array and accepts `having` and `sort`
+over grouped fields and aggregate aliases. Envelopes must be JSON objects;
+unknown options, callbacks, database context, and pagination are unsupported.
+Repository validates AST versions, expressions, aliases and field capabilities
+and returns the existing `{ code, message }` error response with status 400.
+The 1 MiB body limit also applies to both actions.
+
+`maxLimit` applies only to `findMany`. Aggregations operate over all matching
+rows, and `groupBy` returns all matching groups without pagination. Responses
+are `{ data: aggregateObject }` or `{ data: groupObjects }`. BigInt scalar results
+become decimal strings without precision loss. See the
+[`@nocobase/api-client` examples](../../libs/api-client/README.md#aggregate-and-grouped-queries)
+for the JSON Aggregate, Filter and Sort AST contracts.

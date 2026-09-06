@@ -61,3 +61,57 @@ validation, and query limits.
 complete JSON array, or asynchronously iterate it to request framed NDJSON and
 process records as they arrive. A query cannot be awaited and iterated, or be
 iterated twice; create another query to execute it again.
+
+## Aggregate and grouped queries
+
+Enable `aggregate` and `groupBy` in the server's `defineRepositoryApiRoutes`
+exposure before calling them. Both return promises and accept JSON ASTs, not
+builder callbacks or a server database context.
+
+```ts
+const repository = api.repository<{ status: string; amount: number }>('orders');
+const aggregate = {
+  kind: 'aggregate',
+  version: 1,
+  items: [
+    { kind: 'count', alias: 'count' },
+    { kind: 'sum', field: 'amount', alias: 'total' },
+    { kind: 'avg', field: 'amount', alias: 'average' },
+    { kind: 'min', field: 'amount', alias: 'minimum' },
+    { kind: 'max', field: 'amount', alias: 'maximum' },
+  ],
+} as const;
+const totals = await repository.aggregate({
+  filter: { status: 'paid' },
+  aggregate,
+});
+const groups = await repository.groupBy({
+  by: ['status'],
+  aggregate,
+  having: {
+    kind: 'filter',
+    version: 1,
+    root: {
+      kind: 'group',
+      logic: 'and',
+      items: [
+        { kind: 'condition', path: ['count'], operator: '$gte', value: 2 },
+      ],
+    },
+  },
+  sort: {
+    kind: 'sort',
+    version: 1,
+    items: [{ kind: 'field', path: ['total'], direction: 'desc' }],
+  },
+});
+```
+
+Requests use `POST /orders:aggregate` and `POST /orders:groupBy`; the client
+unwraps `{ data }` into an aggregate object or array of group objects. Exported
+contracts are `RemoteAggregateAst`, `RemoteAggregateOptions`,
+`RemoteGroupByOptions`, and `RemoteAggregateResult`. Result aliases are dynamic.
+An empty input set returns count 0 and null for SUM/AVG/MIN/MAX; empty grouped
+results are `[]`. BigInt results are serialized as decimal strings to avoid
+precision loss, dates as ISO strings, and dialect-specific numeric strings are
+preserved. These methods do not use `findMany` pagination or NDJSON streaming.

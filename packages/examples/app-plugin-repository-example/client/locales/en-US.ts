@@ -51,10 +51,23 @@ const enUS = {
     'Some increments failed. Successful requests remain committed; inspect the results before retrying.',
   atomicTraceHint:
     'Actual updateOne inputs and responses, including rejected updates. No automatic retries are performed.',
+  groupByExamples: 'More groupBy examples',
+  groupByMinimumCount: 'Minimum rows per group (new examples)',
+  groupByEmpty:
+    'No groups match these filters. Reduce the minimum count or change the status.',
+  groupBy_customerRanking: 'Customer order ranking',
+  groupBy_customerRankingHint:
+    'GROUP BY customerId · COUNT(*) · HAVING count ≥ minimum · count DESC, customerId ASC. Customers without matching orders do not form a group.',
+  groupBy_customerStatus: 'Customer × order status',
+  groupBy_customerStatusHint:
+    'GROUP BY customerId, status. The same customer can appear in several status groups. HAVING applies to each combination, not the customer total. Enum groups preserve exact values; sorting uses count and customerId.',
+  groupBy_productPrice: 'Product × item unit price',
+  groupBy_productPriceHint:
+    'GROUP BY productId, unitPriceCents · COUNT(*) and SUM(quantity). Different item snapshot prices remain separate even for the same product. Sort by quantity DESC, productId ASC, price ASC. Prices are cents; COUNT measures item rows, not units.',
   aggregateApply: 'Apply',
   aggregateTitle: 'Aggregate queries',
   aggregateIntro:
-    'Database-side statistics over the existing orders and items: aggregate, groupBy with HAVING, and per-customer relation counts. Status filters apply to all panels; the minimum quantity applies only to product groups.',
+    'Database-side statistics over the existing orders and items: aggregate, groupBy with HAVING, and per-customer relation counts. Status filters apply to all panels; the minimum quantity applies only to product groups. The minimum row count applies to the three additional groupBy examples.',
   aggregateAll: 'All statuses',
   aggregateHaving: 'Minimum grouped quantity (HAVING)',
   aggregateMetrics: 'Item aggregates',
@@ -65,13 +78,13 @@ const enUS = {
   aggregate_maximumPrice: 'MAX · unit price (cents)',
   aggregateSemantics:
     'Average price is the unweighted average of item unit prices, not an order total or a quantity-weighted price. Empty sets return count 0 and NULL for SUM/AVG/MIN/MAX. Panels run separate queries and may observe concurrent edits.',
-  aggregateStatuses: 'Order counts by status · aggregate',
+  aggregateStatuses: 'Orders grouped by status · groupBy',
   aggregateCustomers: 'Customer relation aggregates',
   aggregateCustomerHint:
     'First {{count}} customers by ID, including customers with zero matching orders. Counts use the selected status.',
   aggregateProducts: 'Items grouped by product',
   aggregateTraceHint:
-    'This fixed plugin endpoint calls Repository.aggregate(), groupBy(), and findMany() with relation count selections. The generic Repository HTTP adapter does not expose aggregate/groupBy yet.',
+    'Calls the configured Repository HTTP aggregate/groupBy actions with JSON ASTs; customer counts use findMany relation selections. Expand the requests to inspect the actual expressions.',
   crm: 'CRM example',
   ordersTitle: 'Orders example',
   subtitle: 'Customers, relationships and orders, powered by Repository APIs.',

@@ -248,12 +248,17 @@ describeIntegrationDatabases('Enum field contract', (context) => {
         aggregate: (a) => ({ total: a.count('status') }),
       }),
     ).toEqual({ total: 2 });
-    await expect(
-      repo.groupBy({
+    expect(
+      await repo.groupBy({
         by: ['status'],
         aggregate: (a) => ({ total: a.count() }),
       }),
-    ).rejects.toMatchObject({ code: 'FIELD_CAPABILITY_NOT_SUPPORTED' });
+    ).toEqual(
+      expect.arrayContaining([
+        { status: 'DRAFT', total: 1 },
+        { status: 'draft', total: 1 },
+      ]),
+    );
     await expect(
       context.builder.addConstraint('articles', {
         type: 'unique',

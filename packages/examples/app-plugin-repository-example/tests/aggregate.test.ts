@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import { loadAggregate } from '../client/aggregate.js';
 import { createFixture } from './helpers.js';
-import { AGGREGATE_PATH, type AggregateResponse } from '../shared/aggregate.js';
+import { type AggregateResponse } from '../shared/aggregate.js';
 
 let f: Awaited<ReturnType<typeof createFixture>>;
 beforeEach(async () => {
@@ -18,12 +19,11 @@ async function seed() {
     })
     .run();
 }
-async function aggregate(query: Record<string, string | number> = {}) {
+async function aggregate(
+  query: Partial<import('../shared/aggregate.js').AggregateRequest> = {},
+): Promise<AggregateResponse> {
   return (
-    await f.api.request<{ data: AggregateResponse }>({
-      path: AGGREGATE_PATH,
-      query,
-    })
+    await loadAggregate(f.api, { status: 'all', minimumQuantity: 0, ...query })
   ).data;
 }
 it('aggregates all rows, groups products with names, and includes zero relation counts', async () => {
@@ -52,6 +52,14 @@ it('aggregates all rows, groups products with names, and includes zero relation 
     averagePrice: 12400,
   });
   expect(result.customers.map((row) => row.orders)).toEqual([2, 1, 1, 0]);
+  const statusCalls = f.requests.filter(
+    (entry) =>
+      /repositoryExampleOrders:groupBy$/.test(entry.path) &&
+      JSON.stringify(entry.body).includes('"by":["status"]'),
+  );
+  expect(statusCalls).toHaveLength(1);
+  expect(statusCalls[0]?.path).toContain(':groupBy');
+  expect(statusCalls[0]?.body).toMatchObject({ by: ['status'] });
 });
 it('applies status to all queries and HAVING only to grouped products', async () => {
   await seed();
@@ -92,24 +100,20 @@ it('preserves SQL empty-set semantics', async () => {
     customerLimit: 50,
   });
 });
-it('requires authentication, validates filters, and leaves unrelated routes public', async () => {
-  expect((await f.router.request(`/main/api/${AGGREGATE_PATH}`)).status).toBe(
-    401,
-  );
-  for (const query of [
-    'status=invalid',
-    'minimumQuantity=-1',
-    'minimumQuantity=1.5',
-    'minimumQuantity=1000001',
-    'minimumQuantity=NaN',
-    'minimumQuantity=',
-  ]) {
-    const response = await f.router.request(
-      `/main/api/${AGGREGATE_PATH}?${query}`,
-      { headers: { 'x-test-user': 'tester' } },
-    );
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ code: 'INVALID_INPUT' });
+it('requires authentication for both aggregate actions and leaves unrelated routes public', async () => {
+  for (const action of ['aggregate', 'groupBy']) {
+    expect(
+      (
+        await f.router.request(
+          `/main/api/repositoryExampleOrderItems:${action}`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          },
+        )
+      ).status,
+    ).toBe(401);
   }
   expect((await f.router.request('/main/api/unrelated')).status).toBe(200);
 });

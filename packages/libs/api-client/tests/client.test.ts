@@ -417,3 +417,76 @@ describe('createApiClient', () => {
     ]);
   });
 });
+
+describe('remote aggregate queries', () => {
+  it('posts aggregate/groupBy ASTs to encoded endpoints and unwraps scalar results', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ data: { count: 0, total: null } }))
+      .mockResolvedValueOnce(
+        Response.json({
+          data: [{ status: 'paid', total: '9007199254740993' }],
+        }),
+      );
+    const orders = createApiClient({
+      baseURL: '/api',
+      fetch: request,
+    }).repository('sales/orders');
+    const aggregate = {
+      kind: 'aggregate',
+      version: 1,
+      items: [
+        { kind: 'count', alias: 'count' },
+        { kind: 'sum', field: 'amount', alias: 'total' },
+      ],
+    } as const;
+    const options = { filter: { status: 'confirmed' as const }, aggregate };
+    expect(await orders.aggregate(options)).toEqual({ count: 0, total: null });
+    const grouped = {
+      by: ['status'] as const,
+      aggregate,
+      having: { total: 10 },
+      sort: {
+        kind: 'sort',
+        version: 1,
+        items: [{ kind: 'field', path: ['total'], direction: 'desc' }],
+      } as const,
+    };
+    expect(await orders.groupBy(grouped)).toEqual([
+      { status: 'paid', total: '9007199254740993' },
+    ]);
+    expect(request.mock.calls.map(([url]) => url)).toEqual([
+      '/api/sales%2Forders:aggregate',
+      '/api/sales%2Forders:groupBy',
+    ]);
+    expect(request.mock.calls.map(([, init]) => init?.method)).toEqual([
+      'POST',
+      'POST',
+    ]);
+    expect(
+      request.mock.calls.map(
+        ([, init]) => JSON.parse(String(init?.body)) as unknown,
+      ),
+    ).toEqual([options, grouped]);
+  });
+  it('preserves Repository validation errors for aggregate calls', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        {
+          code: 'INVALID_AGGREGATE',
+          message: 'Invalid aggregate expression',
+        },
+        { status: 400 },
+      ),
+    );
+    const orders = createApiClient({
+      baseURL: '/api',
+      fetch: request,
+    }).repository<Order>('orders');
+    await expect(
+      orders.aggregate({
+        aggregate: { kind: 'aggregate', version: 1, items: [] },
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'INVALID_AGGREGATE' });
+  });
+});

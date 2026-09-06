@@ -32,6 +32,8 @@ const actions: RepositoryApiAction[] = [
   'findMany',
   'findOne',
   'count',
+  'aggregate',
+  'groupBy',
   'exists',
   'createOne',
   'updateOne',
@@ -133,6 +135,196 @@ describe('Repository API routes', () => {
     await expect(
       orders.deleteOne({ filter: { id: 'one' } }),
     ).rejects.toMatchObject({ status: 404, code: 'RECORD_NOT_FOUND' });
+  });
+
+  it('aggregates all matching rows and groups with HAVING and sort through the HTTP client', async () => {
+    await database.repository('orders').createMany({
+      values: [
+        { id: 'a', status: 'paid' },
+        { id: 'b', status: 'paid' },
+        { id: 'c', status: 'draft' },
+      ],
+    });
+    const orders = client().repository<Order>('sales/orders');
+    const aggregate = {
+      kind: 'aggregate',
+      version: 1,
+      items: [
+        { kind: 'count', alias: 'count' },
+        { kind: 'sum', field: 'version', alias: 'total' },
+        { kind: 'avg', field: 'version', alias: 'average' },
+        { kind: 'min', field: 'version', alias: 'minimum' },
+        { kind: 'max', field: 'version', alias: 'maximum' },
+      ],
+    } as const;
+    // maxLimit restricts findMany, never the input rows of an aggregate.
+    expect(await orders.aggregate({ aggregate })).toEqual({
+      count: 3,
+      total: 3,
+      average: 1,
+      minimum: 1,
+      maximum: 1,
+    });
+    expect(
+      await orders.aggregate({ filter: { status: 'missing' }, aggregate }),
+    ).toEqual({
+      count: 0,
+      total: null,
+      average: null,
+      minimum: null,
+      maximum: null,
+    });
+    expect(
+      await orders.aggregate({ filter: { status: 'paid' }, aggregate }),
+    ).toMatchObject({ count: 2, total: 2 });
+    expect(
+      await orders.groupBy({
+        by: ['status'],
+        aggregate,
+        having: {
+          kind: 'filter',
+          version: 1,
+          root: {
+            kind: 'group',
+            logic: 'and',
+            items: [
+              {
+                kind: 'condition',
+                path: ['count'],
+                operator: '$gte',
+                value: 2,
+              },
+            ],
+          },
+        },
+        sort: {
+          kind: 'sort',
+          version: 1,
+          items: [{ kind: 'field', path: ['total'], direction: 'desc' }],
+        },
+      }),
+    ).toEqual([
+      {
+        status: 'paid',
+        count: 2,
+        total: 2,
+        average: 1,
+        minimum: 1,
+        maximum: 1,
+      },
+    ]);
+    expect(
+      await orders.groupBy({
+        by: ['status'],
+        filter: { status: 'missing' },
+        aggregate,
+      }),
+    ).toEqual([]);
+    expect(
+      await orders.groupBy({
+        by: ['status'],
+        aggregate,
+        sort: {
+          kind: 'sort',
+          version: 1,
+          items: [{ kind: 'field', path: ['count'], direction: 'desc' }],
+        },
+      }),
+    ).toMatchObject([
+      { status: 'paid', count: 2 },
+      { status: 'draft', count: 1 },
+    ]);
+  });
+
+  it('rejects invalid aggregate envelopes, ASTs, fields and unexposed actions', async () => {
+    const aggregate = {
+      kind: 'aggregate',
+      version: 1,
+      items: [{ kind: 'count', alias: 'count' }],
+    };
+    for (const [action, input] of [
+      ['aggregate', {}],
+      ['aggregate', { aggregate: [] }],
+      ['aggregate', { aggregate: { ...aggregate, version: 2 } }],
+      [
+        'aggregate',
+        {
+          aggregate: {
+            ...aggregate,
+            items: [{ kind: 'raw', alias: 'x', sql: 'SELECT 1' }],
+          },
+        },
+      ],
+      [
+        'aggregate',
+        {
+          aggregate: {
+            ...aggregate,
+            items: [{ kind: 'sum', field: 'missing', alias: 'x' }],
+          },
+        },
+      ],
+      ['aggregate', { aggregate, context: {} }],
+      ['aggregate', { aggregate, limit: 1 }],
+      ['groupBy', { aggregate }],
+      ['groupBy', { aggregate, by: [] }],
+      ['groupBy', { aggregate, by: [null] }],
+      ['groupBy', { aggregate, by: ['missing'] }],
+      ['groupBy', { aggregate, by: ['status'], having: [] }],
+      ['groupBy', { aggregate, by: ['status'], having: { missing: 1 } }],
+      [
+        'groupBy',
+        {
+          aggregate,
+          by: ['status'],
+          sort: {
+            kind: 'sort',
+            version: 1,
+            items: [{ kind: 'field', path: ['missing'], direction: 'asc' }],
+          },
+        },
+      ],
+    ] as const) {
+      expect((await request(action, input)).status).toBe(400);
+    }
+    for (const action of ['aggregate', 'groupBy']) {
+      const response = await router.request(`/api/catalog:${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ aggregate, by: ['status'] }),
+      });
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it('serializes bigint aggregate results as lossless decimal strings', async () => {
+    // Router repositories are resolved at construction time, so mount a fresh contribution.
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        { name: 'bigints', collection: 'orders', actions: ['aggregate'] },
+      ],
+    });
+    const repository = database.repository('orders');
+    vi.spyOn(repository, 'aggregate').mockResolvedValue({
+      total: 9007199254740993n,
+    });
+    vi.spyOn(database, 'repository').mockReturnValue(repository);
+    const app = await contribution.createRouter({ container });
+    const response = await app.request('/bigints:aggregate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        aggregate: {
+          kind: 'aggregate',
+          version: 1,
+          items: [{ kind: 'sum', field: 'version', alias: 'total' }],
+        },
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: { total: '9007199254740993' },
+    });
   });
 
   it('applies the default limit and forwards JSON filter, select, sort, offset and cursor', async () => {

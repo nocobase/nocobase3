@@ -1853,7 +1853,8 @@ function validateGroupByFields(
   const seen = new Set<string>();
   for (const [index, name] of input.entries()) {
     const field = scalarField(collection, name, ['by', index]);
-    if (!SORTABLE_TYPES.has(field.type)) {
+    // Enum equality is defined independently of member ordering.
+    if (field.type !== 'enum' && !SORTABLE_TYPES.has(field.type)) {
       invalid(
         'FIELD_CAPABILITY_NOT_SUPPORTED',
         `Field "${field.name}" of type "${field.type}" cannot be grouped.`,

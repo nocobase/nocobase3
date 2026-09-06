@@ -25,6 +25,43 @@ export interface RemoteSortAst {
 export type RemoteRepositoryFilter<TRecord extends object> =
   Readonly<Partial<TRecord>> | RemoteFilterAst;
 
+/** JSON aggregate expressions; callbacks and database context cannot cross HTTP. */
+export interface RemoteAggregateAst {
+  readonly kind: 'aggregate';
+  readonly version: 1;
+  readonly collection?: string;
+  readonly items: readonly (
+    | {
+        readonly kind: 'count';
+        readonly alias: string;
+        readonly field?: string;
+      }
+    | {
+        readonly kind: 'sum' | 'avg' | 'min' | 'max';
+        readonly alias: string;
+        readonly field: string;
+      }
+  )[];
+}
+
+/** SQL scalar values serialized over JSON; bigint and date values become strings. */
+export type RemoteAggregateResult = Readonly<
+  Record<string, string | number | boolean | null>
+>;
+
+export interface RemoteAggregateOptions<TRecord extends object> {
+  readonly filter?: RemoteRepositoryFilter<TRecord>;
+  readonly aggregate: RemoteAggregateAst;
+}
+
+export interface RemoteGroupByOptions<
+  TRecord extends object,
+> extends RemoteAggregateOptions<TRecord> {
+  readonly by: readonly [keyof TRecord & string, ...(keyof TRecord & string)[]];
+  readonly having?: RemoteRepositoryFilter<RemoteAggregateResult>;
+  readonly sort?: RemoteSortAst;
+}
+
 export interface RemoteRepositoryReadOptions<_TRecord extends object> {
   readonly select?: RemoteSelectAst;
 }
@@ -103,7 +140,7 @@ export interface RemoteDeleteResult<TRecord extends object> {
 }
 
 export interface RemoteRepository<
-  TRecord extends object,
+  TRecord extends object = Record<string, unknown>,
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 > {
@@ -111,6 +148,12 @@ export interface RemoteRepository<
     options?: RemoteFindManyOptions<TRecord>,
   ): RemoteRepositoryQuery<TRecord>;
   findOne(options: RemoteFindOneOptions<TRecord>): Promise<TRecord | undefined>;
+  aggregate(
+    options: RemoteAggregateOptions<TRecord>,
+  ): Promise<RemoteAggregateResult>;
+  groupBy(
+    options: RemoteGroupByOptions<TRecord>,
+  ): Promise<RemoteAggregateResult[]>;
   count(options?: RemoteFilterOnlyOptions<TRecord>): Promise<number>;
   exists(options?: RemoteFilterOnlyOptions<TRecord>): Promise<boolean>;
   createOne(
@@ -140,6 +183,8 @@ export type RemoteRepositoryAction =
   | 'findMany'
   | 'findOne'
   | 'count'
+  | 'aggregate'
+  | 'groupBy'
   | 'exists'
   | 'createOne'
   | 'updateOne'
@@ -168,7 +213,7 @@ export interface CreateRemoteRepositoryOptions {
 }
 
 export function createRemoteRepository<
-  TRecord extends object,
+  TRecord extends object = Record<string, unknown>,
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 >(
@@ -210,6 +255,12 @@ export function createRemoteRepository<
         'findOne',
         input,
       )) ?? undefined,
+    aggregate: (
+      input: RemoteAggregateOptions<TRecord>,
+    ): Promise<RemoteAggregateResult> => call('aggregate', input),
+    groupBy: (
+      input: RemoteGroupByOptions<TRecord>,
+    ): Promise<RemoteAggregateResult[]> => call('groupBy', input),
     count: (input: RemoteFilterOnlyOptions<TRecord> = {}): Promise<number> =>
       call('count', input),
     exists: (input: RemoteFilterOnlyOptions<TRecord> = {}): Promise<boolean> =>
