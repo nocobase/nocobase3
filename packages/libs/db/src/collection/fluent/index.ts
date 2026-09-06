@@ -103,6 +103,18 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     return this.field({ ...options, name, type: 'char' });
   }
 
+  enum(
+    name: string,
+    options: Partial<FieldDefinition> & { values: readonly string[] },
+  ): FieldDefinitionBuilder {
+    return this.field({
+      ...options,
+      name,
+      type: 'enum',
+      values: [...options.values],
+    });
+  }
+
   text(
     name: string,
     options: Partial<FieldDefinition> = {},

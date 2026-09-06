@@ -14,6 +14,7 @@ import {
 import { RepositoryError } from '../errors.js';
 import { booleanStorageValue, decodeBooleanValue } from '../boolean.js';
 import { normalizeCharValue } from '../char.js';
+import { normalizeEnumValue } from '../enum.js';
 import { spoolRows } from './row-spool.js';
 import { isTemporalType, normalizeTemporalValue } from '../temporal.js';
 import { temporalBinding, temporalProjection } from './temporal-sql.js';
@@ -2503,6 +2504,13 @@ function decodeBooleanRow(
   for (const field of scalarFields(collection)) {
     if (field.type === 'boolean' && Object.hasOwn(result, field.name))
       result[field.name] = decodeBooleanValue(field, result[field.name]);
+    if (field.type === 'enum' && Object.hasOwn(result, field.name))
+      result[field.name] = normalizeEnumValue(
+        field,
+        result[field.name],
+        'INVALID_STORED_VALUE',
+        ['select', field.name],
+      );
   }
   return result;
 }
@@ -3054,6 +3062,34 @@ function applyCondition(
     ? qualified(sourceAlias, directColumn)
     : directColumn;
   const field = collection.fields?.find((item) => item.name === node.path[0]);
+  if (
+    field?.type === 'enum' &&
+    typeof node.value === 'string' &&
+    (node.operator === '$eq' || node.operator === '$ne')
+  ) {
+    const operator = node.operator === '$eq' ? '=' : '<>';
+    const dialect = String(query.client.config.client);
+    const expressions: Record<string, string> = {
+      pg: `(?? collate "C") ${operator} (? collate "C")`,
+      mysql2: `cast(?? as binary) ${operator} cast(? as binary)`,
+      mysql: `cast(?? as binary) ${operator} cast(? as binary)`,
+      'better-sqlite3': `(?? collate binary) ${operator} ?`,
+      sqlite3: `(?? collate binary) ${operator} ?`,
+      oracledb: `utl_raw.cast_to_raw(??) ${operator} utl_raw.cast_to_raw(?)`,
+      mssql: `convert(varbinary(max), cast(?? as nvarchar(max))) ${operator} convert(varbinary(max), cast(? as nvarchar(255)))`,
+    };
+    const expression = expressions[dialect];
+    if (!expression)
+      throw new RepositoryError(
+        'FIELD_CAPABILITY_NOT_SUPPORTED',
+        'Enum equality requires a supported database dialect.',
+      );
+    query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](expression, [
+      name,
+      node.value,
+    ]);
+    return;
+  }
   if (
     field?.type === 'char' &&
     query.client.config.client === 'oracledb' &&

@@ -242,6 +242,10 @@ function checkKeyTypes(
       ),
     );
   }
+  if (left.type === 'enum' || right.type === 'enum')
+    issues.push(
+      issue(collection, path, 'V1 enum Fields cannot be relation join keys.'),
+    );
 }
 
 function relations(

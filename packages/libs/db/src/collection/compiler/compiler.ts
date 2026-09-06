@@ -1,4 +1,5 @@
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
+import { validateEnumDefinition, assertEnumExpansion } from '../enum.js';
 import {
   requireRelationOption,
   validateRelationOptions,
@@ -400,6 +401,44 @@ export class CollectionCompiler {
 
     for (const field of changes.alterFields ?? []) {
       const previous = existingFields.find((item) => item.name === field.name);
+      if (previous?.type === 'enum' || field.changes.type === 'enum') {
+        if (
+          previous?.type !== 'enum' ||
+          (field.changes.type !== undefined && field.changes.type !== 'enum')
+        )
+          throw new Error(
+            'Changing an existing Field to or from enum requires an explicit migration.',
+          );
+        const merged = {
+          ...previous,
+          ...field.changes,
+          name: field.name,
+          db: field.changes.db,
+        } as FieldDefinition;
+        validateEnumDefinition(merged);
+        assertEnumExpansion(previous.values, merged.values!);
+        if (
+          Object.keys(field.changes).every((key) =>
+            ['title', 'description', 'values'].includes(key),
+          )
+        ) {
+          if (
+            previous.length !== undefined &&
+            merged.values!.some((value) => value.length > previous.length!)
+          )
+            throw new Error(
+              'Added enum members exceed current storage capacity; widen the column explicitly.',
+            );
+          continue;
+        }
+        const [definition] = this.compileFieldColumns(merged, current);
+        operations.push({
+          type: 'alterColumn',
+          column: definition.name,
+          changes: definition,
+        });
+        continue;
+      }
       if (previous?.type === 'char' || field.changes.type === 'char') {
         if (
           Object.keys(field.changes).every((key) =>
@@ -580,6 +619,16 @@ export class CollectionCompiler {
     }
 
     const scalarField = field as FieldDefinition;
+    validateEnumDefinition(scalarField);
+    if (
+      scalarField.type === 'enum' &&
+      collection?.constraints?.some(
+        (constraint) =>
+          (constraint.type === 'primary' || constraint.type === 'unique') &&
+          constraint.fields.includes(scalarField.name),
+      )
+    )
+      throw new Error('V1 enum Fields cannot be identity Fields.');
     if (scalarField.type === 'char') {
       if (!Number.isSafeInteger(scalarField.length) || scalarField.length! < 1)
         throw new Error(
@@ -613,7 +662,10 @@ export class CollectionCompiler {
         autoIncrement:
           scalarField.autoIncrement ??
           (scalarField.type === 'increments' ? true : undefined),
-        length: scalarField.length,
+        length:
+          scalarField.type === 'enum'
+            ? (scalarField.length ?? 255)
+            : scalarField.length,
         precision: scalarField.precision,
         scale: scalarField.scale,
         unsigned: scalarField.unsigned,
@@ -666,6 +718,13 @@ export class CollectionCompiler {
     collection?: CollectionDefinition,
     context: CollectionCompilerContext = {},
   ): PhysicalConstraintDefinition {
+    if (
+      (constraint.type === 'primary' || constraint.type === 'unique') &&
+      constraint.fields.some((name) =>
+        fields.some((field) => field.name === name && field.type === 'enum'),
+      )
+    )
+      throw new Error('V1 enum Fields cannot be identity Fields.');
     switch (constraint.type) {
       case 'primary':
         return {

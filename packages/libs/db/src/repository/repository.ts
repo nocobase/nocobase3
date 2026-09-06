@@ -14,6 +14,7 @@ import { identityConstraints } from './internal/identity.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
 import { normalizeBooleanValue } from './boolean.js';
 import { normalizeCharValue } from './char.js';
+import { normalizeEnumValue } from './enum.js';
 import {
   evaluateValues,
   resolveMutationValue,
@@ -928,6 +929,7 @@ export class DefaultRepository<
 }
 
 const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
+  enum: ['$eq', '$ne', '$empty', '$notEmpty'],
   char: [
     '$includes',
     '$notIncludes',
@@ -1024,6 +1026,7 @@ const OPERATORS_BY_TYPE: Readonly<Record<string, readonly FilterOperator[]>> = {
 };
 
 const FILTER_GROUP_BY_TYPE: Readonly<Record<string, string>> = {
+  enum: 'string',
   char: 'string',
   string: 'string',
   uuid: 'string',
@@ -1043,6 +1046,7 @@ const FILTER_GROUP_BY_TYPE: Readonly<Record<string, string>> = {
 };
 
 const FILTER_SHORTHAND_TYPES: ReadonlySet<string> = new Set([
+  'enum',
   'char',
   'string',
   'uuid',
@@ -1378,6 +1382,11 @@ function validateFilterNode(
     );
   }
   let value = resolveFilterValue(node.value, context, [...path, 'value']);
+  if (field.type === 'enum' && ['$eq', '$ne'].includes(node.operator))
+    value = normalizeEnumValue(field, value, 'INVALID_FILTER', [
+      ...path,
+      'value',
+    ]);
   if (
     field.type === 'char' &&
     value !== null &&
@@ -1445,6 +1454,7 @@ function validateResolvedConditionValue(
     switch (field.type) {
       case 'string':
       case 'char':
+      case 'enum':
       case 'uuid':
       case 'text':
       case 'time':

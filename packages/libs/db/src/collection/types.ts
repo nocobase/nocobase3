@@ -6,6 +6,7 @@ export type FieldType =
   | 'bigInt'
   | 'string'
   | 'char'
+  | 'enum'
   | 'text'
   | 'boolean'
   | 'decimal'
@@ -65,6 +66,8 @@ export interface FieldBase {
 
 export interface FieldDefinition extends FieldBase {
   type: FieldType;
+  /** Stable allowed string members for enum fields only. */
+  values?: readonly string[];
   target?: never;
   sourceKey?: never;
   targetKey?: never;
@@ -439,6 +442,10 @@ export interface CollectionDefinitionBuilder {
   char(
     name: string,
     options: Partial<FieldDefinition> & { length: number },
+  ): FieldDefinitionBuilder;
+  enum(
+    name: string,
+    options: Partial<FieldDefinition> & { values: readonly string[] },
   ): FieldDefinitionBuilder;
   text(
     name: string,

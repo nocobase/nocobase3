@@ -19,6 +19,7 @@ export interface CollectionMetadataDocument {
 export interface FieldMetadata {
   /** Explicit scalar semantic type; physical structure remains inspector-owned. */
   type?: FieldType;
+  values?: readonly string[];
   title?: string;
   description?: string;
 }

@@ -13,6 +13,8 @@ Temporal values follow the [date/time contract](./temporal-values.md): `datetime
 
 Boolean values follow the [boolean contract](./boolean-values.md): only `true`, `false`, and nullable `null` are accepted. Driver-specific 0/1 representations are decoded internally, not accepted as public inputs.
 
+See [CHAR fields](./char-values.md) for native padding and length rules, and [enum fields](./enum-values.md) for exact allowed-member validation and safe member evolution.
+
 普通对象：
 
 ```ts

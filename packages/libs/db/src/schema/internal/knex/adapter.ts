@@ -37,7 +37,9 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     this.assertExecutable(operations);
     const sql: string[] = [];
     for (const operation of operations) {
-      const builder = this.toKnexBuilder(operation);
+      const builder = this.toKnexBuilder(
+        await this.normalizeOracleAlter(operation),
+      );
       const commands = await builder.generateDdlCommands();
       sql.push(...applyIdempotentSql(operation, extractSql(commands)));
     }
@@ -109,7 +111,35 @@ export class KnexSchemaAdapter implements SchemaAdapter {
       );
       return;
     }
-    await this.toKnexBuilder(operation);
+    await this.toKnexBuilder(await this.normalizeOracleAlter(operation));
+  }
+
+  private async normalizeOracleAlter(
+    operation: SchemaOperation,
+  ): Promise<SchemaOperation> {
+    if (this.dialect !== 'oracle' || operation.type !== 'alterTable')
+      return operation;
+    const operations: TableAlterSchemaOperation[] = [];
+    for (const item of operation.operations) {
+      if (
+        item.type !== 'alterColumn' ||
+        !['char', 'enum'].includes(String(item.changes.type)) ||
+        item.changes.nullable === undefined
+      ) {
+        operations.push(item);
+        continue;
+      }
+      // Oracle rejects redundant NULL/NOT NULL clauses on existing columns.
+      const rows: Array<{ NULLABLE: string }> = await this.knex.raw(
+        "select nullable from all_tab_columns where owner = coalesce(?, sys_context('USERENV', 'CURRENT_SCHEMA')) and table_name = ? and column_name = ?",
+        [operation.db?.schema ?? null, operation.tableName, item.column],
+      );
+      const changes = { ...item.changes };
+      if (rows[0] && (rows[0].NULLABLE === 'Y') === changes.nullable)
+        delete changes.nullable;
+      operations.push({ ...item, changes });
+    }
+    return { ...operation, operations };
   }
 
   private toKnexBuilder(operation: SchemaOperation): any {
@@ -261,6 +291,20 @@ export class KnexSchemaAdapter implements SchemaAdapter {
             this.dialect === 'oracle'
               ? table.specificType(column.name, 'number(18, 0)')
               : table.bigInteger(column.name);
+          break;
+        case 'enum':
+          builder =
+            this.dialect === 'oracle'
+              ? table.specificType(
+                  column.name,
+                  `varchar2(${column.length ?? 255} char)`,
+                )
+              : this.dialect === 'mssql'
+                ? table.specificType(
+                    column.name,
+                    `nvarchar(${column.length ?? 255})`,
+                  )
+                : table.string(column.name, column.length ?? 255);
           break;
         case 'char':
           if (!Number.isSafeInteger(column.length) || column.length! < 1)

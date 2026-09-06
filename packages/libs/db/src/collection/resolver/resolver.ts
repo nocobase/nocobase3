@@ -15,6 +15,7 @@ import type {
   RelationMetadata,
 } from '../../metadata/document.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
+import { validateEnumMembers } from '../enum.js';
 import type {
   PhysicalCollectionKind,
   PhysicalColumnSchema,
@@ -90,6 +91,22 @@ export function resolveCollection(
   const constraints = resolveConstraints(input, columns, issues);
   const indexes = resolveIndexes(input, columns, issues);
   addUniqueIndexConstraints(constraints, indexes);
+  if (
+    constraints.some(
+      (constraint) =>
+        (constraint.type === 'primary' || constraint.type === 'unique') &&
+        constraint.fields.some(
+          (name) => columns.byLogicalName.get(name)?.type === 'enum',
+        ),
+    )
+  )
+    issues.push(
+      issue(
+        'COLLECTION_SCHEMA_DRIFT',
+        ['constraints'],
+        'V1 enum Fields cannot be identity Fields.',
+      ),
+    );
   const relations = resolveRelations(
     input.metadata?.relations,
     columns,
@@ -400,9 +417,54 @@ function applyFieldMetadata(
     }
     field.title = fieldMetadata.title;
     field.description = fieldMetadata.description;
+    if (fieldMetadata.type === 'enum') {
+      if (!['string', 'text'].includes(field.type)) {
+        issues.push(
+          issue(
+            'COLLECTION_SCHEMA_DRIFT',
+            ['metadata', 'fields', name, 'type'],
+            'Logical enum requires supported string storage; native enums and other physical types are not adopted.',
+          ),
+        );
+        continue;
+      }
+      try {
+        validateEnumMembers(fieldMetadata.values);
+      } catch (error) {
+        issues.push(
+          issue(
+            'COLLECTION_SCHEMA_DRIFT',
+            ['metadata', 'fields', name, 'values'],
+            error instanceof Error ? error.message : 'Invalid enum domain.',
+          ),
+        );
+        continue;
+      }
+      if (
+        /^(?:n?clob|long|n?varchar2?\(\d+ byte\))/i.test(
+          String(field.db?.nativeType),
+        )
+      ) {
+        issues.push(
+          issue(
+            'COLLECTION_SCHEMA_DRIFT',
+            ['metadata', 'fields', name, 'type'],
+            'V1 enum metadata requires supported character storage, not Oracle LOB/BYTE storage.',
+          ),
+        );
+        continue;
+      }
+    }
     if (fieldMetadata.type !== undefined) {
       const compatible =
         field.type === fieldMetadata.type ||
+        (fieldMetadata.type === 'enum' &&
+          ['string', 'text'].includes(field.type) &&
+          Array.isArray(fieldMetadata.values) &&
+          fieldMetadata.values.every(
+            (value) =>
+              field.length === undefined || value.length <= field.length,
+          )) ||
         (fieldMetadata.type === 'string' && field.type === 'char') ||
         (['integer', 'bigInt'].includes(fieldMetadata.type) &&
           field.type === 'decimal' &&
@@ -446,6 +508,20 @@ function applyFieldMetadata(
         );
       } else {
         field.type = fieldMetadata.type;
+        if (field.type === 'enum') {
+          field.values = [...fieldMetadata.values!];
+          if (
+            typeof field.defaultValue === 'string' &&
+            !field.values.includes(field.defaultValue)
+          )
+            issues.push(
+              issue(
+                'COLLECTION_SCHEMA_DRIFT',
+                ['metadata', 'fields', name, 'values'],
+                'The physical default is not an allowed enum member.',
+              ),
+            );
+        }
       }
     }
     pruneUndefined(field);

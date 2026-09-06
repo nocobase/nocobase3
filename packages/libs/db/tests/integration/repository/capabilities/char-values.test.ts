@@ -2,6 +2,48 @@ import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../../helpers.js';
 
 describeIntegrationDatabases('CHAR field contract', (context) => {
+  it('widens CHAR storage and preserves data through an explicit alteration', async () => {
+    await context.builder.createCollection('widths', (c) => {
+      c.string('key').primary();
+      c.char('value', { length: 2 }).nullable();
+    });
+    const repo = context.database.repository('widths');
+    await repo.createOne({ values: { key: 'A', value: 'AB' } });
+    await context.builder.alterField('widths', 'value', { length: 4 });
+    await repo.updateOne({ filter: { key: 'A' }, values: { value: 'ABCD' } });
+    expect(
+      await repo.findOne({
+        filter: { key: 'A' },
+        select: (s) => s.fields('value'),
+      }),
+    ).toEqual({ value: 'ABCD' });
+  });
+  it('reloads short CHAR identities for upsert and bulk returning', async () => {
+    await context.builder.createCollection('shortKeys', (c) => {
+      c.char('code', { length: 4 }).primary().notNull();
+      c.string('label');
+    });
+    const repo = context.database.repository('shortKeys');
+    const created = await repo.createMany({
+      values: [
+        { code: 'A', label: 'first' },
+        { code: 'B', label: 'second' },
+      ],
+      select: (s) => s.fields('code', 'label'),
+    });
+    expect(created.records.map((record) => record.label)).toEqual([
+      'first',
+      'second',
+    ]);
+    const updated = await repo.upsertOne({
+      filter: { code: 'A' },
+      create: { code: 'A', label: 'unused' },
+      update: { label: 'updated' },
+      select: (s) => s.fields('label'),
+    });
+    expect(updated.record).toEqual({ label: 'updated' });
+  });
+
   it('retains logical type and native fixed-width storage through mutations and filters', async () => {
     await context.builder.createCollection('codes', (c) => {
       c.char('code', { length: 4 }).primary();
@@ -65,6 +107,49 @@ describeIntegrationDatabases('CHAR field contract', (context) => {
         repo.createOne({ values: { key: 'bad', value } }),
       ).rejects.toMatchObject({ code: 'INVALID_MUTATION' });
     expect(await repo.count()).toBe(0);
+  });
+
+  it('supports relation keys and metadata-only alterations without changing storage', async () => {
+    await context.builder.createCollection('parents', (c) => {
+      c.char('code', { length: 4 }).primary();
+    });
+    await context.builder.createCollection('children', (c) => {
+      c.string('key').primary();
+      c.char('parentCode', { length: 4 });
+      c.belongsTo('parent', 'parents')
+        .foreignKey('parentCode')
+        .targetKey('code');
+    });
+    const parents = context.database.repository('parents');
+    const children = context.database.repository('children');
+    await parents.createOne({ values: { code: 'A001' } });
+    await children.createOne({
+      values: { key: 'child', parent: (r) => r.connect({ code: 'A001' }) },
+    });
+    expect(
+      await children.findOne({
+        filter: { key: 'child' },
+        select: (s) =>
+          s.fields('key').include('parent', (r) => r.fields('code')),
+      }),
+    ).toEqual({ key: 'child', parent: { code: 'A001' } });
+    await context.builder.alterField('parents', 'code', {
+      title: 'Parent code',
+    });
+    expect(
+      (
+        await context.database
+          .connection(context.spec.name)
+          .collections.get('parents')
+      )?.fields,
+    ).toContainEqual(
+      expect.objectContaining({
+        name: 'code',
+        type: 'char',
+        length: 4,
+        title: 'Parent code',
+      }),
+    );
   });
 
   it('supports char keys, cursors, group keys and streaming without trimming', async () => {

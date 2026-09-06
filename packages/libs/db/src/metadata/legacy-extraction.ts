@@ -252,6 +252,7 @@ function extractLegacyField(
 
   const metadata = pruneUndefined<FieldMetadata>({
     type: metadataFieldType(input.type),
+    values: input.values as readonly string[] | undefined,
     title: readLegacyOptionalString(input, 'title', path, diagnostics),
     description: readLegacyOptionalString(
       input,

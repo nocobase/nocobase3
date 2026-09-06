@@ -1,4 +1,5 @@
 import { metadataFieldType } from './field-type.js';
+import { validateEnumMembers } from '../collection/enum.js';
 import type {
   CollectionMetadataDocument,
   FieldMetadata,
@@ -22,7 +23,7 @@ const ROOT_KEYS = new Set([
   'relations',
 ]);
 const NAMING_KEYS = new Set(['underscored', 'tablePrefix']);
-const FIELD_KEYS = new Set(['type', 'title', 'description']);
+const FIELD_KEYS = new Set(['type', 'values', 'title', 'description']);
 const OPTIMISTIC_LOCK_KEYS = new Set(['field', 'strategy']);
 const RELATION_KEYS = new Set([
   'type',
@@ -213,6 +214,21 @@ function readFields(
       continue;
     }
     checkUnknownProperties(value, FIELD_KEYS, fieldPath, issues);
+    if (value.type === 'enum' || value.values !== undefined) {
+      try {
+        if (value.type !== 'enum')
+          throw new Error('Allowed values require an enum Field.');
+        validateEnumMembers(value.values);
+      } catch (error) {
+        issues.push(
+          issue(
+            'COLLECTION_METADATA_TYPE_INVALID',
+            [...fieldPath, 'values'],
+            error instanceof Error ? error.message : 'Invalid enum values.',
+          ),
+        );
+      }
+    }
     if (
       value.type !== undefined &&
       metadataFieldType(value.type) === undefined
@@ -230,6 +246,10 @@ function readFields(
       name,
       pruneUndefined({
         type: metadataFieldType(value.type),
+        values:
+          value.type === 'enum' && Array.isArray(value.values)
+            ? ([...value.values] as string[])
+            : undefined,
         title: readOptionalString(value, 'title', fieldPath, issues),
         description: readOptionalString(
           value,

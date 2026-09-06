@@ -14,6 +14,7 @@ import type {
 import type { CollectionMetadataIssue } from './errors.js';
 import { CollectionMetadataPatchError } from './service-errors.js';
 import { validateCollectionMetadataDocument } from './validation.js';
+import { assertEnumExpansion } from '../collection/enum.js';
 
 export interface CollectionMetadataPropertiesPatch {
   readonly naming?: NamingOptions | null;
@@ -24,6 +25,7 @@ export interface CollectionMetadataPropertiesPatch {
 
 export interface CollectionFieldMetadataPatch {
   readonly type?: FieldMetadata['type'] | null;
+  readonly values?: readonly string[] | null;
   readonly title?: string | null;
   readonly description?: string | null;
 }
@@ -88,6 +90,7 @@ export class CollectionMetadataService {
     const document = validateCollectionMetadataDocument(input);
     const current = await this.readCurrent(document.name, options);
     const previous = current.stored?.document;
+    validateEnumEvolution(previous, document);
     if (
       sameDocument(document, previous ?? { version: 1, name: document.name })
     ) {
@@ -168,7 +171,7 @@ export class CollectionMetadataService {
     options: UpdateCollectionMetadataOptions = {},
   ): Promise<StoredCollectionMetadata | undefined> {
     validateName(field, 'field');
-    validatePatch(patch, ['type', 'title', 'description']);
+    validatePatch(patch, ['type', 'values', 'title', 'description']);
     validateNullableString(patch.title, 'title');
     validateNullableString(patch.description, 'description');
     return this.mutate(
@@ -179,6 +182,9 @@ export class CollectionMetadataService {
         const fields = cloneRecord(document.fields);
         const metadata = { ...(getRecordEntry(fields, field) ?? {}) };
         applyNullableProperty(metadata, 'type', patch.type);
+        if (patch.type !== undefined && patch.type !== 'enum')
+          delete metadata.values;
+        applyNullableProperty(metadata, 'values', patch.values);
         applyNullableProperty(metadata, 'title', patch.title);
         applyNullableProperty(metadata, 'description', patch.description);
         if (Object.keys(metadata).length === 0) delete fields[field];
@@ -314,6 +320,7 @@ export class CollectionMetadataService {
     );
     apply(document);
     const normalized = validateCollectionMetadataDocument(document);
+    validateEnumEvolution(current.stored?.document, normalized);
     if (
       sameDocument(normalized, current.stored?.document ?? { version: 1, name })
     ) {
@@ -496,6 +503,15 @@ function patchIssue(
     { code: 'COLLECTION_METADATA_TYPE_INVALID', path, message },
   ];
   throw new CollectionMetadataPatchError(issues);
+}
+
+function validateEnumEvolution(
+  previous: CollectionMetadataDocument | undefined,
+  next: CollectionMetadataDocument,
+): void {
+  for (const [name, field] of Object.entries(next.fields ?? {}))
+    if (field.type === 'enum')
+      assertEnumExpansion(previous?.fields?.[name]?.values, field.values!);
 }
 
 function applyNullableProperty<T extends object, Key extends keyof T>(

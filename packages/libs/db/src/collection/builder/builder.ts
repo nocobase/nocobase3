@@ -1407,6 +1407,7 @@ async function syncFieldMetadata(
   }
   if (
     changes.type !== undefined ||
+    ('values' in changes && changes.values !== undefined) ||
     changes.title !== undefined ||
     changes.description !== undefined
   ) {
@@ -1416,6 +1417,7 @@ async function syncFieldMetadata(
           ? undefined
           : (metadataFieldType(field.type) ?? null),
       title: changes.title,
+      values: 'values' in changes ? changes.values : undefined,
       description: changes.description,
     });
   }

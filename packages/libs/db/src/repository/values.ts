@@ -1,5 +1,6 @@
 import type { FieldDefinition } from '../collection/types.js';
 import { RepositoryError } from './errors.js';
+import { normalizeEnumValue } from './enum.js';
 import { isTemporalType, normalizeTemporalValue } from './temporal.js';
 import type {
   MutationLiteral,
@@ -105,6 +106,8 @@ export function validateResolvedMutationValue(
   path: readonly (string | number)[],
 ): RepositoryMutationScalarValue {
   const value = resolved.value;
+  if (field.type === 'enum')
+    return normalizeEnumValue(field, value, 'INVALID_MUTATION', path);
   if (isTemporalType(field.type))
     return normalizeTemporalValue(field, value, 'INVALID_MUTATION', path);
   const valid = (() => {
