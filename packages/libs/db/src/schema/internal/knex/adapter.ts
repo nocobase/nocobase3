@@ -247,17 +247,52 @@ export class KnexSchemaAdapter implements SchemaAdapter {
           builder = table.double(column.name);
           break;
         case 'date':
-          builder = table.date(column.name);
+          builder =
+            this.dialect === 'sqlite'
+              ? table.text(column.name)
+              : table.date(column.name);
           break;
         case 'time':
           builder =
             this.dialect === 'oracle'
-              ? table.string(column.name, 16)
-              : table.time(column.name);
+              ? table.string(column.name, 18)
+              : this.dialect === 'sqlite'
+                ? table.text(column.name)
+                : table.specificType(column.name, 'time(3)');
           break;
         case 'datetime':
-          builder = table.datetime(column.name);
+        case 'datetimeTz': {
+          const instant = column.type === 'datetimeTz';
+          const temporalTypes: Record<string, string> = {
+            sqlite: 'text',
+            postgres: instant
+              ? 'timestamp(3) with time zone'
+              : 'timestamp(3) without time zone',
+            mysql: 'datetime(3)',
+            oracle: instant ? 'timestamp(3) with time zone' : 'timestamp(3)',
+            mssql: instant ? 'datetimeoffset(3)' : 'datetime2(3)',
+          };
+          const clientDialect = String(this.knex.client.config.client);
+          const dialect =
+            this.dialect ??
+            (
+              {
+                pg: 'postgres',
+                mysql2: 'mysql',
+                'better-sqlite3': 'sqlite',
+                sqlite3: 'sqlite',
+                oracledb: 'oracle',
+                mssql: 'mssql',
+              } as Record<string, string>
+            )[clientDialect];
+          const type = dialect && temporalTypes[dialect];
+          if (!type)
+            throw new Error(
+              'Temporal fields require a supported database dialect.',
+            );
+          builder = table.specificType(column.name, type);
           break;
+        }
         case 'json':
           builder = table.json(column.name);
           break;

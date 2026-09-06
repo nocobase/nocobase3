@@ -13,6 +13,7 @@ export type FieldType =
   | 'date'
   | 'time'
   | 'datetime'
+  | 'datetimeTz'
   | 'json'
   | 'blob'
   | 'uuid'
@@ -55,6 +56,8 @@ export interface FieldBase {
   length?: number;
   precision?: number;
   scale?: number;
+  /** Inspected fractional-second precision; V1 Builder temporal columns use 3. */
+  fractionalSecondsPrecision?: number;
   unsigned?: boolean;
   db?: DbOptions;
 }
@@ -441,6 +444,26 @@ export interface CollectionDefinitionBuilder {
     options?: Partial<FieldDefinition>,
   ): FieldDefinitionBuilder;
   decimal(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  float(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  double(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  date(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  time(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  datetimeTz(
     name: string,
     options?: Partial<FieldDefinition>,
   ): FieldDefinitionBuilder;

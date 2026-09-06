@@ -1,3 +1,4 @@
+import { metadataFieldType } from './field-type.js';
 import type {
   CollectionMetadataDocument,
   FieldMetadata,
@@ -214,16 +215,13 @@ function readFields(
     checkUnknownProperties(value, FIELD_KEYS, fieldPath, issues);
     if (
       value.type !== undefined &&
-      value.type !== 'boolean' &&
-      value.type !== 'json' &&
-      value.type !== 'date' &&
-      value.type !== 'time'
+      metadataFieldType(value.type) === undefined
     ) {
       issues.push(
         issue(
           'COLLECTION_METADATA_TYPE_INVALID',
           [...fieldPath, 'type'],
-          'Supplemental field type must be boolean, json, date, or time.',
+          'Field type must be a non-empty scalar type name without surrounding whitespace.',
         ),
       );
     }
@@ -231,13 +229,7 @@ function readFields(
       fields,
       name,
       pruneUndefined({
-        type:
-          value.type === 'boolean' ||
-          value.type === 'json' ||
-          value.type === 'date' ||
-          value.type === 'time'
-            ? value.type
-            : undefined,
+        type: metadataFieldType(value.type),
         title: readOptionalString(value, 'title', fieldPath, issues),
         description: readOptionalString(
           value,

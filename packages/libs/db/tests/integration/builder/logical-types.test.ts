@@ -12,6 +12,8 @@ describeIntegrationDatabases('Supplemental logical field types', (context) => {
     });
     expect((await context.metadataStore.get('flags'))?.document.fields).toEqual(
       {
+        code: { type: 'string' },
+        quantity: { type: 'integer' },
         enabled: { type: 'boolean' },
         payload: { type: 'json' },
         day: { type: 'date' },
@@ -30,6 +32,8 @@ describeIntegrationDatabases('Supplemental logical field types', (context) => {
     });
     expect((await context.metadataStore.get('flags'))?.document.fields).toEqual(
       {
+        code: { type: 'string' },
+        quantity: { type: 'integer' },
         enabled: { type: 'boolean', title: 'Enabled' },
         payload: { type: 'json' },
         day: { type: 'date' },
@@ -37,7 +41,12 @@ describeIntegrationDatabases('Supplemental logical field types', (context) => {
     );
     await context.builder.dropField('flags', 'payload');
     expect((await context.metadataStore.get('flags'))?.document.fields).toEqual(
-      { enabled: { type: 'boolean', title: 'Enabled' }, day: { type: 'date' } },
+      {
+        code: { type: 'string' },
+        quantity: { type: 'integer' },
+        enabled: { type: 'boolean', title: 'Enabled' },
+        day: { type: 'date' },
+      },
     );
     await context.builder.addField('flags', {
       name: 'extra',
@@ -50,7 +59,7 @@ describeIntegrationDatabases('Supplemental logical field types', (context) => {
     await context.builder.alterField('flags', 'extra', { type: 'integer' });
     expect(
       (await context.metadataStore.get('flags'))?.document.fields?.extra,
-    ).toBeUndefined();
+    ).toEqual({ type: 'integer' });
   });
 
   it('allows metadata type patches only when compatible with physical columns', async () => {
@@ -72,7 +81,7 @@ describeIntegrationDatabases('Supplemental logical field types', (context) => {
     ).rejects.toThrow();
     expect(
       (await context.metadataStore.get('flags'))?.document.fields?.label,
-    ).toBeUndefined();
+    ).toEqual({ type: 'string' });
     await connection.collectionMetadata.updateField('flags', 'value', {
       type: null,
     });

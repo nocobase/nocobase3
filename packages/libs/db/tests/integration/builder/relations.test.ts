@@ -188,7 +188,7 @@ describeIntegrationDatabases('relation fields', (context) => {
       orders: { type: 'hasMany', target: 'orders' },
       products: { type: 'belongsToMany', target: 'products' },
     });
-    expect(metadata?.document).not.toHaveProperty('fields');
+    expect(metadata?.document.fields).toEqual({ id: { type: 'integer' } });
   });
 
   it('uses deterministic physical columns for logical relation keys during alteration', async () => {

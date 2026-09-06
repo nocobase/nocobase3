@@ -33,7 +33,7 @@ export class SchemaManagementSchemaAdapter implements SchemaAdapter {
     this.capabilities = adapter.capabilities;
   }
 
-  async execute(operations: SchemaOperation[]): Promise<void> {
+  assertExecutable(operations: SchemaOperation[]): void {
     const operation = operations[0];
     if (operation && this.options.mode === 'external') {
       throw new SchemaManagementNotAllowedError(
@@ -41,6 +41,11 @@ export class SchemaManagementSchemaAdapter implements SchemaAdapter {
         operation.type,
       );
     }
+    this.adapter.assertExecutable?.(operations);
+  }
+
+  async execute(operations: SchemaOperation[]): Promise<void> {
+    this.assertExecutable(operations);
     await this.adapter.execute(operations);
   }
 

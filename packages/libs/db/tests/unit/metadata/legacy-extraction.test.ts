@@ -52,7 +52,9 @@ describe('extractLegacyCollectionMetadata', () => {
         title: 'Orders',
         description: 'Customer purchase orders.',
         fields: {
+          id: { type: 'integer' },
           amount: {
+            type: 'decimal',
             title: 'Amount',
             description: 'Total before refunds.',
           },
@@ -97,7 +99,7 @@ describe('extractLegacyCollectionMetadata', () => {
       version: 1,
       name: 'orderItems',
       naming: { underscored: false },
-      fields: { orderNo: { title: 'Order number' } },
+      fields: { orderNo: { type: 'string', title: 'Order number' } },
     });
     expect(result.diagnostics).toEqual([]);
   });
@@ -120,7 +122,7 @@ describe('extractLegacyCollectionMetadata', () => {
     expect(result.document).toEqual({
       version: 1,
       name: 'orders',
-      fields: { amount: { title: 'Amount' } },
+      fields: { amount: { type: 'decimal', title: 'Amount' } },
     });
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
@@ -227,7 +229,11 @@ describe('extractLegacyCollectionMetadata', () => {
 
     const result = extractLegacyCollectionMetadata(input);
 
-    expect(result.document).toEqual({ version: 1, name: 'orders' });
+    expect(result.document).toEqual({
+      version: 1,
+      name: 'orders',
+      fields: { id: { type: 'integer' } },
+    });
     expect(input).toEqual(before);
   });
 
@@ -247,9 +253,11 @@ describe('extractLegacyCollectionMetadata', () => {
       true,
     );
     expect(result.document?.fields?.__proto__).toEqual({
+      type: 'string',
       title: 'Prototype field',
     });
     expect(result.document?.fields?.constructor).toEqual({
+      type: 'string',
       title: 'Constructor field',
     });
   });

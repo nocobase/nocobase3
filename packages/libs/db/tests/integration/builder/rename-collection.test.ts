@@ -3,10 +3,14 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('collection rename', (context) => {
   it('renames the backing table and preserves data', async () => {
-    await context.builder.createCollection('users', (collection) => {
-      collection.increments('id');
-      collection.string('email');
-    });
+    await context.builder.createCollection(
+      'users',
+      (collection) => {
+        collection.increments('id');
+        collection.string('email');
+      },
+      { syncMetadata: false },
+    );
     await context
       .db(context.table('users'))
       .insert({ email: 'ada@example.com' });

@@ -124,6 +124,41 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     return this.field({ name, type: 'datetime', ...options });
   }
 
+  float(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'float' });
+  }
+
+  double(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'double' });
+  }
+
+  date(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'date' });
+  }
+
+  time(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'time' });
+  }
+
+  datetimeTz(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'datetimeTz' });
+  }
+
   json(
     name: string,
     options: Partial<FieldDefinition> = {},

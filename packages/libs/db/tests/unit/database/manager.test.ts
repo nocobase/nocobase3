@@ -76,7 +76,10 @@ describe('DatabaseManager', () => {
           version: 1,
           name: 'orders',
           title: 'Orders',
-          fields: { amount: { title: 'Amount before tax' } },
+          fields: {
+            id: { type: 'integer' },
+            amount: { type: 'decimal', title: 'Amount before tax' },
+          },
         },
         revision: 1,
       });
@@ -126,12 +129,16 @@ describe('DatabaseManager', () => {
         name: 'orders',
         title: 'Orders',
         fields: {
-          amount: { title: 'Amount' },
-          status: { title: 'Status' },
+          id: { type: 'integer' },
+          amount: { type: 'decimal', title: 'Amount' },
+          status: { type: 'string', title: 'Status' },
         },
       });
       expect(afterAdd?.document).not.toHaveProperty('indexes');
-      expect(afterAdd?.document.fields?.status).not.toHaveProperty('type');
+      expect(afterAdd?.document.fields?.status).toHaveProperty(
+        'type',
+        'string',
+      );
 
       await connection.builder.dropField('orders', 'status');
       expect(
@@ -505,6 +512,7 @@ describe('DatabaseManager', () => {
         collection.increments('id');
       });
       await connection.collections.get('orders');
+      const metadataBefore = await metadataStore.get('orders');
       const invalidate = vi.spyOn(connection.collections, 'invalidate');
 
       await expect(
@@ -518,7 +526,9 @@ describe('DatabaseManager', () => {
         }),
       ).rejects.toThrow('rollback');
       expect(invalidate).not.toHaveBeenCalled();
-      await expect(metadataStore.get('orders')).resolves.toBeUndefined();
+      await expect(metadataStore.get('orders')).resolves.toEqual(
+        metadataBefore,
+      );
       await expect(
         connection.collections.get('orders'),
       ).resolves.not.toMatchObject({
@@ -648,9 +658,13 @@ describe('DatabaseManager', () => {
 
     try {
       const connection = db.connection();
-      await connection.builder.createCollection('orders', (collection) => {
-        collection.increments('id');
-      });
+      await connection.builder.createCollection(
+        'orders',
+        (collection) => {
+          collection.increments('id');
+        },
+        { syncMetadata: false },
+      );
       await expect(metadataStore.get('orders')).resolves.toBeUndefined();
 
       await connection.builder.renameCollection('orders', 'archivedOrders');

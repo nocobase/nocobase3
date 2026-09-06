@@ -1,4 +1,5 @@
 import type { NamingOptions, RelationType } from '../collection/types.js';
+import { metadataFieldType } from './field-type.js';
 import { DefaultNamingStrategy } from '../naming/default-strategy.js';
 import type {
   CollectionMetadataDocument,
@@ -250,13 +251,7 @@ function extractLegacyField(
   }
 
   const metadata = pruneUndefined<FieldMetadata>({
-    type:
-      input.type === 'boolean' ||
-      input.type === 'json' ||
-      input.type === 'date' ||
-      input.type === 'time'
-        ? input.type
-        : undefined,
+    type: metadataFieldType(input.type),
     title: readLegacyOptionalString(input, 'title', path, diagnostics),
     description: readLegacyOptionalString(
       input,

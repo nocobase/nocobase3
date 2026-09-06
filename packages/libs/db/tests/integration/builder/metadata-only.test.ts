@@ -31,7 +31,9 @@ describeIntegrationDatabases(
         title: 'Orders',
         description: 'Customer purchase orders.',
         fields: {
+          id: { type: 'integer' },
           amount: {
+            type: 'decimal',
             title: 'Amount',
             description: 'Total order amount before refunds.',
           },

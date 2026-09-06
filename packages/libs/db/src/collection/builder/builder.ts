@@ -23,6 +23,7 @@ import {
 } from '../../metadata/legacy-extraction.js';
 import type { ConnectionCollections } from '../registry/types.js';
 import { CollectionResolutionError } from '../resolver/errors.js';
+import { metadataFieldType } from '../../metadata/field-type.js';
 import type {
   AnyFieldDefinition,
   BuilderExecOptions,
@@ -391,6 +392,7 @@ export class CollectionBuilder {
     ];
 
     if (!options.dryRun) {
+      this.schemaAdapter.assertExecutable?.(schemaOperations);
       const executedOperations = filterMetadataOperations(
         this.compiler,
         effectiveOperations,
@@ -641,30 +643,39 @@ export class CollectionBuilder {
             operation.changes,
           );
           projected.set(operation.collection, definition);
-          if (operation.changes.optimisticLock !== undefined) {
-            await service.updateCollection(operation.collection, {
-              optimisticLock: operation.changes.optimisticLock,
-            });
+          // Validate the final document against the already-applied physical DDL.
+          // Per-field updates can reference columns dropped in the same operation.
+          const current = (await service.get(operation.collection))
+            ?.document ?? { version: 1 as const, name: operation.collection };
+          const fields = { ...current.fields };
+          const relations = { ...current.relations };
+          const changedNames = new Set([
+            ...(operation.changes.addFields ?? []).map((field) => field.name),
+            ...(operation.changes.alterFields ?? []).map((field) => field.name),
+          ]);
+          for (const name of operation.changes.dropFields ?? []) {
+            delete fields[name];
+            delete relations[name];
           }
-          for (const field of operation.changes.addFields ?? []) {
-            await syncFieldMetadata(service, operation.collection, field);
+          const updates = extractSupplementalMetadata(operation.collection, {
+            fields: definition.fields?.filter((field) =>
+              changedNames.has(field.name),
+            ),
+          });
+          for (const name of changedNames) {
+            delete fields[name];
+            delete relations[name];
           }
-          for (const field of operation.changes.alterFields ?? []) {
-            const resolved = definition.fields?.find(
-              (item) => item.name === field.name,
-            );
-            if (resolved) {
-              await syncFieldMetadata(
-                service,
-                operation.collection,
-                resolved,
-                field.changes,
-              );
-            }
-          }
-          for (const field of operation.changes.dropFields ?? []) {
-            await service.removeField(operation.collection, field);
-          }
+          await service.replaceDocument({
+            ...current,
+            ...(operation.changes.optimisticLock !== undefined
+              ? {
+                  optimisticLock: operation.changes.optimisticLock ?? undefined,
+                }
+              : {}),
+            fields: { ...fields, ...updates.fields },
+            relations: { ...relations, ...updates.relations },
+          });
           break;
         }
         case 'addField': {
@@ -1350,9 +1361,6 @@ async function assertRenameOperations(
         `Cannot rename collection "${operation.from}" to "${operation.to}" because the target collection already exists.`,
       );
     }
-    if (metadata && (await metadata.get(operation.from))) {
-      throw new CollectionRenameAtomicityError(operation.from, operation.to);
-    }
     const dependencies = collectRenameDependencies(operation.from, collections);
     if (dependencies.length > 0) {
       throw new CollectionRenameDependencyError(
@@ -1360,6 +1368,9 @@ async function assertRenameOperations(
         operation.to,
         dependencies,
       );
+    }
+    if (metadata && (await metadata.get(operation.from))) {
+      throw new CollectionRenameAtomicityError(operation.from, operation.to);
     }
   }
 }
@@ -1403,12 +1414,7 @@ async function syncFieldMetadata(
       type:
         changes.type === undefined
           ? undefined
-          : field.type === 'boolean' ||
-              field.type === 'json' ||
-              field.type === 'date' ||
-              field.type === 'time'
-            ? field.type
-            : null,
+          : (metadataFieldType(field.type) ?? null),
       title: changes.title,
       description: changes.description,
     });

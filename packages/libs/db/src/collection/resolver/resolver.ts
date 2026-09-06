@@ -364,6 +364,7 @@ function resolveColumn(
     length: column.length,
     precision: column.precision,
     scale: column.scale,
+    fractionalSecondsPrecision: column.fractionalSecondsPrecision,
     unsigned: column.unsigned,
     db,
   });
@@ -392,6 +393,21 @@ function applyFieldMetadata(
     if (fieldMetadata.type !== undefined) {
       const compatible =
         field.type === fieldMetadata.type ||
+        fieldMetadata.type === 'native' ||
+        fieldMetadata.type.toLowerCase() ===
+          String(field.db?.nativeType).toLowerCase() ||
+        (['decimal', 'double'].includes(fieldMetadata.type) &&
+          field.type === 'float') ||
+        (fieldMetadata.type === 'float' && field.type === 'double') ||
+        (fieldMetadata.type === 'uuid' &&
+          (field.type === 'string' || field.type === 'blob')) ||
+        (['date', 'time', 'datetime', 'datetimeTz'].includes(
+          fieldMetadata.type,
+        ) &&
+          field.type === 'text') ||
+        (fieldMetadata.type === 'datetimeTz' &&
+          field.type === 'datetime' &&
+          /^datetime(?:\(\d+\))?$/i.test(String(field.db?.nativeType))) ||
         (fieldMetadata.type === 'time' &&
           field.type === 'string' &&
           (field.length ?? 0) >= 8) ||

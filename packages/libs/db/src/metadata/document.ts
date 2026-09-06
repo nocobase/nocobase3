@@ -2,6 +2,7 @@ import type {
   NamingOptions,
   OptimisticLockDefinition,
   RelationType,
+  FieldType,
 } from '../collection/types.js';
 
 export interface CollectionMetadataDocument {
@@ -16,8 +17,8 @@ export interface CollectionMetadataDocument {
 }
 
 export interface FieldMetadata {
-  /** Explicit semantic types whose physical representation is ambiguous. */
-  type?: 'boolean' | 'json' | 'date' | 'time';
+  /** Explicit scalar semantic type; physical structure remains inspector-owned. */
+  type?: FieldType;
   title?: string;
   description?: string;
 }

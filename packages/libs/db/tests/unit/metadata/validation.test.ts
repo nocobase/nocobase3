@@ -194,7 +194,19 @@ describe('validateCollectionMetadataDocument', () => {
   });
 
   it('accepts only supported supplemental logical types', () => {
-    for (const type of ['boolean', 'json', 'date', 'time']) {
+    for (const type of [
+      'boolean',
+      'json',
+      'date',
+      'time',
+      'integer',
+      'string',
+      'decimal',
+      'datetime',
+      'datetimeTz',
+      'native',
+      'inet',
+    ]) {
       expect(
         validateCollectionMetadataDocument({
           version: 1,
@@ -203,7 +215,15 @@ describe('validateCollectionMetadataDocument', () => {
         }).fields?.value,
       ).toEqual({ type });
     }
-    for (const type of ['relation', 'integer', null, 1, {}]) {
+    for (const type of [
+      'relation',
+      'belongsTo',
+      '',
+      ' integer ',
+      null,
+      1,
+      {},
+    ]) {
       expect(() =>
         validateCollectionMetadataDocument({
           version: 1,

@@ -47,7 +47,7 @@ describeIntegrationDatabases('managed Collection resolution', (context) => {
     expect(physicalAmount).toBeDefined();
     expect(amount).toMatchObject({
       name: 'amount',
-      type: physicalAmount?.dataType,
+      type: 'decimal',
       nullable: physicalAmount?.nullable,
       title: 'Order amount',
     });
@@ -90,7 +90,7 @@ describeIntegrationDatabases('managed Collection resolution', (context) => {
     expect(physicalAmount).toBeDefined();
     expect(amount).toMatchObject({
       name: 'amount',
-      type: physicalAmount?.dataType,
+      type: 'decimal',
       nullable: physicalAmount?.nullable,
       title: 'Order amount',
       description: 'Total amount before refunds.',
