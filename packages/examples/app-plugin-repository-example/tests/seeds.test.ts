@@ -21,7 +21,7 @@ describe('Repository example seeds', () => {
   }
   it('seeds all entities, exposes related data through HTTP, and preserves edits on replay', async () => {
     const runner = seeder();
-    expect((await runner.run()).executed).toHaveLength(3);
+    expect((await runner.run()).executed).toHaveLength(4);
     for (const [key, count] of [
       ['customers', 4],
       ['contacts', 5],
@@ -116,7 +116,7 @@ describe('Repository example seeds', () => {
       filter: { id: 'existing-product' },
       values: { sku: 'USER-KEYBOARD' },
     });
-    expect((await runner.run()).executed).toHaveLength(3);
+    expect((await runner.run()).executed).toHaveLength(4);
     expect(await products.count()).toBe(7);
   });
 });

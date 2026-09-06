@@ -93,9 +93,70 @@ it('creates physical collections and relation metadata and rolls them back', asy
         keys: [expect.objectContaining({ columnName: 'sequence' })],
       }),
     );
+    const relationProjects = await collections.get(
+      'repositoryExampleRelationProjects',
+    );
+    expect(relationProjects?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'owner',
+          type: 'belongsTo',
+          target: 'repositoryExampleRelationUsers',
+        }),
+        expect.objectContaining({
+          name: 'profile',
+          type: 'hasOne',
+          target: 'repositoryExampleRelationProjectProfiles',
+        }),
+        expect.objectContaining({
+          name: 'tasks',
+          type: 'hasMany',
+          target: 'repositoryExampleRelationTasks',
+        }),
+        expect.objectContaining({
+          name: 'tags',
+          type: 'belongsToMany',
+          target: 'repositoryExampleRelationTags',
+          through: 'repositoryExampleRelationProjectTags',
+        }),
+      ]),
+    );
+    const physicalRelationProjects = await collections.getPhysical(
+      'repositoryExampleRelationProjects',
+    );
+    expect(physicalRelationProjects?.tableName).toBe(
+      'repository_example_relation_projects',
+    );
+    const physicalProfiles = await collections.getPhysical(
+      'repositoryExampleRelationProjectProfiles',
+    );
+    expect(physicalProfiles?.indexes).toContainEqual(
+      expect.objectContaining({
+        unique: true,
+        keys: [expect.objectContaining({ columnName: 'project_id' })],
+      }),
+    );
+    const physicalProjectTags = await collections.getPhysical(
+      'repositoryExampleRelationProjectTags',
+    );
+    expect(physicalProjectTags?.indexes).toContainEqual(
+      expect.objectContaining({
+        unique: true,
+        keys: [
+          expect.objectContaining({ columnName: 'project_id' }),
+          expect.objectContaining({ columnName: 'tag_id' }),
+        ],
+      }),
+    );
     const result = await migrator.rollback();
-    expect(result.rolledBack).toHaveLength(3);
+    expect(result.rolledBack).toHaveLength(4);
     for (const name of [
+      'repositoryExampleRelationProjects',
+      'repositoryExampleRelationProjectTags',
+      'repositoryExampleRelationTasks',
+      'repositoryExampleRelationProjectProfiles',
+      'repositoryExampleRelationTags',
+      'repositoryExampleRelationUsers',
       'repositoryExampleFindManyRecords',
       'repositoryExampleAtomicCounters',
       'repositoryExampleCustomers',
