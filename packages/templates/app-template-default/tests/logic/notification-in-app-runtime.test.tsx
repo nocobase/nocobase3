@@ -1,17 +1,18 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import type { AppClient, RealtimeListener } from '@nocobase/app-client';
+import type { RealtimeClient, RealtimeListener } from '@nocobase/app-client';
 import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 const testState = vi.hoisted(() => ({
-  client: undefined as AppClient | undefined,
+  realtime: undefined as RealtimeClient | undefined,
 }));
 
 vi.mock('@nocobase/app-client', () => ({
-  appApiClientToken: Symbol('app-api-client'),
-  useService: (): AppClient => {
-    if (!testState.client) throw new Error('Test AppClient is required.');
-    return testState.client;
+  realtimeClientToken: Symbol('realtime-client'),
+  useService: (): RealtimeClient => {
+    if (!testState.realtime)
+      throw new Error('Test RealtimeClient is required.');
+    return testState.realtime;
   },
 }));
 
@@ -37,20 +38,17 @@ describe('NotificationInAppProvider', () => {
     const unreadCount = vi.mocked(fetchUnreadCount);
     unreadCount.mockResolvedValueOnce(2).mockResolvedValueOnce(5);
     let realtimeListener: RealtimeListener<unknown> | undefined;
-    testState.client = {
-      realtime: {
-        connected: true,
-        subscribe: vi.fn((topic, listener) => {
-          expect(topic).toBe(IN_APP_NOTIFICATION_REALTIME_TOPIC);
-          realtimeListener = listener as RealtimeListener<unknown>;
-          return vi.fn();
-        }),
-        onOpen: vi.fn(() => vi.fn()),
-        onError: vi.fn(() => vi.fn()),
-        reconnect: vi.fn(),
-        close: vi.fn(),
-      },
-      request: vi.fn(),
+    testState.realtime = {
+      connected: true,
+      subscribe: vi.fn((topic, listener) => {
+        expect(topic).toBe(IN_APP_NOTIFICATION_REALTIME_TOPIC);
+        realtimeListener = listener as RealtimeListener<unknown>;
+        return vi.fn();
+      }),
+      onOpen: vi.fn(() => vi.fn()),
+      onError: vi.fn(() => vi.fn()),
+      reconnect: vi.fn(),
+      close: vi.fn(),
     };
 
     render(

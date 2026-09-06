@@ -1,16 +1,16 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NocoBaseAIService } from '../registry/nocobase-ai/services/nocobase-ai-service.ts';
 
 function createClient(): {
-  readonly client: AppClient;
-  readonly request: ReturnType<typeof vi.fn<AppClient['request']>>;
-  readonly stream: ReturnType<typeof vi.fn<AppClient['stream']>>;
+  readonly client: ApiClient;
+  readonly request: ReturnType<typeof vi.fn<ApiClient['request']>>;
+  readonly stream: ReturnType<typeof vi.fn<ApiClient['stream']>>;
 } {
-  const request = vi.fn<AppClient['request']>();
-  const stream = vi.fn<AppClient['stream']>();
-  return { client: { request, stream }, request, stream };
+  const request = vi.fn<ApiClient['request']>();
+  const stream = vi.fn<ApiClient['stream']>();
+  return { client: { request, stream } as ApiClient, request, stream };
 }
 
 describe('NocoBaseAIService', () => {
@@ -22,7 +22,8 @@ describe('NocoBaseAIService', () => {
     await expect(service.listEmployees()).resolves.toEqual([
       { username: 'atlas', nickname: 'Atlas' },
     ]);
-    expect(request).toHaveBeenCalledWith('ai/aiEmployees:listByUser', {
+    expect(request).toHaveBeenCalledWith({
+      path: 'ai/aiEmployees:listByUser',
       method: 'GET',
     });
   });
@@ -35,19 +36,17 @@ describe('NocoBaseAIService', () => {
     await service.listConversations('renewal risk');
     await service.updateConversationTitle('session/1', 'Weekly review');
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      'ai/aiConversations:list?keyword=renewal+risk',
-      { method: 'GET' },
-    );
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'ai/aiConversations:update?sessionId=session%2F1',
-      {
-        method: 'PUT',
-        body: JSON.stringify({ title: 'Weekly review' }),
-      },
-    );
+    expect(request).toHaveBeenNthCalledWith(1, {
+      path: 'ai/aiConversations:list',
+      method: 'GET',
+      query: { keyword: 'renewal risk' },
+    });
+    expect(request).toHaveBeenNthCalledWith(2, {
+      path: 'ai/aiConversations:update',
+      method: 'PUT',
+      query: { sessionId: 'session/1' },
+      json: { title: 'Weekly review' },
+    });
   });
 
   it('preserves FormData for uploads', async () => {
@@ -58,12 +57,12 @@ describe('NocoBaseAIService', () => {
 
     await service.uploadFile(file);
 
-    const init = request.mock.calls[0]?.[1];
-    expect(request).toHaveBeenCalledWith(
-      'ai/aiFiles:create',
-      expect.objectContaining({ method: 'POST' }),
-    );
-    expect(init?.body).toBeInstanceOf(FormData);
+    const options = request.mock.calls[0]?.[0];
+    expect(options).toMatchObject({
+      path: 'ai/aiFiles:create',
+      method: 'POST',
+    });
+    expect(options?.body).toBeInstanceOf(FormData);
   });
 
   it('uses the App API client streaming transport', async () => {
@@ -75,9 +74,10 @@ describe('NocoBaseAIService', () => {
     await expect(
       service.sendMessagesStream({ sessionId: 'session-1' }),
     ).resolves.toBe(responseBody);
-    expect(stream).toHaveBeenCalledWith('ai/aiConversations:sendMessages', {
+    expect(stream).toHaveBeenCalledWith({
+      path: 'ai/aiConversations:sendMessages',
       method: 'POST',
-      body: JSON.stringify({ sessionId: 'session-1' }),
+      json: { sessionId: 'session-1' },
     });
   });
 });

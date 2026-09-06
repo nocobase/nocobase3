@@ -62,6 +62,7 @@
     "react-router": "^7.0.0"
   },
   "dependencies": {
+    "@nocobase/api-client": "workspace:^",
     "@nocobase/realtime": "workspace:^",
     "@nocobase/service-provider": "workspace:^"
   },

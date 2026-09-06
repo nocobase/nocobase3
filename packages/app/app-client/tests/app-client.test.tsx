@@ -5,8 +5,9 @@ import { type ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  appApiClientToken,
+  apiClientToken,
   ClientApplication,
+  realtimeClientToken,
   type ClientApplicationRenderConfigFactory,
 } from '../src/application.js';
 import { AppClientRoot } from '../src/app-client.js';
@@ -114,8 +115,9 @@ describe('app client', () => {
     const app = await createTestApplication(() =>
       defineAppClientRenderConfig({ routes: null }),
     );
-    const client = app.services.resolve(appApiClientToken);
-    const close = vi.spyOn(client.realtime!, 'close');
+    expect(app.services.resolve(apiClientToken)).toBeDefined();
+    const realtime = app.services.resolve(realtimeClientToken);
+    const close = vi.spyOn(realtime, 'close');
 
     await app.shutdown();
 

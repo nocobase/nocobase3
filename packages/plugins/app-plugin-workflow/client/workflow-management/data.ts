@@ -1,3 +1,5 @@
+import type { ApiJsonRequestOptions } from '@nocobase/app-client';
+
 import type {
   WorkflowDetailRecord,
   WorkflowListRecord,
@@ -13,13 +15,21 @@ interface DataResponse<T> {
 
 const pendingRequests = new Map<string, Promise<unknown>>();
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const method = init?.method ?? 'GET';
+type WorkflowRequestOptions = Omit<ApiJsonRequestOptions, 'path'>;
+
+async function request<T>(
+  path: string,
+  options: WorkflowRequestOptions = {},
+): Promise<T> {
+  const method = options.method ?? 'GET';
   const key = `${method}:${path}`;
   const pending = method === 'GET' ? pendingRequests.get(key) : undefined;
   if (pending) return (await pending) as T;
   const operation = getWorkflowClient()
-    .request<DataResponse<T>>(path, init)
+    .request<DataResponse<T>>({
+      path,
+      ...options,
+    })
     .then((response) => {
       if (
         response === null ||
@@ -64,7 +74,7 @@ export const workflowApi = {
   status: (id: string, enabled: boolean): Promise<WorkflowListRecord> =>
     request(`/workflows/${encodeURIComponent(id)}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ enabled }),
+      json: { enabled },
     }),
   enable: (idOrHash: string): Promise<WorkflowListRecord> =>
     request(`/workflows/${encodeURIComponent(idOrHash)}/enable`, {
@@ -76,7 +86,7 @@ export const workflowApi = {
   ): Promise<object> =>
     request(`/workflows/${encodeURIComponent(id)}/parameters`, {
       method: 'PUT',
-      body: JSON.stringify({ parameterValues }),
+      json: { parameterValues },
     }),
   execute: (
     id: string,
@@ -86,7 +96,7 @@ export const workflowApi = {
     request(`/workflows/${encodeURIComponent(id)}/run`, {
       method: 'POST',
       headers: { 'event-key': eventKey },
-      body: JSON.stringify({ input }),
+      json: { input },
     }),
 };
 

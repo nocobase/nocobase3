@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,8 +9,8 @@ import { loadSkillsExampleNotice } from '../../client/components/skills-example-
 describe('Plugin Skills example integration', () => {
   it('uses the API path documented by the synchronized Skill', async () => {
     const paths: string[] = [];
-    const appClient: AppClient = {
-      request<T>(path: string): Promise<T> {
+    const api = {
+      request<T>({ path }: { path: string }): Promise<T> {
         paths.push(path);
         return Promise.resolve({
           description: 'Loaded from the plugin.',
@@ -18,12 +18,9 @@ describe('Plugin Skills example integration', () => {
           tone: 'info',
         } as T);
       },
-      stream(): Promise<ReadableStream<Uint8Array>> {
-        throw new Error('Not used by this test.');
-      },
-    };
+    } as ApiClient;
 
-    await expect(loadSkillsExampleNotice(appClient)).resolves.toMatchObject({
+    await expect(loadSkillsExampleNotice(api)).resolves.toMatchObject({
       title: 'Plugin Notice',
     });
     expect(paths).toEqual(['skills-example/notice']);

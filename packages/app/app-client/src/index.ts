@@ -1,19 +1,22 @@
 export {
-  appApiClientToken,
+  apiClientToken,
   ClientApplication,
   createApp,
+  realtimeClientToken,
   type ClientApplicationOptions,
   type ClientApplicationRenderConfigFactory,
 } from './application.js';
 export { AppClientRoot, type AppClientRootProps } from './app-client.js';
+export { resolveAppBase, resolveAppUrl } from './client.js';
 export {
-  AppRequestError,
-  createAppClient,
-  resolveAppBase,
-  resolveAppUrl,
-  type AppClient,
-  type AppClientOptions,
-} from './client.js';
+  ApiClientError,
+  createApiClient,
+  type ApiClient,
+  type ApiJsonRequestOptions,
+  type ApiRequestOptions,
+  type CreateApiClientOptions,
+  type RemoteRepository,
+} from '@nocobase/api-client';
 export { useClientApplication, useService } from './hooks.js';
 export type {
   RealtimeClient,

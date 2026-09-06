@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { createAppClient, type AppClient } from '@nocobase/app-client';
+import { createApiClient, type ApiClient } from '@nocobase/app-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -32,7 +32,7 @@ function filesClient(
   endpoint = 'orders/1/attachments',
 ): FilesClient {
   return createFilesClient({
-    appClient: createAppClient({ baseURL: '/nocobase/api', fetch }),
+    api: createApiClient({ baseURL: '/nocobase/api', fetch }),
     endpoint,
   });
 }
@@ -99,12 +99,10 @@ describe('createFilesClient', () => {
   ] as const)(
     'rejects endpoints containing %s',
     (_label, endpoint, message) => {
-      const appClient: AppClient = { request: vi.fn() };
+      const api = { request: vi.fn() } as ApiClient;
 
-      expect(() => createFilesClient({ appClient, endpoint })).toThrowError(
-        message,
-      );
-      expect(appClient.request).not.toHaveBeenCalled();
+      expect(() => createFilesClient({ api, endpoint })).toThrowError(message);
+      expect(api.request).not.toHaveBeenCalled();
     },
   );
 
@@ -141,6 +139,10 @@ describe('createFilesClient', () => {
     const fetch = vi.fn<typeof globalThis.fetch>(
       (_input, init) =>
         new Promise((_resolve, reject) => {
+          if (init?.signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+            return;
+          }
           init?.signal?.addEventListener('abort', () =>
             reject(new DOMException('Aborted', 'AbortError')),
           );
@@ -229,14 +231,14 @@ describe('createFilesClient', () => {
   });
 
   it('preserves a text payload from custom App client implementations', async () => {
-    const appClient: AppClient = {
+    const api = {
       request: vi.fn().mockRejectedValue({
         status: 502,
         message: 'Generic proxy error.',
         payload: 'The file service is temporarily unavailable.',
       }),
-    };
-    const client = createFilesClient({ appClient, endpoint: 'files' });
+    } as ApiClient;
+    const client = createFilesClient({ api, endpoint: 'files' });
 
     const error = await client.list().catch((value: unknown) => value);
 

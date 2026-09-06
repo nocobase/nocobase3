@@ -254,6 +254,9 @@ importers:
 
   packages/app/app-client:
     dependencies:
+      '@nocobase/api-client':
+        specifier: workspace:^
+        version: link:../../libs/api-client
       '@nocobase/realtime':
         specifier: workspace:^
         version: link:../../libs/realtime

@@ -11,16 +11,11 @@ export class AuthClient {
     const isEmail = identifier.includes('@');
     const session = await this.send<AuthSession>(
       isEmail ? 'sign-in/email' : 'sign-in/username',
-      {
-        method: 'POST',
-        body: JSON.stringify(
-          isEmail
-            ? { email: identifier, password }
-            : { username: identifier, password },
-        ),
-      },
+      isEmail
+        ? { email: identifier, password }
+        : { username: identifier, password },
     );
-    this.options.client.realtime?.reconnect();
+    this.options.realtime.reconnect();
     return session;
   }
 
@@ -31,42 +26,36 @@ export class AuthClient {
     password: string,
   ): Promise<AuthSession> {
     const session = await this.send<AuthSession>('sign-up/email', {
-      method: 'POST',
-      body: JSON.stringify({ name, username, email, password }),
+      name,
+      username,
+      email,
+      password,
     });
-    this.options.client.realtime?.reconnect();
+    this.options.realtime.reconnect();
     return session;
   }
 
   async signOut(): Promise<void> {
-    await this.send('sign-out', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    this.options.client.realtime?.reconnect();
+    await this.send('sign-out', {});
+    this.options.realtime.reconnect();
   }
 
   async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
-    await this.send('request-password-reset', {
-      method: 'POST',
-      body: JSON.stringify({ email, redirectTo }),
-    });
+    await this.send('request-password-reset', { email, redirectTo });
   }
 
   async resetPassword(newPassword: string, token: string): Promise<void> {
-    await this.send('reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ newPassword, token }),
-    });
+    await this.send('reset-password', { newPassword, token });
   }
 
   refreshRealtimeSession(): void {
-    this.options.client.realtime?.reconnect();
+    this.options.realtime.reconnect();
   }
 
-  private async send<T>(path: string, init: RequestInit = {}): Promise<T> {
-    return this.options.client.request<T>(`auth/${path}`, {
-      ...init,
+  private async send<T>(path: string, json?: unknown): Promise<T> {
+    return this.options.api.request<T>({
+      path: `auth/${path}`,
+      ...(json === undefined ? {} : { method: 'POST', json }),
     });
   }
 }

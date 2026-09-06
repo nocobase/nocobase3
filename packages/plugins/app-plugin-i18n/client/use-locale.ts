@@ -6,24 +6,25 @@ import {
   type LocaleDefinition,
 } from '@nocobase/i18n/client';
 import {
-  createAppClient,
+  createApiClient,
+  resolveAppUrl,
   writeStoredLocale,
-  type AppClient,
+  type ApiClient,
 } from '@nocobase/app-client';
 import { useCallback, useEffect } from 'react';
 
 /** Path under the application's API root, which is where the server is told which language to answer in. */
 const LOCALE_PATH = 'i18n/locale';
 
-let client: AppClient | undefined;
+let client: ApiClient | undefined;
 
 /**
  * Hands the plugin the Application's own API client. The client ServiceProvider calls this during boot, which is what
  * makes a configured `api.baseURL` apply here too instead of being silently ignored.
  */
-export function configureLocaleClient(appClient: AppClient): AppClient {
-  client = appClient;
-  return appClient;
+export function configureLocaleClient(api: ApiClient): ApiClient {
+  client = api;
+  return api;
 }
 
 /**
@@ -33,8 +34,8 @@ export function configureLocaleClient(appClient: AppClient): AppClient {
  * paths against the application's own base — an app served from `/main/` answers at `/main/api`, so a hard-coded
  * `/api/...` would miss it entirely.
  */
-function getClient(): AppClient {
-  client ??= createAppClient();
+function getClient(): ApiClient {
+  client ??= createApiClient({ baseURL: resolveAppUrl('/api') });
   return client;
 }
 
@@ -52,9 +53,10 @@ export interface UseAppLocaleResult {
  * Exported so the path resolution can be tested: it has to land under the application's base, not the origin root.
  */
 export async function notifyServerLocale(locale: Locale): Promise<void> {
-  await getClient().request(LOCALE_PATH, {
+  await getClient().request({
+    path: LOCALE_PATH,
     method: 'POST',
-    body: JSON.stringify({ locale }),
+    json: { locale },
   });
 }
 

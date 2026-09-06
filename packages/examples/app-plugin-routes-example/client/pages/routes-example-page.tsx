@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import { Button } from '../components/ui/button.js';
@@ -12,7 +12,7 @@ interface RoutesExampleResponse {
 
 export default function RoutesExamplePage(): ReactElement {
   // The Application's own API client, so the route follows whatever `api.baseURL` the Application is configured with.
-  const appClient = useService(appApiClientToken);
+  const api = useService(apiClientToken);
   const { description } = useRoutesExample();
   const [result, setResult] = useState<RoutesExampleResponse>();
   const [error, setError] = useState<string>();
@@ -22,8 +22,9 @@ export default function RoutesExamplePage(): ReactElement {
     setIsLoading(true);
     setError(undefined);
     try {
-      const response =
-        await appClient.request<RoutesExampleResponse>('routes-example');
+      const response = await api.request<RoutesExampleResponse>({
+        path: 'routes-example',
+      });
       setResult(response);
     } catch (requestError) {
       setError(
@@ -34,13 +35,13 @@ export default function RoutesExamplePage(): ReactElement {
     } finally {
       setIsLoading(false);
     }
-  }, [appClient]);
+  }, [api]);
 
   useEffect(() => {
     let active = true;
 
-    void appClient
-      .request<RoutesExampleResponse>('routes-example')
+    void api
+      .request<RoutesExampleResponse>({ path: 'routes-example' })
       .then((response) => {
         if (active) {
           setResult(response);
@@ -64,7 +65,7 @@ export default function RoutesExamplePage(): ReactElement {
     return () => {
       active = false;
     };
-  }, [appClient]);
+  }, [api]);
 
   return (
     <section className='mx-auto flex w-full max-w-3xl flex-col px-6 py-10'>
