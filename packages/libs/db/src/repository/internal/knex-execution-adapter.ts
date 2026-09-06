@@ -12,10 +12,15 @@ import {
   validateRelationOptions,
 } from '../../collection/relation-contract.js';
 import { RepositoryError } from '../errors.js';
-import { booleanStorageValue, decodeBooleanValue } from '../boolean.js';
-import { normalizeCharValue } from '../char.js';
+import {
+  booleanStorageValue,
+  decodeBooleanValue,
+  normalizeBooleanValue,
+  resolveBooleanStorageCodec,
+} from '../boolean.js';
 import { normalizeEnumValue } from '../enum.js';
 import { spoolRows } from './row-spool.js';
+import { prepareScalarRowDecoder } from './row-decoder.js';
 import { isTemporalType, normalizeTemporalValue } from '../temporal.js';
 import { temporalBinding, temporalProjection } from './temporal-sql.js';
 import {
@@ -89,6 +94,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   async findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]> {
     this.assertReadable();
+    const decodeRow = prepareScalarRowDecoder(plan.collection, plan.fields);
     const { query } = await this.buildRead(plan);
     const rows = (await query) as RepositoryRecord[];
     if (plan.direction === 'backward') rows.reverse();
@@ -96,16 +102,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await this.loadRelations(plan.collection, rows, plan.select.root);
     }
     return rows.map((row) =>
-      projectRow(
-        decodeScalarRow(plan.collection, row),
-        plan.fields,
-        plan.select?.root,
-      ),
+      projectRow(decodeRow(row), plan.fields, plan.select?.root),
     );
   }
 
   async *stream(plan: RepositoryReadPlan): AsyncIterable<RepositoryRecord> {
     this.assertReadable();
+    const decodeRow = prepareScalarRowDecoder(plan.collection, plan.fields);
     const includes = plan.select?.root.includes?.length;
     const source = this.streamRoots(plan);
     const roots =
@@ -116,11 +119,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     for await (const row of roots) {
       this.assertReadable();
       if (!includes) {
-        yield projectRow(
-          decodeScalarRow(plan.collection, row),
-          plan.fields,
-          plan.select?.root,
-        );
+        yield projectRow(decodeRow(row), plan.fields, plan.select?.root);
         continue;
       }
       batch.push(row);
@@ -128,11 +127,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         await this.loadRelations(plan.collection, batch, plan.select.root);
         for (const record of batch) {
           this.assertReadable();
-          yield projectRow(
-            decodeScalarRow(plan.collection, record),
-            plan.fields,
-            plan.select?.root,
-          );
+          yield projectRow(decodeRow(record), plan.fields, plan.select?.root);
         }
         batch = [];
       }
@@ -142,11 +137,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       await this.loadRelations(plan.collection, batch, plan.select!.root);
       for (const record of batch) {
         this.assertReadable();
-        yield projectRow(
-          decodeScalarRow(plan.collection, record),
-          plan.fields,
-          plan.select?.root,
-        );
+        yield projectRow(decodeRow(record), plan.fields, plan.select?.root);
       }
     }
   }
@@ -444,10 +435,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     const rows = (await query) as RepositoryRecord[];
-    return rows.map((row) =>
-      Object.fromEntries(
+    const decodeRow = prepareScalarRowDecoder(outputCollection);
+    return rows.map((row) => {
+      const decoded = decodeRow(row);
+      return Object.fromEntries(
         outputs.map((output) => {
-          const value = decodeScalarRow(outputCollection, row)[output.internal];
+          const value = decoded[output.internal];
           return [
             output.name,
             output.aggregate === 'count'
@@ -457,8 +450,8 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
                 : value,
           ];
         }),
-      ),
-    );
+      );
+    });
   }
 
   async createOne(
@@ -506,23 +499,17 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     ) {
       return this.inTransaction(async (adapter) => {
         const client = adapter.getClient();
+        const encodeRow = prepareWrite(client, plan.collection);
         for (const record of plan.records)
           await tableQuery(client, plan.collection).insert(
-            mapWrite(
-              client,
-              plan.collection,
-              withInitialVersion(plan.collection, record),
-            ),
+            encodeRow(withInitialVersion(plan.collection, record)),
           );
         return { count: plan.records.length };
       });
     }
+    const encodeRow = prepareWrite(this.getClient(), plan.collection);
     const records = plan.records.map((record) =>
-      mapWrite(
-        this.getClient(),
-        plan.collection,
-        withInitialVersion(plan.collection, record),
-      ),
+      encodeRow(withInitialVersion(plan.collection, record)),
     );
     const result = (await tableQuery(this.getClient(), plan.collection).insert(
       records,
@@ -2283,6 +2270,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (node.select.includes?.length) {
       await this.loadRelations(resolved.target, selectedTargets, node.select);
     }
+    const decodeRow = prepareScalarRowDecoder(resolved.target, requested);
     for (const parent of parents) {
       const group =
         grouped.get(associationKey(parent[relationHelper(node.relation)])) ??
@@ -2291,13 +2279,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         node.limit === undefined ? group : group.slice(0, node.limit);
       const matches = (
         node.direction === 'backward' ? [...page].reverse() : page
-      ).map((target) =>
-        projectRow(
-          decodeScalarRow(resolved.target, target),
-          requested,
-          node.select,
-        ),
-      );
+      ).map((target) => projectRow(decodeRow(target), requested, node.select));
       parent[node.relation] = isToOne(resolved.relation)
         ? (matches[0] ?? null)
         : matches;
@@ -2511,31 +2493,6 @@ function decodeBooleanRow(
         'INVALID_STORED_VALUE',
         ['select', field.name],
       );
-  }
-  return result;
-}
-
-function decodeScalarRow(
-  collection: CollectionDefinition,
-  row: RepositoryRecord,
-): RepositoryRecord {
-  const result = decodeBooleanRow(collection, row);
-  for (const field of scalarFields(collection)) {
-    if (field.type === 'char' && Object.hasOwn(result, field.name))
-      result[field.name] = normalizeCharValue(
-        field,
-        result[field.name],
-        'INVALID_STORED_VALUE',
-        ['select', field.name],
-      );
-    if (isTemporalType(field.type) && Object.hasOwn(result, field.name)) {
-      result[field.name] = normalizeTemporalValue(
-        field,
-        result[field.name],
-        'FIELD_CAPABILITY_NOT_SUPPORTED',
-        ['select', field.name],
-      );
-    }
   }
   return result;
 }
@@ -2812,6 +2769,37 @@ function mapWrite(
       writeValue(client, collection, field, value),
     ]),
   );
+}
+
+/** Bind boolean storage once for a write batch; other types retain their adapters. */
+function prepareWrite(
+  client: Knex,
+  collection: CollectionDefinition,
+): (values: RepositoryRecord) => PhysicalWriteRecord {
+  const booleans = new Map<
+    string,
+    (value: unknown) => boolean | number | null
+  >();
+  for (const field of scalarFields(collection)) {
+    if (field.type !== 'boolean') continue;
+    const codec = resolveBooleanStorageCodec(
+      String(client.client.config.client),
+      field,
+    );
+    booleans.set(field.name, (value) =>
+      codec.encode(normalizeBooleanValue(field, value)),
+    );
+  }
+  return (values) =>
+    Object.fromEntries(
+      Object.entries(values).map(([field, value]) => {
+        const encode = booleans.get(field);
+        return [
+          column(collection, field),
+          encode ? encode(value) : writeValue(client, collection, field, value),
+        ];
+      }),
+    );
 }
 
 function writeValue(

@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { describeIntegrationDatabases } from '../../helpers.js';
 
 describeIntegrationDatabases('Repository boolean contract', (context) => {
@@ -143,6 +143,46 @@ describeIntegrationDatabases('Repository boolean contract', (context) => {
         repo.aggregate({ aggregate: (a) => ({ result: a[kind]('enabled') }) }),
       ).rejects.toMatchObject({ code: 'FIELD_CAPABILITY_NOT_SUPPORTED' });
     }
+  });
+
+  it('decodes incrementally for a slow consumer and releases an abandoned stream', async () => {
+    const repo = await setup();
+    await repo.createMany({
+      values: [
+        { code: 'A', enabled: true },
+        { code: 'B', enabled: false },
+        { code: 'C', enabled: null },
+      ],
+    });
+    const query = () =>
+      repo.findMany({
+        select: (s) => s.fields('enabled'),
+        sort: (s) => s.field('code').asc(),
+      });
+    const rows = [];
+    for await (const row of query()) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      rows.push(row);
+    }
+    expect(rows).toEqual([
+      { enabled: true },
+      { enabled: false },
+      { enabled: null },
+    ]);
+    const iterator = query()[Symbol.asyncIterator]();
+    expect(await iterator.next()).toMatchObject({
+      done: false,
+      value: { enabled: true },
+    });
+    const release = vi.spyOn(context.db.client, 'releaseConnection');
+    try {
+      await iterator.return!();
+      expect(release).toHaveBeenCalled();
+      expect((await iterator.next()).done).toBe(true);
+    } finally {
+      release.mockRestore();
+    }
+    expect(await repo.count()).toBe(3);
   });
 
   it('supports boolean unique identity through lock, upsert and batch updates', async () => {
@@ -317,6 +357,17 @@ describeIntegrationDatabases('Repository boolean contract', (context) => {
     ).rejects.toMatchObject({ code: 'INVALID_MUTATION' });
     expect(await parents.count()).toBe(1);
     expect(await repo.count()).toBe(2);
+    const query = () =>
+      parents.findMany({
+        select: (s) =>
+          s.include('flags', (r) =>
+            r.fields('enabled').sort((sort) => sort.field('code').asc()),
+          ),
+      });
+    const streamed = [];
+    for await (const row of query()) streamed.push(row);
+    expect(streamed).toEqual(await query());
+    expect(streamed[0]?.flags).toEqual([{ enabled: true }, { enabled: false }]);
   });
 
   it('rejects invalid external storage without interpreting ordinary integers as booleans', async () => {
@@ -341,5 +392,22 @@ describeIntegrationDatabases('Repository boolean contract', (context) => {
     await expect(
       repo.findMany({ select: (s) => s.fields('enabled') }),
     ).rejects.toMatchObject({ code: 'INVALID_STORED_VALUE' });
+    const iterator = repo
+      .findMany({ select: (s) => s.fields('enabled') })
+      [Symbol.asyncIterator]();
+    const release = vi.spyOn(context.db.client, 'releaseConnection');
+    try {
+      await expect(iterator.next()).rejects.toMatchObject({
+        code: 'INVALID_STORED_VALUE',
+        path: ['select', 'enabled'],
+      });
+      expect(release).toHaveBeenCalled();
+      expect((await iterator.next()).done).toBe(true);
+    } finally {
+      release.mockRestore();
+    }
+    expect(
+      await repo.findMany({ select: (s) => s.fields('quantity') }),
+    ).toEqual([{ quantity: 2 }]);
   });
 });
