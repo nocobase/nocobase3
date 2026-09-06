@@ -72,6 +72,8 @@ Non-null hasMany currently disallows the replace action, including an unchanged 
 
 ## Unit and type coverage
 
+- [Scalar Filter matrix](./capabilities/filter-scalars.test.ts) verifies exact Builder/serialized-AST results for numeric comparisons, string/text predicates, boolean null/false distinctions and half-open date ranges. Empty strings are tested separately from SQL NULL, including Oracle's storage distinction. [Filter fixture](./fixtures/filter.ts) uses an explicit string code key and physical setup. Time/datetime Builder serialization is covered; their SQL and timezone matrices remain future work.
+
 - Filter Builder serialization and JSON validation/binding are under unit/repository/filter; scalar operator and malformed AST matrices remain incomplete.
 - Sort Builder covers copied paths, independent null-position branches and serializable aggregate nodes; Aggregate Builder covers aliases and forged expressions.
 - Values covers variable/literal resolution, numeric operands and all seven relation Builder operations with copied operation lists.

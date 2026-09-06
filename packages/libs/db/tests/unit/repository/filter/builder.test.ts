@@ -26,4 +26,54 @@ describe('DefaultFilterBuilder', () => {
     });
     expect(JSON.parse(JSON.stringify(node))).toEqual(node);
   });
+
+  it('copies field paths and serializes time predicates without leaking builder metadata', () => {
+    const filter = new DefaultFilterBuilder();
+    const path = ['owner', 'schedule'];
+    const time = filter.time(path);
+    path.push('changed');
+    expect(time.eq('12:30:00')).toEqual({
+      kind: 'condition',
+      path: ['owner', 'schedule'],
+      operator: '$eq',
+      value: '12:30:00',
+    });
+    expect(time.ne(null)).toEqual({
+      kind: 'condition',
+      path: ['owner', 'schedule'],
+      operator: '$ne',
+      value: null,
+    });
+    expect(filter.time('schedule').empty()).toEqual({
+      kind: 'condition',
+      path: ['schedule'],
+      operator: '$empty',
+    });
+    const node = filter.string('name').eq('ALPHA', { mode: 'insensitive' });
+    expect(JSON.parse(JSON.stringify(node))).toEqual({
+      kind: 'condition',
+      path: ['name'],
+      operator: '$eq',
+      value: 'ALPHA',
+      mode: 'insensitive',
+    });
+  });
+
+  it('normalizes datetime range endpoints and preserves variable operands', () => {
+    const filter = new DefaultFilterBuilder();
+    const start = new Date('2026-09-01T00:00:00Z');
+    const node = filter
+      .date('occurredAt')
+      .between([start, filter.variable('$window.end')]);
+    start.setUTCFullYear(2030);
+    expect(node).toEqual({
+      kind: 'condition',
+      path: ['occurredAt'],
+      operator: '$dateBetween',
+      value: [
+        '2026-09-01T00:00:00.000Z',
+        { kind: 'variable', path: '$window.end' },
+      ],
+    });
+  });
 });
