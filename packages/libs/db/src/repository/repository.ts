@@ -2058,7 +2058,7 @@ async function validateSelectInputWithRelations(
       'relation',
     ]);
     const target = await targetCollection(collections, relation, path);
-    if (node.result) {
+    if (node.result !== undefined) {
       if (!isToManyRelation(relation))
         invalid(
           'INVALID_SELECT',
@@ -2173,6 +2173,16 @@ async function validateRelationResult(
   depth: number,
 ): Promise<RelationSelectBranchNode> {
   const result = input.result;
+  if (
+    result !== undefined &&
+    (!isPlainRecord(result) || typeof result.kind !== 'string')
+  ) {
+    invalid('INVALID_SELECT', 'Expected a relation selection result node.', {
+      collection: source.name,
+      relation,
+      path: ['result'],
+    });
+  }
   const validated = await validateSelectInputWithRelations(
     collections,
     source,
@@ -2192,7 +2202,16 @@ async function validateRelationResult(
   const scope = validated.select!.root.includes![0];
   if (!result) return scope;
   if (result.kind === 'combine') {
-    const entries = Object.entries(result.branches ?? {});
+    if (!isPlainRecord(result.branches)) {
+      invalid('INVALID_SELECT', 'combine branches must be an object.', {
+        collection: source.name,
+        relation,
+        path: ['result', 'branches'],
+      });
+    }
+    const entries: [string, RelationSelectBranchInput][] = Object.entries(
+      result.branches,
+    );
     if (entries.length === 0 || entries.length > 32)
       invalid(
         'INVALID_SELECT',
@@ -2203,6 +2222,13 @@ async function validateRelationResult(
     for (const [name, branch] of entries) {
       if (!name || ['__proto__', 'constructor', 'prototype'].includes(name))
         invalid('INVALID_SELECT', 'Invalid combine branch name.', {});
+      if (!isPlainRecord(branch) || !isPlainRecord(branch.select)) {
+        invalid('INVALID_SELECT', 'Expected a combine branch selection.', {
+          collection: source.name,
+          relation,
+          path: ['result', 'branches', name],
+        });
+      }
       const commonFilter = scope.filter;
       const target = await targetCollection(
         collections,
