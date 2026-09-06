@@ -111,9 +111,14 @@ describeIntegrationDatabases('Repository capabilities/filter', (context) => {
     await expect(
       repository.findMany({
         filter: { note: null },
+        sort: (s) => s.field('orderNo').asc(),
         select: selection(['orderNo']),
       }),
-    ).resolves.toEqual([{ orderNo: 'SO-002' }]);
+    ).resolves.toEqual(
+      context.spec.dialect === 'oracle'
+        ? [{ orderNo: 'SO-001' }, { orderNo: 'SO-002' }]
+        : [{ orderNo: 'SO-002' }],
+    );
     await expect(
       repository.findMany({
         filter: { enabled: null },

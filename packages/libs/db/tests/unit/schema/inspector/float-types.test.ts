@@ -8,11 +8,10 @@ it.each(['float', 'FLOAT(12)', ' float '])(
   },
 );
 
-it('recognizes MySQL FLOAT while leaving unresolved aliases in other dialects unchanged', () => {
+it('recognizes MySQL FLOAT and Oracle decimal FLOAT without guessing PostgreSQL aliases', () => {
   expect(normalizePhysicalDataType('mysql', 'float')).toBe('float');
-  for (const dialect of ['postgres', 'oracle'] as const) {
-    expect(normalizePhysicalDataType(dialect, 'float')).toBe('native');
-  }
+  expect(normalizePhysicalDataType('oracle', 'float')).toBe('decimal');
+  expect(normalizePhysicalDataType('postgres', 'float')).toBe('native');
 });
 
 it('preserves MSSQL FLOAT and explicit double precision classification', () => {

@@ -17,6 +17,30 @@ async function collect<T>(rows: AsyncIterable<T>): Promise<T[]> {
 }
 
 describeIntegrationDatabases('Repository findMany consumption', (context) => {
+  it('matches array values for large text, binary, JSON and nullable fields', async () => {
+    await context.builder.createCollection('queryValues', (c) => {
+      c.string('code').primary();
+      c.text('body').nullable();
+      c.field({ name: 'bytes', type: 'blob' }).nullable();
+      c.json('payload').nullable();
+    });
+    const repository = context.database.repository('queryValues');
+    await context.db(context.table('queryValues')).insert({
+      code: 'A',
+      body: 'Content '.repeat(1000),
+      bytes: Buffer.from('binary content'),
+      payload: JSON.stringify({ nested: [1, true, 'value'] }),
+    });
+    await context.db(context.table('queryValues')).insert({ code: 'B' });
+    const options = {
+      sort: (s: import('../../../../src/index.js').SortBuilder) =>
+        s.field('code').asc(),
+    };
+    expect(await collect(repository.findMany(options))).toEqual(
+      await repository.findMany(options),
+    );
+  });
+
   it('iterates unique-only and keyless collections without inventing a primary key', async () => {
     await context.builder.createCollections([
       {

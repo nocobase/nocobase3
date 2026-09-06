@@ -6,6 +6,25 @@ import {
 } from '../fixtures/documentation.js';
 
 describeIntegrationDatabases('Repository stream lifecycle', (context) => {
+  it('propagates a stream setup rejection after acquiring a connection', async () => {
+    await createDocumentationFixture(context);
+    await seedDocumentationProjects(context, 'stream');
+    const failure = new Error('Driver stream setup failed');
+    const stream = vi
+      .spyOn(context.db.client, 'stream')
+      .mockRejectedValueOnce(failure);
+    try {
+      const iterator = context.database
+        .repository('projects')
+        .findMany()
+        [Symbol.asyncIterator]();
+      await expect(iterator.next()).rejects.toBe(failure);
+    } finally {
+      stream.mockRestore();
+    }
+    expect(await context.database.repository('projects').count()).toBe(3);
+  });
+
   it('returns from iterator cleanup only after Knex releases the stream connection', async () => {
     await createDocumentationFixture(context);
     await seedDocumentationProjects(context, 'stream');

@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import type { Readable } from 'node:stream';
+import { Readable } from 'node:stream';
 import type {
   AnyFieldDefinition,
   CollectionDefinition,
@@ -65,6 +65,8 @@ interface LockedMutationRecord {
   readonly record: RepositoryRecord;
   readonly unique: UniqueSelector;
 }
+
+type PhysicalWriteRecord = Record<string, RepositoryRecord[string] | Knex.Raw>;
 
 interface GroupByOutput {
   readonly name: string;
@@ -140,7 +142,53 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     plan: RepositoryReadPlan,
   ): AsyncIterable<RepositoryRecord> {
     const { query } = await this.buildRead(plan);
-    const source = query.stream() as Readable & AsyncIterable<RepositoryRecord>;
+    let source!: Readable & AsyncIterable<RepositoryRecord>;
+    // The callback form exposes errors thrown after connection acquisition;
+    // Knex's stream-only form can otherwise leave the consumer waiting forever.
+    const client = this.getClient();
+    const oracleDriver = isOracleClient(client)
+      ? (
+          client.client as unknown as {
+            driver: { OUT_FORMAT_OBJECT: number; CLOB: object; NCLOB: object };
+          }
+        ).driver
+      : undefined;
+    const options = isOracleClient(client)
+      ? {
+          outFormat: oracleDriver!.OUT_FORMAT_OBJECT,
+        }
+      : {};
+    // QueryBuilder.stream currently drops its second argument in Knex 3.
+    const runner = client.client.runner(query) as {
+      client: Knex['client'];
+      stream(
+        options: object,
+        handler: (stream: Readable) => void,
+      ): Promise<void>;
+    };
+    // Knex assumes dialects emit every rejected setup error on the stream,
+    // and swallows the rejection after acquiring a connection. Guard this
+    // single runner without patching the shared connection or client.
+    const streamClient: Knex['client'] = Object.create(client.client);
+    streamClient.stream = async (
+      ...args: Parameters<Knex['client']['stream']>
+    ) => {
+      try {
+        return await client.client.stream(...args);
+      } catch (error: unknown) {
+        source.destroy(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+        throw error;
+      }
+    };
+    runner.client = streamClient;
+    const execution = runner.stream(options, (stream) => {
+      source = stream as Readable & AsyncIterable<RepositoryRecord>;
+    });
+    void execution.catch((error: unknown) => {
+      source.destroy(error instanceof Error ? error : new Error(String(error)));
+    });
     // Knex releases the acquired connection from its close listener. Do not
     // finish iterator cleanup while that listener can still run after pool teardown.
     const closed = new Promise<void>((resolve) => {
@@ -149,6 +197,21 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     });
     try {
       for await (const row of source) {
+        if (oracleDriver) {
+          // Match Knex's array read path before releasing the LOB connection
+          // or passing a row to the disk spool.
+          for (const [field, value] of Object.entries(row)) {
+            if (!(value instanceof Readable)) continue;
+            const lob = value as Readable & { type: object };
+            const textual =
+              lob.type === oracleDriver.CLOB || lob.type === oracleDriver.NCLOB;
+            const chunks: Buffer[] = [];
+            for await (const chunk of lob as AsyncIterable<Buffer>)
+              chunks.push(chunk);
+            const data = Buffer.concat(chunks);
+            row[field] = textual ? data.toString('utf8') : data;
+          }
+        }
         yield row;
       }
     } finally {
@@ -381,7 +444,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     const records = plan.records.map((record) =>
-      mapWrite(plan.collection, withInitialVersion(plan.collection, record)),
+      mapWrite(
+        this.getClient(),
+        plan.collection,
+        withInitialVersion(plan.collection, record),
+      ),
     );
     const result = (await tableQuery(this.getClient(), plan.collection).insert(
       records,
@@ -856,7 +923,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     );
     const graph = await this.prepareFilterGraph(collection, filter.root);
     applyFilter(query, collection, filter.root, graph, alias, client);
-    query.limit(2).forUpdate();
+    limitLockedQuery(query, client);
     const rows = (await query) as RepositoryRecord[];
     if (rows.length === 0) return 'missing';
     if (rows.length > 1) return 'multiple';
@@ -946,7 +1013,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   ): Promise<{ record: RepositoryRecord; unique: UniqueSelector }> {
     const values = withInitialVersion(collection, input);
     const physicalValues = {
-      ...mapWrite(collection, values),
+      ...mapWrite(this.getClient(), collection, values),
       ...additionalPhysicalValues,
     };
     const deferred: RelationMutationNode[] = [];
@@ -989,7 +1056,8 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async insertRecord(
     collection: CollectionDefinition,
     values: RepositoryRecord,
-    physicalValues: RepositoryRecord = mapWrite(
+    physicalValues: PhysicalWriteRecord = mapWrite(
+      this.getClient(),
       collection,
       withInitialVersion(collection, values),
     ),
@@ -1352,15 +1420,8 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     } else {
       const throughAlias = 'repository_relation_through';
-      query
-        .join(
-          collectionReference(client, resolved.through, throughAlias),
-          qualified(targetAlias, column(resolved.target, resolved.targetKey)),
-          qualified(
-            throughAlias,
-            column(resolved.through, resolved.throughTargetForeignKey),
-          ),
-        )
+      const linkedTargets = tableQuery(client, resolved.through, throughAlias)
+        .select(column(resolved.through, resolved.throughTargetForeignKey))
         .where(
           qualified(
             throughAlias,
@@ -1368,6 +1429,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           ),
           source[resolved.sourceKey] as Knex.Value,
         );
+      query.whereIn(
+        qualified(targetAlias, column(resolved.target, resolved.targetKey)),
+        linkedTargets,
+      );
     }
     const graph = await this.prepareFilterGraph(resolved.target, filter?.root);
     applyFilter(
@@ -1378,7 +1443,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       targetAlias,
       client,
     );
-    query.limit(2).forUpdate();
+    limitLockedQuery(query, client);
     const rows = (await query) as RepositoryRecord[];
     if (rows.length === 0) return 'missing';
     if (rows.length > 1) return 'multiple';
@@ -1530,12 +1595,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           );
       }
       await tableQuery(this.getClient(), resolved.through).insert({
-        ...mapWrite(resolved.through, values),
+        ...mapWrite(this.getClient(), resolved.through, values),
         ...edge,
       });
     } else if (through && Object.keys(through).length > 0) {
       const changes: Record<string, RepositoryRecord[string] | Knex.Raw> =
-        mapWrite(resolved.through, through);
+        mapWrite(this.getClient(), resolved.through, through);
       const version = resolved.through.optimisticLock?.field;
       if (version)
         changes[column(resolved.through, version)] = this.getClient().raw(
@@ -2257,6 +2322,13 @@ function isOracleClient(client: Knex): boolean {
   return (client.client.config as { client?: string }).client === 'oracledb';
 }
 
+function limitLockedQuery(query: Knex.QueryBuilder, client: Knex): void {
+  // Oracle cannot place FOR UPDATE inside Knex's pagination subquery.
+  if (isOracleClient(client)) query.whereRaw('rownum <= ?', [2]);
+  else query.limit(2);
+  query.forUpdate();
+}
+
 function naming(collection: CollectionDefinition): DefaultNamingStrategy {
   return new DefaultNamingStrategy(collection.naming);
 }
@@ -2437,15 +2509,39 @@ function applyOrderBy(
 }
 
 function mapWrite(
+  client: Knex,
   collection: CollectionDefinition,
   values: RepositoryRecord,
-): RepositoryRecord {
+): PhysicalWriteRecord {
   return Object.fromEntries(
     Object.entries(values).map(([field, value]) => [
       column(collection, field),
-      value,
+      writeValue(client, collection, field, value),
     ]),
   );
+}
+
+function writeValue(
+  client: Knex,
+  collection: CollectionDefinition,
+  name: string,
+  value: RepositoryRecord[string],
+): RepositoryRecord[string] | Knex.Raw {
+  const field = collection.fields?.find((item) => item.name === name);
+  // SQLite's multi-row UNION path bypasses Knex's object serialization.
+  if (field?.type === 'json' && value !== null && typeof value === 'object')
+    return JSON.stringify(value);
+  if (field?.type === 'blob') {
+    if (value instanceof Uint8Array) return Buffer.from(value);
+    // Tedious binds untyped NULL as NVARCHAR, which SQL Server cannot insert
+    // into VARBINARY without an explicit cast.
+    if (
+      value === null &&
+      (client.client.config as { client?: string }).client === 'mssql'
+    )
+      return client.raw('cast(null as varbinary(max))');
+  }
+  return value;
 }
 
 function mapUpdate(
@@ -2460,7 +2556,7 @@ function mapUpdate(
         !isNumericMutation(value) ||
         collection.fields?.find((item) => item.name === field)?.type === 'json'
       )
-        return [name, value];
+        return [name, writeValue(client, collection, field, value)];
       const operator = {
         increment: '+',
         decrement: '-',
@@ -2660,11 +2756,68 @@ function applyCondition(
   const name = sourceAlias
     ? qualified(sourceAlias, directColumn)
     : directColumn;
+  const field = collection.fields?.find((item) => item.name === node.path[0]);
+  if (
+    client &&
+    isOracleClient(client) &&
+    field?.type === 'datetime' &&
+    node.value !== null &&
+    node.value !== undefined
+  ) {
+    const operators: Partial<Record<FilterConditionNode['operator'], string>> =
+      {
+        $eq: '=',
+        $ne: '<>',
+        $dateBefore: '<',
+        $dateAfter: '>',
+        $dateNotBefore: '>=',
+        $dateNotAfter: '<=',
+      };
+    const operand = (value: FilterValue): Knex.Raw => {
+      if (typeof value !== 'string')
+        throw new Error('Expected a normalized datetime filter value.');
+      return client.raw(
+        'to_timestamp_tz(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM\')',
+        [new Date(value).toISOString().replace('Z', '+00:00')],
+      );
+    };
+    if (node.operator === '$dateBetween') {
+      const [start, end] = node.value as readonly FilterValue[];
+      whereCallback(query, boolean, function datetimeRange(): void {
+        this.where(name, '>=', operand(start)).andWhere(
+          name,
+          '<',
+          operand(end),
+        );
+      });
+      return;
+    }
+    const operator = operators[node.operator];
+    if (operator) {
+      whereValue(query, boolean, name, operator, operand(node.value));
+      return;
+    }
+  }
   if (jsonOperators.includes(node.operator)) {
     if (!client)
       throw new Error('JSON filters require a Repository query client.');
     query[boolean === 'or' ? 'orWhere' : 'where'](
       compileJsonCondition(client, name, node),
+    );
+    return;
+  }
+  if (
+    client &&
+    isOracleClient(client) &&
+    isTextualField(collection, node.path[0]) &&
+    (node.operator === '$empty' || node.operator === '$notEmpty')
+  ) {
+    // Oracle treats empty VARCHAR values as NULL; empty LOBs can have length zero.
+    query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
+      node.operator === '$empty'
+        ? '(?? is null or length(??) = 0)'
+        : '(?? is not null and length(??) > 0)',
+      [name, name],
     );
     return;
   }
@@ -2676,7 +2829,10 @@ function applyCondition(
   ].includes(node.operator);
   if (pattern || (node.mode === 'insensitive' && node.value !== null)) {
     const text = stringFilterValue(node.value);
-    const escaped = text.replace(/[!%_[]/g, '!$&');
+    const mssql =
+      (client?.client.config as { client?: string } | undefined)?.client ===
+      'mssql';
+    const escaped = text.replace(mssql ? /[!%_[]/g : /[!%_]/g, '!$&');
     const operand = pattern
       ? `${node.operator === '$startsWith' ? '' : '%'}${escaped}${node.operator === '$endsWith' ? '' : '%'}`
       : text;

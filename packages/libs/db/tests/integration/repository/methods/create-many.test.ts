@@ -6,6 +6,56 @@ import {
 } from '../fixtures/documentation.js';
 
 describeIntegrationDatabases('Repository createMany contracts', (context) => {
+  it('binds JSON and binary values consistently with and without returning', async () => {
+    await context.builder.createCollection('batchValues', (c) => {
+      c.string('code').primary();
+      c.json('payload').nullable();
+      c.field({ name: 'bytes', type: 'blob' }).nullable();
+    });
+    const repository = context.database.repository('batchValues');
+    for (const returning of [false, true]) {
+      const prefix = returning ? 'R' : 'C';
+      await repository.createMany({
+        values: [
+          {
+            code: `${prefix}A`,
+            payload: { nested: [1, true, 'text'] },
+            bytes: new Uint8Array([1, 2, 3]),
+          },
+          { code: `${prefix}B`, payload: [1, 2], bytes: null },
+        ],
+        ...(returning
+          ? {
+              select: (s: import('../../../../src/index.js').SelectBuilder) =>
+                s.fields('code'),
+            }
+          : {}),
+      });
+      const rows = await repository.findMany({
+        sort: (s) => s.field('code').asc(),
+      });
+      const first = rows.find((row) => row.code === `${prefix}A`)!;
+      const second = rows.find((row) => row.code === `${prefix}B`)!;
+      const decode = (value: unknown): unknown =>
+        typeof value === 'string' ? JSON.parse(value) : value;
+      expect(decode(first.payload)).toEqual({ nested: [1, true, 'text'] });
+      expect(Buffer.from(first.bytes as Uint8Array)).toEqual(
+        Buffer.from([1, 2, 3]),
+      );
+      expect(decode(second.payload)).toEqual([1, 2]);
+      expect(second.bytes).toBeNull();
+      await repository.updateOne({
+        filter: { code: `${prefix}A` },
+        values: { bytes: null, payload: { changed: true } },
+      });
+      const updated = await repository.findOne({
+        filter: { code: `${prefix}A` },
+      });
+      expect(updated?.bytes).toBeNull();
+      expect(decode(updated?.payload)).toEqual({ changed: true });
+    }
+  });
+
   it.each([
     ['empty array', []],
     [
