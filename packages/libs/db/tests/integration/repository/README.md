@@ -46,6 +46,8 @@ Some existing tests intentionally remain transitional:
 
 ## Relation coverage
 
+The tables below record the structural-migration audit. Phase updates near the end of this file identify gaps closed since that audit; unlisted combinations remain unverified.
+
 ### Reads and query expressions
 
 | Contract                                                                        | Existing assertion location                                                                        | Follow-up gaps                                                                                                     |
@@ -122,6 +124,14 @@ Use the package's supported Node 24+ runtime, matching the ABI used to build nat
 - [Sort matrix](./relations/sort-matrix.test.ts) covers sum/avg/min/max in both directions, explicit null placement, tied belongsToMany counts before pagination and missing to-one targets. Existing Sort semantics coalesce empty sum to zero; Select sum remains null on an empty relation.
 - [Batch loading](./relations/batch-loading.test.ts) verifies bounded SELECT query count when parent rows grow from 1 to 15, nested shared targets and exact projections. This establishes the measured graph only, not a universal query-count guarantee.
 - [Aggregate Select](./relations/aggregate-select.test.ts) now asserts exact nonempty sum/avg/min/max values in addition to relationships between aggregates.
+
+### Phase 3: relation mutation safety
+
+- [Cardinality](./relations/values/cardinality.test.ts) covers nested create, disconnect and delete separately on belongsTo, hasOne, hasMany and belongsToMany, including physical target lifetime, foreign-key clearing, edge cleanup and unrelated target preservation.
+- [Update/upsert](./relations/values/update-upsert.test.ts) covers target updates and both upsert branches for all four relation types; repeated upsert preserves target identity and does not create a duplicate.
+- [Shared targets](./relations/values/shared-targets.test.ts) verifies repeated connect/payload updates and clearing one parent's edges without changing another parent's edge or the target. A late missing connect rolls back root changes, new targets and edge payloads together.
+- [Limits](./relations/values/limits.test.ts) verifies depth 3 versus 4 and 100 versus 101 relation nodes, both validation and execution. Validation writes nothing; over-limit execution leaves no physical rows. The node counter counts relation nodes, not every target record.
+- Non-null foreign-key cases, duplicate selectors within one operation and concurrency are still follow-up work; these tests do not make all cells in the audit complete.
 
 1. **Structural baseline (this phase):** partition files, extract fixed fixtures, retain assertions, repair documentation links and establish this map.
 2. **Public contracts and safety:** add independent method cases and documentation scenarios, then split transitional workflows where useful. Prioritize write scope, cardinality, identity and atomic rollback.
