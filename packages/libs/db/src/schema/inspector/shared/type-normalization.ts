@@ -49,7 +49,12 @@ export function normalizePhysicalDataType(
   if (/^(decimal|numeric|number)/.test(base)) {
     return 'decimal';
   }
-  if (base === 'real' || base === 'float4' || base === 'binary_float') {
+  if (
+    base === 'float' ||
+    base === 'real' ||
+    base === 'float4' ||
+    base === 'binary_float'
+  ) {
     return 'float';
   }
   if (/^(double|double precision|float8|binary_double)/.test(base)) {

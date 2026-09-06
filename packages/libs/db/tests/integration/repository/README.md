@@ -104,6 +104,8 @@ BigInt/Decimal transport redesign stays deferred. Different database errors and 
 
 ## Runtime regression found during this work
 
+[Field-type Filters](./capabilities/filter-field-types.test.ts) covers small exact integer/bigInt/decimal/float/double comparisons, time/null predicates and UTC datetime bounds. SQLite's Knex-emitted FLOAT columns were classified as native, blocking numeric filters; the shared inspector now recognizes FLOAT, with MSSQL's double classification preserved. This does not change BigInt/Decimal transport or promise timezone-offset equivalence.
+
 [Nested Filter validation](./relations/filter-invalid-nested.test.ts) covers relation callback returns, nested AST groups and malformed variable paths. Null callback results and non-string variable paths previously raised native TypeErrors; they now return structured diagnostics before writes.
 
 [Filter validation](./capabilities/filter-validation.test.ts) covers malformed callback/AST structures, invalid paths and numeric operands, plus unchanged physical rows/versions after rejected bulk writes. Tests exposed native TypeErrors during traversal and unknown relation quantifiers being treated as existence checks; structural validation now rejects these with INVALID_FILTER.
