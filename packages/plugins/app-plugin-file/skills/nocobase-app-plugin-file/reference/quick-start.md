@@ -78,6 +78,7 @@ import {
   authorizationToken,
   type AuthorizationEnv,
   type DatabaseAuthorizationConditions,
+  type DatabaseAuthorizationParams,
   type DatabaseFieldFilter,
   type DatabaseFilter,
   type DatabaseFilterOperator,
@@ -147,7 +148,7 @@ export const orderAttachmentRoutes: AppApiRouteContribution<Application> =
           const { authz }: Partial<AuthorizationEnv['Variables']> = context.var;
           if (!authz) return false;
           const action = parentActions[fileAction];
-          const decision = await authz.authorize({
+          const decision = await authz.authorize<DatabaseAuthorizationParams>({
             resource: {
               type: 'database.collection',
               id: 'main.purchaseOrders',
@@ -426,8 +427,11 @@ guard. A missing ID must not construct an endpoint or enable uploads.
 The endpoint is relative to the App's API root: no `/api`, origin, public base
 path, query, or fragment. Use public components by default; install Registry
 `component-ui` only for editable UI source, not alongside a second copy of the
-same field. Put application copy in `client/locales/`; add a page only when the
-business workflow needs one.
+same field. Put application copy in `client/locales/`. Prefer an existing order
+page or dialog. Only when a new page is needed, register its page wrapper in
+`client/routes.ts` using `defineAppRoutes()` and `componentLoader`, preserving
+existing routes. The wrapper supplies `orderId` and `onDone`; do not register
+`OrderAttachments` directly as a page without its required props.
 
 ## 4. Preserve lifecycle semantics
 
