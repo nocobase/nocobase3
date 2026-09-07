@@ -11,6 +11,7 @@ export function defineWorkflowNodes(
   collection.text('description');
   collection
     .belongsTo('workflow', WORKFLOW_COLLECTIONS.workflows)
+    .targetKey('id')
     .foreignKey('workflowId')
     .foreignKeyType('bigInt')
     .notNull()

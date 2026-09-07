@@ -169,7 +169,7 @@ Browser request
                                   │ 仅 SPA fallback
                                   ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│ createAppClient() -> Refine App (React App)                        │
+│ createApp() -> ClientApplication -> Refine App (React App)         │
 │                                                                    │
 │ BrowserRouter / AppRouter                                          │
 │  /<custom-page> -> Client route -> Page                            │
@@ -249,7 +249,7 @@ resolveAppRuntime() → ResolvedAppRuntime              解析公开配置和静
     ▼
 createApp(runtime) → ClientApplication                创建 App 和 ServiceContainer
     │
-    ├── app.config + AppClient/API Client
+    ├── app.config + apiClientToken + realtimeClientToken
     ├── serviceProviders + Refine config
     └── reactProviders + Routes
     │

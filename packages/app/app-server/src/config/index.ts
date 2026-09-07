@@ -15,4 +15,5 @@ export {
 export type * from './app-config-types.js';
 export * from './context.js';
 export * from './paths.js';
+export * from './schema-document.js';
 export type * from './types.js';

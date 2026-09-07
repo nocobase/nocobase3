@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   Bell,
@@ -31,7 +31,7 @@ import {
 } from './ui/card.js';
 
 export function NotificationInAppInbox(): ReactElement {
-  const appClient = useService(appApiClientToken);
+  const appClient = useService(apiClientToken);
   const { t } = useTranslation(IN_APP_NOTIFICATION_CLIENT_NAMESPACE);
   const inboxRuntime = useNotificationInAppRuntime();
   const { revision, unreadCount } = inboxRuntime;

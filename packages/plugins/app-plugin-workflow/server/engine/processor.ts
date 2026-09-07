@@ -39,7 +39,7 @@ export interface ProcessorOptions {
   execution: WorkflowRun;
   instructions: Map<string, WorkflowInstructionClass>;
   workflowResourceRoot: string | null;
-  app?: unknown;
+  services?: import('./run-services.js').WorkflowRunServices;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
@@ -86,7 +86,8 @@ export default class Processor {
   readonly workflow: WorkflowDefinition;
   readonly execution: WorkflowRun;
   readonly workflowResourceRoot: string | null;
-  readonly app: unknown;
+  readonly services:
+    import('./run-services.js').WorkflowRunServices | undefined;
   readonly nodes: WorkflowNode[] = [];
   readonly nodesMap: Map<string, WorkflowNode> = new Map();
   readonly abortController: AbortController = new AbortController();
@@ -112,7 +113,7 @@ export default class Processor {
     this.workflow = options.workflow;
     this.execution = options.execution;
     this.workflowResourceRoot = options.workflowResourceRoot;
-    this.app = options.app;
+    this.services = options.services;
     this.instructions = options.instructions;
     this.logger = options.logger ?? noopWorkflowLogger;
     this.environment = options.environment;

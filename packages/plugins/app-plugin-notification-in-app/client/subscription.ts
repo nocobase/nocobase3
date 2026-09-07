@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { RealtimeClient } from '@nocobase/app-client';
 
 import { IN_APP_NOTIFICATION_REALTIME_TOPIC } from '../shared/realtime.js';
 
@@ -8,12 +8,12 @@ export interface InboxFocusTarget {
 }
 
 export function subscribeToInboxInvalidations(
-  appClient: AppClient,
+  realtime: RealtimeClient,
   target: InboxFocusTarget,
   refresh: () => void,
 ): () => void {
-  const unsubscribeOpen = appClient.realtime?.onOpen(refresh);
-  const unsubscribeTopic = appClient.realtime?.subscribe<unknown>(
+  const unsubscribeOpen = realtime.onOpen(refresh);
+  const unsubscribeTopic = realtime.subscribe<unknown>(
     IN_APP_NOTIFICATION_REALTIME_TOPIC,
     (event): void => {
       if (isInboxChanged(event.payload)) refresh();

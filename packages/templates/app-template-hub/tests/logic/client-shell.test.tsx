@@ -28,21 +28,15 @@ describe('application shell', () => {
     expect(
       await screen.findByRole('navigation', { name: 'Application navigation' }),
     ).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(
+      screen.queryByRole('link', { name: 'Home' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('complementary', { name: 'Application navigation' }),
     ).toHaveClass(
       'bg-sidebar',
       'text-sidebar-foreground',
       'border-sidebar-border',
-    );
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveClass(
-      'bg-sidebar-primary',
-      'text-sidebar-primary-foreground',
-      'focus-visible:ring-sidebar-ring',
     );
     // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
     expect(

@@ -19,4 +19,6 @@ export type * from './server/instructions/types.js';
 export type {
   WorkflowRunFunction,
   WorkflowRunJsonValue,
+  WorkflowRunOptions,
 } from './server/instructions/run/instruction.js';
+export type { WorkflowRunServices } from './server/engine/run-services.js';

@@ -1,5 +1,6 @@
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { ServiceResolver } from '@nocobase/service-provider';
 import { randomUUID } from 'node:crypto';
 import {
   LocalWorkflowArtifactStore,
@@ -22,12 +23,13 @@ import {
 } from './engine/index.js';
 import type { FsDriveDiskConfig } from '@nocobase/drive';
 import { WORKFLOW_COLLECTIONS } from './collections/names.js';
+import { createWorkflowRunServices } from './engine/run-services.js';
 
 export interface WorkflowServiceOptions {
   database: DatabaseManager;
   queue: NocoBaseQueueManager;
   queueName?: string;
-  app?: unknown;
+  services: ServiceResolver;
   sourceRoot?: string;
   distRoot: string;
   artifactDisk: FsDriveDiskConfig;
@@ -52,7 +54,7 @@ export class WorkflowService {
       ...(options.queueName === undefined
         ? {}
         : { queueName: options.queueName }),
-      app: options.app,
+      services: createWorkflowRunServices(options.services),
       artifactStore: this.store,
       ...(!options.production && options.sourceRoot
         ? { developmentResourceRoot: options.sourceRoot }

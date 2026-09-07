@@ -68,7 +68,8 @@ Declaration modules are imported by `server:inspect`, so nothing at module top l
 The client has the same pattern. `client/service-provider.ts` holds application startup logic, and services are resolved with `useService`:
 
 ```tsx
-const appClient = useService(appApiClientToken);
+const api = useService(apiClientToken);
+const realtime = useService(realtimeClientToken);
 ```
 
 ## Background jobs

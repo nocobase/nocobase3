@@ -9,7 +9,7 @@ export interface AppBrandProps {
 export function AppBrand({ compact = false }: AppBrandProps): ReactElement {
   return (
     <Link
-      aria-label='NocoBase home'
+      aria-label='NocoBase applications'
       className='flex min-w-0 items-center text-foreground'
       to='/'
     >

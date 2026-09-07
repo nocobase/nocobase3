@@ -320,7 +320,7 @@ function finishHub(
 /**
  * Prints what the user has to do next, in the order they have to do it.
  *
- * Editing `config.yml` is a step rather than a trailing remark, because for postgres and mysql it is the one thing
+ * Editing `config.yml` is a step rather than a trailing remark, because for postgres, mysql, oracle, and mssql it is the one thing
  * standing between a generated project and a running one: the file holds stock credentials pointing at localhost, so
  * `pnpm dev` fails on connection until it is filled in. SQLite needs no server and its generated defaults already
  * work, so there the file is only worth mentioning.

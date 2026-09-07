@@ -148,9 +148,9 @@ interface CalculateRiskArgs {
 
 export const run: WorkflowRunFunction = (
   rawArgs: unknown,
-  runtime,
+  options,
 ): WorkflowRunJsonValue => {
-  runtime.signal.throwIfAborted();
+  options.signal.throwIfAborted();
   const args = rawArgs as CalculateRiskArgs;
   if (typeof args.quotationId !== 'string' || typeof args.amount !== 'number') {
     throw new Error('quotationId and amount are required.');
@@ -166,14 +166,15 @@ import type { WorkflowRunFunction } from '@nocobase/app-plugin-workflow';
 
 export const run: WorkflowRunFunction = async (
   rawArgs: unknown,
-  runtime,
+  options,
 ): Promise<null> => {
-  runtime.signal.throwIfAborted();
+  options.signal.throwIfAborted();
   const quotationId = (rawArgs as { quotationId?: unknown }).quotationId;
   if (typeof quotationId !== 'string')
     throw new Error('quotationId is required.');
-  // Call an idempotent application service through runtime.app here.
-  runtime.logger.info('Approval requested');
+  // Resolve business services with options.services using the owning plugin's
+  // original public token rather than recreating a same-named token.
+  options.logger.info('Approval requested', { quotationId });
   return null;
 };
 ```
@@ -185,14 +186,17 @@ import type { WorkflowRunFunction } from '@nocobase/app-plugin-workflow';
 
 export const run: WorkflowRunFunction = async (
   rawArgs: unknown,
-  runtime,
+  options,
 ): Promise<null> => {
-  runtime.signal.throwIfAborted();
+  options.signal.throwIfAborted();
   const needsApproval = (rawArgs as { approved?: unknown }).approved;
   if (typeof needsApproval !== 'boolean')
     throw new Error('approved must be boolean.');
-  // Persist by a stable business id; retries may execute this script again.
-  runtime.logger.info('Decision recorded');
+  // Persist through the owning plugin's public service by a stable business id;
+  // retries may execute this script again.
+  // Persist through a service resolved from options.services by a stable
+  // business id; retries may execute this script again.
+  options.logger.info('Decision recorded', { approved: needsApproval });
   return null;
 };
 ```
@@ -348,19 +352,19 @@ type Result = { score: number };
 
 export const run: WorkflowRunFunction = async (
   rawArgs,
-  runtime,
+  options,
 ): Promise<WorkflowRunJsonValue> => {
+  options.signal.throwIfAborted();
   const args = rawArgs as Args;
-  runtime.signal.throwIfAborted();
   const result: Result = { score: args.quotationId.length };
-  runtime.logger.info('Risk calculated');
+  options.logger.info('Risk calculated');
   return result;
 };
 ```
 
-The actual public function currently receives `args: unknown` and runtime with exactly `app`, `signal`, and `logger`. It returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
+The public function receives `args: unknown` and options with exactly `services`, `signal`, and `logger`. `services` is a read-only application service resolver with `has(token)` and `resolve(token)`: import each service owner's original public token and do not recreate a same-named token. The resolver cannot register or replace application services. `signal` is the current Workflow abort signal, and `logger` is already bound to the current Workflow execution context. The function returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
 
-Honor `runtime.signal` in cancellable I/O. Keep secrets out of args/results/logs. Make external side effects idempotent using business identifiers because workflow retries/reruns may call the script again.
+Honor `options.signal` in cancellable I/O and use service-owned timeout options where available. Keep secrets out of args, results, logs, and service inputs that may be logged. Make external side effects idempotent using business identifiers because workflow retries/reruns may call the script again.
 
 ## Variables and templates
 

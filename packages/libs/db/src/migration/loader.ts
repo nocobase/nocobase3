@@ -3,7 +3,7 @@ import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { isDefinedMigration } from './define.js';
+import { isDefinedMigration } from './internal/marker.js';
 import type {
   LoadedMigration,
   LoadMigrationsOptions,
@@ -19,6 +19,7 @@ export const DEFAULT_MIGRATION_EXTENSIONS = [
 ] as const;
 export const DEFAULT_MIGRATION_PACKAGE_NAME = 'app';
 
+/** Loads, validates, and deterministically orders migration definitions from configured sources. */
 export async function loadMigrations(
   options: LoadMigrationsOptions,
 ): Promise<LoadedMigration[]> {
@@ -31,6 +32,7 @@ export async function loadMigrations(
   return migrations.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Loads migration definitions without executing them. */
 export async function validateMigrations(
   options: string | LoadMigrationsOptions,
 ): Promise<LoadedMigration[]> {

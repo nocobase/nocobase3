@@ -6,17 +6,24 @@ import {
 import {
   CollectionCompiler,
   type CollectionCompilerContext,
-} from '../compiler/index.js';
+} from '../compiler/compiler.js';
 import {
   FluentCollectionAlterBuilder,
   FluentCollectionDefinitionBuilder,
   FluentViewCollectionDefinitionBuilder,
 } from '../fluent/index.js';
 import {
-  InMemoryCollectionMetadataStore,
-  type CollectionMetadataStore,
-} from '../../metadata/index.js';
-import type { NamingStrategy } from '../../naming/index.js';
+  type CollectionMetadataInvalidator,
+  type CollectionMetadataService,
+} from '../../metadata/service.js';
+import { CollectionMetadataStoreReadOnlyError } from '../../metadata/document-store-errors.js';
+import {
+  extractLegacyCollectionMetadata,
+  type LegacyMetadataExtractionDiagnostic,
+} from '../../metadata/legacy-extraction.js';
+import type { ConnectionCollections } from '../registry/types.js';
+import { CollectionResolutionError } from '../resolver/errors.js';
+import { metadataFieldType } from '../../metadata/field-type.js';
 import type {
   AnyFieldDefinition,
   BuilderExecOptions,
@@ -24,16 +31,15 @@ import type {
   BuilderResult,
   CollectionAlterDefinition,
   CollectionAlterInput,
+  CollectionCreateInput,
   CollectionDefinition,
   CollectionDefinitionInput,
-  CollectionMetadataPatch,
+  CollectionKind,
   CollectionOperation,
   ConstraintDefinition,
   FieldAlterInput,
-  FieldMetadataPatch,
   IndexDefinition,
   MaterializedViewCollectionInput,
-  MetadataUpdateOptions,
   NamingOptions,
   RefreshMaterializedViewOptions,
   ViewCollectionInput,
@@ -42,23 +48,113 @@ import type {
 
 export interface CollectionBuilderOptions {
   schemaAdapter?: SchemaAdapter;
-  metadataStore?: CollectionMetadataStore;
+  collections?: Pick<ConnectionCollections, 'get' | 'scan'>;
+  collectionMetadata?: CollectionMetadataService;
+  schemaInvalidator?: CollectionMetadataInvalidator;
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
+}
+
+export class CollectionMetadataFieldNotFoundError extends Error {
+  readonly code = 'COLLECTION_METADATA_FIELD_NOT_FOUND' as const;
+
+  constructor(
+    readonly collection: string,
+    readonly field: string,
+  ) {
+    super(`Collection "${collection}" does not contain Field "${field}".`);
+    this.name = 'CollectionMetadataFieldNotFoundError';
+  }
+}
+
+export class CollectionMetadataExtractionError extends Error {
+  readonly code = 'COLLECTION_METADATA_EXTRACTION_FAILED' as const;
+
+  constructor(
+    readonly collection: string,
+    readonly diagnostics: readonly LegacyMetadataExtractionDiagnostic[],
+  ) {
+    super(`Supplemental Metadata extraction failed for "${collection}".`);
+    this.name = 'CollectionMetadataExtractionError';
+  }
+}
+
+export type CollectionRenameDependencyKind =
+  | 'relationTarget'
+  | 'relationThrough'
+  | 'foreignKey'
+  | 'structuredView'
+  | 'rawView';
+
+export interface CollectionRenameDependency {
+  kind: CollectionRenameDependencyKind;
+  collection: string;
+  path: string;
+}
+
+export class CollectionRenameDependencyError extends Error {
+  readonly code = 'COLLECTION_RENAME_HAS_DEPENDENCIES' as const;
+  readonly from: string;
+  readonly to: string;
+  readonly dependencies: CollectionRenameDependency[];
+
+  constructor(
+    from: string,
+    to: string,
+    dependencies: CollectionRenameDependency[],
+  ) {
+    super(formatRenameDependencyError(from, to, dependencies));
+    this.name = 'CollectionRenameDependencyError';
+    this.from = from;
+    this.to = to;
+    this.dependencies = dependencies;
+  }
+}
+
+export class CollectionRenameAtomicityError extends Error {
+  readonly code = 'COLLECTION_RENAME_ATOMICITY_REQUIRED' as const;
+
+  constructor(
+    readonly from: string,
+    readonly to: string,
+  ) {
+    super(
+      `Cannot rename collection "${from}" to "${to}" because supplemental Metadata exists and the configured Store cannot atomically rename it with the physical Schema.`,
+    );
+    this.name = 'CollectionRenameAtomicityError';
+  }
+}
+
+export class CollectionRenameUnsupportedKindError extends Error {
+  readonly code = 'COLLECTION_RENAME_UNSUPPORTED_KIND' as const;
+
+  constructor(
+    readonly from: string,
+    readonly to: string,
+    readonly kind: Exclude<CollectionKind, 'table'>,
+  ) {
+    super(
+      `Cannot rename ${kind} collection "${from}" to "${to}" because renameCollection currently supports table collections only.`,
+    );
+    this.name = 'CollectionRenameUnsupportedKindError';
+  }
 }
 
 export class CollectionBuilder {
   private readonly schemaAdapter: SchemaAdapter;
-  private readonly metadataStore: CollectionMetadataStore;
+  private readonly collections?: Pick<ConnectionCollections, 'get' | 'scan'>;
+  private readonly collectionMetadata?: CollectionMetadataService;
+  private readonly schemaInvalidator?: CollectionMetadataInvalidator;
   private readonly compiler: CollectionCompiler;
+  private readonly plannedCollections = new Map<string, CollectionDefinition>();
 
   constructor(options: CollectionBuilderOptions = {}) {
+    assertSupportedBuilderOptions(options);
     this.schemaAdapter = options.schemaAdapter ?? new NoopSchemaAdapter();
-    this.metadataStore =
-      options.metadataStore ?? new InMemoryCollectionMetadataStore();
+    this.collections = options.collections;
+    this.collectionMetadata = options.collectionMetadata;
+    this.schemaInvalidator = options.schemaInvalidator;
     this.compiler = new CollectionCompiler({
       naming: options.naming,
-      namingStrategy: options.namingStrategy,
     });
   }
 
@@ -72,6 +168,27 @@ export class CollectionBuilder {
       [{ type: 'createCollection', name, definition }],
       options,
     );
+  }
+
+  async createCollections(
+    inputs: readonly CollectionCreateInput[],
+    options: BuilderExecOptions = {},
+  ): Promise<BuilderResult> {
+    return this.apply(
+      inputs.map(({ name, definition }) => ({
+        type: 'createCollection' as const,
+        name,
+        definition: normalizeCollectionInput(definition),
+      })),
+      options,
+    );
+  }
+
+  async hasCollection(name: string): Promise<boolean> {
+    if (this.collections) {
+      return Boolean(await this.collections.get(name));
+    }
+    return this.plannedCollections.has(name);
   }
 
   async alterCollection(
@@ -96,10 +213,7 @@ export class CollectionBuilder {
   async renameCollection(
     oldName: string,
     newName: string,
-    options: BuilderExecOptions & {
-      renameTable?: boolean;
-      renameTableTo?: string;
-    } = {},
+    options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
     return this.apply(
       [
@@ -107,8 +221,6 @@ export class CollectionBuilder {
           type: 'renameCollection',
           from: oldName,
           to: newName,
-          renameTable: options.renameTable,
-          renameTableTo: options.renameTableTo,
         },
       ],
       options,
@@ -123,7 +235,6 @@ export class CollectionBuilder {
     const definition = {
       ...normalizeViewInput(input),
       kind: 'view' as const,
-      writable: false,
     };
     return this.apply(
       [{ type: 'createViewCollection', name, definition }],
@@ -139,7 +250,6 @@ export class CollectionBuilder {
     const definition = {
       ...normalizeViewInput(input),
       kind: 'view' as const,
-      writable: false,
     };
     return this.apply(
       [{ type: 'replaceViewCollection', name, definition }],
@@ -155,7 +265,6 @@ export class CollectionBuilder {
     const definition = {
       ...normalizeViewInput(input),
       kind: 'materializedView' as const,
-      writable: false,
     };
     return this.apply(
       [{ type: 'createMaterializedViewCollection', name, definition }],
@@ -245,37 +354,20 @@ export class CollectionBuilder {
     );
   }
 
-  async updateCollectionMetadata(
-    collection: string,
-    patch: CollectionMetadataPatch,
-    options: MetadataUpdateOptions = {},
-  ): Promise<BuilderResult> {
-    return this.apply(
-      [{ type: 'updateCollectionMetadata', collection, patch }],
-      options,
-    );
-  }
-
-  async updateFieldMetadata(
-    collection: string,
-    field: string,
-    patch: FieldMetadataPatch,
-    options: MetadataUpdateOptions = {},
-  ): Promise<BuilderResult> {
-    return this.apply(
-      [{ type: 'updateFieldMetadata', collection, field, patch }],
-      options,
-    );
-  }
-
   async apply(
     operations: CollectionOperation[],
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
     const effectiveOperations = applyExecOptions(operations, options);
-    assertNoRelationColumnNameOperations(effectiveOperations);
+    assertNoPhysicalMappingOperations(effectiveOperations);
     const compilerContext =
       await this.createCompilerContext(effectiveOperations);
+    assertOptimisticLockOperations(effectiveOperations, compilerContext);
+    await assertRenameOperations(
+      effectiveOperations,
+      compilerContext,
+      this.collectionMetadata,
+    );
     const compiledSchemaOperations = this.compiler.compile(
       effectiveOperations,
       compilerContext,
@@ -300,15 +392,25 @@ export class CollectionBuilder {
     ];
 
     if (!options.dryRun) {
+      this.schemaAdapter.assertExecutable?.(schemaOperations);
+      const executedOperations = filterMetadataOperations(
+        this.compiler,
+        effectiveOperations,
+        schemaOperations,
+        compilerContext,
+      );
+      const metadataOperations =
+        options.syncMetadata !== false ? executedOperations : undefined;
+      if (metadataOperations) {
+        assertMetadataFieldChanges(metadataOperations, compilerContext);
+        await this.assertDocumentMetadataWritable(metadataOperations);
+      }
       await this.schemaAdapter.execute(schemaOperations);
-      if (options.syncMetadata !== false) {
-        await this.applyMetadataChanges(
-          filterMetadataOperations(
-            this.compiler,
-            effectiveOperations,
-            schemaOperations,
-            compilerContext,
-          ),
+      this.updatePlannedCollections(executedOperations);
+      this.invalidatePhysicalSchema(effectiveOperations);
+      if (metadataOperations) {
+        await this.applyDocumentMetadataChanges(
+          metadataOperations,
           compilerContext,
         );
       }
@@ -333,6 +435,9 @@ export class CollectionBuilder {
     operations: CollectionOperation[],
   ): Promise<CollectionCompilerContext> {
     const names = new Set<string>();
+    const includesRename = operations.some(
+      (operation) => operation.type === 'renameCollection',
+    );
     for (const operation of operations) {
       switch (operation.type) {
         case 'createCollection':
@@ -352,13 +457,12 @@ export class CollectionBuilder {
         case 'addIndex':
         case 'dropIndex':
         case 'dropConstraint':
-        case 'updateCollectionMetadata':
-        case 'updateFieldMetadata':
         case 'refreshMaterializedViewCollection':
           names.add(operation.collection);
           break;
         case 'renameCollection':
           names.add(operation.from);
+          names.add(operation.to);
           break;
         case 'addField':
           names.add(operation.collection);
@@ -374,9 +478,23 @@ export class CollectionBuilder {
     }
 
     const collections: Record<string, CollectionDefinition | undefined> = {};
+    if (includesRename && this.collections) {
+      for await (const collection of this.collections.scan()) {
+        if (!collection.name) continue;
+        collections[collection.name] = collection;
+      }
+    }
+    if (!this.collections) {
+      for (const [name, definition] of this.plannedCollections) {
+        collections[name] = structuredClone(definition);
+      }
+    }
     await Promise.all(
       [...names].map(async (name) => {
-        collections[name] = await this.metadataStore.getCollection(name);
+        if (Object.hasOwn(collections, name)) {
+          return;
+        }
+        collections[name] = await this.collections?.get(name);
       }),
     );
     for (const operation of operations) {
@@ -397,91 +515,71 @@ export class CollectionBuilder {
     return { collections };
   }
 
-  private async applyMetadataChanges(
-    operations: CollectionOperation[],
-    context: CollectionCompilerContext,
-  ): Promise<void> {
+  private updatePlannedCollections(operations: CollectionOperation[]): void {
+    if (this.collections) return;
     for (const operation of operations) {
       switch (operation.type) {
         case 'createCollection':
         case 'createViewCollection':
         case 'replaceViewCollection':
         case 'createMaterializedViewCollection':
-          await this.metadataStore.saveCollection(operation.name, {
-            ...operation.definition,
+          this.plannedCollections.set(operation.name, {
+            ...structuredClone(operation.definition),
             name: operation.name,
           });
           break;
         case 'dropCollection':
-          await this.metadataStore.removeCollection(operation.collection);
+          this.plannedCollections.delete(operation.collection);
           break;
         case 'renameCollection': {
-          const current = context.collections?.[operation.from] ??
-            (await this.metadataStore.getCollection(operation.from)) ?? {
-              name: operation.from,
-              fields: [],
-            };
-          const next: CollectionDefinition = {
-            ...current,
-            name: operation.to,
-          };
-          if (operation.renameTableTo) {
-            next.tableName = operation.renameTableTo;
-          } else if (operation.renameTable) {
-            delete next.tableName;
-          } else {
-            next.tableName = this.compiler.effectiveTableName(
-              operation.from,
-              current,
-            );
+          const current = this.plannedCollections.get(operation.from);
+          this.plannedCollections.delete(operation.from);
+          if (current) {
+            this.plannedCollections.set(operation.to, {
+              ...current,
+              name: operation.to,
+            });
           }
-          await this.metadataStore.removeCollection(operation.from);
-          await this.metadataStore.saveCollection(operation.to, next);
           break;
         }
         case 'alterCollection': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(
-              current ?? { name: operation.collection },
-              operation.changes,
-            ),
-          );
+          const current = this.plannedCollections.get(operation.collection);
+          if (current) {
+            this.plannedCollections.set(
+              operation.collection,
+              applyAlterMetadata(current, operation.changes),
+            );
+          }
           break;
         }
         case 'addField': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
-          await this.metadataStore.saveCollection(operation.collection, {
-            ...(current ?? { name: operation.collection }),
-            fields: [...(current?.fields ?? []), operation.field],
-          });
+          const current = this.plannedCollections.get(operation.collection);
+          if (current) {
+            this.plannedCollections.set(operation.collection, {
+              ...current,
+              fields: [...(current.fields ?? []), operation.field],
+            });
+          }
           break;
         }
         case 'alterField': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              alterFields: [
-                { name: operation.field, changes: operation.changes },
-              ],
-            }),
-          );
+          const current = this.plannedCollections.get(operation.collection);
+          if (current) {
+            this.plannedCollections.set(
+              operation.collection,
+              applyAlterMetadata(current, {
+                alterFields: [
+                  { name: operation.field, changes: operation.changes },
+                ],
+              }),
+            );
+          }
           break;
         }
         case 'dropField': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
+          const current = this.plannedCollections.get(operation.collection);
           if (current) {
-            await this.metadataStore.saveCollection(operation.collection, {
+            this.plannedCollections.set(operation.collection, {
               ...current,
               fields: current.fields?.filter(
                 (field) => field.name !== operation.field,
@@ -490,69 +588,193 @@ export class CollectionBuilder {
           }
           break;
         }
-        case 'addIndex': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              addIndexes: [operation.index],
-            }),
-          );
-          break;
-        }
-        case 'dropIndex': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              dropIndexes: [operation.index],
-            }),
-          );
-          break;
-        }
-        case 'addConstraint': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              addConstraints: [operation.constraint],
-            }),
-          );
-          break;
-        }
-        case 'dropConstraint': {
-          const current = await this.metadataStore.getCollection(
-            operation.collection,
-          );
-          await this.metadataStore.saveCollection(
-            operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, {
-              dropConstraints: [operation.constraint],
-            }),
-          );
-          break;
-        }
-        case 'updateCollectionMetadata':
-          await this.metadataStore.patchCollection(
-            operation.collection,
-            operation.patch,
-          );
-          break;
-        case 'updateFieldMetadata':
-          await this.metadataStore.patchField(
-            operation.collection,
-            operation.field,
-            operation.patch,
-          );
-          break;
         default:
           break;
+      }
+    }
+  }
+
+  private async applyDocumentMetadataChanges(
+    operations: CollectionOperation[],
+    context: CollectionCompilerContext,
+  ): Promise<void> {
+    const service = this.collectionMetadata;
+    if (!service) return;
+    const projected = new Map<string, CollectionDefinition>();
+    for (const [name, definition] of Object.entries(
+      context.collections ?? {},
+    )) {
+      if (definition) projected.set(name, structuredClone(definition));
+    }
+    for (const operation of operations) {
+      switch (operation.type) {
+        case 'createCollection':
+        case 'createViewCollection':
+        case 'replaceViewCollection':
+        case 'createMaterializedViewCollection': {
+          const definition = {
+            ...operation.definition,
+            name: operation.name,
+          };
+          projected.set(operation.name, definition);
+          await service.replaceDocument(
+            extractSupplementalMetadata(operation.name, definition),
+          );
+          break;
+        }
+        case 'dropCollection':
+          projected.delete(operation.collection);
+          await service.removeDocument(operation.collection);
+          break;
+        case 'renameCollection': {
+          const definition = projected.get(operation.from);
+          projected.delete(operation.from);
+          if (definition) {
+            const renamed = { ...definition, name: operation.to };
+            projected.set(operation.to, renamed);
+          }
+          break;
+        }
+        case 'alterCollection': {
+          const definition = applyAlterMetadata(
+            projected.get(operation.collection) ?? {
+              name: operation.collection,
+            },
+            operation.changes,
+          );
+          projected.set(operation.collection, definition);
+          // Validate the final document against the already-applied physical DDL.
+          // Per-field updates can reference columns dropped in the same operation.
+          const current = (await service.get(operation.collection))
+            ?.document ?? { version: 1 as const, name: operation.collection };
+          const fields = { ...current.fields };
+          const relations = { ...current.relations };
+          const changedNames = new Set([
+            ...(operation.changes.addFields ?? []).map((field) => field.name),
+            ...(operation.changes.alterFields ?? []).map((field) => field.name),
+          ]);
+          for (const name of operation.changes.dropFields ?? []) {
+            delete fields[name];
+            delete relations[name];
+          }
+          const updates = extractSupplementalMetadata(operation.collection, {
+            fields: definition.fields?.filter((field) =>
+              changedNames.has(field.name),
+            ),
+          });
+          for (const name of changedNames) {
+            delete fields[name];
+            delete relations[name];
+          }
+          await service.replaceDocument({
+            ...current,
+            ...(operation.changes.optimisticLock !== undefined
+              ? {
+                  optimisticLock: operation.changes.optimisticLock ?? undefined,
+                }
+              : {}),
+            fields: { ...fields, ...updates.fields },
+            relations: { ...relations, ...updates.relations },
+          });
+          break;
+        }
+        case 'addField': {
+          const definition = projected.get(operation.collection) ?? {
+            name: operation.collection,
+          };
+          const next = {
+            ...definition,
+            fields: [...(definition.fields ?? []), operation.field],
+          };
+          projected.set(operation.collection, next);
+          await syncFieldMetadata(
+            service,
+            operation.collection,
+            operation.field,
+          );
+          break;
+        }
+        case 'alterField': {
+          const definition = applyAlterMetadata(
+            projected.get(operation.collection) ?? {
+              name: operation.collection,
+            },
+            {
+              alterFields: [
+                { name: operation.field, changes: operation.changes },
+              ],
+            },
+          );
+          projected.set(operation.collection, definition);
+          const resolved = definition.fields?.find(
+            (field) => field.name === operation.field,
+          );
+          if (resolved) {
+            await syncFieldMetadata(
+              service,
+              operation.collection,
+              resolved,
+              operation.changes,
+            );
+          }
+          break;
+        }
+        case 'dropField': {
+          const definition = projected.get(operation.collection);
+          if (definition) {
+            const next = {
+              ...definition,
+              fields: definition.fields?.filter(
+                (field) => field.name !== operation.field,
+              ),
+            };
+            projected.set(operation.collection, next);
+          }
+          await service.removeField(operation.collection, operation.field);
+          break;
+        }
+        case 'addIndex':
+        case 'dropIndex':
+        case 'addConstraint':
+        case 'dropConstraint':
+        case 'refreshMaterializedViewCollection':
+          break;
+      }
+    }
+  }
+
+  private invalidatePhysicalSchema(operations: CollectionOperation[]): void {
+    if (!this.schemaInvalidator) {
+      return;
+    }
+    if (
+      operations.some(
+        (operation) =>
+          operation.type === 'dropCollection' ||
+          operation.type === 'renameCollection',
+      )
+    ) {
+      this.schemaInvalidator.invalidateAll();
+      return;
+    }
+    const collections = affectedCollections(operations);
+    if (collections.length > 0) {
+      this.schemaInvalidator.invalidate({
+        collections,
+        namingIndex: false,
+      });
+    }
+  }
+
+  private async assertDocumentMetadataWritable(
+    operations: CollectionOperation[],
+  ): Promise<void> {
+    const service = this.collectionMetadata;
+    if (!service || service.capabilities.writable) return;
+    for (const operation of operations) {
+      const write = await requiredMetadataWrite(operation, service);
+      if (write) {
+        throw new CollectionMetadataStoreReadOnlyError(write);
       }
     }
   }
@@ -569,21 +791,11 @@ function normalizeCollectionInput(
     input(builder);
     return builder.toDefinition();
   })();
-  assertNoRelationColumnNames(definition);
+  assertNoPhysicalMappings(definition, definition.name ?? '(new collection)');
   return definition;
 }
 
-function assertNoRelationColumnNames(definition: CollectionDefinition): void {
-  for (const field of definition.fields ?? []) {
-    if (isRelationField(field) && 'columnName' in field) {
-      throw new Error(
-        `Relation field "${field.name}" does not support columnName. Define a local foreign key field and reference it with foreignKey().`,
-      );
-    }
-  }
-}
-
-function assertNoRelationColumnNameOperations(
+function assertNoPhysicalMappingOperations(
   operations: CollectionOperation[],
 ): void {
   for (const operation of operations) {
@@ -592,15 +804,30 @@ function assertNoRelationColumnNameOperations(
       case 'createViewCollection':
       case 'replaceViewCollection':
       case 'createMaterializedViewCollection':
-        assertNoRelationColumnNames(operation.definition);
+        assertNoPhysicalMappings(operation.definition, operation.name);
         break;
       case 'alterCollection':
-        assertNoRelationColumnNames({
-          fields: operation.changes.addFields ?? [],
-        });
+        assertNoPhysicalMappings(
+          { fields: operation.changes.addFields ?? [] },
+          operation.collection,
+        );
+        assertNoPhysicalFieldAlterMappings(
+          operation.collection,
+          operation.changes,
+        );
         break;
       case 'addField':
-        assertNoRelationColumnNames({ fields: [operation.field] });
+        assertNoPhysicalMappings(
+          { fields: [operation.field] },
+          operation.collection,
+        );
+        break;
+      case 'alterField':
+        assertNoPhysicalFieldMapping(
+          operation.collection,
+          operation.field,
+          operation.changes,
+        );
         break;
       default:
         break;
@@ -619,13 +846,11 @@ function normalizeAlterInput(
     input(builder);
     return builder.toAlterDefinition();
   })();
-  for (const field of changes.addFields ?? []) {
-    if (isRelationField(field) && 'columnName' in field) {
-      throw new Error(
-        `Relation field "${field.name}" does not support columnName. Define a local foreign key field and reference it with foreignKey().`,
-      );
-    }
-  }
+  assertNoPhysicalMappings(
+    { fields: changes.addFields ?? [] },
+    '(altered collection)',
+  );
+  assertNoPhysicalFieldAlterMappings('(altered collection)', changes);
   return changes;
 }
 
@@ -635,6 +860,7 @@ function normalizeViewInput(input: ViewCollectionInput): CollectionDefinition {
     input(builder);
     return builder.toDefinition();
   }
+  assertNoPhysicalMappings(input, input.name ?? '(new view)');
   return input;
 }
 
@@ -684,13 +910,6 @@ function createImpact(operations: CollectionOperation[]): BuilderImpact[] {
           level: 'destructive',
           operation: operation.type,
           message: `Dropping collection ${operation.collection} may remove the backing database object.`,
-        };
-      case 'updateCollectionMetadata':
-      case 'updateFieldMetadata':
-        return {
-          level: 'safe',
-          operation: operation.type,
-          message: 'Only collection metadata will be updated.',
         };
       default:
         return {
@@ -755,7 +974,10 @@ function applyAlterMetadata(
         ...field.changes,
       } as AnyFieldDefinition;
     } else {
-      fields.push({ name: field.name, type: 'virtual', ...field.changes });
+      throw new CollectionMetadataFieldNotFoundError(
+        current.name ?? '(unknown collection)',
+        field.name,
+      );
     }
   }
   fields = fields.filter(
@@ -779,10 +1001,227 @@ function applyAlterMetadata(
 
   return {
     ...current,
+    optimisticLock:
+      changes.optimisticLock === null
+        ? undefined
+        : (changes.optimisticLock ?? current.optimisticLock),
     fields,
     indexes,
     constraints,
   };
+}
+
+function assertOptimisticLockOperations(
+  operations: CollectionOperation[],
+  context: CollectionCompilerContext,
+): void {
+  const collections = new Map<string, CollectionDefinition>();
+  for (const [name, definition] of Object.entries(context.collections ?? {})) {
+    if (definition) collections.set(name, definition);
+  }
+  for (const operation of operations) {
+    let name: string | undefined;
+    let definition: CollectionDefinition | undefined;
+    switch (operation.type) {
+      case 'createCollection':
+      case 'createViewCollection':
+      case 'replaceViewCollection':
+      case 'createMaterializedViewCollection':
+        name = operation.name;
+        definition = {
+          ...operation.definition,
+          name,
+          kind:
+            operation.type === 'createViewCollection' ||
+            operation.type === 'replaceViewCollection'
+              ? 'view'
+              : operation.type === 'createMaterializedViewCollection'
+                ? 'materializedView'
+                : (operation.definition.kind ?? 'table'),
+        };
+        break;
+      case 'alterCollection':
+        name = operation.collection;
+        if (
+          !collections.get(name)?.optimisticLock &&
+          operation.changes.optimisticLock === undefined
+        ) {
+          continue;
+        }
+        definition = applyAlterMetadata(
+          collections.get(name) ?? { name },
+          operation.changes,
+        );
+        break;
+      case 'addField':
+        name = operation.collection;
+        if (!collections.get(name)?.optimisticLock) continue;
+        definition = {
+          ...(collections.get(name) ?? { name }),
+          fields: [...(collections.get(name)?.fields ?? []), operation.field],
+        };
+        break;
+      case 'alterField':
+        name = operation.collection;
+        if (!collections.get(name)?.optimisticLock) continue;
+        definition = applyAlterMetadata(collections.get(name) ?? { name }, {
+          alterFields: [{ name: operation.field, changes: operation.changes }],
+        });
+        break;
+      case 'dropField':
+        name = operation.collection;
+        if (!collections.get(name)?.optimisticLock) continue;
+        definition = applyAlterMetadata(collections.get(name) ?? { name }, {
+          dropFields: [operation.field],
+        });
+        break;
+      case 'dropCollection':
+        collections.delete(operation.collection);
+        continue;
+      case 'renameCollection':
+      case 'addIndex':
+      case 'dropIndex':
+      case 'addConstraint':
+      case 'dropConstraint':
+      case 'refreshMaterializedViewCollection':
+        continue;
+    }
+    if (name && definition) {
+      assertOptimisticLockDefinition(name, definition);
+      collections.set(name, definition);
+    }
+  }
+}
+
+function assertOptimisticLockDefinition(
+  name: string,
+  definition: CollectionDefinition,
+): void {
+  const optimisticLock = definition.optimisticLock;
+  if (!optimisticLock) return;
+  const issues: Array<{
+    code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID';
+    path: readonly (string | number)[];
+    message: string;
+  }> = [];
+  if ((definition.kind ?? 'table') !== 'table') {
+    issues.push({
+      code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+      path: ['optimisticLock'],
+      message: 'Optimistic locking is only supported for table Collections.',
+    });
+  }
+  const field = definition.fields?.find(
+    (candidate) => candidate.name === optimisticLock.field,
+  );
+  if (!field || 'target' in field) {
+    issues.push({
+      code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+      path: ['optimisticLock', 'field'],
+      message: `Optimistic lock Field "${optimisticLock.field}" does not exist as a direct Field in Collection "${name}".`,
+    });
+  } else {
+    if (field.type !== 'integer' && field.type !== 'bigInt') {
+      issues.push({
+        code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        path: ['optimisticLock', 'field'],
+        message: `Optimistic lock Field "${optimisticLock.field}" must be integer or bigInt.`,
+      });
+    }
+    if (field.nullable !== false) {
+      issues.push({
+        code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        path: ['optimisticLock', 'field'],
+        message: `Optimistic lock Field "${optimisticLock.field}" must be non-nullable.`,
+      });
+    }
+  }
+  if (issues.length > 0) throw new CollectionResolutionError(issues);
+}
+
+function assertMetadataFieldChanges(
+  operations: CollectionOperation[],
+  context: CollectionCompilerContext,
+): void {
+  const collections = new Map<string, CollectionDefinition>();
+  for (const [name, definition] of Object.entries(context.collections ?? {})) {
+    if (definition) {
+      collections.set(name, definition);
+    }
+  }
+
+  for (const operation of operations) {
+    switch (operation.type) {
+      case 'createCollection':
+      case 'createViewCollection':
+      case 'replaceViewCollection':
+      case 'createMaterializedViewCollection':
+        collections.set(operation.name, {
+          ...operation.definition,
+          name: operation.name,
+        });
+        break;
+      case 'dropCollection':
+        collections.delete(operation.collection);
+        break;
+      case 'renameCollection': {
+        const current = collections.get(operation.from) ?? {
+          name: operation.from,
+        };
+        collections.delete(operation.from);
+        collections.set(operation.to, { ...current, name: operation.to });
+        break;
+      }
+      case 'alterCollection': {
+        const current = collections.get(operation.collection) ?? {
+          name: operation.collection,
+        };
+        collections.set(
+          operation.collection,
+          applyAlterMetadata(current, operation.changes),
+        );
+        break;
+      }
+      case 'addField': {
+        const current = collections.get(operation.collection) ?? {
+          name: operation.collection,
+        };
+        collections.set(operation.collection, {
+          ...current,
+          fields: [...(current.fields ?? []), operation.field],
+        });
+        break;
+      }
+      case 'alterField': {
+        const current = collections.get(operation.collection) ?? {
+          name: operation.collection,
+        };
+        collections.set(
+          operation.collection,
+          applyAlterMetadata(current, {
+            alterFields: [
+              { name: operation.field, changes: operation.changes },
+            ],
+          }),
+        );
+        break;
+      }
+      case 'dropField': {
+        const current = collections.get(operation.collection);
+        if (current) {
+          collections.set(operation.collection, {
+            ...current,
+            fields: current.fields?.filter(
+              (field) => field.name !== operation.field,
+            ),
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }
 
 function collectReferencedCollections(
@@ -846,4 +1285,337 @@ function collectConstraintReferences(
   if (constraint.type === 'foreignKey') {
     names.add(constraint.references.collection);
   }
+}
+
+function assertSupportedBuilderOptions(
+  options: CollectionBuilderOptions,
+): void {
+  if ('namingStrategy' in options) {
+    throw new Error(
+      'CollectionBuilder no longer supports a custom namingStrategy. Use connection or collection naming.tablePrefix instead.',
+    );
+  }
+}
+
+function assertNoPhysicalMappings(
+  definition: CollectionDefinition,
+  collection: string,
+): void {
+  if ('tableName' in definition) {
+    throw new Error(
+      `Collection "${collection}" no longer supports tableName. Use naming with a logical collection name instead.`,
+    );
+  }
+  for (const field of definition.fields ?? []) {
+    assertNoPhysicalFieldMapping(collection, field.name, field);
+  }
+}
+
+function assertNoPhysicalFieldAlterMappings(
+  collection: string,
+  changes: CollectionAlterDefinition,
+): void {
+  for (const field of changes.alterFields ?? []) {
+    assertNoPhysicalFieldMapping(collection, field.name, field.changes);
+  }
+}
+
+function assertNoPhysicalFieldMapping(
+  collection: string,
+  field: string,
+  definition: object,
+): void {
+  if ('columnName' in definition) {
+    throw new Error(
+      `Field "${collection}.${field}" no longer supports columnName. Its physical column name is derived from the logical field name and naming options.`,
+    );
+  }
+}
+
+async function assertRenameOperations(
+  operations: CollectionOperation[],
+  context: CollectionCompilerContext,
+  metadata?: CollectionMetadataService,
+): Promise<void> {
+  for (const operation of operations) {
+    if (operation.type !== 'renameCollection') {
+      continue;
+    }
+    const collections = context.collections ?? {};
+    const source = collections[operation.from];
+    if (!source) {
+      throw new Error(
+        `Cannot rename collection "${operation.from}" because its metadata does not exist.`,
+      );
+    }
+    const kind = source.kind ?? 'table';
+    if (kind !== 'table') {
+      throw new CollectionRenameUnsupportedKindError(
+        operation.from,
+        operation.to,
+        kind,
+      );
+    }
+    if (collections[operation.to]) {
+      throw new Error(
+        `Cannot rename collection "${operation.from}" to "${operation.to}" because the target collection already exists.`,
+      );
+    }
+    const dependencies = collectRenameDependencies(operation.from, collections);
+    if (dependencies.length > 0) {
+      throw new CollectionRenameDependencyError(
+        operation.from,
+        operation.to,
+        dependencies,
+      );
+    }
+    if (metadata && (await metadata.get(operation.from))) {
+      throw new CollectionRenameAtomicityError(operation.from, operation.to);
+    }
+  }
+}
+
+function extractSupplementalMetadata(
+  name: string,
+  definition: CollectionDefinition,
+) {
+  const result = extractLegacyCollectionMetadata({ ...definition, name });
+  if (!result.document) {
+    throw new CollectionMetadataExtractionError(name, result.diagnostics);
+  }
+  return result.document;
+}
+
+async function syncFieldMetadata(
+  service: CollectionMetadataService,
+  collection: string,
+  field: AnyFieldDefinition,
+  changes: Partial<AnyFieldDefinition> = field,
+): Promise<void> {
+  if (isRelationField(field)) {
+    if (relationMetadataChanged(changes)) {
+      const extracted = extractSupplementalMetadata(collection, {
+        name: collection,
+        fields: [field],
+      });
+      const relation = extracted.relations?.[field.name];
+      if (relation) {
+        await service.setRelation(collection, field.name, relation);
+      }
+    }
+    return;
+  }
+  if (
+    changes.type !== undefined ||
+    ('values' in changes && changes.values !== undefined) ||
+    changes.title !== undefined ||
+    changes.description !== undefined
+  ) {
+    await service.updateField(collection, field.name, {
+      type:
+        changes.type === undefined
+          ? undefined
+          : (metadataFieldType(field.type) ?? null),
+      title: changes.title,
+      values: 'values' in changes ? changes.values : undefined,
+      description: changes.description,
+    });
+  }
+}
+
+function relationMetadataChanged(
+  changes: Partial<AnyFieldDefinition>,
+): boolean {
+  return [
+    'type',
+    'target',
+    'sourceKey',
+    'targetKey',
+    'foreignKey',
+    'otherKey',
+    'through',
+    'title',
+    'description',
+  ].some((property) => Object.hasOwn(changes, property));
+}
+
+function affectedCollections(operations: CollectionOperation[]): string[] {
+  const names = new Set<string>();
+  for (const operation of operations) {
+    switch (operation.type) {
+      case 'createCollection':
+      case 'createViewCollection':
+      case 'replaceViewCollection':
+      case 'createMaterializedViewCollection':
+        names.add(operation.name);
+        break;
+      case 'renameCollection':
+        names.add(operation.from);
+        names.add(operation.to);
+        break;
+      default:
+        names.add(operation.collection);
+        break;
+    }
+  }
+  return [...names];
+}
+
+async function requiredMetadataWrite(
+  operation: CollectionOperation,
+  service: CollectionMetadataService,
+): Promise<'put' | 'delete' | undefined> {
+  switch (operation.type) {
+    case 'createCollection':
+    case 'createViewCollection':
+    case 'replaceViewCollection':
+    case 'createMaterializedViewCollection':
+      return isEmptySupplementalMetadata(
+        extractSupplementalMetadata(operation.name, operation.definition),
+      )
+        ? undefined
+        : 'put';
+    case 'dropCollection':
+      return (await service.get(operation.collection)) ? 'delete' : undefined;
+    case 'renameCollection':
+      return undefined;
+    case 'alterCollection': {
+      if (
+        operation.changes.optimisticLock !== undefined ||
+        (operation.changes.addFields ?? []).some(
+          fieldHasSupplementalMetadata,
+        ) ||
+        (operation.changes.alterFields ?? []).some((field) =>
+          fieldChangesSupplementalMetadata(field.changes),
+        )
+      ) {
+        return 'put';
+      }
+      const stored = await service.get(operation.collection);
+      return (operation.changes.dropFields ?? []).some(
+        (field) =>
+          Object.hasOwn(stored?.document.fields ?? {}, field) ||
+          Object.hasOwn(stored?.document.relations ?? {}, field),
+      )
+        ? 'put'
+        : undefined;
+    }
+    case 'addField':
+      return fieldHasSupplementalMetadata(operation.field) ? 'put' : undefined;
+    case 'alterField':
+      return fieldChangesSupplementalMetadata(operation.changes)
+        ? 'put'
+        : undefined;
+    case 'dropField': {
+      const stored = await service.get(operation.collection);
+      return Object.hasOwn(stored?.document.fields ?? {}, operation.field) ||
+        Object.hasOwn(stored?.document.relations ?? {}, operation.field)
+        ? 'put'
+        : undefined;
+    }
+    case 'addIndex':
+    case 'dropIndex':
+    case 'addConstraint':
+    case 'dropConstraint':
+    case 'refreshMaterializedViewCollection':
+      return undefined;
+  }
+}
+
+function isEmptySupplementalMetadata(
+  document: ReturnType<typeof extractSupplementalMetadata>,
+): boolean {
+  return Object.keys(document).every(
+    (key) => key === 'version' || key === 'name',
+  );
+}
+
+function fieldHasSupplementalMetadata(field: AnyFieldDefinition): boolean {
+  return isRelationField(field) || fieldChangesSupplementalMetadata(field);
+}
+
+function fieldChangesSupplementalMetadata(
+  changes: Partial<AnyFieldDefinition>,
+): boolean {
+  return (
+    relationMetadataChanged(changes) ||
+    Object.hasOwn(changes, 'title') ||
+    Object.hasOwn(changes, 'description')
+  );
+}
+
+function collectRenameDependencies(
+  target: string,
+  collections: Record<string, CollectionDefinition | undefined>,
+): CollectionRenameDependency[] {
+  const dependencies: CollectionRenameDependency[] = [];
+  for (const [collectionName, definition] of Object.entries(collections)) {
+    if (!definition) {
+      continue;
+    }
+    for (const field of definition.fields ?? []) {
+      if (!isRelationField(field)) {
+        continue;
+      }
+      if (field.target === target) {
+        dependencies.push({
+          kind: 'relationTarget',
+          collection: collectionName,
+          path: `fields.${field.name}.target`,
+        });
+      }
+      if (field.through === target) {
+        dependencies.push({
+          kind: 'relationThrough',
+          collection: collectionName,
+          path: `fields.${field.name}.through`,
+        });
+      }
+    }
+    for (const [index, constraint] of (
+      definition.constraints ?? []
+    ).entries()) {
+      if (
+        constraint.type === 'foreignKey' &&
+        constraint.references.collection === target
+      ) {
+        dependencies.push({
+          kind: 'foreignKey',
+          collection: collectionName,
+          path: `constraints.${index}.references.collection`,
+        });
+      }
+    }
+    if (definition.view?.as?.from === target) {
+      dependencies.push({
+        kind: 'structuredView',
+        collection: collectionName,
+        path: 'view.as.from',
+      });
+    }
+    if (definition.view?.asRaw) {
+      dependencies.push({
+        kind: 'rawView',
+        collection: collectionName,
+        path: 'view.asRaw',
+      });
+    }
+  }
+  return dependencies;
+}
+
+function formatRenameDependencyError(
+  from: string,
+  to: string,
+  dependencies: CollectionRenameDependency[],
+): string {
+  const lines = dependencies.map(
+    (dependency) =>
+      `- ${dependency.collection}.${dependency.path} (${dependency.kind})`,
+  );
+  return [
+    `Cannot rename collection "${from}" to "${to}" because dependent metadata cannot be updated atomically.`,
+    ...lines,
+    'Rename was not applied.',
+  ].join('\n');
 }

@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 
 import { requestAIAction, requestAppAction } from './api-client.js';
 
@@ -162,7 +162,7 @@ export function buildAIEmployeeUpdatePayload(
 
 export async function listAIEmployees(
   signal?: AbortSignal,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<AIEmployeeRecord[]> {
   const response = await requestAIAction<unknown>(
     'aiEmployees',
@@ -178,7 +178,7 @@ export async function listAIEmployees(
 export async function getAIEmployee(
   username: string,
   signal?: AbortSignal,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<AIEmployeeRecord> {
   const response = await requestAIAction<unknown>(
     'aiEmployees',
@@ -194,7 +194,7 @@ export async function getAIEmployee(
 export async function updateAIEmployee(
   employee: AIEmployeeRecord,
   editable: AIEmployeeEditableValues,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<AIEmployeeRecord> {
   const response = await requestAIAction<unknown>(
     'aiEmployees',
@@ -215,7 +215,7 @@ export async function updateAIEmployee(
 
 export async function listEnabledModels(
   signal?: AbortSignal,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<EnabledModelOption[]> {
   const response = await requestAIAction<unknown>(
     'ai',
@@ -248,7 +248,7 @@ export async function listEnabledModels(
 
 export async function listEnabledKnowledgeBases(
   signal?: AbortSignal,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<KnowledgeBaseOption[]> {
   const response = await requestAppAction<unknown>(
     'aiKnowledgeBase',
@@ -276,7 +276,7 @@ export async function listEnabledKnowledgeBases(
 async function listMetadata(
   resource: 'aiSkills' | 'aiTools',
   signal?: AbortSignal,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<AIMetadataItem[]> {
   try {
     const response = await requestAIAction<unknown>(
@@ -323,9 +323,9 @@ async function listMetadata(
 
 export const listAISkills = (
   signal?: AbortSignal,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<AIMetadataItem[]> => listMetadata('aiSkills', signal, client);
 export const listAITools = (
   signal?: AbortSignal,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<AIMetadataItem[]> => listMetadata('aiTools', signal, client);

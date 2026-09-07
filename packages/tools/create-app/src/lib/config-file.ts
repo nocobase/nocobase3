@@ -13,10 +13,13 @@ export interface BuildConfigFileOptions {
 export function buildConfigFile(options: BuildConfigFileOptions): string {
   const database = options.database;
   const secret = options.secret ?? generateAuthSecret();
-  const connection = [
-    `      dialect: ${database.dialect}`,
-    `      database: ${yamlString(database.database)}`,
-  ];
+  const connection = [`      dialect: ${database.dialect}`];
+
+  if (database.dialect === 'oracle') {
+    connection.push(`      serviceName: ${yamlString(database.serviceName)}`);
+  } else {
+    connection.push(`      database: ${yamlString(database.database)}`);
+  }
 
   if (database.dialect !== 'sqlite') {
     connection.push(
@@ -34,6 +37,12 @@ export function buildConfigFile(options: BuildConfigFileOptions): string {
   }
   if (database.dialect === 'mysql') {
     connection.push(`      charset: ${yamlString(database.charset)}`);
+  }
+  if (database.dialect === 'mssql') {
+    connection.push(
+      `      encrypt: ${database.encrypt}`,
+      `      trustServerCertificate: ${database.trustServerCertificate}`,
+    );
   }
 
   return [

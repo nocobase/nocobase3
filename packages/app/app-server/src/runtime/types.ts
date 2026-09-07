@@ -1,6 +1,7 @@
 import type { EnvMap } from '../config/index.js';
+import type { AppConfigAccessor } from '../config/index.js';
 import type { ApplicationFetchHandler } from '../application/index.js';
-import type { AppWebSocketHandler } from '../websocket.js';
+import type { AppWebSocketHandler } from '@nocobase/app-websocket';
 
 export type AppDisposer = () => void | Promise<void>;
 
@@ -11,6 +12,10 @@ export interface AppLifecycle {
 export interface AppServer {
   readonly fetch: ApplicationFetchHandler;
   websocket?: AppWebSocketHandler;
+}
+
+export interface AppInstance extends AppServer {
+  readonly config: AppConfigAccessor;
 }
 
 export interface AppPathOptions {
@@ -44,7 +49,7 @@ export interface AppScope extends AppLifecycle {
   readonly dataDir?: string;
   /** Optional configuration file path supplied by the host. */
   readonly configPath?: string;
-  /** Fully resolved environment supplied by the host when available. */
+  /** Explicit configuration environment. Embedded Apps default to an empty map. */
   readonly env?: EnvMap;
   /** Fully resolved application paths supplied by the host when available. */
   readonly paths?: AppPathOptions;

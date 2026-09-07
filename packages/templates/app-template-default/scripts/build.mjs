@@ -248,6 +248,9 @@ run(
   ['install', '--prod', '--no-lockfile'],
   { cwd: distDir },
 );
+run('Materialize server dependency links', 'node', [
+  './scripts/clean-dist-bin.mjs',
+]);
 
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',

@@ -2,11 +2,12 @@ import { useGo } from '@refinedev/core';
 import { ServiceProvider } from '@nocobase/service-provider';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { type ReactElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  appApiClientToken,
+  apiClientToken,
   ClientApplication,
+  realtimeClientToken,
   type ClientApplicationRenderConfigFactory,
 } from '../src/application.js';
 import { AppClientRoot } from '../src/app-client.js';
@@ -50,6 +51,66 @@ async function createTestApplication(
 }
 
 describe('app client', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    [{}, 'wss://ui.example.com/main/ws'],
+    [
+      { baseURL: 'https://api.example.com/apps/demo/api/' },
+      'wss://api.example.com/apps/demo/ws',
+    ],
+    [{ baseURL: '/apps/demo/api' }, 'wss://ui.example.com/apps/demo/ws'],
+    [
+      { baseURL: '/apps/demo/api', realtimeURL: '/custom/realtime' },
+      'wss://ui.example.com/custom/realtime',
+    ],
+    [
+      { realtimeURL: 'wss://events.example.com/socket' },
+      'wss://events.example.com/socket',
+    ],
+  ])(
+    'resolves the realtime service endpoint from API config %j',
+    async (api, expected) => {
+      const urls: string[] = [];
+      class MockWebSocket {
+        public static readonly CONNECTING = 0;
+        public static readonly OPEN = 1;
+        public readonly readyState = MockWebSocket.CONNECTING;
+        public constructor(url: string) {
+          urls.push(url);
+        }
+        public close(): void {}
+      }
+      vi.stubGlobal('WebSocket', MockWebSocket);
+      vi.stubGlobal('window', {
+        APP_BASE_PATH: '/main/',
+        location: {
+          href: 'https://ui.example.com/main/',
+          origin: 'https://ui.example.com',
+        },
+      });
+      const runtime = await resolveAppRuntime(
+        defineAppRuntime({
+          packageName: '@example/app',
+          config: createAppClientConfig,
+          plugins: defineClientPlugins([]),
+        }),
+        { rawConfig: { api } },
+      );
+      const app = new ClientApplication({
+        runtime,
+        createRenderConfig: () => ({ routes: null }),
+      });
+      await app.start();
+      expect(urls).toHaveLength(0);
+      app.services
+        .resolve(realtimeClientToken)
+        .subscribe('test:topic', vi.fn());
+      expect(urls).toEqual([expected]);
+      await app.shutdown();
+    },
+  );
+
   it('normalizes router basenames', () => {
     expect(normalizeAppClientBasename(undefined)).toBeUndefined();
     expect(normalizeAppClientBasename('/')).toBeUndefined();
@@ -114,8 +175,9 @@ describe('app client', () => {
     const app = await createTestApplication(() =>
       defineAppClientRenderConfig({ routes: null }),
     );
-    const client = app.services.resolve(appApiClientToken);
-    const close = vi.spyOn(client.realtime!, 'close');
+    expect(app.services.resolve(apiClientToken)).toBeDefined();
+    const realtime = app.services.resolve(realtimeClientToken);
+    const close = vi.spyOn(realtime, 'close');
 
     await app.shutdown();
 

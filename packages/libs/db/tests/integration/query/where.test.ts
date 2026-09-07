@@ -5,7 +5,7 @@ import { createWhereOrdersCollection, seedWhereOrders } from './helpers.js';
 
 describeIntegrationDatabases('query where', (context) => {
   it('supports comparison, list, null, and pattern operators against a real connection', async () => {
-    const ordersTable = context.table('whereOrders');
+    const ordersTable = 'whereOrders';
 
     await createWhereOrdersCollection(context);
     await seedWhereOrders(context, ordersTable);
@@ -90,7 +90,7 @@ describeIntegrationDatabases('query where', (context) => {
   });
 
   it('supports Kysely-style expression groups, reusable factories, not, between, and parens', async () => {
-    const ordersTable = context.table('whereOrders');
+    const ordersTable = 'whereOrders';
     const visiblePaidOrders = (eb: ExpressionBuilder) =>
       eb.and([
         eb('tenantId', '=', 'tenant-a'),
@@ -124,7 +124,7 @@ describeIntegrationDatabases('query where', (context) => {
   });
 
   it('supports nested or groups and negated portable operators', async () => {
-    const ordersTable = context.table('whereOrders');
+    const ordersTable = 'whereOrders';
 
     await createWhereOrdersCollection(context);
     await seedWhereOrders(context, ordersTable);
@@ -164,7 +164,7 @@ describeIntegrationDatabases('query where', (context) => {
   });
 
   it('rejects non-portable comparison operators early', async () => {
-    const ordersTable = context.table('whereOrders');
+    const ordersTable = 'whereOrders';
 
     await createWhereOrdersCollection(context);
 
@@ -177,7 +177,7 @@ describeIntegrationDatabases('query where', (context) => {
   });
 
   it('supports object filters, eb.ref, eb.val, whereRef operands, and clearWhere', async () => {
-    const ordersTable = context.table('whereOrders');
+    const ordersTable = 'whereOrders';
 
     await context.builder.createCollection('whereOrders', (collection) => {
       collection.increments('id');

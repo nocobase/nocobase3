@@ -63,6 +63,12 @@ plugin itself owns and publishes its complete management UI; enabling the
 plugin is sufficient to register the Automation settings pages and their
 detail routes.
 
+Run modules receive execution options containing a read-only application
+service resolver, the Workflow abort signal, and a contextual logger. They
+import the service owner's original public token and can consume configured
+application services without receiving the Application or its mutable
+container.
+
 Server plugins can contribute an instruction through the public Workflow
 service. Duplicate instruction types are rejected, while registration timing
 is intentionally unrestricted:

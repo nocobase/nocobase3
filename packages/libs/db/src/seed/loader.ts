@@ -3,7 +3,7 @@ import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { isDefinedSeed } from './define.js';
+import { isDefinedSeed } from './internal/marker.js';
 import type {
   LoadSeedsOptions,
   LoadedSeed,
@@ -14,6 +14,7 @@ import type {
 export const DEFAULT_SEED_EXTENSIONS = ['.js', '.mjs', '.cjs', '.ts'] as const;
 export const DEFAULT_SEED_PACKAGE_NAME = 'app';
 
+/** Loads, validates, and deterministically orders seed definitions from configured sources. */
 export async function loadSeeds(
   options: LoadSeedsOptions,
 ): Promise<LoadedSeed[]> {
@@ -26,6 +27,7 @@ export async function loadSeeds(
   return seeds.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Loads seed definitions without executing them. */
 export async function validateSeeds(
   options: string | LoadSeedsOptions,
 ): Promise<LoadedSeed[]> {

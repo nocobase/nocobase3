@@ -1,3 +1,4 @@
+import type { ApiClient, RealtimeClient } from '@nocobase/app-client';
 import { createAuthClient, type AuthClient } from '../auth-client.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -68,7 +69,15 @@ describe('authentication provider password reset flow', () => {
 
 function createAuthClientMock(): AuthClient {
   const client = createAuthClient({
-    client: { request: vi.fn() },
+    api: { request: vi.fn() } as ApiClient,
+    realtime: {
+      connected: false,
+      subscribe: vi.fn(() => vi.fn()),
+      onOpen: vi.fn(() => vi.fn()),
+      onError: vi.fn(() => vi.fn()),
+      reconnect: vi.fn(),
+      close: vi.fn(),
+    } satisfies RealtimeClient,
   });
   vi.spyOn(client, 'requestPasswordReset').mockResolvedValue(undefined);
   vi.spyOn(client, 'resetPassword').mockResolvedValue(undefined);

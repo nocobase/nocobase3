@@ -83,6 +83,13 @@ describe('file inventory query', () => {
     expect(result.data[0]).not.toHaveProperty('businessField');
   });
 
+  it.each([1788220800000, '1788220800000', '1788220800000.0'])(
+    'serializes legacy millisecond timestamps %s',
+    (value) => {
+      expect(serializeDatabaseDate(value)).toBe('2026-09-01T00:00:00.000Z');
+    },
+  );
+
   it('preserves database date strings without timezone reinterpretation', () => {
     expect(serializeDatabaseDate('2026-09-02 10:00:00')).toBe(
       '2026-09-02 10:00:00',

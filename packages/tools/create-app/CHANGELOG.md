@@ -1,5 +1,12 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.10
+
+### Minor Changes
+
+- 90a4903: Add Microsoft SQL Server support through Knex and the `tedious` driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+- 90a4903: Add Oracle Database support through the `oracledb` Thin driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+
 ## 0.1.0-beta.9
 
 ### Minor Changes

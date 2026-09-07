@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "1.0.0-beta.15",
+  "version": "1.0.0-beta.16",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.15",
+    "defaultTemplateVersion": "1.0.0-beta.16",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -52,6 +52,9 @@
         "enabled": true
       },
       "@nocobase/app-plugin-realtime-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-repository-example": {
         "enabled": true
       },
       "@nocobase/app-plugin-routes-example": {
@@ -102,6 +105,7 @@
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/cron": "workspace:^",
@@ -257,5 +261,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "dependencies": {
+    "@nocobase/app-plugin-repository-example": "workspace:^"
   }
 }

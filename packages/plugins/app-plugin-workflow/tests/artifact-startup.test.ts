@@ -13,6 +13,7 @@ import {
   createSyncQueueConfig,
   type NocoBaseQueueManager,
 } from '@nocobase/queue';
+import { ServiceContainer } from '@nocobase/service-provider';
 import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
@@ -31,9 +32,12 @@ const queues: NocoBaseQueueManager[] = [];
 async function createWorkflowCollections(
   database: DatabaseManager,
 ): Promise<void> {
-  for (const schema of workflowCollectionSchemas) {
-    await database.builder().createCollection(schema.name, schema.define);
-  }
+  await database.builder().createCollections(
+    workflowCollectionSchemas.map(({ name, define }) => ({
+      name,
+      definition: define,
+    })),
+  );
 }
 afterEach(async () => {
   await Promise.all(queues.splice(0).map((queue) => queue.close()));
@@ -107,6 +111,7 @@ function createService(
   return new WorkflowService({
     database: f.database,
     queue: f.queue,
+    services: new ServiceContainer(),
     sourceRoot: path.join(f.root, 'server/workflows'),
     distRoot: f.distRoot,
     artifactDisk: {

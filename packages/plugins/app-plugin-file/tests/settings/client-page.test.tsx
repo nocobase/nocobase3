@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import { I18nProvider, NamespaceScope } from '@nocobase/i18n/client';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 const { client, request } = vi.hoisted(() => {
   const stableRequest = vi.fn();
   return {
-    client: { request: stableRequest },
+    client: { request: stableRequest, stream: vi.fn(), repository: vi.fn() },
     request: stableRequest,
   };
 });
@@ -16,7 +16,7 @@ vi.mock('@nocobase/app-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@nocobase/app-client')>();
   return {
     ...actual,
-    useService: (): AppClient => client,
+    useService: (): ApiClient => client,
   };
 });
 
@@ -31,7 +31,7 @@ import { createFileI18nRuntime } from '../i18n.js';
 
 describe('file inventory page', () => {
   it('keeps the current files when the selected source is clicked again', async () => {
-    request.mockImplementation(async (path: string) => {
+    request.mockImplementation(async ({ path }: { path: string }) => {
       if (path === 'files/inventory/sources') return sourcesResponse('alpha');
       if (path.includes('/alpha/files')) return filesResponse('alpha.pdf');
       throw new Error(`Unexpected request: ${path}`);
@@ -50,7 +50,7 @@ describe('file inventory page', () => {
 
   it('resets pagination when refresh replaces the selected source', async () => {
     let sourceLoad = 0;
-    request.mockImplementation(async (path: string) => {
+    request.mockImplementation(async ({ path }: { path: string }) => {
       if (path === 'files/inventory/sources') {
         sourceLoad += 1;
         return sourceLoad === 1
@@ -84,12 +84,13 @@ describe('file inventory page', () => {
 
     expect(await screen.findByText('beta-page-1.pdf')).toBeVisible();
     expect(request).toHaveBeenCalledWith(
-      expect.stringContaining('/beta/files?pageSize=25'),
-      expect.anything(),
+      expect.objectContaining({
+        path: expect.stringContaining('/beta/files?pageSize=25'),
+      }),
     );
     expect(
       request.mock.calls.some(
-        ([path]) =>
+        ([{ path }]) =>
           String(path).includes('/beta/files?') &&
           String(path).includes('cursor='),
       ),
@@ -98,7 +99,7 @@ describe('file inventory page', () => {
 
   it('ignores a stale file response after selecting another source', async () => {
     const alpha = deferred<FileInventoryFilesResponse>();
-    request.mockImplementation(async (path: string) => {
+    request.mockImplementation(async ({ path }: { path: string }) => {
       if (path === 'files/inventory/sources') {
         return {
           data: [
@@ -125,7 +126,7 @@ describe('file inventory page', () => {
 
   it('returns to the last valid page when the result set shrinks', async () => {
     let firstPageLoads = 0;
-    request.mockImplementation(async (path: string) => {
+    request.mockImplementation(async ({ path }: { path: string }) => {
       if (path === 'files/inventory/sources') return sourcesResponse('alpha');
       if (path.includes('/alpha/files?pageSize=25&cursor=before-shrink.pdf')) {
         return { data: [], meta: pageMeta(2) };
@@ -153,7 +154,7 @@ describe('file inventory page', () => {
   });
 
   it('disables forward pagination after a page request fails', async () => {
-    request.mockImplementation(async (path: string) => {
+    request.mockImplementation(async ({ path }: { path: string }) => {
       if (path === 'files/inventory/sources') return sourcesResponse('alpha');
       if (path.includes('/alpha/files?pageSize=25&cursor=page-1.pdf')) {
         throw new Error('Second page failed');

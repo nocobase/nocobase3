@@ -65,8 +65,9 @@ key。认证关系由 Better Auth 管理，索引用于保持查询效率。
 ## 命名策略
 
 database adapter 使用 Collection 和 Field 的逻辑名，通过 NocoBase Database
-解析物理表名和列名。当前实现覆盖 `underscored: true` 和
-`underscored: false`。
+解析物理表名和列名。Connection 或 Collection 的 `naming` 可以配置
+`underscored` 和 `tablePrefix`，但不能逐表或逐字段覆盖任意物理名称。当前实现覆盖
+`underscored: true` 和 `underscored: false`。
 
 例如在下划线命名策略下：
 

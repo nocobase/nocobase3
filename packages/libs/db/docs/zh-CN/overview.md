@@ -1,90 +1,74 @@
-# 概览
+---
+title: '@nocobase/db 概览'
+description: 根据数据库任务选择 DatabaseManager、Builder、Query、Collections、Migration、Seed 或 Metadata。
+---
 
-本项目验证一套以 Collection 为中心的数据建模体系。Collection 是应用层 DSL，不直接等同于数据库表结构。它向下屏蔽数据库方言差异，向上为应用、插件、CLI、HTTP API 和 Agent 提供统一的数据模型描述。
+# `@nocobase/db` 概览
 
-## 主线
+`@nocobase/db` 提供多数据库连接管理、Collection Schema 构建、数据库层查询、事务、Migration、Seed、物理 Schema 检查和 Collection Metadata 解析。
+
+## 按任务选择入口
+
+| 要做什么                  | 首选入口                                              |
+| ------------------------- | ----------------------------------------------------- |
+| 创建数据库入口            | `createDatabaseManager()`                             |
+| 修改业务 Schema           | Migration 中的 `builder`                              |
+| Collection 记录与关系读写 | `db.repository(name)` / `connection.repository(name)` |
+| 数据库层查询组合          | `db.query()` / `connection.query`                     |
+| 原子执行多个操作          | `db.transaction()` / `connection.transaction()`       |
+| 读取完整 Collection       | `connection.collections`                              |
+| 检查物理数据库对象        | `connection.schemaInspector`                          |
+| 更新补充 Metadata         | `connection.collectionMetadata`                       |
+| 初始化安装数据            | `defineSeed()` + `db.createSeeder()`                  |
+
+选择入口时先判断任务操作的是 Schema、业务数据、物理数据库结构，还是补充 Metadata。这些能力不能互相替代；完整判断见[任务路由](./agent/task-router.md)。
+
+## 对象关系
 
 ```text
-Collection DSL -> Collection Builder -> Schema Adapter -> Database
+createDatabaseManager(config)
+  -> DatabaseManager                         application scope
+       -> connection(name?)
+       -> builder(name?)
+       -> query(name?)
+       -> repository(collection, connection?)
+       -> transaction(fn, name?)
+       -> createMigrator(options)
+       -> createSeeder(options)
+            |
+            v
+       DatabaseConnection                    connection scope
+         -> builder                          schema writes
+         -> query                            record reads/writes
+         -> repository(collection)           Collection-aware reads/writes
+         -> collections                      resolved Collections
+         -> transaction()
+         -> schemaInspector                  physical schema reads
+         -> collectionMetadata               supplemental metadata
 ```
 
-当前已经实现的是上面这条 Builder 主线。它负责从 Collection DSL 创建或修改数据库结构，并同步应用层元数据。
+## 推荐阅读路径
 
-目标架构中还有另一条路径：
+1. [快速开始](./quick-start.md)
+2. 根据任务进入 [Repository](./repository/overview.md)、[Builder](./builder/overview.md)、[Query](./query/overview.md)、[Migration](./migration/overview.md)、[Seed](./seed/overview.md)或其他专题
+3. 遇到名称或 Metadata 边界时阅读[核心概念](./concepts/README.md)
+4. 需要按名称定位公开能力时使用[公开 API 导航](./reference/api-index.md)
+5. 需要查阅全部主题时使用[完整文档目录](./toc.md)
 
-```text
-Database Schema -> Inspector -> Collection Generator -> Collection DSL
-```
+## 文档可信级别
 
-`Collection Generator` 用于已有数据库场景，但当前原型还没有实现。
+| 目录                                  | 用途                         | 使用边界                             |
+| ------------------------------------- | ---------------------------- | ------------------------------------ |
+| [`concepts/`](./concepts/README.md)   | 当前稳定概念和 API 边界      | 用于理解，不替代具体 API 文档        |
+| `database/`、`builder/`、`query/` 等  | 当前公开能力的选择与推荐用法 | 可指导当前代码，以类型声明为最终依据 |
+| [`internals/`](./internals/README.md) | 当前底层实现和维护者设计     | 仅用于维护或诊断，不要绕过公开入口   |
+| [`proposals/`](./proposals/README.md) | 候选设计与演进记录           | 不作为当前 API 契约                  |
+| [`archive/`](./archive/README.md)     | 已被取代的历史材料           | 不可用于当前代码                     |
 
-## 为什么需要 Collection
+## 当前边界
 
-数据库之间存在数据类型、索引、约束、视图、schema、comment 等差异。如果应用和 Agent 直接操作数据库 Schema，就会被具体数据库方言绑定。
-
-Collection 提供一层稳定的应用抽象：
-
-- `collection.name` 是应用层名称。
-- `collection.tableName` 是物理表或视图名覆盖。
-- `field.name` 是应用层字段名。
-- `field.columnName` 是物理列名覆盖。
-- `title`、`description` 是应用层元信息。
-- `db.comment`、`db.nativeType` 是数据库层配置。
-
-## 当前模块
-
-- `CollectionBuilder`：创建、修改、删除 Collection 和字段。
-- `CollectionOperation[]`：可解释的变更计划，适合 Agent 和 file sync diff。
-- `SchemaAdapter`：底层数据库 schema 操作接口。
-- `KnexSchemaAdapter`：基于 Knex 的 SchemaAdapter。
-- `DatabaseManager`：管理多数据库连接。
-- `QueryAdapter`：数据库层 Query Builder，Repository 尚未实现。
-- `Migration`：版本化数据库变更 runner，负责加载 migration、执行 pending、写 history、控制事务和 lock。
-- `Repository`：计划中的 Collection-aware 数据访问层，当前未实现。
-- `Select AST`：计划中的 Repository 结果选择树，当前未实现。
-- `Repository Filter Builder`：计划中的应用层筛选条件 DSL，当前未实现。
-- `Sort AST`：计划中的 Repository 排序结构，当前未实现。
-- `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
-
-## 文档地图
-
-- 快速理解主线见 [快速开始](./quick-start.md)。
-- Builder 用法见 [Builder API 总览](./builder/overview.md)。
-- Query 用法见 [QueryAdapter 概览](./query/overview.md)。
-- Migration 用法和维护清单见 [Migration](./migration/overview.md) 和 [Migration 维护清单](./migration/maintenance.md)。
-- Repository 规划见 [Repository 概览](./repository/overview.md)。
-- Repository 结果选择设计见 [Select AST](./repository/select-ast.md)。
-- Repository filter 设计见 [Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
-- Repository 排序设计见 [Sort AST](./repository/sort-ast.md)。
-- 命名策略见 [命名概念](./concepts/naming.md)。
-- Collection 的解析与 Metadata Store 设计见 [Collection 架构](./collection/architecture.md)。
-- 数据库连接见 [Database 概览](./database/overview.md)。
-- 真实数据库测试见 [集成测试](./testing/integration.md)。
-- 开发维护说明见 [源码与测试目录结构](./development/source-layout.md) 和 [Agent 开发指南](./development/agent-guide.md)。
-- 类型参考见 [Reference](./reference/api-index.md)。
-- 术语统一见 [术语表](./reference/glossary.md)。
-
-## Agent 注意事项
-
-Agent 的推荐 DSL 取决于输出载体：
-
-- 写 migration 文件、插件代码或其他 TypeScript 代码时，优先使用 Fluent DSL。
-- Migration 文件固定使用 `export default defineMigration({})`。
-- Migration context 顶层只有 `builder`、`query`、`connection`；不公开 `schema`，adapter client 只通过 `connection.client()` 兜底。
-- 调用 HTTP API、CLI，或生成 `collection.json` 这类可序列化配置时，优先使用 Object DSL。
-- 做 file sync、snapshot diff、执行计划审计或批量 apply 时，优先使用 `CollectionOperation[]`。
-- `db.query()` 只做物理查询名的轻量归一化，不读取 Collection metadata。
-- 未来写 Repository 数据访问代码时，结果字段和 relation 使用 Select AST，排序使用
-  Sort AST。
-- 未来写 Repository 数据访问代码时，筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder。
-- 当前 Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 还没有实现，
-  不要把规划接口当作可运行代码。
-
-对 destructive 操作，例如 `dropField`、`dropCollection`，应先使用：
-
-```ts
-await builder.apply(operations, {
-  dryRun: true,
-  previewSql: true,
-});
-```
+- Repository 及 Filter/Select/Sort Builder 与 AST 已公开；当前契约见 [Repository](./repository/overview.md)，历史提案不是用法依据。
+- Builder 使用 Collection/Field 逻辑名。
+- Query 使用 Connection 级查询标识符，不读取 Collection Metadata。
+- Schema Inspector 使用物理数据库 identity。
+- `connection.client()` 是最后的 adapter 逃生口，不是常规数据库入口。

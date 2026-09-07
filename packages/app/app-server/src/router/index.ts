@@ -9,6 +9,7 @@ import {
 
 export * from './health.js';
 export * from './routes.js';
+export * from './repository-routes.js';
 
 /**
  * The HTTP router owned by an application.

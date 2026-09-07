@@ -1,7 +1,9 @@
 import {
-  appApiClientToken,
-  type AppClient,
+  apiClientToken,
+  type ApiClient,
   type ClientApplication,
+  type RealtimeClient,
+  realtimeClientToken,
 } from '@nocobase/app-client';
 import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,9 +12,14 @@ import { AuthenticationServiceProvider } from '../service-provider.js';
 
 describe('client ServiceProvider', () => {
   it('registers the authentication provider with the app runtime', async () => {
-    const appClient: AppClient = {
-      request: vi.fn<AppClient['request']>(),
-      stream: vi.fn<AppClient['stream']>(),
+    const api = { request: vi.fn<ApiClient['request']>() } as ApiClient;
+    const realtime: RealtimeClient = {
+      connected: false,
+      subscribe: vi.fn(() => vi.fn()),
+      onOpen: vi.fn(() => vi.fn()),
+      onError: vi.fn(() => vi.fn()),
+      reconnect: vi.fn(),
+      close: vi.fn(),
     };
     const setAuthProvider = vi.fn();
     const refine: AppClientRefineRegistry = {
@@ -35,8 +42,9 @@ describe('client ServiceProvider', () => {
     const app = {
       container: {
         resolve: vi.fn((token) => {
-          expect(token).toBe(appApiClientToken);
-          return appClient;
+          if (token === apiClientToken) return api;
+          if (token === realtimeClientToken) return realtime;
+          throw new Error('Unexpected client service token.');
         }),
       },
       refine,

@@ -69,18 +69,18 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 
 ## 参数
 
-| 参数             | 说明                                                            |
-| ---------------- | --------------------------------------------------------------- |
-| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问                    |
-| `--db-dialect`   | 数据库类型：`postgres`、`sqlite`、`mysql`。省略时进入交互式选择 |
-| `--no-install`   | 生成后不自动安装依赖                                            |
-| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录              |
-| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`                   |
-| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai`           |
-| `-h, --help`     | 查看帮助                                                        |
-| `--version`      | 查看版本                                                        |
+| 参数             | 说明                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问                                       |
+| `--db-dialect`   | 数据库类型：`postgres`、`sqlite`、`mysql`、`oracle`、`mssql`。省略时进入交互式选择 |
+| `--no-install`   | 生成后不自动安装依赖                                                               |
+| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录                                 |
+| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`                                      |
+| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai`                              |
+| `-h, --help`     | 查看帮助                                                                           |
+| `--version`      | 查看版本                                                                           |
 
-`--db-dialect` 接受常见别名，`postgresql`、`pg` 都会归一化成 `postgres`，`sqlite3` 归一化成 `sqlite`，`mysql2`、`mariadb` 归一化成 `mysql`。这三个规范名才是模板 `server/config/database.ts` 里 `DB_DIALECT` 认的值，写别的会在启动时抛错。
+`--db-dialect` 接受常见别名，`postgresql`、`pg` 都会归一化成 `postgres`，`sqlite3` 归一化成 `sqlite`，`mysql2`、`mariadb` 归一化成 `mysql`，`oracledb` 归一化成 `oracle`，`sqlserver`、`sql-server`、`tedious` 归一化成 `mssql`。这些规范名才是运行时 `DB_DIALECT` 认的值，写别的会在启动时抛错。
 
 `--template` 用具名模板，目前只有一个 `default`，指向 `@nocobase/app-template-default`。以后新增模板会加新的名字，用户不需要知道背后的包名：
 
@@ -117,18 +117,18 @@ pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
 下载模板（默认 `default`，即 `@nocobase/app-template-default@latest`），并在此基础上：
 
 - 改写 `package.json`：换成应用自己的名字和版本，置为 `private`，去掉 `publishConfig` 和 `repository`，避免误发布
-- 按数据库类型装一个驱动：sqlite 装 `better-sqlite3`，postgres 装 `pg`，mysql 装 `mysql2`。模板本身只依赖 `knex`，三个驱动一个都不带
+- 按数据库类型装一个驱动：sqlite 装 `better-sqlite3`，postgres 装 `pg`，mysql 装 `mysql2`，Oracle 装 `oracledb`，SQL Server 装 `tedious`。模板本身不预装数据库驱动
 - 写 `config.yml`：写入数据库连接段和随机生成的认证密钥
 - 写 `.gitignore`：模板没带的话会生成一份兜底的，防止 `config.yml` 里的认证密钥被提交
 - 选 sqlite 时写 `pnpm-workspace.yaml` 的 `allowBuilds`（见下）
 - 安装依赖（`--no-install` 可跳过）
 - 装完依赖后跑一次应用自己的 `pnpm plugin:skills:sync`，把模板内置插件的 skills 复制进 `.agents/skills/`。这一步必须在安装之后，因为同步是从 `node_modules` 里解析插件的。同步失败只警告，不影响生成出来的应用能跑，之后随时可以在应用目录里手动补跑
 
-## 关于 sqlite 的原生模块
+## 关于数据库驱动的安装脚本
 
 pnpm 11 默认不执行依赖的安装脚本，必须在 `pnpm-workspace.yaml` 的 `allowBuilds` 里显式列出。`package.json` 的 `pnpm` 字段在 pnpm 11 已被移除，`.npmrc` 从来不读构建配置，所以这个文件是唯一入口。
 
-少了它，`better-sqlite3` 装完不会编译原生模块，`pnpm install` 照样报成功，但应用第一次查询时会抛 `Could not locate the bindings file`——这个报错完全看不出真实原因。所以选 sqlite 时会自动写入这份配置。`pg` 和 `mysql2` 是纯 JS，不需要，也就不会生成这个文件。
+少了它，`better-sqlite3` 装完不会编译原生模块，`pnpm install` 照样报成功，但应用第一次查询时会抛 `Could not locate the bindings file`。`oracledb` 也有安装脚本，因此生成的 `allowBuilds` 同时包含二者；运行时使用 Thin mode，不需要 Oracle Instant Client。`pg`、`mysql2` 和 `tedious` 是纯 JS，不需要构建许可。
 
 还有一种情况：如果 npm 配置里有 `ignore-scripts=true`，它会全局压制所有安装脚本，优先级高于 `allowBuilds`。create-app 装完会实际加载一次驱动来验证，发现装了但加载不了时会自动跑一次 `pnpm rebuild <驱动>` 补上编译——`pnpm rebuild` 针对单个包，不需要改动全局设置。自动修复失败才会提示，并给出可直接执行的命令。
 

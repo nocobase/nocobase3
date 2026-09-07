@@ -55,8 +55,9 @@ export type {
   WorkflowRunFunction,
   WorkflowRunJsonValue,
   WorkflowRunModule,
-  WorkflowRunRuntime,
+  WorkflowRunOptions,
 } from './run/instruction.js';
+export type { WorkflowRunServices } from '../engine/run-services.js';
 export * from './condition/json-logic/index.js';
 
 export * from './definition.js';

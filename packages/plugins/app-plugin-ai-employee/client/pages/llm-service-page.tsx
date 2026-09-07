@@ -1,7 +1,7 @@
 import {
-  appApiClientToken,
+  apiClientToken,
   useService,
-  type AppClient,
+  type ApiClient,
 } from '@nocobase/app-client';
 import { Check, ChevronDown, CircleAlert, Pencil, X } from 'lucide-react';
 import {
@@ -25,19 +25,19 @@ import {
 } from '../llm-service-service.js';
 
 export default function LLMServicePage(): ReactElement {
-  const appClient = useService(appApiClientToken);
+  const api = useService(apiClientToken);
   const [services, setServices] = useState<LLMService[]>([]);
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<LLMService>();
   useEffect(() => {
-    void Promise.all([listLLMServices(appClient), listLLMProviders(appClient)])
+    void Promise.all([listLLMServices(api), listLLMProviders(api)])
       .then(([nextServices, nextProviders]) => {
         setServices(nextServices);
         setProviders(nextProviders);
       })
       .catch((e: unknown) => setError(String(e)));
-  }, [appClient]);
+  }, [api]);
   const toggle = async (service: LLMService, enabled: boolean) => {
     setServices((items) =>
       items.map((item) =>
@@ -45,7 +45,7 @@ export default function LLMServicePage(): ReactElement {
       ),
     );
     try {
-      await updateLLMService(service.name, { enabled }, appClient);
+      await updateLLMService(service.name, { enabled }, api);
     } catch (e) {
       setServices((items) =>
         items.map((item) => (item.name === service.name ? service : item)),
@@ -112,7 +112,7 @@ export default function LLMServicePage(): ReactElement {
       </div>
       {editing && (
         <ModelEditor
-          appClient={appClient}
+          api={api}
           service={editing}
           onClose={() => setEditing(undefined)}
           onSaved={(next) => {
@@ -339,12 +339,12 @@ function ModelMultiSelect({
 }
 
 function ModelEditor({
-  appClient,
+  api,
   service,
   onClose,
   onSaved,
 }: {
-  appClient: AppClient;
+  api: ApiClient;
   service: LLMService;
   onClose: () => void;
   onSaved: (service: LLMService) => void;
@@ -369,11 +369,7 @@ function ModelEditor({
       const request = ++modelRequestRef.current;
       setLoading(true);
       try {
-        const models = await listProviderModels(
-          service.name,
-          searchValue,
-          appClient,
-        );
+        const models = await listProviderModels(service.name, searchValue, api);
         if (request === modelRequestRef.current) setProviderModels(models);
       } catch (loadError) {
         if (request === modelRequestRef.current) setError(String(loadError));
@@ -381,7 +377,7 @@ function ModelEditor({
         if (request === modelRequestRef.current) setLoading(false);
       }
     },
-    [appClient, service.name],
+    [api, service.name],
   );
 
   useEffect(() => {
@@ -391,9 +387,7 @@ function ModelEditor({
   const save = async (): Promise<void> => {
     try {
       const enabledModels = prepareEnabledModels(config);
-      onSaved(
-        await updateLLMService(service.name, { enabledModels }, appClient),
-      );
+      onSaved(await updateLLMService(service.name, { enabledModels }, api));
     } catch (saveError) {
       setError(String(saveError));
     }
