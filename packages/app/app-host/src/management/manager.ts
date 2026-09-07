@@ -29,6 +29,10 @@ export interface HostManagementService {
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult>;
   reloadAppConfig(appId: string): Promise<AppConfigReloadResult | null>;
+  publishAppConfig(
+    appId: string,
+    content: string,
+  ): Promise<AppConfigReloadResult | null>;
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult>;
@@ -52,6 +56,14 @@ type HostModeState =
   | { mode: 'managed'; reconciler: ManagedReconciler };
 
 export class HostManager implements HostManagementService {
+  publishAppConfig(
+    appId: string,
+    content: string,
+  ): Promise<AppConfigReloadResult | null> {
+    if (this.state.mode !== 'managed')
+      throw new Error('Configuration publishing requires managed host mode');
+    return this.state.reconciler.publishAppConfig(appId, content);
+  }
   restoreDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult> {
@@ -84,6 +96,7 @@ export class HostManager implements HostManagementService {
               registry: options.registry,
               artifactResolver: options.artifactResolver,
               volumes: options.deploymentCatalog.volumes,
+              deploymentsDir: options.deploymentCatalog.deploymentsDir,
             }),
           };
   }
@@ -152,6 +165,8 @@ export class HostManager implements HostManagementService {
   }
 
   async restartApp(appId: string): Promise<HostStatus> {
+    if (this.state.mode === 'managed')
+      return this.state.reconciler.restartApp(appId);
     if (!this.registry.isActive(appId)) {
       throw new Error(`App "${appId}" is not running`);
     }

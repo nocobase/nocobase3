@@ -136,7 +136,7 @@ export class AppHostSupervisor {
   private shuttingDown = false;
   private shutdownPromise: Promise<void> | null = null;
   private session: string | null = null;
-  private lastDeploymentSet: HostDeploymentSet | null = null;
+  private readonly readyListeners = new Set<() => void>();
   private automaticRestartTimer: NodeJS.Timeout | null = null;
   private automaticRestartAttempts: number[] = [];
   private readonly handleShutdownSignal: () => void = () => {
@@ -297,92 +297,41 @@ export class AppHostSupervisor {
     return await this.ensureStarted();
   }
 
+  onReady(listener: () => void): () => void {
+    this.readyListeners.add(listener);
+    return () => {
+      this.readyListeners.delete(listener);
+    };
+  }
+
   async applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult> {
-    const management = await this.getManagementClient();
-    const result = await management.applyDeploymentSet(deploymentSet);
-    if (result.status.desiredRevision === deploymentSet.revision) {
-      const previous = this.lastDeploymentSet?.deployments ?? [];
-      this.lastDeploymentSet = {
-        revision: deploymentSet.revision,
-        deployments: deploymentSet.deployments.flatMap((deployment) => {
-          const retained = this.deploymentSucceeded(
-            result.status,
-            deployment.appId,
-          )
-            ? deployment
-            : previous.find((item) => item.appId === deployment.appId);
-          return retained ? [structuredClone(retained)] : [];
-        }),
-      };
-    }
-    return result;
+    return (await this.getManagementClient()).applyDeploymentSet(deploymentSet);
   }
 
   async restoreDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult> {
-    const management = await this.getManagementClient();
-    const result = await management.restoreDeploymentSet(deploymentSet);
-    if (result.accepted)
-      this.lastDeploymentSet = structuredClone(deploymentSet);
-    return result;
+    return (await this.getManagementClient()).restoreDeploymentSet(
+      deploymentSet,
+    );
   }
 
   async applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
-    const management = await this.getManagementClient();
-    const status = await management.applyDeployment(deployment);
-    if (this.deploymentSucceeded(status, deployment.appId)) {
-      this.updateLastDeploymentSet(status.desiredRevision, deployment);
-    }
-    return status;
+    return (await this.getManagementClient()).applyDeployment(deployment);
   }
 
   async startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
-    const management = await this.getManagementClient();
-    const status = await management.startDeployment(deployment);
-    if (this.deploymentSucceeded(status, deployment.appId)) {
-      this.updateLastDeploymentSet(status.desiredRevision, {
-        ...deployment,
-        desiredState: 'running',
-      });
-    }
-    return status;
-  }
-
-  updateStartupPolicy(
-    appId: string,
-    activation: NonNullable<HostDeploymentSpec['activation']>,
-  ): void {
-    if (!this.lastDeploymentSet) return;
-    this.mapLastDeploymentSet(this.lastDeploymentSet.revision, (deployments) =>
-      deployments.map((deployment) =>
-        deployment.appId === appId ? { ...deployment, activation } : deployment,
-      ),
-    );
+    return (await this.getManagementClient()).startDeployment(deployment);
   }
 
   async stopDeployment(appId: string): Promise<HostStatus> {
-    const management = await this.getManagementClient();
-    const status = await management.stopDeployment(appId);
-    this.mapLastDeploymentSet(status.desiredRevision, (deployments) =>
-      deployments.map((deployment) =>
-        deployment.appId === appId
-          ? { ...deployment, desiredState: 'stopped' }
-          : deployment,
-      ),
-    );
-    return status;
+    return (await this.getManagementClient()).stopDeployment(appId);
   }
 
   async removeDeployment(appId: string): Promise<HostStatus> {
-    const management = await this.getManagementClient();
-    const status = await management.removeDeployment(appId);
-    this.mapLastDeploymentSet(status.desiredRevision, (deployments) =>
-      deployments.filter((deployment) => deployment.appId !== appId),
-    );
-    return status;
+    return (await this.getManagementClient()).removeDeployment(appId);
   }
 
   async getManagementClient(): Promise<HostManagementService> {
@@ -411,39 +360,6 @@ export class AppHostSupervisor {
       },
     );
     return this.shutdownPromise;
-  }
-
-  private updateLastDeploymentSet(
-    revision: number,
-    deployment: HostDeploymentSpec,
-  ): void {
-    const deployments = this.lastDeploymentSet?.deployments ?? [];
-    this.lastDeploymentSet = {
-      revision,
-      deployments: [
-        ...deployments.filter((item) => item.id !== deployment.id),
-        structuredClone(deployment),
-      ],
-    };
-  }
-
-  private deploymentSucceeded(status: HostStatus, appId: string): boolean {
-    const deployment = status.deployments.find((item) => item.appId === appId);
-    return (
-      deployment?.observedState === 'running' ||
-      deployment?.observedState === 'stopped'
-    );
-  }
-
-  private mapLastDeploymentSet(
-    revision: number,
-    map: (deployments: HostDeploymentSpec[]) => HostDeploymentSpec[],
-  ): void {
-    if (!this.lastDeploymentSet) return;
-    this.lastDeploymentSet = {
-      revision,
-      deployments: map(this.lastDeploymentSet.deployments),
-    };
   }
 
   private async startManagedChild(): Promise<URL> {
@@ -504,14 +420,14 @@ export class AppHostSupervisor {
 
     try {
       await this.waitForReady(targetUrl);
-      if (management && this.lastDeploymentSet) {
-        void management
-          .restoreDeploymentSet(this.lastDeploymentSet)
-          .catch((error: unknown) => {
-            console.error('Failed to restore app-host applications', error);
-          });
-      }
       this.status = 'ready';
+      for (const listener of this.readyListeners) {
+        try {
+          listener();
+        } catch (error) {
+          console.error('App host ready listener failed', error);
+        }
+      }
       return targetUrl;
     } catch (error) {
       this.status = 'failed';

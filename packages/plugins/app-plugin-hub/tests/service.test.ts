@@ -112,10 +112,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     const before = await service.getApp('customer');
     host.targetedOperations = [];
     const after = await service.restart('customer');
-    expect(host.targetedOperations).toEqual([
-      'stop:customer',
-      'start:customer',
-    ]);
+    expect(host.targetedOperations).toEqual(['restart:customer']);
     expect(after.app.currentDeploymentId).toBe(before.app.currentDeploymentId);
     expect(after.deployment.activation).toBe(before.deployment.activation);
     expect(after.runtime.state).toBe('running');
@@ -217,9 +214,13 @@ describe('@nocobase/app-plugin-hub service', () => {
     await waitForLatestDeployment(service, 'customer');
     const operations = [...host.targetedOperations];
     await service.updateSettings('customer', { activation: 'lazy' });
-    expect(host.lastDeploymentSet?.deployments[0]?.activation).toBe('lazy');
+    expect(
+      (await service.createDeploymentSet()).deployments[0]?.activation,
+    ).toBe('lazy');
     await service.updateSettings('customer', { activation: 'eager' });
-    expect(host.lastDeploymentSet?.deployments[0]?.activation).toBe('eager');
+    expect(
+      (await service.createDeploymentSet()).deployments[0]?.activation,
+    ).toBe('eager');
     expect(host.targetedOperations).toEqual(operations);
   });
 
@@ -442,7 +443,8 @@ describe('@nocobase/app-plugin-hub service', () => {
     ).toBe(0o700);
     expect(host.lastDeploymentSet?.deployments[0]?.config).toEqual({
       provider: 'file',
-      path: deployment.config.path,
+      revision: deployment.id,
+      content: await readFile(deployment.config.path!, 'utf8'),
     });
   });
 
@@ -843,11 +845,41 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
 
     await expect(service.restoreDesiredState()).resolves.toBeUndefined();
-    expect(host.deploymentSetStarted).toBe(true);
+    await vi.waitFor(() => expect(host.deploymentSetStarted).toBe(true));
     expect(host.deploymentSetCompleted).toBe(false);
 
     releaseStartup?.();
     await host.nextDeploymentSetGate;
+  });
+
+  it('rebuilds recovery targets from current configuration and settings after Host readiness', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const operation = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'value: initial\n' },
+    });
+    await waitForDeployment(service, 'customer', operation.id);
+    await service.restoreDesiredState();
+    await vi.waitFor(() =>
+      expect(host.lastDeploymentSet?.deployments[0]?.config?.content).toBe(
+        'value: initial\n',
+      ),
+    );
+    await service.updateConfig('customer', { content: 'value: published\n' });
+    await service.updateSettings('customer', { activation: 'lazy' });
+    for (const listener of host.readyListeners) listener();
+    await vi.waitFor(() => {
+      expect(host.lastDeploymentSet?.deployments[0]).toMatchObject({
+        activation: 'lazy',
+        config: { content: 'value: published\n', revision: operation.id },
+      });
+    });
+    expect(
+      host.lastDeploymentSet?.deployments[0]?.config?.path,
+    ).toBeUndefined();
   });
 });
 
@@ -876,6 +908,13 @@ async function waitForDeployment(
 }
 
 class FakeHostController implements HubHostController {
+  readonly readyListeners = new Set<() => void>();
+  onReady(listener: () => void): () => void {
+    this.readyListeners.add(listener);
+    return () => {
+      this.readyListeners.delete(listener);
+    };
+  }
   updateStartupPolicy(appId: string, activation: 'lazy' | 'eager'): void {
     const deployment = this.lastDeploymentSet?.deployments.find(
       (item) => item.appId === appId,
@@ -954,6 +993,7 @@ class FakeHostController implements HubHostController {
 
   public async getManagementClient(): Promise<HostManagementService> {
     return {
+      publishAppConfig: (appId) => this.reloadAppConfig(appId),
       reloadAppConfig: this.reloadAppConfig,
       restoreDeploymentSet: async (deploymentSet) => ({
         accepted: true,
@@ -971,10 +1011,12 @@ class FakeHostController implements HubHostController {
         createStatus(
           this.lastDeploymentSet ?? { revision: 0, deployments: [] },
         ),
-      restartApp: async () =>
-        createStatus(
+      restartApp: async (appId) => {
+        this.targetedOperations.push(`restart:${appId}`);
+        return createStatus(
           this.lastDeploymentSet ?? { revision: 0, deployments: [] },
-        ),
+        );
+      },
     };
   }
 

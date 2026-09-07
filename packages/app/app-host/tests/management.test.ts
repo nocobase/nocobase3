@@ -39,6 +39,41 @@ afterEach(async () => {
 });
 
 describe('managed host reconciliation', () => {
+  it('owns runtime config files and cleans up replaced configurations', async () => {
+    const fixture = await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: fixture.deploymentsDir,
+      appVolumesDir: fixture.volumesDir,
+      artifact: fsArtifact(fixture.artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const first = deploymentSet(1, fixture.artifact, { activation: 'lazy' });
+    first.deployments[0]!.config = {
+      provider: 'file',
+      revision: 'first',
+      content: 'feature: old\n',
+    };
+    await host.management.applyDeploymentSet(first);
+    const oldPath = host.registry.definition('customer')!.configPath!;
+    expect(await readFile(oldPath, 'utf8')).toBe('feature: old\n');
+    const second = {
+      ...first.deployments[0]!,
+      config: {
+        provider: 'file' as const,
+        revision: 'second',
+        content: 'feature: new\n',
+      },
+    };
+    await host.management.applyDeployment(second);
+    const nextPath = host.registry.definition('customer')!.configPath!;
+    expect(nextPath).not.toBe(oldPath);
+    await expect(readFile(oldPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await host.management.publishAppConfig('customer', 'feature: published\n');
+    expect(await readFile(nextPath, 'utf8')).toBe('feature: published\n');
+    expect(host.registry.isActive('customer')).toBe(false);
+  });
   it('restores local revisions without reading artifacts and fails when the revision is missing', async () => {
     const fixture = await createFixture();
     const options = {

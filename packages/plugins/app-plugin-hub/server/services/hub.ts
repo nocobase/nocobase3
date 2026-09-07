@@ -65,6 +65,7 @@ export interface DefaultHubServiceOptions {
 }
 
 export interface HubHostController {
+  onReady(listener: () => void): () => void;
   restoreDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<{ readonly status: HostStatus }>;
@@ -74,7 +75,6 @@ export interface HubHostController {
   ): Promise<{ readonly status: HostStatus }>;
   applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
   startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
-  updateStartupPolicy(appId: string, activation: 'lazy' | 'eager'): void;
   stopDeployment(appId: string): Promise<HostStatus>;
   removeDeployment(appId: string): Promise<HostStatus>;
   getManagementClient(): Promise<HostManagementService>;
@@ -98,6 +98,7 @@ export class DefaultHubService implements HubService {
   private revision = 0;
   private currentHostUrl: string | null = null;
   private startupReconciliation: Promise<void> | null = null;
+  private unsubscribeHostReady: (() => void) | undefined;
 
   public constructor(private readonly options: DefaultHubServiceOptions) {
     const drive = createDriveManager({
@@ -110,10 +111,6 @@ export class DefaultHubService implements HubService {
 
   public async prepare(): Promise<void> {
     await mkdir(path.dirname(this.options.config.host.configPath), {
-      recursive: true,
-      mode: 0o700,
-    });
-    await mkdir(this.options.config.host.appVolumesDir, {
       recursive: true,
       mode: 0o700,
     });
@@ -316,7 +313,7 @@ export class DefaultHubService implements HubService {
       await writeTextAtomic(this.configPath(deployment), input.content);
       try {
         const management = await this.hostController.getManagementClient();
-        await management.reloadAppConfig(appId);
+        await management.publishAppConfig(appId, input.content);
       } catch (error) {
         throw new HubError(
           `Configuration was saved, but runtime configuration reload failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -387,7 +384,6 @@ export class DefaultHubService implements HubService {
       await this.startupReconciliation;
       await this.requireApp(appId);
       await this.updateApp(appId, { startupMode: input.activation });
-      this.hostController.updateStartupPolicy(appId, input.activation);
       return await this.getApp(appId);
     });
   }
@@ -469,10 +465,10 @@ export class DefaultHubService implements HubService {
           409,
         );
       }
-      const spec = await this.createDeploymentSpec(app, deployment, 'running');
       try {
-        await this.hostController.stopDeployment(appId);
-        const status = await this.hostController.startDeployment(spec);
+        const status = await (
+          await this.hostController.getManagementClient()
+        ).restartApp(appId);
         const observed = status.deployments.find(
           (item) => item.appId === appId,
         );
@@ -513,14 +509,17 @@ export class DefaultHubService implements HubService {
       });
       await Promise.allSettled([
         ...releases.map((release) => this.disk.delete(release.artifactKey)),
-        rm(path.join(this.options.config.host.appDeploymentsDir, appId), {
-          recursive: true,
-          force: true,
-        }),
-        rm(path.join(this.options.config.host.appVolumesDir, appId), {
-          recursive: true,
-          force: true,
-        }),
+        rm(
+          path.join(
+            path.dirname(this.options.config.host.configPath),
+            'app-configs',
+            appId,
+          ),
+          {
+            recursive: true,
+            force: true,
+          },
+        ),
       ]);
     });
   }
@@ -550,14 +549,26 @@ export class DefaultHubService implements HubService {
     this.currentHostUrl = (
       await this.hostController.ensureStarted()
     ).toString();
-    const deploymentSet = await this.createDeploymentSet();
-    this.startupReconciliation = this.hostController
-      .restoreDeploymentSet(deploymentSet)
+    this.unsubscribeHostReady ??= this.hostController.onReady(() => {
+      this.scheduleRestoration();
+    });
+    this.scheduleRestoration();
+  }
+
+  private scheduleRestoration(): void {
+    const restoration = this.createDeploymentSet()
+      .then((deploymentSet) =>
+        this.hostController.restoreDeploymentSet(deploymentSet),
+      )
       .then(() => undefined)
-      .catch(() => undefined)
+      .catch((error: unknown) =>
+        console.error('Failed to restore app-host applications', error),
+      )
       .finally(() => {
-        this.startupReconciliation = null;
+        if (this.startupReconciliation === restoration)
+          this.startupReconciliation = null;
       });
+    this.startupReconciliation = restoration;
   }
 
   public async createDeploymentSet(): Promise<HostDeploymentSet> {
@@ -600,7 +611,11 @@ export class DefaultHubService implements HubService {
       basePath: app.basePath,
       config:
         deployment.config.mode === 'file'
-          ? { provider: 'file', path: deployment.config.path }
+          ? {
+              provider: 'file',
+              revision: deployment.id,
+              content: await readFile(this.configPath(deployment), 'utf8'),
+            }
           : undefined,
     };
   }
@@ -610,6 +625,8 @@ export class DefaultHubService implements HubService {
   }
 
   public async shutdown(): Promise<void> {
+    this.unsubscribeHostReady?.();
+    this.unsubscribeHostReady = undefined;
     await this.startupReconciliation;
     await Promise.allSettled(this.locks.values());
     this.currentHostUrl = null;
@@ -886,7 +903,8 @@ export class DefaultHubService implements HubService {
     content ??= '';
     validateYamlConfig(content);
     const configPath = path.join(
-      this.options.config.host.appVolumesDir,
+      path.dirname(this.options.config.host.configPath),
+      'app-configs',
       app.id,
       'configs',
       `config.${deploymentId}.yml`,
@@ -986,7 +1004,8 @@ export class DefaultHubService implements HubService {
   ): Promise<void> {
     if (deployment.config.mode !== 'file') return;
     const ownedPath = path.join(
-      this.options.config.host.appVolumesDir,
+      path.dirname(this.options.config.host.configPath),
+      'app-configs',
       deployment.appId,
       'configs',
       `config.${deployment.id}.yml`,

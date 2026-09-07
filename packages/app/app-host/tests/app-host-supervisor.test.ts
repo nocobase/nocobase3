@@ -135,6 +135,12 @@ describe('AppHostSupervisor', () => {
       const started = await supervisor.startDeployment(deployment);
       expect(started.deployments[0]?.observedState).toBe('running');
 
+      supervisor.onReady(() => {
+        void supervisor.restoreDeploymentSet({
+          revision: 3,
+          deployments: [deployment],
+        });
+      });
       await supervisor.restart('test restart');
       await vi.waitFor(
         async () => {
@@ -162,7 +168,7 @@ describe('AppHostSupervisor', () => {
     }
   });
 
-  it('restarts a crashed managed host and replays its deployment set', async () => {
+  it('notifies the controller after a crash so it can restore its deployment set', async () => {
     const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));
     const fixture = await createManagedFixture(volumesDir);
     const supervisor = AppHostSupervisor.initialize({
@@ -190,6 +196,21 @@ describe('AppHostSupervisor', () => {
         ],
       });
       const previousPid = supervisor.getInfo().pid;
+      supervisor.onReady(() => {
+        void supervisor.restoreDeploymentSet({
+          revision: 1,
+          deployments: [
+            {
+              id: 'demo',
+              appId: 'demo',
+              artifact: fixture.artifact,
+              desiredState: 'running',
+              backend: 'in-process',
+              activation: 'eager',
+            },
+          ],
+        });
+      });
       await rm(path.join(volumesDir, 'app-artifacts', fixture.artifact.key));
       if (!previousPid) {
         throw new Error('Managed app-host has no process ID');

@@ -17,6 +17,8 @@ export type AppActivationPolicy = 'lazy' | 'eager';
 export interface HostFileConfig {
   provider: 'file';
   path?: string;
+  content?: string;
+  revision?: string;
 }
 
 export interface HostDeploymentSpec {

@@ -12,6 +12,7 @@ import type { AppRuntimeRegistry } from '../app-registry.ts';
 import type { AppVolumeManager } from '../deployment/volume-manager.ts';
 import { rootErrorMessage } from '../errors.ts';
 import path from 'node:path';
+import { rm } from 'node:fs/promises';
 import type {
   ApplyDeploymentSetResult,
   HostDeploymentSet,
@@ -24,12 +25,14 @@ export interface ManagedReconcilerOptions {
   registry: AppRuntimeRegistry;
   artifactResolver: ArtifactResolver;
   volumes: AppVolumeManager;
+  deploymentsDir: string;
 }
 
 export class ManagedReconciler {
   private readonly registry: AppRuntimeRegistry;
   private readonly artifactResolver: ArtifactResolver;
   private readonly volumes: AppVolumeManager;
+  private readonly deploymentsDir: string;
   private statuses = new Map<string, HostDeploymentStatus>();
   private desiredRevision = 0;
   private reconciledRevision = 0;
@@ -49,6 +52,7 @@ export class ManagedReconciler {
     this.registry = options.registry;
     this.artifactResolver = options.artifactResolver;
     this.volumes = options.volumes;
+    this.deploymentsDir = options.deploymentsDir;
   }
 
   applyDeploymentSet(
@@ -147,6 +151,7 @@ export class ManagedReconciler {
 
   removeDeployment(appId: string): Promise<HostStatus> {
     return this.enqueue(async () => {
+      if (!/^[a-zA-Z0-9_-]+$/.test(appId)) throw new Error('Invalid app ID');
       const revision = this.nextRevision();
       const status = [...this.statuses.values()].find(
         (candidate) => candidate.appId === appId,
@@ -157,7 +162,36 @@ export class ManagedReconciler {
           : `app ${appId} removed`,
       });
       if (status) this.statuses.delete(status.id);
+      await rm(path.join(this.deploymentsDir, appId), {
+        recursive: true,
+        force: true,
+      });
+      await rm(path.join(this.volumes.volumesDir, appId), {
+        recursive: true,
+        force: true,
+      });
       this.reconciledRevision = revision;
+      return this.getStatus();
+    });
+  }
+
+  publishAppConfig(
+    appId: string,
+    content: string,
+  ): ReturnType<AppRuntimeRegistry['reloadAppConfig']> {
+    return this.enqueue(async () => {
+      const definition = this.registry.definition(appId);
+      if (!definition?.configPath) return null;
+      await this.volumes.publishConfig(appId, definition.configPath, content);
+      return this.registry.reloadAppConfig(appId);
+    });
+  }
+
+  restartApp(appId: string): Promise<HostStatus> {
+    return this.enqueue(async () => {
+      if (!this.registry.isActive(appId))
+        throw new Error(`App "${appId}" is not running`);
+      await this.registry.reload(appId, { reason: 'host app restart' });
       return this.getStatus();
     });
   }
@@ -283,11 +317,23 @@ export class ManagedReconciler {
         ? await this.artifactResolver.restore(spec.artifact)
         : await this.artifactResolver.resolve(spec.artifact);
       let result;
+      const previousConfigPath = this.registry.definition(
+        spec.appId,
+      )?.configPath;
+      let candidateConfigPath: string | undefined;
       try {
-        const configPath = spec.config
-          ? (spec.config.path ?? this.volumes.configPath(spec.appId))
-          : undefined;
+        const configPath =
+          spec.config?.content !== undefined
+            ? await this.volumes.writeConfig(
+                spec.appId,
+                spec.config.revision ?? spec.id,
+                spec.config.content,
+              )
+            : spec.config
+              ? (spec.config.path ?? this.volumes.configPath(spec.appId))
+              : undefined;
         const dataDir = await this.volumes.prepareStorageDir(spec.appId);
+        candidateConfigPath = configPath;
         result = await this.registry.replaceDefinition(
           {
             ...artifact.definition,
@@ -305,8 +351,32 @@ export class ManagedReconciler {
           },
         );
         await artifact.commit();
+        if (previousConfigPath && previousConfigPath !== configPath) {
+          await this.volumes
+            .removeConfig(spec.appId, previousConfigPath)
+            .catch((error: unknown) => {
+              console.warn('Failed to clean up previous app configuration', {
+                appId: spec.appId,
+                error,
+              });
+            });
+        }
       } catch (error) {
         await artifact.rollback();
+        if (
+          spec.config?.content !== undefined &&
+          candidateConfigPath &&
+          candidateConfigPath !== previousConfigPath
+        ) {
+          await this.volumes
+            .removeConfig(spec.appId, candidateConfigPath)
+            .catch((cleanupError: unknown) => {
+              console.warn('Failed to clean up candidate app configuration', {
+                appId: spec.appId,
+                error: cleanupError,
+              });
+            });
+        }
         throw error;
       }
       this.statuses.set(spec.id, {

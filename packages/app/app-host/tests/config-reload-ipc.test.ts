@@ -7,6 +7,35 @@ import {
   type HostManagementService,
 } from '../dist/management/index.js';
 
+it('keeps listening for completion after a deployment is accepted', async () => {
+  const child = new EventEmitter() as ChildProcess;
+  Object.defineProperty(child, 'connected', { value: true });
+  let complete: (() => void) | undefined;
+  child.send = ((
+    message: Record<string, unknown>,
+    callback: (error: Error | null) => void,
+  ) => {
+    callback(null);
+    child.emit('message', { ...message, kind: 'response', accepted: true });
+    complete = () =>
+      child.emit('message', {
+        ...message,
+        kind: 'response',
+        result: { deployments: [] },
+      });
+    return true;
+  }) as ChildProcess['send'];
+  const client = new IpcHostManagementClient(child, {
+    session: 'test',
+    timeoutMs: 5,
+  });
+  const pending = client.applyDeployment({ id: 'app', appId: 'app' } as never);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  complete?.();
+  await expect(pending).resolves.toEqual({ deployments: [] });
+  expect(child.listenerCount('message')).toBe(0);
+});
+
 it('routes configuration reload through IPC and propagates results and errors', async () => {
   const child = new EventEmitter() as ChildProcess;
   Object.defineProperty(child, 'connected', { value: true });

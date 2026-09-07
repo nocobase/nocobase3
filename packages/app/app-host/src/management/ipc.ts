@@ -19,6 +19,7 @@ import type {
 const IPC_CHANNEL = 'nocobase-app-host';
 
 type IpcMethod =
+  | 'publishAppConfig'
   | 'restoreDeploymentSet'
   | 'reloadAppConfig'
   | 'applyDeploymentSet'
@@ -44,6 +45,7 @@ interface IpcResponse {
   requestId: string;
   result?: unknown;
   error?: string;
+  accepted?: boolean;
 }
 
 export interface IpcHostManagementClientOptions {
@@ -52,6 +54,12 @@ export interface IpcHostManagementClientOptions {
 }
 
 export class IpcHostManagementClient implements HostManagementService {
+  publishAppConfig(
+    appId: string,
+    content: string,
+  ): ReturnType<HostManagementService['publishAppConfig']> {
+    return this.call('publishAppConfig', { appId, content });
+  }
   restoreDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult> {
@@ -132,6 +140,12 @@ export class IpcHostManagementClient implements HostManagementService {
         if (!isIpcResponse(message) || message.requestId !== requestId) {
           return;
         }
+        if (message.accepted) {
+          // The request deadline covers acceptance only. Execution completion
+          // is delivered independently and must not be discarded on timeout.
+          clearTimeout(timeout);
+          return;
+        }
         cleanup();
         if (message.error) {
           reject(new Error(message.error));
@@ -207,39 +221,52 @@ export class IpcHostManagementServer {
     }
     let result: unknown;
     switch (request.method) {
+      case 'publishAppConfig':
+        result = await this.service.publishAppConfig(
+          payloadAppId(request),
+          (request.payload as { content: string }).content,
+        );
+        break;
       case 'getStatus':
         result = await this.service.getStatus();
         break;
       case 'applyDeploymentSet':
+        this.accept(request);
         result = await this.service.applyDeploymentSet(
           request.payload as HostDeploymentSet,
         );
         break;
       case 'applyDeployment':
+        this.accept(request);
         result = await this.service.applyDeployment(
           request.payload as HostDeploymentSpec,
         );
         break;
       case 'startDeployment':
+        this.accept(request);
         result = await this.service.startDeployment(
           request.payload as HostDeploymentSpec,
         );
         break;
       case 'stopDeployment':
+        this.accept(request);
         result = await this.service.stopDeployment(payloadAppId(request));
         break;
       case 'removeDeployment':
+        this.accept(request);
         result = await this.service.removeDeployment(payloadAppId(request));
         break;
       case 'reloadAppConfig':
         result = await this.service.reloadAppConfig(payloadAppId(request));
         break;
       case 'restoreDeploymentSet':
+        this.accept(request);
         result = await this.service.restoreDeploymentSet(
           request.payload as HostDeploymentSet,
         );
         break;
       case 'restartApp':
+        this.accept(request);
         result = await this.service.restartApp(
           (request.payload as { appId: string }).appId,
         );
@@ -255,6 +282,15 @@ export class IpcHostManagementServer {
 
   private send(response: IpcResponse): void {
     process.send?.(response);
+  }
+
+  private accept(request: IpcRequest): void {
+    this.send({
+      channel: IPC_CHANNEL,
+      kind: 'response',
+      requestId: request.requestId,
+      accepted: true,
+    });
   }
 }
 
@@ -272,6 +308,7 @@ function isIpcRequest(value: unknown): value is IpcRequest {
 
 function isIpcMethod(value: unknown): value is IpcMethod {
   return (
+    value === 'publishAppConfig' ||
     value === 'applyDeploymentSet' ||
     value === 'applyDeployment' ||
     value === 'startDeployment' ||
