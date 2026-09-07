@@ -1,11 +1,12 @@
 import { Readable } from 'node:stream';
 
-import type { FileStorage, FileMetadata } from '@nocobase/ai-employee';
+import type { FileMetadata, FileStorage } from '@nocobase/ai-employee';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 
-import type { Context } from '../context.js';
-import type { AIFileEntity } from '../repository/ai-file.js';
+import type { Actor } from '../domain/contracts.js';
+import { forbiddenError, notFoundError } from '../domain/errors.js';
 import type { AIFileMetadataCreateContext } from '../file-storage/ai-file-metadata-repository.js';
+import type { AIFileEntity } from '../repository/ai-file.js';
 
 export type AIFileUploadResult = {
   id: number | string;
@@ -21,18 +22,44 @@ export type AIFileUploadResult = {
   source: { collectionName: 'aiFiles' };
 };
 
-/** `aiFiles` service backed by metadata-aware file storage. */
-export class AIFileService {
-  public constructor(
-    private readonly fileStorage: FileStorage<
-      AIFileEntity,
-      AIFileMetadataCreateContext
-    >,
-    private readonly snowflake: IdGeneratorService,
-    private readonly apiBasePath: string,
-  ) {}
+export interface AIFilePreviewResult {
+  readonly stream: ReadableStream<Uint8Array>;
+  readonly contentType: string;
+  readonly filename: string;
+}
 
-  public async create(ctx: Context, file: File): Promise<AIFileUploadResult> {
+/** `aiFiles` domain service backed by metadata-aware file storage. */
+export interface AIFileServiceOptions {
+  readonly fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
+  readonly snowflake: IdGeneratorService;
+  readonly apiBasePath: string;
+}
+
+export class AIFileService {
+  private readonly fileStorage: FileStorage<
+    AIFileEntity,
+    AIFileMetadataCreateContext
+  >;
+  private readonly snowflake: IdGeneratorService;
+  private readonly apiBasePath: string;
+
+  public constructor({
+    fileStorage,
+    snowflake,
+    apiBasePath,
+  }: AIFileServiceOptions) {
+    this.fileStorage = fileStorage;
+    this.snowflake = snowflake;
+    this.apiBasePath = apiBasePath;
+  }
+
+  public async create({
+    actor,
+    file,
+  }: {
+    actor: Actor;
+    file: File;
+  }): Promise<AIFileUploadResult> {
     const id = String(this.snowflake.generate());
     const metadata = await this.fileStorage.write({
       id,
@@ -41,38 +68,42 @@ export class AIFileService {
       content: file.stream(),
       size: file.size,
       mimeType: file.type || 'application/octet-stream',
-      metadataContext: { createdById: ctx.currentUser.id },
+      metadataContext: { createdById: actor.id },
     });
     return this.toUploadResult(metadata);
   }
 
-  public async preview(ctx: Context, id: string): Promise<Response> {
+  public async preview({
+    actor,
+    id,
+  }: {
+    actor: Actor;
+    id: string;
+  }): Promise<AIFilePreviewResult> {
     let opened;
     try {
       opened = await this.fileStorage.open(id);
     } catch {
-      return new Response('file content not found', { status: 404 });
+      throw notFoundError('file content not found');
     }
-    if (!opened) return new Response('file not found', { status: 404 });
+    if (!opened) throw notFoundError('file not found');
 
     const record = opened.metadata.entity;
     if (
       record.createdById != null &&
-      String(record.createdById) !== String(ctx.currentUser.id) &&
-      !ctx.currentUser.isRoot
+      String(record.createdById) !== String(actor.id) &&
+      !actor.isRoot
     ) {
-      return new Response('forbidden', { status: 403 });
+      throw forbiddenError('forbidden');
     }
 
-    return new Response(
-      Readable.toWeb(opened.stream as Readable) as ReadableStream<Uint8Array>,
-      {
-        headers: {
-          'Content-Type': opened.contentType,
-          'Content-Disposition': `inline; filename="${encodeURIComponent(opened.metadata.filename)}"`,
-        },
-      },
-    );
+    return {
+      stream: Readable.toWeb(
+        opened.stream as Readable,
+      ) as ReadableStream<Uint8Array>,
+      contentType: opened.contentType,
+      filename: opened.metadata.filename,
+    };
   }
 
   private createPreviewUrl(id: string | number): string {

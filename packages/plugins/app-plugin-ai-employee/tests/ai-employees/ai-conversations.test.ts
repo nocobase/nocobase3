@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AIConversationsManager } from '../../server/ai-employees/ai-conversations.js';
+import { AIConversationsManager } from '../../server/managers/ai-conversations-manager.js';
 
 describe('AIConversationsManager', () => {
   it('loads only messages that belong to the requested session', async () => {
     const findMessages = vi.fn().mockResolvedValue([]);
-    const manager = new AIConversationsManager({
-      repositories: {
+    const manager = new AIConversationsManager(
+      {
+        toolsManager: { listTools: vi.fn().mockResolvedValue([]) },
+        llmProviderManager: { llmProviders: new Map() },
+      } as any,
+      {
         aiConversations: {
           findOne: vi.fn().mockResolvedValue({ sessionId: 'session-a' }),
           count: vi.fn().mockResolvedValue(1),
@@ -13,12 +17,8 @@ describe('AIConversationsManager', () => {
         },
         aiMessages: { find: findMessages },
         aiToolMessages: { find: vi.fn().mockResolvedValue([]) },
-      },
-      ai: {
-        toolsManager: { listTools: vi.fn().mockResolvedValue([]) },
-        llmProviderManager: { llmProviders: new Map() },
-      },
-    } as any);
+      } as any,
+    );
 
     await manager.getMessages({
       userId: 'user-1',

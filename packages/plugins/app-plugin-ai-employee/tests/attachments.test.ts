@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Context } from '../server/context.js';
+import type { Context } from '../server/internal/runtime-context.js';
 import {
   appendAIFileAttachmentSource,
   findMessageAttachments,
@@ -21,11 +21,11 @@ function createContext(
       },
     }),
   };
-  return {
-    repositories,
+  const context = {
     auth: { user: { id: 7 } },
     app: {},
   } as unknown as Context;
+  return [context, repositories] as const;
 }
 
 function expectLookupKey(attachment: unknown, expected: string) {
@@ -49,7 +49,7 @@ describe('message attachment lookup', () => {
     const calls: FindCall[] = [];
     const attachment = { id: 1, filename: 'upload.png' };
     const result = await findMessageAttachments(
-      createContext([{ id: 1 }], calls),
+      ...createContext([{ id: 1 }], calls),
       [attachment] as any,
     );
     expect(getMessageAttachmentLookupKey(attachment as any)).toBeNull();
@@ -65,7 +65,7 @@ describe('message attachment lookup', () => {
       source: { collectionName: 'aiFiles' },
     };
     const result = await findMessageAttachments(
-      createContext([{ id: 1, filename: 'upload.png', disk: 1 }], calls),
+      ...createContext([{ id: 1, filename: 'upload.png', disk: 1 }], calls),
       [attachment] as any,
     );
     expect(result.get(expectLookupKey(attachment, 'aiFiles:1'))).toMatchObject({
@@ -88,7 +88,7 @@ describe('message attachment lookup', () => {
       source: { collectionName: 'attachments', field: 'orders.files' },
     };
     const result = await findMessageAttachments(
-      createContext([{ id: 2, filename: 'block.pdf', disk: 1 }], calls),
+      ...createContext([{ id: 2, filename: 'block.pdf', disk: 1 }], calls),
       [attachment] as any,
     );
     expect(
@@ -103,7 +103,7 @@ describe('message attachment lookup', () => {
     const calls: FindCall[] = [];
     const attachment = { id: 3, source: { trustworthy: true } };
     const result = await findMessageAttachments(
-      createContext([{ id: 3 }], calls),
+      ...createContext([{ id: 3 }], calls),
       [attachment] as any,
     );
     expect(result.size).toBe(0);

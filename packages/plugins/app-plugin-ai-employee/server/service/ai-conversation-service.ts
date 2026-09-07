@@ -10,32 +10,46 @@ import type {
   Context,
   ConversationRequestExecution,
   StreamTarget,
-} from '../context.js';
+} from '../internal/runtime-context.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
-import { ResourceActionError, sendSSEError } from '../routes/utils.js';
+import { ResourceActionError, sendStreamError } from '../domain/errors.js';
 import type {
   AIMessageEntity,
   AIToolMessageEntity,
 } from '../repository/index.js';
 import { AIEmployee } from '../ai-employees/ai-employee.js';
+import type { AIEmployeeOptions } from '../ai-employees/ai-employee.js';
 import { AgentSSEAdapter } from '../agent/sse.js';
 import { createAIEmployeeAgentService } from '../agent/ai-employee/index.js';
-import { createAgentContext } from '../agent/context.js';
+import {
+  createAgentContext,
+  type AppAgentContext,
+  type CreateAgentContextOptions,
+} from '../agent/context.js';
 import { EXECUTE_FRONTEND_TOOL_NAME } from '../ai-employees/common/frontend-tools.js';
 import { findCurrentFrontendTool } from '../ai-employees/frontend-tools.js';
+import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { DocumentLoaders } from '@nocobase/ai-employee';
+import type { AIEmployeesManager } from '../managers/ai-employees-manager.js';
+import type { AIConversationsManager } from '../managers/ai-conversations-manager.js';
+import type { BuiltInManager } from '../managers/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../managers/llm-stream-cached-manager.js';
+import type { SubAgentsDispatcher } from '../managers/sub-agents/dispatcher.js';
+import type { WorkContextHandler } from '../managers/work-context/index.js';
 
 async function getAIEmployee(
-  ctx: Context,
+  repositories: RepositoryFactory,
   username: string,
 ): Promise<AIEmployeeEntity | null> {
-  const employee = await ctx.repositories.aiEmployees.findOne({
+  const employee = await repositories.aiEmployees.findOne({
     filter: { username },
   });
   return employee;
 }
 
 async function prependCancelledToolContinuation(
-  ctx: Pick<Context, 'repositories'>,
+  repositories: RepositoryFactory,
   sessionId: string,
   messages: AIMessageInput[],
   toolMessages: AIMessageEntity[],
@@ -58,7 +72,7 @@ async function prependCancelledToolContinuation(
     });
   }
   if (!continuationMessageId) return;
-  const assistantMessage = await ctx.repositories.aiMessages.findOne({
+  const assistantMessage = await repositories.aiMessages.findOne({
     filter: { sessionId, messageId: continuationMessageId },
   });
   if (!assistantMessage) return;
@@ -84,7 +98,7 @@ function setupSSEHeaders(_ctx: Context) {
 }
 
 function sendErrorResponse(target: StreamTarget, errorMessage: string) {
-  sendSSEError(target, errorMessage);
+  sendStreamError(target, errorMessage);
 }
 
 function streamTarget(execution: ConversationRequestExecution): StreamTarget {
@@ -100,9 +114,12 @@ async function loginInCheck(ctx: Context) {
   }
 }
 
-const isReachParallelLimit = async (ctx: Context) => {
+const isReachParallelLimit = async (
+  repositories: RepositoryFactory,
+  ctx: Context,
+) => {
   const userId = String(ctx.currentUser.id);
-  const activeStreamCount = await ctx.repositories.aiConversations.count({
+  const activeStreamCount = await repositories.aiConversations.count({
     filter: {
       userId,
       llmActiveState: 'streaming',
@@ -115,6 +132,7 @@ const isReachParallelLimit = async (ctx: Context) => {
 };
 
 const saveUserMessages = async (
+  repositories: RepositoryFactory,
   ctx: Context,
   sessionId: string,
   messages: AIMessageInput[],
@@ -125,7 +143,7 @@ const saveUserMessages = async (
     return;
   }
   await ctx.database.transaction(async (connection) => {
-    const repository = ctx.repositories.aiMessages;
+    const repository = repositories.aiMessages;
     if (messageId) {
       const existing = await repository.findOne(
         { filter: { sessionId, messageId } },
@@ -185,36 +203,107 @@ function normalizeIncomingMessageAttachments(
   }
 }
 
+export interface AIConversationServiceOptions {
+  repositories: RepositoryFactory;
+  aiEmployeesManager: AIEmployeesManager;
+  aiConversationsManager: AIConversationsManager;
+  builtInManager: BuiltInManager;
+  llmStreamCachedManager: LLMStreamCachedManager;
+  subAgentsDispatcher: SubAgentsDispatcher;
+  knowledgeBaseManager: KnowledgeBaseManager;
+  workContextHandler: WorkContextHandler;
+  documentLoaders: DocumentLoaders;
+}
+
 export class AIConversationService {
-  async prependCancelledToolContinuation(
-    ctx: Pick<Context, 'repositories'>,
-    sessionId: string,
-    messages: AIMessageInput[],
-    toolMessages: AIMessageEntity[],
-  ): Promise<void> {
-    await prependCancelledToolContinuation(
+  private readonly repositories: RepositoryFactory;
+  private readonly aiEmployeesManager: AIEmployeesManager;
+  private readonly aiConversationsManager: AIConversationsManager;
+  private readonly builtInManager: BuiltInManager;
+  private readonly llmStreamCachedManager: LLMStreamCachedManager;
+  private readonly subAgentsDispatcher: SubAgentsDispatcher;
+  private readonly knowledgeBaseManager: KnowledgeBaseManager;
+  private readonly workContextHandler: WorkContextHandler;
+  private readonly documentLoaders: DocumentLoaders;
+
+  public constructor(options: AIConversationServiceOptions) {
+    this.repositories = options.repositories;
+    this.aiEmployeesManager = options.aiEmployeesManager;
+    this.aiConversationsManager = options.aiConversationsManager;
+    this.builtInManager = options.builtInManager;
+    this.llmStreamCachedManager = options.llmStreamCachedManager;
+    this.subAgentsDispatcher = options.subAgentsDispatcher;
+    this.knowledgeBaseManager = options.knowledgeBaseManager;
+    this.workContextHandler = options.workContextHandler;
+    this.documentLoaders = options.documentLoaders;
+  }
+  private createAgentContext(
+    ctx: Context,
+    state?: CreateAgentContextOptions['state'],
+  ): AppAgentContext {
+    return createAgentContext({
       ctx,
+      repositories: this.repositories,
+      aiEmployeesManager: this.aiEmployeesManager,
+      aiConversationsManager: this.aiConversationsManager,
+      builtInManager: this.builtInManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      subAgentsDispatcher: this.subAgentsDispatcher,
+      state,
+    });
+  }
+
+  async getActiveState({
+    actorId,
+    sessionId,
+  }: {
+    actorId: string | number;
+    sessionId: string;
+  }): Promise<{ llmActiveState: string }> {
+    const conversation = await this.repositories.aiConversations.findOne({
+      filter: { sessionId, userId: actorId },
+    });
+    return { llmActiveState: conversation?.llmActiveState ?? 'idle' };
+  }
+
+  async prependCancelledToolContinuation({
+    sessionId,
+    messages,
+    toolMessages,
+  }: {
+    sessionId: string;
+    messages: AIMessageInput[];
+    toolMessages: AIMessageEntity[];
+  }): Promise<void> {
+    await prependCancelledToolContinuation(
+      this.repositories,
       sessionId,
       messages,
       toolMessages,
     );
   }
 
-  normalizeIncomingMessageAttachments(
-    ctx: Context,
-    messages: AIMessageInput[],
-  ): void {
+  normalizeIncomingMessageAttachments({
+    ctx,
+    messages,
+  }: {
+    ctx: Context;
+    messages: AIMessageInput[];
+  }): void {
     normalizeIncomingMessageAttachments(ctx, messages);
   }
 
-  async list(
-    ctx: Context,
-    options: {
+  async list({
+    ctx,
+    options = {},
+  }: {
+    ctx: Context;
+    options?: {
       filter?: Record<string, unknown>;
       scope?: string;
       keyword?: string;
-    } = {},
-  ) {
+    };
+  }) {
     await loginInCheck(ctx);
     const userId = String(ctx.currentUser.id);
     const filter = isRecord(options.filter) ? options.filter : {};
@@ -227,16 +316,16 @@ export class AIConversationService {
       category: 'chat',
       ...(typeof scope === 'string' && scope ? { scope } : {}),
     };
-    const rows = await ctx.repositories.aiConversations.find({
+    const rows = await this.repositories.aiConversations.find({
       filter: where,
       sort: ['-updatedAt'],
     });
     return rows;
   }
 
-  async unreadCount(ctx: Context) {
+  async unreadCount({ ctx }: { ctx: Context }) {
     const userId = String(ctx.currentUser.id);
-    const count = await ctx.repositories.aiConversations.count({
+    const count = await this.repositories.aiConversations.count({
       filter: {
         userId,
         read: false,
@@ -247,17 +336,17 @@ export class AIConversationService {
     return { count };
   }
 
-  async unreadCounts(ctx: Context) {
+  async unreadCounts({ ctx }: { ctx: Context }) {
     const userId = String(ctx.currentUser.id);
     const conversationUnreadCount =
-      await ctx.repositories.aiConversations.count({
+      await this.repositories.aiConversations.count({
         filter: { userId, read: false, from: 'main-agent', category: 'chat' },
       });
     const workflowTaskUnreadCount = 0;
     return { conversationUnreadCount, workflowTaskUnreadCount };
   }
 
-  async create(ctx: Context, input: Record<string, any>) {
+  async create({ ctx, input }: { ctx: Context; input: Record<string, any> }) {
     const userId = String(ctx.currentUser.id);
     const {
       aiEmployee,
@@ -271,7 +360,10 @@ export class AIConversationService {
       return ctx.throw!(400, 'AI employee is required');
     }
     const normalizedScope = typeof scope === 'string' ? scope : undefined;
-    const employee = await getAIEmployee(ctx, aiEmployee.username);
+    const employee = await getAIEmployee(
+      this.repositories,
+      aiEmployee.username,
+    );
     if (!employee) {
       return ctx.throw!(400, 'AI employee not found');
     }
@@ -280,7 +372,7 @@ export class AIConversationService {
     }
 
     try {
-      return await ctx.aiConversationsManager.create({
+      return await this.aiConversationsManager.create({
         userId,
         aiEmployee,
         scope: normalizedScope,
@@ -299,24 +391,36 @@ export class AIConversationService {
     }
   }
 
-  async update(ctx: Context, sessionId: string, input: { title?: string }) {
+  async update({
+    ctx,
+    sessionId,
+    input,
+  }: {
+    ctx: Context;
+    sessionId: string;
+    input: { title?: string };
+  }) {
     const userId = String(ctx.currentUser.id);
     if (typeof sessionId !== 'string' || !sessionId) {
       return ctx.throw!(400, 'invalid sessionId');
     }
     const { title } = input;
-    return await ctx.aiConversationsManager.update({
+    return await this.aiConversationsManager.update({
       userId,
       sessionId,
       title,
     });
   }
 
-  async updateOptions(
-    ctx: Context,
-    sessionId: string,
-    input: Record<string, any>,
-  ) {
+  async updateOptions({
+    ctx,
+    sessionId,
+    input,
+  }: {
+    ctx: Context;
+    sessionId: string;
+    input: Record<string, any>;
+  }) {
     const userId = String(ctx.currentUser.id);
     if (!sessionId) {
       return ctx.throw!(400, 'invalid sessionId');
@@ -336,7 +440,7 @@ export class AIConversationService {
       return ctx.throw!(400, 'invalid options');
     }
     try {
-      return await ctx.aiConversationsManager.update({
+      return await this.aiConversationsManager.update({
         userId,
         sessionId,
         options: {
@@ -354,10 +458,13 @@ export class AIConversationService {
     }
   }
 
-  async destroy(
-    ctx: Context,
-    options: { sessionId?: string; filter?: Record<string, unknown> },
-  ) {
+  async destroy({
+    ctx,
+    options,
+  }: {
+    ctx: Context;
+    options: { sessionId?: string; filter?: Record<string, unknown> };
+  }) {
     const userId = String(ctx.currentUser.id);
     const filter = isRecord(options.filter) ? options.filter : {};
     const sessionId = options.sessionId;
@@ -366,19 +473,22 @@ export class AIConversationService {
       userId,
     };
     if (sessionId) where.sessionId = sessionId;
-    await ctx.repositories.aiConversations.destroy({ filter: where });
+    await this.repositories.aiConversations.destroy({ filter: where });
     return null;
   }
 
-  async getMessages(
-    ctx: Context,
+  async getMessages({
+    ctx,
+    options,
+  }: {
+    ctx: Context;
     options: {
       sessionId: string;
       cursor?: string;
       paginate?: boolean;
       updateRead?: boolean;
-    },
-  ) {
+    };
+  }) {
     const userId = String(ctx.currentUser.id);
     const { sessionId, cursor } = options;
     if (!sessionId) {
@@ -387,7 +497,7 @@ export class AIConversationService {
     const paginate = options.paginate !== false;
     const updateRead = options.updateRead === true;
     try {
-      return await ctx.aiConversationsManager.getMessages({
+      return await this.aiConversationsManager.getMessages({
         userId,
         sessionId,
         cursor,
@@ -402,23 +512,32 @@ export class AIConversationService {
     }
   }
 
-  async updateToolArgs(ctx: Context, input: Record<string, any>) {
+  async updateToolArgs({
+    ctx,
+    input,
+  }: {
+    ctx: Context;
+    input: Record<string, any>;
+  }) {
     const userId = String(ctx.currentUser.id);
     const { sessionId, messageId, tool } = input;
     if (!sessionId) {
       return ctx.throw!(400);
     }
-    const conversation = await ctx.aiConversationsManager.getConversation({
+    const conversation = await this.aiConversationsManager.getConversation({
       sessionId,
       userId,
     });
     if (!conversation) {
       return ctx.throw!(400);
     }
-    const messageRepository = ctx.repositories.aiMessages;
+    const messageRepository = this.repositories.aiMessages;
     const message = await messageRepository.findOne({
       filter: { sessionId, messageId },
     });
+    if (!message) {
+      return ctx.throw!(400);
+    }
     const toolCalls = message.toolCalls || [];
     const index = toolCalls.findIndex(
       (toolCall: { id: string }) => toolCall.id === tool.id,
@@ -434,11 +553,15 @@ export class AIConversationService {
     return null;
   }
 
-  async sendMessages(
-    ctx: Context,
-    input: Record<string, any>,
-    execution: ConversationRequestExecution = {},
-  ) {
+  async sendMessages({
+    ctx,
+    input,
+    execution = {},
+  }: {
+    ctx: Context;
+    input: Record<string, any>;
+    execution?: ConversationRequestExecution;
+  }) {
     const userId = String(ctx.currentUser.id);
     ctx.requestExecution = execution;
     const {
@@ -471,7 +594,7 @@ export class AIConversationService {
         throw new ResourceActionError(400, ctx.t!('user message is required'));
       }
 
-      const conversation = await ctx.aiConversationsManager.getConversation({
+      const conversation = await this.aiConversationsManager.getConversation({
         sessionId,
         userId,
       });
@@ -479,7 +602,7 @@ export class AIConversationService {
         throw new ResourceActionError(400, ctx.t!('conversation not found'));
       }
 
-      const employee = await getAIEmployee(ctx, employeeName);
+      const employee = await getAIEmployee(this.repositories, employeeName);
       if (!employee) {
         throw new ResourceActionError(400, ctx.t!('AI employee not found'));
       }
@@ -494,7 +617,7 @@ export class AIConversationService {
         if (textUserMessage) {
           const content = textUserMessage.content.content;
           const title = content.substring(0, 30);
-          await ctx.repositories.aiConversations.update({
+          await this.repositories.aiConversations.update({
             filter: { sessionId, userId },
             values: { title },
           });
@@ -502,8 +625,14 @@ export class AIConversationService {
         }
       }
 
-      if (await isReachParallelLimit(ctx)) {
-        await saveUserMessages(ctx, sessionId, messages, editingMessageId);
+      if (await isReachParallelLimit(this.repositories, ctx)) {
+        await saveUserMessages(
+          this.repositories,
+          ctx,
+          sessionId,
+          messages,
+          editingMessageId,
+        );
         throw new ResourceActionError(
           400,
           ctx.t!(
@@ -512,24 +641,38 @@ export class AIConversationService {
         );
       }
       const useInitialThread = conversation.thread === 0;
-      const resolvedModel = await ctx.aiEmployeesManager.resolveModel(
+      const resolvedModel = await this.aiEmployeesManager.resolveModel(
         employee,
         model,
       );
       const agentOptions = {
         ctx: ctx,
+        repositories: this.repositories,
+        aiEmployeesManager: this.aiEmployeesManager,
+        builtInManager: this.builtInManager,
+        llmStreamCachedManager: this.llmStreamCachedManager,
+        knowledgeBaseManager: this.knowledgeBaseManager,
+        workContextHandler: this.workContextHandler,
+        documentLoaders: this.documentLoaders,
         employee,
         sessionId,
-        systemMessage: conversation.options?.systemMessage,
-        skillSettings: conversation.options?.skillSettings,
-        tools: conversation.options?.tools,
+        systemMessage:
+          typeof conversation.options?.systemMessage === 'string'
+            ? conversation.options.systemMessage
+            : undefined,
+        skillSettings: isRecord(conversation.options?.skillSettings)
+          ? conversation.options.skillSettings
+          : undefined,
+        tools: Array.isArray(conversation.options?.tools)
+          ? conversation.options.tools
+          : undefined,
         webSearch,
         model: resolvedModel,
         legacy: useInitialThread,
       };
       const useLegacyWorkflow = conversation.category === 'task';
       const aiEmployee = useLegacyWorkflow
-        ? new AIEmployee(agentOptions)
+        ? new AIEmployee(agentOptions as AIEmployeeOptions)
         : null;
       const agent = useLegacyWorkflow
         ? null
@@ -539,12 +682,12 @@ export class AIConversationService {
         const adapter = new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
-            ctx.llmStreamCachedManager.getCached(sessionId).append(chunk),
+            this.llmStreamCachedManager.getCached(sessionId).append(chunk),
         );
         if (!agent) {
           throw new Error('AI employee agent service is required');
         }
-        const agentContext = createAgentContext(ctx);
+        const agentContext = this.createAgentContext(ctx);
         await adapter.consume(
           request?.messageId
             ? agent.service.forkStream(request, agentContext)
@@ -558,7 +701,7 @@ export class AIConversationService {
         if (!agent) {
           throw new Error('AI employee agent service is required');
         }
-        const agentContext = createAgentContext(ctx);
+        const agentContext = this.createAgentContext(ctx);
         return request?.messageId
           ? agent.service.forkInvoke(request, agentContext)
           : agent.service.invoke(request, agentContext);
@@ -573,8 +716,8 @@ export class AIConversationService {
         return agent.facade.cancelToolCall();
       };
       if (!editingMessageId) {
-        if (await ctx.subAgentsDispatcher.isInterrupted(sessionId, ctx)) {
-          const userDecisions = await ctx.subAgentsDispatcher.reject(
+        if (await this.subAgentsDispatcher.isInterrupted(sessionId)) {
+          const userDecisions = await this.subAgentsDispatcher.reject(
             sessionId,
             ctx,
           );
@@ -590,7 +733,7 @@ export class AIConversationService {
           const toolMessages = await cancelToolCall();
           if (toolMessages?.length) {
             await prependCancelledToolContinuation(
-              ctx,
+              this.repositories,
               sessionId,
               messages,
               toolMessages,
@@ -632,28 +775,32 @@ export class AIConversationService {
     }
   }
 
-  async abort(ctx: Context, input: { sessionId: string }) {
+  async abort({ ctx, input }: { ctx: Context; input: { sessionId: string } }) {
     const userId = String(ctx.currentUser.id);
     const { sessionId } = input;
     if (typeof sessionId !== 'string' || !sessionId) {
       return ctx.throw!(400, 'sessionId is required');
     }
-    const conversation = await ctx.aiConversationsManager.getConversation({
+    const conversation = await this.aiConversationsManager.getConversation({
       sessionId,
       userId,
     });
     if (!conversation) {
       return ctx.throw!(404, 'conversation not found');
     }
-    ctx.aiEmployeesManager.abortConversation(sessionId);
+    this.aiEmployeesManager.abortConversation(sessionId);
     return null;
   }
 
-  async resumeStream(
-    ctx: Context,
-    input: { sessionId: string },
-    execution: ConversationRequestExecution = {},
-  ) {
+  async resumeStream({
+    ctx,
+    input,
+    execution = {},
+  }: {
+    ctx: Context;
+    input: { sessionId: string };
+    execution?: ConversationRequestExecution;
+  }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);
     const abortController = new AbortController();
@@ -676,7 +823,7 @@ export class AIConversationService {
     });
 
     try {
-      const conversation = await ctx.aiConversationsManager.getConversation({
+      const conversation = await this.aiConversationsManager.getConversation({
         sessionId,
         userId,
       });
@@ -687,14 +834,14 @@ export class AIConversationService {
         sendErrorResponse(streamTarget(execution), 'conversation not found');
         return;
       }
-      const reachLimit = await isReachParallelLimit(ctx);
+      const reachLimit = await isReachParallelLimit(this.repositories, ctx);
       if (shouldStopStream()) {
         return;
       }
 
       let hasChunks = false;
       if (!reachLimit) {
-        for await (const chunk of ctx.llmStreamCachedManager
+        for await (const chunk of this.llmStreamCachedManager
           .getCached(sessionId)
           .stream({ signal: abortController.signal })) {
           if (shouldStopStream()) {
@@ -707,7 +854,7 @@ export class AIConversationService {
 
       if (!hasChunks && !shouldStopStream()) {
         const currentConversation =
-          await ctx.aiConversationsManager.getConversation({
+          await this.aiConversationsManager.getConversation({
             sessionId,
             userId,
           });
@@ -736,11 +883,15 @@ export class AIConversationService {
     }
   }
 
-  async resendMessages(
-    ctx: Context,
-    input: Record<string, any>,
-    execution: ConversationRequestExecution = {},
-  ) {
+  async resendMessages({
+    ctx,
+    input,
+    execution = {},
+  }: {
+    ctx: Context;
+    input: Record<string, any>;
+    execution?: ConversationRequestExecution;
+  }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);
     const { sessionId, webSearch, model, stream = true } = input;
@@ -755,7 +906,7 @@ export class AIConversationService {
       if (!sessionId) {
         throw new ResourceActionError(400, ctx.t!('sessionId is required'));
       }
-      const conversation = await ctx.aiConversationsManager.getConversation({
+      const conversation = await this.aiConversationsManager.getConversation({
         sessionId,
         userId,
       });
@@ -763,8 +914,8 @@ export class AIConversationService {
         throw new ResourceActionError(400, ctx.t!('conversation not found'));
       }
       const employee = await getAIEmployee(
-        ctx,
-        conversation.aiEmployeeUsername,
+        this.repositories,
+        conversation.aiEmployeeUsername ?? '',
       );
       if (!employee) {
         throw new ResourceActionError(400, ctx.t!('AI employee not found'));
@@ -772,14 +923,14 @@ export class AIConversationService {
 
       const resendMessages: AIMessageInput[] = [];
       if (messageId) {
-        const message = await ctx.repositories.aiMessages.findOne({
+        const message = await this.repositories.aiMessages.findOne({
           filter: { sessionId, messageId },
         });
         if (!message) {
           throw new ResourceActionError(400, ctx.t!('message not found'));
         }
       } else {
-        const message = await ctx.repositories.aiMessages.findOne({
+        const message = await this.repositories.aiMessages.findOne({
           filter: { sessionId },
           sort: ['-messageId'],
         });
@@ -799,7 +950,7 @@ export class AIConversationService {
         }
       }
 
-      if (await isReachParallelLimit(ctx)) {
+      if (await isReachParallelLimit(this.repositories, ctx)) {
         throw new ResourceActionError(
           400,
           ctx.t!(
@@ -807,34 +958,48 @@ export class AIConversationService {
           ),
         );
       }
-      const resolvedModel = await ctx.aiEmployeesManager.resolveModel(
+      const resolvedModel = await this.aiEmployeesManager.resolveModel(
         employee,
         model,
       );
       const agentOptions = {
         ctx: ctx,
+        repositories: this.repositories,
+        aiEmployeesManager: this.aiEmployeesManager,
+        builtInManager: this.builtInManager,
+        llmStreamCachedManager: this.llmStreamCachedManager,
+        knowledgeBaseManager: this.knowledgeBaseManager,
+        workContextHandler: this.workContextHandler,
+        documentLoaders: this.documentLoaders,
         employee,
         sessionId,
-        systemMessage: conversation.options?.systemMessage,
-        skillSettings: conversation.options?.skillSettings,
-        tools: conversation.options?.tools,
+        systemMessage:
+          typeof conversation.options?.systemMessage === 'string'
+            ? conversation.options.systemMessage
+            : undefined,
+        skillSettings: isRecord(conversation.options?.skillSettings)
+          ? conversation.options.skillSettings
+          : undefined,
+        tools: Array.isArray(conversation.options?.tools)
+          ? conversation.options.tools
+          : undefined,
         webSearch,
         model: resolvedModel,
       };
       const useLegacyWorkflow = conversation.category === 'task';
       if (shouldStream) {
         if (useLegacyWorkflow) {
-          await new AIEmployee(agentOptions).stream({
+          await new AIEmployee(agentOptions as AIEmployeeOptions).stream({
             messageId,
             userMessages: resendMessages.length ? resendMessages : undefined,
           });
         } else {
           const { service } = await createAIEmployeeAgentService(agentOptions);
-          const agentContext = createAgentContext(ctx);
+          const agentContext = this.createAgentContext(ctx);
           await new AgentSSEAdapter(
             (chunk) => streamTarget(execution).write(chunk),
             (chunk) =>
-              ctx.llmStreamCachedManager.getCached(sessionId).append(chunk),
+              this.llmStreamCachedManager.getCached(sessionId).append(chunk),
           ).consume(
             service.forkStream(
               {
@@ -850,10 +1015,12 @@ export class AIConversationService {
         }
       } else {
         if (useLegacyWorkflow) {
-          return await new AIEmployee(agentOptions).invoke({
-            messageId,
-            userMessages: resendMessages.length ? resendMessages : undefined,
-          });
+          return await new AIEmployee(agentOptions as AIEmployeeOptions).invoke(
+            {
+              messageId,
+              userMessages: resendMessages.length ? resendMessages : undefined,
+            },
+          );
         }
         const { service } = await createAIEmployeeAgentService(agentOptions);
         return service.forkInvoke(
@@ -861,7 +1028,7 @@ export class AIConversationService {
             messageId,
             userMessages: resendMessages.length ? resendMessages : undefined,
           },
-          createAgentContext(ctx),
+          this.createAgentContext(ctx),
         );
       }
       return undefined;
@@ -886,32 +1053,36 @@ export class AIConversationService {
     }
   }
 
-  async updateUserDecision(
-    ctx: Context,
-    input: Record<string, any>,
-    execution: ConversationRequestExecution = {},
-  ) {
+  async updateUserDecision({
+    ctx,
+    input,
+    execution = {},
+  }: {
+    ctx: Context;
+    input: Record<string, any>;
+    execution?: ConversationRequestExecution;
+  }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);
     const { sessionId, messageId, toolCallId, userDecision } = input;
     if (!sessionId) {
       return ctx.throw!(400);
     }
-    const conversation = await ctx.aiConversationsManager.getConversation({
+    const conversation = await this.aiConversationsManager.getConversation({
       sessionId,
       userId,
     });
     if (!conversation) {
       return ctx.throw!(400);
     }
-    const message = await ctx.repositories.aiMessages.findOne({
+    const message = await this.repositories.aiMessages.findOne({
       filter: { sessionId, messageId },
     });
     if (!message) {
       return ctx.throw!(400);
     }
     const messageConversation =
-      await ctx.aiConversationsManager.getConversation({
+      await this.aiConversationsManager.getConversation({
         sessionId: message.sessionId,
         userId,
       });
@@ -934,14 +1105,16 @@ export class AIConversationService {
         : undefined;
       const frontendTool =
         typeof toolId === 'string'
-          ? await findCurrentFrontendTool(ctx, toolId, message.sessionId)
+          ? await findCurrentFrontendTool(this.repositories, toolId, {
+              sessionId: message.sessionId,
+            })
           : undefined;
       if (!frontendTool) {
         return ctx.throw!(400, ctx.t!('Frontend tool is unavailable'));
       }
     }
 
-    const updated = await ctx.repositories.aiToolMessages.update({
+    const updated = await this.repositories.aiToolMessages.update({
       filter: {
         sessionId: message.sessionId,
         messageId: message.messageId,
@@ -955,7 +1128,7 @@ export class AIConversationService {
     });
 
     const toolCallIds = toolCalls.map((x: any) => x.id);
-    const toolMessages = await ctx.repositories.aiToolMessages.find({
+    const toolMessages = await this.repositories.aiToolMessages.find({
       filter: {
         sessionId: message.sessionId,
         messageId: message.messageId,
@@ -997,11 +1170,15 @@ export class AIConversationService {
     };
   }
 
-  async resumeToolCall(
-    ctx: Context,
-    input: Record<string, any>,
-    execution: ConversationRequestExecution = {},
-  ) {
+  async resumeToolCall({
+    ctx,
+    input,
+    execution = {},
+  }: {
+    ctx: Context;
+    input: Record<string, any>;
+    execution?: ConversationRequestExecution;
+  }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);
     setupSSEHeaders(ctx);
@@ -1011,7 +1188,7 @@ export class AIConversationService {
       return;
     }
     try {
-      const conversation = await ctx.aiConversationsManager.getConversation({
+      const conversation = await this.aiConversationsManager.getConversation({
         sessionId,
         userId,
       });
@@ -1020,8 +1197,8 @@ export class AIConversationService {
         return;
       }
       const employee = await getAIEmployee(
-        ctx,
-        conversation.aiEmployeeUsername,
+        this.repositories,
+        conversation.aiEmployeeUsername ?? '',
       );
       if (!employee) {
         sendErrorResponse(streamTarget(execution), 'AI employee not found');
@@ -1030,11 +1207,11 @@ export class AIConversationService {
 
       let message: AIMessageEntity | null;
       if (messageId) {
-        message = await ctx.repositories.aiMessages.findOne({
+        message = await this.repositories.aiMessages.findOne({
           filter: { sessionId, messageId },
         });
       } else {
-        message = await ctx.repositories.aiMessages.findOne({
+        message = await this.repositories.aiMessages.findOne({
           filter: { sessionId },
           sort: ['-messageId'],
         });
@@ -1044,7 +1221,7 @@ export class AIConversationService {
         return;
       }
       const messageConversation =
-        await ctx.aiConversationsManager.getConversation({
+        await this.aiConversationsManager.getConversation({
           sessionId: message.sessionId,
           userId,
         });
@@ -1057,33 +1234,49 @@ export class AIConversationService {
         sendErrorResponse(streamTarget(execution), 'No tool calls found');
         return;
       }
-      const resolvedModel = await ctx.aiEmployeesManager.resolveModel(
+      const resolvedModel = await this.aiEmployeesManager.resolveModel(
         employee,
         model,
       );
       const agentOptions = {
         ctx: ctx,
+        repositories: this.repositories,
+        aiEmployeesManager: this.aiEmployeesManager,
+        builtInManager: this.builtInManager,
+        llmStreamCachedManager: this.llmStreamCachedManager,
+        knowledgeBaseManager: this.knowledgeBaseManager,
+        workContextHandler: this.workContextHandler,
+        documentLoaders: this.documentLoaders,
         employee,
         sessionId,
-        systemMessage: conversation.options?.systemMessage,
-        skillSettings: conversation.options?.skillSettings,
-        tools: conversation.options?.tools,
+        systemMessage:
+          typeof conversation.options?.systemMessage === 'string'
+            ? conversation.options.systemMessage
+            : undefined,
+        skillSettings: isRecord(conversation.options?.skillSettings)
+          ? conversation.options.skillSettings
+          : undefined,
+        tools: Array.isArray(conversation.options?.tools)
+          ? conversation.options.tools
+          : undefined,
         webSearch,
         model: resolvedModel,
       };
-      const userDecisions = await ctx.aiConversationsManager.getUserDecisions(
+      const userDecisions = await this.aiConversationsManager.getUserDecisions(
         message.messageId,
       );
       if (conversation.category === 'task') {
-        await new AIEmployee(agentOptions).stream({ userDecisions });
+        await new AIEmployee(agentOptions as AIEmployeeOptions).stream({
+          userDecisions,
+        });
       } else {
         const { service } = await createAIEmployeeAgentService(agentOptions);
         await new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
-            ctx.llmStreamCachedManager.getCached(sessionId).append(chunk),
+            this.llmStreamCachedManager.getCached(sessionId).append(chunk),
         ).consume(
-          service.resumeStream({ userDecisions }, createAgentContext(ctx)),
+          service.resumeStream({ userDecisions }, this.createAgentContext(ctx)),
         );
         streamTarget(execution).end();
       }

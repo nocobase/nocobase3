@@ -1,3 +1,4 @@
+import type { ServiceFactory } from '../service/factory.js';
 import type { Hono } from 'hono';
 import type {
   AIEmployeeResourceInput,
@@ -5,72 +6,74 @@ import type {
 } from './contracts.js';
 import { requiredString } from './utils.js';
 
-export function createAIEmployeeRouter(app: Hono): void {
+export function createAIEmployeeRouter(
+  app: Hono,
+  services: ServiceFactory,
+): void {
   app.get('/aiEmployees:listByUser', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.employeeService.listByUser(ctx);
+    const result = await services.employeeService.listByUser({
+      actor: context.var.currentUser,
+      translate: (key) => key,
+    });
     return context.json(result as never);
   });
 
   app.post('/aiEmployees:updateUserPrompt', async (context) => {
-    const ctx = context.var.ctx;
     const input = await context.req.json<AIUserPromptUpdateInput>();
-    await ctx.employeeService.updateUserPrompt(
-      ctx,
-      requiredString(input.aiEmployee, 'aiEmployee'),
-      typeof input.prompt === 'string' ? input.prompt : '',
-    );
+    await services.employeeService.updateUserPrompt({
+      actorId: context.var.currentUser.id,
+      employeeKey: requiredString(input.aiEmployee, 'aiEmployee'),
+      prompt: typeof input.prompt === 'string' ? input.prompt : '',
+    });
     const result = null;
     return context.json(result as never);
   });
 
   app.get('/aiEmployees:getTemplates', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.employeeService.getTemplates(ctx);
+    const result = await services.employeeService.getTemplates({});
     return context.json(result as never);
   });
 
   app.get('/aiEmployees:list', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.employeeService.list(ctx);
+    const result = await services.employeeService.list({
+      translate: (key) => key,
+    });
     return context.json(result as never);
   });
 
   app.get('/aiEmployees:get', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.employeeService.get(
-      ctx,
-      requiredString(context.req.query('key'), 'key'),
-    );
+    const result = await services.employeeService.get({
+      username: requiredString(context.req.query('key'), 'key'),
+      translate: (key) => key,
+    });
     return context.json(result as never);
   });
 
   app.post('/aiEmployees:create', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.employeeService.upsert(
-      ctx,
-      await context.req.json<AIEmployeeResourceInput>(),
-    );
+    const result = await services.employeeService.upsert({
+      input: await context.req.json<AIEmployeeResourceInput>(),
+      translate: (key) => key,
+    });
     return context.json(result as never);
   });
 
   app.put('/aiEmployees:update', async (context) => {
-    const ctx = context.var.ctx;
     const input = await context.req.json<AIEmployeeResourceInput>();
     const key = requiredString(context.req.query('key'), 'key');
-    const result = await ctx.employeeService.upsert(ctx, {
-      ...input,
-      username: key,
+    const result = await services.employeeService.upsert({
+      input: {
+        ...input,
+        username: key,
+      },
+      translate: (key) => key,
     });
     return context.json(result as never);
   });
 
   app.delete('/aiEmployees:destroy', async (context) => {
-    const ctx = context.var.ctx;
-    const result = await ctx.employeeService.delete(
-      ctx,
-      requiredString(context.req.query('key'), 'key'),
-    );
+    const result = await services.employeeService.delete({
+      username: requiredString(context.req.query('key'), 'key'),
+    });
     return context.json(result as never);
   });
 }

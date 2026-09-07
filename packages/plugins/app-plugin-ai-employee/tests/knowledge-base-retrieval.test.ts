@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Context } from '../server/context.js';
+import type { Context } from '../server/internal/runtime-context.js';
 import {
   getCurrentRoleNames,
   getKnowledgeBaseBackgroundPrompt,
@@ -9,8 +9,7 @@ import {
   KNOWLEDGE_BASE_ON_DEMAND_PROMPT,
   KNOWLEDGE_BASE_PRE_RETRIEVED_PROMPT,
   normalizeKnowledgeBaseRetrievalStrategy,
-} from '../server/agent/ai-employee/ai-knowledge-base.js';
-import { createSupportingManagers } from '../server/runtime.js';
+} from '../server/managers/knowledge-base-manager.js';
 
 const employee = {
   username: 'atlas',
@@ -72,11 +71,13 @@ describe('AI employee knowledge-base retrieval', () => {
           knowledgeBase: { search, getAccessibleKnowledgeBaseKeys },
         },
       },
+    } as unknown as Context;
+    const manager = new KnowledgeBaseManager({
+      ai: ctx.ai,
       repositories: {
         aiEmployees: { findOne: vi.fn().mockResolvedValue(employee) },
-      },
-    } as unknown as Context;
-    const manager = new KnowledgeBaseManager(ctx);
+      } as never,
+    });
     const roleNames = getCurrentRoleNames({
       currentRoles: ['editor', 'reviewer', 'editor'],
     });
@@ -98,17 +99,5 @@ describe('AI employee knowledge-base retrieval', () => {
       score: '0.6',
       roleNames: ['editor', 'reviewer'],
     });
-  });
-
-  it('installs a real knowledge-base manager in the runtime context', () => {
-    const ctx = {
-      repositories: {},
-      ai: {},
-      sendSyncMessage: undefined,
-      i18nNamespace: '@nocobase/app-plugin-ai-employee',
-    } as unknown as Context;
-    const managers = createSupportingManagers(ctx);
-
-    expect(managers.knowledgeBaseManager).toBeInstanceOf(KnowledgeBaseManager);
   });
 });

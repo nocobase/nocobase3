@@ -9,7 +9,8 @@
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { EEFeatures } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import type { Context } from '../../context.js';
+import type { AIManager } from '@nocobase/ai-employee';
+import type { RepositoryFactory } from '../repository/database/factory.js';
 
 export const KNOWLEDGE_BASE_RETRIEVAL_STRATEGIES = [
   'always',
@@ -159,7 +160,19 @@ const buildKnowledgeBaseContent = (
 };
 
 export class KnowledgeBaseManager {
-  constructor(private readonly ctx: Context) {}
+  private readonly ai: AIManager;
+  private readonly repositories: RepositoryFactory;
+
+  constructor({
+    ai,
+    repositories,
+  }: {
+    ai: AIManager;
+    repositories: RepositoryFactory;
+  }) {
+    this.ai = ai;
+    this.repositories = repositories;
+  }
 
   async retrievePrompt({
     username,
@@ -178,7 +191,7 @@ export class KnowledgeBaseManager {
     const promptTemplate = ChatPromptTemplate.fromTemplate(
       employee.knowledgeBasePrompt ?? '{knowledgeBaseData}',
     );
-    const docs = await this.ctx.ai.features.knowledgeBase.search({
+    const docs = await this.ai.features.knowledgeBase.search({
       knowledgeBaseKeys,
       query,
       topK,
@@ -199,8 +212,8 @@ export class KnowledgeBaseManager {
     roleNames,
   }: KnowledgeBaseAccessOptions): Promise<boolean> {
     const knowledgeBaseKeys = employee.knowledgeBase?.knowledgeBaseKeys ?? [];
-    const feature = this.ctx.ai.features
-      .knowledgeBase as typeof this.ctx.ai.features.knowledgeBase & {
+    const feature = this.ai.features
+      .knowledgeBase as typeof this.ai.features.knowledgeBase & {
       getAccessibleKnowledgeBaseKeys?: (options: {
         knowledgeBaseKeys: string[];
         roleNames: string[];
@@ -221,7 +234,7 @@ export class KnowledgeBaseManager {
   async isEnabledKnowledgeBase(
     usernameOrEmployee: string | KnowledgeBaseEmployee,
   ): Promise<boolean> {
-    const featureEnabled = this.ctx.ai.features.isFeaturesEnabled(
+    const featureEnabled = this.ai.features.isFeaturesEnabled(
       Object.values(EEFeatures),
     );
     const employee =
@@ -234,6 +247,9 @@ export class KnowledgeBaseManager {
   private async getEmployee(
     username: string,
   ): Promise<KnowledgeBaseEmployee | undefined> {
-    return this.ctx.repositories.aiEmployees.findOne({ filter: { username } });
+    return (
+      (await this.repositories.aiEmployees.findOne({ filter: { username } })) ??
+      undefined
+    );
   }
 }

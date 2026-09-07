@@ -7,7 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../context.js';
+import type { AIManager } from '@nocobase/ai-employee';
+import type { Context } from '../internal/runtime-context.js';
+import type { RepositoryFactory } from '../repository/database/factory.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   AIMessage,
@@ -17,7 +19,7 @@ import {
   UserDecision,
 } from '@nocobase/ai-employee';
 import { parseResponseMessage } from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from './common/frontend-tools.js';
+import type { FrontendToolManifest } from '../ai-employees/common/frontend-tools.js';
 
 export type AIConversationsOptions = {
   systemMessage?: unknown;
@@ -87,7 +89,10 @@ export const registerAIConversationReadNotification = (
 ): void => {};
 
 export class AIConversationsManager {
-  constructor(protected ctx: Context) {}
+  constructor(
+    protected ai: AIManager,
+    protected repositories: RepositoryFactory,
+  ) {}
 
   async create({
     userId,
@@ -225,7 +230,7 @@ export class AIConversationsManager {
 
     const pageSize = 10;
     const maxLimit = 200;
-    const messageRepository = this.ctx.repositories.aiMessages;
+    const messageRepository = this.repositories.aiMessages;
     const filter: Record<string, unknown> = {
       sessionId,
       role: {
@@ -279,7 +284,8 @@ export class AIConversationsManager {
         .map((toolCall: AIToolCall) => toolCall.id),
       ...subAgentConversationMessages
         .filter((row: ParsedMessageRow) => (row.toolCalls?.length ?? 0) > 0)
-        .flatMap((row: ParsedMessageRow) => row.toolCalls ?? []),
+        .flatMap((row: ParsedMessageRow) => row.toolCalls ?? [])
+        .map((toolCall: AIToolCall) => toolCall.id),
     ];
     const toolMessages = await this.aiToolMessagesRepo.find({
       filter: {
@@ -297,7 +303,7 @@ export class AIConversationsManager {
       ]),
     );
 
-    const tools = await this.ctx.ai.toolsManager.listTools({});
+    const tools = await this.ai.toolsManager.listTools({});
     const toolsMap = new Map<string, any>(
       tools.map((tool) => [tool.definition.name, tool]),
     );
@@ -322,7 +328,7 @@ export class AIConversationsManager {
         }
       }
 
-      const providerOptions = this.ctx.ai.llmProviderManager.llmProviders.get(
+      const providerOptions = this.ai.llmProviderManager.llmProviders.get(
         row.metadata?.provider,
       );
       if (!providerOptions) {
@@ -373,7 +379,7 @@ export class AIConversationsManager {
     const allInterruptedToolCall = await this.aiToolMessagesRepo.find({
       filter: {
         messageId,
-        interruptActionOrder: { $ne: null },
+        interruptActionOrder: { $ne: null as unknown as number },
       },
       sort: ['interruptActionOrder'],
     });
@@ -438,14 +444,14 @@ export class AIConversationsManager {
   }
 
   private get aiConversationsRepo() {
-    return this.ctx.repositories.aiConversations;
+    return this.repositories.aiConversations;
   }
 
   private get aiMessagesRepo() {
-    return this.ctx.repositories.aiMessages;
+    return this.repositories.aiMessages;
   }
 
   private get aiToolMessagesRepo() {
-    return this.ctx.repositories.aiToolMessages;
+    return this.repositories.aiToolMessages;
   }
 }

@@ -1,5 +1,5 @@
 import type { AIMessage, WorkContext } from '@nocobase/ai-employee';
-import type { Context } from '../../../context.js';
+import type { Context } from '../../internal/runtime-context.js';
 
 export type WorkContextResolveStrategy = (
   ctx: Context,

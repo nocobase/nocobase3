@@ -2,16 +2,13 @@
 import type {
   AIManager,
   AIMessageInput,
-  DocumentLoaders,
   FileStorage,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { Caching } from '@nocobase/caching';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { WorkContextHandler } from './agent/ai-employee/work-context/index.js';
-import type { KnowledgeBaseManager } from './agent/ai-employee/ai-knowledge-base.js';
-import type { AIFileEntity } from './repository/ai-file.js';
-import type { AIFileMetadataCreateContext } from './file-storage/ai-file-metadata-repository.js';
+import type { AIFileEntity } from '../repository/ai-file.js';
+import type { AIFileMetadataCreateContext } from '../file-storage/ai-file-metadata-repository.js';
 
 export type CurrentUser = {
   id: string | number;
@@ -47,32 +44,15 @@ export interface ConversationRequestExecution {
   abortSignal?: AbortSignal;
   timezone?: string;
 }
-export interface Context<TRepositories = any> {
+export interface Context {
   ai: AIManager;
   database: DatabaseConnection;
   databaseManager: DatabaseManager;
-  repositories: TRepositories;
   logger: any;
   caching: Caching;
   fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
   snowflake: IdGeneratorService;
   currentUser: CurrentUser;
-  employeeService: any;
-  modelService: any;
-  fileService: any;
-  toolService: any;
-  skillService: any;
-  llmService: any;
-  mcpServerService: any;
-  aiConversationService: any;
-  aiEmployeesManager: any;
-  aiConversationsManager: any;
-  builtInManager: any;
-  llmStreamCachedManager: any;
-  subAgentsDispatcher: any;
-  knowledgeBaseManager: KnowledgeBaseManager;
-  workContextHandler: WorkContextHandler;
-  documentLoaders: DocumentLoaders;
   i18nNamespace?: string;
   sendSyncMessage?: (message: any) => void;
   requestExecution?: ConversationRequestExecution;

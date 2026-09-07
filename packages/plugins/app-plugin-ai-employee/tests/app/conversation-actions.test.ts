@@ -3,7 +3,18 @@ import type { AIMessageInput } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../server/repository/index.js';
 import { AIConversationService } from '../../server/service/ai-conversation-service.js';
 
-const service = new AIConversationService();
+const findOne = vi.fn();
+const service = new AIConversationService({
+  repositories: { aiMessages: { findOne } } as never,
+  aiEmployeesManager: {} as never,
+  aiConversationsManager: {} as never,
+  builtInManager: {} as never,
+  llmStreamCachedManager: {} as never,
+  subAgentsDispatcher: {} as never,
+  knowledgeBaseManager: {} as never,
+  workContextHandler: {} as never,
+  documentLoaders: {} as never,
+});
 
 describe('AIConversationService tool continuation', () => {
   it('prepends the matching assistant tool call before cancelled tool outputs', async () => {
@@ -28,10 +39,7 @@ describe('AIConversationService tool continuation', () => {
         },
       },
     } as AIMessageEntity;
-    const findOne = vi.fn().mockResolvedValue(assistantMessage);
-    const ctx = {
-      repositories: { aiMessages: { findOne } },
-    } as any;
+    findOne.mockResolvedValueOnce(assistantMessage);
     const messages: AIMessageInput[] = [
       {
         role: 'user',
@@ -49,12 +57,11 @@ describe('AIConversationService tool continuation', () => {
       } as AIMessageEntity,
     ];
 
-    await service.prependCancelledToolContinuation(
-      ctx,
-      'session-1',
+    await service.prependCancelledToolContinuation({
+      sessionId: 'session-1',
       messages,
       toolMessages,
-    );
+    });
 
     expect(findOne).toHaveBeenCalledWith({
       filter: { sessionId: 'session-1', messageId: '100' },
@@ -80,10 +87,10 @@ describe('AIConversationService attachments', () => {
       } as AIMessageInput,
     ];
 
-    service.normalizeIncomingMessageAttachments(
-      { t: (message: string) => message } as any,
+    service.normalizeIncomingMessageAttachments({
+      ctx: { t: (message: string) => message } as any,
       messages,
-    );
+    });
 
     expect(messages[0].attachments).toEqual([
       {
@@ -109,10 +116,10 @@ describe('AIConversationService attachments', () => {
       } as AIMessageInput,
     ];
 
-    service.normalizeIncomingMessageAttachments(
-      { t: (message: string) => message } as any,
+    service.normalizeIncomingMessageAttachments({
+      ctx: { t: (message: string) => message } as any,
       messages,
-    );
+    });
 
     expect(messages[0].attachments?.[0]).toEqual({
       id: 'file-1',

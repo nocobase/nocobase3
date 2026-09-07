@@ -1,4 +1,4 @@
-import type { Context } from '../context.js';
+import type { AIManager } from '@nocobase/ai-employee';
 import type { ToolsEntity, ToolsOptions } from '@nocobase/ai-employee';
 import {
   asRecord,
@@ -10,20 +10,29 @@ import {
   requiredString,
 } from './utils.js';
 
+export interface AIToolServiceOptions {
+  readonly ai: AIManager;
+}
+
 export class AIToolService {
-  async list(ctx: Context): Promise<unknown[]> {
+  private readonly ai: AIManager;
+
+  public constructor({ ai }: AIToolServiceOptions) {
+    this.ai = ai;
+  }
+  async list(_options: {}): Promise<unknown[]> {
     // The employee editor consumes this serialized list as read-only display
     // metadata. Management authorization remains required for get and mutations.
-    return (await ctx.ai.toolsManager.listTools({})).map(serializeTool);
+    return (await this.ai.toolsManager.listTools({})).map(serializeTool);
   }
 
-  async get(ctx: Context, name: string): Promise<unknown> {
-    const tool = await ctx.ai.toolsManager.getTools(name);
+  async get({ name }: { name: string }): Promise<unknown> {
+    const tool = await this.ai.toolsManager.getTools(name);
     if (!tool) throw notFound('aiTools', name);
     return serializeTool(tool);
   }
 
-  async upsert(ctx: Context, input: unknown): Promise<unknown> {
+  async upsert({ input }: { input: unknown }): Promise<unknown> {
     const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
     const definition = asRecord(record.definition) ?? record;
@@ -37,15 +46,15 @@ export class AIToolService {
         : record.definition
           ? { ...record, definition: { ...definition, name } }
           : { ...record, name };
-    const current = await ctx.ai.toolsManager.getTools(name);
-    await ctx.ai.toolsManager.registerTools(
+    const current = await this.ai.toolsManager.getTools(name);
+    await this.ai.toolsManager.registerTools(
       normalizeTool(normalizedInput, current),
     );
-    return this.get(ctx, name);
+    return this.get({ name });
   }
 
-  async delete(ctx: Context, name: string): Promise<void> {
-    await ctx.ai.toolsManager.unregisterTools(name);
+  async delete({ name }: { name: string }): Promise<void> {
+    await this.ai.toolsManager.unregisterTools(name);
   }
 }
 

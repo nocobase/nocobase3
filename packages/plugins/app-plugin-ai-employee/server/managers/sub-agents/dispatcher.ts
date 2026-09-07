@@ -7,10 +7,18 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../context.js';
+import type { Context } from '../../internal/runtime-context.js';
+import type { RepositoryFactory } from '../../repository/database/factory.js';
+import type { DocumentLoaders } from '@nocobase/ai-employee';
+import type { AIEmployeesManager } from '../ai-employees-manager.js';
+import type { AIConversationsManager } from '../ai-conversations-manager.js';
+import type { BuiltInManager } from '../built-in-manager.js';
+import type { KnowledgeBaseManager } from '../knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../llm-stream-cached-manager.js';
+import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
-import { ModelRef } from '../ai-employee.js';
+import { ModelRef } from '../../ai-employees/ai-employee.js';
 import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
 import { createAgentContext } from '../../agent/context.js';
 import type {
@@ -30,7 +38,43 @@ export type SubAgentTask = {
 };
 
 export class SubAgentsDispatcher {
-  constructor(private readonly ctx: Context) {}
+  private readonly repositories: RepositoryFactory;
+  private readonly aiEmployeesManager: AIEmployeesManager;
+  private readonly aiConversationsManager: AIConversationsManager;
+  private readonly builtInManager: BuiltInManager;
+  private readonly llmStreamCachedManager: LLMStreamCachedManager;
+  private readonly knowledgeBaseManager: KnowledgeBaseManager;
+  private readonly workContextHandler: WorkContextHandler;
+  private readonly documentLoaders: DocumentLoaders;
+
+  constructor({
+    repositories,
+    aiEmployeesManager,
+    aiConversationsManager,
+    builtInManager,
+    llmStreamCachedManager,
+    knowledgeBaseManager,
+    workContextHandler,
+    documentLoaders,
+  }: {
+    repositories: RepositoryFactory;
+    aiEmployeesManager: AIEmployeesManager;
+    aiConversationsManager: AIConversationsManager;
+    builtInManager: BuiltInManager;
+    llmStreamCachedManager: LLMStreamCachedManager;
+    knowledgeBaseManager: KnowledgeBaseManager;
+    workContextHandler: WorkContextHandler;
+    documentLoaders: DocumentLoaders;
+  }) {
+    this.repositories = repositories;
+    this.aiEmployeesManager = aiEmployeesManager;
+    this.aiConversationsManager = aiConversationsManager;
+    this.builtInManager = builtInManager;
+    this.llmStreamCachedManager = llmStreamCachedManager;
+    this.knowledgeBaseManager = knowledgeBaseManager;
+    this.workContextHandler = workContextHandler;
+    this.documentLoaders = documentLoaders;
+  }
   private extractTextContent(content: unknown): string {
     if (typeof content === 'string') {
       return content;
@@ -74,14 +118,13 @@ export class SubAgentsDispatcher {
   }
 
   private async resolveSubAgentSessionId(
-    ctx: Context,
     sessionId: string,
   ): Promise<string | null> {
     if (!sessionId) {
       return null;
     }
 
-    const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
+    const aiToolMessage = await this.repositories.aiToolMessages.findOne({
       filter: {
         sessionId,
         toolName: 'dispatch-sub-agent-task',
@@ -95,7 +138,7 @@ export class SubAgentsDispatcher {
       return null;
     }
 
-    const aiMessage = await ctx.repositories.aiMessages.findOne({
+    const aiMessage = await this.repositories.aiMessages.findOne({
       filter: {
         sessionId,
         messageId: String(aiToolMessage.messageId),
@@ -114,15 +157,14 @@ export class SubAgentsDispatcher {
   }
 
   private async resolveLastMessage(
-    ctx: Context,
     sessionId: string,
   ): Promise<AIMessageEntity | null> {
-    const subSessionId = await this.resolveSubAgentSessionId(ctx, sessionId);
+    const subSessionId = await this.resolveSubAgentSessionId(sessionId);
     if (!subSessionId) {
       return null;
     }
 
-    return ctx.repositories.aiMessages.findOne({
+    return this.repositories.aiMessages.findOne({
       filter: {
         sessionId: subSessionId,
       },
@@ -130,7 +172,7 @@ export class SubAgentsDispatcher {
     });
   }
 
-  async run(task: SubAgentTask): Promise<string> {
+  async run(task: SubAgentTask, ctx: Context): Promise<string> {
     const {
       sessionId,
       employee,
@@ -141,19 +183,25 @@ export class SubAgentsDispatcher {
       messages,
       writer,
     } = task;
-    const ctx = this.ctx;
     const userId = ctx.auth?.user?.id;
     if (!userId) {
       throw new Error('User not authenticated');
     }
 
-    const resolvedModel = await ctx.aiEmployeesManager.resolveModel(
+    const resolvedModel = await this.aiEmployeesManager.resolveModel(
       employee,
       model,
     );
 
     const agent = await createAIEmployeeAgentService({
       ctx,
+      repositories: this.repositories,
+      aiEmployeesManager: this.aiEmployeesManager,
+      builtInManager: this.builtInManager,
+      llmStreamCachedManager: this.llmStreamCachedManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      workContextHandler: this.workContextHandler,
+      documentLoaders: this.documentLoaders,
       employee,
       sessionId,
       skillSettings,
@@ -161,14 +209,16 @@ export class SubAgentsDispatcher {
       model: resolvedModel,
       from: 'sub-agent',
     });
-    const lastMessage = await ctx.repositories.aiMessages.findOne({
+    const lastMessage = await this.repositories.aiMessages.findOne({
       filter: {
         sessionId,
       },
       sort: ['-messageId'],
     });
     const decisions = lastMessage
-      ? await ctx.aiConversationsManager.getUserDecisions(lastMessage.messageId)
+      ? await this.aiConversationsManager.getUserDecisions(
+          lastMessage.messageId,
+        )
       : null;
     let context;
     if (
@@ -183,17 +233,24 @@ export class SubAgentsDispatcher {
       };
     }
 
-    const agentContext = createAgentContext(ctx, {
+    const agentContext = createAgentContext({
+      ctx,
+      repositories: this.repositories,
+      aiEmployeesManager: this.aiEmployeesManager,
+      aiConversationsManager: this.aiConversationsManager,
+      builtInManager: this.builtInManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      subAgentsDispatcher: this,
       state: {
         sessionId,
-        model: resolvedModel,
+        model: resolvedModel as unknown as Record<string, unknown>,
         webSearch,
         messages,
       },
     });
     const result = await agent.service.invoke(
       {
-        userDecisions: decisions,
+        userDecisions: decisions ?? undefined,
         userMessages: decisions
           ? undefined
           : [
@@ -224,12 +281,12 @@ export class SubAgentsDispatcher {
     return this.extractLastMessageText(result);
   }
 
-  async isInterrupted(sessionId: string, ctx: Context): Promise<boolean> {
+  async isInterrupted(sessionId: string): Promise<boolean> {
     if (!sessionId) {
       return false;
     }
 
-    const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
+    const aiToolMessage = await this.repositories.aiToolMessages.findOne({
       filter: {
         sessionId,
         toolName: 'dispatch-sub-agent-task',
@@ -246,7 +303,7 @@ export class SubAgentsDispatcher {
     if (!userId) {
       throw new Error('User not authenticated');
     }
-    const conversation = await ctx.repositories.aiConversations.findOne({
+    const conversation = await this.repositories.aiConversations.findOne({
       filter: {
         sessionId,
         userId,
@@ -255,7 +312,7 @@ export class SubAgentsDispatcher {
     if (!conversation) {
       return;
     }
-    const lastMessage = await this.resolveLastMessage(ctx, sessionId);
+    const lastMessage = await this.resolveLastMessage(sessionId);
     if (!sessionId || !lastMessage) {
       return;
     }
@@ -263,7 +320,7 @@ export class SubAgentsDispatcher {
       type: 'reject' as const,
       message: `The user ignored the tools usage and send new messages`,
     };
-    const updated = await ctx.repositories.aiToolMessages.update({
+    const updated = await this.repositories.aiToolMessages.update({
       values: { userDecision, invokeStatus: 'waiting' },
       filter: {
         sessionId: lastMessage.sessionId,
@@ -272,7 +329,7 @@ export class SubAgentsDispatcher {
       },
     });
     if (updated > 0) {
-      return await ctx.aiConversationsManager.getUserDecisions(
+      return await this.aiConversationsManager.getUserDecisions(
         lastMessage.messageId,
       );
     }

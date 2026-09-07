@@ -7,7 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../context.js';
+import type { Context } from '../internal/runtime-context.js';
+import type { RepositoryFactory } from '../repository/database/factory.js';
 import _ from 'lodash';
 import {
   AIChatContext,
@@ -23,15 +24,17 @@ import type { CollectionFilter } from '@nocobase/ai-employee';
 import { recordAIUsageEventsForMessages } from './ai-usage-events.js';
 export const createAIChatConversation = (
   ctx: Context,
+  repositories: RepositoryFactory,
   sessionId: string,
 ): AIChatConversation => {
-  return new AIChatConversationImpl(ctx, sessionId);
+  return new AIChatConversationImpl(ctx, repositories, sessionId);
 };
 
 class AIChatConversationImpl implements AIChatConversation {
   private transaction?: DatabaseConnection;
   constructor(
     private ctx: Context,
+    private repositories: RepositoryFactory,
     private sessionId: string,
   ) {}
   async withTransaction<T>(
@@ -131,10 +134,12 @@ class AIChatConversationImpl implements AIChatConversation {
       sessionId: this.sessionId,
       role: 'user',
     };
-    return await this.aiMessagesRepo.findOne({
+    const message = await this.aiMessagesRepo.findOne({
       sort: ['-messageId'],
       filter,
     });
+    if (!message) throw new Error('User message not found');
+    return message;
   }
 
   async getChatContext(options?: AIChatContextOptions): Promise<AIChatContext> {
@@ -170,7 +175,11 @@ class AIChatConversationImpl implements AIChatConversation {
   }
 
   private clone(): AIChatConversationImpl {
-    return new AIChatConversationImpl(this.ctx, this.sessionId);
+    return new AIChatConversationImpl(
+      this.ctx,
+      this.repositories,
+      this.sessionId,
+    );
   }
 
   private snowflake() {
@@ -178,6 +187,6 @@ class AIChatConversationImpl implements AIChatConversation {
   }
 
   private get aiMessagesRepo() {
-    return this.ctx.repositories.aiMessages;
+    return this.repositories.aiMessages;
   }
 }
