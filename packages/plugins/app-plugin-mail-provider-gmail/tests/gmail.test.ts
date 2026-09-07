@@ -392,6 +392,42 @@ describe('Gmail Mail Provider', () => {
       'References: <root@example.com> <parent@example.com>',
     );
   });
+
+  it('maps message mutations to Gmail label and trash APIs', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await adapter.setRead('message-1', true);
+    await adapter.setStarred('message-1', true);
+    await adapter.moveMessage('message-1', '__archive__');
+    await adapter.deleteMessage('message-1', false);
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      expect.stringContaining('/messages/message-1/modify'),
+      expect.stringContaining('/messages/message-1/modify'),
+      expect.stringContaining('/messages/message-1/modify'),
+      expect.stringContaining('/messages/message-1/trash'),
+    ]);
+    expect(String(fetchMock.mock.calls[2][1]?.body)).toContain(
+      '"removeLabelIds":["INBOX","TRASH","SPAM"]',
+    );
+  });
 });
 
 interface MemoryVault extends MailCredentialVault {

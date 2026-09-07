@@ -18,6 +18,7 @@ import type {
   MailSubmissionLogView,
   MailSubmissionView,
   MailSyncRunView,
+  MailUpdateAccountInput,
 } from '../server/types.js';
 
 export type {
@@ -83,6 +84,26 @@ export class MailClient {
         path: 'mail/accounts',
       })
       .then((response) => response.data);
+  }
+
+  public updateAccount(
+    input: MailUpdateAccountInput,
+  ): Promise<MailAccountView> {
+    const { accountId, ...json } = input;
+    return this.client
+      .request<DataResponse<MailAccountView>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}`,
+        method: 'PATCH',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
+  public removeAccount(accountId: string): Promise<void> {
+    return this.client.request<void>({
+      path: `mail/accounts/${encodeURIComponent(accountId)}`,
+      method: 'DELETE',
+    });
   }
 
   public listManagedAccounts(): Promise<readonly MailManagedAccountView[]> {
@@ -233,8 +254,9 @@ export class MailClient {
     permanently = false,
   ): Promise<void> {
     return this.client.request<void>({
-      path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}?permanently=${String(permanently)}`,
+      path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}`,
       method: 'DELETE',
+      query: { permanently },
     });
   }
 

@@ -234,6 +234,56 @@ export class DefaultMailService implements MailService {
     );
   }
 
+  public async updateAccount(
+    context: MailOperationContext,
+    input: import('./types.js').MailUpdateAccountInput,
+  ): Promise<MailAccountView> {
+    const account = await this.dependencies.store.getAccount(input.accountId);
+    if (!account || account.userId !== context.actorId) {
+      throw new Error('Mail account was not found.');
+    }
+    if (input.isDefault) {
+      return toMailAccountView(
+        await this.dependencies.store.setDefaultAccount(
+          context.actorId,
+          account.id,
+        ),
+      );
+    }
+    if (input.status) {
+      if (
+        input.status === 'active' &&
+        !['active', 'suspended'].includes(account.status)
+      ) {
+        throw new Error('This Mail account must be reauthorized.');
+      }
+      return toMailAccountView(
+        await this.dependencies.store.saveAccount({
+          ...account,
+          status: input.status,
+        }),
+      );
+    }
+    return toMailAccountView(account);
+  }
+
+  public async removeAccount(
+    context: MailOperationContext,
+    accountId: string,
+  ): Promise<void> {
+    const account = await this.dependencies.store.getAccount(accountId);
+    if (!account || account.userId !== context.actorId) {
+      throw new Error('Mail account was not found.');
+    }
+    if (await this.dependencies.store.findActiveSyncRun(accountId)) {
+      throw new Error('Wait for mailbox synchronization to finish first.');
+    }
+    if (!(await this.dependencies.store.deleteAccount(accountId))) {
+      throw new Error('Mail account was not found.');
+    }
+    await this.dependencies.credentials?.delete(account.credentialReference);
+  }
+
   public async listManagedAccounts(
     context: MailOperationContext,
   ): Promise<readonly MailManagedAccountView[]> {

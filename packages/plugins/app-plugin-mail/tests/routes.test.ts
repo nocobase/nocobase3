@@ -486,6 +486,16 @@ function service(overrides: Partial<MailService> = {}): MailService {
       isDefault: true,
     }),
     listAccounts: async () => [],
+    updateAccount: async (_context, input) => ({
+      id: input.accountId,
+      userId: 'user-1',
+      provider: { type: 'test', name: 'test' },
+      address: 'user@example.com',
+      scopes: [],
+      status: input.status ?? 'active',
+      isDefault: input.isDefault ?? true,
+    }),
+    removeAccount: async () => {},
     listManagedAccounts: async () => [],
     listManagedOperationLogs: async () => ({
       accounts: [],

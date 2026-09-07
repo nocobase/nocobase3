@@ -4,6 +4,7 @@ const enUS = {
   nav: {
     settings: 'Mail',
     accounts: 'Mail accounts',
+    myAccounts: 'My mail accounts',
     syncLogs: 'Sync logs',
     sendLogs: 'Send logs',
     operationLogs: 'Operation logs',
@@ -81,6 +82,10 @@ const enUS = {
       sync: 'Sync mailbox',
       syncProgress: '{{messages}} messages in {{pages}} batches',
       owner: 'User ID: {{userId}}',
+      makeDefault: 'Make default',
+      suspend: 'Pause',
+      resume: 'Resume',
+      remove: 'Disconnect',
     },
     syncLogs: {
       eyebrow: 'Mail',

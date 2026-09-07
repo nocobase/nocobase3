@@ -4,6 +4,7 @@ const zhCN: MailResource = {
   nav: {
     settings: '邮件',
     accounts: '邮件账户',
+    myAccounts: '我的邮件账户',
     syncLogs: '同步日志',
     sendLogs: '发送日志',
     operationLogs: '操作日志',
@@ -78,6 +79,10 @@ const zhCN: MailResource = {
       sync: '同步邮箱',
       syncProgress: '已处理 {{messages}} 封邮件，共 {{pages}} 批',
       owner: '用户 ID：{{userId}}',
+      makeDefault: '设为默认',
+      suspend: '暂停',
+      resume: '恢复',
+      remove: '断开连接',
     },
     syncLogs: {
       eyebrow: '邮件',

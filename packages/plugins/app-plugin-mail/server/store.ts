@@ -300,6 +300,95 @@ export class DatabaseMailStore implements MailStore {
     return account;
   }
 
+  public async setDefaultAccount(
+    userId: string,
+    accountId: string,
+  ): Promise<MailAccount> {
+    await this.database.transaction(async (connection): Promise<void> => {
+      await connection.query
+        .updateTable<AccountRow>('mailAccounts')
+        .set({ isDefault: false, updatedAt: new Date().toISOString() })
+        .where('userId', '=', userId)
+        .execute();
+      const result = await connection.query
+        .updateTable<AccountRow>('mailAccounts')
+        .set({ isDefault: true, updatedAt: new Date().toISOString() })
+        .where('id', '=', accountId)
+        .where('userId', '=', userId)
+        .execute();
+      if (result.updatedCount !== 1)
+        throw new Error('Mail account was not found.');
+    });
+    const account = await this.getAccount(accountId);
+    if (!account) throw new Error('Mail account was not found.');
+    return account;
+  }
+
+  public async deleteAccount(accountId: string): Promise<boolean> {
+    return this.database.transaction(async (connection): Promise<boolean> => {
+      const account = await connection.query
+        .selectFrom<AccountRow>('mailAccounts')
+        .selectAll()
+        .where('id', '=', accountId)
+        .executeTakeFirst<AccountRow>();
+      if (!account) return false;
+      const syncRuns = await connection.query
+        .selectFrom<SyncRunRow>('mailSyncRuns')
+        .select('id')
+        .where('accountId', '=', accountId)
+        .execute<Pick<SyncRunRow, 'id'>>();
+      const submissions = await connection.query
+        .selectFrom<SubmissionRow>('mailSubmissions')
+        .select('id')
+        .where('accountId', '=', accountId)
+        .execute<Pick<SubmissionRow, 'id'>>();
+      const aggregateIds = [
+        ...syncRuns.map(({ id }) => id),
+        ...submissions.map(({ id }) => id),
+      ];
+      if (aggregateIds.length > 0) {
+        await connection.query
+          .deleteFrom<OutboxRow>('mailOutbox')
+          .where('aggregateId', 'in', aggregateIds)
+          .execute();
+      }
+      for (const table of [
+        'mailMessageFolders',
+        'mailMessages',
+        'mailFolders',
+        'mailIdentities',
+        'mailSyncStates',
+        'mailSyncRuns',
+        'mailSubmissions',
+      ] as const) {
+        await connection.query
+          .deleteFrom(table)
+          .where('accountId', '=', accountId)
+          .execute();
+      }
+      const deleted = await connection.query
+        .deleteFrom<AccountRow>('mailAccounts')
+        .where('id', '=', accountId)
+        .execute();
+      if (account.isDefault) {
+        const replacement = await connection.query
+          .selectFrom<AccountRow>('mailAccounts')
+          .select('id')
+          .where('userId', '=', account.userId)
+          .orderBy('createdAt', 'asc')
+          .executeTakeFirst<Pick<AccountRow, 'id'>>();
+        if (replacement) {
+          await connection.query
+            .updateTable<AccountRow>('mailAccounts')
+            .set({ isDefault: true, updatedAt: new Date().toISOString() })
+            .where('id', '=', replacement.id)
+            .execute();
+        }
+      }
+      return deleted.deletedCount === 1;
+    });
+  }
+
   public async saveAuthorizedAccount(
     account: MailAccount,
     identities: readonly MailIdentity[],

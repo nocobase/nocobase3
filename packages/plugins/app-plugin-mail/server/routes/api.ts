@@ -95,6 +95,31 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.listAccounts(operationContext(context)),
       }),
     );
+    routes.patch('/accounts/:accountId', async (context) => {
+      const value = await readObject(context.req.raw);
+      const status = value.status;
+      if (
+        status !== undefined &&
+        status !== 'active' &&
+        status !== 'suspended'
+      ) {
+        throw new TypeError('Mail field "status" must be active or suspended.');
+      }
+      return context.json({
+        data: await mail.updateAccount(operationContext(context), {
+          accountId: context.req.param('accountId'),
+          status,
+          isDefault: optionalBoolean(value.isDefault, 'isDefault'),
+        }),
+      });
+    });
+    routes.delete('/accounts/:accountId', async (context) => {
+      await mail.removeAccount(
+        operationContext(context),
+        context.req.param('accountId'),
+      );
+      return context.body(null, 204);
+    });
     routes.get('/settings/accounts', async (context) =>
       context.json({
         data: await mail.listManagedAccounts(operationContext(context)),

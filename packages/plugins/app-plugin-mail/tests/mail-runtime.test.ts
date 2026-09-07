@@ -227,6 +227,69 @@ describe('mail MVP runtime', () => {
     );
   });
 
+  it('updates Provider and local message state, then deletes the message', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [message('provider-mutable', 'Mutable')],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'mutation-test' },
+    });
+    const stored = await store.listMessages('user-1', {});
+    const setRead = vi.fn<NonNullable<MailProviderAdapter['setRead']>>(
+      async () => ({ ok: true, value: undefined }),
+    );
+    const setStarred = vi.fn<NonNullable<MailProviderAdapter['setStarred']>>(
+      async () => ({ ok: true, value: undefined }),
+    );
+    const deleteMessage = vi.fn<
+      NonNullable<MailProviderAdapter['deleteMessage']>
+    >(async () => ({ ok: true, value: undefined }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({
+        ...baseAdapter(),
+        setRead,
+        setStarred,
+        deleteMessage,
+      }),
+      outbox: { kick: vi.fn() },
+    });
+
+    const updated = await service.updateMessage(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        messageId: stored.items[0].id,
+        read: true,
+        starred: true,
+      },
+    );
+    expect(updated).toMatchObject({ read: true, starred: true });
+    expect(setRead).toHaveBeenCalledWith('provider-mutable', true, undefined);
+    expect(setStarred).toHaveBeenCalledWith(
+      'provider-mutable',
+      true,
+      undefined,
+    );
+
+    await service.deleteMessage(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        messageId: stored.items[0].id,
+      },
+    );
+    expect(deleteMessage).toHaveBeenCalledWith(
+      'provider-mutable',
+      false,
+      undefined,
+    );
+    await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
+      items: [],
+    });
+  });
+
   it('lists every account for management without granting cross-user sync', async () => {
     await store.saveAccount({
       ...account(),

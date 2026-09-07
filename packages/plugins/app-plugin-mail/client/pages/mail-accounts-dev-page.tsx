@@ -169,6 +169,40 @@ export default function MailAccountsDevPage(): ReactElement {
       });
   };
 
+  const updateAccount = (
+    account: MailAccountView,
+    change: {
+      readonly status?: 'active' | 'suspended';
+      readonly isDefault?: boolean;
+    },
+  ): void => {
+    setError(undefined);
+    void mail
+      .updateAccount({ accountId: account.id, ...change })
+      .then(refresh, (cause: unknown) =>
+        setError(
+          mailErrorMessage(
+            cause,
+            t('errors.requestFailed', { defaultValue: 'Mail request failed.' }),
+          ),
+        ),
+      );
+  };
+
+  const removeAccount = (account: MailAccountView): void => {
+    setError(undefined);
+    void mail
+      .removeAccount(account.id)
+      .then(refresh, (cause: unknown) =>
+        setError(
+          mailErrorMessage(
+            cause,
+            t('errors.requestFailed', { defaultValue: 'Mail request failed.' }),
+          ),
+        ),
+      );
+  };
+
   return (
     <MailDevPageShell
       actions={
@@ -386,6 +420,18 @@ export default function MailAccountsDevPage(): ReactElement {
                           defaultValue: 'Default',
                         })}
                         onSync={startSync}
+                        onDefault={(account) =>
+                          updateAccount(account, { isDefault: true })
+                        }
+                        onRemove={removeAccount}
+                        onToggleStatus={(account) =>
+                          updateAccount(account, {
+                            status:
+                              account.status === 'suspended'
+                                ? 'active'
+                                : 'suspended',
+                          })
+                        }
                         providerLabel={
                           providerLabels.get(providerKey(account.provider)) ??
                           account.provider.name
@@ -396,6 +442,21 @@ export default function MailAccountsDevPage(): ReactElement {
                         syncLabel={t('settings.accounts.sync', {
                           defaultValue: 'Sync mailbox',
                         })}
+                        defaultActionLabel={t('settings.accounts.makeDefault', {
+                          defaultValue: 'Make default',
+                        })}
+                        removeLabel={t('settings.accounts.remove', {
+                          defaultValue: 'Disconnect',
+                        })}
+                        toggleStatusLabel={
+                          account.status === 'suspended'
+                            ? t('settings.accounts.resume', {
+                                defaultValue: 'Resume',
+                              })
+                            : t('settings.accounts.suspend', {
+                                defaultValue: 'Pause',
+                              })
+                        }
                         syncing={
                           syncing === account.id ||
                           (run !== undefined &&
@@ -419,18 +480,30 @@ function ConnectedAccountRow({
   account,
   defaultLabel,
   onSync,
+  onDefault,
+  onRemove,
+  onToggleStatus,
   providerLabel,
   statusLabel,
   syncLabel,
   syncing,
+  defaultActionLabel,
+  removeLabel,
+  toggleStatusLabel,
 }: {
   readonly account: MailAccountView;
   readonly defaultLabel: string;
   readonly onSync: (account: MailAccountView) => void;
+  readonly onDefault: (account: MailAccountView) => void;
+  readonly onRemove: (account: MailAccountView) => void;
+  readonly onToggleStatus: (account: MailAccountView) => void;
   readonly providerLabel: string;
   readonly statusLabel: string;
   readonly syncLabel: string;
   readonly syncing: boolean;
+  readonly defaultActionLabel: string;
+  readonly removeLabel: string;
+  readonly toggleStatusLabel: string;
 }): ReactElement {
   return (
     <div className='flex flex-col gap-4 px-6 py-5 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center'>
@@ -467,6 +540,31 @@ function ConnectedAccountRow({
             className={`size-4 ${syncing ? 'animate-spin' : ''}`}
           />
           {syncLabel}
+        </Button>
+        {!account.isDefault ? (
+          <Button
+            onClick={() => onDefault(account)}
+            type='button'
+            variant='outline'
+          >
+            {defaultActionLabel}
+          </Button>
+        ) : null}
+        <Button
+          disabled={syncing}
+          onClick={() => onToggleStatus(account)}
+          type='button'
+          variant='outline'
+        >
+          {toggleStatusLabel}
+        </Button>
+        <Button
+          disabled={syncing}
+          onClick={() => onRemove(account)}
+          type='button'
+          variant='destructive'
+        >
+          {removeLabel}
         </Button>
       </div>
     </div>

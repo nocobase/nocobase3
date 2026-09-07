@@ -27,6 +27,13 @@ describe('Mail client routes', () => {
           navigation: { title: 'nav.settings' },
           children: [
             {
+              name: 'my-accounts',
+              path: '/my-accounts',
+              navigation: { title: 'nav.myAccounts' },
+              access: { resource: 'mail.settings', action: 'access' },
+              componentLoader: expect.any(Function),
+            },
+            {
               name: 'accounts',
               path: '/accounts',
               navigation: { title: 'nav.accounts' },
@@ -118,6 +125,9 @@ describe('Mail client routes', () => {
       settings.routes[0]?.children?.[1]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
     await expect(
+      settings.routes[0]?.children?.[2]?.componentLoader(),
+    ).resolves.toMatchObject({ default: expect.any(Function) });
+    await expect(
       dev.routes[0]?.children?.[0]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
     await expect(
@@ -144,6 +154,7 @@ describe('Mail client routes', () => {
       { id: 'mail', title: 'nav.settings' },
     ]);
     expect(resolved.settings.map((route) => route.path)).toEqual([
+      '/settings/mail/my-accounts',
       '/settings/mail/accounts',
       '/settings/mail/send-logs',
     ]);

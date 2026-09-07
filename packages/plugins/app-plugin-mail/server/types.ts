@@ -250,6 +250,12 @@ export interface MailStartSyncInput {
   readonly batchSize?: number;
 }
 
+export interface MailUpdateAccountInput {
+  readonly accountId: string;
+  readonly status?: 'active' | 'suspended';
+  readonly isDefault?: boolean;
+}
+
 export type MailCommandType =
   'setRead' | 'setStarred' | 'move' | 'delete' | 'saveDraft' | 'send';
 
@@ -434,6 +440,14 @@ export interface MailService {
   listAccounts(
     context: MailOperationContext,
   ): Promise<readonly MailAccountView[]>;
+  updateAccount(
+    context: MailOperationContext,
+    input: MailUpdateAccountInput,
+  ): Promise<MailAccountView>;
+  removeAccount(
+    context: MailOperationContext,
+    accountId: string,
+  ): Promise<void>;
   listManagedAccounts(
     context: MailOperationContext,
   ): Promise<readonly MailManagedAccountView[]>;
@@ -930,6 +944,8 @@ export interface MailStore {
   listAccounts(userId: string): Promise<readonly MailAccount[]>;
   listAllAccounts(): Promise<readonly MailAccount[]>;
   saveAccount(account: MailAccount): Promise<MailAccount>;
+  setDefaultAccount(userId: string, accountId: string): Promise<MailAccount>;
+  deleteAccount(accountId: string): Promise<boolean>;
   saveAuthorizedAccount(
     account: MailAccount,
     identities: readonly MailIdentity[],

@@ -554,6 +554,52 @@ describe('Microsoft Mail Provider', () => {
       '/me/messages/reply-draft-1/send',
     );
   });
+
+  it('maps message mutations to Microsoft Graph operations', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'message-1' }))
+      .mockResolvedValueOnce(Response.json({ id: 'message-1' }))
+      .mockResolvedValueOnce(Response.json({ id: 'moved-message-1' }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(adapter.setRead('message-1', true)).resolves.toMatchObject({
+      ok: true,
+    });
+    await expect(adapter.setStarred('message-1', true)).resolves.toMatchObject({
+      ok: true,
+    });
+    await expect(
+      adapter.moveMessage('message-1', 'archive'),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { providerMessageId: 'moved-message-1' },
+    });
+    await expect(
+      adapter.deleteMessage('moved-message-1', true),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual([
+      'PATCH',
+      'PATCH',
+      'POST',
+      'DELETE',
+    ]);
+  });
 });
 
 interface MemoryVault extends MailCredentialVault {

@@ -343,11 +343,20 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
           ]
         : [],
     );
+    const completeFolders = [
+      ...folders,
+      {
+        providerFolderId: '__archive__',
+        type: 'archive' as const,
+        name: 'Archive',
+        kind: 'label' as const,
+      },
+    ];
     return {
       ok: true,
       value: {
-        folders,
-        completeProviderFolderIds: folders.map(
+        folders: completeFolders,
+        completeProviderFolderIds: completeFolders.map(
           (folder) => folder.providerFolderId,
         ),
       },
@@ -619,9 +628,10 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     providerFolderId: string,
     signal?: AbortSignal,
   ): Promise<MailProviderResult<{ readonly providerMessageId: string }>> {
+    const archive = providerFolderId === '__archive__';
     const result = await this.modifyLabels(
       providerMessageId,
-      [providerFolderId],
+      archive ? [] : [providerFolderId],
       ['INBOX', 'TRASH', 'SPAM'].filter((label) => label !== providerFolderId),
       signal,
     );
@@ -819,7 +829,7 @@ function normalizeMessage(
       providerMessageId: message.id,
       internetMessageId: headers.get('message-id'),
       providerConversationId: message.threadId,
-      providerFolderIds: message.labelIds ?? [],
+      providerFolderIds: gmailFolderIds(message.labelIds ?? []),
       from: parseAddresses(headers.get('from'))[0],
       to: parseAddresses(headers.get('to')),
       cc: parseAddresses(headers.get('cc')),
@@ -880,6 +890,13 @@ function collectParts(part: GmailPart | undefined): {
   };
   visit(part);
   return { text, html, attachments };
+}
+
+function gmailFolderIds(labelIds: readonly string[]): readonly string[] {
+  const archived = !['INBOX', 'TRASH', 'SPAM', 'SENT', 'DRAFT'].some((label) =>
+    labelIds.includes(label),
+  );
+  return archived ? [...labelIds, '__archive__'] : labelIds;
 }
 
 function buildMime(input: MailProviderSendInput): string {
