@@ -95,6 +95,16 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.listAccounts(operationContext(context)),
       }),
     );
+    routes.get('/settings/accounts', async (context) =>
+      context.json({
+        data: await mail.listManagedAccounts(operationContext(context)),
+      }),
+    );
+    routes.get('/settings/operation-logs', async (context) =>
+      context.json({
+        data: await mail.listManagedOperationLogs(operationContext(context)),
+      }),
+    );
     routes.get('/providers', async (context) =>
       context.json({ data: await mail.listProviders() }),
     );
@@ -149,6 +159,16 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         202,
       );
     });
+    routes.get('/sync-runs', async (context) =>
+      context.json({
+        data: await mail.listSyncRuns(operationContext(context)),
+      }),
+    );
+    routes.get('/submissions', async (context) =>
+      context.json({
+        data: await mail.listSubmissions(operationContext(context)),
+      }),
+    );
     routes.get('/sync-runs/:syncRunId', async (context) => {
       const t = getRequestTranslator(context, MAIL_NAMESPACE);
       const run = await mail.getSyncRun(

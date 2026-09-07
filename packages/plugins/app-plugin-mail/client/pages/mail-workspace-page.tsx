@@ -17,6 +17,7 @@ import {
   type MailFolder,
   type MailMessage,
   type MailMessageSummary,
+  type MailSyncRunView,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
 
@@ -38,6 +39,7 @@ export default function MailWorkspacePage(): ReactElement {
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
+  const [syncRun, setSyncRun] = useState<MailSyncRunView>();
   const [error, setError] = useState<string>();
   const [reloadVersion, setReloadVersion] = useState(0);
   const conversationRequestIdRef = useRef(0);
@@ -91,6 +93,37 @@ export default function MailWorkspacePage(): ReactElement {
   useEffect(() => {
     void Promise.resolve().then(loadAccounts);
   }, [loadAccounts]);
+
+  const finishSync = useCallback(
+    (run: MailSyncRunView): void => {
+      setSyncRun(run);
+      if (run.status === 'completed') {
+        loadAccounts();
+        setReloadVersion((version) => version + 1);
+        return;
+      }
+      if (run.status === 'failed' || run.status === 'cancelled') {
+        const fallback = t('errors.syncFailed', {
+          defaultValue: 'Could not synchronize the mailbox.',
+        });
+        setError(
+          run.error?.code ? `${fallback} (${run.error.code})` : fallback,
+        );
+      }
+    },
+    [loadAccounts, t],
+  );
+
+  useEffect(() => {
+    if (!syncRun || !['pending', 'running'].includes(syncRun.status)) return;
+    const timer = window.setInterval(() => {
+      void mail.getSyncRun(syncRun.id).then(finishSync, (cause: unknown) => {
+        setSyncRun(undefined);
+        requestError(cause);
+      });
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [finishSync, requestError, syncRun]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
@@ -240,9 +273,26 @@ export default function MailWorkspacePage(): ReactElement {
       });
   };
 
+  const startIncrementalSync = (): void => {
+    if (
+      !accountId ||
+      syncRun?.status === 'pending' ||
+      syncRun?.status === 'running'
+    )
+      return;
+    setError(undefined);
+    void mail
+      .startSync({ accountId, mode: 'incremental' })
+      .then(finishSync)
+      .catch(requestError);
+  };
+
+  const syncing =
+    syncRun?.status === 'pending' || syncRun?.status === 'running';
+
   return (
-    <section className='flex min-h-[calc(100svh-4rem)] flex-col bg-background'>
-      <header className='flex flex-wrap items-center gap-3 border-b px-4 py-3'>
+    <section className='flex min-h-[38rem] flex-col bg-background'>
+      <header className='flex flex-wrap items-center gap-3 border-b bg-muted/20 px-4 py-3'>
         <h1 className='mr-auto text-lg font-semibold'>
           {t('workspace.title', { defaultValue: 'Mail' })}
         </h1>
@@ -260,15 +310,28 @@ export default function MailWorkspacePage(): ReactElement {
           />
         </label>
         <Button
-          aria-label={t('actions.refresh', { defaultValue: 'Refresh' })}
-          disabled={loadingAccounts || loadingMessages || loadingConversation}
-          onClick={() => {
-            loadAccounts();
-            setReloadVersion((version) => version + 1);
-          }}
+          aria-label={t('workspace.incrementalRefresh', {
+            defaultValue: 'Sync updates',
+          })}
+          disabled={
+            !accountId ||
+            syncing ||
+            loadingAccounts ||
+            loadingMessages ||
+            loadingConversation
+          }
+          onClick={startIncrementalSync}
           variant='outline'
         >
-          <RefreshCw aria-hidden='true' className='size-4' />
+          <RefreshCw
+            aria-hidden='true'
+            className={`size-4 ${syncing ? 'animate-spin' : ''}`}
+          />
+          {syncing
+            ? t('workspace.syncing', { defaultValue: 'Syncing updates…' })
+            : t('workspace.incrementalRefresh', {
+                defaultValue: 'Sync updates',
+              })}
         </Button>
       </header>
 

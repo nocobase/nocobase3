@@ -277,6 +277,17 @@ export class DatabaseMailStore implements MailStore {
     return rows.map(fromAccountRow);
   }
 
+  public async listAllAccounts(): Promise<readonly MailAccount[]> {
+    const rows = await this.database
+      .query()
+      .selectFrom<AccountRow>('mailAccounts')
+      .selectAll()
+      .orderBy('userId', 'asc')
+      .orderBy('address', 'asc')
+      .execute<AccountRow>();
+    return rows.map(fromAccountRow);
+  }
+
   public async saveAccount(account: MailAccount): Promise<MailAccount> {
     await persistAccount(this.database.query(), account);
     return account;
@@ -566,6 +577,35 @@ export class DatabaseMailStore implements MailStore {
     return row ? fromSyncRunRow(row) : undefined;
   }
 
+  public async listSyncRuns(userId: string): Promise<readonly MailSyncRun[]> {
+    const accounts = await this.listAccounts(userId);
+    if (accounts.length === 0) return [];
+    const rows = await this.database
+      .query()
+      .selectFrom<SyncRunRow>('mailSyncRuns')
+      .selectAll()
+      .where(
+        'accountId',
+        'in',
+        accounts.map((account) => account.id),
+      )
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .execute<SyncRunRow>();
+    return rows.map(fromSyncRunRow);
+  }
+
+  public async listAllSyncRuns(): Promise<readonly MailSyncRun[]> {
+    const rows = await this.database
+      .query()
+      .selectFrom<SyncRunRow>('mailSyncRuns')
+      .selectAll()
+      .orderBy('createdAt', 'desc')
+      .limit(200)
+      .execute<SyncRunRow>();
+    return rows.map(fromSyncRunRow);
+  }
+
   public async claimSyncRun(
     syncRunId: string,
     expectedRevision: number,
@@ -775,6 +815,37 @@ export class DatabaseMailStore implements MailStore {
     return row ? fromSubmissionRow(row) : undefined;
   }
 
+  public async listSubmissions(
+    userId: string,
+  ): Promise<readonly MailStoredSubmission[]> {
+    const accounts = await this.listAccounts(userId);
+    if (accounts.length === 0) return [];
+    const rows = await this.database
+      .query()
+      .selectFrom<SubmissionRow>('mailSubmissions')
+      .selectAll()
+      .where(
+        'accountId',
+        'in',
+        accounts.map((account) => account.id),
+      )
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .execute<SubmissionRow>();
+    return rows.map(fromSubmissionRow);
+  }
+
+  public async listAllSubmissions(): Promise<readonly MailStoredSubmission[]> {
+    const rows = await this.database
+      .query()
+      .selectFrom<SubmissionRow>('mailSubmissions')
+      .selectAll()
+      .orderBy('createdAt', 'desc')
+      .limit(200)
+      .execute<SubmissionRow>();
+    return rows.map(fromSubmissionRow);
+  }
+
   public async createSubmission(
     submission: MailSubmission,
     idempotencyKey: string,
@@ -802,7 +873,12 @@ export class DatabaseMailStore implements MailStore {
       if (existing) return existing;
       throw error;
     }
-    return { ...submission, requestFingerprint };
+    return {
+      ...submission,
+      requestFingerprint,
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
   public async claimSubmission(
@@ -1531,6 +1607,8 @@ function fromSubmissionRow(row: SubmissionRow): MailStoredSubmission {
       ? parseJson<MailProviderError>(row.error, 'submission error')
       : undefined,
     requestFingerprint: row.requestFingerprint,
+    createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt),
   };
 }
 

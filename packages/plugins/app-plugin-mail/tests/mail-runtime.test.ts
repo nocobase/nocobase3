@@ -90,6 +90,73 @@ describe('mail MVP runtime', () => {
     expect(second).toEqual(first);
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(accounts[0]).not.toHaveProperty('credentialReference');
+    await expect(
+      service.listSubmissions({ actorId: 'user-1' }),
+    ).resolves.toMatchObject([
+      {
+        id: first.id,
+        accountId: 'account-1',
+        status: 'accepted',
+        providerMessageId: 'provider-sent-1',
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      },
+    ]);
+  });
+
+  it('lists every account for management without granting cross-user sync', async () => {
+    await store.saveAccount({
+      ...account(),
+      id: 'account-2',
+      userId: 'user-2',
+      address: 'other@example.com',
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+    await store.createSyncRun({
+      id: 'sync-account-2',
+      accountId: 'account-2',
+      requestedBy: 'user-2',
+      mode: 'initial',
+      policy: { maxMessages: 100, batchSize: 20 },
+    });
+    await store.createSubmission(
+      {
+        id: 'submission-account-2',
+        accountId: 'account-2',
+        status: 'accepted',
+      },
+      'operation-log-test',
+      'operation-log-test-fingerprint',
+    );
+
+    await expect(
+      service.listManagedAccounts({ actorId: 'user-1' }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'account-1',
+        userId: 'user-1',
+        canSync: true,
+      }),
+      expect.objectContaining({
+        id: 'account-2',
+        userId: 'user-2',
+        canSync: false,
+      }),
+    ]);
+    await expect(
+      service.listManagedOperationLogs({ actorId: 'user-1' }),
+    ).resolves.toMatchObject({
+      accounts: [
+        expect.objectContaining({ id: 'account-1', userId: 'user-1' }),
+        expect.objectContaining({ id: 'account-2', userId: 'user-2' }),
+      ],
+      syncRuns: [expect.objectContaining({ accountId: 'account-2' })],
+      submissions: [expect.objectContaining({ accountId: 'account-2' })],
+    });
   });
 
   it('resumes a pending submission after interruption before claiming', async () => {
@@ -295,12 +362,99 @@ describe('mail MVP runtime', () => {
     expect(await store.getSyncCursor('account-1')).toEqual({
       value: 'watermark-2',
     });
+    await expect(
+      service.listSyncRuns({ actorId: 'user-1' }),
+    ).resolves.toMatchObject([
+      {
+        id: created.id,
+        accountId: 'account-1',
+        status: 'completed',
+      },
+    ]);
 
     const next = await service.startSync(
       { actorId: 'user-1' },
       { accountId: 'account-1' },
     );
     expect(next.mode).toBe('incremental');
+  });
+
+  it('re-establishes the baseline once when an initial catch-up cursor expires', async () => {
+    const getCurrentSyncCursor = vi
+      .fn<NonNullable<MailProviderAdapter['getCurrentSyncCursor']>>()
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { value: 'watermark-before-import' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { value: 'watermark-after-import' },
+      });
+    const listChanges = vi
+      .fn<NonNullable<MailProviderAdapter['listChanges']>>()
+      .mockResolvedValueOnce({
+        ok: false,
+        error: {
+          code: 'TEST_SYNC_CURSOR_INVALID',
+          message: 'The cursor expired.',
+          category: 'provider',
+          retryable: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          messages: [],
+          deletedProviderMessageIds: [],
+          nextCursor: { value: 'watermark-after-import' },
+          hasMore: false,
+        },
+      });
+    const adapters = resolver({
+      ...baseAdapter(),
+      getCurrentSyncCursor,
+      listMessages: async () => ({ ok: true, value: { messages: [] } }),
+      listChanges,
+    });
+    queue = createQueueManager({
+      default: 'sync',
+      connections: { sync: { driver: 'sync' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    runtime = createMailRuntime({
+      store,
+      adapters,
+      queue,
+      queueName: 'mail:test',
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: { kick: vi.fn() },
+    });
+    const created = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1', batchSize: 100 },
+    );
+
+    for (let step = 0; step < 3; step += 1) {
+      await runtime.publishPending();
+    }
+
+    expect(await store.getSyncRun(created.id)).toMatchObject({
+      status: 'completed',
+      phase: 'completed',
+      changeCursor: { value: 'watermark-after-import' },
+    });
+    expect(getCurrentSyncCursor).toHaveBeenCalledTimes(2);
+    expect(listChanges).toHaveBeenNthCalledWith(1, {
+      cursor: { value: 'watermark-before-import' },
+      limit: 100,
+    });
+    expect(listChanges).toHaveBeenNthCalledWith(2, {
+      cursor: { value: 'watermark-after-import' },
+      limit: 100,
+    });
   });
 
   it('filters synchronized messages by folder and provider conversation', async () => {

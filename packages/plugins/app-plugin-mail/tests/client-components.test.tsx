@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   MailAccountCard,
+  MailAccountConnector,
   MailboxSidebar,
   MailConversationView,
   MailProviderCard,
@@ -26,6 +27,48 @@ const capabilities: MailProviderView['capabilities'] = {
 };
 
 describe('Mail client components', () => {
+  it('connects the mail account type selected by the user', () => {
+    const onConnect = vi.fn();
+    const providers: readonly MailProviderView[] = [
+      {
+        type: 'gmail',
+        name: 'google',
+        label: 'Gmail',
+        capabilities,
+      },
+      {
+        type: 'microsoft',
+        name: 'work',
+        label: 'Microsoft 365',
+        capabilities,
+      },
+    ];
+    render(
+      <MailAccountConnector
+        connectedAccountCount={() => 0}
+        labels={{
+          accountType: 'Mail account type',
+          chooseAccountType: 'Select an account type',
+          connect: 'Connect account',
+          connecting: 'Opening authorization',
+          connectedAccounts: (count) => `${count} connected`,
+          capability: (capability) => capability,
+        }}
+        onConnect={onConnect}
+        providers={providers}
+      />,
+    );
+
+    const connect = screen.getByRole('button', { name: 'Connect account' });
+    expect(connect).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Mail account type'), {
+      target: { value: 'microsoft:work' },
+    });
+    expect(connect).toBeEnabled();
+    fireEvent.click(connect);
+    expect(onConnect).toHaveBeenCalledWith(providers[1]);
+  });
+
   it('renders Provider capabilities and starts authorization', () => {
     const onConnect = vi.fn();
     const provider: MailProviderView = {
@@ -73,6 +116,35 @@ describe('Mail client components', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Sync mailbox' })).toBeDisabled();
+  });
+
+  it('shows managed account ownership without exposing a sync action', () => {
+    const account: MailAccountView = {
+      id: 'account-2',
+      userId: 'user-2',
+      provider: { type: 'gmail', name: 'google' },
+      address: 'other@example.com',
+      scopes: [],
+      status: 'active',
+      isDefault: true,
+    };
+    render(
+      <MailAccountCard
+        account={account}
+        canSync={false}
+        defaultLabel='Default'
+        onSync={vi.fn()}
+        ownerLabel='User ID: user-2'
+        providerLabel='Gmail'
+        statusLabel='Active'
+        syncLabel='Sync mailbox'
+      />,
+    );
+
+    expect(screen.getByText('User ID: user-2')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Sync mailbox' }),
+    ).not.toBeInTheDocument();
   });
 
   it('reports sync-limit changes as one value', () => {

@@ -53,6 +53,67 @@ describe('mail API routes', () => {
     });
   });
 
+  it('lists all managed accounts for an authorized Settings user', async () => {
+    const listManagedAccounts = vi.fn<MailService['listManagedAccounts']>(
+      async () => [
+        {
+          id: 'account-2',
+          userId: 'user-2',
+          provider: { type: 'gmail', name: 'google' },
+          address: 'other@example.com',
+          scopes: [],
+          status: 'active',
+          isDefault: true,
+          canSync: false,
+        },
+      ],
+    );
+    const router = await createRouter(true, service({ listManagedAccounts }));
+
+    const response = await router.request('/mail/settings/accounts');
+
+    expect(response.status).toBe(200);
+    expect(listManagedAccounts).toHaveBeenCalledWith({ actorId: 'user-1' });
+    expect(await response.json()).toMatchObject({
+      data: [{ userId: 'user-2', address: 'other@example.com' }],
+    });
+  });
+
+  it('lists all user operation logs for an authorized Settings user', async () => {
+    const listManagedOperationLogs = vi.fn<
+      MailService['listManagedOperationLogs']
+    >(async () => ({
+      accounts: [],
+      syncRuns: [syncRun('account-2', 'user-2')],
+      submissions: [
+        {
+          id: 'submission-2',
+          accountId: 'account-2',
+          status: 'accepted',
+          createdAt: '2026-09-06T08:00:00.000Z',
+          updatedAt: '2026-09-06T08:00:01.000Z',
+        },
+      ],
+    }));
+    const router = await createRouter(
+      true,
+      service({ listManagedOperationLogs }),
+    );
+
+    const response = await router.request('/mail/settings/operation-logs');
+
+    expect(response.status).toBe(200);
+    expect(listManagedOperationLogs).toHaveBeenCalledWith({
+      actorId: 'user-1',
+    });
+    expect(await response.json()).toMatchObject({
+      data: {
+        syncRuns: [{ accountId: 'account-2' }],
+        submissions: [{ accountId: 'account-2' }],
+      },
+    });
+  });
+
   it('starts a bounded asynchronous sync for the authenticated user', async () => {
     const startSync = vi.fn<MailService['startSync']>(async (context, input) =>
       syncRun(input.accountId, context.actorId),
@@ -78,6 +139,43 @@ describe('mail API routes', () => {
         maxMessages: 5_000,
       },
     );
+  });
+
+  it('lists synchronization logs for the authenticated user', async () => {
+    const listSyncRuns = vi.fn<MailService['listSyncRuns']>(async () => [
+      syncRun('account-1', 'user-1'),
+    ]);
+    const router = await createRouter(true, service({ listSyncRuns }));
+
+    const response = await router.request('/mail/sync-runs');
+
+    expect(response.status).toBe(200);
+    expect(listSyncRuns).toHaveBeenCalledWith({ actorId: 'user-1' });
+    expect(await response.json()).toMatchObject({
+      data: [{ id: 'sync-1', accountId: 'account-1' }],
+    });
+  });
+
+  it('lists send logs for the authenticated user', async () => {
+    const listSubmissions = vi.fn<MailService['listSubmissions']>(async () => [
+      {
+        id: 'submission-1',
+        accountId: 'account-1',
+        status: 'accepted',
+        providerMessageId: 'provider-message-1',
+        createdAt: '2026-09-06T08:00:00.000Z',
+        updatedAt: '2026-09-06T08:00:01.000Z',
+      },
+    ]);
+    const router = await createRouter(true, service({ listSubmissions }));
+
+    const response = await router.request('/mail/submissions');
+
+    expect(response.status).toBe(200);
+    expect(listSubmissions).toHaveBeenCalledWith({ actorId: 'user-1' });
+    expect(await response.json()).toMatchObject({
+      data: [{ id: 'submission-1', accountId: 'account-1' }],
+    });
   });
 
   it('starts OAuth with the configured public callback URL', async () => {
@@ -283,10 +381,18 @@ function service(overrides: Partial<MailService> = {}): MailService {
       isDefault: true,
     }),
     listAccounts: async () => [],
+    listManagedAccounts: async () => [],
+    listManagedOperationLogs: async () => ({
+      accounts: [],
+      syncRuns: [],
+      submissions: [],
+    }),
     listFolders: async () => [],
     listIdentities: async () => [],
     startSync: async (_context, input) => syncRun(input.accountId, 'user-1'),
     getSyncRun: async () => undefined,
+    listSyncRuns: async () => [],
+    listSubmissions: async () => [],
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,
     listConversationMessages: async () => ({ items: [] }),

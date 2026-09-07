@@ -12,10 +12,14 @@ The first runnable vertical slice provides:
 - authenticated Mail API routes for sending, starting sync, reading sync
   status, and reading synchronized messages;
 - authenticated OAuth start plus a public one-time-state callback;
-- development workspace controls for Provider authorization, connected
-  accounts, and bounded initial-sync policy;
-- a development-only Mail workspace for account and folder navigation, message
-  search and filters, conversation detail, sending, and synchronization;
+- a permission-protected Mail Settings group with `/settings/mail/accounts`
+  for read-only all-user account visibility, plus
+  `/settings/mail/send-logs` for all-user synchronization and delivery
+  operation logs;
+- development-only Mail center, full message management table, and sending
+  pages under `/dev/mail` for account and folder filtering, refresh, message
+  search, conversation detail, account connection, synchronization controls,
+  sending, synchronization logs, and delivery submission logs;
 - AES-256-GCM encrypted OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
   explicit `unknown` result for indeterminate Provider submissions;
@@ -103,12 +107,16 @@ All MVP routes require an authenticated application session:
 
 ```text
 GET  /api/mail/accounts
+GET  /api/mail/settings/accounts
+GET  /api/mail/settings/operation-logs
 GET  /api/mail/providers
 POST /api/mail/authorizations
 GET  /api/mail/accounts/:accountId/identities
 GET  /api/mail/accounts/:accountId/folders
 POST /api/mail/messages/send
+GET  /api/mail/submissions
 POST /api/mail/accounts/:accountId/sync
+GET  /api/mail/sync-runs
 GET  /api/mail/sync-runs/:syncRunId
 GET  /api/mail/messages
 GET  /api/mail/accounts/:accountId/messages/:messageId
@@ -118,7 +126,7 @@ GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 `GET /mail/oauth/callback` is intentionally public because Google and
 Microsoft redirect the browser to it. It accepts only a short-lived,
 single-use state created by the authenticated start endpoint and redirects the
-browser to `/dev/mail` after completion; state and PKCE verifiers are
+browser to `/dev/mail/accounts` after completion; state and PKCE verifiers are
 never returned by account APIs.
 
 All Mail APIs require `page:mail.settings/access`. Account ownership is enforced again in
@@ -126,7 +134,7 @@ All Mail APIs require `page:mail.settings/access`. Account ownership is enforced
 Inactive accounts cannot send or synchronize. Public responses omit credential
 references, Provider cursors, leases, and internal error messages.
 
-The `/dev/mail` workspace opens a complete conversation only when a Provider
+The `/dev/mail/center` workspace opens a complete conversation only when a Provider
 supplies its stable identifier (`threadId` for Gmail or `conversationId` for
 Microsoft Graph). Messages without that identifier open independently; the
 core does not infer a conversation from a matching subject.

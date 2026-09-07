@@ -1,5 +1,7 @@
 export * from './mail-account-card.js';
+export * from './mail-account-connector.js';
 export * from './mail-conversation-view.js';
+export * from './mail-dev-page-shell.js';
 export * from './mail-message-list.js';
 export * from './mail-page-header.js';
 export * from './mail-provider-card.js';

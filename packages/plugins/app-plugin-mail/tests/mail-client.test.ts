@@ -17,6 +17,10 @@ describe('MailClient', () => {
     const client = new MailClient(appClient(request));
 
     await expect(client.listAccounts()).resolves.toEqual([{ id: 'account-1' }]);
+    await client.listManagedAccounts();
+    expect(request).toHaveBeenLastCalledWith('mail/settings/accounts');
+    await client.listManagedOperationLogs();
+    expect(request).toHaveBeenLastCalledWith('mail/settings/operation-logs');
     await expect(
       client.startAuthorization({ type: 'gmail', name: 'google' }),
     ).resolves.toMatchObject({ state: 'state-1' });
@@ -60,6 +64,12 @@ describe('MailClient', () => {
         batchSize: 100,
       }),
     });
+
+    await client.listSyncRuns();
+    expect(request).toHaveBeenLastCalledWith('mail/sync-runs');
+
+    await client.listSubmissions();
+    expect(request).toHaveBeenLastCalledWith('mail/submissions');
   });
 });
 

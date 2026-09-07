@@ -7,6 +7,7 @@ import type {
   MailCompleteAuthorizationInput,
   MailListMessagesInput,
   MailListConversationMessagesInput,
+  MailManagedAccountView,
   MailFolder,
   MailMessage,
   MailMessageSummary,
@@ -19,6 +20,7 @@ import type {
   MailSyncRun,
   MailSyncRunView,
   MailSubmission,
+  MailSubmissionLogView,
   MailSubmissionView,
   MailCredentialVault,
   MailProviderConfig,
@@ -229,6 +231,30 @@ export class DefaultMailService implements MailService {
     );
   }
 
+  public async listManagedAccounts(
+    context: MailOperationContext,
+  ): Promise<readonly MailManagedAccountView[]> {
+    return (await this.dependencies.store.listAllAccounts()).map((account) => ({
+      ...toMailAccountView(account),
+      canSync: account.userId === context.actorId,
+    }));
+  }
+
+  public async listManagedOperationLogs(
+    _context: MailOperationContext,
+  ): Promise<import('./types.js').MailManagedOperationLogsView> {
+    const [accounts, syncRuns, submissions] = await Promise.all([
+      this.dependencies.store.listAllAccounts(),
+      this.dependencies.store.listAllSyncRuns(),
+      this.dependencies.store.listAllSubmissions(),
+    ]);
+    return {
+      accounts: accounts.map(toMailAccountView),
+      syncRuns: syncRuns.map(toSyncRunView),
+      submissions: submissions.map(toSubmissionLogView),
+    };
+  }
+
   public async listFolders(
     context: MailOperationContext,
     accountId: string,
@@ -284,6 +310,22 @@ export class DefaultMailService implements MailService {
     if (!run) return undefined;
     const account = await this.dependencies.store.getAccount(run.accountId);
     return account?.userId === context.actorId ? toSyncRunView(run) : undefined;
+  }
+
+  public async listSyncRuns(
+    context: MailOperationContext,
+  ): Promise<readonly MailSyncRunView[]> {
+    return (await this.dependencies.store.listSyncRuns(context.actorId)).map(
+      toSyncRunView,
+    );
+  }
+
+  public async listSubmissions(
+    context: MailOperationContext,
+  ): Promise<readonly MailSubmissionLogView[]> {
+    return (await this.dependencies.store.listSubmissions(context.actorId)).map(
+      toSubmissionLogView,
+    );
   }
 
   public listMessages(
@@ -400,6 +442,16 @@ function toSubmissionView(submission: MailSubmission): MailSubmissionView {
     status: submission.status,
     providerMessageId: submission.providerMessageId,
     error: submission.error ? toPublicError(submission.error) : undefined,
+  };
+}
+
+function toSubmissionLogView(
+  submission: import('./types.js').MailStoredSubmission,
+): MailSubmissionLogView {
+  return {
+    ...toSubmissionView(submission),
+    createdAt: submission.createdAt,
+    updatedAt: submission.updatedAt,
   };
 }
 

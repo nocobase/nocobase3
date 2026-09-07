@@ -115,6 +115,9 @@ interface GmailLabelList {
 interface GmailCursorValue {
   readonly historyId: string;
   readonly pageToken?: string;
+  readonly capturedAt?: string;
+  readonly recoveryAfter?: string;
+  readonly recoveryPageToken?: string;
 }
 
 export const gmailMailProviderDefinition: MailProviderDefinition<GmailMailProviderConfig> =
@@ -269,19 +272,55 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   public async getCurrentSyncCursor(
     signal?: AbortSignal,
   ): Promise<MailProviderResult<MailSyncCursor>> {
+    const query = new URLSearchParams({
+      maxResults: '1',
+      includeSpamTrash: 'true',
+    });
+    const page = await this.request<GmailMessageList>(
+      `/users/me/messages?${query.toString()}`,
+      { signal },
+    );
+    if (!page.ok) return page;
+    const latestMessageId = page.value.messages?.find(
+      (message) => message.id,
+    )?.id;
+    if (latestMessageId) {
+      const message = await this.request<GmailMessageResource>(
+        `/users/me/messages/${encodeURIComponent(latestMessageId)}?format=minimal`,
+        { signal },
+      );
+      if (!message.ok) return message;
+      if (message.value.historyId) {
+        return {
+          ok: true,
+          value: gmailCursor(
+            message.value.historyId,
+            undefined,
+            new Date().toISOString(),
+          ),
+        };
+      }
+    }
+
     const profile = await this.request<GmailProfile>('/users/me/profile', {
       signal,
     });
-    return profile.ok && profile.value.historyId
-      ? { ok: true, value: gmailCursor(profile.value.historyId) }
-      : profile.ok
-        ? failure(
-            'GMAIL_HISTORY_ID_MISSING',
-            'Gmail profile did not include a history ID.',
-            'provider',
-            false,
-          )
-        : profile;
+    if (!profile.ok) return profile;
+    return profile.value.historyId
+      ? {
+          ok: true,
+          value: gmailCursor(
+            profile.value.historyId,
+            undefined,
+            new Date().toISOString(),
+          ),
+        }
+      : failure(
+          'GMAIL_HISTORY_ID_MISSING',
+          'Gmail did not provide a history ID for the initial sync baseline.',
+          'provider',
+          false,
+        );
   }
 
   public async listFolders(
@@ -320,9 +359,8 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   ): Promise<MailProviderResult<MailProviderMessagePage>> {
     const query = new URLSearchParams();
     query.set('maxResults', String(Math.min(input.limit ?? 100, 500)));
+    query.set('includeSpamTrash', 'true');
     if (input.cursor) query.set('pageToken', input.cursor);
-    for (const labelId of input.providerFolderIds ?? [])
-      query.append('labelIds', labelId);
     if (input.receivedAfter) {
       const seconds = Math.floor(
         new Date(input.receivedAfter).getTime() / 1000,
@@ -365,6 +403,9 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         'provider',
         false,
       );
+    if (cursor.recoveryAfter) {
+      return this.listRecoveryChanges(cursor, input);
+    }
     const query = new URLSearchParams({
       startHistoryId: cursor.historyId,
       maxResults: String(Math.min(input.limit, 500)),
@@ -376,12 +417,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     );
     if (!history.ok) {
       return history.error.code === 'GMAIL_HTTP_404'
-        ? failure(
-            'GMAIL_SYNC_CURSOR_INVALID',
-            'Gmail history cursor expired; a new initial sync is required.',
-            'provider',
-            false,
-          )
+        ? this.listRecoveryChanges(cursor, input)
         : history;
     }
     const deleted = new Set<string>();
@@ -412,6 +448,9 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     const historyId = history.value.nextPageToken
       ? cursor.historyId
       : (history.value.historyId ?? cursor.historyId);
+    const capturedAt = history.value.nextPageToken
+      ? cursor.capturedAt
+      : new Date().toISOString();
     return {
       ok: true,
       value: {
@@ -419,8 +458,54 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
           result.ok ? [result.value] : [],
         ),
         deletedProviderMessageIds: [...deleted],
-        nextCursor: gmailCursor(historyId, history.value.nextPageToken),
+        nextCursor: gmailCursor(
+          historyId,
+          history.value.nextPageToken,
+          capturedAt,
+        ),
         hasMore: Boolean(history.value.nextPageToken),
+      },
+    };
+  }
+
+  private async listRecoveryChanges(
+    cursor: GmailCursorValue,
+    input: MailProviderListChangesInput,
+  ): Promise<MailProviderResult<MailProviderChangePage>> {
+    const recoveryAfter =
+      cursor.recoveryAfter ?? recoveryStart(cursor.capturedAt);
+    const page = await this.listMessages({
+      receivedAfter: recoveryAfter,
+      cursor: cursor.recoveryPageToken,
+      limit: input.limit,
+      signal: input.signal,
+    });
+    if (!page.ok) return page;
+    if (page.value.nextCursor) {
+      return {
+        ok: true,
+        value: {
+          messages: page.value.messages,
+          deletedProviderMessageIds: [],
+          nextCursor: gmailRecoveryCursor(
+            cursor.historyId,
+            cursor.capturedAt,
+            recoveryAfter,
+            page.value.nextCursor,
+          ),
+          hasMore: true,
+        },
+      };
+    }
+    const nextCursor = await this.getCurrentSyncCursor(input.signal);
+    if (!nextCursor.ok) return nextCursor;
+    return {
+      ok: true,
+      value: {
+        messages: page.value.messages,
+        deletedProviderMessageIds: [],
+        nextCursor: nextCursor.value,
+        hasMore: false,
       },
     };
   }
@@ -773,9 +858,34 @@ function headerValue(
   return headers?.find((header) => header.name?.toLowerCase() === name)?.value;
 }
 
-function gmailCursor(historyId: string, pageToken?: string): MailSyncCursor {
+function gmailCursor(
+  historyId: string,
+  pageToken?: string,
+  capturedAt?: string,
+): MailSyncCursor {
   return {
-    value: { historyId, ...(pageToken ? { pageToken } : {}) },
+    value: {
+      historyId,
+      ...(pageToken ? { pageToken } : {}),
+      ...(capturedAt ? { capturedAt } : {}),
+    },
+    version: 'gmail-v1',
+  };
+}
+
+function gmailRecoveryCursor(
+  historyId: string,
+  capturedAt: string | undefined,
+  recoveryAfter: string,
+  recoveryPageToken: string,
+): MailSyncCursor {
+  return {
+    value: {
+      historyId,
+      ...(capturedAt ? { capturedAt } : {}),
+      recoveryAfter,
+      recoveryPageToken,
+    },
     version: 'gmail-v1',
   };
 }
@@ -791,8 +901,26 @@ function parseGmailCursor(
         historyId: value.historyId,
         pageToken:
           typeof value.pageToken === 'string' ? value.pageToken : undefined,
+        capturedAt:
+          typeof value.capturedAt === 'string' ? value.capturedAt : undefined,
+        recoveryAfter:
+          typeof value.recoveryAfter === 'string'
+            ? value.recoveryAfter
+            : undefined,
+        recoveryPageToken:
+          typeof value.recoveryPageToken === 'string'
+            ? value.recoveryPageToken
+            : undefined,
       }
     : undefined;
+}
+
+function recoveryStart(capturedAt: string | undefined): string {
+  const capturedTime = capturedAt ? Date.parse(capturedAt) : Number.NaN;
+  const start = Number.isFinite(capturedTime)
+    ? capturedTime - 1_000
+    : Date.now() - 7 * 24 * 60 * 60 * 1_000;
+  return new Date(start).toISOString();
 }
 
 function gmailFolderType(id: string): NormalizedMailFolder['type'] {

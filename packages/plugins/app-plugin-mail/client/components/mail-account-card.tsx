@@ -8,20 +8,24 @@ import { Card } from './ui/card.js';
 
 export interface MailAccountCardProps {
   readonly account: MailAccountView;
+  readonly canSync?: boolean;
   readonly providerLabel: string;
-  readonly syncLabel: string;
+  readonly syncLabel?: string;
   readonly defaultLabel: string;
   readonly statusLabel: string;
+  readonly ownerLabel?: string;
   readonly syncing?: boolean;
-  readonly onSync: (account: MailAccountView) => void;
+  readonly onSync?: (account: MailAccountView) => void;
 }
 
 export function MailAccountCard({
   account,
+  canSync = true,
   providerLabel,
   syncLabel,
   defaultLabel,
   statusLabel,
+  ownerLabel,
   syncing = false,
   onSync,
 }: MailAccountCardProps): ReactElement {
@@ -43,18 +47,23 @@ export function MailAccountCard({
             {account.displayName ? `${account.displayName} · ` : ''}
             {providerLabel}
           </p>
+          {ownerLabel ? (
+            <p className='mt-1 text-xs text-muted-foreground'>{ownerLabel}</p>
+          ) : null}
         </div>
-        <Button
-          disabled={syncing || account.status !== 'active'}
-          onClick={() => onSync(account)}
-          type='button'
-        >
-          <RefreshCw
-            aria-hidden='true'
-            className={`size-4 ${syncing ? 'animate-spin' : ''}`}
-          />
-          {syncLabel}
-        </Button>
+        {canSync && onSync && syncLabel ? (
+          <Button
+            disabled={syncing || account.status !== 'active'}
+            onClick={() => onSync(account)}
+            type='button'
+          >
+            <RefreshCw
+              aria-hidden='true'
+              className={`size-4 ${syncing ? 'animate-spin' : ''}`}
+            />
+            {syncLabel}
+          </Button>
+        ) : null}
       </div>
     </Card>
   );

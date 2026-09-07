@@ -6,11 +6,14 @@ import type {
   MailFolder,
   MailIdentity,
   MailListMessagesInput,
+  MailManagedAccountView,
+  MailManagedOperationLogsView,
   MailMessage,
   MailMessageSummary,
   MailPage,
   MailProviderView,
   MailStartSyncInput,
+  MailSubmissionLogView,
   MailSubmissionView,
   MailSyncRunView,
 } from '../server/types.js';
@@ -24,6 +27,8 @@ export type {
   MailFolder,
   MailIdentity,
   MailInitialSyncPolicy,
+  MailManagedAccountView,
+  MailManagedOperationLogsView,
   MailMessage,
   MailMessageSummary,
   MailPage,
@@ -31,6 +36,7 @@ export type {
   MailProviderView,
   MailStartSyncInput,
   MailSubmissionStatus,
+  MailSubmissionLogView,
   MailSubmissionView,
   MailSyncMode,
   MailSyncPhase,
@@ -73,6 +79,22 @@ export class MailClient {
       .then((response) => response.data);
   }
 
+  public listManagedAccounts(): Promise<readonly MailManagedAccountView[]> {
+    return this.client
+      .request<DataResponse<readonly MailManagedAccountView[]>>(
+        'mail/settings/accounts',
+      )
+      .then((response) => response.data);
+  }
+
+  public listManagedOperationLogs(): Promise<MailManagedOperationLogsView> {
+    return this.client
+      .request<DataResponse<MailManagedOperationLogsView>>(
+        'mail/settings/operation-logs',
+      )
+      .then((response) => response.data);
+  }
+
   public startAuthorization(
     input: MailAuthorizationRequest,
   ): Promise<MailAuthorizationStartResult> {
@@ -110,6 +132,20 @@ export class MailClient {
     return this.client
       .request<DataResponse<MailSyncRunView>>(
         `mail/sync-runs/${encodeURIComponent(syncRunId)}`,
+      )
+      .then((response) => response.data);
+  }
+
+  public listSyncRuns(): Promise<readonly MailSyncRunView[]> {
+    return this.client
+      .request<DataResponse<readonly MailSyncRunView[]>>('mail/sync-runs')
+      .then((response) => response.data);
+  }
+
+  public listSubmissions(): Promise<readonly MailSubmissionLogView[]> {
+    return this.client
+      .request<DataResponse<readonly MailSubmissionLogView[]>>(
+        'mail/submissions',
       )
       .then((response) => response.data);
   }

@@ -289,12 +289,24 @@ export class SyncMailboxOperation {
         ),
       );
     }
-    const page = unwrap(
-      await adapter.listChanges({
-        cursor: run.changeCursor,
+    let result = await adapter.listChanges({
+      cursor: run.changeCursor,
+      limit: run.policy.batchSize,
+    });
+    if (
+      !result.ok &&
+      run.mode === 'initial' &&
+      run.phase === 'catchUp' &&
+      isCursorInvalid(result.error) &&
+      adapter.getCurrentSyncCursor
+    ) {
+      const refreshedCursor = unwrap(await adapter.getCurrentSyncCursor());
+      result = await adapter.listChanges({
+        cursor: refreshedCursor,
         limit: run.policy.batchSize,
-      }),
-    );
+      });
+    }
+    const page = unwrap(result);
     await this.dependencies.store.commitSyncStep({
       run,
       messages: page.messages,

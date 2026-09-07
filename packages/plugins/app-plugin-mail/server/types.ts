@@ -81,6 +81,10 @@ export type MailAccountView = Omit<
   'credentialReference' | 'authorizationSubject' | 'syncCursor'
 >;
 
+export interface MailManagedAccountView extends MailAccountView {
+  readonly canSync: boolean;
+}
+
 export interface MailIdentity {
   readonly id: string;
   readonly accountId: string;
@@ -379,6 +383,17 @@ export interface MailSubmissionView {
   readonly error?: MailPublicError;
 }
 
+export interface MailSubmissionLogView extends MailSubmissionView {
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MailManagedOperationLogsView {
+  readonly accounts: readonly MailAccountView[];
+  readonly syncRuns: readonly MailSyncRunView[];
+  readonly submissions: readonly MailSubmissionLogView[];
+}
+
 export interface MailAttachmentContent {
   readonly fileName: string;
   readonly contentType: string;
@@ -398,6 +413,12 @@ export interface MailService {
   listAccounts(
     context: MailOperationContext,
   ): Promise<readonly MailAccountView[]>;
+  listManagedAccounts(
+    context: MailOperationContext,
+  ): Promise<readonly MailManagedAccountView[]>;
+  listManagedOperationLogs(
+    context: MailOperationContext,
+  ): Promise<MailManagedOperationLogsView>;
   listFolders(
     context: MailOperationContext,
     accountId: string,
@@ -414,6 +435,12 @@ export interface MailService {
     context: MailOperationContext,
     syncRunId: string,
   ): Promise<MailSyncRunView | undefined>;
+  listSyncRuns(
+    context: MailOperationContext,
+  ): Promise<readonly MailSyncRunView[]>;
+  listSubmissions(
+    context: MailOperationContext,
+  ): Promise<readonly MailSubmissionLogView[]>;
   listMessages(
     context: MailOperationContext,
     input: MailListMessagesInput,
@@ -825,6 +852,8 @@ export interface MailCreateSyncRunInput {
 
 export interface MailStoredSubmission extends MailSubmission {
   readonly requestFingerprint: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
 }
 
 export interface MailStore {
@@ -841,6 +870,7 @@ export interface MailStore {
     address: string,
   ): Promise<MailAccount | undefined>;
   listAccounts(userId: string): Promise<readonly MailAccount[]>;
+  listAllAccounts(): Promise<readonly MailAccount[]>;
   saveAccount(account: MailAccount): Promise<MailAccount>;
   saveAuthorizedAccount(
     account: MailAccount,
@@ -874,6 +904,8 @@ export interface MailStore {
   createSyncRun(input: MailCreateSyncRunInput): Promise<MailSyncRun>;
   findActiveSyncRun(accountId: string): Promise<MailSyncRun | undefined>;
   getSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
+  listSyncRuns(userId: string): Promise<readonly MailSyncRun[]>;
+  listAllSyncRuns(): Promise<readonly MailSyncRun[]>;
   claimSyncRun(
     syncRunId: string,
     expectedRevision: number,
@@ -897,6 +929,8 @@ export interface MailStore {
     accountId: string,
     idempotencyKey: string,
   ): Promise<MailStoredSubmission | undefined>;
+  listSubmissions(userId: string): Promise<readonly MailStoredSubmission[]>;
+  listAllSubmissions(): Promise<readonly MailStoredSubmission[]>;
   createSubmission(
     submission: MailSubmission,
     idempotencyKey: string,

@@ -2,6 +2,10 @@
 
 Adds delegated Gmail OAuth, sending, paginated initial synchronization, and
 Gmail History incremental synchronization to `@nocobase/app-plugin-mail`.
+When Gmail History records are temporarily unavailable, incremental sync falls
+back to a resumable message scan from the last captured synchronization time.
+This fallback can import and update messages but cannot detect deletions until
+Gmail History becomes available again.
 
 ## Configuration
 

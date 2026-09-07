@@ -34,7 +34,7 @@ describe('Mail OAuth callback route', () => {
     );
     expect(completed.status).toBe(302);
     expect(completed.headers.get('location')).toBe(
-      '/test/dev/mail?mailAuthorization=success',
+      '/test/dev/mail/accounts?mailAuthorization=success',
     );
     expect(completeAuthorization).toHaveBeenCalledWith({
       state: 'state-1',
@@ -56,7 +56,7 @@ describe('Mail OAuth callback route', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
-      '/test/dev/mail?mailAuthorization=failure',
+      '/test/dev/mail/accounts?mailAuthorization=failure',
     );
   });
 });
@@ -95,12 +95,20 @@ function service(overrides: Partial<MailService> = {}): MailService {
       throw new Error('Not implemented.');
     },
     listAccounts: async () => [],
+    listManagedAccounts: async () => [],
+    listManagedOperationLogs: async () => ({
+      accounts: [],
+      syncRuns: [],
+      submissions: [],
+    }),
     listFolders: async () => [],
     listIdentities: async () => [],
     startSync: async () => {
       throw new Error('Not implemented.');
     },
     getSyncRun: async () => undefined,
+    listSyncRuns: async () => [],
+    listSubmissions: async () => [],
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,
     listConversationMessages: async () => ({ items: [] }),

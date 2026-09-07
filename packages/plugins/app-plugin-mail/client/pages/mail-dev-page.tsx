@@ -3,19 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import {
-  MailPageHeader,
-  MailStatusBadge,
-  MailSyncPolicyFields,
-  type MailSyncPolicyValue,
-} from '../components/index.js';
+import { MailDevPageShell, MailStatusBadge } from '../components/index.js';
 import {
   mailErrorMessage,
   type MailAccountView,
   type MailIdentity,
   type MailSubmissionView,
-  type MailSyncMode,
-  type MailSyncRunView,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
 import { Button } from '../components/ui/button.js';
@@ -24,7 +17,6 @@ import { Input } from '../components/ui/input.js';
 import { NativeSelect } from '../components/ui/native-select.js';
 import { Textarea } from '../components/ui/textarea.js';
 import MailWorkspacePage from './mail-workspace-page.js';
-import MailSettingsPage from './mail-settings-page.js';
 
 const mail = getMailClient();
 interface ComposeValue {
@@ -33,7 +25,31 @@ interface ComposeValue {
   readonly text: string;
 }
 
-export default function MailDevPage(): ReactElement {
+export function MailCenterDevPage(): ReactElement {
+  const { t } = useTranslation();
+
+  return (
+    <MailDevPageShell
+      badge={t('nav.dev', { defaultValue: 'Mail components' })}
+      category={t('dev.centerCategory', { defaultValue: 'Mailbox preview' })}
+      description={t('dev.centerDescription', {
+        defaultValue:
+          'Filter, refresh, and inspect locally stored mail components.',
+      })}
+      title={t('dev.centerTitle', { defaultValue: 'Mail center' })}
+    >
+      <Card className='overflow-hidden rounded-2xl bg-background shadow-sm'>
+        <MailWorkspacePage />
+      </Card>
+    </MailDevPageShell>
+  );
+}
+
+export function MailSendDevPage(): ReactElement {
+  return <MailDevPage />;
+}
+
+function MailDevPage(): ReactElement {
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [accountId, setAccountId] = useState('');
@@ -44,15 +60,8 @@ export default function MailDevPage(): ReactElement {
     subject: '',
     text: '',
   });
-  const [policy, setPolicy] = useState<MailSyncPolicyValue>(() => ({
-    receivedAfter: dateDaysAgo(30),
-    maxMessages: 1_000,
-    batchSize: 100,
-  }));
-  const [syncMode, setSyncMode] = useState<MailSyncMode>('initial');
-  const [syncRun, setSyncRun] = useState<MailSyncRunView>();
   const [submission, setSubmission] = useState<MailSubmissionView>();
-  const [busy, setBusy] = useState<'loading' | 'sending' | 'syncing'>();
+  const [busy, setBusy] = useState<'loading' | 'sending'>();
   const [error, setError] = useState<string>();
 
   const selectedAccount = useMemo(
@@ -93,9 +102,7 @@ export default function MailDevPage(): ReactElement {
   }, [loadAccounts]);
 
   useEffect(() => {
-    if (!accountId) {
-      return;
-    }
+    if (!accountId) return;
     let active = true;
     void mail.listIdentities(accountId).then(
       (nextIdentities) => {
@@ -123,35 +130,6 @@ export default function MailDevPage(): ReactElement {
       active = false;
     };
   }, [accountId, t]);
-
-  useEffect(() => {
-    if (!syncRun || !['pending', 'running'].includes(syncRun.status)) {
-      return undefined;
-    }
-    const timer = window.setInterval(() => {
-      void mail.getSyncRun(syncRun.id).then(
-        (nextRun) => {
-          setSyncRun(nextRun);
-          if (!['pending', 'running'].includes(nextRun.status)) {
-            setBusy(undefined);
-          }
-        },
-        (cause: unknown) => {
-          setError(
-            mailErrorMessage(
-              cause,
-              t('errors.requestFailed', {
-                defaultValue: 'Mail request failed.',
-              }),
-            ),
-          );
-          setBusy(undefined);
-          setSyncRun(undefined);
-        },
-      );
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [syncRun, t]);
 
   const sendMessage = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -186,114 +164,35 @@ export default function MailDevPage(): ReactElement {
       .finally(() => setBusy(undefined));
   };
 
-  const startSync = (): void => {
-    if (!accountId) return;
-    setBusy('syncing');
-    setError(undefined);
-    setSyncRun(undefined);
-    void mail
-      .startSync({
-        accountId,
-        mode: syncMode,
-        receivedAfter:
-          syncMode === 'initial' && policy.receivedAfter
-            ? new Date(`${policy.receivedAfter}T00:00:00Z`).toISOString()
-            : undefined,
-        maxMessages: policy.maxMessages,
-        batchSize: policy.batchSize,
-      })
-      .then(setSyncRun)
-      .catch((cause: unknown) => {
-        setError(
-          mailErrorMessage(
-            cause,
-            t('errors.syncFailed', {
-              defaultValue: 'Could not start mailbox synchronization.',
-            }),
-          ),
-        );
-        setBusy(undefined);
-      });
-  };
-
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
-      <MailPageHeader
-        actions={
-          <Button
-            disabled={busy === 'loading'}
-            onClick={loadAccounts}
-            variant='outline'
-          >
-            <RefreshCw aria-hidden='true' className='size-4' />
-            {t('actions.reloadAccounts', { defaultValue: 'Reload accounts' })}
-          </Button>
-        }
-        description={t('dev.description', {
-          defaultValue:
-            'Exercise the send and synchronization APIs against a connected account. This route is excluded from production builds.',
-        })}
-        eyebrow={t('dev.eyebrow', { defaultValue: 'Development tools' })}
-        title={t('dev.title', { defaultValue: 'Mail playground' })}
-      />
-
-      <div className='mx-auto w-full max-w-7xl space-y-6 px-6 py-6'>
+    <MailDevPageShell
+      actions={
+        <Button
+          disabled={busy === 'loading'}
+          onClick={loadAccounts}
+          variant='outline'
+        >
+          <RefreshCw aria-hidden='true' className='size-4' />
+          {t('actions.reloadAccounts', { defaultValue: 'Reload accounts' })}
+        </Button>
+      }
+      badge={t('nav.dev', { defaultValue: 'Mail components' })}
+      category={t('dev.sendCategory', { defaultValue: 'Operations' })}
+      description={t('dev.sendPageDescription', {
+        defaultValue:
+          'Exercise the mail sending API against a connected account and identity.',
+      })}
+      title={t('dev.sendPageTitle', { defaultValue: 'Send mail' })}
+    >
+      <div className='mx-auto max-w-4xl space-y-5 pb-12'>
         {error ? (
           <div className='rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive'>
             {error}
           </div>
         ) : null}
 
-        <Card className='p-5 shadow-sm'>
-          <div className='grid gap-4 md:grid-cols-2'>
-            <label className='text-sm font-medium'>
-              {t('dev.account', { defaultValue: 'Account' })}
-              <NativeSelect
-                className='mt-1'
-                onChange={(event) => setAccountId(event.target.value)}
-                value={accountId}
-              >
-                {accounts.length === 0 ? (
-                  <option value=''>
-                    {t('dev.noAccounts', {
-                      defaultValue: 'No connected accounts',
-                    })}
-                  </option>
-                ) : null}
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.address}
-                  </option>
-                ))}
-              </NativeSelect>
-            </label>
-            <label className='text-sm font-medium'>
-              {t('dev.identity', { defaultValue: 'Sending identity' })}
-              <NativeSelect
-                className='mt-1'
-                disabled={!accountId}
-                onChange={(event) => setIdentityId(event.target.value)}
-                value={identityId}
-              >
-                {identities.map((identity) => (
-                  <option key={identity.id} value={identity.id}>
-                    {identity.displayName
-                      ? `${identity.displayName} <${identity.address}>`
-                      : identity.address}
-                  </option>
-                ))}
-              </NativeSelect>
-            </label>
-          </div>
-          {selectedAccount ? (
-            <p className='mt-3 text-xs text-muted-foreground'>
-              {selectedAccount.provider.type} / {selectedAccount.provider.name}
-            </p>
-          ) : null}
-        </Card>
-
-        <div className='grid gap-6 xl:grid-cols-2'>
-          <Card className='p-5 shadow-sm'>
+        <div className='grid gap-6'>
+          <Card className='rounded-2xl bg-background p-6 shadow-sm'>
             <div className='flex items-center gap-2'>
               <Send aria-hidden='true' className='size-5 text-primary' />
               <h2 className='font-semibold'>
@@ -307,6 +206,52 @@ export default function MailDevPage(): ReactElement {
               })}
             </p>
             <form className='mt-5 space-y-4' onSubmit={sendMessage}>
+              <div className='grid gap-4 md:grid-cols-2'>
+                <label className='text-sm font-medium'>
+                  {t('dev.account', { defaultValue: 'Account' })}
+                  <NativeSelect
+                    className='mt-1'
+                    onChange={(event) => setAccountId(event.target.value)}
+                    value={accountId}
+                  >
+                    {accounts.length === 0 ? (
+                      <option value=''>
+                        {t('dev.noAccounts', {
+                          defaultValue: 'No connected accounts',
+                        })}
+                      </option>
+                    ) : null}
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.address}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </label>
+                <label className='text-sm font-medium'>
+                  {t('dev.identity', { defaultValue: 'Sending identity' })}
+                  <NativeSelect
+                    className='mt-1'
+                    disabled={!accountId}
+                    onChange={(event) => setIdentityId(event.target.value)}
+                    value={identityId}
+                  >
+                    {identities.map((identity) => (
+                      <option key={identity.id} value={identity.id}>
+                        {identity.displayName
+                          ? `${identity.displayName} <${identity.address}>`
+                          : identity.address}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </label>
+              </div>
+              {selectedAccount ? (
+                <p className='text-xs text-muted-foreground'>
+                  {selectedAccount.provider.type} /{' '}
+                  {selectedAccount.provider.name}
+                </p>
+              ) : null}
               <label className='block text-sm font-medium'>
                 {t('dev.send.to', { defaultValue: 'To' })}
                 <Input
@@ -379,87 +324,13 @@ export default function MailDevPage(): ReactElement {
               />
             ) : null}
           </Card>
-
-          <Card className='p-5 shadow-sm'>
-            <div className='flex items-center gap-2'>
-              <RefreshCw aria-hidden='true' className='size-5 text-primary' />
-              <h2 className='font-semibold'>
-                {t('dev.sync.title', { defaultValue: 'Synchronize mailbox' })}
-              </h2>
-            </div>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              {t('dev.sync.description', {
-                defaultValue:
-                  'Use bounded initial sync for a new account. Use incremental sync after a baseline cursor exists.',
-              })}
-            </p>
-            <div className='mt-5 space-y-4'>
-              <label className='block text-sm font-medium'>
-                {t('dev.sync.mode', { defaultValue: 'Mode' })}
-                <NativeSelect
-                  className='mt-1'
-                  onChange={(event) =>
-                    setSyncMode(event.target.value as MailSyncMode)
-                  }
-                  value={syncMode}
-                >
-                  <option value='initial'>
-                    {t('dev.sync.initial', { defaultValue: 'Initial' })}
-                  </option>
-                  <option value='incremental'>
-                    {t('dev.sync.incremental', { defaultValue: 'Incremental' })}
-                  </option>
-                </NativeSelect>
-              </label>
-              <MailSyncPolicyFields
-                disabled={busy === 'syncing'}
-                labels={{
-                  receivedAfter: t('settings.initialSync.receivedAfter', {
-                    defaultValue: 'Import messages received after',
-                  }),
-                  maxMessages: t('settings.initialSync.maxMessages', {
-                    defaultValue: 'Maximum messages',
-                  }),
-                  batchSize: t('settings.initialSync.batchSize', {
-                    defaultValue: 'Messages per batch',
-                  }),
-                }}
-                onChange={setPolicy}
-                value={policy}
-              />
-              <Button
-                disabled={!accountId || busy === 'syncing'}
-                onClick={startSync}
-                type='button'
-              >
-                <RefreshCw
-                  aria-hidden='true'
-                  className={`size-4 ${busy === 'syncing' ? 'animate-spin' : ''}`}
-                />
-                {t('dev.sync.start', { defaultValue: 'Start sync' })}
-              </Button>
-            </div>
-            {syncRun ? (
-              <ResultRow
-                detail={`${syncRun.processedMessages} messages · ${syncRun.processedPages} batches · ${syncRun.phase}`}
-                label={t('dev.sync.run', { defaultValue: 'Sync run' })}
-                status={syncRun.status}
-              />
-            ) : null}
-          </Card>
         </div>
-
-        <section className='overflow-hidden rounded-xl border bg-card shadow-sm'>
-          <MailWorkspacePage />
-        </section>
-
-        <section className='overflow-hidden rounded-xl border bg-card shadow-sm'>
-          <MailSettingsPage />
-        </section>
       </div>
-    </main>
+    </MailDevPageShell>
   );
 }
+
+export default MailCenterDevPage;
 
 function ResultRow({
   label,
@@ -483,12 +354,6 @@ function statusTone(status: string): 'success' | 'danger' | 'info' {
   if (status === 'accepted' || status === 'completed') return 'success';
   if (status === 'failed' || status === 'cancelled') return 'danger';
   return 'info';
-}
-
-function dateDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
 }
 
 function createIdempotencyKey(): string {

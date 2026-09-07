@@ -11,7 +11,10 @@ import {
 } from '../server/gmail.js';
 
 describe('Gmail Mail Provider', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it('uses PKCE and stores OAuth tokens behind a credential reference', async () => {
     const credentials = memoryVault();
@@ -64,6 +67,58 @@ describe('Gmail Mail Provider', () => {
       accessToken: 'access-1',
       refreshToken: 'refresh-1',
     });
+  });
+
+  it('starts initial sync from a message history ID without intersecting every Gmail label', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ messages: [{ id: 'latest-message' }] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ id: 'latest-message', historyId: '20' }),
+      )
+      .mockResolvedValueOnce(Response.json({ messages: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(adapter.getCurrentSyncCursor()).resolves.toMatchObject({
+      ok: true,
+      value: {
+        value: { historyId: '20', capturedAt: expect.any(String) },
+        version: 'gmail-v1',
+      },
+    });
+    await expect(
+      adapter.listMessages({
+        providerFolderIds: ['INBOX', 'SENT', 'CATEGORY_SOCIAL'],
+        limit: 100,
+      }),
+    ).resolves.toMatchObject({ ok: true, value: { messages: [] } });
+
+    const baselineUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(baselineUrl.pathname).toBe('/gmail/v1/users/me/messages');
+    expect(baselineUrl.searchParams.get('maxResults')).toBe('1');
+    expect(baselineUrl.searchParams.get('includeSpamTrash')).toBe('true');
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      '/users/me/messages/latest-message?format=minimal',
+    );
+    const listUrl = new URL(String(fetchMock.mock.calls[2][0]));
+    expect(listUrl.searchParams.getAll('labelIds')).toEqual([]);
+    expect(listUrl.searchParams.get('includeSpamTrash')).toBe('true');
   });
 
   it('sends MIME content and preserves the original history cursor while paging', async () => {
@@ -149,6 +204,86 @@ describe('Gmail Mail Provider', () => {
         hasMore: true,
       },
     });
+  });
+
+  it('falls back to a bounded message scan when Gmail history is unavailable', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-06T14:30:00.000Z') });
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { message: 'Requested entity was not found.' } },
+          { status: 404 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ messages: [{ id: 'recovered-message' }] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: 'recovered-message',
+          historyId: '25',
+          labelIds: ['INBOX'],
+          payload: {
+            mimeType: 'text/plain',
+            headers: [{ name: 'Subject', value: 'Recovered' }],
+            body: { data: Buffer.from('Body').toString('base64url') },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ messages: [{ id: 'latest-message' }] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ id: 'latest-message', historyId: '30' }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    const result = await adapter.listChanges({
+      cursor: {
+        value: {
+          historyId: '20',
+          capturedAt: '2026-09-06T14:00:00.000Z',
+        },
+        version: 'gmail-v1',
+      },
+      limit: 100,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        messages: [
+          { providerMessageId: 'recovered-message', subject: 'Recovered' },
+        ],
+        nextCursor: {
+          value: {
+            historyId: '30',
+            capturedAt: '2026-09-06T14:30:00.000Z',
+          },
+          version: 'gmail-v1',
+        },
+        hasMore: false,
+      },
+    });
+    const recoveryUrl = new URL(String(fetchMock.mock.calls[1][0]));
+    expect(recoveryUrl.pathname).toBe('/gmail/v1/users/me/messages');
+    expect(recoveryUrl.searchParams.get('maxResults')).toBe('100');
+    expect(recoveryUrl.searchParams.get('q')).toMatch(/^after:\d+$/);
   });
 
   it('keeps a rejected token refresh as a terminal authentication error', async () => {
