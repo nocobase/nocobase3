@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 
 import type { AIManager } from '@nocobase/ai-employee';
-import { expandEnvironmentReferences } from '@nocobase/app-plugin-ai-employee/server';
 import type { AIKnowledgeBaseVectorDatabaseConfig } from '@nocobase/app-plugin-ai-employee/server/config';
 
 import { PG_VECTOR_PROVIDER_NAME } from './extensions/vector-database/pg-vector-provider.js';
@@ -223,6 +222,30 @@ export class VectorDatabaseConfigSynchronizer {
   }
 }
 
+function expandEnvironmentReferences<T>(value: T): T {
+  return expandEnvironmentValue(value) as T;
+}
+
+function expandEnvironmentValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.replace(
+      /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
+      (_match, name: string) => process.env[name] ?? '',
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => expandEnvironmentValue(item));
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        expandEnvironmentValue(item),
+      ]),
+    );
+  }
+  return value;
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
