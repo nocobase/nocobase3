@@ -2,10 +2,7 @@ import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
-import {
-  authenticationToken,
-  type Auth,
-} from '@nocobase/app-plugin-authentication';
+import { authenticationToken, Auth } from '@nocobase/app-plugin-authentication';
 
 import { authorizationToken, type AppAuthorization } from '../server/index.js';
 import { apiRoutes } from '../server/routes/index.js';
@@ -14,6 +11,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
   it('protects its HTTP routes with authentication', async () => {
     const container = new ServiceContainer();
     container.instance(authenticationToken, {
+      auditHttp: Auth.prototype.auditHttp,
       required: () => (context) =>
         Promise.resolve(
           context.json(
@@ -60,6 +58,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       const require = vi.fn(() => Promise.resolve());
       const set = vi.fn((rule: object) => Promise.resolve(rule));
       container.instance(authenticationToken, {
+        auditHttp: Auth.prototype.auditHttp,
         required: () => async (_context, next) => next(),
       } as unknown as Auth);
       container.instance(authorizationToken, {

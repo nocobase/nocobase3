@@ -1,4 +1,9 @@
 import type { Context } from '../context.js';
+import {
+  bindAIConversationAudit,
+  runAuditedAI,
+  markAIRunOutcome,
+} from '../audit-runtime.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   AIChatContext,
@@ -162,6 +167,7 @@ export class AIEmployee {
     tools = [],
   }: AIEmployeeOptions) {
     this.employee = employee;
+    bindAIConversationAudit(this, ctx, String(employee.username), sessionId);
     this.ctx = ctx;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
@@ -182,10 +188,10 @@ export class AIEmployee {
     this.protocol = ChatStreamProtocol.fromContext(ctx, async (chunk) => {
       try {
         await this.streamCached.append(chunk);
-      } catch (error) {
+      } catch {
         this.logger.warn('Failed to append LLM stream cache', {
           sessionId: this.sessionId,
-          error,
+          code: 'AI_STREAM_CACHE_FAILED',
         });
       }
     });
@@ -380,66 +386,69 @@ export class AIEmployee {
       decisions: UserDecision[];
     };
   }) {
-    await this.streamCached.clear();
-    await this.aiConversationsRepo.update({
-      values: { llmActiveState: 'streaming' },
-      filter: {
-        sessionId: this.sessionId,
-      },
-    });
-    try {
-      const {
-        providerName,
-        llmService,
-        model,
-        provider,
-        chatContext,
-        config,
-        state,
-      } = await this.buildChatContext({
-        messageId,
-        userMessages,
-        userDecisions,
-      });
-
-      const responseMetadata = new Map<string, unknown>();
-      const responseMetadataCollector = new ResponseMetadataCollector(
-        provider,
-        responseMetadata,
-      );
-      const streamConfig: RunnableConfig = {
-        ...config,
-        callbacks: [responseMetadataCollector],
-      };
-      const { stream, signal } = await this.prepareChatStream({
-        chatContext,
-        provider,
-        config: streamConfig,
-        state,
-      });
-      await this.processChatStream(stream, {
-        signal,
-        providerName,
-        llmService,
-        model,
-        provider,
-        responseMetadata,
-      });
-
-      return true;
-    } catch (err) {
-      this.ctx.logger.error(err);
-      this.sendErrorResponse(getErrorMessage(err, 'Chat error warning'));
-      return false;
-    } finally {
+    return runAuditedAI(this, async () => {
+      await this.streamCached.clear();
       await this.aiConversationsRepo.update({
-        values: { llmActiveState: 'idle', read: false },
+        values: { llmActiveState: 'streaming' },
         filter: {
           sessionId: this.sessionId,
         },
       });
-      await this.streamCached.clear();
-    }
+      try {
+        const {
+          providerName,
+          llmService,
+          model,
+          provider,
+          chatContext,
+          config,
+          state,
+        } = await this.buildChatContext({
+          messageId,
+          userMessages,
+          userDecisions,
+        });
+
+        const responseMetadata = new Map<string, unknown>();
+        const responseMetadataCollector = new ResponseMetadataCollector(
+          provider,
+          responseMetadata,
+        );
+        const streamConfig: RunnableConfig = {
+          ...config,
+          callbacks: [responseMetadataCollector],
+        };
+        const { stream, signal } = await this.prepareChatStream({
+          chatContext,
+          provider,
+          config: streamConfig,
+          state,
+        });
+        await this.processChatStream(stream, {
+          signal,
+          providerName,
+          llmService,
+          model,
+          provider,
+          responseMetadata,
+        });
+        if (signal.aborted) markAIRunOutcome('failed', this);
+
+        return true;
+      } catch (err) {
+        this.ctx.logger.error({ code: 'AI_EXECUTION_FAILED' });
+        this.sendErrorResponse(getErrorMessage(err, 'Chat error warning'));
+        return false;
+      } finally {
+        await this.aiConversationsRepo.update({
+          values: { llmActiveState: 'idle', read: false },
+          filter: {
+            sessionId: this.sessionId,
+          },
+        });
+        await this.streamCached.clear();
+      }
+    });
   }
 
   async invoke({
@@ -460,62 +469,64 @@ export class AIEmployee {
     context?: any;
     signal?: AbortSignal;
   }) {
-    await this.aiConversationsRepo.update({
-      values: { llmActiveState: 'invoking' },
-      filter: {
-        sessionId: this.sessionId,
-      },
-    });
-    try {
-      const { provider, chatContext, config, state } =
-        await this.buildChatContext({
-          messageId,
-          userMessages,
-          userDecisions,
-        });
-
-      const { threadId } = await this.getCurrentThread();
-      const invokeConfig = {
-        context: {
-          ctx: this.ctx,
-          decisions: chatContext.decisions,
-          ...context,
-        },
-        recursionLimit: 200,
-        configurable:
-          this.from === 'main-agent' ? { thread_id: threadId } : undefined,
-        writer,
-        signal,
-        ...config,
-      };
-
-      const invokeResult = await this.agentInvoke(
-        provider,
-        chatContext,
-        invokeConfig,
-        state,
-      );
-
-      await this.handleInterruptedToolCalls(
-        invokeResult?.__interrupt__?.[0],
-        () => invokeResult?.messageId,
-      );
-
-      return invokeResult;
-    } catch (err) {
-      if (getErrorName(err) === 'GraphInterrupt') {
-        throw err;
-      }
-      this.ctx.logger.error(err);
-      throw err;
-    } finally {
+    return runAuditedAI(this, async () => {
       await this.aiConversationsRepo.update({
-        values: { llmActiveState: 'idle' },
+        values: { llmActiveState: 'invoking' },
         filter: {
           sessionId: this.sessionId,
         },
       });
-    }
+      try {
+        const { provider, chatContext, config, state } =
+          await this.buildChatContext({
+            messageId,
+            userMessages,
+            userDecisions,
+          });
+
+        const { threadId } = await this.getCurrentThread();
+        const invokeConfig = {
+          context: {
+            ctx: this.ctx,
+            decisions: chatContext.decisions,
+            ...context,
+          },
+          recursionLimit: 200,
+          configurable:
+            this.from === 'main-agent' ? { thread_id: threadId } : undefined,
+          writer,
+          signal,
+          ...config,
+        };
+
+        const invokeResult = await this.agentInvoke(
+          provider,
+          chatContext,
+          invokeConfig,
+          state,
+        );
+
+        await this.handleInterruptedToolCalls(
+          invokeResult?.__interrupt__?.[0],
+          () => invokeResult?.messageId,
+        );
+
+        return invokeResult;
+      } catch (err) {
+        if (getErrorName(err) === 'GraphInterrupt') {
+          throw err;
+        }
+        this.ctx.logger.error({ code: 'AI_EXECUTION_FAILED' });
+        throw err;
+      } finally {
+        await this.aiConversationsRepo.update({
+          values: { llmActiveState: 'idle' },
+          filter: {
+            sessionId: this.sessionId,
+          },
+        });
+      }
+    });
   }
 
   // === Agent wiring & execution ===
@@ -711,11 +722,8 @@ export class AIEmployee {
             );
           }
         }
-      } catch (e) {
-        this.logger.error(
-          'Fail to save message after conversation abort',
-          gathered,
-        );
+      } catch {
+        this.logger.error({ code: 'AI_ABORT_PERSISTENCE_FAILED' });
       } finally {
         await this.aiConversationsRepo.update({
           values: { llmActiveState: 'idle', read: true },
@@ -781,6 +789,7 @@ export class AIEmployee {
         } else if (mode === 'updates') {
           const interrupt = chunks?.__interrupt__?.[0];
           if (interrupt) {
+            markAIRunOutcome('accepted', this);
             const toolsMap = await this.getToolsMap();
             await this.handleInterruptedToolCalls(
               interrupt,
@@ -922,6 +931,7 @@ export class AIEmployee {
         !signal.aborted &&
         !allowEmpty
       ) {
+        markAIRunOutcome('failed', this);
         this.sendErrorResponse('Empty message');
         return;
       }
@@ -929,7 +939,8 @@ export class AIEmployee {
       await this.protocol.with(aiEmployeeConversation).endStream();
     } catch (err) {
       await stopAllReasoning();
-      this.ctx.logger.error(err);
+      markAIRunOutcome('failed', this);
+      this.ctx.logger.error({ code: 'AI_EXECUTION_FAILED' });
       const errorName = getErrorName(err);
       if (errorName === 'GraphRecursionError') {
         this.sendSpecificError({
@@ -1662,7 +1673,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       if (!payload) {
         this.logger.warn('Ignore malformed interrupt action description', {
           name,
-          description: actionRequest.description,
+          code: 'AI_INTERRUPT_DESCRIPTION_INVALID',
         });
         continue;
       }

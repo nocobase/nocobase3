@@ -14,6 +14,7 @@ import {
 } from 'langchain';
 import { AIEmployee } from '../ai-employee.js';
 import z from 'zod';
+import { beginAIToolAttempt } from '../../audit-runtime.js';
 import _ from 'lodash';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 
@@ -97,6 +98,8 @@ export const toolCallStatusMiddleware = (
         body: { toolCall },
         currentConversation,
       });
+      const finishAttempt = await beginAIToolAttempt(toolCall.name, aiEmployee);
+      let attemptOutcome: 'success' | 'failed' | 'accepted' = 'failed';
       let result;
       try {
         const toolMessage = await handler(request);
@@ -106,26 +109,33 @@ export const toolCallStatusMiddleware = (
           } else if (typeof toolMessage.content === 'string') {
             try {
               result = JSON.parse(toolMessage.content);
-            } catch (e) {
-              aiEmployee.logger.warn('tool result parse fail', e);
+            } catch {
+              aiEmployee.logger.warn({ code: 'AI_TOOL_RESULT_NOT_JSON' });
               result = toolMessage.content;
             }
           } else {
-            // 当 content 是数组或其他非字符串类型时，直接返回原值
+            // Preserve non-string tool content.
             result = toolMessage.content;
           }
         } else {
           result = toolMessage;
         }
 
+        attemptOutcome =
+          (toolMessage instanceof ToolMessage &&
+            toolMessage.status === 'error') ||
+          result?.status === 'error'
+            ? 'failed'
+            : 'success';
         return toolMessage;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (error instanceof Error && error.name === 'GraphInterrupt') {
           interrupted = true;
+          attemptOutcome = 'accepted';
           throw error;
         }
-        aiEmployee.logger.error(error);
+        aiEmployee.logger.error({ code: 'AI_TOOL_EXECUTION_FAILED' });
         result = { status: 'error', content: message };
         runtime.writer?.({
           action: 'afterToolCallError',
@@ -141,6 +151,7 @@ export const toolCallStatusMiddleware = (
           },
         });
       } finally {
+        await finishAttempt?.(attemptOutcome);
         if (!interrupted) {
           await aiEmployee.updateToolCallDone(messageId, toolCallId, result);
           const toolCallResult = await aiEmployee.getToolCallResult(

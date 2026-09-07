@@ -1,3 +1,5 @@
+import { workflowDatabaseTime } from './database-time.js';
+import { recordWorkflowPhase } from '../audit-internal.js';
 import type { DatabaseManager, Row } from '@nocobase/db';
 
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
@@ -60,31 +62,46 @@ export function createTimeoutReaper(
   const abortExpiredRun = async (executionId: WorkflowId): Promise<boolean> => {
     // The status guard makes the sweep safe to run concurrently with a live
     // processor: whoever updates the row first wins and the other one is a no-op.
-    const result = await query()
-      .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({
-        status: EXECUTION_STATUS.ABORTED,
-        reason: EXECUTION_REASON.TIMEOUT,
-        finishedAt: new Date().toISOString(),
-      })
-      .where('id', '=', executionId)
-      .where('status', '=', EXECUTION_STATUS.STARTED)
-      .execute();
-    if ((result.updatedCount ?? 0) === 0) {
-      return false;
-    }
-    await query()
-      .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-      .set({
-        status: NODE_RUN_STATUS.ABORTED,
-        result: serializeJson(null),
-        error: 'Workflow execution timed out',
-        finishedAt: new Date().toISOString(),
-      })
-      .where('workflowRunId', '=', executionId)
-      .where('status', '=', NODE_RUN_STATUS.PENDING)
-      .execute();
-    return true;
+    return options.database.transaction(async (connection) => {
+      const result = await connection.query
+        .updateTable(WORKFLOW_COLLECTIONS.runs)
+        .set({
+          status: EXECUTION_STATUS.ABORTED,
+          reason: EXECUTION_REASON.TIMEOUT,
+          finishedAt: workflowDatabaseTime(
+            new Date().toISOString(),
+            connection.dialect,
+          ),
+        })
+        .where('id', '=', executionId)
+        .where('status', '=', EXECUTION_STATUS.STARTED)
+        .execute();
+      if ((result.updatedCount ?? 0) === 0) {
+        return false;
+      }
+      await connection.query
+        .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
+        .set({
+          status: NODE_RUN_STATUS.ABORTED,
+          result: serializeJson(null),
+          error: 'Workflow execution timed out',
+          finishedAt: workflowDatabaseTime(
+            new Date().toISOString(),
+            connection.dialect,
+          ),
+        })
+        .where('workflowRunId', '=', executionId)
+        .where('status', '=', NODE_RUN_STATUS.PENDING)
+        .execute();
+      await recordWorkflowPhase(
+        options.database,
+        connection,
+        executionId,
+        'cancelled',
+        'failed',
+      );
+      return true;
+    }, options.connectionName);
   };
 
   const performSweep = async (): Promise<number> => {
@@ -94,7 +111,14 @@ export function createTimeoutReaper(
       .select(['id', 'workflowId', 'expiresAt'])
       .where('status', '=', EXECUTION_STATUS.STARTED)
       .where('expiresAt', 'is not', null)
-      .where('expiresAt', '<', now)
+      .where(
+        'expiresAt',
+        '<',
+        workflowDatabaseTime(
+          now,
+          options.database.connection(options.connectionName).dialect,
+        ),
+      )
       .orderBy('expiresAt')
       .orderBy('id')
       .limit(batchSize)

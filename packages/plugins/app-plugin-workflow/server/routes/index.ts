@@ -1,3 +1,5 @@
+import { attachWorkflowHttp, workflowHttpTarget } from '../audit-internal.js';
+import { workflowAuditToken } from '../audit.js';
 import { databaseManagerToken } from '@nocobase/db';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -69,6 +71,15 @@ export const apiRoutes: AppApiRouteContribution<
       },
       500,
     );
+  });
+  router.post('/workflows/:id/run', async (context, next) => {
+    if (!container.has(workflowAuditToken)) return next();
+    const bridge = container.resolve(workflowAuditToken);
+    attachWorkflowHttp(context, bridge);
+    return bridge.service.http({
+      action: 'workflow.run',
+      target: workflowHttpTarget,
+    })(context, next);
   });
   const authentication = container.resolve(authenticationToken);
   for (const path of workflowRoutePaths) {

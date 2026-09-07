@@ -25,3 +25,9 @@ export type {
   AppDatabaseSeedConfig,
 } from './types.js';
 export * from './config.js';
+export {
+  databaseLifecycleObserverToken,
+  type DatabaseLifecycleObserver,
+  type DatabaseLifecyclePhase,
+  type DatabaseLifecycleResult,
+} from './lifecycle-observer.js';

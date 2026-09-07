@@ -3,10 +3,11 @@ import type {
   SessionData,
   SessionEnv,
 } from '@nocobase/session';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import type { InAppStore } from './store.js';
 import type { InAppItem } from './types.js';
+import type { InAppNotificationAuditBridge } from './audit.js';
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -20,6 +21,7 @@ export type InAppUserIdResolver = (
 
 export interface CreateInAppRouterOptions {
   readonly resolveUserId?: InAppUserIdResolver;
+  readonly audit?: InAppNotificationAuditBridge;
 }
 
 type InAppRouterEnv = {
@@ -31,17 +33,25 @@ export function createInAppRouter(
   options: CreateInAppRouterOptions = {},
 ): Hono<InAppRouterEnv> {
   const router = new Hono<InAppRouterEnv>();
-  router.use('*', async (context, next) => {
+  router.use('*', async (context: Context<InAppRouterEnv>, next) => {
     const externalUserId = await options.resolveUserId?.(context.req.raw);
     if (externalUserId && context.var.session) {
       await context.var.session.set('userId', externalUserId);
     }
     const resolvedUserId =
       externalUserId ?? (await userId(context.var.session));
-    if (!resolvedUserId)
-      return context.json({ error: 'Authentication required.' }, 401);
-    context.set('notificationUserId', resolvedUserId);
-    await next();
+    const proceed = async (): Promise<void> => {
+      if (!resolvedUserId) {
+        context.res = context.json({ error: 'Authentication required.' }, 401);
+        return;
+      }
+      context.set('notificationUserId', resolvedUserId);
+      await next();
+    };
+    // Legacy session fallback still controls inbox access, but cannot claim audit identity.
+    if (options.audit)
+      await options.audit.withIdentity(context, externalUserId, proceed);
+    else await proceed();
   });
   router.get('/csrf', (context) => {
     const token = crypto.randomUUID();
@@ -95,7 +105,7 @@ export function createInAppRouter(
       updated: await store.markAllRead(context.var.notificationUserId),
     });
   });
-  router.post('/:id', async (context) => {
+  router.post('/:id{(?!read-all$)[^/]+}', async (context) => {
     if (
       !validCsrf(
         context.req.header('x-csrf-token'),

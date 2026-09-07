@@ -16,7 +16,7 @@ pnpm dev
 
 ### Review your configuration
 
-`config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
+This template declares `nocobase.scaffoldProfile: "app-v1"`; use a compatible `@nocobase/create-app` generator. `config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
 
 - **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.

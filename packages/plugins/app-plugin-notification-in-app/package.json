@@ -41,7 +41,11 @@
       "types": "./shared/realtime.ts",
       "import": "./shared/realtime.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./server/audit": {
+      "types": "./server/audit.ts",
+      "import": "./server/audit.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -70,7 +74,11 @@
         "types": "./dist/shared/realtime.d.ts",
         "import": "./dist/shared/realtime.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./server/audit": {
+        "types": "./dist/server/audit.d.ts",
+        "import": "./dist/server/audit.js"
+      }
     }
   },
   "scripts": {

@@ -10,8 +10,7 @@ const REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
 export interface InstallOptions {
   directory: string;
   /**
-   * The one database driver an app's dialect needs, recorded for the caller's benefit. Omitted for a hub, which has no
-   * database. The install itself does not read it: the driver reaches the tree through `dependencies`, not the
+   * The one database driver an app's dialect needs, recorded for the caller's benefit. Omitted for a legacy Hub without the app-v1 scaffold profile. The install itself does not read it: the driver reaches the tree through `dependencies`, not the
    * command line.
    */
   driver?: string;

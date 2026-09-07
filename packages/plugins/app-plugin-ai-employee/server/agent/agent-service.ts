@@ -1,4 +1,9 @@
 import { concat } from '@langchain/core/utils/stream';
+import {
+  runAuditedAI,
+  streamAuditedAI,
+  markAIRunOutcome,
+} from '../audit-runtime.js';
 import { Command } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
 import { buildTool } from '@nocobase/ai-employee';
@@ -113,37 +118,49 @@ export class AgentService {
     request: AgentRequest = {},
     agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('stream', request, agentContext);
+    return streamAuditedAI(this.providers.conversation, () =>
+      this.executeStream('stream', request, agentContext),
+    );
   }
   resumeStream(
     request: AgentRequest,
     agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('resume', request, agentContext);
+    return streamAuditedAI(this.providers.conversation, () =>
+      this.executeStream('resume', request, agentContext),
+    );
   }
   forkStream(
     request: AgentRequest,
     agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('fork', request, agentContext);
+    return streamAuditedAI(this.providers.conversation, () =>
+      this.executeStream('fork', request, agentContext),
+    );
   }
   invoke(
     request: AgentRequest = {},
     agentContext?: AgentContext,
   ): Promise<unknown> {
-    return this.executeInvoke('invoke', request, agentContext);
+    return runAuditedAI(this.providers.conversation, () =>
+      this.executeInvoke('invoke', request, agentContext),
+    );
   }
   resumeInvoke(
     request: AgentRequest,
     agentContext?: AgentContext,
   ): Promise<unknown> {
-    return this.executeInvoke('resume', request, agentContext);
+    return runAuditedAI(this.providers.conversation, () =>
+      this.executeInvoke('resume', request, agentContext),
+    );
   }
   forkInvoke(
     request: AgentRequest,
     agentContext?: AgentContext,
   ): Promise<unknown> {
-    return this.executeInvoke('fork', request, agentContext);
+    return runAuditedAI(this.providers.conversation, () =>
+      this.executeInvoke('fork', request, agentContext),
+    );
   }
 
   private async resolveLLM(_request: AgentRequest): Promise<{
@@ -584,6 +601,8 @@ export class AgentService {
       await conversation.afterExecution('streaming', {
         aborted: signal.aborted,
       });
+      if (signal.aborted)
+        markAIRunOutcome('failed', this.providers.conversation);
       await conversation.streamCache.clear();
     }
   }

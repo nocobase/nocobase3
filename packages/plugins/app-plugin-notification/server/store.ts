@@ -1,4 +1,10 @@
-import type { DatabaseManager, Row } from '@nocobase/db';
+import {
+  databaseTime,
+  timestamp,
+  optionalTimestamp,
+  databaseTimezone,
+} from './database-time.js';
+import type { DatabaseDialect, DatabaseManager, Row } from '@nocobase/db';
 import {
   isNotificationProviderErrorCategory,
   type NotificationProviderErrorCategory,
@@ -119,8 +125,8 @@ interface NotificationRow extends Row {
   id: string;
   sourceType: string;
   sourceReferenceId?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 interface DeliveryRow extends Row {
@@ -133,12 +139,12 @@ interface DeliveryRow extends Row {
   providerType: string;
   attemptCount: number;
   status: NotificationDeliveryStatus;
-  nextRunAt?: string | null;
+  nextRunAt?: string | Date | null;
   leaseToken?: string | null;
-  leaseExpiresAt?: string | null;
+  leaseExpiresAt?: string | Date | null;
   lastError?: NotificationErrorRecord | string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 interface AttemptRow extends Row {
@@ -148,8 +154,8 @@ interface AttemptRow extends Row {
   providerName: string;
   providerType: string;
   status: NotificationAttemptStatus;
-  startedAt: string;
-  finishedAt?: string;
+  startedAt: string | Date;
+  finishedAt?: string | Date;
   providerMessageId?: string;
   errorCategory?: string;
   errorCode?: string;
@@ -158,6 +164,9 @@ interface AttemptRow extends Row {
 
 export class DatabaseNotificationStore implements NotificationStore {
   constructor(private readonly database: DatabaseManager) {}
+  private time<T extends string | null | undefined>(value: T): T | Date {
+    return databaseTime(value, this.database.connection().dialect);
+  }
   async now(): Promise<string> {
     return new Date().toISOString();
   }
@@ -166,12 +175,16 @@ export class DatabaseNotificationStore implements NotificationStore {
     await this.database.transaction(async (connection): Promise<void> => {
       await connection.query
         .insertInto<NotificationRow>('notificationDispatches')
-        .values(toLogRow(bundle.log))
+        .values(toLogRow(bundle.log, this.database.connection().dialect))
         .execute();
       if (bundle.deliveries.length > 0)
         await connection.query
           .insertInto<DeliveryRow>('notificationDeliveries')
-          .values(bundle.deliveries.map(toDeliveryRow))
+          .values(
+            bundle.deliveries.map((row) =>
+              toDeliveryRow(row, this.database.connection().dialect),
+            ),
+          )
           .execute();
     });
   }
@@ -183,7 +196,13 @@ export class DatabaseNotificationStore implements NotificationStore {
       .selectAll()
       .where('id', '=', id)
       .executeTakeFirst<NotificationRow>();
-    return row ? fromLogRow(row, await this.listDeliveries(id)) : undefined;
+    return row
+      ? fromLogRow(
+          row,
+          await this.listDeliveries(id),
+          await databaseTimezone(this.database.connection()),
+        )
+      : undefined;
   }
 
   async listLogs(
@@ -198,7 +217,11 @@ export class DatabaseNotificationStore implements NotificationStore {
       .execute<NotificationRow>();
     return Promise.all(
       rows.map(async (row): Promise<NotificationLogRecord> =>
-        fromLogRow(row, await this.listDeliveries(row.id)),
+        fromLogRow(
+          row,
+          await this.listDeliveries(row.id),
+          await databaseTimezone(this.database.connection()),
+        ),
       ),
     );
   }
@@ -212,7 +235,9 @@ export class DatabaseNotificationStore implements NotificationStore {
       .selectAll()
       .where('id', '=', id)
       .executeTakeFirst<DeliveryRow>();
-    return row ? fromDeliveryRow(row) : undefined;
+    return row
+      ? fromDeliveryRow(row, await databaseTimezone(this.database.connection()))
+      : undefined;
   }
 
   async listDeliveries(
@@ -224,7 +249,8 @@ export class DatabaseNotificationStore implements NotificationStore {
       .selectAll()
       .where('notificationId', '=', notificationId)
       .execute<DeliveryRow>();
-    return rows.map(fromDeliveryRow);
+    const timezone = await databaseTimezone(this.database.connection());
+    return rows.map((row) => fromDeliveryRow(row, timezone));
   }
 
   async listReady(
@@ -240,14 +266,15 @@ export class DatabaseNotificationStore implements NotificationStore {
           builder.eb('status', '=', 'pending'),
           builder.eb.and([
             builder.eb('status', '=', 'failed'),
-            builder.eb('nextRunAt', '<=', now),
+            builder.eb('nextRunAt', '<=', this.time(now)),
           ]),
         ]),
       )
       .orderBy('createdAt', 'asc')
       .limit(limit)
       .execute<DeliveryRow>();
-    return rows.map(fromDeliveryRow);
+    const timezone = await databaseTimezone(this.database.connection());
+    return rows.map((row) => fromDeliveryRow(row, timezone));
   }
 
   async listAttempts(
@@ -260,7 +287,8 @@ export class DatabaseNotificationStore implements NotificationStore {
       .where('deliveryId', '=', deliveryId)
       .orderBy('sequence', 'asc')
       .execute<AttemptRow>();
-    return rows.map(fromAttemptRow);
+    const timezone = await databaseTimezone(this.database.connection());
+    return rows.map((row) => fromAttemptRow(row, timezone));
   }
 
   async claimDelivery(
@@ -276,8 +304,8 @@ export class DatabaseNotificationStore implements NotificationStore {
         status: 'preparing',
         nextRunAt: null,
         leaseToken,
-        leaseExpiresAt,
-        updatedAt: now,
+        leaseExpiresAt: this.time(leaseExpiresAt),
+        updatedAt: this.time(now),
       })
       .where('id', '=', id)
       .where((builder) =>
@@ -285,7 +313,7 @@ export class DatabaseNotificationStore implements NotificationStore {
           builder.eb('status', '=', 'pending'),
           builder.eb.and([
             builder.eb('status', '=', 'failed'),
-            builder.eb('nextRunAt', '<=', now),
+            builder.eb('nextRunAt', '<=', this.time(now)),
           ]),
         ]),
       )
@@ -307,8 +335,8 @@ export class DatabaseNotificationStore implements NotificationStore {
           .set({
             attemptCount: attempt.sequence,
             status: 'submitting',
-            leaseExpiresAt,
-            updatedAt: now,
+            leaseExpiresAt: this.time(leaseExpiresAt),
+            updatedAt: this.time(now),
           })
           .where('id', '=', delivery.id)
           .where('status', 'in', ['preparing', 'submitting'])
@@ -318,14 +346,19 @@ export class DatabaseNotificationStore implements NotificationStore {
         if (result.updatedCount !== 1) return undefined;
         await connection.query
           .insertInto<AttemptRow>('notificationDeliveryAttempts')
-          .values(toAttemptRow(attempt))
+          .values(toAttemptRow(attempt, this.database.connection().dialect))
           .execute();
         const row = await connection.query
           .selectFrom<DeliveryRow>('notificationDeliveries')
           .selectAll()
           .where('id', '=', delivery.id)
           .executeTakeFirst<DeliveryRow>();
-        return row ? fromDeliveryRow(row) : undefined;
+        return row
+          ? fromDeliveryRow(
+              row,
+              await databaseTimezone(this.database.connection()),
+            )
+          : undefined;
       },
     );
   }
@@ -349,7 +382,7 @@ export class DatabaseNotificationStore implements NotificationStore {
             .updateTable<AttemptRow>('notificationDeliveryAttempts')
             .set({
               status: attempt.status,
-              finishedAt: attempt.finishedAt,
+              finishedAt: this.time(attempt.finishedAt),
               providerMessageId: attempt.providerMessageId,
               errorCategory: attempt.error?.category,
               errorCode: attempt.error?.code,
@@ -363,11 +396,11 @@ export class DatabaseNotificationStore implements NotificationStore {
             .updateTable<DeliveryRow>('notificationDeliveries')
             .set({
               status,
-              nextRunAt: nextRunAt ?? null,
+              nextRunAt: this.time(nextRunAt ?? null),
               lastError: error ? JSON.stringify(error) : null,
               leaseToken: null,
               leaseExpiresAt: null,
-              updatedAt: now,
+              updatedAt: this.time(now),
             })
             .where('id', '=', delivery.id)
             .where('status', '=', 'submitting')
@@ -395,7 +428,10 @@ export class DatabaseNotificationStore implements NotificationStore {
     const result = await this.database
       .query()
       .updateTable<DeliveryRow>('notificationDeliveries')
-      .set({ leaseExpiresAt, updatedAt: await this.now() })
+      .set({
+        leaseExpiresAt: this.time(leaseExpiresAt),
+        updatedAt: this.time(await this.now()),
+      })
       .where('id', '=', id)
       .where('status', 'in', ['preparing', 'submitting'])
       .where('leaseToken', '=', leaseToken)
@@ -421,7 +457,7 @@ export class DatabaseNotificationStore implements NotificationStore {
         lastError: error ? JSON.stringify(error) : null,
         leaseToken: null,
         leaseExpiresAt: null,
-        updatedAt: now,
+        updatedAt: this.time(now),
       })
       .where('id', '=', delivery.id)
       .where('status', 'in', ['preparing', 'submitting'])
@@ -438,7 +474,7 @@ export class DatabaseNotificationStore implements NotificationStore {
       .selectFrom<DeliveryRow>('notificationDeliveries')
       .selectAll()
       .where('status', 'in', ['preparing', 'submitting'])
-      .where('leaseExpiresAt', '<=', now)
+      .where('leaseExpiresAt', '<=', this.time(now))
       .execute<DeliveryRow>();
     let recoveredCount = 0;
     for (const row of rows) {
@@ -450,11 +486,11 @@ export class DatabaseNotificationStore implements NotificationStore {
             status: 'pending',
             leaseToken: null,
             leaseExpiresAt: null,
-            updatedAt: now,
+            updatedAt: this.time(now),
           })
           .where('id', '=', row.id)
           .where('status', '=', 'preparing')
-          .where('leaseExpiresAt', '<=', now)
+          .where('leaseExpiresAt', '<=', this.time(now))
           .execute();
         if (result.updatedCount === 1) {
           recoveredCount += 1;
@@ -474,18 +510,18 @@ export class DatabaseNotificationStore implements NotificationStore {
                 lastError: JSON.stringify(error),
                 leaseToken: null,
                 leaseExpiresAt: null,
-                updatedAt: now,
+                updatedAt: this.time(now),
               })
               .where('id', '=', row.id)
               .where('status', '=', 'submitting')
-              .where('leaseExpiresAt', '<=', now)
+              .where('leaseExpiresAt', '<=', this.time(now))
               .execute();
             if (result.updatedCount !== 1) return false;
             await connection.query
               .updateTable<AttemptRow>('notificationDeliveryAttempts')
               .set({
                 status: 'unknown',
-                finishedAt: now,
+                finishedAt: this.time(now),
                 errorCode: error.code,
                 errorMessage: error.message,
               })
@@ -539,19 +575,23 @@ function summarize(
   return 'partial';
 }
 
-function toLogRow(record: NotificationLogRecord): NotificationRow {
+function toLogRow(
+  record: NotificationLogRecord,
+  dialect: DatabaseDialect,
+): NotificationRow {
   return {
     id: record.id,
     sourceType: record.sourceType,
     sourceReferenceId: record.sourceReferenceId,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
+    createdAt: databaseTime(record.createdAt, dialect),
+    updatedAt: databaseTime(record.updatedAt, dialect),
   };
 }
 
 function fromLogRow(
   row: NotificationRow,
   deliveries: readonly NotificationDeliveryRecord[],
+  timezone?: string,
 ): NotificationLogRecord {
   const messageSnapshot: Record<string, object> = {};
   for (const delivery of deliveries)
@@ -562,16 +602,19 @@ function fromLogRow(
     sourceReferenceId: row.sourceReferenceId,
     messageSnapshot,
     status: summarize(deliveries),
-    createdAt: row.createdAt,
+    createdAt: timestamp(row.createdAt, timezone),
     updatedAt: deliveries.reduce(
       (latest, delivery) =>
         delivery.updatedAt > latest ? delivery.updatedAt : latest,
-      row.updatedAt,
+      timestamp(row.updatedAt, timezone),
     ),
   };
 }
 
-function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
+function toDeliveryRow(
+  record: NotificationDeliveryRecord,
+  dialect: DatabaseDialect,
+): DeliveryRow {
   return {
     id: record.id,
     notificationId: record.notificationId,
@@ -582,16 +625,19 @@ function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
     providerType: record.providerType,
     attemptCount: record.attemptCount,
     status: record.status,
-    nextRunAt: record.nextRunAt,
+    nextRunAt: databaseTime(record.nextRunAt, dialect),
     leaseToken: record.leaseToken,
-    leaseExpiresAt: record.leaseExpiresAt,
+    leaseExpiresAt: databaseTime(record.leaseExpiresAt, dialect),
     lastError: record.lastError,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
+    createdAt: databaseTime(record.createdAt, dialect),
+    updatedAt: databaseTime(record.updatedAt, dialect),
   };
 }
 
-function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
+function fromDeliveryRow(
+  row: DeliveryRow,
+  timezone?: string,
+): NotificationDeliveryRecord {
   return {
     id: row.id,
     notificationId: row.notificationId,
@@ -602,12 +648,12 @@ function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
     providerType: row.providerType,
     attemptCount: row.attemptCount,
     status: row.status,
-    nextRunAt: row.nextRunAt ?? undefined,
+    nextRunAt: optionalTimestamp(row.nextRunAt, timezone),
     leaseToken: row.leaseToken ?? undefined,
-    leaseExpiresAt: row.leaseExpiresAt ?? undefined,
+    leaseExpiresAt: optionalTimestamp(row.leaseExpiresAt, timezone),
     lastError: parseError(row.lastError),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: timestamp(row.createdAt, timezone),
+    updatedAt: timestamp(row.updatedAt, timezone),
   };
 }
 
@@ -647,7 +693,10 @@ function parseError(
   };
 }
 
-function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
+function toAttemptRow(
+  record: NotificationAttemptRecord,
+  dialect: DatabaseDialect,
+): AttemptRow {
   return {
     id: record.id,
     deliveryId: record.deliveryId,
@@ -655,8 +704,8 @@ function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
     providerName: record.providerName,
     providerType: record.providerType,
     status: record.status,
-    startedAt: record.startedAt,
-    finishedAt: record.finishedAt,
+    startedAt: databaseTime(record.startedAt, dialect),
+    finishedAt: databaseTime(record.finishedAt, dialect),
     providerMessageId: record.providerMessageId,
     errorCategory: record.error?.category,
     errorCode: record.error?.code,
@@ -664,7 +713,10 @@ function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
   };
 }
 
-function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
+function fromAttemptRow(
+  row: AttemptRow,
+  timezone?: string,
+): NotificationAttemptRecord {
   const category = normalizeStoredErrorCategory(row.errorCategory);
   const error = row.errorMessage
     ? {
@@ -680,8 +732,8 @@ function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
     providerName: row.providerName,
     providerType: row.providerType,
     status: row.status,
-    startedAt: row.startedAt,
-    finishedAt: row.finishedAt,
+    startedAt: timestamp(row.startedAt, timezone),
+    finishedAt: optionalTimestamp(row.finishedAt, timezone),
     providerMessageId: row.providerMessageId,
     error,
   };

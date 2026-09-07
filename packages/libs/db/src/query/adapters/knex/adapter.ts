@@ -1,3 +1,10 @@
+import type { DatabaseConnection } from '../../../database/connection.js';
+import { executeManagedWrite } from '../../managed-write.js';
+import type {
+  ManagedWriteDescriptor,
+  ManagedWriteResult,
+  ManagedWriteSummary,
+} from '../../managed-write-types.js';
 import type { Knex } from 'knex';
 import type { NamingStrategy } from '../../../naming/index.js';
 import type {
@@ -34,6 +41,7 @@ export class KnexQueryAdapter implements QueryAdapter {
   constructor(
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
+    private readonly connection: DatabaseConnection | undefined = undefined,
   ) {}
 
   selectFrom<TRecord extends Row = Row>(
@@ -43,15 +51,30 @@ export class KnexQueryAdapter implements QueryAdapter {
   }
 
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord> {
-    return new KnexInsertQuery<TRecord>(this.getClient, this.naming, table);
+    return new KnexInsertQuery<TRecord>(
+      this.getClient,
+      this.naming,
+      table,
+      this.connection,
+    );
   }
 
   updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord> {
-    return new KnexUpdateQuery<TRecord>(this.getClient, this.naming, table);
+    return new KnexUpdateQuery<TRecord>(
+      this.getClient,
+      this.naming,
+      table,
+      this.connection,
+    );
   }
 
   deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord> {
-    return new KnexDeleteQuery<TRecord>(this.getClient, this.naming, table);
+    return new KnexDeleteQuery<TRecord>(
+      this.getClient,
+      this.naming,
+      table,
+      this.connection,
+    );
   }
 }
 
@@ -485,6 +508,7 @@ class KnexInsertQuery<
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
     private readonly tableName: string,
+    private readonly connection: DatabaseConnection | undefined = undefined,
     private readonly data?: TRecord | readonly TRecord[],
   ) {}
 
@@ -493,14 +517,22 @@ class KnexInsertQuery<
       this.getClient,
       this.naming,
       this.tableName,
+      this.connection,
       data,
     );
   }
 
   async execute(): Promise<InsertResult> {
     const data = this.requireValues();
-    const result = await this.buildQuery(data);
-    return normalizeInsertResult(result, data);
+    return executeMutation(
+      this.connection,
+      'insert',
+      this.tableName,
+      this.naming,
+      this.getClient,
+      (client) => this.buildQuery(data, client),
+      (result) => normalizeInsertResult(result, data),
+    );
   }
 
   compile(): CompiledQuery {
@@ -511,10 +543,13 @@ class KnexInsertQuery<
     };
   }
 
-  private buildQuery(data: TRecord | readonly TRecord[]): Knex.QueryBuilder {
-    return this.getClient()(
-      mapTableExpression(this.tableName, this.naming),
-    ).insert(mapData(data, this.naming) as any);
+  private buildQuery(
+    data: TRecord | readonly TRecord[],
+    client: Knex = this.getClient(),
+  ): Knex.QueryBuilder {
+    return client<Row>(mapTableExpression(this.tableName, this.naming)).insert(
+      mapData(data, this.naming),
+    );
   }
 
   private requireValues(): TRecord | readonly TRecord[] {
@@ -532,6 +567,7 @@ class KnexUpdateQuery<
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
     private readonly tableName: string,
+    private readonly connection: DatabaseConnection | undefined = undefined,
     private readonly data?: Partial<TRecord>,
     private readonly state: MutationState = emptyMutationState(),
   ) {}
@@ -541,6 +577,7 @@ class KnexUpdateQuery<
       this.getClient,
       this.naming,
       this.tableName,
+      this.connection,
       data,
       this.state,
     );
@@ -592,8 +629,15 @@ class KnexUpdateQuery<
   }
 
   async execute(): Promise<UpdateResult> {
-    const result = await this.buildQuery();
-    return normalizeUpdateResult(result);
+    return executeMutation(
+      this.connection,
+      'update',
+      this.tableName,
+      this.naming,
+      this.getClient,
+      (client) => this.buildQuery(client),
+      normalizeUpdateResult,
+    );
   }
 
   compile(): CompiledQuery {
@@ -609,6 +653,7 @@ class KnexUpdateQuery<
       this.getClient,
       this.naming,
       this.tableName,
+      this.connection,
       this.data,
       {
         where: patch.where ?? this.state.where,
@@ -617,13 +662,12 @@ class KnexUpdateQuery<
     );
   }
 
-  private buildQuery(): Knex.QueryBuilder {
-    const client = this.getClient();
+  private buildQuery(client: Knex = this.getClient()): Knex.QueryBuilder {
     const data = this.requireSetData();
     this.assertWhereSafety('updateTable().execute()');
-    const query = client(
+    const query = client<Row>(
       mapTableExpression(this.tableName, this.naming),
-    ).update(mapData(data, this.naming) as any);
+    ).update(mapData(data, this.naming));
     applyWhereExpressions(query, this.state.where, {
       client,
       naming: this.naming,
@@ -658,6 +702,7 @@ class KnexDeleteQuery<
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
     private readonly tableName: string,
+    private readonly connection: DatabaseConnection | undefined = undefined,
     private readonly state: MutationState = emptyMutationState(),
   ) {}
 
@@ -707,8 +752,15 @@ class KnexDeleteQuery<
   }
 
   async execute(): Promise<DeleteResult> {
-    const result = await this.buildQuery();
-    return normalizeDeleteResult(result);
+    return executeMutation(
+      this.connection,
+      'delete',
+      this.tableName,
+      this.naming,
+      this.getClient,
+      (client) => this.buildQuery(client),
+      normalizeDeleteResult,
+    );
   }
 
   compile(): CompiledQuery {
@@ -720,14 +772,19 @@ class KnexDeleteQuery<
   }
 
   private clone(patch: Partial<MutationState>): KnexDeleteQuery<TRecord> {
-    return new KnexDeleteQuery(this.getClient, this.naming, this.tableName, {
-      where: patch.where ?? this.state.where,
-      allowAllRows: patch.allowAllRows ?? this.state.allowAllRows,
-    });
+    return new KnexDeleteQuery(
+      this.getClient,
+      this.naming,
+      this.tableName,
+      this.connection,
+      {
+        where: patch.where ?? this.state.where,
+        allowAllRows: patch.allowAllRows ?? this.state.allowAllRows,
+      },
+    );
   }
 
-  private buildQuery(): Knex.QueryBuilder {
-    const client = this.getClient();
+  private buildQuery(client: Knex = this.getClient()): Knex.QueryBuilder {
     this.assertWhereSafety('deleteFrom().execute()');
     const query = client(
       mapTableExpression(this.tableName, this.naming),
@@ -2359,4 +2416,89 @@ function lastReferenceSegment(reference: string): string {
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled value: ${JSON.stringify(value)}`);
+}
+
+async function executeMutation<T extends ManagedWriteResult>(
+  connection: DatabaseConnection | undefined,
+  operation: ManagedWriteDescriptor['operation'],
+  table: string,
+  naming: NamingStrategy,
+  getClient: () => Knex,
+  build: (client: Knex) => Knex.QueryBuilder,
+  normalize: (raw: unknown) => T,
+): Promise<T> {
+  if (!connection) return normalize(await build(getClient()));
+  let actualResult: T | undefined;
+  let summary: ManagedWriteSummary = { countSemantics: 'unknown' };
+  const parts = mapReference(
+    parseAliasedIdentifier(table).identifier,
+    naming,
+  ).split('.');
+  const target = {
+    table: parts.pop()!,
+    ...(parts.length ? { schema: parts.join('.') } : {}),
+  };
+  return executeManagedWrite(
+    connection,
+    operation,
+    target,
+    async (selected) => {
+      const client =
+        selected === connection ? getClient() : await selected.client<Knex>();
+      const raw: unknown = await build(client);
+      actualResult = normalize(raw);
+      summary = summarizeMutation(raw, operation, selected.driver, client);
+      return actualResult;
+    },
+    (result) =>
+      result === actualResult ? summary : { countSemantics: 'unknown' },
+  );
+}
+
+function summarizeMutation(
+  raw: unknown,
+  operation: ManagedWriteDescriptor['operation'],
+  driver: DatabaseConnection['driver'],
+  client: Knex,
+): ManagedWriteSummary {
+  let count: unknown;
+  let countSemantics: ManagedWriteSummary['countSemantics'] = 'unknown';
+  if (operation === 'insert') {
+    // Knex discards SQLite changes and MySQL affectedRows for inserts. IDs are not counts.
+    if (driver === 'pg' && isPlainObject(raw)) {
+      count = raw.rowCount;
+      countSemantics = 'inserted';
+    }
+  } else if (typeof raw === 'number') {
+    count = raw;
+    countSemantics = operation === 'delete' ? 'deleted' : 'matched';
+    if (operation === 'update' && driver === 'mysql2') {
+      // mysql2 defaults to FOUND_ROWS; explicit flags may change affectedRows semantics.
+      const config: unknown = client.client.config.connection;
+      const flags: unknown = isPlainObject(config) ? config.flags : undefined;
+      if (flags !== undefined) {
+        const list =
+          typeof flags === 'string'
+            ? flags.toUpperCase().split(/\s*,+\s*/)
+            : flags;
+        if (
+          Array.isArray(list) &&
+          list.every((flag: unknown) => typeof flag === 'string')
+        ) {
+          const found = list.filter(
+            (flag) => flag === 'FOUND_ROWS' || flag === '-FOUND_ROWS',
+          );
+          countSemantics = found.includes('-FOUND_ROWS')
+            ? 'changed'
+            : 'matched';
+        } else countSemantics = 'unknown';
+      }
+    }
+  }
+  return typeof count === 'number' &&
+    Number.isSafeInteger(count) &&
+    count >= 0 &&
+    countSemantics !== 'unknown'
+    ? Object.freeze({ count, countSemantics })
+    : Object.freeze({ countSemantics: 'unknown' });
 }

@@ -1,4 +1,5 @@
-import type { ExecutionContext, Hono } from 'hono';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Context, ExecutionContext, Hono, Next } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
 import { appConfig } from '../config/index.js';
 
@@ -33,6 +34,27 @@ export type ApplicationFetchHandler = (
   env?: unknown,
   executionContext?: ExecutionContext,
 ) => Response | Promise<Response>;
+
+/** Trusted infrastructure hooks. Finalizers run after Hono resolves its response. */
+export interface ApplicationHttpObserver {
+  run(context: Context, next: Next): Promise<void>;
+  finalize(context: Context): Promise<void>;
+  failure(): void;
+  /** No response exists when even Hono's error handler rejects. Release request resources. */
+  abort?(context: Context): void;
+}
+
+export interface ApplicationHttpHost {
+  addObserver(observer: ApplicationHttpObserver): () => void;
+  /** Fixed read-only startup probe; no caller-supplied request or business handler. */
+  probe(): Promise<Response>;
+}
+
+interface HttpObservation {
+  readonly probe?: boolean;
+  context?: Context;
+  readonly observers: readonly ApplicationHttpObserver[];
+}
 
 export type ApplicationWebSocketFactory = (
   container: ServiceResolver,
@@ -84,9 +106,65 @@ export class Application<
     env,
     executionContext,
   ) => {
-    await this.start();
-    return this.router.fetch(request, env, executionContext);
+    if (this.closing)
+      return new Response('Application is shutting down.', { status: 503 });
+    // Admission is synchronous; shutdown also drains requests waiting for startup.
+    const startup = this.start();
+    const dispatch = startup.then(() =>
+      this.dispatchHttp(request, env, executionContext),
+    );
+    this.acceptedHttp.add(dispatch);
+    try {
+      return await dispatch;
+    } finally {
+      this.acceptedHttp.delete(dispatch);
+    }
   };
+
+  private dispatchHttp(
+    request: Request,
+    env?: unknown,
+    executionContext?: ExecutionContext,
+    probe: boolean = false,
+  ): Promise<Response> {
+    const observation: HttpObservation = {
+      observers: [...this.httpObservers],
+      probe,
+    };
+    return this.httpObservation.run(observation, async () => {
+      let response: Response;
+      try {
+        response = await this.router.fetch(request, env, executionContext);
+      } catch (error) {
+        if (observation.context) {
+          for (const observer of observation.observers) {
+            try {
+              observer.abort?.(observation.context);
+            } catch {
+              console.error('HTTP response observer cleanup failed.');
+            }
+          }
+        }
+        throw error;
+      }
+      if (observation.context) {
+        if (observation.context.res !== response)
+          observation.context.res = response;
+        for (const observer of observation.observers) {
+          try {
+            await observer.finalize(observation.context);
+          } catch {
+            try {
+              observer.failure();
+            } catch {
+              console.error('HTTP response observer diagnostics failed.');
+            }
+          }
+        }
+      }
+      return response;
+    });
+  }
   public readonly websocket: AppWebSocketHandler;
 
   private readonly providerRegistry: ServiceProviderRegistry =
@@ -98,6 +176,29 @@ export class Application<
   private readonly httpMiddleware: AppHttpMiddleware<Application<TConfig>>[] =
     [];
   private readonly routes: AppRouteContribution<Application<TConfig>>[] = [];
+  private readonly httpObservation: AsyncLocalStorage<HttpObservation> =
+    new AsyncLocalStorage<HttpObservation>();
+  private readonly httpObservers: Set<ApplicationHttpObserver> = new Set();
+  private closing = false;
+  private shutdownPromise: Promise<void> | undefined;
+  private readonly acceptedHttp: Set<Promise<Response>> = new Set();
+  private startupProbeOpen = false;
+  public readonly httpHost: ApplicationHttpHost = Object.freeze({
+    addObserver: (observer: ApplicationHttpObserver): (() => void) =>
+      this.addHttpObserver(observer),
+    probe: async (): Promise<Response> => {
+      if (!this.startupProbeOpen || !this.routesRegistered)
+        throw new Error(
+          'HTTP probe is only available during startup verification.',
+        );
+      return this.dispatchHttp(
+        new Request('http://localhost/.nocobase/startup-probe'),
+        undefined,
+        undefined,
+        true,
+      );
+    },
+  });
   private startPromise: Promise<void> | undefined;
   private websocketHandler: AppWebSocketHandler | undefined;
   private appPackageName: string | undefined;
@@ -117,7 +218,16 @@ export class Application<
       await this.start();
       return this.getWebSocketHandler()(request, env);
     };
-    this.addServiceProvider(RouterProvider);
+    const observe = (context: Context, next: Next): Promise<void> =>
+      this.observeHttpContext(context, next);
+    this.addServiceProvider(
+      class extends RouterProvider<Application<TConfig>> {
+        public override register(): void {
+          super.register();
+          this.app.router.use('*', observe);
+        }
+      },
+    );
     if (this.usesDefaultWebSocket) {
       this.addServiceProvider(RealtimeProvider);
     }
@@ -150,7 +260,14 @@ export class Application<
     }
   }
 
+  private readonly registeredPlugins: Set<string> = new Set();
+
+  public hasPlugin(packageName: string): boolean {
+    return this.registeredPlugins.has(packageName);
+  }
+
   public addServerPlugins(serverPlugins: ResolvedAppServerPlugins): void {
+    this.assertRoutesMutable();
     this.appPackageName = serverPlugins.appPackageName;
     for (const plugin of serverPlugins.plugins) {
       for (const Provider of plugin.definition.serviceProviders) {
@@ -159,6 +276,7 @@ export class Application<
       for (const routes of plugin.definition.routes) {
         this.addRoutes(routes);
       }
+      this.registeredPlugins.add(plugin.definition.packageName);
       if (plugin.definition.locales) {
         this.localeContributions.push({
           packageName: plugin.definition.packageName,
@@ -190,6 +308,38 @@ export class Application<
     this.httpMiddleware.push(middleware);
   }
 
+  /** Install before traffic starts; disposal stops new observations, not in-flight finalizers. */
+  public addHttpObserver(observer: ApplicationHttpObserver): () => void {
+    if (this.routesRegistered)
+      throw new Error('HTTP observers must be installed before routes start.');
+    if (this.httpObservers.has(observer))
+      throw new Error('HTTP observer is already installed.');
+    this.httpObservers.add(observer);
+    return () => {
+      this.httpObservers.delete(observer);
+    };
+  }
+
+  private async observeHttpContext(
+    context: Context,
+    next: Next,
+  ): Promise<void> {
+    const observation = this.httpObservation.getStore();
+    if (!observation) {
+      await next();
+      return;
+    }
+    observation.context = context;
+    const dispatch = async (index: number): Promise<void> => {
+      const observer = observation.observers[index];
+      if (observer) await observer.run(context, () => dispatch(index + 1));
+      else if (observation.probe)
+        context.res = new Response(null, { status: 204 });
+      else await next();
+    };
+    await dispatch(0);
+  }
+
   public registerProviders(): void {
     if (this.serviceProvidersRegistered) {
       return;
@@ -202,12 +352,27 @@ export class Application<
   }
 
   public start(): Promise<void> {
+    if (this.closing)
+      return Promise.reject(new Error('Application is shutting down.'));
     this.startPromise ??= this.startServiceProviders();
     return this.startPromise;
   }
 
   public shutdown(): Promise<void> {
-    return this.providerRegistry.shutdown();
+    this.closing = true;
+    this.startupProbeOpen = false;
+    this.shutdownPromise ??= (async (): Promise<void> => {
+      if (this.startPromise) {
+        try {
+          await this.startPromise;
+        } catch {
+          /* Provider registry already cleans up failed startup. */
+        }
+      }
+      await Promise.allSettled([...this.acceptedHttp]);
+      await this.providerRegistry.shutdown();
+    })();
+    return this.shutdownPromise;
   }
 
   private getWebSocketHandler(): AppWebSocketHandler {
@@ -220,8 +385,13 @@ export class Application<
     await this.registerLocales();
     await this.providerRegistry.bootAll();
     await this.registerRoutes();
-    await this.providerRegistry.startAll();
-    await this.providerRegistry.readyAll();
+    this.startupProbeOpen = !this.closing;
+    try {
+      await this.providerRegistry.startAll();
+      await this.providerRegistry.readyAll();
+    } finally {
+      this.startupProbeOpen = false;
+    }
   }
 
   /**

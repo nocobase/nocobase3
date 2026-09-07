@@ -1,3 +1,9 @@
+import { workflowDatabaseTime } from './database-time.js';
+import {
+  recordWorkflowPhase,
+  retryWorkflowFinalization,
+  workflowExecutionAudit,
+} from '../audit-internal.js';
 import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
 
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
@@ -209,6 +215,12 @@ export default class Processor {
   }
 
   async prepare(): Promise<void> {
+    await workflowExecutionAudit(
+      this.execution,
+      this.database,
+      this.query,
+      this.execution.id,
+    );
     this.makeNodes(this.workflow.nodes);
     const nodeRuns = await this.query
       .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
@@ -364,17 +376,56 @@ export default class Processor {
     const reason =
       executionStatus === EXECUTION_STATUS.ABORTED ? this.abortReason : null;
     const finishedAt = new Date().toISOString();
-    const result = await this.query
-      .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({
-        status: executionStatus,
-        output: serializeJson(output),
-        reason,
-        finishedAt,
-      })
-      .where('id', '=', this.execution.id)
-      .where('status', '=', EXECUTION_STATUS.STARTED)
-      .execute();
+    const auditContext = await workflowExecutionAudit(
+      this.execution,
+      this.database,
+      this.query,
+      this.execution.id,
+    );
+    const result = await retryWorkflowFinalization(() =>
+      this.database.transaction(async (connection) => {
+        const result = await connection.query
+          .updateTable(WORKFLOW_COLLECTIONS.runs)
+          .set({
+            status: executionStatus,
+            ...(auditContext && executionStatus !== EXECUTION_STATUS.STARTED
+              ? { auditContext: serializeJson(auditContext) }
+              : {}),
+            output: serializeJson(output),
+            reason,
+            finishedAt: workflowDatabaseTime(
+              finishedAt,
+              this.database.connection(this.connectionName).dialect,
+            ),
+          })
+          .where('id', '=', this.execution.id)
+          .where('status', '=', EXECUTION_STATUS.STARTED)
+          .execute();
+        if ((result.updatedCount ?? 0) > 0) {
+          const phase =
+            executionStatus === EXECUTION_STATUS.RESOLVED
+              ? 'completed'
+              : executionStatus === EXECUTION_STATUS.ABORTED
+                ? 'cancelled'
+                : executionStatus === EXECUTION_STATUS.STARTED
+                  ? 'waiting'
+                  : 'failed';
+          await recordWorkflowPhase(
+            this.database,
+            connection,
+            this.execution.id,
+            phase,
+            executionStatus === EXECUTION_STATUS.RESOLVED
+              ? 'success'
+              : executionStatus === EXECUTION_STATUS.STARTED
+                ? 'unknown'
+                : 'failed',
+            { context: auditContext },
+          );
+        }
+        return result;
+      }, this.connectionName),
+    );
     if ((result.updatedCount ?? 0) > 0) {
       this.execution.status = executionStatus;
       this.execution.output = output;
@@ -423,8 +474,14 @@ export default class Processor {
           error,
           meta: serializeJson(payload.meta ?? null),
           log: payload.log ?? null,
-          startedAt,
-          finishedAt,
+          startedAt: workflowDatabaseTime(
+            startedAt,
+            this.database.connection(this.connectionName).dialect,
+          ),
+          finishedAt: workflowDatabaseTime(
+            finishedAt,
+            this.database.connection(this.connectionName).dialect,
+          ),
         })
         .where('id', '=', overwrite.id)
         .execute();
@@ -450,8 +507,14 @@ export default class Processor {
           meta: serializeJson(payload.meta ?? null),
           result: serializeJson(result),
           error,
-          startedAt,
-          finishedAt,
+          startedAt: workflowDatabaseTime(
+            startedAt,
+            this.database.connection(this.connectionName).dialect,
+          ),
+          finishedAt: workflowDatabaseTime(
+            finishedAt,
+            this.database.connection(this.connectionName).dialect,
+          ),
           log: payload.log ?? null,
         })
         .execute();

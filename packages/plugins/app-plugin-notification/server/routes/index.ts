@@ -18,6 +18,7 @@ import {
   type Translator,
 } from '@nocobase/i18n/server';
 
+import { notificationAuditToken } from '../audit.js';
 import { notificationConfig } from '../config.js';
 import { notificationRuntimeToken } from '../runtime.js';
 import { isNotificationTestSendRequest } from '../test-contract.js';
@@ -43,6 +44,13 @@ export const apiRoutes: AppApiRouteContribution<
   const authorization = container.resolve(authorizationToken);
 
   const logs = new Hono<NotificationRoutesEnv>();
+  const audit = container.has(notificationAuditToken)
+    ? container.resolve(notificationAuditToken)
+    : undefined;
+  if (audit) {
+    logs.get('/logs', audit.http({ action: 'notification.logs.list' }));
+    logs.get('/logs/:id', audit.http({ action: 'notification.logs.get' }));
+  }
   logs.use('/logs/:id?', auth.required(), authorization.middleware());
   logs.use('/logs/:id?', async (context, next) => {
     const allowed = await context.get('authz').can({
@@ -76,6 +84,14 @@ export const apiRoutes: AppApiRouteContribution<
       error.status as 400,
     );
   });
+  if (audit) {
+    tests.get('/targets', audit.http({ action: 'notification.test.targets' }));
+    tests.post('/send', audit.http({ action: 'notification.test.send' }));
+    tests.get(
+      '/:id/status',
+      audit.http({ action: 'notification.test.status' }),
+    );
+  }
   tests.use('*', auth.required(), authorization.middleware());
   tests.use('*', async (context, next) => {
     if (!config.get(notificationConfig).test?.enabled) {

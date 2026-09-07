@@ -30,7 +30,11 @@
       "types": "./client/plugin.ts",
       "import": "./client/plugin.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./server/audit": {
+      "types": "./server/audit.ts",
+      "import": "./server/audit.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -55,7 +59,11 @@
         "types": "./dist/client/plugin.d.ts",
         "import": "./dist/client/plugin.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./server/audit": {
+        "types": "./dist/server/audit.d.ts",
+        "import": "./dist/server/audit.js"
+      }
     }
   },
   "files": [

@@ -28,7 +28,11 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./server/audit": {
+      "types": "./server/audit.ts",
+      "import": "./server/audit.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -49,7 +53,11 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./server/audit": {
+        "types": "./dist/server/audit.d.ts",
+        "import": "./dist/server/audit.js"
+      }
     }
   },
   "files": [

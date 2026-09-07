@@ -4,6 +4,8 @@ export * from './factory.js';
 export * from './manager.js';
 export * from './token.js';
 export * from './capabilities.js';
+export { transactionAuthority } from './transaction.js';
+export type { TransactionHandle, TransactionAuthority } from './transaction.js';
 export * from './drivers/knex/index.js';
 
 export { KnexQueryAdapter } from '../query/index.js';

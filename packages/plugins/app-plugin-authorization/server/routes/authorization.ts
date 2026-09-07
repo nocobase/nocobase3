@@ -14,6 +14,31 @@ export function createAuthorizationRoutes(
   authorization: AppAuthorization,
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
+  for (const resource of [
+    'permission-sets',
+    'default-access',
+    'sharing-rules',
+    'restriction-rules',
+  ] as const) {
+    for (const [method, action] of [
+      ['GET', 'read'],
+      ['POST', 'create'],
+      ['PUT', 'update'],
+      ['DELETE', 'delete'],
+    ] as const) {
+      routes.on(
+        method,
+        [`/${resource}`, `/${resource}/*`],
+        auth.auditHttp({
+          action: `authorization.${resource}.${action}`,
+        }),
+      );
+    }
+  }
+  routes.get(
+    '/permissions',
+    auth.auditHttp({ action: 'authorization.permissions.read' }),
+  );
   routes.onError((error, context) => {
     if (error instanceof AuthorizationDeniedError)
       return context.json({ code: 'FORBIDDEN', message: error.message }, 403);

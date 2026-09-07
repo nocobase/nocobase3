@@ -44,6 +44,14 @@ export const fileSettingsApiRoutes: AppApiRouteContribution<AppPluginApplication
     const router = new Hono();
     const routes = new Hono<InventoryRoutesEnv>();
 
+    routes.use(
+      '/sources',
+      authentication.auditHttp({ action: 'file.inventory.sources' }),
+    );
+    routes.use(
+      '/sources/:sourceId/files',
+      authentication.auditHttp({ action: 'file.inventory.files' }),
+    );
     routes.use('*', authentication.required());
     routes.use('*', authorization.middleware());
     routes.use('*', async (context, next) => {

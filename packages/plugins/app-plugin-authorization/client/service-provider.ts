@@ -1,3 +1,7 @@
+import {
+  ClientAccessResolvers,
+  clientAccessResolversToken,
+} from './access-resolvers.js';
 import { appApiClientToken, ClientApplication } from '@nocobase/app-client';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
@@ -8,7 +12,15 @@ import { configureAuthorizationClient } from './runtime.js';
 export class AuthorizationServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-plugin-authorization/client';
 
+  public override register(): void {
+    this.app.container.instance(
+      clientAccessResolversToken,
+      new ClientAccessResolvers(),
+    );
+  }
+
   public override boot(): Promise<void> {
+    const resolvers = this.app.container.resolve(clientAccessResolversToken);
     const authz = configureAuthorizationClient(
       this.app.container.resolve(appApiClientToken),
     );
@@ -17,6 +29,8 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
     > = {
       async can({ resource, action }) {
         if (!resource) return { can: false };
+        const custom = await resolvers.resolve(resource, action);
+        if (custom !== undefined) return custom;
         if (resource === 'authorization') return { can: true };
         if (resource.startsWith('authorization.settings.')) {
           return {

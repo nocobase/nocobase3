@@ -1,0 +1,71 @@
+import type { LocaleResource } from '@nocobase/i18n';
+const enUS = {
+  events: {
+    navigation: 'Audit',
+    title: 'Operation events',
+    description:
+      'Review individual facts within the server-authorized application and resource scope.',
+    store: 'Audit store',
+    scope: 'Application and security scope are enforced by the server.',
+    target: 'Target',
+    resource: 'Resource',
+    targetKey: 'Target key',
+    targetSource: 'Target data source',
+    action: 'Action',
+    kind: 'Event kind',
+    outcome: 'Outcome',
+    actor: 'Actor',
+    actorType: 'Actor type',
+    actorId: 'Actor ID',
+    initiator: 'Original initiator',
+    operation: 'Operation',
+    requestId: 'Request ID',
+    runId: 'Run ID',
+    from: 'From (UTC)',
+    to: 'To (UTC)',
+    time: 'Occurred at',
+    recordedAt: 'Recorded at',
+    apply: 'Apply filters',
+    all: 'All',
+    next: 'Next page',
+    previous: 'Previous page',
+    page: 'Page {{page}}',
+    refresh: 'Refresh',
+    loading: 'Loading audit events…',
+    empty: 'No audit events match this query.',
+    forbidden: 'You do not have permission to view these audit events.',
+    notFound: 'This event is unavailable within your authorized scope.',
+    degraded:
+      'Audit storage is degraded or not ready. Events cannot be loaded.',
+    networkError:
+      'Audit events could not be loaded. Check the connection and retry.',
+    invalid: 'The query or cursor is invalid. Apply the filters again.',
+    close: 'Close details',
+    details: 'Event details',
+    related: 'Related facts in this operation',
+    more: 'Load more related facts',
+    facts: '{{count}} facts on this page',
+    grouping:
+      'Grouped by operation. Each row is a distinct fact, not a separate business operation.',
+    ungrouped: 'No operation ID',
+    unknown: 'Unknown',
+    metadata: 'Authorized event metadata',
+    producer: 'Producer',
+    eventId: 'Event ID',
+    request: 'Request',
+    database: 'Database',
+    business: 'Business',
+    success: 'Success',
+    failed: 'Failed',
+    denied: 'Denied',
+    accepted: 'Accepted',
+    requestProof:
+      'A request fact describes how an interface finished. Success does not prove a business transaction committed.',
+    databaseProof:
+      'A database fact describes a managed write committed with its audit summary in the same transaction. It does not describe field history.',
+    businessProof:
+      'A business fact records a stage explicitly confirmed by the producing runtime. Its outcome applies to that stage.',
+  },
+};
+export type AuditEventsResource = LocaleResource<typeof enUS>;
+export default enUS;

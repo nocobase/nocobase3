@@ -101,6 +101,8 @@ export interface WorkflowLogger {
 }
 
 export interface WorkflowEventOptions {
+  /** Explicitly request publication through the configured queue. */
+  enqueueOnly?: boolean;
   eventKey?: string;
   deferred?: boolean;
   /** Execute any workflow manually, bypassing its enabled state and trigger-specific event validation. */
@@ -118,6 +120,8 @@ export interface WorkflowEventOptions {
 }
 
 export interface WorkflowExecutionQueueTask {
+  /** Stable server-generated attempt identity for duplicate rerun deliveries. */
+  attemptId?: string;
   executionId: WorkflowId;
   nodeRunId?: WorkflowId;
   rerun?: ProcessorRerunOptions;

@@ -10,6 +10,7 @@ import {
   ToolMessage,
 } from 'langchain';
 import z from 'zod';
+import { beginAIToolAttempt } from '../../audit-runtime.js';
 import _ from 'lodash';
 import type { ConversationProvider, ToolProvider } from '../types.js';
 import type { ToolsEntity } from '@nocobase/ai-employee';
@@ -86,6 +87,11 @@ export const toolCallStatusMiddleware = (
         body: { toolCall },
         currentConversation,
       });
+      const finishAttempt = await beginAIToolAttempt(
+        toolCall.name,
+        conversation,
+      );
+      let attemptOutcome: 'success' | 'failed' | 'accepted' = 'failed';
       let result;
       try {
         const toolMessage = await handler(request);
@@ -94,19 +100,29 @@ export const toolCallStatusMiddleware = (
           else if (typeof toolMessage.content === 'string') {
             try {
               result = JSON.parse(toolMessage.content);
-            } catch (error) {
-              conversation.logger.warn({ error }, 'tool result parse fail');
+            } catch {
+              conversation.logger.warn(
+                { code: 'AI_TOOL_RESULT_NOT_JSON' },
+                'Tool result is not JSON',
+              );
               result = toolMessage.content;
             }
           } else result = toolMessage.content;
         } else result = toolMessage;
+        attemptOutcome =
+          (toolMessage instanceof ToolMessage &&
+            toolMessage.status === 'error') ||
+          result?.status === 'error'
+            ? 'failed'
+            : 'success';
         return toolMessage;
       } catch (error: any) {
         if (error?.name === 'GraphInterrupt') {
           interrupted = true;
+          attemptOutcome = 'accepted';
           throw error;
         }
-        conversation.logger.error(error);
+        conversation.logger.error({ code: 'AI_TOOL_EXECUTION_FAILED' });
         result = { status: 'error', content: error?.message };
         await store.markError(messageId, toolCallId, error);
         runtime.writer?.({
@@ -121,6 +137,7 @@ export const toolCallStatusMiddleware = (
           metadata: { messageId },
         });
       } finally {
+        await finishAttempt?.(attemptOutcome);
         if (!interrupted) {
           if (result?.status !== 'error')
             await store.markDone(messageId, toolCallId, result);

@@ -33,8 +33,8 @@ describe('application config', () => {
     expect(runtime.appConfig.get(queueConfig).default).toBe('sync');
     expect(runtime.appConfig.get(queueConfig).jobs?.locations).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(
-          /app-plugin-ai-knowledge-base\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+        expect.stringContaining(
+          'app-plugin-ai-knowledge-base/server/jobs/**/{!(*.d).ts,*.js,!(*.d).mts,*.mjs}',
         ),
       ]),
     );

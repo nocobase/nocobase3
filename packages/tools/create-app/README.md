@@ -65,24 +65,30 @@ npm view @nocobase/create-app dist-tags --registry=https://npm.nocobase.ai
 npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 ```
 
-只有数据库类型这一项需要选择，其余连接参数走默认值写进 `config.yml`。
+For App templates and Hubs declaring the app-v1 scaffold profile, only the database dialect is prompted for; connection defaults are written to config.yml. Legacy Hub templates without that profile skip database initialization.
 
 ## 参数
 
-| 参数             | 说明                                                            |
-| ---------------- | --------------------------------------------------------------- |
-| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问                    |
-| `--db-dialect`   | 数据库类型：`postgres`、`sqlite`、`mysql`。省略时进入交互式选择 |
-| `--no-install`   | 生成后不自动安装依赖                                            |
-| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录              |
-| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`                   |
-| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai`           |
-| `-h, --help`     | 查看帮助                                                        |
-| `--version`      | 查看版本                                                        |
+| 参数             | 说明                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问                                                                    |
+| `--db-dialect`   | Database dialect for App initialization: postgres, sqlite, mysql; prompted when omitted. Legacy Hubs ignore it. |
+| `--no-install`   | 生成后不自动安装依赖                                                                                            |
+| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录                                                              |
+| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`                                                                   |
+| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai`                                                           |
+| `-h, --help`     | 查看帮助                                                                                                        |
+| `--version`      | 查看版本                                                                                                        |
 
-`--db-dialect` 接受常见别名，`postgresql`、`pg` 都会归一化成 `postgres`，`sqlite3` 归一化成 `sqlite`，`mysql2`、`mariadb` 归一化成 `mysql`。这三个规范名才是模板 `server/config/database.ts` 里 `DB_DIALECT` 认的值，写别的会在启动时抛错。
+The database flag accepts aliases: postgresql and pg normalize to postgres,
+sqlite3 to sqlite, and mysql2 and mariadb to mysql. The canonical dialects match
+the shared application-server database configuration and its DB_DIALECT mapping.
+App templates and Hubs declaring app-v1 prompt for a missing dialect; legacy Hub
+templates without that profile warn and ignore the flag.
 
-`--template` 用具名模板，目前只有一个 `default`，指向 `@nocobase/app-template-default`。以后新增模板会加新的名字，用户不需要知道背后的包名：
+The named templates are default (the @nocobase/app-template-default package) and
+hub (the @nocobase/app-template-hub package). A package specifier or local template
+path can also be supplied:
 
 ```bash
 pnpm create @nocobase/app crm --template=default   # 默认值，可以不写
@@ -114,21 +120,40 @@ pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
 
 ## 生成的内容
 
-下载模板（默认 `default`，即 `@nocobase/app-template-default@latest`），并在此基础上：
+The generator downloads the selected template (default resolves to
+@nocobase/app-template-default@latest) and performs these shared steps:
 
-- 改写 `package.json`：换成应用自己的名字和版本，置为 `private`，去掉 `publishConfig` 和 `repository`，避免误发布
-- 按数据库类型装一个驱动：sqlite 装 `better-sqlite3`，postgres 装 `pg`，mysql 装 `mysql2`。模板本身只依赖 `knex`，三个驱动一个都不带
-- 写 `config.yml`：写入数据库连接段和随机生成的认证密钥
-- 写 `.gitignore`：模板没带的话会生成一份兜底的，防止 `config.yml` 里的认证密钥被提交
-- 选 sqlite 时写 `pnpm-workspace.yaml` 的 `allowBuilds`（见下）
-- 安装依赖（`--no-install` 可跳过）
-- 装完依赖后跑一次应用自己的 `pnpm plugin:skills:sync`，把模板内置插件的 skills 复制进 `.agents/skills/`。这一步必须在安装之后，因为同步是从 `node_modules` 里解析插件的。同步失败只警告，不影响生成出来的应用能跑，之后随时可以在应用目录里手动补跑
+- Replace the package name and displayName while preserving the template version
+  and existing private status; remove description, publishConfig, and repository.
+- Restore the template's gitignore or write a fallback when none is supplied.
+- Write or merge pnpm-workspace.yaml build settings for every template, regardless
+  of database dialect. The build allowlist does not itself install a package.
+- Install dependencies unless --no-install is supplied.
+
+App templates, including older App templates without a profile, and Hub templates
+declaring app-v1 additionally receive:
+
+- One selected runtime driver: better-sqlite3 for SQLite, pg for PostgreSQL, or
+  mysql2 for MySQL. The official templates do not declare these drivers themselves.
+- config.yml containing database defaults and a freshly generated secret shared
+  by auth.secret and session.secret.
+- Native SQLite driver verification after installation, with a rebuild attempt
+  when necessary, followed by plugin:skills:sync. Skill synchronization failures
+  are warnings and can be retried manually.
+
+Every Hub also receives its identity/mount environment file and app-dist placeholder.
+A Hub without the app-v1 profile retains legacy initialization: no database prompt,
+no generated database config, no added driver, and no plugin skill synchronization.
 
 ## 关于 sqlite 的原生模块
 
 pnpm 11 默认不执行依赖的安装脚本，必须在 `pnpm-workspace.yaml` 的 `allowBuilds` 里显式列出。`package.json` 的 `pnpm` 字段在 pnpm 11 已被移除，`.npmrc` 从来不读构建配置，所以这个文件是唯一入口。
 
-少了它，`better-sqlite3` 装完不会编译原生模块，`pnpm install` 照样报成功，但应用第一次查询时会抛 `Could not locate the bindings file`——这个报错完全看不出真实原因。所以选 sqlite 时会自动写入这份配置。`pg` 和 `mysql2` 是纯 JS，不需要，也就不会生成这个文件。
+Without build permission, better-sqlite3 may install without a usable native
+addon and fail with "Could not locate the bindings file" on its first query.
+The generated workspace build settings include better-sqlite3 and esbuild for
+all templates. PostgreSQL and MySQL still receive that workspace file, although
+their pg and mysql2 drivers are pure JavaScript and need no native build entry.
 
 还有一种情况：如果 npm 配置里有 `ignore-scripts=true`，它会全局压制所有安装脚本，优先级高于 `allowBuilds`。create-app 装完会实际加载一次驱动来验证，发现装了但加载不了时会自动跑一次 `pnpm rebuild <驱动>` 补上编译——`pnpm rebuild` 针对单个包，不需要改动全局设置。自动修复失败才会提示，并给出可直接执行的命令。
 
@@ -151,3 +176,34 @@ node ./bin/run.js crm --db-dialect=sqlite --template ../app-template-default
 ```
 
 本地目录会用 `pnpm pack` 打包，把 `workspace:` 和 `catalog:` 解析成真实版本号，因此生成的项目在仓库之外也能安装。
+
+## Full-stack Hub templates
+
+The named templates are `default` and `hub`. The current official templates declare
+`nocobase.scaffoldProfile: "app-v1"` in their package manifests. This profile opts into
+the existing App initialization contract: database selection, generated `config.yml`
+with a random authentication/session secret, a runtime database driver, native
+SQLite driver verification after installation, and plugin skill synchronization.
+
+```bash
+pnpm create @nocobase/app my-hub --template=hub --db-dialect=sqlite
+```
+
+A full-stack Hub retains `templateKind: "hub"` and also receives `.env` for its identity
+and mount settings. Its default generated mount path is `/hub`; a template's explicit
+`APP_BASE_PATH` is preserved. Use `pnpm dev` during development, or `pnpm build` followed
+by `pnpm start`. PostgreSQL/MySQL connections must be edited in `config.yml` before starting.
+
+The profile is read from the downloaded manifest for named, package, and local
+templates alike. Unsupported profile values fail before the target is written.
+Hub templates that omit the profile retain legacy initialization: no database
+prompt, generated database configuration, or added driver; `--db-dialect` is warned
+about and ignored. App templates without the field keep their existing behavior.
+Use a compatible generator and a profile-bearing template together: upgrading the
+generator alone cannot infer the capabilities of an unmarked historical Hub.
+
+`--no-install` still writes configuration and driver dependencies, but skips installation,
+driver verification, and skill synchronization. Workspace build settings are generated
+for all templates, including PostgreSQL/MySQL and legacy Hubs; an allowBuilds entry
+alone does not install a driver. Scaffold preserves the template version and existing
+private status while replacing its name/displayName and removing publish metadata.

@@ -12,16 +12,7 @@ import { CommandFailedError, runCommand } from './run-command.ts';
  */
 export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
 
-/**
- * What a template needs scaffolding around it, which is not the same for every template.
- *
- * An `app` owns a database: it is asked which dialect to use, gets that driver added to its manifest, and has the
- * connection written to `config.yml`. A `hub` owns none of that — it is a Portal host that proxies an upstream
- * NocoBase API, configured through `.env` — so running it through the app flow would leave it with a `config.yml` it
- * never reads and a database driver it never loads.
- *
- * The kind belongs to the template rather than to the flag, so `--template hub` and `--template ./packages/templates/app-template-hub` are scaffolded identically.
- */
+/** Product identity, independent of the initialization capabilities a template declares. */
 export type TemplateKind = 'app' | 'hub';
 
 export interface TemplateAlias {
@@ -156,6 +147,8 @@ export interface ResolvedTemplate {
   version: string;
   /** `nocobase.templateKind` as the template declared it, if it declared one. */
   kind?: string;
+  /** Opt-in to the existing full-stack App initialization contract. */
+  scaffoldProfile?: 'app-v1';
 }
 
 export interface DownloadTemplateOptions {
@@ -212,9 +205,16 @@ async function findTarball(directory: string): Promise<string> {
   return path.join(directory, tarball);
 }
 
+export function parseScaffoldProfile(value: unknown): 'app-v1' | undefined {
+  if (value === undefined || value === 'app-v1') return value;
+  throw new Error(
+    'Unsupported nocobase.scaffoldProfile. Expected "app-v1" or an omitted field. Use a compatible template and create-app version.',
+  );
+}
+
 async function readTemplateManifest(
   directory: string,
-): Promise<{ name: string; version: string; kind?: string }> {
+): Promise<Omit<ResolvedTemplate, 'directory'>> {
   const manifestPath = path.join(directory, 'package.json');
   let raw: string;
 
@@ -229,13 +229,14 @@ async function readTemplateManifest(
   const manifest = JSON.parse(raw) as {
     name?: string;
     version?: string;
-    nocobase?: { templateKind?: string };
+    nocobase?: { templateKind?: string; scaffoldProfile?: unknown };
   };
 
   return {
     name: manifest.name ?? 'unknown',
     version: manifest.version ?? '0.0.0',
     kind: manifest.nocobase?.templateKind,
+    scaffoldProfile: parseScaffoldProfile(manifest.nocobase?.scaffoldProfile),
   };
 }
 

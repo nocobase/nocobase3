@@ -1,3 +1,4 @@
+import { recordWorkflowPhase } from '../audit-internal.js';
 import type { DatabaseManager } from '@nocobase/db';
 import path from 'node:path';
 
@@ -195,12 +196,21 @@ export default class WorkflowEngine {
       throw new Error(
         `Node run "${String(nodeRunId)}" does not belong to run "${String(runId)}"`,
       );
-    await this.database
-      .query(this.options.connectionName)
-      .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-      .set({ result: serializeJson(result) })
-      .where('id', '=', nodeRunId)
-      .execute();
+    await this.database.transaction(async (connection) => {
+      await connection.query
+        .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
+        .set({ result: serializeJson(result) })
+        .where('id', '=', nodeRunId)
+        .execute();
+      await recordWorkflowPhase(
+        this.database,
+        connection,
+        runId,
+        'resumed',
+        'accepted',
+        { human: true, phaseKey: String(nodeRunId) },
+      );
+    }, this.options.connectionName);
     await this.dispatcher.dispatch({ executionId: runId, nodeRunId });
   }
 }

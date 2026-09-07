@@ -41,7 +41,7 @@ catalog:
   '@vitest/coverage-v8': ^4.1.10
   '@vitest/eslint-plugin': ^1.6.27
   ajv: ^8.20.0
-  better-auth: ^1.7.1
+  better-auth: '>=1.7.1 <1.7.3'
   better-sqlite3: ^12.11.1
   bloom-filters: ^3.0.4
   cron: ^4.4.0

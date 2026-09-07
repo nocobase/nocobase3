@@ -7,3 +7,5 @@ export * from './naming/index.js';
 export * from './query/index.js';
 export * from './schema/index.js';
 export * from './seed/index.js';
+export type * from './query/managed-write-types.js';
+export { getManagedWriteRegistry } from './query/managed-write.js';

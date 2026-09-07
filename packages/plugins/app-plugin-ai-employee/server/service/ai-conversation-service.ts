@@ -612,7 +612,7 @@ export class AIConversationService {
       }
       return undefined;
     } catch (err: any) {
-      ctx.logger?.error(err);
+      ctx.logger?.error({ code: 'AI_EXECUTION_FAILED' });
       let status = 500;
       let message = ctx.t!('Server unexpected error occur');
       if (err instanceof ResourceActionError) {
@@ -722,7 +722,7 @@ export class AIConversationService {
       if (shouldStopStream()) {
         return;
       }
-      ctx.logger?.error(err);
+      ctx.logger?.error({ code: 'AI_EXECUTION_FAILED' });
       sendErrorResponse(
         streamTarget(execution),
         err.message || 'Resume stream error',
@@ -866,7 +866,7 @@ export class AIConversationService {
       }
       return undefined;
     } catch (err: any) {
-      ctx.logger?.error(err);
+      ctx.logger?.error({ code: 'AI_EXECUTION_FAILED' });
       let status = 500;
       let message = ctx.t!('Server unexpected error occur');
       if (err instanceof ResourceActionError) {
@@ -1088,7 +1088,7 @@ export class AIConversationService {
         streamTarget(execution).end();
       }
     } catch (err: any) {
-      ctx.logger?.error(err);
+      ctx.logger?.error({ code: 'AI_EXECUTION_FAILED' });
       sendErrorResponse(
         streamTarget(execution),
         err.message || 'Tool call error',

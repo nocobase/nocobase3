@@ -60,6 +60,10 @@ export interface FileRouteLimits {
 }
 
 interface CreateFileRouteCommonOptions {
+  /** Optional host-bound HTTP collector and runtime recorder. */
+  readonly audit?: FileAudit;
+  /** Trusted business resource reference, for example the order owning an attachment. */
+  readonly auditSource?: (context: Context) => FileAuditTarget;
   readonly drive?: NocoBaseDriveManager;
   readonly defaultDisk: string;
   readonly publicBasePath: string;
@@ -70,6 +74,36 @@ interface CreateFileRouteCommonOptions {
   readonly disk?: string;
   readonly visibility?: FileRouteVisibilityOptions;
   readonly limits?: FileRouteLimits;
+}
+
+/** Structural capability keeps file-only consumers independent of the audit package. */
+export interface FileAudit {
+  http(declaration: {
+    readonly action: string;
+    readonly target?: (context: Context) => FileAuditTarget;
+    readonly details?: (context: Context) => Readonly<Record<string, unknown>>;
+  }): MiddlewareHandler;
+  markHttpResult(
+    context: Context,
+    result: {
+      readonly outcome:
+        'success' | 'failed' | 'denied' | 'accepted' | 'unknown';
+      readonly reasonCode?: string;
+    },
+  ): void;
+  record(event: {
+    readonly action: string;
+    readonly outcome: 'success' | 'failed';
+    readonly target: FileAuditTarget;
+    readonly source?: FileAuditTarget;
+    readonly details: Readonly<Record<string, unknown>>;
+  }): Promise<{ readonly state: string }>;
+}
+
+export interface FileAuditTarget {
+  readonly dataSource?: string;
+  readonly resource: string;
+  readonly key?: string;
 }
 
 export interface DatabaseFileRouteSource {

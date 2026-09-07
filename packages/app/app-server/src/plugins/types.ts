@@ -1,3 +1,4 @@
+import type { ApplicationHttpHost } from '../application/index.js';
 import type {
   ServiceContainer,
   ServiceProviderLifecycle,
@@ -13,6 +14,8 @@ import type { ConfigPaths } from '../config/index.js';
 import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<TConfig = object> {
+  readonly httpHost?: ApplicationHttpHost;
+  hasPlugin?(packageName: string): boolean;
   readonly appName: string;
   readonly publicBasePath: string;
   readonly config: AppConfigAccessor & Partial<Record<never, TConfig>>;

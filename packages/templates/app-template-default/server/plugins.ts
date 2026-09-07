@@ -20,8 +20,11 @@ import {
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
+import audit from '@nocobase/app-plugin-audit/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
+  // Audit boots before producer resources and shuts down after them.
+  audit,
   authentication,
   aiEmployee,
   aiKnowledgeBase,

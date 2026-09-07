@@ -46,11 +46,12 @@ Hub 是用于部署和管理 App 的应用中心。
 如果需要本地 Hub：
 
 ```bash
-pnpm create @nocobase/app my-hub --template hub
+pnpm create @nocobase/app my-hub --template hub --db-dialect sqlite
 cd my-hub
-pnpm build
-pnpm start
+pnpm dev
 ```
+
+当前官方 Hub 的本地生成与开发已支持，默认生成挂载路径为 `/hub`。上面的“未实现”指应用中心部署/管理目标能力，不是说 Hub 模板只有代理入口。生产环境执行 `pnpm build` / `pnpm start` 时需显式部署私密配置和持久数据库；不能假设 dist 自动包含项目根的 `config.yml` 或复用开发数据库。
 
 ## 4. 部署 App（未实现）
 
@@ -93,7 +94,7 @@ pnpm deploy
 两者都用 `pnpm create @nocobase/app`，区别在 `--template`：
 
 - 不带 `--template`（等同于 `--template default`）创建业务 App 源码，会询问数据库类型并写入 `config.yml`。
-- `--template hub` 创建应用中心运行环境。Hub 没有数据库，它代理上游的 NocoBase API，配置写在 `.env` 里。
+- `--template hub` 选择 Hub 模板。当前官方 Hub 是完整 App，声明 `nocobase.scaffoldProfile: "app-v1"`，同样选择数据库并生成带随机认证/session secret 的 `config.yml`，同时保留 Hub 的 `.env` 与挂载路径。只有未声明该 profile 的旧/第三方 Hub 维持无数据库初始化的旧生成流程；不能据此推断所有 Hub 都是上游代理。
 
 ## 架构介绍
 

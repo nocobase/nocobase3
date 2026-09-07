@@ -32,7 +32,7 @@ describe('Server inspection', () => {
     expect(inspection.suggestions).toEqual([]);
     expect(inspection.plugins[0]).toMatchObject({
       order: 1,
-      packageName: '@nocobase/app-plugin-authentication',
+      packageName: '@nocobase/app-plugin-audit',
     });
     expect(
       inspection.plugins.find(

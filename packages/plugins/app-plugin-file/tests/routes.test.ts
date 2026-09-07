@@ -809,7 +809,7 @@ describe('createFileRoute', () => {
     expect(store.remove).toHaveBeenCalledTimes(1);
     expect(report).toHaveBeenCalledWith(
       'File object cleanup failed after its database record was deleted.',
-      expect.any(FileUnavailableError),
+      { code: 'FILE_STORAGE_CLEANUP_FAILED' },
     );
   });
 

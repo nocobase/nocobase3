@@ -13,8 +13,6 @@
   "files": [
     "dist",
     "client",
-    "database",
-    "server",
     "package.json",
     "README.md"
   ],

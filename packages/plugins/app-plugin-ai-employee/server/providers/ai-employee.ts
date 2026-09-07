@@ -1,3 +1,5 @@
+import { aiEmployeeAuditToken } from '../audit.js';
+import { stopAndDrainAI } from '../audit-runtime.js';
 import {
   createAIManager,
   DriveFileStorageFactory,
@@ -65,10 +67,11 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
     await waitForPluginReady();
   }
 
-  public override shutdown(): Promise<void> {
+  public override async shutdown(): Promise<void> {
     this.unsubscribeConfig?.();
     this.unsubscribeConfig = undefined;
-    return Promise.resolve();
+    const bridge = this.app.container.resolveIfCreated(aiEmployeeAuditToken);
+    if (bridge) await stopAndDrainAI(bridge);
   }
 
   private resolveDeps(container: ServiceResolver): AppDeps {

@@ -15,7 +15,15 @@ import type {
   DatabaseDriver,
 } from '../../config.js';
 import type { DatabaseConnection } from '../../connection.js';
+import {
+  assertTransactionActive,
+  assertTransactionCommittable,
+  beginTransaction,
+  finishTransaction,
+  isTransactionConnection,
+} from '../../transaction.js';
 import { createKnexClient } from './client.js';
+import { quarantineKnexConnection } from './connection-quarantine.js';
 import {
   resolveKnexConnectionConfig,
   type KnexConnectionConfig,
@@ -62,6 +70,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         underscored: this.config.naming?.underscored,
         tablePrefix: '',
       }),
+      this,
     );
     this.builder = new CollectionBuilder({
       schemaAdapter: this.schema,
@@ -81,6 +90,9 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   }
 
   async disconnect(): Promise<void> {
+    if (isTransactionConnection(this)) {
+      throw new Error('Cannot disconnect a transaction connection.');
+    }
     const client = this.knexInstance;
     if (!client) {
       return;
@@ -99,18 +111,79 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T> {
     const client = await this.resolveClient();
-    return client.transaction(async (trx) => {
-      const connection = new KnexDatabaseConnection(
-        this.name,
-        this.sourceConfig,
-        this.metadataStore,
-        trx,
+    let connection: DatabaseConnection | undefined;
+    let rolledBack = false;
+    let commitAttempted = false;
+    // Keep the root connection checked out until commit-failure recovery finishes.
+    const nativeConnection: object | undefined = !isTransactionConnection(this)
+      ? await client.client.acquireConnection()
+      : undefined;
+    try {
+      const result = await client.transaction(
+        async (trx) => {
+          connection = new KnexDatabaseConnection(
+            this.name,
+            this.sourceConfig,
+            this.metadataStore,
+            trx,
+          );
+          beginTransaction(this, connection, () => trx.isCompleted());
+          const transactionConnection = connection;
+          const commit = trx.commit.bind(trx);
+          const rollback = trx.rollback.bind(trx);
+          trx.rollback = (error: unknown): ReturnType<typeof trx.rollback> => {
+            rolledBack = true;
+            return rollback(error);
+          };
+          let callbackCompleted = false;
+          trx.commit = (value: unknown): ReturnType<typeof trx.commit> => {
+            try {
+              assertTransactionCommittable(transactionConnection);
+              if (!callbackCompleted) {
+                throw new Error(
+                  'Transaction commit is managed by the callback.',
+                );
+              }
+            } catch (error) {
+              return trx.rollback(error);
+            }
+            commitAttempted = true;
+            return commit(value);
+          };
+          const result = await fn(connection);
+          assertTransactionCommittable(connection);
+          callbackCompleted = true;
+          return result;
+        },
+        nativeConnection ? { connection: nativeConnection } : undefined,
       );
-      return fn(connection);
-    });
+      if (connection) {
+        // A manual rollback can resolve Knex before its callback has returned.
+        assertTransactionCommittable(connection);
+        finishTransaction(connection, !rolledBack);
+      }
+      return result;
+    } catch (error) {
+      if (connection) finishTransaction(connection, false);
+      if (nativeConnection && commitAttempted) {
+        try {
+          // A completed Knex transaction refuses queries even if COMMIT left the
+          // physical transaction open. Recover through its still-pinned connection.
+          await client.raw('ROLLBACK').connection(nativeConnection);
+        } catch {
+          // Pool validation discards this resource before another borrower sees it.
+          quarantineKnexConnection(nativeConnection);
+        }
+      }
+      throw error;
+    } finally {
+      if (nativeConnection)
+        await client.client.releaseConnection(nativeConnection);
+    }
   }
 
   private getClient(): Knex {
+    assertTransactionActive(this);
     if (!this.knexInstance) {
       this.knexInstance = createKnexClient(this.config);
     }

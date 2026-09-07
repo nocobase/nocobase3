@@ -32,6 +32,7 @@ export function defineWorkflowRuns(
   collection.datetime('createdAt').notNull();
   collection.boolean('manually').notNull().defaultTo(false);
   collection.string('reason');
+  collection.json('auditContext');
 
   collection.index(['dispatched', 'id']);
   collection.index(['status', 'expiresAt']);

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createFileAudit } from './audit.js';
 
 import type { Context } from 'hono';
 import { Hono } from 'hono';
@@ -86,6 +87,7 @@ class FileRouteError extends Error {
 
 export function createFileRoute(options: CreateFileRouteOptions): Hono {
   const store = resolveFileStore(options);
+  const audit = createFileAudit(options);
   assertMaxFiles(options.limits?.maxFiles);
   if (!options.store) {
     registerDatabaseFileSource({
@@ -100,7 +102,7 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
 
   routes.onError((error, context) => mapKnownError(error, context));
 
-  routes.get('/', options.auth, async (context) => {
+  routes.get('/', audit.http('file.list'), options.auth, async (context) => {
     const denied = await authorize(options, context, 'list');
     if (denied) return denied;
 
@@ -116,7 +118,7 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     });
   });
 
-  routes.post('/', options.auth, async (context) => {
+  routes.post('/', audit.http('file.upload'), options.auth, async (context) => {
     const denied = await authorize(options, context, 'upload');
     if (denied) return denied;
 
@@ -138,6 +140,7 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
             persist,
           );
 
+    await audit.stage(context, 'upload-completed', record);
     return context.json(
       {
         data: toClientRecord(
@@ -150,10 +153,12 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     );
   });
 
-  routes.get('/:id', options.auth, async (context) => {
+  routes.get('/:id', audit.http('file.read'), options.auth, async (context) => {
     const record = await findRecord(context, store);
+    audit.identify(context, record.id);
     const denied = await authorize(options, context, 'read', record);
     if (denied) return denied;
+    audit.remember(context, record);
 
     return context.json({
       data: toClientRecord(
@@ -164,33 +169,42 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     });
   });
 
-  routes.post('/:id/token', options.auth, async (context) => {
-    const record = await findRecord(context, store);
-    const denied = await authorize(options, context, 'issue-token', record);
-    if (denied) return denied;
+  routes.post(
+    '/:id/token',
+    audit.http('file.link'),
+    options.auth,
+    async (context) => {
+      const record = await findRecord(context, store);
+      audit.identify(context, record.id);
+      const denied = await authorize(options, context, 'issue-token', record);
+      if (denied) return denied;
+      audit.remember(context, record);
 
-    const contentPath = tokenContentPath(context, record.id);
-    let access: FileAccessUrl;
-    if (record.public) {
-      access = {
-        url: resolvePublicContentPath(contentPath, options.publicBasePath),
-        expiresAt: null,
-      };
-    } else {
-      access = issueFileAccessUrl({
-        tokenSecret: options.tokenSecret,
-        publicBasePath: options.publicBasePath,
-        audience: options.audience,
-        fileId: record.id,
-        contentPath,
-        expiresIn: await parseExpiresIn(context),
-      });
-    }
-    return context.json({ data: access });
-  });
+      const contentPath = tokenContentPath(context, record.id);
+      let access: FileAccessUrl;
+      if (record.public) {
+        access = {
+          url: resolvePublicContentPath(contentPath, options.publicBasePath),
+          expiresAt: null,
+        };
+      } else {
+        access = issueFileAccessUrl({
+          tokenSecret: options.tokenSecret,
+          publicBasePath: options.publicBasePath,
+          audience: options.audience,
+          fileId: record.id,
+          contentPath,
+          expiresIn: await parseExpiresIn(context),
+        });
+      }
+      await audit.stage(context, 'link-created', record);
+      return context.json({ data: access });
+    },
+  );
 
-  routes.get('/:id/content', async (context) => {
+  routes.get('/:id/content', audit.http('file.content'), async (context) => {
     const record = await findRecord(context, store);
+    audit.identify(context, record.id);
     const token = context.req.query('token');
     if (!record.public) {
       if (!token) {
@@ -209,6 +223,7 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
       });
     }
 
+    audit.remember(context, record);
     const stream = await openFileObject(options.drive, record);
     const activeContent = isActiveContent(record);
     const headers = new Headers({
@@ -227,29 +242,39 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
       headers.set('Pragma', 'no-cache');
       headers.set('Referrer-Policy', 'no-referrer');
     }
+    await audit.stage(context, 'content-request-processed', record);
     return new Response(stream, { headers });
   });
 
-  routes.delete('/:id', options.auth, async (context) => {
-    const id = context.req.param('id');
-    if (!id) return context.body(null, 204);
-    const record = await store.find(id, context);
-    if (!record) return context.body(null, 204);
-    const denied = await authorize(options, context, 'delete', record);
-    if (denied) return denied;
+  routes.delete(
+    '/:id',
+    audit.http('file.delete'),
+    options.auth,
+    async (context) => {
+      const id = context.req.param('id');
+      if (!id) return context.body(null, 204);
+      const record = await store.find(id, context);
+      if (!record) return context.body(null, 204);
+      audit.identify(context, record.id);
+      const denied = await authorize(options, context, 'delete', record);
+      if (denied) return denied;
+      audit.remember(context, record);
 
-    const removed = await store.remove(record.id, context);
-    if (!removed) return context.body(null, 204);
-    try {
-      await removeFileObject(options.drive, removed);
-    } catch (error) {
-      console.error(
-        'File object cleanup failed after its database record was deleted.',
-        error,
-      );
-    }
-    return context.body(null, 204);
-  });
+      const removed = await store.remove(record.id, context);
+      if (!removed) return context.body(null, 204);
+      try {
+        await removeFileObject(options.drive, removed);
+        await audit.stage(context, 'delete-completed', removed);
+      } catch {
+        await audit.stage(context, 'storage-cleanup-failed', removed, true);
+        console.error(
+          'File object cleanup failed after its database record was deleted.',
+          { code: 'FILE_STORAGE_CLEANUP_FAILED' },
+        );
+      }
+      return context.body(null, 204);
+    },
+  );
 
   return routes;
 }

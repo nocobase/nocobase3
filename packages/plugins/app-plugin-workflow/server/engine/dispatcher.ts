@@ -1,3 +1,14 @@
+import { workflowDatabaseTime } from './database-time.js';
+import {
+  captureWorkflowAudit,
+  beginWorkflowAttempt,
+  bindWorkflowExecutionAudit,
+  loadWorkflowAudit,
+  workflowAudit,
+  WorkflowAuditWriteError,
+  recordWorkflowPhase,
+  withWorkflowAudit,
+} from '../audit-internal.js';
 import { randomUUID } from 'node:crypto';
 
 import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
@@ -53,6 +64,7 @@ type ExecutionPlan = {
   workflow: WorkflowDefinition;
   nodeRun?: WorkflowNodeRun;
   rerun?: ProcessorRerunOptions;
+  attemptId?: string;
 };
 
 const RECOVERY_BATCH_SIZE = 100;
@@ -90,6 +102,13 @@ export default class Dispatcher {
     options: WorkflowEventOptions,
   ): Promise<Processor | null | void> {
     const logger = this.getLogger(workflow.id);
+    if (options.enqueueOnly && options.deferred) {
+      throw new Error(
+        'Workflow enqueue and deferred execution are mutually exclusive',
+      );
+    }
+    if (options.enqueueOnly && !this.options.queue)
+      throw new Error('Workflow enqueue requires a configured queue');
     if (!options.force && !options.manually && !workflow.enabled) {
       logger.warn(`Workflow "${workflow.key}" is disabled; event ignored`);
       return;
@@ -124,7 +143,7 @@ export default class Dispatcher {
         ...options,
         eventKey,
       });
-      if (options.deferred || options.manually) {
+      if (!options.enqueueOnly && (options.deferred || options.manually)) {
         const entered = await this.acquireExecution(execution, workflow);
         return entered ? this.process({ execution: entered, workflow }) : null;
       }
@@ -158,7 +177,10 @@ export default class Dispatcher {
       selection = selection.where(
         'createdAt',
         '<',
-        new Date(Date.now() - (options.gracePeriod ?? 0)).toISOString(),
+        workflowDatabaseTime(
+          new Date(Date.now() - (options.gracePeriod ?? 0)).toISOString(),
+          this.options.database.connection(this.options.connectionName).dialect,
+        ),
       );
     }
     const rows = await selection.execute<Row>();
@@ -181,7 +203,11 @@ export default class Dispatcher {
 
   async enqueue(task: WorkflowQueueTask): Promise<void> {
     if (this.options.queue) {
-      await this.options.queue.publish(task);
+      await this.options.queue.publish(
+        task.rerun && !task.attemptId
+          ? { ...task, attemptId: randomUUID() }
+          : task,
+      );
       return;
     }
     await this.dispatch(task);
@@ -238,6 +264,7 @@ export default class Dispatcher {
       workflow,
       nodeRun,
       rerun: task.rerun,
+      attemptId: task.attemptId,
     });
   }
 
@@ -281,14 +308,23 @@ export default class Dispatcher {
             parentRunId: options.parentRunId ?? null,
             stack: serializeJson(stack),
             output: serializeJson(null),
-            startedAt: options.deferred ? createdAt : null,
+            startedAt: workflowDatabaseTime(
+              options.deferred ? createdAt : null,
+              connection.dialect,
+            ),
             finishedAt: null,
             expiresAt: options.deferred
-              ? this.getExpiresAt(workflow, createdAt)
+              ? workflowDatabaseTime(
+                  this.getExpiresAt(workflow, createdAt),
+                  connection.dialect,
+                )
               : null,
-            createdAt,
+            createdAt: workflowDatabaseTime(createdAt, connection.dialect),
             manually: options.manually ?? false,
             reason: null,
+            auditContext: serializeJson(
+              captureWorkflowAudit(this.options.database),
+            ),
           })
           .execute();
         const row = await query
@@ -299,6 +335,21 @@ export default class Dispatcher {
         await this.incrementStats(query, workflow);
         const execution = hydrateRun(row);
         execution.workflow = workflow;
+        await recordWorkflowPhase(
+          this.options.database,
+          connection,
+          execution.id,
+          'accepted',
+          'accepted',
+        );
+        if (options.deferred)
+          await recordWorkflowPhase(
+            this.options.database,
+            connection,
+            execution.id,
+            'started',
+            'unknown',
+          );
         return execution;
       }, this.options.connectionName);
     } catch (error) {
@@ -324,65 +375,107 @@ export default class Dispatcher {
     }
 
     const startedAt = new Date().toISOString();
-    const query = this.options.database.query(this.options.connectionName);
-    const result = await query
-      .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({
-        dispatched: true,
-        status: EXECUTION_STATUS.STARTED,
-        startedAt,
-        finishedAt: null,
-        expiresAt: this.getExpiresAt(workflow, startedAt),
-      })
-      .where('id', '=', execution.id)
-      .where('dispatched', '=', false)
-      .where('status', 'is', null)
-      .execute();
-    if ((result.updatedCount ?? 0) === 0) {
-      return null;
-    }
-    const entered = await loadRun(query, execution.id);
-    if (entered) {
-      entered.workflow = workflow;
-    }
-    return entered;
+    return this.options.database.transaction(async (connection) => {
+      const query = connection.query;
+      const result = await query
+        .updateTable(WORKFLOW_COLLECTIONS.runs)
+        .set({
+          dispatched: true,
+          status: EXECUTION_STATUS.STARTED,
+          startedAt: workflowDatabaseTime(startedAt, connection.dialect),
+          finishedAt: null,
+          expiresAt: workflowDatabaseTime(
+            this.getExpiresAt(workflow, startedAt),
+            connection.dialect,
+          ),
+        })
+        .where('id', '=', execution.id)
+        .where('dispatched', '=', false)
+        .where('status', 'is', null)
+        .execute();
+      if ((result.updatedCount ?? 0) === 0) {
+        return null;
+      }
+      const entered = await loadRun(query, execution.id);
+      if (entered) {
+        entered.workflow = workflow;
+        await recordWorkflowPhase(
+          this.options.database,
+          connection,
+          entered.id,
+          'started',
+          'unknown',
+        );
+      }
+      return entered;
+    }, this.options.connectionName);
   }
 
-  private async process(plan: ExecutionPlan): Promise<Processor> {
+  private async process(plan: ExecutionPlan): Promise<Processor | null> {
     const logger = this.getLogger(plan.workflow.id);
     return this.withExecutionLock(plan.execution.id, async () => {
-      const workflowResourceRoot =
-        (await this.options.resolveWorkflowResourceRoot?.(
-          plan.workflow,
-          plan.execution,
-        )) ?? null;
-      const processor = new Processor({
-        database: this.options.database,
-        connectionName: this.options.connectionName,
-        workflow: plan.workflow,
-        execution: plan.execution,
-        instructions: this.options.instructions,
-        workflowResourceRoot,
-        app: this.options.app,
-        logger,
-        environment: this.options.environment,
-        functions: this.options.functions,
-      });
-      try {
-        if (plan.rerun) {
-          await processor.rerun(plan.rerun);
-        } else if (plan.nodeRun) {
-          await processor.resume(plan.nodeRun);
-        } else {
-          await processor.start();
-        }
-      } catch (error) {
-        logger.error(`Execution "${plan.execution.id}" failed`, { error });
-        await processor.exit(-2, {
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
-      return processor;
+      const query = this.options.database.query(this.options.connectionName);
+      const execution = await loadRun(query, plan.execution.id);
+      if (!execution || execution.status !== EXECUTION_STATUS.STARTED)
+        return null;
+      const context = !workflowAudit(this.options.database)
+        ? null
+        : plan.rerun
+          ? await this.options.database.transaction(
+              (connection) =>
+                beginWorkflowAttempt(
+                  this.options.database,
+                  connection,
+                  execution.id,
+                  plan.attemptId ?? randomUUID(),
+                ),
+              this.options.connectionName,
+            )
+          : await loadWorkflowAudit(query, execution.id);
+      if (context === undefined) return null;
+      bindWorkflowExecutionAudit(execution, context);
+      plan = { ...plan, execution };
+      return withWorkflowAudit(
+        this.options.database,
+        this.options.database.query(this.options.connectionName),
+        plan.execution.id,
+        async () => {
+          const workflowResourceRoot =
+            (await this.options.resolveWorkflowResourceRoot?.(
+              plan.workflow,
+              plan.execution,
+            )) ?? null;
+          const processor = new Processor({
+            database: this.options.database,
+            connectionName: this.options.connectionName,
+            workflow: plan.workflow,
+            execution: plan.execution,
+            instructions: this.options.instructions,
+            workflowResourceRoot,
+            app: this.options.app,
+            logger,
+            environment: this.options.environment,
+            functions: this.options.functions,
+          });
+          try {
+            if (plan.rerun) {
+              await processor.rerun(plan.rerun);
+            } else if (plan.nodeRun) {
+              await processor.resume(plan.nodeRun);
+            } else {
+              await processor.start();
+            }
+          } catch (error) {
+            if (error instanceof WorkflowAuditWriteError) throw error;
+            logger.error(`Execution "${plan.execution.id}" failed`, { error });
+            await processor.exit(-2, {
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+          return processor;
+        },
+        context,
+      );
     });
   }
 

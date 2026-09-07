@@ -100,7 +100,7 @@ export const queueConfig: AppConfigDefinition<
     },
     jobs: {
       locations: [
-        path.join(paths.server(), 'jobs/**/*.{ts,js}'),
+        path.join(paths.server(), 'jobs/**/{!(*.d).ts,*.js}'),
         ...createPluginJobLocations(
           plugins.plugins.map((plugin) => plugin.metadata),
         ),

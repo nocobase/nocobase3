@@ -18,8 +18,11 @@ import {
 } from '@nocobase/app-server/plugins';
 import systemInfo from '@nocobase/app-plugin-system-info/server';
 import skillsExample from '@nocobase/app-plugin-skills-example/server';
+import audit from '@nocobase/app-plugin-audit/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
+  // Audit boots before producer resources and shuts down after them.
+  audit,
   authentication,
   authorization,
   databaseExample,

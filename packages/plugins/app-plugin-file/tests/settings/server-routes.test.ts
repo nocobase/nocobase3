@@ -272,6 +272,11 @@ function createApplication(options: {
   }
   if (options.authentication) {
     container.instance(authenticationToken, {
+      auditHttp:
+        () =>
+        async (_context: import('hono').Context, next: import('hono').Next) => {
+          await next();
+        },
       required: () => async (_context, next) => {
         if (options.denyAuthentication) {
           return new Response(null, { status: 401 });

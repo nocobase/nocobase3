@@ -184,8 +184,11 @@ export const conversationMiddleware = (
           currentConversation: identity,
         });
         return nextState;
-      } catch (error) {
-        conversation.logger.error(error);
+      } catch {
+        conversation.logger.error({
+          code: 'AI_CONVERSATION_PERSISTENCE_FAILED',
+        });
+        await recordAIPersistenceFailure(conversation);
       }
     },
     wrapModelCall: async (request, handler) => {
@@ -205,3 +208,4 @@ export const conversationMiddleware = (
     },
   });
 };
+import { recordAIPersistenceFailure } from '../../audit-runtime.js';

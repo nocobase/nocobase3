@@ -6,6 +6,7 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
+import { i18nAuditToken } from './audit.js';
 
 /**
  * The language endpoints: what is available, and which one this session wants.
@@ -24,6 +25,15 @@ export const i18nApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         locales: runtime.getLocaleDefinitions(),
       }),
     );
+
+    if (container.has(i18nAuditToken)) {
+      router.post(
+        '/i18n/locale',
+        container
+          .resolve(i18nAuditToken)
+          .http({ action: 'i18n.locale.change' }),
+      );
+    }
 
     router.post('/i18n/locale', async (context) => {
       const body: unknown = await context.req.json().catch(() => undefined);

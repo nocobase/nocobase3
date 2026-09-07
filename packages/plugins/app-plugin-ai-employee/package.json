@@ -13,8 +13,6 @@
   "files": [
     "dist",
     "client",
-    "server",
-    "database",
     "ai",
     "package.json",
     "README.md",
@@ -68,6 +66,10 @@
     "./server/tokens": {
       "types": "./server/tokens.ts",
       "import": "./server/tokens.ts"
+    },
+    "./server/audit": {
+      "types": "./server/audit.ts",
+      "import": "./server/audit.ts"
     }
   },
   "publishConfig": {
@@ -117,6 +119,10 @@
       "./server/tokens": {
         "types": "./dist/server/tokens.d.ts",
         "import": "./dist/server/tokens.js"
+      },
+      "./server/audit": {
+        "types": "./dist/server/audit.d.ts",
+        "import": "./dist/server/audit.js"
       }
     }
   },
@@ -204,7 +210,8 @@
     "tailwind-merge": "^3.2.0",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/app-plugin-audit": "workspace:*"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",

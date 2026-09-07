@@ -162,7 +162,7 @@ function resolvePlugin(
 
 function createJobLocation(resolvedPath: string): string {
   return statSync(resolvedPath).isDirectory()
-    ? path.join(resolvedPath, '**/*.{ts,js,mts,mjs}')
+    ? path.join(resolvedPath, '**/{!(*.d).ts,*.js,!(*.d).mts,*.mjs}')
     : resolvedPath;
 }
 

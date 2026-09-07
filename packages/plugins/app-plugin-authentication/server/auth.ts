@@ -6,8 +6,15 @@ import {
   type User,
 } from 'better-auth';
 import { username } from 'better-auth/plugins';
+import { createAuthMiddleware } from 'better-auth/api';
 import type { Context, MiddlewareHandler } from 'hono';
 import { databaseAdapter } from './better-auth/database-adapter.js';
+import {
+  captureAuthenticatedUser,
+  declareAudit,
+  withAuditIdentity,
+} from './audit-internal.js';
+import type { AuthenticationAuditDeclaration } from './audit.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
@@ -47,7 +54,23 @@ export class Auth {
       ...config,
       appName: config.appName ?? 'NocoBase3',
       database: databaseAdapter(connection),
-      plugins,
+      plugins: [
+        ...(plugins ?? []),
+        {
+          id: 'nocobase-audit-identity',
+          hooks: {
+            after: [
+              {
+                matcher: () => true,
+                handler: createAuthMiddleware(async (context) => {
+                  const user = context.context.newSession?.user;
+                  if (user) captureAuthenticatedUser(user.id);
+                }),
+              },
+            ],
+          },
+        },
+      ],
       emailAndPassword: {
         ...config.emailAndPassword,
         enabled: config.emailAndPassword?.enabled ?? true,
@@ -72,14 +95,20 @@ export class Auth {
     return this.auth.api.getSession({ headers });
   }
 
+  /** Declarative observation only; identity remains owned by authentication. */
+  auditHttp(declaration: AuthenticationAuditDeclaration): MiddlewareHandler {
+    return declareAudit(this, declaration);
+  }
+
   optional(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
     return async (context, next) => {
       if (options.skip?.(context)) {
         await next();
         return;
       }
-      context.set('auth', await this.getSession(context.req.raw.headers));
-      await next();
+      const session = await this.getSession(context.req.raw.headers);
+      context.set('auth', session);
+      await withAuditIdentity(this, context, session?.user.id, next);
     };
   }
 
@@ -91,16 +120,18 @@ export class Auth {
       }
       const auth = await this.getSession(context.req.raw.headers);
       if (!auth) {
-        return context.json(
-          {
-            code: 'UNAUTHORIZED',
-            message: 'Authentication required',
-          },
-          401,
+        return withAuditIdentity(this, context, undefined, () =>
+          context.json(
+            {
+              code: 'UNAUTHORIZED',
+              message: 'Authentication required',
+            },
+            401,
+          ),
         );
       }
       context.set('auth', auth);
-      await next();
+      await withAuditIdentity(this, context, auth.user.id, next);
     };
   }
 }

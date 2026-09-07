@@ -1,0 +1,24 @@
+{
+  "name": "nocobase-audit",
+  "items": [
+    {
+      "name": "events-panel",
+      "type": "registry:component",
+      "title": "Application-owned audit events panel",
+      "description": "Editable layout around the public AuditEventsView runtime component.",
+      "dependencies": [],
+      "registryDependencies": [],
+      "docs": "Requires an App with @nocobase/app-plugin-audit client and server registered. Import AuditEventsPanel in an App-owned page. Materialize does not install or enable plugins.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": { "requiresPlugins": { "@nocobase/app-plugin-audit": "*" } }
+      },
+      "source": {
+        "root": "registry/events-panel",
+        "target": "client/extensions/nocobase-audit-events-panel",
+        "include": ["."]
+      }
+    }
+  ]
+}

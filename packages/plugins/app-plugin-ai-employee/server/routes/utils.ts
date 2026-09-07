@@ -28,7 +28,10 @@ export function createAIRequestMiddleware(): MiddlewareHandler {
       await next();
       context.header('x-local-ai', '1');
     } catch (error: unknown) {
-      ctx.logger?.error?.({ action, error }, 'AI local action failed');
+      ctx.logger?.error?.(
+        { action, code: 'AI_REQUEST_FAILED' },
+        'AI local action failed',
+      );
       return errorResponse(error);
     }
   };
@@ -58,7 +61,10 @@ async function runSSEAction(
   try {
     await handler();
   } catch (error: unknown) {
-    ctx.logger?.error?.({ action, error }, 'AI SSE action failed');
+    ctx.logger?.error?.(
+      { action, code: 'AI_REQUEST_FAILED' },
+      'AI SSE action failed',
+    );
     const message = error instanceof Error ? error.message : String(error);
     target.write(
       `data: ${JSON.stringify({ type: 'error', body: message })}\n\n`,

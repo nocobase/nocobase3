@@ -21,6 +21,8 @@ import {
 import { createAuthStorage } from '../auth-storage.js';
 import { authenticationToken } from '../tokens.js';
 import { authenticationConfig, resolveAuthSecret } from '../config.js';
+import { authenticationAuditToken } from '../audit.js';
+import { attachAuthenticationAudit } from '../audit-internal.js';
 
 interface RequestInitWithDuplex extends RequestInit {
   duplex?: 'half';
@@ -107,6 +109,11 @@ export class AuthenticationProvider<
     const originalAuthHandler = auth.handler.bind(auth);
     auth.handler = (request: Request): Promise<Response> =>
       originalAuthHandler(toPublicRequest(request, app.publicBasePath));
+    attachAuthenticationAudit(auth, () =>
+      container.has(authenticationAuditToken)
+        ? container.resolve(authenticationAuditToken)
+        : undefined,
+    );
     return auth;
   }
 }

@@ -112,6 +112,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/app-plugin-audit": "workspace:*"
   }
 }

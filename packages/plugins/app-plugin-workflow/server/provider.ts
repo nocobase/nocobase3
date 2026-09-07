@@ -1,3 +1,5 @@
+import { attachWorkflowAudit } from './audit-internal.js';
+import { workflowAuditToken } from './audit.js';
 import { driveConfig } from '@nocobase/app-server/drive';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -36,6 +38,11 @@ export class WorkflowProvider<
 
   public override register(): void {
     if (!this.app.container.has(databaseManagerToken)) return;
+    attachWorkflowAudit(this.app.container.resolve(databaseManagerToken), () =>
+      this.app.container.has(workflowAuditToken)
+        ? this.app.container.resolve(workflowAuditToken)
+        : undefined,
+    );
     const workflow = this.app.config.get(workflowConfig);
     const drive = this.app.config.get(driveConfig);
 

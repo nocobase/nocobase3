@@ -22,7 +22,7 @@ export const CREATE_ARGS = {
 
 export const CREATE_FLAGS = {
   'db-dialect': Flags.string({
-    description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, and sqlite3 are accepted. Prompted for when omitted.`,
+    description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, and sqlite3 are accepted. Prompted for App templates and Hubs declaring app-v1 when omitted.`,
   }),
   install: Flags.boolean({
     allowNo: true,

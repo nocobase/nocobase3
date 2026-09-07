@@ -37,7 +37,11 @@
       "types": "./server/config.ts",
       "import": "./server/config.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./server/audit": {
+      "types": "./server/audit.ts",
+      "import": "./server/audit.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -65,7 +69,11 @@
         "types": "./dist/server/config.d.ts",
         "import": "./dist/server/config.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./server/audit": {
+        "types": "./dist/server/audit.d.ts",
+        "import": "./dist/server/audit.js"
+      }
     }
   },
   "files": [
@@ -139,6 +147,7 @@
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "@nocobase/app-plugin-audit": "workspace:*"
   }
 }

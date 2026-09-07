@@ -1,0 +1,1037 @@
+import { auditRaw } from '../../server/database/sql-client.js';
+import { Hono } from 'hono';
+import { defineApiRoutes } from '@nocobase/app-server/router';
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+import { ServiceProvider } from '@nocobase/service-provider';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
+import * as databaseExports from '@nocobase/db';
+import { databaseLifecycleObserverToken } from '@nocobase/app-server/database';
+import { Application } from '@nocobase/app-server/application';
+import {
+  AppConfig,
+  appConfig,
+  createConfigPaths,
+} from '@nocobase/app-server/config';
+import {
+  defineServerPlugins,
+  resolveAppServerPlugins,
+} from '@nocobase/app-server/plugins';
+import { cachingToken } from '@nocobase/app-server/caching';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { createCaching } from '@nocobase/caching';
+import { createMigrator, databaseManagerToken } from '@nocobase/db';
+import authentication, {
+  authenticationConfig,
+} from '@nocobase/app-plugin-authentication/server';
+import authorization from '@nocobase/app-plugin-authorization/server';
+import { authorizationToken } from '@nocobase/app-plugin-authorization';
+import type { AuditConfig } from '../../server/config.js';
+import audit, {
+  auditConfig,
+  auditPermissionId,
+  auditResourceAdaptersToken,
+  auditServiceToken,
+  createAuditDatabaseResourceAdapter,
+} from '../../server/index.js';
+import { auditCompositionToken } from '../../server/providers/composition.js';
+import {
+  createPortableFixture,
+  dialects,
+} from '../helpers/database-fixtures.js';
+
+async function fixture(
+  dialect: (typeof dialects)[number],
+  enabled: boolean = true,
+  overrides: Partial<AuditConfig> = {},
+  additionalStore: boolean = false,
+) {
+  const primary = await createPortableFixture(dialect);
+  const secondary = additionalStore
+    ? await createPortableFixture(dialect, true, 'other')
+    : undefined;
+  const manager = secondary
+    ? databaseExports.createDatabaseManager({
+        default: 'main',
+        connections: { main: primary.config, other: secondary.config },
+      })
+    : primary.manager;
+  const f = {
+    ...primary,
+    manager,
+    connection: manager.connection('main'),
+    cleanup: async () => {
+      if (secondary) await manager.destroy();
+      await primary.cleanup();
+      await secondary?.cleanup();
+    },
+  };
+  const caching = createCaching();
+  await f.connection.builder.createCollection('g20_items', (table) => {
+    table.string('id').primary();
+    table.string('name');
+  });
+  for (const name of ['authentication', 'authorization'])
+    await createMigrator({
+      database: f.manager,
+      packageName: '@nocobase/app-plugin-' + name,
+      directory: fileURLToPath(
+        new URL(
+          '../../../app-plugin-' + name + '/database/migrations',
+          import.meta.url,
+        ),
+      ),
+    }).latest();
+  const config = new AppConfig([
+    {
+      ...appConfig,
+      defaults: {
+        name: 'main',
+        publicOrigin: 'http://localhost',
+        publicBasePath: '',
+        internalBasePath: '',
+        publicApiUrl: '/api',
+      },
+    },
+    {
+      ...authenticationConfig,
+      defaults: {
+        secret: 'G20-synthetic-server-authentication-secret',
+        emailAndPassword: { enabled: true, autoSignIn: true },
+        session: { storeSessionInDatabase: true },
+      },
+    },
+    { ...auditConfig, defaults: { ...auditConfig.defaults, ...overrides } },
+  ]);
+  await config.loadAll();
+  const make = (): Application => {
+    const app = new Application<
+      import('@nocobase/app-server/config').AppConfigAccessor
+    >({
+      config,
+      paths: createConfigPaths({ rootDir: f.directory }),
+      websocket: () => async () => null,
+    });
+    app.container.instance(databaseManagerToken, f.manager);
+    app.container.instance(cachingToken, caching);
+    app.container.instance(idGeneratorToken, {
+      generate: () => 1,
+      generateString: () => randomUUID(),
+    });
+    app.addServerPlugins(
+      resolveAppServerPlugins(
+        fileURLToPath(
+          new URL(
+            '../../../../templates/app-template-default',
+            import.meta.url,
+          ),
+        ),
+        defineServerPlugins([
+          authentication,
+          authorization,
+          ...(enabled ? [audit] : []),
+        ]),
+      ),
+    );
+    return app;
+  };
+  const app = make();
+  return {
+    f,
+    app,
+    make,
+    async close() {
+      await app.shutdown();
+      await caching.dispose();
+      await f.cleanup();
+    },
+  };
+}
+const json = (body: object, cookie?: string): RequestInit => ({
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    origin: 'http://localhost',
+    ...(cookie ? { cookie } : {}),
+  },
+  body: JSON.stringify(body),
+});
+
+describe.each(dialects)('production composition %s', (dialect) => {
+  it('reports background persistence failures safely and clears them after a committed recovery', async () => {
+    const s = await fixture(dialect);
+    let unavailable = false;
+    const diagnostics = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    try {
+      await s.app.start();
+      const composition = s.app.container.resolve(auditCompositionToken);
+      const scope = { appId: 'main', actor: { type: 'system' } };
+      const recorder = s.app.container
+        .resolve(auditServiceToken)
+        .bind(scope, { producer: 'background.worker' });
+      const event = {
+        action: 'worker.completed',
+        outcome: 'success' as const,
+        details: { payload: 'private-payload-sentinel' },
+      };
+      expect((await recorder.record(event)).state).toBe('committed');
+      const before = composition.health
+        .get()
+        .coverage.find((entry) => entry.producer === 'background.worker');
+      expect(before?.lastSuccessAt).toBeDefined();
+      await expect(
+        recorder.record({ ...event, action: '' }),
+      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+      await recorder.record(event, { idempotencyKey: 'completed-job' });
+      await expect(
+        recorder.record(
+          { ...event, action: 'worker.changed' },
+          { idempotencyKey: 'completed-job' },
+        ),
+      ).rejects.toMatchObject({ code: 'AUDIT_IDEMPOTENCY_CONFLICT' });
+      expect(
+        composition.health
+          .get()
+          .coverage.find((entry) => entry.producer === 'background.worker')
+          ?.lastError,
+      ).toBeUndefined();
+      diagnostics.mockClear();
+      await auditRaw(
+        s.f.connection,
+        'ALTER TABLE "auditEvents" RENAME TO "unavailableEvents"',
+      );
+      unavailable = true;
+      expect((await composition.routes().settings.get(scope)).enabled).toBe(
+        true,
+      );
+      // An observation failure must not replace an already completed business result.
+      await s.f.connection.query
+        .insertInto('g20_items')
+        .values({ id: 'background-result', name: 'completed' })
+        .execute();
+      let failure: unknown;
+      try {
+        await recorder.record(event);
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({
+        code: 'AUDIT_WRITE_FAILED',
+        message: 'AUDIT_WRITE_FAILED',
+      });
+      expect(
+        await s.f.connection.query
+          .selectFrom('g20_items')
+          .select('name')
+          .where('id', '=', 'background-result')
+          .executeTakeFirst(),
+      ).toEqual({ name: 'completed' });
+      const health = composition.health.get();
+      expect(health.state).toBe('degraded');
+      expect(
+        health.coverage.find((entry) => entry.producer === 'background.worker'),
+      ).toMatchObject({
+        store: 'main',
+        observed: true,
+        lastError: { code: 'AUDIT_WRITE_FAILED' },
+      });
+      expect(diagnostics).toHaveBeenCalledTimes(1);
+      expect(diagnostics.mock.calls[0]).toEqual([
+        'Audit diagnostic.',
+        expect.objectContaining({
+          producer: 'background.worker',
+          dataSource: 'main',
+          code: 'AUDIT_WRITE_FAILED',
+        }),
+      ]);
+      expect(
+        JSON.stringify({ health, calls: diagnostics.mock.calls, failure }),
+      ).not.toMatch(
+        /private-payload-sentinel|unavailableEvents|INSERT|SQLITE|password/,
+      );
+      await auditRaw(
+        s.f.connection,
+        'ALTER TABLE "unavailableEvents" RENAME TO "auditEvents"',
+      );
+      unavailable = false;
+      expect((await recorder.record(event)).state).toBe('committed');
+      const recovered = composition.health.get();
+      expect(recovered.state).not.toBe('degraded');
+      expect(
+        recovered.coverage.find(
+          (entry) => entry.producer === 'background.worker',
+        )?.lastError,
+      ).toBeUndefined();
+      expect(diagnostics).toHaveBeenCalledTimes(1);
+    } finally {
+      if (unavailable)
+        await auditRaw(
+          s.f.connection,
+          'ALTER TABLE "unavailableEvents" RENAME TO "auditEvents"',
+        );
+      await s.close();
+      diagnostics.mockRestore();
+    }
+  });
+  it('registers during owner boot and drains accepted HTTP before owner shutdown', async () => {
+    const s = await fixture(dialect);
+    const gate = deferred<void>();
+    const entered = deferred<void>();
+    let wait = false;
+    let ownerStopped = false;
+    class OwnerProvider extends ServiceProvider<AppPluginApplication> {
+      readonly name: string = 'adapter-owner';
+      private release?: () => void;
+      override async boot(): Promise<void> {
+        this.release = this.app.container
+          .resolve(auditResourceAdaptersToken)
+          .register({
+            dataSource: 'main',
+            resource: 'g20_items',
+            canRead: async () => {
+              if (wait) {
+                entered.resolve();
+                await gate.promise;
+              }
+              return 'allowed';
+            },
+          });
+      }
+      override async shutdown(): Promise<void> {
+        ownerStopped = true;
+        this.release?.();
+      }
+    }
+    s.app.addServiceProvider(OwnerProvider);
+    try {
+      await s.app.start();
+      const signup = await s.app.fetch(
+        new Request(
+          'http://localhost/api/auth/sign-up/email',
+          json({
+            name: 'Boot owner',
+            email: 'boot@example.test',
+            password: 'Synthetic long owner password',
+          }),
+        ),
+      );
+      expect(signup.status).toBe(200);
+      const { user } = (await signup.json()) as { user: { id: string } };
+      const cookie = signup.headers.get('set-cookie') ?? '';
+      const authz = s.app.container.resolve(authorizationToken);
+      await authz.permissionSets.create({
+        key: 'boot-owner',
+        grants: [
+          {
+            resource: {
+              type: 'audit.events',
+              id: auditPermissionId({ appId: 'main' }, 'main'),
+            },
+            actions: [{ action: 'read' }],
+          },
+        ],
+      });
+      await authz.permissionSets.assign({
+        subject: { type: 'user', id: user.id },
+        permissionSet: 'boot-owner',
+      });
+      const target = { dataSource: 'main', resource: 'g20_items', key: 'a' };
+      const receipt = await s.app.container
+        .resolve(auditServiceToken)
+        .bind(
+          { appId: 'main', actor: { type: 'user', id: user.id } },
+          { producer: 'adapter-owner' },
+        )
+        .record({ action: 'g23.boot', outcome: 'success', target });
+      expect(receipt.state).toBe('committed');
+      const url =
+        'http://localhost/api/audit/events?store=main&target=' +
+        encodeURIComponent(JSON.stringify(target));
+      expect(
+        (await s.app.fetch(new Request(url, { headers: { cookie } }))).status,
+      ).toBe(200);
+      wait = true;
+      const response = s.app.fetch(new Request(url, { headers: { cookie } }));
+      await entered.promise;
+      const shutdown = s.app.shutdown();
+      expect(ownerStopped).toBe(false);
+      gate.resolve();
+      expect((await response).status).toBe(200);
+      await shutdown;
+      expect(ownerStopped).toBe(true);
+      expect(() =>
+        s.app.container.resolve(auditResourceAdaptersToken).register({
+          dataSource: 'main',
+          resource: 'closed',
+          canRead: async () => 'allowed',
+        }),
+      ).toThrow('closed');
+    } finally {
+      gate.resolve();
+      await s.close();
+    }
+  });
+  it('makes owner adapters available to production list/detail/operation/count and revokes them live', async () => {
+    const s = await fixture(dialect);
+    try {
+      await s.app.start();
+      const request = (path: string, cookie: string = '') =>
+        s.app.fetch(
+          new Request('http://localhost/api/audit' + path, {
+            headers: { cookie },
+          }),
+        );
+      const signup = await s.app.fetch(
+        new Request(
+          'http://localhost/api/auth/sign-up/email',
+          json({
+            name: 'Owner',
+            email: 'owner@example.test',
+            password: 'Synthetic long owner password',
+          }),
+        ),
+      );
+      expect(signup.status).toBe(200);
+      const { user } = (await signup.json()) as { user: { id: string } };
+      const cookie = signup.headers.get('set-cookie') ?? '';
+      await s.f.connection.builder.createCollection(
+        'adapter_documents',
+        (table) => {
+          table.string('id').primary();
+          table.string('ownerId');
+          table.string('tenant');
+        },
+      );
+      await s.f.connection.query
+        .insertInto('adapter_documents')
+        .values([
+          { id: 'a', ownerId: user.id, tenant: 'synthetic' },
+          { id: 'b', ownerId: 'another-user', tenant: 'synthetic' },
+        ])
+        .execute();
+      const authz = s.app.container.resolve(authorizationToken);
+      authz.database.collections.add({
+        name: 'main.adapter_documents',
+        actions: ['read'],
+        fields: ['id', 'ownerId', 'tenant'],
+        attributes: { identifier: 'id', owner: 'ownerId' },
+      });
+      await authz.permissionSets.create({
+        key: 'owner',
+        grants: [
+          {
+            resource: {
+              type: 'audit.events',
+              id: auditPermissionId({ appId: 'main' }, 'main'),
+            },
+            actions: [{ action: 'read' }],
+          },
+          authz.database.grant('main.adapter_documents', {
+            read: { fields: { output: ['id'] }, recordAccess: ['recordsIOwn'] },
+          }),
+        ],
+      });
+      await authz.permissionSets.assign({
+        subject: { type: 'user', id: user.id },
+        permissionSet: 'owner',
+      });
+      const target = {
+        dataSource: 'main',
+        resource: 'adapter_documents',
+        key: 'a',
+      };
+      const adapter = createAuditDatabaseResourceAdapter({
+        connection: s.f.connection,
+        resource: target.resource,
+        table: 'adapter_documents',
+        keyFields: ['id'],
+        boundaryFilter: { tenant: { $eq: 'synthetic' } },
+      });
+      expect(
+        await adapter.canRead(
+          authz.for({ principal: { type: 'user', id: user.id } }),
+          target,
+        ),
+      ).toBe('allowed');
+      const receipt = await s.app.container
+        .resolve(auditServiceToken)
+        .bind(
+          {
+            appId: 'main',
+            actor: { type: 'user', id: user.id },
+            operationId: 'adapter-owner',
+          },
+          { producer: 'adapter-owner' },
+        )
+        .record({ action: 'adapter.owner', outcome: 'success', target });
+      expect(receipt.state).toBe('committed');
+      if (receipt.state !== 'committed')
+        throw new Error('Expected committed receipt.');
+      const suffix =
+        '?store=main&target=' + encodeURIComponent(JSON.stringify(target));
+      const paths = [
+        '/events' + suffix,
+        '/events' + suffix + '&count=true',
+        '/events/' + receipt.eventId + suffix,
+        '/operations/adapter-owner' + suffix,
+      ];
+      for (const path of paths)
+        expect((await request(path, cookie)).status).toBe(403);
+      const registry = s.app.container.resolve(auditResourceAdaptersToken);
+      const dispose = registry.register(adapter);
+      for (const path of paths) {
+        const response = await request(path, cookie);
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(JSON.stringify(body)).toContain(receipt.eventId);
+        if (path.endsWith('&count=true'))
+          expect(body).toMatchObject({ total: 1 });
+      }
+      expect(
+        (
+          await request(
+            '/events?store=main&target=' +
+              encodeURIComponent(JSON.stringify({ ...target, key: 'b' })),
+            cookie,
+          )
+        ).status,
+      ).toBe(403);
+      expect((await request('/events' + suffix)).status).toBe(401);
+      expect((await request('/events?store=main', cookie)).status).toBe(403);
+      dispose();
+      for (const path of paths)
+        expect((await request(path, cookie)).status).toBe(403);
+      const next = registry.register(adapter);
+      dispose();
+      expect((await request(paths[0], cookie)).status).toBe(200);
+      const sibling = s.make();
+      try {
+        await sibling.start();
+        expect(sibling.container.resolve(auditResourceAdaptersToken)).not.toBe(
+          registry,
+        );
+        expect(
+          (
+            await sibling.fetch(
+              new Request('http://localhost/api/audit' + paths[0], {
+                headers: { cookie },
+              }),
+            )
+          ).status,
+        ).toBe(403);
+      } finally {
+        await sibling.shutdown();
+      }
+      expect((await request(paths[0], cookie)).status).toBe(200);
+      await s.f.connection.query
+        .deleteFrom('adapter_documents')
+        .where('id', '=', 'a')
+        .execute();
+      expect((await request(paths[0], cookie)).status).toBe(403);
+      await authz.permissionSets.create({
+        key: 'deleted',
+        grants: [
+          {
+            resource: {
+              type: 'audit.events',
+              id: auditPermissionId({ appId: 'main' }, 'main'),
+            },
+            actions: [{ action: 'readDeleted' }],
+          },
+        ],
+      });
+      await authz.permissionSets.assign({
+        subject: { type: 'user', id: user.id },
+        permissionSet: 'deleted',
+      });
+      expect((await request(paths[0], cookie)).status).toBe(200);
+      next();
+      expect((await request(paths[0], cookie)).status).toBe(403);
+      await authz.permissionSets.create({
+        key: 'all',
+        grants: [
+          {
+            resource: {
+              type: 'audit.events',
+              id: auditPermissionId({ appId: 'main' }, 'main'),
+            },
+            actions: [{ action: 'readAll' }],
+          },
+        ],
+      });
+      const all = await authz.permissionSets.assign({
+        subject: { type: 'user', id: user.id },
+        permissionSet: 'all',
+      });
+      for (const path of paths)
+        expect((await request(path, cookie)).status).toBe(200);
+      await authz.permissionSets.revoke(all.id);
+      expect((await request(paths[0], cookie)).status).toBe(403);
+      await s.app.shutdown();
+      expect(() => registry.register(adapter)).toThrow('closed');
+    } finally {
+      await s.close();
+    }
+  });
+  it('switches runtime and HTTP observation stores, preserves transaction affinity, and restarts with the selected store', async () => {
+    const s = await fixture(dialect, true, { stores: ['main', 'other'] }, true);
+    let restarted: Application | undefined;
+    try {
+      await s.app.start();
+      const composition = s.app.container.resolve(auditCompositionToken);
+      const settings = composition.routes().settings;
+      const scope = composition.runtime.current();
+      const previous = await settings.get(scope);
+      await settings.update(scope, {
+        expectedRevision: previous.revision,
+        settings: { ...previous, observationStore: 'other' },
+        confirmRetentionReduction: false,
+      });
+      const event = await composition.runtime.recorder.record({
+        action: 'g20.after-switch',
+        outcome: 'success',
+      });
+      expect(event.state).toBe('committed');
+      await s.f.manager.transaction(async (connection) => {
+        const transaction =
+          databaseExports.transactionAuthority.current(connection);
+        if (!transaction) throw new Error('Expected actual transaction.');
+        expect(
+          await composition.runtime.recorder.record(
+            { action: 'g20.transaction-main', outcome: 'success' },
+            { transaction },
+          ),
+        ).toMatchObject({ state: 'pending-commit' });
+      });
+      await s.app.fetch(new Request('http://localhost/api/audit/events'));
+      const { auditRows } = await import('../../server/database/sql-client.js');
+      const actions = async (name: string): Promise<unknown[]> =>
+        (
+          await auditRows(
+            s.f.manager.connection(name),
+            'SELECT "action" FROM "auditEvents"',
+          )
+        ).map((row) => row.action);
+      expect(await actions('main')).toContain('g20.transaction-main');
+      expect(await actions('main')).not.toContain('g20.after-switch');
+      expect(await actions('other')).toContain('g20.after-switch');
+      expect(await actions('other')).toContain('audit.api.access');
+      expect(await actions('other')).not.toContain('g20.transaction-main');
+      await s.app.shutdown();
+      restarted = s.make();
+      await restarted.start();
+      const next = restarted.container.resolve(auditCompositionToken);
+      const policy = await next.routes().settings.get(next.runtime.current());
+      expect(policy.observationStore).toBe('other');
+      expect(
+        next.catalog
+          .entries(policy)
+          .filter((entry) => entry.kind === 'business'),
+      ).toHaveLength(2);
+      await expect(
+        next.routes().settings.update(next.runtime.current(), {
+          expectedRevision: policy.revision,
+          settings: { ...policy, observationStore: 'unprepared' },
+          confirmRetentionReduction: false,
+        }),
+      ).rejects.toBeInstanceOf(Error);
+    } finally {
+      await restarted?.shutdown();
+      await s.close();
+    }
+  });
+  it('rejects a missing managed-write callback at the real startup probe', async () => {
+    const s = await fixture(dialect, true, { auditRequired: true });
+    // Fault injection removes only extension delivery; real connections, SQL,
+    // authentication, settings, and stores continue to execute.
+    const extension = vi
+      .spyOn(databaseExports, 'getManagedWriteRegistry')
+      .mockReturnValue({
+        register: () => () => undefined,
+      });
+    try {
+      await expect(s.app.start()).rejects.toMatchObject({
+        code: 'AUDIT_NOT_READY',
+      });
+      await expect(
+        s.app.fetch(new Request('http://localhost/api/audit/events')),
+      ).rejects.toMatchObject({ code: 'AUDIT_NOT_READY' });
+    } finally {
+      extension.mockRestore();
+      await s.close();
+    }
+  });
+  it('rejects required missing storage through the registered pre-DDL observer', async () => {
+    const s = await fixture(dialect, true, { auditRequired: true });
+    try {
+      await s.f.connection.builder.dropCollection('auditEvents');
+      s.app.registerProviders();
+      const observer = s.app.container.resolve(databaseLifecycleObserverToken);
+      await expect(observer.before('migrations')).rejects.toMatchObject({
+        code: 'AUDIT_NOT_READY',
+      });
+      await expect(s.app.start()).rejects.toMatchObject({
+        code: 'AUDIT_NOT_READY',
+      });
+    } finally {
+      await s.close();
+    }
+  });
+  it('uses production providers and routes for anonymous denial, real login, persisted grants, settings and restart', async () => {
+    const s = await fixture(dialect);
+    let restarted: Application | undefined;
+    try {
+      const request = (path: string, init?: RequestInit) =>
+        Promise.resolve(
+          s.app.fetch(new Request('http://localhost/api' + path, init)),
+        );
+      expect((await request('/audit/events?store=main')).status).toBe(401);
+      expect((await request('/audit/capabilities')).status).toBe(401);
+      const signup = await request(
+        '/auth/sign-up/email',
+        json({
+          name: 'User',
+          email: 'g20@example.test',
+          password: 'synthetic long password',
+        }),
+      );
+      expect(signup.status).toBe(200);
+      const user = (await signup.json()) as { user: { id: string } };
+      const cookie = signup.headers.get('set-cookie') ?? '';
+      expect(
+        (await request('/audit/events?store=main', { headers: { cookie } }))
+          .status,
+      ).toBe(403);
+      const authz = s.app.container.resolve(authorizationToken);
+      await authz.permissionSets.create({
+        key: 'g20-page-only',
+        grants: [
+          {
+            resource: { type: 'page', id: '*' },
+            actions: [{ action: 'access' }],
+          },
+        ],
+      });
+      const pageGrant = await authz.permissionSets.assign({
+        subject: { type: 'user', id: user.user.id },
+        permissionSet: 'g20-page-only',
+      });
+      expect(
+        await (
+          await request('/audit/capabilities', { headers: { cookie } })
+        ).json(),
+      ).toEqual({
+        data: { events: false, settings: false, stores: [] },
+      });
+      await authz.permissionSets.revoke(pageGrant.id);
+      await authz.permissionSets.create({
+        key: 'g20-auditor',
+        grants: [
+          {
+            resource: {
+              type: 'audit.events',
+              id: auditPermissionId({ appId: 'main' }, 'main'),
+            },
+            actions: ['read', 'readAll', 'readMetadata'].map((action) => ({
+              action,
+            })),
+          },
+          {
+            resource: {
+              type: 'audit.settings',
+              id: auditPermissionId({ appId: 'main' }, 'main'),
+            },
+            actions: ['read', 'manage'].map((action) => ({ action })),
+          },
+        ],
+      });
+      const auditGrant = await authz.permissionSets.assign({
+        subject: { type: 'user', id: user.user.id },
+        permissionSet: 'g20-auditor',
+      });
+      expect(
+        (await request('/audit/events?store=main', { headers: { cookie } }))
+          .status,
+      ).toBe(200);
+      const capabilities = await request('/audit/capabilities', {
+        headers: { cookie },
+      });
+      expect(capabilities.headers.get('cache-control')).toBe('no-store');
+      expect(await capabilities.json()).toEqual({
+        data: { events: true, settings: true, stores: ['main'] },
+      });
+      const composition = s.app.container.resolve(auditCompositionToken);
+      const settings = await composition
+        .routes()
+        .settings.get(composition.runtime.current());
+      expect(settings.sources.database).toEqual([]);
+      await s.f.connection.query
+        .insertInto('g20_items')
+        .values({ id: 'g20-unselected', name: 'Synthetic' })
+        .execute();
+      const catalog = composition.catalog.entries(settings);
+      expect(
+        catalog.some(
+          (entry) =>
+            entry.kind === 'database' &&
+            entry.targets.some((target) => target.table === 'g20_items'),
+        ),
+      ).toBe(true);
+      await composition
+        .routes()
+        .settings.update(composition.runtime.current(), {
+          expectedRevision: settings.revision,
+          confirmRetentionReduction: false,
+          settings: {
+            ...settings,
+            retentionDays: 210,
+            sources: {
+              ...settings.sources,
+              database: [{ dataSource: 'main', table: 'g20_items' }],
+            },
+          },
+        });
+      await s.f.connection.query
+        .updateTable('g20_items')
+        .set({ name: 'Selected synthetic' })
+        .where('id', '=', 'g20-unselected')
+        .execute();
+      const queryResources = composition.routes();
+      const events = await queryResources.query.list(
+        await queryResources.authorization.issue(
+          authz.for({ principal: { type: 'user', id: user.user.id } }),
+          'main',
+        ),
+        { store: 'main', kind: 'database' },
+      );
+      expect(events.items.map((event) => event.action)).toEqual([
+        'database.update',
+      ]);
+      await authz.permissionSets.revoke(auditGrant.id);
+      expect(
+        await (
+          await request('/audit/capabilities', { headers: { cookie } })
+        ).json(),
+      ).toEqual({
+        data: { events: false, settings: false, stores: [] },
+      });
+      expect(
+        (await request('/audit/events?store=main', { headers: { cookie } }))
+          .status,
+      ).toBe(403);
+      await s.app.shutdown();
+      restarted = s.make();
+      await restarted.start();
+      const next = restarted.container.resolve(auditCompositionToken);
+      expect(
+        (await next.routes().settings.get(next.runtime.current()))
+          .retentionDays,
+      ).toBe(210);
+      expect(
+        next.catalog
+          .entries(await next.routes().settings.get(next.runtime.current()))
+          .filter((entry) => entry.kind === 'request'),
+      ).toHaveLength(1);
+    } finally {
+      await restarted?.shutdown();
+      await s.close();
+    }
+  });
+
+  it('rejects missing stores and mandatory source policy before admitting traffic', async () => {
+    for (const overrides of [
+      { auditRequired: true, defaults: { enabled: false } },
+      { auditRequired: true, stores: ['missing'] },
+      { auditRequired: true, mandatorySources: ['database'] as const },
+      {
+        auditRequired: true,
+        mandatorySources: ['business'] as const,
+        defaults: {
+          enabled: true,
+          sources: {
+            http: 'declared-routes' as const,
+            runtime: 'disabled' as const,
+            database: [],
+          },
+        },
+      },
+    ]) {
+      const s = await fixture(dialect, true, overrides);
+      try {
+        await expect(s.app.start()).rejects.toBeInstanceOf(Error);
+      } finally {
+        await s.close();
+      }
+    }
+  });
+  it('starts an optional producer composition with Audit absent', async () => {
+    const s = await fixture(dialect, false);
+    try {
+      await s.app.start();
+      expect(s.app.hasPlugin('@nocobase/app-plugin-audit')).toBe(false);
+      expect(
+        (
+          await s.app.fetch(
+            new Request('http://localhost/api/audit/events?store=main'),
+          )
+        ).status,
+      ).toBe(404);
+    } finally {
+      await s.close();
+    }
+  });
+});
+
+describe('mounted audit declarations', () => {
+  it.each(['same route', 'parent wildcard', 'same action different extractor'])(
+    'rejects %s conflicts before serving requests',
+    async (scenario) => {
+      const f = await fixture('sqlite');
+      let executed = false;
+      f.app.addRoutes(
+        defineApiRoutes(() => {
+          const service = f.app.container.resolve(auditServiceToken);
+          const root = new Hono();
+          const child = new Hono();
+          child.onError((_error, context) => context.text('handled', 500));
+          const first = service.http({ action: 'orders.first' });
+          const second = service.http({
+            action:
+              scenario === 'same action different extractor'
+                ? 'orders.first'
+                : 'orders.second',
+            details: () => ({ source: 'second' }),
+          });
+          if (scenario === 'parent wildcard') root.use('/orders/*', first);
+          else child.use('/:id', first);
+          child.get('/:id', second, (context) => {
+            executed = true;
+            return context.text('never');
+          });
+          root.route('/orders', child);
+          return root;
+        }),
+      );
+      try {
+        await expect(f.app.start()).rejects.toMatchObject({
+          code: 'AUDIT_INVALID_EVENT',
+        });
+        expect(executed).toBe(false);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+
+  it.each(['action', 'titleKey', 'target', 'details'] as const)(
+    'rejects a reused declaration whose %s snapshot changed',
+    async (field) => {
+      const f = await fixture('sqlite');
+      let executed = false;
+      f.app.addRoutes(
+        defineApiRoutes(() => {
+          const service = f.app.container.resolve(auditServiceToken);
+          const child = new Hono();
+          child.onError((_error, context) => context.text('handled', 500));
+          const shared = {
+            action: 'orders.first',
+            titleKey: 'orders.first',
+            target: () => undefined,
+            details: () => ({ source: 'first' }),
+          };
+          child.get('/:id', service.http(shared));
+          if (field === 'action') shared.action = 'orders.second';
+          if (field === 'titleKey') shared.titleKey = 'orders.second';
+          if (field === 'target') shared.target = () => undefined;
+          if (field === 'details')
+            shared.details = () => ({ source: 'second' });
+          child.get('/:id', service.http(shared), (context) => {
+            executed = true;
+            return context.text('never');
+          });
+          return new Hono().route('/orders', child);
+        }),
+      );
+      try {
+        await expect(f.app.start()).rejects.toMatchObject({
+          code: 'AUDIT_INVALID_EVENT',
+        });
+        expect(executed).toBe(false);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+
+  it('allows a scope bridge, shared declarations, distinct methods and disjoint paths', async () => {
+    const f = await fixture('sqlite');
+    f.app.addRoutes(
+      defineApiRoutes(() => {
+        const service = f.app.container.resolve(auditServiceToken);
+        const composition = f.app.container.resolve(auditCompositionToken);
+        const root = new Hono();
+        root.use('/orders/*', async (_context, next) => {
+          await composition.runtime.runAuthenticated(
+            { actor: { type: 'user', id: 'trusted-user' } },
+            next,
+          );
+        });
+        const child = new Hono();
+        child.onError((_error, context) => context.text('handled', 500));
+        const shared = { action: 'orders.read' };
+        child.get(
+          '/:id',
+          service.http(shared),
+          service.http(shared),
+          (context) => context.text('ok'),
+        );
+        child.post(
+          '/:id',
+          service.http({ action: 'orders.write' }),
+          (context) => context.text('created', 201),
+        );
+        root.route('/orders', child);
+        root.get(
+          '/customers/:id',
+          service.http({ action: 'customers.read' }),
+          (context) => context.text('ok'),
+        );
+        return root;
+      }),
+    );
+    try {
+      await f.app.start();
+      expect(
+        (await f.app.fetch(new Request('http://localhost/api/orders/one')))
+          .status,
+      ).toBe(200);
+      const composition = f.app.container.resolve(auditCompositionToken);
+      const { auditRows, storedText } =
+        await import('../../server/database/sql-client.js');
+      const records = await auditRows(
+        f.f.connection,
+        'SELECT "payload" FROM "auditEvents" WHERE "action" = ?',
+        ['orders.read'],
+      );
+      expect(records).toHaveLength(1);
+      expect(JSON.parse(storedText(records[0], 'payload'))).toMatchObject({
+        actor: { type: 'user', id: 'trusted-user' },
+        action: 'orders.read',
+        outcome: 'success',
+      });
+      expect(composition.runtime.current().actor.type).toBe('unknown');
+    } finally {
+      await f.close();
+    }
+  });
+});

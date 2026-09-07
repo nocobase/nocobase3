@@ -5,6 +5,7 @@ import type { DatabaseConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
 import { KnexConnectionAdapter } from './drivers/knex/index.js';
+import { registerConnectionOwner } from './transaction.js';
 
 export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
@@ -63,6 +64,7 @@ export class DefaultDatabaseManager implements DatabaseManager {
         this.config.metadataStore ??
         new InMemoryCollectionMetadataStore(),
     });
+    registerConnectionOwner(connection, this);
     this.connections.set(name, connection);
     return connection;
   }

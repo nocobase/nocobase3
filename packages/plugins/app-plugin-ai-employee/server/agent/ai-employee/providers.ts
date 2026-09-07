@@ -1,4 +1,5 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+import { bindAIConversationAudit } from '../../audit-runtime.js';
 import type { LLMResult } from '@langchain/core/outputs';
 import {
   createAgent,
@@ -295,6 +296,7 @@ export function createAIEmployeeConversationProvider(
     },
     logger: ctx.logger,
   };
+  bindAIConversationAudit(conversation, options.ctx, username, sessionId);
   return conversation;
 }
 
@@ -391,6 +393,12 @@ export async function createAIEmployeeAgentProviders(
           }),
     overrides,
   });
+  bindAIConversationAudit(
+    providers.conversation,
+    options.ctx,
+    String(options.employee.username ?? ''),
+    options.sessionId,
+  );
   return {
     providers,
     facade: {

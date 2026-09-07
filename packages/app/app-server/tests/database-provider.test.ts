@@ -27,6 +27,7 @@ vi.mock('@nocobase/db', async (importOriginal) => {
 
 import {
   DatabaseProvider,
+  databaseLifecycleObserverToken,
   databaseConfig,
   runAppMigrations,
   runAppSeeds,
@@ -49,6 +50,29 @@ afterEach(() => {
 });
 
 describe('DatabaseProvider', () => {
+  it('resolves lifecycle observers lazily and rejects admission before creating a migrator', async () => {
+    createDatabaseManagerMock.mockReturnValue(createMockDatabase());
+    const { provider, container } = await createProvider(
+      createConfig(createTempDirectory(), true),
+    );
+    const error = new Error('Admission unavailable');
+    const after = vi.fn();
+    const resolve = vi.fn(() => ({
+      before: async () => {
+        throw error;
+      },
+      after,
+    }));
+    container.singleton(databaseLifecycleObserverToken, resolve);
+    provider.register();
+    expect(resolve).not.toHaveBeenCalled();
+    await expect(provider.boot()).rejects.toBe(error);
+    expect(resolve).toHaveBeenCalledOnce();
+    expect(createDatabaseMigratorMock).not.toHaveBeenCalled();
+    expect(createDatabaseSeederMock).not.toHaveBeenCalled();
+    expect(after).not.toHaveBeenCalled();
+  });
+
   it('registers a lazy database manager created from runtime config', async () => {
     const database = createMockDatabase();
     createDatabaseManagerMock.mockReturnValue(database);

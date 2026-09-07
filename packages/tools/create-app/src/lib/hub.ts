@@ -10,9 +10,8 @@ export interface BuildHubEnvOptions {
 /**
  * Builds the `.env` a generated hub starts with.
  *
- * A hub is configured through environment variables rather than the `config.yml` an app uses — it owns no database,
- * only a Portal host and a proxy to an upstream NocoBase API. The template ships `.env.example` but not `.env`, and
- * nothing reads the example, so a hub generated without this step runs entirely on defaults with no file to edit.
+ * Hub identity and mount settings live in the environment file. Templates declaring app-v1 also receive
+ * the application configuration file for database and authentication settings.
  *
  * The example is used as the base rather than generating the file from scratch, so the comments explaining each
  * setting and the commented-out optional keys reach the user.

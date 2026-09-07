@@ -6,6 +6,7 @@ import {
   needsConnectionDetails,
   parseDialect,
   type DatabaseDialect,
+  type DatabaseConfig,
 } from './lib/database.ts';
 import { buildConfigFile } from './lib/config-file.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
@@ -136,46 +137,57 @@ async function run(input: ParsedInput): Promise<void> {
     throw error;
   }
 
-  // Settled against the downloaded manifest, because a package specifier or a local path only reveals what it is once
-  // it is on disk. This is also why the dialect is not asked for earlier: prompting first would ask every hub created
-  // from a path for a database it does not have, and there is no answer to that question worth keeping.
+  // Identity and initialization capabilities are independent and come from the downloaded template.
   const kind = resolveTemplateKind(input.flags.template, {
     name: template.name,
     nocobase: { templateKind: template.kind },
   });
 
-  if (kind === 'hub') {
-    if (input.flags['db-dialect'] !== undefined) {
-      // Silently ignoring it would leave the user believing they chose a database the hub never had.
-      log.warn(
-        '--db-dialect does not apply to a hub, which has no database. Ignoring it.',
-      );
+  let database: DatabaseConfig;
+  try {
+    if (kind === 'hub' && template.scaffoldProfile === undefined) {
+      if (input.flags['db-dialect'] !== undefined) {
+        log.warn(
+          '--db-dialect is ignored because this Hub template does not declare the app-v1 scaffold profile.',
+        );
+      }
+
+      await createHub({ input, name, targetDirectory, template });
+      return;
     }
 
-    await createHub({ input, name, targetDirectory, template });
-    return;
-  }
+    database = defaultDatabaseConfig(await resolveDialect(input));
+    const extraFiles: Record<string, string> = {
+      'config.yml': buildConfigFile({ database }),
+    };
+    if (kind === 'hub') {
+      extraFiles['.env'] = buildHubEnvFile({
+        example: await readEnvExample(template.directory),
+        name,
+      });
+      extraFiles[path.join('app-dist', '.gitkeep')] = '';
+    }
 
-  const database = defaultDatabaseConfig(await resolveDialect(input));
-  const driver = driverFor(database.dialect);
-
-  try {
     await scaffoldFromTemplate({
       name,
       targetDirectory,
       templateDirectory: template.directory,
-      extraFiles: {
-        'config.yml': buildConfigFile({ database }),
-      },
+      extraFiles,
     });
   } finally {
     await removeDirectory(template.directory);
   }
 
+  const driver = driverFor(database.dialect);
   await addDriverDependency(targetDirectory, driver);
   await ensureAllowBuilds(targetDirectory);
 
   const dialect = database.dialect;
+  if (kind === 'hub') {
+    log.info(
+      'Created a full-stack Hub. Identity and mount settings were written to .env.',
+    );
+  }
 
   log.success(`Created ${name} using ${dialect} (${driver}).`);
 
@@ -230,40 +242,22 @@ interface CreateHubOptions {
   template: { directory: string; name: string; version: string };
 }
 
-/**
- * Scaffolds a hub.
- *
- * A hub is a Portal host that serves built apps and proxies an upstream NocoBase API. It has no database, so none of
- * the app flow's database work applies: no dialect, no driver dependency, no `config.yml`. What it needs instead is
- * `.env` for its own settings, since a hub is configured through the environment, and `app-dist/` for the apps it
- * serves. It is run through its own `pnpm build` and `pnpm start`.
- *
- * `ensureAllowBuilds` still runs. The hub depends on `esbuild`, which needs its install script, and pnpm 11 skips
- * that for any package missing from `allowBuilds`.
- */
+/** Preserves initialization for Hub templates without the full-stack App profile. */
 async function createHub(options: CreateHubOptions): Promise<void> {
   const { input, name, targetDirectory, template } = options;
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
 
-  // Read before the template directory is removed below.
   const envExample = await readEnvExample(template.directory);
-
-  try {
-    await scaffoldFromTemplate({
-      name,
-      targetDirectory,
-      templateDirectory: template.directory,
-      extraFiles: {
-        '.env': buildHubEnvFile({ example: envExample, name }),
-        // Where a hub keeps the built apps it serves. Empty until something is deployed, so it needs a placeholder to
-        // exist in a fresh checkout at all.
-        [path.join('app-dist', '.gitkeep')]: '',
-      },
-    });
-  } finally {
-    await removeDirectory(template.directory);
-  }
+  await scaffoldFromTemplate({
+    name,
+    targetDirectory,
+    templateDirectory: template.directory,
+    extraFiles: {
+      '.env': buildHubEnvFile({ example: envExample, name }),
+      [path.join('app-dist', '.gitkeep')]: '',
+    },
+  });
 
   await ensureAllowBuilds(targetDirectory);
 
@@ -290,11 +284,7 @@ async function createHub(options: CreateHubOptions): Promise<void> {
   finishHub(name, { installed: true });
 }
 
-/**
- * Prints what the user has to do next for a hub.
- *
- * A hub has to be built before it can be started, unlike an app whose `pnpm dev` compiles as it serves.
- */
+/** Prints the existing build/start instructions for a legacy Hub template. */
 function finishHub(
   name: string,
   state: { installed: boolean },
@@ -311,7 +301,7 @@ function finishHub(
   note(steps.join('\n'), 'Next steps');
 
   log.info(
-    'Hub settings were written to .env. It has no database; it proxies an upstream NocoBase API instead.',
+    'Hub settings were written to .env. This template does not declare App database initialization.',
   );
 
   outro(message);
