@@ -6,6 +6,12 @@ import { databaseManagerToken } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 import {
+  createAgentContext,
+  type AppAgentContext,
+} from '../../server/agent/context.js';
+import type { ConversationExecution } from '../../server/agent/contracts.js';
+import type { Actor } from '../../server/domain/contracts.js';
+import {
   ManagerFactory,
   managerFactoryToken,
 } from '../../server/factory/manager-factory.js';
@@ -19,6 +25,21 @@ import {
 } from '../../server/factory/service-factory.js';
 import { aiManagerToken } from '../../server/provider/ai-employee.js';
 import { createTestAppDeps } from './test-app-deps.js';
+
+export function createTestActor(overrides: Partial<Actor> = {}): Actor {
+  return {
+    id: 'fixture-user',
+    roles: ['member'],
+    isRoot: false,
+    ...overrides,
+  };
+}
+
+export function createTestConversationExecution(
+  overrides: ConversationExecution = {},
+): ConversationExecution {
+  return { ...overrides };
+}
 
 export function createTestAIEmployeeFixture() {
   const deps = createTestAppDeps();
@@ -51,14 +72,31 @@ export function createTestAIEmployeeFixture() {
   });
   const managers = container.resolve(managerFactoryToken);
   const repositories = container.resolve(repositoryFactoryToken);
-  const context = services.createRequestRuntime({
-    id: 'fixture-user',
-    roles: ['member'],
-    isRoot: false,
-  });
-  return { context, repositories, managers, services };
+  return { container, deps, repositories, managers, services };
 }
 
-export function createTestAIEmployeeRuntime() {
-  return createTestAIEmployeeFixture().context;
+export function createTestAgentContext({
+  actor = createTestActor(),
+  execution = createTestConversationExecution(),
+  state,
+}: {
+  actor?: Actor;
+  execution?: ConversationExecution;
+  state?: Parameters<typeof createAgentContext>[0]['state'];
+} = {}): AppAgentContext {
+  const fixture = createTestAIEmployeeFixture();
+  return createAgentContext({
+    actor,
+    execution,
+    state,
+    ai: fixture.deps.ai,
+    database: fixture.deps.database,
+    logger: fixture.deps.logging.getLogger('ai-employee-test'),
+    repositories: fixture.repositories,
+    aiEmployeesManager: fixture.managers.aiEmployeesManager,
+    aiConversationsManager: fixture.managers.aiConversationsManager,
+    builtInManager: fixture.managers.builtInManager,
+    knowledgeBaseManager: fixture.managers.knowledgeBaseManager,
+    subAgentsDispatcher: fixture.managers.subAgentsDispatcher,
+  });
 }
