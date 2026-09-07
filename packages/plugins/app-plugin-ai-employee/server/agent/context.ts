@@ -1,7 +1,11 @@
 import type { AgentContext, AgentState } from '@nocobase/ai-employee';
 import type { Context } from '../internal/runtime-context.js';
-import type { RuntimeServices } from '../internal/runtime-services.js';
 import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { AIEmployeesManager } from '../managers/ai-employees-manager.js';
+import type { AIConversationsManager } from '../managers/ai-conversations-manager.js';
+import type { BuiltInManager } from '../managers/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
+import type { SubAgentsDispatcher } from '../managers/sub-agents/dispatcher.js';
 import type {
   AIConversationRepository,
   AIMessageRepository,
@@ -35,15 +39,26 @@ export type AppAgentContext = AgentContext<
 >;
 
 export interface CreateAgentContextOptions {
+  ctx: Context;
+  repositories: RepositoryFactory;
+  aiEmployeesManager: AIEmployeesManager;
+  aiConversationsManager: AIConversationsManager;
+  builtInManager: BuiltInManager;
+  knowledgeBaseManager: KnowledgeBaseManager;
+  subAgentsDispatcher: SubAgentsDispatcher;
   state?: Partial<AgentState>;
 }
 
-export function createAgentContext(
-  ctx: Context,
-  repositories: RepositoryFactory,
-  runtime: RuntimeServices,
-  options: CreateAgentContextOptions = {},
-): AppAgentContext {
+export function createAgentContext({
+  ctx,
+  repositories,
+  aiEmployeesManager,
+  aiConversationsManager,
+  builtInManager,
+  knowledgeBaseManager,
+  subAgentsDispatcher,
+  state: stateOverrides,
+}: CreateAgentContextOptions): AppAgentContext {
   const execution = ctx.requestExecution;
   const state: AgentState = {
     sessionId: execution?.sessionId,
@@ -55,36 +70,33 @@ export function createAgentContext(
     frontendTools: execution?.frontendTools,
     toolCallResults: execution?.toolCallResults,
     timezone: execution?.timezone,
-    ...options.state,
+    ...stateOverrides,
   };
   const services: AppAgentServices = {
     aiEmployees: {
       resolveModel: (employee, model) =>
-        runtime.aiEmployeesManager.resolveModel(employee, model),
+        aiEmployeesManager.resolveModel(employee, model),
     },
     aiConversations: {
-      create: (params) => runtime.aiConversationsManager.create(params),
+      create: (params) => aiConversationsManager.create(params),
       resolveSubAgentConversation: async (sessionId, toolCallId) => {
         if (!sessionId || !toolCallId) return null;
-        return runtime.aiConversationsManager.resolveSubAgentConversation(
+        return aiConversationsManager.resolveSubAgentConversation(
           sessionId,
           toolCallId,
         );
       },
       getUserDecisions: async (messageId) =>
-        (await runtime.aiConversationsManager.getUserDecisions(messageId)) ??
-        null,
+        (await aiConversationsManager.getUserDecisions(messageId)) ?? null,
     },
     builtIn: {
-      localize: (employee) =>
-        runtime.builtInManager.setupBuiltInInfo(ctx, employee),
+      localize: (employee) => builtInManager.setupBuiltInInfo(ctx, employee),
     },
     knowledgeBase: {
-      retrievePrompt: (params) =>
-        runtime.knowledgeBaseManager.retrievePrompt(params),
+      retrievePrompt: (params) => knowledgeBaseManager.retrievePrompt(params),
     },
     subAgents: {
-      run: (task) => runtime.subAgentsDispatcher.run(task),
+      run: (task) => subAgentsDispatcher.run(task, ctx),
     },
     frontendTools: {
       find: (toolId) =>

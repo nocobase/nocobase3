@@ -11,7 +11,6 @@ import type {
   ConversationRequestExecution,
   StreamTarget,
 } from '../internal/runtime-context.js';
-import type { RuntimeServices } from '../internal/runtime-services.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
 import { ResourceActionError, sendStreamError } from '../domain/errors.js';
 import type {
@@ -22,10 +21,22 @@ import { AIEmployee } from '../ai-employees/ai-employee.js';
 import type { AIEmployeeOptions } from '../ai-employees/ai-employee.js';
 import { AgentSSEAdapter } from '../agent/sse.js';
 import { createAIEmployeeAgentService } from '../agent/ai-employee/index.js';
-import { createAgentContext } from '../agent/context.js';
+import {
+  createAgentContext,
+  type AppAgentContext,
+  type CreateAgentContextOptions,
+} from '../agent/context.js';
 import { EXECUTE_FRONTEND_TOOL_NAME } from '../ai-employees/common/frontend-tools.js';
 import { findCurrentFrontendTool } from '../ai-employees/frontend-tools.js';
 import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { DocumentLoaders } from '@nocobase/ai-employee';
+import type { AIEmployeesManager } from '../managers/ai-employees-manager.js';
+import type { AIConversationsManager } from '../managers/ai-conversations-manager.js';
+import type { BuiltInManager } from '../managers/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../managers/llm-stream-cached-manager.js';
+import type { SubAgentsDispatcher } from '../managers/sub-agents/dispatcher.js';
+import type { WorkContextHandler } from '../managers/work-context/index.js';
 
 async function getAIEmployee(
   repositories: RepositoryFactory,
@@ -194,17 +205,54 @@ function normalizeIncomingMessageAttachments(
 
 export interface AIConversationServiceOptions {
   repositories: RepositoryFactory;
-  runtime: RuntimeServices;
+  aiEmployeesManager: AIEmployeesManager;
+  aiConversationsManager: AIConversationsManager;
+  builtInManager: BuiltInManager;
+  llmStreamCachedManager: LLMStreamCachedManager;
+  subAgentsDispatcher: SubAgentsDispatcher;
+  knowledgeBaseManager: KnowledgeBaseManager;
+  workContextHandler: WorkContextHandler;
+  documentLoaders: DocumentLoaders;
 }
 
 export class AIConversationService {
   private readonly repositories: RepositoryFactory;
-  private readonly runtime: RuntimeServices;
+  private readonly aiEmployeesManager: AIEmployeesManager;
+  private readonly aiConversationsManager: AIConversationsManager;
+  private readonly builtInManager: BuiltInManager;
+  private readonly llmStreamCachedManager: LLMStreamCachedManager;
+  private readonly subAgentsDispatcher: SubAgentsDispatcher;
+  private readonly knowledgeBaseManager: KnowledgeBaseManager;
+  private readonly workContextHandler: WorkContextHandler;
+  private readonly documentLoaders: DocumentLoaders;
 
-  public constructor({ repositories, runtime }: AIConversationServiceOptions) {
-    this.repositories = repositories;
-    this.runtime = runtime;
+  public constructor(options: AIConversationServiceOptions) {
+    this.repositories = options.repositories;
+    this.aiEmployeesManager = options.aiEmployeesManager;
+    this.aiConversationsManager = options.aiConversationsManager;
+    this.builtInManager = options.builtInManager;
+    this.llmStreamCachedManager = options.llmStreamCachedManager;
+    this.subAgentsDispatcher = options.subAgentsDispatcher;
+    this.knowledgeBaseManager = options.knowledgeBaseManager;
+    this.workContextHandler = options.workContextHandler;
+    this.documentLoaders = options.documentLoaders;
   }
+  private createAgentContext(
+    ctx: Context,
+    state?: CreateAgentContextOptions['state'],
+  ): AppAgentContext {
+    return createAgentContext({
+      ctx,
+      repositories: this.repositories,
+      aiEmployeesManager: this.aiEmployeesManager,
+      aiConversationsManager: this.aiConversationsManager,
+      builtInManager: this.builtInManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      subAgentsDispatcher: this.subAgentsDispatcher,
+      state,
+    });
+  }
+
   async getActiveState({
     actorId,
     sessionId,
@@ -324,7 +372,7 @@ export class AIConversationService {
     }
 
     try {
-      return await this.runtime.aiConversationsManager.create({
+      return await this.aiConversationsManager.create({
         userId,
         aiEmployee,
         scope: normalizedScope,
@@ -357,7 +405,7 @@ export class AIConversationService {
       return ctx.throw!(400, 'invalid sessionId');
     }
     const { title } = input;
-    return await this.runtime.aiConversationsManager.update({
+    return await this.aiConversationsManager.update({
       userId,
       sessionId,
       title,
@@ -392,7 +440,7 @@ export class AIConversationService {
       return ctx.throw!(400, 'invalid options');
     }
     try {
-      return await this.runtime.aiConversationsManager.update({
+      return await this.aiConversationsManager.update({
         userId,
         sessionId,
         options: {
@@ -449,7 +497,7 @@ export class AIConversationService {
     const paginate = options.paginate !== false;
     const updateRead = options.updateRead === true;
     try {
-      return await this.runtime.aiConversationsManager.getMessages({
+      return await this.aiConversationsManager.getMessages({
         userId,
         sessionId,
         cursor,
@@ -476,11 +524,10 @@ export class AIConversationService {
     if (!sessionId) {
       return ctx.throw!(400);
     }
-    const conversation =
-      await this.runtime.aiConversationsManager.getConversation({
-        sessionId,
-        userId,
-      });
+    const conversation = await this.aiConversationsManager.getConversation({
+      sessionId,
+      userId,
+    });
     if (!conversation) {
       return ctx.throw!(400);
     }
@@ -547,11 +594,10 @@ export class AIConversationService {
         throw new ResourceActionError(400, ctx.t!('user message is required'));
       }
 
-      const conversation =
-        await this.runtime.aiConversationsManager.getConversation({
-          sessionId,
-          userId,
-        });
+      const conversation = await this.aiConversationsManager.getConversation({
+        sessionId,
+        userId,
+      });
       if (!conversation) {
         throw new ResourceActionError(400, ctx.t!('conversation not found'));
       }
@@ -595,14 +641,19 @@ export class AIConversationService {
         );
       }
       const useInitialThread = conversation.thread === 0;
-      const resolvedModel = await this.runtime.aiEmployeesManager.resolveModel(
+      const resolvedModel = await this.aiEmployeesManager.resolveModel(
         employee,
         model,
       );
       const agentOptions = {
         ctx: ctx,
         repositories: this.repositories,
-        runtime: this.runtime,
+        aiEmployeesManager: this.aiEmployeesManager,
+        builtInManager: this.builtInManager,
+        llmStreamCachedManager: this.llmStreamCachedManager,
+        knowledgeBaseManager: this.knowledgeBaseManager,
+        workContextHandler: this.workContextHandler,
+        documentLoaders: this.documentLoaders,
         employee,
         sessionId,
         systemMessage:
@@ -631,18 +682,12 @@ export class AIConversationService {
         const adapter = new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
-            this.runtime.llmStreamCachedManager
-              .getCached(sessionId)
-              .append(chunk),
+            this.llmStreamCachedManager.getCached(sessionId).append(chunk),
         );
         if (!agent) {
           throw new Error('AI employee agent service is required');
         }
-        const agentContext = createAgentContext(
-          ctx,
-          this.repositories,
-          this.runtime,
-        );
+        const agentContext = this.createAgentContext(ctx);
         await adapter.consume(
           request?.messageId
             ? agent.service.forkStream(request, agentContext)
@@ -656,11 +701,7 @@ export class AIConversationService {
         if (!agent) {
           throw new Error('AI employee agent service is required');
         }
-        const agentContext = createAgentContext(
-          ctx,
-          this.repositories,
-          this.runtime,
-        );
+        const agentContext = this.createAgentContext(ctx);
         return request?.messageId
           ? agent.service.forkInvoke(request, agentContext)
           : agent.service.invoke(request, agentContext);
@@ -675,8 +716,8 @@ export class AIConversationService {
         return agent.facade.cancelToolCall();
       };
       if (!editingMessageId) {
-        if (await this.runtime.subAgentsDispatcher.isInterrupted(sessionId)) {
-          const userDecisions = await this.runtime.subAgentsDispatcher.reject(
+        if (await this.subAgentsDispatcher.isInterrupted(sessionId)) {
+          const userDecisions = await this.subAgentsDispatcher.reject(
             sessionId,
             ctx,
           );
@@ -740,15 +781,14 @@ export class AIConversationService {
     if (typeof sessionId !== 'string' || !sessionId) {
       return ctx.throw!(400, 'sessionId is required');
     }
-    const conversation =
-      await this.runtime.aiConversationsManager.getConversation({
-        sessionId,
-        userId,
-      });
+    const conversation = await this.aiConversationsManager.getConversation({
+      sessionId,
+      userId,
+    });
     if (!conversation) {
       return ctx.throw!(404, 'conversation not found');
     }
-    this.runtime.aiEmployeesManager.abortConversation(sessionId);
+    this.aiEmployeesManager.abortConversation(sessionId);
     return null;
   }
 
@@ -783,11 +823,10 @@ export class AIConversationService {
     });
 
     try {
-      const conversation =
-        await this.runtime.aiConversationsManager.getConversation({
-          sessionId,
-          userId,
-        });
+      const conversation = await this.aiConversationsManager.getConversation({
+        sessionId,
+        userId,
+      });
       if (shouldStopStream()) {
         return;
       }
@@ -802,7 +841,7 @@ export class AIConversationService {
 
       let hasChunks = false;
       if (!reachLimit) {
-        for await (const chunk of this.runtime.llmStreamCachedManager
+        for await (const chunk of this.llmStreamCachedManager
           .getCached(sessionId)
           .stream({ signal: abortController.signal })) {
           if (shouldStopStream()) {
@@ -815,7 +854,7 @@ export class AIConversationService {
 
       if (!hasChunks && !shouldStopStream()) {
         const currentConversation =
-          await this.runtime.aiConversationsManager.getConversation({
+          await this.aiConversationsManager.getConversation({
             sessionId,
             userId,
           });
@@ -867,11 +906,10 @@ export class AIConversationService {
       if (!sessionId) {
         throw new ResourceActionError(400, ctx.t!('sessionId is required'));
       }
-      const conversation =
-        await this.runtime.aiConversationsManager.getConversation({
-          sessionId,
-          userId,
-        });
+      const conversation = await this.aiConversationsManager.getConversation({
+        sessionId,
+        userId,
+      });
       if (!conversation) {
         throw new ResourceActionError(400, ctx.t!('conversation not found'));
       }
@@ -920,14 +958,19 @@ export class AIConversationService {
           ),
         );
       }
-      const resolvedModel = await this.runtime.aiEmployeesManager.resolveModel(
+      const resolvedModel = await this.aiEmployeesManager.resolveModel(
         employee,
         model,
       );
       const agentOptions = {
         ctx: ctx,
         repositories: this.repositories,
-        runtime: this.runtime,
+        aiEmployeesManager: this.aiEmployeesManager,
+        builtInManager: this.builtInManager,
+        llmStreamCachedManager: this.llmStreamCachedManager,
+        knowledgeBaseManager: this.knowledgeBaseManager,
+        workContextHandler: this.workContextHandler,
+        documentLoaders: this.documentLoaders,
         employee,
         sessionId,
         systemMessage:
@@ -952,17 +995,11 @@ export class AIConversationService {
           });
         } else {
           const { service } = await createAIEmployeeAgentService(agentOptions);
-          const agentContext = createAgentContext(
-            ctx,
-            this.repositories,
-            this.runtime,
-          );
+          const agentContext = this.createAgentContext(ctx);
           await new AgentSSEAdapter(
             (chunk) => streamTarget(execution).write(chunk),
             (chunk) =>
-              this.runtime.llmStreamCachedManager
-                .getCached(sessionId)
-                .append(chunk),
+              this.llmStreamCachedManager.getCached(sessionId).append(chunk),
           ).consume(
             service.forkStream(
               {
@@ -991,7 +1028,7 @@ export class AIConversationService {
             messageId,
             userMessages: resendMessages.length ? resendMessages : undefined,
           },
-          createAgentContext(ctx, this.repositories, this.runtime),
+          this.createAgentContext(ctx),
         );
       }
       return undefined;
@@ -1031,11 +1068,10 @@ export class AIConversationService {
     if (!sessionId) {
       return ctx.throw!(400);
     }
-    const conversation =
-      await this.runtime.aiConversationsManager.getConversation({
-        sessionId,
-        userId,
-      });
+    const conversation = await this.aiConversationsManager.getConversation({
+      sessionId,
+      userId,
+    });
     if (!conversation) {
       return ctx.throw!(400);
     }
@@ -1046,7 +1082,7 @@ export class AIConversationService {
       return ctx.throw!(400);
     }
     const messageConversation =
-      await this.runtime.aiConversationsManager.getConversation({
+      await this.aiConversationsManager.getConversation({
         sessionId: message.sessionId,
         userId,
       });
@@ -1152,11 +1188,10 @@ export class AIConversationService {
       return;
     }
     try {
-      const conversation =
-        await this.runtime.aiConversationsManager.getConversation({
-          sessionId,
-          userId,
-        });
+      const conversation = await this.aiConversationsManager.getConversation({
+        sessionId,
+        userId,
+      });
       if (!conversation) {
         sendErrorResponse(streamTarget(execution), 'conversation not found');
         return;
@@ -1186,7 +1221,7 @@ export class AIConversationService {
         return;
       }
       const messageConversation =
-        await this.runtime.aiConversationsManager.getConversation({
+        await this.aiConversationsManager.getConversation({
           sessionId: message.sessionId,
           userId,
         });
@@ -1199,14 +1234,19 @@ export class AIConversationService {
         sendErrorResponse(streamTarget(execution), 'No tool calls found');
         return;
       }
-      const resolvedModel = await this.runtime.aiEmployeesManager.resolveModel(
+      const resolvedModel = await this.aiEmployeesManager.resolveModel(
         employee,
         model,
       );
       const agentOptions = {
         ctx: ctx,
         repositories: this.repositories,
-        runtime: this.runtime,
+        aiEmployeesManager: this.aiEmployeesManager,
+        builtInManager: this.builtInManager,
+        llmStreamCachedManager: this.llmStreamCachedManager,
+        knowledgeBaseManager: this.knowledgeBaseManager,
+        workContextHandler: this.workContextHandler,
+        documentLoaders: this.documentLoaders,
         employee,
         sessionId,
         systemMessage:
@@ -1222,10 +1262,9 @@ export class AIConversationService {
         webSearch,
         model: resolvedModel,
       };
-      const userDecisions =
-        await this.runtime.aiConversationsManager.getUserDecisions(
-          message.messageId,
-        );
+      const userDecisions = await this.aiConversationsManager.getUserDecisions(
+        message.messageId,
+      );
       if (conversation.category === 'task') {
         await new AIEmployee(agentOptions as AIEmployeeOptions).stream({
           userDecisions,
@@ -1235,14 +1274,9 @@ export class AIConversationService {
         await new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
-            this.runtime.llmStreamCachedManager
-              .getCached(sessionId)
-              .append(chunk),
+            this.llmStreamCachedManager.getCached(sessionId).append(chunk),
         ).consume(
-          service.resumeStream(
-            { userDecisions },
-            createAgentContext(ctx, this.repositories, this.runtime),
-          ),
+          service.resumeStream({ userDecisions }, this.createAgentContext(ctx)),
         );
         streamTarget(execution).end();
       }

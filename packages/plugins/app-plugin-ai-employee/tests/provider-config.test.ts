@@ -16,6 +16,7 @@ import { AIEmployeeProvider } from '../server/providers/ai-employee.js';
 import { aiManagerToken } from '../server/tokens.js';
 import { RepositoryFactory } from '../server/repository/database/factory.js';
 import {
+  managerFactoryToken,
   repositoryFactoryToken,
   serviceFactoryToken,
 } from '../server/internal/tokens.js';
@@ -32,17 +33,20 @@ afterEach(async () => {
 });
 
 describe('AIEmployeeProvider application config', () => {
-  it('registers both private factories lazily and does not instantiate them during shutdown', async () => {
+  it('registers all three private factories lazily and does not instantiate them during shutdown', async () => {
     const { provider, container } = await createProvider(() => ({ ai: {} }));
     provider.register();
 
     expect(container.has(repositoryFactoryToken)).toBe(true);
+    expect(container.has(managerFactoryToken)).toBe(true);
     expect(container.has(serviceFactoryToken)).toBe(true);
     expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
     expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
 
     await provider.shutdown();
     expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
     expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
   });
 

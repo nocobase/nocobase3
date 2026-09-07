@@ -21,7 +21,7 @@ describe('AgentContext adapter', () => {
     const {
       context: ctx,
       repositories,
-      services,
+      managers,
     } = createTestAIEmployeeFixture();
     ctx.currentUser = {
       id: 7,
@@ -36,14 +36,16 @@ describe('AgentContext adapter', () => {
       streamTarget: { write() {}, end() {} },
       abortSignal: new AbortController().signal,
     };
-    const agentContext = createAgentContext(
-      ctx,
-      repositories,
-      services.runtimeServices,
-      {
-        state: { sessionId: 'sub' },
-      },
-    );
+    const agentContext = createAgentContext({
+      ctx: ctx,
+      repositories: repositories,
+      aiEmployeesManager: managers.aiEmployeesManager,
+      aiConversationsManager: managers.aiConversationsManager,
+      builtInManager: managers.builtInManager,
+      knowledgeBaseManager: managers.knowledgeBaseManager,
+      subAgentsDispatcher: managers.subAgentsDispatcher,
+      state: { sessionId: 'sub' },
+    });
     expect(agentContext.database).toBe(ctx.databaseManager);
     expect(agentContext.repositories.aiMessages).toBe(repositories.aiMessages);
     expect(agentContext.actor).toEqual({
@@ -68,24 +70,28 @@ describe('AgentService AgentContext propagation', () => {
     const {
       context: appContext,
       repositories,
-      services,
+      managers,
     } = createTestAIEmployeeFixture();
-    const contextA = createAgentContext(
-      appContext,
-      repositories,
-      services.runtimeServices,
-      {
-        state: { sessionId: 'A' },
-      },
-    );
-    const contextB = createAgentContext(
-      appContext,
-      repositories,
-      services.runtimeServices,
-      {
-        state: { sessionId: 'B' },
-      },
-    );
+    const contextA = createAgentContext({
+      ctx: appContext,
+      repositories: repositories,
+      aiEmployeesManager: managers.aiEmployeesManager,
+      aiConversationsManager: managers.aiConversationsManager,
+      builtInManager: managers.builtInManager,
+      knowledgeBaseManager: managers.knowledgeBaseManager,
+      subAgentsDispatcher: managers.subAgentsDispatcher,
+      state: { sessionId: 'A' },
+    });
+    const contextB = createAgentContext({
+      ctx: appContext,
+      repositories: repositories,
+      aiEmployeesManager: managers.aiEmployeesManager,
+      aiConversationsManager: managers.aiConversationsManager,
+      builtInManager: managers.builtInManager,
+      knowledgeBaseManager: managers.knowledgeBaseManager,
+      subAgentsDispatcher: managers.subAgentsDispatcher,
+      state: { sessionId: 'B' },
+    });
     const built = (await import('@nocobase/ai-employee')).buildTool(
       contextTool,
     ) as unknown as {

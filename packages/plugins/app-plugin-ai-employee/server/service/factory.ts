@@ -1,35 +1,23 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  DocumentLoaders,
-  type AIManager,
-  type FileStorageFactory,
-} from '@nocobase/ai-employee';
-import { cachingToken } from '@nocobase/app-server/caching';
+import { type AIManager } from '@nocobase/ai-employee';
 import { databaseManagerToken } from '@nocobase/db';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { ConfigPaths } from '@nocobase/app-server/config';
 import type { ServiceContainer } from '@nocobase/service-provider';
-import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 import type { AIEmployeeLLMServiceConfig } from '../config.js';
 import type { Context, CurrentUser } from '../internal/runtime-context.js';
-import type { RuntimeServices } from '../internal/runtime-services.js';
-import { createWorkContextHandler } from '../agent/ai-employee/work-context/index.js';
-import { KnowledgeBaseManager } from '../agent/ai-employee/ai-knowledge-base.js';
-import { AIConversationsManager } from '../ai-employees/ai-conversations.js';
-import { AIEmployeesManager } from '../ai-employees/ai-employees-manager.js';
-import { BuiltInManager } from '../ai-employees/built-in-manager.js';
-import { LLMStreamCachedManager } from '../ai-employees/llm-stream-manager.js';
-import { SubAgentsDispatcher } from '../ai-employees/sub-agents/dispatcher.js';
-import { AIFileMetadataRepository } from '../file-storage/ai-file-metadata-repository.js';
-import { repositoryFactoryToken } from '../internal/tokens.js';
+import {
+  managerFactoryToken,
+  repositoryFactoryToken,
+} from '../internal/tokens.js';
+import type { ManagerFactory } from '../managers/factory.js';
 import { LLMServiceConfigSynchronizer } from '../llm-service-config.js';
 import { AI_API_BASE_PATH } from '../domain/api-contracts.js';
 import { aiManagerToken } from '../tokens.js';
-import { fileStorageFactoryToken } from '@nocobase/ai-employee';
 import { AIConversationService } from './ai-conversation-service.js';
 import { AIEmployeeService } from './ai-employee-service.js';
 import { AIMCPServerService } from './ai-mcp-server-service.js';
@@ -46,7 +34,6 @@ export interface ServiceFactoryOptions {
 
 export interface ServiceFactoryInitialization {
   readonly paths: ConfigPaths;
-  readonly aiStorageDisk: string;
   readonly llmServices?: readonly AIEmployeeLLMServiceConfig[];
   readonly loadResources?: boolean;
 }
@@ -56,12 +43,9 @@ export class ServiceFactory {
   private readonly container: ServiceContainer;
   private initialization: ServiceFactoryInitialization | undefined;
   private readyPromise: Promise<void> | undefined;
-  private runtimeContextValue: Context | undefined;
-  private runtimeServicesValue: RuntimeServices | undefined;
   private employeeServiceValue: AIEmployeeService | undefined;
   private modelServiceValue: ModelService | undefined;
   private fileServiceValue: AIFileService | undefined;
-  private fileStorageValue: Context['fileStorage'] | undefined;
   private toolServiceValue: AIToolService | undefined;
   private skillServiceValue: AISkillService | undefined;
   private llmServiceValue: LLMService | undefined;
@@ -117,7 +101,7 @@ export class ServiceFactory {
 
   public get fileService(): AIFileService {
     return (this.fileServiceValue ??= new AIFileService({
-      fileStorage: this.fileStorage,
+      fileStorage: this.managers.context.fileStorage,
       snowflake: this.container.resolve(idGeneratorToken),
       apiBasePath: AI_API_BASE_PATH,
     }));
@@ -142,15 +126,23 @@ export class ServiceFactory {
   }
 
   public get conversationService(): AIConversationService {
+    const managers = this.managers;
     return (this.conversationServiceValue ??= new AIConversationService({
       repositories: this.repositories,
-      runtime: this.runtimeServices,
+      aiEmployeesManager: managers.aiEmployeesManager,
+      aiConversationsManager: managers.aiConversationsManager,
+      builtInManager: managers.builtInManager,
+      llmStreamCachedManager: managers.llmStreamCachedManager,
+      subAgentsDispatcher: managers.subAgentsDispatcher,
+      knowledgeBaseManager: managers.knowledgeBaseManager,
+      workContextHandler: managers.workContextHandler,
+      documentLoaders: managers.documentLoaders,
     }));
   }
 
   /** Creates request-local state while retaining only App-scoped collaborators. */
   public createRequestRuntime(actor: CurrentUser, request?: Request): Context {
-    const runtime = this.runtimeContext;
+    const runtime = this.managers.context;
     const currentRole = actor.isRoot ? 'root' : (actor.roles[0] ?? 'member');
     return {
       ...runtime,
@@ -176,64 +168,6 @@ export class ServiceFactory {
       },
       requestExecution: undefined,
     };
-  }
-
-  private get runtimeContext(): Context {
-    if (this.runtimeContextValue) return this.runtimeContextValue;
-    const databaseManager = this.container.resolve(databaseManagerToken);
-    const runtime = {
-      ai: this.ai,
-      database: databaseManager.connection(),
-      databaseManager,
-      logger: this.logger,
-      caching: this.container.resolve(cachingToken),
-      snowflake: this.container.resolve(idGeneratorToken),
-      fileStorage: this.fileStorage,
-      i18nNamespace: packageMetadata.name,
-      currentUser: { id: 'system', roles: ['root'], isRoot: true },
-      auth: { user: { id: 'system', username: 'system' } },
-      state: { currentRoles: ['root'], currentRole: 'root' },
-      get: () => undefined,
-      set: () => undefined,
-      t: (key: string) => key,
-      getCurrentLocale: () => undefined,
-    } as unknown as Context;
-    this.runtimeContextValue = runtime;
-    return runtime;
-  }
-
-  public get runtimeServices(): RuntimeServices {
-    if (this.runtimeServicesValue) return this.runtimeServicesValue;
-    const ctx = this.runtimeContext;
-    const aiEmployeesManager = new AIEmployeesManager(
-      this.repositories,
-      this.ai,
-      ctx.sendSyncMessage,
-    );
-    const aiConversationsManager = new AIConversationsManager(
-      ctx,
-      this.repositories,
-    );
-    const llmStreamCachedManager = new LLMStreamCachedManager(ctx);
-    const builtInManager = new BuiltInManager(ctx.i18nNamespace);
-    const services = {} as RuntimeServices;
-    services.aiEmployeesManager = aiEmployeesManager;
-    services.aiConversationsManager = aiConversationsManager;
-    services.llmStreamCachedManager = llmStreamCachedManager;
-    services.builtInManager = builtInManager;
-    services.subAgentsDispatcher = new SubAgentsDispatcher({
-      ctx,
-      repositories: this.repositories,
-      runtime: services,
-    });
-    services.knowledgeBaseManager = new KnowledgeBaseManager({
-      ctx,
-      repositories: this.repositories,
-    });
-    services.workContextHandler = createWorkContextHandler();
-    services.documentLoaders = new DocumentLoaders(ctx);
-    this.runtimeServicesValue = services;
-    return services;
   }
 
   private async initializeResources(): Promise<void> {
@@ -288,19 +222,8 @@ export class ServiceFactory {
     return this.container.resolve(aiManagerToken);
   }
 
-  private get fileStorage(): Context['fileStorage'] {
-    const initialization = this.requireInitialization();
-    return (this.fileStorageValue ??= this.fileStorageFactory.create({
-      disk: initialization.aiStorageDisk,
-      prefix: 'ai-files',
-      metadataRepository: new AIFileMetadataRepository(
-        this.repositories.aiFiles,
-      ),
-    }));
-  }
-
-  private get fileStorageFactory(): FileStorageFactory {
-    return this.container.resolve(fileStorageFactoryToken);
+  private get managers(): ManagerFactory {
+    return this.container.resolve(managerFactoryToken);
   }
 
   private get logger() {

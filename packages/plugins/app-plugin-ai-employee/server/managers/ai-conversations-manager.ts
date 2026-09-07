@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { AIManager } from '@nocobase/ai-employee';
 import type { Context } from '../internal/runtime-context.js';
 import type { RepositoryFactory } from '../repository/database/factory.js';
 import type { DatabaseConnection } from '@nocobase/db';
@@ -18,7 +19,7 @@ import {
   UserDecision,
 } from '@nocobase/ai-employee';
 import { parseResponseMessage } from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from './common/frontend-tools.js';
+import type { FrontendToolManifest } from '../ai-employees/common/frontend-tools.js';
 
 export type AIConversationsOptions = {
   systemMessage?: unknown;
@@ -89,7 +90,7 @@ export const registerAIConversationReadNotification = (
 
 export class AIConversationsManager {
   constructor(
-    protected ctx: Context,
+    protected ai: AIManager,
     protected repositories: RepositoryFactory,
   ) {}
 
@@ -302,7 +303,7 @@ export class AIConversationsManager {
       ]),
     );
 
-    const tools = await this.ctx.ai.toolsManager.listTools({});
+    const tools = await this.ai.toolsManager.listTools({});
     const toolsMap = new Map<string, any>(
       tools.map((tool) => [tool.definition.name, tool]),
     );
@@ -327,7 +328,7 @@ export class AIConversationsManager {
         }
       }
 
-      const providerOptions = this.ctx.ai.llmProviderManager.llmProviders.get(
+      const providerOptions = this.ai.llmProviderManager.llmProviders.get(
         row.metadata?.provider,
       );
       if (!providerOptions) {

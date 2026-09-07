@@ -1,6 +1,11 @@
 import type { Context } from '../../internal/runtime-context.js';
-import type { RuntimeServices } from '../../internal/runtime-services.js';
 import type { RepositoryFactory } from '../../repository/database/factory.js';
+import type { AIEmployeesManager } from '../../managers/ai-employees-manager.js';
+import type { BuiltInManager } from '../../managers/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../../managers/knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../../managers/llm-stream-cached-manager.js';
+import type { WorkContextHandler } from '../../managers/work-context/index.js';
+import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { SkillsEntity } from '@nocobase/ai-employee';
 /**
@@ -25,13 +30,13 @@ import {
   getCurrentRoleNames,
   getKnowledgeBaseBackgroundPrompt,
   normalizeKnowledgeBaseRetrievalStrategy,
-} from './ai-knowledge-base.js';
+} from '../../managers/knowledge-base-manager.js';
 
 import type { ToolsFilter, ToolsManager } from '@nocobase/ai-employee';
 import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
-} from '../../ai-employees/sub-agents/shared.js';
+} from '../../managers/sub-agents/shared.js';
 import { sanitizeAdditionalKwargsForToolCalls } from '../../ai-employees/tool-call-sanitizer.js';
 import {
   findMessageAttachments,
@@ -57,7 +62,12 @@ export interface ModelRef {
 export interface AIEmployeeOptions {
   ctx: Context;
   repositories: RepositoryFactory;
-  runtime: RuntimeServices;
+  aiEmployeesManager: AIEmployeesManager;
+  builtInManager: BuiltInManager;
+  llmStreamCachedManager: LLMStreamCachedManager;
+  knowledgeBaseManager: KnowledgeBaseManager;
+  workContextHandler: WorkContextHandler;
+  documentLoaders: DocumentLoaders;
   employee: any;
   sessionId: string;
   systemMessage?: string;
@@ -79,7 +89,10 @@ export class AIEmployeeCapabilities {
 
   private ctx: Context;
   private repositories: RepositoryFactory;
-  private runtime: RuntimeServices;
+  private builtInManager: BuiltInManager;
+  private knowledgeBaseManager: KnowledgeBaseManager;
+  private workContextHandler: WorkContextHandler;
+  private documentLoaders: DocumentLoaders;
   private systemMessage?: string;
   private webSearch?: boolean;
   private model?: ModelRef;
@@ -88,7 +101,10 @@ export class AIEmployeeCapabilities {
   constructor({
     ctx,
     repositories,
-    runtime,
+    builtInManager,
+    knowledgeBaseManager,
+    workContextHandler,
+    documentLoaders,
     employee,
     sessionId,
     systemMessage,
@@ -101,7 +117,10 @@ export class AIEmployeeCapabilities {
     this.employee = employee;
     this.ctx = ctx;
     this.repositories = repositories;
-    this.runtime = runtime;
+    this.builtInManager = builtInManager;
+    this.knowledgeBaseManager = knowledgeBaseManager;
+    this.workContextHandler = workContextHandler;
+    this.documentLoaders = documentLoaders;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
     this.aiChatConversation = createAIChatConversation(
@@ -113,8 +132,7 @@ export class AIEmployeeCapabilities {
     this.model = model;
     this.from = from;
     this.tools = tools;
-    const builtInManager = this.runtime.builtInManager;
-    builtInManager.setupBuiltInInfo(
+    this.builtInManager.setupBuiltInInfo(
       ctx,
       this.employee as unknown as AIEmployeeType,
     );
@@ -184,8 +202,10 @@ export class AIEmployeeCapabilities {
     }
 
     const aiMessages = await this.aiChatConversation.listMessages();
-    const workContextBackground =
-      await this.runtime.workContextHandler.background(this.ctx, aiMessages);
+    const workContextBackground = await this.workContextHandler.background(
+      this.ctx,
+      aiMessages,
+    );
     if (workContextBackground?.length) {
       background = `${background}\n${workContextBackground.join('\n')}`;
     }
@@ -194,7 +214,7 @@ export class AIEmployeeCapabilities {
       background = `${background}\n${addSystemPrompt.map((it) => it.content).join('\n')}`;
     }
 
-    const knowledgeBaseManager = this.runtime.knowledgeBaseManager;
+    const knowledgeBaseManager = this.knowledgeBaseManager;
     const employee = this.employee as unknown as AIEmployeeType;
     const knowledgeBaseEnabled =
       await knowledgeBaseManager.isEnabledKnowledgeBase(employee);
@@ -638,7 +658,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     provider: LLMProvider;
   }) {
     const formattedMessages = [];
-    const workContextHandler = this.runtime.workContextHandler;
+    const workContextHandler = this.workContextHandler;
     const normalizedMessages = await this.normalizeMessageAttachments(messages);
 
     // 截断过长的内容
@@ -682,7 +702,7 @@ If information is missing, clearly state it in the summary.</Important>`;
           for (const attachment of attachments) {
             const parsed = await provider.parseAttachment(attachment as any, {
               fileStorage: this.ctx.fileStorage,
-              documentLoader: this.runtime.documentLoaders.cached,
+              documentLoader: this.documentLoaders.cached,
               caching: this.ctx.caching,
               getHeader: (name: string) => this.ctx.get(name),
             });
@@ -786,7 +806,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     ToolsEntity | undefined
   > {
     const employee = this.employee as unknown as AIEmployeeType;
-    const knowledgeBaseManager = this.runtime.knowledgeBaseManager;
+    const knowledgeBaseManager = this.knowledgeBaseManager;
     if (!(await knowledgeBaseManager.isEnabledKnowledgeBase(employee))) {
       return undefined;
     }
@@ -1029,7 +1049,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       await listAccessibleAIEmployees(this.ctx, this.repositories)
     )
       .map((employee) =>
-        serializeEmployeeSummary(this.ctx, this.runtime, employee),
+        serializeEmployeeSummary(this.ctx, this.builtInManager, employee),
       )
       .filter((it) => it.username !== this.employee.username);
     return availableAIEmployees;

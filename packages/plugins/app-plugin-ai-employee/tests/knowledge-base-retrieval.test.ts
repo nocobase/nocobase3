@@ -9,7 +9,7 @@ import {
   KNOWLEDGE_BASE_ON_DEMAND_PROMPT,
   KNOWLEDGE_BASE_PRE_RETRIEVED_PROMPT,
   normalizeKnowledgeBaseRetrievalStrategy,
-} from '../server/agent/ai-employee/ai-knowledge-base.js';
+} from '../server/managers/knowledge-base-manager.js';
 
 const employee = {
   username: 'atlas',
@@ -73,7 +73,7 @@ describe('AI employee knowledge-base retrieval', () => {
       },
     } as unknown as Context;
     const manager = new KnowledgeBaseManager({
-      ctx,
+      ai: ctx.ai,
       repositories: {
         aiEmployees: { findOne: vi.fn().mockResolvedValue(employee) },
       } as never,

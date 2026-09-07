@@ -8,7 +8,7 @@
  */
 
 import type { Context } from '../../internal/runtime-context.js';
-import type { RuntimeServices } from '../../internal/runtime-services.js';
+import type { BuiltInManager } from '../built-in-manager.js';
 import type { RepositoryFactory } from '../../repository/database/factory.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
@@ -41,21 +41,18 @@ export async function getAccessibleAIEmployee(
 
 function localizeBuiltInInfo(
   ctx: Context,
-  runtime: RuntimeServices,
+  builtInManager: BuiltInManager,
   employee: AIEmployeeEntity,
 ) {
-  runtime.builtInManager.setupBuiltInInfo(
-    ctx,
-    employee as unknown as AIEmployeeType,
-  );
+  builtInManager.setupBuiltInInfo(ctx, employee as unknown as AIEmployeeType);
 }
 
 export function serializeEmployeeSummary(
   ctx: Context,
-  runtime: RuntimeServices,
+  builtInManager: BuiltInManager,
   employee: AIEmployeeEntity,
 ) {
-  localizeBuiltInInfo(ctx, runtime, employee);
+  localizeBuiltInInfo(ctx, builtInManager, employee);
   return {
     username: employee.username as string,
     nickname: employee.nickname as string,
@@ -68,13 +65,13 @@ export function serializeEmployeeSummary(
 
 export function serializeEmployeeDetail(
   ctx: Context,
-  runtime: RuntimeServices,
+  builtInManager: BuiltInManager,
   employee: AIEmployeeEntity,
 ) {
-  localizeBuiltInInfo(ctx, runtime, employee);
+  localizeBuiltInInfo(ctx, builtInManager, employee);
   const about = employee.about || employee.defaultPrompt || '';
   return {
-    ...serializeEmployeeSummary(ctx, runtime, employee),
+    ...serializeEmployeeSummary(ctx, builtInManager, employee),
     about,
   };
 }

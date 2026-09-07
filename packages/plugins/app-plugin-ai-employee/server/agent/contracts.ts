@@ -5,7 +5,7 @@ import type {
 } from '@nocobase/ai-employee';
 import type { FrontendToolManifest } from '../ai-employees/common/frontend-tools.js';
 import type { ModelRef } from '../ai-employees/ai-employee.js';
-import type { CreateAIConversationParams } from '../ai-employees/ai-conversations.js';
+import type { CreateAIConversationParams } from '../managers/ai-conversations-manager.js';
 import type { AIConversationEntity } from '../repository/ai-conversation.js';
 
 export interface AgentUserDecisionResult {

@@ -1,15 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AIConversationsManager } from '../../server/ai-employees/ai-conversations.js';
+import { AIConversationsManager } from '../../server/managers/ai-conversations-manager.js';
 
 describe('AIConversationsManager', () => {
   it('loads only messages that belong to the requested session', async () => {
     const findMessages = vi.fn().mockResolvedValue([]);
     const manager = new AIConversationsManager(
       {
-        ai: {
-          toolsManager: { listTools: vi.fn().mockResolvedValue([]) },
-          llmProviderManager: { llmProviders: new Map() },
-        },
+        toolsManager: { listTools: vi.fn().mockResolvedValue([]) },
+        llmProviderManager: { llmProviders: new Map() },
       } as any,
       {
         aiConversations: {

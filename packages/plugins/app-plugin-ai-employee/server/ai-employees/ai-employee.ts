@@ -1,6 +1,11 @@
 import type { Context } from '../internal/runtime-context.js';
-import type { RuntimeServices } from '../internal/runtime-services.js';
 import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { AIEmployeesManager } from '../managers/ai-employees-manager.js';
+import type { BuiltInManager } from '../managers/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../managers/llm-stream-cached-manager.js';
+import type { WorkContextHandler } from '../managers/work-context/index.js';
+import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   AIChatContext,
@@ -54,8 +59,8 @@ import type { AIToolMessageEntity } from '../repository/index.js';
 import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
-} from './sub-agents/shared.js';
-import { LLMStreamCached } from './llm-stream-manager.js';
+} from '../managers/sub-agents/shared.js';
+import { LLMStreamCached } from '../managers/llm-stream-cached-manager.js';
 import { sanitizeAdditionalKwargsForToolCalls } from './tool-call-sanitizer.js';
 import {
   findMessageAttachments,
@@ -98,7 +103,12 @@ export type RuntimeSkillSettings = {
 export interface AIEmployeeOptions {
   ctx: Context;
   repositories: RepositoryFactory;
-  runtime: RuntimeServices;
+  aiEmployeesManager: AIEmployeesManager;
+  builtInManager: BuiltInManager;
+  llmStreamCachedManager: LLMStreamCachedManager;
+  knowledgeBaseManager: KnowledgeBaseManager;
+  workContextHandler: WorkContextHandler;
+  documentLoaders: DocumentLoaders;
   employee: AIEmployeeEntity;
   sessionId: string;
   systemMessage?: unknown;
@@ -145,7 +155,12 @@ export class AIEmployee {
 
   private ctx: Context;
   private repositories: RepositoryFactory;
-  private runtime: RuntimeServices;
+  private aiEmployeesManager: AIEmployeesManager;
+  private builtInManager: BuiltInManager;
+  private llmStreamCachedManager: LLMStreamCachedManager;
+  private knowledgeBaseManager: KnowledgeBaseManager;
+  private workContextHandler: WorkContextHandler;
+  private documentLoaders: DocumentLoaders;
   private systemMessage?: unknown;
   private protocol: ChatStreamProtocol;
   private webSearch?: boolean;
@@ -158,7 +173,12 @@ export class AIEmployee {
   constructor({
     ctx,
     repositories,
-    runtime,
+    aiEmployeesManager,
+    builtInManager,
+    llmStreamCachedManager,
+    knowledgeBaseManager,
+    workContextHandler,
+    documentLoaders,
     employee,
     sessionId,
     systemMessage,
@@ -172,7 +192,12 @@ export class AIEmployee {
     this.employee = employee;
     this.ctx = ctx;
     this.repositories = repositories;
-    this.runtime = runtime;
+    this.aiEmployeesManager = aiEmployeesManager;
+    this.builtInManager = builtInManager;
+    this.llmStreamCachedManager = llmStreamCachedManager;
+    this.knowledgeBaseManager = knowledgeBaseManager;
+    this.workContextHandler = workContextHandler;
+    this.documentLoaders = documentLoaders;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
     this.aiChatConversation = createAIChatConversation(
@@ -185,11 +210,9 @@ export class AIEmployee {
     this.legacy = legacy;
     this.from = from;
     this.tools = tools;
-    this.streamCached =
-      this.runtime.llmStreamCachedManager.getCached(sessionId);
+    this.streamCached = this.llmStreamCachedManager.getCached(sessionId);
 
-    const builtInManager = this.runtime.builtInManager;
-    builtInManager.setupBuiltInInfo(ctx, this.employee);
+    this.builtInManager.setupBuiltInInfo(ctx, this.employee);
     this.webSearch = webSearch;
     this.protocol = ChatStreamProtocol.fromContext(ctx, async (chunk) => {
       try {
@@ -657,7 +680,7 @@ export class AIEmployee {
         },
         state,
       );
-      this.runtime.aiEmployeesManager.conversationController.set(
+      this.aiEmployeesManager.conversationController.set(
         this.sessionId,
         controller,
       );
@@ -1036,8 +1059,10 @@ export class AIEmployee {
     }
 
     const aiMessages = await this.aiChatConversation.listMessages();
-    const workContextBackground =
-      await this.runtime.workContextHandler.background(this.ctx, aiMessages);
+    const workContextBackground = await this.workContextHandler.background(
+      this.ctx,
+      aiMessages,
+    );
     if (workContextBackground?.length) {
       background = `${background}\n${workContextBackground.join('\n')}`;
     }
@@ -1439,9 +1464,7 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   removeAbortController() {
-    this.runtime.aiEmployeesManager.conversationController.delete(
-      this.sessionId,
-    );
+    this.aiEmployeesManager.conversationController.delete(this.sessionId);
   }
 
   shouldInterruptToolCall(tools: ToolsEntity | undefined): boolean {
@@ -1511,7 +1534,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     provider: LLMProvider;
   }) {
     const formattedMessages = [];
-    const workContextHandler = this.runtime.workContextHandler;
+    const workContextHandler = this.workContextHandler;
     const normalizedMessages = await this.normalizeMessageAttachments(messages);
 
     // 截断过长的内容
@@ -1561,7 +1584,7 @@ If information is missing, clearly state it in the summary.</Important>`;
             }
             const parsed = await provider.parseAttachment(attachment, {
               fileStorage: this.ctx.fileStorage,
-              documentLoader: this.runtime.documentLoaders.cached,
+              documentLoader: this.documentLoaders.cached,
               caching: this.ctx.caching,
               getHeader: (name: string) => this.ctx.get(name),
             });
@@ -1733,11 +1756,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     const toolMap = await this.getToolsMap();
     const settingsTools = this.employee.skillSettings?.tools ?? [];
     const employeeTools = [...settingsTools, ...this.tools];
-    if (
-      await this.runtime.knowledgeBaseManager.isEnabledKnowledgeBase(
-        this.employee,
-      )
-    ) {
+    if (await this.knowledgeBaseManager.isEnabledKnowledgeBase(this.employee)) {
       const knowledgeBaseRetrieveTool = await this.toolsManager.getTools(
         SYSTEM_TOOLS.KNOWLEDGE_BASE,
         {
@@ -1936,7 +1955,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       await listAccessibleAIEmployees(this.ctx, this.repositories)
     )
       .map((employee) =>
-        serializeEmployeeSummary(this.ctx, this.runtime, employee),
+        serializeEmployeeSummary(this.ctx, this.builtInManager, employee),
       )
       .filter((it) => it.username !== this.employee.username);
     return availableAIEmployees;
