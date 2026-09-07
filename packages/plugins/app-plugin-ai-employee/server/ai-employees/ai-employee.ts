@@ -1,10 +1,10 @@
 import type { Context } from '../internal/runtime-context.js';
-import type { RepositoryFactory } from '../repository/database/factory.js';
-import type { AIEmployeesManager } from '../managers/ai-employees-manager.js';
-import type { BuiltInManager } from '../managers/built-in-manager.js';
-import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
-import type { LLMStreamCachedManager } from '../managers/llm-stream-cached-manager.js';
-import type { WorkContextHandler } from '../managers/work-context/index.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
+import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
+import type { BuiltInManager } from '../manager/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../manager/knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../manager/llm-stream-cached-manager.js';
+import type { WorkContextHandler } from '../manager/work-context/index.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
@@ -59,8 +59,8 @@ import type { AIToolMessageEntity } from '../repository/index.js';
 import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
-} from '../managers/sub-agents/shared.js';
-import { LLMStreamCached } from '../managers/llm-stream-cached-manager.js';
+} from '../manager/sub-agents/shared.js';
+import { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
 import { sanitizeAdditionalKwargsForToolCalls } from './tool-call-sanitizer.js';
 import {
   findMessageAttachments,

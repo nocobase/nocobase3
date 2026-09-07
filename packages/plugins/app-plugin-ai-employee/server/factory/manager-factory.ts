@@ -8,24 +8,35 @@ import { cachingToken } from '@nocobase/app-server/caching';
 import { databaseManagerToken } from '@nocobase/db';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
-import type { ServiceResolver } from '@nocobase/service-provider';
+import {
+  createServiceToken,
+  type ServiceResolver,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 import type { Context } from '../internal/runtime-context.js';
-import { repositoryFactoryToken } from '../internal/tokens.js';
-import { AIFileMetadataRepository } from '../file-storage/ai-file-metadata-repository.js';
-import type { RepositoryFactory } from '../repository/database/factory.js';
-import { aiManagerToken } from '../tokens.js';
-import { AIConversationsManager } from './ai-conversations-manager.js';
-import { AIEmployeesManager } from './ai-employees-manager.js';
-import { BuiltInManager } from './built-in-manager.js';
-import { KnowledgeBaseManager } from './knowledge-base-manager.js';
-import { LLMStreamCachedManager } from './llm-stream-cached-manager.js';
-import { SubAgentsDispatcher } from './sub-agents/dispatcher.js';
+import { AIFileMetadataRepository } from '../repository/file-storage/ai-file-metadata-repository.js';
+import {
+  type RepositoryFactory,
+  repositoryFactoryToken,
+} from './repository-factory.js';
+import { aiManagerToken } from '../provider/ai-employee.js';
+import { AIConversationsManager } from '../manager/ai-conversations-manager.js';
+import { AIEmployeesManager } from '../manager/ai-employees-manager.js';
+import { BuiltInManager } from '../manager/built-in-manager.js';
+import { KnowledgeBaseManager } from '../manager/knowledge-base-manager.js';
+import { LLMStreamCachedManager } from '../manager/llm-stream-cached-manager.js';
+import { SubAgentsDispatcher } from '../manager/sub-agents/dispatcher.js';
 import {
   createWorkContextHandler,
   type WorkContextHandler,
-} from './work-context/index.js';
+} from '../manager/work-context/index.js';
+
+export const managerFactoryToken: ServiceToken<ManagerFactory> =
+  createServiceToken<ManagerFactory>(
+    '@nocobase/app-plugin-ai-employee/internal/managers',
+  );
 
 export interface ManagerFactoryOptions {
   readonly container: ServiceResolver;

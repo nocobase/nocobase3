@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AIConversationsManager } from '../../server/managers/ai-conversations-manager.js';
+import { AIConversationsManager } from '../../server/manager/ai-conversations-manager.js';
 
 describe('AIConversationsManager', () => {
   it('loads only messages that belong to the requested session', async () => {

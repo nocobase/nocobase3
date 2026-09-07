@@ -5,7 +5,7 @@ import type {
   NewFileMetadata,
 } from '@nocobase/ai-employee';
 
-import type { AIFileEntity, AIFileRepository } from '../repository/ai-file.js';
+import type { AIFileEntity, AIFileRepository } from '../ai-file.js';
 
 export interface AIFileMetadataCreateContext {
   readonly createdById: string | number;

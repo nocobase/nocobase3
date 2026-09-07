@@ -28,15 +28,15 @@ import {
 } from '../agent/context.js';
 import { EXECUTE_FRONTEND_TOOL_NAME } from '../ai-employees/common/frontend-tools.js';
 import { findCurrentFrontendTool } from '../ai-employees/frontend-tools.js';
-import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
-import type { AIEmployeesManager } from '../managers/ai-employees-manager.js';
-import type { AIConversationsManager } from '../managers/ai-conversations-manager.js';
-import type { BuiltInManager } from '../managers/built-in-manager.js';
-import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
-import type { LLMStreamCachedManager } from '../managers/llm-stream-cached-manager.js';
-import type { SubAgentsDispatcher } from '../managers/sub-agents/dispatcher.js';
-import type { WorkContextHandler } from '../managers/work-context/index.js';
+import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
+import type { AIConversationsManager } from '../manager/ai-conversations-manager.js';
+import type { BuiltInManager } from '../manager/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../manager/knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../manager/llm-stream-cached-manager.js';
+import type { SubAgentsDispatcher } from '../manager/sub-agents/dispatcher.js';
+import type { WorkContextHandler } from '../manager/work-context/index.js';
 
 async function getAIEmployee(
   repositories: RepositoryFactory,

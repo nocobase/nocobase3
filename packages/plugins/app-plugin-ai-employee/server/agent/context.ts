@@ -1,11 +1,11 @@
 import type { AgentContext, AgentState } from '@nocobase/ai-employee';
 import type { Context } from '../internal/runtime-context.js';
-import type { RepositoryFactory } from '../repository/database/factory.js';
-import type { AIEmployeesManager } from '../managers/ai-employees-manager.js';
-import type { AIConversationsManager } from '../managers/ai-conversations-manager.js';
-import type { BuiltInManager } from '../managers/built-in-manager.js';
-import type { KnowledgeBaseManager } from '../managers/knowledge-base-manager.js';
-import type { SubAgentsDispatcher } from '../managers/sub-agents/dispatcher.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
+import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
+import type { AIConversationsManager } from '../manager/ai-conversations-manager.js';
+import type { BuiltInManager } from '../manager/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../manager/knowledge-base-manager.js';
+import type { SubAgentsDispatcher } from '../manager/sub-agents/dispatcher.js';
 import type {
   AIConversationRepository,
   AIMessageRepository,

@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { databaseManagerToken, type DatabaseConnection } from '@nocobase/db';
-import type { ServiceResolver } from '@nocobase/service-provider';
+import {
+  createServiceToken,
+  type ServiceResolver,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 
 import type {
   AIConversationEntity,
@@ -24,7 +28,7 @@ import type {
   LCCheckpointWriteRepository,
   UserAIEmployeeEntity,
   UserAIEmployeeRepository,
-} from '../index.js';
+} from '../repository/index.js';
 import type {
   AIEmployeeRepository,
   AIMCPRepository,
@@ -33,9 +37,9 @@ import type {
   LLMServiceRepository,
   MCPEntity,
 } from '@nocobase/ai-employee';
-import type { DatabaseRepositoryFactory } from '../runtime-factory.js';
-import { DatabaseAIEmployeeRepository } from './ai-employee.js';
-import { BaseCollectionRepository } from './base-collection-repository.js';
+import type { DatabaseRepositoryFactory } from '../repository/runtime-factory.js';
+import { DatabaseAIEmployeeRepository } from '../repository/database/ai-employee.js';
+import { BaseCollectionRepository } from '../repository/database/base-collection-repository.js';
 
 const JSON_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
   aiConversations: new Set(['options']),
@@ -54,6 +58,11 @@ const JSON_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
   lcCheckpoints: new Set(['checkpoint', 'metadata']),
   llmServices: new Set(['options', 'enabledModels', 'modelOptions']),
 };
+
+export const repositoryFactoryToken: ServiceToken<RepositoryFactory> =
+  createServiceToken<RepositoryFactory>(
+    '@nocobase/app-plugin-ai-employee/internal/repositories',
+  );
 
 export interface RepositoryFactoryOptions {
   readonly container: ServiceResolver;
@@ -97,7 +106,7 @@ export class RepositoryFactory implements DatabaseRepositoryFactory {
         name,
         this.generateId,
         JSON_FIELDS[name] ?? new Set(),
-      ) as BaseCollectionRepository<object>;
+      );
       this.records.set(name, repository);
     }
     return repository as unknown as CollectionRepository<T>;
@@ -114,7 +123,7 @@ export class RepositoryFactory implements DatabaseRepositoryFactory {
       repository = new DatabaseAIEmployeeRepository(
         this.connection,
         this.generateId,
-      ) as unknown as BaseCollectionRepository<object>;
+      );
       this.records.set(name, repository);
     }
     return repository as unknown as DatabaseAIEmployeeRepository;

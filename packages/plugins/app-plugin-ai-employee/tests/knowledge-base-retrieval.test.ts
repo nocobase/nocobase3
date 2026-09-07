@@ -9,7 +9,7 @@ import {
   KNOWLEDGE_BASE_ON_DEMAND_PROMPT,
   KNOWLEDGE_BASE_PRE_RETRIEVED_PROMPT,
   normalizeKnowledgeBaseRetrievalStrategy,
-} from '../server/managers/knowledge-base-manager.js';
+} from '../server/manager/knowledge-base-manager.js';
 
 const employee = {
   username: 'atlas',

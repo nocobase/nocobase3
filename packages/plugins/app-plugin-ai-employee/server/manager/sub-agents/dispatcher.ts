@@ -8,7 +8,7 @@
  */
 
 import type { Context } from '../../internal/runtime-context.js';
-import type { RepositoryFactory } from '../../repository/database/factory.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { AIEmployeesManager } from '../ai-employees-manager.js';
 import type { AIConversationsManager } from '../ai-conversations-manager.js';

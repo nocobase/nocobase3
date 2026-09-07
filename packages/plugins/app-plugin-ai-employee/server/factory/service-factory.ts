@@ -6,27 +6,36 @@ import { databaseManagerToken } from '@nocobase/db';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { ConfigPaths } from '@nocobase/app-server/config';
-import type { ServiceContainer } from '@nocobase/service-provider';
+import {
+  createServiceToken,
+  type ServiceContainer,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 
 import type { AIEmployeeLLMServiceConfig } from '../config.js';
 import type { Context, CurrentUser } from '../internal/runtime-context.js';
-import {
-  managerFactoryToken,
-  repositoryFactoryToken,
-} from '../internal/tokens.js';
-import type { ManagerFactory } from '../managers/factory.js';
-import { LLMServiceConfigSynchronizer } from '../llm-service-config.js';
+import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
+import { repositoryFactoryToken } from './repository-factory.js';
+import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
 import { AI_API_BASE_PATH } from '../domain/api-contracts.js';
-import { aiManagerToken } from '../tokens.js';
-import { AIConversationService } from './ai-conversation-service.js';
-import { AIEmployeeService } from './ai-employee-service.js';
-import { AIMCPServerService } from './ai-mcp-server-service.js';
-import { AISkillService } from './ai-skill-service.js';
-import { AIToolService } from './ai-tool-service.js';
-import { AIFileService } from './file-service.js';
-import { LLMService } from './llm-service.js';
-import { ModelService } from './model-service.js';
-import { loadResources, resolveAIDirectory } from './resource-loader.js';
+import { aiManagerToken } from '../provider/ai-employee.js';
+import { AIConversationService } from '../service/ai-conversation-service.js';
+import { AIEmployeeService } from '../service/ai-employee-service.js';
+import { AIMCPServerService } from '../service/ai-mcp-server-service.js';
+import { AISkillService } from '../service/ai-skill-service.js';
+import { AIToolService } from '../service/ai-tool-service.js';
+import { AIFileService } from '../service/file-service.js';
+import { LLMService } from '../service/llm-service.js';
+import { ModelService } from '../service/model-service.js';
+import {
+  loadResources,
+  resolveAIDirectory,
+} from '../service/resource-loader.js';
+
+export const serviceFactoryToken: ServiceToken<ServiceFactory> =
+  createServiceToken<ServiceFactory>(
+    '@nocobase/app-plugin-ai-employee/internal/services',
+  );
 
 export interface ServiceFactoryOptions {
   readonly container: ServiceContainer;

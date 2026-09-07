@@ -6,7 +6,7 @@ import type {
 import { normalizeEnabledModelsConfig } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 
-import type { AIEmployeeLLMServiceConfig } from './config.js';
+import type { AIEmployeeLLMServiceConfig } from '../config.js';
 
 const DEFAULT_MODEL_OPTIONS: Readonly<Record<string, unknown>> = {
   temperature: 1,

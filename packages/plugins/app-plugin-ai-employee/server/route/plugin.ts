@@ -7,7 +7,7 @@ import {
 import { loggingToken } from '@nocobase/app-server/logging';
 import { Hono } from 'hono';
 
-import { serviceFactoryToken } from '../internal/tokens.js';
+import { serviceFactoryToken } from '../factory/service-factory.js';
 import { createAIEmployeeRoutes } from './index.js';
 
 export const aiEmployeeApiRoutes: AppApiRouteContribution<AppPluginApplication> =

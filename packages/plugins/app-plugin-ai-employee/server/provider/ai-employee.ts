@@ -2,22 +2,34 @@ import {
   createAIManager,
   DriveFileStorageFactory,
   fileStorageFactoryToken,
+  type AIManager,
 } from '@nocobase/ai-employee';
 import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { ServiceProvider } from '@nocobase/service-provider';
+import {
+  createServiceToken,
+  ServiceProvider,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 
 import { aiConfig, resolveAIEmployeeStorageDisk } from '../config.js';
 import {
+  ManagerFactory,
   managerFactoryToken,
+} from '../factory/manager-factory.js';
+import {
+  RepositoryFactory,
   repositoryFactoryToken,
+} from '../factory/repository-factory.js';
+import {
+  ServiceFactory,
   serviceFactoryToken,
-} from '../internal/tokens.js';
-import { ManagerFactory } from '../managers/factory.js';
-import { RepositoryFactory } from '../repository/database/factory.js';
-import { ServiceFactory } from '../service/factory.js';
-import { aiManagerToken } from '../tokens.js';
+} from '../factory/service-factory.js';
+
+/** Public cross-plugin AI manager capability. */
+export const aiManagerToken: ServiceToken<AIManager> =
+  createServiceToken<AIManager>('@nocobase/app-plugin-ai-employee/manager');
 
 export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-plugin-ai-employee';

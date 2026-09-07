@@ -1,4 +1,4 @@
-import type { ServiceFactory } from '../service/factory.js';
+import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Context as HonoContext, Hono } from 'hono';
 import { createAISSEStreamResponse, requiredString } from './utils.js';
 

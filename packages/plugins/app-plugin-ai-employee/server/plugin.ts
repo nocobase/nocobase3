@@ -4,8 +4,8 @@ import {
 } from '@nocobase/app-server/plugins';
 
 import { aiConfig } from './config.js';
-import serviceProviders from './providers/index.js';
-import routes from './routes/plugin.js';
+import serviceProviders from './provider/index.js';
+import routes from './route/plugin.js';
 
 const aiEmployeePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-ai-employee',

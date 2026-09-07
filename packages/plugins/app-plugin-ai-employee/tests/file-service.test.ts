@@ -4,7 +4,7 @@ import type { FileMetadata, FileStorage } from '@nocobase/ai-employee';
 import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../server/domain/errors.js';
-import type { AIFileMetadataCreateContext } from '../server/file-storage/ai-file-metadata-repository.js';
+import type { AIFileMetadataCreateContext } from '../server/repository/file-storage/ai-file-metadata-repository.js';
 import type { AIFileEntity } from '../server/repository/ai-file.js';
 import { AIFileService } from '../server/service/file-service.js';
 

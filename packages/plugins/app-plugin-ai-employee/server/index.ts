@@ -15,13 +15,13 @@ export {
   expandEnvironmentReferences,
   LLMServiceConfigSynchronizer,
   normalizeLLMServiceConfig,
-} from './llm-service-config.js';
-export type { LLMServiceSyncSummary } from './llm-service-config.js';
-export { AIEmployeeProvider } from './providers/index.js';
+} from './manager/llm-service-config.js';
+export type { LLMServiceSyncSummary } from './manager/llm-service-config.js';
+export { AIEmployeeProvider } from './provider/index.js';
 export {
   aiConfig,
   normalizeDisks,
   resolveAIEmployeeStorageDisk,
   resolveAIKnowledgeBaseStorageDisks,
 } from './config.js';
-export { aiManagerToken } from './tokens.js';
+export { aiManagerToken } from './provider/ai-employee.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { SubAgentsDispatcher } from '../server/managers/sub-agents/dispatcher.js';
+import { SubAgentsDispatcher } from '../server/manager/sub-agents/dispatcher.js';
 
 const unusedDependencies = {
   aiEmployeesManager: {} as never,

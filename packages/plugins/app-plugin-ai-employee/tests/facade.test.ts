@@ -7,14 +7,18 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ManagerFactory,
   managerFactoryToken,
+} from '../server/factory/manager-factory.js';
+import {
+  RepositoryFactory,
   repositoryFactoryToken,
+} from '../server/factory/repository-factory.js';
+import {
+  ServiceFactory,
   serviceFactoryToken,
-} from '../server/internal/tokens.js';
-import { ManagerFactory } from '../server/managers/factory.js';
-import { RepositoryFactory } from '../server/repository/database/factory.js';
-import { ServiceFactory } from '../server/service/factory.js';
-import { aiManagerToken } from '../server/tokens.js';
+} from '../server/factory/service-factory.js';
+import { aiManagerToken } from '../server/provider/ai-employee.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 
 function createContainer(): ServiceContainer {

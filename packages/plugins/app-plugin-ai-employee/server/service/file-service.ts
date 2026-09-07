@@ -5,7 +5,7 @@ import type { IdGeneratorService } from '@nocobase/snowflake';
 
 import type { Actor } from '../domain/contracts.js';
 import { forbiddenError, notFoundError } from '../domain/errors.js';
-import type { AIFileMetadataCreateContext } from '../file-storage/ai-file-metadata-repository.js';
+import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import type { AIFileEntity } from '../repository/ai-file.js';
 
 export type AIFileUploadResult = {

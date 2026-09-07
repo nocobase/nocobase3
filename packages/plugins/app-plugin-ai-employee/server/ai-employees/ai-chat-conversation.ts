@@ -8,7 +8,7 @@
  */
 
 import type { Context } from '../internal/runtime-context.js';
-import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
 import _ from 'lodash';
 import {
   AIChatContext,

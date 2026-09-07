@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { createAIEmployeeRoutes } from '../../server/routes/index.js';
+import { createAIEmployeeRoutes } from '../../server/route/index.js';
 import type { Context } from '../../server/internal/runtime-context.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
 import { createTestAppDeps } from './test-app-deps.js';

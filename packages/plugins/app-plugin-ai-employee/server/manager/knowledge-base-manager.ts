@@ -10,7 +10,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { EEFeatures } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIManager } from '@nocobase/ai-employee';
-import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
 
 export const KNOWLEDGE_BASE_RETRIEVAL_STRATEGIES = [
   'always',

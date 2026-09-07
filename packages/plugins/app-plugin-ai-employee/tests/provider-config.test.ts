@@ -12,14 +12,16 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { aiEmployeeConfig, type AIEmployeeConfig } from '../server/config.js';
-import { AIEmployeeProvider } from '../server/providers/ai-employee.js';
-import { aiManagerToken } from '../server/tokens.js';
-import { RepositoryFactory } from '../server/repository/database/factory.js';
 import {
-  managerFactoryToken,
+  AIEmployeeProvider,
+  aiManagerToken,
+} from '../server/provider/ai-employee.js';
+import { managerFactoryToken } from '../server/factory/manager-factory.js';
+import {
+  RepositoryFactory,
   repositoryFactoryToken,
-  serviceFactoryToken,
-} from '../server/internal/tokens.js';
+} from '../server/factory/repository-factory.js';
+import { serviceFactoryToken } from '../server/factory/service-factory.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 
 const providers: AIEmployeeProvider[] = [];

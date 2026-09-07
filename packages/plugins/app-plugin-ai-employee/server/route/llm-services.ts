@@ -1,4 +1,4 @@
-import type { ServiceFactory } from '../service/factory.js';
+import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
 import type { LLMServiceResourceInput } from './contracts.js';
 import { requiredString } from './utils.js';

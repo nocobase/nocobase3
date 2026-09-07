@@ -9,7 +9,7 @@
 
 import type { ConversationRequestExecution } from '../internal/runtime-context.js';
 import { z } from 'zod';
-import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,

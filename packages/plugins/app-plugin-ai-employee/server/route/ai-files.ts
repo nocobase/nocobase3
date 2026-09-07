@@ -1,4 +1,4 @@
-import type { ServiceFactory } from '../service/factory.js';
+import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
 
 import { requiredString } from './utils.js';

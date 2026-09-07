@@ -1,4 +1,4 @@
-import type { ServiceFactory } from '../service/factory.js';
+import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
 
 export function createAIRouter(app: Hono, services: ServiceFactory): void {

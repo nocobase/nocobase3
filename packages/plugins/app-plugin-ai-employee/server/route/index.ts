@@ -2,7 +2,7 @@ import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
 import { Hono } from 'hono';
 
-import type { ServiceFactory } from '../service/factory.js';
+import type { ServiceFactory } from '../factory/service-factory.js';
 import { createAIConversationsRouter } from './ai-conversations.js';
 import { createAIEmployeeRouter } from './ai-employees.js';
 import { createAIFilesRouter } from './ai-files.js';

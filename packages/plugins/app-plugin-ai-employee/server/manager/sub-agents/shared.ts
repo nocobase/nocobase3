@@ -9,7 +9,7 @@
 
 import type { Context } from '../../internal/runtime-context.js';
 import type { BuiltInManager } from '../built-in-manager.js';
-import type { RepositoryFactory } from '../../repository/database/factory.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import type { SubAgentConversationMetadata } from '@nocobase/ai-employee';

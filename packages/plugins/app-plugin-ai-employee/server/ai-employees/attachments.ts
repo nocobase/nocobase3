@@ -9,7 +9,7 @@
 
 import type { Context } from '../internal/runtime-context.js';
 import type { AIFileAttachment } from '@nocobase/ai-employee';
-import type { RepositoryFactory } from '../repository/database/factory.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
 
 export type AttachmentId = string | number;
 
