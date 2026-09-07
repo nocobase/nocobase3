@@ -2,12 +2,10 @@ import {
   DocumentLoaders,
   fileStorageFactoryToken,
   type AIManager,
+  type FileStorage,
   type FileStorageFactory,
 } from '@nocobase/ai-employee';
 import { cachingToken } from '@nocobase/app-server/caching';
-import { databaseManagerToken } from '@nocobase/db';
-import { idGeneratorToken } from '@nocobase/app-server/id-generator';
-import { loggingToken } from '@nocobase/app-server/logging';
 import {
   createServiceToken,
   type ServiceResolver,
@@ -15,7 +13,8 @@ import {
 } from '@nocobase/service-provider';
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
-import type { Context } from '../internal/runtime-context.js';
+import type { AIFileEntity } from '../repository/ai-file.js';
+import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import { AIFileMetadataRepository } from '../repository/file-storage/ai-file-metadata-repository.js';
 import {
   type RepositoryFactory,
@@ -50,8 +49,8 @@ export interface ManagerFactoryConfiguration {
 export class ManagerFactory {
   private readonly container: ServiceResolver;
   private configuration: ManagerFactoryConfiguration | undefined;
-  private contextValue: Context | undefined;
-  private fileStorageValue: Context['fileStorage'] | undefined;
+  private fileStorageValue:
+    FileStorage<AIFileEntity, AIFileMetadataCreateContext> | undefined;
   private aiEmployeesManagerValue: AIEmployeesManager | undefined;
   private aiConversationsManagerValue: AIConversationsManager | undefined;
   private builtInManagerValue: BuiltInManager | undefined;
@@ -110,7 +109,10 @@ export class ManagerFactory {
   }
 
   public get documentLoaders(): DocumentLoaders {
-    return (this.documentLoadersValue ??= new DocumentLoaders(this.context));
+    return (this.documentLoadersValue ??= new DocumentLoaders({
+      caching: this.container.resolve(cachingToken),
+      fileStorage: this.fileStorage,
+    }));
   }
 
   public get subAgentsDispatcher(): SubAgentsDispatcher {
@@ -126,30 +128,10 @@ export class ManagerFactory {
     }));
   }
 
-  public get context(): Context {
-    if (this.contextValue) return this.contextValue;
-    const databaseManager = this.container.resolve(databaseManagerToken);
-    this.contextValue = {
-      ai: this.ai,
-      database: databaseManager.connection(),
-      databaseManager,
-      logger: this.container.resolve(loggingToken).getLogger('ai-employee'),
-      caching: this.container.resolve(cachingToken),
-      snowflake: this.container.resolve(idGeneratorToken),
-      fileStorage: this.fileStorage,
-      i18nNamespace: packageMetadata.name,
-      currentUser: { id: 'system', roles: ['root'], isRoot: true },
-      auth: { user: { id: 'system', username: 'system' } },
-      state: { currentRoles: ['root'], currentRole: 'root' },
-      get: () => undefined,
-      set: () => undefined,
-      t: (key: string) => key,
-      getCurrentLocale: () => undefined,
-    };
-    return this.contextValue;
-  }
-
-  private get fileStorage(): Context['fileStorage'] {
+  public get fileStorage(): FileStorage<
+    AIFileEntity,
+    AIFileMetadataCreateContext
+  > {
     const configuration = this.requireConfiguration();
     return (this.fileStorageValue ??= this.fileStorageFactory.create({
       disk: configuration.aiStorageDisk,

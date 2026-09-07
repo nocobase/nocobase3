@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { type AIManager } from '@nocobase/ai-employee';
 import { databaseManagerToken } from '@nocobase/db';
+import { cachingToken } from '@nocobase/app-server/caching';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { ConfigPaths } from '@nocobase/app-server/config';
@@ -111,7 +112,7 @@ export class ServiceFactory {
 
   public get fileService(): AIFileService {
     return (this.fileServiceValue ??= new AIFileService({
-      fileStorage: this.managers.context.fileStorage,
+      fileStorage: this.managers.fileStorage,
       snowflake: this.container.resolve(idGeneratorToken),
       apiBasePath: AI_API_BASE_PATH,
     }));
@@ -152,10 +153,16 @@ export class ServiceFactory {
 
   /** Creates request-local state while retaining only App-scoped collaborators. */
   public createRequestRuntime(actor: Actor, request?: Request): Context {
-    const runtime = this.managers.context;
+    const databaseManager = this.container.resolve(databaseManagerToken);
     const currentRole = actor.isRoot ? 'root' : (actor.roles[0] ?? 'member');
     return {
-      ...runtime,
+      ai: this.ai,
+      database: databaseManager.connection(),
+      databaseManager,
+      logger: this.logger,
+      caching: this.container.resolve(cachingToken),
+      snowflake: this.container.resolve(idGeneratorToken),
+      fileStorage: this.managers.fileStorage,
       currentUser: actor,
       auth: { user: { id: actor.id, username: String(actor.id) } },
       state: {

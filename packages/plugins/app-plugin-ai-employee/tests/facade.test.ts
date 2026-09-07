@@ -67,6 +67,8 @@ describe('AI employee container-scoped factories', () => {
     expect(container.resolve(serviceFactoryToken)).toBe(services);
     expect(repositories.aiEmployees).toBe(repositories.aiEmployees);
     expect(managers.aiEmployeesManager).toBe(managers.aiEmployeesManager);
+    expect(managers.fileStorage).toBe(managers.fileStorage);
+    expect(managers.documentLoaders).toBe(managers.documentLoaders);
     expect(managers.subAgentsDispatcher).toBe(managers.subAgentsDispatcher);
     expect(services.modelService).toBe(services.modelService);
     expect(services.toolService).toBe(services.toolService);
@@ -112,6 +114,10 @@ describe('AI employee container-scoped factories', () => {
       roles: ['member'],
       isRoot: false,
     });
+    expect(firstManagers.fileStorage).not.toBe(secondManagers.fileStorage);
+    expect(firstManagers.documentLoaders).not.toBe(
+      secondManagers.documentLoaders,
+    );
     expect(firstManagers.aiEmployeesManager).not.toBe(
       secondManagers.aiEmployeesManager,
     );
