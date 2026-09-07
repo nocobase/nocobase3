@@ -60,7 +60,7 @@ import {
   shouldAutoExecuteFrontendTool,
 } from '../../ai-employees/frontend-tools.js';
 
-export interface AIEmployeeOptions {
+export interface AIEmployeeAgentRuntimeOptions {
   agentContext: AppAgentContext;
   database: DatabaseConnection;
   caching: Caching;
@@ -132,7 +132,7 @@ export class AIEmployeeCapabilities {
     model,
     from = 'main-agent',
     tools = [],
-  }: AIEmployeeOptions) {
+  }: AIEmployeeAgentRuntimeOptions) {
     this.employee = employee;
     this.agentContext = agentContext;
     this.database = database;

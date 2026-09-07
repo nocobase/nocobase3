@@ -27,7 +27,10 @@ import {
 } from '../../ai-employees/utils.js';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { createAgentProviders } from '../providers.js';
-import { AIEmployeeCapabilities, type AIEmployeeOptions } from './runtime.js';
+import {
+  AIEmployeeCapabilities,
+  type AIEmployeeAgentRuntimeOptions,
+} from './runtime.js';
 
 class ResponseMetadataCollector extends BaseCallbackHandler {
   name = 'ResponseMetadataCollector';
@@ -55,22 +58,24 @@ export interface AIEmployeeAgentProvidersResult {
 }
 
 interface AIEmployeeProviderState {
-  options: AIEmployeeOptions;
+  options: AIEmployeeAgentRuntimeOptions;
   runtime: AIEmployeeCapabilities;
   activeProvider?: LLMProvider;
   activeIdentity?: AgentLLMIdentity;
   responseMetadata: Map<string, any>;
 }
 
-const createState = (options: AIEmployeeOptions): AIEmployeeProviderState => ({
+const createState = (
+  options: AIEmployeeAgentRuntimeOptions,
+): AIEmployeeProviderState => ({
   options,
   runtime: new AIEmployeeCapabilities(options),
   responseMetadata: new Map(),
 });
 
 function getRequiredModel(
-  options: AIEmployeeOptions,
-): NonNullable<AIEmployeeOptions['model']> {
+  options: AIEmployeeAgentRuntimeOptions,
+): NonNullable<AIEmployeeAgentRuntimeOptions['model']> {
   if (!options.model) {
     throw new Error('AI employee model is required');
   }
@@ -78,7 +83,7 @@ function getRequiredModel(
 }
 
 async function resolveAIEmployeeLLM(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state: AIEmployeeProviderState,
 ): Promise<{ provider: LLMProvider; identity: AgentLLMIdentity }> {
   const resolved =
@@ -97,7 +102,7 @@ async function resolveAIEmployeeLLM(
 }
 
 export function createAIEmployeeConversationProvider(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
 ): ConversationProvider {
   const { runtime } = state;
@@ -307,7 +312,7 @@ export function createAIEmployeeConversationProvider(
 }
 
 export function createAIEmployeeToolProvider(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
 ): ToolProvider {
   const { runtime } = state;
@@ -323,7 +328,7 @@ export function createAIEmployeeToolProvider(
 }
 
 export function createAIEmployeeChatContextProvider(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
 ): ChatContextProvider {
   const { runtime, responseMetadata } = state;
@@ -375,7 +380,7 @@ export function createAIEmployeeChatContextProvider(
 }
 
 export async function createAIEmployeeAgentProviders(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   overrides?: AgentProviderOverrides,
 ): Promise<AIEmployeeAgentProvidersResult> {
   const state = createState(options);
