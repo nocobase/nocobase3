@@ -4,7 +4,7 @@ import {
 } from '@nocobase/app-server/plugins';
 
 import serviceProviders from './providers/index.js';
-import routes from './routes/plugin.js';
+import routes from './routes/index.js';
 
 const aiKnowledgeBasePlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-ai-knowledge-base',
