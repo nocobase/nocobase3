@@ -104,7 +104,7 @@ export function createAIEmployeeConversationProvider(
   const sessionId = options.sessionId;
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
-  const cache = options.runtime.llmStreamCachedManager.getCached(sessionId);
+  const cache = options.llmStreamCachedManager.getCached(sessionId);
   const toolCalls: ToolCallHandler = {
     initialize: async (messageId, calls) =>
       ctx.database.transaction((transaction: DatabaseConnection) =>
@@ -268,16 +268,13 @@ export function createAIEmployeeConversationProvider(
       });
     },
     registerAbortHandle: (token: symbol, handle: AgentAbortHandle) =>
-      options.runtime.aiEmployeesManager.registerAgentAbortHandle(
+      options.aiEmployeesManager.registerAgentAbortHandle(
         sessionId,
         token,
         handle,
       ),
     unregisterAbortHandle: (token: symbol) =>
-      options.runtime.aiEmployeesManager.unregisterAgentAbortHandle(
-        sessionId,
-        token,
-      ),
+      options.aiEmployeesManager.unregisterAgentAbortHandle(sessionId, token),
     streamCache: {
       append: (chunk) => cache.append(chunk),
       clear: () => cache.clear(),

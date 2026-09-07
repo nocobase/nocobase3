@@ -6,7 +6,14 @@ import { AIConversationService } from '../../server/service/ai-conversation-serv
 const findOne = vi.fn();
 const service = new AIConversationService({
   repositories: { aiMessages: { findOne } } as never,
-  runtime: {} as never,
+  aiEmployeesManager: {} as never,
+  aiConversationsManager: {} as never,
+  builtInManager: {} as never,
+  llmStreamCachedManager: {} as never,
+  subAgentsDispatcher: {} as never,
+  knowledgeBaseManager: {} as never,
+  workContextHandler: {} as never,
+  documentLoaders: {} as never,
 });
 
 describe('AIConversationService tool continuation', () => {

@@ -8,11 +8,17 @@
  */
 
 import type { Context } from '../../internal/runtime-context.js';
-import type { RuntimeServices } from '../../internal/runtime-services.js';
 import type { RepositoryFactory } from '../../repository/database/factory.js';
+import type { DocumentLoaders } from '@nocobase/ai-employee';
+import type { AIEmployeesManager } from '../ai-employees-manager.js';
+import type { AIConversationsManager } from '../ai-conversations-manager.js';
+import type { BuiltInManager } from '../built-in-manager.js';
+import type { KnowledgeBaseManager } from '../knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../llm-stream-cached-manager.js';
+import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
-import { ModelRef } from '../ai-employee.js';
+import { ModelRef } from '../../ai-employees/ai-employee.js';
 import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
 import { createAgentContext } from '../../agent/context.js';
 import type {
@@ -32,22 +38,42 @@ export type SubAgentTask = {
 };
 
 export class SubAgentsDispatcher {
-  private readonly ctx: Context;
   private readonly repositories: RepositoryFactory;
-  private readonly runtime: RuntimeServices;
+  private readonly aiEmployeesManager: AIEmployeesManager;
+  private readonly aiConversationsManager: AIConversationsManager;
+  private readonly builtInManager: BuiltInManager;
+  private readonly llmStreamCachedManager: LLMStreamCachedManager;
+  private readonly knowledgeBaseManager: KnowledgeBaseManager;
+  private readonly workContextHandler: WorkContextHandler;
+  private readonly documentLoaders: DocumentLoaders;
 
   constructor({
-    ctx,
     repositories,
-    runtime,
+    aiEmployeesManager,
+    aiConversationsManager,
+    builtInManager,
+    llmStreamCachedManager,
+    knowledgeBaseManager,
+    workContextHandler,
+    documentLoaders,
   }: {
-    ctx: Context;
     repositories: RepositoryFactory;
-    runtime: RuntimeServices;
+    aiEmployeesManager: AIEmployeesManager;
+    aiConversationsManager: AIConversationsManager;
+    builtInManager: BuiltInManager;
+    llmStreamCachedManager: LLMStreamCachedManager;
+    knowledgeBaseManager: KnowledgeBaseManager;
+    workContextHandler: WorkContextHandler;
+    documentLoaders: DocumentLoaders;
   }) {
-    this.ctx = ctx;
     this.repositories = repositories;
-    this.runtime = runtime;
+    this.aiEmployeesManager = aiEmployeesManager;
+    this.aiConversationsManager = aiConversationsManager;
+    this.builtInManager = builtInManager;
+    this.llmStreamCachedManager = llmStreamCachedManager;
+    this.knowledgeBaseManager = knowledgeBaseManager;
+    this.workContextHandler = workContextHandler;
+    this.documentLoaders = documentLoaders;
   }
   private extractTextContent(content: unknown): string {
     if (typeof content === 'string') {
@@ -146,7 +172,7 @@ export class SubAgentsDispatcher {
     });
   }
 
-  async run(task: SubAgentTask): Promise<string> {
+  async run(task: SubAgentTask, ctx: Context): Promise<string> {
     const {
       sessionId,
       employee,
@@ -157,13 +183,12 @@ export class SubAgentsDispatcher {
       messages,
       writer,
     } = task;
-    const ctx = this.ctx;
     const userId = ctx.auth?.user?.id;
     if (!userId) {
       throw new Error('User not authenticated');
     }
 
-    const resolvedModel = await this.runtime.aiEmployeesManager.resolveModel(
+    const resolvedModel = await this.aiEmployeesManager.resolveModel(
       employee,
       model,
     );
@@ -171,7 +196,12 @@ export class SubAgentsDispatcher {
     const agent = await createAIEmployeeAgentService({
       ctx,
       repositories: this.repositories,
-      runtime: this.runtime,
+      aiEmployeesManager: this.aiEmployeesManager,
+      builtInManager: this.builtInManager,
+      llmStreamCachedManager: this.llmStreamCachedManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      workContextHandler: this.workContextHandler,
+      documentLoaders: this.documentLoaders,
       employee,
       sessionId,
       skillSettings,
@@ -186,7 +216,7 @@ export class SubAgentsDispatcher {
       sort: ['-messageId'],
     });
     const decisions = lastMessage
-      ? await this.runtime.aiConversationsManager.getUserDecisions(
+      ? await this.aiConversationsManager.getUserDecisions(
           lastMessage.messageId,
         )
       : null;
@@ -203,19 +233,21 @@ export class SubAgentsDispatcher {
       };
     }
 
-    const agentContext = createAgentContext(
+    const agentContext = createAgentContext({
       ctx,
-      this.repositories,
-      this.runtime,
-      {
-        state: {
-          sessionId,
-          model: resolvedModel as unknown as Record<string, unknown>,
-          webSearch,
-          messages,
-        },
+      repositories: this.repositories,
+      aiEmployeesManager: this.aiEmployeesManager,
+      aiConversationsManager: this.aiConversationsManager,
+      builtInManager: this.builtInManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      subAgentsDispatcher: this,
+      state: {
+        sessionId,
+        model: resolvedModel as unknown as Record<string, unknown>,
+        webSearch,
+        messages,
       },
-    );
+    });
     const result = await agent.service.invoke(
       {
         userDecisions: decisions ?? undefined,
@@ -297,7 +329,7 @@ export class SubAgentsDispatcher {
       },
     });
     if (updated > 0) {
-      return await this.runtime.aiConversationsManager.getUserDecisions(
+      return await this.aiConversationsManager.getUserDecisions(
         lastMessage.messageId,
       );
     }

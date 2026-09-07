@@ -7,7 +7,7 @@ import {
   STANDARD_AGENT_MIDDLEWARE_ORDER,
   type AgentStreamEvent,
 } from '../server/agent/types.js';
-import { AIEmployeesManager } from '../server/ai-employees/ai-employees-manager.js';
+import { AIEmployeesManager } from '../server/managers/ai-employees-manager.js';
 import {
   createAgentProviders,
   createMemoryConversationProvider,

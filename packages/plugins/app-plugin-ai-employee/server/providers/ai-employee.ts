@@ -10,9 +10,11 @@ import { ServiceProvider } from '@nocobase/service-provider';
 
 import { aiConfig, resolveAIEmployeeStorageDisk } from '../config.js';
 import {
+  managerFactoryToken,
   repositoryFactoryToken,
   serviceFactoryToken,
 } from '../internal/tokens.js';
+import { ManagerFactory } from '../managers/factory.js';
 import { RepositoryFactory } from '../repository/database/factory.js';
 import { ServiceFactory } from '../service/factory.js';
 import { aiManagerToken } from '../tokens.js';
@@ -35,6 +37,10 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
       (resolver) => new RepositoryFactory({ container: resolver }),
     );
     this.app.container.singleton(
+      managerFactoryToken,
+      (resolver) => new ManagerFactory({ container: resolver }),
+    );
+    this.app.container.singleton(
       serviceFactoryToken,
       () => new ServiceFactory({ container: this.app.container }),
     );
@@ -43,12 +49,15 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
   public override async boot(): Promise<void> {
     const services = this.app.container.resolve(serviceFactoryToken);
     const config = this.app.config.get(aiConfig);
+    const aiStorageDisk = resolveAIEmployeeStorageDisk(
+      config,
+      this.app.config.get(driveConfig).default,
+    );
+    this.app.container.resolve(managerFactoryToken).configure({
+      aiStorageDisk,
+    });
     services.configure({
       paths: this.app.paths,
-      aiStorageDisk: resolveAIEmployeeStorageDisk(
-        config,
-        this.app.config.get(driveConfig).default,
-      ),
       llmServices: config.llmServices,
     });
     await services.initialize();

@@ -7,9 +7,11 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it } from 'vitest';
 
 import {
+  managerFactoryToken,
   repositoryFactoryToken,
   serviceFactoryToken,
 } from '../server/internal/tokens.js';
+import { ManagerFactory } from '../server/managers/factory.js';
 import { RepositoryFactory } from '../server/repository/database/factory.js';
 import { ServiceFactory } from '../server/service/factory.js';
 import { aiManagerToken } from '../server/tokens.js';
@@ -29,6 +31,10 @@ function createContainer(): ServiceContainer {
     (resolver) => new RepositoryFactory({ container: resolver }),
   );
   container.singleton(
+    managerFactoryToken,
+    (resolver) => new ManagerFactory({ container: resolver }),
+  );
+  container.singleton(
     serviceFactoryToken,
     () => new ServiceFactory({ container }),
   );
@@ -40,19 +46,24 @@ describe('AI employee container-scoped factories', () => {
     const container = createContainer();
 
     expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
     expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
 
     const repositories = container.resolve(repositoryFactoryToken);
+    const managers = container.resolve(managerFactoryToken);
     const services = container.resolve(serviceFactoryToken);
+    managers.configure({ aiStorageDisk: 'local' });
     services.configure({
       paths: createTestAppDeps().paths,
-      aiStorageDisk: 'local',
       loadResources: false,
     });
 
     expect(container.resolve(repositoryFactoryToken)).toBe(repositories);
+    expect(container.resolve(managerFactoryToken)).toBe(managers);
     expect(container.resolve(serviceFactoryToken)).toBe(services);
     expect(repositories.aiEmployees).toBe(repositories.aiEmployees);
+    expect(managers.aiEmployeesManager).toBe(managers.aiEmployeesManager);
+    expect(managers.subAgentsDispatcher).toBe(managers.subAgentsDispatcher);
     expect(services.modelService).toBe(services.modelService);
     expect(services.toolService).toBe(services.toolService);
   });
@@ -60,16 +71,18 @@ describe('AI employee container-scoped factories', () => {
   it('isolates repositories, services, readiness and mutable managers by container', async () => {
     const firstContainer = createContainer();
     const secondContainer = createContainer();
+    const firstManagers = firstContainer.resolve(managerFactoryToken);
+    const secondManagers = secondContainer.resolve(managerFactoryToken);
     const first = firstContainer.resolve(serviceFactoryToken);
     const second = secondContainer.resolve(serviceFactoryToken);
+    firstManagers.configure({ aiStorageDisk: 'local' });
+    secondManagers.configure({ aiStorageDisk: 'local' });
     first.configure({
       paths: createTestAppDeps().paths,
-      aiStorageDisk: 'local',
       loadResources: false,
     });
     second.configure({
       paths: createTestAppDeps().paths,
-      aiStorageDisk: 'local',
       loadResources: false,
     });
 
@@ -95,8 +108,8 @@ describe('AI employee container-scoped factories', () => {
       roles: ['member'],
       isRoot: false,
     });
-    expect(first.runtimeServices.aiEmployeesManager).not.toBe(
-      second.runtimeServices.aiEmployeesManager,
+    expect(firstManagers.aiEmployeesManager).not.toBe(
+      secondManagers.aiEmployeesManager,
     );
     expect(firstRuntime).not.toHaveProperty('aiEmployeesManager');
     expect(firstRuntime).not.toHaveProperty('aiConversationsManager');

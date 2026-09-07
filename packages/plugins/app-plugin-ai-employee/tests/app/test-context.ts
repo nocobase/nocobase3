@@ -6,9 +6,11 @@ import { databaseManagerToken } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 import {
+  managerFactoryToken,
   repositoryFactoryToken,
   serviceFactoryToken,
 } from '../../server/internal/tokens.js';
+import { ManagerFactory } from '../../server/managers/factory.js';
 import { RepositoryFactory } from '../../server/repository/database/factory.js';
 import { ServiceFactory } from '../../server/service/factory.js';
 import { aiManagerToken } from '../../server/tokens.js';
@@ -28,22 +30,29 @@ export function createTestAIEmployeeFixture() {
     (resolver) => new RepositoryFactory({ container: resolver }),
   );
   container.singleton(
+    managerFactoryToken,
+    (resolver) => new ManagerFactory({ container: resolver }),
+  );
+  container.singleton(
     serviceFactoryToken,
     () => new ServiceFactory({ container }),
   );
   const services = container.resolve(serviceFactoryToken);
+  container.resolve(managerFactoryToken).configure({
+    aiStorageDisk: deps.aiStorageDisk,
+  });
   services.configure({
     paths: deps.paths,
-    aiStorageDisk: deps.aiStorageDisk,
     loadResources: false,
   });
+  const managers = container.resolve(managerFactoryToken);
   const repositories = container.resolve(repositoryFactoryToken);
   const context = services.createRequestRuntime({
     id: 'fixture-user',
     roles: ['member'],
     isRoot: false,
   });
-  return { context, repositories, services };
+  return { context, repositories, managers, services };
 }
 
 export function createTestAIEmployeeRuntime() {

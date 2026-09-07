@@ -7,8 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../internal/runtime-context.js';
-import type { Cache } from '@nocobase/caching';
+import type { Cache, Caching } from '@nocobase/caching';
 
 const CACHE_NAME = 'ai-llm-stream-cache';
 const CACHE_TTL = 10 * 60 * 1000;
@@ -26,7 +25,7 @@ export class LLMStreamCachedManager {
   private cachePromise?: Promise<Cache>;
 
   constructor(
-    private readonly ctx: Pick<Context, 'caching'>,
+    private readonly caching: Caching,
     private readonly store = 'memory',
   ) {}
 
@@ -113,7 +112,7 @@ export class LLMStreamCachedManager {
 
   private async getCache() {
     this.cachePromise ??= Promise.resolve(
-      this.ctx.caching.getCache({ namespace: CACHE_NAME }),
+      this.caching.getCache({ namespace: CACHE_NAME }),
     );
     return this.cachePromise;
   }
