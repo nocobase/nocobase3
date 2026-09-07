@@ -181,6 +181,7 @@
     "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.13.1",
+    "sonner": "^2.0.3",
     "tailwind-merge": "^3.2.0",
     "tailwindcss": "catalog:",
     "tsc-alias": "^1.9.2",
