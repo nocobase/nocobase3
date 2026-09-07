@@ -1,5 +1,18 @@
 # @nocobase/app-plugin-hub
 
+## 0.0.2-beta.1
+
+### Patch Changes
+
+- a3cb4bb: Show release templates on the left and editable deployment drafts on the right. Initialize subsequent deployment drafts from current configuration and allow template changes to be applied selectively while reviewing against the active configuration.
+- Updated dependencies [0e9505a]
+- Updated dependencies [9536bf5]
+- Updated dependencies [9536bf5]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.8
+  - @nocobase/drive@0.1.0-beta.3
+  - @nocobase/app-client@1.0.0-beta.11
+  - @nocobase/app-plugin-authorization@0.2.0-beta.7
+
 ## 0.0.2-beta.0
 
 ### Patch Changes

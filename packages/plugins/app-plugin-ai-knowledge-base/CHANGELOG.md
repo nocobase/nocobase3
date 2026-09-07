@@ -1,5 +1,17 @@
 # @nocobase/app-plugin-ai-knowledge-base
 
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- a4d4982: Add application-owned AI Knowledge Base Registry items for providers, controlled components, and a complete editable workspace, plus six development-only showcase routes under `/dev/ai-knowledge-base`.
+
+### Patch Changes
+
+- Updated dependencies [9536bf5]
+  - @nocobase/app-client@1.0.0-beta.11
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.3
+
 ## 0.1.0-beta.2
 
 ### Patch Changes
