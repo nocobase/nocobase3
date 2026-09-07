@@ -72,6 +72,22 @@ describe('mail database migration', () => {
       ]),
     );
     await expect(
+      client.raw('PRAGMA index_list(mail_submissions)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'mail_submissions_scheduled_idx' }),
+      ]),
+    );
+    await expect(
+      metadataStore.get('mailSubmissions').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: {
+        scheduledAt: { type: 'datetime' },
+        requestedBy: { type: 'string' },
+        composeInput: { type: 'json' },
+      },
+    });
+    await expect(
       client.raw('PRAGMA index_list(mail_message_folders)'),
     ).resolves.toEqual(
       expect.arrayContaining([
@@ -84,13 +100,13 @@ describe('mail database migration', () => {
       ]),
     );
     await expect(
-      metadataStore.getCollection('mailSyncRuns'),
+      metadataStore.get('mailSyncRuns').then((stored) => stored?.document),
     ).resolves.toMatchObject({
-      fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'historyCursor' }),
-        expect.objectContaining({ name: 'folderCursor' }),
-        expect.objectContaining({ name: 'baselineCursor' }),
-      ]),
+      fields: {
+        historyCursor: { type: 'text' },
+        folderCursor: { type: 'text' },
+        baselineCursor: { type: 'json' },
+      },
     });
   });
 
@@ -104,9 +120,7 @@ describe('mail database migration', () => {
       ),
     ).resolves.toEqual(COLLECTIONS.map(() => false));
     for (const [collection] of COLLECTIONS) {
-      await expect(
-        metadataStore.getCollection(collection),
-      ).resolves.toBeUndefined();
+      await expect(metadataStore.get(collection)).resolves.toBeUndefined();
     }
   });
 });

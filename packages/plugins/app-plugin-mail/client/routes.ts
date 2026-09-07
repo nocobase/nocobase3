@@ -1,4 +1,5 @@
 import {
+  defineAppRoutes,
   defineDevRoutes,
   defineSettingsRoutes,
   type AppClientRouteContribution,
@@ -6,6 +7,14 @@ import {
 import { History, Inbox, Link2, Mail, Send, Table2, Users } from 'lucide-react';
 
 const routes: readonly AppClientRouteContribution[] = [
+  defineAppRoutes([
+    {
+      name: 'mail',
+      path: '/mail',
+      auth: 'required',
+      componentLoader: () => import('./pages/mail-workspace-page.js'),
+    },
+  ]),
   defineSettingsRoutes([
     {
       name: 'mail',

@@ -1,4 +1,4 @@
-import { Paperclip } from 'lucide-react';
+import { Archive, MailOpen, Mail, Paperclip, Star, Trash2 } from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import type { MailMessage } from '../mail-client.js';
@@ -20,6 +20,20 @@ export interface MailConversationViewProps {
   readonly nextCursor?: string;
   readonly onLoadMore: () => void;
   readonly subject?: string;
+  readonly actions?: {
+    readonly archive?: (message: MailMessage) => void;
+    readonly delete: (message: MailMessage) => void;
+    readonly toggleRead: (message: MailMessage) => void;
+    readonly toggleStarred: (message: MailMessage) => void;
+  };
+  readonly actionLabels?: {
+    readonly archive: string;
+    readonly delete: string;
+    readonly markRead: string;
+    readonly markUnread: string;
+    readonly star: string;
+    readonly unstar: string;
+  };
 }
 
 export function MailConversationView({
@@ -29,6 +43,8 @@ export function MailConversationView({
   nextCursor,
   onLoadMore,
   subject,
+  actions,
+  actionLabels,
 }: MailConversationViewProps): ReactElement {
   if (messages.length === 0) {
     return (
@@ -79,6 +95,52 @@ export function MailConversationView({
                 <time className='shrink-0 text-xs text-muted-foreground'>
                   {formatFullDate(message.receivedAt ?? message.sentAt)}
                 </time>
+                {actions && actionLabels ? (
+                  <div className='flex shrink-0 items-center gap-1'>
+                    <Button
+                      aria-label={
+                        message.read
+                          ? actionLabels.markUnread
+                          : actionLabels.markRead
+                      }
+                      className='size-8 px-0'
+                      onClick={() => actions.toggleRead(message)}
+                      variant='ghost'
+                    >
+                      {message.read ? <Mail /> : <MailOpen />}
+                    </Button>
+                    <Button
+                      aria-label={
+                        message.starred
+                          ? actionLabels.unstar
+                          : actionLabels.star
+                      }
+                      className='size-8 px-0'
+                      onClick={() => actions.toggleStarred(message)}
+                      variant='ghost'
+                    >
+                      <Star fill={message.starred ? 'currentColor' : 'none'} />
+                    </Button>
+                    {actions.archive ? (
+                      <Button
+                        aria-label={actionLabels.archive}
+                        className='size-8 px-0'
+                        onClick={() => actions.archive?.(message)}
+                        variant='ghost'
+                      >
+                        <Archive />
+                      </Button>
+                    ) : null}
+                    <Button
+                      aria-label={actionLabels.delete}
+                      className='size-8 px-0'
+                      onClick={() => actions.delete(message)}
+                      variant='ghost'
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                ) : null}
               </header>
               <div className='mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground'>
                 {plainMessageBody(message)}

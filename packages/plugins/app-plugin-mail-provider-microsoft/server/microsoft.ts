@@ -173,7 +173,7 @@ export const microsoftMailProviderDefinition: MailProviderDefinition<MicrosoftMa
       folders: true,
       labels: false,
       drafts: false,
-      moveMessage: false,
+      moveMessage: true,
       aliases: false,
     },
     validateConfig(config: MicrosoftMailProviderConfig): void {
@@ -703,6 +703,12 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       };
     }
     try {
+      if (
+        input.message.replyToProviderMessageId ||
+        input.message.forwardOfProviderMessageId
+      ) {
+        return await this.sendRelatedMessage(token, input);
+      }
       const response = await fetch(`${graphBase(this.config)}/me/sendMail`, {
         method: 'POST',
         headers: {
@@ -735,6 +741,186 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         error: unknownError(error, 'MICROSOFT_SEND_RESULT_UNKNOWN'),
       };
     }
+  }
+
+  public setRead(
+    providerMessageId: string,
+    read: boolean,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    return this.updateMessage(providerMessageId, { isRead: read }, signal);
+  }
+
+  public setStarred(
+    providerMessageId: string,
+    starred: boolean,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    return this.updateMessage(
+      providerMessageId,
+      { flag: { flagStatus: starred ? 'flagged' : 'notFlagged' } },
+      signal,
+    );
+  }
+
+  public async moveMessage(
+    providerMessageId: string,
+    providerFolderId: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<{ readonly providerMessageId: string }>> {
+    const result = await this.request<GraphMessage>(
+      `/me/messages/${encodeURIComponent(providerMessageId)}/move`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ destinationId: providerFolderId }),
+        signal,
+      },
+    );
+    return result.ok
+      ? {
+          ok: true,
+          value: {
+            providerMessageId: required(
+              result.value.id,
+              'Microsoft moved message ID',
+            ),
+          },
+        }
+      : result;
+  }
+
+  public async deleteMessage(
+    providerMessageId: string,
+    permanently: boolean,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    if (!permanently) {
+      const moved = await this.moveMessage(
+        providerMessageId,
+        'deleteditems',
+        signal,
+      );
+      return moved.ok ? { ok: true, value: undefined } : moved;
+    }
+    let token: string;
+    try {
+      token = await this.accessToken(signal);
+    } catch (error) {
+      return {
+        ok: false,
+        error: errorResult(error, 'MICROSOFT_AUTHORIZATION_FAILED'),
+      };
+    }
+    try {
+      const response = await fetch(
+        `${graphBase(this.config)}/me/messages/${encodeURIComponent(providerMessageId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            authorization: `Bearer ${token}`,
+            Prefer: 'IdType="ImmutableId"',
+          },
+          signal,
+        },
+      );
+      return response.ok
+        ? { ok: true, value: undefined }
+        : { ok: false, error: await responseError(response) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: errorResult(error, 'MICROSOFT_MESSAGE_DELETE_FAILED'),
+      };
+    }
+  }
+
+  private async updateMessage(
+    providerMessageId: string,
+    patch: Readonly<Record<string, unknown>>,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    const result = await this.request<GraphMessage>(
+      `/me/messages/${encodeURIComponent(providerMessageId)}`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+        signal,
+      },
+    );
+    return result.ok ? { ok: true, value: undefined } : result;
+  }
+
+  private async sendRelatedMessage(
+    token: string,
+    input: MailProviderSendInput,
+  ): Promise<MailProviderSendResult> {
+    const sourceId =
+      input.message.replyToProviderMessageId ??
+      input.message.forwardOfProviderMessageId;
+    const action = input.message.replyToProviderMessageId
+      ? 'createReply'
+      : 'createForward';
+    const created = await fetch(
+      `${graphBase(this.config)}/me/messages/${encodeURIComponent(required(sourceId, 'Microsoft related message ID'))}/${action}`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          Prefer: 'IdType="ImmutableId"',
+          'client-request-id': input.trackingId,
+        },
+        body: '{}',
+        signal: input.signal,
+      },
+    );
+    if (!created.ok) {
+      return { status: 'failed', error: await responseError(created) };
+    }
+    const draft = (await created.json()) as GraphMessage;
+    const draftId = required(draft.id, 'Microsoft reply or forward draft ID');
+    const updated = await fetch(
+      `${graphBase(this.config)}/me/messages/${encodeURIComponent(draftId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          Prefer: 'IdType="ImmutableId"',
+          'client-request-id': input.trackingId,
+        },
+        body: JSON.stringify({
+          subject: input.message.subject,
+          body: {
+            contentType: input.message.html ? 'HTML' : 'Text',
+            content: input.message.html ?? input.message.text,
+          },
+          toRecipients: input.message.to.map(graphRecipient),
+          ccRecipients: input.message.cc.map(graphRecipient),
+          bccRecipients: input.message.bcc.map(graphRecipient),
+        }),
+        signal: input.signal,
+      },
+    );
+    if (!updated.ok) {
+      return { status: 'failed', error: await responseError(updated) };
+    }
+    const sent = await fetch(
+      `${graphBase(this.config)}/me/messages/${encodeURIComponent(draftId)}/send`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'client-request-id': input.trackingId,
+        },
+        signal: input.signal,
+      },
+    );
+    return sent.ok
+      ? { status: 'accepted', providerMessageId: draftId }
+      : { status: 'failed', error: await responseError(sent) };
   }
 
   private async normalizePage(

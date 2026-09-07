@@ -8,10 +8,15 @@ import type {
 import SyncMailboxJob, {
   registerMailSyncJobHandler,
 } from './jobs/sync-mailbox.js';
+import SendScheduledMailJob, {
+  registerMailScheduledSendJobHandler,
+} from './jobs/send-scheduled-mail.js';
+import { SendMailOperation } from './operations/send-mail.js';
 import { SyncMailboxOperation } from './operations/sync-mailbox.js';
 import type { MailOutboxPublisher } from './service.js';
 import type {
   MailProviderAdapterResolver,
+  MailScheduledSendTaskPayload,
   MailStore,
   MailSyncMailboxTaskPayload,
 } from './types.js';
@@ -36,6 +41,7 @@ export class MailRuntime implements MailOutboxPublisher {
     payload: MailSyncMailboxTaskPayload,
   ) => Promise<void>;
   private readonly unregisterHandler: () => void;
+  private readonly unregisterScheduledSendHandler: () => void;
   private worker?: NocoBaseQueueWorker;
   private workerLoop?: Promise<void>;
   private timer?: NodeJS.Timeout;
@@ -49,7 +55,38 @@ export class MailRuntime implements MailOutboxPublisher {
       options.queueName,
       this.handler,
     );
+    const send = new SendMailOperation(options);
+    this.unregisterScheduledSendHandler = registerMailScheduledSendJobHandler(
+      options.queueName,
+      async (payload: MailScheduledSendTaskPayload): Promise<void> => {
+        const scheduled = await options.store.getScheduledSubmission(
+          payload.submissionId,
+        );
+        if (!scheduled || scheduled.submission.status !== 'pending') return;
+        try {
+          const result = await send.execute(
+            { actorId: scheduled.actorId },
+            scheduled.input,
+            { scheduledDelivery: true },
+          );
+          if (result.status !== 'pending') {
+            await options.store.clearScheduledSubmission(payload.submissionId);
+          }
+        } catch (error) {
+          await options.store.failScheduledSubmission(payload.submissionId, {
+            code: 'MAIL_SCHEDULED_SEND_FAILED',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'The scheduled message could not be sent.',
+            category: 'content',
+            retryable: false,
+          });
+        }
+      },
+    );
     options.queue.registerJob(SyncMailboxJob);
+    options.queue.registerJob(SendScheduledMailJob);
   }
 
   public start(): void {
@@ -97,10 +134,21 @@ export class MailRuntime implements MailOutboxPublisher {
     );
     for (const record of claimed) {
       try {
-        await this.options.queue.dispatch(SyncMailboxJob, record.payload, {
-          queue: this.options.queueName,
-          dedup: { id: record.deduplicationKey, ttl: '1d' },
-        });
+        if (record.type === 'syncMailbox') {
+          await this.options.queue.dispatch(SyncMailboxJob, record.payload, {
+            queue: this.options.queueName,
+            dedup: { id: record.deduplicationKey, ttl: '1d' },
+          });
+        } else {
+          await this.options.queue.dispatch(
+            SendScheduledMailJob,
+            record.payload,
+            {
+              queue: this.options.queueName,
+              dedup: { id: record.deduplicationKey, ttl: '1d' },
+            },
+          );
+        }
         await this.options.store.markOutboxPublished(
           record.id,
           record.leaseToken ?? '',
@@ -139,6 +187,7 @@ export class MailRuntime implements MailOutboxPublisher {
     await this.worker?.stop();
     await this.workerLoop;
     this.unregisterHandler();
+    this.unregisterScheduledSendHandler();
     this.worker = undefined;
     this.workerLoop = undefined;
   }

@@ -5,7 +5,7 @@ import { MailClient } from '../client/mail-client.js';
 
 describe('MailClient', () => {
   it('maps account and authorization calls onto the Mail API', async () => {
-    const request = vi.fn(async (path: string) => {
+    const request = vi.fn(async ({ path }: { path: string }) => {
       if (path === 'mail/accounts') return { data: [{ id: 'account-1' }] };
       return {
         data: {
@@ -18,15 +18,20 @@ describe('MailClient', () => {
 
     await expect(client.listAccounts()).resolves.toEqual([{ id: 'account-1' }]);
     await client.listManagedAccounts();
-    expect(request).toHaveBeenLastCalledWith('mail/settings/accounts');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/settings/accounts',
+    });
     await client.listManagedOperationLogs();
-    expect(request).toHaveBeenLastCalledWith('mail/settings/operation-logs');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/settings/operation-logs',
+    });
     await expect(
       client.startAuthorization({ type: 'gmail', name: 'google' }),
     ).resolves.toMatchObject({ state: 'state-1' });
-    expect(request).toHaveBeenLastCalledWith('mail/authorizations', {
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/authorizations',
       method: 'POST',
-      body: JSON.stringify({ type: 'gmail', name: 'google' }),
+      json: { type: 'gmail', name: 'google' },
     });
   });
 
@@ -44,9 +49,9 @@ describe('MailClient', () => {
       unread: true,
       limit: 20,
     });
-    expect(request).toHaveBeenLastCalledWith(
-      'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&conversationId=thread%2F1&unread=true&limit=20',
-    );
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&conversationId=thread%2F1&unread=true&limit=20',
+    });
 
     await client.startSync({
       accountId: 'account/1',
@@ -55,21 +60,22 @@ describe('MailClient', () => {
       maxMessages: 1000,
       batchSize: 100,
     });
-    expect(request).toHaveBeenLastCalledWith('mail/accounts/account%2F1/sync', {
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/accounts/account%2F1/sync',
       method: 'POST',
-      body: JSON.stringify({
+      json: {
         mode: 'initial',
         receivedAfter: '2026-01-01T00:00:00.000Z',
         maxMessages: 1000,
         batchSize: 100,
-      }),
+      },
     });
 
     await client.listSyncRuns();
-    expect(request).toHaveBeenLastCalledWith('mail/sync-runs');
+    expect(request).toHaveBeenLastCalledWith({ path: 'mail/sync-runs' });
 
     await client.listSubmissions();
-    expect(request).toHaveBeenLastCalledWith('mail/submissions');
+    expect(request).toHaveBeenLastCalledWith({ path: 'mail/submissions' });
   });
 });
 

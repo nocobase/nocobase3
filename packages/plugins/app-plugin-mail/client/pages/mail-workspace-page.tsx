@@ -287,6 +287,31 @@ export default function MailWorkspacePage(): ReactElement {
       .catch(requestError);
   };
 
+  const updateVisibleMessage = (updated: MailMessage): void => {
+    setConversation((current) =>
+      current.map((message) => (message.id === updated.id ? updated : message)),
+    );
+    setMessages((current) =>
+      current.map((message) => (message.id === updated.id ? updated : message)),
+    );
+    setSelected((current) => (current?.id === updated.id ? updated : current));
+  };
+
+  const mutateMessage = (
+    operation: Promise<MailMessage | void>,
+    removeMessage = false,
+  ): void => {
+    setError(undefined);
+    void operation.then((updated) => {
+      if (updated) updateVisibleMessage(updated);
+      if (removeMessage) {
+        setSelected(undefined);
+        setConversation([]);
+        setReloadVersion((version) => version + 1);
+      }
+    }, requestError);
+  };
+
   const syncing =
     syncRun?.status === 'pending' || syncRun?.status === 'running';
 
@@ -406,6 +431,55 @@ export default function MailWorkspacePage(): ReactElement {
             selectedMessageId={selected?.id}
           />
           <MailConversationView
+            actions={{
+              archive: folders.find((folder) => folder.type === 'archive')
+                ? (message) => {
+                    const archive = folders.find(
+                      (folder) => folder.type === 'archive',
+                    );
+                    if (archive)
+                      mutateMessage(
+                        mail.moveMessage({
+                          accountId: message.accountId,
+                          messageId: message.id,
+                          providerFolderId: archive.providerFolderId,
+                        }),
+                        true,
+                      );
+                  }
+                : undefined,
+              delete: (message) =>
+                mutateMessage(
+                  mail.deleteMessage(message.accountId, message.id),
+                  true,
+                ),
+              toggleRead: (message) =>
+                mutateMessage(
+                  mail.updateMessage({
+                    accountId: message.accountId,
+                    messageId: message.id,
+                    read: !message.read,
+                  }),
+                ),
+              toggleStarred: (message) =>
+                mutateMessage(
+                  mail.updateMessage({
+                    accountId: message.accountId,
+                    messageId: message.id,
+                    starred: !message.starred,
+                  }),
+                ),
+            }}
+            actionLabels={{
+              archive: t('workspace.archive', { defaultValue: 'Archive' }),
+              delete: t('workspace.delete', { defaultValue: 'Delete' }),
+              markRead: t('workspace.markRead', { defaultValue: 'Mark read' }),
+              markUnread: t('workspace.markUnread', {
+                defaultValue: 'Mark unread',
+              }),
+              star: t('workspace.star', { defaultValue: 'Star' }),
+              unstar: t('workspace.unstar', { defaultValue: 'Remove star' }),
+            }}
             labels={{
               attachmentCount: (count) =>
                 t('workspace.attachmentCount', {

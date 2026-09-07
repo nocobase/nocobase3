@@ -13,6 +13,11 @@ import type {
 export interface SendMailOperationDependencies {
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
+  readonly outbox?: { kick(): void };
+}
+
+export interface SendMailExecutionOptions {
+  readonly scheduledDelivery?: boolean;
 }
 
 export class SendMailOperation {
@@ -23,7 +28,11 @@ export class SendMailOperation {
   public async execute(
     context: MailOperationContext,
     input: MailComposeInput,
+    options: SendMailExecutionOptions = {},
   ): Promise<MailSubmission> {
+    if (input.inReplyToMessageId && input.forwardOfMessageId) {
+      throw new TypeError('A message cannot be both a reply and a forward.');
+    }
     if ((input.attachmentIds?.length ?? 0) > 0) {
       throw new TypeError(
         'Attachments are outside the first mail plugin release.',
@@ -56,6 +65,26 @@ export class SendMailOperation {
     );
     if (!identity || identity.accountId !== account.id || !identity.canSend) {
       throw new Error('Mail sending identity is not available.');
+    }
+
+    const providerMessage = await this.toProviderMessage(context, input);
+    if (input.scheduledAt && !options.scheduledDelivery) {
+      const scheduledAt = parseFutureDate(input.scheduledAt);
+      const scheduled = await this.dependencies.store.createScheduledSubmission(
+        {
+          id: randomUUID(),
+          accountId: account.id,
+          status: 'pending',
+          scheduledAt,
+        },
+        input.idempotencyKey,
+        requestFingerprint,
+        context.actorId,
+        input,
+      );
+      assertMatchingRequest(scheduled.requestFingerprint, requestFingerprint);
+      this.dependencies.outbox?.kick();
+      return scheduled;
     }
 
     const submission =
@@ -129,7 +158,7 @@ export class SendMailOperation {
       const result = await adapter.sendMessage({
         trackingId: submission.id,
         identity,
-        message: toProviderMessage(input),
+        message: providerMessage,
         signal: context.signal,
       });
       if (result.status === 'accepted') {
@@ -180,6 +209,51 @@ export class SendMailOperation {
       await closeQuietly(adapter);
     }
   }
+
+  private async toProviderMessage(
+    context: MailOperationContext,
+    input: MailComposeInput,
+  ): Promise<MailProviderMessageInput> {
+    const relatedMessageId =
+      input.inReplyToMessageId ?? input.forwardOfMessageId;
+    const related = relatedMessageId
+      ? await this.dependencies.store.getMessage(
+          context.actorId,
+          input.accountId,
+          relatedMessageId,
+        )
+      : undefined;
+    if (relatedMessageId && !related) {
+      throw new Error('The related mail message was not found.');
+    }
+    const parentInternetMessageId = related?.internetMessageId;
+    return {
+      to: input.to,
+      cc: input.cc ?? [],
+      bcc: input.bcc ?? [],
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
+      attachments: [],
+      inReplyTo: input.inReplyToMessageId ? parentInternetMessageId : undefined,
+      references:
+        input.inReplyToMessageId && related
+          ? uniqueStrings([
+              ...related.references,
+              ...(parentInternetMessageId ? [parentInternetMessageId] : []),
+            ])
+          : [],
+      providerConversationId: input.inReplyToMessageId
+        ? related?.conversationId
+        : undefined,
+      replyToProviderMessageId: input.inReplyToMessageId
+        ? related?.providerMessageId
+        : undefined,
+      forwardOfProviderMessageId: input.forwardOfMessageId
+        ? related?.providerMessageId
+        : undefined,
+    };
+  }
 }
 
 export class MailIdempotencyConflictError extends Error {
@@ -217,17 +291,16 @@ function canonicalAddress(address: {
   return { address: address.address, name: address.name ?? null };
 }
 
-function toProviderMessage(input: MailComposeInput): MailProviderMessageInput {
-  return {
-    to: input.to,
-    cc: input.cc ?? [],
-    bcc: input.bcc ?? [],
-    subject: input.subject,
-    text: input.text,
-    html: input.html,
-    attachments: [],
-    references: [],
-  };
+function uniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
+}
+
+function parseFutureDate(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) {
+    throw new TypeError('Scheduled sending time must be a valid future date.');
+  }
+  return new Date(timestamp).toISOString();
 }
 
 export type SendMessageMethod = MailService['sendMessage'];

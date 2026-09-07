@@ -132,7 +132,7 @@ export const gmailMailProviderDefinition: MailProviderDefinition<GmailMailProvid
       folders: true,
       labels: true,
       drafts: false,
-      moveMessage: false,
+      moveMessage: true,
       aliases: false,
     },
     validateConfig(config: GmailMailProviderConfig): void {
@@ -564,7 +564,12 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
             authorization: `Bearer ${accessToken}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify({ raw: buildMime(input) }),
+          body: JSON.stringify({
+            raw: buildMime(input),
+            ...(input.message.providerConversationId
+              ? { threadId: input.message.providerConversationId }
+              : {}),
+          }),
           signal: input.signal,
         },
       );
@@ -579,6 +584,102 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       return {
         status: 'submission_unknown',
         error: unknownError(error, 'GMAIL_SEND_RESULT_UNKNOWN'),
+      };
+    }
+  }
+
+  public setRead(
+    providerMessageId: string,
+    read: boolean,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    return this.modifyLabels(
+      providerMessageId,
+      read ? [] : ['UNREAD'],
+      read ? ['UNREAD'] : [],
+      signal,
+    );
+  }
+
+  public setStarred(
+    providerMessageId: string,
+    starred: boolean,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    return this.modifyLabels(
+      providerMessageId,
+      starred ? ['STARRED'] : [],
+      starred ? [] : ['STARRED'],
+      signal,
+    );
+  }
+
+  public async moveMessage(
+    providerMessageId: string,
+    providerFolderId: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<{ readonly providerMessageId: string }>> {
+    const result = await this.modifyLabels(
+      providerMessageId,
+      [providerFolderId],
+      ['INBOX', 'TRASH', 'SPAM'].filter((label) => label !== providerFolderId),
+      signal,
+    );
+    return result.ok ? { ok: true, value: { providerMessageId } } : result;
+  }
+
+  public deleteMessage(
+    providerMessageId: string,
+    permanently: boolean,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    return permanently
+      ? this.emptyRequest(
+          `/users/me/messages/${encodeURIComponent(providerMessageId)}`,
+          { method: 'DELETE', signal },
+        )
+      : this.emptyRequest(
+          `/users/me/messages/${encodeURIComponent(providerMessageId)}/trash`,
+          { method: 'POST', signal },
+        );
+  }
+
+  private async modifyLabels(
+    providerMessageId: string,
+    addLabelIds: readonly string[],
+    removeLabelIds: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    return this.emptyRequest(
+      `/users/me/messages/${encodeURIComponent(providerMessageId)}/modify`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ addLabelIds, removeLabelIds }),
+        signal,
+      },
+    );
+  }
+
+  private async emptyRequest(
+    path: string,
+    init: RequestInit,
+  ): Promise<MailProviderResult<void>> {
+    try {
+      const response = await fetch(`${apiBase(this.config)}${path}`, {
+        ...init,
+        headers: {
+          authorization: `Bearer ${await this.accessToken(init.signal ?? undefined)}`,
+          ...init.headers,
+        },
+      });
+      return response.ok
+        ? { ok: true, value: undefined }
+        : { ok: false, error: await responseError('GMAIL', response) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: errorResult(error, 'GMAIL_MESSAGE_MUTATION_FAILED'),
       };
     }
   }
@@ -792,6 +893,12 @@ function buildMime(input: MailProviderSendInput): string {
       ? [`Bcc: ${input.message.bcc.map(formatAddress).join(', ')}`]
       : []),
     `Subject: ${encodeHeader(input.message.subject)}`,
+    ...(input.message.inReplyTo
+      ? [`In-Reply-To: ${cleanHeader(input.message.inReplyTo)}`]
+      : []),
+    ...(input.message.references.length
+      ? [`References: ${input.message.references.map(cleanHeader).join(' ')}`]
+      : []),
     'MIME-Version: 1.0',
   ];
   let body: string;

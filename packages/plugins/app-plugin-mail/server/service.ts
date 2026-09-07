@@ -55,7 +55,10 @@ export class DefaultMailService implements MailService {
   public constructor(
     private readonly dependencies: DefaultMailServiceDependencies,
   ) {
-    this.sendMail = new SendMailOperation(dependencies);
+    this.sendMail = new SendMailOperation({
+      ...dependencies,
+      outbox: dependencies.outbox,
+    });
   }
 
   public listProviders(): Promise<readonly MailProviderView[]> {
@@ -369,6 +372,151 @@ export class DefaultMailService implements MailService {
     return toSubmissionView(await this.sendMail.execute(context, input));
   }
 
+  public async updateMessage(
+    context: MailOperationContext,
+    input: import('./types.js').MailUpdateMessageInput,
+  ): Promise<MailMessage> {
+    const { account, message } = await this.requireOwnedMessage(
+      context,
+      input.accountId,
+      input.messageId,
+    );
+    if (input.read === undefined && input.starred === undefined) return message;
+    const adapter = await this.dependencies.adapters.resolve(
+      account,
+      context.signal,
+    );
+    try {
+      if (input.read !== undefined) {
+        if (!adapter.setRead)
+          throw new Error(
+            'The selected Mail Provider cannot change read state.',
+          );
+        assertProviderResult(
+          await adapter.setRead(
+            message.providerMessageId,
+            input.read,
+            context.signal,
+          ),
+        );
+      }
+      if (input.starred !== undefined) {
+        if (!adapter.setStarred)
+          throw new Error(
+            'The selected Mail Provider cannot change starred state.',
+          );
+        assertProviderResult(
+          await adapter.setStarred(
+            message.providerMessageId,
+            input.starred,
+            context.signal,
+          ),
+        );
+      }
+      const updated = await this.dependencies.store.updateMessageState(
+        account.id,
+        message.id,
+        { read: input.read, starred: input.starred },
+      );
+      if (!updated) throw new Error('Mail message was not found after update.');
+      return updated;
+    } finally {
+      await closeAdapter(adapter);
+    }
+  }
+
+  public async moveMessage(
+    context: MailOperationContext,
+    input: import('./types.js').MailMoveMessageInput,
+  ): Promise<MailMessage> {
+    const { account, message } = await this.requireOwnedMessage(
+      context,
+      input.accountId,
+      input.messageId,
+    );
+    const folder = (await this.dependencies.store.listFolders(account.id)).find(
+      (item) => item.providerFolderId === input.providerFolderId,
+    );
+    if (!folder) throw new Error('Mail destination folder was not found.');
+    const adapter = await this.dependencies.adapters.resolve(
+      account,
+      context.signal,
+    );
+    try {
+      if (!adapter.capabilities.moveMessage || !adapter.moveMessage) {
+        throw new Error('The selected Mail Provider cannot move messages.');
+      }
+      const moved = assertProviderResult(
+        await adapter.moveMessage(
+          message.providerMessageId,
+          input.providerFolderId,
+          context.signal,
+        ),
+      );
+      const updated = await this.dependencies.store.moveMessage(
+        account.id,
+        message.id,
+        moved.providerMessageId,
+        input.providerFolderId,
+      );
+      if (!updated) throw new Error('Mail message was not found after move.');
+      return updated;
+    } finally {
+      await closeAdapter(adapter);
+    }
+  }
+
+  public async deleteMessage(
+    context: MailOperationContext,
+    input: import('./types.js').MailDeleteMessageInput,
+  ): Promise<void> {
+    const { account, message } = await this.requireOwnedMessage(
+      context,
+      input.accountId,
+      input.messageId,
+    );
+    const adapter = await this.dependencies.adapters.resolve(
+      account,
+      context.signal,
+    );
+    try {
+      if (!adapter.deleteMessage) {
+        throw new Error('The selected Mail Provider cannot delete messages.');
+      }
+      assertProviderResult(
+        await adapter.deleteMessage(
+          message.providerMessageId,
+          input.permanently ?? false,
+          context.signal,
+        ),
+      );
+      await this.dependencies.store.deleteMessage(account.id, message.id);
+    } finally {
+      await closeAdapter(adapter);
+    }
+  }
+
+  private async requireOwnedMessage(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+  ): Promise<{ readonly account: MailAccount; readonly message: MailMessage }> {
+    const account = await this.dependencies.store.getAccount(accountId);
+    if (!account || account.userId !== context.actorId) {
+      throw new Error('Mail account was not found.');
+    }
+    if (account.status !== 'active') {
+      throw new Error('Mail account is not active.');
+    }
+    const message = await this.dependencies.store.getMessage(
+      context.actorId,
+      accountId,
+      messageId,
+    );
+    if (!message) throw new Error('Mail message was not found.');
+    return { account, message };
+  }
+
   private async requireOwnedAccount(
     context: MailOperationContext,
     accountId: string,
@@ -414,6 +562,23 @@ export class DefaultMailService implements MailService {
   }
 }
 
+function assertProviderResult<T>(
+  result: import('./types.js').MailProviderResult<T>,
+): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
+}
+
+async function closeAdapter(adapter: {
+  close?(): Promise<void>;
+}): Promise<void> {
+  try {
+    await adapter.close?.();
+  } catch {
+    // Provider cleanup cannot change the result of a completed command.
+  }
+}
+
 function hashState(state: string): string {
   return createHash('sha256').update(state).digest('hex');
 }
@@ -441,6 +606,7 @@ function toSubmissionView(submission: MailSubmission): MailSubmissionView {
     accountId: submission.accountId,
     status: submission.status,
     providerMessageId: submission.providerMessageId,
+    scheduledAt: submission.scheduledAt,
     error: submission.error ? toPublicError(submission.error) : undefined,
   };
 }

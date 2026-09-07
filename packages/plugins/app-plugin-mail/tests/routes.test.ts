@@ -261,6 +261,41 @@ describe('mail API routes', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('preserves reply, forward, and scheduling fields at the HTTP boundary', async () => {
+    const sendMessage = vi.fn<MailService['sendMessage']>(
+      async (_context, input) => ({
+        id: input.idempotencyKey,
+        accountId: input.accountId,
+        status: 'pending',
+        scheduledAt: input.scheduledAt,
+      }),
+    );
+    const router = await createRouter(true, service({ sendMessage }));
+    const response = await router.request('/mail/messages/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [{ address: 'recipient@example.com' }],
+        subject: 'Follow up',
+        text: 'Mail body',
+        inReplyToMessageId: 'message-1',
+        scheduledAt: '2099-01-01T00:00:00.000Z',
+        idempotencyKey: 'scheduled-reply',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(sendMessage).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      expect.objectContaining({
+        inReplyToMessageId: 'message-1',
+        scheduledAt: '2099-01-01T00:00:00.000Z',
+      }),
+    );
+  });
+
   it('does not expose internal service errors', async () => {
     const listAccounts = vi.fn<MailService['listAccounts']>(async () => {
       throw new Error('database password appeared in an internal error');
@@ -278,6 +313,76 @@ describe('mail API routes', () => {
       },
     });
     expect(JSON.stringify(body)).not.toContain('database password');
+  });
+
+  it('maps message mutation routes onto the Mail service', async () => {
+    const updateMessage = vi.fn<MailService['updateMessage']>(async () =>
+      messageView(),
+    );
+    const moveMessage = vi.fn<MailService['moveMessage']>(async () =>
+      messageView(),
+    );
+    const deleteMessage = vi.fn<MailService['deleteMessage']>(async () => {});
+    const router = await createRouter(
+      true,
+      service({ updateMessage, moveMessage, deleteMessage }),
+    );
+
+    expect(
+      (
+        await router.request('/mail/accounts/account-1/messages/message-1', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ read: true, starred: true }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await router.request(
+          '/mail/accounts/account-1/messages/message-1/move',
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ providerFolderId: 'archive' }),
+          },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await router.request(
+          '/mail/accounts/account-1/messages/message-1?permanently=true',
+          { method: 'DELETE' },
+        )
+      ).status,
+    ).toBe(204);
+
+    expect(updateMessage).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        messageId: 'message-1',
+        read: true,
+        starred: true,
+      },
+    );
+    expect(moveMessage).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        messageId: 'message-1',
+        providerFolderId: 'archive',
+      },
+    );
+    expect(deleteMessage).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        messageId: 'message-1',
+        permanently: true,
+      },
+    );
   });
 
   it('does not silently discard unsupported attachments', async () => {
@@ -401,7 +506,30 @@ function service(overrides: Partial<MailService> = {}): MailService {
       accountId: input.accountId,
       status: 'accepted',
     }),
+    updateMessage: async () => messageView(),
+    moveMessage: async () => messageView(),
+    deleteMessage: async () => {},
     ...overrides,
+  };
+}
+
+function messageView(): import('../server/types.js').MailMessage {
+  return {
+    id: 'message-1',
+    accountId: 'account-1',
+    providerMessageId: 'provider-message-1',
+    folderIds: ['inbox'],
+    to: [],
+    cc: [],
+    bcc: [],
+    replyTo: [],
+    references: [],
+    subject: 'Subject',
+    read: false,
+    starred: false,
+    draft: false,
+    hasAttachments: false,
+    attachments: [],
   };
 }
 

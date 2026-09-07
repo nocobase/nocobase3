@@ -110,6 +110,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-mail:mail',
+        path: '/mail',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-notification-provider:demo',
         path: '/notification-provider',
       },
@@ -195,8 +200,8 @@ describe('client inspection', () => {
     expect(inspection.devRoutes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'mail',
-          path: '/dev/mail',
+          id: 'accounts',
+          path: '/dev/mail/accounts',
           packageName: '@nocobase/app-plugin-mail',
         }),
       ]),

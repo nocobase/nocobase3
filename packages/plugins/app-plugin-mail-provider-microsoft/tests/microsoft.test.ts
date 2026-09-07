@@ -498,6 +498,62 @@ describe('Microsoft Mail Provider', () => {
       },
     });
   });
+
+  it('creates, updates, and sends a reply draft through Microsoft Graph', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'reply-draft-1' }))
+      .mockResolvedValueOnce(Response.json({ id: 'reply-draft-1' }))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-reply',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Re: Original',
+          text: 'Reply body',
+          attachments: [],
+          references: [],
+          replyToProviderMessageId: 'source-message-1',
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'accepted',
+      providerMessageId: 'reply-draft-1',
+    });
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      '/me/messages/source-message-1/createReply',
+    );
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH');
+    expect(String(fetchMock.mock.calls[2][0])).toContain(
+      '/me/messages/reply-draft-1/send',
+    );
+  });
 });
 
 interface MemoryVault extends MailCredentialVault {

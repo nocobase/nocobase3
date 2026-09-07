@@ -37,6 +37,12 @@ const enUS = {
     loading: 'Loading mail…',
     incrementalRefresh: 'Sync updates',
     syncing: 'Syncing updates…',
+    archive: 'Archive',
+    delete: 'Delete',
+    markRead: 'Mark read',
+    markUnread: 'Mark unread',
+    star: 'Star',
+    unstar: 'Remove star',
   },
   settings: {
     eyebrow: 'Communication',

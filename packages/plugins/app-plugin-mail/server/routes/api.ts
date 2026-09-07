@@ -238,6 +238,50 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             404,
           );
     });
+    routes.patch(
+      '/accounts/:accountId/messages/:messageId',
+      async (context) => {
+        const value = await readObject(context.req.raw);
+        return context.json({
+          data: await mail.updateMessage(operationContext(context), {
+            accountId: context.req.param('accountId'),
+            messageId: context.req.param('messageId'),
+            read: optionalBoolean(value.read, 'read'),
+            starred: optionalBoolean(value.starred, 'starred'),
+          }),
+        });
+      },
+    );
+    routes.post(
+      '/accounts/:accountId/messages/:messageId/move',
+      async (context) => {
+        const value = await readObject(context.req.raw);
+        return context.json({
+          data: await mail.moveMessage(operationContext(context), {
+            accountId: context.req.param('accountId'),
+            messageId: context.req.param('messageId'),
+            providerFolderId: requiredString(
+              value.providerFolderId,
+              'providerFolderId',
+            ),
+          }),
+        });
+      },
+    );
+    routes.delete(
+      '/accounts/:accountId/messages/:messageId',
+      async (context) => {
+        await mail.deleteMessage(operationContext(context), {
+          accountId: context.req.param('accountId'),
+          messageId: context.req.param('messageId'),
+          permanently: optionalBoolean(
+            context.req.query('permanently'),
+            'permanently',
+          ),
+        });
+        return context.body(null, 204);
+      },
+    );
 
     router.route('/mail', routes);
     return router;
@@ -268,6 +312,15 @@ async function readComposeInput(request: Request): Promise<MailComposeInput> {
     text,
     html: optionalString(value.html, 'html'),
     attachmentIds: optionalStringArray(value.attachmentIds, 'attachmentIds'),
+    inReplyToMessageId: optionalString(
+      value.inReplyToMessageId,
+      'inReplyToMessageId',
+    ),
+    forwardOfMessageId: optionalString(
+      value.forwardOfMessageId,
+      'forwardOfMessageId',
+    ),
+    scheduledAt: optionalString(value.scheduledAt, 'scheduledAt'),
     idempotencyKey,
   };
 }

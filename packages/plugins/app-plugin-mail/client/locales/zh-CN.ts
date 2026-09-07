@@ -36,6 +36,12 @@ const zhCN: MailResource = {
     loading: '正在加载邮件…',
     incrementalRefresh: '增量刷新',
     syncing: '正在增量同步…',
+    archive: '归档',
+    delete: '删除',
+    markRead: '标记为已读',
+    markUnread: '标记为未读',
+    star: '添加星标',
+    unstar: '取消星标',
   },
   settings: {
     eyebrow: '通信',

@@ -19,8 +19,12 @@ import type {
   MailProviderError,
   MailStore,
   MailStoredSubmission,
+  MailScheduledSubmission,
+  MailScheduledSendTaskPayload,
   MailSubmission,
+  MailComposeInput,
   MailSyncBatch,
+  MailSyncMailboxTaskPayload,
   MailSyncCursor,
   MailSyncRun,
   MailSyncStepCommit,
@@ -157,6 +161,9 @@ interface SubmissionRow extends Row {
   requestFingerprint: string;
   status: MailSubmission['status'];
   providerMessageId?: string | null;
+  scheduledAt?: string | null;
+  requestedBy?: string | null;
+  composeInput?: MailComposeInput | string | null;
   error?: MailProviderError | string | null;
   leaseToken?: string | null;
   leaseExpiresAt?: string | null;
@@ -499,6 +506,95 @@ export class DatabaseMailStore implements MailStore {
       nextCursor:
         hasMore && lastItem ? encodeMessageCursor(lastItem) : undefined,
     };
+  }
+
+  public async updateMessageState(
+    accountId: string,
+    messageId: string,
+    state: { readonly read?: boolean; readonly starred?: boolean },
+  ): Promise<MailMessage | undefined> {
+    const values: Partial<MessageRow> = {
+      ...(state.read === undefined ? {} : { read: state.read }),
+      ...(state.starred === undefined ? {} : { starred: state.starred }),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.database
+      .query()
+      .updateTable<MessageRow>('mailMessages')
+      .set(values)
+      .where('id', '=', messageId)
+      .where('accountId', '=', accountId)
+      .execute();
+    const row = await this.database
+      .query()
+      .selectFrom<MessageRow>('mailMessages')
+      .selectAll()
+      .where('id', '=', messageId)
+      .where('accountId', '=', accountId)
+      .executeTakeFirst<MessageRow>();
+    return row ? toMailMessage(row) : undefined;
+  }
+
+  public async moveMessage(
+    accountId: string,
+    messageId: string,
+    providerMessageId: string,
+    providerFolderId: string,
+  ): Promise<MailMessage | undefined> {
+    await this.database.transaction(async (connection): Promise<void> => {
+      const updated = await connection.query
+        .updateTable<MessageRow>('mailMessages')
+        .set({
+          providerMessageId,
+          providerFolderIds: JSON.stringify([providerFolderId]),
+          updatedAt: new Date().toISOString(),
+        })
+        .where('id', '=', messageId)
+        .where('accountId', '=', accountId)
+        .execute();
+      if (updated.updatedCount !== 1) return;
+      await connection.query
+        .deleteFrom<MessageFolderRow>('mailMessageFolders')
+        .where('accountId', '=', accountId)
+        .where('messageId', '=', messageId)
+        .execute();
+      await connection.query
+        .insertInto<MessageFolderRow>('mailMessageFolders')
+        .values({
+          id: randomUUID(),
+          accountId,
+          messageId,
+          providerFolderId,
+        })
+        .execute();
+    });
+    const row = await this.database
+      .query()
+      .selectFrom<MessageRow>('mailMessages')
+      .selectAll()
+      .where('id', '=', messageId)
+      .where('accountId', '=', accountId)
+      .executeTakeFirst<MessageRow>();
+    return row ? toMailMessage(row) : undefined;
+  }
+
+  public async deleteMessage(
+    accountId: string,
+    messageId: string,
+  ): Promise<boolean> {
+    return this.database.transaction(async (connection): Promise<boolean> => {
+      await connection.query
+        .deleteFrom<MessageFolderRow>('mailMessageFolders')
+        .where('accountId', '=', accountId)
+        .where('messageId', '=', messageId)
+        .execute();
+      const deleted = await connection.query
+        .deleteFrom<MessageRow>('mailMessages')
+        .where('accountId', '=', accountId)
+        .where('id', '=', messageId)
+        .execute();
+      return deleted.deletedCount === 1;
+    });
   }
 
   public async getSyncCursor(
@@ -879,6 +975,111 @@ export class DatabaseMailStore implements MailStore {
       createdAt: now,
       updatedAt: now,
     };
+  }
+
+  public async createScheduledSubmission(
+    submission: MailSubmission,
+    idempotencyKey: string,
+    requestFingerprint: string,
+    actorId: string,
+    input: MailComposeInput,
+  ): Promise<MailStoredSubmission> {
+    const scheduledAt = submission.scheduledAt;
+    if (!scheduledAt) throw new Error('Scheduled submission time is required.');
+    const now = new Date().toISOString();
+    try {
+      await this.database.transaction(async (connection): Promise<void> => {
+        await connection.query
+          .insertInto<SubmissionRow>('mailSubmissions')
+          .values({
+            ...submission,
+            idempotencyKey,
+            requestFingerprint,
+            scheduledAt,
+            requestedBy: actorId,
+            composeInput: JSON.stringify(input),
+            error: jsonOrNull(submission.error),
+            createdAt: now,
+            updatedAt: now,
+          })
+          .execute();
+        await connection.query
+          .insertInto<OutboxRow>('mailOutbox')
+          .values({
+            id: randomUUID(),
+            type: 'sendScheduledMail',
+            aggregateId: submission.id,
+            deduplicationKey: `scheduled-send:${submission.id}`,
+            payload: JSON.stringify({
+              version: 1,
+              submissionId: submission.id,
+            }),
+            status: 'pending',
+            attempts: 0,
+            availableAt: scheduledAt,
+            createdAt: now,
+          })
+          .execute();
+      });
+    } catch (error) {
+      const existing = await this.getSubmissionByIdempotencyKey(
+        submission.accountId,
+        idempotencyKey,
+      );
+      if (existing) return existing;
+      throw error;
+    }
+    return {
+      ...submission,
+      requestFingerprint,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  public async getScheduledSubmission(
+    submissionId: string,
+  ): Promise<MailScheduledSubmission | undefined> {
+    const row = await this.database
+      .query()
+      .selectFrom<SubmissionRow>('mailSubmissions')
+      .selectAll()
+      .where('id', '=', submissionId)
+      .executeTakeFirst<SubmissionRow>();
+    if (!row?.requestedBy || !row.composeInput) return undefined;
+    return {
+      actorId: row.requestedBy,
+      input: parseJson<MailComposeInput>(row.composeInput, 'scheduled input'),
+      submission: fromSubmissionRow(row),
+    };
+  }
+
+  public async clearScheduledSubmission(submissionId: string): Promise<void> {
+    await this.database
+      .query()
+      .updateTable<SubmissionRow>('mailSubmissions')
+      .set({ requestedBy: null, composeInput: null })
+      .where('id', '=', submissionId)
+      .execute();
+  }
+
+  public async failScheduledSubmission(
+    submissionId: string,
+    error: MailProviderError,
+  ): Promise<void> {
+    await this.database
+      .query()
+      .updateTable<SubmissionRow>('mailSubmissions')
+      .set({
+        status: 'failed',
+        error: JSON.stringify(error),
+        requestedBy: null,
+        composeInput: null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where('id', '=', submissionId)
+      .where('status', '=', 'pending')
+      .execute();
   }
 
   public async claimSubmission(
@@ -1603,6 +1804,7 @@ function fromSubmissionRow(row: SubmissionRow): MailStoredSubmission {
     accountId: row.accountId,
     status: row.status,
     providerMessageId: row.providerMessageId ?? undefined,
+    scheduledAt: row.scheduledAt ? toIsoString(row.scheduledAt) : undefined,
     error: row.error
       ? parseJson<MailProviderError>(row.error, 'submission error')
       : undefined,
@@ -1613,15 +1815,10 @@ function fromSubmissionRow(row: SubmissionRow): MailStoredSubmission {
 }
 
 function fromOutboxRow(row: OutboxRow): MailOutboxRecord {
-  return {
+  const base = {
     id: row.id,
-    type: row.type,
     aggregateId: row.aggregateId,
     deduplicationKey: row.deduplicationKey,
-    payload: parseJson<MailOutboxRecord['payload']>(
-      row.payload,
-      'outbox payload',
-    ),
     status: row.status,
     attempts: Number(row.attempts),
     availableAt: toIsoString(row.availableAt),
@@ -1632,6 +1829,23 @@ function fromOutboxRow(row: OutboxRow): MailOutboxRecord {
     createdAt: toIsoString(row.createdAt),
     publishedAt: row.publishedAt ? toIsoString(row.publishedAt) : undefined,
   };
+  return row.type === 'syncMailbox'
+    ? {
+        ...base,
+        type: 'syncMailbox',
+        payload: parseJson<MailSyncMailboxTaskPayload>(
+          row.payload as string | MailSyncMailboxTaskPayload,
+          'sync outbox payload',
+        ),
+      }
+    : {
+        ...base,
+        type: 'sendScheduledMail',
+        payload: parseJson<MailScheduledSendTaskPayload>(
+          row.payload as string | MailScheduledSendTaskPayload,
+          'scheduled send outbox payload',
+        ),
+      };
 }
 
 function parseJson<T>(value: T | string, label: string): T {

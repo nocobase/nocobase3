@@ -357,6 +357,25 @@ export interface MailComposeInput {
   readonly idempotencyKey: string;
 }
 
+export interface MailUpdateMessageInput {
+  readonly accountId: string;
+  readonly messageId: string;
+  readonly read?: boolean;
+  readonly starred?: boolean;
+}
+
+export interface MailMoveMessageInput {
+  readonly accountId: string;
+  readonly messageId: string;
+  readonly providerFolderId: string;
+}
+
+export interface MailDeleteMessageInput {
+  readonly accountId: string;
+  readonly messageId: string;
+  readonly permanently?: boolean;
+}
+
 export interface MailDraftResult {
   readonly message: MailMessage;
   readonly command: MailCommand;
@@ -370,6 +389,7 @@ export interface MailSubmission {
   readonly accountId: string;
   readonly status: MailSubmissionStatus;
   readonly providerMessageId?: string;
+  readonly scheduledAt?: string;
   readonly error?: MailProviderError;
 }
 
@@ -380,6 +400,7 @@ export interface MailSubmissionView {
   readonly accountId: string;
   readonly status: MailSubmissionStatus;
   readonly providerMessageId?: string;
+  readonly scheduledAt?: string;
   readonly error?: MailPublicError;
 }
 
@@ -460,6 +481,18 @@ export interface MailService {
     context: MailOperationContext,
     input: MailComposeInput,
   ): Promise<MailSubmissionView>;
+  updateMessage(
+    context: MailOperationContext,
+    input: MailUpdateMessageInput,
+  ): Promise<MailMessage>;
+  moveMessage(
+    context: MailOperationContext,
+    input: MailMoveMessageInput,
+  ): Promise<MailMessage>;
+  deleteMessage(
+    context: MailOperationContext,
+    input: MailDeleteMessageInput,
+  ): Promise<void>;
 }
 
 export const MAIL_PROVIDER_ERROR_CATEGORIES: readonly [
@@ -640,6 +673,10 @@ export interface MailProviderMessageInput {
   readonly inReplyTo?: string;
   readonly references: readonly string[];
   readonly providerConversationId?: string;
+  /** Provider message used as the reply target, resolved by Mail Core. */
+  readonly replyToProviderMessageId?: string;
+  /** Provider message used as the forward source, resolved by Mail Core. */
+  readonly forwardOfProviderMessageId?: string;
 }
 
 export type MailProviderSendResult =
@@ -827,12 +864,15 @@ export interface MailSyncMailboxTaskPayload {
   readonly expectedPhase: MailSyncPhase;
 }
 
-export interface MailOutboxRecord {
+export interface MailScheduledSendTaskPayload {
+  readonly version: 1;
+  readonly submissionId: string;
+}
+
+interface MailOutboxRecordBase {
   readonly id: string;
-  readonly type: 'syncMailbox';
   readonly aggregateId: string;
   readonly deduplicationKey: string;
-  readonly payload: MailSyncMailboxTaskPayload;
   readonly status: MailOutboxStatus;
   readonly attempts: number;
   readonly availableAt: string;
@@ -841,6 +881,18 @@ export interface MailOutboxRecord {
   readonly createdAt: string;
   readonly publishedAt?: string;
 }
+
+export type MailOutboxRecord = MailOutboxRecordBase &
+  (
+    | {
+        readonly type: 'syncMailbox';
+        readonly payload: MailSyncMailboxTaskPayload;
+      }
+    | {
+        readonly type: 'sendScheduledMail';
+        readonly payload: MailScheduledSendTaskPayload;
+      }
+  );
 
 export interface MailCreateSyncRunInput {
   readonly id: string;
@@ -854,6 +906,12 @@ export interface MailStoredSubmission extends MailSubmission {
   readonly requestFingerprint: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface MailScheduledSubmission {
+  readonly actorId: string;
+  readonly input: MailComposeInput;
+  readonly submission: MailStoredSubmission;
 }
 
 export interface MailStore {
@@ -899,6 +957,18 @@ export interface MailStore {
     conversationId: string,
     input?: MailListConversationMessagesInput,
   ): Promise<MailPage<MailMessage>>;
+  updateMessageState(
+    accountId: string,
+    messageId: string,
+    state: { readonly read?: boolean; readonly starred?: boolean },
+  ): Promise<MailMessage | undefined>;
+  moveMessage(
+    accountId: string,
+    messageId: string,
+    providerMessageId: string,
+    providerFolderId: string,
+  ): Promise<MailMessage | undefined>;
+  deleteMessage(accountId: string, messageId: string): Promise<boolean>;
   getSyncCursor(accountId: string): Promise<MailSyncCursor | undefined>;
   clearSyncCursor(accountId: string): Promise<void>;
   createSyncRun(input: MailCreateSyncRunInput): Promise<MailSyncRun>;
@@ -936,6 +1006,21 @@ export interface MailStore {
     idempotencyKey: string,
     requestFingerprint: string,
   ): Promise<MailStoredSubmission>;
+  createScheduledSubmission(
+    submission: MailSubmission,
+    idempotencyKey: string,
+    requestFingerprint: string,
+    actorId: string,
+    input: MailComposeInput,
+  ): Promise<MailStoredSubmission>;
+  getScheduledSubmission(
+    submissionId: string,
+  ): Promise<MailScheduledSubmission | undefined>;
+  clearScheduledSubmission(submissionId: string): Promise<void>;
+  failScheduledSubmission(
+    submissionId: string,
+    error: MailProviderError,
+  ): Promise<void>;
   claimSubmission(
     submissionId: string,
     leaseToken: string,

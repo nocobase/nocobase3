@@ -1,5 +1,5 @@
 import {
-  appApiClientToken,
+  apiClientToken,
   type AppClient,
   type ClientApplication,
 } from '@nocobase/app-client';
@@ -17,7 +17,7 @@ describe('Mail client ServiceProvider', () => {
     const app = {
       container: {
         resolve: vi.fn((token) => {
-          expect(token).toBe(appApiClientToken);
+          expect(token).toBe(apiClientToken);
           return appClient;
         }),
       },
@@ -26,6 +26,8 @@ describe('Mail client ServiceProvider', () => {
     await new MailClientServiceProvider(app).boot();
     await getMailClient().listAccounts();
 
-    expect(appClient.request).toHaveBeenCalledWith('mail/accounts');
+    expect(appClient.request).toHaveBeenCalledWith({
+      path: 'mail/accounts',
+    });
   });
 });

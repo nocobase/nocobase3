@@ -104,6 +104,129 @@ describe('mail MVP runtime', () => {
     ]);
   });
 
+  it('persists a scheduled message and sends it only after its due time', async () => {
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'accepted',
+      providerMessageId: 'provider-scheduled-1',
+    }));
+    const adapters = resolver({ ...baseAdapter(), sendMessage });
+    queue = createQueueManager({
+      default: 'sync',
+      connections: { sync: { driver: 'sync' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    runtime = createMailRuntime({
+      store,
+      adapters,
+      queue,
+      queueName: 'mail:test',
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: runtime,
+    });
+    const scheduledAt = new Date(Date.now() + 60_000).toISOString();
+
+    const submission = await service.sendMessage(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [{ address: 'recipient@example.com' }],
+        subject: 'Later',
+        text: 'Scheduled body',
+        scheduledAt,
+        idempotencyKey: 'scheduled-request-1',
+      },
+    );
+
+    expect(submission).toMatchObject({ status: 'pending', scheduledAt });
+    await runtime.publishPending();
+    expect(sendMessage).not.toHaveBeenCalled();
+    const due = await store.claimOutbox(
+      new Date(Date.now() + 61_000).toISOString(),
+      'due-lease',
+      new Date(Date.now() + 90_000).toISOString(),
+      1,
+    );
+    expect(due).toHaveLength(1);
+    expect(due[0]).toMatchObject({
+      type: 'sendScheduledMail',
+      aggregateId: submission.id,
+    });
+    await store.releaseOutbox(
+      due[0].id,
+      due[0].leaseToken ?? '',
+      new Date().toISOString(),
+    );
+    await runtime.publishPending();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    await expect(
+      service.listSubmissions({ actorId: 'user-1' }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: submission.id,
+          status: 'accepted',
+          providerMessageId: 'provider-scheduled-1',
+        }),
+      ]),
+    );
+  });
+
+  it('resolves a reply against the owned stored message', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [
+        {
+          ...message('provider-parent', 'Original'),
+          internetMessageId: '<parent@example.com>',
+          providerConversationId: 'thread-1',
+          references: ['<root@example.com>'],
+        },
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'reply-test' },
+    });
+    const stored = await store.listMessages('user-1', {});
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'accepted',
+      providerMessageId: 'provider-reply',
+    }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: { kick: vi.fn() },
+    });
+
+    await service.sendMessage(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [{ address: 'recipient@example.com' }],
+        subject: 'Re: Original',
+        text: 'Reply body',
+        inReplyToMessageId: stored.items[0].id,
+        idempotencyKey: 'reply-request-1',
+      },
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          inReplyTo: '<parent@example.com>',
+          references: ['<root@example.com>', '<parent@example.com>'],
+          providerConversationId: 'thread-1',
+          replyToProviderMessageId: 'provider-parent',
+        }),
+      }),
+    );
+  });
+
   it('lists every account for management without granting cross-user sync', async () => {
     await store.saveAccount({
       ...account(),

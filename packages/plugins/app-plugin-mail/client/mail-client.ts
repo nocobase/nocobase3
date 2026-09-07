@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import type {
   MailAccountView,
   MailAuthorizationStartResult,
@@ -10,6 +10,8 @@ import type {
   MailManagedOperationLogsView,
   MailMessage,
   MailMessageSummary,
+  MailUpdateMessageInput,
+  MailMoveMessageInput,
   MailPage,
   MailProviderView,
   MailStartSyncInput,
@@ -65,33 +67,37 @@ export interface MailMessagesQuery extends Pick<
 }
 
 export class MailClient {
-  public constructor(private readonly client: AppClient) {}
+  public constructor(private readonly client: ApiClient) {}
 
   public listProviders(): Promise<readonly MailProviderView[]> {
     return this.client
-      .request<DataResponse<readonly MailProviderView[]>>('mail/providers')
+      .request<DataResponse<readonly MailProviderView[]>>({
+        path: 'mail/providers',
+      })
       .then((response) => response.data);
   }
 
   public listAccounts(): Promise<readonly MailAccountView[]> {
     return this.client
-      .request<DataResponse<readonly MailAccountView[]>>('mail/accounts')
+      .request<DataResponse<readonly MailAccountView[]>>({
+        path: 'mail/accounts',
+      })
       .then((response) => response.data);
   }
 
   public listManagedAccounts(): Promise<readonly MailManagedAccountView[]> {
     return this.client
-      .request<DataResponse<readonly MailManagedAccountView[]>>(
-        'mail/settings/accounts',
-      )
+      .request<DataResponse<readonly MailManagedAccountView[]>>({
+        path: 'mail/settings/accounts',
+      })
       .then((response) => response.data);
   }
 
   public listManagedOperationLogs(): Promise<MailManagedOperationLogsView> {
     return this.client
-      .request<DataResponse<MailManagedOperationLogsView>>(
-        'mail/settings/operation-logs',
-      )
+      .request<DataResponse<MailManagedOperationLogsView>>({
+        path: 'mail/settings/operation-logs',
+      })
       .then((response) => response.data);
   }
 
@@ -106,17 +112,17 @@ export class MailClient {
 
   public listIdentities(accountId: string): Promise<readonly MailIdentity[]> {
     return this.client
-      .request<DataResponse<readonly MailIdentity[]>>(
-        `mail/accounts/${encodeURIComponent(accountId)}/identities`,
-      )
+      .request<DataResponse<readonly MailIdentity[]>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/identities`,
+      })
       .then((response) => response.data);
   }
 
   public listFolders(accountId: string): Promise<readonly MailFolder[]> {
     return this.client
-      .request<DataResponse<readonly MailFolder[]>>(
-        `mail/accounts/${encodeURIComponent(accountId)}/folders`,
-      )
+      .request<DataResponse<readonly MailFolder[]>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/folders`,
+      })
       .then((response) => response.data);
   }
 
@@ -130,23 +136,25 @@ export class MailClient {
 
   public getSyncRun(syncRunId: string): Promise<MailSyncRunView> {
     return this.client
-      .request<DataResponse<MailSyncRunView>>(
-        `mail/sync-runs/${encodeURIComponent(syncRunId)}`,
-      )
+      .request<DataResponse<MailSyncRunView>>({
+        path: `mail/sync-runs/${encodeURIComponent(syncRunId)}`,
+      })
       .then((response) => response.data);
   }
 
   public listSyncRuns(): Promise<readonly MailSyncRunView[]> {
     return this.client
-      .request<DataResponse<readonly MailSyncRunView[]>>('mail/sync-runs')
+      .request<DataResponse<readonly MailSyncRunView[]>>({
+        path: 'mail/sync-runs',
+      })
       .then((response) => response.data);
   }
 
   public listSubmissions(): Promise<readonly MailSubmissionLogView[]> {
     return this.client
-      .request<DataResponse<readonly MailSubmissionLogView[]>>(
-        'mail/submissions',
-      )
+      .request<DataResponse<readonly MailSubmissionLogView[]>>({
+        path: 'mail/submissions',
+      })
       .then((response) => response.data);
   }
 
@@ -159,9 +167,9 @@ export class MailClient {
     }
     const query = parameters.size > 0 ? `?${parameters.toString()}` : '';
     return this.client
-      .request<DataResponse<MailPage<MailMessageSummary>>>(
-        `mail/messages${query}`,
-      )
+      .request<DataResponse<MailPage<MailMessageSummary>>>({
+        path: `mail/messages${query}`,
+      })
       .then((response) => response.data);
   }
 
@@ -170,9 +178,9 @@ export class MailClient {
     messageId: string,
   ): Promise<MailMessage> {
     return this.client
-      .request<DataResponse<MailMessage>>(
-        `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}`,
-      )
+      .request<DataResponse<MailMessage>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}`,
+      })
       .then((response) => response.data);
   }
 
@@ -187,9 +195,9 @@ export class MailClient {
     }
     const query = parameters.size > 0 ? `?${parameters.toString()}` : '';
     return this.client
-      .request<DataResponse<MailPage<MailMessage>>>(
-        `mail/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}/messages${query}`,
-      )
+      .request<DataResponse<MailPage<MailMessage>>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}/messages${query}`,
+      })
       .then((response) => response.data);
   }
 
@@ -197,11 +205,45 @@ export class MailClient {
     return this.post<MailSubmissionView>('mail/messages/send', input);
   }
 
+  public updateMessage(input: MailUpdateMessageInput): Promise<MailMessage> {
+    const { accountId, messageId, ...json } = input;
+    return this.client
+      .request<DataResponse<MailMessage>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}`,
+        method: 'PATCH',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
+  public moveMessage(input: MailMoveMessageInput): Promise<MailMessage> {
+    const { accountId, messageId, ...json } = input;
+    return this.client
+      .request<DataResponse<MailMessage>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}/move`,
+        method: 'POST',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
+  public deleteMessage(
+    accountId: string,
+    messageId: string,
+    permanently = false,
+  ): Promise<void> {
+    return this.client.request<void>({
+      path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}?permanently=${String(permanently)}`,
+      method: 'DELETE',
+    });
+  }
+
   private post<T>(path: string, body: unknown): Promise<T> {
     return this.client
-      .request<DataResponse<T>>(path, {
+      .request<DataResponse<T>>({
+        path,
         method: 'POST',
-        body: JSON.stringify(body),
+        json: body,
       })
       .then((response) => response.data);
   }

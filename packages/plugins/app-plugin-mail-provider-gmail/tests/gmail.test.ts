@@ -338,6 +338,60 @@ describe('Gmail Mail Provider', () => {
       error: { category: 'authentication', retryable: false },
     });
   });
+
+  it('sends replies in the existing Gmail thread with RFC reply headers', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ id: 'reply-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await adapter.sendMessage({
+      trackingId: 'submission-reply',
+      identity: {
+        id: 'identity-1',
+        accountId: 'account-1',
+        address: 'user@example.com',
+        isPrimary: true,
+        canSend: true,
+      },
+      message: {
+        to: [{ address: 'recipient@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'Re: Original',
+        text: 'Reply body',
+        attachments: [],
+        inReplyTo: '<parent@example.com>',
+        references: ['<root@example.com>', '<parent@example.com>'],
+        providerConversationId: 'thread-1',
+      },
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      raw: string;
+      threadId?: string;
+    };
+    const mime = Buffer.from(body.raw, 'base64url').toString('utf8');
+    expect(body.threadId).toBe('thread-1');
+    expect(mime).toContain('In-Reply-To: <parent@example.com>');
+    expect(mime).toContain(
+      'References: <root@example.com> <parent@example.com>',
+    );
+  });
 });
 
 interface MemoryVault extends MailCredentialVault {

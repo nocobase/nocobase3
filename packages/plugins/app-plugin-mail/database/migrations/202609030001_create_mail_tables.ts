@@ -183,6 +183,9 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('requestFingerprint', { length: 64, nullable: false });
       collection.string('status', { length: 20, nullable: false });
       collection.string('providerMessageId', { length: 500 });
+      collection.datetime('scheduledAt');
+      collection.string('requestedBy', { length: 255 });
+      collection.json('composeInput');
       collection.json('error');
       collection.string('leaseToken', { length: 100 });
       collection.datetime('leaseExpiresAt');
@@ -190,6 +193,9 @@ const migration: MigrationDefinition = defineMigration({
       collection.datetime('updatedAt', { nullable: false });
       collection.index(['status', 'leaseExpiresAt'], {
         name: 'mail_submissions_expired_idx',
+      });
+      collection.index(['status', 'scheduledAt'], {
+        name: 'mail_submissions_scheduled_idx',
       });
       collection.unique(['accountId', 'idempotencyKey'], {
         name: 'mail_submissions_idempotency_unique',
