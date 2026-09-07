@@ -1,274 +1,124 @@
 # Quick start for an application
 
-This is the shortest App-owned path for adding attachments to a business
-record. The [data model guide](data-model.md) defines the file-table contract,
-and the [Route API guide](route-api.md) defines the stable HTTP surface.
+Start with the three executable source files below, not a new business plugin.
+They implement a saved order's private PDF attachments using the application's
+existing Database, Drive, Session, authentication, authorization, and API Client.
+The package's tests import these same files and typecheck them; there is no
+separate, simplified implementation maintained only for the tests.
 
-The locations below follow applications such as `app-template-default`. Adapt
-names to the target App's existing structure, but keep the ownership in the
-application unless the user explicitly requests a reusable published plugin.
+## 1. Check the App and copy the example
 
-## 1. Inspect the target application
+Read the target App's `AGENTS.md` and Client/Server instructions. Confirm that
+`@nocobase/app-plugin-file`, Authentication, and Authorization are installed and
+registered, and that their migrations have run. Configure the App's existing
+Drive disk; S3 configuration belongs there, not in the file route or browser.
 
-Before editing, confirm the App's composition roots and local instructions:
+Copy the following files into the owning application, adapting business names:
 
-```text
-database/migrations/    App-owned schema history
-server/routes/index.ts  App-owned Server Route array
-server/runtime.ts       Imports the App Route array
-client/routes.ts        App-owned page contributions
-client/pages/           App-owned pages and forms
-client/locales/         App-owned user-facing text
-tests/logic/ or e2e/    App behavior tests
-```
+| Executable source                                                         | App destination                           |
+| ------------------------------------------------------------------------- | ----------------------------------------- |
+| [Migration](example/database/migrations/202609070001_order_attachments.ts)   | `database/migrations/`                     |
+| [Server route and authorization](example/server/routes/order-attachments.ts) | `server/routes/order-attachments.ts`       |
+| [Complete attachment form](example/client/order-attachments.tsx)            | `client/components/order-attachments.tsx`  |
 
-Confirm `@nocobase/app-plugin-file` is installed and registered in the App. The
-plugin registration supplies reusable public code and locale resources; it does
-not create a business table, API endpoint, or page.
+The example's `tsconfig.json` is only for checking the bundled example. Do not
+copy it into the App. Do not edit the File plugin or synchronized
+`.agents/skills/` files, run `plugin:create`, or create a `defineServerPlugin()`
+for this application-specific feature.
 
-Do not create a new business plugin for this workflow. Do not edit the File
-plugin's source or the App's synchronized `.agents/skills/` copy.
+The example creates a new `purchaseOrders` parent with string IDs. For an
+existing parent, create only the file table and add its inverse relation through
+a new migration. Match `orderId` and its validation to the parent's actual ID
+type; do not copy the example's string validation into a numeric-ID schema.
+Keep the standard file columns, owner index, and `UNIQUE (disk, key)`.
+See [data model](data-model.md) for other relations.
 
-## 2. Add the App migration
+## 2. Register the Server route and grant business access
 
-Create the business relation in the application's `database/migrations/`
-directory. For a new feature, create the parent collection and a separate
-standard file collection. For an existing parent, alter it to add the inverse
-relation and create only the file collection.
+Import `orderAttachmentRoutes` from the copied module and append it to the
+existing array in `server/routes/index.ts`, already consumed by
+`server/runtime.ts`. Do not replace the other routes or add `/api` to its child
+path: `defineApiRoutes()` supplies that prefix.
 
-A one-to-many attachment collection uses an indexed owner key. A one-to-one
-file field uses a unique owner key. Declare every field, relation, index, and
-constraint directly in the migration; do not import a runtime collection
-definition. Use a reverse-order `down` migration when the operation is
-reversible.
+The Server example includes real authorization, not an undefined
+`authorizePurchaseOrder()` placeholder. It registers the parent resource and
+maps every `FileRouteAction` as follows:
 
-For example, an App-owned `purchaseOrderAttachments` collection should contain
-the standard fields from [data model](data-model.md), an indexed `orderId`, a
-`belongsTo` relation to `purchaseOrders`, and `UNIQUE (disk, key)`. The parent
-collection owns the inverse `hasMany('attachments',
-'purchaseOrderAttachments')` relation.
+| File action                  | Required parent permission                          |
+| ---------------------------- | --------------------------------------------------- |
+| `list`, `read`, `issue-token`  | `purchaseOrders.read`, output field `attachments`     |
+| `upload`, `delete`            | `purchaseOrders.update`, input field `attachments`    |
 
-## 3. Add the App Server Route
+Grant these actions and the required record range through the App's existing
+Permission Sets configuration. For example, `recordsIOwn` uses the registered
+`ownerId` attribute; `allRecords` requires an explicit business decision.
+Registration alone grants nothing. A user who can read only `number` cannot
+read attachments, and an attachment reader cannot upload or delete.
 
-Create an application source file such as
-`server/routes/purchase-order-attachments.ts`. Import only public package
-entries:
+The returned record filter is combined with the parent ID in one existence
+query before any management operation. Do not use `can()` for this conditional
+database decision, replace it with `return true`, or treat file `scope` as ACL.
+The local `compileFilter` translates the Authorization Filter AST; reuse the
+App's existing adapter when available. It is not a new File plugin API.
+For a previously registered parent, extend its existing registration instead
+of registering a second copy. Adapt the action mapping for more specific
+business grants when necessary.
 
-```ts
-import type { Application } from '@nocobase/app-server/application';
-import { appConfig } from '@nocobase/app-server/config';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
-import { sessionManagerToken } from '@nocobase/app-server/session';
-import {
-  defineApiRoutes,
-  type AppApiRouteContribution,
-} from '@nocobase/app-server/router';
-import {
-  authenticationToken,
-  type AuthEnv,
-} from '@nocobase/app-plugin-authentication';
-import {
-  authorizationToken,
-  type AuthorizationEnv,
-} from '@nocobase/app-plugin-authorization';
-import {
-  createFileRoute,
-  type FileRouteAuthorizer,
-} from '@nocobase/app-plugin-file/server';
-import { databaseManagerToken } from '@nocobase/db';
-import { Hono } from 'hono';
-import { every } from 'hono/combine';
-import { HTTPException } from 'hono/http-exception';
+Pass authentication through the factory's `auth` option. Do not wrap the whole
+router in a login middleware: private content uses a short-lived capability
+URL, while public content does not require login. Private `contentUrl` is
+unsigned and is not usable by itself, even with a valid session. The supplied
+preview components obtain access URLs through the Client.
 
-type Env = {
-  Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
-};
+## 3. Mount the complete form
 
-function parseOrderId(value: string | undefined): number {
-  const orderId = Number(value);
-  if (!Number.isSafeInteger(orderId) || orderId < 1) {
-    throw new HTTPException(400, { message: 'A valid orderId is required.' });
-  }
-  return orderId;
-}
+Render the copied `OrderAttachments` component with the saved `orderId` and an
+`onDone` callback that closes the attachment editor or returns to the order.
+An absent ID shows a save-first message without constructing an endpoint.
+This component already renders a form; do not nest it inside another form.
+For an existing order form, move its loading/state logic into that form and
+combine its `ready` condition with the existing submit guard.
 
-const authorizePurchaseOrderFile: FileRouteAuthorizer = async (
-  context,
-  action,
-  file,
-) => {
-  const orderId = parseOrderId(context.req.param('orderId'));
-  return authorizePurchaseOrder(context, { orderId, action, file });
-};
+The component memoizes the Client, loads `client.list()`, blocks editing and
+Done until loading succeeds, exposes a retry on load failure, and blocks Done
+during uploads or upload errors. The owner key is on the component that owns
+all attachment state. Changing orders resets that state and ignores late list
+responses, not just pending uploads. Keep these behaviors when adapting it.
 
-export const purchaseOrderAttachmentRoutes: AppApiRouteContribution<Application> =
-  defineApiRoutes((app) => {
-    const router = new Hono<Env>();
-    const authentication = app.container.resolve(authenticationToken);
-    const authorization = app.container.resolve(authorizationToken);
-    const drive = app.config.get(driveConfig);
-    const appSettings = app.config.get(appConfig);
-    const session = app.container.resolve(sessionManagerToken).config;
-    const requireManagement = every(
-      authentication.required(),
-      authorization.middleware(),
-    );
+Use public components by default; install Registry `component-ui` only when
+editable UI source is needed. Do not maintain both implementations for the
+same field. The Client endpoint is relative to the App's API root: no `/api`,
+origin, public base path, query, or fragment. Put application copy in
+`client/locales/`; the example uses English labels to keep its behavior visible.
+Only add a lazy page in `client/pages/` and `client/routes.ts` if a new page is
+actually needed.
 
-    router.route(
-      '/purchase-orders/:orderId/attachments',
-      createFileRoute({
-        database: app.container.resolve(databaseManagerToken),
-        table: 'purchaseOrderAttachments',
-        scope: (context) => ({
-          orderId: parseOrderId(context.req.param('orderId')),
-        }),
-        drive: app.container.resolve(driveManagerToken),
-        defaultDisk: drive.default,
-        publicBasePath: appSettings.publicBasePath,
-        tokenSecret: session.secret,
-        audience: 'purchase-order-attachments',
-        auth: requireManagement,
-        authorize: authorizePurchaseOrderFile,
-        visibility: { default: 'private', allowClientOverride: false },
-        limits: { maxFiles: 10, mimeTypes: ['application/pdf'] },
-      }),
-    );
-    return router;
-  });
-```
+## 4. Preserve lifecycle semantics
 
-`authorizePurchaseOrder()` above is application-owned domain code, not a File
-plugin API. It must validate the parent record and map every
-`FileRouteAction` to the App's existing authorization model. If authorization
-returns record conditions, apply them while loading the parent; do not reduce a
-conditional decision to a plain permit. Return `false` to deny with
-`FILE_FORBIDDEN` (403), or return a denial Response/throw the App's standard
-error. `true` and `void` permit the operation; never leave a permissive stub.
-For a conventional attachment field, map `list`, `read`, and `issue-token` to
-parent read permission, and `upload`/`delete` to parent update permission.
-Use the App's more specific policy when these operations have distinct grants.
-Authentication alone and `{ orderId }` scope do not authorize the parent.
+Uploads persist immediately. `onDone` does not perform another file save, and
+closing or cancelling the form does not roll back completed server writes.
+`removeOnDelete` immediately deletes the record and attempts object cleanup;
+without it, removal changes only local state. Reconcile with `client.list()`
+after an interrupted request. Single-file mode requires explicit removal
+before another upload; it is not atomic replacement.
 
-Pass the combined authentication and authorization middleware through
-`createFileRoute()`'s `auth` option. The factory applies it to management
-operations while preserving the content endpoint's Public or Private-token
-decision. Do not put a wildcard login middleware around the whole child router;
-that would incorrectly require a session for Public content and valid token
-URLs. The same App Route contribution still owns and tests the complete
-security boundary.
+The example uses a restrictive parent foreign key to avoid losing cleanup
+metadata through a cascade. Delete attachments deliberately before deleting
+an order, with an application policy for failed cleanup. This is not a cleanup
+queue or a transaction spanning the database and Drive. A different migration
+using SQL cascade still deletes rows only, not storage objects.
 
-Import this contribution in the application's `server/routes/index.ts` and add
-it to the existing routes array:
+Client `accept` supports patterns such as `image/*`; Server `mimeTypes` needs
+exact values such as `['image/png', 'image/jpeg']`. The check validates declared
+MIME, not file contents. Never store final URLs or tokens or accept disk, key,
+table, scope field names, or signing configuration from the browser.
 
-```ts
-import { purchaseOrderAttachmentRoutes } from './purchase-order-attachments.js';
+## 5. Verify in the target App
 
-const routes = [
-  // Existing App routes.
-  purchaseOrderAttachmentRoutes,
-];
-```
-
-Do not add `/api` to the child path; `defineApiRoutes()` supplies it. Do not
-accept the table, scope field, disk, storage key, or token secret from the
-browser.
-
-## 4. Connect the App Client
-
-In the owning application page or form, import the public Client API:
-
-```tsx
-import { apiClientToken, useService } from '@nocobase/app-client';
-import {
-  createFilesClient,
-  FileUploadField,
-  type FileRecord,
-  type FileUploadStatus,
-} from '@nocobase/app-plugin-file/client';
-import { useMemo, useState } from 'react';
-
-const api = useService(apiClientToken);
-const client = useMemo(
-  () =>
-    createFilesClient({
-      api,
-      endpoint: `purchase-orders/${encodeURIComponent(orderId)}/attachments`,
-    }),
-  [api, orderId],
-);
-
-const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
-const [attachmentUploadStatus, setAttachmentUploadStatus] =
-  useState<FileUploadStatus>('idle');
-
-<FileUploadField
-  key={orderId}
-  client={client}
-  value={attachments}
-  onChange={setAttachments}
-  onStatusChange={setAttachmentUploadStatus}
-  multiple
-  accept={['application/pdf']}
-  maxFiles={10}
-  removeOnDelete
-/>;
-
-// Include this condition in the owning form's submit-disabled logic.
-const attachmentsPending = attachmentUploadStatus !== 'idle';
-```
-
-`endpoint` is relative to the v3 Application's `/api` root. Do not include
-`/api`, the public base path, an origin, a query string, or a fragment. The
-injected `ApiClient` owns Cookie authentication, deployment base paths, request
-headers, and multipart transport.
-
-Persist the parent record before constructing its scoped endpoint or enabling
-uploads. Initialize edit and read views with `await client.list()` before
-enabling edits or submission; surface load failures instead of treating them as
-an empty list. Key the owning form by the saved owner ID so its controlled
-values reset when navigating between records. Memoize the client as above;
-changing it cancels the previous component upload session. Treat `uploading`
-and `error` status as form-submission blockers. Use `FileList`,
-`FilePreviewField`, or `FilePreviewDialog` in application-owned read views as
-needed.
-
-If the workflow needs a new page, default-export it from `client/pages/` and
-add a lazy entry to the App's existing `client/routes.ts`. Do not add a Client
-Route to the File plugin. Put application labels, validation messages, and page
-copy in the App's `client/locales/`; the reusable File components keep their
-own plugin namespace.
-
-### File lifecycle: immediate persistence, not a form transaction
-
-| User action                          | Server effect                                                                                                                                         |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Select a file                        | Uploads immediately and creates the scoped record.                                                                                                    |
-| Remove with `removeOnDelete`         | Immediately deletes the file record and attempts object cleanup.                                                                                      |
-| Remove without `removeOnDelete`      | Changes only controlled state; the App must deliberately delete or reconcile it.                                                                      |
-| Cancel the form or an upload request | Does not roll back writes already completed on the server. Reload with `client.list()` when reconciling.                                              |
-| Select another single file           | First remove the old file explicitly. This is not atomic replacement; retain the old file until a custom replacement workflow succeeds when required. |
-| Delete the parent record             | SQL cascade removes rows, not Drive objects. The App must coordinate cleanup before losing disk/key metadata.                                         |
-
-Use the public components by default. Install the Registry `component-ui` only
-when the application needs editable UI source; do not maintain both versions
-for the same field. Keep MIME rules distinct: Client `accept` permits patterns
-such as `image/*`, but Server `mimeTypes` requires exact types such as
-`['image/png', 'image/jpeg']` and validates the declared MIME, not file contents.
-
-## 5. Validate the application workflow
-
-Run the App migration and focused application tests. Cover:
-
-- the physical file schema, relation, owner index or unique constraint, and
-  `UNIQUE (disk, key)`;
-- invalid owner IDs and cross-owner scope isolation;
-- anonymous, authenticated-but-denied, and permitted management requests;
-- Public content and Private token access, including expiry and wrong audience;
-- MIME, size, and file-count limits;
-- delete behavior and object cleanup;
-- controlled Client upload state, reload with `client.list()`, and previews;
-- the real App page-to-API workflow under its configured public base path.
-
-Run the target application's focused lint, typecheck, tests, and build. Use
-Client or Server inspectors only when Route or plugin composition changed or is
-unexpectedly unavailable; inspectors do not prove behavior or security.
+Run the migration, lint, typecheck, focused tests, and build. Verify permitted,
+anonymous, and denied requests; parent and attachment-field permissions;
+private token access; owner switching; initial load failure/retry; upload
+errors; reload; deletion and object cleanup; and the real page-to-API path under
+the configured public base path. See [Route API](route-api.md) for the HTTP
+contract and token/limit behavior. Passing the plugin tests does not replace
+verification of the App's own composition and business grants.
