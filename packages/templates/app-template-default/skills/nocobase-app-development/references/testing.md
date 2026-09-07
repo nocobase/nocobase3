@@ -10,7 +10,7 @@ e2e/                Tests needing a real server, real auth, or a real database
 
 **Never put a test beside the source it covers.** Name files `*.test.ts` or `*.test.tsx`.
 
-`vitest.config.ts` lists included test files explicitly. A new file under `tests/` is not picked up until it is added there — a test that never runs looks exactly like a test that passes.
+`vitest.config.ts` discovers `tests/**/*.test.{ts,tsx}` automatically. Theme token tests compile the real CSS; browser checks still need to verify computed styles, typography, spacing and focus.
 
 ## What to test, by change
 
