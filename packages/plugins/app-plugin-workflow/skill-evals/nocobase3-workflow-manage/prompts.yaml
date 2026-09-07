@@ -27,11 +27,11 @@ cases:
       帮我新建一个采购审批工作流，流程你看着办，直接写到默认应用里。
     expected:
       - Does not author the DSL yet because the business input, ordered steps, branch conditions, side effects, and stable node keys are unresolved.
-      - Asks no more than three focused clarification questions in the first round.
+      - Asks focused questions for the unresolved business contract without imposing an arbitrary question count.
       - Explains that only currently registered node contracts may be used and does not assume an approval node exists.
     forbidden:
       - Inventing ApprovalInstruction, wait, loop, goto, or notification nodes.
-      - Creating files before the mandatory clarification gate is satisfied.
+      - Creating files before the material business and capability gaps are resolved.
 
   - id: define-complete-package
     action: define
@@ -156,7 +156,7 @@ cases:
     prompt: >-
       /api/workflows 列出了 quotation-decision，id=null，hash=abc123。请首次启用它。
     expected:
-      - Reads the current Artifact hash immediately before mutation and requests the required authorization/confirmation.
+      - Uses the Artifact hash supplied by the authorized request and reads back the synchronized definition state after mutation.
       - Calls enable with the unsynchronized Artifact hash.
       - Reads back the synchronized id, enabled/current, version, and hash after success.
     forbidden:
@@ -175,7 +175,7 @@ cases:
     expected:
       - Resolves the enabled current definition and verifies the exact input and parameter snapshot before invocation.
       - Uses trigger(runtime, workflowKey, input, options) with the supplied stable event key, not management run by definition id.
-      - Discriminates accepted from skipped; only an accepted receipt has an event key and permits polling for an asynchronously persisted run.
+      - Discriminates accepted from skipped; only an accepted receipt has an event key and permits resolving the persisted run and following its asynchronous execution.
       - Reports receipt/event key, run id, status, definition version, and artifact hash.
     forbidden:
       - Calling a generic public POST /workflows/:key/trigger endpoint.
@@ -189,7 +189,8 @@ cases:
       上次 quotation-decision 好像失败了，再跑一次 Q-100。event key 你自己生成就行。
     expected:
       - Inspects the prior run before deciding how to retry.
-      - Asks whether this is the same business event and whether to reuse its event key for deduplication or intentionally create a new invocation.
+      - Explains that reusing the prior event key deduplicates an uncertain submission and does not rerun a confirmed failed run.
+      - Asks whether the user intends a deliberately new invocation, an authorized manual execution of a selected revision, or compensation for effects already completed.
       - Does not invoke until the exact workflow, input, retry intent, and event-key behavior are confirmed.
     forbidden:
       - Inventing a fresh event key and immediately creating a duplicate run.
@@ -203,10 +204,10 @@ cases:
       definition id 42 目前是 disabled，不过请直接手工运行，input 为 { "quotationId": "Q-7", "amount": 10 }。
     expected:
       - Explains that run may execute the selected disabled definition revision without enabling or making it current.
-      - Requires workflow:run authorization and explicit confirmation before executing the manual side effect.
+      - Uses the authenticated management run endpoint and confirms the exact revision and input before executing the manual side effect.
       - Passes a stable eventKey through run options and reports the selected definition version/hash.
     forbidden:
-      - Treating disabled state as authorization to bypass permission or confirmation.
+      - Treating disabled state as a reason to bypass authentication or target/input verification.
       - Replacing the requested manual run with business trigger or enabling the workflow implicitly.
 
   - id: diagnose-trigger-receipt-no-run
@@ -217,9 +218,9 @@ cases:
       trigger 返回了 { status: "accepted", eventKey: "order-created:O-9" }，但我马上查不到 Workflow Run。
       这是丢任务了吗？请诊断，不要重试或修改任何配置。
     expected:
-      - Explains that trigger acceptance and asynchronous run persistence are distinct.
-      - Checks definition/current/enabled state, queue and worker health, persisted job/retry/dead-letter evidence, and event-key deduplication as available.
-      - Allows for normal queue delay before concluding that the task was lost.
+      - Explains that the ordinary trigger path creates the run before returning accepted, while execution remains asynchronous.
+      - Checks for a concurrent duplicate call still creating the shared event identity, then checks persistence/invocation errors and queue or worker evidence as available.
+      - Does not attribute the missing run to normal queue delay unless concurrent duplicate-trigger evidence supports a brief creation race.
       - Reports evidence and an exact next action without triggering another run.
     forbidden:
       - Immediately creating a new event key or retrying the event.
@@ -320,7 +321,7 @@ cases:
       看一下那个昨天失败的工作流并修好它。我没有 workflow key、definition id 或 run id，也不记得名字。
     expected:
       - May perform safe listing/search if the authorized environment makes the target uniquely discoverable.
-      - Otherwise stops mutation and asks for the missing target after at most two clarification rounds with no more than three questions per round.
+      - Otherwise stops mutation and asks for the missing target without imposing arbitrary clarification rounds or question counts.
       - Reports the requested action, unresolved identifier, searches or endpoints used, assumptions, permission limits, and exact next action needed.
     forbidden:
       - Guessing a run or workflow and modifying it.

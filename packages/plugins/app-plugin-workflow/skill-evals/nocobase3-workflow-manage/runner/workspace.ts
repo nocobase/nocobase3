@@ -32,10 +32,44 @@ export async function prepareCaseWorkspace(
     ),
   );
   const projectRoot = path.join(root, 'project');
-  await fs.mkdir(projectRoot, { recursive: true });
+  await fs.mkdir(path.join(projectRoot, 'node_modules', '@nocobase'), {
+    recursive: true,
+  });
+  const workflowPackageRoot = path.join(
+    options.repoRoot,
+    'packages/plugins/app-plugin-workflow',
+  );
+  const linkedWorkflowPackage = path.join(
+    projectRoot,
+    'node_modules/@nocobase/app-plugin-workflow',
+  );
+  await fs.mkdir(linkedWorkflowPackage, { recursive: true });
+  await fs.writeFile(
+    path.join(linkedWorkflowPackage, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: '@nocobase/app-plugin-workflow',
+        type: 'module',
+        exports: {
+          '.': {
+            types: './index.ts',
+            import: './index.ts',
+            default: './index.ts',
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
   await fs.symlink(
-    path.join(options.repoRoot, 'node_modules'),
-    path.join(projectRoot, 'node_modules'),
+    path.join(workflowPackageRoot, 'index.ts'),
+    path.join(linkedWorkflowPackage, 'index.ts'),
+    'file',
+  );
+  await fs.symlink(
+    path.join(workflowPackageRoot, 'server'),
+    path.join(linkedWorkflowPackage, 'server'),
     'dir',
   );
   const sourceFixtures = path.join(options.testsRoot, 'fixtures', 'workflows');
@@ -53,6 +87,19 @@ export async function prepareCaseWorkspace(
       '',
     ].join('\n'),
   );
+  if (options.case.skillMode === 'implicit') {
+    await fs.mkdir(path.join(projectRoot, '.agents', 'skills'), {
+      recursive: true,
+    });
+    await fs.cp(
+      path.join(
+        options.repoRoot,
+        'packages/plugins/app-plugin-workflow/skills/nocobase-app-plugin-workflow',
+      ),
+      path.join(projectRoot, '.agents/skills/nocobase-app-plugin-workflow'),
+      { recursive: true },
+    );
+  }
   const fixtureDatabase = options.case.fixture?.startsWith('runtime-')
     ? path.join(root, 'runtime', `${safeName(options.case.id)}.sqlite`)
     : undefined;
@@ -83,6 +130,7 @@ function buildTestContext(
   const packageRoot = path.join(
     options.repoRoot,
     'packages',
+    'plugins',
     'app-plugin-workflow',
   );
   const lines = [
@@ -96,7 +144,7 @@ function buildTestContext(
     'Run the real source checker with:',
     '',
     '```bash',
-    `node --import ${path.join(packageRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')} ${path.join(packageRoot, 'engine', 'cli.ts')} check ${path.resolve(options.testsRoot, 'fixtures', 'workflows', '<fixture>', 'workflow.ts')}`,
+    `node --import ${path.join(packageRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')} ${path.join(packageRoot, 'bin', 'workflow.ts')} check server/workflows/<workflow-key-or-workflow.ts>`,
     '```',
   ];
   if (fixtureDatabase && options.case.fixture) {

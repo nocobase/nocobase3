@@ -12,22 +12,23 @@
 
 ## Choose the correct entry
 
-| Intent                                                  | Contract                                        | Identifier                | Result                                                                        |
-| ------------------------------------------------------- | ----------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| Business/domain event starts a workflow                 | `workflowRuntime.trigger(key, input, options?)` | workflow key              | immediate `accepted`/`skipped` receipt; accepted run creation is asynchronous |
-| Authorized administrator manually executes a definition | authenticated management HTTP API               | definition id             | persisted run list item                                                       |
-| Manage/inspect workflows and runs                       | authenticated management HTTP API               | mostly definition/run ids | typed view/list/detail                                                        |
-| Browser/admin client                                    | authenticated `/api` routes                     | definition/run ids        | `{ data }` or paged response                                                  |
+| Intent                                                  | Contract                                        | Identifier                | Result                                                           |
+| ------------------------------------------------------- | ----------------------------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| Business/domain event starts a workflow                 | `workflowRuntime.trigger(key, input, options?)` | workflow key              | `accepted`/`skipped` receipt; accepted execution is asynchronous |
+| Authorized administrator manually executes a definition | authenticated management HTTP API               | definition id             | persisted run list item                                          |
+| Manage/inspect workflows and runs                       | authenticated management HTTP API               | mostly definition/run ids | typed view/list/detail                                           |
+| Browser/admin client                                    | authenticated `/api` routes                     | definition/run ids        | `{ data }` or paged response                                     |
 
 There is intentionally no generic public `POST /workflows/:key/trigger`. A cron, webhook, route, or domain module authenticates and validates its own event, constructs the declared input, then calls the internal service.
 
 ## Find a workflow to trigger
 
-Discover a workflow for business invocation from the DSL package list, not from
-the database or an HTTP API. In the configured Workflow source root, each
-direct child directory is one workflow package; the directory name is the
-stable `workflowKey`, and `workflow.ts` contains its input schema and node
-definition. In the default application this is `server/workflows/<key>`.
+When source is available, discover a workflow for new business-trigger code
+from the DSL package list, not from database ids or management titles. In the
+configured Workflow source root, each direct child directory is one workflow
+package; the directory name is the stable `workflowKey`, and `workflow.ts`
+contains its input schema and node definition. In the default application this
+is `server/workflows/<key>`.
 Enumerate these directories (for example with `rg --files server/workflows`)
 and read each `workflow.ts` top-level `title` and optional `description`. If the
 request names an exact key, locate that directory directly. Otherwise compare
@@ -47,8 +48,11 @@ database, or management API. The runtime remains the authority at execution
 time, so a missing package/deployment can still produce a `not-found` receipt.
 
 Do not use `enabled`, `current`, database ids, or management API results to
-discover a business trigger. Titles and descriptions are discovery metadata;
-the final trigger identifier is always the selected DSL directory key.
+invent a business trigger contract. Titles and descriptions are discovery
+metadata; the final trigger identifier is always the selected DSL directory
+key. In a deployed environment where source is unavailable, the authenticated
+management API remains appropriate for inspection and manual operations, but
+it is not a substitute for the source contract when writing new trigger code.
 
 ## Internal service access
 
@@ -98,10 +102,10 @@ const { eventKey } = receipt;
 - Rejects input over 65,536 UTF-8 bytes.
 - Resolves administrator defaults/overrides into an immutable run input snapshot.
 - Accepts optional `eventKey` and `parentRunId`; parent linkage is used for nested calls and stack-limit checks.
-- Enqueues work and immediately returns `{ status: 'accepted', eventKey }`; the Workflow Run may not exist yet.
-- Uses event key for idempotency. Reusing it must represent the same business event.
+- Creates the Workflow Run and enqueues work before returning `{ status: 'accepted', eventKey }` in the ordinary path; execution continues asynchronously. A concurrent call with the same pending event key can return the accepted identity before the first call finishes creating the run.
+- Uses event key for invocation deduplication. Reusing it must represent the same business event. If a run already exists, another trigger with that key does not execute it again; reuse is appropriate when the caller does not know whether the original submission was accepted, not as a rerun mechanism for a confirmed failure.
 
-After the runtime accepts a workflow, validation/dispatch can still throw `INVALID_INPUT`, `INPUT_TOO_LARGE`, `PARENT_RUN_NOT_FOUND`, or `STACK_LIMIT_EXCEEDED`.
+For a workflow that exists and is enabled, `trigger()` can still throw `INVALID_INPUT`, `INPUT_TOO_LARGE`, `PARENT_RUN_NOT_FOUND`, or `STACK_LIMIT_EXCEEDED` before it returns an accepted receipt.
 
 The management run endpoint resolves the exact materialized database definition/version identified by `definitionId`. It does not require that revision to be `current` or `enabled`, so an authenticated operator can run a historical revision. The Run is marked manual and preserves that definition's version, hash, Input Schema, and input snapshot. The optional event key uses the same idempotency mechanism as `trigger()`; the server generates one when it is omitted. The current DSL has no top-level trigger-source field.
 
@@ -110,22 +114,22 @@ The management run endpoint resolves the exact materialized database definition/
 These names describe the repository behavior behind the authenticated routes;
 they are not additional package-root service exports.
 
-| Method                               | Purpose                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `list()`                             | Current definitions with enabled/current flags, version/hash, executed/active counts, latest run |
-| `getWorkflow(id)`                    | One definition and its materialized nodes/input/input settings                                   |
-| `revisions(id)`                      | All revisions sharing the selected definition's key                                              |
-| `enable(idOrArtifactHash)`           | Enable a synchronized definition by id or publish/enable an unsynchronized Artifact by hash      |
-| `disable(id)`                        | Disable the current definition                                                                   |
-| `setStatus(id, enabled)`             | Change enabled state on a current definition                                                     |
-| `getParameters(id)`                  | Read administrator input schema and explicit override values                                     |
-| `updateParameters(id, values)`       | Replace validated override values on a current definition                                        |
-| `runs(options?)`                     | Paged runs across workflows; default page size is 20                                             |
-| `runsForWorkflow(id)`                | Latest 50 runs for the selected definition's workflow key                                        |
-| `getRun(id)`                         | Run input, version identity, timing/reason, and latest attempt per node key                      |
-| `nodeRuns(id, nodeKey?)`             | All node attempts, optionally filtered by node key                                               |
-| `nodeRunPayload(runId, nodeRunId)`   | Redacted/truncated result, error, and log for one attempt                                        |
-| `run(definitionId, input, options?)` | Authorized manual execution of the selected revision; accepts the common `eventKey` option       |
+| Method                               | Purpose                                                                                                                                 |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `list()`                             | Current definitions with their actual enabled/version/hash state; a newer deployed Artifact is reported separately as `pendingArtifact` |
+| `getWorkflow(id)`                    | One definition and its materialized nodes/input/input settings; a current definition may include `pendingArtifact`                      |
+| `revisions(id)`                      | All revisions sharing the selected definition's key                                                                                     |
+| `enable(idOrArtifactHash)`           | Enable a synchronized definition by id or publish/enable an unsynchronized Artifact by hash                                             |
+| `disable(id)`                        | Disable the current definition                                                                                                          |
+| `setStatus(id, enabled)`             | Change enabled state on a current definition                                                                                            |
+| `getParameters(id)`                  | Read administrator input schema and explicit override values                                                                            |
+| `updateParameters(id, values)`       | Replace validated override values on a current definition                                                                               |
+| `runs(options?)`                     | Paged runs across workflows; default page size is 20                                                                                    |
+| `runsForWorkflow(id)`                | Latest 50 runs for the selected definition's workflow key                                                                               |
+| `getRun(id)`                         | Run input, version identity, timing/reason, and latest attempt per node key                                                             |
+| `nodeRuns(id, nodeKey?)`             | All node attempts, optionally filtered by node key                                                                                      |
+| `nodeRunPayload(runId, nodeRunId)`   | Redacted/truncated result, error, and log for one attempt                                                                               |
+| `run(definitionId, input, options?)` | Authorized manual execution of the selected revision; accepts the common `eventKey` option                                              |
 
 Input override updates accept only declared scalar values with exact types and enum membership. The stored map contains explicit overrides, not resolved defaults. Read back after changing it.
 
@@ -136,6 +140,7 @@ Artifact has no id and is identified by its deployed `hash`.
 
 - For an unsynchronized Artifact, call `enable(hash)` or `POST /api/workflows/<hash>/enable`.
 - For a synchronized workflow, call `enable(id)` or `POST /api/workflows/<id>/enable`.
+- Enabling a revision atomically makes it the current revision and enables it; the previous current revision is no longer current or enabled.
 - After enable, read back id/key, `enabled`, `current`, version, and hash before configuring parameters or running it.
 
 ## Authenticated management HTTP API
@@ -190,11 +195,13 @@ An unsynchronized Artifact is addressed by its hash; after enable, use the persi
 
 1. Enumerate the configured Workflow DSL source root. Use an explicit key when supplied; otherwise match the business requirement against each `workflow.ts` title and description, inspect nodes to resolve close candidates, and ask when ambiguity remains. Use the selected directory name as the key; do not query the API or database for discovery.
 2. Validate the exact input locally against the declared schema, including extra fields and byte size.
-3. Choose/reuse a stable event key for the same source event.
+3. Choose a stable event key for the source event. Reuse it only to resubmit an invocation whose acceptance is unknown; inspect an existing failed run before choosing a separately authorized recovery action.
 4. Resolve `workflowServiceToken` from `app.container`, fail explicitly if the token is not registered, then call `workflowRuntime.trigger(key, input, options)` for business logic. Use the authenticated management routes only for explicit inspection or manual management.
-5. Discriminate the receipt. For `skipped`, record the reason and stop; there is no event key or run. For `accepted`, record its event key and allow for queue delay before looking up a run.
-6. Once persisted, verify its workflow id/key, version, hash, input, event key, status, and timestamps.
+5. Discriminate the receipt. For `skipped`, record the reason and stop; there is no event key or run. For `accepted`, record its event key and resolve the run by that identity; tolerate a short delay when another concurrent call with the same event key is still creating it.
+6. Verify the run's workflow id/key, version, hash, input, event key, status, and timestamps.
 7. Verify side-effecting run scripts by their business idempotency evidence, not merely a resolved workflow status.
+
+The current public service and management routes do not expose node rerun or failed-run replay. Do not promise recovery by sending the same event key again. After a confirmed failure, distinguish a deliberately new business invocation or manual execution from compensation of effects already completed.
 
 ## Installed implementation discovery
 
