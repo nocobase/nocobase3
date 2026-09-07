@@ -17,7 +17,7 @@ export interface AIRequestMiddlewareOptions {
   readonly logger: Logger;
 }
 
-export function createAICurrentUserMiddleware(auth: Auth): MiddlewareHandler {
+export function createAIActorMiddleware(auth: Auth): MiddlewareHandler {
   return async (context, next) => {
     context.set(
       'currentUser',

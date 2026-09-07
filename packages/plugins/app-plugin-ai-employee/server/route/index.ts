@@ -11,7 +11,7 @@ import { createAISkillsRouter } from './ai-skills.js';
 import { createAIToolsRouter } from './ai-tools.js';
 import { createAIRouter } from './ai.js';
 import {
-  createAICurrentUserMiddleware,
+  createAIActorMiddleware,
   createAIRequestMiddleware,
   errorResponse,
 } from './utils.js';
@@ -30,7 +30,7 @@ export function createAIEmployeeRoutes(
 ): Hono {
   const routes = new Hono();
   routes.onError((error) => errorResponse(error));
-  routes.use('*', createAICurrentUserMiddleware(options.authentication));
+  routes.use('*', createAIActorMiddleware(options.authentication));
   routes.use(
     '*',
     createAIRequestMiddleware({
