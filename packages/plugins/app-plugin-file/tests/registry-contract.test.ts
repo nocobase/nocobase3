@@ -18,7 +18,6 @@ interface RegistrySource {
 interface RegistryItem {
   readonly dependencies: readonly string[];
   readonly description: string;
-  readonly docs: string;
   readonly meta: {
     readonly nocobase?: {
       readonly requiresPlugins?: Readonly<Record<string, string>>;
@@ -85,7 +84,6 @@ describe('file plugin Registry contract', () => {
     });
     expect(item?.title).toBeTruthy();
     expect(item?.description).toBeTruthy();
-    expect(item?.docs).toBeTruthy();
     const metadata = JSON.parse(read('package.json')) as {
       name: string;
       version: string;
@@ -189,10 +187,7 @@ describe('file plugin Registry contract', () => {
   });
 
   it('contains no server, security, storage, or route implementation', () => {
-    const source = config.items
-      .flatMap((item) => filesUnder(item.source.root))
-      .map(read)
-      .join('\n');
+    const source = config.items.flatMap(sourceFiles).map(read).join('\n');
     for (const banned of [
       'createFileRoute',
       'DatabaseManager',

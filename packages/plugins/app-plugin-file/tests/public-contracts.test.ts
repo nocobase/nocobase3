@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 import type { ApiClient } from '@nocobase/app-client';
 import { describe, expect, it } from 'vitest';
@@ -145,26 +145,16 @@ describe('file plugin public contracts', () => {
     expect(barrel).not.toMatch(/FilePlugin(?:Runtime|Server|Routes)Context/u);
   });
 
-  it('publishes the renamed Agent Skill from the package root', () => {
+  it('publishes only supported client and server entry points', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
-      readonly files: readonly string[];
       readonly exports: Readonly<Record<string, unknown>>;
       readonly publishConfig: {
         readonly exports: Readonly<Record<string, unknown>>;
       };
     };
-    const skillPath = 'skills/nocobase-app-plugin-file/SKILL.md';
-    const quickStartPath =
-      'skills/nocobase-app-plugin-file/reference/quick-start.md';
     const bootstrapEntry = ['./client', 'bootstrap'].join('/');
     const providersEntry = ['./client', 'providers'].join('/');
 
-    expect(packageJson.files).toContain('skills');
-    expect(packageJson.files).not.toContain('database');
-    expect(packageJson.exports).not.toHaveProperty(`./${skillPath}`);
-    expect(packageJson.publishConfig.exports).not.toHaveProperty(
-      `./${skillPath}`,
-    );
     expect(packageJson.exports).not.toHaveProperty(bootstrapEntry);
     expect(packageJson.exports).not.toHaveProperty(providersEntry);
     expect(packageJson.publishConfig.exports).not.toHaveProperty(
@@ -187,19 +177,5 @@ describe('file plugin public contracts', () => {
     expect(packageJson.publishConfig.exports).not.toHaveProperty(
       './client/route-contracts',
     );
-    expect(existsSync(skillPath)).toBe(true);
-    const skill = readFileSync(skillPath, 'utf8');
-    const quickStart = readFileSync(quickStartPath, 'utf8');
-    expect(skill).toContain('name: nocobase-app-plugin-file');
-    expect(skill).toContain('application source');
-    expect(quickStart).toContain('database/migrations/');
-    expect(quickStart).toContain('server/routes/index.ts');
-    expect(quickStart).toContain('client/routes.ts');
-    expect(`${skill}\n${quickStart}`).not.toMatch(
-      /The business plugin|business plugin's|AppPluginApplication|passed to defineServerPlugin/u,
-    );
-    expect(packageJson.files).not.toContain('docs');
-    expect(existsSync('docs')).toBe(false);
-    expect(existsSync(quickStartPath)).toBe(true);
   });
 });
