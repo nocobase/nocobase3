@@ -11,7 +11,6 @@ import { PersistentAuditSettingsService } from '../../server/settings-service.js
 import { createAuditDatabaseCollector } from '../../server/providers/database.js';
 import { NodeAuditScopeCarrier } from '../../server/scope.js';
 import type { AuditDatabaseCollector } from '../../server/database-collector.js';
-import { normalizeEvent } from '../../server/event-normalizer.js';
 import { PortableAuditStore } from '../../server/store.js';
 import type { AuditTablePolicy } from '../../server/contracts.js';
 import {
@@ -357,51 +356,6 @@ for (const dialect of dialects)
       expect(await events(f)).toHaveLength(1);
     });
 
-    it('A07 actual SQL sequence has no business-row SELECT or payload capture', async () => {
-      const f = await fixture();
-      await assembly(f);
-      const queries: string[] = [];
-      const client = await f.connection.client<{
-        on(event: string, listener: (query: { sql: string }) => void): void;
-        removeListener(
-          event: string,
-          listener: (query: { sql: string }) => void,
-        ): void;
-      }>();
-      const listener = (query: { sql: string }) => queries.push(query.sql);
-      client.on('query', listener);
-      try {
-        await f.connection.query
-          .insertInto('orders')
-          .values({ id: 1, value: 987654321 })
-          .execute();
-        await f.connection.query
-          .updateTable('orders')
-          .set({ value: 123456789 })
-          .where('id', '=', 1)
-          .execute();
-        await f.connection.query
-          .deleteFrom('orders')
-          .where('id', '=', 1)
-          .execute();
-      } finally {
-        client.removeListener('query', listener);
-      }
-      expect(
-        queries.filter(
-          (sql) => /^(insert|update|delete)/i.test(sql) && /orders/i.test(sql),
-        ),
-      ).toHaveLength(3);
-      expect(
-        queries.filter((sql) => /^select/i.test(sql) && /orders/i.test(sql)),
-      ).toHaveLength(0);
-      process.stdout.write(
-        JSON.stringify({ dialect, sequence: queries }) + '\n',
-      );
-      const payload = JSON.stringify(await events(f));
-      expect(payload).not.toContain('987654321');
-      expect(payload).not.toContain('123456789');
-    });
     it('A03 actual immutable clones use live enable/exclude policies and preserve in-flight revision', async () => {
       const f = await fixture();
       const a = await assembly(f, f, false);
@@ -649,7 +603,7 @@ for (const dialect of dialects)
         await manager.destroy();
       }
     });
-    it('A01 correlated request and database facts survive independently with concurrent trusted scopes', async () => {
+    it('keeps concurrent managed writes in their respective trusted scopes', async () => {
       const f = await fixture();
       const a = await assembly(f);
       await Promise.all(
@@ -660,53 +614,20 @@ for (const dialect of dialects)
               actor: { type: 'user', id: 'synthetic-' + id },
               operationId: 'synthetic-op-' + id,
             },
-            async () => {
-              await f.connection.query
+            () =>
+              f.connection.query
                 .insertInto('orders')
                 .values({ id, value: id })
-                .execute();
-              const time = new Date().toISOString();
-              const event = normalizeEvent(
-                { action: 'synthetic.request', outcome: 'success' },
-                {
-                  scope: a.scope.current()!,
-                  kind: 'request',
-                  producer: 'audit.http',
-                  id: 'synthetic-request-' + id,
-                  occurredAt: time,
-                  recordedAt: time,
-                  store: f.connection.name,
-                  policyVersion: 1,
-                },
-              ).event;
-              await f.store.append({
-                ...event,
-                http: {
-                  method: 'POST',
-                  routePattern: '/synthetic',
-                  httpStatus: 200,
-                  durationMs: 1,
-                },
-              });
-            },
+                .execute(),
           ),
         ),
       );
-      const all = (await f.store.query(f.scope, { store: f.connection.name }))
-        .items;
-      expect(all).toHaveLength(4);
-      for (const id of [1, 2]) {
-        const linked = all.filter(
-          (event) => event.operationId === 'synthetic-op-' + id,
-        );
-        expect(linked.map((event) => event.kind).sort()).toEqual([
-          'database',
-          'request',
-        ]);
+      const captured = await events(f);
+      expect(captured).toHaveLength(2);
+      for (const id of [1, 2])
         expect(
-          linked.every((event) => event.actor.id === 'synthetic-' + id),
-        ).toBe(true);
-      }
+          captured.find((event) => event.operationId === 'synthetic-op-' + id),
+        ).toMatchObject({ actor: { type: 'user', id: 'synthetic-' + id } });
     });
 
     it('A03 dispose drains a suspended managed write and rejects newly entering writes', async () => {

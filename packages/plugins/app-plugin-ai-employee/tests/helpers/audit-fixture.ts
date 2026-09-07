@@ -1,10 +1,10 @@
 import { bindAuditRecorder } from '@nocobase/app-plugin-audit/server';
-import { createSettingsFixture } from '../../../app-plugin-audit/tests/helpers/settings-fixture.js';
+import { createAuditApiFixture } from '../../../app-plugin-audit/tests/helpers/api-fixture.js';
 import type { DatabaseDialect } from '@nocobase/db';
 import type { AIEmployeeAuditBridge } from '../../server/audit.js';
 
 export async function createAIAuditFixture(dialect: DatabaseDialect) {
-  const fixture = await createSettingsFixture(dialect);
+  const fixture = await createAuditApiFixture(dialect);
   const bind: AIEmployeeAuditBridge['service']['bind'] = (scope, options) =>
     bindAuditRecorder(scope, {
       store: fixture.f.store,

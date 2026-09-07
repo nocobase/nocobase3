@@ -1,4 +1,3 @@
-import type { TransactionAuthority } from '@nocobase/db';
 export type {
   TransactionAuthority,
   ManagedWriteDescriptor,
@@ -7,10 +6,8 @@ export type {
   ManagedWriteInterceptor,
   ManagedWriteRegistry,
 } from '@nocobase/db';
-import type { Context } from 'hono';
 import type {
   AuditCoverage,
-  AuditDeploymentRequirements,
   AuditErrorCode,
   AuditEventDto,
   AuditEventLookup,
@@ -18,11 +15,9 @@ import type {
   AuditEventsQuery,
   AuditHealthDto,
   AuditHealthQuery,
-  AuditHttpResult,
   AuditOperationQuery,
   AuditReceipt,
   AuditRecordOptions,
-  AuditService,
   AuditSettings,
   AuditSettingsUpdate,
   TrustedAuditScope,
@@ -67,14 +62,6 @@ export interface AuditStore {
     scope: TrustedAuditScope,
     query: AuditEventsQuery,
   ): Promise<AuditEventsPage>;
-  deleteBatch(
-    scope: TrustedAuditScope,
-    options: {
-      readonly store: string;
-      readonly cutoff: string;
-      readonly limit: number;
-    },
-  ): Promise<number>;
 }
 export interface AuditSettingsService {
   get(scope: TrustedAuditScope): Promise<AuditSettings>;
@@ -82,36 +69,9 @@ export interface AuditSettingsService {
     scope: TrustedAuditScope,
     update: AuditSettingsUpdate,
   ): Promise<AuditSettings>;
-  subscribe(listener: (settings: AuditSettings) => void): () => void;
 }
 export interface AuditHealthService {
   get(query?: AuditHealthQuery): AuditHealthDto;
   report(coverage: AuditCoverage): void;
   failure(code: AuditErrorCode, producer: string, store: string): void;
 }
-export interface AuditProducerBinding {
-  readonly producer: string;
-  readonly service: AuditService;
-  readonly scope: AuditScopeCarrier;
-}
-export type AuditDispose = () => void | Promise<void>;
-export interface AuditProducerAdapter {
-  readonly name: string;
-  register(binding: AuditProducerBinding): AuditDispose | Promise<AuditDispose>;
-}
-export interface AuditAssembly {
-  readonly store: AuditStore;
-  readonly settings: AuditSettingsService;
-  readonly health: AuditHealthService;
-  readonly scope: AuditScopeCarrier;
-  readonly transactions: TransactionAuthority;
-  readonly requirements: AuditDeploymentRequirements;
-  readonly producers: readonly AuditProducerAdapter[];
-}
-/** G09 installs this at the host's final response boundary, after response mutation. */
-export type AuditHttpFinalizer = (
-  context: Context,
-  result?: AuditHttpResult,
-) => Promise<void>;
-
-export type AuditServiceFactory = (assembly: AuditAssembly) => AuditService;

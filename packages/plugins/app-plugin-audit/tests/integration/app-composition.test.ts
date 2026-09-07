@@ -1,4 +1,8 @@
-import { auditRaw } from '../../server/database/sql-client.js';
+import {
+  auditRaw,
+  auditRows,
+  storedText,
+} from '../../server/database/sql-client.js';
 import { Hono } from 'hono';
 import { defineApiRoutes } from '@nocobase/app-server/router';
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -10,151 +14,33 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import * as databaseExports from '@nocobase/db';
 import { databaseLifecycleObserverToken } from '@nocobase/app-server/database';
-import { Application } from '@nocobase/app-server/application';
-import {
-  AppConfig,
-  appConfig,
-  createConfigPaths,
-} from '@nocobase/app-server/config';
-import {
-  defineServerPlugins,
-  resolveAppServerPlugins,
-} from '@nocobase/app-server/plugins';
-import { cachingToken } from '@nocobase/app-server/caching';
-import { idGeneratorToken } from '@nocobase/app-server/id-generator';
-import { createCaching } from '@nocobase/caching';
-import { createMigrator, databaseManagerToken } from '@nocobase/db';
-import authentication, {
-  authenticationConfig,
-} from '@nocobase/app-plugin-authentication/server';
-import authorization from '@nocobase/app-plugin-authorization/server';
+import { queueManagerToken } from '@nocobase/app-server/queue';
+import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import type { Application } from '@nocobase/app-server/application';
 import { authorizationToken } from '@nocobase/app-plugin-authorization';
-import type { AuditConfig } from '../../server/config.js';
-import audit, {
-  auditConfig,
+import {
   auditPermissionId,
   auditResourceAdaptersToken,
   auditServiceToken,
   createAuditDatabaseResourceAdapter,
+  PortableAuditStore,
 } from '../../server/index.js';
 import { auditCompositionToken } from '../../server/providers/composition.js';
-import {
-  createPortableFixture,
-  dialects,
-} from '../helpers/database-fixtures.js';
+import { AuditDatabaseCollector } from '../../server/database-collector.js';
+import { AuditError } from '../../server/errors.js';
+import { AuditRetentionService } from '../../server/retention-service.js';
+import AuditRetentionJob from '../../server/queue/retention-job.js';
+import type { AuditEventDto } from '../../server/contracts.js';
 
-async function fixture(
-  dialect: (typeof dialects)[number],
-  enabled: boolean = true,
-  overrides: Partial<AuditConfig> = {},
-  additionalStore: boolean = false,
-) {
-  const primary = await createPortableFixture(dialect);
-  const secondary = additionalStore
-    ? await createPortableFixture(dialect, true, 'other')
-    : undefined;
-  const manager = secondary
-    ? databaseExports.createDatabaseManager({
-        default: 'main',
-        connections: { main: primary.config, other: secondary.config },
-      })
-    : primary.manager;
-  const f = {
-    ...primary,
-    manager,
-    connection: manager.connection('main'),
-    cleanup: async () => {
-      if (secondary) await manager.destroy();
-      await primary.cleanup();
-      await secondary?.cleanup();
-    },
-  };
-  const caching = createCaching();
-  await f.connection.builder.createCollection('g20_items', (table) => {
-    table.string('id').primary();
-    table.string('name');
-  });
-  for (const name of ['authentication', 'authorization'])
-    await createMigrator({
-      database: f.manager,
-      packageName: '@nocobase/app-plugin-' + name,
-      directory: fileURLToPath(
-        new URL(
-          '../../../app-plugin-' + name + '/database/migrations',
-          import.meta.url,
-        ),
-      ),
-    }).latest();
-  const config = new AppConfig([
-    {
-      ...appConfig,
-      defaults: {
-        name: 'main',
-        publicOrigin: 'http://localhost',
-        publicBasePath: '',
-        internalBasePath: '',
-        publicApiUrl: '/api',
-      },
-    },
-    {
-      ...authenticationConfig,
-      defaults: {
-        secret: 'G20-synthetic-server-authentication-secret',
-        emailAndPassword: { enabled: true, autoSignIn: true },
-        session: { storeSessionInDatabase: true },
-      },
-    },
-    { ...auditConfig, defaults: { ...auditConfig.defaults, ...overrides } },
-  ]);
-  await config.loadAll();
-  const make = (): Application => {
-    const app = new Application<
-      import('@nocobase/app-server/config').AppConfigAccessor
-    >({
-      config,
-      paths: createConfigPaths({ rootDir: f.directory }),
-      websocket: () => async () => null,
-    });
-    app.container.instance(databaseManagerToken, f.manager);
-    app.container.instance(cachingToken, caching);
-    app.container.instance(idGeneratorToken, {
-      generate: () => 1,
-      generateString: () => randomUUID(),
-    });
-    app.addServerPlugins(
-      resolveAppServerPlugins(
-        fileURLToPath(
-          new URL(
-            '../../../../templates/app-template-default',
-            import.meta.url,
-          ),
-        ),
-        defineServerPlugins([
-          authentication,
-          authorization,
-          ...(enabled ? [audit] : []),
-        ]),
-      ),
-    );
-    return app;
-  };
-  const app = make();
-  return {
-    f,
-    app,
-    make,
-    async close() {
-      await app.shutdown();
-      await caching.dispose();
-      await f.cleanup();
-    },
-  };
-}
+import { dialects } from '../helpers/database-fixtures.js';
+import {
+  bounded,
+  createProductionApp as fixture,
+} from '../helpers/system-fixture.js';
+
 const json = (body: object, cookie?: string): RequestInit => ({
   method: 'POST',
   headers: {
@@ -166,6 +52,202 @@ const json = (body: object, cookie?: string): RequestInit => ({
 });
 
 describe.each(dialects)('production composition %s', (dialect) => {
+  it('persists migration and seed observations through the registered database observer', async () => {
+    const s = await fixture(dialect);
+    try {
+      s.app.registerProviders();
+      const observer = s.app.container.resolve(databaseLifecycleObserverToken);
+      for (const [phase, outcome] of [
+        ['migrations', 'success'],
+        ['seeds', 'failed'],
+      ] as const) {
+        await observer.before(phase);
+        await observer.after({
+          phase,
+          outcome,
+          code:
+            outcome === 'success'
+              ? 'DATABASE_TASK_COMPLETED'
+              : 'DATABASE_TASK_FAILED',
+        });
+      }
+      const events = (
+        await auditRows(s.f.connection, 'SELECT "payload" FROM "auditEvents"')
+      ).map((row) => JSON.parse(storedText(row, 'payload')) as AuditEventDto);
+      expect(events).toHaveLength(4);
+      for (const [action, outcome, code] of [
+        ['database.migrations.attempted', 'accepted', undefined],
+        ['database.migrations.completed', 'success', 'DATABASE_TASK_COMPLETED'],
+        ['database.seeds.attempted', 'accepted', undefined],
+        ['database.seeds.completed', 'failed', 'DATABASE_TASK_FAILED'],
+      ]) {
+        expect(events.filter((event) => event.action === action)).toEqual([
+          expect.objectContaining({
+            appId: 'main',
+            kind: 'business',
+            outcome,
+            ...(code ? { details: { code } } : {}),
+          }),
+        ]);
+      }
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('continues production collector and runtime cleanup after HTTP disposal fails', async () => {
+    const s = await fixture(dialect);
+    let shutdownFailed = false;
+    try {
+      await s.app.start();
+      const composition = s.app.container.resolve(auditCompositionToken);
+      const http = composition.routes().http;
+      const dispose = http.dispose.bind(http);
+      const failure = new Error('Synthetic HTTP cleanup failure.');
+      vi.spyOn(http, 'dispose').mockImplementationOnce(async () => {
+        await dispose();
+        throw failure;
+      });
+      const collectors = vi.spyOn(AuditDatabaseCollector.prototype, 'dispose');
+      const catalog = vi.spyOn(composition.catalog, 'dispose');
+      const runtime = vi.spyOn(composition.runtime, 'dispose');
+      shutdownFailed = true;
+      await expect(s.app.shutdown()).rejects.toMatchObject({
+        errors: [failure],
+      });
+      expect(collectors).toHaveBeenCalledTimes(1);
+      expect(catalog).toHaveBeenCalledTimes(1);
+      expect(runtime).toHaveBeenCalledTimes(1);
+      expect(() => composition.runtime.current()).toThrow();
+      expect(
+        composition.catalog
+          .entries(
+            await composition
+              .routes()
+              .settings.get({ appId: 'main', actor: { type: 'unknown' } }),
+          )
+          .some((entry) => entry.live),
+      ).toBe(false);
+      await s.f.connection.query
+        .insertInto('g20_items')
+        .values({ id: 'after-disposal', name: 'collector detached' })
+        .execute();
+    } finally {
+      vi.restoreAllMocks();
+      if (shutdownFailed)
+        await expect(s.close()).rejects.toThrow('teardown failed');
+      else await s.close();
+    }
+  });
+
+  it('runs production retention through Queue with a fixed retry plan and detaches its binding on shutdown', async () => {
+    const s = await fixture(dialect);
+    const queue = createQueueManager(
+      { ...createSyncQueueConfig(), retry: { maxRetries: 1 } },
+      {
+        database: s.f.manager,
+        jobFactory: (JobClass) => new JobClass({ database: s.f.manager }),
+      },
+    );
+    s.app.container.instance(queueManagerToken, queue);
+    let restarted: Application | undefined;
+    try {
+      s.app.registerProviders();
+      const composition = s.app.container.resolve(auditCompositionToken);
+      await composition.prepare();
+      const expired = await composition.runtime.recorder.record({
+        action: 'retention.expired',
+        outcome: 'success',
+      });
+      expect(expired.state).toBe('committed');
+      if (expired.state !== 'committed')
+        throw new Error('Expected a committed event.');
+      await auditRaw(
+        s.f.connection,
+        'UPDATE "auditEvents" SET "occurredAt" = ? WHERE "id" = ?',
+        ['2000-01-01T00:00:00.000Z', expired.eventId],
+      );
+      const started = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(started);
+      const run = vi.spyOn(AuditRetentionService.prototype, 'run');
+      const append = PortableAuditStore.prototype.appendWithLimits;
+      let failed = false;
+      vi.spyOn(
+        PortableAuditStore.prototype,
+        'appendWithLimits',
+      ).mockImplementation(async function (
+        this: PortableAuditStore,
+        event,
+        options,
+        limits,
+      ) {
+        if (event.action === 'audit.cleanup.batch' && !failed) {
+          failed = true;
+          clock.mockReturnValue(started + 86400000);
+          throw new AuditError('AUDIT_WRITE_FAILED');
+        }
+        return append.call(this, event, options, limits);
+      });
+      const dispatch = vi.spyOn(queue, 'dispatch');
+      await s.app.start();
+      expect(run).toHaveBeenCalledTimes(2);
+      expect(run.mock.calls[0][0]).toEqual(run.mock.calls[1][0]);
+      expect(run.mock.calls[0][0]?.referenceTime).toBe(
+        new Date(started).toISOString(),
+      );
+      expect(
+        await auditRows(
+          s.f.connection,
+          'SELECT "id" FROM "auditEvents" WHERE "id" = ?',
+          [expired.eventId],
+        ),
+      ).toEqual([]);
+      expect(
+        await auditRows(
+          s.f.connection,
+          'SELECT "id" FROM "auditEvents" WHERE "action" = ?',
+          ['audit.cleanup.batch'],
+        ),
+      ).toHaveLength(1);
+      const payload = dispatch.mock.calls[0][1];
+      const job = new AuditRetentionJob({ database: s.f.manager });
+      Object.defineProperty(job, 'payload', {
+        configurable: true,
+        value: { ...payload, binding: 'untrusted-other-app' },
+      });
+      await expect(job.execute()).rejects.toMatchObject({
+        code: 'AUDIT_NOT_READY',
+      });
+      restarted = s.make();
+      restarted.container.instance(queueManagerToken, queue);
+      await expect(restarted.start()).rejects.toMatchObject({
+        code: 'AUDIT_NOT_READY',
+      });
+      await restarted.shutdown();
+      await s.app.shutdown();
+      Object.defineProperty(job, 'payload', { value: payload });
+      await expect(job.execute()).rejects.toMatchObject({
+        code: 'AUDIT_NOT_READY',
+      });
+      restarted = s.make();
+      restarted.container.instance(queueManagerToken, queue);
+      await restarted.start();
+      expect(dispatch).toHaveBeenCalledTimes(2);
+      expect(run).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.restoreAllMocks();
+      try {
+        await restarted?.shutdown();
+      } finally {
+        try {
+          await s.close();
+        } finally {
+          await queue.close();
+        }
+      }
+    }
+  });
+
   it('reports background persistence failures safely and clears them after a committed recovery', async () => {
     const s = await fixture(dialect);
     let unavailable = false;
@@ -283,11 +365,21 @@ describe.each(dialects)('production composition %s', (dialect) => {
       diagnostics.mockRestore();
     }
   });
-  it('registers during owner boot and drains accepted HTTP before owner shutdown', async () => {
-    const s = await fixture(dialect);
+  it('registers during owner boot and drains a transaction despite another HTTP request rejecting', async () => {
+    const s = await fixture(dialect, true, {
+      defaults: {
+        enabled: true,
+        sources: {
+          http: 'declared-routes',
+          runtime: 'integrated-producers',
+          database: [{ dataSource: 'main', table: 'g20_items' }],
+        },
+      },
+    });
     const gate = deferred<void>();
     const entered = deferred<void>();
-    let wait = false;
+    const fail = deferred<void>();
+    const failureEntered = deferred<void>();
     let ownerStopped = false;
     class OwnerProvider extends ServiceProvider<AppPluginApplication> {
       readonly name: string = 'adapter-owner';
@@ -298,13 +390,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
           .register({
             dataSource: 'main',
             resource: 'g20_items',
-            canRead: async () => {
-              if (wait) {
-                entered.resolve();
-                await gate.promise;
-              }
-              return 'allowed';
-            },
+            canRead: async () => 'allowed',
           });
       }
       override async shutdown(): Promise<void> {
@@ -313,6 +399,52 @@ describe.each(dialects)('production composition %s', (dialect) => {
       }
     }
     s.app.addServiceProvider(OwnerProvider);
+    s.app.addRoutes(
+      defineApiRoutes(() => {
+        const composition = s.app.container.resolve(auditCompositionToken);
+        const router = new Hono();
+        router.get(
+          '/owner/drain',
+          composition.service.http({ action: 'owner.drain' }),
+          async (c) => {
+            await s.f.connection.transaction(async (connection) => {
+              await connection.query
+                .insertInto('g20_items')
+                .values({ id: 'drained', name: 'committed' })
+                .execute();
+              entered.resolve();
+              await gate.promise;
+              expect(ownerStopped).toBe(false);
+              await composition.runtime.recorder.record(
+                { action: 'owner.ending', outcome: 'success' },
+                {
+                  transaction:
+                    databaseExports.transactionAuthority.current(connection),
+                },
+              );
+            });
+            return c.text('committed');
+          },
+        );
+        router.get('/owner/fail', async () => {
+          failureEntered.resolve();
+          await fail.promise;
+          throw new Error('Synthetic request failure.');
+        });
+        return router;
+      }),
+    );
+    s.app.addHttpMiddleware({
+      name: 'owner-error-rejection',
+      register(router) {
+        router.onError(() => {
+          throw new Error('Synthetic final error.');
+        });
+      },
+    });
+    let response: Promise<Response> | undefined;
+    let broken: Promise<Response> | undefined;
+    let shutdown: Promise<void> | undefined;
     try {
       await s.app.start();
       const signup = await s.app.fetch(
@@ -360,15 +492,48 @@ describe.each(dialects)('production composition %s', (dialect) => {
       expect(
         (await s.app.fetch(new Request(url, { headers: { cookie } }))).status,
       ).toBe(200);
-      wait = true;
-      const response = s.app.fetch(new Request(url, { headers: { cookie } }));
-      await entered.promise;
-      const shutdown = s.app.shutdown();
+      broken = Promise.resolve(
+        s.app.fetch(new Request('http://localhost/api/owner/fail')),
+      );
+      void broken.catch(() => undefined);
+      await bounded(failureEntered.promise);
+      response = Promise.resolve(
+        s.app.fetch(new Request('http://localhost/api/owner/drain')),
+      );
+      await bounded(entered.promise);
+      shutdown = s.app.shutdown();
+      expect(s.app.shutdown()).toBe(shutdown);
+      fail.resolve();
+      await expect(broken).rejects.toThrow('Synthetic final error.');
+      expect((await s.app.fetch(new Request(url))).status).toBe(503);
       expect(ownerStopped).toBe(false);
       gate.resolve();
-      expect((await response).status).toBe(200);
-      await shutdown;
+      expect((await bounded(response)).status).toBe(200);
+      await bounded(shutdown);
       expect(ownerStopped).toBe(true);
+      expect(
+        await auditRows(s.f.connection, 'SELECT * FROM "g20_items"'),
+      ).toEqual([{ id: 'drained', name: 'committed' }]);
+      const events = (
+        await auditRows(s.f.connection, 'SELECT "payload" FROM "auditEvents"')
+      )
+        .map((row) => JSON.parse(storedText(row, 'payload')) as AuditEventDto)
+        .filter((event) =>
+          ['owner.drain', 'owner.ending', 'database.insert'].includes(
+            event.action,
+          ),
+        );
+      expect(events.map((event) => event.action).sort()).toEqual([
+        'database.insert',
+        'owner.drain',
+        'owner.ending',
+      ]);
+      expect(new Set(events.map((event) => event.requestId)).size).toBe(1);
+      expect(new Set(events.map((event) => event.operationId)).size).toBe(1);
+      expect(events.every((event) => event.outcome === 'success')).toBe(true);
+      expect(() =>
+        s.app.container.resolve(auditCompositionToken).runtime.current(),
+      ).toThrow();
       expect(() =>
         s.app.container.resolve(auditResourceAdaptersToken).register({
           dataSource: 'main',
@@ -378,6 +543,8 @@ describe.each(dialects)('production composition %s', (dialect) => {
       ).toThrow('closed');
     } finally {
       gate.resolve();
+      fail.resolve();
+      await Promise.allSettled([response, broken, shutdown]);
       await s.close();
     }
   });

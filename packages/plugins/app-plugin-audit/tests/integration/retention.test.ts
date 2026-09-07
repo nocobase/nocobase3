@@ -314,16 +314,6 @@ for (const dialect of dialects)
         expect(
           completed.reduce((count, result) => count + result.deleted, 0),
         ).toBe(13);
-      process.stdout.write(
-        JSON.stringify({
-          probe: 'G12-concurrent-attempts',
-          dialect,
-          rejected: rejected.length,
-          codes,
-          committedBatchDeleted: 13,
-          successfulAttempts: completed.length,
-        }) + String.fromCharCode(10),
-      );
     });
 
     it('real SQL batch-summary failure rolls back deletion and retry commits once', async () => {

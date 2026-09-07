@@ -1,23 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import {
-  createSettingsFixture,
-  type SettingsFixture,
-} from '../helpers/settings-fixture.js';
+  createAuditApiFixture,
+  type AuditApiFixture,
+} from '../helpers/api-fixture.js';
 import type {
   AuditSettingsResponse,
   AuditHealthDto,
 } from '../../server/contracts.js';
 import { auditRaw, dialects } from '../helpers/database-fixtures.js';
 
-const fixtures: SettingsFixture[] = [];
+const fixtures: AuditApiFixture[] = [];
 afterEach(async () => {
   for (const f of fixtures.splice(0)) await f.cleanup();
 });
 
 describe.each(dialects)('metadata real API (%s)', (dialect) => {
   it('rejects a concurrent policy update during old-scope authorization', async () => {
-    const f = await createSettingsFixture(dialect);
+    const f = await createAuditApiFixture(dialect);
     fixtures.push(f);
     await f.grant(f.alice.id, [], ['read', 'manage']);
     const initial = await f.settings.get(f.f.scope);
@@ -60,10 +60,23 @@ describe.each(dialects)('metadata real API (%s)', (dialect) => {
     }
   });
   it('requires management of removed stores and leaves the persisted revision untouched', async () => {
-    const f = await createSettingsFixture(dialect, false, false, true);
+    const f = await createAuditApiFixture(dialect, {
+      additionalStore: 'other',
+    });
     fixtures.push(f);
     await f.grant(f.alice.id, [], ['read', 'manage']);
     const initial = await f.settings.get(f.f.scope);
+    const denied = await f.request('/settings?store=main', undefined, {
+      method: 'PUT',
+      headers: { 'if-match': '"1"' },
+      body: JSON.stringify({
+        expectedRevision: 1,
+        settings: { ...initial, observationStore: 'other' },
+        confirmRetentionReduction: false,
+      }),
+    });
+    expect(denied.status).toBe(403);
+    expect(await f.settings.get(f.f.scope)).toEqual(initial);
     const configured = await f.settings.update(f.f.scope, {
       expectedRevision: initial.revision,
       settings: {
@@ -96,7 +109,7 @@ describe.each(dialects)('metadata real API (%s)', (dialect) => {
     expect(await f.settings.get(f.f.scope)).toEqual(configured);
   });
   it('does not disclose an unauthorized target and does not disguise ACL failures as read-only', async () => {
-    const f = await createSettingsFixture(dialect);
+    const f = await createAuditApiFixture(dialect);
     fixtures.push(f);
     await f.grant(f.alice.id, [], ['read', 'manage']);
     const original = f.resources.authorization.require.bind(
@@ -140,7 +153,7 @@ describe.each(dialects)('metadata real API (%s)', (dialect) => {
     );
   });
   it('uses actual grants, immutable deployment requirements and filtered stores', async () => {
-    const f = await createSettingsFixture(dialect, true);
+    const f = await createAuditApiFixture(dialect, { required: true });
     fixtures.push(f);
     await f.grant(f.alice.id, [], ['read']);
     const read = await f.request('/settings?store=main');
@@ -165,6 +178,25 @@ describe.each(dialects)('metadata real API (%s)', (dialect) => {
       await f.request('/settings?store=main')
     ).json()) as AuditSettingsResponse;
     expect(manager.meta?.canManage).toBe(true);
+    for (const settings of [
+      { ...manager.data, enabled: false },
+      {
+        ...manager.data,
+        sources: { ...manager.data.sources, http: 'disabled' },
+      },
+    ]) {
+      const rejected = await f.request('/settings?store=main', undefined, {
+        method: 'PUT',
+        headers: { 'if-match': '"1"' },
+        body: JSON.stringify({
+          expectedRevision: 1,
+          settings,
+          confirmRetentionReduction: false,
+        }),
+      });
+      expect(rejected.status).toBe(409);
+    }
+    expect(await f.settings.get(f.f.scope)).toEqual(manager.data);
     expect((await f.request('/settings?store=main', f.bob.cookie)).status).toBe(
       403,
     );
@@ -186,10 +218,15 @@ describe.each(dialects)('metadata real API (%s)', (dialect) => {
     ).toBe(true);
   });
   it('returns independent degraded health after real settings table loss', async () => {
-    const f = await createSettingsFixture(dialect);
+    const f = await createAuditApiFixture(dialect);
     fixtures.push(f);
     await f.grant(f.alice.id, [], ['read', 'manage']);
     await auditRaw(f.f.connection, 'DROP TABLE "auditSettings"');
+    const failed = await f.request('/settings?store=main');
+    expect(failed.status).toBe(503);
+    expect(await failed.text()).not.toMatch(
+      /SELECT|password|credentials|sqlite|mysql|postgres/,
+    );
     const response = await f.request('/health?store=main');
     expect(response.status).toBe(200);
     const body = (await response.json()) as { data: AuditHealthDto };
@@ -200,9 +237,9 @@ describe.each(dialects)('metadata real API (%s)', (dialect) => {
 });
 
 it('static inventory follows actual Hono mounts and only this collector, without requests', async () => {
-  const f = await createSettingsFixture('sqlite');
+  const f = await createAuditApiFixture('sqlite');
   fixtures.push(f);
-  const other = await createSettingsFixture('sqlite');
+  const other = await createAuditApiFixture('sqlite');
   fixtures.push(other);
   const first = f.http.collector.http({
     action: 'orders.read',

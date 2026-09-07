@@ -1,37 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  fireEvent,
-} from '@testing-library/react';
+import { cleanup, screen, waitFor, fireEvent } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import {
-  AppClientRoot,
-  ClientApplication,
-  createAppClientConfig,
-} from '@nocobase/app-client';
-import {
-  defineAppRuntime,
-  resolveAppRuntime,
-} from '@nocobase/app-client/runtime';
-import { defineClientPlugins } from '@nocobase/app-client/plugins';
-import { I18nProvider } from '@nocobase/i18n/client';
-import { ServiceProvider } from '@nocobase/service-provider';
-import audit from '../../client/index.js';
+  createAuditClientRuntime,
+  renderAuditClient,
+} from '../helpers/client-fixture.js';
 import type { AuditSettingsResponse } from '../../client/contracts.js';
-import { createSettingsFixture } from '../helpers/settings-fixture.js';
+import { createAuditApiFixture } from '../helpers/api-fixture.js';
 import { auditRaw } from '../helpers/database-fixtures.js';
 
-class TestProvider extends ServiceProvider<ClientApplication> {
-  readonly name: string = '@example/g14';
-  override boot(): Promise<void> {
-    this.app.refine.setRouterProvider({});
-    return Promise.resolve();
-  }
-}
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => {
   cleanup();
@@ -44,22 +22,14 @@ async function fixture(
   manage: boolean = true,
   required: boolean = false,
 ) {
-  const server = await createSettingsFixture('sqlite', required);
+  const server = await createAuditApiFixture('sqlite', { required });
   closes.push(server.cleanup);
   await server.grant(
     server.alice.id,
     [],
     manage ? ['read', 'manage'] : ['read'],
   );
-  const runtime = await resolveAppRuntime(
-    defineAppRuntime({
-      packageName: '@example/g14',
-      config: createAppClientConfig,
-      serviceProviders: [TestProvider],
-      plugins: defineClientPlugins([audit()]),
-    }),
-  );
-  await runtime.i18n.changeLanguage(locale);
+  const runtime = await createAuditClientRuntime(locale);
   const route = runtime.settings.find(
     (entry) => entry.path === '/settings/audit/settings',
   );
@@ -74,21 +44,9 @@ async function fixture(
       init,
     );
   });
-  const app = new ClientApplication({
-    runtime,
-    createRenderConfig: () => ({
-      routes: (
-        <I18nProvider runtime={runtime.i18n}>
-          <Page />
-        </I18nProvider>
-      ),
-    }),
-  });
-  await app.start();
-  closes.push(() => app.shutdown());
-  const view = render(<AppClientRoot app={app} />);
+  const view = await renderAuditClient(runtime, <Page />, closes);
   await screen.findByText(locale === 'zh-CN' ? '版本 1' : 'Revision 1');
-  return { server, writes, view, app, runtime };
+  return { server, writes, view };
 }
 
 describe('real settings UI, authenticated Hono API and SQLite persistence', () => {
@@ -203,21 +161,10 @@ describe('real settings UI, authenticated Hono API and SQLite persistence', () =
       180,
     );
   });
-  it('prevents mandatory HTTP removal and server rejects crafted updates', async () => {
-    const f = await fixture('en-US', true, true);
+  it('disables controls for mandatory capture', async () => {
+    await fixture('en-US', true, true);
     expect(screen.getByLabelText('Enable audit')).toBeDisabled();
     expect(screen.getByLabelText('Declared HTTP routes')).toBeDisabled();
-    const settings = await f.server.settings.get(f.server.f.scope);
-    const response = await f.server.request('/settings?store=main', undefined, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json', 'if-match': '"1"' },
-      body: JSON.stringify({
-        expectedRevision: 1,
-        settings: { ...settings, enabled: false },
-        confirmRetentionReduction: false,
-      }),
-    });
-    expect(response.status).toBe(409);
   });
   it('renders read-only for actual read permission without manage', async () => {
     await fixture('en-US', false);

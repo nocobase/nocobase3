@@ -2,39 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
+import { NamespaceScope } from '@nocobase/i18n/client';
 import {
-  AppClientRoot,
-  ClientApplication,
-  createAppClientConfig,
-} from '@nocobase/app-client';
-import {
-  defineAppRuntime,
-  resolveAppRuntime,
-} from '@nocobase/app-client/runtime';
-import { defineClientPlugins } from '@nocobase/app-client/plugins';
-import { I18nProvider, NamespaceScope } from '@nocobase/i18n/client';
-import audit from '@nocobase/app-plugin-audit/client';
+  createAuditClientRuntime,
+  renderAuditClient,
+} from '../helpers/client-fixture.js';
 import { AuditEventsView } from '@nocobase/app-plugin-audit/client/components';
 import type { AuditEventsQuery } from '@nocobase/app-plugin-audit/client/contracts';
-import { createQueryFixture } from '../helpers/query-fixture.js';
+import { createAuditApiFixture } from '../helpers/api-fixture.js';
 import { normalizeEvent } from '../../server/event-normalizer.js';
-import { ServiceProvider } from '@nocobase/service-provider';
-
-class EmbeddedTestProvider extends ServiceProvider<ClientApplication> {
-  readonly name: string = '@example/g13/embedded-test';
-  override boot(): Promise<void> {
-    this.app.refine.setRouterProvider({});
-    return Promise.resolve();
-  }
-}
-
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   cleanup();
@@ -43,7 +25,7 @@ afterEach(async () => {
 });
 
 async function fixture(locale: string = 'en-US', grants: boolean = true) {
-  const server = await createQueryFixture('sqlite');
+  const server = await createAuditApiFixture('sqlite');
   cleanups.push(server.cleanup);
   if (grants)
     await server.grant(server.alice.id, ['read', 'readAll', 'readMetadata']);
@@ -58,7 +40,7 @@ async function fixture(locale: string = 'en-US', grants: boolean = true) {
           id === 'three' ? '<img src=x onerror=alert(1)>' : 'orders.approve',
         outcome: 'success',
         target: { dataSource: 'main', resource: 'documents', key: 'a' },
-        details: { text: '<script>window.G13_XSS = true</script>' },
+        details: { text: '<script>window.AUDIT_XSS = true</script>' },
       },
       {
         scope: {
@@ -78,15 +60,7 @@ async function fixture(locale: string = 'en-US', grants: boolean = true) {
     );
     await server.f.store.append(normalized.event);
   }
-  const runtime = await resolveAppRuntime(
-    defineAppRuntime({
-      packageName: '@example/g13',
-      config: createAppClientConfig,
-      serviceProviders: [EmbeddedTestProvider],
-      plugins: defineClientPlugins([audit()]),
-    }),
-  );
-  await runtime.i18n.changeLanguage(locale);
+  const runtime = await createAuditClientRuntime(locale);
   const requests: string[] = [];
   let mode: 'normal' | 'network' | 'degraded' | 'denied' = 'normal';
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
@@ -113,34 +87,24 @@ async function fixture(locale: string = 'en-US', grants: boolean = true) {
       label: 'Display-only target label',
     },
   };
-  const app = new ClientApplication({
+  await renderAuditClient(
     runtime,
-    createRenderConfig: () => ({
-      routes: (
-        <I18nProvider runtime={runtime.i18n}>
-          <NamespaceScope ns='@example/g13'>
-            <AuditEventsView query={query} />
-          </NamespaceScope>
-        </I18nProvider>
-      ),
-    }),
-  });
-  await app.start();
-  cleanups.push(() => app.shutdown());
-  render(<AppClientRoot app={app} />);
+    <NamespaceScope ns='@example/audit-host'>
+      <AuditEventsView query={query} />
+    </NamespaceScope>,
+    cleanups,
+  );
   return {
     server,
     runtime,
     requests,
-    query,
-    app,
     mode: (next: typeof mode) => {
       mode = next;
     },
   };
 }
 
-describe('public UI with the real G11 router, authentication, SQL authorization and SQLite store', () => {
+describe('public UI with the real audit router, authentication, SQL authorization and SQLite store', () => {
   it('renders persisted facts, cursor pagination, actor/initiator and operation detail', async () => {
     const f = await fixture();
     await screen.findByText('approval · 1 facts on this page');
@@ -282,7 +246,7 @@ describe('public UI with the real G11 router, authentication, SQL authorization 
     fireEvent.click(trigger);
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByText('retired-plugin');
-    expect(within(dialog).getByText(/<script>window.G13_XSS/)).toBeVisible();
+    expect(within(dialog).getByText(/<script>window.AUDIT_XSS/)).toBeVisible();
     expect(dialog.querySelector('script')).toBeNull();
     expect(within(dialog).getAllByText(/原始发起者/).length).toBeGreaterThan(0);
     fireEvent.click(within(dialog).getByRole('button', { name: '关闭详情' }));

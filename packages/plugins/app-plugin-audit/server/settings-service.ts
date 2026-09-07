@@ -15,7 +15,7 @@ import { auditRaw, auditRows, storedText } from './database/sql-client.js';
 import { AuditError } from './errors.js';
 import { LocalAuditHealthService } from './health-service.js';
 import { AuditReadiness } from './providers/readiness.js';
-import { bindAuditRecorder, type AuditRecorderPolicy } from './service.js';
+import { bindAuditRecorder } from './service.js';
 import {
   snapshotAuditSettings,
   snapshotAuditSettingsUpdate,
@@ -45,8 +45,6 @@ export class PersistentAuditSettingsService implements AuditSettingsService {
   // A successful infrastructure check must precede transaction reads; checking the
   // root pool from inside its own SQLite transaction would wait for itself.
   private transactionReadsReady = false;
-  private readonly listeners: Set<(settings: AuditSettings) => void> =
-    new Set();
   private readonly scopeHash: string;
   private readonly scopeEncoding: string;
   constructor(private readonly options: PersistentAuditSettingsOptions) {
@@ -166,19 +164,6 @@ export class PersistentAuditSettingsService implements AuditSettingsService {
       : Object.freeze({ ...settings, enabled });
   }
 
-  async recorderPolicy(
-    scope: TrustedAuditScope,
-    options: AuditSettingsReadOptions = {},
-  ): Promise<AuditRecorderPolicy> {
-    const settings = await this.snapshot(scope, options);
-    return Object.freeze({
-      revision: settings.revision,
-      enabled: settings.enabled,
-      excluded: settings.sources.runtime === 'disabled',
-      maxDetailsBytes: settings.maxDetailsBytes,
-    });
-  }
-
   async update(
     scope: TrustedAuditScope,
     update: AuditSettingsUpdate,
@@ -279,26 +264,7 @@ export class PersistentAuditSettingsService implements AuditSettingsService {
         this.options.connection.name,
       );
     }
-    // Subscribers are notifications, never the enforcement source. Persisted CAS is already committed.
-    for (const listener of this.listeners) {
-      try {
-        listener(next);
-      } catch {
-        this.options.health.failure(
-          'AUDIT_NOT_READY',
-          'audit.settings.listener',
-          this.options.connection.name,
-        );
-      }
-    }
     return next;
-  }
-
-  subscribe(listener: (settings: AuditSettings) => void): () => void {
-    this.listeners.add(listener);
-    return (): void => {
-      this.listeners.delete(listener);
-    };
   }
 
   private failed(error: unknown): never {

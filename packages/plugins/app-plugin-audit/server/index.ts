@@ -24,8 +24,6 @@ export type {
   AuditBackgroundTrace,
   AuditBackgroundVerifier,
 } from './runtime.js';
-export { createAuditScopeResources } from './providers/scope.js';
-export type { AuditScopeResources } from './providers/scope.js';
 
 export { PersistentAuditSettingsService } from './settings-service.js';
 export type { PersistentAuditSettingsOptions } from './settings-service.js';
@@ -89,11 +87,6 @@ export type {
 } from './retention-service.js';
 export { createAuditRetentionQueueResources } from './queue/retention.js';
 export type { AuditRetentionQueueResources } from './queue/retention.js';
-export { createAuditLifecycleResources } from './providers/lifecycle.js';
-export type {
-  AuditLifecycleOptions,
-  AuditLifecycleResources,
-} from './providers/lifecycle.js';
 
 export { auditConfig } from './config.js';
 export type { AuditConfig } from './config.js';

@@ -27,7 +27,7 @@ import { PortableAuditStore } from '../../server/store.js';
 import type { ResourceRef, TrustedAuditScope } from '../../server/contracts.js';
 import { createPortableFixture, auditRaw } from './database-fixtures.js';
 
-export interface SettingsFixture {
+export interface AuditApiFixture {
   catalog: AuditCaptureCatalog;
   readiness: AuditReadiness;
   http: ReturnType<typeof createAuditHttpResources>;
@@ -56,17 +56,21 @@ export interface SettingsFixture {
   cleanup(): Promise<void>;
 }
 
-export async function createSettingsFixture(
+export async function createAuditApiFixture(
   dialect: DatabaseDialect,
-  required: boolean = false,
-  runtimeMissing: boolean = false,
-  includeOtherStore: boolean = false,
-): Promise<SettingsFixture> {
+  {
+    required = false,
+    additionalStore,
+  }: {
+    required?: boolean;
+    additionalStore?: string;
+  } = {},
+): Promise<AuditApiFixture> {
   const f = await createPortableFixture(dialect);
   const cleanup: (() => Promise<void>)[] = [f.cleanup];
   try {
-    const other = includeOtherStore
-      ? await createPortableFixture(dialect, true, 'other')
+    const other = additionalStore
+      ? await createPortableFixture(dialect, true, additionalStore)
       : undefined;
     if (other) cleanup.push(other.cleanup);
     const stores = [f, ...(other ? [other] : [])];
@@ -83,13 +87,13 @@ export async function createSettingsFixture(
       }).latest();
     await auditRaw(
       f.connection,
-      'CREATE TABLE "g11_documents" ("id" VARCHAR(80) PRIMARY KEY, "owner_id" VARCHAR(80), "tenant" VARCHAR(80))',
+      'CREATE TABLE "audit_documents" ("id" VARCHAR(80) PRIMARY KEY, "owner_id" VARCHAR(80), "tenant" VARCHAR(80))',
     );
     const auth = new Auth({
       connection: f.connection,
       baseURL: 'http://localhost/api/auth',
-      secret: 'g11-synthetic-secret-at-least-thirty-two-characters',
-      advanced: { cookiePrefix: 'g11' },
+      secret: 'audit-test-secret-at-least-thirty-two-characters',
+      advanced: { cookiePrefix: 'audit-test' },
     });
     async function user(name: string) {
       const response = await auth.handler(
@@ -115,7 +119,7 @@ export async function createSettingsFixture(
     const bob = await user('bob');
     await auditRaw(
       f.connection,
-      'INSERT INTO "g11_documents" ("id", "owner_id", "tenant") VALUES (?, ?, ?), (?, ?, ?)',
+      'INSERT INTO "audit_documents" ("id", "owner_id", "tenant") VALUES (?, ?, ?), (?, ?, ?)',
       ['a', alice.id, 'tenant-a', 'b', bob.id, 'tenant-a'],
     );
     const appAuthorization = createAppAuthorization({
@@ -141,7 +145,7 @@ export async function createSettingsFixture(
     await config.loadAll();
     const app = new Application({
       config,
-      paths: createConfigPaths({ rootDir: '/synthetic/g11' }),
+      paths: createConfigPaths({ rootDir: '/synthetic/audit-api' }),
       websocket: () => async () => null,
     });
     cleanup.push(() => app.shutdown());
@@ -178,7 +182,7 @@ export async function createSettingsFixture(
         enabled: true,
         sources: {
           http: 'declared-routes',
-          runtime: runtimeMissing ? 'integrated-producers' : 'disabled',
+          runtime: 'disabled',
           database: [],
         },
       },
@@ -204,7 +208,7 @@ export async function createSettingsFixture(
         createAuditDatabaseResourceAdapter({
           connection: f.connection,
           resource: 'documents',
-          table: 'g11_documents',
+          table: 'audit_documents',
           keyFields: ['id'],
           boundaryFilter: { $and: [{ tenant: { $eq: 'tenant-a' } }] },
         }),
@@ -228,7 +232,7 @@ export async function createSettingsFixture(
       }),
     );
     await http.verify(async () => {
-      await app.fetch(new Request('http://localhost/__g11_probe'));
+      await app.fetch(new Request('http://localhost/__audit_probe'));
     });
     await readiness.start(initial);
     let permissionIndex = 0;
@@ -238,7 +242,7 @@ export async function createSettingsFixture(
       settingsActions: string[] = [],
       resourceRead: boolean = true,
     ) {
-      const key = 'g11-' + ++permissionIndex;
+      const key = 'audit-permission-' + ++permissionIndex;
       await appAuthorization.permissionSets.create({
         key,
         grants: [
@@ -302,7 +306,7 @@ export async function createSettingsFixture(
             operationId: 'same-operation',
           },
           kind: 'business',
-          producer: 'synthetic-g11',
+          producer: 'synthetic-api',
           id,
           occurredAt: '2026-09-05T00:00:00.000Z',
           recordedAt: '2026-09-05T00:00:00.000Z',

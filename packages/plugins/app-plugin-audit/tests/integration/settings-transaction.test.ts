@@ -1,10 +1,10 @@
-import { PortableAuditStore } from '../../server/store.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { transactionAuthority, type TransactionHandle } from '@nocobase/db';
 import { PersistentAuditSettingsService } from '../../server/settings-service.js';
 import { AuditReadiness } from '../../server/providers/readiness.js';
 import { AuditCaptureCatalog } from '../../server/capture-catalog.js';
 import { LocalAuditHealthService } from '../../server/health-service.js';
+import type { AuditSettings } from '../../server/contracts.js';
 import {
   createPortableFixture,
   dialects,
@@ -60,6 +60,11 @@ for (const dialect of dialects)
       let pending: ReturnType<typeof settings.snapshot> | undefined;
       let timedOut = false;
       const before = await settings.get(f.scope);
+      const observed: {
+        first?: AuditSettings;
+        pinnedRevision?: number;
+        latestRevision?: number;
+      } = {};
       try {
         await expect(
           f.connection.transaction(async (connection) => {
@@ -85,7 +90,7 @@ for (const dialect of dialects)
             ]).finally(() => {
               clearTimeout(timer);
             });
-            expect(snapshot).toMatchObject({ revision: 2, retentionDays: 365 });
+            observed.first = { ...snapshot };
             await auditRaw(
               connection,
               'UPDATE "auditSettings" SET "revision" = ?, "settings" = ?',
@@ -94,17 +99,21 @@ for (const dialect of dialects)
                 JSON.stringify({ ...before, revision: 3, retentionDays: 400 }),
               ],
             );
-            expect(snapshot.revision).toBe(2);
-            expect(
-              (await settings.recorderPolicy(f.scope, { transaction }))
-                .revision,
-            ).toBe(3);
+            observed.pinnedRevision = snapshot.revision;
+            observed.latestRevision = (
+              await settings.snapshot(f.scope, { transaction })
+            ).revision;
             throw new Error('Synthetic rollback');
           }),
         ).rejects.toThrow('Synthetic rollback');
       } finally {
         await pending?.catch(() => undefined);
       }
+      expect(observed).toMatchObject({
+        first: { revision: 2, retentionDays: 365 },
+        pinnedRevision: 2,
+        latestRevision: 3,
+      });
       expect(timedOut).toBe(false);
       expect((await settings.get(f.scope)).revision).toBe(1);
     });
@@ -114,19 +123,28 @@ for (const dialect of dialects)
       const other = await fixture(dialect);
       const otherSource = await fixture(dialect, 'business');
       const settings = await service(f);
-      for (const foreign of [other, otherSource])
-        await foreign.connection.transaction(async (connection) => {
-          await expect(
+      for (const foreign of [other, otherSource]) {
+        const [result] = await foreign.connection.transaction((connection) =>
+          Promise.allSettled([
             settings.snapshot(f.scope, { transaction: active(connection) }),
-          ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
+          ]),
+        );
+        expect(result).toMatchObject({
+          status: 'rejected',
+          reason: { code: 'AUDIT_TRANSACTION_MISMATCH' },
         });
+      }
       let completed: TransactionHandle | undefined;
-      await f.connection.transaction(async (connection) => {
+      const [forged] = await f.connection.transaction((connection) => {
         const handle = active(connection);
         completed = handle;
-        await expect(
+        return Promise.allSettled([
           settings.snapshot(f.scope, { transaction: { ...handle } }),
-        ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
+        ]);
+      });
+      expect(forged).toMatchObject({
+        status: 'rejected',
+        reason: { code: 'AUDIT_TRANSACTION_MISMATCH' },
       });
       await expect(
         settings.snapshot(f.scope, { transaction: completed }),
@@ -141,6 +159,11 @@ for (const dialect of dialects)
         business.connection,
         'CREATE TABLE "settings_probe" ("id" INTEGER PRIMARY KEY)',
       );
+      const observed: {
+        first?: AuditSettings;
+        pinnedRevision?: number;
+        latestRevision?: number;
+      } = {};
       await expect(
         business.connection.transaction(async (connection) => {
           await auditRaw(
@@ -149,20 +172,24 @@ for (const dialect of dialects)
             [1],
           );
           const snapshot = await settings.snapshot(config.scope);
-          expect(snapshot).toMatchObject({
-            revision: 1,
-            observationStore: 'main',
-          });
+          observed.first = { ...snapshot };
           await settings.update(config.scope, {
             expectedRevision: 1,
             settings: { ...snapshot, retentionDays: 365 },
             confirmRetentionReduction: false,
           });
-          expect(snapshot.revision).toBe(1);
-          expect((await settings.snapshot(config.scope)).revision).toBe(2);
+          observed.pinnedRevision = snapshot.revision;
+          observed.latestRevision = (
+            await settings.snapshot(config.scope)
+          ).revision;
           throw new Error('Business rollback');
         }),
       ).rejects.toThrow('Business rollback');
+      expect(observed).toMatchObject({
+        first: { revision: 1, observationStore: 'main' },
+        pinnedRevision: 1,
+        latestRevision: 2,
+      });
       expect(
         await auditRows(
           business.connection,
@@ -179,46 +206,29 @@ for (const dialect of dialects)
       const f = await fixture(dialect);
       const settings = await service(f);
       let finished: TransactionHandle | undefined;
+      const revisions: number[] = [];
       await expect(
         f.connection.transaction(async (outer) => {
           await outer.transaction(async (inner) => {
             const handle = active(inner);
-            expect(
+            revisions.push(
               (await settings.snapshot(f.scope, { transaction: handle }))
                 .revision,
-            ).toBe(1);
+            );
             transactionAuthority.markRollbackOnly(handle);
             // The existing authority permits reads until completion; it still forbids commit.
             transactionAuthority.validate(handle, inner);
-            expect(
+            revisions.push(
               (await settings.get(f.scope, { transaction: handle })).revision,
-            ).toBe(1);
+            );
             finished = handle;
           });
         }),
       ).rejects.toThrow('rollback-only');
+      expect(revisions).toEqual([1, 1]);
       await expect(
         settings.snapshot(f.scope, { transaction: finished }),
       ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
       expect((await settings.snapshot(f.scope)).revision).toBe(1);
-    });
-  });
-
-for (const dialect of dialects)
-  describe('configuration Store composition ' + dialect, () => {
-    it('accepts only the exact configuration Store instance before collector startup', async () => {
-      const f = await fixture(dialect);
-      const foreign = await fixture(dialect);
-      const settings = await service(f);
-      const another = new PortableAuditStore(f.connection, f.store.binding);
-      await another.prepare();
-      expect(() => settings.assertConfigurationStore(f.store)).not.toThrow();
-      expect(() => settings.assertConfigurationStore(foreign.store)).toThrow(
-        'AUDIT_TRANSACTION_MISMATCH',
-      );
-      expect(() => settings.assertConfigurationStore(another)).toThrow(
-        'AUDIT_TRANSACTION_MISMATCH',
-      );
-      expect((await settings.get(f.scope)).revision).toBe(1);
     });
   });

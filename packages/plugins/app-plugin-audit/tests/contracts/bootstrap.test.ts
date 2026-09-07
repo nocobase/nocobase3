@@ -7,14 +7,10 @@ import plugin, {
 import { auditServiceToken as tokenFromSubpath } from '@nocobase/app-plugin-audit/server/tokens';
 import type {
   AuditEventInput,
-  AuditReceipt,
   AuditRecorder,
   AuditService,
-  AuditEventDto,
-  AuditEventsQuery,
   AuditSettingsUpdate,
 } from '@nocobase/app-plugin-audit/server/contracts';
-import type { AuditEventsPage } from '@nocobase/app-plugin-audit/client/contracts';
 
 const input: AuditEventInput = {
   action: 'orders.approve',
@@ -24,23 +20,6 @@ const input: AuditEventInput = {
     resource: 'orders',
     key: { tenant: 'test', id: 42 },
   },
-};
-const event: AuditEventDto = {
-  id: 'fixture-event',
-  eventVersion: 1,
-  kind: 'business',
-  producer: 'fixture',
-  action: input.action,
-  outcome: input.outcome,
-  appId: 'fixture-app',
-  securityScope: 'fixture-scope',
-  actor: { type: 'workflow', id: 'fixture-run' },
-  initiator: { type: 'user', id: 'fixture-user' },
-  occurredAt: '2026-09-05T00:00:00Z',
-  recordedAt: '2026-09-05T00:00:00Z',
-  store: 'observations',
-  target: input.target,
-  policyVersion: 1,
 };
 
 describe('public audit bootstrap', () => {
@@ -89,30 +68,6 @@ describe('public audit bootstrap', () => {
     expect(plugin.database).toEqual({
       migrations: './server/database/migrations',
     });
-  });
-  it('keeps business target datasource distinct from the observation store', () => {
-    const query: AuditEventsQuery = {
-      store: 'observations',
-      target: input.target,
-      pageSize: 20,
-    };
-    const page: AuditEventsPage = {
-      items: [event],
-      nextCursor: 'opaque-scoped-cursor',
-    };
-    expect(page.items[0]?.target?.dataSource).toBe('business');
-    expect(query.store).toBe(page.items[0]?.store);
-    expect(page.items[0]?.actor.type).toBe('workflow');
-    expect(page.items[0]?.initiator?.type).toBe('user');
-  });
-  it('distinguishes all receipt states in consumer fixtures', () => {
-    const receipts: readonly AuditReceipt[] = [
-      { state: 'committed', eventId: 'committed-id' },
-      { state: 'pending-commit', eventId: 'pending-id' },
-      { state: 'disabled', reason: 'disabled-by-deployment' },
-      { state: 'excluded', reason: 'not-in-policy', policyVersion: 3 },
-    ];
-    expect(new Set(receipts.map((receipt) => receipt.state)).size).toBe(4);
   });
   it('freezes required outcome and excludes trusted fields from ordinary input types', () => {
     expectTypeOf<AuditEventInput['outcome']>().toEqualTypeOf<

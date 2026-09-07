@@ -228,21 +228,6 @@ export function normalizeResourceRef(
   return resource(input, scope(trustedScope)).normalized;
 }
 
-/** A digest match alone is insufficient: compare the complete scoped locator on retrieval. */
-export function resourceRefsEqual(
-  left: NormalizedResourceRef,
-  right: NormalizedResourceRef,
-): boolean {
-  return (
-    left.appId === right.appId &&
-    left.securityScope === right.securityScope &&
-    left.dataSource === right.dataSource &&
-    left.resource === right.resource &&
-    left.keyHash === right.keyHash &&
-    left.keyEncoding === right.keyEncoding
-  );
-}
-
 function timestamp(value: unknown): string {
   const source = text(value, 32);
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(source))

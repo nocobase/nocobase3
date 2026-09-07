@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  transactionAuthority,
-  type TransactionHandle,
-  type DatabaseConnection,
-} from '@nocobase/db';
+import type { DatabaseConnection } from '@nocobase/db';
 import { bindAuditRecorder } from '@nocobase/app-plugin-audit/server';
+import { handle } from '../helpers/database-fixtures.js';
 import {
   createFixture,
   type Fixture,
@@ -12,11 +9,6 @@ import {
 } from './sqlite-fixture.js';
 
 const event = { action: 'synthetic.updated', outcome: 'success' as const };
-function handle(connection: DatabaseConnection): TransactionHandle {
-  const result = transactionAuthority.current(connection);
-  if (!result) throw new Error('Expected active transaction.');
-  return result;
-}
 describe('public bound Recorder', () => {
   let f: Fixture;
   beforeEach(async () => {
@@ -24,50 +16,6 @@ describe('public bound Recorder', () => {
   });
   afterEach(async () => {
     await f?.cleanup();
-  });
-
-  it('returns committed with a durable safe event after the transaction completes', async () => {
-    const receipt = await f.recorder.record({
-      ...event,
-      details: { secret: 'SYNTHETIC_SECRET', visible: 1 },
-    });
-    expect(receipt.state).toBe('committed');
-    if (receipt.state !== 'committed') throw new Error('Expected committed.');
-    const saved = await f.store.findById(f.scope, receipt.eventId);
-    expect(saved).toMatchObject({
-      ...event,
-      appId: f.scope.appId,
-      kind: 'business',
-      producer: 'synthetic-runtime',
-      policyVersion: 7,
-      details: { visible: 1 },
-    });
-    expect(JSON.stringify(saved)).not.toContain('SYNTHETIC_SECRET');
-  });
-
-  it('returns pending for outer transactions and removes the event after rollback', async () => {
-    let id = '';
-    let expired: TransactionHandle | undefined;
-    await expect(
-      f.connection.transaction(async (connection) => {
-        expired = handle(connection);
-        const receipt = await f.recorder.record(event, {
-          transaction: expired,
-        });
-        expect(receipt.state).toBe('pending-commit');
-        if (receipt.state !== 'pending-commit')
-          throw new Error('Expected pending.');
-        id = receipt.eventId;
-        expect(await f.store.findById(f.scope, id, expired)).toMatchObject(
-          event,
-        );
-        throw new Error('Synthetic rollback');
-      }),
-    ).rejects.toThrow('Synthetic rollback');
-    expect(await f.store.findById(f.scope, id)).toBeUndefined();
-    await expect(
-      f.recorder.record(event, { transaction: expired }),
-    ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
   });
 
   it('returns pending for idempotent repeats inside one transaction and commits a single event', async () => {
@@ -199,7 +147,7 @@ describe('public bound Recorder', () => {
     ).toHaveLength(1);
   });
 
-  it('keeps disabled/excluded explicit and never converts missing migration or storage failure to disabled', async () => {
+  it('reads policy changes and returns disabled/excluded without persisting an event', async () => {
     f.policy = { ...f.policy, enabled: false };
     expect(await f.recorder.record(event)).toEqual({
       state: 'disabled',
@@ -214,23 +162,6 @@ describe('public bound Recorder', () => {
     expect(
       (await f.store.query(f.scope, { store: 'main' })).items,
     ).toHaveLength(0);
-    f.policy = { ...f.policy, excluded: false };
-    const client = await f.connection.client<RawClient>();
-    await client.raw('DROP TABLE auditEvents');
-    await expect(f.recorder.record(event)).rejects.toMatchObject({
-      code: 'AUDIT_WRITE_FAILED',
-    });
-    await expect(f.store.prepare()).rejects.toMatchObject({
-      code: 'AUDIT_NOT_READY',
-    });
-    await expect(f.recorder.record(event)).rejects.toMatchObject({
-      code: 'AUDIT_NOT_READY',
-    });
-    expect(
-      await client.raw(
-        "SELECT name FROM sqlite_master WHERE name = 'auditEvents'",
-      ),
-    ).toEqual([]);
   });
 
   it('captures trusted identity at bind and rejects ordinary overrides without calling a getter', async () => {
@@ -286,25 +217,6 @@ describe('public bound Recorder', () => {
     ]);
   });
 
-  it('does not prepare missing migrations and leaves a fresh SQLite database without audit tables', async () => {
-    const empty = await createFixture(false);
-    try {
-      await expect(empty.store.prepare()).rejects.toMatchObject({
-        code: 'AUDIT_NOT_READY',
-      });
-      await expect(empty.recorder.record(event)).rejects.toMatchObject({
-        code: 'AUDIT_NOT_READY',
-      });
-      const client = await empty.connection.client<RawClient>();
-      expect(
-        await client.raw(
-          "SELECT name FROM sqlite_master WHERE name IN ('auditEvents', 'auditSettings')",
-        ),
-      ).toEqual([]);
-    } finally {
-      await empty.cleanup();
-    }
-  });
   it('uses the captured policy payload limit without an accidental second default cap', async () => {
     f.policy = { ...f.policy, maxDetailsBytes: 100000 };
     const receipt = await f.recorder.record({

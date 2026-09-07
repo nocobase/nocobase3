@@ -26,16 +26,138 @@ import authentication, {
   authenticationConfig,
 } from '@nocobase/app-plugin-authentication/server';
 import authorization from '@nocobase/app-plugin-authorization/server';
-import audit, { auditConfig } from '../../server/index.js';
+import audit, { auditConfig, type AuditConfig } from '../../server/index.js';
 import {
   auditCompositionToken,
   type AuditComposition,
 } from '../../server/providers/composition.js';
 import type { AuditEventDto } from '../../server/contracts.js';
 import { storedText } from '../../server/database/sql-client.js';
-import { createPortableFixture, auditRows } from './database-fixtures.js';
+import {
+  createPortableFixture,
+  auditRows,
+  dialects,
+  type PortableFixture,
+} from './database-fixtures.js';
 import { runCouplingCleanup } from './system-teardown.js';
 
+export interface ProductionApp {
+  readonly f: PortableFixture;
+  readonly app: Application;
+  make(): Application;
+  close(): Promise<void>;
+}
+
+export async function createProductionApp(
+  dialect: (typeof dialects)[number],
+  enabled: boolean = true,
+  overrides: Partial<AuditConfig> = {},
+  additionalStore: boolean = false,
+  table: string = 'g20_items',
+): Promise<ProductionApp> {
+  const primary = await createPortableFixture(dialect);
+  const secondary = additionalStore
+    ? await createPortableFixture(dialect, true, 'other')
+    : undefined;
+  const manager = secondary
+    ? createDatabaseManager({
+        default: 'main',
+        connections: { main: primary.config, other: secondary.config },
+      })
+    : primary.manager;
+  const f = {
+    ...primary,
+    manager,
+    connection: manager.connection('main'),
+    cleanup: async () => {
+      if (secondary) await manager.destroy();
+      await primary.cleanup();
+      await secondary?.cleanup();
+    },
+  };
+  const caching = createCaching();
+  await f.connection.builder.createCollection(table, (table) => {
+    table.string('id').primary();
+    table.string('name');
+  });
+  for (const name of ['authentication', 'authorization'])
+    await createMigrator({
+      database: f.manager,
+      packageName: '@nocobase/app-plugin-' + name,
+      directory: fileURLToPath(
+        new URL(
+          '../../../app-plugin-' + name + '/database/migrations',
+          import.meta.url,
+        ),
+      ),
+    }).latest();
+  const config = new AppConfig([
+    {
+      ...appConfig,
+      defaults: {
+        name: 'main',
+        publicOrigin: 'http://localhost',
+        publicBasePath: '',
+        internalBasePath: '',
+        publicApiUrl: '/api',
+      },
+    },
+    {
+      ...authenticationConfig,
+      defaults: {
+        secret: 'G20-synthetic-server-authentication-secret',
+        emailAndPassword: { enabled: true, autoSignIn: true },
+        session: { storeSessionInDatabase: true },
+      },
+    },
+    { ...auditConfig, defaults: { ...auditConfig.defaults, ...overrides } },
+  ]);
+  await config.loadAll();
+  const make = (): Application => {
+    const app = new Application<
+      import('@nocobase/app-server/config').AppConfigAccessor
+    >({
+      config,
+      paths: createConfigPaths({ rootDir: f.directory }),
+      websocket: () => async () => null,
+    });
+    app.container.instance(databaseManagerToken, f.manager);
+    app.container.instance(cachingToken, caching);
+    app.container.instance(idGeneratorToken, {
+      generate: () => 1,
+      generateString: () => randomUUID(),
+    });
+    app.addServerPlugins(
+      resolveAppServerPlugins(
+        fileURLToPath(
+          new URL(
+            '../../../../templates/app-template-default',
+            import.meta.url,
+          ),
+        ),
+        defineServerPlugins([
+          authentication,
+          authorization,
+          ...(enabled ? [audit] : []),
+        ]),
+      ),
+    );
+    return app;
+  };
+  const app = make();
+  return {
+    f,
+    app,
+    make,
+    async close() {
+      await runCouplingCleanup([
+        { name: 'application shutdown', run: () => app.shutdown() },
+        { name: 'cache disposal', run: () => caching.dispose() },
+        { name: 'database cleanup', run: f.cleanup },
+      ]);
+    },
+  };
+}
 export interface CouplingFixture {
   app: Application;
   composition: AuditComposition;

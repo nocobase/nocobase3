@@ -14,7 +14,7 @@ afterEach(async () => {
 
 for (const dialect of dialects)
   it(
-    'Store collector metadata validates data and participates in idempotency ' +
+    'Store collector metadata persists and participates in idempotency ' +
       dialect,
     async () => {
       const f = await createPortableFixture(dialect);
@@ -77,47 +77,50 @@ for (const dialect of dialects)
             { idempotencyKey: 'synthetic-http-key' },
           ),
         ).rejects.toMatchObject({ code: 'AUDIT_IDEMPOTENCY_CONFLICT' });
-      const getter = vi.fn(() => 'secret-sentinel');
-      const accessor = Object.defineProperty({}, 'method', {
-        get: getter,
-        enumerable: true,
-      });
-      const proxy = new Proxy({}, { get: getter, ownKeys: getter });
-      for (const change of [
-        { http: { ...event.http!, httpStatus: 99 } },
-        { http: { ...event.http!, durationMs: Infinity } },
-        { http: { ...event.http!, bindings: 'secret-sentinel' } },
-        { http: accessor },
-        { http: proxy },
-        { titleKey: null },
-        { reasonCode: 3 },
-        { captureWarnings: [3] },
-        { database: { executionId: 'e', countSemantics: 'matched' } },
-        { unexpected: 'secret-sentinel' },
-        { captureWarnings: new Proxy([], { get: getter }) },
-      ])
+      // Metadata validation is JavaScript-only; persistence and fingerprints run on every dialect.
+      if (dialect === 'sqlite') {
+        const getter = vi.fn(() => 'secret-sentinel');
+        const accessor = Object.defineProperty({}, 'method', {
+          get: getter,
+          enumerable: true,
+        });
+        const proxy = new Proxy({}, { get: getter, ownKeys: getter });
+        for (const change of [
+          { http: { ...event.http!, httpStatus: 99 } },
+          { http: { ...event.http!, durationMs: Infinity } },
+          { http: { ...event.http!, bindings: 'secret-sentinel' } },
+          { http: accessor },
+          { http: proxy },
+          { titleKey: null },
+          { reasonCode: 3 },
+          { captureWarnings: [3] },
+          { database: { executionId: 'e', countSemantics: 'matched' } },
+          { unexpected: 'secret-sentinel' },
+          { captureWarnings: new Proxy([], { get: getter }) },
+        ])
+          await expect(
+            f.store.append({ ...event, ...change } as unknown as AuditEventDto),
+          ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
         await expect(
-          f.store.append({ ...event, ...change } as unknown as AuditEventDto),
+          f.store.append(
+            Object.defineProperty({ ...event }, 'http', { get: getter }),
+          ),
         ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
-      await expect(
-        f.store.append(
-          Object.defineProperty({ ...event }, 'http', { get: getter }),
-        ),
-      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
-      await expect(
-        f.store.append(new Proxy(event, { get: getter })),
-      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
-      expect(getter).not.toHaveBeenCalled();
-      await expect(
-        f.store.appendWithLimits(event, {}, { maxBytes: 32 }),
-      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
-      await expect(
-        f.recorder.record({
-          action: 'synthetic.inject',
-          outcome: 'success',
-          http: event.http,
-        } as unknown as Parameters<typeof f.recorder.record>[0]),
-      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+        await expect(
+          f.store.append(new Proxy(event, { get: getter })),
+        ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+        expect(getter).not.toHaveBeenCalled();
+        await expect(
+          f.store.appendWithLimits(event, {}, { maxBytes: 32 }),
+        ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+        await expect(
+          f.recorder.record({
+            action: 'synthetic.inject',
+            outcome: 'success',
+            http: event.http,
+          } as unknown as Parameters<typeof f.recorder.record>[0]),
+        ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+      }
       expect(
         (await f.store.query(f.scope, { store: 'main' })).items,
       ).toHaveLength(1);
@@ -126,7 +129,7 @@ for (const dialect of dialects)
 
 for (const dialect of dialects)
   it(
-    'database metadata rejects invalid fields and binds execution/count fingerprint ' +
+    'database metadata persists and binds execution/count fingerprint ' +
       dialect,
     async () => {
       const f = await createPortableFixture(dialect);
@@ -152,7 +155,10 @@ for (const dialect of dialects)
           countSemantics: 'matched',
         },
       };
-      await f.store.append(event, { idempotencyKey: 'count-key' });
+      const receipt = await f.store.append(event, {
+        idempotencyKey: 'count-key',
+      });
+      expect(await f.store.findById(f.scope, receipt.eventId)).toEqual(event);
       for (const change of [
         { count: 1 },
         { countSemantics: 'changed' },
@@ -167,31 +173,33 @@ for (const dialect of dialects)
             { idempotencyKey: 'count-key' },
           ),
         ).rejects.toMatchObject({ code: 'AUDIT_IDEMPOTENCY_CONFLICT' });
-      for (const change of [
-        { count: -1 },
-        { count: 0.5 },
-        { count: NaN },
-        { count: '1' },
-        { countSemantics: 'invented' },
-        { executionId: '' },
-        { before: { secret: 'sentinel' } },
-      ])
+      if (dialect === 'sqlite') {
+        for (const change of [
+          { count: -1 },
+          { count: 0.5 },
+          { count: NaN },
+          { count: '1' },
+          { countSemantics: 'invented' },
+          { executionId: '' },
+          { before: { secret: 'sentinel' } },
+        ])
+          await expect(
+            f.store.append({
+              ...event,
+              database: { ...event.database!, ...change },
+            } as unknown as AuditEventDto),
+          ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+        const getter = vi.fn(() => 'secret-sentinel');
         await expect(
           f.store.append({
             ...event,
-            database: { ...event.database!, ...change },
-          } as unknown as AuditEventDto),
+            database: Object.defineProperty({}, 'executionId', {
+              get: getter,
+            }) as AuditEventDto['database'],
+          }),
         ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
-      const getter = vi.fn(() => 'secret-sentinel');
-      await expect(
-        f.store.append({
-          ...event,
-          database: Object.defineProperty({}, 'executionId', {
-            get: getter,
-          }) as AuditEventDto['database'],
-        }),
-      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
-      expect(getter).not.toHaveBeenCalled();
+        expect(getter).not.toHaveBeenCalled();
+      }
       expect(
         (await f.store.query(f.scope, { store: 'main' })).items,
       ).toHaveLength(1);

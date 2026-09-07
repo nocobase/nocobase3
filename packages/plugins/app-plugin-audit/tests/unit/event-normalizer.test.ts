@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeEvent,
   normalizeResourceRef,
-  resourceRefsEqual,
   type EventNormalizationContext,
 } from '../../server/event-normalizer.js';
 
@@ -158,6 +157,12 @@ describe('event normalizer', () => {
       context.scope,
     );
     expect(first).toEqual(second);
+    expect(
+      normalizeResourceRef(
+        { resource: 'x', key: '汉'.repeat(1000) },
+        context.scope,
+      ).keyEncoding,
+    ).toContain('汉'.repeat(1000));
     expect(first.keyHash).not.toBe(
       normalizeResourceRef(
         { resource: 'x', key: { z: '1', a: '1' } },
@@ -176,21 +181,6 @@ describe('event normalizer', () => {
         context.scope,
       ),
     ).toThrow('AUDIT_INVALID_EVENT');
-  });
-  it('retains complete long keys and rejects a digest collision on retrieval', () => {
-    const left = normalizeResourceRef(
-      { resource: 'x', key: '汉'.repeat(1000) },
-      context.scope,
-    );
-    expect(left.keyEncoding).toContain('汉'.repeat(1000));
-    expect(resourceRefsEqual(left, { ...left })).toBe(true);
-    expect(resourceRefsEqual(left, { ...left, keyEncoding: 'different' })).toBe(
-      false,
-    );
-    expect(resourceRefsEqual(left, { ...left, appId: 'foreign' })).toBe(false);
-    expect(resourceRefsEqual(left, { ...left, dataSource: 'foreign' })).toBe(
-      false,
-    );
   });
   it('rejects malformed keys without stringifying arbitrary objects', () => {
     for (const key of [

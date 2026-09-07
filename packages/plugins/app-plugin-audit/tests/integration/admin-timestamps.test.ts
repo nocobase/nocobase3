@@ -11,7 +11,7 @@ import {
 } from '../helpers/database-fixtures.js';
 
 describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
-  it.each([false, true])(
+  it.each(dialect === 'mysql' ? [false, true] : [false])(
     'preserves timezone, nullable fields, precision and cursors with dateStrings=%s',
     async (dateStrings) => {
       const fixture = await createPortableFixture(dialect);

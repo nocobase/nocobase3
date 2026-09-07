@@ -352,54 +352,6 @@ export class PortableAuditStore implements AuditStore {
       throw new AuditError('AUDIT_WRITE_FAILED');
     }
   }
-
-  async deleteBatch(
-    scope: TrustedAuditScope,
-    options: {
-      readonly store: string;
-      readonly cutoff: string;
-      readonly limit: number;
-    },
-  ): Promise<number> {
-    this.assertScope(scope, options.store);
-    if (!this.owner) throw new AuditError('AUDIT_NOT_READY');
-    if (
-      !Number.isSafeInteger(options.limit) ||
-      options.limit < 1 ||
-      options.limit > 1000 ||
-      !Number.isFinite(Date.parse(options.cutoff)) ||
-      new Date(options.cutoff).toISOString() !== options.cutoff
-    )
-      throw new AuditError('AUDIT_INVALID_EVENT');
-    try {
-      return await this.connection.transaction(async (connection) => {
-        const rows = await auditRows(
-          connection,
-          'SELECT "eventHash" FROM "auditEvents" WHERE "scopeIndex" = ? AND "appId" = ? AND "securityScope" = ? AND "store" = ? AND "occurredAt" < ? ORDER BY "occurredAt", "id" LIMIT ?' +
-            (connection.dialect === 'sqlite' ? '' : ' FOR UPDATE'),
-          [
-            digest(
-              JSON.stringify([scope.appId, scopeEncoding(scope.securityScope)]),
-            ),
-            scope.appId,
-            scopeEncoding(scope.securityScope),
-            options.store,
-            options.cutoff,
-            options.limit,
-          ],
-        );
-        if (rows.length === 0) return 0;
-        await auditRaw(
-          connection,
-          `DELETE FROM "auditEvents" WHERE "eventHash" IN (${rows.map(() => '?').join(',')})`,
-          rows.map((row) => storedText(row, 'eventHash')),
-        );
-        return rows.length;
-      });
-    } catch {
-      throw new AuditError('AUDIT_WRITE_FAILED');
-    }
-  }
 }
 
 /** Backward-compatible constructor using the shared portable implementation. */

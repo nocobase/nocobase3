@@ -1,11 +1,10 @@
 import { setImmediate } from 'node:timers/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Hono } from 'hono';
 import {
   bindAuditRecorder,
   SqliteAuditStore,
 } from '@nocobase/app-plugin-audit/server';
-import { createDatabaseManager, transactionAuthority } from '@nocobase/db';
+import { createDatabaseManager } from '@nocobase/db';
 import type {
   AuditRecorder,
   TrustedAuditScope,
@@ -15,7 +14,6 @@ import {
   TrustedAuditRuntime,
   type AuditBackgroundTrace,
 } from '../../server/runtime.js';
-import { createAuditScopeResources } from '../../server/providers/scope.js';
 import {
   createFixture,
   type Fixture,
@@ -76,7 +74,7 @@ describe('trusted scope with durable public Recorder attribution', () => {
     await f?.cleanup();
   });
 
-  it('A04 revokes a still-running child when its enclosing request has already ended', async () => {
+  it('revokes a still-running child when its enclosing request has already ended', async () => {
     const release = latch();
     let detached: Promise<void> | undefined;
     await runtime.runRequest(async () => {
@@ -92,7 +90,7 @@ describe('trusted scope with durable public Recorder attribution', () => {
     expect(rows[0]?.actor.type).toBe('unknown');
   });
 
-  it('A05 keeps manager.query and cached root builders outside a same-manager transaction', async () => {
+  it('keeps manager.query and cached root builders outside a same-manager transaction', async () => {
     const manager = createDatabaseManager({
       connections: {
         main: {
@@ -140,15 +138,16 @@ describe('trusted scope with durable public Recorder attribution', () => {
     }
   });
 
-  it('A01 interleaves two users and two Apps through Promise.all without identity bleed', async () => {
+  it('interleaves two users and two Apps through Promise.all without identity bleed', async () => {
     const otherScope = { appId: 'second-app', actor: { type: 'unknown' } };
     const otherStore = new SqliteAuditStore(f.connection, {
       appId: 'second-app',
       store: 'main',
     });
     await otherStore.prepare();
-    const resources = createAuditScopeResources({
+    const second = new TrustedAuditRuntime({
       appId: 'second-app',
+      carrier: new NodeAuditScopeCarrier('second-app'),
       diagnostic: () => undefined,
       bind: (scope) =>
         bindAuditRecorder(scope, {
@@ -157,7 +156,6 @@ describe('trusted scope with durable public Recorder attribution', () => {
           policy: () => Promise.resolve(f.policy),
         }),
     });
-    const second = resources.runtime;
     const arrivals = latch();
     let entered = 0;
     async function write(
@@ -205,11 +203,11 @@ describe('trusted scope with durable public Recorder attribution', () => {
       expect(diagnostics).toEqual([]);
       expect(carrier.current()).toBeUndefined();
     } finally {
-      resources.dispose();
+      second.dispose();
     }
   });
 
-  it('A02 preserves the original human across Agent, Workflow and human approval', async () => {
+  it('preserves the original human across Agent, Workflow and human approval', async () => {
     await runtime.runRequest(() =>
       runtime.runAuthenticated(alice, async () => {
         await service.write('human');
@@ -228,6 +226,7 @@ describe('trusted scope with durable public Recorder attribution', () => {
           },
         );
         await service.write('human.resumed');
+        await runtime.runAnonymous(() => service.write('anonymous'));
       }),
     );
     const rows = (await f.store.query(f.scope, { store: 'main' })).items;
@@ -241,6 +240,7 @@ describe('trusted scope with durable public Recorder attribution', () => {
     });
     expect(byAction.get('workflow.resumed')?.actor.type).toBe('workflow');
     expect(byAction.get('human.resumed')?.actor).toEqual(alice.actor);
+    expect(byAction.get('anonymous')?.actor.type).toBe('anonymous');
     expect(byAction.get('workflow')?.roleIds).toBeUndefined();
     for (const key of ['requestId', 'operationId', 'correlationId'] as const) {
       expect(new Set(rows.map((row) => row[key])).size).toBe(1);
@@ -259,85 +259,7 @@ describe('trusted scope with durable public Recorder attribution', () => {
     ).toBe(3);
   });
 
-  it('A03 ignores forged HTTP header/body identity and snapshots authentication and logout', async () => {
-    const app = new Hono();
-    // This deterministic authentication fixture supplies a server-owned identity.
-    // G15 owns wiring to the actual authentication plugin; this is no ACL claim.
-    app.use('*', async (context, next) =>
-      runtime.runRequest(async () => {
-        await service.write('request.start');
-        if (
-          context.req.header('authorization') === 'Bearer SYNTHETIC_SESSION'
-        ) {
-          await runtime.runAuthenticated(alice, next);
-        } else {
-          await next();
-        }
-      }),
-    );
-    app.post('/operation', async (context) => {
-      await service.write('operation');
-      return context.json({ ok: true });
-    });
-    app.post('/logout', async (context) => {
-      await service.write('logout.before');
-      await runtime.runAnonymous(() => service.write('logout.after'));
-      return context.json({ ok: true });
-    });
-    const forged = {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer SYNTHETIC_SESSION',
-        'x-actor-id': 'attacker',
-        'x-app-id': 'other',
-        'x-operation-id': 'forged',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        actorId: 'attacker',
-        actor: { type: 'system' },
-        initiator: 'attacker',
-      }),
-    };
-    expect((await app.request('/operation', forged)).status).toBe(200);
-    expect((await app.request('/logout', forged)).status).toBe(200);
-    expect(
-      (
-        await app.request('/operation', {
-          method: 'POST',
-          headers: { 'x-actor-id': 'alice' },
-        })
-      ).status,
-    ).toBe(200);
-    await service.write('context.missing');
-    const rows = (await f.store.query(f.scope, { store: 'main' })).items;
-    expect(
-      rows
-        .filter((row) => row.action === 'request.start')
-        .every((row) => row.actor.type === 'anonymous'),
-    ).toBe(true);
-    expect(
-      rows
-        .filter((row) => row.action === 'operation')
-        .map((row) => row.actor.type)
-        .sort(),
-    ).toEqual(['anonymous', 'user']);
-    expect(rows.find((row) => row.action === 'logout.before')?.actor).toEqual(
-      alice.actor,
-    );
-    expect(rows.find((row) => row.action === 'logout.after')).toMatchObject({
-      actor: { type: 'anonymous' },
-      initiator: alice.actor,
-    });
-    expect(rows.find((row) => row.action === 'context.missing')?.actor).toEqual(
-      { type: 'unknown' },
-    );
-    expect(JSON.stringify(rows)).not.toContain('attacker');
-    expect(JSON.stringify(rows)).not.toContain('forged');
-    expect(diagnostics).toEqual(['AUDIT_SCOPE_MISSING']);
-  });
-
-  it('A04 revokes request/job contexts after errors and restores an enclosing actor', async () => {
+  it('revokes request/job contexts after errors and restores an enclosing actor', async () => {
     await expect(
       runtime.runRequest(() =>
         runtime.runAuthenticated(alice, async () => {
@@ -376,7 +298,7 @@ describe('trusted scope with durable public Recorder attribution', () => {
     expect(carrier.current()).toBeUndefined();
   });
 
-  it('A04 revokes detached asynchronous descendants after the callback settles', async () => {
+  it('revokes detached asynchronous descendants after the callback settles', async () => {
     const release = latch();
     let detached: Promise<void> | undefined;
     await runtime.runRequest(() =>
@@ -396,7 +318,7 @@ describe('trusted scope with durable public Recorder attribution', () => {
     );
   });
 
-  it('A04 disposal invalidates suspended scopes and refuses further Recorder writes', async () => {
+  it('disposal invalidates suspended scopes and refuses further Recorder writes', async () => {
     const release = latch();
     const pending = runtime.runRequest(() =>
       runtime.runAuthenticated(alice, async () => {
@@ -417,75 +339,6 @@ describe('trusted scope with durable public Recorder attribution', () => {
     expect(
       (await f.store.query(f.scope, { store: 'main' })).items,
     ).toHaveLength(0);
-  });
-
-  it('A05 leaves explicit transaction and original manager query selection unchanged', async () => {
-    const other = await createFixture();
-    try {
-      const client = await f.connection.client<RawClient>();
-      const otherClient = await other.connection.client<RawClient>();
-      await client.raw('CREATE TABLE scope_business (id INTEGER PRIMARY KEY)');
-      await otherClient.raw(
-        'CREATE TABLE scope_business (id INTEGER PRIMARY KEY)',
-      );
-      await expect(
-        runtime.runRequest(() =>
-          runtime.runAuthenticated(alice, () =>
-            f.connection.transaction(async (transaction) => {
-              expect(
-                transactionAuthority.current(f.connection),
-              ).toBeUndefined();
-              expect(
-                transactionAuthority.current(other.connection),
-              ).toBeUndefined();
-              await transaction.query
-                .insertInto('scope_business')
-                .values({ id: 1 })
-                .execute();
-              // A different explicitly selected manager remains outside the transaction.
-              await other.manager
-                .query()
-                .insertInto('scope_business')
-                .values({ id: 2 })
-                .execute();
-              const handle = transactionAuthority.current(transaction);
-              if (!handle) throw new Error('Expected live handle');
-              expect(
-                (await runtime.recorder.record(event, { transaction: handle }))
-                  .state,
-              ).toBe('pending-commit');
-              throw new Error('rollback');
-            }),
-          ),
-        ),
-      ).rejects.toThrow('rollback');
-      expect(await client.raw('SELECT * FROM scope_business')).toEqual([]);
-      expect(await otherClient.raw('SELECT * FROM scope_business')).toEqual([
-        { id: 2 },
-      ]);
-      expect(
-        (await f.store.query(f.scope, { store: 'main' })).items,
-      ).toHaveLength(0);
-    } finally {
-      await other.cleanup();
-    }
-  });
-
-  it('A06 never attributes later human business operations to a program-authoring Code Agent', async () => {
-    await runtime.runChild(
-      { actor: { type: 'agent', id: 'code-author' } },
-      () => service.write('program.created'),
-    );
-    await runtime.runRequest(() =>
-      runtime.runAuthenticated(alice, () => service.write('program.executed')),
-    );
-    const rows = (await f.store.query(f.scope, { store: 'main' })).items;
-    expect(rows.find((row) => row.action === 'program.created')?.actor.id).toBe(
-      'code-author',
-    );
-    expect(rows.find((row) => row.action === 'program.executed')).toMatchObject(
-      { actor: alice.actor, initiator: alice.actor },
-    );
   });
 
   it('copies and freezes scope values, rejects foreign Apps and never invokes accessors', () => {

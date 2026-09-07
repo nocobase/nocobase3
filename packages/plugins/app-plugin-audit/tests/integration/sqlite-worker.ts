@@ -1,6 +1,6 @@
 import { createDatabaseManager } from '@nocobase/db';
 import {
-  SqliteAuditStore,
+  PortableAuditStore,
   bindAuditRecorder,
 } from '@nocobase/app-plugin-audit/server';
 const filename = process.argv[2];
@@ -12,7 +12,7 @@ try {
     appId: 'synthetic-app',
     actor: { type: 'user', id: 'synthetic-user' },
   };
-  const store = new SqliteAuditStore(manager.connection(), {
+  const store = new PortableAuditStore(manager.connection(), {
     appId: scope.appId,
     store: 'main',
   });

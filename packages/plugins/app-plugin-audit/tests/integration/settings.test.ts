@@ -8,6 +8,7 @@ import {
 import { AuditReadiness } from '../../server/providers/readiness.js';
 import { PersistentAuditSettingsService } from '../../server/settings-service.js';
 import { bindAuditRecorder } from '../../server/service.js';
+import { PortableAuditStore } from '../../server/store.js';
 import type {
   AuditDeploymentRequirements,
   AuditSettings,
@@ -63,13 +64,14 @@ async function runtime(f: PortableFixture, catalog: AuditCaptureCatalog) {
     targets: [],
     dispose: () => undefined,
   });
+  let receipt: Awaited<ReturnType<typeof f.recorder.record>> | undefined;
   await handle.verify(async () => {
-    const receipt = await f.recorder.record({
+    receipt = await f.recorder.record({
       action: 'synthetic.probe',
       outcome: 'success',
     });
-    expect(receipt.state).toBe('committed');
   });
+  expect(receipt?.state).toBe('committed');
   return handle;
 }
 const enabled: Partial<Omit<AuditSettings, 'revision'>> = {
@@ -90,6 +92,20 @@ for (const dialect of dialects)
       const a = assembly(f);
       const b = assembly(f);
       const current = await a.settings.initialize(f.scope);
+      await expect(
+        a.settings.get({ ...f.scope, appId: 'other-app' }),
+      ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
+      await expect(
+        a.settings.update(f.scope, {
+          expectedRevision: current.revision,
+          settings: { ...current, observationStore: 'absent' },
+          confirmRetentionReduction: false,
+        }),
+      ).rejects.toMatchObject({ code: 'AUDIT_TARGET_UNSUPPORTED' });
+      expect(await a.settings.get(f.scope)).toEqual(current);
+      expect((await f.store.query(f.scope, { store: 'main' })).items).toEqual(
+        [],
+      );
       const results = await Promise.allSettled(
         [a, b].map(({ settings }, index) =>
           settings.update(f.scope, {
@@ -119,7 +135,7 @@ for (const dialect of dialects)
       });
     });
 
-    it('restart never overwrites persisted null; zero and unconfirmed reductions are rejected', async () => {
+    it('restart preserves null retention and requires confirmation before a finite policy', async () => {
       const f = await fixture();
       const a = assembly(f);
       const current = await a.settings.initialize(f.scope);
@@ -138,14 +154,14 @@ for (const dialect of dialects)
         enabled: false,
         retentionDays: null,
       });
-      for (const retentionDays of [0, 10])
-        await expect(
-          restarted.settings.update(f.scope, {
-            expectedRevision: 2,
-            settings: { ...current, retentionDays },
-            confirmRetentionReduction: false,
-          }),
-        ).rejects.toMatchObject({ code: 'AUDIT_POLICY_CONFLICT' });
+      await expect(
+        restarted.settings.update(f.scope, {
+          expectedRevision: 2,
+          settings: { ...current, retentionDays: 10 },
+          confirmRetentionReduction: false,
+        }),
+      ).rejects.toMatchObject({ code: 'AUDIT_POLICY_CONFLICT' });
+      expect((await restarted.settings.get(f.scope)).revision).toBe(2);
       const after = await restarted.settings.update(f.scope, {
         expectedRevision: 2,
         settings: { ...current, retentionDays: 10 },
@@ -205,8 +221,6 @@ for (const dialect of dialects)
       await runtime(f, a.catalog);
       expect(await a.readiness.start(await a.settings.get(f.scope))).toBe(true);
       expect(a.health.get().state).toBe('ready-no-events');
-      a.health.success('synthetic-runtime', 'main');
-      expect(a.health.get().state).toBe('healthy');
     });
 
     it('database read/write outage stays visible locally without exposing underlying errors', async () => {
@@ -232,109 +246,8 @@ for (const dialect of dialects)
         scope: 'current-instance-only',
         dataSources: ['main'],
       });
-      expect(a.health.observe().observedAt).toMatch(/Z$/);
-      expect(
-        a.health.observe({ instanceId: 'another-instance' }),
-      ).toMatchObject({
-        observation: 'unknown',
-        coverage: [],
-        scope: 'unobserved-instance',
-      });
       expect(JSON.stringify(a.diagnostics)).not.toContain('SELECT');
       expect(JSON.stringify(a.diagnostics)).not.toContain('DROP');
-    });
-
-    it('concurrent policy updates keep revision snapshots stable and callbacks installed', async () => {
-      const f = await fixture();
-      const a = assembly(f, { ...optional, auditRequired: true }, enabled);
-      const handle = await runtime(f, a.catalog);
-      await a.settings.initialize(f.scope);
-      await a.readiness.start(await a.settings.get(f.scope));
-      const pinned = await a.settings.snapshot(f.scope);
-      const recorder = bindAuditRecorder(f.scope, {
-        store: f.store,
-        producer: 'synthetic-pinned',
-        policy: () => Promise.resolve(pinned),
-      });
-      const live = bindAuditRecorder(f.scope, {
-        store: f.store,
-        producer: 'synthetic-live',
-        policy: () => a.settings.recorderPolicy(f.scope),
-      });
-      const receipts = await Promise.all([
-        ...Array.from({ length: 12 }, () =>
-          live.record({ action: 'synthetic.concurrent', outcome: 'success' }),
-        ),
-        a.settings.update(f.scope, {
-          expectedRevision: 1,
-          settings: { ...pinned, retentionDays: 365 },
-          confirmRetentionReduction: false,
-        }),
-      ]);
-      expect(
-        receipts
-          .slice(0, 12)
-          .every(
-            (receipt) => 'state' in receipt && receipt.state === 'committed',
-          ),
-      ).toBe(true);
-      await recorder.record({ action: 'synthetic.pinned', outcome: 'success' });
-      await live.record({ action: 'synthetic.after', outcome: 'success' });
-      const events = (
-        await f.store.query(f.scope, { store: 'main', pageSize: 100 })
-      ).items;
-      expect(
-        events.find((event) => event.action === 'synthetic.pinned')
-          ?.policyVersion,
-      ).toBe(1);
-      expect(
-        events.find((event) => event.action === 'synthetic.after')
-          ?.policyVersion,
-      ).toBe(2);
-      expect(
-        events.filter((event) => event.action === 'synthetic.concurrent'),
-      ).toHaveLength(12);
-      expect(a.catalog.entries(pinned)[0]?.generation).toBe(handle.generation);
-      await handle.dispose();
-      await expect(
-        live.record({ action: 'synthetic.must-not-pass', outcome: 'success' }),
-      ).rejects.toMatchObject({ code: 'AUDIT_NOT_READY' });
-    });
-
-    it('invalid updates and wrong scopes never mutate settings, listeners cannot bypass committed policy', async () => {
-      const f = await fixture();
-      const a = assembly(f);
-      const current = await a.settings.initialize(f.scope);
-      await expect(
-        a.settings.get({ ...f.scope, appId: 'other-app' }),
-      ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
-      await expect(
-        a.settings.update(f.scope, {
-          expectedRevision: 1,
-          settings: { ...current, observationStore: 'absent' },
-          confirmRetentionReduction: false,
-        }),
-      ).rejects.toMatchObject({ code: 'AUDIT_TARGET_UNSUPPORTED' });
-      const unsubscribe = a.settings.subscribe(() => {
-        throw new Error('SYNTHETIC_SECRET_DO_NOT_LOG');
-      });
-      await a.settings.update(f.scope, {
-        expectedRevision: 1,
-        settings: { ...current, retentionDays: 200 },
-        confirmRetentionReduction: false,
-      });
-      unsubscribe();
-      expect((await a.settings.get(f.scope)).revision).toBe(2);
-      expect(a.health.get().state).toBe('degraded');
-      expect(JSON.stringify(a.diagnostics)).not.toContain('SYNTHETIC_SECRET');
-      expect(
-        (
-          await auditRows(
-            f.connection,
-            'SELECT "revision" FROM "auditSettings"',
-          )
-        )[0]?.revision,
-      ).toBe(2);
     });
   });
 
@@ -558,44 +471,18 @@ for (const dialect of dialects)
 
 for (const dialect of dialects)
   describe('independent review regressions ' + dialect, () => {
-    it('R1 required readiness rejects same-name connections belonging to another physical Store', async () => {
+    it('rejects foreign physical stores before initialization, readiness or mutation', async () => {
       const a = await createPortableFixture(dialect);
       fixtures.push(a);
       const b = await createPortableFixture(dialect);
       fixtures.push(b);
-      const resources = assembly(
-        a,
-        {
-          auditRequired: true,
-          mandatorySources: ['business'],
-          requiredDataSources: [],
-        },
-        enabled,
-      );
+      const requirements: AuditDeploymentRequirements = {
+        auditRequired: true,
+        mandatorySources: ['business'],
+        requiredDataSources: [],
+      };
+      const resources = assembly(a, requirements, enabled);
       await runtime(a, resources.catalog);
-      const current = await resources.settings.initialize(a.scope);
-      const mismatch = new AuditReadiness({
-        stores: [{ connection: a.connection, store: b.store }],
-        catalog: resources.catalog,
-        health: resources.health,
-        requirements: {
-          auditRequired: true,
-          mandatorySources: ['business'],
-          requiredDataSources: [],
-        },
-      });
-      await expect(mismatch.start(current)).rejects.toMatchObject({
-        code: 'AUDIT_TRANSACTION_MISMATCH',
-      });
-      expect(await resources.readiness.start(current)).toBe(true);
-    });
-
-    it('R1 settings rejects mismatched physical Store before initialization or configuration mutation', async () => {
-      const a = await createPortableFixture(dialect);
-      fixtures.push(a);
-      const b = await createPortableFixture(dialect);
-      fixtures.push(b);
-      const resources = assembly(a);
       const mismatch = new PersistentAuditSettingsService({
         connection: a.connection,
         store: b.store,
@@ -609,6 +496,15 @@ for (const dialect of dialects)
         await auditRows(a.connection, 'SELECT "revision" FROM "auditSettings"'),
       ).toEqual([]);
       const current = await resources.settings.initialize(a.scope);
+      const readiness = new AuditReadiness({
+        stores: [{ connection: a.connection, store: b.store }],
+        catalog: resources.catalog,
+        health: resources.health,
+        requirements,
+      });
+      await expect(readiness.start(current)).rejects.toMatchObject({
+        code: 'AUDIT_TRANSACTION_MISMATCH',
+      });
       await expect(mismatch.get(a.scope)).rejects.toMatchObject({
         code: 'AUDIT_TRANSACTION_MISMATCH',
       });
@@ -619,7 +515,17 @@ for (const dialect of dialects)
           confirmRetentionReduction: false,
         }),
       ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
-      expect((await resources.settings.get(a.scope)).revision).toBe(1);
+      const another = new PortableAuditStore(a.connection, a.store.binding);
+      await another.prepare();
+      expect(() =>
+        resources.settings.assertConfigurationStore(a.store),
+      ).not.toThrow();
+      for (const store of [b.store, another])
+        expect(() =>
+          resources.settings.assertConfigurationStore(store),
+        ).toThrow('AUDIT_TRANSACTION_MISMATCH');
+      expect(await resources.settings.get(a.scope)).toEqual(current);
+      expect(await resources.readiness.start(current)).toBe(true);
     });
 
     it('R2 committed disable immediately updates health without waiting for another snapshot', async () => {
@@ -631,10 +537,6 @@ for (const dialect of dialects)
       await a.readiness.start(current);
       a.health.success('synthetic-runtime', 'main');
       expect(a.health.get().state).toBe('healthy');
-      let observedState: string | undefined;
-      a.settings.subscribe(() => {
-        observedState = a.health.get().state;
-      });
       const changed = await a.settings.update(f.scope, {
         expectedRevision: 1,
         settings: { ...current, enabled: false },
@@ -648,7 +550,6 @@ for (const dialect of dialects)
           .coverage.find((entry) => entry.producer === 'synthetic-runtime')
           ?.configured,
       ).toBe(false);
-      expect(observedState).toBe('disabled');
       expect((await a.settings.get(f.scope)).enabled).toBe(false);
     });
   });

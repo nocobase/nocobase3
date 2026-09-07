@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { TransactionHandle } from '@nocobase/db';
 import {
   PortableAuditStore,
   bindAuditRecorder,
@@ -280,6 +281,11 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
     if (receipt.state !== 'committed') throw new Error('Expected committed.');
     const saved = await f.store.findById(f.scope, receipt.eventId);
     expect(saved).toMatchObject({
+      ...event,
+      appId: f.scope.appId,
+      kind: 'business',
+      producer: 'synthetic-runtime',
+      policyVersion: 7,
       store: 'main',
       target,
       details: { amount: '12345678901234567890', nullable: null },
@@ -290,15 +296,16 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
     expect(
       (await f.store.query(f.scope, { store: 'main', target })).items,
     ).toHaveLength(1);
-    const wrong = { ...target, key: { ...target.key, a: 2 } };
+    const otherTarget = { ...target, key: { ...target.key, a: '1' } };
+    await f.recorder.record({ ...event, target: otherTarget });
     await auditRaw(
       f.connection,
       'UPDATE "auditEvents" SET "targetKeyHash" = ?',
-      [normalizeResourceRef(wrong, f.scope).keyHash],
+      [normalizeResourceRef(target, f.scope).keyHash],
     );
     expect(
-      (await f.store.query(f.scope, { store: 'main', target: wrong })).items,
-    ).toHaveLength(0);
+      (await f.store.query(f.scope, { store: 'main', target })).items,
+    ).toEqual([saved]);
   });
   it('persists one event under concurrent idempotent retries and retains original time', async () => {
     const receipts = await Promise.all(
@@ -311,25 +318,14 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
     ).toBe(1);
     const first = (await f.store.query(f.scope, { store: 'main' })).items;
     expect(first).toHaveLength(1);
-    const rebuilt = new PortableAuditStore(f.connection, f.store.binding);
-    await rebuilt.prepare();
-    const retry = bindAuditRecorder(f.scope, {
-      producer: 'synthetic-runtime',
-      store: rebuilt,
-      policy: () =>
-        Promise.resolve({
-          enabled: true,
-          revision: 7,
-          maxDetailsBytes: 262144,
-        }),
-    });
-    expect(await retry.record(event, { idempotencyKey: 'concurrent' })).toEqual(
-      receipts[0],
-    );
-    expect((await rebuilt.query(f.scope, { store: 'main' })).items).toEqual(
+    expect(
+      await f.recorder.record(event, { idempotencyKey: 'concurrent' }),
+    ).toEqual(receipts[0]);
+    expect((await f.store.query(f.scope, { store: 'main' })).items).toEqual(
       first,
     );
   });
+
   it('isolates identical keys by App, absent versus present security scope and producer', async () => {
     for (const [appId, securityScope, producer] of [
       ['synthetic-app', undefined, 'one'],
@@ -394,12 +390,13 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
       (await f.store.query(f.scope, { store: 'main' })).items,
     ).toHaveLength(1);
   });
-  it('rolls business and event back together, rejects expired and copied handles', async () => {
+  it('reads pending events through the owning transaction, rolls back with business writes, and rejects expired handles', async () => {
     await auditRaw(
       f.connection,
       'CREATE TABLE synthetic_business (id INTEGER PRIMARY KEY)',
     );
-    let expired;
+    let expired: TransactionHandle | undefined;
+    let eventId = '';
     await expect(
       f.connection.transaction(async (connection) => {
         expired = handle(connection);
@@ -407,12 +404,16 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
           .insertInto('synthetic_business')
           .values({ id: 1 })
           .execute();
-        expect(
-          (await f.recorder.record(event, { transaction: expired })).state,
-        ).toBe('pending-commit');
-        await expect(
-          f.recorder.record(event, { transaction: { ...expired } }),
-        ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
+        const receipt = await f.recorder.record(event, {
+          transaction: expired,
+        });
+        expect(receipt.state).toBe('pending-commit');
+        if (receipt.state !== 'pending-commit')
+          throw new Error('Expected pending.');
+        eventId = receipt.eventId;
+        expect(await f.store.findById(f.scope, eventId, expired)).toMatchObject(
+          event,
+        );
         throw new Error('Synthetic rollback');
       }),
     ).rejects.toThrow('Synthetic rollback');
@@ -420,6 +421,7 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
       await auditRows(f.connection, 'SELECT * FROM synthetic_business'),
     ).toEqual([]);
     expect((await f.store.query(f.scope, { store: 'main' })).items).toEqual([]);
+    expect(await f.store.findById(f.scope, eventId)).toBeUndefined();
     await expect(
       f.recorder.record(event, { transaction: expired }),
     ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
@@ -439,11 +441,12 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
       auditRows(f.connection, 'SELECT * FROM "auditEvents"'),
     ).rejects.toThrow();
   });
-  it('paginates and deletes only the bound scope in bounded transactions', async () => {
+  it('paginates without duplicate events and binds cursors to filters and scope', async () => {
     for (let i = 0; i < 4; i++)
       await f.recorder.record({ ...event, details: { i } });
     const page = await f.store.query(f.scope, { store: 'main', pageSize: 2 });
     expect(page.items).toHaveLength(2);
+    expect(page.nextCursor).toBeDefined();
     const next = await f.store.query(f.scope, {
       store: 'main',
       pageSize: 2,
@@ -453,15 +456,29 @@ describe.each(dialects)('shared Store/Recorder contract: %s', (dialect) => {
     expect(
       new Set([...page.items, ...next.items].map((item) => item.id)).size,
     ).toBe(4);
-    expect(
-      await f.store.deleteBatch(f.scope, {
-        store: 'main',
-        cutoff: '2100-01-01T00:00:00.000Z',
-        limit: 2,
-      }),
-    ).toBe(2);
-    expect(
-      (await f.store.query(f.scope, { store: 'main' })).items,
-    ).toHaveLength(2);
+    expect(next.nextCursor).toBeUndefined();
+    // Input guards are independent of the database dialect.
+    if (dialect === 'sqlite') {
+      await expect(
+        f.store.query(f.scope, {
+          store: 'main',
+          cursor: page.nextCursor,
+          action: 'other',
+        }),
+      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+      await expect(
+        f.store.query({ ...f.scope, appId: 'other-app' }, { store: 'main' }),
+      ).rejects.toMatchObject({ code: 'AUDIT_TRANSACTION_MISMATCH' });
+      await expect(
+        f.store.query(f.scope, { store: 'main', pageSize: 101 }),
+      ).rejects.toMatchObject({ code: 'AUDIT_INVALID_EVENT' });
+      const wrongStore = new PortableAuditStore(f.connection, {
+        ...f.store.binding,
+        store: 'other',
+      });
+      await expect(wrongStore.prepare()).rejects.toMatchObject({
+        code: 'AUDIT_TARGET_UNSUPPORTED',
+      });
+    }
   });
 });

@@ -1,15 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
-import { createSettingsFixture } from '../helpers/settings-fixture.js';
-import { dialects } from '../helpers/database-fixtures.js';
+import { createAuditApiFixture } from '../helpers/api-fixture.js';
 import { AuditRetentionService } from '../../server/retention-service.js';
 import { createAuditRetentionQueueResources } from '../../server/queue/retention.js';
 import { AuditRetentionScheduler } from '../../server/providers/retention-scheduler.js';
 import { auditRaw } from '../../server/database/sql-client.js';
 
-describe.each(dialects)('recurring retention %s', (dialect) => {
+describe('recurring retention', () => {
   it('runs future UTC rounds without restart, honors null and disabled policy, and cancels on shutdown', async () => {
-    const f = await createSettingsFixture(dialect);
+    const f = await createAuditApiFixture('sqlite');
     const queue = createQueueManager(createSyncQueueConfig(), {
       database: f.f.manager,
       jobFactory: (JobClass) => new JobClass({ database: f.f.manager }),

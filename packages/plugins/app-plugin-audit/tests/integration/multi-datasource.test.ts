@@ -136,6 +136,14 @@ describe.each(dialects)(
       await expect(a.store.prepare()).rejects.toMatchObject({
         code: 'AUDIT_NOT_READY',
       });
+      await expect(
+        a.recorder.record({ action: 'synthetic.created', outcome: 'success' }),
+      ).rejects.toMatchObject({ code: 'AUDIT_NOT_READY' });
+      for (const table of ['auditEvents', 'auditSettings']) {
+        await expect(
+          auditRows(a.connection, 'SELECT * FROM "' + table + '"'),
+        ).rejects.toThrow();
+      }
       await auditRaw(
         a.connection,
         'CREATE TABLE synthetic_business (id INTEGER PRIMARY KEY)',

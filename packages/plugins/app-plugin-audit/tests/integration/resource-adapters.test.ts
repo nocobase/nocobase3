@@ -12,11 +12,11 @@ import {
   AuditAccessDenied,
   type AuditResourceAdapter,
 } from '../../server/authorization.js';
-import { createQueryFixture } from '../helpers/query-fixture.js';
+import { createAuditApiFixture } from '../helpers/api-fixture.js';
 
 describe('Live resource authorization', () => {
   it('rechecks each event and rejects disposal or same-adapter replacement during awaited checks', async () => {
-    const s = await createQueryFixture('sqlite');
+    const s = await createAuditApiFixture('sqlite');
     try {
       await s.grant(s.alice.id, ['read']);
       await s.append('a');

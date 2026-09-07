@@ -64,6 +64,7 @@ export async function createPortableFixture(
   dialect: DatabaseDialect,
   migrate: boolean = true,
   name: string = 'main',
+  metadataScope: 'manager' | 'connection' = 'manager',
 ): Promise<PortableFixture> {
   const adminConfig = dialect === 'sqlite' ? undefined : localConfig(dialect);
   const directory = await mkdtemp(join(tmpdir(), 'nocobase-audit-test-'));
@@ -73,12 +74,18 @@ export async function createPortableFixture(
     : undefined;
   let created = false;
   const metadata = new InMemoryCollectionMetadataStore();
-  const config: ConnectionConfig = adminConfig
-    ? { ...adminConfig, database: databaseName }
-    : { dialect: 'sqlite', filename: join(directory, 'audit.sqlite') };
+  const config: ConnectionConfig = {
+    ...(adminConfig
+      ? { ...adminConfig, database: databaseName }
+      : {
+          dialect: 'sqlite' as const,
+          filename: join(directory, 'audit.sqlite'),
+        }),
+    ...(metadataScope === 'connection' ? { metadataStore: metadata } : {}),
+  };
   const manager = createDatabaseManager({
     default: name,
-    metadataStore: metadata,
+    metadataStore: metadataScope === 'manager' ? metadata : undefined,
     connections: { [name]: config },
   });
   const connection = manager.connection();

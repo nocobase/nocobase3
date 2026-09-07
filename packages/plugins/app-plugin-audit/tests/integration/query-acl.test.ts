@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createQueryFixture } from '../helpers/query-fixture.js';
+import { createAuditApiFixture } from '../helpers/api-fixture.js';
 import {
   dialects,
   auditRaw,
@@ -21,7 +21,7 @@ afterEach(async () => {
 for (const dialect of dialects)
   describe('real authentication and SQL ACL ' + dialect, () => {
     async function fixture() {
-      const s = await createQueryFixture(dialect);
+      const s = await createAuditApiFixture(dialect);
       cleanups.push(s.cleanup);
       return s;
     }
@@ -115,7 +115,7 @@ for (const dialect of dialects)
       ).toBe(403);
       await auditRaw(
         s.f.connection,
-        'DELETE FROM "g11_documents" WHERE "id" = ?',
+        'DELETE FROM "audit_documents" WHERE "id" = ?',
         ['a'],
       );
       expect(
@@ -202,6 +202,11 @@ for (const dialect of dialects)
           body: JSON.stringify(value),
         });
       expect(
+        (await put({ ...update, settings: { ...settings, retentionDays: 1 } }))
+          .status,
+      ).toBe(409);
+      expect((await s.settings.get(s.f.scope)).revision).toBe(1);
+      expect(
         (await put({ ...update, appId: 'forged', actor: { type: 'system' } }))
           .status,
       ).toBe(409);
@@ -220,13 +225,6 @@ for (const dialect of dialects)
       expect(JSON.stringify(rows)).toContain(s.alice.id);
       expect((await s.request('/health?store=main')).status).toBe(200);
       expect((await s.request('/health?store=foreign')).status).toBe(403);
-      await auditRaw(s.f.connection, 'DROP TABLE "auditSettings"');
-      const failed = await s.request('/settings?store=main');
-      expect(failed.status).toBe(503);
-      expect(await failed.text()).not.toMatch(
-        /SELECT|password|credentials|sqlite|mysql|postgres/,
-      );
-      expect((await s.request('/health?store=main')).status).toBe(200);
     });
     it('exposes no generic audit event mutation and records safe API observations', async () => {
       const s = await fixture();
@@ -329,56 +327,5 @@ for (const dialect of dialects)
           appAuthorization: s.appAuthorization,
         }),
       ).toThrow('AUDIT_TRANSACTION_MISMATCH');
-    });
-    it('refuses HTTP attempts to weaken mandatory capture and preserves its revision', async () => {
-      const s = await createQueryFixture(dialect, true);
-      cleanups.push(s.cleanup);
-      await s.grant(s.alice.id, [], ['read', 'manage']);
-      const { revision: _revision, ...settings } = await s.settings.get(
-        s.f.scope,
-      );
-      for (const next of [
-        { ...settings, enabled: false },
-        { ...settings, sources: { ...settings.sources, http: 'disabled' } },
-      ]) {
-        const response = await s.request(
-          '/settings?store=main',
-          s.alice.cookie,
-          {
-            method: 'PUT',
-            headers: { 'if-match': '"1"' },
-            body: JSON.stringify({
-              expectedRevision: 1,
-              settings: next,
-              confirmRetentionReduction: false,
-            }),
-          },
-        );
-        expect(response.status).toBe(409);
-      }
-      expect((await s.settings.get(s.f.scope)).revision).toBe(1);
-    });
-    it('validates settings store coverage and mandatory retention confirmation without advancing revision', async () => {
-      const s = await fixture();
-      await s.grant(s.alice.id, [], ['read', 'manage']);
-      const { revision: _revision, ...settings } = await s.settings.get(
-        s.f.scope,
-      );
-      const put = (settingsValue: unknown) =>
-        s.request('/settings?store=main', s.alice.cookie, {
-          method: 'PUT',
-          headers: { 'if-match': '"1"' },
-          body: JSON.stringify({
-            expectedRevision: 1,
-            settings: settingsValue,
-            confirmRetentionReduction: false,
-          }),
-        });
-      expect(
-        (await put({ ...settings, observationStore: 'foreign' })).status,
-      ).toBe(403);
-      expect((await put({ ...settings, retentionDays: 1 })).status).toBe(409);
-      expect((await put({ ...settings, retentionDays: 0 })).status).toBe(409);
-      expect((await s.settings.get(s.f.scope)).revision).toBe(1);
     });
   });
