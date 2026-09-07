@@ -42,15 +42,24 @@ const app = {
 
 function Dialog({
   loadTemplate,
+  deployed = false,
 }: {
   loadTemplate: (appId: string, releaseId: string) => Promise<string | null>;
+  deployed?: boolean;
 }): ReactElement {
   const [releaseId, setReleaseId] = useState('one');
   const [content, setContent] = useState('stale: true');
   const [mode, setMode] = useState<ConfigMode>('file');
   return (
     <DeploymentDialog
-      app={app}
+      app={
+        deployed
+          ? {
+              ...app,
+              app: { ...app.app, currentDeploymentId: 'current-deployment' },
+            }
+          : app
+      }
       releaseId={releaseId}
       content={content}
       mode={mode}
@@ -69,6 +78,20 @@ function Dialog({
 }
 
 describe('Hub deployment configuration step', () => {
+  it('starts an existing deployment draft from current config rather than the template', async () => {
+    render(
+      <Dialog
+        deployed
+        loadTemplate={vi.fn().mockResolvedValue('fresh: true')}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    expect(
+      await screen.findByRole('textbox', { name: 'New configuration' }),
+    ).toHaveValue('current: true');
+    expect(screen.getByText('Release template')).toBeVisible();
+    expect(screen.getByText('Deployment draft')).toBeVisible();
+  });
   it('loads only after Continue, blocks on failure, and allows retry', async () => {
     const loader = vi
       .fn()

@@ -271,6 +271,7 @@ export function DeploymentDialog({
   const [step, setStep] = useState(firstStep);
   const [retry, setRetry] = useState(0);
   const [templateError, setTemplateError] = useState<string>();
+  const [releaseTemplate, setReleaseTemplate] = useState('');
   const [loadedReleaseId, setLoadedReleaseId] = useState<string>();
   const editingConfig = step > 0;
   const configReady = loadedReleaseId === releaseId && releaseId !== undefined;
@@ -280,7 +281,12 @@ export function DeploymentDialog({
     void loadTemplate(app.app.id, releaseId)
       .then((template) => {
         if (cancelled) return;
-        onContent(template ?? (baselineMode === 'file' ? baselineContent : ''));
+        setReleaseTemplate(template ?? '');
+        onContent(
+          app.app.currentDeploymentId && baselineMode === 'file'
+            ? baselineContent
+            : (template ?? ''),
+        );
         if (!rollback) onMode(template !== null ? 'file' : baselineMode);
         setLoadedReleaseId(releaseId);
       })
@@ -297,6 +303,7 @@ export function DeploymentDialog({
     retry,
     loadTemplate,
     app.app.id,
+    app.app.currentDeploymentId,
     baselineMode,
     baselineContent,
     rollback,
@@ -432,8 +439,9 @@ export function DeploymentDialog({
                           Deployment configuration
                         </div>
                         <p className='mt-1 text-xs text-muted-foreground'>
-                          Edit the configuration that will be used for this
-                          deployment.
+                          Apply template changes from left to right, or edit the
+                          draft. The active configuration remains unchanged
+                          until deployment.
                         </p>
                       </div>
                       <div className='pb-3'>
@@ -444,13 +452,9 @@ export function DeploymentDialog({
                         >
                           {(
                             [
-                              [
-                                'current',
-                                'Current configuration only',
-                                PanelLeft,
-                              ],
+                              ['current', 'Release template only', PanelLeft],
                               ['both', 'Side by side', Columns2],
-                              ['new', 'New configuration only', PanelRight],
+                              ['new', 'Deployment draft only', PanelRight],
                             ] as const
                           ).map(([value, label, Icon]) => (
                             <Button
@@ -477,11 +481,13 @@ export function DeploymentDialog({
                           hidden={visibleConfig === 'new'}
                           className='px-4 py-2.5'
                         >
-                          <p className='text-xs font-medium'>Current</p>
+                          <p className='text-xs font-medium'>
+                            Release template
+                          </p>
                           <p className='mt-0.5 text-xs text-muted-foreground'>
-                            {app.app.currentDeploymentId
-                              ? `Deployment ${shortId(app.app.currentDeploymentId)} · Read-only`
-                              : 'No active configuration'}
+                            {release?.hasConfigTemplate
+                              ? `Release v${release.version} · Read-only`
+                              : 'No Release template'}
                           </p>
                         </div>
                         <div
@@ -489,23 +495,21 @@ export function DeploymentDialog({
                           className='px-4 py-2.5'
                         >
                           <p className='text-xs font-medium'>
-                            New configuration
+                            Deployment draft
                           </p>
                           <p className='mt-0.5 text-xs text-muted-foreground'>
-                            {release?.hasConfigTemplate
-                              ? `From Release v${release.version} template · Editable`
-                              : baselineMode === 'file' &&
-                                  app.app.currentDeploymentId
-                                ? 'From current configuration · Editable'
-                                : 'No Release template · Editable'}
+                            {baselineMode === 'file' &&
+                            app.app.currentDeploymentId
+                              ? `From current deployment ${shortId(app.app.currentDeploymentId)} · Editable`
+                              : release?.hasConfigTemplate
+                                ? 'From Release template · Editable'
+                                : 'Empty configuration · Editable'}
                           </p>
                         </div>
                       </div>
                       <Suspense fallback={<ConfigEditorFallback />}>
                         <ConfigMergeEditor
-                          current={
-                            baselineMode === 'file' ? baselineContent : ''
-                          }
+                          current={releaseTemplate}
                           onChange={onContent}
                           value={content}
                           visiblePane={visibleConfig}
