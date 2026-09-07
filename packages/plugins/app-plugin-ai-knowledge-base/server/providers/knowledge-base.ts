@@ -2,7 +2,7 @@ import {
   aiConfig,
   resolveAIKnowledgeBaseStorageDisks,
 } from '@nocobase/app-plugin-ai-employee/server/config';
-import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server';
+import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/plugin';
 import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';

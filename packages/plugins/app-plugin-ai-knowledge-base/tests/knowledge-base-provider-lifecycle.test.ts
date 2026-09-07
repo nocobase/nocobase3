@@ -1,7 +1,7 @@
 import type { AIManager } from '@nocobase/ai-employee';
 import { fileStorageFactoryToken } from '@nocobase/ai-employee';
 import type { AIApplicationConfig } from '@nocobase/app-plugin-ai-employee/server/config';
-import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/tokens';
+import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/plugin';
 import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
