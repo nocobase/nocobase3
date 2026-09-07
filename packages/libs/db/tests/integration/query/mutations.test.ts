@@ -4,7 +4,7 @@ import { createQueryOrdersCollection, seedQueryOrders } from './helpers.js';
 
 describeIntegrationDatabases('query mutations', (context) => {
   it('inserts, updates, and deletes rows against a real connection', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await createQueryOrdersCollection(context);
 
@@ -69,7 +69,7 @@ describeIntegrationDatabases('query mutations', (context) => {
   });
 
   it('requires values, set data, or allowAllRows where appropriate', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await context.builder.createCollection('queryOrders', (collection) => {
       collection.increments('id');
@@ -124,7 +124,7 @@ describeIntegrationDatabases('query mutations', (context) => {
   });
 
   it('updates and deletes with expression callbacks and immutable clearWhere', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await createQueryOrdersCollection(context);
     await seedQueryOrders(context, ordersTable);
@@ -165,5 +165,68 @@ describeIntegrationDatabases('query mutations', (context) => {
       { orderNo: 'SO-002', status: 'settled' },
       { orderNo: 'SO-003', status: 'settled' },
     ]);
+  });
+
+  it('maps qualified references in update and delete predicates', async () => {
+    const ordersTable = 'namingMutations';
+
+    await context.builder.createCollection(ordersTable, (collection) => {
+      collection.increments('id');
+      collection.string('orderNo');
+      collection.integer('expectedAmount');
+      collection.integer('actualAmount');
+      collection.string('status');
+    });
+    await context.database
+      .query()
+      .insertInto(ordersTable)
+      .values([
+        {
+          orderNo: 'SO-001',
+          expectedAmount: 100,
+          actualAmount: 100,
+          status: 'pending',
+        },
+        {
+          orderNo: 'SO-002',
+          expectedAmount: 100,
+          actualAmount: 80,
+          status: 'pending',
+        },
+      ])
+      .execute();
+
+    await expect(
+      context.database
+        .query()
+        .updateTable(ordersTable)
+        .set({ status: 'matched' })
+        .whereRef(
+          `${ordersTable}.expectedAmount`,
+          '=',
+          `${ordersTable}.actualAmount`,
+        )
+        .execute(),
+    ).resolves.toEqual({ updatedCount: 1 });
+
+    await expect(
+      context.database
+        .query()
+        .deleteFrom(ordersTable)
+        .whereRef(
+          `${ordersTable}.expectedAmount`,
+          '!=',
+          `${ordersTable}.actualAmount`,
+        )
+        .execute(),
+    ).resolves.toEqual({ deletedCount: 1 });
+
+    await expect(
+      context.database
+        .query()
+        .selectFrom(ordersTable)
+        .select(['orderNo', 'status'])
+        .execute(),
+    ).resolves.toEqual([{ orderNo: 'SO-001', status: 'matched' }]);
   });
 });

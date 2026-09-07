@@ -1,17 +1,16 @@
 import type { RealtimeUserTopic } from '@nocobase/app-server/realtime';
 
+import {
+  type InAppNotificationChange,
+  type InAppNotificationRealtimeEvent,
+} from '../shared/realtime.js';
 import type { InAppStore } from './store.js';
 
-export const IN_APP_NOTIFICATION_REALTIME_TOPIC: string =
-  'notifications:in-app';
-
-export type InAppNotificationChange =
-  'created' | 'read' | 'unread' | 'deleted' | 'read-all';
-
-export interface InAppNotificationRealtimeEvent {
-  readonly kind: 'inbox.changed';
-  readonly change: InAppNotificationChange;
-}
+export {
+  IN_APP_NOTIFICATION_REALTIME_TOPIC,
+  type InAppNotificationChange,
+  type InAppNotificationRealtimeEvent,
+} from '../shared/realtime.js';
 
 export type InAppNotificationRealtimeTopic = Pick<
   RealtimeUserTopic<InAppNotificationRealtimeEvent>,

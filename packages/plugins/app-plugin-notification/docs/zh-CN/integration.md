@@ -251,14 +251,8 @@ lifecycle.registerDisposer('notification', async (): Promise<void> => {
 
 ## 可选：接入客户端页面
 
-Delivery 日志和个人站内信页面分别由对应插件发布为 Registry 配方：
-
-- `@nocobase/app-plugin-notification` 的 `logs-ui` item 提供 Delivery 和 Attempt 日志页面；
-- `@nocobase/app-plugin-notification-in-app` 的 `in-app-ui` item 提供个人站内信页面、未读数 Provider 和客户端 API 适配器。
-
-canonical source 位于插件自身的 `registry/` 目录，默认模板不再保存副本。
-
-在仓库中可以把它物化到应用：
+Delivery 日志仍由 `@nocobase/app-plugin-notification` 的 `logs-ui` Registry
+item 提供。它会把可编辑源码物化到应用：
 
 ```bash
 pnpm registry materialize \
@@ -266,17 +260,19 @@ pnpm registry materialize \
   --item logs-ui \
   --output-root /path/to/your-app
 
-pnpm registry materialize \
-  --package @nocobase/app-plugin-notification-in-app \
-  --item in-app-ui \
-  --output-root /path/to/your-app
 ```
 
-两个 item 会分别写入 `client/extensions/nocobase-notification-logs-ui` 和 `client/extensions/nocobase-notification-in-app-ui`。
+该 item 会写入 `client/extensions/nocobase-notification-logs-ui`。
 
-当前插件尚未提供稳定的客户端路由和 Provider contribution contract，因此这两个 item 不包含 `extension.ts`，安装后不会自动注册页面。应用需要主动接入 `NotificationLogsPage`，并用 `NotificationInAppProvider` 包裹需要站内信状态的子树后接入 `NotificationInAppPage`。等插件补齐默认客户端路由和稳定 route ID 后，再由 Registry 通过 source extension 覆盖默认页面。
+个人站内信组件示例由 `@nocobase/app-plugin-notification-in-app/client`
+直接提供。把该 Client 插件注册到应用后，开发环境会自动出现
+`/dev/notification-in-app`；当应用 public base 为 `/main` 时，浏览器路径是
+`/main/dev/notification-in-app`。页面自身挂载未读数 Provider，离开页面后会清理
+实时订阅。Dev Route 及页面模块不会进入生产构建。
 
-页面默认请求 `/api/notifications/logs` 和 `/api/notifications/in-app`，需要和第四步的服务端挂载路径保持一致。物化后的代码属于消费应用，可以按需修改；registry 扩展不会创建服务端 runtime。
+两个页面分别请求 `/api/notifications/logs` 和
+`/api/notifications/in-app`，需要和第四步的服务端挂载路径保持一致。日志
+Registry 副本属于消费应用；站内信 Dev 页面属于插件 runtime，随插件升级。
 
 ## 相关链接
 

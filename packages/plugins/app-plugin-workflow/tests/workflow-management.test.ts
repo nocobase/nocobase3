@@ -141,10 +141,11 @@ describe('workflow management', () => {
     await expect(
       workflowApi.execute('workflow-1', { approved: true }, 'event-1'),
     ).resolves.toEqual({ id: 'run-1' });
-    expect(request).toHaveBeenCalledWith('/workflows/workflow-1/run', {
-      body: JSON.stringify({ input: { approved: true } }),
+    expect(request).toHaveBeenCalledWith({
       headers: { 'event-key': 'event-1' },
+      json: { input: { approved: true } },
       method: 'POST',
+      path: '/workflows/workflow-1/run',
     });
   });
 

@@ -57,9 +57,23 @@ describeIntegrationDatabases('collection alteration', (context) => {
       await context.db.schema.hasColumn(context.table('orders'), 'paid_at'),
     ).toBe(true);
     const indexes = await listIndexes(context, context.table('orders'));
-    expect(indexes.map((index) => index.name)).toEqual(
-      expect.arrayContaining([paidAtIndexName, paidAtUniqueName]),
-    );
+    if (context.spec.dialect === 'oracle') {
+      expect(indexes.map((index) => index.name)).toContain(paidAtIndexName);
+      const inspected = await context.database
+        .connection()
+        .schemaInspector.getPhysicalCollection({
+          tableName: context.table('orders'),
+        });
+      expect(inspected?.uniqueConstraints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: paidAtUniqueName }),
+        ]),
+      );
+    } else {
+      expect(indexes.map((index) => index.name)).toEqual(
+        expect.arrayContaining([paidAtIndexName, paidAtUniqueName]),
+      );
+    }
 
     await context
       .db(context.table('orders'))
@@ -71,10 +85,16 @@ describeIntegrationDatabases('collection alteration', (context) => {
     );
 
     await context.builder.dropIndex('orders', paidAtIndexName);
-    expect(
-      (await listIndexes(context, context.table('orders'))).map(
-        (index) => index.name,
-      ),
-    ).not.toContain(paidAtIndexName);
+    const remainingIndexNames = (
+      await listIndexes(context, context.table('orders'))
+    ).map((index) => index.name);
+    if (context.spec.dialect === 'oracle') {
+      // Oracle can reuse an existing index to enforce a later unique
+      // constraint. The logical index is removed from metadata, while the
+      // physical index must remain until the constraint is dropped.
+      expect(remainingIndexNames).toContain(paidAtIndexName);
+    } else {
+      expect(remainingIndexNames).not.toContain(paidAtIndexName);
+    }
   });
 });

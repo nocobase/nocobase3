@@ -1,28 +1,5 @@
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-
-/** Local state a hub writes as it runs lives here, mirroring the `.nb3/` a generated app keeps. */
-export const HUB_STATE_DIR = '.nb3';
-
-export const DEFAULT_HUB_PORT = 3000;
-export const DEFAULT_HUB_HOST = '127.0.0.1';
-
-export interface HubConfig {
-  name: string;
-  port: number;
-  host: string;
-}
-
-/**
- * The `.nb3/hub.json` the `nb3 hub` commands look for.
- *
- * This file is how a hub is told apart from an app: both keep a `.nb3/` directory, and which file it holds decides
- * which set of commands applies. A hub scaffolded without it is not discoverable by `nb3 hub start`, `stop`, `logs`,
- * or `status`, all of which walk up from the working directory looking for exactly this path.
- */
-export function buildHubConfigFile(config: HubConfig): string {
-  return `${JSON.stringify(config, null, 2)}\n`;
-}
 
 export interface BuildHubEnvOptions {
   name: string;
@@ -90,61 +67,4 @@ export async function readEnvExample(
   } catch {
     return undefined;
   }
-}
-
-/** Runtime state a hub writes as it runs; none of it belongs in version control. */
-const GITIGNORE_ADDITIONS = [
-  '',
-  '# nb3 hub runtime state',
-  `${HUB_STATE_DIR}/logs/`,
-  `${HUB_STATE_DIR}/cache/`,
-  `${HUB_STATE_DIR}/*.pid`,
-  '',
-].join('\n');
-
-/**
- * Finishes a scaffolded hub: creates the directories it writes into and ignores what it writes there.
- *
- * `.nb3/logs` and `.nb3/cache` are created rather than committed because they are gitignored, and the hub expects them
- * to exist. `app-dist/` holds the built apps a hub serves and is created with a `.gitkeep` by the caller, which writes
- * it alongside the rest of the extra files.
- *
- * This mirrors what `nb3 hub create` does, so a hub is the same whichever command produced it.
- */
-export async function finalizeHub(directory: string): Promise<void> {
-  for (const relative of ['logs', 'cache']) {
-    await mkdir(path.join(directory, HUB_STATE_DIR, relative), {
-      recursive: true,
-    });
-  }
-
-  await appendHubGitignore(directory);
-}
-
-/**
- * Appends the hub's runtime-state entries to the generated project's `.gitignore`.
- *
- * The file is created when the template shipped none, rather than skipping the ignore rules: `scaffoldFromTemplate`
- * guarantees a `.gitignore` exists, but writing it here as well keeps this function usable on its own.
- */
-async function appendHubGitignore(directory: string): Promise<void> {
-  const target = path.join(directory, '.gitignore');
-  let existing = '';
-
-  try {
-    existing = await readFile(target, 'utf8');
-  } catch {
-    // No file yet; the additions below stand on their own.
-  }
-
-  if (existing.includes(`${HUB_STATE_DIR}/logs/`)) {
-    return;
-  }
-
-  if (existing === '') {
-    await writeFile(target, GITIGNORE_ADDITIONS.trimStart(), 'utf8');
-    return;
-  }
-
-  await appendFile(target, GITIGNORE_ADDITIONS, 'utf8');
 }

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildWorkflowArtifact } from '../server/loader/artifact-builder.js';
+import { buildWorkflowArtifact } from '../build/artifact-builder.js';
 import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 const roots: string[] = [];
 afterEach(async () =>

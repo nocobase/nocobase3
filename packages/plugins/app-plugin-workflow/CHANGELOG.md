@@ -1,5 +1,108 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.8
+
+### Minor Changes
+
+- db6685f: Replace the run module's Application runtime access with execution options containing a read-only service resolver, abort signal, and contextual logger, so scripts can consume public application services without accessing or mutating the Application container.
+
+### Patch Changes
+
+- 90a4903: Replace the composite application transport with application-owned `ApiClient` and `RealtimeClient` services. Client plugins, examples, and application templates now use object-style HTTP request options through the shared API client, while realtime subscriptions resolve their dedicated WebSocket client.
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [a864497]
+- Updated dependencies [a864497]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/app-server@1.0.0-beta.7
+  - @nocobase/app-client@1.0.0-beta.10
+  - @nocobase/app-plugin-authentication@0.1.0-beta.7
+
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- 15c77a6: Move Workflow source parsing and Artifact generation behind the `workflow build` command while retaining the public build API for applications with custom Instructions. The command uses Node's native TypeScript loading in a disposable process and removes esbuild entirely. CLI build modules remain in the published package, but production servers do not load them or TypeScript at runtime.
+- fe9ad59: Add complete English and Chinese translations for workflow management, canvas controls, status and dialog copy, navigation, accessibility labels, and request-localized API errors.
+- b446b6a: Validate and route workflow definition IDs and Artifact hashes before querying the database.
+- 15988a2: Teach and verify workflow authoring under the application's `isolatedDeclarations` server typecheck: bind `defineWorkflow()` to a `WorkflowSourceAst`-annotated const before default-exporting it instead of default-exporting the call directly, and compile the skill-eval workflow fixtures under that contract in `pnpm typecheck`. Also drop the stale `.agents` entry from the published `files` allowlist — the workflow skill ships under `skills/` and the plugin has no `.agents` directory.
+
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 4243eb0: Add a terminate instruction that can finish a workflow early from the main path or a conditional branch, with success and failure outcomes and a distinct termination icon.
+
+### Patch Changes
+
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- 4243eb0: Reload workflows after status changes, open manual runs on their execution canvas, and keep descriptions out of canvas node cards.
+- 4243eb0: Render each empty workflow condition branch as a distinct path before it rejoins the common successor.
+- 4243eb0: Show workflow node descriptions in canvas dialogs and execution detail dialogs, with a subtle borderless disclosure for descriptions in execution records.
+- 4243eb0: Add a theme-aware canvas control for switching between compact vertical and horizontal workflow layouts, adapt the zoom controls and minimap to light and dark themes, route edges with ELK orthogonal paths, preserve condition branch order, and merge converging edges at their successor input port.
+- 813da59: Declare `typescript` as a runtime dependency. `server/loader/source-parser.ts` imports it and the engine reaches that module through a static import chain, so a deployed application crashed on start with `Cannot find package 'typescript'` while every development checkout resolved it from devDependencies.
+- Updated dependencies [8d88ff4]
+- Updated dependencies [43d5bf0]
+- Updated dependencies [813da59]
+- Updated dependencies [cee3251]
+  - @nocobase/app-server@1.0.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/app-plugin-authentication@0.1.0-beta.6
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/queue@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.5
 
 ### Minor Changes

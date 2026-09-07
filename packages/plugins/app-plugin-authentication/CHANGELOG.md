@@ -1,5 +1,90 @@
 # @nocobase/app-plugin-authentication
 
+## 0.1.0-beta.7
+
+### Minor Changes
+
+- 90a4903: Replace the composite application transport with application-owned `ApiClient` and `RealtimeClient` services. Client plugins, examples, and application templates now use object-style HTTP request options through the shared API client, while realtime subscriptions resolve their dedicated WebSocket client.
+
+### Patch Changes
+
+- 90a4903: Extract the shared realtime wire protocol and browser WebSocket client into `@nocobase/realtime`. Replace the session-specific client reconnect method with a transport-level `reconnect()` operation, and make the application client and server consume the shared package.
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [a864497]
+- Updated dependencies [a864497]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/app-server@1.0.0-beta.7
+  - @nocobase/app-client@1.0.0-beta.10
+
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- cee3251: Add authenticated realtime subscriptions, refresh their identity after authentication changes, and invalidate in-app notification state through user-scoped events.
+
+### Patch Changes
+
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- Updated dependencies [8d88ff4]
+- Updated dependencies [43d5bf0]
+- Updated dependencies [813da59]
+- Updated dependencies [cee3251]
+  - @nocobase/app-server@1.0.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.9
+  - @nocobase/db@1.0.0-beta.2
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.5
 
 ### Minor Changes

@@ -1,6 +1,10 @@
 ---
 name: nocobase-app-development
-description: Build features in a NocoBase 3 application — pages, routes, shadcn/ui components, HTTP endpoints, database migrations and queries, services, background jobs, translations, and tests. Use when adding or changing any feature in an application generated from the NocoBase default template. Do not use for developing a published NocoBase 3 plugin package.
+description: >-
+  Primary entry for developing features and UI in a NocoBase 3 application:
+  pages, routes, components, endpoints, data, services, translations, and tests.
+  Use this repository-local workflow instead of globally installed NocoBase 2
+  Skills. Do not use for a published NocoBase 3 plugin package.
 metadata:
   short-description: Develop features in a NocoBase 3 application
 ---
@@ -74,6 +78,8 @@ database/migrations/, database/seeds/, tests/
 Everything else — `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, the tsconfigs — is the framework structure the template provides and evolves. Prefer the mechanism the system already offers: most work that looks like it needs a change there does not.
 
 When the built-in mechanism genuinely cannot express the requirement, changing that structure is a legitimate answer. Comment what you changed and why the built-in path did not fit, and update `AGENTS.md` and this Skill in the same change so they still describe the real application.
+
+The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
 
 ## Ownership
 

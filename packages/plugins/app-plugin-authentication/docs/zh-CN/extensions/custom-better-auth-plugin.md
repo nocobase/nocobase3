@@ -389,19 +389,20 @@ POST /api/auth/sign-in/ticket
 
 ## 9. 增加客户端登录入口
 
-当前 NocoBase authentication client 通过 `AppClient` 调用认证接口。可以在应用中
+当前 NocoBase authentication client 通过 `ApiClient` 调用认证接口。可以在应用中
 封装一个小 client：
 
 ```ts
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 
 export class TicketAuthClient {
-  constructor(private readonly client: AppClient) {}
+  constructor(private readonly api: ApiClient) {}
 
   async signIn(ticket: string): Promise<void> {
-    await this.client.request('auth/sign-in/ticket', {
+    await this.api.request({
+      path: 'auth/sign-in/ticket',
       method: 'POST',
-      body: JSON.stringify({ ticket }),
+      json: { ticket },
     });
   }
 }

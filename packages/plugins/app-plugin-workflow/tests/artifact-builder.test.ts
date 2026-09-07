@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildWorkflowArtifact,
   computeWorkflowArtifactDigest,
-} from '../server/loader/artifact-builder.js';
+} from '../build/artifact-builder.js';
 
 const roots: string[] = [];
 afterEach(async () =>

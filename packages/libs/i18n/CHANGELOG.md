@@ -1,5 +1,11 @@
 # @nocobase/i18n
 
+## 1.0.0-beta.2
+
+### Patch Changes
+
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+
 ## 1.0.0-beta.1
 
 ### Major Changes

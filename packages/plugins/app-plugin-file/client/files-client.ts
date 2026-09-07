@@ -139,15 +139,15 @@ export function createFilesClient(
     },
   ): Promise<T> {
     try {
-      const payload = await options.appClient.request<unknown>(path, {
+      const payload = await options.api.request<unknown>({
+        path,
         method: requestOptions.method,
-        body:
-          requestOptions.body === undefined
-            ? undefined
-            : typeof FormData !== 'undefined' &&
-                requestOptions.body instanceof FormData
-              ? requestOptions.body
-              : JSON.stringify(requestOptions.body),
+        ...(typeof FormData !== 'undefined' &&
+        requestOptions.body instanceof FormData
+          ? { body: requestOptions.body }
+          : requestOptions.body === undefined
+            ? {}
+            : { json: requestOptions.body }),
         signal: requestOptions.signal,
       });
       if (requestOptions.allowNoContent && payload === undefined) {

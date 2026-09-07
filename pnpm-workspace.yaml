@@ -1,5 +1,6 @@
 packages:
   - packages/*/*
+  - docs
 
 # Commands with --dry-run must not trigger an implicit install before their
 # own code can enforce read-only behavior. Dependency changes are synchronized
@@ -32,8 +33,9 @@ catalog:
   '@tiptap/react': 3.30.2
   '@tiptap/starter-kit': 3.30.2
   '@types/node': ^24.0.0
-  '@types/react': ^19.1.0
-  '@types/react-dom': ^19.1.0
+  '@types/react': ^19.2.0
+  '@types/react-dom': ^19.2.0
+  '@types/ws': ^8.18.1
   '@typescript-eslint/eslint-plugin': ^8.67.0
   '@typescript-eslint/parser': ^8.67.0
   '@vitejs/plugin-react': ^4.4.1
@@ -47,7 +49,7 @@ catalog:
   eslint: ^10.0.0
   eslint-config-prettier: ^10.1.8
   eslint-plugin-react-hooks: ^7.1.1
-  eslint-plugin-react-refresh: ^0.5.4
+  eslint-plugin-react-refresh: ^0.5.6
   globals: ^17.11.0
   hono: ^4.13.2
   husky: ^9.1.7
@@ -57,6 +59,8 @@ catalog:
   jsdom: ^30.0.1
   keyv: ^5.6.0
   knex: ^3.1.0
+  oracledb: ^6.10.0
+  tedious: ^20.0.0
   lint-staged: ^17.3.0
   postcss: ^8.5.3
   prettier: ^3.9.6
@@ -64,8 +68,8 @@ catalog:
   pino-pretty: ^13.0.0
   pino-roll: ^4.0.0
   publint: ^0.3.24
-  react: ^19.1.0
-  react-dom: ^19.1.0
+  react: ^19.2.8
+  react-dom: ^19.2.8
   react-i18next: ^17.0.12
   react-markdown: ^10.1.0
   react-router: ^7.0.2
@@ -76,6 +80,7 @@ catalog:
   typescript-eslint: ^8.67.0
   vite: ^6.3.5
   vitest: ^4.1.10
+  ws: ^8.21.3
   yaml: ^2.9.0
 
 # Which dependencies may run install scripts: true compiles a native addon, false skips a script
@@ -83,8 +88,13 @@ catalog:
 # donation notice. A package left out entirely stops the install with ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
   better-sqlite3: true
+  oracledb: true
   esbuild: true
   tesseract.js: false
+  # Pulled in by @iconscout/unicons, the icon font the documentation site uses. Its build script only runs when
+  # unicons regenerates its own fonts; the .woff2 files ship in the published package, so compiling the native addon
+  # at install time produces nothing anything reads.
+  ttf2woff2: false
 
 # Reports a dependency whose install script was skipped as a warning instead of failing the install.
 # allowBuilds decides the packages known today; this keeps a newly introduced transitive dependency
@@ -95,4 +105,5 @@ strictDepBuilds: false
 minimumReleaseAgeExclude:
   - '@publint/pack@0.1.7'
   - publint@0.3.24
-  - '@gchust/agent-annotations@0.1.7'
+  - '@gchust/agent-annotations@0.1.8'
+  - eslint-plugin-react-refresh@0.5.6

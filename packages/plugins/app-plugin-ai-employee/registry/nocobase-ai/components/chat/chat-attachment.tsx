@@ -14,9 +14,9 @@ export function ChatAttachment({
   onRemove?: () => void;
 }) {
   const t = useAITranslate();
-  const preview =
-    attachment.preview ??
-    (attachment.mimetype?.startsWith('image/') ? attachment.url : undefined);
+  const preview = attachment.mimetype?.startsWith('image/')
+    ? (attachment.preview ?? attachment.url)
+    : undefined;
   const content = (
     <div
       className={cn(

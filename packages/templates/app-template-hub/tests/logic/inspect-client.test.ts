@@ -80,7 +80,7 @@ describe('client inspection', () => {
     ).toEqual([
       {
         auth: 'required',
-        id: '@nocobase/app-template-hub:home',
+        id: '@nocobase/app-template-hub:applications-root',
         path: '/',
       },
       {
@@ -133,6 +133,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-system-info:index',
         path: '/system-info',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub',
+        path: '/hub',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
@@ -161,6 +166,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-notification-provider', order: 6 },
       { packageName: '@nocobase/app-plugin-workflow', order: 7 },
       { packageName: '@nocobase/app-plugin-notification', order: 8 },
+      { packageName: '@nocobase/app-plugin-hub', order: 9 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

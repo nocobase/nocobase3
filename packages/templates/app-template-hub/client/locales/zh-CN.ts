@@ -17,7 +17,6 @@ const zhCN: AppResource = {
     signingOut: '正在退出…',
   },
   navigation: {
-    home: '首页',
     open: '打开导航',
     close: '关闭导航',
     expand: '展开导航',

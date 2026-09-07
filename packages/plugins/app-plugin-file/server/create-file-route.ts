@@ -38,6 +38,7 @@ import {
   type FileStore,
   type NewFileRecord,
 } from './types.js';
+import { registerDatabaseFileSource } from './settings/source-registry.js';
 
 interface ClientFileRecord {
   readonly id: string;
@@ -86,6 +87,12 @@ class FileRouteError extends Error {
 export function createFileRoute(options: CreateFileRouteOptions): Hono {
   const store = resolveFileStore(options);
   assertMaxFiles(options.limits?.maxFiles);
+  if (!options.store) {
+    registerDatabaseFileSource({
+      database: options.database,
+      table: options.table,
+    });
+  }
   const routes = new Hono();
   const visibility = options.visibility ?? DEFAULT_FILE_ROUTE_VISIBILITY;
   const maxFileSize = options.limits?.maxSize ?? DEFAULT_MAX_FILE_SIZE;

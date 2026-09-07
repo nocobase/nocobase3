@@ -1,5 +1,41 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.10
+
+### Major Changes
+
+- 90a4903: Extract the shared realtime wire protocol and browser WebSocket client into `@nocobase/realtime`. Replace the session-specific client reconnect method with a transport-level `reconnect()` operation, and make the application client and server consume the shared package.
+- 90a4903: Replace the composite application transport with application-owned `ApiClient` and `RealtimeClient` services. Client plugins, examples, and application templates now use object-style HTTP request options through the shared API client, while realtime subscriptions resolve their dedicated WebSocket client.
+
+### Patch Changes
+
+- 90a4903: Preserve configured API and realtime endpoints after splitting the client services. Integrate file inventory and the plugin-owned inbox with the shared API and realtime clients, including reconnection refresh and isolated event listeners.
+
+  Allow the Oracle driver install script in both templates’ standalone deployment workspace settings.
+
+  Resolve SQLite auto-incrementing bigint metadata correctly, narrow Oracle LOB values before reading their type, preserve legacy file timestamps, and rebuild the AI registry against the current API client.
+
+- 90a4903: Support asynchronous iteration of remote Repository `findMany` queries over framed NDJSON while preserving array consumption through `await`.
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+  - @nocobase/realtime@0.0.2-beta.0
+  - @nocobase/api-client@0.1.0-beta.0
+
+## 1.0.0-beta.9
+
+### Minor Changes
+
+- cee3251: Add authenticated realtime subscriptions, refresh their identity after authentication changes, and invalidate in-app notification state through user-scoped events.
+
+### Patch Changes
+
+- 43d5bf0: Publish the application-owned AI Employee frontend Registry with its chat components. Plugin-owned development showcases now live under `client/dev`, outside the materialized Registry item, and are excluded from production application builds. The Registry uses the application-scoped `@nocobase/app-client` transport for JSON, upload, and streaming requests instead of the deprecated Portal SDK client. The Default and Hub templates scan plugin Registry source for Tailwind utilities, so materialized components retain their intended responsive layout and sizing.
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- Updated dependencies [813da59]
+  - @nocobase/i18n@1.0.0-beta.2
+
 ## 1.0.0-beta.8
 
 ### Major Changes

@@ -1,5 +1,5 @@
 import type { AppNoticeData } from '@nocobase/app-plugin-skills-example/server/tokens';
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 
 export type LoadSkillsExampleNotice = () => Promise<AppNoticeData>;
 
@@ -8,7 +8,7 @@ export type LoadSkillsExampleNotice = () => Promise<AppNoticeData>;
  * whatever `api.baseURL` it is configured with.
  */
 export function loadSkillsExampleNotice(
-  appClient: AppClient,
+  api: ApiClient,
 ): Promise<AppNoticeData> {
-  return appClient.request<AppNoticeData>('skills-example/notice');
+  return api.request<AppNoticeData>({ path: 'skills-example/notice' });
 }

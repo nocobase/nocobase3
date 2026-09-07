@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   Background,
   BaseEdge,
@@ -35,6 +36,7 @@ import type {
   WorkflowLayoutPoint,
 } from '@nocobase/app-plugin-workflow/client';
 import { layoutWithElk } from './graph/elk-layout.js';
+import { WORKFLOW_NS } from '../namespace.js';
 import type { WorkflowCanvasProps, WorkflowNodeRunRecord } from './types.js';
 import './workflow-canvas.css';
 
@@ -56,6 +58,7 @@ interface CanvasEdgeData extends Record<string, unknown> {
 const EMPTY_NODE_RUNS: readonly WorkflowNodeRunRecord[] = [];
 
 function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
   const vertical = data.direction === 'DOWN';
   const targetPosition = vertical ? Position.Top : Position.Left;
   const sourcePosition = vertical ? Position.Bottom : Position.Right;
@@ -63,7 +66,7 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
     return (
       <div
         className={`workflow-flow-branch-anchor ${data.status}`}
-        aria-label='Empty branch'
+        aria-label={t('canvas.emptyBranch')}
       >
         <Handle
           type='target'
@@ -217,7 +220,50 @@ export function WorkflowCanvas({
   onViewNodeRun,
   onViewStartInput,
 }: WorkflowCanvasProps): ReactElement {
-  const graph = useMemo(() => projectWorkflowGraph(definition), [definition]);
+  const { t } = useTranslation(WORKFLOW_NS);
+  const graph = useMemo(() => {
+    const contracts = new Map([
+      [
+        'condition',
+        {
+          type: 'condition',
+          title: t('canvas.condition'),
+          getBranchKeys: () => ['yes', 'no'],
+          getBranchLabel: (branchKey: string) =>
+            branchKey === 'yes'
+              ? t('canvas.yes')
+              : branchKey === 'no'
+                ? t('canvas.no')
+                : branchKey,
+        },
+      ],
+      [
+        'terminate',
+        {
+          type: 'terminate',
+          title: t('canvas.terminate'),
+          getBranchKeys: () => [],
+          terminal: true,
+        },
+      ],
+      ['run', { type: 'run', title: t('canvas.run'), getBranchKeys: () => [] }],
+    ]);
+    const projected = projectWorkflowGraph(definition, contracts);
+    return {
+      ...projected,
+      nodes: projected.nodes.map((node) => ({
+        ...node,
+        title:
+          node.kind === 'start'
+            ? t('canvas.start')
+            : node.kind === 'end'
+              ? t('canvas.end')
+              : node.kind === 'branch-anchor'
+                ? t('canvas.emptyBranch')
+                : node.title,
+      })),
+    };
+  }, [definition, t]);
   const [direction, setDirection] = useState<WorkflowLayoutDirection>('DOWN');
   const [layout, setLayout] = useState<{
     graph: typeof graph;
@@ -379,10 +425,10 @@ export function WorkflowCanvas({
       className='workflow-canvas'
       aria-label={
         runInteractive
-          ? 'Workflow run canvas'
+          ? t('canvas.runLabel')
           : onSelectNode
-            ? 'Workflow canvas'
-            : 'Read-only workflow canvas'
+            ? t('canvas.editableLabel')
+            : t('canvas.readOnlyLabel')
       }
     >
       {ready ? (
@@ -432,9 +478,9 @@ export function WorkflowCanvas({
               <button
                 type='button'
                 className={direction === 'RIGHT' ? 'active' : undefined}
-                aria-label='Horizontal layout'
+                aria-label={t('canvas.horizontalLayout')}
                 aria-pressed={direction === 'RIGHT'}
-                title='Horizontal layout'
+                title={t('canvas.horizontalLayout')}
                 onClick={() => setDirection('RIGHT')}
               >
                 <Columns3 aria-hidden='true' />
@@ -442,9 +488,9 @@ export function WorkflowCanvas({
               <button
                 type='button'
                 className={direction === 'DOWN' ? 'active' : undefined}
-                aria-label='Vertical layout'
+                aria-label={t('canvas.verticalLayout')}
                 aria-pressed={direction === 'DOWN'}
-                title='Vertical layout'
+                title={t('canvas.verticalLayout')}
                 onClick={() => setDirection('DOWN')}
               >
                 <Rows3 aria-hidden='true' />
@@ -461,11 +507,11 @@ export function WorkflowCanvas({
             <Controls />
           </ReactFlow>
           {viewportReady ? null : (
-            <div className='workflow-canvas-loading'>正在适配全览视图…</div>
+            <div className='workflow-canvas-loading'>{t('canvas.fitting')}</div>
           )}
         </>
       ) : (
-        <div className='workflow-canvas-loading'>正在布局流程…</div>
+        <div className='workflow-canvas-loading'>{t('canvas.layingOut')}</div>
       )}
     </div>
   );

@@ -1,18 +1,20 @@
-# Collection Builder Prototype
+# `@nocobase/db`
 
-这是一个用于验证 Collection Builder、数据库连接管理和真实数据库兼容性的 TypeScript 原型。
+`@nocobase/db` 提供多数据库连接管理、Collection Schema Builder、Query Adapter、Transaction、Migration、Seed、Schema Inspector 和 Collection Metadata。
 
-当前原型的重点是：保留 `Collection` 作为应用层数据模型抽象，通过 `CollectionBuilder` 把 Collection DSL 编译并应用到底层数据库 Schema。默认底层适配器基于 Knex，如有需要可以增加其他适配器。
+所有公开 API 都从包根入口导入；不要从源码深路径或 `internal/` 导入。
 
-## 核心目标
+## 文档入口
 
-- 用 Collection DSL 屏蔽数据库方言差异。
-- 用 Collection Builder 管理建表、改表、字段、约束、索引和视图。
-- 用 metadata-only API 补充应用层元信息，而不修改数据库结构。
-- 用 `CollectionOperation[]` 表达可解释、可 dry-run、适合 Agent apply/diff 的变更计划。
-- 用真实数据库集成测试验证 SQLite、PostgreSQL、MySQL 的行为。
+- 第一次使用：阅读[整体概览](./docs/zh-CN/overview.md)和[快速开始](./docs/zh-CN/quick-start.md)。
+- 按任务选择入口：阅读[任务路由](./docs/zh-CN/agent/task-router.md)。
+- 按公开能力深入：阅读 [Database](./docs/zh-CN/database/overview.md)、[Builder](./docs/zh-CN/builder/overview.md)、[Query](./docs/zh-CN/query/overview.md)、[Migration](./docs/zh-CN/migration/overview.md) 或 [Seed](./docs/zh-CN/seed/overview.md)。
+- 按名称查找 API：阅读[公开 API 导航](./docs/zh-CN/reference/api-index.md)，并以 TypeScript 类型声明为最终依据。
+- 浏览全部页面：查看[完整文档目录](./docs/zh-CN/toc.md)。
 
-## 快速开始
+维护 `@nocobase/db` 底层实现时再进入[内部实现文档](./docs/zh-CN/internals/README.md)。[未来提案](./docs/zh-CN/proposals/README.md)和尚未删除但具有追溯价值的[历史归档](./docs/zh-CN/archive/README.md)都不是当前 API 合同，不能据此生成生产代码。
+
+## 创建数据库入口
 
 ```ts
 import { createDatabaseManager } from '@nocobase/db';
@@ -27,137 +29,39 @@ const db = createDatabaseManager({
   },
 });
 
-await db.builder().createCollection('orders', (collection) => {
-  collection.increments('id');
-  collection.belongsTo('customer', 'customers');
-  collection.decimal('amount', { precision: 12, scale: 2 });
-});
+const connection = db.connection();
+console.log(connection.dialect);
 
 await db.destroy();
 ```
 
-## 文档入口
+持久化业务 Schema 变更应通过 Migration 中的 Builder 完成，数据读写通过 Query 完成。完整闭环见[快速开始](./docs/zh-CN/quick-start.md)。
 
-- [快速开始](./docs/zh-CN/quick-start.md)
-- [整体概览](./docs/zh-CN/overview.md)
-- [Collection 概念](./docs/zh-CN/concepts/collection.md)
-- [Metadata 概念](./docs/zh-CN/concepts/metadata.md)
-- [命名概念](./docs/zh-CN/concepts/naming.md)
-- [Builder API 总览](./docs/zh-CN/builder/overview.md)
-- [QueryAdapter 概览](./docs/zh-CN/query/overview.md)
-- [Repository 规划](./docs/zh-CN/repository/overview.md)
-- [Repository Select AST 规划](./docs/zh-CN/repository/select-ast.md)
-- [Repository Filter Builder 规划](./docs/zh-CN/repository/filter-builder.md)
-- [Repository Filter AST 规划](./docs/zh-CN/repository/filter-ast.md)
-- [Repository Sort AST 规划](./docs/zh-CN/repository/sort-ast.md)
-- [数据库概览](./docs/zh-CN/database/overview.md)
-- [真实数据库集成测试](./docs/zh-CN/testing/integration.md)
-- [源码与测试目录结构](./docs/zh-CN/development/source-layout.md)
-- [Agent 开发指南](./docs/zh-CN/development/agent-guide.md)
-- [API 索引](./docs/zh-CN/reference/api-index.md)
-- [术语表](./docs/zh-CN/reference/glossary.md)
+## 运行示例
 
-## 文档目录结构
-
-```text
-README.zh-CN.md
-docs/
-  zh-CN/
-    quick-start.md
-    overview.md
-    concepts/
-      collection.md
-      metadata.md
-      database-abstraction.md
-      naming.md
-    builder/
-      overview.md
-      create-collection.md
-      alter-collection.md
-      naming.md
-      fields.md
-      relations.md
-      constraints-and-indexes.md
-      view-collections.md
-      metadata-only.md
-      apply-operations.md
-      dialect-capabilities.md
-    database/
-      overview.md
-      connections.md
-      manager-and-connection.md
-      transactions.md
-    query/
-      overview.md
-      select.md
-      where.md
-      joins.md
-      aggregates.md
-      mutations.md
-      naming.md
-      compile.md
-    repository/
-      overview.md
-      select-ast.md
-      filter-builder.md
-      filter-ast.md
-      sort-ast.md
-    testing/
-      integration.md
-    development/
-      source-layout.md
-      agent-guide.md
-    reference/
-      api-index.md
-      database-config.md
-      query-api.md
-      collection-definition.md
-      field-definition.md
-      collection-operation.md
-      builder-options.md
-      builder-result.md
-      glossary.md
-```
-
-## 常用命令
+Managed Collection 生命周期：
 
 ```bash
-npm run typecheck
-npm test
-npm run test:coverage
-npm run build
+pnpm --filter @nocobase/db example managed
 ```
 
-默认集成测试使用内存 SQLite：
+External Schema 与 Module Metadata：
 
 ```bash
-npm run test:integration
+pnpm --filter @nocobase/db example external
 ```
 
-启动 PostgreSQL 和 MySQL：
+## 验证
 
 ```bash
-npm run test:db:up
+pnpm --filter @nocobase/db check
+pnpm --filter @nocobase/db test:integration
 ```
 
-跑完整真实数据库矩阵：
-
-```bash
-npm run test:integration:all
-```
-
-停止并清理测试数据库：
-
-```bash
-npm run test:db:down
-```
+完整验证和多方言选择见[验证指南](./docs/zh-CN/agent/verification.md)。
 
 ## 当前边界
 
-- 当前只实现了 Collection Builder，没有实现 Collection Generator。
-- 当前没有 Repository、Repository Select AST、Repository Filter Builder、Repository
-  Filter AST、Repository Sort AST、Model、Transformer。
-- Schema Adapter 默认基于 Knex。
-- `check` constraint 已建模，但还没有完整编译到 SQL。
-- `dropConstraint` 当前实现仍较基础，后续需要按 constraint 类型增强。
-- `BuilderExecOptions` 中 `ifNotExists`、`ifExists`、`transaction` 是预留扩展，当前不要把它们当成运行时保证；当前主要验证 `dryRun`、`previewSql`、`syncMetadata` 和 `strict`。
+- Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 是未来提案，当前不可调用。
+- QueryAdapter 是数据库层查询接口，不读取 Collection Metadata。
+- `connection.client()` 是底层 adapter 逃生口，不是常规数据库入口。

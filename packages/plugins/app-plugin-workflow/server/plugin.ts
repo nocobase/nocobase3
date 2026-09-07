@@ -14,6 +14,7 @@ const serviceProviders: readonly AppPluginProviderConstructor<WorkflowProviderCo
 const workflowPlugin: AppServerPlugin<WorkflowProviderConfig> =
   defineServerPlugin<WorkflowProviderConfig>({
     packageName: '@nocobase/app-plugin-workflow',
+    locales: () => import('./locales/index.js'),
     config: workflowConfig,
     serviceProviders,
     routes,

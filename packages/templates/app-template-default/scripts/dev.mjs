@@ -174,16 +174,11 @@ const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
   .filter(Boolean)
   .join('/')}`;
 const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
-const workflowBuild = spawn.sync(
-  'tsx',
-  [
-    '--conditions=source',
-    '--tsconfig',
-    'tsconfig.node.json',
-    'scripts/build-workflows.ts',
-  ],
-  { cwd: rootDir, env: nextEnv, stdio: 'inherit' },
-);
+const workflowBuild = spawn.sync('workflow', ['build'], {
+  cwd: rootDir,
+  env: nextEnv,
+  stdio: 'inherit',
+});
 if (workflowBuild.error) throw workflowBuild.error;
 if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
 const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);

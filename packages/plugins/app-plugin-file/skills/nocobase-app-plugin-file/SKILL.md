@@ -35,10 +35,6 @@ Application owns
   storage, filename, token, and preview mechanics
 ```
 
-The File plugin intentionally ships no business tables, attachment endpoints,
-or application pages. Never depend on `/file-demo`, `/api/attachments`,
-`fileDemo*` collections, or plugin-internal source paths.
-
 ## Application workflow
 
 1. Confirm `@nocobase/app-plugin-file` is installed and registered so its
@@ -49,7 +45,7 @@ or application pages. Never depend on `/file-demo`, `/api/attachments`,
    `server/routes/` directory and include it in the App's routes array. Resolve
    Database, Drive, Session, authentication, and authorization from the App's
    existing container and config.
-4. Resolve `appApiClientToken` from the owning App, pass that v3 `AppClient` to
+4. Resolve `apiClientToken` from the owning App, pass that `ApiClient` to
    `createFilesClient()`, and use the reusable File components in the App page
    or form. Add an application route in `client/routes.ts` only when the
    workflow needs a new page.

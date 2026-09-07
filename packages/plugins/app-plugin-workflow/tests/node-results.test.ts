@@ -13,11 +13,11 @@ import type {
   NodeResultSchema,
   WorkflowSourceAst,
 } from '../server/instructions/types.js';
-import { compileWorkflowSource } from '../server/loader/source-compiler.js';
+import { compileWorkflowSource } from '../build/source-compiler.js';
 import {
   validateWorkflowSourceAst,
   type WorkflowSourceContracts,
-} from '../server/loader/source-validator.js';
+} from '../build/source-validator.js';
 
 const contracts: WorkflowSourceContracts = {
   nodes: new Map([

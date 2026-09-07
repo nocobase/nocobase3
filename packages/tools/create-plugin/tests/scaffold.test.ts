@@ -383,7 +383,9 @@ describe('createPlugin', () => {
     expect(result.files).toEqual([
       '.gitignore',
       '.prettierignore',
+      'AGENTS.md',
       'CHANGELOG.md',
+      'CLAUDE.md',
       'eslint.config.js',
       'package.json',
       'package.ts',

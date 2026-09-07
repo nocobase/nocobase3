@@ -12,7 +12,6 @@ export interface WorkflowLoaderOptions {
   database: DatabaseManager;
   artifactStore: WorkflowArtifactStore;
   distRoot: string;
-  refreshEngine(): Promise<void>;
 }
 
 export class WorkflowLoader {
@@ -45,7 +44,6 @@ export class WorkflowLoader {
         .where('key', '=', artifact.key)
         .where('hash', '=', artifact.digest)
         .executeTakeFirst<{ id: WorkflowId }>();
-      let created = false;
       const stored = await this.options.artifactStore.has(
         artifact.key,
         artifact.digest,
@@ -59,7 +57,6 @@ export class WorkflowLoader {
       if (!registered) {
         const result = await this.publisher.registerArtifact(artifact);
         registered = { id: result.workflowId };
-        created = result.action !== 'unchanged';
       }
       const current = await this.options.database
         .query()
@@ -69,7 +66,6 @@ export class WorkflowLoader {
         .where('current', '=', true)
         .executeTakeFirst();
       if (!current) await this.publisher.activate(registered.id);
-      if (created || !stored || !current) await this.options.refreshEngine();
       return registered.id;
     });
   }

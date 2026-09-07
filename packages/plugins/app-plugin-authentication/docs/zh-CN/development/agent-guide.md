@@ -149,12 +149,13 @@ database/migrations/
 
 ### 4. 增加客户端入口
 
-简单场景可以直接通过现有 `AppClient` 请求 plugin endpoint：
+简单场景可以直接通过应用级 `ApiClient` 请求 plugin endpoint：
 
 ```ts
-await appClient.request('auth/sign-in/my-provider', {
+await api.request({
+  path: 'auth/sign-in/my-provider',
   method: 'POST',
-  body: JSON.stringify(input),
+  json: input,
 });
 ```
 

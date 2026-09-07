@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { AppConfigReloadResult } from '@nocobase/app-server/config';
 import {
   InvalidAppIdError,
   AppCapacityExceededError,
@@ -28,7 +29,10 @@ import type {
   AppDestroyOptions,
   AppRequestMetadata,
   AppSnapshot,
+  ReplaceAppDefinitionOptions,
+  ReplaceAppDefinitionResult,
 } from './app-types.ts';
+import type { Logger } from '@nocobase/logging';
 
 export interface ReloadAppOptions {
   reason?: string;
@@ -61,6 +65,7 @@ export interface RegistryHealth {
 
 export interface AppRuntimeRegistryOptions {
   backend?: AppActivationBackend;
+  backends?: AppActivationBackend[];
   resolveFactory?: (
     definition: AppDefinition,
   ) => Promise<AppFactory> | AppFactory;
@@ -68,6 +73,7 @@ export interface AppRuntimeRegistryOptions {
   idleTtlMs?: number;
   evictionIntervalMs?: number;
   startEvictionLoop?: boolean;
+  logger?: Logger;
 }
 
 export interface RegistryMetrics {
@@ -90,13 +96,14 @@ export class AppRuntimeRegistry {
   private readonly definitions = new Map<string, AppDefinition>();
   private readonly runtimes = new Map<string, ActiveAppHandle>();
   private readonly operations = new Map<string, Promise<unknown>>();
-  private readonly backend: AppActivationBackend;
+  private readonly backends: ReadonlyMap<string, AppActivationBackend>;
   private readonly resolveFactory: (
     definition: AppDefinition,
   ) => Promise<AppFactory> | AppFactory;
   private readonly maxActiveApps: number;
   private readonly idleTtlMs: number;
   private readonly evictionIntervalMs: number;
+  private readonly logger: Logger | undefined;
   private evictionLoop: NodeJS.Timeout | null = null;
   private metrics: RegistryMetrics = {
     activations: 0,
@@ -114,7 +121,13 @@ export class AppRuntimeRegistry {
   private versionSequence = 0;
 
   constructor(options: AppRuntimeRegistryOptions = {}) {
-    this.backend = options.backend ?? new InProcessAppBackend(this.events);
+    this.logger = options.logger;
+    const configuredBackends = options.backends ?? [
+      options.backend ?? new InProcessAppBackend(this.events),
+    ];
+    this.backends = new Map(
+      configuredBackends.map((backend) => [backend.kind, backend]),
+    );
     this.resolveFactory =
       options.resolveFactory ??
       (() => {
@@ -159,6 +172,10 @@ export class AppRuntimeRegistry {
     });
   }
 
+  async registerDefinition(definition: AppDefinition): Promise<AppDefinition> {
+    return this.register(definition.id, definition);
+  }
+
   async updateDefinition(
     id: string,
     options: CreateAppDefinitionOptions = {},
@@ -168,6 +185,85 @@ export class AppRuntimeRegistry {
       const definition = this.createDefinition(id, options);
       this.definitions.set(id, definition);
       return definition;
+    });
+  }
+
+  async replaceDefinition(
+    definition: AppDefinition,
+    replaceOptions: ReplaceAppDefinitionOptions = {},
+  ): Promise<ReplaceAppDefinitionResult> {
+    const id = definition.id;
+    return this.withAppLock(id, async () => {
+      const startedAt = Date.now();
+      const currentDefinition = this.definitions.get(id);
+      const currentRuntime = this.runtimes.get(id);
+      const nextDefinition = this.createDefinition(id, definition);
+      const changed =
+        !currentDefinition ||
+        !definitionsEqual(currentDefinition, nextDefinition);
+
+      if (!changed) {
+        const activationStartedAt = Date.now();
+        const app =
+          replaceOptions.activate && !currentRuntime
+            ? await this.ensureActiveUnlocked(id)
+            : (currentRuntime?.snapshot() ?? null);
+        this.logger?.info(
+          {
+            appId: id,
+            changed: false,
+            activationDurationMs: Date.now() - activationStartedAt,
+            destroyDurationMs: 0,
+            durationMs: Date.now() - startedAt,
+          },
+          'App definition replacement completed',
+        );
+        return { definition: currentDefinition, app, changed: false };
+      }
+
+      if (!currentRuntime && !replaceOptions.activate) {
+        this.definitions.set(id, nextDefinition);
+        return { definition: nextDefinition, app: null, changed: true };
+      }
+
+      if (!currentRuntime) {
+        await this.evictForCapacity();
+      }
+
+      const replacementStartedAt = Date.now();
+      let newRuntime: ActiveAppHandle;
+      try {
+        newRuntime = await this.replaceRuntimeStopFirst({
+          id,
+          currentDefinition,
+          currentRuntime,
+          nextDefinition,
+          reason: replaceOptions.reason ?? 'app definition replaced',
+          destroyTimeoutMs: replaceOptions.destroyTimeoutMs,
+        });
+      } catch (error) {
+        throw new AppReloadFailedError(id, error);
+      }
+      const replacementDurationMs = Date.now() - replacementStartedAt;
+
+      this.definitions.set(id, nextDefinition);
+
+      this.logger?.info(
+        {
+          appId: id,
+          changed: true,
+          replacementDurationMs,
+          durationMs: Date.now() - startedAt,
+          replacementStrategy: 'stop-first',
+        },
+        'App definition replacement completed',
+      );
+
+      return {
+        definition: nextDefinition,
+        app: newRuntime.snapshot(),
+        changed: true,
+      };
     });
   }
 
@@ -212,6 +308,13 @@ export class AppRuntimeRegistry {
     return evicted;
   }
 
+  async reloadAppConfig(id: string): Promise<AppConfigReloadResult | null> {
+    return this.withAppLock(id, async () => {
+      const runtime = this.runtimes.get(id);
+      return runtime ? await runtime.reloadConfig() : null;
+    });
+  }
+
   async reload(
     id: string,
     options: ReloadAppOptions = {},
@@ -221,16 +324,14 @@ export class AppRuntimeRegistry {
       const oldRuntime = this.runtimes.get(id);
 
       try {
-        const newRuntime = await this.activateDefinition(definition);
-        this.runtimes.set(id, newRuntime);
-
-        if (oldRuntime) {
-          await oldRuntime.destroy({
-            reason:
-              options.reason ?? `reloaded by version ${newRuntime.version}`,
-            timeoutMs: options.destroyTimeoutMs,
-          });
-        }
+        const newRuntime = await this.replaceRuntimeStopFirst({
+          id,
+          currentDefinition: definition,
+          currentRuntime: oldRuntime,
+          nextDefinition: definition,
+          reason: options.reason ?? 'app reloaded',
+          destroyTimeoutMs: options.destroyTimeoutMs,
+        });
 
         this.metrics.reloads += 1;
         return newRuntime.snapshot();
@@ -263,7 +364,6 @@ export class AppRuntimeRegistry {
             ? { ...currentDefinition.release, version: desiredVersion }
             : undefined,
         });
-        this.definitions.set(id, definition);
       }
 
       try {
@@ -271,21 +371,21 @@ export class AppRuntimeRegistry {
           await this.evictForCapacity();
         }
 
-        const newRuntime = await this.activateDefinition(definition);
-        this.runtimes.set(id, newRuntime);
-
-        if (oldRuntime) {
-          await oldRuntime.destroy({
-            reason: options.reason ?? `deployed version ${desiredVersion}`,
-            timeoutMs: options.destroyTimeoutMs,
-          });
-        }
+        const newRuntime = await this.replaceRuntimeStopFirst({
+          id,
+          currentDefinition,
+          currentRuntime: oldRuntime,
+          nextDefinition: definition,
+          reason: options.reason ?? `deployed version ${desiredVersion}`,
+          destroyTimeoutMs: options.destroyTimeoutMs,
+        });
+        this.definitions.set(id, definition);
 
         const app = newRuntime.snapshot();
         this.metrics.deployments += 1;
         return {
           id,
-          strategy: options.strategy ?? 'blue-green',
+          strategy: 'restart',
           previousVersion: oldSnapshot?.codeVersion ?? null,
           desiredVersion,
           activeVersion: app.codeVersion,
@@ -293,13 +393,61 @@ export class AppRuntimeRegistry {
           app,
         };
       } catch (error) {
-        if (desiredVersion !== currentDefinition.desiredVersion) {
-          this.definitions.set(id, currentDefinition);
-        }
-
         throw new AppReloadFailedError(id, error);
       }
     });
+  }
+
+  // This remains stop-first until queue managers and job registries are
+  // isolated per App Runtime. Starting both runtimes concurrently can make
+  // @boringnode/queue process-level state cross runtime boundaries.
+  private async replaceRuntimeStopFirst(options: {
+    id: string;
+    currentDefinition: AppDefinition | undefined;
+    currentRuntime: ActiveAppHandle | undefined;
+    nextDefinition: AppDefinition;
+    reason: string;
+    destroyTimeoutMs?: number;
+  }): Promise<ActiveAppHandle> {
+    const {
+      id,
+      currentDefinition,
+      currentRuntime,
+      nextDefinition,
+      reason,
+      destroyTimeoutMs,
+    } = options;
+
+    if (currentRuntime) {
+      await currentRuntime.destroy({ reason, timeoutMs: destroyTimeoutMs });
+      if (this.runtimes.get(id) === currentRuntime) {
+        this.runtimes.delete(id);
+      }
+    }
+
+    try {
+      const newRuntime = await this.activateDefinition(nextDefinition);
+      this.runtimes.set(id, newRuntime);
+      return newRuntime;
+    } catch (activationError) {
+      if (!currentRuntime || !currentDefinition?.enabled) {
+        throw activationError;
+      }
+
+      try {
+        const restoredRuntime =
+          await this.activateDefinition(currentDefinition);
+        this.runtimes.set(id, restoredRuntime);
+      } catch (restoreError) {
+        throw new AggregateError(
+          [activationError, restoreError],
+          `App "${id}" failed to activate the replacement and restore the previous runtime`,
+          { cause: restoreError },
+        );
+      }
+
+      throw activationError;
+    }
   }
 
   async destroy(
@@ -388,6 +536,10 @@ export class AppRuntimeRegistry {
     return [...this.runtimes.values()].map((runtime) => runtime.snapshot());
   }
 
+  backendKinds(): AppDefinition['backend'][] {
+    return [...this.backends.keys()] as AppDefinition['backend'][];
+  }
+
   capacity(): RegistryHealth['capacity'] {
     return {
       maxActiveApps: this.maxActiveApps,
@@ -427,7 +579,7 @@ export class AppRuntimeRegistry {
 
     this.evictionLoop = setInterval(() => {
       this.evictIdle().catch((error) => {
-        console.error('Idle app eviction failed', error);
+        this.logger?.error({ err: error }, 'Idle app eviction failed');
       });
     }, this.evictionIntervalMs);
     this.evictionLoop.unref?.();
@@ -504,12 +656,22 @@ export class AppRuntimeRegistry {
 
     const startedAt = Date.now();
     try {
+      const factoryStartedAt = Date.now();
       const createApp = await this.resolveFactory(definition);
-      const runtime = await this.backend.activate({
+      const factoryDurationMs = Date.now() - factoryStartedAt;
+      const backend = this.backends.get(definition.backend);
+      if (!backend) {
+        throw new Error(
+          `App backend "${definition.backend}" is not available on this host`,
+        );
+      }
+      const backendStartedAt = Date.now();
+      const runtime = await backend.activate({
         definition,
         version,
         createApp,
       });
+      const backendDurationMs = Date.now() - backendStartedAt;
 
       // In-process runtimes emit `created` only after activation.
       const activatableRuntime = runtime as ActiveAppHandle & {
@@ -521,6 +683,15 @@ export class AppRuntimeRegistry {
 
       this.metrics.activations += 1;
       this.metrics.lastActivationDurationMs = Date.now() - startedAt;
+      this.logger?.info(
+        {
+          appId: definition.id,
+          factoryDurationMs,
+          backendDurationMs,
+          durationMs: this.metrics.lastActivationDurationMs,
+        },
+        'App runtime activation completed',
+      );
       return runtime;
     } catch (error) {
       this.metrics.activationFailures += 1;
@@ -694,4 +865,8 @@ function sortByLastAccessed(a: AppSnapshot, b: AppSnapshot): number {
     ? Date.parse(b.lastAccessedAt)
     : Date.parse(b.createdAt);
   return aTime - bTime;
+}
+
+function definitionsEqual(a: AppDefinition, b: AppDefinition): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }

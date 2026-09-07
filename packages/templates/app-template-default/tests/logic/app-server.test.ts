@@ -52,7 +52,7 @@ import {
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-websocket';
 import {
   databaseManagerToken,
   type DatabaseManager,
@@ -1309,7 +1309,6 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
           visibility: 'private' as const,
         },
       },
-      links: {},
     },
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
@@ -1575,6 +1574,12 @@ function createMockDatabase(
       throw new Error('Not implemented.');
     }) as DatabaseManager['builder'],
     query: (() => query) as DatabaseManager['query'],
+    createMigrator: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['createMigrator'],
+    createSeeder: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['createSeeder'],
     connect: (() =>
       Promise.reject(
         new Error('Not implemented.'),

@@ -5,16 +5,20 @@ Database、Hono 或 Better Auth 服务端实现。
 
 ## 创建 AuthClient
 
+在已经启动的 `ClientApplication` 上解析应用级客户端：
+
 ```ts
 import { createAuthClient } from '@nocobase/app-plugin-authentication/client';
-import { createAppClient } from '@nocobase/app-client';
+import { apiClientToken, realtimeClientToken } from '@nocobase/app-client';
 
-const appClient = createAppClient();
-const authClient = createAuthClient({ client: appClient });
+const authClient = createAuthClient({
+  api: app.services.resolve(apiClientToken),
+  realtime: app.services.resolve(realtimeClientToken),
+});
 ```
 
-`AuthClient` 通过 `AppClient` 请求相对路径 `auth/*`。应用的 API base 和公开
-mount path 应由 `AppClient` 统一处理。
+`AuthClient` 通过 `ApiClient` 请求相对路径 `auth/*`，并在身份变化后要求
+`RealtimeClient` 重连。应用的 API base 和公开 mount path 由应用级客户端统一处理。
 
 ## 查询 Session
 

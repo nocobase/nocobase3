@@ -26,33 +26,29 @@ describeIntegrationDatabases('naming conventions', (context) => {
     ).toBe(true);
   });
 
-  it('uses explicit tableName and columnName as physical names', async () => {
-    const tableName = context.identifier('legacy_order_item');
+  it('allows a collection to override the connection table prefix', async () => {
+    const tableName = `${context.prefix}_archive_order_items`;
 
     await context.builder.createCollection('orderItems', (collection) => {
-      collection.tableName(tableName);
+      collection.naming({ tablePrefix: `${context.prefix}_archive_` });
       collection.increments('id');
-      collection.string('orderNo').columnName('order_number');
+      collection.string('orderNo');
       collection.datetime('createdAt');
     });
 
     expect(await context.db.schema.hasTable(tableName)).toBe(true);
-    expect(await context.db.schema.hasColumn(tableName, 'order_number')).toBe(
-      true,
-    );
+    expect(await context.db.schema.hasColumn(tableName, 'order_no')).toBe(true);
     expect(await context.db.schema.hasColumn(tableName, 'created_at')).toBe(
       true,
     );
 
     await context.db(tableName).insert({
-      order_number: 'SO-001',
+      order_no: 'SO-001',
     });
-    await expect(context.db(tableName).select('order_number')).resolves.toEqual(
-      [
-        {
-          order_number: 'SO-001',
-        },
-      ],
-    );
+    await expect(context.db(tableName).select('order_no')).resolves.toEqual([
+      {
+        order_no: 'SO-001',
+      },
+    ]);
   });
 });

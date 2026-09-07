@@ -87,6 +87,8 @@ database:
       dialect: sqlite
       database: database.sqlite
       debug: false
+      # For Oracle, use dialect: oracle and replace database with serviceName: FREEPDB1.
+      # For SQL Server, use dialect: mssql and configure encrypt and trustServerCertificate.
   migrations:
     autoRun: true
   seeds:

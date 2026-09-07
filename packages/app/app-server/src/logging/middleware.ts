@@ -55,7 +55,7 @@ export function requestLogger(
           ),
         },
       },
-      'request started',
+      `${method} ${path} started`,
     );
 
     try {
@@ -71,7 +71,7 @@ export function requestLogger(
           statusFromError(error),
           error,
         ),
-        'request failed',
+        `${method} ${path} failed`,
       );
       throw error;
     }
@@ -88,14 +88,14 @@ export function requestLogger(
     );
 
     if (status >= 500) {
-      options.logger.error(bindings, 'request failed');
+      options.logger.error(bindings, `${method} ${path} ${status} failed`);
       return;
     }
     if (status >= 400) {
-      options.logger.warn(bindings, 'request completed');
+      options.logger.warn(bindings, `${method} ${path} ${status} completed`);
       return;
     }
-    options.logger.info(bindings, 'request completed');
+    options.logger.info(bindings, `${method} ${path} ${status} completed`);
   });
 }
 
@@ -109,7 +109,13 @@ export const requestLoggingMiddleware: AppHttpMiddleware<AppPluginApplication> =
         requestLogger({
           logger: logging.getLogger('request'),
           app: app.appName,
-          skip: (context) => context.req.path.endsWith('/api/healthz'),
+          skip: (context) => {
+            const path = context.req.path;
+            return (
+              (path !== '/api' && !path.startsWith('/api/')) ||
+              path === '/api/healthz'
+            );
+          },
         }),
       );
     },

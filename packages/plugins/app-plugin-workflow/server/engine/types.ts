@@ -1,5 +1,6 @@
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { WorkflowRunServices } from './run-services.js';
 
 import type {
   WorkflowParameterSchema,
@@ -135,25 +136,14 @@ export interface ProcessorRerunOptions {
   overwrite?: boolean;
 }
 
-export interface WorkflowEngineSourceOptions {
-  /** Directory containing one `<workflow-key>/workflow.ts` package per workflow. */
-  rootPath: string;
-  /** Make newly materialized revisions current immediately. */
-  autoActivate?: boolean;
-  /** Enable current source revisions after registration. */
-  autoEnable?: boolean;
-}
-
 export interface WorkflowEngineOptions {
   database: DatabaseManager;
   connectionName?: string;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
-  /** Application value exposed to `run` scripts as `runtime.app`. */
-  app?: unknown;
-  /** Source packages discovered and registered before the runtime accepts work. */
-  sources?: WorkflowEngineSourceOptions;
+  /** Read-only application services exposed to `run` modules. */
+  services?: WorkflowRunServices;
   /** Immutable production artifacts. When present, run nodes never read source directories. */
   artifactStore?: WorkflowArtifactStore;
   /** Development-only root containing one source package per workflow key. */

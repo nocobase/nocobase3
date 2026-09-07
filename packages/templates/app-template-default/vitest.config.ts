@@ -25,31 +25,13 @@ export default createReactVitestConfig({
   },
   test: {
     root,
-    include: [
-      'tests/components/language-switcher.test.tsx',
-      'tests/components/loading.test.tsx',
-      'tests/logic/agent-annotations.test.ts',
-      'tests/logic/app-server.test.ts',
-      'tests/logic/client-auth.test.tsx',
-      'tests/logic/client-plugin-registry.test.ts',
-      'tests/logic/client-routes.test.ts',
-      'tests/logic/client-runtime.test.ts',
-      'tests/logic/client-settings.test.tsx',
-      'tests/logic/client-shell.test.tsx',
-      'tests/logic/client-theme.test.tsx',
-      'tests/logic/config.test.ts',
-      'tests/logic/dev-ports.test.ts',
-      'tests/logic/dev-routes-production-build.test.ts',
-      'tests/logic/inspect-client.test.ts',
-      'tests/logic/dev-readiness.test.ts',
-      'tests/logic/dev-plugin-watches.test.ts',
-      'tests/logic/lifecycle.test.ts',
-      'tests/logic/notification-in-app-runtime.test.tsx',
-      'tests/logic/plugin-commands.test.ts',
-      'tests/logic/skills-example-integration.test.tsx',
-      'tests/logic/tailwind-sources.test.ts',
-      'tests/logic/workflow-management.test.ts',
-    ],
+    // A glob rather than a list of filenames. The list had to be edited by hand for every test added or removed and
+    // silently drifted: it named a file that no longer existed while seven real test files were absent from it, so
+    // those tests were never run at all.
+    include: ['tests/**/*.test.{ts,tsx}'],
+    // A generated application ships no `tests/` — the template's `files` field does not include it — so an empty run
+    // is the expected outcome there rather than a failure on `pnpm test` before a line of code has been written.
+    passWithNoTests: true,
     coverage: {
       provider: 'v8',
       reportsDirectory: './coverage',

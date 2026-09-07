@@ -3,10 +3,16 @@
 File storage, scoped access routes, client APIs, and reusable file UI for
 NocoBase applications.
 
-The plugin does not install business file tables, business API routes, or
-application pages. Each application owns its file relations, migrations,
-authorization policy, Server Route composition, and Client page or form, and
-builds them with the plugin's public factories and components.
+The plugin does not install business file tables or business API routes. Each
+application owns its file relations, migrations, authorization policy, Server
+Route composition, and business Client pages or forms, and builds them with the
+plugin's public factories and components.
+
+The plugin also provides the read-only `/settings/files` inventory and
+`/api/files/inventory/*` API for registered database-backed file routes.
+Authentication and Authorization are required runtime dependencies and must be
+enabled. Both surfaces require the `file.inventory` page access permission;
+the built-in system administrator receives it through the wildcard page grant.
 
 The Client UI and Server API errors provide lazy-loaded `en-US` and `zh-CN`
 resources under the `@nocobase/app-plugin-file` namespace.

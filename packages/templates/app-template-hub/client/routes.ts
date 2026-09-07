@@ -7,8 +7,8 @@ import {
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
   {
     auth: 'required',
-    componentLoader: () => import('./pages/home.js'),
-    name: 'home',
+    componentLoader: () => import('./pages/applications-redirect.js'),
+    name: 'applications-root',
     path: '/',
   },
 ]);

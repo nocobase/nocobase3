@@ -1,5 +1,95 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.7
+
+### Minor Changes
+
+- 90a4903: Stream exposed Repository `findMany` records as framed NDJSON when requested through HTTP content negotiation.
+- 90a4903: Finalize the Collection Metadata architecture by making the V1 supplemental document Store the only `CollectionMetadataStore` contract, using persistent database Metadata by default for managed connections, requiring an explicit Store for external connections, and removing the legacy full-Collection Store and Builder Metadata-only APIs.
+- 90a4903: Add defineRepositoryApiRoutes to expose explicitly configured Collection Repository methods through the api-client HTTP protocol, with JSON request validation, bounded list queries, and Repository error mapping. This basic adapter does not install authentication or authorization.
+- 90a4903: Add server-owned writePolicy for single and bulk creates/updates, root upserts and
+  mutation preflight. Internal Repository calls default to true. Explicit policies
+  restrict scalar fields, each relation operation, nested create/update/upsert branches
+  and through payloads before any writes. Add buildWritePolicy, buildUpsertWritePolicy
+  and synchronous callback input, frozen snapshots and structured policy errors.
+
+  Replace defineRepositoryApiRoutes action arrays with configuration objects and move
+  maxLimit to actions.findMany. API create/update actions default to writePolicy false
+  and require explicit allowlists; true and client-supplied policies are rejected.
+  Return HTTP 403 for forbidden writes and migrate the Repository example's routes,
+  fixtures and integration guidance to field and relationship policies.
+
+- 90a4903: Replace the legacy database connection `managed` flag with the explicit `schemaManagement` mode, and prevent external-schema connections from executing Builder DDL or migrations while retaining query access and dry-run compilation. Remove unused Collection `writable`, Field `interface` and `uiSchema` properties, and implicit virtual-field metadata creation.
+- a864497: Add standalone and Hub-managed host modes, startup-only YAML or JSON host configuration, FS and S3 release deployment through NocoBase Drive, strict desired deployment reconciliation, file configuration path selection, host-owned structured logging, shared ws-backed App WebSocket handling, private authenticated child-process management over Node IPC, and bounded managed-host crash recovery. Managed deployments use checksum-addressed immutable revision directories, stop-first Runtime replacement with bounded graceful request draining, and a three-revision local cache for fast rollback. Rename the Host's in-process runtime implementation to `InProcessAppHandle`.
+- a864497: Register the Application Hub in the Hub template and provide an application control plane. Release artifacts supply their version and an optional `config.example.yml` or `config.example.yaml` template, while applications choose Config file or External configuration and reserve Hub-managed configuration for a future database-backed implementation. Hub actions reconcile only the selected application, reuse an already installed matching artifact, report deployment phase timings, and support removing an application and its persisted resources. Separate Hub desired configuration files from Host-owned runtime configuration, rebuild recovery targets when Host becomes ready, and split the management page into business modules.
+- 90a4903: Add Microsoft SQL Server support through Knex and the `tedious` driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+- 90a4903: Add Oracle Database support through the `oracledb` Thin driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+- 90a4903: Expose opt-in aggregate and groupBy Repository HTTP actions with JSON AST validation, grouped filters and sorting, and lossless BigInt result serialization. Add matching remote Repository methods and public types. Switch the aggregate example to the generic authenticated endpoints and display its actual Repository requests.
+
+### Patch Changes
+
+- 90a4903: Extract the shared realtime wire protocol and browser WebSocket client into `@nocobase/realtime`. Replace the session-specific client reconnect method with a transport-level `reconnect()` operation, and make the application client and server consume the shared package.
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/realtime@0.0.2-beta.0
+
+## 1.0.0-beta.6
+
+### Minor Changes
+
+- cee3251: Add authenticated realtime subscriptions, refresh their identity after authentication changes, and invalidate in-app notification state through user-scoped events.
+
+### Patch Changes
+
+- 8d88ff4: Replace the public AI Employee LLM service filesystem loader with the application `config.yml` contract at `ai.llmServices`. Configured model entries use a simple label/value array and are converted internally to custom mode. The App plugin validates and synchronizes declarative service definitions at startup and on application-config reload while preserving repository-managed enabled state for matching services. The default App template includes a commented configuration example, and the App config validator supports unique object properties for rejecting duplicate service names.
+- Updated dependencies [813da59]
+  - @nocobase/i18n@1.0.0-beta.2
+
 ## 1.0.0-beta.5
 
 ### Patch Changes

@@ -8,12 +8,12 @@ const settings: AppClientSettingsRoutesContribution = defineSettingsRoutes([
   {
     name: 'automation',
     path: '/automation',
-    navigation: { title: 'Automation', icon: WorkflowIcon },
+    navigation: { title: 'nav.automation', icon: WorkflowIcon },
     children: [
       {
         name: 'workflows',
         path: '/workflows',
-        navigation: { title: 'Workflows' },
+        navigation: { title: 'nav.workflows' },
         access: { resource: 'workflow', action: 'access' },
         componentLoader: () =>
           import('./workflow-management/pages.js').then(
@@ -23,7 +23,7 @@ const settings: AppClientSettingsRoutesContribution = defineSettingsRoutes([
       {
         name: 'workflow-runs',
         path: '/workflow-runs',
-        navigation: { title: 'Workflow runs' },
+        navigation: { title: 'nav.runs' },
         access: { resource: 'workflow', action: 'access' },
         componentLoader: () =>
           import('./workflow-management/pages.js').then(

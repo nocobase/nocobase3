@@ -9,7 +9,7 @@ user-isolated inbox API.
 The package exports its Server plugin and public Server contracts from both the
 package root and `/server`. Register it in the target App's Server plugin list
 after `@nocobase/app-plugin-notification` when durable notification delivery is
-needed. It has no Client runtime entry. The package keeps
+needed. Its `/client` entry contributes a development-only inbox page. The package keeps
 `@nocobase/app-plugin-notification` as a peer because it imports the shared
 notification contracts. Registering the core Server plugin is optional: the
 inbox store and routes require only the database and authentication services,
@@ -46,27 +46,28 @@ Every operation resolves the authenticated user and constrains reads and
 writes to that user. Invalid pagination, cursor, JSON, or mutation input returns
 `400`; unauthenticated requests return `401`; invalid CSRF returns `403`.
 
-## Registry UI
+## Client inbox page
 
-The `in-app-ui` Registry item materializes an editable inbox page into the
-target App. It is App-owned Client source, not a Client contribution from this
-package. The target App owns the installed copy, its locale keys and wording,
-and any source extension that mounts it. The package continues to own the API,
-storage, authentication, CSRF, and user-isolation boundaries.
+Register the package's `/client` entry to add the inbox component example to
+the built-in Dev Route. In development it is available at
+`/dev/notification-in-app` inside the App, such as
+`/main/dev/notification-in-app` when the App public base is `/main`. The route
+and its page module are absent from production builds.
 
-The installed runtime subscribes lazily, reconnects after authentication
-changes, and refetches the unread count on realtime invalidation, WebSocket
-reconnection, and browser focus.
+The page mounts its inbox Provider locally, subscribes only while the page is
+open, reconnects after authentication changes, and refetches the unread count
+on realtime invalidation, WebSocket reconnection, and browser focus. HTTP state
+remains authoritative.
 
 ## Development
 
-Tests live in `tests/` and include route validation, stable pagination, Provider
-behavior, Registry contracts, and real SQLite migration `up`/`down` coverage.
+Tests live in `tests/` and include Client Route and inbox runtime behavior,
+Server Route validation, stable pagination, Provider behavior, and real SQLite
+migration `up`/`down` coverage.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-notification-in-app lint
 pnpm --filter @nocobase/app-plugin-notification-in-app typecheck
 pnpm --filter @nocobase/app-plugin-notification-in-app test
-pnpm --filter @nocobase/app-plugin-notification-in-app registry:build
 pnpm --filter @nocobase/app-plugin-notification-in-app build
 ```

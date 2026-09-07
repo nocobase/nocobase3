@@ -62,10 +62,7 @@ export function UserMenu(): ReactElement {
           ) : null}
         </div>
         <DropdownMenuSeparator />
-        {/* Outside the item list: this is a control to operate, not a command that closes the menu when chosen. */}
-        <div className='px-1 py-1'>
-          <LanguageSwitcher />
-        </div>
+        <LanguageSwitcher />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={isLoggingOut}

@@ -140,8 +140,8 @@ describe('workflow collections', () => {
 
     await expect(
       Promise.all(
-        workflowCollectionSchemas.map(({ name }) =>
-          metadataStore.getCollection(name),
+        workflowCollectionSchemas.map(async ({ name }) =>
+          database.connection().collections.get(name),
         ),
       ),
     ).resolves.toEqual(
@@ -154,11 +154,21 @@ describe('workflow collections', () => {
         expect.objectContaining({ name: WORKFLOW_COLLECTIONS.versionStats }),
       ]),
     );
+    await expect(
+      metadataStore.get(WORKFLOW_COLLECTIONS.workflows),
+    ).resolves.toMatchObject({
+      document: {
+        relations: {
+          nodes: { target: WORKFLOW_COLLECTIONS.nodes },
+          runs: { target: WORKFLOW_COLLECTIONS.runs },
+        },
+      },
+    });
 
     const dryRun = await createWorkflowCollections(database.builder(), {
       dryRun: true,
     });
-    const workflows = dryRun[0].operations[0] as {
+    const workflows = dryRun.operations[0] as {
       definition: CollectionDefinition;
     };
     expect(workflows.definition.fields).toEqual(

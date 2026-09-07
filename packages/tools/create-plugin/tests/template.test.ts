@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -12,7 +14,9 @@ import {
 const foundation = [
   '.gitignore',
   '.prettierignore',
+  'AGENTS.md',
   'CHANGELOG.md',
+  'CLAUDE.md',
   'eslint.config.js',
   'package.json',
   'package.ts',
@@ -122,6 +126,39 @@ describe('bundled capability templates', () => {
         normalizePluginCapabilities([]),
       ),
     ).resolves.toEqual(foundation);
+  });
+
+  /**
+   * The agent-facing documentation is part of the foundation rather than a capability, because the dependency rule it
+   * carries applies to every plugin. A plugin generated without it reintroduces the mistake it exists to prevent:
+   * browser packages declared as `dependencies`, which the application bundles anyway and then installs a second
+   * time into a server deployment that never requires them.
+   */
+  it('always emits the agent documentation, with CLAUDE.md deferring to AGENTS.md', async () => {
+    const files = await listTemplateFiles(
+      DEFAULT_TEMPLATE_DIRECTORY,
+      undefined,
+      normalizePluginCapabilities([]),
+    );
+
+    expect(files).toContain('AGENTS.md');
+    expect(files).toContain('CLAUDE.md');
+
+    const claude = await readFile(
+      path.join(DEFAULT_TEMPLATE_DIRECTORY, 'CLAUDE.md'),
+      'utf8',
+    );
+    expect(claude.trim()).toBe('@AGENTS.md');
+
+    const agents = await readFile(
+      path.join(DEFAULT_TEMPLATE_DIRECTORY, 'AGENTS.md'),
+      'utf8',
+    );
+    // The three destinations a dependency can go to, and the boundary that decides between them.
+    expect(agents).toContain('dependencies');
+    expect(agents).toContain('devDependencies');
+    expect(agents).toContain('peerDependencies');
+    expect(agents).toContain('bundled by the application');
   });
 
   it.each(

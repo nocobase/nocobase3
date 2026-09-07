@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-server",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0-beta.7",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -81,10 +81,6 @@
     "./support": {
       "types": "./src/support/index.ts",
       "import": "./src/support/index.ts"
-    },
-    "./websocket": {
-      "types": "./src/websocket.ts",
-      "import": "./src/websocket.ts"
     },
     "./i18n": {
       "types": "./src/i18n/index.ts",
@@ -168,10 +164,6 @@
         "types": "./dist/support/index.d.ts",
         "import": "./dist/support/index.js"
       },
-      "./websocket": {
-        "types": "./dist/websocket.d.ts",
-        "import": "./dist/websocket.js"
-      },
       "./i18n": {
         "types": "./dist/i18n/index.d.ts",
         "import": "./dist/i18n/index.js"
@@ -182,7 +174,7 @@
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
@@ -193,6 +185,7 @@
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
+    "@nocobase/app-websocket": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
@@ -201,6 +194,7 @@
     "@nocobase/snowflake": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/realtime": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@sinclair/typebox": "catalog:",
@@ -208,6 +202,7 @@
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/api-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",

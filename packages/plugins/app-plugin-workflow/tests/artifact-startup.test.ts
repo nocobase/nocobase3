@@ -13,10 +13,11 @@ import {
   createSyncQueueConfig,
   type NocoBaseQueueManager,
 } from '@nocobase/queue';
+import { ServiceContainer } from '@nocobase/service-provider';
 import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
-} from '../server/loader/artifact-builder.js';
+} from '../build/artifact-builder.js';
 import { WorkflowService } from '../server/service.js';
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
@@ -31,9 +32,12 @@ const queues: NocoBaseQueueManager[] = [];
 async function createWorkflowCollections(
   database: DatabaseManager,
 ): Promise<void> {
-  for (const schema of workflowCollectionSchemas) {
-    await database.builder().createCollection(schema.name, schema.define);
-  }
+  await database.builder().createCollections(
+    workflowCollectionSchemas.map(({ name, define }) => ({
+      name,
+      definition: define,
+    })),
+  );
 }
 afterEach(async () => {
   await Promise.all(queues.splice(0).map((queue) => queue.close()));
@@ -107,6 +111,7 @@ function createService(
   return new WorkflowService({
     database: f.database,
     queue: f.queue,
+    services: new ServiceContainer(),
     sourceRoot: path.join(f.root, 'server/workflows'),
     distRoot: f.distRoot,
     artifactDisk: {
@@ -223,6 +228,12 @@ describe('application workflow Artifact lazy synchronization', () => {
     await expect(
       fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
     ).resolves.toEqual(expect.arrayContaining(['workflow.json', 'server']));
+    await firstRepository.setStatus(first.id as string, false);
+    await expect(firstRepository.enable(v1)).resolves.toMatchObject({
+      id: String(first.id),
+      enabled: true,
+      hash: v1,
+    });
     await firstRepository.setStatus(first.id as string, false);
     await expect(
       firstRepository.enable(first.id as string),

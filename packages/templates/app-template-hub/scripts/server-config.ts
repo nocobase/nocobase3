@@ -134,7 +134,6 @@ const report = {
   drive: {
     default: activeDriveName || '(none)',
     active: summarizeDriveDisk(activeDrive),
-    links: drive.links,
   },
   queue: {
     default: activeQueueName || '(none)',
@@ -220,7 +219,17 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
     return summary;
   }
 
-  for (const key of ['host', 'port', 'database', 'username', 'schema', 'ssl']) {
+  for (const key of [
+    'host',
+    'port',
+    'database',
+    'serviceName',
+    'username',
+    'schema',
+    'ssl',
+    'encrypt',
+    'trustServerCertificate',
+  ]) {
     const value = connection[key];
     if (
       typeof value === 'string' ||
@@ -511,7 +520,6 @@ function printReport(value: typeof report): void {
   printSection('Drive');
   printPair('Default disk', value.drive.default);
   printJson('Active disk', value.drive.active);
-  printJson('Links', value.drive.links);
 
   printSection('Queue');
   printPair('Default connection', value.queue.default);

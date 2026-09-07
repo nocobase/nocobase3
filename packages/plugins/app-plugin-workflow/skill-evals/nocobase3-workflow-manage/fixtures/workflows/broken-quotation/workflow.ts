@@ -1,6 +1,10 @@
-import { defineWorkflow, RunInstruction } from '@nocobase/app-plugin-workflow';
+import {
+  defineWorkflow,
+  RunInstruction,
+  type WorkflowSourceAst,
+} from '@nocobase/app-plugin-workflow';
 
-export default defineWorkflow({
+const workflow: WorkflowSourceAst = defineWorkflow({
   title: 'Broken quotation fixture',
   inputSchema: {
     type: 'object',
@@ -15,3 +19,5 @@ export default defineWorkflow({
     }),
   ],
 });
+
+export default workflow;

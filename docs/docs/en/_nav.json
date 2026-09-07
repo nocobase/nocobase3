@@ -1,0 +1,26 @@
+[
+  {
+    "text": "Start",
+    "link": "/get-started/"
+  },
+  {
+    "text": "Tutorials",
+    "link": "/tutorials/"
+  },
+  {
+    "text": "Building apps",
+    "link": "/app/"
+  },
+  {
+    "text": "Plugins",
+    "link": "/plugins/"
+  },
+  {
+    "text": "Deployment",
+    "link": "/deployment/"
+  },
+  {
+    "text": "Website",
+    "link": "https://www.nocobase.com/"
+  }
+]

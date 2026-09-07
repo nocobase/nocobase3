@@ -1,8 +1,10 @@
 # nb3
 
-`nb3` 是仓库内部的开发命令行工具，不是给最终用户全局安装的 CLI。
+`nb3` 是仓库内部的开发命令行工具，不是给最终用户全局安装的 CLI。它只做一件事：插件注册。
 
 它随 App 一起分发：`app-template-default`（以及由它生成的应用）把 `@nocobase/nb3-cli` 声明为 devDependency，通过 App 自己的 `package.json` scripts 调用。**不要 `npm i -g`，也不要让用户直接敲 `nb3`。**在 App 目录里跑对应的 `pnpm` 脚本即可。
+
+创建项目走 `pnpm create @nocobase/app`，不经过这里。App 和 Hub 建好之后，用它们自己的 `pnpm dev`、`pnpm build`、`pnpm start` 运行。
 
 ## 插件命令
 
@@ -190,6 +192,12 @@ Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数�
 
 仓库根目录不再保留 `create-plugin.mjs`、`register-plugin.mjs`、`unregister-plugin.mjs` 或 `sync-skills.mjs`，也不再保留独立的 `plugin:skills:sync` 脚本。改动注册逻辑时只改对应包内实现：创建逻辑位于 `@nocobase/create-plugin`，注册与 skills 逻辑位于 `@nocobase/nb3-cli`。只有删除 workspace 插件源码的 `plugin:remove` 仍是仓库专属命令，继续留在 `scripts/`。
 
-## App 与 Hub 命令
+## 曾经有过的 App 与 Hub 命令
 
-`nb3 app create`、`nb3 app dev`、`nb3 hub *` 等命令的实现仍在 `packages/tools/cli/src/commands/` 中，但尚未定稿，文档暂不提供。需要了解当前行为时直接看源码或 `nb3 <topic> --help`。
+`nb3 app create`、`dev`、`info`、`config`、`destroy`、`deploy`、`pull`、`list` 和 `nb3 hub *` 已全部删除。
+
+它们来自一个不同的设想：用户先全局安装 `nb3`，再用它创建和运行项目。实际走的是另一条路——项目由 `pnpm create @nocobase/app` 生成，之后用项目自己的 scripts 运行，Hub 的启停也在 Hub 项目里解决。那批命令因此没有任何调用方，其中 `deploy`、`pull`、`list` 从未实现，只会以退出码 3 报错。
+
+一并消失的还有 Hub 的 `.nb3/` 目录：`hub.json`、`logs/`、`cache/` 只被这些命令读写，Hub 自身从不碰它们，所以 `create-app` 也不再生成。
+
+将来若要做部署，从 `dist/package.json` 出发重新设计——它现在已经是一个能独立安装运行的产物——而不是复活当时的空壳。

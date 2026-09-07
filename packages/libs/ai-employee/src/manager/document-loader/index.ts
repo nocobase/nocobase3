@@ -9,7 +9,6 @@
 
 import { Document } from '@langchain/core/documents';
 import { Worker } from 'node:worker_threads';
-import path from 'node:path';
 
 export type DocumentLoaderWorkerOptions = {
   filePath: string;
@@ -24,12 +23,12 @@ export const loadByWorker = async (
   extname: string,
   options: DocumentLoaderWorkerOptions,
 ): Promise<Document[]> => {
-  const isTsRuntime = __filename.endsWith('.ts');
-  const workerPath = path.join(
-    __dirname,
-    `loader.worker.${isTsRuntime ? 'ts' : 'js'}`,
+  const isTsRuntime = import.meta.url.endsWith('.ts');
+  const workerUrl = new URL(
+    `./loader.worker.${isTsRuntime ? 'ts' : 'js'}`,
+    import.meta.url,
   );
-  const worker = new Worker(workerPath, {
+  const worker = new Worker(workerUrl, {
     execArgv: isTsRuntime ? ['--require', 'tsx/cjs'] : undefined,
   });
   const timeout = options.timeout ?? DEFAULT_WORKER_TIMEOUT;

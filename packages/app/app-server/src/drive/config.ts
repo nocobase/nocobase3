@@ -44,20 +44,13 @@ export const driveConfig: AppConfigDefinition<
         ),
       ),
     ),
-    links: Type.Record(Type.String(), Type.String()),
   }),
   defaults: ({ paths }) => {
     const disks: AppDriveConfig['disks'] = {
       local: {
         driver: 'fs',
-        location: paths.storage('app/private'),
+        location: paths.storage(),
         visibility: 'private',
-      },
-      public: {
-        driver: 'fs',
-        location: paths.storage('app/public'),
-        visibility: 'public',
-        url: '/storage',
       },
       s3: {
         driver: 's3',
@@ -72,7 +65,6 @@ export const driveConfig: AppConfigDefinition<
     return {
       default: 'local',
       disks,
-      links: { [paths.root('public/storage')]: paths.storage('app/public') },
     };
   },
   envMappings: {

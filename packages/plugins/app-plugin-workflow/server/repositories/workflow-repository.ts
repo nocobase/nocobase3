@@ -23,6 +23,8 @@ import { BadRequestError } from '../errors.js';
 import {
   asWorkflowId,
   normalizePage,
+  parseWorkflowId,
+  parseWorkflowIdentifier,
   toDiscoveredWorkflowDefinition,
   toWorkflowDefinitionView,
   toWorkflowListItem,
@@ -309,7 +311,6 @@ export class WorkflowRepository {
         );
       },
     );
-    await this.service.refreshSourceResolvers();
     return workflow;
   }
 
@@ -319,7 +320,6 @@ export class WorkflowRepository {
 
   async setStatus(id: WorkflowId, enabled: boolean): Promise<WorkflowListItem> {
     const result = await this.setCurrentEnabled(id, enabled);
-    await this.service.refreshSourceResolvers();
     return result;
   }
 
@@ -362,13 +362,17 @@ export class WorkflowRepository {
   }
 
   async get(id: WorkflowId): Promise<WorkflowDefinitionView> {
-    let workflow = await loadWorkflow(this.database.query(), id);
-    if (!workflow) {
+    const identifier = parseWorkflowIdentifier(id);
+    let workflow =
+      identifier.kind === 'id'
+        ? await loadWorkflow(this.database.query(), identifier.value)
+        : null;
+    if (!workflow && identifier.kind === 'hash') {
       const materialized = await this.database
         .query()
         .selectFrom(WORKFLOW_COLLECTIONS.workflows)
         .select('id')
-        .where('hash', '=', String(id))
+        .where('hash', '=', identifier.value)
         .executeTakeFirst<Row>();
       if (materialized)
         workflow = await loadWorkflow(
@@ -377,8 +381,10 @@ export class WorkflowRepository {
         );
     }
     if (!workflow) {
+      if (identifier.kind === 'id')
+        throw new BadRequestError(`Workflow ${String(id)} was not found.`);
       const artifact = (await this.service.discoverArtifacts()).find(
-        (candidate) => candidate.digest === String(id),
+        (candidate) => candidate.digest === identifier.value,
       );
       if (!artifact)
         throw new BadRequestError(`Workflow ${String(id)} was not found.`);
@@ -421,11 +427,12 @@ export class WorkflowRepository {
     id: WorkflowId,
     enabled: boolean,
   ): Promise<WorkflowListItem> {
+    const workflowId = parseWorkflowId(id);
     const current = await this.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
       .select(['id', 'key'])
-      .where('id', '=', id)
+      .where('id', '=', workflowId)
       .where('current', '=', true)
       .executeTakeFirst<Row>();
     if (!current)
@@ -442,7 +449,7 @@ export class WorkflowRepository {
         await connection.query
           .updateTable(WORKFLOW_COLLECTIONS.workflows)
           .set({ enabled: true, current: true })
-          .where('id', '=', id)
+          .where('id', '=', workflowId)
           .where('current', '=', true)
           .execute();
     });
@@ -450,7 +457,7 @@ export class WorkflowRepository {
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
       .select(['id', 'key', 'title', 'enabled', 'current', 'parametersSchema'])
-      .where('id', '=', id)
+      .where('id', '=', workflowId)
       .where('current', '=', true)
       .executeTakeFirst<Row>();
     if (!row)
@@ -475,12 +482,13 @@ export class WorkflowRepository {
   }
 
   async findCurrentRowById(id: WorkflowId): Promise<Row | undefined> {
+    const workflowId = parseWorkflowId(id);
     return this.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
       .selectAll()
       .where('current', '=', true)
-      .where('id', '=', id)
+      .where('id', '=', workflowId)
       .executeTakeFirst<Row>();
   }
 
@@ -497,13 +505,17 @@ export class WorkflowRepository {
   async resolveRevision(
     idOrHash: WorkflowId,
   ): Promise<NonNullable<Awaited<ReturnType<typeof loadWorkflow>>>> {
-    let existing = await loadWorkflow(this.database.query(), idOrHash);
-    if (!existing) {
+    const identifier = parseWorkflowIdentifier(idOrHash);
+    let existing =
+      identifier.kind === 'id'
+        ? await loadWorkflow(this.database.query(), identifier.value)
+        : null;
+    if (!existing && identifier.kind === 'hash') {
       const row = await this.database
         .query()
         .selectFrom(WORKFLOW_COLLECTIONS.workflows)
         .select('id')
-        .where('hash', '=', String(idOrHash))
+        .where('hash', '=', identifier.value)
         .executeTakeFirst<Row>();
       if (row)
         existing = await loadWorkflow(
@@ -516,8 +528,12 @@ export class WorkflowRepository {
         await this.service.ensureArtifactMaterialized(existing.hash);
       return existing;
     }
+    if (identifier.kind === 'id')
+      throw new BadRequestError(
+        `Workflow id or hash ${String(idOrHash)} was not found.`,
+      );
     const workflowId = await this.service.ensureArtifactMaterialized(
-      String(idOrHash),
+      identifier.value,
     );
     if (workflowId == null)
       throw new BadRequestError(
@@ -534,17 +550,18 @@ export class WorkflowRepository {
   async loadCurrentWorkflow(
     id: WorkflowId,
   ): Promise<NonNullable<Awaited<ReturnType<typeof loadWorkflow>>>> {
+    const workflowId = parseWorkflowId(id);
     const isCurrent = await this.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .where('id', '=', id)
+      .where('id', '=', workflowId)
       .where('current', '=', true)
       .value('id');
     if (isCurrent == null)
       throw new BadRequestError(
         `Current workflow ${String(id)} was not found.`,
       );
-    const workflow = await loadWorkflow(this.database.query(), id);
+    const workflow = await loadWorkflow(this.database.query(), workflowId);
     if (!workflow)
       throw new BadRequestError(`Workflow ${String(id)} was not found.`);
     return workflow;

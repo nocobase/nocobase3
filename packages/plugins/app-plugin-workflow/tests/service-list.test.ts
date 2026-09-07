@@ -1,5 +1,5 @@
 import type { DatabaseManager } from '@nocobase/db';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
@@ -11,6 +11,7 @@ import {
   insertTestRun,
 } from './helpers.js';
 import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
+import { parseWorkflowIdentifier } from '../server/repositories/mappers.js';
 
 describe('workflow repositories', () => {
   let database: DatabaseManager;
@@ -25,7 +26,6 @@ describe('workflow repositories', () => {
         status: 'accepted',
         eventKey: 'test-event',
       }),
-      refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
       ensureArtifactMaterialized: async () => undefined,
     };
@@ -123,6 +123,57 @@ describe('workflow repositories', () => {
     });
   });
 
+  it('classifies workflow ids and Artifact hashes before repository queries', async () => {
+    const hash = 'A'.repeat(64);
+    expect(parseWorkflowIdentifier('42')).toEqual({ kind: 'id', value: '42' });
+    expect(parseWorkflowIdentifier(hash)).toEqual({
+      kind: 'hash',
+      value: hash.toLowerCase(),
+    });
+    expect(parseWorkflowIdentifier('1'.repeat(64))).toEqual({
+      kind: 'hash',
+      value: '1'.repeat(64),
+    });
+
+    const ensureArtifactMaterialized = vi.fn(async () => undefined);
+    const repository = new WorkflowRepository(database, {
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      refreshSourceResolvers: async (): Promise<void> => undefined,
+      discoverArtifacts: async () => [],
+      ensureArtifactMaterialized,
+    });
+
+    for (const identifier of [
+      'artifact-hash',
+      '0',
+      '-1',
+      '1.5',
+      '9223372036854775808',
+      'g'.repeat(64),
+    ]) {
+      await expect(repository.enable(identifier)).rejects.toThrow(
+        /positive integer id or a 64-character hexadecimal Artifact hash/,
+      );
+    }
+    expect(ensureArtifactMaterialized).not.toHaveBeenCalled();
+
+    await expect(repository.enable('42')).rejects.toThrow(
+      /Workflow id or hash 42 was not found/,
+    );
+    expect(ensureArtifactMaterialized).not.toHaveBeenCalled();
+
+    await expect(repository.enable(hash)).rejects.toThrow(
+      new RegExp(`Workflow id or hash ${hash} was not found`),
+    );
+    expect(ensureArtifactMaterialized).toHaveBeenCalledExactlyOnceWith(
+      hash.toLowerCase(),
+    );
+  });
+
   it('paginates matching undeployed artifacts after database workflows', async () => {
     await createTestWorkflow(database, { key: 'database-workflow', nodes: [] });
     const artifacts: WorkflowDistArtifact[] = [
@@ -135,7 +186,6 @@ describe('workflow repositories', () => {
         status: 'accepted',
         eventKey: 'test-event',
       }),
-      refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => artifacts,
       ensureArtifactMaterialized: async () => undefined,
     };

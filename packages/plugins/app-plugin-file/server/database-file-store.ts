@@ -5,6 +5,13 @@ import type {
   SelectQuery,
 } from '@nocobase/db';
 
+import {
+  DATABASE_FILE_COLUMNS,
+  normalizeDatabaseFileSize,
+  normalizeDatabaseFileVisibility,
+  toDatabaseFileRecord,
+  type DatabaseFileRow,
+} from './database-file-record.js';
 import type {
   DatabaseFileOrder,
   DatabaseFileScope,
@@ -14,30 +21,7 @@ import type {
   FileStore,
 } from './types.js';
 
-interface DatabaseFileRow extends Row {
-  id: string;
-  disk: string;
-  key: string;
-  filename: string;
-  mimeType: string;
-  size: unknown;
-  public: unknown;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-}
-
-const FILE_COLUMNS: readonly string[] = Object.freeze([
-  'id',
-  'disk',
-  'key',
-  'filename',
-  'mimeType',
-  'size',
-  'public',
-  'createdAt',
-  'updatedAt',
-]);
-const FILE_COLUMN_SET = new Set(FILE_COLUMNS);
+const FILE_COLUMN_SET = new Set(DATABASE_FILE_COLUMNS);
 const ORDER_FIELDS = new Set(['createdAt', 'updatedAt', 'filename', 'size']);
 
 const DEFAULT_ORDER: Readonly<Required<DatabaseFileOrder>> = Object.freeze({
@@ -67,14 +51,14 @@ export function createDatabaseFileStore(
         .orderBy(order.field, orderDirection)
         .orderBy('id', orderDirection)
         .execute<DatabaseFileRow>();
-      return rows.map(toFileRecord);
+      return rows.map(toDatabaseFileRecord);
     },
 
     async find(id, context): Promise<FileRecord | null> {
       assertNonEmptyString(id, 'file id');
       const scope = resolveScope(options, context);
       const row = await findRow(database.query(), options.table, id, scope);
-      return row ? toFileRecord(row) : null;
+      return row ? toDatabaseFileRecord(row) : null;
     },
 
     async create(input, context): Promise<FileRecord> {
@@ -98,7 +82,7 @@ export function createDatabaseFileStore(
             query = query.where(field, value === null ? 'is' : '=', value);
           }
           const result = await query.execute();
-          return result.deletedCount === 1 ? toFileRecord(row) : null;
+          return result.deletedCount === 1 ? toDatabaseFileRecord(row) : null;
         },
       );
     },
@@ -128,8 +112,8 @@ async function insertRecord(
     .insertInto(table)
     .values({
       ...input,
-      size: toSafeSize(input.size),
-      public: toBoolean(input.public),
+      size: normalizeDatabaseFileSize(input.size),
+      public: normalizeDatabaseFileVisibility(input.public),
       ...scope,
       createdAt: now,
       updatedAt: now,
@@ -139,14 +123,14 @@ async function insertRecord(
   if (!row) {
     throw new Error(`Created file record "${input.id}" could not be read.`);
   }
-  return toFileRecord(row);
+  return toDatabaseFileRecord(row);
 }
 
 function selectFiles(
   query: QueryAdapter,
   table: string,
 ): SelectQuery<DatabaseFileRow, Row> {
-  return query.selectFrom<DatabaseFileRow>(table).select(FILE_COLUMNS);
+  return query.selectFrom<DatabaseFileRow>(table).select(DATABASE_FILE_COLUMNS);
 }
 
 async function findRow(
@@ -255,48 +239,4 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   }
   const prototype = Reflect.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
-}
-
-function toFileRecord(row: DatabaseFileRow): FileRecord {
-  return {
-    id: row.id,
-    disk: row.disk,
-    key: row.key,
-    filename: row.filename,
-    mimeType: row.mimeType,
-    size: toSafeSize(row.size),
-    public: toBoolean(row.public),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
-
-function toSafeSize(value: unknown): number {
-  let size: number;
-  if (typeof value === 'bigint') {
-    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < 0n) {
-      throw new RangeError('File size is outside the safe API number range.');
-    }
-    size = Number(value);
-  } else if (typeof value === 'string' && /^\d+$/.test(value)) {
-    size = Number(value);
-  } else if (typeof value === 'number') {
-    size = value;
-  } else {
-    throw new TypeError('File size returned by the database is not numeric.');
-  }
-  if (!Number.isSafeInteger(size) || size < 0) {
-    throw new RangeError('File size is outside the safe API number range.');
-  }
-  return size;
-}
-
-function toBoolean(value: unknown): boolean {
-  if (value === true || value === 1 || value === '1') {
-    return true;
-  }
-  if (value === false || value === 0 || value === '0') {
-    return false;
-  }
-  throw new TypeError('File visibility returned by the database is invalid.');
 }

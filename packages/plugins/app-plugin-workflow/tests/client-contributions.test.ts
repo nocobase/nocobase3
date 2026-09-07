@@ -10,6 +10,10 @@ describe('workflow client contributions', () => {
     expect(packageJson.exports).toHaveProperty('./client');
     expect(packageJson.publishConfig.exports).toHaveProperty('./client');
     expect(workflow().serviceProviders).toHaveLength(1);
+    expect(workflow().locales).toMatchObject({
+      'en-US': expect.any(Function),
+      'zh-CN': expect.any(Function),
+    });
   });
 
   it('keeps collection definitions internal to the plugin', () => {
@@ -26,17 +30,17 @@ describe('workflow client contributions', () => {
     expect(settings?.routes[0]).toMatchObject({
       name: 'automation',
       path: '/automation',
-      navigation: { title: 'Automation' },
+      navigation: { title: 'nav.automation' },
       children: [
         {
           name: 'workflows',
           path: '/workflows',
-          navigation: { title: 'Workflows' },
+          navigation: { title: 'nav.workflows' },
         },
         {
           name: 'workflow-runs',
           path: '/workflow-runs',
-          navigation: { title: 'Workflow runs' },
+          navigation: { title: 'nav.runs' },
         },
       ],
     });

@@ -17,7 +17,6 @@ const enUS = {
     signingOut: 'Signing out…',
   },
   navigation: {
-    home: 'Home',
     open: 'Open navigation',
     close: 'Close navigation',
     expand: 'Expand navigation',

@@ -1,4 +1,8 @@
-import { createAppClient, type AppClient } from '@nocobase/app-client';
+import {
+  createApiClient,
+  resolveAppUrl,
+  type ApiClient,
+} from '@nocobase/app-client';
 
 export type AppActionQuery = Readonly<
   Record<string, string | number | boolean | null | undefined>
@@ -11,41 +15,38 @@ export interface AppActionOptions {
   readonly signal?: AbortSignal;
 }
 
-const defaultAppClient: AppClient = createAppClient();
+const defaultApiClient: ApiClient = createApiClient({
+  baseURL: resolveAppUrl('/api'),
+});
 
 export function requestAIAction<T>(
   resource: string,
   action: string,
   options: AppActionOptions = {},
-  client: AppClient = defaultAppClient,
+  api: ApiClient = defaultApiClient,
 ): Promise<T> {
-  return requestAction(client, `ai/${resource}:${action}`, options);
+  return requestAction(api, `ai/${resource}:${action}`, options);
 }
 
 export function requestAppAction<T>(
   resource: string,
   action: string,
   options: AppActionOptions = {},
-  client: AppClient = defaultAppClient,
+  api: ApiClient = defaultApiClient,
 ): Promise<T> {
-  return requestAction(client, `${resource}:${action}`, options);
+  return requestAction(api, `${resource}:${action}`, options);
 }
 
 function requestAction<T>(
-  client: AppClient,
+  api: ApiClient,
   endpoint: string,
   options: AppActionOptions,
 ): Promise<T> {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(options.query ?? {})) {
-    if (value !== undefined && value !== null) search.set(key, String(value));
-  }
-  const query = search.toString();
-  const body =
-    options.body === undefined ? undefined : JSON.stringify(options.body);
-  return client.request<T>(`${endpoint}${query ? `?${query}` : ''}`, {
-    method: options.method ?? (body === undefined ? 'GET' : 'POST'),
-    ...(body === undefined ? {} : { body }),
+  return api.request<T>({
+    path: endpoint,
+    method: options.method ?? (options.body === undefined ? 'GET' : 'POST'),
+    ...(options.query === undefined ? {} : { query: options.query }),
+    ...(options.body === undefined ? {} : { json: options.body }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
 }

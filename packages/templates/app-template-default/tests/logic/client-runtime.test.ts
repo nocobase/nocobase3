@@ -83,14 +83,87 @@ describe('app client runtime', () => {
 
   it('uses the default template Application and static plugin declarations', async () => {
     const runtime = await resolveAppRuntime(appRuntime, {
-      rawConfig: { app: { title: 'NocoBase' } },
+      rawConfig: { app: { title: 'Configured application' } },
     });
     const app = createApp(runtime);
 
     expect(app).toBeInstanceOf(ClientApplication);
     await expect(app.start()).resolves.toBeUndefined();
-    expect(app.config.get('app.title')).toBe('NocoBase');
+    expect(app.config.get('app.title')).toBe('Configured application');
+    expect(app.refineConfig.options?.title).toEqual({
+      text: 'Configured application',
+    });
     expect(app.refineConfig.authProvider).toBeDefined();
+    expect(app.refineConfig.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'repository-example-customers',
+          list: '/repository-example/crm',
+          meta: expect.objectContaining({
+            i18nNs: '@nocobase/app-plugin-repository-example',
+          }),
+        }),
+        expect.objectContaining({
+          name: 'repository-example-order-list',
+          list: '/repository-example/orders',
+          meta: expect.objectContaining({
+            i18nNs: '@nocobase/app-plugin-repository-example',
+          }),
+        }),
+      ]),
+    );
+    const resources = app.refineConfig.resources ?? [];
+    expect(resources).toContainEqual(
+      expect.objectContaining({
+        name: 'repository-example-relation-mutations',
+        list: '/repository-example/relation-mutations',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    expect(resources).toContainEqual(
+      expect.objectContaining({
+        name: 'repository-example-atomic',
+        list: '/repository-example/atomic',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    expect(resources).toContainEqual(
+      expect.objectContaining({
+        name: 'repository-example-find-many',
+        list: '/repository-example/find-many',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    expect(resources).toContainEqual(
+      expect.objectContaining({
+        name: 'repository-example-aggregate',
+        list: '/repository-example/aggregate',
+        meta: expect.objectContaining({ parent: 'repository-example-api' }),
+      }),
+    );
+    for (const [group, children] of [
+      [
+        'repository-example-crm',
+        ['repository-example-customers', 'repository-example-contacts'],
+      ],
+      [
+        'repository-example-orders',
+        [
+          'repository-example-order-list',
+          'repository-example-items',
+          'repository-example-products',
+        ],
+      ],
+    ] as const) {
+      expect(
+        resources.find((resource) => resource.name === group)?.list,
+      ).toBeUndefined();
+      expect(
+        resources
+          .filter((resource) => resource.meta?.parent === group)
+          .map((resource) => resource.name),
+      ).toEqual(children);
+    }
     await app.shutdown();
   });
 

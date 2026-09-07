@@ -26,7 +26,7 @@ cases:
       - Uses a strict JSON input schema carrying identifiers rather than complete order or payment documents.
       - Designs stable globally unique node keys and declares result schemas for values used by later conditions or nodes.
       - Treats paymentId as the basis for the eventual stable business event key and also requires each side-effecting service operation to be idempotent by business identity.
-      - Runs pnpm exec workflow check and reports the six-phase result without loading or invoking the workflow.
+      - Runs pnpm exec workflow check and reports the five-phase result without loading or invoking the workflow.
     forbidden:
       - Performing inventory, order, or notification side effects while authoring.
       - Assuming workflow event-key deduplication alone makes partially completed external calls idempotent.
