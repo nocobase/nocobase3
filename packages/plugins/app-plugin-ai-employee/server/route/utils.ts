@@ -128,6 +128,9 @@ async function resolveAuthenticatedUser(
       typeof profile.isRoot === 'boolean'
         ? profile.isRoot
         : roles.includes('root'),
-    locale: typeof profile.locale === 'string' ? profile.locale : undefined,
+    locale:
+      typeof profile.locale === 'string'
+        ? profile.locale
+        : (request.headers.get('x-locale') ?? undefined),
   };
 }
