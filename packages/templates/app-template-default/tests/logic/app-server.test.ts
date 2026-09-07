@@ -52,7 +52,7 @@ import {
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-websocket';
 import {
   databaseManagerToken,
   type DatabaseManager,
@@ -1309,7 +1309,6 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
           visibility: 'private' as const,
         },
       },
-      links: {},
     },
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),

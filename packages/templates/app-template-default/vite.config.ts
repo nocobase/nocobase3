@@ -93,7 +93,9 @@ export default createPortalViteConfig(({ command }) => {
         : []),
     ],
     server: {
-      watch: { ignored: ['**/.agent-annotations/**'] },
+      watch: {
+        ignored: ['**/.agent-annotations/**', '**/storage/**'],
+      },
       ...(command === 'serve'
         ? {
             hmr: {

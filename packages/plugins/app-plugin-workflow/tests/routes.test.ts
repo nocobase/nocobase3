@@ -279,7 +279,6 @@ function createWorkflowApplication(
             visibility: 'private',
           },
         },
-        links: {},
       },
       workflow: {
         sourceRoot: '/missing/source',

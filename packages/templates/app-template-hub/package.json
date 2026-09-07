@@ -24,6 +24,9 @@
       "@nocobase/app-plugin-file": {
         "enabled": true
       },
+      "@nocobase/app-plugin-hub": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-i18n": {
         "enabled": true
       },
@@ -78,6 +81,7 @@
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
+    "@nocobase/app-plugin-hub": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
@@ -93,6 +97,7 @@
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",

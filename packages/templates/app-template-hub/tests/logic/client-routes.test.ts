@@ -44,7 +44,7 @@ describe('app client routes', () => {
       routes: [
         {
           auth: 'required',
-          name: 'home',
+          name: 'applications-root',
           path: '/',
         },
       ],
