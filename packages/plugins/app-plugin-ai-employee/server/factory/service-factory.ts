@@ -14,8 +14,6 @@ import {
 } from '@nocobase/service-provider';
 
 import type { AIEmployeeLLMServiceConfig } from '../config.js';
-import type { Context } from '../internal/runtime-context.js';
-import type { Actor } from '../domain/contracts.js';
 import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
 import { repositoryFactoryToken } from './repository-factory.js';
 import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
@@ -138,7 +136,15 @@ export class ServiceFactory {
 
   public get conversationService(): AIConversationService {
     const managers = this.managers;
+    const databaseManager = this.container.resolve(databaseManagerToken);
     return (this.conversationServiceValue ??= new AIConversationService({
+      ai: this.ai,
+      database: databaseManager.connection(),
+      databaseManager,
+      logger: this.logger,
+      caching: this.container.resolve(cachingToken),
+      fileStorage: managers.fileStorage,
+      snowflake: this.container.resolve(idGeneratorToken),
       repositories: this.repositories,
       aiEmployeesManager: managers.aiEmployeesManager,
       aiConversationsManager: managers.aiConversationsManager,
@@ -149,42 +155,6 @@ export class ServiceFactory {
       workContextHandler: managers.workContextHandler,
       documentLoaders: managers.documentLoaders,
     }));
-  }
-
-  /** Creates request-local state while retaining only App-scoped collaborators. */
-  public createRequestRuntime(actor: Actor, request?: Request): Context {
-    const databaseManager = this.container.resolve(databaseManagerToken);
-    const currentRole = actor.isRoot ? 'root' : (actor.roles[0] ?? 'member');
-    return {
-      ai: this.ai,
-      database: databaseManager.connection(),
-      databaseManager,
-      logger: this.logger,
-      caching: this.container.resolve(cachingToken),
-      snowflake: this.container.resolve(idGeneratorToken),
-      fileStorage: this.managers.fileStorage,
-      currentUser: actor,
-      auth: { user: { id: actor.id, username: String(actor.id) } },
-      state: {
-        currentUser: { id: actor.id, username: String(actor.id) },
-        currentRole,
-        currentRoles: [...actor.roles],
-      },
-      getCurrentLocale: () =>
-        actor.locale ?? request?.headers.get('x-locale') ?? undefined,
-      get: (name: string) => request?.headers.get(name) ?? undefined,
-      set: () => undefined,
-      status: undefined,
-      t: (key: string) => key,
-      throw: (status: number, message?: string): never => {
-        const error: Error & { status?: number } = new Error(
-          message ?? `Request failed with status ${status}`,
-        );
-        error.status = status;
-        throw error;
-      },
-      requestExecution: undefined,
-    };
   }
 
   private async initializeResources(): Promise<void> {
