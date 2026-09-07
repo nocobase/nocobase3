@@ -4,7 +4,7 @@
 
 - [Authorization](#authorization)
 - [Credentials and network](#credentials-and-network)
-- [Files and ZIP](#files-and-zip)
+- [File uploads](#file-uploads)
 - [Destructive operations](#destructive-operations)
 
 ## Authorization
@@ -23,11 +23,11 @@ const connectionString = process.env.PGVECTOR_CONNECTION_STRING;
 
 Do not serialize secrets into client bundles. Prefer server-side assembly of connection properties. Restrict outbound connections for external vector stores and validate TLS, DNS/IP allowlists, timeouts, and tenant boundaries.
 
-## Files and ZIP
+## File uploads
 
-Accepted extensions are `.doc`, `.docx`, `.md`, `.pdf`, `.txt`, and `.zip`; extension checks do not prove content type. The advertised upload limit is 100 MiB and the client checks it, but the direct server upload path does not enforce that size itself. Add upstream/body limits and content inspection.
+Uploads accept one multipart file with one of exactly these filename extensions: `.pdf`, `.pptx`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm`, `.txt`, `.md`, `.json`, or `.csv`. Extension checks do not prove content type. Enforce the 100 MiB limit in the client, route, and upstream request-body configuration; scan untrusted files and apply deployment-specific MIME/content validation and malware controls.
 
-ZIP extraction skips directories and names containing a `..` path segment, normalizes backslashes, and stores only `path.basename`. However, it has no explicit entry count, per-entry size, aggregate uncompressed size, or compression-ratio limit. Treat untrusted ZIPs as high risk; scan and limit before calling the plugin. Nested ZIPs are ignored. Encoding choices are not currently applied by extraction.
+The caller must not choose or override storage. The server resolves the disk configured for the target knowledge base and must reject missing, unavailable, or disallowed disks. Do not expose disk-provider credentials or internal storage configuration through upload-capability responses.
 
 Server-issued file URLs must be resolved against the App origin and fetched with active authentication headers when access is protected. Do not paste authenticated URLs into public logs or third-party viewers.
 

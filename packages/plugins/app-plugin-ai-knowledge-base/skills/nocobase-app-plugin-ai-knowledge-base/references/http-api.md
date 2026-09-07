@@ -7,7 +7,6 @@
 - [Document actions](#document-actions)
 - [Segment actions](#segment-actions)
 - [Vector-database actions](#vector-database-actions)
-- [Compatibility caveats](#compatibility-caveats)
 
 ## Common contract
 
@@ -41,21 +40,21 @@ await nocobaseClient.action('aiKnowledgeBase', 'list', {
 
 ### `GET /aiKnowledgeBase:list`
 
-Query: pagination fields. Returns bases enriched from `aiVectorStoreConfig` with `vectorDatabaseKey`, `llmService`, and `embeddingModel` when configuration exists. Current route ignores name/key filters even though the default client sends them.
+Query: pagination fields. Returns knowledge-base records with inline `vectorDatabaseKey`, `llmService`, and `embeddingModel`. Current route ignores name/key filters even though the default client sends them.
 
 ### `POST /aiKnowledgeBase:create`
 
-JSON body is `KnowledgeBaseMutation` plus internal compatibility fields when supplied. Server default type is LOCAL when omitted, but application code should always send it. Type must be `LOCAL`, `READONLY`, or `EXTERNAL`. Generates 32-character `key`, `knowledgeBaseOuterId`, and config key when omitted; returns created record.
+JSON body is `KnowledgeBaseMutation`. Server default type is LOCAL when omitted, but application code should always send it. Type must be `LOCAL`, `READONLY`, or `EXTERNAL`. Generates 32-character `key` and `knowledgeBaseOuterId` when omitted; returns the created record.
 
-For non-EXTERNAL bases, a vector-store config is created only when at least one of `llmService`, `embeddingModel`, `vectorDatabaseKey`, or `vectorStoreConfigKey` is supplied. LOCAL provider defaults to `NocobaseLocalVectorStoreProvider`; READONLY to `NocobaseReadonlyVectorStoreProvider`; EXTERNAL uses `externalProvider` or an empty string.
+LOCAL and READONLY require non-empty `vectorDatabaseKey`, `llmService`, and `embeddingModel`. Their provider defaults to `NocobaseLocalVectorStore` and `NocobaseReadOnlyVectorStore`, respectively. The three fields are normalized and stored directly on the knowledge-base record; creation computes `vectorStoreConfigHash` and initializes `vectorStoreUpdatedAt` and `confirmVectorStoreChanged` to the same time. EXTERNAL uses `vectorStoreProvider` or `externalProvider`.
 
 ### `POST /aiKnowledgeBase:update?filterByTk=<id>`
 
-JSON body: partial mutation; body `id` is fallback. Missing ID returns 400. Updates vector config for supplied LLM/model/database fields, normalizes supplied segment options, and returns a record or JSON `null` if ID does not exist. It does not return 404 for that null case.
+JSON body: partial mutation; body `id` is fallback. Missing ID returns 400. The server validates the existing record merged with supplied LOCAL/READONLY vector fields. When one of `vectorDatabaseKey`, `llmService`, or `embeddingModel` materially changes, it recomputes `vectorStoreConfigHash` and refreshes `vectorStoreUpdatedAt`; ordinary field updates preserve both values. Supplied segment options are normalized. Returns a record or JSON `null` if ID does not exist.
 
 ### `POST /aiKnowledgeBase:destroy?filterByTk[]=<id>`
 
-One or more IDs required. Accepts comma-separated/repeated variants. Deletes each base's documents/files/segments/shards, then bases. Returns `{"data":{"success":true}}`. It does not refresh or explicitly delete vector-store rows.
+One or more IDs required. Accepts comma-separated/repeated variants. For LOCAL bases, attempts vector deletion by `knowledgeBaseOuterId`; cleanup failures are logged and do not block deletion. Deletes documents/files/segments/shards, then bases. Returns `{"data":{"success":true}}`.
 
 ### `POST /aiKnowledgeBase:runHitTest`
 
@@ -67,7 +66,7 @@ Key may be in query or JSON body. Required; sets `confirmVectorStoreChanged` to 
 
 ### `GET /aiKnowledgeBase:checkVectorStoreChanged?key=<key>`
 
-Required key. Returns `null` if absent; otherwise `{key,changed:false,confirmVectorStoreChanged}`. Current implementation does not calculate change.
+Required key. Returns `null` if absent. Otherwise compares the knowledge base's inline `vectorStoreUpdatedAt` and its vector database's `updatedAt` against `confirmVectorStoreChanged` (falling back to base creation time), and returns `{key,changed,confirmVectorStoreChanged,vectorStoreChanged,vectorDatabaseChanged,vectorStoreUpdatedAt,vectorDatabaseUpdatedAt}`. Comparisons are strict; equal timestamps are unchanged.
 
 ### `GET /aiKnowledgeBase:listExternalVectorStoreProviders`
 
@@ -85,12 +84,19 @@ ID required. Returns document plus `accessAbility:"readWrite"`; 404 if absent.
 
 ### `POST /aiKnowledgeBaseDocs:upload?knowledgeBaseKey=<key>`
 
-Two forms:
+Request content type must be `multipart/form-data`. Send exactly one `file` field. `knowledgeBaseKey` is required and may be supplied in the query or as one text form field; using the query is recommended. The caller sends no file-metadata fields and no storage disk.
 
-1. `multipart/form-data`: `file` required; `knowledgeBaseKey` required in query or form. Optional repeated `zipFilenameEncoding[]` is accepted by the client but not consumed by current server extraction. The route passes file name, MIME, bytes, and authenticated actor ID.
-2. `application/json`: query or body `knowledgeBaseKey`; flat finalized-file fields such as `title`, `filename`, `extname`, `path`, `size`, `url`, `mimetype`, `disk`, `meta`, and optional key. This is the presigned-upload finalize contract.
+```bash
+curl -X POST "$NOCOBASE_URL/v2/api/aiKnowledgeBaseDocs:upload?knowledgeBaseKey=$KNOWLEDGE_BASE_KEY" \
+  -H "Authorization: Bearer $NOCOBASE_TOKEN" \
+  -F 'file=@./manual.pdf'
+```
 
-Only LOCAL direct upload is explicitly enforced. Current JSON finalize does not repeat that LOCAL check. Supported lowercase extensions after normalization: `.doc`, `.docx`, `.md`, `.pdf`, `.txt`, `.zip`. Direct ZIP extracts supported non-ZIP entries and returns only the first created document. Both paths create PENDING documents and dispatch queue work before returning. Current response is a document; compatible clients also support `{taskId,message?}`.
+The server resolves the knowledge base and rejects uploads unless it is LOCAL. It accepts exactly these case-normalized filename extensions: `.pdf`, `.pptx`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm`, `.txt`, `.md`, `.json`, and `.csv`. The maximum file size is 104857600 bytes (100 MiB). MIME type is recorded but does not replace the extension check.
+
+The server selects the storage disk from the knowledge-base record, writes the uploaded bytes there, creates one document with pending processing statuses, and attempts to dispatch vectorization to the `default` queue. Success returns that single document in the normal `{"data":{...}}` envelope. Queue dispatch is not vectorization completion.
+
+Reject malformed multipart bodies, multiple or missing file fields, a missing key, a missing/non-LOCAL knowledge base, an unsupported extension, an oversized file, a missing or disallowed configured disk, or storage failure. If metadata persistence fails after the object is written, the server attempts to delete that object and preserves the original error; cleanup failure is logged with disk and path. If queue dispatch fails after document creation, the upload still returns that document with `indexStatus:"ERROR"` and a retryable `errorMessage`, so callers must not upload the file again. Retry through the vectorization action. After a successful response, later parsing or vectorization failures are reported asynchronously by the document's `indexStatus`, `segmentStatus`, `errorMessage`, and `segmentErrorMessage`.
 
 ### `POST /aiKnowledgeBaseDocs:destroy?filterByTk[]=<id>`
 
@@ -102,25 +108,30 @@ Query: optional `knowledgeBaseKey`; optional IDs as `id`, `id[]`, repeated, or c
 
 ### `GET /aiKnowledgeBaseDocs:getUploadStorage?knowledgeBaseKey=<key>`
 
-Required existing key. Returns current compatibility payload:
+Required existing key. This is a safe upload-capability lookup, despite the legacy action name. It returns the fixed values needed for client-side validation:
 
 ```json
 {
   "data": {
-    "id": "default",
-    "name": "default",
-    "title": "Default storage",
-    "type": "local",
-    "rules": { "size": 104857600 }
+    "acceptedExtensions": [
+      ".pdf",
+      ".pptx",
+      ".doc",
+      ".docx",
+      ".xls",
+      ".xlsx",
+      ".xlsm",
+      ".txt",
+      ".md",
+      ".json",
+      ".csv"
+    ],
+    "maxFileSizeBytes": 104857600
   }
 }
 ```
 
-`id` is the base storage ID when present. The 100 MiB value is advertised to clients; direct server multipart does not enforce it.
-
-### `GET /aiKnowledgeBaseDocs:getZipFilenameEncodingOptions`
-
-Returns `{options:[{value:"utf8",label:"UTF-8",isDefault:true},{value:"gbk",label:"GBK"}]}`. No key is required by the route.
+The response must not expose provider credentials, upload URLs, or let the caller select or override the knowledge base's storage disk. A missing knowledge base returns 404.
 
 ## Segment actions
 
@@ -188,8 +199,4 @@ JSON: optional provider default built-in, `connectProps`. Returns `{success:true
 
 ### `GET /aiVectorDatabases:findRelatedKnowledgeBase?vectorDatabaseKey=<key>`
 
-`key` is an alias. Missing key returns an empty array. Current relation lookup compares base `vectorStoreConfigKey` directly to the supplied vector database key, while normal configurations point through `aiVectorStoreConfig`; this can under-report relationships. Do not use it as the sole deletion safety control.
-
-## Compatibility caveats
-
-The endpoint set is a legacy compatibility contract. Filtering/search parameters sent by the default client are not fully implemented server-side; apply client-side filtering only for UX, never security. Several mutating segment routes ignore the supplied knowledge-base key and locate by document ID/UID. Current authorization is login-only. Wrap or harden these actions before offering them to ordinary users.
+`key` is an alias. Missing key returns an empty array. Relationships are resolved directly from knowledge-base records whose inline `vectorDatabaseKey` matches the supplied key.

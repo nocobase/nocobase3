@@ -49,6 +49,10 @@
       "import": "./client/vector-databases.ts"
     },
     "./package.json": "./package.json",
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
+    },
     "./server/plugin": {
       "types": "./server/plugin.ts",
       "import": "./server/plugin.ts"
@@ -82,6 +86,10 @@
         "import": "./dist/client/vector-databases.js"
       },
       "./package.json": "./package.json",
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
       "./server/plugin": {
         "types": "./dist/server/plugin.d.ts",
         "import": "./dist/server/plugin.js"
@@ -93,7 +101,7 @@
       "database": {
         "migrations": "database/migrations"
       },
-      "server": "./server/bootstrap.ts"
+      "server": "./server/index.ts"
     },
     "registry": {
       "items": {
@@ -121,6 +129,7 @@
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-ai-employee": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
@@ -136,16 +145,18 @@
     "@langchain/core": "1.1.49",
     "@langchain/textsplitters": "1.0.1",
     "@nocobase/ai-employee": "workspace:^",
+    "@nocobase/drive": "workspace:^",
     "hono": "catalog:",
     "nanoid": "^3.3.18",
     "pg": "^8.23.0",
-    "yauzl": "^2.10.0",
+    "yaml": "catalog:",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-ai-employee": "workspace:*",
+    "@nocobase/app-plugin-authentication": "workspace:*",
     "@nocobase/app-portal-sdk": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
@@ -159,7 +170,6 @@
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/yauzl": "^2.10.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "eslint": "catalog:",

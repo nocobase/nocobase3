@@ -12,6 +12,34 @@ export interface AIStorageConfig {
   readonly disk?: readonly string[];
 }
 
+export interface AIKnowledgeBaseVectorDatabaseConnectionConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly user: string;
+  readonly password?: string;
+  readonly database: string;
+  readonly tableName: string;
+}
+
+export interface AIKnowledgeBaseVectorDatabaseConfig {
+  readonly name: string;
+  readonly provider?: string;
+  readonly databaseSpec?: string;
+  readonly connection: AIKnowledgeBaseVectorDatabaseConnectionConfig;
+  readonly enabled?: boolean;
+}
+
+export interface AIKnowledgeBaseManifestConfig {
+  readonly disk: string;
+  readonly locations: readonly string[];
+}
+
+export interface AIKnowledgeBaseConfig {
+  readonly storage?: AIStorageConfig;
+  readonly vectorDatabases?: readonly AIKnowledgeBaseVectorDatabaseConfig[];
+  readonly manifests?: readonly AIKnowledgeBaseManifestConfig[];
+}
+
 export interface AIEmployeeEnabledModelConfig {
   readonly label: string;
   readonly value: string;
@@ -29,14 +57,15 @@ export interface AIApplicationConfig {
   readonly aiEmployee?: {
     readonly storage?: AIStorageConfig;
   };
-  readonly aiKnowledgeBase?: {
-    readonly storage?: AIStorageConfig;
-  };
+  readonly aiKnowledgeBase?: AIKnowledgeBaseConfig;
   readonly llmServices: AIEmployeeLLMServiceConfig[];
   readonly [key: string]: unknown;
 }
 
 export type AIEmployeeConfig = AIApplicationConfig;
+
+const nonBlankStringSchema = Type.String({ pattern: '.*\\S.*' });
+const manifestLocationSchema = Type.String({ pattern: '.*[^\\s/].*' });
 
 const storageSchema = Type.Object(
   {
@@ -55,11 +84,42 @@ const enabledModelItemSchema = Type.Object(
 
 const enabledModelsSchema = Type.Array(enabledModelItemSchema);
 
+const vectorDatabaseConnectionSchema = Type.Object(
+  {
+    host: nonBlankStringSchema,
+    port: Type.Integer({ minimum: 1, maximum: 65535 }),
+    user: nonBlankStringSchema,
+    password: Type.Optional(Type.String()),
+    database: nonBlankStringSchema,
+    tableName: nonBlankStringSchema,
+  },
+  { additionalProperties: false },
+);
+
+const vectorDatabaseSchema = Type.Object(
+  {
+    name: nonBlankStringSchema,
+    provider: Type.Optional(nonBlankStringSchema),
+    databaseSpec: Type.Optional(nonBlankStringSchema),
+    connection: vectorDatabaseConnectionSchema,
+    enabled: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false },
+);
+
+const manifestConfigSchema = Type.Object(
+  {
+    disk: nonBlankStringSchema,
+    locations: Type.Array(manifestLocationSchema, { minItems: 1 }),
+  },
+  { additionalProperties: false },
+);
+
 const llmServiceSchema = Type.Object(
   {
-    name: Type.String({ pattern: '.*\\S.*' }),
+    name: nonBlankStringSchema,
     title: Type.Optional(Type.String()),
-    provider: Type.String({ pattern: '.*\\S.*' }),
+    provider: nonBlankStringSchema,
     options: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
     enabledModels: Type.Optional(enabledModelsSchema),
     modelOptions: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
@@ -81,7 +141,13 @@ export const aiConfig: AppConfigDefinition<AIApplicationConfig> =
             { additionalProperties: false },
           ),
           aiKnowledgeBase: Type.Object(
-            { storage: storageSchema },
+            {
+              storage: storageSchema,
+              vectorDatabases: Type.Array(vectorDatabaseSchema, {
+                uniqueItemProperties: ['name'],
+              }),
+              manifests: Type.Array(manifestConfigSchema),
+            },
             { additionalProperties: false },
           ),
           llmServices: Type.Array(llmServiceSchema, {
@@ -94,7 +160,11 @@ export const aiConfig: AppConfigDefinition<AIApplicationConfig> =
     defaults: {
       storage: {},
       aiEmployee: { storage: {} },
-      aiKnowledgeBase: { storage: {} },
+      aiKnowledgeBase: {
+        storage: {},
+        vectorDatabases: [],
+        manifests: [],
+      },
       llmServices: [],
     },
   });

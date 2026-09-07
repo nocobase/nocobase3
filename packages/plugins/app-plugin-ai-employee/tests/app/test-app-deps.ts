@@ -45,6 +45,9 @@ export function createTestAppDeps(): AppDeps {
         },
         getStream: async (key) => Readable.from(objects.get(key) ?? []),
         getUrl: async (key) => `/storage/${key}`,
+        delete: async (key) => {
+          objects.delete(key);
+        },
       }),
     }),
     aiStorageDisk: 'local',

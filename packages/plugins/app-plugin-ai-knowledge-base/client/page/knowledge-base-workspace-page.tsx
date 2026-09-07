@@ -319,11 +319,7 @@ export default function KnowledgeBaseWorkspacePage() {
                     aria-hidden='true'
                     className='size-3.5 shrink-0'
                   />
-                  <span>
-                    {t(
-                      'Upload a ZIP archive to import multiple documents in one go.',
-                    )}
-                  </span>
+                  <span>{t('Upload one supported document at a time.')}</span>
                 </p>
                 <div className='flex shrink-0 items-center gap-2'>
                   <Button

@@ -3,7 +3,6 @@ import type {
   KnowledgeBaseDocument,
   KnowledgeBaseSearchResult,
   KnowledgeBaseSegment,
-  ZipFilenameEncodingOption,
 } from '../../../providers/index.js';
 
 export const fixtureKnowledgeBases: KnowledgeBase[] = Array.from(
@@ -36,66 +35,13 @@ export const fixtureKnowledgeBaseDirectory = [
   fixtureKnowledgeBases[0],
   fixtureKnowledgeBases[6],
 ];
-export const fixtureZipFilenameEncodingResponse = {
-  defaultEncoding: 'windows-1252',
-  options: [
-    {
-      value: 'utf-8',
-      label: 'utf-8',
-      description: 'Unicode (UTF-8)',
-      isDefault: false,
-    },
-    {
-      value: 'windows-1252',
-      label: 'windows-1252',
-      description: 'Western European',
-      isDefault: true,
-    },
-    {
-      value: 'gb18030',
-      label: 'gb18030',
-      description: 'Simplified Chinese',
-      isDefault: false,
-    },
-    {
-      value: 'gbk',
-      label: 'gbk',
-      description: 'Simplified Chinese (GBK)',
-      isDefault: false,
-    },
-    {
-      value: 'big5',
-      label: 'big5',
-      description: 'Traditional Chinese',
-      isDefault: false,
-    },
-    {
-      value: 'shift_jis',
-      label: 'shift_jis',
-      description: 'Japanese',
-      isDefault: false,
-    },
-    {
-      value: 'euc-kr',
-      label: 'euc-kr',
-      description: 'Korean',
-      isDefault: false,
-    },
-    {
-      value: 'windows-1251',
-      label: 'windows-1251',
-      description: 'Cyrillic',
-      isDefault: false,
-    },
-  ] satisfies ZipFilenameEncodingOption[],
-} as const;
 export const fixtureDocuments: KnowledgeBaseDocument[] = Array.from(
   { length: 37 },
   (_, index) => ({
     id: index + 1,
     knowledgeBaseKey: 'library-01',
     title: index % 4 === 0 ? undefined : `Knowledge document ${index + 1}`,
-    filename: `source-${index + 1}.${index % 5 === 0 ? 'zip' : 'pdf'}`,
+    filename: `source-${index + 1}.${index % 5 === 0 ? 'md' : 'pdf'}`,
     characterCount: 1200 + index * 217,
     segmentCount: 1 + (index % 9),
     size: 2048 + index * 1000,
