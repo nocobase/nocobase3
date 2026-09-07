@@ -43,7 +43,6 @@ export type CreateAIConversationParams = {
   from?: 'main-agent' | 'sub-agent';
   scope?: string;
   transaction?: DatabaseConnection;
-  category?: 'chat' | 'task';
 };
 
 export type UpdateAIConversationParams = {
@@ -97,7 +96,6 @@ export class AIConversationsManager {
     from = 'main-agent',
     scope,
     transaction,
-    category = 'chat',
   }: CreateAIConversationParams) {
     return await this.aiConversationsRepo.create(
       {
@@ -109,7 +107,7 @@ export class AIConversationsManager {
           thread: 1,
           from,
           ...(scope !== undefined ? { scope } : {}),
-          category,
+          category: 'chat',
         },
       },
       transaction ? { connection: transaction } : undefined,

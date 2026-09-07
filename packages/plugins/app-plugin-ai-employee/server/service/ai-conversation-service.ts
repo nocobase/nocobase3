@@ -388,8 +388,7 @@ export class AIConversationService {
       await this.repositories.aiConversations.count({
         filter: { userId, read: false, from: 'main-agent', category: 'chat' },
       });
-    const workflowTaskUnreadCount = 0;
-    return { conversationUnreadCount, workflowTaskUnreadCount };
+    return { conversationUnreadCount };
   }
 
   async create({
