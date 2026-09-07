@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import { createAIEmployeeRoutes } from '../../server/route/index.js';
-import type { Context } from '../../server/internal/runtime-context.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
 import { createTestAppDeps } from './test-app-deps.js';
 
@@ -75,11 +74,11 @@ for (const resource of ['aiTools', 'aiSkills', 'llmServices', 'aiMcpServers']) {
 describe('AI action routers', () => {
   it('registers each supported local action once under /api/ai with a precise method', () => {
     const app = new Hono();
-    const { context: runtime, services } = createTestAIEmployeeFixture();
+    const { deps, services } = createTestAIEmployeeFixture();
     const routes = createAIEmployeeRoutes({
-      authentication: createTestAppDeps().auth,
+      authentication: deps.auth,
       services,
-      logger: runtime.logger,
+      logger: deps.logging.getLogger('ai-employee-test'),
     });
     app.route('/api/ai', routes);
 
@@ -112,17 +111,16 @@ describe('AI action routers', () => {
 
   it('returns direct JSON with the local marker and rejects legacy methods', async () => {
     const app = new Hono();
-    const { context: runtime, services } = createTestAIEmployeeFixture();
+    const { deps, services } = createTestAIEmployeeFixture();
     services.ready = async () => undefined;
     services.employeeService.list = async () => [];
     services.conversationService.unreadCounts = async () => ({
       conversationUnreadCount: 3,
-      workflowTaskUnreadCount: 0,
     });
     const routes = createAIEmployeeRoutes({
-      authentication: createTestAppDeps().auth,
+      authentication: deps.auth,
       services,
-      logger: runtime.logger,
+      logger: deps.logging.getLogger('ai-employee-test'),
     });
     app.route('/api/ai', routes);
 
@@ -139,7 +137,6 @@ describe('AI action routers', () => {
     expect(unreadResponse.status).toBe(200);
     expect(await unreadResponse.json()).toEqual({
       conversationUnreadCount: 3,
-      workflowTaskUnreadCount: 0,
     });
 
     const legacyMethod = await app.request(
@@ -151,12 +148,12 @@ describe('AI action routers', () => {
 
   it('preserves the legacy error envelope while mapping explicit statuses', async () => {
     const app = new Hono();
-    const { context: runtime, services } = createTestAIEmployeeFixture();
+    const { deps, services } = createTestAIEmployeeFixture();
     services.ready = async () => undefined;
     const routes = createAIEmployeeRoutes({
-      authentication: createTestAppDeps().auth,
+      authentication: deps.auth,
       services,
-      logger: runtime.logger,
+      logger: deps.logging.getLogger('ai-employee-test'),
     });
     app.route('/api/ai', routes);
 
@@ -170,7 +167,7 @@ describe('AI action routers', () => {
     });
   });
   it('wires each managed resource to a dedicated service instance', () => {
-    const { context: runtime, services } = createTestAIEmployeeFixture();
+    const { deps, services } = createTestAIEmployeeFixture();
     expect(services.employeeService.constructor.name).toBe('AIEmployeeService');
     expect(services.toolService.constructor.name).toBe('AIToolService');
     expect(services.skillService.constructor.name).toBe('AISkillService');

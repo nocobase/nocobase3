@@ -100,20 +100,6 @@ describe('AI employee container-scoped factories', () => {
     await expect(first.ready()).rejects.toThrow('has not been initialized');
     await expect(second.ready()).rejects.toThrow('has not been initialized');
 
-    const firstRuntime = first.createRequestRuntime({
-      id: 'first',
-      roles: ['member'],
-      isRoot: false,
-    });
-    expect(firstRuntime).not.toHaveProperty('repositories');
-    expect(firstRuntime).not.toHaveProperty('employeeService');
-    expect(firstRuntime).not.toHaveProperty('conversationService');
-    expect(firstRuntime).not.toHaveProperty('aiConversationService');
-    const secondRuntime = second.createRequestRuntime({
-      id: 'second',
-      roles: ['member'],
-      isRoot: false,
-    });
     expect(firstManagers.fileStorage).not.toBe(secondManagers.fileStorage);
     expect(firstManagers.documentLoaders).not.toBe(
       secondManagers.documentLoaders,
@@ -121,10 +107,7 @@ describe('AI employee container-scoped factories', () => {
     expect(firstManagers.aiEmployeesManager).not.toBe(
       secondManagers.aiEmployeesManager,
     );
-    expect(firstRuntime).not.toHaveProperty('aiEmployeesManager');
-    expect(firstRuntime).not.toHaveProperty('aiConversationsManager');
-    expect(firstRuntime).not.toHaveProperty('knowledgeBaseManager');
-    expect(firstRuntime.currentUser.id).toBe('first');
-    expect(secondRuntime.currentUser.id).toBe('second');
+    expect(first).not.toHaveProperty('createRequestRuntime');
+    expect(second).not.toHaveProperty('createRequestRuntime');
   });
 });
