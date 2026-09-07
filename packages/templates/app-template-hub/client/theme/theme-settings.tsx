@@ -62,7 +62,7 @@ export function ThemeSettings(): ReactElement {
                 <label
                   key={mode}
                   className={cn(
-                    'relative flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors select-none',
+                    'relative flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors select-none has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
                     isSelected
                       ? 'bg-background text-foreground shadow-xs'
                       : 'text-muted-foreground hover:bg-background/40 hover:text-foreground',
@@ -99,7 +99,7 @@ export function ThemeSettings(): ReactElement {
                 <label
                   key={item.id}
                   className={cn(
-                    'group relative flex cursor-pointer flex-col rounded-xl border p-2 text-left transition-all select-none',
+                    'group relative flex cursor-pointer flex-col rounded-xl border p-2 text-left transition-all select-none has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
                     isSelected
                       ? 'border-primary ring-2 ring-primary/20 bg-primary/5 shadow-xs'
                       : 'border-border/70 hover:border-border hover:bg-muted/30',
