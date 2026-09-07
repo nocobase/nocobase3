@@ -1,8 +1,8 @@
-import { defineMigration, type MigrationDefinition } from '@nocobase/db';
+import { defineMigration } from '@nocobase/db';
 
 // For an existing parent collection, create only the attachment collection and
 // add its inverse relation. Match orderId to the parent's actual ID type.
-const migration: MigrationDefinition = defineMigration({
+export default defineMigration({
   name: '202609070001_order_attachments',
   async up({ builder }) {
     await builder.createCollection('purchaseOrders', (collection) => {
@@ -44,5 +44,3 @@ const migration: MigrationDefinition = defineMigration({
     await builder.dropCollection('purchaseOrders');
   },
 });
-
-export default migration;

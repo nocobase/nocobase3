@@ -119,9 +119,7 @@ describe('bundled file quick start', () => {
       container,
       config: {
         get: (key: unknown) =>
-          key === appConfig
-            ? { publicBasePath: '/base' }
-            : { default: 'local' },
+          key === appConfig ? { publicBasePath: '/base' } : { default: 'local' },
       },
     } as unknown as Application;
     router = new Hono();
@@ -206,9 +204,10 @@ describe('bundled file quick start', () => {
     };
     const item = `${endpoint}/${file.id}`;
     expect(file.contentUrl).toBe(`${item}/content`);
-    await expect(
-      (await request(endpoint, 'alice')).json(),
-    ).resolves.toMatchObject({ data: [{ id: file.id }] });
+    const listed = await request(endpoint, 'alice');
+    await expect(listed.json()).resolves.toMatchObject({
+      data: [{ id: file.id }],
+    });
     expect((await request(item, 'alice')).status).toBe(200);
     expect(
       (await request(`${item}/token`, 'bob', { method: 'POST' })).status,
@@ -299,8 +298,6 @@ describe('bundled file quick start', () => {
     expect(
       await database.builder().hasCollection('purchaseOrderAttachments'),
     ).toBe(false);
-    expect(
-      await database.builder().hasCollection('purchaseOrders'),
-    ).toBe(false);
+    expect(await database.builder().hasCollection('purchaseOrders')).toBe(false);
   });
 });

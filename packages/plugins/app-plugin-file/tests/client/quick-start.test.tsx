@@ -106,6 +106,33 @@ describe('bundled attachment form example', () => {
     ).toBeVisible();
   });
 
+  it('clears loaded files and blocks Done when the owner changes', async () => {
+    let finishNew!: (value: Response) => void;
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response([record('order-a.pdf')]))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishNew = resolve;
+          }),
+      );
+    setup(fetch);
+    const { rerender } = render(
+      <OrderAttachments orderId='order-a' onDone={vi.fn()} />,
+    );
+    await screen.findByRole('button', { name: 'Remove: order-a.pdf' });
+    rerender(<OrderAttachments orderId='order-b' onDone={vi.fn()} />);
+    expect(
+      screen.queryByRole('button', { name: 'Remove: order-a.pdf' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    await act(async () => {
+      finishNew(response([]));
+    });
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  });
+
   it('blocks Done until an upload succeeds', async () => {
     let failUpload!: (error: Error) => void;
     const fetch = vi

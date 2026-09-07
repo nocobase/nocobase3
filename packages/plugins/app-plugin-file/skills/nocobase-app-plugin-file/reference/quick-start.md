@@ -13,13 +13,14 @@ Read the target App's `AGENTS.md` and Client/Server instructions. Confirm that
 registered, and that their migrations have run. Configure the App's existing
 Drive disk; S3 configuration belongs there, not in the file route or browser.
 
-Copy the following files into the owning application, adapting business names:
+Adapt the business names when copying these files into the application.
 
-| Executable source                                                         | App destination                           |
-| ------------------------------------------------------------------------- | ----------------------------------------- |
-| [Migration](example/database/migrations/202609070001_order_attachments.ts)   | `database/migrations/`                     |
-| [Server route and authorization](example/server/routes/order-attachments.ts) | `server/routes/order-attachments.ts`       |
-| [Complete attachment form](example/client/order-attachments.tsx)            | `client/components/order-attachments.tsx`  |
+Copy [the migration](example/database/migrations/202609070001_order_attachments.ts)
+into `database/migrations/`,
+[the Server route](example/server/routes/order-attachments.ts) into
+`server/routes/order-attachments.ts`, and
+[the attachment form](example/client/order-attachments.tsx) into
+`client/components/order-attachments.tsx`.
 
 The example's `tsconfig.json` is only for checking the bundled example. Do not
 copy it into the App. Do not edit the File plugin or synchronized
@@ -44,10 +45,9 @@ The Server example includes real authorization, not an undefined
 `authorizePurchaseOrder()` placeholder. It registers the parent resource and
 maps every `FileRouteAction` as follows:
 
-| File action                  | Required parent permission                          |
-| ---------------------------- | --------------------------------------------------- |
-| `list`, `read`, `issue-token`  | `purchaseOrders.read`, output field `attachments`     |
-| `upload`, `delete`            | `purchaseOrders.update`, input field `attachments`    |
+`list`, `read`, and `issue-token` require `purchaseOrders.read` with output
+field `attachments`. `upload` and `delete` require `purchaseOrders.update` with
+input field `attachments`.
 
 Grant these actions and the required record range through the App's existing
 Permission Sets configuration. For example, `recordsIOwn` uses the registered
