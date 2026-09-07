@@ -117,7 +117,10 @@ function parseOrderId(value: string | undefined): string {
   return value;
 }
 
-const operators: Readonly<Record<DatabaseFilterOperator, ComparisonOperator>> = {
+type FilterOperators = Readonly<
+  Record<DatabaseFilterOperator, ComparisonOperator>
+>;
+const operators: FilterOperators = {
   $eq: '=',
   $ne: '!=',
   $in: 'in',

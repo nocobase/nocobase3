@@ -4,7 +4,7 @@ import { defineMigration } from '@nocobase/db';
 // add its inverse relation. Match orderId to the parent's actual ID type.
 export default defineMigration({
   name: '202609070001_order_attachments',
-  async up({ builder }) {
+  up: async ({ builder }) => {
     await builder.createCollection('purchaseOrders', (collection) => {
       collection.string('id', { length: 64 }).notNull();
       collection.string('number', { length: 64 }).notNull();
@@ -39,7 +39,7 @@ export default defineMigration({
         .foreignKey('orderId');
     });
   },
-  async down({ builder }) {
+  down: async ({ builder }) => {
     await builder.dropCollection('purchaseOrderAttachments');
     await builder.dropCollection('purchaseOrders');
   },

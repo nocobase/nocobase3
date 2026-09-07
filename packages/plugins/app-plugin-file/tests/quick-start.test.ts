@@ -118,8 +118,10 @@ describe('bundled file quick start', () => {
     const host = {
       container,
       config: {
-        get: (key: unknown) =>
-          key === appConfig ? { publicBasePath: '/base' } : { default: 'local' },
+        get: (key: unknown) => {
+          if (key === appConfig) return { publicBasePath: '/base' };
+          return { default: 'local' };
+        },
       },
     } as unknown as Application;
     router = new Hono();
@@ -298,6 +300,7 @@ describe('bundled file quick start', () => {
     expect(
       await database.builder().hasCollection('purchaseOrderAttachments'),
     ).toBe(false);
-    expect(await database.builder().hasCollection('purchaseOrders')).toBe(false);
+    const exists = await database.builder().hasCollection('purchaseOrders');
+    expect(exists).toBe(false);
   });
 });
