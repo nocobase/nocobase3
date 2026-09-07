@@ -8,7 +8,6 @@
  */
 
 import type { AIManager } from '@nocobase/ai-employee';
-import type { Context } from '../internal/runtime-context.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
@@ -83,10 +82,6 @@ export type GetAIConversationMessagesResult = {
   hasMore?: boolean;
   cursor?: string | null;
 };
-
-export const registerAIConversationReadNotification = (
-  _ctx: Context,
-): void => {};
 
 export class AIConversationsManager {
   constructor(

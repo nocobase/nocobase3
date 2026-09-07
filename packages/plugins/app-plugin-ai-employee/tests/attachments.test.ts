@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Context } from '../server/internal/runtime-context.js';
 import {
   appendAIFileAttachmentSource,
   findMessageAttachments,
@@ -21,11 +20,7 @@ function createContext(
       },
     }),
   };
-  const context = {
-    auth: { user: { id: 7 } },
-    app: {},
-  } as unknown as Context;
-  return [context, repositories] as const;
+  return { actorId: 7, repositories } as const;
 }
 
 function expectLookupKey(attachment: unknown, expected: string) {
@@ -48,10 +43,10 @@ describe('message attachment lookup', () => {
   it('skips historical attachments without source metadata', async () => {
     const calls: FindCall[] = [];
     const attachment = { id: 1, filename: 'upload.png' };
-    const result = await findMessageAttachments(
+    const result = await findMessageAttachments({
       ...createContext([{ id: 1 }], calls),
-      [attachment] as any,
-    );
+      attachments: [attachment],
+    });
     expect(getMessageAttachmentLookupKey(attachment as any)).toBeNull();
     expect(result.size).toBe(0);
     expect(calls).toEqual([]);
@@ -64,10 +59,10 @@ describe('message attachment lookup', () => {
       filename: 'upload.png',
       source: { collectionName: 'aiFiles' },
     };
-    const result = await findMessageAttachments(
+    const result = await findMessageAttachments({
       ...createContext([{ id: 1, filename: 'upload.png', disk: 1 }], calls),
-      [attachment] as any,
-    );
+      attachments: [attachment],
+    });
     expect(result.get(expectLookupKey(attachment, 'aiFiles:1'))).toMatchObject({
       id: 1,
       filename: 'upload.png',
@@ -87,10 +82,10 @@ describe('message attachment lookup', () => {
       filename: 'block.pdf',
       source: { collectionName: 'attachments', field: 'orders.files' },
     };
-    const result = await findMessageAttachments(
+    const result = await findMessageAttachments({
       ...createContext([{ id: 2, filename: 'block.pdf', disk: 1 }], calls),
-      [attachment] as any,
-    );
+      attachments: [attachment],
+    });
     expect(
       result.get(expectLookupKey(attachment, 'attachments:2')),
     ).toMatchObject({ id: 2, filename: 'block.pdf' });
@@ -102,10 +97,10 @@ describe('message attachment lookup', () => {
   it('skips trustworthy attachments and preserves normalized source fields', async () => {
     const calls: FindCall[] = [];
     const attachment = { id: 3, source: { trustworthy: true } };
-    const result = await findMessageAttachments(
+    const result = await findMessageAttachments({
       ...createContext([{ id: 3 }], calls),
-      [attachment] as any,
-    );
+      attachments: [attachment],
+    });
     expect(result.size).toBe(0);
     expect(calls).toEqual([]);
     expect(

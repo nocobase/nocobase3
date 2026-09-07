@@ -94,7 +94,8 @@ export function createAgentContext({
         (await aiConversationsManager.getUserDecisions(messageId)) ?? null,
     },
     builtIn: {
-      localize: (employee) => builtInManager.setupBuiltInInfo(ctx, employee),
+      localize: (employee) =>
+        builtInManager.setupBuiltInInfo({ employee, translate: ctx.t }),
     },
     knowledgeBase: {
       retrievePrompt: (params) => knowledgeBaseManager.retrievePrompt(params),

@@ -6,12 +6,10 @@
  * Behavior note: telemetry only — the AI conversation/message writes are not
  * affected by this no-op.
  */
-import type { Context } from '../internal/runtime-context.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 
 export async function recordAIUsageEventsForMessages(
-  _ctx: Context,
   _sessionId: string,
   _messages: any[],
   _transaction?: DatabaseConnection,

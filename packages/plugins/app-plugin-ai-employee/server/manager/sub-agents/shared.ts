@@ -7,52 +7,63 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../internal/runtime-context.js';
 import type { BuiltInManager } from '../built-in-manager.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import type { SubAgentConversationMetadata } from '@nocobase/ai-employee';
+import type { Translate } from '../../domain/contracts.js';
 
-export async function listAccessibleAIEmployees(
-  ctx: Context,
-  repositories: RepositoryFactory,
-): Promise<AIEmployeeEntity[]> {
-  const filter = await buildAccessibleEmployeeFilter(ctx);
+export async function listAccessibleAIEmployees({
+  roleNames,
+  repositories,
+}: {
+  roleNames: readonly string[];
+  repositories: RepositoryFactory;
+}): Promise<AIEmployeeEntity[]> {
+  const filter = buildAccessibleEmployeeFilter(roleNames);
   return repositories.aiEmployees.find({
     filter,
     sort: ['sort', 'username'],
   });
 }
 
-export async function getAccessibleAIEmployee(
-  ctx: Context,
-  repositories: RepositoryFactory,
-  username: string,
-): Promise<AIEmployeeEntity | null> {
-  const filter = await buildAccessibleEmployeeFilter(ctx);
+export async function getAccessibleAIEmployee({
+  roleNames,
+  repositories,
+  username,
+}: {
+  roleNames: readonly string[];
+  repositories: RepositoryFactory;
+  username: string;
+}): Promise<AIEmployeeEntity | null> {
+  const filter = buildAccessibleEmployeeFilter(roleNames);
   return repositories.aiEmployees.findOne({
-    filter: {
-      ...filter,
-      username,
-    },
+    filter: { ...filter, username },
   });
 }
 
 function localizeBuiltInInfo(
-  ctx: Context,
+  translate: Translate | undefined,
   builtInManager: BuiltInManager,
   employee: AIEmployeeEntity,
-) {
-  builtInManager.setupBuiltInInfo(ctx, employee as unknown as AIEmployeeType);
+): void {
+  builtInManager.setupBuiltInInfo({
+    employee: employee as unknown as AIEmployeeType,
+    translate,
+  });
 }
 
-export function serializeEmployeeSummary(
-  ctx: Context,
-  builtInManager: BuiltInManager,
-  employee: AIEmployeeEntity,
-) {
-  localizeBuiltInInfo(ctx, builtInManager, employee);
+export function serializeEmployeeSummary({
+  employee,
+  builtInManager,
+  translate,
+}: {
+  employee: AIEmployeeEntity;
+  builtInManager: BuiltInManager;
+  translate?: Translate;
+}) {
+  localizeBuiltInInfo(translate, builtInManager, employee);
   return {
     username: employee.username as string,
     nickname: employee.nickname as string,
@@ -63,50 +74,51 @@ export function serializeEmployeeSummary(
   };
 }
 
-export function serializeEmployeeDetail(
-  ctx: Context,
-  builtInManager: BuiltInManager,
-  employee: AIEmployeeEntity,
-) {
-  localizeBuiltInInfo(ctx, builtInManager, employee);
-  const about = employee.about || employee.defaultPrompt || '';
-  return {
-    ...serializeEmployeeSummary(ctx, builtInManager, employee),
-    about,
-  };
+export function serializeEmployeeDetail({
+  employee,
+  builtInManager,
+  translate,
+}: {
+  employee: AIEmployeeEntity;
+  builtInManager: BuiltInManager;
+  translate?: Translate;
+}) {
+  const summary = serializeEmployeeSummary({
+    employee,
+    builtInManager,
+    translate,
+  });
+  return { ...summary, about: employee.about || employee.defaultPrompt || '' };
 }
 
-async function buildAccessibleEmployeeFilter(ctx: Context) {
-  const filter: Record<string, any> = {
+function buildAccessibleEmployeeFilter(
+  roleNames: readonly string[],
+): Record<string, unknown> {
+  const filter: Record<string, unknown> = {
     enabled: true,
     category: 'business',
     deprecated: false,
   };
-
-  if (ctx.state.currentRoles?.includes('root')) {
-    return filter;
-  }
-
+  if (roleNames.includes('root')) return filter;
   return filter;
 }
 
-export const getSkillSettingsFromMain = async (
-  ctx: Context,
-  repositories: RepositoryFactory,
-  sessionId: string,
-): Promise<Record<string, any> | null | undefined> => {
-  if (!sessionId) {
-    return null;
-  }
+export const getSkillSettingsFromMain = async ({
+  actorId,
+  repositories,
+  sessionId,
+}: {
+  actorId: string | number;
+  repositories: RepositoryFactory;
+  sessionId: string;
+}): Promise<Record<string, unknown> | null | undefined> => {
+  if (!sessionId) return null;
   const aiConversation = await repositories.aiConversations.findOne({
-    filter: {
-      sessionId,
-      userId: ctx.auth?.user?.id,
-    },
+    filter: { sessionId, userId: actorId },
   });
   const skillSettings = aiConversation?.options?.skillSettings;
   return skillSettings && typeof skillSettings === 'object'
-    ? (skillSettings as Record<string, any>)
+    ? (skillSettings as Record<string, unknown>)
     : skillSettings == null
       ? skillSettings
       : undefined;

@@ -7,7 +7,6 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../internal/runtime-context.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import _ from 'lodash';
 import {
@@ -20,23 +19,50 @@ import {
   AIMessageRemoveOptions,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
+import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { CollectionFilter } from '@nocobase/ai-employee';
 import { recordAIUsageEventsForMessages } from './ai-usage-events.js';
-export const createAIChatConversation = (
-  ctx: Context,
-  repositories: RepositoryFactory,
-  sessionId: string,
-): AIChatConversation => {
-  return new AIChatConversationImpl(ctx, repositories, sessionId);
+export const createAIChatConversation = ({
+  repositories,
+  database,
+  snowflake,
+  sessionId,
+}: {
+  repositories: RepositoryFactory;
+  database: DatabaseConnection;
+  snowflake: IdGeneratorService;
+  sessionId: string;
+}): AIChatConversation => {
+  return new AIChatConversationImpl({
+    repositories,
+    database,
+    snowflake,
+    sessionId,
+  });
 };
-
 class AIChatConversationImpl implements AIChatConversation {
   private transaction?: DatabaseConnection;
-  constructor(
-    private ctx: Context,
-    private repositories: RepositoryFactory,
-    private sessionId: string,
-  ) {}
+  public constructor({
+    repositories,
+    database,
+    snowflake,
+    sessionId,
+  }: {
+    repositories: RepositoryFactory;
+    database: DatabaseConnection;
+    snowflake: IdGeneratorService;
+    sessionId: string;
+  }) {
+    this.repositories = repositories;
+    this.database = database;
+    this.idGenerator = snowflake;
+    this.sessionId = sessionId;
+  }
+
+  private readonly repositories: RepositoryFactory;
+  private readonly database: DatabaseConnection;
+  private readonly idGenerator: IdGeneratorService;
+  private readonly sessionId: string;
   async withTransaction<T>(
     runnable: (
       instance: AIChatConversationImpl,
@@ -49,7 +75,7 @@ class AIChatConversationImpl implements AIChatConversation {
       instance.transaction = transaction as DatabaseConnection;
       return await runnable(instance, transaction);
     }
-    return await instance.ctx.database.transaction(async (connection) => {
+    return await this.database.transaction(async (connection) => {
       instance.transaction = connection;
       return await runnable(instance, connection);
     });
@@ -85,7 +111,6 @@ class AIChatConversationImpl implements AIChatConversation {
       { connection: this.transaction },
     );
     await recordAIUsageEventsForMessages(
-      this.ctx,
       this.sessionId,
       instances,
       this.transaction,
@@ -175,15 +200,16 @@ class AIChatConversationImpl implements AIChatConversation {
   }
 
   private clone(): AIChatConversationImpl {
-    return new AIChatConversationImpl(
-      this.ctx,
-      this.repositories,
-      this.sessionId,
-    );
+    return new AIChatConversationImpl({
+      repositories: this.repositories,
+      database: this.database,
+      snowflake: this.idGenerator,
+      sessionId: this.sessionId,
+    });
   }
 
-  private snowflake() {
-    return this.ctx.snowflake.generate();
+  private snowflake(): string | number {
+    return this.idGenerator.generate();
   }
 
   private get aiMessagesRepo() {

@@ -196,11 +196,12 @@ export class AIEmployee {
     this.documentLoaders = documentLoaders;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
-    this.aiChatConversation = createAIChatConversation(
-      this.ctx,
-      this.repositories,
-      this.sessionId,
-    );
+    this.aiChatConversation = createAIChatConversation({
+      repositories: this.repositories,
+      database: this.ctx.database,
+      snowflake: this.ctx.snowflake,
+      sessionId: this.sessionId,
+    });
     this.skillSettings = skillSettings;
     this.model = model;
     this.legacy = legacy;
@@ -208,7 +209,10 @@ export class AIEmployee {
     this.tools = tools;
     this.streamCached = this.llmStreamCachedManager.getCached(sessionId);
 
-    this.builtInManager.setupBuiltInInfo(ctx, this.employee);
+    this.builtInManager.setupBuiltInInfo({
+      employee: this.employee,
+      translate: ctx.t,
+    });
     this.webSearch = webSearch;
     this.protocol = ChatStreamProtocol.fromContext(ctx, async (chunk) => {
       try {
@@ -1055,10 +1059,8 @@ export class AIEmployee {
     }
 
     const aiMessages = await this.aiChatConversation.listMessages();
-    const workContextBackground = await this.workContextHandler.background(
-      this.ctx,
-      aiMessages,
-    );
+    const workContextBackground =
+      await this.workContextHandler.background(aiMessages);
     if (workContextBackground?.length) {
       background = `${background}\n${workContextBackground.join('\n')}`;
     }
@@ -1493,11 +1495,11 @@ If information is missing, clearly state it in the summary.</Important>`;
       return messages;
     }
 
-    const attachmentsByLookup = await findMessageAttachments(
-      this.ctx,
-      this.repositories,
+    const attachmentsByLookup = await findMessageAttachments({
+      actorId: this.ctx.currentUser.id,
+      repositories: this.repositories,
       attachments,
-    );
+    });
     return messages.map((message) => {
       if (!Array.isArray(message.attachments) || !message.attachments.length) {
         return message;
@@ -1562,7 +1564,7 @@ If information is missing, clearly state it in the summary.</Important>`;
           content = `<user_query>${content}</user_query>`;
           if (workContext?.length) {
             const workContextStr = (
-              await workContextHandler.resolve(this.ctx, workContext)
+              await workContextHandler.resolve(workContext)
             )
               .map((x) => `<work_context>${x}</work_context>`)
               .join('\n');
@@ -1948,10 +1950,17 @@ If information is missing, clearly state it in the summary.</Important>`;
       return [];
     }
     const availableAIEmployees = (
-      await listAccessibleAIEmployees(this.ctx, this.repositories)
+      await listAccessibleAIEmployees({
+        roleNames: this.ctx.currentUser.roles,
+        repositories: this.repositories,
+      })
     )
       .map((employee) =>
-        serializeEmployeeSummary(this.ctx, this.builtInManager, employee),
+        serializeEmployeeSummary({
+          employee,
+          builtInManager: this.builtInManager,
+          translate: this.ctx.t,
+        }),
       )
       .filter((it) => it.username !== this.employee.username);
     return availableAIEmployees;
