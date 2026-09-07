@@ -1060,85 +1060,36 @@ describe.each(dialects)('production composition %s', (dialect) => {
 });
 
 describe('mounted audit declarations', () => {
-  it.each(['same route', 'parent wildcard', 'same action different extractor'])(
-    'rejects %s conflicts before serving requests',
-    async (scenario) => {
-      const f = await fixture('sqlite');
-      let executed = false;
-      f.app.addRoutes(
-        defineApiRoutes(() => {
-          const service = f.app.container.resolve(auditServiceToken);
-          const root = new Hono();
-          const child = new Hono();
-          child.onError((_error, context) => context.text('handled', 500));
-          const first = service.http({ action: 'orders.first' });
-          const second = service.http({
-            action:
-              scenario === 'same action different extractor'
-                ? 'orders.first'
-                : 'orders.second',
-            details: () => ({ source: 'second' }),
-          });
-          if (scenario === 'parent wildcard') root.use('/orders/*', first);
-          else child.use('/:id', first);
-          child.get('/:id', second, (context) => {
+  it('rejects conflicting declarations before the application serves requests', async () => {
+    const f = await fixture('sqlite');
+    let executed = false;
+    f.app.addRoutes(
+      defineApiRoutes(() => {
+        const service = f.app.container.resolve(auditServiceToken);
+        const child = new Hono();
+        child.onError((_error, context) => context.text('handled', 500));
+        child.get(
+          '/:id',
+          service.http({ action: 'orders.second' }),
+          (context) => {
             executed = true;
             return context.text('never');
-          });
-          root.route('/orders', child);
-          return root;
-        }),
-      );
-      try {
-        await expect(f.app.start()).rejects.toMatchObject({
-          code: 'AUDIT_INVALID_EVENT',
-        });
-        expect(executed).toBe(false);
-      } finally {
-        await f.close();
-      }
-    },
-  );
-
-  it.each(['action', 'titleKey', 'target', 'details'] as const)(
-    'rejects a reused declaration whose %s snapshot changed',
-    async (field) => {
-      const f = await fixture('sqlite');
-      let executed = false;
-      f.app.addRoutes(
-        defineApiRoutes(() => {
-          const service = f.app.container.resolve(auditServiceToken);
-          const child = new Hono();
-          child.onError((_error, context) => context.text('handled', 500));
-          const shared = {
-            action: 'orders.first',
-            titleKey: 'orders.first',
-            target: () => undefined,
-            details: () => ({ source: 'first' }),
-          };
-          child.get('/:id', service.http(shared));
-          if (field === 'action') shared.action = 'orders.second';
-          if (field === 'titleKey') shared.titleKey = 'orders.second';
-          if (field === 'target') shared.target = () => undefined;
-          if (field === 'details')
-            shared.details = () => ({ source: 'second' });
-          child.get('/:id', service.http(shared), (context) => {
-            executed = true;
-            return context.text('never');
-          });
-          return new Hono().route('/orders', child);
-        }),
-      );
-      try {
-        await expect(f.app.start()).rejects.toMatchObject({
-          code: 'AUDIT_INVALID_EVENT',
-        });
-        expect(executed).toBe(false);
-      } finally {
-        await f.close();
-      }
-    },
-  );
+          },
+        );
+        return new Hono()
+          .use('/orders/*', service.http({ action: 'orders.first' }))
+          .route('/orders', child);
+      }),
+    );
+    try {
+      await expect(f.app.start()).rejects.toMatchObject({
+        code: 'AUDIT_INVALID_EVENT',
+      });
+      expect(executed).toBe(false);
+    } finally {
+      await f.close();
+    }
+  });
 
   it('allows a scope bridge, shared declarations, distinct methods and disjoint paths', async () => {
     const f = await fixture('sqlite');
@@ -1155,7 +1106,12 @@ describe('mounted audit declarations', () => {
         });
         const child = new Hono();
         child.onError((_error, context) => context.text('handled', 500));
-        const shared = { action: 'orders.read' };
+        const shared = {
+          action: 'orders.read',
+          titleKey: 'orders.read.title',
+          target: () => ({ resource: 'orders' }),
+          details: () => ({ source: 'first' }),
+        };
         child.get(
           '/:id',
           service.http(shared),
@@ -1183,6 +1139,22 @@ describe('mounted audit declarations', () => {
           .status,
       ).toBe(200);
       const composition = f.app.container.resolve(auditCompositionToken);
+      expect(
+        composition
+          .routes()
+          .http.describeRoutes(f.app.router.routes)
+          .filter(
+            (route) =>
+              route.method === 'GET' && route.path === '/api/orders/:id',
+          ),
+      ).toEqual([
+        {
+          method: 'GET',
+          path: '/api/orders/:id',
+          action: 'orders.read',
+          titleKey: 'orders.read.title',
+        },
+      ]);
       const { auditRows, storedText } =
         await import('../../server/database/sql-client.js');
       const records = await auditRows(

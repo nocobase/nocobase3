@@ -7,7 +7,11 @@ import type {
   AuditReceipt,
   TrustedAuditScope,
 } from './contracts.js';
-import { normalizeEvent } from './event-normalizer.js';
+import {
+  normalizeAuditIdentifier,
+  normalizeEvent,
+  snapshotAuditScope,
+} from './event-normalizer.js';
 import { AuditError } from './errors.js';
 import type { PortableAuditStore } from './store.js';
 
@@ -30,31 +34,10 @@ export function bindAuditRecorder(
   options: BoundAuditRecorderOptions,
 ): AuditRecorder {
   const store = options.store;
-  store.assertScope(scope);
-  const seed = normalizeEvent(
-    { action: 'audit.bind', outcome: 'unknown' },
-    {
-      scope,
-      kind: 'business',
-      producer: options.producer,
-      store: store.binding.store,
-      id: randomUUID(),
-      occurredAt: new Date().toISOString(),
-      recordedAt: new Date().toISOString(),
-      policyVersion: 0,
-    },
-  ).event;
-  const boundScope: TrustedAuditScope = {
-    appId: seed.appId,
-    securityScope: seed.securityScope,
-    actor: seed.actor,
-    initiator: seed.initiator,
-    roleIds: seed.roleIds,
-    operationId: seed.operationId,
-    requestId: seed.requestId,
-    runId: seed.runId,
-    correlationId: seed.correlationId,
-  };
+  const boundScope = snapshotAuditScope(scope);
+  store.assertScope(boundScope);
+  const producer = normalizeAuditIdentifier(options.producer);
+  normalizeAuditIdentifier(store.binding.store);
   const getPolicy = options.policy;
   return {
     async record(
@@ -95,7 +78,7 @@ export function bindAuditRecorder(
           {
             scope: boundScope,
             kind: 'business',
-            producer: seed.producer,
+            producer,
             store: store.binding.store,
             id: randomUUID(),
             occurredAt: time,

@@ -113,10 +113,14 @@ export function snapshotAuditSettings(input: unknown): AuditSettings {
   });
 }
 
+interface NormalizedAuditSettingsUpdate extends AuditSettingsUpdate {
+  readonly settings: AuditSettings;
+}
+
 /** Inspect the transport object before spreading any user-supplied property. */
 export function snapshotAuditSettingsUpdate(
   input: unknown,
-): AuditSettingsUpdate {
+): NormalizedAuditSettingsUpdate {
   const value = plain(input);
   keys(value, ['expectedRevision', 'settings', 'confirmRetentionReduction']);
   if (

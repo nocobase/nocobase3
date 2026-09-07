@@ -1,3 +1,5 @@
+import { AuditCaptureCatalog } from '../../server/capture-catalog.js';
+import { createCaptureServices } from '../helpers/capture-services.js';
 import type { AuditEventDto } from '../../server/contracts.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
@@ -18,10 +20,7 @@ import { AuditHttpCollector } from '../../server/http.js';
 import { createAuditHttpResources } from '../../server/providers/http.js';
 import { NodeAuditScopeCarrier } from '../../server/scope.js';
 import { TrustedAuditRuntime } from '../../server/runtime.js';
-import { PersistentAuditSettingsService } from '../../server/settings-service.js';
-import { AuditCaptureCatalog } from '../../server/capture-catalog.js';
-import { LocalAuditHealthService } from '../../server/health-service.js';
-import { AuditReadiness } from '../../server/providers/readiness.js';
+
 import {
   createPortableFixture,
   auditRaw,
@@ -75,28 +74,7 @@ async function setup(
     bind: () => f.recorder,
     diagnostic: () => undefined,
   });
-  const health = new LocalAuditHealthService(() => undefined);
-  const catalog = new AuditCaptureCatalog();
-  const readiness = new AuditReadiness({
-    stores: [{ connection: f.connection, store: f.store }],
-    catalog,
-    health,
-    requirements: {
-      auditRequired: false,
-      requiredDataSources: [],
-      mandatorySources: [],
-    },
-  });
-  const settings = new PersistentAuditSettingsService({
-    connection: f.connection,
-    store: f.store,
-    readiness,
-    health,
-    defaults: {
-      enabled: true,
-      sources: { http: 'declared-routes', runtime: 'disabled', database: [] },
-    },
-  });
+  const { health, catalog, readiness, settings } = createCaptureServices([f]);
   const initial = await settings.initialize(f.scope);
   const resources = createAuditHttpResources({
     application: app,

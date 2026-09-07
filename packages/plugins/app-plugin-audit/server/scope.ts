@@ -2,40 +2,10 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { types } from 'node:util';
 import type { TrustedAuditScope } from './contracts.js';
 import type { AuditScopeCarrier } from './internal-contracts.js';
-import { normalizeEvent } from './event-normalizer.js';
+import { snapshotAuditScope } from './event-normalizer.js';
 import { AuditError } from './errors.js';
 
-/** Copies only the frozen scope contract through the existing safe normalizer. */
-export function snapshotAuditScope(
-  scope: TrustedAuditScope,
-): TrustedAuditScope {
-  const seed = normalizeEvent(
-    { action: 'audit.scope', outcome: 'unknown' },
-    {
-      scope,
-      kind: 'business',
-      producer: 'audit.scope',
-      store: 'scope',
-      id: 'scope',
-      occurredAt: '2000-01-01T00:00:00.000Z',
-      recordedAt: '2000-01-01T00:00:00.000Z',
-      policyVersion: 0,
-    },
-  ).event;
-  return Object.freeze({
-    appId: seed.appId,
-    securityScope: seed.securityScope,
-    actor: Object.freeze(seed.actor),
-    initiator:
-      seed.initiator === undefined ? undefined : Object.freeze(seed.initiator),
-    roleIds:
-      seed.roleIds === undefined ? undefined : Object.freeze(seed.roleIds),
-    operationId: seed.operationId,
-    requestId: seed.requestId,
-    runId: seed.runId,
-    correlationId: seed.correlationId,
-  });
-}
+export { snapshotAuditScope };
 
 interface ScopeFrame {
   readonly scope: TrustedAuditScope;

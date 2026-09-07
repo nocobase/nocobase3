@@ -73,6 +73,8 @@ function text(value: unknown, maxBytes: number = 1_024): string {
   return value;
 }
 
+export { text as normalizeAuditIdentifier };
+
 function optionalText(value: unknown): string | undefined {
   return value === undefined ? undefined : text(value);
 }
@@ -134,6 +136,17 @@ function scope(input: unknown): TrustedAuditScope {
       : {}),
     ...(roleIds !== undefined ? { roleIds } : {}),
   };
+}
+
+/** Validate and detach trusted identity without constructing an audit event. */
+export function snapshotAuditScope(
+  input: TrustedAuditScope,
+): TrustedAuditScope {
+  const snapshot = scope(input);
+  Object.freeze(snapshot.actor);
+  if (snapshot.initiator) Object.freeze(snapshot.initiator);
+  if (snapshot.roleIds) Object.freeze(snapshot.roleIds);
+  return Object.freeze(snapshot);
 }
 
 function hash(value: string): string {

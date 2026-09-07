@@ -121,10 +121,6 @@ export class AuditHttpCollector implements ApplicationHttpObserver {
       readonly captured: AuditHttpDeclaration;
     }
   > = new WeakMap();
-  private readonly declarations: WeakMap<
-    object,
-    Pick<AuditDeclaredRoute, 'action' | 'titleKey'>
-  > = new WeakMap();
 
   /** Reads only this collector's declarations in the host's fully assembled Hono table. */
   describeRoutes(
@@ -136,14 +132,15 @@ export class AuditHttpCollector implements ApplicationHttpObserver {
   ): readonly AuditDeclaredRoute[] {
     const result = new Map<string, AuditDeclaredRoute>();
     for (const route of routes) {
-      const declaration = this.declarations.get(
+      const declaration = this.declarationIdentities.get(
         findTargetHandler(route.handler),
-      );
+      )?.captured;
       if (!declaration) continue;
       const value = Object.freeze({
         method: route.method,
         path: route.path,
-        ...declaration,
+        action: declaration.action,
+        ...(declaration.titleKey ? { titleKey: declaration.titleKey } : {}),
       });
       result.set(JSON.stringify(value), value);
     }
@@ -227,13 +224,6 @@ export class AuditHttpCollector implements ApplicationHttpObserver {
       identity: declaration,
       captured,
     });
-    this.declarations.set(
-      handler,
-      Object.freeze({
-        action: captured.action,
-        ...(captured.titleKey ? { titleKey: captured.titleKey } : {}),
-      }),
-    );
     return handler;
   }
 

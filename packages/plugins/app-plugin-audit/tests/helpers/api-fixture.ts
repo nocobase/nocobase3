@@ -1,3 +1,4 @@
+import { createCaptureServices } from './capture-services.js';
 import { fileURLToPath } from 'node:url';
 import { createMigrator, type DatabaseDialect } from '@nocobase/db';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
@@ -11,10 +12,10 @@ import {
   appConfig,
   createConfigPaths,
 } from '@nocobase/app-server/config';
-import { AuditCaptureCatalog } from '../../server/capture-catalog.js';
-import { LocalAuditHealthService } from '../../server/health-service.js';
-import { AuditReadiness } from '../../server/providers/readiness.js';
-import { PersistentAuditSettingsService } from '../../server/settings-service.js';
+import type { AuditCaptureCatalog } from '../../server/capture-catalog.js';
+import type { LocalAuditHealthService } from '../../server/health-service.js';
+import type { AuditReadiness } from '../../server/providers/readiness.js';
+import type { PersistentAuditSettingsService } from '../../server/settings-service.js';
 import { NodeAuditScopeCarrier } from '../../server/scope.js';
 import { TrustedAuditRuntime } from '../../server/runtime.js';
 import { createAuditHttpResources } from '../../server/providers/http.js';
@@ -158,35 +159,14 @@ export async function createAuditApiFixture(
       bind: () => f.recorder,
       diagnostic: () => undefined,
     });
-    const health = new LocalAuditHealthService(() => undefined);
-    const catalog = new AuditCaptureCatalog();
-    const readiness = new AuditReadiness({
-      stores: stores.map((entry) => ({
-        connection: entry.connection,
-        store: entry.store,
-      })),
-      catalog,
-      health,
-      requirements: {
+    const { health, catalog, readiness, settings } = createCaptureServices(
+      stores,
+      {
         auditRequired: required,
         requiredDataSources: [],
         mandatorySources: required ? ['request'] : [],
       },
-    });
-    const settings = new PersistentAuditSettingsService({
-      connection: f.connection,
-      store: f.store,
-      readiness,
-      health,
-      defaults: {
-        enabled: true,
-        sources: {
-          http: 'declared-routes',
-          runtime: 'disabled',
-          database: [],
-        },
-      },
-    });
+    );
     const initial = await settings.initialize(f.scope);
     const http = createAuditHttpResources({
       application: app,

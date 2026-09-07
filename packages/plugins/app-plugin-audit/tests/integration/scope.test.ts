@@ -341,22 +341,46 @@ describe('trusted scope with durable public Recorder attribution', () => {
     ).toHaveLength(0);
   });
 
-  it('copies and freezes scope values, rejects foreign Apps and never invokes accessors', () => {
+  it('snapshots carrier and recorder identities, rejects invalid bindings and never invokes accessors', async () => {
     const input = {
       ...f.scope,
       actor: { ...alice.actor },
-      roleIds: ['operator'],
+      roleIds: ['operator', 'operator'],
+      initiator: { ...alice.actor },
     };
+    const options = {
+      store: f.store,
+      producer: 'original',
+      policy: async () => f.policy,
+    };
+    const recorder = bindAuditRecorder(input, options);
     carrier.run(input, () => {
       input.actor.id = 'mutated';
+      input.initiator.id = 'mutated';
       input.roleIds.push('admin');
+      options.producer = 'mutated';
       expect(carrier.current()).toMatchObject({
         actor: alice.actor,
+        initiator: alice.actor,
         roleIds: ['operator'],
       });
       expect(Object.isFrozen(carrier.current()?.actor)).toBe(true);
+      expect(Object.isFrozen(carrier.current()?.initiator)).toBe(true);
       expect(Object.isFrozen(carrier.current()?.roleIds)).toBe(true);
     });
+    await recorder.record(event);
+    expect((await f.store.query(f.scope, { store: 'main' })).items).toEqual([
+      expect.objectContaining({
+        actor: alice.actor,
+        initiator: alice.actor,
+        roleIds: ['operator'],
+        producer: 'original',
+      }),
+    ]);
+    for (const producer of ['', 'invalid\n', 'x'.repeat(1025)])
+      expect(() =>
+        bindAuditRecorder(f.scope, { ...options, producer }),
+      ).toThrow('AUDIT_INVALID_EVENT');
     expect(() =>
       carrier.run({ ...f.scope, appId: 'other' }, () => undefined),
     ).toThrow('AUDIT_INVALID_EVENT');
@@ -371,6 +395,19 @@ describe('trusted scope with durable public Recorder attribution', () => {
           },
         },
         () => undefined,
+      ),
+    ).toThrow('AUDIT_INVALID_EVENT');
+    expect(reads).toBe(0);
+    expect(() =>
+      bindAuditRecorder(
+        {
+          ...f.scope,
+          get appId() {
+            reads++;
+            return f.scope.appId;
+          },
+        },
+        options,
       ),
     ).toThrow('AUDIT_INVALID_EVENT');
     expect(reads).toBe(0);

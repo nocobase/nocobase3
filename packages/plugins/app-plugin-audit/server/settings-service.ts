@@ -169,26 +169,20 @@ export class PersistentAuditSettingsService implements AuditSettingsService {
     update: AuditSettingsUpdate,
   ): Promise<AuditSettings> {
     this.options.store.assertScope(scope);
-    update = snapshotAuditSettingsUpdate(update);
-    if (
-      !Number.isSafeInteger(update.expectedRevision) ||
-      update.expectedRevision < 1 ||
-      typeof update.confirmRetentionReduction !== 'boolean'
-    )
-      throw new AuditError('AUDIT_POLICY_CONFLICT');
-    const next = snapshotAuditSettings({
-      ...update.settings,
-      revision: update.expectedRevision + 1,
-    });
+    const {
+      settings: next,
+      expectedRevision,
+      confirmRetentionReduction,
+    } = snapshotAuditSettingsUpdate(update);
     const previous = await this.get(scope);
-    if (previous.revision !== update.expectedRevision)
+    if (previous.revision !== expectedRevision)
       throw new AuditError('AUDIT_POLICY_CONFLICT');
     this.options.readiness.validate(next, previous);
     if (
       next.retentionDays !== null &&
       (previous.retentionDays === null ||
         next.retentionDays < previous.retentionDays) &&
-      !update.confirmRetentionReduction
+      !confirmRetentionReduction
     )
       throw new AuditError('AUDIT_POLICY_CONFLICT');
     if (next.enabled) {
@@ -203,7 +197,7 @@ export class PersistentAuditSettingsService implements AuditSettingsService {
           next.revision,
           JSON.stringify(next),
           this.scopeHash,
-          update.expectedRevision,
+          expectedRevision,
         ];
         let changed: boolean;
         if (connection.dialect === 'mysql') {

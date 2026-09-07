@@ -1,17 +1,7 @@
-import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { Hono } from 'hono';
-import { createCaching } from '@nocobase/caching';
-import { createMigrator, databaseManagerToken } from '@nocobase/db';
-import { Application } from '@nocobase/app-server/application';
-import {
-  AppConfig,
-  appConfig,
-  createConfigPaths,
-} from '@nocobase/app-server/config';
-import { cachingToken } from '@nocobase/app-server/caching';
-import { idGeneratorToken } from '@nocobase/app-server/id-generator';
-import { defineApiRoutes } from '@nocobase/app-server/router';
+import type { DatabaseDialect } from '@nocobase/db';
+import type { Application } from '@nocobase/app-server/application';
+import type { AppConfig } from '@nocobase/app-server/config';
+import { authenticationAuditToken } from '@nocobase/app-plugin-authentication/server/audit';
 import {
   NodeAuditScopeCarrier,
   TrustedAuditRuntime,
@@ -23,12 +13,7 @@ import {
   bindAuditRecorder,
 } from '@nocobase/app-plugin-audit/server';
 import { createPortableFixture } from '../../../app-plugin-audit/tests/helpers/database-fixtures.js';
-import type { DatabaseDialect } from '@nocobase/db';
-import { authenticationConfig } from '@nocobase/app-plugin-authentication';
-import { AuthenticationProvider } from '../../../app-plugin-authentication/server/providers/authentication.js';
-import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import { authenticationAuditToken } from '@nocobase/app-plugin-authentication/server/audit';
-import { apiRoutes } from '../../../app-plugin-authentication/server/routes/index.js';
+import { createAuthenticatedApp } from '../../../app-plugin-audit/tests/helpers/authenticated-app.js';
 
 export async function createAuditAuthApp(
   dialect: DatabaseDialect,
@@ -39,33 +24,8 @@ export async function createAuditAuthApp(
   bridgeEnabled: boolean = true,
 ) {
   const fixture = await createPortableFixture(dialect);
-  const caching = createCaching();
-  const config = new AppConfig([
-    {
-      ...appConfig,
-      defaults: {
-        name: 'synthetic-app',
-        publicOrigin: 'http://localhost',
-        publicBasePath: '',
-        internalBasePath: '',
-        publicApiUrl: '/api',
-      },
-    },
-    {
-      ...authenticationConfig,
-      defaults: {
-        secret: 'G15-synthetic-secret-at-least-32-characters',
-        emailAndPassword: { enabled: true, autoSignIn: true },
-        session: { storeSessionInDatabase: true },
-      },
-    },
-  ]);
-  await config.loadAll();
-  const app = new Application({
-    config,
-    paths: createConfigPaths({ rootDir: fixture.directory }),
-    websocket: () => async () => null,
-  });
+  const authenticated = await createAuthenticatedApp(fixture);
+  const { app } = authenticated;
   const carrier = new NodeAuditScopeCarrier(fixture.scope.appId);
   const runtime = new TrustedAuditRuntime({
     appId: fixture.scope.appId,
@@ -131,41 +91,14 @@ export async function createAuditAuthApp(
     catalog,
     connections: [fixture.connection],
   });
-  app.container.instance(databaseManagerToken, fixture.manager);
-  app.container.instance(cachingToken, caching);
-  app.container.instance(idGeneratorToken, {
-    generate: () => 1,
-    generateString: () => randomUUID(),
-  });
   if (bridgeEnabled)
     app.container.instance(authenticationAuditToken, {
       runtime,
       collector: resources.collector,
     });
-  const contributionApp = {
-    appName: 'synthetic-app',
-    publicBasePath: '',
-    config,
-    paths: app.paths,
-    router: new Hono(),
-    container: app.container,
-  };
-  new AuthenticationProvider(contributionApp).register();
-  await createMigrator({
-    database: fixture.manager,
-    packageName: '@nocobase/app-plugin-authentication',
-    directory: fileURLToPath(
-      new URL(
-        '../../../app-plugin-authentication/database/migrations',
-        import.meta.url,
-      ),
-    ),
-  }).latest();
-  app.addRoutes(
-    defineApiRoutes(async () => apiRoutes.createRouter(contributionApp)),
-  );
-  await configure?.(app, app.container.resolve(authenticationToken));
+  await configure?.(app, authenticated.auth);
   return {
+    ...authenticated,
     start: async () => {
       await resources.verify(async () => {
         await app.fetch(new Request('http://localhost/probe'));
@@ -183,12 +116,7 @@ export async function createAuditAuthApp(
     health,
     catalog,
     collector: resources.collector,
-    app,
-    contributionApp,
     settings,
-    auth: app.container.resolve(authenticationToken),
-    request: (path: string, init?: RequestInit) =>
-      app.fetch(new Request('http://localhost/api' + path, init)),
     events: async () =>
       (
         await fixture.store.query(fixture.scope, {
@@ -200,21 +128,10 @@ export async function createAuditAuthApp(
       await business.dispose();
       await resources.dispose();
       runtime.dispose();
-      await app.shutdown();
-      await caching.dispose();
+      await authenticated.close();
       await fixture.cleanup();
     },
   };
 }
 
-export function jsonRequest(body: object, cookie?: string): RequestInit {
-  return {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      origin: 'http://localhost',
-      ...(cookie ? { cookie } : {}),
-    },
-    body: JSON.stringify(body),
-  };
-}
+export { jsonRequest } from '../../../app-plugin-audit/tests/helpers/authenticated-app.js';
