@@ -16,7 +16,7 @@ import {
   ServiceProviderRegistry,
   type ServiceResolver,
 } from '@nocobase/service-provider';
-import type { AppWebSocketHandler } from '../websocket.js';
+import type { AppWebSocketHandler } from '@nocobase/app-websocket';
 import {
   createRealtimeWebSocketHandler,
   registerRealtimeWebSocketRoutes,

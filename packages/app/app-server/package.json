@@ -82,10 +82,6 @@
       "types": "./src/support/index.ts",
       "import": "./src/support/index.ts"
     },
-    "./websocket": {
-      "types": "./src/websocket.ts",
-      "import": "./src/websocket.ts"
-    },
     "./i18n": {
       "types": "./src/i18n/index.ts",
       "import": "./src/i18n/index.ts"
@@ -168,10 +164,6 @@
         "types": "./dist/support/index.d.ts",
         "import": "./dist/support/index.js"
       },
-      "./websocket": {
-        "types": "./dist/websocket.d.ts",
-        "import": "./dist/websocket.js"
-      },
       "./i18n": {
         "types": "./dist/i18n/index.d.ts",
         "import": "./dist/i18n/index.js"
@@ -193,6 +185,7 @@
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
+    "@nocobase/app-websocket": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",

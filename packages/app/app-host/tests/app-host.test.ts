@@ -20,10 +20,12 @@ afterEach(async () => {
 });
 
 it('dispatches non-asset requests to the embedded server with the app mount stripped', async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), 'nocobase-app-host-'));
-  tempDirs.push(appsDir);
+  const deploymentsDir = await mkdtemp(
+    path.join(os.tmpdir(), 'nocobase-app-host-'),
+  );
+  tempDirs.push(deploymentsDir);
 
-  const appRoot = path.join(appsDir, 'customer');
+  const appRoot = path.join(deploymentsDir, 'customer');
   await mkdir(path.join(appRoot, 'dist', 'client', 'assets'), {
     recursive: true,
   });
@@ -38,7 +40,7 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
   );
   await writeFile(
     path.join(appRoot, 'dist', 'client', 'index.html'),
-    `<!doctype html><html><body><main>Customer App</main><script type="module" src="/assets/app.js"></script></body></html>`,
+    `<!doctype html><html><head><link rel="stylesheet" href="/main/assets/app.css"><meta property="og:image" content="/main/assets/preview.png"><link rel="preload" href="//cdn.example.com/assets/vendor.js"><link rel="preload" href="https://cdn.example.com/assets/vendor.css"><script src="/customer/assets/already.js"></script></head><body><main>Customer App</main><script type="module" src="/main/assets/app.js"></script></body></html>`,
   );
   await writeFile(
     path.join(appRoot, 'dist', 'client', 'assets', 'app.js'),
@@ -56,8 +58,11 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
             const url = new URL(request.url);
             if (url.pathname === "/") {
               const html = await readFile(path.join(scope.clientDir, "index.html"), "utf8");
-              return new Response(html.replaceAll('"/assets/', '"' + scope.assetsBasePath + "/"), {
-                headers: { "content-type": "text/html; charset=utf-8" },
+              return new Response(html, {
+                headers: {
+                  "content-type": "text/html; charset=utf-8",
+                  "content-length": String(Buffer.byteLength(html)),
+                },
               });
             }
 
@@ -85,7 +90,7 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -118,6 +123,13 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
   const pageHtml = await page.text();
   expect(pageHtml).toContain('Customer App');
   expect(pageHtml).toContain('/customer/assets/app.js');
+  expect(pageHtml).toContain('/customer/assets/app.css');
+  expect(pageHtml).toContain('/customer/assets/preview.png');
+  expect(pageHtml).toContain('/customer/assets/already.js');
+  expect(pageHtml).toContain('//cdn.example.com/assets/vendor.js');
+  expect(pageHtml).toContain('https://cdn.example.com/assets/vendor.css');
+  expect(pageHtml).not.toContain('/main/assets/');
+  expect(page.headers.get('content-length')).toBeNull();
 
   const asset = await fetch(
     `http://127.0.0.1:${address.port}/customer/assets/app.js`,
@@ -127,12 +139,12 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
 });
 
 it('does not discover a client-only app without a server artifact', async () => {
-  const appsDir = await mkdtemp(
+  const deploymentsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-client-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
-  const appRoot = path.join(appsDir, 'customer');
+  const appRoot = path.join(deploymentsDir, 'customer');
   await mkdir(path.join(appRoot, 'dist', 'client', 'assets'), {
     recursive: true,
   });
@@ -156,7 +168,7 @@ it('does not discover a client-only app without a server artifact', async () => 
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -174,12 +186,12 @@ it('does not discover a client-only app without a server artifact', async () => 
 });
 
 it('serves a server-only app from dist/server/embedded.js', async () => {
-  const appsDir = await mkdtemp(
+  const deploymentsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-server-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
-  const appRoot = path.join(appsDir, 'customer');
+  const appRoot = path.join(deploymentsDir, 'customer');
   await mkdir(path.join(appRoot, 'dist', 'server'), { recursive: true });
   await writeFile(
     path.join(appRoot, 'package.json'),
@@ -210,7 +222,7 @@ it('serves a server-only app from dist/server/embedded.js', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -239,12 +251,12 @@ it('serves a server-only app from dist/server/embedded.js', async () => {
 });
 
 it('calls registered app disposers when the app is destroyed', async () => {
-  const appsDir = await mkdtemp(
+  const deploymentsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-disposer-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
-  const appRoot = path.join(appsDir, 'customer');
+  const appRoot = path.join(deploymentsDir, 'customer');
   await mkdir(path.join(appRoot, 'dist', 'server'), { recursive: true });
   await writeFile(
     path.join(appRoot, 'package.json'),
@@ -277,7 +289,7 @@ it('calls registered app disposers when the app is destroyed', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -300,12 +312,12 @@ it('calls registered app disposers when the app is destroyed', async () => {
 });
 
 it('keeps serving after a streaming response client disconnects', async () => {
-  const appsDir = await mkdtemp(
+  const deploymentsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-stream-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
-  const appRoot = path.join(appsDir, 'customer');
+  const appRoot = path.join(deploymentsDir, 'customer');
   await mkdir(path.join(appRoot, 'dist', 'server'), { recursive: true });
   await writeFile(
     path.join(appRoot, 'package.json'),
@@ -346,7 +358,7 @@ it('keeps serving after a streaming response client disconnects', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -369,12 +381,12 @@ it('keeps serving after a streaming response client disconnects', async () => {
 });
 
 it('reserves /assets for static files and does not fall through to the server', async () => {
-  const appsDir = await mkdtemp(
+  const deploymentsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-assets-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
-  const appRoot = path.join(appsDir, 'customer');
+  const appRoot = path.join(deploymentsDir, 'customer');
   await mkdir(path.join(appRoot, 'dist', 'client', 'assets'), {
     recursive: true,
   });
@@ -408,7 +420,7 @@ it('reserves /assets for static files and does not fall through to the server', 
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -443,13 +455,13 @@ it('reserves /assets for static files and does not fall through to the server', 
 });
 
 it('serves the packaged app-dist fixture', async () => {
-  const appsDir = fileURLToPath(
+  const deploymentsDir = fileURLToPath(
     new URL('../fixtures/app-dist', import.meta.url),
   );
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -616,15 +628,15 @@ it('serves the packaged app-dist fixture', async () => {
 });
 
 it('serves health information without discovered apps', async () => {
-  const appsDir = await mkdtemp(
+  const deploymentsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-empty-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
   });
   runningHosts.push(host);
   await host.start();
@@ -639,18 +651,62 @@ it('serves health information without discovered apps', async () => {
   );
   expect(response.registered).toBe(0);
   expect(response.activeTotal).toBe(0);
+  expect(response.mode).toBe('standalone');
+});
+
+it('does not discover directory apps or expose management HTTP in managed mode', async () => {
+  const deploymentsDir = await mkdtemp(
+    path.join(os.tmpdir(), 'nocobase-app-host-managed-'),
+  );
+  tempDirs.push(deploymentsDir);
+
+  await mkdir(path.join(deploymentsDir, 'customer', 'dist', 'server'), {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(deploymentsDir, 'customer', 'dist', 'server', 'embedded.js'),
+    'export function createServer() { return { fetch() { return new Response("ok"); } }; }',
+  );
+
+  const host = createAppHost({
+    mode: 'managed',
+    host: '127.0.0.1',
+    port: 0,
+    appDeploymentsDir: deploymentsDir,
+  });
+  runningHosts.push(host);
+  await host.start();
+
+  expect(host.mode).toBe('managed');
+  expect(host.registry.listDefinitions()).toEqual([]);
+
+  const address = host.server.address();
+  if (!address || typeof address !== 'object') {
+    throw new Error('App host did not expose a TCP address');
+  }
+
+  const health = await fetchJson(
+    new URL(`http://127.0.0.1:${address.port}/__health`),
+  );
+  expect(health).toEqual({ status: 'not-ready' });
+
+  const rescan = await fetch(`http://127.0.0.1:${address.port}/__apps/rescan`, {
+    method: 'POST',
+  });
+  expect(rescan.status).toBe(404);
+  expect(host.registry.listDefinitions()).toEqual([]);
 });
 
 it('exposes app management through /__apps', async () => {
-  const appsDir = await mkdtemp(
+  const deploymentsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-management-'),
   );
-  tempDirs.push(appsDir);
+  tempDirs.push(deploymentsDir);
 
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDistDir: appsDir,
+    appDeploymentsDir: deploymentsDir,
   });
   runningHosts.push(host);
   await host.start();

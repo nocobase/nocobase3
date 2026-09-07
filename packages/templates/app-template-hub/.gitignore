@@ -15,7 +15,6 @@ dist-ssr
 /.extension-state/
 /src/extensions/
 /registry.json
-/public/storage
 /coverage/
 /playwright-report/
 /test-results/

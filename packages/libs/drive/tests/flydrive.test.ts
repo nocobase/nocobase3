@@ -46,7 +46,6 @@ describe('createDriveManager', () => {
   it('uses provider credentials when explicit S3 credentials are missing', () => {
     const manager = createDriveManager({
       default: 's3',
-      links: {},
       disks: {
         s3: {
           driver: 's3',
@@ -69,7 +68,6 @@ describe('createDriveManager', () => {
     expect(() =>
       createDriveManager({
         default: 'missing',
-        links: {},
         disks: {},
       }),
     ).toThrow('Default drive disk "missing" is not configured.');
@@ -85,9 +83,6 @@ describe('assertDefaultDisk', () => {
 function createConfig(): AppDriveConfig {
   return {
     default: 'public',
-    links: {
-      '/tmp/app/public/storage': '/tmp/storage/public',
-    },
     disks: {
       public: {
         driver: 'fs',

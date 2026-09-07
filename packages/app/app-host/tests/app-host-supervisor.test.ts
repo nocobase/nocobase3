@@ -7,10 +7,42 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
+import { c as createTar } from 'tar';
+import type { ArtifactReference } from '../dist/index.js';
 import { sanitizeAppHostChildNodeOptions } from '../dist/supervisor.js';
+import { AppHostSupervisor } from '../dist/supervisor.js';
 
 describe('AppHostSupervisor', () => {
+  it('uses explicit options instead of ambient supervisor configuration', async () => {
+    vi.stubEnv('APP_HOST_ENABLED', 'false');
+    vi.stubEnv('APP_HOST_MODE', 'invalid');
+    vi.stubEnv('APP_HOST_URL', 'http://ambient.invalid');
+    vi.stubEnv('APP_HOST_DRIVER', 'tsx');
+    vi.stubEnv('APP_DEPLOYMENTS_DIR', '/ambient/deployments');
+    try {
+      const supervisor = AppHostSupervisor.initialize({ mode: 'managed' });
+      try {
+        expect(supervisor.getInfo()).toMatchObject({
+          mode: 'managed',
+          driver: 'node',
+          status: 'stopped',
+          targetUrl: undefined,
+          appDeploymentsDir: undefined,
+        });
+      } finally {
+        await supervisor.shutdown();
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('removes preserve symlink flags from app-host child NODE_OPTIONS', () => {
     expect(
       sanitizeAppHostChildNodeOptions(
@@ -26,4 +58,247 @@ describe('AppHostSupervisor', () => {
       ),
     ).toBe('');
   });
+
+  it('uses an explicit singleton lifecycle', async () => {
+    expect(() => AppHostSupervisor.getInstance()).toThrow(
+      'AppHostSupervisor is not initialized',
+    );
+
+    const supervisor = AppHostSupervisor.initialize({ enabled: false });
+    expect(AppHostSupervisor.getInstance()).toBe(supervisor);
+    expect(() => AppHostSupervisor.initialize({ enabled: false })).toThrow(
+      'AppHostSupervisor is already initialized',
+    );
+
+    await supervisor.shutdown();
+    expect(() => AppHostSupervisor.getInstance()).toThrow(
+      'AppHostSupervisor is not initialized',
+    );
+  });
+
+  it('shares instance shutdown and allows initialization after cleanup', async () => {
+    const sigintListeners = process.listenerCount('SIGINT');
+    const sigtermListeners = process.listenerCount('SIGTERM');
+    const supervisor = AppHostSupervisor.initialize({ enabled: false });
+    const stopped = Promise.withResolvers<void>();
+    const stop = vi.spyOn(supervisor, 'stop').mockReturnValue(stopped.promise);
+    const shutdown = supervisor.shutdown();
+    expect(supervisor.shutdown()).toBe(shutdown);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(() => AppHostSupervisor.initialize()).toThrow('already initialized');
+    stopped.resolve();
+    await shutdown;
+    expect(process.listenerCount('SIGINT')).toBe(sigintListeners);
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermListeners);
+    await expect(supervisor.ensureStarted()).rejects.toThrow('is shut down');
+
+    const next = AppHostSupervisor.initialize({ enabled: false });
+    await supervisor.shutdown();
+    expect(AppHostSupervisor.getInstance()).toBe(next);
+    await next.shutdown();
+    stop.mockRestore();
+  });
+
+  it('manages a spawned host through authenticated IPC', async () => {
+    const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));
+    const fixture = await createManagedFixture(volumesDir);
+    const supervisor = AppHostSupervisor.initialize({
+      mode: 'managed',
+      driver: 'tsx',
+      appDeploymentsDir: fixture.appDeploymentsDir,
+      appVolumesDir: fixture.appVolumesDir,
+      configPath: fixture.configPath,
+      startTimeoutMs: 10_000,
+    });
+    try {
+      await supervisor.ensureStarted();
+
+      const deployment = {
+        id: 'demo',
+        appId: 'demo',
+        artifact: fixture.artifact,
+        desiredState: 'running' as const,
+        backend: 'in-process' as const,
+        activation: 'eager' as const,
+      };
+      const result = await supervisor.applyDeploymentSet({
+        revision: 1,
+        deployments: [deployment],
+      });
+      expect(result.status.deployments[0]).toMatchObject({
+        appId: 'demo',
+        observedState: 'running',
+      });
+
+      const stopped = await supervisor.stopDeployment('demo');
+      expect(stopped.deployments[0]?.observedState).toBe('stopped');
+      const started = await supervisor.startDeployment(deployment);
+      expect(started.deployments[0]?.observedState).toBe('running');
+
+      supervisor.onReady(() => {
+        void supervisor.restoreDeploymentSet({
+          revision: 3,
+          deployments: [deployment],
+        });
+      });
+      await supervisor.restart('test restart');
+      await vi.waitFor(
+        async () => {
+          const recovered = await (
+            await supervisor.getManagementClient()
+          ).getStatus();
+          expect(recovered).toMatchObject({
+            ready: true,
+            desiredRevision: 3,
+            reconciledRevision: 3,
+          });
+          expect(recovered.deployments[0]).toMatchObject({
+            appId: 'demo',
+            observedState: 'running',
+          });
+        },
+        { timeout: 10_000, interval: 50 },
+      );
+
+      const removed = await supervisor.removeDeployment('demo');
+      expect(removed.deployments).toEqual([]);
+    } finally {
+      await supervisor.shutdown();
+      await rm(volumesDir, { recursive: true, force: true });
+    }
+  });
+
+  it('notifies the controller after a crash so it can restore its deployment set', async () => {
+    const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));
+    const fixture = await createManagedFixture(volumesDir);
+    const supervisor = AppHostSupervisor.initialize({
+      mode: 'managed',
+      driver: 'tsx',
+      appDeploymentsDir: fixture.appDeploymentsDir,
+      appVolumesDir: fixture.appVolumesDir,
+      configPath: fixture.configPath,
+      startTimeoutMs: 10_000,
+      automaticRestartBaseDelayMs: 10,
+      maxAutomaticRestarts: 3,
+    });
+    try {
+      await supervisor.applyDeploymentSet({
+        revision: 1,
+        deployments: [
+          {
+            id: 'demo',
+            appId: 'demo',
+            artifact: fixture.artifact,
+            desiredState: 'running',
+            backend: 'in-process',
+            activation: 'eager',
+          },
+        ],
+      });
+      const previousPid = supervisor.getInfo().pid;
+      supervisor.onReady(() => {
+        void supervisor.restoreDeploymentSet({
+          revision: 1,
+          deployments: [
+            {
+              id: 'demo',
+              appId: 'demo',
+              artifact: fixture.artifact,
+              desiredState: 'running',
+              backend: 'in-process',
+              activation: 'eager',
+            },
+          ],
+        });
+      });
+      await rm(path.join(volumesDir, 'app-artifacts', fixture.artifact.key));
+      if (!previousPid) {
+        throw new Error('Managed app-host has no process ID');
+      }
+      process.kill(previousPid, 'SIGKILL');
+
+      await waitUntil(
+        () =>
+          supervisor.getStatus() === 'ready' &&
+          supervisor.getInfo().pid !== previousPid,
+        10_000,
+      );
+      await vi.waitFor(
+        async () => {
+          const recovered = await (
+            await supervisor.getManagementClient()
+          ).getStatus();
+          expect(recovered).toMatchObject({
+            ready: true,
+            desiredRevision: 1,
+            reconciledRevision: 1,
+            deployments: [
+              expect.objectContaining({ observedState: 'running' }),
+            ],
+          });
+        },
+        { timeout: 10_000 },
+      );
+    } finally {
+      await supervisor.shutdown();
+      await rm(volumesDir, { recursive: true, force: true });
+    }
+  });
 });
+
+async function createManagedFixture(rootDir: string): Promise<{
+  appDeploymentsDir: string;
+  appVolumesDir: string;
+  configPath: string;
+  artifact: ArtifactReference;
+}> {
+  const sourceDir = fileURLToPath(
+    new URL('../fixtures/app-dist/demo', import.meta.url),
+  );
+  const artifactDir = path.join(rootDir, 'app-artifacts');
+  const appDeploymentsDir = path.join(rootDir, 'app-deployments');
+  const appVolumesDir = path.join(rootDir, 'app-volumes');
+  const key = 'releases/demo/0.0.1.tar.gz';
+  const archivePath = path.join(artifactDir, key);
+  await mkdir(path.dirname(archivePath), { recursive: true });
+  await createTar({ cwd: sourceDir, file: archivePath, gzip: true }, ['.']);
+  const checksum = createHash('sha256')
+    .update(await readFile(archivePath))
+    .digest('hex');
+  const configPath = path.join(rootDir, 'host.json');
+  await writeFile(
+    configPath,
+    JSON.stringify({
+      host: {
+        mode: 'managed',
+        server: { host: '127.0.0.1', port: 13010 },
+        artifact: {
+          driver: 'fs',
+          location: artifactDir,
+          visibility: 'private',
+        },
+        appDeploymentsDir,
+        appVolumesDir,
+      },
+    }),
+  );
+  return {
+    appDeploymentsDir,
+    appVolumesDir,
+    configPath,
+    artifact: { key, appId: 'demo', version: '0.0.1', checksum },
+  };
+}
+
+async function waitUntil(
+  predicate: () => boolean,
+  timeoutMs: number,
+): Promise<void> {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error(`Condition was not met within ${timeoutMs}ms`);
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+  }
+}

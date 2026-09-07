@@ -79,7 +79,7 @@ export function resolveAppScopeEnv(
   overrides: EnvMap = {},
 ): EnvMap {
   return {
-    ...(scope.env ?? process.env),
+    ...(scope.env ?? (scope.mode === 'standalone' ? process.env : {})),
     ...overrides,
   };
 }

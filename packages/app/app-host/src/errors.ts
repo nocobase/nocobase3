@@ -22,6 +22,22 @@ export class AppRegistryError extends Error {
   }
 }
 
+export function rootErrorMessage(error: unknown): string {
+  let current = error;
+  const visited = new Set<unknown>();
+
+  while (
+    current instanceof Error &&
+    current.cause !== undefined &&
+    !visited.has(current)
+  ) {
+    visited.add(current);
+    current = current.cause;
+  }
+
+  return current instanceof Error ? current.message : String(current);
+}
+
 export class InvalidAppIdError extends AppRegistryError {
   constructor(id: string) {
     super(

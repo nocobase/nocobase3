@@ -7,55 +7,37 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type {
-  AppWebSocketAcceptResult,
-  AppWebSocketHandler,
-} from '@nocobase/app-server/websocket';
-import type {
-  AppDisposer as ServerAppDisposer,
-  AppScope as ServerAppScope,
-} from '@nocobase/app-server/runtime';
-
 import type { AppState } from './events.ts';
+import type { AppInstance } from '@nocobase/app-server/runtime';
+import type { AppConfigReloadResult } from '@nocobase/app-server/config';
+export type { AppInstance } from '@nocobase/app-server/runtime';
+import type { AppWebSocketAcceptResult } from '@nocobase/app-websocket';
 
-export type {
-  AppWebSocket,
-  AppWebSocketAcceptResult,
-  AppWebSocketCloseEvent,
-  AppWebSocketErrorEvent,
-  AppWebSocketEvents,
-  AppWebSocketHandler,
-  AppWebSocketMessageData,
-  AppWebSocketMessageEvent,
-  AppWebSocketOpenEvent,
-  AppWebSocketReadyState,
-  AppWebSocketSendOptions,
-} from '@nocobase/app-server/websocket';
+export type AppDisposer = () => void | Promise<void>;
 
-export type AppDisposer = ServerAppDisposer;
-
-export interface FetchApp {
-  fetch(
-    request: Request,
-    env?: unknown,
-    executionCtx?: unknown,
-  ): Response | Promise<Response>;
-  websocket?: AppWebSocketHandler;
-}
-
-export interface AppScope extends ServerAppScope {
+export interface AppScope {
+  readonly id: string;
+  readonly appName?: string;
   readonly version: number;
+  readonly basePath: string;
   readonly assetsBasePath: string;
+  readonly clientDir?: string;
   /**
    * Deprecated. App servers should define their own API routes under the
    * app-local path they receive, for example `/api/*`.
    */
   readonly apiBasePath: string;
+  readonly rootDir?: string;
+  readonly dataDir?: string;
+  readonly configPath?: string;
   readonly signal: AbortSignal;
+  registerDisposer(name: string, dispose: AppDisposer): void;
   onBeforeDestroy(handler: () => void | Promise<void>): () => void;
 }
 
-export type AppFactory = (scope: AppScope) => FetchApp | Promise<FetchApp>;
+export type AppFactory = (
+  scope: AppScope,
+) => AppInstance | Promise<AppInstance>;
 
 export type AppBackendKind =
   'in-process' | 'worker' | 'process' | 'external-service';
@@ -68,7 +50,7 @@ export interface AppCodeReference {
   version: string;
   rootDir: string;
   entrypoint: string;
-  checksum?: string;
+  fingerprint?: string;
 }
 
 export interface AppClientReference {
@@ -191,6 +173,7 @@ export interface AppSnapshot {
 }
 
 export interface ActiveAppHandle {
+  reloadConfig(): Promise<AppConfigReloadResult>;
   readonly id: string;
   readonly version: number;
   readonly basePath: string;
@@ -225,17 +208,29 @@ export interface AppActivationBackend {
 export interface DeployAppOptions {
   version?: string;
   reason?: string;
-  strategy?: 'restart' | 'blue-green';
+  strategy?: 'restart';
   destroyTimeoutMs?: number;
   waitForReady?: boolean;
 }
 
 export interface AppDeploymentResult {
   id: string;
-  strategy: 'restart' | 'blue-green';
+  strategy: 'restart';
   previousVersion: string | null;
   desiredVersion: string;
   activeVersion: string;
   changed: boolean;
   app: AppSnapshot;
+}
+
+export interface ReplaceAppDefinitionOptions {
+  activate?: boolean;
+  reason?: string;
+  destroyTimeoutMs?: number;
+}
+
+export interface ReplaceAppDefinitionResult {
+  definition: AppDefinition;
+  app: AppSnapshot | null;
+  changed: boolean;
 }
