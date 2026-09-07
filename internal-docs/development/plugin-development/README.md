@@ -18,24 +18,25 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 
 ## 按任务选读
 
-| 任务                               | 首先读取                                | 按需深入                                                                |
-| ---------------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
-| 创建并接入新插件                   | [快速开始](./quick-start.md)            | [插件结构](./plugin-structure.md)、[插件注册](./plugin-registration.md) |
-| 实现完整业务插件                   | [开发工作流](./development-workflow.md) | 按 capability 进入对应模块                                              |
-| 声明插件能力或 package contract    | [插件声明](./plugin-declaration.md)     | [公共契约](./public-contracts.md)                                       |
-| 修改数据库结构                     | [Database 模块选择](./database.md)      | [Migrations](./database-migrations.md)                                  |
-| 写入必要初始数据                   | [Database 模块选择](./database.md)      | [Seeds](./database-seeds.md)                                            |
-| 添加 Server Service                | [Server 模块选择](./server.md)          | [Services、Tokens 与 Providers](./server-services-and-providers.md)     |
-| 添加 HTTP API、callback 或 webhook | [Route 插件开发](./routes.md)           | [Server Routes 示例](./server-routes-examples.md)                       |
-| 添加后台任务                       | [Server 模块选择](./server.md)          | [Jobs](./server-jobs.md)                                                |
-| 提供 React 组件                    | [Client 模块选择](./client.md)          | [Components](./client-components.md)                                    |
-| 添加 App 或 Settings 页面          | [Route 插件开发](./routes.md)           | [Client Routes 示例](./client-routes-examples.md)                       |
-| 共享 React Context                 | [Client 模块选择](./client.md)          | [React Providers](./client-react-providers.md)                          |
-| 添加 Client Service 或启动初始化   | [Client 模块选择](./client.md)          | [Client ServiceProviders](./client-service-providers.md)                |
-| 添加 Client 或 Server 翻译         | [Plugin I18n](./i18n.md)                | 页面内的 Advanced scenarios                                             |
-| 交付 App-owned 可编辑 Client 源码  | [Registry 模块选择](./registry.md)      | [编写 item](./registry-authoring.md)、[交付](./registry-delivery.md)    |
-| 描述插件提供给 App Agent 的能力    | [Plugin Skills](./skills.md)            | [测试与验证](./testing.md)                                              |
-| 验证或诊断插件                     | [测试与验证](./testing.md)              | 对应模块的行为测试与 source of truth                                    |
+| 任务                               | 首先读取                                   | 按需深入                                                                |
+| ---------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| 创建并接入新插件                   | [快速开始](./quick-start.md)               | [插件结构](./plugin-structure.md)、[插件注册](./plugin-registration.md) |
+| 实现完整业务插件                   | [开发工作流](./development-workflow.md)    | 按 capability 进入对应模块                                              |
+| 声明插件能力或 package contract    | [插件声明](./plugin-declaration.md)        | [公共契约](./public-contracts.md)                                       |
+| 修改数据库结构                     | [Database 模块选择](./database.md)         | [Migrations](./database-migrations.md)                                  |
+| 写入必要初始数据                   | [Database 模块选择](./database.md)         | [Seeds](./database-seeds.md)                                            |
+| 添加 Server Service                | [Server 模块选择](./server.md)             | [Services、Tokens 与 Providers](./server-services-and-providers.md)     |
+| 添加 HTTP API、callback 或 webhook | [Route 插件开发](./routes.md)              | [Server Routes 示例](./server-routes-examples.md)                       |
+| 暴露 Repository API 并从前端调用   | [Repository API 快速开始](./repository.md) | [Route 插件开发](./routes.md)                                           |
+| 添加后台任务                       | [Server 模块选择](./server.md)             | [Jobs](./server-jobs.md)                                                |
+| 提供 React 组件                    | [Client 模块选择](./client.md)             | [Components](./client-components.md)                                    |
+| 添加 App 或 Settings 页面          | [Route 插件开发](./routes.md)              | [Client Routes 示例](./client-routes-examples.md)                       |
+| 共享 React Context                 | [Client 模块选择](./client.md)             | [React Providers](./client-react-providers.md)                          |
+| 添加 Client Service 或启动初始化   | [Client 模块选择](./client.md)             | [Client ServiceProviders](./client-service-providers.md)                |
+| 添加 Client 或 Server 翻译         | [Plugin I18n](./i18n.md)                   | 页面内的 Advanced scenarios                                             |
+| 交付 App-owned 可编辑 Client 源码  | [Registry 模块选择](./registry.md)         | [编写 item](./registry-authoring.md)、[交付](./registry-delivery.md)    |
+| 描述插件提供给 App Agent 的能力    | [Plugin Skills](./skills.md)               | [测试与验证](./testing.md)                                              |
+| 验证或诊断插件                     | [测试与验证](./testing.md)                 | 对应模块的行为测试与 source of truth                                    |
 
 ## 核心工作流
 
@@ -58,6 +59,7 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 - [Server 模块选择](./server.md)
 - [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md)
 - [Server Routes 示例](./server-routes-examples.md)
+- [Repository API 快速开始](./repository.md)
 - [Jobs](./server-jobs.md)
 
 深入参考：
