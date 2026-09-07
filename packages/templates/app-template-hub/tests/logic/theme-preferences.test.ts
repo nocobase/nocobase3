@@ -1,10 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { themePresets } from '../../client/theme/theme-presets';
 import {
   initializeTheme,
   themeStorageKeys,
 } from '../../client/theme/theme-preferences';
 
 describe('application appearance storage', () => {
+  it('restores Default when the saved Ant Design preset is removed', () => {
+    const keys = themeStorageKeys('/crm/');
+    localStorage.setItem(keys.preset, 'ant-design');
+    localStorage.setItem(keys.mode, 'light');
+    initializeTheme(
+      '/crm/',
+      themePresets.map(({ id }) => id),
+    );
+    expect(document.documentElement.dataset.theme).toBe('default');
+    expect(document.documentElement).toHaveClass('light');
+  });
   afterEach(() => vi.unstubAllGlobals());
   beforeEach(() => {
     localStorage.clear();

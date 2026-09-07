@@ -10,38 +10,21 @@ import {
 } from '../../client/theme/index.ts';
 
 describe('app client theme', () => {
-  it('selects and restores Ant Design independently of color mode', async () => {
-    const view = render(
-      <AppThemeProvider>
-        <ThemeSettings />
-      </AppThemeProvider>,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Ant-design' }));
-    expect(document.documentElement).toHaveAttribute(
-      'data-theme',
-      'ant-design',
-    );
-    expect(document.documentElement).toHaveClass('dark');
-    expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe(
-      'ant-design',
-    );
-    await userEvent.click(screen.getByRole('radio', { name: 'Light' }));
-    view.unmount();
+  it('falls back from the removed Ant Design preset without changing mode', async () => {
+    localStorage.setItem('nocobase:crm:theme:preset', 'ant-design');
+    localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
     render(
       <AppThemeProvider>
         <ThemeSettings />
       </AppThemeProvider>,
     );
-    await waitFor(() => {
-      expect(document.documentElement).toHaveAttribute(
-        'data-theme',
-        'ant-design',
-      );
-      expect(document.documentElement).toHaveClass('light');
-    });
     await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    expect(screen.getByRole('radio', { name: 'Ant-design' })).toBeChecked();
+    expect(
+      screen.queryByRole('radio', { name: 'Ant-design' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Default' })).toBeChecked();
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveClass('light');
   });
   it('omits Ocean and falls back from its saved ID to Default', async () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'ocean');
