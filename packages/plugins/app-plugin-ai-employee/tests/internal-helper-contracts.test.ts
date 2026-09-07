@@ -58,5 +58,12 @@ describe('explicit internal helper contracts', () => {
     expect(source).not.toContain('ctx.requestExecution');
     expect(source).not.toContain('ctx.throw');
     expect(source).not.toContain('setupSSEHeaders');
+
+    const routeSource = readFileSync(
+      new URL('../server/route/ai-conversations.ts', import.meta.url),
+      'utf8',
+    );
+    expect(routeSource).not.toContain('createRequestRuntime');
+    expect(routeSource).not.toMatch(/conversationService\.\w+\(\{\s*ctx/);
   });
 });
