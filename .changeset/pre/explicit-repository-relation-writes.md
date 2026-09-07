@@ -1,8 +1,8 @@
 ---
-"@nocobase/db": minor
-"@nocobase/repository-input": patch
-"@nocobase/app-server": minor
-"@nocobase/app-plugin-repository-example": patch
+'@nocobase/db': minor
+'@nocobase/repository-input': patch
+'@nocobase/app-server': minor
+'@nocobase/app-plugin-repository-example': patch
 ---
 
 Add server-owned writePolicy for single and bulk creates/updates, root upserts and

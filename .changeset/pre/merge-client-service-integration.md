@@ -1,12 +1,12 @@
 ---
-"@nocobase/app-template-default": patch
-"@nocobase/app-template-hub": patch
-"@nocobase/db": patch
-"@nocobase/app-plugin-ai-employee": patch
-"@nocobase/app-client": patch
-"@nocobase/realtime": patch
-"@nocobase/app-plugin-file": patch
-"@nocobase/app-plugin-notification-in-app": patch
+'@nocobase/app-template-default': patch
+'@nocobase/app-template-hub': patch
+'@nocobase/db': patch
+'@nocobase/app-plugin-ai-employee': patch
+'@nocobase/app-client': patch
+'@nocobase/realtime': patch
+'@nocobase/app-plugin-file': patch
+'@nocobase/app-plugin-notification-in-app': patch
 ---
 
 Preserve configured API and realtime endpoints after splitting the client services. Integrate file inventory and the plugin-owned inbox with the shared API and realtime clients, including reconnection refresh and isolated event listeners.
