@@ -45,10 +45,10 @@ ID 可选是指按业务场景选择是否声明 ID，不要求所有路由都�
 | 新增订单 | `/orders/create` |
 | 订单详情 | `/orders/detail/:orderId` |
 | 编辑订单 | `/orders/edit/:orderId` |
-| 订单详情中的商品详情 | `/orders/detail/:orderId/itemDetail/:itemId` |
-| 订单详情中的客户详情 | `/orders/detail/:orderId/customerDetail/:customerId` |
+| 订单详情中的商品详情 | `/orders/detail/:orderId/item-detail/:itemId` |
+| 订单详情中的客户详情 | `/orders/detail/:orderId/customer-detail/:customerId` |
 
-`dialogPathName` 使用表达弹窗业务含义的名称，多词采用 lowerCamelCase，例如 `itemDetail`、`customerDetail`。每个弹窗追加一个名称段，需要记录时再追加一个参数段，不拆成 `items/detail` 等额外层级。
+`dialogPathName` 使用表达弹窗业务含义的名称，使用小写字母，多词用连字符分隔（kebab-case），例如 `item-detail`、`customer-detail`。每个弹窗追加一个名称段，需要记录时再追加一个参数段，不拆成 `items/detail` 等额外层级。路由声明与所有导航入口保持相同的拼写和大小写，不依赖路由器的大小写宽容匹配。
 
 参数名表达记录含义。同一条嵌套路由链使用不同参数名，避免多个 `:id` 相互覆盖。相同实体出现多层时，也要通过角色区分参数名。
 
@@ -60,8 +60,8 @@ ID 可选是指按业务场景选择是否声明 ID，不要求所有路由都�
 /orders
 ├── create
 └── detail/:orderId
-    ├── itemDetail/:itemId
-    └── customerDetail/:customerId
+    ├── item-detail/:itemId
+    └── customer-detail/:customerId
 ```
 
 在订单详情中打开商品详情时，订单页面和订单详情保持挂载，商品详情显示在最上层。从订单页面直接打开商品详情，则应声明在订单页面下；不能因为复用同一个组件就使用错误的父路由。
@@ -136,8 +136,8 @@ ID 可选是指按业务场景选择是否声明 ID，不要求所有路由都�
 
 ```text
 /orders/detail/:orderId
-/orders/detail/:orderId/itemDetail/:itemId
-/orders/detail/:orderId/customerDetail/:customerId
+/orders/detail/:orderId/item-detail/:itemId
+/orders/detail/:orderId/customer-detail/:customerId
 ```
 
 插件包名用于路由身份和所有权，不强行加入 URL。不同插件的最终路径冲突仍应被检测，不能因为来自不同包就允许重复路径。页面组件继续通过 `componentLoader()` 懒加载，沿用插件自己的翻译命名空间。
@@ -208,12 +208,12 @@ defineAppRoutes([
         children: [
           {
             name: 'orderItemDetail',
-            path: 'itemDetail/:itemId',
+            path: 'item-detail/:itemId',
             componentLoader: () => import('./pages/orders/dialogs/item-detail.js'),
           },
           {
             name: 'orderCustomerDetail',
-            path: 'customerDetail/:customerId',
+            path: 'customer-detail/:customerId',
             componentLoader: () => import('./pages/orders/dialogs/customer-detail.js'),
           },
         ],
@@ -313,7 +313,7 @@ defineAppRoutes([
 5. 使用路由导航打开，使用统一关闭入口返回父路由。
 6. 添加翻译和针对性测试，验证直达、刷新、关闭及嵌套。
 
-每个示例必须给出完整文件路径、可用导入、完整组件和对应路由声明。至少覆盖无 ID 的新增、带 ID 的详情或编辑，以及订单详情中的商品详情、客户详情。明确 URL 命名和源码文件命名分别遵循各自约定，不要求文件名也使用 lowerCamelCase。
+每个示例必须给出完整文件路径、可用导入、完整组件和对应路由声明。至少覆盖无 ID 的新增、带 ID 的详情或编辑，以及订单详情中的商品详情、客户详情。明确 URL 命名和源码文件命名分别遵循各自约定，URL 静态名称段使用 kebab-case；动态参数名和 TypeScript 标识符仍沿用 lowerCamelCase，例如 `:orderId`、`:itemId`，不改为连字符形式。源码文件名沿用项目约定。
 
 只有在 API 已实现并通过验证后，才将拟议代码写成 Skills 中的可执行指令。两套模板提供相同框架规范，各自保留产品内容和身份。
 
