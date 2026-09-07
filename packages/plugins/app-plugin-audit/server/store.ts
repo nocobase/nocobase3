@@ -131,7 +131,7 @@ export class PortableAuditStore implements AuditStore {
     return this.appendWithLimits(event, options);
   }
 
-  /** The bound recorder supplies its captured policy limit; the frozen append contract retains safe defaults. */
+  /** The bound recorder supplies its captured policy limit; direct appends retain safe defaults. */
   async appendWithLimits(
     event: AuditEventDto,
     options: AuditRecordOptions = {},

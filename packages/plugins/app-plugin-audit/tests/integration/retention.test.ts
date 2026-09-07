@@ -81,7 +81,7 @@ async function seed(
       {
         action: 'synthetic.secret.action',
         outcome: 'success',
-        details: { note: 'G12-SYNTHETIC-RAW-CONTENT' },
+        details: { note: 'RETENTION-SYNTHETIC-RAW-CONTENT' },
       },
       {
         scope: {
@@ -175,7 +175,7 @@ for (const dialect of dialects)
           .reduce((n, e) => n + Number(e.details?.deleted), 0),
       ).toBe(7);
       expect(JSON.stringify([summaries, s.diagnostics])).not.toContain(
-        'G12-SYNTHETIC-RAW-CONTENT',
+        'RETENTION-SYNTHETIC-RAW-CONTENT',
       );
       expect(JSON.stringify([summaries, s.diagnostics])).not.toContain(
         'synthetic.secret.action',
@@ -324,12 +324,12 @@ for (const dialect of dialects)
       if (dialect === 'sqlite')
         await auditRaw(
           f.connection,
-          `CREATE TRIGGER "g12_fail" BEFORE INSERT ON "auditEvents" WHEN NEW."producer" = 'audit.retention' BEGIN SELECT RAISE(ABORT, 'G12-SYNTHETIC-SECRET-FAULT'); END`,
+          `CREATE TRIGGER "retention_fail" BEFORE INSERT ON "auditEvents" WHEN NEW."producer" = 'audit.retention' BEGIN SELECT RAISE(ABORT, 'RETENTION-SYNTHETIC-SECRET-FAULT'); END`,
         );
       else
         await auditRaw(
           f.connection,
-          `ALTER TABLE "auditEvents" ADD CONSTRAINT "g12_fail" CHECK ("producer" <> 'audit.retention')`,
+          `ALTER TABLE "auditEvents" ADD CONSTRAINT "retention_fail" CHECK ("producer" <> 'audit.retention')`,
         );
       await expect(s.service.run()).rejects.toMatchObject({
         code: 'AUDIT_WRITE_FAILED',
@@ -338,14 +338,14 @@ for (const dialect of dialects)
       expect(s.service.observe().state).toBe('failed');
       expect(s.health.get().state).toBe('degraded');
       expect(JSON.stringify(s.diagnostics)).not.toContain(
-        'G12-SYNTHETIC-SECRET-FAULT',
+        'RETENTION-SYNTHETIC-SECRET-FAULT',
       );
       if (dialect === 'sqlite')
-        await auditRaw(f.connection, 'DROP TRIGGER "g12_fail"');
+        await auditRaw(f.connection, 'DROP TRIGGER "retention_fail"');
       else
         await auditRaw(
           f.connection,
-          'ALTER TABLE "auditEvents" DROP CONSTRAINT "g12_fail"',
+          'ALTER TABLE "auditEvents" DROP CONSTRAINT "retention_fail"',
         );
       expect(await s.service.run()).toMatchObject({
         status: 'completed',
@@ -360,12 +360,12 @@ for (const dialect of dialects)
       if (dialect === 'sqlite')
         await auditRaw(
           f.connection,
-          `CREATE TRIGGER "g12_final_fail" BEFORE INSERT ON "auditEvents" WHEN NEW."action" = 'audit.cleanup' BEGIN SELECT RAISE(ABORT, 'G12-FINAL-FAULT'); END`,
+          `CREATE TRIGGER "retention_final_fail" BEFORE INSERT ON "auditEvents" WHEN NEW."action" = 'audit.cleanup' BEGIN SELECT RAISE(ABORT, 'RETENTION-FINAL-FAULT'); END`,
         );
       else
         await auditRaw(
           f.connection,
-          `ALTER TABLE "auditEvents" ADD CONSTRAINT "g12_final_fail" CHECK ("action" <> 'audit.cleanup')`,
+          `ALTER TABLE "auditEvents" ADD CONSTRAINT "retention_final_fail" CHECK ("action" <> 'audit.cleanup')`,
         );
       await expect(s.service.run()).rejects.toMatchObject({
         code: 'AUDIT_WRITE_FAILED',
@@ -460,7 +460,7 @@ for (const dialect of dialects)
       const s = await setup(f);
       await auditRaw(
         f.connection,
-        'ALTER TABLE "auditEvents" RENAME TO "g12_unavailable_events"',
+        'ALTER TABLE "auditEvents" RENAME TO "retention_unavailable_events"',
       );
       await expect(s.service.run()).rejects.toThrow();
       expect(s.service.observe().state).toBe('failed');

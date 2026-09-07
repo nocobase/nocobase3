@@ -15,7 +15,9 @@ describeIntegrationDatabases(
   (context) => {
     if (context.spec.dialect === 'sqlite') {
       it('quarantines a physically closed SQLite connection when commit and rollback both fail', async () => {
-        const directory = await mkdtemp(join(tmpdir(), 'nocobase-g03-commit-'));
+        const directory = await mkdtemp(
+          join(tmpdir(), 'nocobase-managed-write-commit-'),
+        );
         let validations = 0;
         const manager = createDatabaseManager({
           connections: {

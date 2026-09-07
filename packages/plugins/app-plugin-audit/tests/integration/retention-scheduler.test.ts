@@ -54,23 +54,23 @@ describe('recurring retention', () => {
         await f.f.store.query(f.f.scope, { store: 'main', pageSize: 100 })
       ).items.map((event) => event.id);
     try {
-      await expired('g20-first-round');
+      await expired('composition-first-round');
       scheduler.start();
       scheduler.start();
       await tick(1000, 1);
-      expect(await ids()).not.toContain('g20-first-round');
-      await expired('g20-second-round');
+      expect(await ids()).not.toContain('composition-first-round');
+      await expired('composition-second-round');
       await tick(86400000, 2);
-      expect(await ids()).not.toContain('g20-second-round');
+      expect(await ids()).not.toContain('composition-second-round');
       let policy = await f.settings.get(f.f.scope);
       await f.settings.update(f.f.scope, {
         expectedRevision: policy.revision,
         settings: { ...policy, retentionDays: null },
         confirmRetentionReduction: false,
       });
-      await expired('g20-retained');
+      await expired('composition-retained');
       await tick(86400000, 3);
-      expect(await ids()).toContain('g20-retained');
+      expect(await ids()).toContain('composition-retained');
       expect(service.observe().state).toBe('no-auto-delete');
       policy = await f.settings.get(f.f.scope);
       await f.settings.update(f.f.scope, {
@@ -79,7 +79,7 @@ describe('recurring retention', () => {
         confirmRetentionReduction: false,
       });
       await tick(86400000, 4);
-      expect(await ids()).toContain('g20-retained');
+      expect(await ids()).toContain('composition-retained');
       expect(service.observe().state).toBe('disabled');
       await scheduler.dispose();
       await vi.advanceTimersByTimeAsync(86400000 * 2);

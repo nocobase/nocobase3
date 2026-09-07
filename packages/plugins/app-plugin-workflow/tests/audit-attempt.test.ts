@@ -24,7 +24,7 @@ for (const dialect of auditDialects)
         });
         let calls = 0;
         engine.registerInstruction(
-          defineTestInstruction('g17-independent-wait', async () => {
+          defineTestInstruction('workflow-independent-wait', async () => {
             calls += 1;
             if (calls === 2) {
               entered();
@@ -42,8 +42,8 @@ for (const dialect of auditDialects)
         let second: Promise<unknown> | undefined;
         try {
           const workflow = await createTestWorkflow(f.database, {
-            key: 'g17-independent-attempt',
-            nodes: [{ key: 'wait', type: 'g17-independent-wait' }],
+            key: 'workflow-independent-attempt',
+            nodes: [{ key: 'wait', type: 'workflow-independent-wait' }],
           });
           await engine.trigger(workflow, {});
           const row = await f.database

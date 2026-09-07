@@ -35,7 +35,7 @@ import { waitFor } from './helpers.js';
 for (const dialect of auditDialects)
   describe('workflow audit HTTP ' + dialect, () => {
     it('uses the production route and database queue for 202 then a correlated terminal fact', async () => {
-      const root = await mkdtemp(join(tmpdir(), 'audit-g17-http-'));
+      const root = await mkdtemp(join(tmpdir(), 'audit-workflow-http-'));
       let queue!: NocoBaseQueueManager;
       let service!: WorkflowService;
       let resumeWorker!: () => Promise<void>;
@@ -83,16 +83,16 @@ for (const dialect of auditDialects)
           .connection()
           .client<import('knex').Knex>();
         const schema = new QueueSchemaService(client);
-        await schema.createJobsTable('g17_jobs');
-        await schema.createSchedulesTable('g17_schedules');
+        await schema.createJobsTable('workflow_jobs');
+        await schema.createSchedulesTable('workflow_schedules');
         queue = createQueueManager(
           {
             default: 'database',
             connections: {
               database: {
                 driver: 'database',
-                table: 'g17_jobs',
-                schedulesTable: 'g17_schedules',
+                table: 'workflow_jobs',
+                schedulesTable: 'workflow_schedules',
               },
             },
             worker: { concurrency: 1, idleDelay: '10ms' },
@@ -116,7 +116,7 @@ for (const dialect of auditDialects)
         service = new WorkflowService({
           database,
           queue,
-          queueName: 'g17-http',
+          queueName: 'workflow-http',
           distRoot: join(root, 'dist'),
           artifactDisk: {
             driver: 'fs',
@@ -128,7 +128,7 @@ for (const dialect of auditDialects)
         restoreGate = () => gate.mockRestore();
         resumeWorker = async () => {
           gate.mockRestore();
-          workerLoop = pausedWorkers[0].start(['g17-http']);
+          workerLoop = pausedWorkers[0].start(['workflow-http']);
         };
         app.container.instance(internalWorkflowServiceToken, service);
         const i18n = await createWorkflowI18nRuntime(locales);
@@ -189,7 +189,7 @@ for (const dialect of auditDialects)
             email: 'workflow@example.com',
             username: 'workflow',
             name: 'Workflow',
-            password: 'G17_PASSWORD_SENTINEL_xxxxxxxxx',
+            password: 'WORKFLOW_PASSWORD_SENTINEL_xxxxxxxxx',
           }),
         );
         expect(signup.status).toBe(200);
@@ -201,7 +201,7 @@ for (const dialect of auditDialects)
         ).toBe(401);
         const accepted = await a.request(
           path + '?enqueue=true',
-          jsonRequest({ input: { password: 'G17_INPUT_SECRET' } }, cookie),
+          jsonRequest({ input: { password: 'WORKFLOW_INPUT_SECRET' } }, cookie),
         );
         expect(accepted.status).toBe(202);
         const payload = (await accepted.json()) as {
@@ -218,7 +218,9 @@ for (const dialect of auditDialects)
         expect(
           before.filter((event) => event.action === 'workflow.completed'),
         ).toHaveLength(0);
-        const queued = await client('g17_jobs').count({ count: '*' }).first();
+        const queued = await client('workflow_jobs')
+          .count({ count: '*' })
+          .first();
         expect(Number(queued?.count)).toBe(1);
         await resumeWorker();
         await waitFor(async () =>
@@ -237,7 +239,7 @@ for (const dialect of auditDialects)
         expect(terminal?.actor.type).toBe('workflow');
         expect(terminal?.initiator?.type).toBe('user');
         expect(JSON.stringify(await a.events())).not.toContain(
-          'G17_INPUT_SECRET',
+          'WORKFLOW_INPUT_SECRET',
         );
         expect(
           (

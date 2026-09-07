@@ -17,13 +17,13 @@ import {
   runCouplingCleanup,
 } from '../helpers/system-teardown.js';
 
-const secret = 'G22_SYNTHETIC_SECRET_MUST_NOT_BE_CAPTURED';
+const secret = 'TRANSACTION_SYNTHETIC_SECRET_MUST_NOT_BE_CAPTURED';
 const insert = async (
   connection: DatabaseConnection,
   id: string,
 ): Promise<void> => {
   await connection.query
-    .insertInto('g22_items')
+    .insertInto('transaction_items')
     .values({ id, value: secret })
     .execute();
 };
@@ -53,7 +53,7 @@ async function facts(
     store: 'main',
     appId: 'main',
     operationId: request.operationId,
-    target: { dataSource: 'main', resource: 'g22_items' },
+    target: { dataSource: 'main', resource: 'transaction_items' },
     actor: request.actor,
   });
   expect(
@@ -68,7 +68,7 @@ async function facts(
 
 // No concurrent suites: each case exclusively owns and drops its random databases.
 describe.each(dialects)('production system coupling %s', (dialect) => {
-  it('C01 outer failure rolls back provisional success even when onError returns 200', async () => {
+  it('outer failure rolls back provisional success even when onError returns 200', async () => {
     const transactions = new AsyncLocalStorage<DatabaseConnection>();
     let provisionalStatus = 0;
     let pendingId = '';
@@ -77,14 +77,14 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       (composition) => {
         const router = new Hono();
         router.post(
-          '/g22/late',
-          composition.service.http({ action: 'g22.late' }),
+          '/transactions/late',
+          composition.service.http({ action: 'transactions.late' }),
           async (c) => {
             const connection = transactions.getStore();
             if (!connection) throw new Error('Expected outer transaction.');
             await insert(connection, 'late');
             const receipt = await composition.runtime.recorder.record(
-              { action: 'g22.pending', outcome: 'success' },
+              { action: 'transactions.pending', outcome: 'success' },
               { transaction: handle(connection) },
             );
             expect(receipt.state).toBe('pending-commit');
@@ -97,12 +97,12 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       (app, main) =>
         app.addHttpMiddleware(
           defineHttpMiddleware({
-            name: 'g22-outer-transaction',
+            name: 'transactions-outer-transaction',
             register(router) {
               router.onError((_error, c) =>
                 c.text('safe final transaction failure', 200),
               );
-              router.use('/api/g22/late', async (c, next) => {
+              router.use('/api/transactions/late', async (c, next) => {
                 await main.transaction((connection) =>
                   transactions.run(connection, async () => {
                     await next();
@@ -130,7 +130,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       ).toBe(false);
       const observation = await s.events('observation');
       expect(
-        only(observation, (event) => event.action === 'g22.late'),
+        only(observation, (event) => event.action === 'transactions.late'),
       ).toMatchObject({
         kind: 'request',
         outcome: 'failed',
@@ -144,14 +144,14 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
     }
   });
 
-  it('C02 real TCP client timeout precedes database commit and server final response', async () => {
+  it('real TCP client timeout precedes database commit and server final response', async () => {
     const entered = gate();
     const release = gate();
     const s = await createCouplingFixture(dialect, (composition, main) => {
       const router = new Hono();
       router.get(
-        '/g22/timeout',
-        composition.service.http({ action: 'g22.timeout' }),
+        '/transactions/timeout',
+        composition.service.http({ action: 'transactions.timeout' }),
         async (c) => {
           entered.release();
           await release.promise;
@@ -169,7 +169,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
     let originalFailure: unknown;
     try {
       server = await serveCouplingApp(s.app);
-      client = fetch(server.url + '/api/g22/timeout', {
+      client = fetch(server.url + '/api/transactions/timeout', {
         signal: controller.signal,
       }).then(
         (response) => ({ response }),
@@ -194,7 +194,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       release.release();
       expect(await bounded(server.completed)).toBe(200);
       expect(await s.rows()).toEqual([{ id: 'timeout', value: secret }]);
-      const { request } = await facts(s, 'g22.timeout');
+      const { request } = await facts(s, 'transactions.timeout');
       // The collector observes App response completion, not TCP delivery receipts.
       expect(request).toMatchObject({
         outcome: 'success',
@@ -223,14 +223,14 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
     }
   });
 
-  it('C04 catching a physical summary append failure cannot commit the outer HTTP transaction', async () => {
+  it('catching a physical summary append failure cannot commit the outer HTTP transaction', async () => {
     const caught: unknown[] = [];
     const s = await createCouplingFixture(dialect, (composition, main) => {
       const router = new Hono();
       router.onError((_error, c) => c.text('rolled back', 500));
       router.post(
-        '/g22/rollback/:id',
-        composition.service.http({ action: 'g22.rollback' }),
+        '/transactions/rollback/:id',
+        composition.service.http({ action: 'transactions.rollback' }),
         async (c) => {
           await main.transaction(async (connection) => {
             try {
@@ -249,7 +249,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
     try {
       await auditRaw(
         s.main,
-        'ALTER TABLE "auditEvents" RENAME TO "g22_unavailable_events"',
+        'ALTER TABLE "auditEvents" RENAME TO "transactions_unavailable_events"',
       );
       broken = true;
       const response = await s.request('/rollback/failed', { method: 'POST' });
@@ -259,7 +259,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       expect(await s.rows()).toEqual([]);
       const failed = only(
         await s.events('observation'),
-        (event) => event.action === 'g22.rollback',
+        (event) => event.action === 'transactions.rollback',
       );
       expect(failed).toMatchObject({
         outcome: 'failed',
@@ -267,7 +267,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       });
       await auditRaw(
         s.main,
-        'ALTER TABLE "g22_unavailable_events" RENAME TO "auditEvents"',
+        'ALTER TABLE "transactions_unavailable_events" RENAME TO "auditEvents"',
       );
       broken = false;
       expect(
@@ -282,7 +282,8 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       const successful = only(
         await s.events('observation'),
         (event) =>
-          event.action === 'g22.rollback' && event.outcome === 'success',
+          event.action === 'transactions.rollback' &&
+          event.outcome === 'success',
       );
       const summary = only(
         await s.events(),
@@ -298,7 +299,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
         if (broken)
           await auditRaw(
             s.main,
-            'ALTER TABLE "g22_unavailable_events" RENAME TO "auditEvents"',
+            'ALTER TABLE "transactions_unavailable_events" RENAME TO "auditEvents"',
           );
       } finally {
         await s.close();
@@ -321,7 +322,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
           : c.text('unexpected failure', 500),
       );
       router.post(
-        '/g22/conflict/:id',
+        '/transactions/conflict/:id',
         composition.service.http({ action: 'domain.conflict' }),
         async (c) => {
           const id = c.req.param('id');
@@ -384,14 +385,14 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
     }
   });
 
-  it('C09 handler failure after an independent managed commit retains business and database success with request failed', async () => {
+  it('handler failure after an independent managed commit retains business and database success with request failed', async () => {
     let executions = 0;
     const s = await createCouplingFixture(dialect, (composition, main) => {
       const router = new Hono();
       router.onError((_error, c) => c.text('safe post-commit failure', 500));
       router.post(
-        '/g22/post-commit',
-        composition.service.http({ action: 'g22.post-commit' }),
+        '/transactions/post-commit',
+        composition.service.http({ action: 'transactions.post-commit' }),
         async () => {
           executions++;
           await insert(main, 'committed-before-error');
@@ -408,7 +409,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
         { id: 'committed-before-error', value: secret },
       ]);
       expect(executions).toBe(1);
-      const { request, database } = await facts(s, 'g22.post-commit');
+      const { request, database } = await facts(s, 'transactions.post-commit');
       expect(request).toMatchObject({
         kind: 'request',
         outcome: 'failed',
@@ -427,7 +428,7 @@ describe.each(dialects)('production system coupling %s', (dialect) => {
       ).toHaveLength(1);
       expect(
         (await s.events('observation')).filter(
-          (event) => event.action === 'g22.post-commit',
+          (event) => event.action === 'transactions.post-commit',
         ),
       ).toHaveLength(1);
     } finally {

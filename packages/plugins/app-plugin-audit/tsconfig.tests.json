@@ -9,6 +9,7 @@
     "client/**/*.ts",
     "tests/**/*.ts",
     "client/**/*.tsx",
-    "tests/**/*.tsx"
+    "tests/**/*.tsx",
+    "skills/*/examples/**/*.ts"
   ]
 }

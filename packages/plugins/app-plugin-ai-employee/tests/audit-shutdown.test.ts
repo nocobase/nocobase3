@@ -15,7 +15,12 @@ function bound(bridge: Parameters<typeof bindAIRequestAudit>[1]): object {
   const context = {},
     conversation = {};
   bindAIRequestAudit(context, bridge);
-  bindAIConversationAudit(conversation, context, 'g20-agent', 'g20-session');
+  bindAIConversationAudit(
+    conversation,
+    context,
+    'composition-agent',
+    'composition-session',
+  );
   return conversation;
 }
 describe.each(dialects)('AI shutdown %s', (dialect) => {

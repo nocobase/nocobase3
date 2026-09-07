@@ -44,10 +44,10 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
       const signup = await app.request(
         '/auth/sign-up/email',
         jsonRequest({
-          email: 'admin@g15.example',
-          username: 'g15admin',
+          email: 'admin@auth.example',
+          username: 'authadmin',
           name: 'Admin',
-          password: 'G15_SECRET_PASSWORD_XXXXXXXX',
+          password: 'AUTH_SECRET_PASSWORD_XXXXXXXX',
         }),
       );
       expect(signup.status).toBe(200);
@@ -75,7 +75,7 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
       expect(
         (
           await call('/permission-sets', 'POST', {
-            key: 'G15_DENIED_TARGET',
+            key: 'AUTH_DENIED_TARGET',
             grants: [],
           })
         ).status,
@@ -89,10 +89,10 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
         ),
       ).toEqual([]);
       expect(
-        await authz.permissionSets.get('G15_DENIED_TARGET'),
+        await authz.permissionSets.get('AUTH_DENIED_TARGET'),
       ).toBeUndefined();
       await authz.permissionSets.create({
-        key: 'g15-admin',
+        key: 'auth-admin',
         grants: [
           'permission-sets',
           'default-access',
@@ -106,19 +106,19 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
         })),
       });
       await authz.permissionSets.assign({
-        permissionSet: 'g15-admin',
+        permissionSet: 'auth-admin',
         subject: { type: 'user', id: user.id },
       });
       const operations = [
-        ['/permission-sets', 'POST', { key: 'g15-reader', grants: [] }, 201],
+        ['/permission-sets', 'POST', { key: 'auth-reader', grants: [] }, 201],
         [
-          '/permission-sets/g15-reader',
+          '/permission-sets/auth-reader',
           'PUT',
-          { key: 'g15-reader', grants: [], title: 'Reader' },
+          { key: 'auth-reader', grants: [], title: 'Reader' },
           200,
         ],
         [
-          '/permission-sets/g15-reader/assignments',
+          '/permission-sets/auth-reader/assignments',
           'POST',
           { subject: { type: 'user', id: user.id } },
           201,
@@ -139,7 +139,7 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
           '/sharing-rules',
           'POST',
           {
-            key: 'g15-sharing',
+            key: 'auth-sharing',
             resource: { type: 'database.collection', id: 'main.orders' },
             subjects: [{ type: 'user', id: user.id }],
             actions: [
@@ -149,10 +149,10 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
           201,
         ],
         [
-          '/sharing-rules/g15-sharing',
+          '/sharing-rules/auth-sharing',
           'PUT',
           {
-            key: 'g15-sharing',
+            key: 'auth-sharing',
             resource: { type: 'database.collection', id: 'main.orders' },
             subjects: [{ type: 'user', id: user.id }],
             actions: [
@@ -161,12 +161,12 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
           },
           200,
         ],
-        ['/sharing-rules/g15-sharing', 'DELETE', {}, 204],
+        ['/sharing-rules/auth-sharing', 'DELETE', {}, 204],
         [
           '/restriction-rules',
           'POST',
           {
-            key: 'g15-restriction',
+            key: 'auth-restriction',
             resource: { type: 'database.collection', id: 'main.orders' },
             subjects: [{ type: 'user', id: user.id }],
             actions: [{ action: 'read', scope: { type: 'all' } }],
@@ -174,18 +174,18 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
           201,
         ],
         [
-          '/restriction-rules/g15-restriction',
+          '/restriction-rules/auth-restriction',
           'PUT',
           {
-            key: 'g15-restriction',
+            key: 'auth-restriction',
             resource: { type: 'database.collection', id: 'main.orders' },
             subjects: [{ type: 'user', id: user.id }],
             actions: [{ action: 'read', scope: { type: 'all' } }],
           },
           200,
         ],
-        ['/restriction-rules/g15-restriction', 'DELETE', {}, 204],
-        ['/permission-sets/g15-reader', 'DELETE', {}, 204],
+        ['/restriction-rules/auth-restriction', 'DELETE', {}, 204],
+        ['/permission-sets/auth-reader', 'DELETE', {}, 204],
       ] as const;
       for (const [path, method, body, status] of operations) {
         const before = new Set((await app.events()).map((e) => e.id));
@@ -206,10 +206,10 @@ describe.each(dialects)('authorization audit %s', (dialect) => {
       expect(denied).toHaveLength(3);
       expect(denied.every((e) => !e.target && !e.details)).toBe(true);
       expect(JSON.stringify(await app.events())).not.toContain(
-        'G15_DENIED_TARGET',
+        'AUTH_DENIED_TARGET',
       );
       expect(JSON.stringify(await app.events())).not.toContain(
-        'G15_SECRET_PASSWORD',
+        'AUTH_SECRET_PASSWORD',
       );
     } finally {
       await app.close();

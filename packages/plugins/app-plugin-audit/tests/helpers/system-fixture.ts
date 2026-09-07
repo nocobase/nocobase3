@@ -53,7 +53,6 @@ export async function createProductionApp(
   enabled: boolean = true,
   overrides: Partial<AuditConfig> = {},
   additionalStore: boolean = false,
-  table: string = 'g20_items',
 ): Promise<ProductionApp> {
   const primary = await createPortableFixture(dialect);
   const secondary = additionalStore
@@ -76,7 +75,7 @@ export async function createProductionApp(
     },
   };
   const caching = createCaching();
-  await f.connection.builder.createCollection(table, (table) => {
+  await f.connection.builder.createCollection('audit_items', (table) => {
     table.string('id').primary();
     table.string('name');
   });
@@ -105,7 +104,7 @@ export async function createProductionApp(
     {
       ...authenticationConfig,
       defaults: {
-        secret: 'G20-synthetic-server-authentication-secret',
+        secret: 'COMPOSITION-synthetic-server-authentication-secret',
         emailAndPassword: { enabled: true, autoSignIn: true },
         session: { storeSessionInDatabase: true },
       },
@@ -195,7 +194,7 @@ export async function createCouplingFixture(
     cleanups.push(() => manager.destroy());
     const main = manager.connection('main');
     const observation = manager.connection('observation');
-    await main.builder.createCollection('g22_items', (table) => {
+    await main.builder.createCollection('transaction_items', (table) => {
       table.string('id').primary();
       table.string('value');
     });
@@ -225,7 +224,7 @@ export async function createCouplingFixture(
       {
         ...authenticationConfig,
         defaults: {
-          secret: 'G22-synthetic-authentication-secret',
+          secret: 'TRANSACTION-synthetic-authentication-secret',
           emailAndPassword: { enabled: true, autoSignIn: true },
           session: { storeSessionInDatabase: true },
         },
@@ -241,7 +240,7 @@ export async function createCouplingFixture(
             sources: {
               http: 'declared-routes',
               runtime: 'integrated-producers',
-              database: [{ dataSource: 'main', table: 'g22_items' }],
+              database: [{ dataSource: 'main', table: 'transaction_items' }],
             },
           },
         },
@@ -278,7 +277,7 @@ export async function createCouplingFixture(
     outer?.(app, main);
     // Synthetic fault routes are intentionally anonymous and only exercised
     // through App.fetch or a loopback-only server. Real ACL providers remain
-    // installed; authorization regression coverage is mapped in G22.
+    // installed, while the query API tests exercise their access restrictions.
     app.addRoutes(
       defineApiRoutes(() =>
         routes(app.container.resolve(auditCompositionToken), main),
@@ -291,7 +290,9 @@ export async function createCouplingFixture(
       observation,
       composition: app.container.resolve(auditCompositionToken),
       request: async (path, init) =>
-        app.fetch(new Request('http://localhost/api/g22' + path, init)),
+        app.fetch(
+          new Request('http://localhost/api/transactions' + path, init),
+        ),
       events: async (store = 'main') =>
         (
           await auditRows(
@@ -299,7 +300,8 @@ export async function createCouplingFixture(
             'SELECT "payload" FROM "auditEvents"',
           )
         ).map((row) => JSON.parse(storedText(row, 'payload')) as AuditEventDto),
-      rows: () => auditRows(main, 'SELECT * FROM "g22_items" ORDER BY "id"'),
+      rows: () =>
+        auditRows(main, 'SELECT * FROM "transaction_items" ORDER BY "id"'),
       close,
     };
   } catch (error) {

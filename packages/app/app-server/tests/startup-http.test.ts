@@ -22,7 +22,7 @@ async function fixture() {
   await config.loadAll();
   return new Application({
     config,
-    paths: createConfigPaths({ rootDir: '/synthetic/g20' }),
+    paths: createConfigPaths({ rootDir: '/synthetic/startup-http' }),
     websocket: () => async () => null,
   });
 }

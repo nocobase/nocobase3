@@ -38,7 +38,7 @@ export async function auditFixture(
   dialect: DatabaseDialect,
   timezone?: string,
 ) {
-  const name = `audit_g17_${randomUUID().replaceAll('-', '')}`;
+  const name = `audit_workflow_${randomUUID().replaceAll('-', '')}`;
   const prefix = dialect === 'postgres' ? 'POSTGRES' : 'MYSQL';
   const host = process.env[`${prefix}_HOST`];
   const port = Number(process.env[`${prefix}_PORT`]);
@@ -81,9 +81,9 @@ export async function auditFixture(
     query: connection.query,
   };
   let bridge: WorkflowAuditBridge | undefined;
-  const carrier = new NodeAuditScopeCarrier('g17-app');
+  const carrier = new NodeAuditScopeCarrier('workflow-app');
   const store = new PortableAuditStore(connection, {
-    appId: 'g17-app',
+    appId: 'workflow-app',
     store: 'main',
   });
   const bind = (
@@ -100,7 +100,7 @@ export async function auditFixture(
       }),
     });
   const runtime = new TrustedAuditRuntime({
-    appId: 'g17-app',
+    appId: 'workflow-app',
     carrier,
     bind: (scope) => bind(scope, { producer: 'workflow' }),
     diagnostic: () => undefined,
@@ -136,9 +136,6 @@ export async function auditFixture(
       service: { bind, http: () => async (_context, next) => next() },
     };
     attachWorkflowAudit(database, () => bridge);
-    process.stdout.write(
-      JSON.stringify({ dialect, database: name }) + String.fromCharCode(10),
-    );
     return {
       database,
       metadata,

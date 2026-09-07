@@ -129,7 +129,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
           .some((entry) => entry.live),
       ).toBe(false);
       await s.f.connection.query
-        .insertInto('g20_items')
+        .insertInto('audit_items')
         .values({ id: 'after-disposal', name: 'collector detached' })
         .execute();
     } finally {
@@ -298,7 +298,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
       );
       // An observation failure must not replace an already completed business result.
       await s.f.connection.query
-        .insertInto('g20_items')
+        .insertInto('audit_items')
         .values({ id: 'background-result', name: 'completed' })
         .execute();
       let failure: unknown;
@@ -313,7 +313,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
       });
       expect(
         await s.f.connection.query
-          .selectFrom('g20_items')
+          .selectFrom('audit_items')
           .select('name')
           .where('id', '=', 'background-result')
           .executeTakeFirst(),
@@ -372,7 +372,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
         sources: {
           http: 'declared-routes',
           runtime: 'integrated-producers',
-          database: [{ dataSource: 'main', table: 'g20_items' }],
+          database: [{ dataSource: 'main', table: 'audit_items' }],
         },
       },
     });
@@ -389,7 +389,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
           .resolve(auditResourceAdaptersToken)
           .register({
             dataSource: 'main',
-            resource: 'g20_items',
+            resource: 'audit_items',
             canRead: async () => 'allowed',
           });
       }
@@ -409,7 +409,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
           async (c) => {
             await s.f.connection.transaction(async (connection) => {
               await connection.query
-                .insertInto('g20_items')
+                .insertInto('audit_items')
                 .values({ id: 'drained', name: 'committed' })
                 .execute();
               entered.resolve();
@@ -477,14 +477,14 @@ describe.each(dialects)('production composition %s', (dialect) => {
         subject: { type: 'user', id: user.id },
         permissionSet: 'boot-owner',
       });
-      const target = { dataSource: 'main', resource: 'g20_items', key: 'a' };
+      const target = { dataSource: 'main', resource: 'audit_items', key: 'a' };
       const receipt = await s.app.container
         .resolve(auditServiceToken)
         .bind(
           { appId: 'main', actor: { type: 'user', id: user.id } },
           { producer: 'adapter-owner' },
         )
-        .record({ action: 'g23.boot', outcome: 'success', target });
+        .record({ action: 'startup.record', outcome: 'success', target });
       expect(receipt.state).toBe('committed');
       const url =
         'http://localhost/api/audit/events?store=main&target=' +
@@ -512,7 +512,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
       await bounded(shutdown);
       expect(ownerStopped).toBe(true);
       expect(
-        await auditRows(s.f.connection, 'SELECT * FROM "g20_items"'),
+        await auditRows(s.f.connection, 'SELECT * FROM "audit_items"'),
       ).toEqual([{ id: 'drained', name: 'committed' }]);
       const events = (
         await auditRows(s.f.connection, 'SELECT "payload" FROM "auditEvents"')
@@ -765,7 +765,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
         confirmRetentionReduction: false,
       });
       const event = await composition.runtime.recorder.record({
-        action: 'g20.after-switch',
+        action: 'composition.after-switch',
         outcome: 'success',
       });
       expect(event.state).toBe('committed');
@@ -775,7 +775,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
         if (!transaction) throw new Error('Expected actual transaction.');
         expect(
           await composition.runtime.recorder.record(
-            { action: 'g20.transaction-main', outcome: 'success' },
+            { action: 'composition.transaction-main', outcome: 'success' },
             { transaction },
           ),
         ).toMatchObject({ state: 'pending-commit' });
@@ -789,11 +789,13 @@ describe.each(dialects)('production composition %s', (dialect) => {
             'SELECT "action" FROM "auditEvents"',
           )
         ).map((row) => row.action);
-      expect(await actions('main')).toContain('g20.transaction-main');
-      expect(await actions('main')).not.toContain('g20.after-switch');
-      expect(await actions('other')).toContain('g20.after-switch');
+      expect(await actions('main')).toContain('composition.transaction-main');
+      expect(await actions('main')).not.toContain('composition.after-switch');
+      expect(await actions('other')).toContain('composition.after-switch');
       expect(await actions('other')).toContain('audit.api.access');
-      expect(await actions('other')).not.toContain('g20.transaction-main');
+      expect(await actions('other')).not.toContain(
+        'composition.transaction-main',
+      );
       await s.app.shutdown();
       restarted = s.make();
       await restarted.start();
@@ -868,7 +870,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
         '/auth/sign-up/email',
         json({
           name: 'User',
-          email: 'g20@example.test',
+          email: 'composition@example.test',
           password: 'synthetic long password',
         }),
       );
@@ -881,7 +883,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
       ).toBe(403);
       const authz = s.app.container.resolve(authorizationToken);
       await authz.permissionSets.create({
-        key: 'g20-page-only',
+        key: 'composition-page-only',
         grants: [
           {
             resource: { type: 'page', id: '*' },
@@ -891,7 +893,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
       });
       const pageGrant = await authz.permissionSets.assign({
         subject: { type: 'user', id: user.user.id },
-        permissionSet: 'g20-page-only',
+        permissionSet: 'composition-page-only',
       });
       expect(
         await (
@@ -902,7 +904,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
       });
       await authz.permissionSets.revoke(pageGrant.id);
       await authz.permissionSets.create({
-        key: 'g20-auditor',
+        key: 'composition-auditor',
         grants: [
           {
             resource: {
@@ -924,7 +926,7 @@ describe.each(dialects)('production composition %s', (dialect) => {
       });
       const auditGrant = await authz.permissionSets.assign({
         subject: { type: 'user', id: user.user.id },
-        permissionSet: 'g20-auditor',
+        permissionSet: 'composition-auditor',
       });
       expect(
         (await request('/audit/events?store=main', { headers: { cookie } }))
@@ -943,15 +945,15 @@ describe.each(dialects)('production composition %s', (dialect) => {
         .settings.get(composition.runtime.current());
       expect(settings.sources.database).toEqual([]);
       await s.f.connection.query
-        .insertInto('g20_items')
-        .values({ id: 'g20-unselected', name: 'Synthetic' })
+        .insertInto('audit_items')
+        .values({ id: 'composition-unselected', name: 'Synthetic' })
         .execute();
       const catalog = composition.catalog.entries(settings);
       expect(
         catalog.some(
           (entry) =>
             entry.kind === 'database' &&
-            entry.targets.some((target) => target.table === 'g20_items'),
+            entry.targets.some((target) => target.table === 'audit_items'),
         ),
       ).toBe(true);
       await composition
@@ -964,14 +966,14 @@ describe.each(dialects)('production composition %s', (dialect) => {
             retentionDays: 210,
             sources: {
               ...settings.sources,
-              database: [{ dataSource: 'main', table: 'g20_items' }],
+              database: [{ dataSource: 'main', table: 'audit_items' }],
             },
           },
         });
       await s.f.connection.query
-        .updateTable('g20_items')
+        .updateTable('audit_items')
         .set({ name: 'Selected synthetic' })
-        .where('id', '=', 'g20-unselected')
+        .where('id', '=', 'composition-unselected')
         .execute();
       const queryResources = composition.routes();
       const events = await queryResources.query.list(

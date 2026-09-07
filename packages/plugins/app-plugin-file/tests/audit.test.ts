@@ -22,9 +22,9 @@ import { fileSettingsApiRoutes } from '../server/settings/routes.js';
 import { FILE_INVENTORY_RESOURCE } from '../shared/settings/inventory.js';
 import type { FileAudit } from '../server/types.js';
 
-const BODY = 'G16_FILE_BODY_SECRET_SENTINEL';
-const SECRET = 'G16_TOKEN_SECRET_SENTINEL_at_least_32_characters';
-const STORAGE_SECRET = 'G16_S3_SECRET_SENTINEL';
+const BODY = 'FILE_FILE_BODY_SECRET_SENTINEL';
+const SECRET = 'FILE_TOKEN_SECRET_SENTINEL_at_least_32_characters';
+const STORAGE_SECRET = 'FILE_S3_SECRET_SENTINEL';
 
 async function setup(dialect: (typeof dialects)[number], enabled = true) {
   const host = await createAuditAuthApp(dialect);
@@ -33,7 +33,7 @@ async function setup(dialect: (typeof dialects)[number], enabled = true) {
   host.app.addRoutes(
     defineApiRoutes(() => new Hono().use('*', createI18nMiddleware(i18n))),
   );
-  for (const table of ['g16Files', 'g16OtherFiles']) {
+  for (const table of ['auditFiles', 'otherAuditFiles']) {
     await database.builder().createCollection(table, (collection) => {
       collection.string('id', { length: 64 }).notNull();
       collection.string('orderId', { length: 64 });
@@ -83,10 +83,10 @@ async function setup(dialect: (typeof dialects)[number], enabled = true) {
     defineApiRoutes(() => {
       const routes = new Hono();
       for (const [path, table] of [
-        ['/files', 'g16Files'],
-        ['/other-files', 'g16OtherFiles'],
-        ['/orders/:orderId/files', 'g16OtherFiles'],
-        ['/broken-source', 'g16Files'],
+        ['/files', 'auditFiles'],
+        ['/other-files', 'otherAuditFiles'],
+        ['/orders/:orderId/files', 'otherAuditFiles'],
+        ['/broken-source', 'auditFiles'],
       ]) {
         routes.route(
           path,
@@ -145,7 +145,7 @@ async function setup(dialect: (typeof dialects)[number], enabled = true) {
       fileSettingsApiRoutes.createRouter(host.contributionApp),
     ),
   );
-  const targets = ['g16_files', 'g16_other_files'].map((table) => ({
+  const targets = ['audit_files', 'other_audit_files'].map((table) => ({
     dataSource: 'main',
     table,
   }));
@@ -163,9 +163,9 @@ async function setup(dialect: (typeof dialects)[number], enabled = true) {
   const signup = await host.request(
     '/auth/sign-up/email',
     jsonRequest({
-      name: 'G16 User',
-      email: 'g16@example.com',
-      password: 'G16-synthetic-password-123',
+      name: 'FILE User',
+      email: 'files@example.com',
+      password: 'FILE-synthetic-password-123',
     }),
   );
   expect(signup.status).toBe(200);
@@ -174,7 +174,7 @@ async function setup(dialect: (typeof dialects)[number], enabled = true) {
   if (!session) throw new Error('Expected real authenticated session.');
   const grant = async () => {
     await authorization.permissionSets.create({
-      key: 'g16-file-access',
+      key: 'files-file-access',
       grants: [
         {
           resource: { type: 'page', id: FILE_INVENTORY_RESOURCE },
@@ -183,7 +183,7 @@ async function setup(dialect: (typeof dialects)[number], enabled = true) {
       ],
     });
     await authorization.permissionSets.assign({
-      permissionSet: 'g16-file-access',
+      permissionSet: 'files-file-access',
       subject: { type: 'user', id: session.user.id },
     });
   };
@@ -193,7 +193,7 @@ async function setup(dialect: (typeof dialects)[number], enabled = true) {
     const body = new FormData();
     body.set(
       'file',
-      new File([BODY], 'G16_FILENAME_SECRET.txt', { type: 'text/plain' }),
+      new File([BODY], 'FILE_FILENAME_SECRET.txt', { type: 'text/plain' }),
     );
     body.set('public', String(isPublic));
     return request(path, { method: 'POST', body });
@@ -227,8 +227,8 @@ for (const dialect of dialects)
         );
         await app.grant();
         for (const [path, resource] of [
-          ['/files', 'g16Files'],
-          ['/other-files', 'g16OtherFiles'],
+          ['/files', 'auditFiles'],
+          ['/other-files', 'otherAuditFiles'],
         ]) {
           const uploaded = await app.upload(path);
           expect(uploaded.status).toBe(201);
@@ -244,7 +244,7 @@ for (const dialect of dialects)
           expect(
             (
               await app.anonymous(
-                path + '/' + data.id + '/content?token=G16_INVALID_TICKET',
+                path + '/' + data.id + '/content?token=FILE_INVALID_TICKET',
               )
             ).status,
           ).toBe(403);
@@ -302,7 +302,8 @@ for (const dialect of dialects)
           200,
         );
         expect(
-          (await app.request('/files/inventory/sources/g16Files/files')).status,
+          (await app.request('/files/inventory/sources/auditFiles/files'))
+            .status,
         ).toBe(200);
         const events = await app.events();
         expect(events).toEqual(
@@ -334,8 +335,8 @@ for (const dialect of dialects)
           BODY,
           SECRET,
           STORAGE_SECRET,
-          'G16_FILENAME_SECRET',
-          'G16_INVALID_TICKET',
+          'FILE_FILENAME_SECRET',
+          'FILE_INVALID_TICKET',
           'download-completed',
         ])
           expect(serialized).not.toContain(sentinel);
@@ -476,10 +477,10 @@ for (const dialect of dialects)
           );
         }
         expect(
-          (await app.anonymous('/files/G16_GUESSED_FILE/content')).status,
+          (await app.anonymous('/files/FILE_GUESSED_FILE/content')).status,
         ).toBe(404);
         expect(JSON.stringify(await app.events())).not.toContain(
-          'G16_GUESSED_FILE',
+          'FILE_GUESSED_FILE',
         );
       } finally {
         await app.close();

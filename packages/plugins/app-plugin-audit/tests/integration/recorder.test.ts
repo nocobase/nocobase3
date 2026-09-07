@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DatabaseConnection } from '@nocobase/db';
-import { bindAuditRecorder } from '@nocobase/app-plugin-audit/server';
+import {
+  bindAuditRecorder,
+  DisabledAuditRecorder,
+} from '@nocobase/app-plugin-audit/server';
 import { handle } from '../helpers/database-fixtures.js';
 import {
   createFixture,
@@ -9,6 +12,20 @@ import {
 } from './sqlite-fixture.js';
 
 const event = { action: 'synthetic.updated', outcome: 'success' as const };
+
+it('returns an explicit disabled receipt without inspecting payload accessors', async () => {
+  const recorder = new DisabledAuditRecorder('deployment-disabled');
+  const details = Object.defineProperty({}, 'secret', {
+    get() {
+      throw new Error('Disabled recording must not inspect the payload');
+    },
+  });
+  expect(await recorder.record({ ...event, details })).toEqual({
+    state: 'disabled',
+    reason: 'deployment-disabled',
+  });
+});
+
 describe('public bound Recorder', () => {
   let f: Fixture;
   beforeEach(async () => {

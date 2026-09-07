@@ -21,7 +21,7 @@ import { dialects } from '../../app-plugin-audit/tests/helpers/database-fixtures
 import { auditRaw } from '../../app-plugin-audit/server/database/sql-client.js';
 import { createAIAuditFixture } from './helpers/audit-fixture.js';
 
-const sentinel = 'G18_SYNTHETIC_PROMPT_SECRET';
+const sentinel = 'AGENT_SYNTHETIC_PROMPT_SECRET';
 for (const dialect of dialects)
   describe(`AI producer ${dialect}`, () => {
     it('keeps distinct attempts and never replays a completed side effect on observation failure', async () => {
@@ -37,7 +37,7 @@ for (const dialect of dialects)
           conversation,
           context,
           'trusted-employee',
-          'g18-retry',
+          'audit-test-retry',
         );
         let effects = 0;
         await f.runtime.runRequest(() =>
@@ -119,8 +119,8 @@ for (const dialect of dialects)
               },
             },
             sessionId,
-            model: { llmService: 'g18-model', model: 'g18' },
-            tools: [{ name: 'g18Tool' }],
+            model: { llmService: 'audit-test-model', model: 'audit-test' },
+            tools: [{ name: 'auditTestTool' }],
           };
           await f.runtime.runRequest(() =>
             f.runtime.runAuthenticated(
@@ -156,10 +156,10 @@ for (const dialect of dialects)
             .sort(),
         ).toEqual(['failed', 'failed', 'success', 'success']);
         expect(JSON.stringify(events)).not.toContain(
-          'G18_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL',
+          'AGENT_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL',
         );
         expect(JSON.stringify(log.mock.calls)).not.toContain(
-          'G18_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL',
+          'AGENT_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL',
         );
         log.mockRestore();
       } finally {
@@ -243,7 +243,7 @@ for (const dialect of dialects)
           events.find((e) => e.action === 'ai.aiConversations.get')?.actor.type,
         ).toBe('anonymous');
         expect(JSON.stringify(events)).not.toMatch(
-          /code-generator|G18_SYNTHETIC_PROMPT_SECRET/,
+          /code-generator|AGENT_SYNTHETIC_PROMPT_SECRET/,
         );
         const sessionId = randomUUID();
         await a.runtime.repositories.aiConversations.create({
@@ -266,7 +266,7 @@ for (const dialect of dialects)
             body: JSON.stringify({
               sessionId,
               aiEmployee: 'trusted-employee',
-              model: { llmService: 'g18-model', model: 'g18' },
+              model: { llmService: 'audit-test-model', model: 'audit-test' },
               messages: [
                 {
                   role: 'user',
@@ -384,8 +384,8 @@ for (const dialect of dialects)
               },
             },
             sessionId,
-            model: { llmService: 'g18-model', model: 'g18' },
-            tools: [{ name: 'g18Tool' }],
+            model: { llmService: 'audit-test-model', model: 'audit-test' },
+            tools: [{ name: 'auditTestTool' }],
           };
           await f.runtime.runRequest(() =>
             f.runtime.runAuthenticated(
@@ -520,7 +520,7 @@ for (const dialect of dialects)
           streamTarget: { write: () => undefined, end: () => undefined },
         };
         bindAIRequestAudit(a.runtime, f.bridge);
-        const tool = await a.deps.ai.toolsManager.getTools('g18Tool');
+        const tool = await a.deps.ai.toolsManager.getTools('auditTestTool');
         if (!tool) throw new Error('Missing synthetic tool');
         await a.deps.ai.toolsManager.registerTools({
           ...tool,
@@ -547,8 +547,8 @@ for (const dialect of dialects)
               },
             },
             sessionId,
-            model: { llmService: 'g18-model', model: 'g18' },
-            tools: [{ name: 'g18Tool' }],
+            model: { llmService: 'audit-test-model', model: 'audit-test' },
+            tools: [{ name: 'auditTestTool' }],
           };
           await f.runtime.runRequest(() =>
             f.runtime.runAuthenticated(
@@ -615,7 +615,7 @@ for (const dialect of dialects)
           }
         }
         const a = await prepareAIRuntime(f);
-        a.deps.ai.llmProviderManager.registerLLMProvider('g18', {
+        a.deps.ai.llmProviderManager.registerLLMProvider('audit-test', {
           title: 'Synthetic',
           provider: PlainProvider,
         });
@@ -648,7 +648,7 @@ for (const dialect of dialects)
                   },
                 },
                 sessionId,
-                model: { llmService: 'g18-model', model: 'g18' },
+                model: { llmService: 'audit-test-model', model: 'audit-test' },
               };
               const create = a.runtime.repositories.aiMessages.create.bind(
                 a.runtime.repositories.aiMessages,

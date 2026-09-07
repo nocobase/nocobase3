@@ -22,7 +22,7 @@ for (const dialect of dialects) {
       const f = await createPortableFixture(dialect);
       let collector: AuditDatabaseCollector | undefined;
       try {
-        for (const table of ['g22_perf_rows', 'g22_perf_excluded']) {
+        for (const table of ['audit_perf_rows', 'audit_perf_excluded']) {
           await auditRaw(
             f.connection,
             'CREATE TABLE "' +
@@ -30,10 +30,12 @@ for (const dialect of dialects) {
               '" ("id" INTEGER PRIMARY KEY, "value" INTEGER NOT NULL)',
           );
         }
-        const targets = ['g22_perf_rows', 'g22_perf_excluded'].map((table) => ({
-          dataSource: f.connection.name,
-          table,
-        }));
+        const targets = ['audit_perf_rows', 'audit_perf_excluded'].map(
+          (table) => ({
+            dataSource: f.connection.name,
+            table,
+          }),
+        );
         const scope = new NodeAuditScopeCarrier(f.scope.appId);
         const catalog = new AuditCaptureCatalog();
         const health = new LocalAuditHealthService(() => undefined);
@@ -95,20 +97,20 @@ for (const dialect of dialects) {
             await scope.run(f.scope, async () => {
               expect(
                 await f.connection.query
-                  .insertInto('g22_perf_rows')
+                  .insertInto('audit_perf_rows')
                   .values({ id: 1, value: 987654321 })
                   .execute(),
               ).toMatchObject({ insertedCount: 1 });
               expect(
                 await f.connection.query
-                  .updateTable('g22_perf_rows')
+                  .updateTable('audit_perf_rows')
                   .set({ value: 123456789 })
                   .where('id', '=', 1)
                   .execute(),
               ).toMatchObject({ updatedCount: 1 });
               expect(
                 await f.connection.query
-                  .deleteFrom('g22_perf_rows')
+                  .deleteFrom('audit_perf_rows')
                   .where('id', '=', 1)
                   .execute(),
               ).toMatchObject({ deletedCount: 1 });
@@ -130,7 +132,7 @@ for (const dialect of dialects) {
           expect(
             await auditRows(
               f.connection,
-              'SELECT "id", "value" FROM "g22_perf_rows" ORDER BY "id"',
+              'SELECT "id", "value" FROM "audit_perf_rows" ORDER BY "id"',
             ),
           ).toEqual([]);
           const events = (

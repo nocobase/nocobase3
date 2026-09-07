@@ -74,7 +74,7 @@ export async function createAuditAuthApp(
       sources: {
         http: 'declared-routes',
         runtime: 'integrated-producers',
-        database: ['g16_files', 'g16_other_files'].map((table) => ({
+        database: ['audit_files', 'other_audit_files'].map((table) => ({
           dataSource: 'main',
           table,
         })),

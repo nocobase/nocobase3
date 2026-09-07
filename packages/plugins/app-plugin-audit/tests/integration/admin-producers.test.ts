@@ -20,8 +20,8 @@ function createSessions() {
   return createSessionManager({
     default: 'memory',
     stores: { memory: { driver: 'memory' } },
-    cookie: { name: 'g19_session' },
-    secret: 'G19_SESSION_SECRET_AT_LEAST_32_CHARS',
+    cookie: { name: 'audit_session' },
+    secret: 'ADMIN_SESSION_SECRET_AT_LEAST_32_CHARS',
     lifetime: { absolute: '2h' },
   });
 }
@@ -45,10 +45,10 @@ describe.each(dialects)('administrative boundaries %s', (dialect) => {
       const signup = await app.request(
         '/auth/sign-up/email',
         jsonRequest({
-          email: 'reader@g19.example',
-          username: 'g19reader',
+          email: 'reader@admin.example',
+          username: 'adminreader',
           name: 'Reader',
-          password: 'G19_PASSWORD_SYNTHETIC_XXXXX',
+          password: 'ADMIN_PASSWORD_SYNTHETIC_XXXXX',
         }),
       );
       const cookie = signup.headers.get('set-cookie')!;
@@ -90,14 +90,14 @@ describe.each(dialects)('administrative boundaries %s', (dialect) => {
     });
     app.app.addHttpMiddleware(
       defineHttpMiddleware({
-        name: 'g19-session',
+        name: 'admin-session',
         register(router) {
           router.use('*', createSessionMiddleware(sessions));
         },
       }),
     );
     const seeded = sessions.createRequestSession({});
-    await seeded.set('userId', 'G19_FORGED_SESSION_USER');
+    await seeded.set('userId', 'ADMIN_FORGED_SESSION_USER');
     const persisted = await seeded.persist();
     for (const route of i18nPlugin.routes)
       app.app.addRoutes(
@@ -109,7 +109,7 @@ describe.each(dialects)('administrative boundaries %s', (dialect) => {
         '/i18n/locale',
         jsonRequest(
           { locale: 'zh-CN' },
-          'g19_session=' + persisted.cookieValue,
+          'audit_session=' + persisted.cookieValue,
         ),
       );
       expect(response.status).toBe(200);
@@ -120,7 +120,7 @@ describe.each(dialects)('administrative boundaries %s', (dialect) => {
       const events = await app.events();
       expect(events).toHaveLength(1);
       expect(events[0].actor).toEqual({ type: 'anonymous' });
-      expect(JSON.stringify(events)).not.toContain('G19_FORGED_SESSION_USER');
+      expect(JSON.stringify(events)).not.toContain('ADMIN_FORGED_SESSION_USER');
     } finally {
       await sessions.dispose();
       await app.close();
@@ -132,12 +132,12 @@ describe.each(dialects)('administrative boundaries %s', (dialect) => {
     const notifications = await addNotifications(app);
     const sessions = createSessions();
     const seeded = sessions.createRequestSession({});
-    await seeded.set('userId', 'G19_FORGED_SESSION_USER');
+    await seeded.set('userId', 'ADMIN_FORGED_SESSION_USER');
     const persisted = await seeded.persist();
-    const cookie = 'g19_session=' + persisted.cookieValue;
+    const cookie = 'audit_session=' + persisted.cookieValue;
     app.app.addHttpMiddleware(
       defineHttpMiddleware({
-        name: 'g19-fallback-session',
+        name: 'admin-fallback-session',
         register(router) {
           router.use('*', createSessionMiddleware(sessions));
         },
@@ -200,10 +200,10 @@ describe.each(dialects)('administrative boundaries %s', (dialect) => {
           const response = await app.request(
             '/auth/sign-up/email',
             jsonRequest({
-              email: name + '@g19.example',
-              username: 'g19' + name,
+              email: name + '@admin.example',
+              username: 'admin' + name,
               name,
-              password: 'G19_PASSWORD_SYNTHETIC_XXXXX',
+              password: 'ADMIN_PASSWORD_SYNTHETIC_XXXXX',
             }),
           );
           const body: { user: { id: string } } = await response.json();
@@ -218,7 +218,7 @@ describe.each(dialects)('administrative boundaries %s', (dialect) => {
             app.request('/notifications/in-app/unread-count', {
               headers: {
                 cookie: user.cookie,
-                'x-user-id': 'G19_FORGED_HEADER_USER',
+                'x-user-id': 'ADMIN_FORGED_HEADER_USER',
               },
             }),
           ),
@@ -274,10 +274,10 @@ describe.each(dialects)('notification administration %s', (dialect) => {
       const signup = await app.request(
         '/auth/sign-up/email',
         jsonRequest({
-          email: 'admin@g19.example',
-          username: 'g19admin',
+          email: 'admin@admin.example',
+          username: 'adminadmin',
           name: 'Admin',
-          password: 'G19_SYNTHETIC_PASSWORD_XXXXXXXX',
+          password: 'ADMIN_SYNTHETIC_PASSWORD_XXXXXXXX',
         }),
       );
       expect(signup.status).toBe(200);
@@ -298,7 +298,7 @@ describe.each(dialects)('notification administration %s', (dialect) => {
       );
       expect((await call('/notifications/test/targets')).status).toBe(403);
       await notifications.authz.permissionSets.create({
-        key: 'g19-admin',
+        key: 'admin-admin',
         grants: [
           {
             resource: { type: 'notification', id: 'test' },
@@ -311,14 +311,14 @@ describe.each(dialects)('notification administration %s', (dialect) => {
         ],
       });
       await notifications.authz.permissionSets.assign({
-        permissionSet: 'g19-admin',
+        permissionSet: 'admin-admin',
         subject: { type: 'user', id: body.user.id },
       });
       expect((await call('/notifications/test/targets')).status).toBe(200);
       const response = await call('/notifications/test/send', 'POST', {
         channel: 'in-app',
         provider: { name: 'primary', type: 'database' },
-        values: { title: 'G19_PRIVATE_TITLE', body: secret },
+        values: { title: 'ADMIN_PRIVATE_TITLE', body: secret },
       });
       expect(response.status).toBe(202);
       const sent: { data: { notificationId: string } } = await response.json();
@@ -461,7 +461,7 @@ describe.each(dialects)('notification administration %s', (dialect) => {
         expect(event.target).toBeUndefined();
       }
       expect(JSON.stringify(events)).not.toContain(secret);
-      expect(JSON.stringify(events)).not.toContain('G19_PRIVATE_TITLE');
+      expect(JSON.stringify(events)).not.toContain('ADMIN_PRIVATE_TITLE');
     } finally {
       await notifications.close();
       await app.close();
@@ -472,7 +472,7 @@ describe.each(dialects)('notification administration %s', (dialect) => {
 import installPlugin from '@nocobase/app-plugin-install/server';
 import { installAuditToken } from '@nocobase/app-plugin-install/server/audit';
 
-const secret = 'G19_SYNTHETIC_DATABASE_PASSWORD';
+const secret = 'ADMIN_SYNTHETIC_DATABASE_PASSWORD';
 
 describe.each(dialects)('installation audit policy %s', (dialect) => {
   it('requires committed evidence only for explicit required deployments and keeps bootstrap optional', async () => {
@@ -599,7 +599,9 @@ describe.each(dialects)('administrative producers %s', (dialect) => {
         true,
       );
       expect(JSON.stringify(events)).not.toContain(secret);
-      expect(JSON.stringify(events)).not.toContain('G19_SYNTHETIC_AUTH_SECRET');
+      expect(JSON.stringify(events)).not.toContain(
+        'ADMIN_SYNTHETIC_AUTH_SECRET',
+      );
       const completed = events.find(
         (event) => event.action === 'install.configure.completed',
       )!;

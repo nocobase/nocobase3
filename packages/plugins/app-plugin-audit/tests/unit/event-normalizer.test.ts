@@ -31,7 +31,7 @@ const input = Object.freeze({
   }),
   details: Object.freeze({
     count: 1,
-    nested: Object.freeze({ password: 'SYNTHETIC-G04-SECRET', ok: true }),
+    nested: Object.freeze({ password: 'SYNTHETIC-PAYLOAD-SECRET', ok: true }),
   }),
 });
 
@@ -52,8 +52,8 @@ describe('event normalizer', () => {
       appId: 'app-a',
       securityScope: 'tenant-a',
     });
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC-G04-SECRET');
-    expect(input.details.nested.password).toBe('SYNTHETIC-G04-SECRET');
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC-PAYLOAD-SECRET');
+    expect(input.details.nested.password).toBe('SYNTHETIC-PAYLOAD-SECRET');
     expect(context.scope.roleIds).toEqual(['b', 'a']);
     expect(result.event.actor).not.toBe(context.scope.actor);
   });
@@ -79,7 +79,7 @@ describe('event normalizer', () => {
     'unknown',
   ])('rejects injected field %s', (key) => {
     expect(() =>
-      normalizeEvent({ ...input, [key]: 'SYNTHETIC-G04-SECRET' }, context),
+      normalizeEvent({ ...input, [key]: 'SYNTHETIC-PAYLOAD-SECRET' }, context),
     ).toThrow('AUDIT_INVALID_EVENT');
   });
   it.each([

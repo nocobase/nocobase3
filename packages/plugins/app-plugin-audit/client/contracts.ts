@@ -18,7 +18,7 @@ export type {
 } from '../server/contracts.js';
 
 import type { AuditEventsQuery } from '../server/contracts.js';
-/** Reserved component contract; no component runtime is exported by G01. */
+/** Query and selection options for the public audit events view. */
 export interface AuditEventsViewProps {
   readonly query: AuditEventsQuery;
   readonly onEventSelect?: (eventId: string) => void;

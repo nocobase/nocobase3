@@ -28,7 +28,7 @@ async function application(): Promise<Application> {
   await config.loadAll();
   return new Application<import('../src/config/index.js').AppConfigAccessor>({
     config,
-    paths: createConfigPaths({ rootDir: '/synthetic/g09' }),
+    paths: createConfigPaths({ rootDir: '/synthetic/http-audit' }),
     websocket: () => async () => null,
   });
 }

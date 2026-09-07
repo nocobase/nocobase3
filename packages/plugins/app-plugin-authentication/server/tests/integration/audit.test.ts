@@ -5,14 +5,14 @@ import { defineApiRoutes } from '@nocobase/app-server/router';
 import { dialects } from '../../../../app-plugin-audit/tests/helpers/database-fixtures.js';
 import { createAuditAuthApp, jsonRequest } from '../helpers/audit-app.js';
 
-const password = 'G15_PASSWORD_SENTINEL_xxxxxxxxx';
+const password = 'AUTH_PASSWORD_SENTINEL_xxxxxxxxx';
 
 describe.each(dialects)('authentication audit %s', (dialect) => {
   it('does not replay committed authentication when audit storage fails', async () => {
     const app = await createAuditAuthApp(dialect);
     const failure = vi
       .spyOn(app.fixture.store, 'appendWithLimits')
-      .mockRejectedValue(new Error('G15_STORAGE_SECRET_SENTINEL'));
+      .mockRejectedValue(new Error('AUTH_STORAGE_SECRET_SENTINEL'));
     const logs = vi.spyOn(console, 'error');
     try {
       const response = await app.request(
@@ -36,7 +36,7 @@ describe.each(dialects)('authentication audit %s', (dialect) => {
           .execute(),
       ).toHaveLength(1);
       expect(JSON.stringify(logs.mock.calls)).not.toContain(
-        'G15_STORAGE_SECRET_SENTINEL',
+        'AUTH_STORAGE_SECRET_SENTINEL',
       );
     } finally {
       failure.mockRestore();
@@ -75,9 +75,9 @@ describe.each(dialects)('authentication audit %s', (dialect) => {
       const signup = await app.request(
         '/auth/sign-up/email',
         jsonRequest({
-          email: 'g15@example.com',
-          username: 'g15user',
-          name: 'G15',
+          email: 'auth@example.com',
+          username: 'authuser',
+          name: 'AUTH',
           password,
         }),
       );
@@ -90,8 +90,8 @@ describe.each(dialects)('authentication audit %s', (dialect) => {
         )?.actor,
       ).toEqual({ type: 'user', id: userId });
       for (const input of [
-        { email: 'g15@example.com' },
-        { username: 'g15user' },
+        { email: 'auth@example.com' },
+        { username: 'authuser' },
       ]) {
         const path =
           'email' in input ? '/auth/sign-in/email' : '/auth/sign-in/username';
@@ -114,8 +114,8 @@ describe.each(dialects)('authentication audit %s', (dialect) => {
       const denied = await app.request(
         '/auth/sign-in/email',
         jsonRequest({
-          email: 'g15@example.com',
-          password: 'G15_WRONG_PASSWORD_SENTINEL',
+          email: 'auth@example.com',
+          password: 'AUTH_WRONG_PASSWORD_SENTINEL',
         }),
       );
       expect(denied.status).toBe(401);
@@ -136,8 +136,8 @@ describe.each(dialects)('authentication audit %s', (dialect) => {
       });
       for (const secret of [
         password,
-        'G15_WRONG_PASSWORD_SENTINEL',
-        'g15@example.com',
+        'AUTH_WRONG_PASSWORD_SENTINEL',
+        'auth@example.com',
         'session_token',
       ])
         expect(serialized).not.toContain(secret);

@@ -59,7 +59,7 @@ export async function addNotifications(
   await i18n.init('en-US');
   app.app.addHttpMiddleware(
     defineHttpMiddleware({
-      name: 'g19-i18n',
+      name: 'admin-i18n',
       register(router) {
         router.use('*', createI18nMiddleware(i18n));
       },
@@ -176,7 +176,7 @@ export async function createAdminAuditApp(
         },
       },
     ],
-    installMode ? 'nocobase-install-mode-G19-temporary-secret' : undefined,
+    installMode ? 'nocobase-install-mode-test-temporary-secret' : undefined,
   );
   const { app } = authenticated;
   const runtime = new TrustedAuditRuntime({

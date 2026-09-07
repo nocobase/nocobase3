@@ -20,7 +20,7 @@ export interface AuditHttpResources {
 const applications: WeakSet<AuditHttpResourcesOptions['application']> =
   new WeakSet();
 
-/** Explicit infrastructure resource; G20 owns the service-token/provider composition. */
+/** Attach HTTP observation to the application and register its capture capability. */
 export function createAuditHttpResources(
   options: AuditHttpResourcesOptions,
 ): AuditHttpResources {

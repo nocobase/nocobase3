@@ -39,7 +39,7 @@ export async function observeSqlCost(connection: DatabaseConnection): Promise<{
       /^\s*(select|insert|update|delete)\b/i
         .exec(statement)?.[1]
         ?.toLowerCase() ?? 'other';
-    const target = /\bg22_perf_(rows|excluded)\b/i.test(statement)
+    const target = /\baudit_perf_(rows|excluded)\b/i.test(statement)
       ? 'business'
       : /\bauditSettings\b/i.test(statement)
         ? 'settings'

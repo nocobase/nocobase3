@@ -19,7 +19,7 @@ export interface AuditQueryResources {
   readonly authorization: AuditAuthorization;
   readonly query: ScopedAuditQueryService;
 }
-/** G20 owns App registration; no module import starts services or installs routes. */
+/** Build scoped query services for the application's audit routes. */
 export function createAuditQueryResources(
   options: AuditQueryResourcesOptions,
 ): AuditQueryResources {

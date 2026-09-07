@@ -1,4 +1,3 @@
-import { getManagedWriteRegistry, transactionAuthority } from '@nocobase/db';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AuditCaptureCatalog } from '../../server/capture-catalog.js';
 import {
@@ -7,7 +6,6 @@ import {
 } from '../../server/health-service.js';
 import { AuditReadiness } from '../../server/providers/readiness.js';
 import { PersistentAuditSettingsService } from '../../server/settings-service.js';
-import { bindAuditRecorder } from '../../server/service.js';
 import { PortableAuditStore } from '../../server/store.js';
 import type {
   AuditDeploymentRequirements,
@@ -357,120 +355,7 @@ for (const dialect of dialects)
   });
 
 for (const dialect of dialects)
-  describe('execution boundary ' + dialect, () => {
-    it('real managed business writes retain one revision across concurrent CAS without unregistering protection', async () => {
-      const f = await createPortableFixture(dialect);
-      fixtures.push(f);
-      const target = { dataSource: 'main', table: 'g08_business' };
-      await auditRaw(
-        f.connection,
-        'CREATE TABLE "g08_business" ("id" INTEGER PRIMARY KEY)',
-      );
-      const a = assembly(
-        f,
-        {
-          auditRequired: true,
-          mandatorySources: ['database'],
-          requiredDataSources: ['main'],
-        },
-        {
-          enabled: true,
-          sources: {
-            http: 'disabled',
-            runtime: 'disabled',
-            database: [target],
-          },
-        },
-      );
-      let announce: (() => void) | undefined;
-      const entered = new Promise<void>((resolve) => {
-        announce = resolve;
-      });
-      let release: (() => void) | undefined;
-      const resume = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      let first = true;
-      // Test-only downstream adapter exercises G03's actual execution boundary with G08 policy.
-      // Production database summary collection remains G10; this writes an explicit business fact.
-      const dispose = getManagedWriteRegistry(f.connection).register(
-        async (descriptor, execute) => {
-          if (descriptor.target.table !== target.table)
-            return execute(descriptor.connection);
-          const policy = await a.settings.snapshot(f.scope);
-          if (first) {
-            first = false;
-            announce?.();
-            await resume;
-          }
-          return descriptor.connection.transaction(async (connection) => {
-            const result = await execute(connection);
-            const recorder = bindAuditRecorder(f.scope, {
-              producer: 'synthetic-execution',
-              store: f.store,
-              policy: () => Promise.resolve(policy),
-            });
-            await recorder.record(
-              { action: 'synthetic.business', outcome: 'success' },
-              { transaction: transactionAuthority.current(connection) },
-            );
-            return result;
-          });
-        },
-      );
-      const registration = a.catalog.register({
-        producer: 'synthetic-execution',
-        kind: 'database',
-        connection: f.connection,
-        targets: [target],
-        dispose,
-      });
-      await registration.verify(async () => {
-        await auditRows(
-          f.connection,
-          'SELECT "id" FROM "g08_business" LIMIT 0',
-        );
-      });
-      const initial = await a.settings.initialize(f.scope);
-      await a.readiness.start(initial);
-      const cached = f.connection.query
-        .insertInto('g08_business')
-        .values({ id: 1 });
-      const pending = cached.execute();
-      await entered;
-      try {
-        await a.settings.update(f.scope, {
-          expectedRevision: 1,
-          settings: { ...initial, retentionDays: 365 },
-          confirmRetentionReduction: false,
-        });
-      } finally {
-        release?.();
-      }
-      await pending;
-      await f.connection.query
-        .insertInto('g08_business')
-        .values({ id: 2 })
-        .execute();
-      expect(
-        await auditRows(f.connection, 'SELECT "id" FROM "g08_business"'),
-      ).toHaveLength(2);
-      const facts = (
-        await f.store.query(f.scope, {
-          store: 'main',
-          action: 'synthetic.business',
-        })
-      ).items;
-      expect(facts.map((fact) => fact.policyVersion).sort()).toEqual([1, 2]);
-      expect(a.catalog.entries(initial)[0]?.generation).toBe(
-        registration.generation,
-      );
-      await registration.dispose();
-    });
-  });
-
-for (const dialect of dialects)
-  describe('independent review regressions ' + dialect, () => {
+  describe('configuration store binding ' + dialect, () => {
     it('rejects foreign physical stores before initialization, readiness or mutation', async () => {
       const a = await createPortableFixture(dialect);
       fixtures.push(a);

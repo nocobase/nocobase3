@@ -83,15 +83,15 @@ export async function prepareAIRuntime(
       chatSettings: { systemPromptMode: 'none', enableSkills: false },
     },
   });
-  deps.ai.llmProviderManager.registerLLMProvider('g18', {
+  deps.ai.llmProviderManager.registerLLMProvider('audit-test', {
     title: 'Synthetic model',
     provider: AuditModelProvider,
   });
   await deps.ai.llmServiceManager.registerLLMService({
-    name: 'g18-model',
-    provider: 'g18',
+    name: 'audit-test-model',
+    provider: 'audit-test',
     enabled: true,
-    enabledModels: ['g18'],
+    enabledModels: ['audit-test'],
   });
   let effects = 0;
   await deps.ai.toolsManager.registerTools({
@@ -99,17 +99,17 @@ export async function prepareAIRuntime(
     requiresContext: false,
     defaultPermission: 'ALLOW',
     definition: {
-      name: 'g18Tool',
+      name: 'auditTestTool',
       description: 'Synthetic local tool',
       schema: { type: 'object', properties: { value: { type: 'string' } } },
     },
     invoke: async () => {
       effects++;
       if (effects % 2 === 1)
-        throw new Error('G18_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL');
+        throw new Error('AGENT_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL');
       return {
         status: 'success',
-        content: 'G18_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL',
+        content: 'AGENT_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL',
       };
     },
   });

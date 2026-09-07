@@ -141,7 +141,7 @@ for (const dialect of dialects)
       expect(await events(foreign)).toHaveLength(0);
     });
 
-    it('A01/A04/A05 normal writes preserve results and safe exact summaries without recursion', async () => {
+    it('normal writes preserve results and safe exact summaries without recursion', async () => {
       const f = await fixture();
       const a = await assembly(f);
       let original: ManagedWriteResult | undefined;
@@ -207,7 +207,7 @@ for (const dialect of dialects)
       );
     });
 
-    it('A02 outer catch, append failure, later throw and business failure cannot commit protected writes', async () => {
+    it('outer catch, append failure, later throw and business failure cannot commit protected writes', async () => {
       const f = await fixture();
       await assembly(f);
       await expect(
@@ -266,7 +266,7 @@ for (const dialect of dialects)
       expect(await events(f)).toHaveLength(1);
     });
 
-    it('A03 cached builder/child/reconnect capture current scope and policy; compile is inert', async () => {
+    it('cached builder/child/reconnect capture current scope and policy; compile is inert', async () => {
       const f = await fixture();
       const cached = f.connection.query
         .insertInto('orders')
@@ -328,7 +328,7 @@ for (const dialect of dialects)
       expect(await events(f)).toHaveLength(5);
     });
 
-    it('A06 secondary source commits locally and observation store is not an implicit destination', async () => {
+    it('secondary source commits locally and observation store is not an implicit destination', async () => {
       const main = await fixture();
       const f = await fixture('secondary');
       await assembly(f, main);
@@ -356,7 +356,7 @@ for (const dialect of dialects)
       expect(await events(f)).toHaveLength(1);
     });
 
-    it('A03 actual immutable clones use live enable/exclude policies and preserve in-flight revision', async () => {
+    it('actual immutable clones use live enable/exclude policies and preserve in-flight revision', async () => {
       const f = await fixture();
       const a = await assembly(f, f, false);
       const base = f.connection.query.deleteFrom('orders').where('id', '=', 0);
@@ -406,7 +406,7 @@ for (const dialect of dialects)
       );
     });
 
-    it('A02 nested caught failure poisons ancestors and missing scope never becomes system', async () => {
+    it('nested caught failure poisons ancestors and missing scope never becomes system', async () => {
       const f = await fixture();
       const a = await assembly(f);
       await auditRaw(
@@ -448,7 +448,7 @@ for (const dialect of dialects)
       ).toHaveLength(0);
     });
 
-    it('A03 readiness refuses nonexistent physical targets, missing local schema, and probe retains existing rows', async () => {
+    it('readiness refuses nonexistent physical targets, missing local schema, and probe retains existing rows', async () => {
       const f = await fixture();
       const a = await assembly(f);
       await f.connection.query
@@ -485,7 +485,7 @@ for (const dialect of dialects)
       );
     });
 
-    it('A03/A06 new connection on the same manager remains locally atomic after explicit capability registration', async () => {
+    it('new connection on the same manager remains locally atomic after explicit capability registration', async () => {
       const main = await fixture();
       const secondary = await fixture('secondary');
       const manager = createDatabaseManager({
@@ -630,7 +630,7 @@ for (const dialect of dialects)
         ).toMatchObject({ actor: { type: 'user', id: 'synthetic-' + id } });
     });
 
-    it('A03 dispose drains a suspended managed write and rejects newly entering writes', async () => {
+    it('dispose drains a suspended managed write and rejects newly entering writes', async () => {
       const f = await fixture();
       const a = await assembly(f);
       let release!: () => void;

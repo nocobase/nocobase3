@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { guardPayload, requirePayload } from '../../server/payload-guard.js';
 import { AuditError } from '../../server/errors.js';
 
-const secret = 'SYNTHETIC-G04-SECRET-DO-NOT-LEAK';
+const secret = 'SYNTHETIC-PAYLOAD-SECRET-DO-NOT-LEAK';
 describe('payload guard', () => {
   it('removes nested secrets from copied output, errors and log snapshots', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);

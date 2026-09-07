@@ -11,7 +11,7 @@ import { describeIntegrationDatabases } from './helpers.js';
 
 describeIntegrationDatabases('Audit transaction lock conflicts', (context) => {
   it('executes the callback once when a real competing write times out', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'nocobase-g02-'));
+    const directory = await mkdtemp(join(tmpdir(), 'nocobase-transaction-'));
     const config: ConnectionConfig =
       context.spec.dialect === 'sqlite'
         ? {

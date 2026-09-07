@@ -63,7 +63,7 @@ async function setup(
     import('@nocobase/app-server/config').AppConfigAccessor
   >({
     config,
-    paths: createConfigPaths({ rootDir: '/synthetic/g09' }),
+    paths: createConfigPaths({ rootDir: '/synthetic/http-audit' }),
     websocket: () => async () => null,
   });
   const carrier = new NodeAuditScopeCarrier(f.scope.appId);
@@ -341,7 +341,7 @@ for (const dialect of dialects)
       const f = await fixture();
       await auditRaw(
         f.connection,
-        'CREATE TABLE "g09_business" ("id" INTEGER PRIMARY KEY)',
+        'CREATE TABLE "http_business" ("id" INTEGER PRIMARY KEY)',
       );
       const s = await setup(f, (audit) => {
         const router = new Hono();
@@ -351,7 +351,7 @@ for (const dialect of dialects)
           async (c) => {
             await auditRaw(
               f.connection,
-              'INSERT INTO "g09_business" ("id") VALUES (1)',
+              'INSERT INTO "http_business" ("id") VALUES (1)',
             );
             await auditRaw(f.connection, 'DROP TABLE "auditEvents"');
             return c.text('approved', 201);
@@ -365,7 +365,7 @@ for (const dialect of dialects)
       expect(s.health.get().state).toBe('degraded');
       const result = await auditRows(
         f.connection,
-        'SELECT * FROM "g09_business"',
+        'SELECT * FROM "http_business"',
       );
       expect(result).toHaveLength(1);
     });

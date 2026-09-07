@@ -45,7 +45,7 @@ describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
         const expiry = '2026-09-05T18:22:30.000Z';
         await store.create({
           log: {
-            id: 'g19-log',
+            id: 'admin-log',
             sourceType: 'fixture',
             messageSnapshot: {},
             status: 'pending',
@@ -54,8 +54,8 @@ describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
           },
           deliveries: [
             {
-              id: 'g19-delivery',
-              notificationId: 'g19-log',
+              id: 'admin-delivery',
+              notificationId: 'admin-log',
               channel: 'in-app',
               recipientSnapshot: {},
               messageSnapshot: {},
@@ -68,21 +68,21 @@ describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
             },
           ],
         });
-        expect((await store.getLog('g19-log'))?.createdAt).toBe(instant);
+        expect((await store.getLog('admin-log'))?.createdAt).toBe(instant);
         expect(
-          (await store.getDelivery('g19-delivery'))?.leaseExpiresAt,
+          (await store.getDelivery('admin-delivery'))?.leaseExpiresAt,
         ).toBeUndefined();
         expect(
-          (await store.claimDelivery('g19-delivery', 'lease', expiry))
+          (await store.claimDelivery('admin-delivery', 'lease', expiry))
             ?.leaseExpiresAt,
         ).toBe(expiry);
-        const claimed = (await store.getDelivery('g19-delivery'))!;
+        const claimed = (await store.getDelivery('admin-delivery'))!;
         expect(
           (
             await store.startAttempt(
               claimed,
               {
-                id: 'g19-attempt',
+                id: 'admin-attempt',
                 deliveryId: claimed.id,
                 sequence: 1,
                 providerName: 'primary',
@@ -110,20 +110,20 @@ describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
           (await store.getDelivery(claimed.id))?.leaseExpiresAt,
         ).toBeUndefined();
         const item = await inbox.deliver({
-          deliveryId: 'g19-inbox',
-          notificationId: 'g19-log',
-          userId: 'g19-user',
+          deliveryId: 'admin-inbox',
+          notificationId: 'admin-log',
+          userId: 'admin-user',
           message: { body: 'synthetic' },
           createdAt: instant,
         });
-        expect((await inbox.list({ userId: 'g19-user' }))[0].createdAt).toBe(
+        expect((await inbox.list({ userId: 'admin-user' }))[0].createdAt).toBe(
           instant,
         );
         expect(
           (
             await inbox.update({
               id: item.id,
-              userId: 'g19-user',
+              userId: 'admin-user',
               action: 'read',
             })
           )?.readAt,
@@ -132,14 +132,14 @@ describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
           (
             await inbox.update({
               id: item.id,
-              userId: 'g19-user',
+              userId: 'admin-user',
               action: 'unread',
             })
           )?.readAt,
         ).toBeUndefined();
         expect(
           await inbox.list({
-            userId: 'g19-user',
+            userId: 'admin-user',
             before: { createdAt: expiry, id: 'z' },
           }),
         ).toHaveLength(1);
@@ -147,40 +147,41 @@ describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
           const physical = await auditRows(
             manager.connection(),
             'SELECT CAST(created_at AS CHAR) AS value FROM notification_dispatches WHERE id = ?',
-            ['g19-log'],
+            ['admin-log'],
           );
           expect(physical[0].value).toBe('2026-09-06 02:20:30');
           // Existing DATETIME rows retain connection-local interpretation and second precision.
           await auditRaw(
             manager.connection(),
             "UPDATE notification_dispatches SET created_at = '2026-09-06 02:20:31' WHERE id = ?",
-            ['g19-log'],
+            ['admin-log'],
           );
-          expect((await store.getLog('g19-log'))?.createdAt).toBe(
+          expect((await store.getLog('admin-log'))?.createdAt).toBe(
             '2026-09-05T18:20:31.000Z',
           );
           await inbox.deliver({
-            deliveryId: 'g19-fractional',
-            notificationId: 'g19-log',
-            userId: 'g19-fractional-user',
+            deliveryId: 'admin-fractional',
+            notificationId: 'admin-log',
+            userId: 'admin-fractional-user',
             message: { body: 'synthetic precision fixture' },
             createdAt: '2026-09-05T18:20:30.123Z',
           });
           expect(
-            (await inbox.list({ userId: 'g19-fractional-user' }))[0].createdAt,
+            (await inbox.list({ userId: 'admin-fractional-user' }))[0]
+              .createdAt,
           ).toBe('2026-09-05T18:20:30.000Z');
           await inbox.deliver({
-            deliveryId: 'g19-same-second',
-            notificationId: 'g19-log',
-            userId: 'g19-fractional-user',
+            deliveryId: 'admin-same-second',
+            notificationId: 'admin-log',
+            userId: 'admin-fractional-user',
             message: { body: 'synthetic cursor fixture' },
             createdAt: '2026-09-05T18:20:30.234Z',
           });
           const first = (
-            await inbox.list({ userId: 'g19-fractional-user', limit: 1 })
+            await inbox.list({ userId: 'admin-fractional-user', limit: 1 })
           )[0];
           const second = await inbox.list({
-            userId: 'g19-fractional-user',
+            userId: 'admin-fractional-user',
             limit: 1,
             before: { id: first.id, createdAt: first.createdAt },
           });
@@ -188,7 +189,7 @@ describe.each(dialects)('administrative timestamp storage %s', (dialect) => {
           expect(second[0].id).not.toBe(first.id);
           expect(
             await inbox.list({
-              userId: 'g19-fractional-user',
+              userId: 'admin-fractional-user',
               before: { id: second[0].id, createdAt: second[0].createdAt },
             }),
           ).toHaveLength(0);

@@ -148,9 +148,6 @@ task outcome. Hosts resolve audit storage lazily to avoid bootstrap cycles.
 Before storage exists, hosts must choose explicit unobserved bootstrap or required
 rejection, and must never claim that an event was saved.
 
-The complete implementation inventory, exact methods, outcomes, proof commands,
-and remaining composition boundaries are maintained in the G19 coverage report.
-
 ## Agent and Job observations
 
 The AI employee plugin exports an optional `./server/audit` bridge. Trusted host
@@ -166,12 +163,10 @@ or tool results. Observer failure preserves the actual business result and does
 not replay side effects. These observations are not atomic with external effects
 and do not promise delivery after process termination.
 
-The tested Job example uses actual queue retry attempts and idempotent terminal
-recording with identity supplied by a trusted host verifier. It demonstrates an
-integration pattern; it does not automatically instrument every Job or implement
-cross-process identity recovery. Workflow and file-operation plugins expose their
-own optional bridges. Producer bridge implementations and tests do not by
-themselves establish production App registration or startup order.
+Custom Jobs can restore identity through a trusted host verifier and record
+attempts with idempotency keys. This requires explicit integration; arbitrary Jobs
+are not automatically instrumented. Workflow and file-operation plugins expose
+their own optional bridges, which the host binds during application startup.
 
 ## Application composition
 

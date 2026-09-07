@@ -16,7 +16,7 @@ import { getAuthorizationClient } from '../client/runtime.js';
 it('keeps a reused matched denial in the actual access provider without page fallback', async () => {
   const runtime = await resolveAppRuntime(
     defineAppRuntime({
-      packageName: '@synthetic/g20',
+      packageName: '@synthetic/composition',
       config: createAppClientConfig,
       serviceProviders: [AuthorizationServiceProvider],
       plugins: defineClientPlugins([]),

@@ -7,7 +7,7 @@ import {
 import { ChatGenerationChunk, type ChatResult } from '@langchain/core/outputs';
 import { LLMProvider } from '@nocobase/ai-employee';
 
-export const auditSentinel = 'G18_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL';
+export const auditSentinel = 'AGENT_MODEL_PROMPT_ARGS_OUTPUT_SENTINEL';
 /** Only the external model is substituted; LangChain, tools and repositories execute normally. */
 export class AuditModel extends BaseChatModel {
   async *_streamResponseChunks(
@@ -31,7 +31,7 @@ export class AuditModel extends BaseChatModel {
     });
   }
   _llmType(): string {
-    return 'g18-deterministic';
+    return 'audit-deterministic';
   }
   bindTools(): this {
     return this;
@@ -47,7 +47,7 @@ export class AuditModel extends BaseChatModel {
             tool_calls: [
               {
                 id: globalThis.crypto.randomUUID(),
-                name: 'g18Tool',
+                name: 'auditTestTool',
                 args: { value: auditSentinel },
                 type: 'tool_call',
               },

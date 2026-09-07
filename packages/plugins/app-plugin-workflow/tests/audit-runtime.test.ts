@@ -43,7 +43,7 @@ for (const dialect of auditDialects)
                 { actor: { type: 'agent', id: 'agent' } },
                 () =>
                   dispatcher.trigger(workflow, {
-                    apiKey: 'G17_SECRET_SENTINEL',
+                    apiKey: 'WORKFLOW_SECRET_SENTINEL',
                   }),
               ),
           ),
@@ -66,7 +66,9 @@ for (const dialect of auditDialects)
         expect(
           events.every((e) => e.runId === String(tasks[0].executionId)),
         ).toBe(true);
-        expect(JSON.stringify(events)).not.toContain('G17_SECRET_SENTINEL');
+        expect(JSON.stringify(events)).not.toContain(
+          'WORKFLOW_SECRET_SENTINEL',
+        );
         expect((await readRun(f.database, tasks[0].executionId)).status).toBe(
           EXECUTION_STATUS.RESOLVED,
         );
@@ -106,7 +108,7 @@ for (const dialect of auditDialects)
         const client = await f.connection.client<import('knex').Knex>();
         await client.schema.renameTable(
           'auditEvents',
-          'g17_unavailable_events',
+          'workflow_unavailable_events',
         );
         await expect(p.exit(NODE_RUN_STATUS.RESOLVED)).rejects.toBeInstanceOf(
           WorkflowAuditWriteError,
@@ -116,7 +118,7 @@ for (const dialect of auditDialects)
         );
         expect(execution.status).toBe(EXECUTION_STATUS.STARTED);
         await client.schema.renameTable(
-          'g17_unavailable_events',
+          'workflow_unavailable_events',
           'auditEvents',
         );
         expect(
@@ -140,7 +142,7 @@ for (const dialect of auditDialects)
       });
       runtime.registerInstruction(
         defineTestInstruction('throws', async () => {
-          throw new Error('G17_EXCEPTION_SECRET');
+          throw new Error('WORKFLOW_EXCEPTION_SECRET');
         }),
       );
       try {
@@ -153,7 +155,7 @@ for (const dialect of auditDialects)
           (await f.events()).filter((e) => e.action === 'workflow.failed'),
         ).toHaveLength(1);
         expect(JSON.stringify(await f.events())).not.toContain(
-          'G17_EXCEPTION_SECRET',
+          'WORKFLOW_EXCEPTION_SECRET',
         );
         f.disable();
         await runtime.trigger(workflow, {});
@@ -229,7 +231,7 @@ for (const dialect of auditDialects)
           },
           () =>
             runtime.resume(String(run.id), String(node.id), {
-              password: 'G17_RESUME_SECRET',
+              password: 'WORKFLOW_RESUME_SECRET',
             }),
         );
         const events = await f.events();
@@ -248,7 +250,7 @@ for (const dialect of auditDialects)
           events.find((event) => event.action === 'workflow.completed')
             ?.initiator?.id,
         ).toBe('initiator');
-        expect(JSON.stringify(events)).not.toContain('G17_RESUME_SECRET');
+        expect(JSON.stringify(events)).not.toContain('WORKFLOW_RESUME_SECRET');
       } finally {
         await runtime.dispose();
         await f.dispose();
