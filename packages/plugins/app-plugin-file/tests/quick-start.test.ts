@@ -1,4 +1,4 @@
-import { File as NodeFile } from 'node:buffer';
+// @vitest-environment node
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -27,16 +27,7 @@ import {
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { orderAttachmentRoutes } from '../skills/nocobase-app-plugin-file/reference/example/server/routes/order-attachments.js';
 
@@ -47,9 +38,6 @@ const example = new URL(
 );
 const directory = fileURLToPath(new URL('database/migrations', example));
 const endpoint = '/base/api/purchase-orders/order-a/attachments';
-
-beforeAll(() => vi.stubGlobal('File', NodeFile));
-afterAll(() => vi.unstubAllGlobals());
 
 it('typechecks the bundled example against public package APIs', () => {
   execFileSync(
@@ -77,9 +65,6 @@ describe('bundled file quick start', () => {
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     await database
-      .createMigrator({ directory, packageName: 'file-quick-start' })
-      .upTo(migrationName);
-    await database
       .createMigrator({
         directory: fileURLToPath(
           new URL(
@@ -90,6 +75,11 @@ describe('bundled file quick start', () => {
         packageName: '@nocobase/app-plugin-authorization',
       })
       .upTo('202608210004_create_restriction_rules');
+    // The App migration is the latest batch, so its rollback is isolated from
+    // the pre-existing Authorization schema.
+    await database
+      .createMigrator({ directory, packageName: 'file-quick-start' })
+      .upTo(migrationName);
     authorization = createAppAuthorization({
       connection: database.connection(),
     });
