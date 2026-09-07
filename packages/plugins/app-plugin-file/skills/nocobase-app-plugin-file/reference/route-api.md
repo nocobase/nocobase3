@@ -31,7 +31,9 @@ in `router.route(...)`; the Application adds that prefix for every
 `authorize` is optional, but an application business feature should use it to
 delegate `list`, `upload`, `read`, `issue-token`, and `delete` to the App's
 existing domain authorization. The callback receives the Hono context, the
-exact `FileRouteAction`, and a record for record-specific actions.
+exact `FileRouteAction`, and a record for record-specific actions. Return
+`false` for `FILE_FORBIDDEN` (403), `true`/`void` to allow, or a Response/throwing
+guard to stop with the App's own error. Omitting it does not add business ACL.
 
 Choose either `database` plus `table`/optional `scope`/`order`, or a custom
 `store`; the two forms are mutually exclusive. `defaultDisk`,
@@ -60,7 +62,8 @@ content, request `POST /:id/token` and use its `{ url, expiresAt }` result. A
 Public file returns the unsigned URL with `expiresAt: null`. Never store or log
 a Token URL.
 
-Delete is idempotent and returns `204`. A missing scoped record returns `404`
+Delete removes the database record first, then attempts object cleanup; `204`
+does not guarantee cleanup succeeded. It is idempotent. A missing scoped record returns `404`
 for read and content operations.
 
 ## Upload contract and validation
@@ -76,13 +79,16 @@ Before writing to storage, the Route validates:
 - configured exact MIME types (`FILE_TYPE_NOT_ALLOWED`).
 
 The Route uses a 50 MiB single-file limit when `maxSize` is omitted and applies
-the limit before storage or database mutation. The server normalizes the
+the limit before storage or database mutation. Configured `maxSize` and
+`maxFiles` must be positive safe integers; invalid configuration fails at Route
+creation. MIME types are exact declared values, not wildcard or signature
+checks. The server normalizes the
 display filename and generates the storage key independently; business code
 must not derive a key from the uploaded filename.
 
 When `maxFiles` is configured, one Route instance serializes upload limit
-checks and writes by the current request path, which represents the actual
-owner scope for the normal business route shape. Concurrent uploads for the
+checks and writes by normalized database scope (or request path for a custom
+Store). Concurrent uploads for the
 same owner in one process therefore cannot both pass the list check. Different
 owners remain independent. Multiple application processes or nodes can still
 exceed the limit without a database constraint or distributed mechanism.

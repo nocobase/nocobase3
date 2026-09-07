@@ -2042,19 +2042,25 @@ importers:
 
   packages/plugins/app-plugin-file:
     dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      react-markdown:
+        specifier: 'catalog:'
+        version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
       remark-gfm:
         specifier: 'catalog:'
         version: 4.0.1
     devDependencies:
-      '@base-ui/react':
-        specifier: ^1.6.0
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -2097,6 +2103,9 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
+      '@types/semver':
+        specifier: ^7.7.0
+        version: 7.8.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -2106,9 +2115,6 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -2118,9 +2124,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
-      react-markdown:
-        specifier: 'catalog:'
-        version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
+      semver:
+        specifier: ^7.7.2
+        version: 7.8.5
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
@@ -7217,6 +7223,9 @@ packages:
 
   '@types/seedrandom@3.0.8':
     resolution: {integrity: sha512-TY1eezMU2zH2ozQoAFAQFOPpvP15g+ZgSfTZt31AUUH/Rxtnz3H+A/Sv1Snw2/amp//omibc+AEkTaA8KUeOLQ==}
+
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@types/tough-cookie@4.0.0':
     resolution: {integrity: sha512-I99sngh224D0M7XgW1s120zxCt3VYQ3IQsuw3P3jbq5GG4yc79+ZjyKznyOGIQrflfylLgcfekeZW/vk0yng6A==}
@@ -17638,6 +17647,8 @@ snapshots:
       '@types/node': 22.20.1
 
   '@types/seedrandom@3.0.8': {}
+
+  '@types/semver@7.8.0': {}
 
   '@types/tough-cookie@4.0.0': {}
 

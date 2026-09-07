@@ -100,6 +100,49 @@ describe('createFileRoute', () => {
     verifyAccessToken.mockReset().mockImplementation(() => undefined);
   });
 
+  it.each([NaN, Infinity, -1, 0, 1.5])(
+    'rejects invalid maxSize %s at route creation',
+    (maxSize) => {
+      expect(() => createApp({ limits: { maxSize } })).toThrow(
+        'File route maxSize must be a positive safe integer.',
+      );
+    },
+  );
+
+  it.each([
+    ['GET', '', 'list'],
+    ['POST', '', 'upload'],
+    ['GET', '/file-1', 'read'],
+    ['POST', '/file-1/token', 'issue-token'],
+    ['DELETE', '/file-1', 'delete'],
+  ])(
+    'stops %s %s when its authorizer returns false',
+    async (method, suffix, action) => {
+      const authorize = vi.fn<NonNullable<CreateFileRouteOptions['authorize']>>(
+        () => false,
+      );
+      const response = await createApp({ authorize }).request(
+        `${MOUNT_PATH}${suffix}`,
+        { method },
+      );
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'FILE_FORBIDDEN' },
+      });
+      expect(authorize.mock.calls[0]?.[1]).toBe(action);
+      expect(put).not.toHaveBeenCalled();
+      expect(store.create).not.toHaveBeenCalled();
+      expect(store.remove).not.toHaveBeenCalled();
+      expect(issueAccessUrl).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts a boolean permit without changing existing guard behavior', async () => {
+    expect(
+      (await createApp({ authorize: () => true }).request(MOUNT_PATH)).status,
+    ).toBe(200);
+  });
+
   it('defines exactly the six fixed endpoints', () => {
     const route = createFileRoute({
       store,

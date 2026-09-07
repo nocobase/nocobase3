@@ -76,18 +76,28 @@ import {
   type FileRouteAuthorizer,
 } from '@nocobase/app-plugin-file/server';
 import { databaseManagerToken } from '@nocobase/db';
-import { Hono, type MiddlewareHandler } from 'hono';
+import { Hono } from 'hono';
+import { every } from 'hono/combine';
+import { HTTPException } from 'hono/http-exception';
 
 type Env = {
   Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
 };
+
+function parseOrderId(value: string | undefined): number {
+  const orderId = Number(value);
+  if (!Number.isSafeInteger(orderId) || orderId < 1) {
+    throw new HTTPException(400, { message: 'A valid orderId is required.' });
+  }
+  return orderId;
+}
 
 const authorizePurchaseOrderFile: FileRouteAuthorizer = async (
   context,
   action,
   file,
 ) => {
-  const orderId = Number(context.req.param('orderId'));
+  const orderId = parseOrderId(context.req.param('orderId'));
   return authorizePurchaseOrder(context, { orderId, action, file });
 };
 
@@ -99,27 +109,19 @@ export const purchaseOrderAttachmentRoutes: AppApiRouteContribution<Application>
     const drive = app.config.get(driveConfig);
     const appSettings = app.config.get(appConfig);
     const session = app.container.resolve(sessionManagerToken).config;
-    const authenticate =
-      authentication.required() as unknown as MiddlewareHandler<Env>;
-    const resolveAuthorization =
-      authorization.middleware() as unknown as MiddlewareHandler<Env>;
-    const requireManagement: MiddlewareHandler<Env> = (context, next) =>
-      authenticate(context, async () => {
-        await resolveAuthorization(context, next);
-      });
+    const requireManagement = every(
+      authentication.required(),
+      authorization.middleware(),
+    );
 
     router.route(
       '/purchase-orders/:orderId/attachments',
       createFileRoute({
         database: app.container.resolve(databaseManagerToken),
         table: 'purchaseOrderAttachments',
-        scope: (context) => {
-          const orderId = Number(context.req.param('orderId'));
-          if (!Number.isSafeInteger(orderId) || orderId < 1) {
-            throw new TypeError('A valid orderId is required.');
-          }
-          return { orderId };
-        },
+        scope: (context) => ({
+          orderId: parseOrderId(context.req.param('orderId')),
+        }),
         drive: app.container.resolve(driveManagerToken),
         defaultDisk: drive.default,
         publicBasePath: appSettings.publicBasePath,
@@ -139,8 +141,13 @@ export const purchaseOrderAttachmentRoutes: AppApiRouteContribution<Application>
 plugin API. It must validate the parent record and map every
 `FileRouteAction` to the App's existing authorization model. If authorization
 returns record conditions, apply them while loading the parent; do not reduce a
-conditional decision to a plain permit. Returning a denial Response or throwing
-the App's standard authorization error must stop the file operation.
+conditional decision to a plain permit. Return `false` to deny with
+`FILE_FORBIDDEN` (403), or return a denial Response/throw the App's standard
+error. `true` and `void` permit the operation; never leave a permissive stub.
+For a conventional attachment field, map `list`, `read`, and `issue-token` to
+parent read permission, and `upload`/`delete` to parent update permission.
+Use the App's more specific policy when these operations have distinct grants.
+Authentication alone and `{ orderId }` scope do not authorize the parent.
 
 Pass the combined authentication and authorization middleware through
 `createFileRoute()`'s `auth` option. The factory applies it to management
@@ -176,6 +183,7 @@ import {
   createFilesClient,
   FileUploadField,
   type FileRecord,
+  type FileUploadStatus,
 } from '@nocobase/app-plugin-file/client';
 import { useMemo, useState } from 'react';
 
@@ -190,8 +198,11 @@ const client = useMemo(
 );
 
 const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
+const [attachmentUploadStatus, setAttachmentUploadStatus] =
+  useState<FileUploadStatus>('idle');
 
 <FileUploadField
+  key={orderId}
   client={client}
   value={attachments}
   onChange={setAttachments}
@@ -201,6 +212,9 @@ const [attachments, setAttachments] = useState<readonly FileRecord[]>([]);
   maxFiles={10}
   removeOnDelete
 />;
+
+// Include this condition in the owning form's submit-disabled logic.
+const attachmentsPending = attachmentUploadStatus !== 'idle';
 ```
 
 `endpoint` is relative to the v3 Application's `/api` root. Do not include
@@ -209,8 +223,12 @@ injected `ApiClient` owns Cookie authentication, deployment base paths, request
 headers, and multipart transport.
 
 Persist the parent record before constructing its scoped endpoint or enabling
-uploads. Initialize edit and read views with `await client.list()`. Treat
-`uploading` and `error` status as form-submission blockers. Use `FileList`,
+uploads. Initialize edit and read views with `await client.list()` before
+enabling edits or submission; surface load failures instead of treating them as
+an empty list. Key the owning form by the saved owner ID so its controlled
+values reset when navigating between records. Memoize the client as above;
+changing it cancels the previous component upload session. Treat `uploading`
+and `error` status as form-submission blockers. Use `FileList`,
 `FilePreviewField`, or `FilePreviewDialog` in application-owned read views as
 needed.
 
@@ -219,6 +237,23 @@ add a lazy entry to the App's existing `client/routes.ts`. Do not add a Client
 Route to the File plugin. Put application labels, validation messages, and page
 copy in the App's `client/locales/`; the reusable File components keep their
 own plugin namespace.
+
+### File lifecycle: immediate persistence, not a form transaction
+
+| User action                          | Server effect                                                                                                                                         |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Select a file                        | Uploads immediately and creates the scoped record.                                                                                                    |
+| Remove with `removeOnDelete`         | Immediately deletes the file record and attempts object cleanup.                                                                                      |
+| Remove without `removeOnDelete`      | Changes only controlled state; the App must deliberately delete or reconcile it.                                                                      |
+| Cancel the form or an upload request | Does not roll back writes already completed on the server. Reload with `client.list()` when reconciling.                                              |
+| Select another single file           | First remove the old file explicitly. This is not atomic replacement; retain the old file until a custom replacement workflow succeeds when required. |
+| Delete the parent record             | SQL cascade removes rows, not Drive objects. The App must coordinate cleanup before losing disk/key metadata.                                         |
+
+Use the public components by default. Install the Registry `component-ui` only
+when the application needs editable UI source; do not maintain both versions
+for the same field. Keep MIME rules distinct: Client `accept` permits patterns
+such as `image/*`, but Server `mimeTypes` requires exact types such as
+`['image/png', 'image/jpeg']` and validates the declared MIME, not file contents.
 
 ## 5. Validate the application workflow
 

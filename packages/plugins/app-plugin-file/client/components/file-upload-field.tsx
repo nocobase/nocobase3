@@ -45,7 +45,15 @@ function makeKey(file: File): string {
   return `${file.name}:${file.size}:${file.lastModified}:${Math.random()}`;
 }
 
-export function FileUploadField({
+export function FileUploadField(props: FileUploadFieldProps): ReactElement {
+  const [session, setSession] = useState({ client: props.client, key: 0 });
+  if (session.client !== props.client) {
+    setSession({ client: props.client, key: session.key + 1 });
+  }
+  return <FileUploadSession key={session.key} {...props} />;
+}
+
+function FileUploadSession({
   client,
   value,
   onChange,
@@ -197,9 +205,7 @@ export function FileUploadField({
 
   const addFiles = (files: readonly File[]): void => {
     if (disabled) return;
-    const available = multiple
-      ? effectiveMax - value.length - items.length
-      : 1 - items.length;
+    const available = effectiveMax - value.length - items.length;
     if (files.length > available) {
       report(
         t('errors.maxFilesReached', {
@@ -371,12 +377,7 @@ export function FileUploadField({
           type='button'
           className='flex min-h-20 min-w-32 flex-col items-center justify-center rounded-md border border-dashed px-3 py-2'
           onClick={() => inputRef.current?.click()}
-          disabled={
-            disabled ||
-            (multiple
-              ? value.length + items.length >= effectiveMax
-              : items.length >= 1)
-          }
+          disabled={disabled || value.length + items.length >= effectiveMax}
         >
           <UploadCloud aria-hidden='true' />
           <span>{chooseLabel}</span>

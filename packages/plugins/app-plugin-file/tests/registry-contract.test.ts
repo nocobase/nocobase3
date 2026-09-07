@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
+import { satisfies } from 'semver';
 
 interface RegistrySource {
   readonly include: readonly string[];
@@ -85,12 +86,28 @@ describe('file plugin Registry contract', () => {
     expect(item?.title).toBeTruthy();
     expect(item?.description).toBeTruthy();
     expect(item?.docs).toBeTruthy();
-    expect(item?.dependencies).toContain('@nocobase/app-plugin-file@^0.0.1');
+    const metadata = JSON.parse(read('package.json')) as {
+      name: string;
+      version: string;
+    };
+    const dependency = item?.dependencies.find((value) =>
+      value.startsWith(`${metadata.name}@`),
+    );
+    expect(dependency).toBeDefined();
+    expect(
+      satisfies(
+        metadata.version,
+        dependency?.slice(metadata.name.length + 1) ?? '',
+      ),
+    ).toBe(true);
     expect(item?.dependencies).toContain('react-markdown@^10.1.0');
     expect(item?.dependencies).toContain('remark-gfm@^4.0.1');
-    expect(item?.meta.nocobase?.requiresPlugins).toEqual({
-      '@nocobase/app-plugin-file': '>=0.0.1 <0.1.0',
-    });
+    expect(
+      satisfies(
+        metadata.version,
+        item?.meta.nocobase?.requiresPlugins?.[metadata.name] ?? '',
+      ),
+    ).toBe(true);
     expect(
       item?.dependencies.every((dependency) =>
         /^(?:@[^/]+\/[^@]+|[^@]+)@[^\s]+$/u.test(dependency),

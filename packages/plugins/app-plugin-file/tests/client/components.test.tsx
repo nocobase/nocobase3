@@ -316,28 +316,79 @@ describe('FileUploadField', () => {
     expect(screen.queryByText('replacement.png')).not.toBeInTheDocument();
   });
 
-  it('replaces a controlled single file without retaining the old record', async () => {
+  it('requires explicit removal before uploading another single file', async () => {
     const client = mockClient({
       upload: vi
         .fn()
         .mockResolvedValue(fileRecord({ id: 'new-file', filename: 'new.png' })),
     });
+    const onError = vi.fn();
     render(
       <UploadHarness
         client={client}
         initialValue={[fileRecord({ filename: 'old.png' })]}
+        removeOnDelete
+        onError={onError}
       />,
     );
+    expect(screen.getByRole('button', { name: 'Choose file' })).toBeDisabled();
+    const file = new File(['new'], 'new.png', { type: 'image/png' });
     fireEvent.change(screen.getByLabelText('Choose file'), {
-      target: {
-        files: [new File(['new'], 'new.png', { type: 'image/png' })],
-      },
+      target: { files: [file] },
+    });
+    expect(client.upload).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove: old.png' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('value')).toBeEmptyDOMElement(),
+    );
+    expect(client.remove).toHaveBeenCalledWith('file-1');
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [file] },
     });
     await waitFor(() =>
       expect(screen.getByTestId('value')).toHaveTextContent('new.png'),
     );
-    expect(screen.getByTestId('value')).not.toHaveTextContent('old.png');
-    expect(screen.queryByText('old.png')).not.toBeInTheDocument();
+  });
+
+  it('aborts the previous client session and ignores its late upload result', async () => {
+    let finish: ((file: FileRecord) => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const oldClient = mockClient({
+      upload: vi.fn((_file, options) => {
+        signal = options?.signal;
+        return new Promise<FileRecord>((resolve) => {
+          finish = resolve;
+        });
+      }),
+    });
+    const newClient = mockClient({
+      upload: vi
+        .fn()
+        .mockResolvedValue(
+          fileRecord({ id: 'new-owner', filename: 'new.txt' }),
+        ),
+    });
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <FileUploadField client={oldClient} value={[]} onChange={onChange} />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [new File(['old'], 'old.txt')] },
+    });
+    rerender(
+      <FileUploadField client={newClient} value={[]} onChange={onChange} />,
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByText('old.txt')).not.toBeInTheDocument();
+    finish?.(fileRecord({ filename: 'old.txt' }));
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [new File(['new'], 'new.txt')] },
+    });
+    await waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'new-owner' }),
+    ]);
   });
 
   it.each(['*', '*/*'])(

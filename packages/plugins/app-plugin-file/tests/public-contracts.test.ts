@@ -114,6 +114,20 @@ describe('file plugin public contracts', () => {
     expect(tsconfig).not.toContain('app-portal-sdk');
   });
 
+  it('declares dependencies imported by published client components', () => {
+    const metadata = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    for (const name of [
+      '@base-ui/react',
+      'lucide-react',
+      'react-markdown',
+      'remark-gfm',
+    ]) {
+      expect(metadata.dependencies[name]).toBeTruthy();
+    }
+  });
+
   it('keeps application assembly APIs internal', () => {
     expect(Object.keys(serverApi).sort()).toEqual([
       'DEFAULT_FILE_ROUTE_VISIBILITY',

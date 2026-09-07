@@ -2,6 +2,7 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   errors: {
+    fileForbidden: 'File operation is not permitted.',
     contentPathInvalid: 'File content path is invalid.',
     contentPathQueryFragment:
       'File content path must be a root-relative path without a query or fragment.',

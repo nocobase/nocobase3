@@ -57,13 +57,16 @@ Application owns
 - Store stable metadata only. Never persist final URLs or access tokens.
 - Keep table names and scope fields in Server code. Derive scope from validated
   Route parameters and apply it to every list, read, create, and delete query.
-- Persist the parent record before constructing its scoped client or enabling
-  uploads. Initialize edit and read views with `client.list()`.
+- Persist the parent before uploading. Memoize the scoped client, key the
+  owning form by owner ID, and initialize edit/read views with `client.list()`.
+  Uploads persist immediately; cancelling the form does not roll them back.
+- Single-file mode is not replacement: explicitly remove the existing file
+  before another upload. SQL cascade does not clean up Drive objects.
 - Use a unique owner key for one-to-one relations and an indexed owner key for
   one-to-many relations. Keep `UNIQUE (disk, key)` on each file table.
-- Each application Route owns authentication and authorization. Map every
-  `FileRouteAction` to the App's existing business policy and authorize the
-  parent record before allowing file operations.
+- Each Route owns authentication and authorization. Scope is not ACL. Map
+  every `FileRouteAction` to the App's parent-record policy; `false` denies,
+  `true`/`void` allows. Never leave a permissive authorization stub.
 - `FileUploadField` removes only local controlled state by default. Use
   `removeOnDelete` for immediate Server deletion or let the App workflow call
   `client.remove()` deliberately.

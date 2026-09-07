@@ -2,6 +2,7 @@ import type { FileServerResource } from './en-US.js';
 
 const zhCN: FileServerResource = {
   errors: {
+    fileForbidden: '不允许执行此文件操作。',
     contentPathInvalid: '文件内容路径无效。',
     contentPathQueryFragment:
       '文件内容路径必须是根相对路径，且不能包含查询参数或片段。',

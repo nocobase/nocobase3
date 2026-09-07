@@ -34,11 +34,16 @@ export interface FileStore {
 export type FileRouteAction =
   'list' | 'upload' | 'read' | 'issue-token' | 'delete';
 
+/**
+ * Authorize the parent record for every management action; scope is not ACL.
+ * Return false to deny (403), true/void to allow, or a Response to stop.
+ * Existing throwing guards are supported. Content uses public/token access.
+ */
 export type FileRouteAuthorizer = (
   context: Context,
   action: FileRouteAction,
   file?: FileRecord,
-) => void | Response | Promise<void | Response>;
+) => void | boolean | Response | Promise<void | boolean | Response>;
 
 export type FileVisibility = 'private' | 'public';
 
@@ -65,7 +70,9 @@ interface CreateFileRouteCommonOptions {
   readonly publicBasePath: string;
   readonly tokenSecret?: string;
   readonly audience: string;
+  /** Management middleware only; do not wrap the content route in login middleware. */
   readonly auth: MiddlewareHandler;
+  /** Required for business ACL unless auth already checks the parent and action. */
   readonly authorize?: FileRouteAuthorizer;
   readonly disk?: string;
   readonly visibility?: FileRouteVisibilityOptions;
@@ -75,6 +82,7 @@ interface CreateFileRouteCommonOptions {
 export interface DatabaseFileRouteSource {
   readonly database: DatabaseManager;
   readonly table: string;
+  /** Server-owned equality filters applied to every query, not user authorization. */
   readonly scope?: DatabaseFileScopeResolver;
   readonly order?: DatabaseFileOrder;
   readonly store?: never;

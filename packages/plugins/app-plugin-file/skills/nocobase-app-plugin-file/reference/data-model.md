@@ -43,7 +43,9 @@ collection
 ```
 
 Also register the inverse `hasOne` relation on the business table. The unique
-owner constraint is the durable one-to-one guarantee. Relation names are
+owner constraint is the durable one-to-one guarantee. Use `maxFiles: 1` on
+the Route and single-file mode in the Client; replacement requires explicit
+removal, not a second insert. Relation names are
 logical metadata; `profileId` is the explicit physical foreign-key field.
 
 ## One-to-many
@@ -67,6 +69,10 @@ predictable.
 
 Write every standard field and reverse operation explicitly in the migration;
 do not import a live collection definition or schema helper.
+
+SQL `onDelete('cascade')` deletes file rows only. It does not run the file
+Route's Drive cleanup. The App must coordinate parent deletion and object
+cleanup without discarding the metadata needed to retry failed cleanup.
 
 ## Constraints and scope
 

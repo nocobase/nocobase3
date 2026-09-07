@@ -9,6 +9,7 @@ export interface FileRecord {
   readonly public: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Unsigned content path. Private files require createAccessUrl(), even when logged in. */
   readonly contentUrl: string;
 }
 
@@ -47,17 +48,20 @@ export interface FileUiLabels {
 }
 
 export interface FileUploadFieldProps {
+  /** Memoize per saved owner. Changing the client cancels the previous upload session. */
   readonly client: FilesClient;
   readonly value: readonly FileRecord[];
   readonly onChange: (value: readonly FileRecord[]) => void;
   readonly onError?: (error: Error) => void;
   readonly onStatusChange?: (status: FileUploadStatus) => void;
+  /** Single-file mode requires explicit removal before another upload; it is not replace. */
   readonly multiple?: boolean;
   readonly accept?: readonly string[];
   readonly maxSize?: number;
   readonly maxFiles?: number;
   readonly public?: boolean;
   readonly disabled?: boolean;
+  /** Delete immediately on the server; false only changes local controlled state. */
   readonly removeOnDelete?: boolean;
   readonly labels?: FileUiLabels;
 }

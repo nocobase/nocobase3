@@ -37,7 +37,15 @@ function accepts(file: File, rules: readonly string[]): boolean {
   });
 }
 
-export function FileUploadField({
+export function FileUploadField(props: FileUploadFieldProps): ReactElement {
+  const [session, setSession] = useState({ client: props.client, key: 0 });
+  if (session.client !== props.client) {
+    setSession({ client: props.client, key: session.key + 1 });
+  }
+  return <FileUploadSession key={session.key} {...props} />;
+}
+
+function FileUploadSession({
   client,
   value,
   onChange,
@@ -158,7 +166,7 @@ export function FileUploadField({
 
   const addFiles = (files: readonly File[]): void => {
     if (disabled) return;
-    if (files.length + (multiple ? value.length : 0) + items.length > maximum) {
+    if (files.length + value.length + items.length > maximum) {
       onError?.(new Error('The maximum number of files has been reached.'));
       return;
     }
@@ -301,12 +309,7 @@ export function FileUploadField({
           variant='outline'
           className='min-h-20 min-w-32'
           onClick={() => inputRef.current?.click()}
-          disabled={
-            disabled ||
-            (multiple
-              ? value.length + items.length >= maximum
-              : items.length >= 1)
-          }
+          disabled={disabled || value.length + items.length >= maximum}
         >
           <UploadCloud aria-hidden='true' />
           {chooseLabel}

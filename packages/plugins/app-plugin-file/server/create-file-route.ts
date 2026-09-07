@@ -86,7 +86,8 @@ class FileRouteError extends Error {
 
 export function createFileRoute(options: CreateFileRouteOptions): Hono {
   const store = resolveFileStore(options);
-  assertMaxFiles(options.limits?.maxFiles);
+  assertLimit(options.limits?.maxFiles, 'maxFiles');
+  assertLimit(options.limits?.maxSize, 'maxSize');
   if (!options.store) {
     registerDatabaseFileSource({
       database: options.database,
@@ -298,12 +299,9 @@ function resolveFileStore(options: CreateFileRouteOptions): FileStore {
   });
 }
 
-function assertMaxFiles(maxFiles: number | undefined): void {
-  if (
-    maxFiles !== undefined &&
-    (!Number.isSafeInteger(maxFiles) || maxFiles <= 0)
-  ) {
-    throw new TypeError('File route maxFiles must be a positive safe integer.');
+function assertLimit(value: number | undefined, name: string): void {
+  if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
+    throw new TypeError(`File route ${name} must be a positive safe integer.`);
   }
 }
 
@@ -369,6 +367,14 @@ async function authorize(
 ): Promise<Response | undefined> {
   try {
     const result = await options.authorize?.(context, action, record);
+    if (result === false) {
+      throw new FileRouteError(
+        'FILE_FORBIDDEN',
+        'errors.fileForbidden',
+        'File operation is not permitted.',
+        403,
+      );
+    }
     return result instanceof Response ? result : undefined;
   } catch (error) {
     if (error instanceof Response) return error;

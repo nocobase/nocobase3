@@ -29,6 +29,9 @@ and the dialog supports previous/next navigation from an initial file index.
 Markdown previews use safe React rendering with GFM support and no raw HTML.
 Office and OpenDocument files use Office Online only when their Public URL or
 fresh Private access URL is an internet-accessible absolute HTTP(S) URL;
-relative, localhost, blob, and failed embeds fall back to download.
+relative, localhost, blob, and failed embeds fall back to download. This is
+external processing: the source URL (including a Private capability token) is
+sent to Microsoft's service. Do not supply absolute URLs for confidential
+Office documents unless the application explicitly permits that processing.
 Lists and dialogs expose `onError` for Private download URL failures, and
 `download={false}` removes both toolbar and fallback download actions.
