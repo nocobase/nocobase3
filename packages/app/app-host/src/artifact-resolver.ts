@@ -68,6 +68,7 @@ const DEFAULT_EXPANDED_REVISION_LIMIT = 3;
 export class DriveArtifactResolver implements ArtifactResolver {
   async restore(reference: ArtifactReference): Promise<ResolvedArtifact> {
     validateArtifactReference(reference);
+    await this.revisionPrunes.get(reference.appId);
     const targetDir = path.join(
       this.appDeploymentsDir,
       reference.appId,
@@ -117,6 +118,9 @@ export class DriveArtifactResolver implements ArtifactResolver {
 
   async resolve(reference: ArtifactReference): Promise<ResolvedArtifact> {
     validateArtifactReference(reference);
+    // Host serializes deployments; finish the previous commit's cleanup before
+    // any candidate revision is read or activated by the next operation.
+    await this.revisionPrunes.get(reference.appId);
     await mkdir(this.appDeploymentsDir, { recursive: true, mode: 0o700 });
 
     if (this.expandedRevisionLimit !== undefined) {

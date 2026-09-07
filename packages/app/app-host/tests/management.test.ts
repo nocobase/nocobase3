@@ -8,6 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import * as fsPromises from 'node:fs/promises';
 import {
   mkdir,
   mkdtemp,
@@ -29,6 +30,10 @@ import {
 } from '../dist/index.js';
 
 const tempDirs: string[] = [];
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, readdir: vi.fn(actual.readdir) };
+});
 const hosts: AppHost[] = [];
 
 afterEach(async () => {
@@ -39,6 +44,86 @@ afterEach(async () => {
 });
 
 describe('managed host reconciliation', () => {
+  it.each(['deploy', 'restore'] as const)(
+    'waits for revision pruning before %s reads a revision',
+    async (operation) => {
+      const fixture = await createFixture();
+      const host = createAppHost({
+        mode: 'managed',
+        appDeploymentsDir: fixture.deploymentsDir,
+        appVolumesDir: fixture.volumesDir,
+        artifact: fsArtifact(fixture.artifactDir),
+        evictionIntervalMs: 0,
+      });
+      hosts.push(host);
+      let releasePruning!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        releasePruning = resolve;
+      });
+      const original = (
+        await vi.importActual<typeof import('node:fs/promises')>(
+          'node:fs/promises',
+        )
+      ).readdir;
+      let pruningStarted = false;
+      const spy = vi
+        .spyOn(fsPromises, 'readdir')
+        .mockImplementation(async (...args: Parameters<typeof original>) => {
+          if (
+            String(args[0]) ===
+            path.join(fixture.deploymentsDir, 'customer', 'revisions')
+          ) {
+            pruningStarted = true;
+            await gate;
+          }
+          return original(...args);
+        });
+      try {
+        const set = deploymentSet(1, fixture.artifact, { activation: 'lazy' });
+        await host.management.applyDeploymentSet(set);
+        await vi.waitFor(() => expect(pruningStarted).toBe(true));
+        const discover = vi.spyOn(DeploymentCatalog.prototype, 'discoverAt');
+        try {
+          const next =
+            operation === 'deploy'
+              ? host.management.applyDeployment(set.deployments[0]!)
+              : host.management.restoreDeploymentSet({ ...set, revision: 2 });
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          expect(discover).not.toHaveBeenCalled();
+          releasePruning();
+          await next;
+          expect(discover).toHaveBeenCalled();
+        } finally {
+          discover.mockRestore();
+        }
+      } finally {
+        releasePruning();
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it('rejects configuration publishing without a registered runtime config', async () => {
+    const fixture = await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: fixture.deploymentsDir,
+      appVolumesDir: fixture.volumesDir,
+      artifact: fsArtifact(fixture.artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    await expect(
+      host.management.publishAppConfig('customer', 'feature: true'),
+    ).rejects.toThrow('not registered');
+    const set = deploymentSet(1, fixture.artifact, { activation: 'lazy' });
+    set.deployments[0]!.config = undefined;
+    await host.management.applyDeploymentSet(set);
+    await expect(
+      host.management.publishAppConfig('customer', 'feature: true'),
+    ).rejects.toThrow('no runtime configuration file');
+  });
+
   it('owns runtime config files and cleans up replaced configurations', async () => {
     const fixture = await createFixture();
     const host = createAppHost({

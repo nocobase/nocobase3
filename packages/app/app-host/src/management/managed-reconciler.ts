@@ -181,7 +181,16 @@ export class ManagedReconciler {
   ): ReturnType<AppRuntimeRegistry['reloadAppConfig']> {
     return this.enqueue(async () => {
       const definition = this.registry.definition(appId);
-      if (!definition?.configPath) return null;
+      if (!definition) {
+        throw new Error(
+          `App "${appId}" is not registered; configuration was not published`,
+        );
+      }
+      if (!definition.configPath) {
+        throw new Error(
+          `App "${appId}" has no runtime configuration file; configuration was not published`,
+        );
+      }
       await this.volumes.publishConfig(appId, definition.configPath, content);
       return this.registry.reloadAppConfig(appId);
     });
