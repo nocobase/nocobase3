@@ -195,7 +195,17 @@ const repositories: readonly RepositoryApiExposure[] = [
             .fields('name', 'status')
             .relation('owner', (r) => r.connect())
             .relation('profile', (r) =>
-              r.update((profile) => profile.fields('summary')),
+              r
+                .create((profile) => profile.fields('id', 'summary'))
+                .connect()
+                .disconnect()
+                .update((profile) => profile.fields('summary'))
+                .upsert((u) =>
+                  u
+                    .create((profile) => profile.fields('id', 'summary'))
+                    .update((profile) => profile.fields('summary')),
+                )
+                .delete(),
             )
             .relation('tasks', (r) =>
               r
@@ -204,6 +214,7 @@ const repositories: readonly RepositoryApiExposure[] = [
                 )
                 .connect()
                 .disconnect()
+                .set()
                 .update((task) => task.fields('title', 'status', 'points'))
                 .upsert((u) =>
                   u
@@ -220,7 +231,15 @@ const repositories: readonly RepositoryApiExposure[] = [
                   tag.fields('id', 'label').through((t) => t.fields('role')),
                 )
                 .connect((edge) => edge.through((t) => t.fields('role')))
-                .set((edge) => edge.through((t) => t.fields('role'))),
+                .set((edge) => edge.through((t) => t.fields('role')))
+                .disconnect()
+                .update((tag) => tag.fields('label'))
+                .upsert((u) =>
+                  u
+                    .create((tag) => tag.fields('id', 'label'))
+                    .update((tag) => tag.fields('label')),
+                )
+                .delete(),
             ),
       },
     },

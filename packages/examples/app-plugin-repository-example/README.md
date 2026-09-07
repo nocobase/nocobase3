@@ -16,7 +16,7 @@ Sign in and expand **CRM example** or **Orders example** in the sidebar. Each ch
 
 - **CRM example**: Customers (`/repository-example/crm`), Contacts (`/repository-example/crm/contacts`).
 - **Orders example**: Orders (`/repository-example/orders`), Order items (`/repository-example/orders/items`), Products (`/repository-example/orders/products`).
-- **Repository examples**: relationship writes (`/repository-example/relation-mutations`), `findMany` array/stream (`/repository-example/find-many`), atomic numeric updates (`/repository-example/atomic`), aggregate queries (`/repository-example/aggregate`).
+- **Repository examples**: relationship writes (`/repository-example/relation-mutations`), `findMany` array/stream (`/repository-example/find-many`), atomic numeric updates (`/repository-example/atomic`), aggregate queries (`/repository-example/aggregate`), select combine (`/repository-example/select-combine`), and sorting (`/repository-example/sort`).
 
 View details opens the child route `<list-path>/details/:recordId`, for example `/repository-example/crm/details/demo-customer-1`. Detail URLs load records directly, support refresh, show related records, and provide a Back to list action. Relation headings use singular labels for belongsTo and plural labels for hasMany. Related records link to their detail pages; customer cards show name, company and email, and foreign-key fields display the related name. New and Edit open a right-side drawer with focus management and Escape/Cancel dismissal. Relation and status fields use shadcn Select, with full-width triggers and readable selected labels. Successful saves close the drawer and refresh the list or current detail; errors keep the drawer and entered values visible.
 
@@ -96,19 +96,22 @@ See `client/model.ts` for the JSON select/filter ASTs and relationship mutation 
 
 ## Relationship writes
 
-Open **Repository examples → Relationship writes** at `/repository-example/relation-mutations`. The first panel reads the deterministic seeded graph, including owner, profile, tasks, tags and `projectTags.role` payloads.
+Open **Repository examples → Relationship writes** at `/repository-example/relation-mutations`. Seven independent cards demonstrate `create`, `connect`, `disconnect`, `set`, `update`, `upsert` and `delete`. Each card has its own relationship selector, preparation button, operation form and target table. Choose hasOne `profile`, hasMany `tasks` or belongsToMany `tags`; `set` is available only for the two to-many relationships.
 
-**Run complete relationship write** creates a new isolated graph and then applies three root mutations through `api.repository('repositoryExampleRelationProjects')`:
+Click **Prepare example** in a card to create a fresh project and four targets. The page does not write on initial load and does not require seeded records, but its database migrations must be applied. Each preparation uses new IDs, so cards never reuse shared or exclusive targets. Preparing again leaves previous example records in the database. Preparation spans multiple HTTP requests and is not one transaction; each individual root mutation is transactional.
 
-1. `createOne` connects an owner and tag while creating a profile and tasks.
-2. `updateOne` changes the owner and profile, then combines task `create`, `connect`, `disconnect`, `update`, `upsert` and `delete`; tag `connect` and `create` include through payloads.
-3. A separate `updateOne` uses tag `set`, because `set` cannot be mixed with other operations on the same relation.
+- `create` accepts target fields and adds a new related record.
+- `connect` offers existing unlinked targets; `disconnect` operates on current targets and leaves them in the target collection.
+- `set` uses checkboxes to replace the current relationship set. Clear all boxes to submit an empty set.
+- `update` edits a current target and pre-fills its values.
+- `upsert` creates a target on the first run and can update that same target on subsequent runs. For to-many relations, select an existing related target or **New target**.
+- `delete` removes the target record. Its destructive button and explanation distinguish it from unlinking.
 
-The result panel selects all four relationships. Lifetime checks independently query removed targets to show that task `disconnect` and tag `set` preserve their targets, while task `delete` removes its target. Omitting the through payload for the retained Documentation tag preserves its existing `secondary` role. Each run uses UUID-derived IDs and adds a new project, so the same page can be run repeatedly without reusing exclusive hasOne/hasMany targets.
+Tag `create`, `connect` and `set` expose the `through.role` field. The table independently queries targets and shows both **Linked to this project** and **Target exists**, plus target fields, IDs and tag through roles. Deleted targets remain visible as absent rows, making the different effects of `disconnect`, `set` and `delete` observable. Refreshing a table does not repeat a mutation.
 
-Each HTTP root mutation is transactional, but the whole multi-request walkthrough is not one cross-request transaction. The integration test separately verifies that a failing nested `createOne` rolls back its root and child writes, and that relation-scoped update cannot modify `task-outside`, which belongs to `project-other`.
+The form previews the request; a separate expandable panel shows the last executed request and response. Failed writes retain form values. If a write succeeds but reloading fails, the page reports that distinction and offers a read-only refresh. Request construction and execution live in `client/relation-lab.ts`, using only authenticated Repository actions. The explicit nested-write policies allow the demonstrated operations and fields; no example-specific Server handler exists.
 
-The actual inputs and responses are in `client/relation-mutations.ts` and are shown under **Repository calls**. No example-specific Server handler exists: the prefixed repositories use the same authenticated `defineRepositoryApiRoutes` contribution as the other examples.
+Tests execute all 20 supported operation/relationship combinations through the real HTTP routes and SQLite without seeds. They also verify repeated upserts, empty sets, through fields, target lifetime, relation scope and disallowed fields. The earlier composite-workflow integration test remains as coverage for transactional rollback and multiple nested operations in one root write.
 
 ## findMany arrays and streams
 
@@ -265,3 +268,32 @@ policies on the server and never include them in client request options. New dem
 need an explicit server policy and route tests. Authentication guards every endpoint.
 Internal `db.repository` calls default to `writePolicy: true`, so custom HTTP handlers
 must pass a server-owned policy themselves.
+
+## Select combine examples
+
+Open **Repository examples → Select combine** at `/repository-example/select-combine`. Each card shows its JSON select AST before execution and runs a single read-only `api.repository(name).findMany(options)` request. Results display a table with response field paths as column headings, scalar aggregates as cells, and record-array branches as nested tables within their parent row. NULL, zero and empty relations remain distinct. The original JSON is available in a collapsible panel. Root queries show the first 10 records by ID; record branches have explicit per-parent limits and stable ID sorting.
+
+- **Order preview and independent branches:** one order, total count, paid count and cancelled records per customer. A branch-local limit does not truncate sibling counts. Empty relations return empty lists and zero counts.
+- **Item records and multiple aggregates:** two item rows with COUNT, SUM quantity and AVG/MIN/MAX snapshot unit prices (cents). AVG is unweighted; empty sums and price metrics are null.
+- **Nested orders, items and products:** an orders combine contains another items combine; item preview rows include product names.
+- **Shared filter and branch-local filters:** all task branches inherit `status = draft`; the unassigned branch adds `assigneeId = null`, while `count(assigneeId)` counts non-null values.
+- **Many-to-many tag combinations:** linked tag records, total count and filtered Documentation count remain scoped to each project.
+
+The examples reuse the existing CRM and relationship seeds without writing records. Run application migrations and seeds if needed. Changes made on other example pages are reflected on the next query. See `client/select-combine.ts` for the request definitions.
+
+## Sort examples
+
+Open **Repository examples → Sort examples** at `/repository-example/sort`. The page follows the Repository sort contract documented in `packages/libs/db/docs/zh-CN/repository/sort.md`. Each card shows a builder snippet and the actual serialized Repository HTTP request, then renders the response in a table without client-side reordering. Raw JSON remains available in a collapsible panel.
+
+The 15 read-only examples cover:
+
+- Default primary-key ascending order, single-field price ascending/descending, and quantity/price priority with automatic ID tie-breaks.
+- Explicit NULL-first and NULL-last order on nullable assignee IDs, plus a to-one `assignee.name` sort with a separate include returning names.
+- Order-count ranking with zero-order customers, alongside a filtered paid-order count demonstrating that select filters do not change the sort aggregate scope.
+- Relation SUM, AVG, MIN and MAX of product item quantities, with explicit select aggregates and nested item previews. Empty relations sort as 0 for count/sum and NULL for avg/min/max; selected SUM remains NULL for an empty relation.
+- Local order-number sorting inside each customer include without changing root order.
+- Two intentional `INVALID_SORT` responses: duplicate field targets and direct traversal through a to-many field path. Expected validation errors are distinguished from unexpected request failures.
+
+Root queries return at most 10 records; relation previews have their own limits. Reuse the existing CRM and relationship seeds; no new migration, seed, endpoint or query syntax is introduced. Seeded data demonstrates ties, nullable assignees and empty customer orders. Empty product-item aggregates are additionally covered with isolated test records. Changes on other example pages are reflected when queries run again.
+
+`client/sort.ts` owns the builder definitions. `sortExampleRequest()` uses the HTTP client's public serializer, and integration tests verify that each displayed AST produces the same results as its builder. Cursor, distinct, unsupported scalar types and to-one include restrictions are explained on the page; their complete behavior remains documented in the database package.

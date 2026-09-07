@@ -1,6 +1,155 @@
 import type { RepositoryExampleResource } from './en-US.js';
 const zhCN: RepositoryExampleResource = {
+  sortTitle: 'Sort 排序示例',
+  sortIntro:
+    '通过 Repository HTTP 客户端运行只读排序示例，展示 Builder、实际序列化请求及按服务端顺序排列的表格。查询最多返回 10 条主记录，复用现有 CRM 与关系种子数据。',
+  sortLimits:
+    '使用逻辑字段名。to-many 路径必须使用聚合；to-one include 不接受局部排序。Cursor 仅支持非空、不可空的直接标量排序轴及唯一决胜项；distinct 仅支持直接标量排序及唯一决胜项。text 和 JSON 不可排序。',
+  sortRequest: '实际请求 · JSON AST',
+  sortResultHint:
+    '表格保留服务端返回顺序。关系值由 select 显式选出，记录预览数量可能少于聚合计数。',
+  sortExpectedError: '符合预期的校验错误',
+  sortUnexpectedSuccess: '此非法查询意外执行成功。',
+  sort_default_title: '默认主键顺序',
+  sort_default_description: '省略 sort，客户按主键升序返回。',
+  sort_asc_title: '商品价格升序',
+  sort_asc_description:
+    '直接返回一个升序表达式，按 unitPriceCents 排序，价格单位为分。',
+  sort_desc_title: '商品价格降序',
+  sort_desc_description:
+    '直接返回一个降序表达式，按 unitPriceCents 排序，价格单位为分。',
+  sort_multi_title: '多字段排序与自动主键决胜',
+  sort_multi_description:
+    '先按数量降序，再按快照单价升序。两项相同的记录由自动追加的主键升序决胜，demo-item-3 与 demo-item-7 展示同值顺序。',
+  'sort_nulls-first_title': 'NULL 置前',
+  'sort_nulls-first_description':
+    'assigneeId 升序，NULL 置前。保留未分配任务，主键用于同值决胜。',
+  'sort_nulls-last_title': 'NULL 置后',
+  'sort_nulls-last_description':
+    'assigneeId 升序，NULL 置后。显式配置避免不同数据库的 NULL 默认顺序差异。',
+  'sort_to-one_title': '沿 to-one 关系字段排序',
+  'sort_to-one_description':
+    '按负责人姓名降序，无负责人任务置后；单独配置 include 才会在结果中返回姓名。',
+  sort_count_title: '关系计数排序与独立筛选投影',
+  sort_count_description:
+    '按全部订单数量降序，包含零订单客户。paidCount 只统计已付款订单，其筛选不影响根排序。',
+  sort_include_title: 'include 的独立局部排序',
+  sort_include_description:
+    '客户按 ID 升序，每位客户内部的订单按编号降序，关系 limit 对每位客户分别取 2 条。',
+  sort_duplicate_title: '反例：重复排序目标',
+  sort_duplicate_description:
+    '同一字段不能重复出现，即使方向不同也会报错。运行后查看 INVALID_SORT。',
+  'sort_to-many_title': '反例：直接穿过 to-many 路径',
+  'sort_to-many_description':
+    'items.quantity 对每个商品可能有多个值，必须显式选择关系聚合排序。',
+  sort_sum_title: '关系 SUM 排序',
+  sort_sum_description:
+    '按商品明细数量的 SUM 降序，NULL 置前。空关系排序值为 0，但 select 返回的 SUM 为 NULL。聚合值及明细通过 select 显式返回。',
+  sort_avg_title: '关系 AVG 排序',
+  sort_avg_description:
+    '按商品明细数量的 AVG 降序，NULL 置前。空关系排序值为 NULL。聚合值及明细通过 select 显式返回。',
+  sort_min_title: '关系 MIN 排序',
+  sort_min_description:
+    '按商品明细数量的 MIN 降序，NULL 置前。空关系排序值为 NULL。聚合值及明细通过 select 显式返回。',
+  sort_max_title: '关系 MAX 排序',
+  sort_max_description:
+    '按商品明细数量的 MAX 降序，NULL 置前。空关系排序值为 NULL。聚合值及明细通过 select 显式返回。',
+  selectCombineTitle: 'Select 组合查询',
+  selectCombineIntro:
+    '通过 select.combine 在同一关系中返回命名的记录列表和标量聚合。每个示例执行一次只读 Repository findMany 请求。',
+  combineScopeHint:
+    '展示按 ID 排序的前 10 条主记录；关系 limit 对每条主记录的各分支分别生效。没有示例数据时，请执行应用的迁移和种子。',
+  combineRequest: '请求 · select AST',
+  combineTable: '数据表格',
+  combineJson: '原始 JSON',
+  combineNoRelated: '无关联记录',
+  combineTableHint:
+    '列名对应响应字段路径，记录分支以子表展示；NULL、零和空列表分别显示。',
+  combineRun: '运行查询',
+  combineResult: '查询结果',
+  combineResultHint: '实际响应：每个关系对象中包含各个命名分支。',
+  combineEmpty: '没有主记录。请执行应用的迁移和种子，或创建示例记录。',
+  combine_preview_title: '订单预览与独立分支',
+  combine_preview_description:
+    '同时返回 1 条订单预览、全部订单数、已付款订单数及已取消订单列表。预览的 limit 不影响其他分支；没有订单的客户仍返回空列表和零计数。',
+  combine_statistics_title: '明细记录与多种聚合',
+  combine_statistics_description:
+    '返回 2 条明细，以及 COUNT、数量 SUM 和快照单价 AVG/MIN/MAX（单位：分）。AVG 不按数量加权；空关系的 count 为 0，其他聚合为 null。',
+  combine_nested_title: '嵌套订单、明细与商品',
+  combine_nested_description:
+    '每位客户返回订单预览与计数；预览订单内部再次组合明细预览、计数与数量合计，明细记录还包含商品名称。',
+  combine_scoped_title: '共享筛选与分支筛选',
+  combine_scoped_description:
+    'draft 任务筛选作用于所有分支；COUNT(assigneeId) 统计非空负责人，unassigned 叠加 assigneeId = null。仅取 1 条的预览不影响计数。',
+  combine_tags_title: '多对多标签组合',
+  combine_tags_description:
+    '返回每个项目关联的标签、标签总数和 Documentation 标签数。分支筛选限定在当前项目的关系内，不计入未关联标签。',
   apiExamples: 'Repository 示例',
+  labIntro:
+    '逐项体验关系写入：选择关系类型，准备独立示例，再通过表单执行并查看表格。每块使用自己的项目与目标记录，打开页面不会写入数据。',
+  labOperations: '关系操作导航',
+  labBoth: 'to-one / to-many',
+  labManyOnly: '仅 to-many',
+  labRelation: '关系类型',
+  labPrepare: '准备示例数据',
+  labPrepareAgain: '准备一组新示例',
+  labRefresh: '刷新表格',
+  labPrepareHint:
+    '准备操作创建一个项目和四条独立目标记录。重新准备会保留之前的示例。准备过程包含多次请求，每次写入各自具有事务性。',
+  labProject: '示例项目',
+  labDefaultContent: '{{operation}} 示例 {{id}}',
+  labSummary: '简介内容',
+  labLabel: '标签名称',
+  labTitle: '任务标题',
+  labPoints: '点数',
+  labTarget: '目标记录',
+  labChoose: '选择记录',
+  labNewTarget: '首次执行创建新目标',
+  labNoEligible: '没有可操作的目标，可准备一组新示例再体验。',
+  labSetTargets: '保留以下目标关联',
+  labSetEmpty: '全部取消勾选将发送 set: []。移出的目标仍保留在目标表。',
+  labThroughRole: '当前关联的角色（through.role）',
+  labCurrentProfile: '当前简介',
+  labNoProfile: '当前未关联简介。',
+  labDeleteHint:
+    '此操作删除选中的示例目标记录，不仅解除关联。下方保留该行以展示删除结果。',
+  labUpsertHint:
+    '首次可创建目标；保持同一目标再次执行会更新它。当前关系之外的目标不能通过 upsert 自动关联。',
+  labExecute: '执行 {{operation}}',
+  labRequest: '预览本次操作请求',
+  labSaved: '{{operation}} 写入成功。',
+  labRefreshFailed: '写入已成功，但刷新失败。请先刷新表格再执行下一次写入。',
+  labTargets: '目标记录与关联状态',
+  labTableHint:
+    '独立查询每条目标：disconnect/set 保留目标，delete 删除目标。表格只展示本块示例的目标记录。',
+  labRecord: '记录',
+  labLinked: '关联当前项目',
+  labExists: '目标仍存在',
+  labDeleted: '已删除目标',
+  labYes: '是',
+  labNo: '否',
+  labLastCall: '最近执行的请求与响应',
+  lab_create_title: '创建并关联',
+  lab_create_description:
+    '通过关系创建目标并建立关联，Repository 自动维护关系键。本示例的 hasOne create 需先没有关联目标。',
+  lab_connect_title: '关联已有目标',
+  lab_connect_description:
+    '选择本块已准备但尚未关联的目标，connect 本身不创建目标。hasOne 目标必须可关联。',
+  lab_disconnect_title: '解除关联并保留目标',
+  lab_disconnect_description:
+    '解除可空 hasOne/hasMany 的关联，或删除多对多中间表关联。目标记录仍然保留。',
+  lab_set_title: '替换关系集合',
+  lab_set_description:
+    '用所选已有目标替换当前关系集合，仅适用于 to-many；hasMany 外键可空时才允许移出。',
+  lab_update_title: '修改已关联目标',
+  lab_update_description:
+    '修改当前关系范围内的一条目标。to-one 不需选择器，直接修改当前关联对象。',
+  lab_upsert_title: '关系范围内更新或创建',
+  lab_upsert_description:
+    '关系内未命中时创建，已命中时更新。to-many 使用同一个唯一 ID 定位和创建。',
+  lab_delete_title: '删除目标记录',
+  lab_delete_description:
+    '删除当前关联的目标记录，受约束限制。仅操作本块独立准备的目标；删除共享目标可能影响其他关系。',
   relationMutationsTitle: '关系写入',
   relationMutationsIntro:
     '通过 Repository HTTP API 完整演示 belongsTo、hasOne、hasMany 和 belongsToMany 写入。所有操作都使用 api.repository(name)，没有示例专用的写入接口。',

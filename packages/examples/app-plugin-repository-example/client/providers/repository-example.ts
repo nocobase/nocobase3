@@ -5,6 +5,24 @@ export class RepositoryExampleServiceProvider extends ServiceProvider<ClientAppl
   public override boot(): Promise<void> {
     this.app.refine.addResources([
       {
+        name: 'repository-example-sort',
+        list: '/repository-example/sort',
+        meta: {
+          parent: 'repository-example-api',
+          label: 'sortTitle',
+          i18nNs: this.name,
+        },
+      },
+      {
+        name: 'repository-example-select-combine',
+        list: '/repository-example/select-combine',
+        meta: {
+          parent: 'repository-example-api',
+          label: 'selectCombineTitle',
+          i18nNs: this.name,
+        },
+      },
+      {
         name: 'repository-example-relation-mutations',
         list: '/repository-example/relation-mutations',
         meta: {

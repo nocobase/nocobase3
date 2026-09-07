@@ -5,6 +5,18 @@ import {
 const routes: readonly AppClientRouteContribution[] = [
   defineAppRoutes([
     {
+      name: 'sort',
+      path: '/repository-example/sort',
+      auth: 'required',
+      componentLoader: () => import('./pages/sort-page.js'),
+    },
+    {
+      name: 'select-combine',
+      path: '/repository-example/select-combine',
+      auth: 'required',
+      componentLoader: () => import('./pages/select-combine-page.js'),
+    },
+    {
       name: 'relation-mutations',
       path: '/repository-example/relation-mutations',
       auth: 'required',

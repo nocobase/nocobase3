@@ -135,6 +135,16 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:sort',
+        path: '/repository-example/sort',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:select-combine',
+        path: '/repository-example/select-combine',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:relation-mutations',
         path: '/repository-example/relation-mutations',
       },
