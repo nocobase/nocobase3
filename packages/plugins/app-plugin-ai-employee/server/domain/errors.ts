@@ -1,3 +1,5 @@
+import type { ConversationStreamTarget } from './stream.js';
+
 export type DomainErrorCode =
   | 'VALIDATION_ERROR'
   | 'NOT_FOUND'
@@ -36,13 +38,8 @@ export function infrastructureError(
   return new DomainError('INFRASTRUCTURE_ERROR', message, 500, { cause });
 }
 
-export interface DomainStreamTarget {
-  write(chunk: unknown): void;
-  end(chunk?: unknown): void;
-}
-
 export function sendStreamError(
-  target: DomainStreamTarget,
+  target: ConversationStreamTarget,
   error: Error | string,
   errorName?: string,
 ): void {

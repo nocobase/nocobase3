@@ -1,14 +1,14 @@
 import { DomainError } from '../domain/errors.js';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
-import type { CurrentUser } from '../internal/runtime-context.js';
+import type { Actor } from '../domain/contracts.js';
 import type { Context as HonoContext, MiddlewareHandler } from 'hono';
 import { AI_API_BASE_PATH } from './contracts.js';
 import { SSEStreamTarget, sseResponseHeaders } from './sse.js';
 
 declare module 'hono' {
   interface ContextVariableMap {
-    currentUser: CurrentUser;
+    currentUser: Actor;
   }
 }
 
@@ -113,7 +113,7 @@ function statusForError(message: string): number {
 async function resolveAuthenticatedUser(
   auth: Auth,
   request: Request,
-): Promise<CurrentUser> {
+): Promise<Actor> {
   const session = await auth.getSession(request.headers);
   const user = session?.user;
   if (!user?.id) return { id: 'anonymous', roles: ['member'], isRoot: false };

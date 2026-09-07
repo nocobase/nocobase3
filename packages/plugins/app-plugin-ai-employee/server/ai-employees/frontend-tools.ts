@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { ConversationRequestExecution } from '../internal/runtime-context.js';
+import type { ConversationExecution } from '../agent/contracts.js';
 import { z } from 'zod';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import {
@@ -73,7 +73,7 @@ export const extractFrontendToolManifests = (
 };
 
 const findRequestFrontendTools = (
-  execution?: ConversationRequestExecution,
+  execution?: ConversationExecution,
 ): FrontendToolManifest[] => {
   const explicitlyProvided = normalizeFrontendToolManifests(
     execution?.frontendTools,
@@ -100,7 +100,7 @@ const findRequestFrontendTools = (
 
 export const listCurrentFrontendTools = async (
   repositories: RepositoryFactory,
-  execution: ConversationRequestExecution = {},
+  execution: ConversationExecution = {},
 ): Promise<FrontendToolManifest[]> => {
   const currentSessionId =
     typeof execution.sessionId === 'string' ? execution.sessionId : '';
@@ -144,7 +144,7 @@ export const listCurrentFrontendTools = async (
 export const findCurrentFrontendTool = async (
   repositories: RepositoryFactory,
   toolId: string,
-  execution: ConversationRequestExecution = {},
+  execution: ConversationExecution = {},
 ): Promise<FrontendToolManifest | undefined> => {
   const tools = await listCurrentFrontendTools(repositories, execution);
   return tools.find((tool) => tool.id === toolId);
@@ -211,7 +211,7 @@ export const prepareToolsForFrontendConversation = <
 };
 
 export const readFrontendToolResult = (
-  execution: ConversationRequestExecution,
+  execution: ConversationExecution,
   toolCallId: string,
 ): { provided: true; value: unknown } | undefined => {
   const result = execution.toolCallResults?.find(

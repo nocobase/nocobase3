@@ -63,12 +63,16 @@ export function createAgentContext({
   const state: AgentState = {
     sessionId: execution?.sessionId,
     messageId: execution?.messageId,
-    messages: execution?.messages,
-    model: execution?.model,
+    messages: execution?.messages ? [...execution.messages] : undefined,
+    model: execution?.model ? { ...execution.model } : undefined,
     webSearch: execution?.webSearch,
     important: execution?.important,
-    frontendTools: execution?.frontendTools,
-    toolCallResults: execution?.toolCallResults,
+    frontendTools: execution?.frontendTools
+      ? [...execution.frontendTools]
+      : undefined,
+    toolCallResults: execution?.toolCallResults
+      ? [...execution.toolCallResults]
+      : undefined,
     timezone: execution?.timezone,
     ...stateOverrides,
   };
@@ -124,7 +128,7 @@ export function createAgentContext({
     state,
     actor: {
       id: ctx.currentUser.id,
-      roles: ctx.state.currentRoles ?? ctx.currentUser.roles,
+      roles: [...(ctx.state.currentRoles ?? ctx.currentUser.roles)],
       isRoot: ctx.currentUser.isRoot,
       locale: ctx.currentUser.locale,
     },

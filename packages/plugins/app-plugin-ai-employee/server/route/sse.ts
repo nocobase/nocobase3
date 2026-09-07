@@ -1,7 +1,9 @@
+import type { ConversationStreamTarget } from '../domain/stream.js';
+
 const DEFAULT_CONTENT_TYPE = 'text/event-stream; charset=utf-8';
 
 /** Writable stream target used by AI conversation SSE actions. */
-export class SSEStreamTarget {
+export class SSEStreamTarget implements ConversationStreamTarget {
   private controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   readonly stream: ReadableStream<Uint8Array>;
   headersSent = false;

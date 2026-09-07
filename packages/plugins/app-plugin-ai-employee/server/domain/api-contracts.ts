@@ -1,4 +1,4 @@
-import type { ModelRef } from '../ai-employees/ai-employee.js';
+import type { ModelRef } from './contracts.js';
 
 export const AI_API_BASE_PATH = '/api/ai' as const;
 export type ManagedResourceKeyQuery = {

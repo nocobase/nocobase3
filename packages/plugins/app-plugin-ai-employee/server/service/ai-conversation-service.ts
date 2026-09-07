@@ -6,11 +6,9 @@
  * `AIEmployee` streaming / invocation flows.
  */
 
-import type {
-  Context,
-  ConversationRequestExecution,
-  StreamTarget,
-} from '../internal/runtime-context.js';
+import type { Context } from '../internal/runtime-context.js';
+import type { ConversationExecution } from '../agent/contracts.js';
+import type { ConversationStreamTarget } from '../domain/stream.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
 import { ResourceActionError, sendStreamError } from '../domain/errors.js';
 import type {
@@ -97,11 +95,16 @@ function setupSSEHeaders(_ctx: Context) {
   // Headers are applied by the router when constructing the SSE Response.
 }
 
-function sendErrorResponse(target: StreamTarget, errorMessage: string) {
+function sendErrorResponse(
+  target: ConversationStreamTarget,
+  errorMessage: string,
+) {
   sendStreamError(target, errorMessage);
 }
 
-function streamTarget(execution: ConversationRequestExecution): StreamTarget {
+function streamTarget(
+  execution: ConversationExecution,
+): ConversationStreamTarget {
   if (!execution.streamTarget)
     throw new ResourceActionError(500, 'SSE target is required');
   return execution.streamTarget;
@@ -560,7 +563,7 @@ export class AIConversationService {
   }: {
     ctx: Context;
     input: Record<string, any>;
-    execution?: ConversationRequestExecution;
+    execution?: ConversationExecution;
   }) {
     const userId = String(ctx.currentUser.id);
     ctx.requestExecution = execution;
@@ -799,7 +802,7 @@ export class AIConversationService {
   }: {
     ctx: Context;
     input: { sessionId: string };
-    execution?: ConversationRequestExecution;
+    execution?: ConversationExecution;
   }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);
@@ -890,7 +893,7 @@ export class AIConversationService {
   }: {
     ctx: Context;
     input: Record<string, any>;
-    execution?: ConversationRequestExecution;
+    execution?: ConversationExecution;
   }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);
@@ -1060,7 +1063,7 @@ export class AIConversationService {
   }: {
     ctx: Context;
     input: Record<string, any>;
-    execution?: ConversationRequestExecution;
+    execution?: ConversationExecution;
   }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);
@@ -1177,7 +1180,7 @@ export class AIConversationService {
   }: {
     ctx: Context;
     input: Record<string, any>;
-    execution?: ConversationRequestExecution;
+    execution?: ConversationExecution;
   }) {
     ctx.requestExecution = execution;
     const userId = String(ctx.currentUser.id);

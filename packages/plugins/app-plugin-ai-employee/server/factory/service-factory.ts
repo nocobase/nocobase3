@@ -13,7 +13,8 @@ import {
 } from '@nocobase/service-provider';
 
 import type { AIEmployeeLLMServiceConfig } from '../config.js';
-import type { Context, CurrentUser } from '../internal/runtime-context.js';
+import type { Context } from '../internal/runtime-context.js';
+import type { Actor } from '../domain/contracts.js';
 import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
 import { repositoryFactoryToken } from './repository-factory.js';
 import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
@@ -150,7 +151,7 @@ export class ServiceFactory {
   }
 
   /** Creates request-local state while retaining only App-scoped collaborators. */
-  public createRequestRuntime(actor: CurrentUser, request?: Request): Context {
+  public createRequestRuntime(actor: Actor, request?: Request): Context {
     const runtime = this.managers.context;
     const currentRole = actor.isRoot ? 'root' : (actor.roles[0] ?? 'member');
     return {
@@ -160,7 +161,7 @@ export class ServiceFactory {
       state: {
         currentUser: { id: actor.id, username: String(actor.id) },
         currentRole,
-        currentRoles: actor.roles,
+        currentRoles: [...actor.roles],
       },
       getCurrentLocale: () =>
         actor.locale ?? request?.headers.get('x-locale') ?? undefined,

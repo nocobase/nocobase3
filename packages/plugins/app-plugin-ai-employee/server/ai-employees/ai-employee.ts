@@ -1,3 +1,4 @@
+import type { ModelRef } from '../domain/contracts.js';
 import type { Context } from '../internal/runtime-context.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
@@ -82,11 +83,6 @@ import {
   ReasoningStreamState,
   StreamConversation,
 } from './reasoning-stream-state.js';
-
-export interface ModelRef {
-  llmService: string;
-  model: string;
-}
 
 type EmployeeToolSetting = {
   name: string;

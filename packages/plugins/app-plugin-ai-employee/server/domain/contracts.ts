@@ -6,6 +6,11 @@ export interface Actor {
   readonly scope?: string;
 }
 
+export interface ModelRef {
+  readonly llmService: string;
+  readonly model: string;
+}
+
 export type Translate = (
   key: string,
   options?: Record<string, unknown>,

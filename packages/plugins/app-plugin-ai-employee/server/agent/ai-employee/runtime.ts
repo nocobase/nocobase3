@@ -1,3 +1,4 @@
+import type { ModelRef } from '../../domain/contracts.js';
 import type { Context } from '../../internal/runtime-context.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
@@ -53,11 +54,6 @@ import {
   prepareToolsForFrontendConversation,
   shouldAutoExecuteFrontendTool,
 } from '../../ai-employees/frontend-tools.js';
-
-export interface ModelRef {
-  llmService: string;
-  model: string;
-}
 
 export interface AIEmployeeOptions {
   ctx: Context;

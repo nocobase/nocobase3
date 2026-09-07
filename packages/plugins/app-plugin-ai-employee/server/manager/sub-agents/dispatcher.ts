@@ -18,7 +18,7 @@ import type { LLMStreamCachedManager } from '../llm-stream-cached-manager.js';
 import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
-import { ModelRef } from '../../ai-employees/ai-employee.js';
+import type { ModelRef } from '../../domain/contracts.js';
 import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
 import { createAgentContext } from '../../agent/context.js';
 import type {

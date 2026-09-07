@@ -25,7 +25,7 @@ type RequestRoleState = {
   currentUser?: unknown;
 };
 
-type CurrentUserRole = { name?: unknown };
+type RoleRecord = { name?: unknown };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -35,9 +35,7 @@ const getRoleNames = (roles: unknown): string[] =>
     ? Array.from(
         new Set(
           roles
-            .map((role) =>
-              isRecord(role) ? (role as CurrentUserRole).name : role,
-            )
+            .map((role) => (isRecord(role) ? (role as RoleRecord).name : role))
             .filter(
               (role): role is string =>
                 typeof role === 'string' && role.length > 0,

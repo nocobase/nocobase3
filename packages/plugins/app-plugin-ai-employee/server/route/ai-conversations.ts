@@ -1,5 +1,7 @@
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Context as HonoContext, Hono } from 'hono';
+import type { ConversationExecution } from '../agent/contracts.js';
+import type { ConversationStreamTarget } from '../domain/stream.js';
 import { createAISSEStreamResponse, requiredString } from './utils.js';
 
 export function createAIConversationsRouter(
@@ -249,9 +251,9 @@ function requiredQuery(context: HonoContext, name: string): string {
 
 function execution(
   input: Record<string, any>,
-  streamTarget?: import('../internal/runtime-context.js').StreamTarget,
+  streamTarget?: ConversationStreamTarget,
   abortSignal?: AbortSignal,
-): import('../internal/runtime-context.js').ConversationRequestExecution {
+): ConversationExecution {
   return {
     sessionId:
       typeof input.sessionId === 'string' ? input.sessionId : undefined,
