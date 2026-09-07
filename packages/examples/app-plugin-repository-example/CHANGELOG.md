@@ -1,5 +1,15 @@
 # @nocobase/app-plugin-repository-example
 
+## 0.1.0-beta.1
+
+### Patch Changes
+
+- 9536bf5: Reach the API client through `@nocobase/app-client` instead of importing `@nocobase/api-client` directly from the example plugin's client code. The plugin value-imported `ApiClientError` and `buildFindManyOptions` from a package it declares only as a `devDependency`, which resolved solely because pnpm happened to hoist that package for another consumer. `ApiClientError` is also compared with `instanceof`, so a second copy would make the check silently return false and leave `error.code` undefined under code that looks correct. Re-export `buildFindManyOptions` alongside the existing `ApiClientError` so the plugin resolves both through the single copy the application already provides.
+- Updated dependencies [0e9505a]
+- Updated dependencies [9536bf5]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.8
+  - @nocobase/app-client@1.0.0-beta.11
+
 ## 0.1.0-beta.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @nocobase/app-plugin-authentication
 
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- 0e9505a: Use the application theme's shadow color in the authentication UI registry recipe and keep it aligned with the preinstalled template copies.
+- Updated dependencies [9536bf5]
+  - @nocobase/app-client@1.0.0-beta.11
+
 ## 0.1.0-beta.7
 
 ### Minor Changes

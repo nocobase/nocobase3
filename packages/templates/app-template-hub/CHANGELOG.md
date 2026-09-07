@@ -1,5 +1,17 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.7
+
+### Minor Changes
+
+- 0e9505a: Add App-scoped appearance preferences, theme presets and saved preference restoration. Support semantic colors, sidebar and chart palettes, fonts, type scales, spacing, radius and runtime shadows, with shared AI guidance for theme authors and component authors.
+
+  Provide Default and Compact presets. Compact keeps Default's colors, fonts and shadows while using tighter dimensions.
+
+### Patch Changes
+
+- 9536bf5: Restore the client dependencies an installed application needs to bundle the workflow canvas and the Sonner-backed notification provider. A plugin's `client/` is compiled by the consuming application's Vite build and its `dist/client` keeps bare imports intact, so a package declared only as a `devDependency` is absent once the plugin is installed from the registry rather than linked from this workspace: `pnpm dev` failed with `Could not resolve "@xyflow/react"` and `Could not resolve "sonner"`. Move `@xyflow/react` back into the workflow plugin's `dependencies`, and declare `sonner` in both application templates.
+
 ## 1.0.0-beta.6
 
 ### Minor Changes
