@@ -157,6 +157,13 @@ export interface UpdateHubSettingsInput {
   readonly activation: 'lazy' | 'eager';
 }
 
+export interface HubDeploymentPage {
+  readonly items: readonly HubDeploymentListItem[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
 export interface HubService {
   listApps(): Promise<readonly HubAppSummary[]>;
   getApp(appId: string): Promise<HubAppDetail>;
@@ -176,7 +183,10 @@ export interface HubService {
     appId: string,
     input: UpdateHubSettingsInput,
   ): Promise<HubAppDetail>;
-  listDeployments(appId: string): Promise<readonly HubDeploymentListItem[]>;
+  listDeployments(
+    appId: string,
+    options?: { page?: number; pageSize?: number },
+  ): Promise<HubDeploymentPage>;
   getDeployment(
     appId: string,
     deploymentId: string,

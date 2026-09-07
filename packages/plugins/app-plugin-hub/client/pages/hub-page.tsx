@@ -36,6 +36,13 @@ export default function HubPage(): ReactElement {
     [],
   );
   const [panelKey, setPanelKey] = useState('');
+  const [deploymentPage, setDeploymentPage] = useState(1);
+  const [deploymentPagination, setDeploymentPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+  });
+  const [deploymentsLoading, setDeploymentsLoading] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
   const [tab, setTab] = useState<DetailTab>('deployments');
@@ -169,10 +176,30 @@ export default function HubPage(): ReactElement {
     const key = `${selectedAppId}:${tab}`;
     const load = async (): Promise<void> => {
       if (tab === 'deployments') {
-        const response = await client.request<
-          ApiResponse<readonly DeploymentRecord[]>
-        >({ path: `hub/apps/${selectedAppId}/deployments` });
-        if (!cancelled) setDeployments(response.data);
+        setDeploymentsLoading(true);
+        try {
+          const response = await client.request<
+            ApiResponse<{
+              items: readonly DeploymentRecord[];
+              page: number;
+              pageSize: number;
+              total: number;
+            }>
+          >({
+            path: `hub/apps/${selectedAppId}/deployments`,
+            query: { page: deploymentPage, pageSize: 20 },
+          });
+          if (!cancelled) {
+            setDeployments(response.data.items);
+            setDeploymentPagination({
+              page: response.data.page,
+              pageSize: response.data.pageSize,
+              total: response.data.total,
+            });
+          }
+        } finally {
+          if (!cancelled) setDeploymentsLoading(false);
+        }
       } else if (tab === 'releases') {
         const response = await client.request<
           ApiResponse<readonly ReleaseRecord[]>
@@ -195,7 +222,14 @@ export default function HubPage(): ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [client, tab, selectedAppId, selectedCurrentDeploymentId, refreshVersion]);
+  }, [
+    client,
+    tab,
+    selectedAppId,
+    selectedCurrentDeploymentId,
+    refreshVersion,
+    deploymentPage,
+  ]);
 
   const perform = async (
     work: () => Promise<void>,
@@ -218,6 +252,8 @@ export default function HubPage(): ReactElement {
     setDetail(undefined);
     setReleases([]);
     setDeployments([]);
+    setDeploymentPage(1);
+    setDeploymentPagination({ page: 1, pageSize: 20, total: 0 });
     setPanelKey('');
     setSelectedId(id);
     setSelectedReleaseId(undefined);
@@ -282,6 +318,9 @@ export default function HubPage(): ReactElement {
             }}
             onTab={setTab}
             onRelease={setSelectedReleaseId}
+            deploymentPagination={deploymentPagination}
+            deploymentsLoading={deploymentsLoading}
+            onDeploymentPage={setDeploymentPage}
             onRefresh={() =>
               void perform(async () => {
                 await client.request({
@@ -475,6 +514,7 @@ export default function HubPage(): ReactElement {
               setDeployOpen(false);
               setRollbackDeploymentId(undefined);
               setTab('deployments');
+              setDeploymentPage(1);
             })
           }
         />

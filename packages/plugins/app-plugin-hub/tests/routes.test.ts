@@ -14,6 +14,29 @@ import { apiRoutes } from '../server/routes/index.js';
 import { hubServiceToken, type HubService } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-hub API routes', () => {
+  it('returns deployment pagination metadata and passes query options', async () => {
+    const listDeployments = vi
+      .fn<HubService['listDeployments']>()
+      .mockResolvedValue({ items: [], total: 21, page: 2, pageSize: 20 });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>(),
+        listDeployments,
+      }),
+    );
+    const response = await router.request(
+      '/hub/apps/customer/deployments?page=2&pageSize=20',
+    );
+    expect(response.status).toBe(200);
+    expect(listDeployments).toHaveBeenCalledWith('customer', {
+      page: 2,
+      pageSize: 20,
+    });
+    await expect(response.json()).resolves.toEqual({
+      data: { items: [], total: 21, page: 2, pageSize: 20 },
+    });
+  });
+
   it('rejects anonymous requests', async () => {
     const listApps = vi.fn<HubService['listApps']>();
     const router = await apiRoutes.createRouter(

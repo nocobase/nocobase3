@@ -9,6 +9,13 @@ import {
 import { Badge } from '../../components/ui/badge.js';
 import { Button } from '../../components/ui/button.js';
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationPrevious,
+  PaginationNext,
+} from '../../components/ui/pagination.js';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -32,12 +39,21 @@ export function Deployments({
   busy,
   onDeploy,
   onRollback,
+  pagination,
+  loading,
+  onPage,
 }: {
   readonly app: AppDetail;
   readonly busy: boolean;
   readonly onDeploy: () => void;
   readonly onRollback: (deploymentId: string) => void;
+  readonly pagination: { page: number; pageSize: number; total: number };
+  readonly loading: boolean;
+  readonly onPage: (page: number) => void;
 }): ReactElement {
+  const previousDisabled = loading || pagination.page <= 1;
+  const nextDisabled =
+    loading || pagination.page * pagination.pageSize >= pagination.total;
   if (app.deployments.length === 0) {
     return (
       <Empty
@@ -66,7 +82,10 @@ export function Deployments({
           <Play className='size-4' /> Deploy
         </Button>
       </div>
-      <div className='overflow-hidden rounded-lg border bg-card'>
+      <div
+        className='overflow-hidden rounded-lg border bg-card'
+        aria-busy={loading}
+      >
         <Table>
           <TableHeader className='bg-muted/20'>
             <TableRow>
@@ -157,6 +176,46 @@ export function Deployments({
             })}
           </TableBody>
         </Table>
+      </div>
+      <div className='flex items-center justify-between gap-3 text-sm text-muted-foreground'>
+        <span>
+          {pagination.total} deployments · Page {pagination.page} of{' '}
+          {Math.max(1, Math.ceil(pagination.total / pagination.pageSize))}
+        </span>
+        <Pagination aria-label='Deployment pagination' className='mx-0 w-auto'>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href='#'
+                aria-disabled={previousDisabled}
+                tabIndex={previousDisabled ? -1 : undefined}
+                className={
+                  previousDisabled
+                    ? 'pointer-events-none opacity-50'
+                    : undefined
+                }
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (!previousDisabled) onPage(pagination.page - 1);
+                }}
+              />
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationNext
+                href='#'
+                aria-disabled={nextDisabled}
+                tabIndex={nextDisabled ? -1 : undefined}
+                className={
+                  nextDisabled ? 'pointer-events-none opacity-50' : undefined
+                }
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (!nextDisabled) onPage(pagination.page + 1);
+                }}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       </div>
     </div>
   );

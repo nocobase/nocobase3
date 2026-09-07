@@ -149,11 +149,13 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       );
     });
     routes.get('/apps/:appId/deployments', async (context) =>
-      respond(context, async () =>
-        (await hub.listDeployments(context.req.param('appId'))).map(
-          deploymentListResponse,
-        ),
-      ),
+      respond(context, async () => {
+        const result = await hub.listDeployments(context.req.param('appId'), {
+          page: Number(context.req.query('page') ?? 1),
+          pageSize: Number(context.req.query('pageSize') ?? 20),
+        });
+        return { ...result, items: result.items.map(deploymentListResponse) };
+      }),
     );
     routes.get('/apps/:appId/deployments/:deploymentId', async (context) =>
       respond(context, async () =>

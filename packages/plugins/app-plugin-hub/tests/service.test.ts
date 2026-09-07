@@ -77,6 +77,71 @@ describe('@nocobase/app-plugin-hub service', () => {
     await rm(rootDir, { recursive: true, force: true });
   });
 
+  it('paginates deployments with stable ordering and app isolation', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await service.createApp({ id: 'other', name: 'Other' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+    const row = await database
+      .connection()
+      .query.selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('id', '=', queued.id)
+      .executeTakeFirstOrThrow();
+    for (let index = 0; index < 24; index += 1) {
+      await database
+        .connection()
+        .query.insertInto('hubAppDeployments')
+        .values({
+          ...row,
+          id: `history-${String(index).padStart(2, '0')}`,
+          createdAt: new Date('2026-01-01'),
+        })
+        .execute();
+    }
+    const first = await service.listDeployments('customer');
+    const second = await service.listDeployments('customer', { page: 2 });
+    expect(first).toMatchObject({ total: 25, page: 1, pageSize: 20 });
+    expect(first.items).toHaveLength(20);
+    expect(second.items).toHaveLength(5);
+    expect(
+      new Set([...first.items, ...second.items].map((item) => item.id)).size,
+    ).toBe(25);
+    expect(second.items.map((item) => item.id)).toEqual([
+      'history-04',
+      'history-03',
+      'history-02',
+      'history-01',
+      'history-00',
+    ]);
+    expect(
+      (await service.listDeployments('customer', { page: 999 })).page,
+    ).toBe(2);
+    expect(await service.listDeployments('other')).toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    });
+    for (const options of [
+      { page: 0 },
+      { page: 1.5 },
+      { page: NaN },
+      { pageSize: 101 },
+      { pageSize: 0 },
+    ]) {
+      await expect(
+        service.listDeployments('customer', options),
+      ).rejects.toMatchObject({ code: 'INVALID_PAGINATION' });
+    }
+  });
+
   it('creates an App without inventing a deployment record', async () => {
     const detail = await service.createApp({
       id: 'customer',
@@ -116,7 +181,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(after.app.currentDeploymentId).toBe(before.app.currentDeploymentId);
     expect(after.deployment.activation).toBe(before.deployment.activation);
     expect(after.runtime.state).toBe('running');
-    expect(await service.listDeployments('customer')).toHaveLength(1);
+    expect((await service.listDeployments('customer')).items).toHaveLength(1);
     await service.stop('customer');
     await expect(service.restart('customer')).rejects.toMatchObject({
       code: 'APP_NOT_RUNNING',
@@ -188,7 +253,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(detail).not.toHaveProperty('releases');
     expect(detail).not.toHaveProperty('deployments');
     expect(
-      (await service.listDeployments('customer'))[0]?.release,
+      (await service.listDeployments('customer')).items[0]?.release,
     ).toMatchObject({ version: '1.2.3', checksum: release.checksum });
     expect(host.lastDeploymentSet?.deployments).toEqual([
       expect.objectContaining({
@@ -505,8 +570,8 @@ describe('@nocobase/app-plugin-hub service', () => {
     await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
       'feature: true\n',
     );
-    await expect(service.listDeployments('customer')).resolves.toHaveLength(
-      deploymentsBefore.length,
+    expect((await service.listDeployments('customer')).total).toBe(
+      deploymentsBefore.total,
     );
     expect(host.targetedOperations).toEqual(['deploy:customer']);
     expect(host.reloadAppConfig).toHaveBeenCalledWith('customer');
@@ -887,7 +952,9 @@ async function waitForLatestDeployment(
   service: DefaultHubService,
   appId: string,
 ): Promise<import('../server/tokens.js').HubDeploymentRecord> {
-  const [deployment] = await service.listDeployments(appId);
+  const {
+    items: [deployment],
+  } = await service.listDeployments(appId);
   if (!deployment) throw new Error('Expected a deployment.');
   return await waitForDeployment(service, appId, deployment.id);
 }

@@ -147,6 +147,8 @@ Configuration 默认左右布局：左侧 Current 只读，右侧 New configurat
 
 新 Deployment 成功前，`currentDeploymentId` 仍指向上一次成功部署。如果新版本展开、校验或启动失败，历史中会保留失败记录，但不会把当前成功 Deployment 指针切过去。
 
+Deployments 使用服务端分页，默认每页 20 条，按创建时间、ID 倒序排列。表格显示总数和页码，刷新只请求当前页；提交 Deploy 或 Rollback 后回到第一页查看新操作。
+
 ### 5.5 回滚
 
 回滚入口位于 Deployments 历史。

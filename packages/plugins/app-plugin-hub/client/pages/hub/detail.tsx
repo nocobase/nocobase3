@@ -77,6 +77,9 @@ export function Detail({
   onDeploy,
   onRollback,
   onUpload,
+  deploymentPagination,
+  deploymentsLoading,
+  onDeploymentPage,
 }: {
   readonly panelLoading: boolean;
   readonly app: AppDetail;
@@ -98,6 +101,13 @@ export function Detail({
   readonly onDeploy: () => void;
   readonly onRollback: (deploymentId: string) => void;
   readonly onUpload: () => void;
+  readonly deploymentPagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+  };
+  readonly deploymentsLoading: boolean;
+  readonly onDeploymentPage: (page: number) => void;
 }): ReactElement {
   const deployed = hasDeployment(app);
   const detailTabs: readonly DetailTab[] = [
@@ -248,7 +258,10 @@ export function Detail({
                 <TabsContent value='deployments'>
                   <Deployments
                     app={app}
-                    busy={busy || transitioning}
+                    pagination={deploymentPagination}
+                    loading={deploymentsLoading}
+                    onPage={onDeploymentPage}
+                    busy={busy || transitioning || deploymentsLoading}
                     onDeploy={onDeploy}
                     onRollback={onRollback}
                   />

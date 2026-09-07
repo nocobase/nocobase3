@@ -40,6 +40,7 @@ import type {
   HubConfigMode,
   HubDeploymentRecord,
   HubDeploymentListItem,
+  HubDeploymentPage,
   HubRuntimeStatus,
   HubReleaseRecord,
   RollbackHubAppInput,
@@ -702,8 +703,34 @@ export class DefaultHubService implements HubService {
 
   public async listDeployments(
     appId: string,
-  ): Promise<readonly HubDeploymentListItem[]> {
+    options: { page?: number; pageSize?: number } = {},
+  ): Promise<HubDeploymentPage> {
+    const requestedPage = options.page ?? 1;
+    const pageSize = options.pageSize ?? 20;
+    if (
+      !Number.isSafeInteger(requestedPage) ||
+      requestedPage < 1 ||
+      !Number.isSafeInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100
+    ) {
+      throw new HubError(
+        'Page must be a positive integer and pageSize must be between 1 and 100.',
+        'INVALID_PAGINATION',
+        400,
+      );
+    }
     await this.requireApp(appId);
+    const count = await this.query()
+      .selectFrom('hubAppDeployments')
+      .select((eb) => [eb.fn.countAll().as('total')])
+      .where('appId', '=', appId)
+      .executeTakeFirstOrThrow();
+    const total = Number(count.total);
+    const page = Math.min(
+      requestedPage,
+      Math.max(1, Math.ceil(total / pageSize)),
+    );
     const rows = await this.query()
       .selectFrom('hubAppDeployments')
       .leftJoin(
@@ -718,8 +745,11 @@ export class DefaultHubService implements HubService {
       ])
       .where('hubAppDeployments.appId', '=', appId)
       .orderBy('hubAppDeployments.createdAt', 'desc')
+      .orderBy('hubAppDeployments.id', 'desc')
+      .limit(pageSize)
+      .offset((page - 1) * pageSize)
       .execute<Row>();
-    return rows.map((row) => ({
+    const items: HubDeploymentListItem[] = rows.map((row) => ({
       ...decodeDeployment(row),
       release:
         typeof row.releaseVersion === 'string'
@@ -729,6 +759,7 @@ export class DefaultHubService implements HubService {
             }
           : null,
     }));
+    return { items, total, page, pageSize };
   }
 
   public async getDeployment(
