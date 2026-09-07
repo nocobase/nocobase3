@@ -1,5 +1,10 @@
-import type { AgentContext, AgentState } from '@nocobase/ai-employee';
-import type { Context } from '../internal/runtime-context.js';
+import type {
+  AgentContext,
+  AgentState,
+  AIManager,
+} from '@nocobase/ai-employee';
+import type { DatabaseManager } from '@nocobase/db';
+import type { Logger } from '@nocobase/logging';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
 import type { AIConversationsManager } from '../manager/ai-conversations-manager.js';
@@ -20,7 +25,8 @@ import {
   findCurrentFrontendTool,
   readFrontendToolResult,
 } from '../ai-employees/frontend-tools.js';
-import type { AppAgentServices } from './contracts.js';
+import type { AppAgentServices, ConversationExecution } from './contracts.js';
+import type { Actor, Translate } from '../domain/contracts.js';
 
 export interface AppAgentRepositories {
   aiConversations: AIConversationRepository;
@@ -39,41 +45,52 @@ export type AppAgentContext = AgentContext<
 >;
 
 export interface CreateAgentContextOptions {
-  ctx: Context;
-  repositories: RepositoryFactory;
-  aiEmployeesManager: AIEmployeesManager;
-  aiConversationsManager: AIConversationsManager;
-  builtInManager: BuiltInManager;
-  knowledgeBaseManager: KnowledgeBaseManager;
-  subAgentsDispatcher: SubAgentsDispatcher;
-  state?: Partial<AgentState>;
+  readonly actor: Actor;
+  readonly execution?: ConversationExecution;
+  readonly state?: Partial<AgentState>;
+  readonly ai: AIManager;
+  readonly database: DatabaseManager;
+  readonly logger: Logger;
+  readonly repositories: RepositoryFactory;
+  readonly aiEmployeesManager: AIEmployeesManager;
+  readonly aiConversationsManager: AIConversationsManager;
+  readonly builtInManager: BuiltInManager;
+  readonly knowledgeBaseManager: KnowledgeBaseManager;
+  readonly subAgentsDispatcher: SubAgentsDispatcher;
+  readonly translate?: Translate;
+  readonly getHeader?: (name: string) => string | undefined;
 }
 
 export function createAgentContext({
-  ctx,
+  actor,
+  execution = {},
+  state: stateOverrides,
+  ai,
+  database,
+  logger,
   repositories,
   aiEmployeesManager,
   aiConversationsManager,
   builtInManager,
   knowledgeBaseManager,
   subAgentsDispatcher,
-  state: stateOverrides,
+  translate,
+  getHeader,
 }: CreateAgentContextOptions): AppAgentContext {
-  const execution = ctx.requestExecution;
   const state: AgentState = {
-    sessionId: execution?.sessionId,
-    messageId: execution?.messageId,
-    messages: execution?.messages ? [...execution.messages] : undefined,
-    model: execution?.model ? { ...execution.model } : undefined,
-    webSearch: execution?.webSearch,
-    important: execution?.important,
-    frontendTools: execution?.frontendTools
+    sessionId: execution.sessionId,
+    messageId: execution.messageId,
+    messages: execution.messages ? [...execution.messages] : undefined,
+    model: execution.model ? { ...execution.model } : undefined,
+    webSearch: execution.webSearch,
+    important: execution.important,
+    frontendTools: execution.frontendTools
       ? [...execution.frontendTools]
       : undefined,
-    toolCallResults: execution?.toolCallResults
+    toolCallResults: execution.toolCallResults
       ? [...execution.toolCallResults]
       : undefined,
-    timezone: execution?.timezone,
+    timezone: execution.timezone,
     ...stateOverrides,
   };
   const services: AppAgentServices = {
@@ -95,26 +112,31 @@ export function createAgentContext({
     },
     builtIn: {
       localize: (employee) =>
-        builtInManager.setupBuiltInInfo({ employee, translate: ctx.t }),
+        builtInManager.setupBuiltInInfo({ employee, translate }),
     },
     knowledgeBase: {
       retrievePrompt: (params) => knowledgeBaseManager.retrievePrompt(params),
     },
     subAgents: {
-      run: (task) => subAgentsDispatcher.run(task, ctx),
+      run: (task) =>
+        subAgentsDispatcher.run(task, {
+          actor,
+          execution,
+          translate,
+          getHeader,
+        }),
     },
     frontendTools: {
       find: (toolId) =>
         findCurrentFrontendTool(repositories, toolId, execution),
-      readResult: (toolCallId) =>
-        readFrontendToolResult(execution ?? {}, toolCallId),
+      readResult: (toolCallId) => readFrontendToolResult(execution, toolCallId),
     },
   };
 
   return {
-    ai: ctx.ai,
-    database: ctx.databaseManager,
-    logger: ctx.logger,
+    ai,
+    database,
+    logger,
     repositories: {
       aiConversations: repositories.aiConversations,
       aiEmployees: repositories.aiEmployees,
@@ -128,11 +150,11 @@ export function createAgentContext({
     services,
     state,
     actor: {
-      id: ctx.currentUser.id,
-      roles: [...(ctx.state.currentRoles ?? ctx.currentUser.roles)],
-      isRoot: ctx.currentUser.isRoot,
-      locale: ctx.currentUser.locale,
+      id: actor.id,
+      roles: [...actor.roles],
+      isRoot: actor.isRoot,
+      locale: actor.locale,
     },
-    translate: ctx.t,
+    translate,
   };
 }

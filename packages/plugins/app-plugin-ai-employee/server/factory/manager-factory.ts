@@ -6,6 +6,9 @@ import {
   type FileStorageFactory,
 } from '@nocobase/ai-employee';
 import { cachingToken } from '@nocobase/app-server/caching';
+import { databaseManagerToken } from '@nocobase/db';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { loggingToken } from '@nocobase/app-server/logging';
 import {
   createServiceToken,
   type ServiceResolver,
@@ -117,6 +120,13 @@ export class ManagerFactory {
 
   public get subAgentsDispatcher(): SubAgentsDispatcher {
     return (this.subAgentsDispatcherValue ??= new SubAgentsDispatcher({
+      ai: this.ai,
+      database: this.container.resolve(databaseManagerToken).connection(),
+      databaseManager: this.container.resolve(databaseManagerToken),
+      logger: this.container.resolve(loggingToken).getLogger('ai-employee'),
+      caching: this.container.resolve(cachingToken),
+      fileStorage: this.fileStorage,
+      snowflake: this.container.resolve(idGeneratorToken),
       repositories: this.repositories,
       aiEmployeesManager: this.aiEmployeesManager,
       aiConversationsManager: this.aiConversationsManager,

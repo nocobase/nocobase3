@@ -2,6 +2,7 @@ import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Context as HonoContext, Hono } from 'hono';
 import type { ConversationExecution } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../domain/stream.js';
+import { identityTranslate } from '../domain/contracts.js';
 import { createAISSEStreamResponse, requiredString } from './utils.js';
 
 export function createAIConversationsRouter(
@@ -9,14 +10,11 @@ export function createAIConversationsRouter(
   services: ServiceFactory,
 ): void {
   app.get('/aiConversations:list', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
+    const actor = context.var.currentUser;
     const result = await services.conversationService.list({
-      ctx,
+      actorId: actor.id,
+      scope: actor.scope,
       options: {
-        scope: context.req.query('scope') || undefined,
         keyword: context.req.query('keyword') || undefined,
       },
     });
@@ -24,31 +22,24 @@ export function createAIConversationsRouter(
   });
 
   app.get('/aiConversations:unreadCounts', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
-    const result = await services.conversationService.unreadCounts({ ctx });
+    const result = await services.conversationService.unreadCounts({
+      actorId: context.var.currentUser.id,
+    });
     return context.json(result as never);
   });
 
   app.get('/aiConversations:unreadCount', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
-    const result = (await services.conversationService.unreadCounts({ ctx }))
-      .conversationUnreadCount;
+    const result = (
+      await services.conversationService.unreadCounts({
+        actorId: context.var.currentUser.id,
+      })
+    ).conversationUnreadCount;
     return context.json(result as never);
   });
 
   app.get('/aiConversations:getMessages', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const result = await services.conversationService.getMessages({
-      ctx,
+      actorId: context.var.currentUser.id,
       options: {
         sessionId: requiredQuery(context, 'sessionId'),
         cursor: context.req.query('cursor') || undefined,
@@ -68,24 +59,16 @@ export function createAIConversationsRouter(
   });
 
   app.post('/aiConversations:create', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const result = await services.conversationService.create({
-      ctx,
+      actorId: context.var.currentUser.id,
       input: await jsonObject(context),
     });
     return context.json(result as never);
   });
 
   app.put('/aiConversations:update', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const result = await services.conversationService.update({
-      ctx,
+      actorId: context.var.currentUser.id,
       sessionId: requiredQuery(context, 'sessionId'),
       input: await jsonObject(context),
     });
@@ -93,12 +76,8 @@ export function createAIConversationsRouter(
   });
 
   app.put('/aiConversations:updateOptions', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const result = await services.conversationService.updateOptions({
-      ctx,
+      actorId: context.var.currentUser.id,
       sessionId: requiredQuery(context, 'sessionId'),
       input: await jsonObject(context),
     });
@@ -106,135 +85,112 @@ export function createAIConversationsRouter(
   });
 
   app.delete('/aiConversations:destroy', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const result = await services.conversationService.destroy({
-      ctx,
+      actorId: context.var.currentUser.id,
       options: { sessionId: requiredQuery(context, 'sessionId') },
     });
     return context.json(result as never);
   });
 
-  app.post('/aiConversations:sendMessages', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
-    const request = context.req.raw;
-    return createAISSEStreamResponse(
+  app.post('/aiConversations:sendMessages', async (context) =>
+    createConversationSSE(
       context,
       'aiConversations:sendMessages',
-      async (target) => {
-        const input = await jsonObject(context);
-        return services.conversationService.sendMessages({
-          ctx,
+      (input, target) =>
+        services.conversationService.sendMessages({
+          actor: context.var.currentUser,
           input,
-          execution: execution(input, target, request.signal),
-        });
-      },
-    );
-  });
+          execution: execution(context, input, target),
+          translate: identityTranslate,
+          getHeader: (name) => context.req.header(name),
+        }),
+    ),
+  );
 
-  app.post('/aiConversations:resendMessages', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
-    const request = context.req.raw;
-    return createAISSEStreamResponse(
+  app.post('/aiConversations:resendMessages', async (context) =>
+    createConversationSSE(
       context,
       'aiConversations:resendMessages',
-      async (target) => {
-        const input = await jsonObject(context);
-        return services.conversationService.resendMessages({
-          ctx,
+      (input, target) =>
+        services.conversationService.resendMessages({
+          actor: context.var.currentUser,
           input,
-          execution: execution(input, target, request.signal),
-        });
-      },
-    );
-  });
+          execution: execution(context, input, target),
+          translate: identityTranslate,
+          getHeader: (name) => context.req.header(name),
+        }),
+    ),
+  );
 
   app.post('/aiConversations:updateUserDecision', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const input = await jsonObject(context);
     const result = await services.conversationService.updateUserDecision({
-      ctx,
+      actor: context.var.currentUser,
       input,
-      execution: execution(input),
+      execution: execution(context, input),
+      translate: identityTranslate,
+      getHeader: (name) => context.req.header(name),
     });
     return context.json(result as never);
   });
 
-  app.post('/aiConversations:resumeToolCall', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
-    const request = context.req.raw;
-    return createAISSEStreamResponse(
+  app.post('/aiConversations:resumeToolCall', async (context) =>
+    createConversationSSE(
       context,
       'aiConversations:resumeToolCall',
-      async (target) => {
-        const input = await jsonObject(context);
-        return services.conversationService.resumeToolCall({
-          ctx,
+      (input, target) =>
+        services.conversationService.resumeToolCall({
+          actor: context.var.currentUser,
           input,
-          execution: execution(input, target, request.signal),
-        });
-      },
-    );
-  });
+          execution: execution(context, input, target),
+          translate: identityTranslate,
+          getHeader: (name) => context.req.header(name),
+        }),
+    ),
+  );
 
-  app.post('/aiConversations:resumeStream', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
-    const request = context.req.raw;
-    return createAISSEStreamResponse(
+  app.post('/aiConversations:resumeStream', async (context) =>
+    createConversationSSE(
       context,
       'aiConversations:resumeStream',
-      async (target) => {
-        const input = await jsonObject(context);
-        return services.conversationService.resumeStream({
-          ctx,
+      (input, target) =>
+        services.conversationService.resumeStream({
+          actorId: context.var.currentUser.id,
           input: { sessionId: requiredString(input.sessionId, 'sessionId') },
-          execution: execution(input, target, request.signal),
-        });
-      },
-    );
-  });
+          execution: execution(context, input, target),
+        }),
+    ),
+  );
 
   app.post('/aiConversations:abort', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const input = await jsonObject(context);
     const result = await services.conversationService.abort({
-      ctx,
+      actorId: context.var.currentUser.id,
       input: { sessionId: requiredString(input.sessionId, 'sessionId') },
     });
     return context.json(result as never);
   });
 
   app.post('/aiConversations:updateToolArgs', async (context) => {
-    const ctx = services.createRequestRuntime(
-      context.var.currentUser,
-      context.req.raw,
-    );
     const result = await services.conversationService.updateToolArgs({
-      ctx,
+      actorId: context.var.currentUser.id,
       input: await jsonObject(context),
     });
     return context.json(result as never);
   });
+}
+
+function createConversationSSE(
+  context: HonoContext,
+  action: string,
+  handler: (
+    input: Record<string, any>,
+    target: ConversationStreamTarget,
+  ) => unknown | Promise<unknown>,
+): Response {
+  return createAISSEStreamResponse(context, action, async (target) =>
+    handler(await jsonObject(context), target),
+  );
 }
 
 async function jsonObject(context: HonoContext): Promise<Record<string, any>> {
@@ -250,9 +206,9 @@ function requiredQuery(context: HonoContext, name: string): string {
 }
 
 function execution(
+  context: HonoContext,
   input: Record<string, any>,
   streamTarget?: ConversationStreamTarget,
-  abortSignal?: AbortSignal,
 ): ConversationExecution {
   return {
     sessionId:
@@ -271,6 +227,10 @@ function execution(
       ? input.toolCallResults
       : undefined,
     streamTarget,
-    abortSignal,
+    abortSignal: context.req.raw.signal,
+    timezone:
+      typeof input.timezone === 'string'
+        ? input.timezone
+        : context.req.header('x-timezone'),
   };
 }

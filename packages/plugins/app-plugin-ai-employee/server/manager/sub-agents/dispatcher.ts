@@ -7,7 +7,15 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../internal/runtime-context.js';
+import type { AIManager, FileStorage } from '@nocobase/ai-employee';
+import type { Caching } from '@nocobase/caching';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import type { Logger } from '@nocobase/logging';
+import type { IdGeneratorService } from '@nocobase/snowflake';
+import type { Actor, Translate } from '../../domain/contracts.js';
+import type { ConversationExecution } from '../../agent/contracts.js';
+import type { AIFileEntity } from '../../repository/ai-file.js';
+import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { AIEmployeesManager } from '../ai-employees-manager.js';
@@ -37,7 +45,24 @@ export type SubAgentTask = {
   writer?: (chunk: any) => void;
 };
 
+export interface SubAgentExecutionOptions {
+  readonly actor: Actor;
+  readonly execution?: ConversationExecution;
+  readonly translate?: Translate;
+  readonly getHeader?: (name: string) => string | undefined;
+}
+
 export class SubAgentsDispatcher {
+  private readonly ai: AIManager;
+  private readonly database: DatabaseConnection;
+  private readonly databaseManager: DatabaseManager;
+  private readonly logger: Logger;
+  private readonly caching: Caching;
+  private readonly fileStorage: FileStorage<
+    AIFileEntity,
+    AIFileMetadataCreateContext
+  >;
+  private readonly snowflake: IdGeneratorService;
   private readonly repositories: RepositoryFactory;
   private readonly aiEmployeesManager: AIEmployeesManager;
   private readonly aiConversationsManager: AIConversationsManager;
@@ -47,7 +72,14 @@ export class SubAgentsDispatcher {
   private readonly workContextHandler: WorkContextHandler;
   private readonly documentLoaders: DocumentLoaders;
 
-  constructor({
+  public constructor({
+    ai,
+    database,
+    databaseManager,
+    logger,
+    caching,
+    fileStorage,
+    snowflake,
     repositories,
     aiEmployeesManager,
     aiConversationsManager,
@@ -57,6 +89,13 @@ export class SubAgentsDispatcher {
     workContextHandler,
     documentLoaders,
   }: {
+    ai: AIManager;
+    database: DatabaseConnection;
+    databaseManager: DatabaseManager;
+    logger: Logger;
+    caching: Caching;
+    fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
+    snowflake: IdGeneratorService;
     repositories: RepositoryFactory;
     aiEmployeesManager: AIEmployeesManager;
     aiConversationsManager: AIConversationsManager;
@@ -66,6 +105,13 @@ export class SubAgentsDispatcher {
     workContextHandler: WorkContextHandler;
     documentLoaders: DocumentLoaders;
   }) {
+    this.ai = ai;
+    this.database = database;
+    this.databaseManager = databaseManager;
+    this.logger = logger;
+    this.caching = caching;
+    this.fileStorage = fileStorage;
+    this.snowflake = snowflake;
     this.repositories = repositories;
     this.aiEmployeesManager = aiEmployeesManager;
     this.aiConversationsManager = aiConversationsManager;
@@ -172,7 +218,10 @@ export class SubAgentsDispatcher {
     });
   }
 
-  async run(task: SubAgentTask, ctx: Context): Promise<string> {
+  async run(
+    task: SubAgentTask,
+    options: SubAgentExecutionOptions,
+  ): Promise<string> {
     const {
       sessionId,
       employee,
@@ -183,7 +232,7 @@ export class SubAgentsDispatcher {
       messages,
       writer,
     } = task;
-    const userId = ctx.auth?.user?.id;
+    const userId = options.actor.id;
     if (!userId) {
       throw new Error('User not authenticated');
     }
@@ -193,8 +242,36 @@ export class SubAgentsDispatcher {
       model,
     );
 
+    const agentContext = createAgentContext({
+      actor: options.actor,
+      execution: options.execution,
+      state: {
+        sessionId,
+        model: { ...resolvedModel },
+        webSearch,
+        messages,
+      },
+      ai: this.ai,
+      database: this.databaseManager,
+      logger: this.logger,
+      repositories: this.repositories,
+      aiEmployeesManager: this.aiEmployeesManager,
+      aiConversationsManager: this.aiConversationsManager,
+      builtInManager: this.builtInManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      subAgentsDispatcher: this,
+      translate: options.translate,
+      getHeader: options.getHeader,
+    });
+
     const agent = await createAIEmployeeAgentService({
-      ctx,
+      agentContext,
+      database: this.database,
+      caching: this.caching,
+      fileStorage: this.fileStorage,
+      snowflake: this.snowflake,
+      execution: options.execution,
+      getHeader: options.getHeader,
       repositories: this.repositories,
       aiEmployeesManager: this.aiEmployeesManager,
       builtInManager: this.builtInManager,
@@ -233,21 +310,6 @@ export class SubAgentsDispatcher {
       };
     }
 
-    const agentContext = createAgentContext({
-      ctx,
-      repositories: this.repositories,
-      aiEmployeesManager: this.aiEmployeesManager,
-      aiConversationsManager: this.aiConversationsManager,
-      builtInManager: this.builtInManager,
-      knowledgeBaseManager: this.knowledgeBaseManager,
-      subAgentsDispatcher: this,
-      state: {
-        sessionId,
-        model: resolvedModel as unknown as Record<string, unknown>,
-        webSearch,
-        messages,
-      },
-    });
     const result = await agent.service.invoke(
       {
         userDecisions: decisions ?? undefined,
@@ -298,8 +360,8 @@ export class SubAgentsDispatcher {
     return Boolean(aiToolMessage);
   }
 
-  async reject(sessionId: string, ctx: Context) {
-    const userId = ctx.auth?.user?.id;
+  async reject(sessionId: string, actorId: string | number): Promise<unknown> {
+    const userId = actorId;
     if (!userId) {
       throw new Error('User not authenticated');
     }

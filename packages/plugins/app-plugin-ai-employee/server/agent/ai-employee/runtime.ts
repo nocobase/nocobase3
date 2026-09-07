@@ -1,5 +1,11 @@
 import type { ModelRef } from '../../domain/contracts.js';
-import type { Context } from '../../internal/runtime-context.js';
+import type { AppAgentContext } from '../context.js';
+import type { ConversationExecution } from '../contracts.js';
+import type { Caching } from '@nocobase/caching';
+import type { IdGeneratorService } from '@nocobase/snowflake';
+import type { FileStorage } from '@nocobase/ai-employee';
+import type { AIFileEntity } from '../../repository/ai-file.js';
+import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
 import type { BuiltInManager } from '../../manager/built-in-manager.js';
@@ -28,7 +34,6 @@ import { createAIChatConversation } from '../../ai-employees/ai-chat-conversatio
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import {
-  getCurrentRoleNames,
   getKnowledgeBaseBackgroundPrompt,
   normalizeKnowledgeBaseRetrievalStrategy,
 } from '../../manager/knowledge-base-manager.js';
@@ -56,7 +61,13 @@ import {
 } from '../../ai-employees/frontend-tools.js';
 
 export interface AIEmployeeOptions {
-  ctx: Context;
+  agentContext: AppAgentContext;
+  database: DatabaseConnection;
+  caching: Caching;
+  fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
+  snowflake: IdGeneratorService;
+  execution?: ConversationExecution;
+  getHeader?: (name: string) => string | undefined;
   repositories: RepositoryFactory;
   aiEmployeesManager: AIEmployeesManager;
   builtInManager: BuiltInManager;
@@ -83,7 +94,13 @@ export class AIEmployeeCapabilities {
   skillSettings?: Record<string, any>;
   userMessageCount = 0;
 
-  private ctx: Context;
+  private agentContext: AppAgentContext;
+  private database: DatabaseConnection;
+  private caching: Caching;
+  private fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
+  private snowflake: IdGeneratorService;
+  private execution: ConversationExecution;
+  private getHeader: (name: string) => string | undefined;
   private repositories: RepositoryFactory;
   private builtInManager: BuiltInManager;
   private knowledgeBaseManager: KnowledgeBaseManager;
@@ -95,7 +112,13 @@ export class AIEmployeeCapabilities {
   private tools: { name: string }[];
 
   constructor({
-    ctx,
+    agentContext,
+    database,
+    caching,
+    fileStorage,
+    snowflake,
+    execution = {},
+    getHeader = () => undefined,
     repositories,
     builtInManager,
     knowledgeBaseManager,
@@ -111,7 +134,13 @@ export class AIEmployeeCapabilities {
     tools = [],
   }: AIEmployeeOptions) {
     this.employee = employee;
-    this.ctx = ctx;
+    this.agentContext = agentContext;
+    this.database = database;
+    this.caching = caching;
+    this.fileStorage = fileStorage;
+    this.snowflake = snowflake;
+    this.execution = execution;
+    this.getHeader = getHeader;
     this.repositories = repositories;
     this.builtInManager = builtInManager;
     this.knowledgeBaseManager = knowledgeBaseManager;
@@ -121,8 +150,8 @@ export class AIEmployeeCapabilities {
     this.systemMessage = systemMessage;
     this.aiChatConversation = createAIChatConversation({
       repositories: this.repositories,
-      database: this.ctx.database,
-      snowflake: this.ctx.snowflake,
+      database: this.database,
+      snowflake: this.snowflake,
       sessionId: this.sessionId,
     });
     this.skillSettings = skillSettings;
@@ -131,7 +160,7 @@ export class AIEmployeeCapabilities {
     this.tools = tools;
     this.builtInManager.setupBuiltInInfo({
       employee: this.employee as unknown as AIEmployeeType,
-      translate: ctx.t,
+      translate: agentContext.translate,
     });
     this.webSearch = webSearch;
   }
@@ -164,9 +193,10 @@ export class AIEmployeeCapabilities {
   }
 
   async getFormatMessages(userMessages: AIMessageInput[]) {
-    const { provider } = await this.ctx.ai.llmProviderManager.getLLMService(
-      this.getRequiredModel(),
-    );
+    const { provider } =
+      await this.agentContext.ai.llmProviderManager.getLLMService(
+        this.getRequiredModel(),
+      );
     const { messages } = await this.aiChatConversation.getChatContext({
       userMessages,
       formatMessages: (messages) => this.formatMessages({ messages, provider }),
@@ -188,7 +218,7 @@ export class AIEmployeeCapabilities {
 
     const userConfig = await this.repositories.usersAiEmployees.findOne({
       filter: {
-        userId: this.ctx.auth?.user?.id ?? 0,
+        userId: this.agentContext.actor.id,
         aiEmployee: this.employee.username,
       },
     });
@@ -213,7 +243,7 @@ export class AIEmployeeCapabilities {
     const employee = this.employee as unknown as AIEmployeeType;
     const knowledgeBaseEnabled =
       await knowledgeBaseManager.isEnabledKnowledgeBase(employee);
-    const roleNames = getCurrentRoleNames(this.ctx.state);
+    const roleNames = this.agentContext.actor.roles;
     const hasAccessibleKnowledgeBase = knowledgeBaseEnabled
       ? await knowledgeBaseManager.hasAccessibleKnowledgeBase({
           employee,
@@ -268,12 +298,12 @@ export class AIEmployeeCapabilities {
       },
       personal: userConfig?.prompt,
       environment: {
-        locale: this.ctx.getCurrentLocale?.() || 'en-US',
+        locale: this.agentContext.actor.locale || 'en-US',
         currentDateTime: getCurrentDateTimeForPrompt(
-          this.ctx.getCurrentLocale?.(),
-          getCurrentTimezone(this.ctx),
+          this.agentContext.actor.locale,
+          getCurrentTimezone(this.execution, this.getHeader),
         ),
-        timezone: getCurrentTimezone(this.ctx),
+        timezone: getCurrentTimezone(this.execution, this.getHeader),
       },
       knowledgeBase,
       availableSkills,
@@ -281,7 +311,7 @@ export class AIEmployeeCapabilities {
       webSearch: this.webSearch,
     });
 
-    const { important } = this.ctx.requestExecution ?? {};
+    const { important } = this.execution ?? {};
     if (important === 'GraphRecursionError') {
       const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
 First, provide a summary based on the existing information. Do not call additional tools.
@@ -308,7 +338,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       (toolCall) => toolCall.name === EXECUTE_FRONTEND_TOOL_NAME,
     )
       ? await listCurrentFrontendTools(this.repositories, {
-          ...this.ctx.requestExecution,
+          ...this.execution,
           sessionId: this.sessionId,
         })
       : [];
@@ -326,7 +356,7 @@ If information is missing, clearly state it in the summary.</Important>`;
                 )
               : this.isAutoCall(tools);
           return {
-            id: this.ctx.snowflake.generate(),
+            id: this.snowflake.generate(),
             sessionId: this.sessionId,
             messageId,
             toolCallId: toolCall.id,
@@ -358,7 +388,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       allowed_decisions?: string[];
     },
   ) {
-    return await this.ctx.database.transaction(async (transaction) => {
+    return await this.database.transaction(async (transaction) => {
       const updated = await this.aiToolMessagesRepo.update(
         {
           values: {
@@ -512,13 +542,13 @@ If information is missing, clearly state it in the summary.</Important>`;
     }
 
     const { model, service } =
-      await this.ctx.ai.llmProviderManager.getLLMService(
+      await this.agentContext.ai.llmProviderManager.getLLMService(
         this.getRequiredModel(),
       );
     const toolCallMap = await this.getToolCallMap(messageId);
     const now = new Date();
     const toolMessageContent = reason;
-    return await this.ctx.database.transaction(async (transaction) => {
+    return await this.database.transaction(async (transaction) => {
       for (const toolMessage of toolMessages) {
         await this.aiToolMessagesRepo.update(
           {
@@ -540,7 +570,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       return await this.repositories.aiMessages.create(
         {
           values: toolMessages.map((toolMessage) => ({
-            messageId: String(this.ctx.snowflake.generate()),
+            messageId: String(this.snowflake.generate()),
             role: 'tool',
             content: {
               type: 'text',
@@ -564,7 +594,7 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   get logger() {
-    return this.ctx.logger;
+    return this.agentContext.logger;
   }
 
   // === Conversation/thread helpers ===
@@ -622,7 +652,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!attachments.length) return messages;
 
     const attachmentsByLookup = await findMessageAttachments({
-      actorId: this.ctx.currentUser.id,
+      actorId: this.agentContext.actor.id,
       repositories: this.repositories,
       attachments,
     });
@@ -696,10 +726,10 @@ If information is missing, clearly state it in the summary.</Important>`;
         if (attachments?.length) {
           for (const attachment of attachments) {
             const parsed = await provider.parseAttachment(attachment as any, {
-              fileStorage: this.ctx.fileStorage,
+              fileStorage: this.fileStorage,
               documentLoader: this.documentLoaders.cached,
-              caching: this.ctx.caching,
-              getHeader: (name: string) => this.ctx.get(name),
+              caching: this.caching,
+              getHeader: (name: string) => this.getHeader(name),
             });
             if (parsed.placement === 'system') {
               formattedMessages.push({
@@ -749,12 +779,12 @@ If information is missing, clearly state it in the summary.</Important>`;
         {
           onDiscard: (info) => {
             this.logger.warn(
-              'Discard malformed raw tool calls from AI message',
               {
                 phase: 'formatMessages',
                 messageId: msg.metadata?.id,
                 ...info,
               },
+              'Discard malformed raw tool calls from AI message',
             );
           },
         },
@@ -808,13 +838,13 @@ If information is missing, clearly state it in the summary.</Important>`;
     const hasAccessibleKnowledgeBase =
       await knowledgeBaseManager.hasAccessibleKnowledgeBase({
         employee,
-        roleNames: getCurrentRoleNames(this.ctx.state),
+        roleNames: this.agentContext.actor.roles,
       });
     if (!hasAccessibleKnowledgeBase) {
       return undefined;
     }
     return this.toolsManager.getTools(SYSTEM_TOOLS.KNOWLEDGE_BASE, {
-      ctx: this.ctx,
+      ctx: this.agentContext,
     });
   }
 
@@ -825,13 +855,13 @@ If information is missing, clearly state it in the summary.</Important>`;
     const currentFrontendTools = await listCurrentFrontendTools(
       this.repositories,
       {
-        ...this.ctx.requestExecution,
+        ...this.execution,
         sessionId: this.sessionId,
       },
     );
     const tools: ToolsEntity[] = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
-      ctx: this.ctx,
+      ctx: this.agentContext,
     });
     if (getSkill) {
       tools.push(getSkill);
@@ -839,7 +869,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (this.webSearch === true) {
       const subAgentWebSearch = await this.toolsManager.getTools(
         SYSTEM_TOOLS.WEB_SEARCH,
-        { ctx: this.ctx },
+        { ctx: this.agentContext },
       );
       if (subAgentWebSearch) {
         tools.push(subAgentWebSearch);
@@ -902,7 +932,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!this.areSkillsEnabled()) {
       return [];
     }
-    const { skillsManager } = this.ctx.ai;
+    const { skillsManager } = this.agentContext.ai;
     const aIEmployeeTools = await this.getAIEmployeeTools();
     const getSkill = aIEmployeeTools.find(
       (it) => it.definition.name === 'getSkill',
@@ -1013,7 +1043,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     }
     const availableSkills = await this.getAvailableSkills();
     const loadedSkills =
-      await this.ctx.ai.skillsManager.getSkills(loadedSkillNames);
+      await this.agentContext.ai.skillsManager.getSkills(loadedSkillNames);
     const normalizedLoadedSkills = Array.isArray(loadedSkills)
       ? loadedSkills
       : [loadedSkills];
@@ -1042,7 +1072,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     }
     const availableAIEmployees = (
       await listAccessibleAIEmployees({
-        roleNames: this.ctx.currentUser.roles,
+        roleNames: this.agentContext.actor.roles,
         repositories: this.repositories,
       })
     )
@@ -1050,7 +1080,7 @@ If information is missing, clearly state it in the summary.</Important>`;
         serializeEmployeeSummary({
           employee,
           builtInManager: this.builtInManager,
-          translate: this.ctx.t,
+          translate: this.agentContext.translate,
         }),
       )
       .filter((it) => it.username !== this.employee.username);
@@ -1067,12 +1097,12 @@ If information is missing, clearly state it in the summary.</Important>`;
   private listTools(filter?: ToolsFilter) {
     return this.toolsManager.listTools({
       ...filter,
-      ctx: this.ctx,
+      ctx: this.agentContext,
     });
   }
 
   private get toolsManager(): ToolsManager {
-    return this.ctx.ai.toolsManager;
+    return this.agentContext.ai.toolsManager;
   }
 
   private get aiConversationsRepo() {
@@ -1088,17 +1118,11 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 }
 
-function getCurrentTimezone(ctx: Context): string | undefined {
-  const value =
-    ctx.requestExecution?.timezone ||
-    ctx.get?.('x-timezone') ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return typeof value === 'string' ? value : undefined;
+function getCurrentTimezone(
+  execution: ConversationExecution,
+  getHeader: (name: string) => string | undefined,
+): string | undefined {
+  return execution.timezone || getHeader('x-timezone') || undefined;
 }
 
 function getCurrentDateTimeForPrompt(

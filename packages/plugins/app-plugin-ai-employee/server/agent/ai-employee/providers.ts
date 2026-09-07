@@ -81,9 +81,10 @@ async function resolveAIEmployeeLLM(
   options: AIEmployeeOptions,
   state: AIEmployeeProviderState,
 ): Promise<{ provider: LLMProvider; identity: AgentLLMIdentity }> {
-  const resolved = await options.ctx.ai.llmProviderManager.getLLMService(
-    getRequiredModel(options),
-  );
+  const resolved =
+    await options.agentContext.ai.llmProviderManager.getLLMService(
+      getRequiredModel(options),
+    );
   const identity: AgentLLMIdentity = {
     providerName: resolved.service.provider,
     llmService: resolved.service.name,
@@ -100,14 +101,15 @@ export function createAIEmployeeConversationProvider(
   state = createState(options),
 ): ConversationProvider {
   const { runtime } = state;
-  const ctx = options.ctx as any;
+  const agentContext = options.agentContext;
+  const database = options.database;
   const sessionId = options.sessionId;
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
   const cache = options.llmStreamCachedManager.getCached(sessionId);
   const toolCalls: ToolCallHandler = {
     initialize: async (messageId, calls) =>
-      ctx.database.transaction((transaction: DatabaseConnection) =>
+      database.transaction((transaction: DatabaseConnection) =>
         runtime.initToolCall(transaction, messageId, calls),
       ),
     markInterrupted: (...args) => runtime.updateToolCallInterrupted(...args),
@@ -119,7 +121,7 @@ export function createAIEmployeeConversationProvider(
         content: (error as any)?.message ?? error,
       }),
     confirm: async (messageId, ids) =>
-      ctx.database.transaction((transaction: DatabaseConnection) =>
+      database.transaction((transaction: DatabaseConnection) =>
         runtime.confirmToolCall(transaction, messageId, ids),
       ),
     reject: async (_messageId, ids, reason) => {
@@ -299,7 +301,7 @@ export function createAIEmployeeConversationProvider(
         });
       }
     },
-    logger: ctx.logger,
+    logger: agentContext.logger,
   };
   return conversation;
 }
