@@ -127,7 +127,7 @@ Deploy 入口属于 Deployments，而不是 Releases。因为“部署”产生�
 2. **Configuration**：选择 Config file 或 External，并在需要时编辑本次部署的 YAML 配置。
 3. **Review**：确认 App、Release 和配置来源后提交。
 
-Configuration 默认左右布局：左侧 Current 只读，右侧 New configuration 可编辑，可按差异块将当前值带入右侧，不会修改正在使用的生产配置。图标组支持只看左侧、双栏或只看右侧。Review 使用只读单栏 diff；即使两者相同，也明确显示 `No configuration changes`；首次部署时 Current 显示无当前配置。
+Configuration 默认左右布局：左侧 Release template 只读，右侧 Deployment draft 可编辑。已有文件配置时，草稿以当前配置为起点，可按差异块从左向右应用模板修改，不直接修改线上配置。图标组支持只看左侧、双栏或只看右侧。Review 仍以线上当前配置和最终草稿做只读单栏 diff，而不是对比模板；无变化时明确提示。
 
 首次使用 Config file 时，若 Release 携带 `config.example.yml` 或 `config.example.yaml`，New configuration 自动使用该模板，并明确提示用户在继续前替换示例值、占位符、凭据和密钥；否则使用空 YAML 配置。模板后缀不影响实际文件格式，目标和运行文件统一使用 `.yml`，具体命名见第 7 节。
 
@@ -140,10 +140,10 @@ Configuration 默认左右布局：左侧 Current 只读，右侧 New configurat
 后续部署与首次部署使用同一流程，默认行为如下：
 
 - 默认选中当前 Release，用户可切换到新 Release 或其他构建；
-- 所选 Release 包含 `config.example.yml` 或 `config.example.yaml` 时，它直接成为右侧 New configuration，用来与左侧 Current configuration 比较；不增加额外的“使用模板”操作；
+- 所选 Release 的模板展示在左侧，右侧草稿优先继承当前文件配置；用户按差异块选择应用模板中的新增或修改；
 - 所选 Release 不包含配置示例时，若存在当前 Config file 配置则继承它，避免意外清空；首次部署则使用空配置。
 
-切换 Release 后，进入 Configuration 时将右侧重置为新 Release 对应的初始配置。页面实时校验 YAML 根节点、显示差异，并在配置无效时禁止进入 Review。
+切换 Release 后，进入 Configuration 时重新加载左侧模板，并重新初始化右侧草稿：有当前文件配置则使用它，否则使用模板或空配置。页面实时校验 YAML 根节点、显示差异，并在配置无效时禁止进入 Review。
 
 新 Deployment 成功前，`currentDeploymentId` 仍指向上一次成功部署。如果新版本展开、校验或启动失败，历史中会保留失败记录，但不会把当前成功 Deployment 指针切过去。
 
@@ -155,7 +155,7 @@ Deployments 使用服务端分页，默认每页 20 条，按创建时间、ID �
 
 1. 用户选择一条历史成功 Deployment。
 2. Hub 固定该记录的 Release 和配置来源。配置来源决定 App 如何加载配置，回滚时不能修改。
-3. 用户依次完成 Configuration 和 Review。目标为 Config file 时，右侧优先使用目标 Release 的配置示例；没有示例时使用当前配置，并允许在提交前调整内容。目标为 External 时不展示编辑器。
+3. 用户依次完成 Configuration 和 Review。目标为 Config file 时，左侧展示目标 Release 模板，右侧以当前文件配置为草稿；没有当前文件配置时使用模板初始化。可选择应用模板差异或手动编辑。目标为 External 时不展示编辑器。
 4. 页面默认并列展示当前配置和目标配置，也可隐藏其中一栏；Review 使用单栏 diff。
 5. Hub 新建一条 `kind=rollback` 的 Deployment，记录回滚目标，继承目标 Deployment 的配置来源；Config file 使用本次新建的配置路径，而不是复用已清理的历史文件。
 6. 后续执行流程与普通部署完全相同。
