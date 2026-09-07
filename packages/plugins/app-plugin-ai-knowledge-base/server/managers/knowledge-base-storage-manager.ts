@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   FileMetadataPersistenceError,
   type FileMetadata,
+  type OpenedFile,
   type FileStorage,
   type FileStorageFactory,
   type WriteFileInput,
@@ -11,6 +12,7 @@ import {
 import {
   KnowledgeBaseDocumentMetadataRepository,
   type KnowledgeBaseDocumentMetadataCreateContext,
+  mapKnowledgeBaseDocumentMetadata,
   KnowledgeBaseSegmentShardMetadataRepository,
   mapKnowledgeBaseSegmentShardMetadata,
   type KnowledgeBaseSegmentShardMetadataCreateContext,
@@ -89,6 +91,19 @@ export class KnowledgeBaseStorageManager {
       }
       throw cause;
     }
+  }
+
+  public openDocument(
+    document: KnowledgeBaseDocumentEntity,
+  ): Promise<OpenedFile<KnowledgeBaseDocumentEntity>> {
+    const storage = this.fileStorageFactory.create({
+      disk: document.disk,
+      prefix: '',
+      metadataRepository: new KnowledgeBaseDocumentMetadataRepository(
+        this.documents,
+      ),
+    });
+    return storage.openMetadata(mapKnowledgeBaseDocumentMetadata(document));
   }
 
   public createSegmentShardStorage(

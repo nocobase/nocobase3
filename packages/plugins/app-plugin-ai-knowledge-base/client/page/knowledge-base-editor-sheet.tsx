@@ -258,8 +258,19 @@ export function KnowledgeBaseEditorSheet({
       );
   }, [open, service, values.knowledgeBaseType, values.llmService]);
 
+  const chunkSize =
+    values.segmentOptions?.chunkSize ?? defaultSegmentOptions.chunkSize;
+  const chunkOverlap =
+    values.segmentOptions?.chunkOverlap ?? defaultSegmentOptions.chunkOverlap;
+  const segmentOptionsInvalid =
+    values.knowledgeBaseType === 'LOCAL' && chunkOverlap >= chunkSize;
+
   const save = async (): Promise<void> => {
     if (!values.name.trim() || saving) return;
+    if (segmentOptionsInvalid) {
+      setError(t('Chunk overlap must be less than Chunk size.'));
+      return;
+    }
     setSaving(true);
     setError(undefined);
     try {
@@ -343,7 +354,7 @@ export function KnowledgeBaseEditorSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side='right'
-        className='w-full overflow-y-auto sm:max-w-none md:w-1/2'
+        className='!w-full gap-0 overflow-hidden p-0 sm:!max-w-none md:!w-1/2'
       >
         <SheetHeader className='border-b px-6 py-5'>
           <SheetTitle>
@@ -351,265 +362,280 @@ export function KnowledgeBaseEditorSheet({
           </SheetTitle>
         </SheetHeader>
         <form
-          className='grid gap-5 px-6 pb-6'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden'
           onSubmit={(event) => {
             event.preventDefault();
             void save();
           }}
         >
-          <div className='grid gap-2 rounded-lg border bg-card p-4'>
-            <div className='flex items-center gap-2'>
-              <span className='text-sm font-semibold'>
-                {t('Knowledge base type:')}
-              </span>
-              <span
-                className={`inline-flex h-5 items-center rounded-full px-2 text-xs font-medium ring-1 ring-inset ${typeDetails.badgeClassName}`}
-              >
-                {t(typeDetails.label)}
-              </span>
+          <div className='grid min-h-0 flex-1 gap-5 overflow-y-auto px-6 py-5'>
+            <div className='grid gap-2 rounded-lg border bg-card p-4'>
+              <div className='flex items-center gap-2'>
+                <span className='text-sm font-semibold'>
+                  {t('Knowledge base type:')}
+                </span>
+                <span
+                  className={`inline-flex h-5 items-center rounded-full px-2 text-xs font-medium ring-1 ring-inset ${typeDetails.badgeClassName}`}
+                >
+                  {t(typeDetails.label)}
+                </span>
+              </div>
+              <p className='text-sm leading-5 text-muted-foreground'>
+                {t(typeDetails.description)}
+              </p>
             </div>
-            <p className='text-sm leading-5 text-muted-foreground'>
-              {t(typeDetails.description)}
-            </p>
-          </div>
-          <div className='grid gap-2'>
-            <Label htmlFor='knowledge-base-key'>{t('Key')}</Label>
-            <Input
-              id='knowledge-base-key'
-              value={values.key ?? ''}
-              disabled={!!record}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  key: event.target.value,
-                }))
-              }
-            />
-          </div>
-          <div className='grid gap-2'>
-            <Label htmlFor='knowledge-base-name'>{t('Name')}</Label>
-            <Input
-              id='knowledge-base-name'
-              autoFocus
-              required
-              value={values.name}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-            />
-          </div>
-          {local ? (
             <div className='grid gap-2'>
-              <Label>{t('File storage')}</Label>
-              <OptionSelect
-                value={values.disk}
-                options={options.storages}
-                placeholder={
-                  loadingOptions ? t('Loading…') : t('Select file storage')
-                }
-                disabled={loadingOptions || !!record}
-                onChange={(disk) =>
-                  setValues((current) => ({ ...current, disk }))
-                }
-              />
-            </div>
-          ) : null}
-          {!external ? (
-            <>
-              <div className='grid gap-2'>
-                <Label>{t('Vector database')}</Label>
-                <OptionSelect
-                  value={values.vectorDatabaseKey}
-                  options={options.vectorDatabases}
-                  placeholder={
-                    loadingOptions ? t('Loading…') : t('Select vector database')
-                  }
-                  disabled={loadingOptions}
-                  onChange={(vectorDatabaseKey) =>
-                    setValues((current) => ({ ...current, vectorDatabaseKey }))
-                  }
-                />
-              </div>
-              <div className='grid gap-2'>
-                <Label>{t('LLM service')}</Label>
-                <OptionSelect
-                  value={values.llmService}
-                  options={options.llmServices}
-                  placeholder={
-                    loadingOptions ? t('Loading…') : t('Select LLM service')
-                  }
-                  disabled={loadingOptions}
-                  onChange={(llmService) =>
-                    setValues((current) => ({
-                      ...current,
-                      llmService,
-                      embeddingModel: undefined,
-                    }))
-                  }
-                />
-              </div>
-              <div className='grid gap-2'>
-                <Label>{t('Embedding model')}</Label>
-                <EditableOptionInput
-                  value={values.embeddingModel}
-                  options={embeddingModels}
-                  placeholder={
-                    values.llmService
-                      ? t('Select or enter an embedding model')
-                      : t('Select an LLM service first')
-                  }
-                  disabled={!values.llmService}
-                  onChange={(embeddingModel) =>
-                    setValues((current) => ({ ...current, embeddingModel }))
-                  }
-                />
-              </div>
-            </>
-          ) : (
-            <div className='grid gap-2'>
-              <Label>{t('External vector-store provider')}</Label>
-              <OptionSelect
-                value={values.vectorStoreProvider}
-                options={options.externalProviders}
-                placeholder={
-                  loadingOptions
-                    ? t('Loading…')
-                    : t('Select external vector-store provider')
-                }
-                disabled={loadingOptions || !!record}
-                onChange={(vectorStoreProvider) =>
+              <Label htmlFor='knowledge-base-key'>{t('Key')}</Label>
+              <Input
+                id='knowledge-base-key'
+                value={values.key ?? ''}
+                disabled={!!record}
+                onChange={(event) =>
                   setValues((current) => ({
                     ...current,
-                    vectorStoreProvider,
+                    key: event.target.value,
                   }))
                 }
               />
             </div>
-          )}
-          <div className='grid gap-2'>
-            <Label htmlFor='knowledge-base-description'>
-              {t('Description')}
-            </Label>
-            <Textarea
-              id='knowledge-base-description'
-              rows={5}
-              value={values.description ?? ''}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-            />
-          </div>
-          {external ? (
             <div className='grid gap-2'>
-              <Label htmlFor='external-provider-properties'>
-                {t('Provider properties')}
+              <Label htmlFor='knowledge-base-name'>{t('Name')}</Label>
+              <Input
+                id='knowledge-base-name'
+                autoFocus
+                required
+                value={values.name}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            {local ? (
+              <div className='grid gap-2'>
+                <Label>{t('File storage')}</Label>
+                <OptionSelect
+                  value={values.disk}
+                  options={options.storages}
+                  placeholder={
+                    loadingOptions ? t('Loading…') : t('Select file storage')
+                  }
+                  disabled={loadingOptions || !!record}
+                  onChange={(disk) =>
+                    setValues((current) => ({ ...current, disk }))
+                  }
+                />
+              </div>
+            ) : null}
+            {!external ? (
+              <>
+                <div className='grid gap-2'>
+                  <Label>{t('Vector database')}</Label>
+                  <OptionSelect
+                    value={values.vectorDatabaseKey}
+                    options={options.vectorDatabases}
+                    placeholder={
+                      loadingOptions
+                        ? t('Loading…')
+                        : t('Select vector database')
+                    }
+                    disabled={loadingOptions}
+                    onChange={(vectorDatabaseKey) =>
+                      setValues((current) => ({
+                        ...current,
+                        vectorDatabaseKey,
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label>{t('LLM service')}</Label>
+                  <OptionSelect
+                    value={values.llmService}
+                    options={options.llmServices}
+                    placeholder={
+                      loadingOptions ? t('Loading…') : t('Select LLM service')
+                    }
+                    disabled={loadingOptions}
+                    onChange={(llmService) =>
+                      setValues((current) => ({
+                        ...current,
+                        llmService,
+                        embeddingModel: undefined,
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label>{t('Embedding model')}</Label>
+                  <EditableOptionInput
+                    value={values.embeddingModel}
+                    options={embeddingModels}
+                    placeholder={
+                      values.llmService
+                        ? t('Select or enter an embedding model')
+                        : t('Select an LLM service first')
+                    }
+                    disabled={!values.llmService}
+                    onChange={(embeddingModel) =>
+                      setValues((current) => ({ ...current, embeddingModel }))
+                    }
+                  />
+                </div>
+              </>
+            ) : (
+              <div className='grid gap-2'>
+                <Label>{t('External vector-store provider')}</Label>
+                <OptionSelect
+                  value={values.vectorStoreProvider}
+                  options={options.externalProviders}
+                  placeholder={
+                    loadingOptions
+                      ? t('Loading…')
+                      : t('Select external vector-store provider')
+                  }
+                  disabled={loadingOptions || !!record}
+                  onChange={(vectorStoreProvider) =>
+                    setValues((current) => ({
+                      ...current,
+                      vectorStoreProvider,
+                    }))
+                  }
+                />
+              </div>
+            )}
+            <div className='grid gap-2'>
+              <Label htmlFor='knowledge-base-description'>
+                {t('Description')}
               </Label>
               <Textarea
-                id='external-provider-properties'
-                rows={8}
-                className='font-mono text-xs'
-                value={externalProps}
-                onChange={(event) => setExternalProps(event.target.value)}
+                id='knowledge-base-description'
+                rows={5}
+                value={values.description ?? ''}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
               />
-              <p className='text-xs text-muted-foreground'>
-                {t(
-                  'Enter provider properties as a JSON array of key and value objects.',
-                )}
-              </p>
             </div>
-          ) : null}
-          {local ? (
-            <>
-              <div className='flex items-center justify-between gap-4'>
-                <Label>{t('Split document')}</Label>
-                <Switch
-                  checked={values.segmentOptions?.enabled !== false}
-                  onCheckedChange={(enabled) =>
-                    setValues((current) => ({
-                      ...current,
-                      segmentOptions: {
-                        ...defaultSegmentOptions,
-                        ...current.segmentOptions,
-                        enabled,
-                      },
-                    }))
-                  }
-                />
-              </div>
+            {external ? (
               <div className='grid gap-2'>
-                <Label htmlFor='chunk-size'>{t('Chunk size')}</Label>
-                <Input
-                  id='chunk-size'
-                  className='w-36'
-                  type='number'
-                  min={1}
-                  step={100}
-                  value={
-                    values.segmentOptions?.chunkSize ??
-                    defaultSegmentOptions.chunkSize
-                  }
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      segmentOptions: {
-                        ...defaultSegmentOptions,
-                        ...current.segmentOptions,
-                        chunkSize: Math.max(1, Number(event.target.value) || 1),
-                      },
-                    }))
-                  }
+                <Label htmlFor='external-provider-properties'>
+                  {t('Provider properties')}
+                </Label>
+                <Textarea
+                  id='external-provider-properties'
+                  rows={8}
+                  className='font-mono text-xs'
+                  value={externalProps}
+                  onChange={(event) => setExternalProps(event.target.value)}
                 />
+                <p className='text-xs text-muted-foreground'>
+                  {t(
+                    'Enter provider properties as a JSON array of key and value objects.',
+                  )}
+                </p>
               </div>
-              <div className='grid gap-2'>
-                <Label htmlFor='chunk-overlap'>{t('Chunk overlap')}</Label>
-                <Input
-                  id='chunk-overlap'
-                  className='w-36'
-                  type='number'
-                  min={0}
-                  step={100}
-                  value={
-                    values.segmentOptions?.chunkOverlap ??
-                    defaultSegmentOptions.chunkOverlap
-                  }
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      segmentOptions: {
-                        ...defaultSegmentOptions,
-                        ...current.segmentOptions,
-                        chunkOverlap: Math.max(
-                          0,
-                          Number(event.target.value) || 0,
-                        ),
-                      },
-                    }))
-                  }
-                />
-              </div>
-            </>
-          ) : null}
-          <div className='flex items-center justify-between gap-4'>
-            <Label>{t('Enabled')}</Label>
-            <Switch
-              checked={values.enabled !== false}
-              onCheckedChange={(enabled) =>
-                setValues((current) => ({ ...current, enabled }))
-              }
-            />
+            ) : null}
+            {local ? (
+              <>
+                <div className='flex items-center justify-between gap-4'>
+                  <Label>{t('Split document')}</Label>
+                  <Switch
+                    checked={values.segmentOptions?.enabled !== false}
+                    onCheckedChange={(enabled) =>
+                      setValues((current) => ({
+                        ...current,
+                        segmentOptions: {
+                          ...defaultSegmentOptions,
+                          ...current.segmentOptions,
+                          enabled,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label htmlFor='chunk-size'>{t('Chunk size')}</Label>
+                  <Input
+                    id='chunk-size'
+                    className='w-36'
+                    type='number'
+                    min={100}
+                    step={100}
+                    value={
+                      values.segmentOptions?.chunkSize ??
+                      defaultSegmentOptions.chunkSize
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        segmentOptions: {
+                          ...defaultSegmentOptions,
+                          ...current.segmentOptions,
+                          chunkSize: Math.max(
+                            100,
+                            Number(event.target.value) || 100,
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label htmlFor='chunk-overlap'>{t('Chunk overlap')}</Label>
+                  <Input
+                    id='chunk-overlap'
+                    className='w-36'
+                    type='number'
+                    min={0}
+                    step={100}
+                    value={
+                      values.segmentOptions?.chunkOverlap ??
+                      defaultSegmentOptions.chunkOverlap
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        segmentOptions: {
+                          ...defaultSegmentOptions,
+                          ...current.segmentOptions,
+                          chunkOverlap: Math.max(
+                            0,
+                            Number(event.target.value) || 0,
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  {segmentOptionsInvalid ? (
+                    <p className='text-sm text-destructive' role='alert'>
+                      {t('Chunk overlap must be less than Chunk size.')}
+                    </p>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+            <div className='flex items-center justify-between gap-4'>
+              <Label>{t('Enabled')}</Label>
+              <Switch
+                checked={values.enabled !== false}
+                onCheckedChange={(enabled) =>
+                  setValues((current) => ({ ...current, enabled }))
+                }
+              />
+            </div>
+            {error ? (
+              <p className='text-sm text-destructive' role='alert'>
+                {error}
+              </p>
+            ) : null}
           </div>
-          {error ? (
-            <p className='text-sm text-destructive' role='alert'>
-              {error}
-            </p>
-          ) : null}
-          <SheetFooter className='-mx-6 border-t px-6 pt-4'>
+          <SheetFooter className='mt-0 shrink-0 border-t px-6 py-4'>
             <div className='flex justify-end gap-2'>
               <Button
                 type='button'
@@ -619,7 +645,12 @@ export function KnowledgeBaseEditorSheet({
               >
                 {t('Cancel')}
               </Button>
-              <Button type='submit' disabled={saving || !values.name.trim()}>
+              <Button
+                type='submit'
+                disabled={
+                  saving || !values.name.trim() || segmentOptionsInvalid
+                }
+              >
                 {saving ? t('Saving…') : t('Save')}
               </Button>
             </div>

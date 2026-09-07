@@ -152,7 +152,15 @@ export function DocumentIndexStatusBadge({
         failed ? 'destructive' : status === 'SUCCESS' ? 'default' : 'secondary'
       }
     >
-      {failed ? t('Failed') : status || t('Pending')}
+      {failed
+        ? t('Failed')
+        : status === 'SUCCESS'
+          ? t('Success')
+          : status === 'PROCESSING'
+            ? t('Processing')
+            : status === 'PENDING'
+              ? t('Pending')
+              : status || t('Pending')}
     </Badge>
   );
 }

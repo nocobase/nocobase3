@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import type { OpenedFile } from '@nocobase/ai-employee';
 
 import {
   assertKnowledgeBaseDocumentUploadSize,
@@ -69,6 +70,13 @@ export class KnowledgeBaseDocumentManager {
       return { ...stored, indexStatus: 'ERROR', errorMessage };
     }
     return stored;
+  }
+
+  public async open(
+    id: string | number,
+  ): Promise<OpenedFile<KnowledgeBaseDocumentEntity> | null> {
+    const document = await this.documents.findById(id);
+    return document ? this.storage.openDocument(document) : null;
   }
 
   public async storeDocument(

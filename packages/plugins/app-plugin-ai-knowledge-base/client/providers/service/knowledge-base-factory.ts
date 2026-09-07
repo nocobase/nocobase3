@@ -75,7 +75,24 @@ const required = <T>(value: T | undefined, field: string): T => {
   return value;
 };
 
-const optionalDate = (value: unknown) => text(value);
+const optionalDate = (value: unknown): string | undefined => {
+  const numeric =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^-?\d+(?:\.\d+)?$/u.test(value.trim())
+        ? Number(value)
+        : undefined;
+  if (numeric !== undefined && Number.isFinite(numeric)) {
+    const milliseconds =
+      Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric;
+    const date = new Date(milliseconds);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  }
+  return text(value);
+};
 
 function toSegmentOptions(
   value: unknown,

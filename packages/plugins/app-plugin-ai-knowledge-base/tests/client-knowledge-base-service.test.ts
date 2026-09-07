@@ -65,6 +65,34 @@ test('normalizes database boolean values in knowledge base responses', async () 
     ],
   });
 });
+
+test('normalizes numeric database timestamps before rendering dates', async () => {
+  const timestamp = 1_725_000_000_000;
+  const { client } = recordingClient(() => ({
+    data: {
+      data: [
+        {
+          ...base,
+          createdAt: timestamp,
+          updatedAt: String(timestamp),
+        },
+      ],
+      meta: { count: 1, page: 1, pageSize: 20 },
+    },
+  }));
+  const service = createKnowledgeBaseService(client);
+
+  await expect(
+    service.listKnowledgeBases({ mode: 'all' }),
+  ).resolves.toMatchObject({
+    rows: [
+      {
+        createdAt: new Date(timestamp).toISOString(),
+        updatedAt: new Date(timestamp).toISOString(),
+      },
+    ],
+  });
+});
 const document = {
   id: 2,
   knowledgeBaseKey: 'handbook',

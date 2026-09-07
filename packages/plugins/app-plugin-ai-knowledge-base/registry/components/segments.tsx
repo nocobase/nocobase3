@@ -279,7 +279,7 @@ export function SegmentContentEditor({
       <Textarea
         value={content}
         onChange={(event) => onContentChange(event.target.value)}
-        className='min-h-64'
+        className='h-64 min-h-64 max-h-64 resize-none overflow-y-auto field-sizing-fixed'
         disabled={disabled}
         aria-label={t('Segment content')}
       />
@@ -377,6 +377,7 @@ export function SegmentEditor({
   onSave,
   saving = false,
   disabled = false,
+  showSaveAction = true,
 }: {
   segment: KnowledgeBaseSegment;
   draft: {
@@ -392,6 +393,7 @@ export function SegmentEditor({
   onSave: () => void;
   saving?: boolean;
   disabled?: boolean;
+  showSaveAction?: boolean;
 }) {
   const t = useKnowledgeBaseComponentTranslate();
   const readonly = disabled || saving;
@@ -408,11 +410,13 @@ export function SegmentEditor({
         onChange={(questions) => onDraftChange({ ...draft, questions })}
         disabled={readonly}
       />
-      <div className='flex justify-end'>
-        <Button onClick={onSave} disabled={readonly}>
-          {saving ? t('Saving…') : t('Save changes')}
-        </Button>
-      </div>
+      {showSaveAction ? (
+        <div className='flex justify-end'>
+          <Button onClick={onSave} disabled={readonly}>
+            {saving ? t('Saving…') : t('Save changes')}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
