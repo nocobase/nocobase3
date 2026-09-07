@@ -1,6 +1,0 @@
-{
-  "extends": "../../../../tsconfig.json",
-  "compilerOptions": { "noEmit": true, "isolatedDeclarations": false },
-  "include": ["database/**/*.ts", "server/**/*.ts", "client/**/*.tsx"],
-  "exclude": []
-}
