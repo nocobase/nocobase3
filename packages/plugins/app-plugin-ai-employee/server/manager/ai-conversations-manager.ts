@@ -172,6 +172,7 @@ export class AIConversationsManager {
     const conversation = await this.aiConversationsRepo.findOne({
       filter: {
         sessionId,
+        category: 'chat',
       },
     });
 
