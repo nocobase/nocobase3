@@ -116,6 +116,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       hash: 'artifact-hash',
       activeRunCount: 0,
       latestRun: null,
+      pendingArtifact: null,
     });
     const app = createTestApp(workflow);
 

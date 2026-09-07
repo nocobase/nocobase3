@@ -110,22 +110,22 @@ The management run endpoint resolves the exact materialized database definition/
 These names describe the repository behavior behind the authenticated routes;
 they are not additional package-root service exports.
 
-| Method                               | Purpose                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `list()`                             | Current definitions with enabled/current flags, version/hash, executed/active counts, latest run |
-| `getWorkflow(id)`                    | One definition and its materialized nodes/input/input settings                                   |
-| `revisions(id)`                      | All revisions sharing the selected definition's key                                              |
-| `enable(idOrArtifactHash)`           | Enable a synchronized definition by id or publish/enable an unsynchronized Artifact by hash      |
-| `disable(id)`                        | Disable the current definition                                                                   |
-| `setStatus(id, enabled)`             | Change enabled state on a current definition                                                     |
-| `getParameters(id)`                  | Read administrator input schema and explicit override values                                     |
-| `updateParameters(id, values)`       | Replace validated override values on a current definition                                        |
-| `runs(options?)`                     | Paged runs across workflows; default page size is 20                                             |
-| `runsForWorkflow(id)`                | Latest 50 runs for the selected definition's workflow key                                        |
-| `getRun(id)`                         | Run input, version identity, timing/reason, and latest attempt per node key                      |
-| `nodeRuns(id, nodeKey?)`             | All node attempts, optionally filtered by node key                                               |
-| `nodeRunPayload(runId, nodeRunId)`   | Redacted/truncated result, error, and log for one attempt                                        |
-| `run(definitionId, input, options?)` | Authorized manual execution of the selected revision; accepts the common `eventKey` option       |
+| Method                               | Purpose                                                                                                                                 |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `list()`                             | Current definitions with their actual enabled/version/hash state; a newer deployed Artifact is reported separately as `pendingArtifact` |
+| `getWorkflow(id)`                    | One definition and its materialized nodes/input/input settings; a current definition may include `pendingArtifact`                      |
+| `revisions(id)`                      | All revisions sharing the selected definition's key                                                                                     |
+| `enable(idOrArtifactHash)`           | Enable a synchronized definition by id or publish/enable an unsynchronized Artifact by hash                                             |
+| `disable(id)`                        | Disable the current definition                                                                                                          |
+| `setStatus(id, enabled)`             | Change enabled state on a current definition                                                                                            |
+| `getParameters(id)`                  | Read administrator input schema and explicit override values                                                                            |
+| `updateParameters(id, values)`       | Replace validated override values on a current definition                                                                               |
+| `runs(options?)`                     | Paged runs across workflows; default page size is 20                                                                                    |
+| `runsForWorkflow(id)`                | Latest 50 runs for the selected definition's workflow key                                                                               |
+| `getRun(id)`                         | Run input, version identity, timing/reason, and latest attempt per node key                                                             |
+| `nodeRuns(id, nodeKey?)`             | All node attempts, optionally filtered by node key                                                                                      |
+| `nodeRunPayload(runId, nodeRunId)`   | Redacted/truncated result, error, and log for one attempt                                                                               |
+| `run(definitionId, input, options?)` | Authorized manual execution of the selected revision; accepts the common `eventKey` option                                              |
 
 Input override updates accept only declared scalar values with exact types and enum membership. The stored map contains explicit overrides, not resolved defaults. Read back after changing it.
 
@@ -136,6 +136,7 @@ Artifact has no id and is identified by its deployed `hash`.
 
 - For an unsynchronized Artifact, call `enable(hash)` or `POST /api/workflows/<hash>/enable`.
 - For a synchronized workflow, call `enable(id)` or `POST /api/workflows/<id>/enable`.
+- Enabling a revision atomically makes it the current revision and enables it; the previous current revision is no longer current or enabled.
 - After enable, read back id/key, `enabled`, `current`, version, and hash before configuring parameters or running it.
 
 ## Authenticated management HTTP API
