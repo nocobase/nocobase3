@@ -16,7 +16,12 @@
     "database",
     "server",
     "package.json",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "registry",
+    "registry.config.json",
+    "public/r",
+    "skills"
   ],
   "exports": {
     ".": {
@@ -89,6 +94,13 @@
         "migrations": "database/migrations"
       },
       "server": "./server/bootstrap.ts"
+    },
+    "registry": {
+      "items": {
+        "providers": "./registry/providers",
+        "components": "./registry/components",
+        "workspace": "./registry/workspace"
+      }
     }
   },
   "scripts": {
@@ -99,8 +111,12 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
-    "fix": "pnpm lint:fix && pnpm format"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm typecheck:registry && pnpm test && pnpm registry:build && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
+    "registry:build": "node ../../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../../scripts/registry.mjs materialize --package .",
+    "typecheck:registry": "tsc -p tsconfig.registry.json --noEmit",
+    "prepack": "pnpm registry:build && pnpm build"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",

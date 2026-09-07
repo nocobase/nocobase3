@@ -1,0 +1,377 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "nocobase-ai-knowledge-base",
+  "homepage": "https://www.nocobase.com",
+  "items": [
+    {
+      "name": "providers",
+      "type": "registry:lib",
+      "title": "NocoBase AI Knowledge Base Providers",
+      "description": "Application-owned service adapter, current DTOs, error and pagination normalization, and stale-safe resource hooks.",
+      "dependencies": [
+        "@nocobase/app-portal-sdk@^0.0.1-beta.1",
+        "react@^19.0.0"
+      ],
+      "registryDependencies": [],
+      "docs": "Requires @nocobase/app-plugin-ai-knowledge-base. Import the service contract, provider, hooks, and types through index.ts. The source is application-owned and upgrades must be reviewed with a three-way merge.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-ai-knowledge-base": ">=0.1.0-beta.1 <0.2.0"
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/providers/hooks/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/hooks/index.ts"
+        },
+        {
+          "path": "registry/providers/hooks/shared.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/hooks/shared.ts"
+        },
+        {
+          "path": "registry/providers/hooks/use-knowledge-base-document.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/hooks/use-knowledge-base-document.ts"
+        },
+        {
+          "path": "registry/providers/hooks/use-knowledge-base-segment.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/hooks/use-knowledge-base-segment.ts"
+        },
+        {
+          "path": "registry/providers/hooks/use-knowledge-base.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/hooks/use-knowledge-base.ts"
+        },
+        {
+          "path": "registry/providers/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/index.ts"
+        },
+        {
+          "path": "registry/providers/providers/context.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/providers/context.tsx"
+        },
+        {
+          "path": "registry/providers/providers/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/providers/index.ts"
+        },
+        {
+          "path": "registry/providers/providers/service/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/providers/service/index.ts"
+        },
+        {
+          "path": "registry/providers/providers/service/knowledge-base-factory.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/providers/service/knowledge-base-factory.ts"
+        },
+        {
+          "path": "registry/providers/providers/service/knowledge-base.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/providers/service/knowledge-base.ts"
+        },
+        {
+          "path": "registry/providers/providers/types.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/providers/types.ts"
+        },
+        {
+          "path": "registry/providers/providers/utils.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/providers/utils.ts"
+        },
+        {
+          "path": "registry/providers/README.md",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-providers/README.md"
+        }
+      ]
+    },
+    {
+      "name": "components",
+      "type": "registry:component",
+      "title": "NocoBase AI Knowledge Base Components",
+      "description": "Application-owned controlled knowledge-base, document, upload, retrieval, and segment components with locale resources.",
+      "dependencies": [
+        "@nocobase/i18n@^0.0.2-beta.0",
+        "@refinedev/core@^5.0.0",
+        "lucide-react@^0.487.0",
+        "react@^19.0.0"
+      ],
+      "registryDependencies": [
+        "@nocobase-ai-knowledge-base/providers",
+        "alert",
+        "avatar",
+        "badge",
+        "breadcrumb",
+        "button",
+        "card",
+        "combobox",
+        "dialog",
+        "dropdown-menu",
+        "empty",
+        "input",
+        "input-group",
+        "item",
+        "popover",
+        "select",
+        "separator",
+        "sheet",
+        "skeleton",
+        "switch",
+        "table",
+        "tabs",
+        "textarea",
+        "toggle",
+        "toggle-group",
+        "tooltip"
+      ],
+      "docs": "Install providers first (remote shadcn resolves it recursively). Import controlled components through index.ts and register locales in the consuming application. The source is application-owned and upgrades use a three-way merge.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-ai-knowledge-base": ">=0.1.0-beta.1 <0.2.0"
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/components/app-shell-loading-state.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/app-shell-loading-state.tsx"
+        },
+        {
+          "path": "registry/components/common.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/common.tsx"
+        },
+        {
+          "path": "registry/components/compact-number.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/compact-number.tsx"
+        },
+        {
+          "path": "registry/components/documents.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/documents.tsx"
+        },
+        {
+          "path": "registry/components/i18n.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/i18n.ts"
+        },
+        {
+          "path": "registry/components/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/index.ts"
+        },
+        {
+          "path": "registry/components/knowledge-bases.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/knowledge-bases.tsx"
+        },
+        {
+          "path": "registry/components/locales/en-US.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/locales/en-US.ts"
+        },
+        {
+          "path": "registry/components/locales/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/locales/index.ts"
+        },
+        {
+          "path": "registry/components/locales/zh-CN.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/locales/zh-CN.ts"
+        },
+        {
+          "path": "registry/components/README.md",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/README.md"
+        },
+        {
+          "path": "registry/components/retrieval.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/retrieval.tsx"
+        },
+        {
+          "path": "registry/components/segments.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/segments.tsx"
+        },
+        {
+          "path": "registry/components/upload.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-components/upload.tsx"
+        }
+      ]
+    },
+    {
+      "name": "workspace",
+      "type": "registry:block",
+      "title": "NocoBase AI Knowledge Base Workspace",
+      "description": "Application-owned complete knowledge-base management, document, upload, retrieval, and nested segment workspace composition.",
+      "dependencies": [
+        "@nocobase/app-client@^1.0.0-beta.5",
+        "@nocobase/app-plugin-ai-employee@^0.1.0-beta.1",
+        "@nocobase/app-portal-sdk@^0.0.1-beta.1",
+        "@refinedev/core@^5.0.0",
+        "lucide-react@^0.487.0",
+        "react@^19.0.0",
+        "react-router@^7.0.0"
+      ],
+      "registryDependencies": [
+        "@nocobase-ai-knowledge-base/providers",
+        "@nocobase-ai-knowledge-base/components",
+        "alert",
+        "alert-dialog",
+        "button",
+        "card",
+        "input",
+        "label",
+        "sheet",
+        "switch",
+        "textarea"
+      ],
+      "docs": "Requires the enabled @nocobase/app-plugin-ai-knowledge-base runtime and the providers and components items. Compose the exported pages in application-owned routes; installation does not register routes or enable the plugin. Preserve application edits through a three-way merge on upgrade.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-ai-knowledge-base": ">=0.1.0-beta.1 <0.2.0"
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/workspace/extensions/nocobase-route-surfaces/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/extensions/nocobase-route-surfaces/index.ts"
+        },
+        {
+          "path": "registry/workspace/extensions/nocobase-route-surfaces/route-dialog.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/extensions/nocobase-route-surfaces/route-dialog.tsx"
+        },
+        {
+          "path": "registry/workspace/extensions/nocobase-route-surfaces/route-drawer.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/extensions/nocobase-route-surfaces/route-drawer.tsx"
+        },
+        {
+          "path": "registry/workspace/extensions/nocobase-route-surfaces/route-overlay-viewport.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/extensions/nocobase-route-surfaces/route-overlay-viewport.ts"
+        },
+        {
+          "path": "registry/workspace/extensions/nocobase-route-surfaces/route-page.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/extensions/nocobase-route-surfaces/route-page.tsx"
+        },
+        {
+          "path": "registry/workspace/extensions/nocobase-route-surfaces/use-refine-unsaved-changes.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/extensions/nocobase-route-surfaces/use-refine-unsaved-changes.tsx"
+        },
+        {
+          "path": "registry/workspace/index.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/index.ts"
+        },
+        {
+          "path": "registry/workspace/knowledge-base-routes.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/knowledge-base-routes.ts"
+        },
+        {
+          "path": "registry/workspace/page/document-page.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/document-page.tsx"
+        },
+        {
+          "path": "registry/workspace/page/document-segments-drawer.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/document-segments-drawer.tsx"
+        },
+        {
+          "path": "registry/workspace/page/knowledge-base-editor-sheet.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/knowledge-base-editor-sheet.tsx"
+        },
+        {
+          "path": "registry/workspace/page/knowledge-base-workspace-page.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/knowledge-base-workspace-page.tsx"
+        },
+        {
+          "path": "registry/workspace/page/knowledge-bases-page.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/knowledge-bases-page.tsx"
+        },
+        {
+          "path": "registry/workspace/page/notifications.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/notifications.ts"
+        },
+        {
+          "path": "registry/workspace/page/retrieval-result-route-entry.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/retrieval-result-route-entry.tsx"
+        },
+        {
+          "path": "registry/workspace/page/retrieval-result-route.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/retrieval-result-route.tsx"
+        },
+        {
+          "path": "registry/workspace/page/segment-route-entry.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/segment-route-entry.tsx"
+        },
+        {
+          "path": "registry/workspace/page/segment-route.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/segment-route.tsx"
+        },
+        {
+          "path": "registry/workspace/page/upload-controller.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/upload-controller.tsx"
+        },
+        {
+          "path": "registry/workspace/page/url-state.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/url-state.ts"
+        },
+        {
+          "path": "registry/workspace/page/workspace-route.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/page/workspace-route.tsx"
+        },
+        {
+          "path": "registry/workspace/README.md",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/README.md"
+        },
+        {
+          "path": "registry/workspace/route-paths.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai-knowledge-base-workspace/route-paths.ts"
+        }
+      ]
+    }
+  ]
+}
