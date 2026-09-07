@@ -45,7 +45,7 @@ Application owns
    `server/routes/` directory and include it in the App's routes array. Resolve
    Database, Drive, Session, authentication, and authorization from the App's
    existing container and config.
-4. Resolve `appApiClientToken` from the owning App, pass that v3 `AppClient` to
+4. Resolve `apiClientToken` from the owning App, pass that `ApiClient` to
    `createFilesClient()`, and use the reusable File components in the App page
    or form. Add an application route in `client/routes.ts` only when the
    workflow needs a new page.

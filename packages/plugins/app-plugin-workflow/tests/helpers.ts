@@ -21,14 +21,14 @@ import { workflowCollectionSchemas } from '../server/collections/index.js';
 export async function createWorkflowCollections(
   builder: CollectionBuilder,
   options: BuilderExecOptions = {},
-): Promise<BuilderResult[]> {
-  const results: BuilderResult[] = [];
-  for (const schema of workflowCollectionSchemas) {
-    results.push(
-      await builder.createCollection(schema.name, schema.define, options),
-    );
-  }
-  return results;
+): Promise<BuilderResult> {
+  return builder.createCollections(
+    workflowCollectionSchemas.map(({ name, define }) => ({
+      name,
+      definition: define,
+    })),
+    options,
+  );
 }
 
 export type TestNodeInput = {

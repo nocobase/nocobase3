@@ -1,4 +1,4 @@
-import { appApiClientToken, ClientApplication } from '@nocobase/app-client';
+import { apiClientToken, ClientApplication } from '@nocobase/app-client';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
@@ -10,7 +10,7 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
 
   public override boot(): Promise<void> {
     const authz = configureAuthorizationClient(
-      this.app.container.resolve(appApiClientToken),
+      this.app.container.resolve(apiClientToken),
     );
     const accessControlProvider: NonNullable<
       AppClientRefineConfig['accessControlProvider']

@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 interface SystemInfoResponse {
@@ -10,15 +10,15 @@ interface SystemInfoResponse {
 
 export default function SystemInfoPage(): ReactElement {
   // The Application's own API client, so the route follows whatever `api.baseURL` the Application is configured with.
-  const appClient = useService(appApiClientToken);
+  const api = useService(apiClientToken);
   const [result, setResult] = useState<SystemInfoResponse>();
   const [error, setError] = useState<string>();
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const requestPlugin = useCallback(
     (signal?: AbortSignal): Promise<SystemInfoResponse> =>
-      appClient.request<SystemInfoResponse>('system-info', { signal }),
-    [appClient],
+      api.request<SystemInfoResponse>({ path: 'system-info', signal }),
+    [api],
   );
 
   const refreshResult = (): void => {

@@ -672,8 +672,7 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
   public override register(): void {
     this.app.container.singleton(
       authorizationClientToken,
-      (resolver) =>
-        new AuthorizationClient(resolver.resolve(appApiClientToken)),
+      (resolver) => new AuthorizationClient(resolver.resolve(apiClientToken)),
     );
   }
 
@@ -1016,7 +1015,7 @@ export class DataProviderServiceProvider extends ServiceProvider<ClientApplicati
   public override boot(): Promise<void> {
     this.app.refine.setDataProvider(
       createDataProvider({
-        appClient: this.app.container.resolve(appApiClientToken),
+        api: this.app.container.resolve(apiClientToken),
         config: this.app.config,
         options: this.context.options,
       }),
@@ -1037,7 +1036,7 @@ export interface ClientApplication {
 }
 ```
 
-`services` 只用于解析；新的 Service binding 只能在 `serviceProviders` 的 `register()` 中声明。长期可以将当前 `@nocobase/app-sdk` 的 `AppClient` 重命名为 `AppApiClient`，避免与 `ClientApplication` 混淆；该重命名不属于本方案第一阶段的必要条件。
+`services` 只用于解析；新的 Service binding 只能在 `serviceProviders` 的 `register()` 中声明。HTTP API 和 WebSocket 分别使用 `ApiClient` 与 `RealtimeClient`，避免将不同传输生命周期合并成一个客户端。
 
 ## defineServerPlugin()
 
@@ -1101,15 +1100,16 @@ Client Application 应通过一个最先注册的核心 ServiceProvider 提供�
 
 ```text
 CoreClientServiceProvider
-  └── appApiClientToken → AppClient
+  ├── apiClientToken → ApiClient
+  └── realtimeClientToken → RealtimeClient
 ```
 
-Plugin ServiceProvider 通过 `appApiClientToken` 依赖同一 API Client，不再各自调用 `createAppClient()`：
+Plugin ServiceProvider 通过 `apiClientToken` 依赖同一 HTTP API Client，不再各自调用 `createApiClient()`：
 
 ```ts
 this.app.container.singleton(
   notificationClientToken,
-  (resolver) => new NotificationClient(resolver.resolve(appApiClientToken)),
+  (resolver) => new NotificationClient(resolver.resolve(apiClientToken)),
 );
 ```
 
@@ -1472,7 +1472,7 @@ Runtime 不识别旧字段，CLI 不接受旧 capability，Inspector 不输出�
 4. Workflow Client；
 5. i18n Server synchronization Client；
 6. Realtime 和其他长期连接；
-7. 页面模块中直接创建的 `AppClient`。
+7. 页面模块中直接创建的 `ApiClient`。
 
 每个能力由拥有它的 package 定义 Service contract、Token 和默认 Client ServiceProvider。消费者导入原始 Token，不能重新创建同名 Token。
 

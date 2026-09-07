@@ -33,7 +33,10 @@ export const IDENTITY_SENSITIVE_PACKAGES = new Map([
     '@nocobase/app-server',
     'exports the service tokens every server plugin resolves against',
   ],
-  ['@nocobase/app-client', 'exports React contexts and appApiClientToken'],
+  [
+    '@nocobase/app-client',
+    'exports React contexts plus identity-keyed API and realtime client tokens',
+  ],
   ['@nocobase/app-portal-sdk', 'exports the nocobaseClient module singleton'],
   ['@nocobase/i18n', 'exports React contexts for the i18n runtime'],
   [

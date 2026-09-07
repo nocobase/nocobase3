@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
 
 describe('CollectionBuilder relation fields', () => {
   it('compiles belongsTo as a local foreign key column with optional constraint', async () => {
@@ -11,6 +11,7 @@ describe('CollectionBuilder relation fields', () => {
         collection.increments('id');
         collection
           .belongsTo('customer', 'customers')
+          .targetKey('id')
           .foreignKey('customerId')
           .foreignKeyType('integer')
           .constraints(true)
@@ -54,9 +55,11 @@ describe('CollectionBuilder relation fields', () => {
     const result = await builder.createCollection(
       'orders',
       (collection) => {
-        collection.bigInt('createdById').columnName('creator_id');
+        collection.bigInt('createdById');
         collection
           .belongsTo('createdBy', 'users')
+          .targetKey('id')
+          .foreignKeyType('bigInt')
           .foreignKey('createdById')
           .constraints(true);
       },
@@ -77,17 +80,17 @@ describe('CollectionBuilder relation fields', () => {
     expect(result.schemaOperations?.[0]).toMatchObject({
       type: 'createTable',
       table: {
-        columns: [{ name: 'creator_id', type: 'bigInt' }],
+        columns: [{ name: 'created_by_id', type: 'bigInt' }],
         indexes: [
           {
-            columns: ['creator_id'],
-            name: 'idx_orders_creator_id',
+            columns: ['created_by_id'],
+            name: 'idx_orders_created_by_id',
           },
         ],
         constraints: [
           {
             type: 'foreignKey',
-            columns: ['creator_id'],
+            columns: ['created_by_id'],
             references: {
               table: 'users',
               columns: ['id'],
@@ -105,10 +108,18 @@ describe('CollectionBuilder relation fields', () => {
       'customers',
       (collection) => {
         collection.increments('id');
-        collection.hasOne('profile', 'profiles').foreignKey('customerId');
-        collection.hasMany('orders', 'orders').foreignKey('customerId');
+        collection
+          .hasOne('profile', 'profiles')
+          .sourceKey('id')
+          .foreignKey('customerId');
+        collection
+          .hasMany('orders', 'orders')
+          .sourceKey('id')
+          .foreignKey('customerId');
         collection
           .belongsToMany('products', 'products')
+          .sourceKey('id')
+          .targetKey('id')
           .through('orderProducts')
           .foreignKey('customerId')
           .otherKey('productId');
@@ -135,16 +146,8 @@ describe('CollectionBuilder relation fields', () => {
     expect((result.schemaOperations?.[0] as any).table.columns).toHaveLength(1);
   });
 
-  it('rejects columnName on relation fields', async () => {
+  it('rejects legacy columnName on relation fields', async () => {
     const builder = new CollectionBuilder();
-
-    await expect(
-      builder.createCollection('orders', (collection) => {
-        (collection.belongsTo('createdBy', 'users') as any).columnName(
-          'creator_id',
-        );
-      }),
-    ).rejects.toThrow(/Relation fields do not support columnName/);
 
     await expect(
       builder.createCollection('orders', {
@@ -157,7 +160,7 @@ describe('CollectionBuilder relation fields', () => {
           } as any,
         ],
       }),
-    ).rejects.toThrow(/Relation field "createdBy" does not support columnName/);
+    ).rejects.toThrow(/no longer supports columnName/);
 
     await expect(
       builder.apply([
@@ -172,6 +175,6 @@ describe('CollectionBuilder relation fields', () => {
           } as any,
         },
       ]),
-    ).rejects.toThrow(/Relation field "createdBy" does not support columnName/);
+    ).rejects.toThrow(/no longer supports columnName/);
   });
 });

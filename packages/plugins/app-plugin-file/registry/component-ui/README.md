@@ -10,7 +10,7 @@ The default installation target is
 Import `createFilesClient`, `FilesClientError`, and the components from the
 installed `index.ts`, or pass any object that implements the public
 `FilesClient` contract. Construct the default client with the owning App's
-`appApiClientToken`; its endpoint is relative to the v3 `/api` root. Use
+`apiClientToken`; its endpoint is relative to the v3 `/api` root. Use
 `FileUploadField` for controlled upload values, `FileList` for actions,
 `FileThumbnail` for compact file identity, `FilePreviewField` for read-only
 thumbnail collections, and `FilePreviewDialog` for keyboard-accessible

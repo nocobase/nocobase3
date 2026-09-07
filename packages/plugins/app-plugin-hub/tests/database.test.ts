@@ -56,26 +56,18 @@ describe('@nocobase/app-plugin-hub database migration', () => {
       ]),
     ).resolves.toEqual([true, false, true, true, true]);
     await expect(
-      metadataStore.getCollection('hubAppReleases'),
+      metadataStore.get('hubAppReleases').then((stored) => stored?.document),
     ).resolves.toMatchObject({
-      fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'configTemplate' }),
-      ]),
+      fields: { configTemplate: { type: 'text' } },
     });
     await expect(
-      metadataStore.getCollection('hubAppDeployments'),
+      metadataStore.get('hubAppDeployments').then((stored) => stored?.document),
     ).resolves.toMatchObject({
-      fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'config' }),
-      ]),
+      fields: { config: { type: 'json' } },
     });
-    await expect(metadataStore.getCollection('hubApps')).resolves.toMatchObject(
-      {
-        fields: expect.not.arrayContaining([
-          expect.objectContaining({ name: 'config' }),
-        ]),
-      },
-    );
+    const appMetadata = await metadataStore.get('hubApps');
+    expect(appMetadata?.document.fields).toBeDefined();
+    expect(appMetadata?.document.fields).not.toHaveProperty('config');
   });
 
   it('drops the schema and metadata', async () => {
@@ -89,9 +81,7 @@ describe('@nocobase/app-plugin-hub database migration', () => {
       ),
     ).resolves.toEqual([false, false, false]);
     for (const [collection] of COLLECTIONS) {
-      await expect(
-        metadataStore.getCollection(collection),
-      ).resolves.toBeUndefined();
+      await expect(metadataStore.get(collection)).resolves.toBeUndefined();
     }
   });
 });

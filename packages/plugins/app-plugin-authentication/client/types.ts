@@ -1,7 +1,8 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient, RealtimeClient } from '@nocobase/app-client';
 
 export interface AuthClientOptions {
-  client: AppClient;
+  api: ApiClient;
+  realtime: RealtimeClient;
 }
 
 export interface AuthSessionUser {

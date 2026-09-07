@@ -1574,6 +1574,12 @@ function createMockDatabase(
       throw new Error('Not implemented.');
     }) as DatabaseManager['builder'],
     query: (() => query) as DatabaseManager['query'],
+    createMigrator: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['createMigrator'],
+    createSeeder: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['createSeeder'],
     connect: (() =>
       Promise.reject(
         new Error('Not implemented.'),

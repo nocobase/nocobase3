@@ -264,9 +264,12 @@ export async function createRuntimeFixture(
   const database = createDatabaseManager({
     connections: { main: { dialect: 'sqlite', filename: dbPath } },
   });
-  for (const schema of workflowCollectionSchemas) {
-    await database.builder().createCollection(schema.name, schema.define);
-  }
+  await database.builder().createCollections(
+    workflowCollectionSchemas.map(({ name, define }) => ({
+      name,
+      definition: define,
+    })),
+  );
   const workflowIds: Record<string, WorkflowId> = {};
   const runIds: Record<string, WorkflowId> = {};
   for (const seed of workflowSeeds[profile]) {

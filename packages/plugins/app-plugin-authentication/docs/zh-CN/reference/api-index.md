@@ -143,7 +143,8 @@ class AuthClient {
 }
 ```
 
-所有请求通过 `AppClient` 发送到 `auth/*`。
+所有 HTTP 请求通过 `ApiClient` 发送到 `auth/*`；身份变化后通过
+`RealtimeClient.reconnect()` 刷新 WebSocket 身份。
 
 ### createAuthClient
 
@@ -155,7 +156,8 @@ function createAuthClient(options: AuthClientOptions): AuthClient;
 
 ```ts
 interface AuthClientOptions {
-  client: AppClient;
+  api: ApiClient;
+  realtime: RealtimeClient;
 }
 ```
 

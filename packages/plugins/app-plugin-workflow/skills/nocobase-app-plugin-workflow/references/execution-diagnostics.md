@@ -80,7 +80,7 @@ For `FAILED` or `ERROR`:
 
 For `ABORTED`:
 
-- Check `reason === 'timeout'`, configured deadline, reaper logs, and whether the script honored `runtime.signal`.
+- Check `reason === 'timeout'`, the configured deadline, reaper logs, and whether the script honored `options.signal`.
 - Distinguish an intended cancellation from timeout or shutdown.
 
 For an unexpected path:

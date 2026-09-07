@@ -5,6 +5,8 @@ export type FieldType =
   | 'integer'
   | 'bigInt'
   | 'string'
+  | 'char'
+  | 'enum'
   | 'text'
   | 'boolean'
   | 'decimal'
@@ -13,6 +15,7 @@ export type FieldType =
   | 'date'
   | 'time'
   | 'datetime'
+  | 'datetimeTz'
   | 'json'
   | 'blob'
   | 'uuid'
@@ -25,7 +28,7 @@ export type FieldType =
 
 export type Deferrable = boolean | 'immediate' | 'deferred';
 export type ReferentialAction =
-  'cascade' | 'restrict' | 'set null' | 'no action';
+  'cascade' | 'restrict' | 'set null' | 'set default' | 'no action';
 export type FilterExpression = Record<string, unknown>;
 export type DialectOptions = Record<string, unknown>;
 export type RelationType = 'belongsTo' | 'hasOne' | 'hasMany' | 'belongsToMany';
@@ -55,15 +58,16 @@ export interface FieldBase {
   length?: number;
   precision?: number;
   scale?: number;
+  /** Inspected fractional-second precision; V1 Builder temporal columns use 3. */
+  fractionalSecondsPrecision?: number;
   unsigned?: boolean;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
   db?: DbOptions;
 }
 
 export interface FieldDefinition extends FieldBase {
   type: FieldType;
-  columnName?: string;
+  /** Stable allowed string members for enum fields only. */
+  values?: readonly string[];
   target?: never;
   sourceKey?: never;
   targetKey?: never;
@@ -78,7 +82,6 @@ export interface FieldDefinition extends FieldBase {
 
 export type RelationFieldDefinition = FieldBase & {
   type: RelationType;
-  columnName?: never;
   target: string;
   sourceKey?: string;
   targetKey?: string;
@@ -168,24 +171,29 @@ export interface ViewOptions {
   };
 }
 
+export interface OptimisticLockDefinition {
+  field: string;
+  strategy: 'increment';
+}
+
 export interface CollectionDefinition {
   kind?: CollectionKind;
   name?: string;
-  tableName?: string;
   naming?: NamingOptions;
   title?: string;
   description?: string;
-  writable?: boolean;
   db?: DbOptions;
   fields?: AnyFieldDefinition[];
   constraints?: ConstraintDefinition[];
   indexes?: IndexDefinition[];
   view?: ViewOptions;
+  optimisticLock?: OptimisticLockDefinition;
 }
 
 export type FieldAlterInput = Partial<Omit<FieldDefinition, 'name'>>;
 
 export interface CollectionAlterDefinition {
+  optimisticLock?: OptimisticLockDefinition | null;
   addFields?: AnyFieldDefinition[];
   alterFields?: Array<{ name: string; changes: FieldAlterInput }>;
   dropFields?: string[];
@@ -195,21 +203,13 @@ export interface CollectionAlterDefinition {
   dropConstraints?: string[];
 }
 
-export interface FieldMetadataPatch {
-  title?: string;
-  description?: string;
-  interface?: string;
-  uiSchema?: Record<string, unknown>;
-}
-
-export interface CollectionMetadataPatch {
-  title?: string;
-  description?: string;
-  fields?: Record<string, FieldMetadataPatch>;
-}
-
 export type CollectionDefinitionInput =
   CollectionDefinition | ((collection: CollectionDefinitionBuilder) => void);
+
+export interface CollectionCreateInput {
+  readonly name: string;
+  readonly definition: CollectionDefinitionInput;
+}
 
 export type CollectionAlterInput =
   CollectionAlterDefinition | ((collection: CollectionAlterBuilder) => void);
@@ -240,10 +240,6 @@ export interface BuilderExecOptions {
    * Use DatabaseManager.transaction() or DatabaseConnection.transaction() today.
    */
   transaction?: boolean;
-}
-
-export interface MetadataUpdateOptions {
-  strict?: boolean;
 }
 
 export interface RefreshMaterializedViewOptions extends BuilderExecOptions {
@@ -299,8 +295,6 @@ export type CollectionOperation =
       type: 'renameCollection';
       from: string;
       to: string;
-      renameTable?: boolean;
-      renameTableTo?: string;
     }
   | {
       type: 'createViewCollection';
@@ -337,18 +331,7 @@ export type CollectionOperation =
       collection: string;
       constraint: ConstraintDefinition;
     }
-  | { type: 'dropConstraint'; collection: string; constraint: string }
-  | {
-      type: 'updateCollectionMetadata';
-      collection: string;
-      patch: CollectionMetadataPatch;
-    }
-  | {
-      type: 'updateFieldMetadata';
-      collection: string;
-      field: string;
-      patch: FieldMetadataPatch;
-    };
+  | { type: 'dropConstraint'; collection: string; constraint: string };
 
 export type SchemaOperation =
   | { type: 'createTable'; table: TableSchemaDefinition; ifNotExists?: boolean }
@@ -437,14 +420,13 @@ export type PhysicalConstraintDefinition =
   | CheckConstraintDefinition;
 
 export interface CollectionDefinitionBuilder {
-  tableName(name: string): this;
-  mapToTable(name: string): this;
   naming(options: NamingOptions): this;
   dbSchema(schema: string): this;
   title(title: string): this;
   description(description: string): this;
+  optimisticLock(field: string): this;
   field(field: AnyFieldDefinition): FieldDefinitionBuilder;
-  increments(name?: string): FieldDefinitionBuilder;
+  increments(name: string): FieldDefinitionBuilder;
   integer(
     name: string,
     options?: Partial<FieldDefinition>,
@@ -457,6 +439,14 @@ export interface CollectionDefinitionBuilder {
     name: string,
     options?: Partial<FieldDefinition>,
   ): FieldDefinitionBuilder;
+  char(
+    name: string,
+    options: Partial<FieldDefinition> & { length: number },
+  ): FieldDefinitionBuilder;
+  enum(
+    name: string,
+    options: Partial<FieldDefinition> & { values: readonly string[] },
+  ): FieldDefinitionBuilder;
   text(
     name: string,
     options?: Partial<FieldDefinition>,
@@ -466,6 +456,26 @@ export interface CollectionDefinitionBuilder {
     options?: Partial<FieldDefinition>,
   ): FieldDefinitionBuilder;
   decimal(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  float(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  double(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  date(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  time(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  datetimeTz(
     name: string,
     options?: Partial<FieldDefinition>,
   ): FieldDefinitionBuilder;
@@ -530,6 +540,7 @@ export interface CollectionDefinitionBuilder {
 }
 
 export interface CollectionAlterBuilder extends CollectionDefinitionBuilder {
+  clearOptimisticLock(): this;
   alterField(name: string, changes: FieldAlterInput): this;
   dropField(name: string): this;
   dropFields(...names: string[]): this;
@@ -562,8 +573,6 @@ export interface FieldDefinitionBuilder {
   defaultTo(value: unknown): this;
   unique(options?: Omit<UniqueConstraintDefinition, 'type' | 'fields'>): this;
   index(options?: Omit<IndexDefinition, 'fields'>): this;
-  columnName(name: string): this;
-  mapToColumn(name: string): this;
   title(title: string): this;
   description(description: string): this;
   dbComment(comment: string): this;

@@ -19,6 +19,7 @@ interface AppPackageJson {
   readonly nocobase?: {
     readonly plugins?: Record<string, { readonly enabled?: boolean }>;
   };
+  readonly dependencies?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
 }
 
@@ -42,7 +43,9 @@ describe('client plugin registry consistency', () => {
 
   it('declares every client plugin as a dependency', () => {
     const undeclared = registeredClientPackages.filter(
-      (packageName) => appPackage.devDependencies?.[packageName] === undefined,
+      (packageName) =>
+        appPackage.devDependencies?.[packageName] === undefined &&
+        appPackage.dependencies?.[packageName] === undefined,
     );
 
     expect(undeclared).toEqual([]);

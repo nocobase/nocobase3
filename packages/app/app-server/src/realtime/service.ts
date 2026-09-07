@@ -15,7 +15,7 @@ import {
   RealtimeProtocolError,
   validateRealtimeTopic,
   type RealtimeServerMessage,
-} from './protocol.js';
+} from '@nocobase/realtime/protocol';
 
 const WEB_SOCKET_OPEN = 1;
 const CLOSE_GOING_AWAY = 1001;

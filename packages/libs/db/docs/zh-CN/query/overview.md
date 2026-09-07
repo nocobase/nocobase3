@@ -1,19 +1,26 @@
-# QueryAdapter 概览
+---
+title: QueryAdapter：数据库层查询
+description: 使用 db.query() 或 connection.query 执行 select、insert、update 和 delete；Query 不读取 Collection Metadata，也不是 Repository。
+---
+
+# QueryAdapter：数据库层查询
 
 `QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM；它只负责用一套跨数据库的基础 API 查询和写入数据库表。
 
-V1 按操作类型拆分入口，整体参考 Kysely：
+## 使用边界
 
-```ts
-interface QueryAdapter {
-  selectFrom<TRecord extends Row = Row>(
-    table: string,
-  ): SelectQuery<TRecord, Row>;
-  insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
-  updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
-  deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
-}
-```
+| 项目                       | 内容                                 |
+| -------------------------- | ------------------------------------ |
+| Manager 入口               | `db.query(name?)`                    |
+| Connection 入口            | `connection.query`（属性）           |
+| 名称语义                   | Connection 级查询标识符              |
+| Metadata-aware             | 否                                   |
+| Collection naming override | 不读取                               |
+| 主要副作用                 | DML                                  |
+| External Connection        | 可执行记录读写，受数据库账号权限控制 |
+| 不负责                     | Repository、relation-aware CRUD      |
+
+当前 API 按操作类型提供 `selectFrom()`、`insertInto()`、`updateTable()` 和 `deleteFrom()` 四个入口，整体参考 Kysely。具体组合方式见 [QueryAdapter 用法参考](../reference/query-api.md)，精确类型以 TypeScript 声明为准。
 
 查询执行方法也对齐 Kysely 的语义：
 
@@ -69,30 +76,31 @@ const rows = await db
 
 ## 层级边界
 
-`db.query()` 不读取 Collection metadata，因此不会理解 `collection.tableName()` 或 `field.columnName()` 里的应用层映射。需要 Collection-aware 查询时，应放到未来的 Repository 层。
+`db.query()` 不读取 Collection Metadata。它使用 Connection 的 `underscored` 和 `tablePrefix` 转换 identifier，但不会理解 Collection 级 naming 覆盖。
+
+完整边界见 [`tablePrefix` 表前缀](../concepts/naming/table-prefix.md)。
 
 ```ts
 await builder.createCollection('orders', (collection) => {
-  collection.string('orderNo').columnName('order_number');
+  collection.naming({ tablePrefix: 'app_' });
+  collection.string('orderNo');
 });
 
 await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 ```
 
-上面的 `orderNo` 会被归一化为 `order_no`，不会映射成显式 `columnName: 'order_number'`。
+如果 Connection 的 `tablePrefix` 是 `app_`，上面的表和列会分别归一化为 `app_orders` 和 `order_no`。示例中的 Collection 局部前缀恰好与 Connection 一致；如果它们不同，Query 仍只使用 Connection 配置，无法从 Collection Metadata 得知局部覆盖。
 
-Repository 规划使用 Filter Builder 表达应用层条件。`db.repository()` 当前尚未实现，不要把 Repository 规划示例复制到运行时代码；详见 [Repository 概览](../repository/overview.md) 和 [Filter Builder](../repository/filter-builder.md)。
+需要识别 Collection 级命名、关系和 Filter 时，使用 `db.repository('orders')`；需要数据库层 join 和子查询组合时继续使用 Query。当前用法见 [Repository 概览](../repository/overview.md)。
 
 ## 当前边界
 
-- Repository 暂未实现。
-- Model 暂未实现。
-- Transformer 暂未实现。
+- Query 本身不提供 Collection-aware Filter；该能力由 Repository 提供。
 - QueryAdapter 是数据库层查询接口，不是 Collection-aware 查询接口。
-- V1 不提供 raw API；以后如有需要，应作为 unsafe escape hatch 单独设计。
-- 复杂业务查询可以后续通过 Repository 或自定义 query 封装补充。
+- QueryAdapter 不提供 raw SQL API。确实需要数据库专用能力时，可以通过 `await connection.client()` 获取底层 client；该逃生口不保证跨数据库可移植，也不会应用高层 Schema guard。
+- 复杂业务查询应在业务模块中封装，并明确其方言和命名假设。
 
-## Agent 注意事项
+## 常见误用
 
 - 写查询代码时，优先使用 `selectFrom()`、`insertInto()`、`updateTable()`、`deleteFrom()`。
 - 查询执行使用 `execute()`、`executeTakeFirst()`、`executeTakeFirstOrThrow()`。
@@ -100,6 +108,7 @@ Repository 规划使用 Filter Builder 表达应用层条件。`db.repository()`
 - 复杂条件使用 `where((eb) => ...)`。
 - 不要生成二参 `where(field, value)`。
 - 不要生成 `orWhere()`、`whereIn()`、`whereNull()` 等 Knex 风格快捷方法。
-- 不要生成 raw SQL。
+- 优先使用 QueryAdapter，不要在可移植查询中生成 raw SQL；只有明确需要数据库专用能力时才使用 `connection.client()`。
 - 不要把 `QueryAdapter` 当 Repository 使用。
-- 需要 `columnName` 映射时，不要使用 `db.query()` 假装 Repository。
+- Query 表来源参数使用 Connection 相对标识符，不写 Connection 前缀。
+- 需要解析 Collection 级 `tablePrefix` 时，不要使用 `db.query()` 假装 Repository。

@@ -78,7 +78,7 @@ describe('notification database migration', () => {
       ]),
     );
     await expect(
-      metadataStore.getCollection('notificationDeliveries'),
+      database.connection().collections.get('notificationDeliveries'),
     ).resolves.toMatchObject({
       fields: expect.arrayContaining([
         expect.objectContaining({ name: 'notificationId' }),
@@ -105,7 +105,7 @@ describe('notification database migration', () => {
     ).resolves.toEqual([false, false, false]);
     for (const [collection] of COLLECTIONS) {
       await expect(
-        metadataStore.getCollection(collection),
+        database.connection().collections.get(collection),
       ).resolves.toBeUndefined();
     }
   });

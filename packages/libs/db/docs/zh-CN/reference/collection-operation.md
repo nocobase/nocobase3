@@ -1,164 +1,67 @@
-# CollectionOperation
+---
+title: Builder 结构化执行计划
+description: 按变更目标选择 builder.apply() 的 Operation DSL，并说明 Fluent DSL、dry-run 和 Metadata 的边界。
+---
 
-`CollectionOperation` 是 Builder 的执行计划格式。它适合 file sync、snapshot diff、批量 apply 和审计。
+# Builder 结构化执行计划
 
-如果 Agent 的产物是 migration 文件或 TypeScript 代码，优先写 Fluent DSL；如果 Agent 的产物是 HTTP、CLI 或 `collection.json` payload，优先写 Object DSL；如果 Agent 的产物是执行计划，再使用 `CollectionOperation[]`。
+`builder.apply()` 接收 `CollectionOperation[]` 结构化执行计划，适合 file sync、snapshot diff、批量 apply、审计和跨进程传输。`CollectionOperation` 从 `@nocobase/db` 根入口导出；不要从源码深路径导入。
 
-## createCollection
+## 何时使用 Operation DSL
 
-```ts
-{
-  type: 'createCollection';
-  name: string;
-  definition: CollectionDefinition;
-}
-```
+| 产物                                   | 推荐表示      |
+| -------------------------------------- | ------------- |
+| TypeScript Migration、插件代码或测试   | Fluent DSL    |
+| HTTP、CLI 或 `collection.json` payload | Object DSL    |
+| diff、执行计划或批量 apply payload     | Operation DSL |
 
-## alterCollection
+不要为了统一形式，把普通 Migration 强行转换成手写 Operation 数组。
 
-```ts
-{
-  type: 'alterCollection';
-  collection: string;
-  changes: CollectionAlterDefinition;
-}
-```
+## 按目标选择 operation
 
-## dropCollection
+| 目标                                | operation                                                                   |
+| ----------------------------------- | --------------------------------------------------------------------------- |
+| 创建、修改、删除或重命名 Collection | `createCollection`、`alterCollection`、`dropCollection`、`renameCollection` |
+| 创建或替换 View                     | `createViewCollection`、`replaceViewCollection`                             |
+| 创建或刷新 Materialized View        | `createMaterializedViewCollection`、`refreshMaterializedViewCollection`     |
+| 新增、修改或删除 Field              | `addField`、`alterField`、`dropField`                                       |
+| 新增或删除 Index                    | `addIndex`、`dropIndex`                                                     |
+| 新增或删除 Constraint               | `addConstraint`、`dropConstraint`                                           |
 
-```ts
-{
-  type: 'dropCollection';
-  collection: string;
-}
-```
+每个 operation 使用 Collection 和 Field 逻辑名。
 
-destructive 操作。
-
-## renameCollection
+## 批量执行
 
 ```ts
-{
-  type: 'renameCollection';
-  from: string;
-  to: string;
-  renameTable?: boolean;
-  renameTableTo?: string;
-}
+import type { CollectionOperation } from '@nocobase/db';
+
+const operations = [
+  {
+    type: 'createCollection',
+    name: 'orders',
+    definition: {
+      fields: [{ name: 'id', type: 'increments', primaryKey: true }],
+    },
+  },
+] satisfies CollectionOperation[];
+
+const preview = await db.builder().apply(operations, {
+  dryRun: true,
+  previewSql: true,
+});
 ```
 
-默认只重命名 Collection metadata，不重命名物理表。
+执行前检查 `preview.warnings` 和 `preview.impact`。涉及删除或其他 destructive operation 时，dry-run 不是授权机制；调用方仍需建立明确的确认策略。
 
-`renameTable: true` 表示按命名规则重命名物理表。
+## 特殊边界
 
-`renameTableTo` 表示重命名到指定物理表名。
+- `renameCollection` 当前只支持 Table Collection，并按确定性 naming 同步重命名物理表和 Metadata。
+- 存在无法原子更新的 Relation、Foreign Key 或 View 依赖时，rename 会在 DDL 前拒绝。
+- `dropCollection` 和 `dropField` 可能删除数据，应作为 destructive 操作处理。
+- View 原始 SQL 和方言能力限制见 [View Collection](../builder/view-collections.md)。
 
-## view operations
+## Metadata 不属于执行计划
 
-```ts
-{
-  type: 'createViewCollection';
-  name: string;
-  definition: CollectionDefinition;
-}
+Operation DSL 表达 Schema 计划。Builder 可以在 Schema 成功后同步可提取的补充 Metadata，但纯 `title`、`description` 或 Relation Metadata 更新应使用 `connection.collectionMetadata`，不要伪造成 Schema operation。
 
-{
-  type: 'replaceViewCollection';
-  name: string;
-  definition: CollectionDefinition;
-}
-
-{
-  type: 'createMaterializedViewCollection';
-  name: string;
-  definition: CollectionDefinition;
-}
-
-{
-  type: 'refreshMaterializedViewCollection';
-  collection: string;
-  concurrently?: boolean;
-}
-```
-
-## field operations
-
-```ts
-{
-  type: 'addField';
-  collection: string;
-  field: AnyFieldDefinition;
-}
-
-{
-  type: 'alterField';
-  collection: string;
-  field: string;
-  changes: FieldAlterInput;
-}
-
-{
-  type: 'dropField';
-  collection: string;
-  field: string;
-}
-```
-
-`dropField` 是 destructive 操作。
-
-## index operations
-
-```ts
-{
-  type: 'addIndex';
-  collection: string;
-  index: IndexDefinition;
-}
-
-{
-  type: 'dropIndex';
-  collection: string;
-  index: string;
-}
-```
-
-## constraint operations
-
-```ts
-{
-  type: 'addConstraint';
-  collection: string;
-  constraint: ConstraintDefinition;
-}
-
-{
-  type: 'dropConstraint';
-  collection: string;
-  constraint: string;
-}
-```
-
-## metadata operations
-
-```ts
-{
-  type: 'updateCollectionMetadata';
-  collection: string;
-  patch: CollectionMetadataPatch;
-}
-
-{
-  type: 'updateFieldMetadata';
-  collection: string;
-  field: string;
-  patch: FieldMetadataPatch;
-}
-```
-
-metadata operation 不生成 schema operation。
-
-## Agent 注意事项
-
-- Agent 输出执行计划、diff 结果或批量 apply payload 时，优先生成 `CollectionOperation[]`。
-- destructive operation 先 dry-run。
-- metadata-only operation 不应混入 schema 变更。
+更多执行和审计示例见 [Builder 执行与审计](../builder/execution.md)。

@@ -39,7 +39,7 @@ export interface DispatcherOptions {
     workflow: WorkflowDefinition,
     execution: WorkflowRun,
   ) => Promise<string | null>;
-  app?: unknown;
+  services?: import('./run-services.js').WorkflowRunServices;
   queue?: WorkflowQueue;
   logger?:
     | WorkflowLogger
@@ -363,7 +363,7 @@ export default class Dispatcher {
         execution: plan.execution,
         instructions: this.options.instructions,
         workflowResourceRoot,
-        app: this.options.app,
+        services: this.options.services,
         logger,
         environment: this.options.environment,
         functions: this.options.functions,

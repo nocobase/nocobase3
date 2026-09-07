@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react';
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { Button } from '../components/ui/button.js';
 import {
   useCallback,
@@ -28,7 +28,7 @@ import { UploadReleaseDialog } from './hub/releases.js';
 import { uploadArtifact, readError } from './hub/utils.js';
 
 export default function HubPage(): ReactElement {
-  const client = useService(appApiClientToken);
+  const client = useService(apiClientToken);
   const [apps, setApps] = useState<readonly AppSummary[]>([]);
   const [detail, setDetail] = useState<AppOverview>();
   const [releases, setReleases] = useState<readonly ReleaseRecord[]>([]);
@@ -90,23 +90,24 @@ export default function HubPage(): ReactElement {
   }, [apps, query]);
 
   const loadApps = useCallback(async (): Promise<readonly AppSummary[]> => {
-    const response =
-      await client.request<ApiResponse<readonly AppSummary[]>>('hub/apps');
+    const response = await client.request<ApiResponse<readonly AppSummary[]>>({
+      path: 'hub/apps',
+    });
     setApps(response.data);
     return response.data;
   }, [client]);
   const loadDetail = useCallback(async (): Promise<void> => {
     if (!selectedId) return;
-    const response = await client.request<ApiResponse<AppOverview>>(
-      `hub/apps/${selectedId}`,
-    );
+    const response = await client.request<ApiResponse<AppOverview>>({
+      path: `hub/apps/${selectedId}`,
+    });
     setDetail(response.data);
   }, [client, selectedId]);
   useEffect(() => {
     let cancelled = false;
     if (!selectedId) return;
     void client
-      .request<ApiResponse<AppOverview>>(`hub/apps/${selectedId}`)
+      .request<ApiResponse<AppOverview>>({ path: `hub/apps/${selectedId}` })
       .then((response) => {
         if (!cancelled) setDetail(response.data);
       })
@@ -119,9 +120,9 @@ export default function HubPage(): ReactElement {
   }, [client, selectedId]);
   const loadConfig = useCallback(
     async (appId: string): Promise<ConfigResponse> => {
-      const response = await client.request<ApiResponse<ConfigResponse>>(
-        `hub/apps/${appId}/config`,
-      );
+      const response = await client.request<ApiResponse<ConfigResponse>>({
+        path: `hub/apps/${appId}/config`,
+      });
       setConfigMode(response.data.mode);
       setConfigContent(response.data.content ?? '');
       return response.data;
@@ -132,7 +133,7 @@ export default function HubPage(): ReactElement {
     async (appId: string, releaseId: string): Promise<string | null> => {
       const response = await client.request<
         ApiResponse<ConfigTemplateResponse>
-      >(`hub/apps/${appId}/releases/${releaseId}/config-template`);
+      >({ path: `hub/apps/${appId}/releases/${releaseId}/config-template` });
       return response.data.content;
     },
     [client],
@@ -170,17 +171,17 @@ export default function HubPage(): ReactElement {
       if (tab === 'deployments') {
         const response = await client.request<
           ApiResponse<readonly DeploymentRecord[]>
-        >(`hub/apps/${selectedAppId}/deployments`);
+        >({ path: `hub/apps/${selectedAppId}/deployments` });
         if (!cancelled) setDeployments(response.data);
       } else if (tab === 'releases') {
         const response = await client.request<
           ApiResponse<readonly ReleaseRecord[]>
-        >(`hub/apps/${selectedAppId}/releases`);
+        >({ path: `hub/apps/${selectedAppId}/releases` });
         if (!cancelled) setReleases(response.data);
       } else if (tab === 'configuration' || tab === 'resources') {
-        const response = await client.request<ApiResponse<ConfigResponse>>(
-          `hub/apps/${selectedAppId}/config`,
-        );
+        const response = await client.request<ApiResponse<ConfigResponse>>({
+          path: `hub/apps/${selectedAppId}/config`,
+        });
         if (!cancelled) {
           setConfigMode(response.data.mode);
           setConfigContent(response.data.content ?? '');
@@ -283,7 +284,8 @@ export default function HubPage(): ReactElement {
             onRelease={setSelectedReleaseId}
             onRefresh={() =>
               void perform(async () => {
-                await client.request(`hub/apps/${selected.app.id}/refresh`, {
+                await client.request({
+                  path: `hub/apps/${selected.app.id}/refresh`,
                   method: 'POST',
                 });
               })
@@ -292,9 +294,10 @@ export default function HubPage(): ReactElement {
             onRestart={() => setLifecycleAction('restart')}
             onSaveSettings={(activation) =>
               void perform(async () => {
-                await client.request(`hub/apps/${selected.app.id}/settings`, {
+                await client.request({
+                  path: `hub/apps/${selected.app.id}/settings`,
                   method: 'PUT',
-                  body: JSON.stringify({ activation }),
+                  json: { activation },
                 });
               })
             }
@@ -302,9 +305,10 @@ export default function HubPage(): ReactElement {
               void perform(async () => {
                 const response = await client.request<
                   ApiResponse<ConfigResponse>
-                >(`hub/apps/${selected.app.id}/config`, {
+                >({
+                  path: `hub/apps/${selected.app.id}/config`,
                   method: 'PUT',
-                  body: JSON.stringify({ content }),
+                  json: { content },
                 });
                 setConfigContent(response.data.content ?? '');
               })
@@ -315,9 +319,9 @@ export default function HubPage(): ReactElement {
               setBusy(true);
               setError(undefined);
               void Promise.all([
-                client.request<ApiResponse<readonly ReleaseRecord[]>>(
-                  `hub/apps/${selected.app.id}/releases`,
-                ),
+                client.request<ApiResponse<readonly ReleaseRecord[]>>({
+                  path: `hub/apps/${selected.app.id}/releases`,
+                }),
                 loadConfig(selected.app.id),
               ])
                 .then(([response, config]) => {
@@ -344,9 +348,9 @@ export default function HubPage(): ReactElement {
               setError(undefined);
               void Promise.all([
                 loadConfig(selected.app.id),
-                client.request<ApiResponse<ReleaseRecord>>(
-                  `hub/apps/${selected.app.id}/releases/${target.releaseId}`,
-                ),
+                client.request<ApiResponse<ReleaseRecord>>({
+                  path: `hub/apps/${selected.app.id}/releases/${target.releaseId}`,
+                }),
               ])
                 .then(([config, release]) => {
                   setReleases([release.data]);
@@ -375,9 +379,10 @@ export default function HubPage(): ReactElement {
           onClose={() => setCreateOpen(false)}
           onCreate={() =>
             void perform(async () => {
-              await client.request('hub/apps', {
+              await client.request({
+                path: 'hub/apps',
                 method: 'POST',
-                body: JSON.stringify({ id: newAppId, name: newAppName }),
+                json: { id: newAppId, name: newAppName },
               });
               selectApp(newAppId, false);
               setNewAppId('');
@@ -414,10 +419,10 @@ export default function HubPage(): ReactElement {
               variant={lifecycleAction === 'stop' ? 'destructive' : 'default'}
               onClick={() =>
                 void perform(async () => {
-                  await client.request(
-                    `hub/apps/${selected.app.id}/${lifecycleAction}`,
-                    { method: 'POST' },
-                  );
+                  await client.request({
+                    path: `hub/apps/${selected.app.id}/${lifecycleAction}`,
+                    method: 'POST',
+                  });
                   setLifecycleAction(undefined);
                 })
               }
@@ -451,9 +456,10 @@ export default function HubPage(): ReactElement {
             void perform(async () => {
               if (!deploymentReleaseId || deploymentMode === 'managed') return;
               const endpoint = rollbackDeploymentId ? 'rollback' : 'deploy';
-              await client.request(`hub/apps/${selected.app.id}/${endpoint}`, {
+              await client.request({
+                path: `hub/apps/${selected.app.id}/${endpoint}`,
                 method: 'POST',
-                body: JSON.stringify({
+                json: {
                   ...(rollbackDeploymentId
                     ? { deploymentId: rollbackDeploymentId }
                     : { releaseId: deploymentReleaseId }),
@@ -463,7 +469,7 @@ export default function HubPage(): ReactElement {
                       ? { content: deploymentContent }
                       : {}),
                   },
-                }),
+                },
               });
               setSelectedReleaseId(deploymentReleaseId);
               setDeployOpen(false);
@@ -497,7 +503,8 @@ export default function HubPage(): ReactElement {
           onClose={() => setRemoveOpen(false)}
           onRemove={() =>
             void perform(async () => {
-              await client.request(`hub/apps/${selected.app.id}`, {
+              await client.request({
+                path: `hub/apps/${selected.app.id}`,
                 method: 'DELETE',
               });
               setSelectedId(undefined);

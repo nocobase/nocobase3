@@ -2,7 +2,10 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import type { DatabaseManager } from '@nocobase/db';
+import {
+  InMemoryCollectionMetadataStore,
+  type DatabaseManager,
+} from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createDatabaseMigratorMock = vi.hoisted(() => vi.fn());
@@ -82,6 +85,87 @@ describe('app database manager', () => {
     };
 
     expect(createAppDatabaseManager(config)).toBeDefined();
+  });
+
+  it('forwards the manager-level Collection Metadata Store', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const config: AppDatabaseConfig = {
+      default: 'sqlite',
+      metadataStore,
+      connections: {
+        sqlite: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+    const database = createAppDatabaseManager(config)!;
+
+    try {
+      await database.builder().createCollection('orders', (collection) => {
+        collection.title('Orders');
+        collection.increments('id');
+      });
+      await expect(metadataStore.get('orders')).resolves.toMatchObject({
+        document: { name: 'orders', title: 'Orders' },
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('creates an Oracle manager without opening a connection eagerly', () => {
+    const config: AppDatabaseConfig = {
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'oracle',
+          host: '127.0.0.1',
+          port: 1521,
+          serviceName: 'FREEPDB1',
+          username: 'nocobase',
+          password: 'nocobase',
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+
+    const database = createAppDatabaseManager(config);
+    expect(database?.connection().dialect).toBe('oracle');
+    expect(database?.connection().driver).toBe('oracledb');
+  });
+
+  it('creates an MSSQL manager without opening a connection eagerly', () => {
+    const config: AppDatabaseConfig = {
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'mssql',
+          host: '127.0.0.1',
+          port: 1433,
+          database: 'nocobase',
+          username: 'sa',
+          password: 'secret',
+          encrypt: false,
+          trustServerCertificate: true,
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+
+    const database = createAppDatabaseManager(config);
+    expect(database?.connection().dialect).toBe('mssql');
+    expect(database?.connection().driver).toBe('tedious');
   });
 });
 
@@ -349,6 +433,8 @@ function createMockDatabaseManager(client: unknown = {}): DatabaseManager {
     }) as DatabaseManager['connection'],
     builder: vi.fn() as DatabaseManager['builder'],
     query: vi.fn() as DatabaseManager['query'],
+    createMigrator: vi.fn() as DatabaseManager['createMigrator'],
+    createSeeder: vi.fn() as DatabaseManager['createSeeder'],
     connect: vi.fn() as DatabaseManager['connect'],
     transaction: vi.fn() as DatabaseManager['transaction'],
     disconnect: vi.fn() as DatabaseManager['disconnect'],
