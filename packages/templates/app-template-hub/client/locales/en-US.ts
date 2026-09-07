@@ -1,6 +1,15 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  appearance: {
+    title: 'Appearance',
+    mode: 'Color mode',
+    preset: 'Theme',
+    light: 'Light',
+    dark: 'Dark',
+    system: 'System',
+    themes: { default: 'Default', compact: 'Compact', antDesign: 'Ant Design' },
+  },
   app: {
     title: 'NocoBase',
   },

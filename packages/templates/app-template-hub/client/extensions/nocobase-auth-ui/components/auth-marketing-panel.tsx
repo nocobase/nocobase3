@@ -24,7 +24,7 @@ export function AuthMarketingPanel(): ReactElement {
           NocoBase secures the data, permissions, workflows and governance
           underneath.
         </p>
-        <div className='mt-8 overflow-hidden rounded-2xl bg-white text-neutral-950 shadow-2xl shadow-black/30'>
+        <div className='mt-8 overflow-hidden rounded-2xl bg-white text-neutral-950 shadow-2xl'>
           <div className='space-y-5 p-6'>
             <div className='flex gap-4'>
               <span className='grid size-11 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-700'>

@@ -101,7 +101,7 @@ Build your own components by composing these primitives, and put them in `client
 
 Style with the semantic Tailwind tokens — `bg-background`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary` — so pages follow the light and dark themes. Do not hard-code colors like `bg-white` or `text-gray-900`; they break the moment someone switches theme.
 
-**Visual consistency is a whole-application property.** Match the surrounding code's spacing, typography, and component choices. If a change genuinely calls for a different look, change the application's design tokens in `client/styles.css` so every page moves together. Never restyle only the part you are working on — a page that looks different from the rest is a defect, not a customization.
+**Visual consistency is a whole-application property.** Match the surrounding code's spacing, typography, and component choices. If a change genuinely calls for a different look, change the application's design tokens in `client/theme/themes/*.css` so every page moves together. Never restyle only the part you are working on — a page that looks different from the rest is a defect, not a customization.
 
 ### Server routes
 
@@ -221,3 +221,7 @@ pnpm build
 Add tests for what you changed: a route's authenticated, unauthenticated, and unauthorized responses; a migration's `up` and `down` against a real database; a page's actual behavior. Tests belong in `tests/`, or in `e2e/` when they need a real server. Never place a test beside the source it covers.
 
 `pnpm client:inspect` and `pnpm server:inspect` show what is wired when a contribution does not appear as expected. They report composition, not correctness — a clean inspection proves nothing about behavior or security.
+
+For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).
+
+For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.

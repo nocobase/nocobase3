@@ -40,10 +40,10 @@ export function AppSidebar({
         aria-label={t('navigation.label', {
           defaultValue: 'Application navigation',
         })}
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card text-card-foreground transition-[width,transform] duration-200 md:static md:z-auto md:flex md:translate-x-0 ${desktopCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width,transform] duration-200 md:static md:z-auto md:flex md:translate-x-0 ${desktopCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div
-          className={`flex h-16 shrink-0 items-center justify-between overflow-hidden border-b border-border/70 px-5 ${desktopCollapsed ? 'md:justify-center md:px-0' : ''}`}
+          className={`flex h-16 shrink-0 items-center justify-between overflow-hidden border-b border-sidebar-border/70 px-5 ${desktopCollapsed ? 'md:justify-center md:px-0' : ''}`}
         >
           <div className='md:hidden'>
             <AppBrand />
@@ -55,7 +55,7 @@ export function AppSidebar({
             aria-label={t('navigation.close', {
               defaultValue: 'Close navigation',
             })}
-            className='md:hidden'
+            className='md:hidden hover:bg-sidebar-accent dark:hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring'
             onClick={onCloseMobile}
             size='icon'
             variant='ghost'
@@ -136,7 +136,7 @@ function NavigationTree({
         open={children.some((child) => child.key === selectedKey)}
       >
         <summary
-          className={`flex cursor-pointer list-none items-center rounded-lg px-3 py-2 text-sm font-medium outline-none hover:bg-muted [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'}`}
+          className={`flex cursor-pointer list-none items-center rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'}`}
           title={collapsed ? label : undefined}
         >
           <span className='flex min-w-0 items-center gap-3'>
@@ -150,7 +150,7 @@ function NavigationTree({
           />
         </summary>
         <div
-          className={`mt-1 ml-3 space-y-1 border-l border-border pl-2 ${collapsed ? 'md:hidden' : ''}`}
+          className={`mt-1 ml-3 space-y-1 border-l border-sidebar-border pl-2 ${collapsed ? 'md:hidden' : ''}`}
         >
           {children.map((child) => (
             <NavigationTree
@@ -202,7 +202,7 @@ function NavigationLink({
   return (
     <Link
       aria-current={isSelected ? 'page' : undefined}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${collapsed ? 'md:justify-center md:px-2' : ''} ${isSelected ? 'bg-primary/10 font-medium text-primary' : 'text-card-foreground hover:bg-muted'}`}
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-colors ${collapsed ? 'md:justify-center md:px-2' : ''} ${isSelected ? 'bg-sidebar-primary font-medium text-sidebar-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
       onClick={onNavigate}
       title={collapsed ? label : undefined}
       to={route}
@@ -243,21 +243,21 @@ function SidebarFooter({
   const templateLabel = `${templateName} v${templateVersion}`;
 
   return (
-    <footer className='shrink-0 border-t border-border/70'>
+    <footer className='shrink-0 border-t border-sidebar-border/70'>
       <div
         className={`flex min-h-20 items-center gap-3 px-5 py-3 ${collapsed ? 'md:min-h-16 md:justify-center md:px-2' : ''}`}
         title={templateLabel}
       >
-        <ShieldCheck className='size-4 shrink-0 text-muted-foreground' />
+        <ShieldCheck className='size-4 shrink-0 text-sidebar-foreground/80' />
         <div
           className={`min-w-0 text-xs leading-4 ${collapsed ? 'md:hidden' : ''}`}
         >
-          <div className='font-semibold text-card-foreground'>
+          <div className='font-semibold text-sidebar-foreground'>
             AI builds freely.
           </div>
-          <div className='text-muted-foreground'>
+          <div className='text-sidebar-foreground/80'>
             <a
-              className='font-medium text-card-foreground hover:underline'
+              className='rounded-sm font-medium text-sidebar-foreground hover:underline outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring'
               href='https://www.nocobase.com'
               rel='noopener noreferrer'
               target='_blank'
@@ -266,7 +266,7 @@ function SidebarFooter({
             </a>{' '}
             keeps it reliable.
           </div>
-          <div className='mt-1 font-mono text-[10px] text-muted-foreground/70'>
+          <div className='mt-1 font-mono text-xs text-sidebar-foreground/70'>
             {templateLabel}
           </div>
         </div>
