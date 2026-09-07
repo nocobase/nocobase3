@@ -2,6 +2,7 @@ import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';
 
 export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
+  ignores: ['registry/**'],
   rules: {
     // HTTP compatibility payloads are intentionally decoded from unknown legacy values.
     '@typescript-eslint/no-base-to-string': 'off',
@@ -15,7 +16,9 @@ export default createClientLibraryConfig({
         'client/components/**/*.{ts,tsx}',
         'client/hooks/**/*.{ts,tsx}',
         'client/page/**/*.{ts,tsx}',
+        'client/dev/live/**/*.{ts,tsx}',
       ],
+      ignores: ['registry/**'],
       rules: {
         // The copied Live state machines intentionally reset identity-bound state in effects.
         'react-hooks/refs': 'off',
@@ -32,6 +35,7 @@ export default createClientLibraryConfig({
     {
       name: 'app-plugin-ai-knowledge-base/library-fast-refresh',
       files: ['client/**/*.{ts,tsx}'],
+      ignores: ['registry/**'],
       rules: {
         // This is a published component library, not a Vite application module graph.
         'react-refresh/only-export-components': 'off',

@@ -20,6 +20,7 @@ Guide a coding agent working inside `<appRoot>`, the source directory created by
 - Call the authenticated `/v2/api` compatibility actions for knowledge-base, document, segment, retrieval, and vector-database operations.
 - Configure LOCAL, READONLY, and EXTERNAL knowledge bases, document processing, PGVector, embedding services, and asynchronous vectorization.
 - Build application-side integrations with explicit validation, error handling, and production safety checks.
+- Install and customize the package-owned Registry items `providers`, `components`, and `workspace` when the generated App must own editable client source.
 
 # Non-Goals
 
@@ -50,9 +51,11 @@ Guide a coding agent working inside `<appRoot>`, the source directory created by
 3. Load the reference for the task: use [application-contracts](references/application-contracts.md) for exact calls, [http-api](references/http-api.md) for direct HTTP, [client-integration](references/client-integration.md) for React/client work, and the domain references for lifecycle details.
 4. Prefer the exported client `KnowledgeBaseService` or authenticated application HTTP adapter. Never couple application code to an unexported implementation path.
 5. Implement the smallest application-side change. Preserve credentials in environment variables or the App's secret mechanism, and keep server-side authorization independent of UI state.
-6. For uploads, validate extension and size before sending; distinguish a document response from `{ taskId, message? }`. For segmentation/vectorization, record status fields and make retries observable.
-7. Run the App's real lint, typecheck, test, and build scripts when they exist. Start the App for an authenticated smoke test when the task changes runtime behavior.
-8. Report the public entry points used, files changed, prerequisites, async jobs, data/deletion impact, validation commands/results, and remaining deployment risks.
+6. When editable App-owned source is required, materialize `providers`, then `components`, then `workspace` into their independent `client/extensions/nocobase-ai-knowledge-base-*` targets. Prepare declared npm/shadcn dependencies and plugin enablement first; materialization does none of those tasks and refuses existing targets.
+7. Treat the installed Registry copy as application-owned. Merge a newer canonical source with a three-way merge; never overwrite App changes by default.
+8. For uploads, validate extension and size before sending; distinguish a document response from `{ taskId, message? }`. For segmentation/vectorization, record status fields and make retries observable.
+9. Run the App's real lint, typecheck, test, and build scripts when they exist. Start the App for an authenticated smoke test when the task changes runtime behavior.
+10. Report the public entry points used, files changed, prerequisites, async jobs, data/deletion impact, validation commands/results, and remaining deployment risks.
 
 # Reference Loading Map
 
