@@ -10,11 +10,14 @@ export { AppClientRoot, type AppClientRootProps } from './app-client.js';
 export { resolveAppBase, resolveAppUrl } from './client.js';
 export {
   ApiClientError,
+  buildFindManyOptions,
   createApiClient,
   type ApiClient,
   type ApiJsonRequestOptions,
   type ApiRequestOptions,
   type CreateApiClientOptions,
+  type RemoteFindManyOptions,
+  type RemoteFindManyOptionsJson,
   type RemoteRepository,
   type RemoteRepositoryQuery,
 } from '@nocobase/api-client';

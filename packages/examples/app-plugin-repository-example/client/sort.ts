@@ -3,7 +3,7 @@ import {
   type ApiClient,
   type RemoteFindManyOptions,
   type RemoteFindManyOptionsJson,
-} from '@nocobase/api-client';
+} from '@nocobase/app-client';
 
 export interface SortExample {
   readonly key: string;

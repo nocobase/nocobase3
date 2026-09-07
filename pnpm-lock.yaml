@@ -2700,6 +2700,9 @@ importers:
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
+      '@xyflow/react':
+        specifier: ^12.11.3
+        version: 12.11.5(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       elkjs:
         specifier: ^0.10.2
         version: 0.10.2
@@ -2749,9 +2752,6 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
-      '@xyflow/react':
-        specifier: ^12.11.3
-        version: 12.11.5(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
@@ -3116,6 +3116,9 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+      sonner:
+        specifier: ^2.0.3
+        version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       tailwind-merge:
         specifier: ^3.2.0
         version: 3.6.0
@@ -3455,6 +3458,9 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+      sonner:
+        specifier: ^2.0.3
+        version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       tailwind-merge:
         specifier: ^3.2.0
         version: 3.6.0
