@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Context } from '../server/internal/runtime-context.js';
 import {
   getCurrentRoleNames,
   getKnowledgeBaseBackgroundPrompt,
@@ -64,16 +63,14 @@ describe('AI employee knowledge-base retrieval', () => {
     const getAccessibleKnowledgeBaseKeys = vi
       .fn()
       .mockResolvedValue(['handbook']);
-    const ctx = {
-      ai: {
-        features: {
-          isFeaturesEnabled: vi.fn().mockReturnValue(true),
-          knowledgeBase: { search, getAccessibleKnowledgeBaseKeys },
-        },
+    const ai = {
+      features: {
+        isFeaturesEnabled: vi.fn().mockReturnValue(true),
+        knowledgeBase: { search, getAccessibleKnowledgeBaseKeys },
       },
-    } as unknown as Context;
+    };
     const manager = new KnowledgeBaseManager({
-      ai: ctx.ai,
+      ai: ai as never,
       repositories: {
         aiEmployees: { findOne: vi.fn().mockResolvedValue(employee) },
       } as never,
