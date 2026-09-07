@@ -313,6 +313,7 @@ function toVectorDatabase(value: unknown): VectorDatabase {
     provider: required(text(item.provider), 'vectorDatabase.provider'),
     connectProps: isRecord(item.connectProps) ? item.connectProps : {},
     enabled: required(boolean(item.enabled), 'vectorDatabase.enabled'),
+    ...(item.managedBy === 'config' ? { managedBy: 'config' as const } : {}),
     ...(optionalDate(item.createdAt)
       ? { createdAt: optionalDate(item.createdAt) }
       : {}),

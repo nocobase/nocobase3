@@ -39,6 +39,46 @@ export class KnowledgeBaseDocumentManager {
     file: { name: string; type?: string; bytes: Uint8Array },
     actorId?: string | number,
   ): Promise<KnowledgeBaseDocumentEntity> {
+    const stored = await this.storeDocument(knowledgeBaseKey, file, {
+      actorId,
+    });
+    try {
+      await this.dispatchVectorization(stored.id);
+    } catch (dispatchError) {
+      const errorMessage =
+        'Vectorization could not be queued. Retry vectorization later.';
+      this.warningLogger.warn(
+        'Knowledge base document vectorization dispatch failed.',
+        { documentId: stored.id, error: dispatchError },
+      );
+      try {
+        await this.documents.update(
+          { id: stored.id },
+          { indexStatus: 'ERROR', errorMessage },
+        );
+      } catch (statusUpdateError) {
+        this.warningLogger.warn(
+          'Knowledge base document ERROR status persistence failed after vectorization dispatch failure.',
+          {
+            documentId: stored.id,
+            dispatchError,
+            statusUpdateError,
+          },
+        );
+      }
+      return { ...stored, indexStatus: 'ERROR', errorMessage };
+    }
+    return stored;
+  }
+
+  public async storeDocument(
+    knowledgeBaseKey: string,
+    file: { name: string; type?: string; bytes: Uint8Array },
+    options: {
+      readonly actorId?: string | number;
+      readonly documentKey?: string;
+    } = {},
+  ): Promise<KnowledgeBaseDocumentEntity> {
     let base;
     try {
       base = await this.knowledgeBases.require(knowledgeBaseKey);
@@ -69,10 +109,9 @@ export class KnowledgeBaseDocumentManager {
       );
     }
     assertKnowledgeBaseDocumentUploadSize(file.bytes.byteLength);
-    const key = nanoid(32);
-    let metadata;
+    const key = options.documentKey ?? nanoid(32);
     try {
-      metadata = await this.storage.writeDocument(base, {
+      const metadata = await this.storage.writeDocument(base, {
         objectId: key,
         filename: file.name,
         content: file.bytes,
@@ -83,9 +122,10 @@ export class KnowledgeBaseDocumentManager {
           knowledgeBaseKey: base.key,
           title: file.name,
           segmentOptions: base.segmentOptions,
-          createdById: actorId,
+          createdById: options.actorId,
         },
       });
+      return metadata.entity;
     } catch (cause) {
       throw new KnowledgeBaseUploadError(
         'STORAGE_UNAVAILABLE',
@@ -94,37 +134,46 @@ export class KnowledgeBaseDocumentManager {
         { cause },
       );
     }
-    try {
-      await this.dispatchVectorization(metadata.entity.id);
-    } catch (dispatchError) {
-      const errorMessage =
-        'Vectorization could not be queued. Retry vectorization later.';
-      this.warningLogger.warn(
-        'Knowledge base document vectorization dispatch failed.',
-        { documentId: metadata.entity.id, error: dispatchError },
+  }
+
+  public async replaceDocumentForRecovery(
+    document: KnowledgeBaseDocumentEntity,
+    file: { name: string; type?: string; bytes: Uint8Array },
+  ): Promise<KnowledgeBaseDocumentEntity> {
+    const ext = this.extension(file.name);
+    if (!EXTENSIONS.has(ext)) {
+      throw new KnowledgeBaseUploadError(
+        'UNSUPPORTED_FILE_TYPE',
+        `Unsupported file type: ${ext || 'none'}`,
+        415,
       );
-      try {
-        await this.documents.update(
-          { id: metadata.entity.id },
-          { indexStatus: 'ERROR', errorMessage },
-        );
-      } catch (statusUpdateError) {
-        this.warningLogger.warn(
-          'Knowledge base document ERROR status persistence failed after vectorization dispatch failure.',
-          {
-            documentId: metadata.entity.id,
-            dispatchError,
-            statusUpdateError,
-          },
-        );
-      }
-      return {
-        ...metadata.entity,
-        indexStatus: 'ERROR',
-        errorMessage,
-      };
     }
-    return metadata.entity;
+    assertKnowledgeBaseDocumentUploadSize(file.bytes.byteLength);
+    await this.deleteSegmentArtifacts([document.id]);
+    await this.storage.replaceDocumentObject(document, file.bytes, file.type);
+    await this.documents.update(
+      { id: document.id },
+      {
+        title: file.name,
+        filename: file.name,
+        extname: ext,
+        size: file.bytes.byteLength,
+        mimetype: file.type ?? 'application/octet-stream',
+        indexStatus: 'PENDING',
+        errorMessage: null,
+        characterCount: 0,
+        segmentCount: 0,
+        segmentVersion: 0,
+        segmentRevision: Number(document.segmentRevision ?? 0) + 1,
+        segmentStatus: 'PENDING',
+        segmentErrorMessage: null,
+        segmentUpdatedAt: new Date(),
+      },
+    );
+    const updated = await this.documents.findById(document.id);
+    if (!updated)
+      throw new Error('Recovered knowledge base document was lost.');
+    return updated;
   }
 
   public async dispatchVectorization(

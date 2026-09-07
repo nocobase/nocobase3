@@ -24,7 +24,7 @@ type PgConnectProps = {
 
 Host/user/database/table must be non-empty; port is coerced to a positive integer; password is optional. Table allows one optional schema prefix and must match `^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$`.
 
-The provider uses a `pg.Pool` cached by SHA-256 of all props. Connection test executes `SELECT 1`. Creation checks `SELECT 1 FROM <table> LIMIT 1`; undefined table/schema SQLSTATEs mean safe to create, existing table returns status 1. `skipTableExistedCheck:true` bypasses the check and can attach to/overwrite assumptions about existing data; require explicit confirmation.
+The provider uses a `pg.Pool` cached by SHA-256 of the database connection props (excluding `tableName`, so tables on the same database share a pool). Connection test executes `SELECT 1`. Creation checks `SELECT 1 FROM <table> LIMIT 1`; undefined table/schema SQLSTATEs mean safe to create, existing table returns status 1. `skipTableExistedCheck:true` bypasses the check and can attach to/overwrite assumptions about existing data; require explicit confirmation.
 
 The LangChain store uses columns `id`, `vector`, `content`, `metadata`, cosine distance, and similarity normalization.
 
@@ -35,6 +35,12 @@ The LangChain store uses columns `id`, `vector`, `content`, `metadata`, cosine d
 Update preserves existing provider/connect props when omitted, validates props, recomputes hash, and does not test connectivity or table existence. Always call `testVectorDatabaseConnection` before an update and perform a retrieval smoke test afterward.
 
 Provider listing currently returns only name/spec, so the public `fields` property is supported by the client mapper but not populated by this server route. Do not invent provider UI fields beyond the built-in contract.
+
+## Configuration ownership
+
+`ai.aiKnowledgeBase.vectorDatabases` is reconciled after the built-in provider is registered. Each required `name` is also the stable database key. The canonical connection fields are `host`, `port`, `user`, optional `password`, `database`, and `tableName`; `${ENV_NAME}` references are expanded recursively. Provider/spec/enabled default to `NocobaseDefaultPGVectorProvider`/`PGVector`/`true`.
+
+Rows created by this reconciler have `managedBy: "config"`. Public update and destroy return HTTP 409 with code `VECTOR_DATABASE_CONFIG_MANAGED`, and the settings page excludes these rows from edit, selection, and deletion. A same-name manual row is preserved with a warning. Config-owned rows removed from configuration are deleted only when no knowledge base references them; referenced rows remain read-only and produce a warning containing the blocking knowledge-base keys.
 
 ## Vector-store configuration
 

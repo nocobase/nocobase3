@@ -9,7 +9,7 @@
 
 ## Ownership
 
-The plugin migration history initially creates six collections, then removes the legacy vector-store configuration collection. The final schema owns five collections. `llmServices` belongs to the AI Employee package. Migrations are immutable historical records once merged; ordinary applications must not edit them.
+The plugin migration history initially creates six collections, removes the legacy vector-store configuration collection, and then adds two Manifest processing collections plus configuration ownership metadata. `llmServices` belongs to the AI Employee package. Migrations are immutable historical records once merged; ordinary applications must not edit them.
 
 ## Collections
 
@@ -31,7 +31,15 @@ Auto-increment `id`; required UID, knowledge-base key, document ID, shard ID/num
 
 ### `aiVectorDatabases`
 
-Auto-increment `id`; nullable unique key; required name, database spec, provider, JSON `connectProps`; optional connection hash; enabled defaults true.
+Auto-increment `id`; nullable unique key; required name, database spec, provider, JSON `connectProps`; optional connection hash; enabled defaults true. Nullable `managedBy` is `config` for application-config-owned rows and null for manually managed rows.
+
+### `aiKnowledgeBaseManifests`
+
+One row per normalized Manifest source disk/location, enforced by a unique constraint. It stores the target key and bound knowledge-base ID, operation/status, content hash and JSON snapshot, attempt count, timestamps, and diagnostic error. Status is indexed.
+
+### `aiKnowledgeBaseManifestFiles`
+
+One row per source file within a Manifest. The parent ID plus source disk/location is unique. It stores target key, SHA-256, final document ID/key, status, attempts, and failure reason. `(knowledgeBaseKey, sourceDisk, sourceLocation)` is indexed for exact recover mapping.
 
 ## Relations and deletes
 

@@ -113,13 +113,12 @@ describe('knowledge base storage migration', () => {
     const metadataStore = metadataStores.get(database);
     if (!metadataStore) throw new Error('Metadata store not found');
     await expect(
-      metadataStore.getCollection('aiVectorStoreConfig'),
+      metadataStore.get('aiVectorStoreConfig'),
     ).resolves.toBeUndefined();
-    const knowledgeBaseMetadata =
-      await metadataStore.getCollection('aiKnowledgeBase');
-    const fieldNames = knowledgeBaseMetadata?.fields?.map(
-      (field) => field.name,
-    );
+    const knowledgeBaseMetadata = await metadataStore.get('aiKnowledgeBase');
+    const fieldNames = knowledgeBaseMetadata?.document.fields
+      ? Object.keys(knowledgeBaseMetadata.document.fields)
+      : [];
     expect(fieldNames).toEqual(
       expect.arrayContaining([
         'vectorDatabaseKey',

@@ -67,6 +67,7 @@ Guide a coding agent working inside `<appRoot>`, the source directory created by
 | CRUD, upload, document status                | [knowledge-bases-and-documents](references/knowledge-bases-and-documents.md)   | [lifecycle-and-jobs](references/lifecycle-and-jobs.md) |
 | Segments, questions, retrieval               | [segmentation-and-retrieval](references/segmentation-and-retrieval.md)         | [lifecycle-and-jobs](references/lifecycle-and-jobs.md) |
 | PGVector or vector-store configuration       | [vector-databases](references/vector-databases.md)                             | [security](references/security.md)                     |
+| Declarative startup preload or recovery      | [manifests](references/manifests.md)                                           | [troubleshooting](references/troubleshooting.md)       |
 | Schema/data inspection                       | [data-model](references/data-model.md)                                         | [security](references/security.md)                     |
 | Direct `/v2/api` calls                       | [http-api](references/http-api.md)                                             | [security](references/security.md)                     |
 | Failure diagnosis                            | [troubleshooting](references/troubleshooting.md)                               | the relevant domain reference                          |
@@ -101,6 +102,7 @@ Return: `<appRoot>`; public package entries used; changed files; plugin/dependen
 - [Knowledge Bases and Documents](references/knowledge-bases-and-documents.md)
 - [Segmentation and Retrieval](references/segmentation-and-retrieval.md)
 - [Vector Databases](references/vector-databases.md)
+- [Declarative Manifests](references/manifests.md)
 - [Data Model](references/data-model.md)
 - [Lifecycle and Jobs](references/lifecycle-and-jobs.md)
 - [Security](references/security.md)

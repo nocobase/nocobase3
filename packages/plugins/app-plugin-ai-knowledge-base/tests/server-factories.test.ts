@@ -6,6 +6,7 @@ import type {
 } from '@nocobase/ai-employee';
 import { fileStorageFactoryToken } from '@nocobase/ai-employee';
 import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/tokens';
+import { driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import {
@@ -31,6 +32,8 @@ import {
 } from '../server/factories/service-factory.js';
 import {
   KnowledgeBaseDocumentRepository,
+  KnowledgeBaseManifestFileRepository,
+  KnowledgeBaseManifestRepository,
   KnowledgeBaseRepository,
   KnowledgeBaseSegmentRepository,
   KnowledgeBaseSegmentShardRepository,
@@ -55,6 +58,7 @@ function createContainer(): ServiceContainer {
   } as unknown as DatabaseManager);
   container.instance(aiManagerToken, ai);
   container.instance(fileStorageFactoryToken, fileStorageFactory);
+  container.instance(driveManagerToken, {} as never);
   container.instance(queueManagerToken, queue);
   container.instance(loggingToken, {
     getLogger: () => ({ child: () => warningLogger }),
@@ -73,6 +77,12 @@ describe('knowledge base factories', () => {
     expect(repositories.documents).toBeInstanceOf(
       KnowledgeBaseDocumentRepository,
     );
+    expect(repositories.manifests).toBeInstanceOf(
+      KnowledgeBaseManifestRepository,
+    );
+    expect(repositories.manifestFiles).toBeInstanceOf(
+      KnowledgeBaseManifestFileRepository,
+    );
     expect(repositories.segments).toBeInstanceOf(
       KnowledgeBaseSegmentRepository,
     );
@@ -86,12 +96,16 @@ describe('knowledge base factories', () => {
       new Set([
         repositories.knowledgeBases,
         repositories.documents,
+        repositories.manifests,
+        repositories.manifestFiles,
         repositories.segments,
         repositories.segmentShards,
         repositories.vectorDatabases,
       ]).size,
-    ).toBe(5);
+    ).toBe(7);
     expect(repositories.documents).toBe(repositories.documents);
+    expect(repositories.manifests).toBe(repositories.manifests);
+    expect(repositories.manifestFiles).toBe(repositories.manifestFiles);
     expect(repositories.documents).not.toBe(repositories.knowledgeBases);
 
     const managers = new KnowledgeBaseManagerFactory(
@@ -105,12 +119,14 @@ describe('knowledge base factories', () => {
     const services = new KnowledgeBaseServiceFactory(
       ai,
       managers,
+      {} as never,
       repositories,
       ['local'],
       warningLogger,
     );
     expect(managers.documents).toBe(managers.documents);
     expect(managers.segments).toBe(managers.segments);
+    expect(services.manifests).toBe(services.manifests);
     expect(services.documents).toBe(services.documents);
     expect(services.segments).toBe(services.segments);
     expect(services.knowledgeBases).toBe(services.knowledgeBases);
@@ -129,12 +145,15 @@ describe('knowledge base factories', () => {
     const services = new KnowledgeBaseServiceFactory(
       ai,
       managers,
+      {} as never,
       repositories,
       ['local'],
       warningLogger,
     );
     const documentRepository = repositories.documents;
+    const manifestRepository = repositories.manifests;
     const documentManager = managers.documents;
+    const manifestService = services.manifests;
 
     services.dispose();
     services.dispose();
@@ -143,6 +162,9 @@ describe('knowledge base factories', () => {
     repositories.dispose();
     repositories.dispose();
 
+    expect(() => services.manifests).toThrow(
+      'Knowledge base service factory has been disposed',
+    );
     expect(() => services.documents).toThrow(
       'Knowledge base service factory has been disposed',
     );
@@ -152,8 +174,13 @@ describe('knowledge base factories', () => {
     expect(() => repositories.documents).toThrow(
       'Knowledge base repository factory has been disposed',
     );
+    expect(() => repositories.manifests).toThrow(
+      'Knowledge base repository factory has been disposed',
+    );
     expect(documentRepository).toBeDefined();
+    expect(manifestRepository).toBeDefined();
     expect(documentManager).toBeDefined();
+    expect(manifestService).toBeDefined();
   });
 
   it('registers repository, manager, and service factory bindings lazily', async () => {
@@ -163,6 +190,7 @@ describe('knowledge base factories', () => {
     } as unknown as DatabaseManager);
     container.instance(aiManagerToken, ai);
     container.instance(fileStorageFactoryToken, fileStorageFactory);
+    container.instance(driveManagerToken, {} as never);
     container.instance(queueManagerToken, queue);
     container.instance(loggingToken, {
       getLogger: () => ({ child: () => warningLogger }),
@@ -213,14 +241,22 @@ describe('knowledge base factories', () => {
     container.instance(aiManagerToken, bootAI);
     container.instance(fileStorageFactoryToken, fileStorageFactory);
     container.instance(queueManagerToken, queue);
+    container.instance(driveManagerToken, {} as never);
     container.instance(loggingToken, {
       getLogger: () => ({ child: () => warningLogger }),
     } as never);
     const provider = new KnowledgeBaseProvider({
       container,
-      config: { get: vi.fn().mockReturnValue({ default: 'local' }) },
+      config: {
+        get: vi.fn().mockReturnValue({ default: 'local' }),
+        subscribe: vi.fn().mockReturnValue(() => undefined),
+      },
     } as never);
     provider.register();
+    vi.spyOn(
+      container.resolve(repositoryFactoryToken).vectorDatabases,
+      'find',
+    ).mockResolvedValue([]);
     await provider.boot();
     const customDispose = vi.fn().mockResolvedValue(undefined);
     const customProvider: VectorDatabaseProvider<unknown, unknown> = {

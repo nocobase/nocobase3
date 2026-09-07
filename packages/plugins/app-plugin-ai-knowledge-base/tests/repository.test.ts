@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   KnowledgeBaseDocumentRepository,
+  KnowledgeBaseManifestFileRepository,
+  KnowledgeBaseManifestRepository,
   KnowledgeBaseRepository,
   KnowledgeBaseSegmentRepository,
   KnowledgeBaseSegmentShardRepository,
@@ -37,6 +39,12 @@ describe('knowledge base repositories', () => {
     expect(new KnowledgeBaseDocumentRepository(database).table).toBe(
       'aiKnowledgeBaseDocs',
     );
+    expect(new KnowledgeBaseManifestRepository(database).table).toBe(
+      'aiKnowledgeBaseManifests',
+    );
+    expect(new KnowledgeBaseManifestFileRepository(database).table).toBe(
+      'aiKnowledgeBaseManifestFiles',
+    );
     expect(new KnowledgeBaseSegmentRepository(database).table).toBe(
       'aiKnowledgeBaseDocSegments',
     );
@@ -63,6 +71,17 @@ describe('knowledge base repositories', () => {
       input: {
         meta: { source: 'upload' },
         segmentOptions: { enabled: true, chunkSize: 1200, chunkOverlap: 100 },
+      },
+    },
+    {
+      create: (database: DatabaseConnection) =>
+        new KnowledgeBaseManifestRepository(database),
+      input: {
+        manifestSnapshot: {
+          key: 'manuals',
+          operation: 'append' as const,
+          files: [{ disk: 'local', locations: ['manual.pdf'] }],
+        },
       },
     },
     {

@@ -1772,6 +1772,9 @@ importers:
       '@nocobase/ai-employee':
         specifier: workspace:^
         version: link:../../libs/ai-employee
+      '@nocobase/drive':
+        specifier: workspace:^
+        version: link:../../libs/drive
       '@refinedev/core':
         specifier: ^5.0.0
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -1784,9 +1787,9 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
-      yauzl:
-        specifier: ^2.10.0
-        version: 2.10.0
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.0
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -1842,9 +1845,6 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
-      '@types/yauzl':
-        specifier: ^2.10.3
-        version: 2.10.3
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -7241,9 +7241,6 @@ packages:
 
   '@types/xml2js@0.4.14':
     resolution: {integrity: sha512-4YnrRemBShWRO2QjvUin8ESA41rH+9nQGLUGZV/1IDhi3SL9OhdpNC/MrulTWuptXKwhx/aDxE7toV0f/ypIXQ==}
-
-  '@types/yauzl@2.10.3':
-    resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
 
   '@typescript-eslint/eslint-plugin@8.67.0':
     resolution: {integrity: sha512-Un7Heoyj65NREbKAyIrFxeM143NZpExWmy1Nep4DLeQOeLlTeumPjoNKnBrU5D5moWXbPJgRa5Uwcdu0faVNGQ==}
@@ -17657,10 +17654,6 @@ snapshots:
       '@types/node': 22.20.1
 
   '@types/xml2js@0.4.14':
-    dependencies:
-      '@types/node': 22.20.1
-
-  '@types/yauzl@2.10.3':
     dependencies:
       '@types/node': 22.20.1
 

@@ -153,6 +153,27 @@ export class KnowledgeBaseStorageManager {
     }
     await storage.deleteObject(document.path);
   }
+  public async replaceDocumentObject(
+    document: KnowledgeBaseDocumentEntity,
+    content: Uint8Array,
+    mimeType?: string,
+  ): Promise<void> {
+    const storage = this.fileStorageFactory.create({
+      disk: document.disk,
+      prefix: '',
+      metadataRepository: new KnowledgeBaseDocumentMetadataRepository(
+        this.documents,
+      ),
+    });
+    if (!storage.replaceObject) {
+      throw new Error('File storage does not support object replacement.');
+    }
+    await storage.replaceObject({
+      key: document.path,
+      content,
+      mimeType,
+    });
+  }
 
   public async deleteSegmentShardObject(
     shard: KnowledgeBaseSegmentShardEntity,

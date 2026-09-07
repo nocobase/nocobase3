@@ -350,4 +350,8 @@ export default {
   'This change affects related knowledge bases: {{names}}. Continue?':
     'This change affects related knowledge bases: {{names}}. Continue?',
   Username: 'Username',
+  'Config managed': 'Config managed',
+  'Change in application config': 'Change in application config',
+  'This vector database is managed through application config.':
+    'This vector database is managed through application config.',
 } as const;

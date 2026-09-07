@@ -17,7 +17,7 @@
 | `@nocobase/app-plugin-ai-knowledge-base/client/routes`           | Default `defineClientRoutes([])` result; currently no standalone route declarations.                                                                                |
 | `@nocobase/app-plugin-ai-knowledge-base/client/settings-pages`   | `KnowledgeBaseSettingsPage` and `VectorDatabaseSettingsPage`.                                                                                                       |
 | `@nocobase/app-plugin-ai-knowledge-base/client/vector-databases` | `Component` and default export for the vector-database page.                                                                                                        |
-| `@nocobase/app-plugin-ai-knowledge-base/server`                  | Canonical Server plugin definition for explicit App `server/plugins.ts` composition.                                                                                |
+| `@nocobase/app-plugin-ai-knowledge-base/server`                  | Canonical Server plugin definition plus the public `knowledgeBaseManifestServiceToken`, Manifest input/state contracts, and persisted result DTOs.                  |
 | `@nocobase/app-plugin-ai-knowledge-base/server/plugin`           | Compatibility alias for the same Server plugin definition.                                                                                                          |
 | `@nocobase/app-plugin-ai-knowledge-base/package.json`            | Manifest metadata.                                                                                                                                                  |
 
@@ -35,6 +35,8 @@ Prefer:
 - exported DTO types and normalization/error utilities.
 
 The exported component barrel also includes knowledge-base, document, retrieval, segment, upload, common, i18n, prerequisite, and `VectorDatabasesPage` components. Treat page-level UI as version-coupled; service/types/hooks are the narrower integration boundary.
+
+For server-to-server imports, resolve `knowledgeBaseManifestServiceToken` from the App container. `apply()` requires `{ source: { disk, location }, manifest }` entries so startup configuration and plugin calls share the same source-based idempotency. `state(ids)` returns deterministic parent/file status. A successful source is not replayed; use a new source location for an intentional new run.
 
 ## Internal boundaries
 

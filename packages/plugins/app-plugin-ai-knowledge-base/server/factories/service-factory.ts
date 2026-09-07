@@ -1,4 +1,5 @@
 import type { AIManager } from '@nocobase/ai-employee';
+import type { NocoBaseDriveManager } from '@nocobase/drive';
 import {
   createServiceToken,
   type ServiceToken,
@@ -6,6 +7,7 @@ import {
 
 import type { KnowledgeBaseVectorizationExecutor } from '../internal-types.js';
 import type { KnowledgeBaseWarningLogger } from '../internal-types.js';
+import { DefaultKnowledgeBaseManifestService } from '../services/knowledge-base-manifest-service.js';
 import { KnowledgeBaseDocumentService } from '../services/knowledge-base-document-service.js';
 import { KnowledgeBaseSegmentService } from '../services/knowledge-base-segment-service.js';
 import { KnowledgeBaseService } from '../services/knowledge-base-service.js';
@@ -17,16 +19,29 @@ export class KnowledgeBaseServiceFactory {
   public constructor(
     private readonly ai: AIManager,
     private readonly managers: KnowledgeBaseManagerFactory,
+    private readonly drive: NocoBaseDriveManager,
     private readonly repositories: KnowledgeBaseRepositoryFactory,
     private readonly allowedStorageDisks: readonly string[],
     private readonly warningLogger: KnowledgeBaseWarningLogger,
   ) {}
+  private manifestService: DefaultKnowledgeBaseManifestService | undefined;
   private knowledgeBaseService: KnowledgeBaseService | undefined;
   private documentService: KnowledgeBaseDocumentService | undefined;
   private segmentService: KnowledgeBaseSegmentService | undefined;
   private vectorDatabaseService: VectorDatabaseService | undefined;
   private vectorizationExecutor: KnowledgeBaseVectorizationExecutor | undefined;
   private disposed = false;
+
+  public get manifests(): DefaultKnowledgeBaseManifestService {
+    this.assertActive();
+    return (this.manifestService ??= new DefaultKnowledgeBaseManifestService(
+      this.ai,
+      this.drive,
+      this.repositories,
+      this.managers,
+      this.warningLogger,
+    ));
+  }
 
   public get knowledgeBases(): KnowledgeBaseService {
     this.assertActive();
@@ -88,6 +103,7 @@ export class KnowledgeBaseServiceFactory {
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.manifestService = undefined;
     this.knowledgeBaseService = undefined;
     this.documentService = undefined;
     this.segmentService = undefined;

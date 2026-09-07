@@ -19,6 +19,8 @@ Use exported `normalizeKnowledgeBaseError(error, fallback)`. It returns `{status
 
 For upload failures, verify that the request is authenticated `multipart/form-data` with exactly one `file`, a valid `knowledgeBaseKey`, an allowed extension, and a body no larger than 104857600 bytes. Confirm that the base is LOCAL and has an available allowed storage disk. Storage failures reject the request. Queue-dispatch failure does not reject a completed upload: the returned document has `indexStatus:"ERROR"` and a retryable `errorMessage`; retry vectorization for that document instead of uploading it again.
 
+For declarative startup failures, verify vector database synchronization succeeded before expecting any Manifest read. Manifest and document sources must exist on the configured Drive disk under normalized relative keys. Config-managed vector database update/destroy returns 409 with code `VECTOR_DATABASE_CONFIG_MANAGED`; edit application configuration instead. A successful Manifest source never replays after content changes, while failed/interrupted sources retry only unfinished files.
+
 ## Processing failures
 
 Poll or refresh document fields. `PENDING` means queued; `PROCESSING` means executing; `ERROR` includes `errorMessage` and `segmentErrorMessage`. Verify the `default` queue worker, the 300-second job timeout, source-file durability, document loader availability, and dedup behavior. A retry can call `vectorizeDocuments` for selected IDs; large retries require confirmation.

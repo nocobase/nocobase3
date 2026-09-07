@@ -6,6 +6,8 @@ import {
 
 import {
   KnowledgeBaseDocumentRepository,
+  KnowledgeBaseManifestFileRepository,
+  KnowledgeBaseManifestRepository,
   KnowledgeBaseRepository,
   KnowledgeBaseSegmentRepository,
   KnowledgeBaseSegmentShardRepository,
@@ -17,6 +19,9 @@ export class KnowledgeBaseRepositoryFactory {
 
   private knowledgeBaseRepository: KnowledgeBaseRepository | undefined;
   private documentRepository: KnowledgeBaseDocumentRepository | undefined;
+  private manifestRepository: KnowledgeBaseManifestRepository | undefined;
+  private manifestFileRepository:
+    KnowledgeBaseManifestFileRepository | undefined;
   private segmentRepository: KnowledgeBaseSegmentRepository | undefined;
   private segmentShardRepository:
     KnowledgeBaseSegmentShardRepository | undefined;
@@ -35,6 +40,19 @@ export class KnowledgeBaseRepositoryFactory {
     return (this.documentRepository ??= new KnowledgeBaseDocumentRepository(
       this.database,
     ));
+  }
+
+  public get manifests(): KnowledgeBaseManifestRepository {
+    this.assertActive();
+    return (this.manifestRepository ??= new KnowledgeBaseManifestRepository(
+      this.database,
+    ));
+  }
+
+  public get manifestFiles(): KnowledgeBaseManifestFileRepository {
+    this.assertActive();
+    return (this.manifestFileRepository ??=
+      new KnowledgeBaseManifestFileRepository(this.database));
   }
 
   public get segments(): KnowledgeBaseSegmentRepository {
@@ -62,6 +80,8 @@ export class KnowledgeBaseRepositoryFactory {
     this.disposed = true;
     this.knowledgeBaseRepository = undefined;
     this.documentRepository = undefined;
+    this.manifestRepository = undefined;
+    this.manifestFileRepository = undefined;
     this.segmentRepository = undefined;
     this.segmentShardRepository = undefined;
     this.vectorDatabaseRepository = undefined;

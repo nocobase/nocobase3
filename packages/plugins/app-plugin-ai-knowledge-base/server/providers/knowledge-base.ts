@@ -3,7 +3,7 @@ import {
   resolveAIKnowledgeBaseStorageDisks,
 } from '@nocobase/app-plugin-ai-employee/server/config';
 import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/tokens';
-import { driveConfig } from '@nocobase/app-server/drive';
+import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { queueManagerToken } from '@nocobase/app-server/queue';
@@ -36,6 +36,9 @@ import {
   bindKnowledgeBaseVectorizationExecutor,
   unbindKnowledgeBaseVectorizationExecutor,
 } from '../jobs/knowledge-base-vectorization.js';
+import { KnowledgeBaseManifestBootstrapper } from '../manifest-bootstrap.js';
+import { knowledgeBaseManifestServiceToken } from '../manifest.js';
+import { VectorDatabaseConfigSynchronizer } from '../vector-database-config.js';
 import type { KnowledgeBaseVectorizationExecutor } from '../internal-types.js';
 
 const AI_FEATURE_KEYS = [
@@ -48,6 +51,9 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
   public readonly name: string = '@nocobase/app-plugin-ai-knowledge-base';
   private boundExecutor: KnowledgeBaseVectorizationExecutor | undefined;
   private featuresEnabled = false;
+  private unsubscribeConfig: (() => void) | undefined;
+  private vectorConfigSynchronizer:
+    VectorDatabaseConfigSynchronizer | undefined;
 
   public override register(): void {
     const allowedStorageDisks = resolveAIKnowledgeBaseStorageDisks(
@@ -85,6 +91,7 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
         new KnowledgeBaseServiceFactory(
           this.app.container.resolve(aiManagerToken),
           this.app.container.resolve(managerFactoryToken),
+          this.app.container.resolve(driveManagerToken),
           this.app.container.resolve(repositoryFactoryToken),
           allowedStorageDisks,
           {
@@ -98,9 +105,13 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
           },
         ),
     );
+    this.app.container.singleton(
+      knowledgeBaseManifestServiceToken,
+      () => this.app.container.resolve(serviceFactoryToken).manifests,
+    );
   }
 
-  public override boot(): Promise<void> {
+  public override async boot(): Promise<void> {
     const ai = this.app.container.resolve(aiManagerToken);
     const repositories = this.app.container.resolve(repositoryFactoryToken);
     const managers = this.app.container.resolve(managerFactoryToken);
@@ -111,7 +122,6 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
 
     const vectorDatabaseProvider = new VectorDatabaseProviderFeatureImpl();
     const vectorStoreProvider = new VectorStoreProviderFeatureImpl();
-
     ai.features.enableFeatures({
       vectorDatabaseProvider,
       vectorStoreProvider,
@@ -128,10 +138,56 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
     });
     this.registerBuiltInVectorStoreProviders(ai, managers);
     this.featuresEnabled = true;
-    return Promise.resolve();
+
+    const logger = this.app.container
+      .resolve(loggingToken)
+      .getLogger()
+      .child({ module: 'ai-knowledge-base' });
+    const warningLogger = {
+      warn(message: string, details?: Record<string, unknown>): void {
+        logger.warn(details, message);
+      },
+    };
+    const synchronizer = new VectorDatabaseConfigSynchronizer(
+      ai,
+      repositories.vectorDatabases,
+      repositories.knowledgeBases,
+      warningLogger,
+      () => managers.vectorStores.clear(),
+    );
+    this.vectorConfigSynchronizer = synchronizer;
+    const config = this.app.config.get(aiConfig);
+    try {
+      await synchronizer.enqueue(config.aiKnowledgeBase?.vectorDatabases);
+
+      this.unsubscribeConfig = this.app.config.subscribe(
+        aiConfig,
+        async ({ current }): Promise<void> => {
+          await synchronizer.enqueue(current.aiKnowledgeBase?.vectorDatabases);
+        },
+      );
+
+      const bootstrapper = new KnowledgeBaseManifestBootstrapper(
+        this.app.container.resolve(driveManagerToken),
+        repositories,
+        services.manifests,
+        warningLogger,
+      );
+      await bootstrapper.apply(config.aiKnowledgeBase?.manifests);
+    } catch (error) {
+      this.unsubscribeConfig?.();
+      this.unsubscribeConfig = undefined;
+      await synchronizer.close();
+      this.vectorConfigSynchronizer = undefined;
+      throw error;
+    }
   }
 
   public override async shutdown(): Promise<void> {
+    this.unsubscribeConfig?.();
+    this.unsubscribeConfig = undefined;
+    await this.vectorConfigSynchronizer?.close();
+    this.vectorConfigSynchronizer = undefined;
     if (this.featuresEnabled) {
       const features = this.app.container.resolve(aiManagerToken).features;
       const vectorDatabaseProviders =

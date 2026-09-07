@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import type { AIManager } from '@nocobase/ai-employee';
 import { nanoid } from 'nanoid';
 
@@ -10,6 +8,7 @@ import type {
   VectorDatabaseEntity,
   VectorDatabaseRepository,
 } from '../repository/index.js';
+import { hashVectorDatabaseConnection } from '../vector-database-config.js';
 import { page, type PageOptions, type PageResult } from './pagination.js';
 
 export class VectorDatabaseService {
@@ -20,13 +19,18 @@ export class VectorDatabaseService {
   ) {}
 
   public list(options: PageOptions): Promise<PageResult<VectorDatabaseEntity>> {
-    return page({ repository: this.vectors, paging: options });
+    return page({
+      repository: this.vectors,
+      paging: options,
+      transform: redactConfigManagedConnection,
+    });
   }
 
-  public get(options: {
+  public async get(options: {
     readonly id: string | number;
   }): Promise<VectorDatabaseEntity | null> {
-    return this.vectors.findById(options.id);
+    const database = await this.vectors.findById(options.id);
+    return database ? redactConfigManagedConnection(database) : null;
   }
 
   public async create(options: {
@@ -50,8 +54,9 @@ export class VectorDatabaseService {
       provider,
       databaseSpec: String(options.values.databaseSpec ?? 'PGVector'),
       connectProps,
-      connectPropsHash: hashConnectProps(connectProps),
+      connectPropsHash: hashVectorDatabaseConnection(connectProps),
       enabled: options.values.enabled !== false,
+      managedBy: null,
     });
   }
 
@@ -61,6 +66,7 @@ export class VectorDatabaseService {
   }): Promise<VectorDatabaseEntity | null> {
     const existing = await this.vectors.findById(options.id);
     if (!existing) return null;
+    assertVectorDatabaseMutable(existing);
     const provider = String(options.values.provider ?? existing.provider);
     const connectProps = (options.values.connectProps ??
       existing.connectProps) as Record<string, unknown>;
@@ -74,7 +80,8 @@ export class VectorDatabaseService {
         ...options.values,
         provider,
         connectProps,
-        connectPropsHash: hashConnectProps(connectProps),
+        connectPropsHash: hashVectorDatabaseConnection(connectProps),
+        managedBy: existing.managedBy ?? null,
       },
     );
     return this.vectors.findById(options.id);
@@ -83,9 +90,13 @@ export class VectorDatabaseService {
   public async destroy(options: {
     readonly ids: readonly (string | number)[];
   }): Promise<void> {
+    const databases: VectorDatabaseEntity[] = [];
     for (const id of options.ids) {
       const database = await this.vectors.findById(id);
-      if (!database) continue;
+      if (database) databases.push(database);
+    }
+    for (const database of databases) assertVectorDatabaseMutable(database);
+    for (const database of databases) {
       const related = await this.bases.find({
         filter: { vectorDatabaseKey: database.key },
       });
@@ -104,11 +115,12 @@ export class VectorDatabaseService {
       .map(({ name, spec }) => ({ name, spec }));
   }
 
-  public findEnabled(): Promise<VectorDatabaseEntity[]> {
-    return this.vectors.find({
+  public async findEnabled(): Promise<VectorDatabaseEntity[]> {
+    const databases = await this.vectors.find({
       filter: { enabled: true },
       sort: ['name'],
     });
+    return databases.map(redactConfigManagedConnection);
   }
 
   public testConnection(options: {
@@ -138,8 +150,28 @@ export class VectorDatabaseService {
   }
 }
 
-function hashConnectProps(connectProps: Record<string, unknown>): string {
-  return createHash('sha256')
-    .update(JSON.stringify(connectProps))
-    .digest('hex');
+function redactConfigManagedConnection(
+  database: VectorDatabaseEntity,
+): VectorDatabaseEntity {
+  return database.managedBy === 'config'
+    ? { ...database, connectProps: {} }
+    : database;
+}
+
+class ConfigManagedVectorDatabaseError extends Error {
+  public readonly status = 409;
+  public readonly code = 'VECTOR_DATABASE_CONFIG_MANAGED';
+
+  public constructor() {
+    super(
+      'Config-managed vector databases must be changed through application config.',
+    );
+    this.name = 'ConfigManagedVectorDatabaseError';
+  }
+}
+
+function assertVectorDatabaseMutable(database: VectorDatabaseEntity): void {
+  if (database.managedBy === 'config') {
+    throw new ConfigManagedVectorDatabaseError();
+  }
 }

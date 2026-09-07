@@ -339,4 +339,8 @@ export default {
   'This change affects related knowledge bases: {{names}}. Continue?':
     '此更改会影响关联知识库：{{names}}。是否继续？',
   Username: '用户名',
+  'Config managed': '配置管理',
+  'Change in application config': '请在应用配置中修改',
+  'This vector database is managed through application config.':
+    '此向量数据库由应用配置管理。',
 } as const;

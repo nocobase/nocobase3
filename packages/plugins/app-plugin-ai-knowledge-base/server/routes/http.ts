@@ -79,10 +79,11 @@ export function createRouteGroup(): Hono<AuthEnv> {
     if (cause instanceof KnowledgeBaseUploadError) {
       return error(context, cause.status, cause.message, cause.code);
     }
+    const typedCause = cause as Error & { status?: number; code?: string };
     const status =
-      Number((cause as Error & { status?: number }).status) ||
+      Number(typedCause.status) ||
       (/not found/i.test(cause.message) ? 404 : 500);
-    return error(context, status, cause.message);
+    return error(context, status, cause.message, typedCause.code);
   });
   return routes;
 }

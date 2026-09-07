@@ -11,6 +11,7 @@ export interface VectorDatabaseEntity {
   connectProps: Record<string, unknown>;
   connectPropsHash?: string;
   enabled: boolean;
+  managedBy: 'config' | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }

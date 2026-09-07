@@ -220,6 +220,7 @@ export type VectorDatabase = {
   provider: string;
   connectProps: Record<string, unknown>;
   enabled: boolean;
+  managedBy?: 'config' | null;
   createdAt?: string;
   updatedAt?: string;
 };
