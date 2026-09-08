@@ -27,15 +27,10 @@ import type { SkillsEntity } from '@nocobase/ai-employee';
 import type { AIToolMessageEntity } from '../../repository/index.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import { LLMProvider } from '@nocobase/ai-employee';
-import { getSystemPrompt } from '../../agent/ai-employee/prompts.js';
 import _ from 'lodash';
 import { AIMessageInput } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
-import {
-  getKnowledgeBaseBackgroundPrompt,
-  normalizeKnowledgeBaseRetrievalStrategy,
-} from '../../manager/knowledge-base-manager.js';
 
 import type { ToolsFilter, ToolsManager } from '@nocobase/ai-employee';
 import {
@@ -99,7 +94,6 @@ export class AIEmployeeCapabilities {
   private knowledgeBaseManager: KnowledgeBaseManager;
   private workContextHandler: WorkContextHandler;
   private documentLoaders: DocumentLoaders;
-  private systemMessage?: string;
   private webSearch?: boolean;
   private model?: ModelRef;
   private tools: { name: string }[];
@@ -119,7 +113,6 @@ export class AIEmployeeCapabilities {
     documentLoaders,
     employee,
     sessionId,
-    systemMessage,
     skillSettings,
     webSearch,
     model,
@@ -140,7 +133,6 @@ export class AIEmployeeCapabilities {
     this.workContextHandler = workContextHandler;
     this.documentLoaders = documentLoaders;
     this.sessionId = sessionId;
-    this.systemMessage = systemMessage;
     this.skillSettings = skillSettings;
     this.model = model;
     this.from = from;
@@ -933,36 +925,5 @@ export class AIEmployeeCapabilities {
 
   private get aiToolMessagesRepo() {
     return this.repositories.aiToolMessages;
-  }
-}
-
-function getCurrentTimezone(
-  execution: ConversationExecution,
-  getHeader: (name: string) => string | undefined,
-): string | undefined {
-  return execution.timezone || getHeader('x-timezone') || undefined;
-}
-
-function getCurrentDateTimeForPrompt(
-  locale: string | undefined,
-  timezone?: string,
-) {
-  const now = new Date();
-  const normalizedLocale = locale || 'en-US';
-
-  try {
-    const formatter = new Intl.DateTimeFormat(normalizedLocale, {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-    return `${formatter.format(now)}${timezone ? ` (${timezone})` : ''}`;
-  } catch (error) {
-    return `${now.toISOString()}${timezone ? ` (${timezone})` : ''}`;
   }
 }

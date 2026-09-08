@@ -44,6 +44,12 @@ import {
   getKnowledgeBaseBackgroundPrompt,
   normalizeKnowledgeBaseRetrievalStrategy,
 } from '../../manager/knowledge-base-manager.js';
+import type { ToolCallPolicy } from './tool-call-policy.js';
+import { EXECUTE_FRONTEND_TOOL_NAME } from './common/frontend-tools.js';
+import {
+  listCurrentFrontendTools,
+  shouldAutoExecuteFrontendTool,
+} from './frontend-tools.js';
 
 class ExecutionResponseMetadata {
   private readonly metadata = new Map<string, Record<string, unknown>>();
@@ -141,9 +147,48 @@ async function resolveAIEmployeeLLM(
   };
 }
 
+async function initializeToolCalls(
+  options: AIEmployeeAgentRuntimeOptions,
+  policy: ToolCallPolicy,
+  transaction: DatabaseConnection,
+  messageId: string,
+  toolCalls: { id: string; name: string; args: unknown }[],
+) {
+  const now = new Date();
+  const toolsMap = await policy.getToolsMap();
+  return options.repositories.aiToolMessages.create(
+    {
+      values: await Promise.all(
+        toolCalls.map(async (toolCall) => {
+          const tool = toolsMap.get(toolCall.name);
+          const exists = Boolean(tool);
+          return {
+            id: options.snowflake.generate(),
+            sessionId: options.sessionId,
+            messageId,
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            status: exists ? (null as unknown as string) : 'error',
+            content: exists
+              ? (null as unknown as string)
+              : `Tool ${toolCall.name} not found`,
+            invokeStatus: exists ? 'init' : 'done',
+            invokeStartTime: exists ? (null as unknown as Date) : now,
+            invokeEndTime: exists ? (null as unknown as Date) : now,
+            auto: await policy.isAutoCall(tool, toolCall.args),
+            execution: tool?.execution ?? 'backend',
+          };
+        }),
+      ),
+    },
+    { connection: transaction },
+  );
+}
+
 export function createAIEmployeeConversationProvider(
   options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
+  toolCallPolicy?: ToolCallPolicy,
 ): ConversationProvider {
   const { runtime } = state;
   const agentContext = options.agentContext;
@@ -161,7 +206,15 @@ export function createAIEmployeeConversationProvider(
   const toolCalls: ToolCallHandler = {
     initialize: async (messageId, calls) =>
       database.transaction((transaction: DatabaseConnection) =>
-        runtime.initToolCall(transaction, messageId, calls),
+        toolCallPolicy
+          ? initializeToolCalls(
+              options,
+              toolCallPolicy,
+              transaction,
+              messageId,
+              calls,
+            )
+          : runtime.initToolCall(transaction, messageId, calls),
       ),
     markInterrupted: (...args) => runtime.updateToolCallInterrupted(...args),
     markPending: (...args) => runtime.updateToolCallPending(...args),
@@ -208,7 +261,15 @@ export function createAIEmployeeConversationProvider(
         chatConversation.withTransaction(async (target, transaction) => {
           const saved = await target.addMessages(message);
           const initialized = calls.length
-            ? await runtime.initToolCall(transaction, saved.messageId, calls)
+            ? toolCallPolicy
+              ? await initializeToolCalls(
+                  options,
+                  toolCallPolicy,
+                  transaction,
+                  saved.messageId,
+                  calls,
+                )
+              : await runtime.initToolCall(transaction, saved.messageId, calls)
             : [];
           return {
             message: saved,
@@ -365,7 +426,10 @@ export function createAIEmployeeToolProvider(
   };
 }
 
-export class AIEmployeeChatContextProvider extends BaseChatContextProvider {
+export class AIEmployeeChatContextProvider
+  extends BaseChatContextProvider
+  implements ToolCallPolicy
+{
   public constructor(
     private readonly aiEmployeeOptions: AIEmployeeAgentRuntimeOptions,
     private readonly runtime: AIEmployeeCapabilities = new AIEmployeeCapabilities(
@@ -535,9 +599,26 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   public override getToolsMap(
-    _request: AgentRequest,
+    _request?: AgentRequest,
   ): Promise<ReadonlyMap<string, import('@nocobase/ai-employee').ToolsEntity>> {
     return this.runtime.getToolsMap();
+  }
+
+  public async isAutoCall(
+    tool: import('@nocobase/ai-employee').ToolsEntity | undefined,
+    args: unknown,
+  ): Promise<boolean> {
+    if (tool?.definition.name !== EXECUTE_FRONTEND_TOOL_NAME) {
+      return this.runtime.isAutoCall(tool);
+    }
+    const frontendTools = await listCurrentFrontendTools(
+      this.aiEmployeeOptions.repositories,
+      {
+        ...(this.aiEmployeeOptions.execution ?? {}),
+        sessionId: this.aiEmployeeOptions.sessionId,
+      },
+    );
+    return shouldAutoExecuteFrontendTool(frontendTools, args);
   }
 
   /** @deprecated Message formatting moves to AIEmployeeChatMessageConverters in T09. */
@@ -606,8 +687,12 @@ export async function createAIEmployeeAgentProviders(
   overrides?: AgentProviderOverrides,
 ): Promise<AIEmployeeAgentProvidersResult> {
   const state = createState(options);
-  const conversation = createAIEmployeeConversationProvider(options, state);
   const chatContext = createAIEmployeeChatContextProvider(options, state);
+  const conversation = createAIEmployeeConversationProvider(
+    options,
+    state,
+    chatContext,
+  );
   const tools = createAIEmployeeToolProvider(options, state);
   const providers = createAgentProviders({
     conversation,
