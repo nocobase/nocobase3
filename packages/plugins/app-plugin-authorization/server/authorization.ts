@@ -68,6 +68,8 @@ export type AppAuthorization = Authorization &
 
 export interface CreateAppAuthorizationOptions {
   connection?: DatabaseConnection;
+  onUserPermissionsChanged?(userId: string): void | Promise<void>;
+  onAuthenticatedPermissionsChanged?(): void | Promise<void>;
 }
 
 export function createAppAuthorization(
@@ -81,7 +83,15 @@ export function createAppAuthorization(
     connection: options.connection,
     plugins: [
       authenticationIdentity(),
-      permissionSets(),
+      permissionSets({
+        onAssignmentsChanged: async (subject) => {
+          if (subject.type === 'user') {
+            await options.onUserPermissionsChanged?.(subject.id);
+          } else if (subject.type === 'authenticated') {
+            await options.onAuthenticatedPermissionsChanged?.();
+          }
+        },
+      }),
       databaseAuthorization(),
       defaultAccess(),
       sharingRules(),

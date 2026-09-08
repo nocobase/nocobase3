@@ -8,6 +8,7 @@ const routes: AppClientAppRoutesContribution = defineAppRoutes([
     name: 'hub',
     path: '/hub',
     auth: 'required',
+    access: { resource: 'hub', action: 'access' },
     componentLoader: () => import('./pages/hub-page.js'),
   },
 ]);

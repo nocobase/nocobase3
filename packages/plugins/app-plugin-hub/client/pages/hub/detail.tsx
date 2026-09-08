@@ -46,6 +46,10 @@ import { Resources } from './resources.js';
 import { Configuration } from './configuration.js';
 import { Settings } from './settings.js';
 import { applicationUrl, hasDeployment, formatDate } from './utils.js';
+import {
+  visibleHubDetailTabs,
+  type HubCapabilities,
+} from '../../permissions.js';
 
 const TAB_LABELS: Readonly<Record<DetailTab, string>> = {
   deployments: 'Deployments',
@@ -64,6 +68,7 @@ export function Detail({
   configMode,
   configContent,
   busy,
+  capabilities,
   onBack,
   onTab,
   onRelease,
@@ -88,6 +93,7 @@ export function Detail({
   readonly configMode: ConfigMode;
   readonly configContent: string;
   readonly busy: boolean;
+  readonly capabilities: HubCapabilities;
   readonly onBack: () => void;
   readonly onTab: (tab: DetailTab) => void;
   readonly onRelease: (id: string) => void;
@@ -110,21 +116,13 @@ export function Detail({
   readonly onDeploymentPage: (page: number) => void;
 }): ReactElement {
   const deployed = hasDeployment(app);
-  const detailTabs: readonly DetailTab[] = [
-    ...(!app.hasReleases ? (['development'] as const) : []),
-    'deployments',
-    'releases',
-    'resources',
-    ...(deployed ? (['configuration'] as const) : []),
-    'settings',
-  ];
+  const detailTabs = visibleHubDetailTabs(
+    { hasReleases: app.hasReleases, deployed },
+    capabilities,
+  );
   const activeTab = detailTabs.includes(tab)
     ? tab
-    : !app.hasReleases
-      ? 'development'
-      : deployed
-        ? 'deployments'
-        : 'releases';
+    : (detailTabs[0] ?? 'deployments');
   const visitUrl = applicationUrl(app);
   const running = app.deployment.observedState === 'running';
   const visitAllowed =
@@ -183,12 +181,14 @@ export function Detail({
                 </div>
               </div>
               <div className='flex flex-wrap gap-2'>
-                <Button disabled={busy} onClick={onRefresh} variant='outline'>
-                  <RefreshCw
-                    className={`size-4 ${busy ? 'animate-spin' : ''}`}
-                  />{' '}
-                  Refresh status
-                </Button>
+                {capabilities.refresh ? (
+                  <Button disabled={busy} onClick={onRefresh} variant='outline'>
+                    <RefreshCw
+                      className={`size-4 ${busy ? 'animate-spin' : ''}`}
+                    />{' '}
+                    Refresh status
+                  </Button>
+                ) : null}
                 {visitUrl && visitAllowed ? (
                   <Button
                     className='cursor-pointer'
@@ -205,35 +205,39 @@ export function Detail({
                     <ExternalLink className='size-4' /> Visit
                   </Button>
                 )}
-                <Button
-                  disabled={
-                    busy ||
-                    !deployed ||
-                    !app.runtime.hostAvailable ||
-                    transitioning
-                  }
-                  onClick={running ? onRestart : onStart}
-                  variant='outline'
-                >
-                  {running ? (
-                    <RefreshCw className='size-4' />
-                  ) : (
-                    <Play className='size-4' />
-                  )}{' '}
-                  {running ? 'Restart' : 'Start'}
-                </Button>
-                <Button
-                  disabled={
-                    busy ||
-                    !running ||
-                    !app.runtime.hostAvailable ||
-                    transitioning
-                  }
-                  onClick={onStop}
-                  variant='outline'
-                >
-                  <CircleStop className='size-4' /> Stop
-                </Button>
+                {capabilities[running ? 'restart' : 'start'] ? (
+                  <Button
+                    disabled={
+                      busy ||
+                      !deployed ||
+                      !app.runtime.hostAvailable ||
+                      transitioning
+                    }
+                    onClick={running ? onRestart : onStart}
+                    variant='outline'
+                  >
+                    {running ? (
+                      <RefreshCw className='size-4' />
+                    ) : (
+                      <Play className='size-4' />
+                    )}{' '}
+                    {running ? 'Restart' : 'Start'}
+                  </Button>
+                ) : null}
+                {capabilities.stop ? (
+                  <Button
+                    disabled={
+                      busy ||
+                      !running ||
+                      !app.runtime.hostAvailable ||
+                      transitioning
+                    }
+                    onClick={onStop}
+                    variant='outline'
+                  >
+                    <CircleStop className='size-4' /> Stop
+                  </Button>
+                ) : null}
               </div>
             </div>
             <TabsList>
@@ -262,6 +266,8 @@ export function Detail({
                     loading={deploymentsLoading}
                     onPage={onDeploymentPage}
                     busy={busy || transitioning || deploymentsLoading}
+                    canDeploy={capabilities.deploy}
+                    canRollback={capabilities.rollback}
                     onDeploy={onDeploy}
                     onRollback={onRollback}
                   />
@@ -270,6 +276,7 @@ export function Detail({
                   <Releases
                     app={app}
                     selected={release?.id}
+                    canUpload={capabilities['upload-release']}
                     onSelect={onRelease}
                     onUpload={onUpload}
                   />
@@ -289,6 +296,7 @@ export function Detail({
                       mode={configMode}
                       content={configContent}
                       busy={busy || transitioning}
+                      canUpdate={capabilities['update-config']}
                       onSave={onSaveConfiguration}
                     />
                   </TabsContent>
@@ -298,6 +306,8 @@ export function Detail({
                     key={app.deployment.activation}
                     activation={app.deployment.activation}
                     busy={busy}
+                    canUpdate={capabilities['update-settings']}
+                    canRemove={capabilities.remove}
                     onSave={onSaveSettings}
                     onRemove={onRemove}
                   />

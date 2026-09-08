@@ -6,6 +6,7 @@ import aiEmployee from '@nocobase/app-plugin-ai-employee/client';
 import aiKnowledgeBase from '@nocobase/app-plugin-ai-knowledge-base/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
+import users from '@nocobase/app-plugin-users/client';
 import install from '@nocobase/app-plugin-install/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
@@ -24,6 +25,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   aiEmployee(),
   aiKnowledgeBase(),
   authorization(),
+  users({ mount: 'settings', path: '/users' }),
   i18n(),
   install(),
   notificationProvider(),

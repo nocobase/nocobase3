@@ -4,6 +4,7 @@ import {
 } from '@nocobase/app-client/plugins';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
+import users from '@nocobase/app-plugin-users/client';
 import install from '@nocobase/app-plugin-install/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
@@ -20,6 +21,7 @@ import hub from '@nocobase/app-plugin-hub/client';
 const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   authorization(),
+  users({ mount: 'settings', path: '/users' }),
   i18n(),
   install(),
   notificationProvider(),

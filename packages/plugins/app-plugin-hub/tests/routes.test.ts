@@ -7,6 +7,7 @@ import {
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -49,7 +50,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(listApps).not.toHaveBeenCalled();
   });
 
-  it('rejects authenticated users without system administrator access', async () => {
+  it('rejects authenticated users without Hub access', async () => {
     const listApps = vi.fn<HubService['listApps']>();
     const router = await apiRoutes.createRouter(
       createApplication('member', listApps),
@@ -61,7 +62,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(listApps).not.toHaveBeenCalled();
   });
 
-  it('serves Hub data to system administrators', async () => {
+  it('serves Hub data to Hub administrators', async () => {
     const listApps = vi.fn<HubService['listApps']>().mockResolvedValue([]);
     const router = await apiRoutes.createRouter(
       createApplication('administrator', listApps),
@@ -330,12 +331,21 @@ function createApplication(
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },
+        require: async () => {
+          if (role !== 'administrator') {
+            throw new AuthorizationDeniedError({
+              effect: 'deny',
+              reasons: [
+                {
+                  code: 'HUB_ACCESS_DENIED',
+                  message: 'Hub access is not allowed',
+                },
+              ],
+            });
+          }
+        },
       });
       await next();
-    },
-    permissionSets: {
-      getEffective: async () =>
-        role === 'administrator' ? [{ key: 'system-administrator' }] : [],
     },
   } as AppAuthorization);
   container.instance(

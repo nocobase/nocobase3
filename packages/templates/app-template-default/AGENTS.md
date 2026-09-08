@@ -190,6 +190,7 @@ To customize a plugin's page, pass an option on its registration, add a source e
 | Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
 | Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
 | Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
+| User listing, account state, password reset, and application-owned role assignment                | `@nocobase/app-plugin-users`          |
 | Uploads, attachments, file fields, previews                                                       | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 

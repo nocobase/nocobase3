@@ -9,9 +9,10 @@ import {
 } from '@nocobase/db';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Auth, type AuthEnv } from '../../../index.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
+import { createUserAdministrationService } from '../../user-administration.js';
 
 async function migrateAuthentication(
   database: ReturnType<typeof createDatabaseManager>,
@@ -55,12 +56,13 @@ describe('Authentication', () => {
   });
   const router = new Hono<AuthEnv>();
   let cookie = '';
+  let auth: Auth;
 
   beforeAll(async () => {
     const connection = database.connection();
     await migrateAuthentication(database);
 
-    const auth = new Auth({
+    auth = new Auth({
       connection,
       baseURL: 'http://localhost/api/auth',
       secret: 'development-secret-at-least-32-characters',
@@ -183,6 +185,76 @@ describe('Authentication', () => {
         session: { id: expect.any(String) },
       },
     });
+  });
+
+  it('invalidates disabled accounts and permits login again after enabling', async () => {
+    const user = await database
+      .connection()
+      .query.selectFrom('user')
+      .select('id')
+      .where('email', '=', 'alice@example.com')
+      .executeTakeFirstOrThrow();
+    const disconnectUser = vi.fn();
+    const users = createUserAdministrationService({
+      auth,
+      connection: database.connection(),
+      realtime: { disconnectUser } as never,
+    });
+
+    await users.disable(String(user.id));
+
+    expect(disconnectUser).toHaveBeenCalledWith(String(user.id));
+    await expect(
+      database
+        .connection()
+        .query.selectFrom('session')
+        .select('id')
+        .where('userId', '=', String(user.id))
+        .execute(),
+    ).resolves.toEqual([]);
+    const previousSession = await router.request('/api/private', {
+      headers: { cookie },
+    });
+    expect(previousSession.status).toBe(401);
+
+    for (const [path, credentials] of [
+      [
+        '/api/auth/sign-in/email',
+        {
+          email: 'alice@example.com',
+          password: 'correct horse battery staple',
+        },
+      ],
+      [
+        '/api/auth/sign-in/username',
+        {
+          username: 'alice.admin',
+          password: 'correct horse battery staple',
+        },
+      ],
+    ] as const) {
+      const response = await router.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        code: 'ACCOUNT_DISABLED',
+      });
+    }
+
+    await users.enable(String(user.id));
+    const enabled = await router.request('/api/auth/sign-in/username', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'alice.admin',
+        password: 'correct horse battery staple',
+      }),
+    });
+    expect(enabled.status).toBe(200);
+    cookie = enabled.headers.get('set-cookie') ?? '';
   });
 
   it('matches email credentials case-insensitively', async () => {

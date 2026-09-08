@@ -1,0 +1,59 @@
+import type { UsersResource } from './en-US.js';
+
+const zhCN: UsersResource = {
+  nav: { users: '用户' },
+  page: {
+    title: '用户',
+    description: '创建账号、分配角色并管理登录状态。',
+    add: '添加用户',
+    search: '搜索姓名、用户名或邮箱',
+    allStatuses: '全部状态',
+    allRoles: '全部角色',
+    enabled: '已启用',
+    disabled: '已禁用',
+    noUsers: '没有找到用户。',
+    total: '共 {{count}} 位用户',
+    previous: '上一页',
+    next: '下一页',
+    selectRole: '选择角色',
+    columns: { user: '用户', status: '状态', actions: '操作' },
+    actions: {
+      menu: '用户操作',
+      edit: '编辑资料',
+      resetPassword: '重置密码',
+      revokeSessions: '撤销全部会话',
+      enable: '启用账号',
+      disable: '禁用账号',
+    },
+  },
+  form: {
+    addTitle: '添加用户',
+    editTitle: '编辑用户',
+    addDescription: '创建账号并分配应用角色。',
+    editDescription: '更新账号资料。',
+    name: '姓名',
+    username: '用户名',
+    email: '邮箱',
+    password: '密码',
+    cancel: '取消',
+    save: '保存',
+    create: '创建用户',
+  },
+  password: {
+    title: '重置密码',
+    description: '为 {{name}} 设置新密码，并撤销其全部会话。',
+    newPassword: '新密码',
+    submit: '重置密码',
+  },
+  state: {
+    enableTitle: '启用账号？',
+    disableTitle: '禁用账号？',
+    enableDescription: '{{name}} 将可以重新登录。',
+    disableDescription: '{{name}} 将立即从所有设备退出登录。',
+    enable: '启用',
+    disable: '禁用',
+  },
+  errors: { operationFailed: '用户操作失败。' },
+};
+
+export default zhCN;

@@ -1,0 +1,259 @@
+import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { createDatabaseManager, type DatabaseConnection } from '@nocobase/db';
+import { ServiceContainer } from '@nocobase/service-provider';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { UsersProvider } from '../server/providers/users.js';
+import { createUserManagementService } from '../server/services/users.js';
+import { createUserRoleScopeRegistry } from '../server/services/users.js';
+import type { UserRoleScope } from '../server/tokens.js';
+
+describe('@nocobase/app-plugin-users service', () => {
+  const databases: ReturnType<typeof createDatabaseManager>[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      databases.splice(0).map((database) => database.destroy()),
+    );
+  });
+
+  it('rolls back the created user when role assignment fails', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    databases.push(database);
+    await database
+      .connection()
+      .builder.createCollection('testManagedUsers', (collection) => {
+        collection.string('id').primary();
+      });
+
+    const registry = createUserRoleScopeRegistry();
+    registry.register(
+      roleScope({
+        replace: vi.fn(() => Promise.reject(new Error('role failed'))),
+      }),
+    );
+    const users = administrationService(database.connection());
+    const service = createUserManagementService({
+      database,
+      users,
+      roleScopes: registry,
+    });
+
+    await expect(
+      service.create({
+        name: 'Alice',
+        email: 'alice@example.com',
+        password: 'secret123',
+        roleScopes: { test: 'operator' },
+      }),
+    ).rejects.toThrow('role failed');
+    await expect(
+      database
+        .connection()
+        .query.selectFrom('testManagedUsers')
+        .select('id')
+        .execute(),
+    ).resolves.toEqual([]);
+  });
+
+  it('notifies permission consumers only after a role transaction commits', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    databases.push(database);
+    await database
+      .connection()
+      .builder.createCollection('testManagedUsers', (collection) => {
+        collection.string('id').primary();
+      });
+
+    const events: string[] = [];
+    const registry = createUserRoleScopeRegistry();
+    registry.register(
+      roleScope({
+        replace: async (_userId, _value, connection) => {
+          await connection.query
+            .insertInto('testManagedUsers')
+            .values({ id: 'role-write' })
+            .execute();
+          events.push('role-write');
+        },
+      }),
+    );
+    const service = createUserManagementService({
+      database,
+      users: administrationService(database.connection()),
+      roleScopes: registry,
+      onRoleScopesChanged: async () => {
+        const committed = await database
+          .connection()
+          .query.selectFrom('testManagedUsers')
+          .select('id')
+          .where('id', '=', 'role-write')
+          .executeTakeFirst();
+        events.push(committed ? 'notified-after-commit' : 'notified-too-early');
+      },
+    });
+
+    await service.create({
+      name: 'Alice',
+      email: 'alice@example.com',
+      password: 'secret123',
+      roleScopes: { test: 'operator' },
+    });
+
+    expect(events).toEqual(['role-write', 'notified-after-commit']);
+  });
+
+  it('rejects duplicate role scope registrations and unregisters by identity', () => {
+    const registry = createUserRoleScopeRegistry();
+    const scope = roleScope();
+    const unregister = registry.register(scope);
+
+    expect(() => registry.register(scope)).toThrow(
+      'User role scope already registered: test',
+    );
+    expect(registry.list()).toEqual([scope]);
+
+    unregister();
+    expect(registry.list()).toEqual([]);
+  });
+
+  it('rejects an empty required role and values with the wrong selection shape', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    databases.push(database);
+    const registry = createUserRoleScopeRegistry();
+    registry.register(roleScope({ selection: 'multiple' }));
+    const service = createUserManagementService({
+      database,
+      users: administrationService(database.connection()),
+      roleScopes: registry,
+    });
+
+    await expect(
+      service.create({
+        name: 'Alice',
+        email: 'alice@example.com',
+        password: 'secret123',
+        roleScopes: { test: [] },
+      }),
+    ).rejects.toMatchObject({ code: 'ROLE_SCOPE_REQUIRED' });
+    await expect(
+      service.create({
+        name: 'Alice',
+        email: 'alice@example.com',
+        password: 'secret123',
+        roleScopes: { test: 'operator' },
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
+  });
+});
+
+describe('@nocobase/app-plugin-users resource authorization', () => {
+  it('does not treat a conditional grant as unconditional user access', async () => {
+    const add = vi.fn();
+    const container = new ServiceContainer();
+    container.instance(authorizationToken, {
+      resources: { add },
+    } as unknown as AppAuthorization);
+    const provider = new UsersProvider({
+      appName: 'test',
+      publicBasePath: '',
+      config: {} as AppPluginApplication['config'],
+      paths: {} as AppPluginApplication['paths'],
+      router: {} as AppPluginApplication['router'],
+      container,
+    });
+
+    await provider.boot();
+
+    const handler = add.mock.calls[0]?.[0] as {
+      authorize(
+        request: object,
+        context: object,
+      ): Promise<{ readonly effect: string }>;
+    };
+    await expect(
+      handler.authorize(
+        {
+          principal: { type: 'user', id: 'user-1' },
+          resource: { type: 'user', id: 'user-2' },
+          action: 'update',
+        },
+        {
+          grants: {
+            resolve: () =>
+              Promise.resolve([
+                {
+                  source: { plugin: 'permission-sets', id: 'conditional' },
+                  resource: { type: 'user', id: '*' },
+                  action: 'update',
+                  policy: { type: 'unsupported-user-filter' },
+                },
+              ]),
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ effect: 'deny' });
+  });
+});
+
+function roleScope(overrides: Partial<UserRoleScope> = {}): UserRoleScope {
+  return {
+    key: 'test',
+    label: 'Test role',
+    selection: 'single',
+    requiredOnCreate: true,
+    options: () => Promise.resolve([{ value: 'operator', label: 'Operator' }]),
+    get: () => Promise.resolve('operator'),
+    findUserIds: () => Promise.resolve([]),
+    replace: () => Promise.resolve(),
+    ...overrides,
+  };
+}
+
+function administrationService(
+  initialConnection: DatabaseConnection,
+): UserAdministrationService {
+  const create = (
+    connection: DatabaseConnection,
+  ): UserAdministrationService => ({
+    withConnection: (next) => create(next),
+    list: () => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 20 }),
+    get: () => Promise.resolve(undefined),
+    async create(input) {
+      await connection.query
+        .insertInto('testManagedUsers')
+        .values({ id: 'created-user' })
+        .execute();
+      const now = new Date();
+      return {
+        id: 'created-user',
+        name: input.name,
+        email: input.email,
+        emailVerified: false,
+        disabledAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+    },
+    update: vi.fn(),
+    disable: vi.fn(),
+    enable: vi.fn(),
+    resetPassword: vi.fn(),
+    revokeSessions: vi.fn(),
+  });
+  return create(initialConnection);
+}

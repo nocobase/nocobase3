@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import {
   defineAppConfig,
+  envBoolean,
   envString,
   type AppConfigDefinition,
 } from '@nocobase/app-server/config';
@@ -34,6 +35,7 @@ export const authenticationConfig: AppConfigDefinition<
         {
           enabled: Type.Boolean({ default: true }),
           autoSignIn: Type.Boolean({ default: false }),
+          disableSignUp: Type.Optional(Type.Boolean({ default: false })),
         },
         { additionalProperties: false },
       ),
@@ -50,10 +52,17 @@ export const authenticationConfig: AppConfigDefinition<
     { additionalProperties: true },
   ),
   defaults: {
-    emailAndPassword: { enabled: true, autoSignIn: false },
+    emailAndPassword: {
+      enabled: true,
+      autoSignIn: false,
+      disableSignUp: false,
+    },
     session: { storeSessionInDatabase: true },
   },
-  envMappings: { AUTH_SECRET: envString('secret') },
+  envMappings: {
+    AUTH_SECRET: envString('secret'),
+    AUTH_DISABLE_SIGN_UP: envBoolean('emailAndPassword.disableSignUp'),
+  },
 });
 
 const INSTALL_MODE_AUTH_SECRET = `nocobase-install-mode-${randomUUID()}-${randomUUID()}`;

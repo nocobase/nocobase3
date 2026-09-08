@@ -1,0 +1,4 @@
+{
+  "extends": "../tsconfig.server.json",
+  "include": ["migrations/**/*.ts", "seeds/**/*.ts"]
+}

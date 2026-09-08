@@ -37,14 +37,15 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
 
-| The requirement sounds like                              | Read the Skill for                    |
-| -------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication` |
-| Uploads, attachments, file fields                        | `@nocobase/app-plugin-file`           |
-| Translated text and language switching                   | `@nocobase/app-plugin-i18n`           |
+| The requirement sounds like                               | Read the Skill for                    |
+| --------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y"  | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages                             | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, per-user or per-record access         | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions                           | `@nocobase/app-plugin-authentication` |
+| User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
+| Uploads, attachments, file fields                         | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 

@@ -36,6 +36,7 @@ const FALLBACK_HUB_ENV = [
   '# Application',
   'APP_NAME=hub',
   'APP_BASE_PATH=/hub',
+  'AUTH_DISABLE_SIGN_UP=true',
   '',
 ].join('\n');
 
