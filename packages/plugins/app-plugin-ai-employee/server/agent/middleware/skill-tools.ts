@@ -13,7 +13,7 @@ import type { AgentRequest, ChatContextProvider } from '../types.js';
 export type SkillToolBindingProvider = Pick<ChatContextProvider, 'activeTools'>;
 
 export const skillToolBindingMiddleware = (
-  toolProvider: SkillToolBindingProvider,
+  chatContext: SkillToolBindingProvider,
   options: {
     request: AgentRequest;
     initialActiveToolNames: readonly string[];
@@ -24,7 +24,7 @@ export const skillToolBindingMiddleware = (
   const getAllowedToolNames = async () =>
     new Set([
       ...initialActiveToolNames,
-      ...(await toolProvider.activeTools(options.request)),
+      ...(await chatContext.activeTools(options.request)),
     ]);
 
   const getToolName = (tool: any) => {
