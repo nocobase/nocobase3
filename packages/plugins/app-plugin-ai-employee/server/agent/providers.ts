@@ -13,7 +13,7 @@ import type {
   ToolProvider,
 } from './types.js';
 import { BaseChatMessageConverters } from './chat-message-converters.js';
-import { AgentServiceError, DEFAULT_AGENT_FEATURES } from './types.js';
+import { DEFAULT_AGENT_FEATURES } from './types.js';
 
 const noopLogger = {
   level: 'silent',
@@ -289,12 +289,6 @@ export function createDefaultToolProvider(
 export function createAgentProviders(
   options: CreateAgentProvidersOptions,
 ): AgentProviders {
-  if (!options.llmProvider) {
-    throw new AgentServiceError(
-      'PROVIDER_ERROR',
-      'An LLM provider is required',
-    );
-  }
   const conversation = mergeConversation(
     options.conversation ?? createMemoryConversationProvider(),
     options.overrides?.conversation,

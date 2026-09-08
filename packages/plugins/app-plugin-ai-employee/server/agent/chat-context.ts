@@ -49,11 +49,17 @@ export class BaseChatContextProvider implements ChatContextProvider {
     return this.options.llmResolver.resolve(request);
   }
 
-  public getSystemPrompt(): Promise<string | undefined> {
+  public getSystemPrompt(
+    _messages: readonly import('@nocobase/ai-employee').AIMessageInput[],
+    _request: AgentRequest,
+    _llm: ResolvedAgentLLM,
+  ): Promise<string | undefined> {
     return Promise.resolve(this.options.systemPrompt);
   }
 
-  public discoveredTools(): Promise<readonly ToolsEntity[]> {
+  public discoveredTools(
+    _request: AgentRequest,
+  ): Promise<readonly ToolsEntity[]> {
     return Promise.resolve(this.options.tools ?? []);
   }
 

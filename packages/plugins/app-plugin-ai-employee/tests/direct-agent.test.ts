@@ -60,4 +60,33 @@ describe('direct AgentService', () => {
     expect(typeof conversation.messages.saveAssistantMessage).toBe('function');
     expect(typeof conversation.toolCalls.markPending).toBe('function');
   });
+
+  it('reuses one service across sequential and concurrent executions', async () => {
+    const service = createDirectAgentService({
+      llmProvider: createLLMProvider('reused'),
+      providerName: 'fixed-provider',
+      llmService: 'fixed-service',
+      model: 'fixed-model',
+      systemPrompt: 'You are direct.',
+    });
+    const request = {
+      userMessages: [
+        {
+          role: 'user',
+          content: { type: 'text', content: 'Hi' },
+          metadata: {},
+        } as any,
+      ],
+    };
+
+    const first = (await service.invoke(request)) as any;
+    const [second, third] = (await Promise.all([
+      service.invoke(request),
+      service.invoke(request),
+    ])) as any[];
+
+    expect(first.messages.at(-1).content).toBe('reused');
+    expect(second.messages.at(-1).content).toBe('reused');
+    expect(third.messages.at(-1).content).toBe('reused');
+  });
 });

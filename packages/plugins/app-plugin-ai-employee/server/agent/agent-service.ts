@@ -5,13 +5,12 @@ import { buildTool } from '@nocobase/ai-employee';
 import type { AgentContext, LLMProvider } from '@nocobase/ai-employee';
 import type {
   AgentInterruptAction,
-  AgentLLMIdentity,
-  AgentMessageConversionContext,
   AgentOperation,
   AgentProviders,
   AgentRequest,
   AgentStreamEvent,
   PreparedAgentContext,
+  ResolvedAgentLLM,
 } from './types.js';
 import { AgentServiceError } from './types.js';
 import { normalizeAgentError } from './errors.js';
@@ -146,33 +145,25 @@ export class AgentService {
     return this.executeInvoke('fork', request, agentContext);
   }
 
-  private async resolveLLM(_request: AgentRequest): Promise<{
-    provider: LLMProvider;
-    identity: AgentLLMIdentity;
-  }> {
-    const provider = this.providers.llmProvider;
-    const identity = this.providers.llmIdentity;
-    return { provider, identity };
+  private resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
+    return this.providers.chatContext.resolveLLM(request);
   }
-
   private async prepare(
     operation: AgentOperation,
     request: AgentRequest,
-    llmContext: AgentMessageConversionContext,
+    llm: ResolvedAgentLLM,
     agentContext?: AgentContext,
   ): Promise<PreparedAgentContext> {
-    const {
-      conversation,
-      chatContext,
-      tools: toolProvider,
-      features,
-    } = this.providers;
+    const { conversation, chatContext, features } = this.providers;
     const shouldLoadHistory = conversation.messages.shouldLoadHistory(request);
     const history = shouldLoadHistory
       ? await conversation.messages.load(request.messageId)
       : [];
     const allMessages = [...history, ...(request.userMessages ?? [])];
-    const formatted = await chatContext.formatMessages(allMessages, llmContext);
+    const formatted = await this.providers.chatMessageConverters.formatMessages(
+      allMessages,
+      llm,
+    );
     const formattedSystemPrompt = formatted
       .filter((message: any) => message?.role === 'system')
       .map((message: any) => message.content)
@@ -183,22 +174,22 @@ export class AgentService {
     );
     const systemPrompt = features.contextEnrichment
       ? [
-          await chatContext.getSystemPrompt(allMessages, request),
+          await chatContext.getSystemPrompt(allMessages, request, llm),
           formattedSystemPrompt,
         ]
           .filter(Boolean)
           .join('\n\n') || undefined
       : formattedSystemPrompt || undefined;
-    const sourceTools = features.tools ? await toolProvider.listTools() : [];
-    const baseToolNames = features.skills
-      ? await toolProvider.getBaseToolNames(sourceTools)
+    const sourceTools = features.tools
+      ? await chatContext.discoveredTools(request)
+      : [];
+    const initialActiveToolNames = features.skills
+      ? await chatContext.activeTools(request)
       : new Set(sourceTools.map((tool) => tool.definition.name));
-    const resolvedTools = llmContext.provider.resolveTools(
-      sourceTools.map(buildTool),
-    );
+    const resolvedTools = llm.provider.resolveTools(sourceTools.map(buildTool));
     let thread = await conversation.threads.current();
     if (conversation.threads.shouldFork(operation, request)) {
-      thread = await conversation.threads.fork(llmContext.provider);
+      thread = await conversation.threads.fork(llm.provider);
     }
     const state = shouldLoadHistory
       ? conversation.threads.buildInitialState(history)
@@ -230,7 +221,7 @@ export class AgentService {
           : undefined,
       writer: request.writer,
       signal: request.signal,
-      ...(await chatContext.getExecutionConfig(request)),
+      ...(await chatContext.getExecutionConfig(request, llm)),
       metadata: { currentConversation: conversation.identity },
     };
     if (!config.configurable) delete config.configurable;
@@ -239,7 +230,9 @@ export class AgentService {
       systemPrompt,
       tools: resolvedTools,
       sourceTools,
-      baseToolNames,
+      baseToolNames: new Set(initialActiveToolNames),
+      initialActiveToolNames,
+      llm,
       config,
       state,
       thread,
@@ -250,10 +243,10 @@ export class AgentService {
         currentConversation: conversation.identity,
         messageId: request.messageId,
       },
-      providerName: llmContext.providerName,
-      llmService: llmContext.llmService,
-      model: llmContext.model,
-      provider: llmContext.provider,
+      providerName: llm.providerName,
+      llmService: llm.llmService,
+      model: llm.model,
+      provider: llm.provider,
     };
   }
 
@@ -292,12 +285,13 @@ export class AgentService {
     const { conversation } = this.providers;
     const { controller, signal, token } = this.begin(request);
     await conversation.beforeExecution('invoking');
+    let llm: ResolvedAgentLLM | undefined;
     try {
-      const llm = await this.resolveLLM(request);
+      llm = await this.resolveLLM(request);
       const prepared = await this.prepare(
         operation,
         { ...request, signal },
-        { ...llm.identity, provider: llm.provider },
+        llm,
         agentContext,
       );
       const result = await this.create(prepared).invoke(
@@ -318,6 +312,7 @@ export class AgentService {
       await conversation.afterExecution('invoking', {
         aborted: signal.aborted,
       });
+      await llm?.dispose?.();
     }
   }
 
@@ -350,7 +345,7 @@ export class AgentService {
       prepared = await this.prepare(
         operation,
         { ...request, signal },
-        { ...llm.identity, provider: llm.provider },
+        llm,
         agentContext,
       );
       const stream = await this.create(prepared).stream(
@@ -453,7 +448,7 @@ export class AgentService {
               messageIds.set(current.sessionId, chunks.body.messageId);
             await conversation.streamCache.skipped();
             const metadata = chunks.body?.id
-              ? this.providers.llmIdentity.getResponseMetadata?.(chunks.body.id)
+              ? prepared.llm?.takeResponseMetadata?.(chunks.body.id)
               : undefined;
             if (metadata && chunks.body?.messageId)
               await conversation.updateAssistantResponseMetadata(
@@ -552,10 +547,11 @@ export class AgentService {
       }
       if (signal.aborted) {
         if (gathered && prepared) {
-          const value = this.providers.chatContext.convertAIMessage(
-            gathered,
-            prepared,
-          );
+          const value =
+            await this.providers.chatMessageConverters.assistant.toStored(
+              gathered,
+              prepared,
+            );
           if (value) {
             value.metadata = {
               ...(value.metadata ?? {}),
@@ -579,6 +575,7 @@ export class AgentService {
         aborted: signal.aborted,
       });
       await conversation.streamCache.clear();
+      await prepared?.llm?.dispose?.();
     }
   }
 }

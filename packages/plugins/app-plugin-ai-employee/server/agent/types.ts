@@ -417,9 +417,12 @@ export interface AgentProviders {
   conversation: ConversationProvider;
   chatContext: ChatContextProvider;
   chatMessageConverters: ChatMessageConverters;
+  /** @deprecated Removed after middleware migration. */
   tools: ToolProvider;
-  llmProvider: LLMProvider;
-  llmIdentity: AgentLLMIdentity;
+  /** @deprecated Removed after AgentService migration. */
+  llmProvider?: LLMProvider;
+  /** @deprecated Removed after AgentService migration. */
+  llmIdentity?: AgentLLMIdentity;
   checkpointer?: BaseCheckpointSaver | boolean;
   features: AgentFeatureOptions;
 }
@@ -446,8 +449,10 @@ export interface AgentProviderOverrides {
 }
 
 export interface CreateAgentProvidersOptions {
-  llmProvider: LLMProvider;
-  llmIdentity: AgentLLMIdentity;
+  /** @deprecated Removed after AgentService migration. */
+  llmProvider?: LLMProvider;
+  /** @deprecated Removed after AgentService migration. */
+  llmIdentity?: AgentLLMIdentity;
   conversation?: ConversationProvider;
   chatContext: ChatContextProvider;
   chatMessageConverters?: ChatMessageConverters;
