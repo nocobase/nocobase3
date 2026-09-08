@@ -130,6 +130,20 @@ describe('fixed AgentService contracts', () => {
     );
     expect(runtime).not.toMatch(/getActivatedSkillToolNames|getToolsMap/);
     expect(runtime).not.toMatch(/shouldInterruptToolCall|isAutoCall/);
+    expect(read('agent/ai-employee/providers.ts')).not.toMatch(
+      /activeProvider|activeIdentity/,
+    );
+    expect(production).not.toMatch(
+      /Object\.assign\([^)]*(chatContext|converter)/,
+    );
+    expect(production).not.toMatch(/\.\.\.(options\.)?chatContext/);
+    expect(read('agent/ai-employee/message-converters.ts')).not.toContain(
+      'AIEmployeeCapabilities',
+    );
+    const skillMiddleware = read('agent/middleware/skill-tools.ts');
+    expect(skillMiddleware).toContain('activeTools(options.request)');
+    expect(skillMiddleware).toContain('wrapModelCall');
+    expect(skillMiddleware).toContain('wrapToolCall');
   });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
