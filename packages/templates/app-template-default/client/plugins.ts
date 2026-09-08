@@ -16,8 +16,7 @@ import workflow from '@nocobase/app-plugin-workflow/client';
 import notification from '@nocobase/app-plugin-notification/client';
 import systemInfo from '@nocobase/app-plugin-system-info/client';
 import repositoryExample from '@nocobase/app-plugin-repository-example/client';
-import fileRepository from '@nocobase/app-plugin-file-repository/client';
-import fileRepositoryExample from '@nocobase/app-plugin-file-repository-example/client';
+import appFileExample from '@nocobase/app-file-example/client';
 
 // Array order is contribution order. A plugin is enabled by appearing in this
 // list; removing its entry and its import disables it.
@@ -36,8 +35,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   notification(),
   systemInfo(),
   repositoryExample(),
-  fileRepository(),
-  fileRepositoryExample(),
+  appFileExample(),
 ]);
 
 export default clientPlugins;

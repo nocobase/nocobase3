@@ -12,6 +12,9 @@
     "templateKind": "app",
     "defaultTemplateVersion": "1.0.0-beta.17",
     "plugins": {
+      "@nocobase/app-file-example": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-ai-employee": {
         "enabled": true
       },
@@ -31,12 +34,6 @@
         "enabled": true
       },
       "@nocobase/app-plugin-file": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-file-repository": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-file-repository-example": {
         "enabled": true
       },
       "@nocobase/app-plugin-i18n": {
@@ -100,8 +97,6 @@
     "@nocobase/app-plugin-cli-example": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
-    "@nocobase/app-plugin-file-repository": "workspace:^",
-    "@nocobase/app-plugin-file-repository-example": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
@@ -278,6 +273,7 @@
     ]
   },
   "dependencies": {
-    "@nocobase/app-plugin-repository-example": "workspace:^"
+    "@nocobase/app-plugin-repository-example": "workspace:^",
+    "@nocobase/app-file-example": "workspace:^"
   }
 }

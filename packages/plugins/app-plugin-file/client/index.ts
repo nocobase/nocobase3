@@ -1,8 +1,5 @@
-export * from './types.js';
-export * from './files-client.js';
-export * from './lib/file-preview.js';
-export * from './components/index.js';
-export { FILE_INVENTORY_RESOURCE } from '../shared/settings/inventory.js';
-
-// The registration factory an application lists in its client/plugins.ts.
 export { default } from './plugin.js';
+export { ClientFileRepositoryManager } from './manager.js';
+export type { ClientFileRepository, ClientUploadOptions } from './manager.js';
+export { clientFileRepositoryManagerToken } from './token.js';
+export type * from '../shared/types.js';

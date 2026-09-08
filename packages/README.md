@@ -25,7 +25,7 @@ These packages know what a NocoBase application is, which is what separates them
 
 ## `plugins/`
 
-Plugins that contribute real product functionality: a feature is enabled by installing one. `app-plugin-file` adds file storage with its routes and UI; `app-plugin-authentication` adds sign-in.
+Plugins that contribute real product functionality: a feature is enabled by installing one. `app-plugin-file` provides file Repository services, route factories, and editable Registry UI; `app-plugin-authentication` adds sign-in.
 
 Create one with `pnpm plugin:create`, which scaffolds it here.
 

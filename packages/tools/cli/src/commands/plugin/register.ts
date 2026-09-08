@@ -46,7 +46,7 @@ export default class PluginRegister extends Command {
   static override args = {
     name: Args.string({
       description:
-        'Plugin to register: a short name such as audit-log, or a full @nocobase/app-plugin-* package name.',
+        'Plugin to register: a short name such as audit-log, or a full @nocobase/* package name.',
       required: true,
     }),
   };

@@ -1,7 +1,10 @@
 ---
-'@nocobase/app-plugin-file-repository': patch
-'@nocobase/app-plugin-file-repository-example': patch
+'@nocobase/app-plugin-file': minor
+'@nocobase/app-file-example': patch
 '@nocobase/app-template-default': patch
+'@nocobase/nb3-cli': patch
 ---
 
-Add File Repository Client and Server services, multipart uploads and configurable stream/redirect route helpers. Keep the attachments migration, concrete API configuration and development page in a separate example plugin, and register both plugins in the default application.
+Replace the File plugin's legacy backend and client protocol with File Repository services, multipart uploads, and configurable content routes. Preserve its editable Registry components and adapt them to ClientFileRepository and contentUrl. Remove the separate File Repository package, rename its example to app-file-example, update application registration and Agent integration guidance, and accept explicit NocoBase package names in plugin lifecycle commands.
+
+This is a breaking replacement of the old File API: access-token routes, inventory settings, FilesClient, and runtime component exports are removed. Applications own file collections and route security; metadata deletion retains storage objects. The example migration remains unchanged.

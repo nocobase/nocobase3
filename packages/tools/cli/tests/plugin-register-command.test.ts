@@ -39,10 +39,12 @@ async function createAppWithInstalledPlugin({
   client = true,
   server = true,
   skills = true,
+  packageName = '@nocobase/app-plugin-audit-log',
 }: {
   client?: boolean;
   server?: boolean;
   skills?: boolean;
+  packageName?: string;
 } = {}): Promise<string> {
   const appRoot = await mkdtemp(
     path.join(os.tmpdir(), 'nb3-register-command-'),
@@ -66,14 +68,14 @@ async function createAppWithInstalledPlugin({
     appRoot,
     'node_modules',
     '@nocobase',
-    'app-plugin-audit-log',
+    packageName.split('/')[1]!,
   );
   await mkdir(pluginRoot, { recursive: true });
   await writeFile(
     path.join(pluginRoot, 'package.json'),
     `${JSON.stringify(
       {
-        name: '@nocobase/app-plugin-audit-log',
+        name: packageName,
         version: '1.0.0',
         exports: {
           ...(client ? { './client': './client/index.js' } : {}),
@@ -88,7 +90,7 @@ async function createAppWithInstalledPlugin({
     const skillRoot = path.join(
       pluginRoot,
       'skills',
-      'nocobase-app-plugin-audit-log',
+      'nocobase-' + packageName.split('/')[1],
     );
     await mkdir(skillRoot, { recursive: true });
     await writeFile(path.join(skillRoot, 'SKILL.md'), '# Audit log\n');
@@ -98,6 +100,60 @@ async function createAppWithInstalledPlugin({
 }
 
 describe('app plugin register command', () => {
+  it('registers, inspects, syncs and unregisters an explicitly named example package', async () => {
+    const packageName = '@nocobase/app-file-example';
+    const appRoot = await createAppWithInstalledPlugin({ packageName });
+    const registered = await runCommand(config, 'plugin:register', [
+      packageName,
+      '--dir',
+      appRoot,
+      '--no-install',
+      '--json',
+    ]);
+    expect(JSON.parse(registered.stdout)).toMatchObject({
+      ok: true,
+      status: 'success',
+    });
+    expect(
+      await readFile(path.join(appRoot, 'client/plugins.ts'), 'utf8'),
+    ).toContain('appFileExample()');
+    const inspected = await runCommand(config, 'plugin:inspect', [
+      packageName,
+      '--dir',
+      appRoot,
+      '--json',
+    ]);
+    expect(JSON.parse(inspected.stdout)).toMatchObject({ ok: true });
+    const synced = await runCommand(config, 'plugin:skills:sync', [
+      '--plugin',
+      packageName,
+      '--dir',
+      appRoot,
+      '--json',
+    ]);
+    expect(JSON.parse(synced.stdout)).toMatchObject({ ok: true });
+    const skillDirectory = path.join(
+      appRoot,
+      '.agents/skills/nocobase-app-file-example',
+    );
+    expect(existsSync(path.join(skillDirectory, 'SKILL.md'))).toBe(true);
+    const removed = await runCommand(config, 'plugin:unregister', [
+      packageName,
+      '--dir',
+      appRoot,
+      '--no-install',
+      '--json',
+    ]);
+    expect(JSON.parse(removed.stdout)).toMatchObject({
+      ok: true,
+      status: 'success',
+    });
+    expect(existsSync(skillDirectory)).toBe(false);
+    expect(
+      await readFile(path.join(appRoot, 'server/plugins.ts'), 'utf8'),
+    ).not.toContain(packageName);
+  });
+
   it('keeps every registration surface unchanged during a dry run', async () => {
     const appRoot = await createAppWithInstalledPlugin();
     const manifestPath = path.join(appRoot, 'package.json');

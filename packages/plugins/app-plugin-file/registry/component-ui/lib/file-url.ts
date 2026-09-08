@@ -20,14 +20,3 @@ export function fileUrlCredentials(url: string): RequestCredentials {
     ? 'include'
     : 'omit';
 }
-
-export function publicDownloadUrl(url: string): string | undefined {
-  const safeUrl = resolveSafeFileUrl(url);
-  if (!safeUrl) return undefined;
-  const parsed = new URL(safeUrl, window.location.href);
-  if (parsed.origin === window.location.origin) {
-    parsed.searchParams.set('download', '1');
-    return parsed.toString();
-  }
-  return safeUrl;
-}
