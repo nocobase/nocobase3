@@ -208,7 +208,7 @@ export default function KnowledgeBaseWorkspacePage() {
         record.filename ||
         (title ? `${title}${suffix}` : `document-${downloadable.id}${suffix}`);
       const stream = await nocobaseClient.stream(
-        'aiKnowledgeBaseDocs:download',
+        'ai/aiKnowledgeBaseDocs:download',
         {
           method: 'GET',
           query: { filterByTk: downloadable.id },

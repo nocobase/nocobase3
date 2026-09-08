@@ -78,7 +78,7 @@ test('document downloads use the authenticated streaming endpoint', () => {
     readRegistry('workspace/page/knowledge-base-workspace-page.tsx'),
   ]) {
     expect(source).toMatch(
-      /nocobaseClient\.stream\(\s*['"]aiKnowledgeBaseDocs:download['"]/,
+      /nocobaseClient\.stream\(\s*['"]ai\/aiKnowledgeBaseDocs:download['"]/,
     );
     expect(source).toMatch(/query: \{ filterByTk: downloadable\.id \}/);
     expect(source).toMatch(
