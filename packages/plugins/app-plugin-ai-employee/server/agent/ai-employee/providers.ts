@@ -18,6 +18,7 @@ import type {
   ToolProvider,
 } from '../types.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
+import { createAIChatConversation } from './ai-chat-conversation.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   convertAIMessage,
@@ -107,6 +108,12 @@ export function createAIEmployeeConversationProvider(
   const agentContext = options.agentContext;
   const database = options.database;
   const sessionId = options.sessionId;
+  const chatConversation = createAIChatConversation({
+    repositories: options.repositories,
+    database,
+    snowflake: options.snowflake,
+    sessionId,
+  });
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
   const cache = options.llmStreamCachedManager.getCached(sessionId);
@@ -142,46 +149,38 @@ export function createAIEmployeeConversationProvider(
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
     toolCalls,
     messages: {
-      load: (messageId) =>
-        runtime.aiChatConversation.listMessages({ messageId }),
-      get: (messageId) => runtime.aiChatConversation.getMessage(messageId),
+      load: (messageId) => chatConversation.listMessages({ messageId }),
+      get: (messageId) => chatConversation.getMessage(messageId),
       add: ((messages: any) =>
-        runtime.aiChatConversation.addMessages(
+        chatConversation.addMessages(
           messages,
         )) as ConversationProvider['messages']['add'],
-      remove: (messageId) =>
-        runtime.aiChatConversation.removeMessages({ messageId }),
+      remove: (messageId) => chatConversation.removeMessages({ messageId }),
       saveUserMessages: async (messageId, messages, thread) =>
-        runtime.aiChatConversation.withTransaction(
-          async (target, transaction) => {
-            if (thread) await runtime.updateThread(transaction, thread);
-            if (messageId && (await target.getMessage(messageId)))
-              await target.removeMessages({ messageId });
-            if (messages.length) await target.addMessages(messages);
-          },
-        ),
+        chatConversation.withTransaction(async (target, transaction) => {
+          if (thread) await runtime.updateThread(transaction, thread);
+          if (messageId && (await target.getMessage(messageId)))
+            await target.removeMessages({ messageId });
+          if (messages.length) await target.addMessages(messages);
+        }),
       saveAssistantMessage: async (message, calls) =>
-        runtime.aiChatConversation.withTransaction(
-          async (target, transaction) => {
-            const saved = await target.addMessages(message);
-            const initialized = calls.length
-              ? await runtime.initToolCall(transaction, saved.messageId, calls)
-              : [];
-            return {
-              message: saved,
-              initializedToolCalls: initialized,
-            };
-          },
-        ),
+        chatConversation.withTransaction(async (target, transaction) => {
+          const saved = await target.addMessages(message);
+          const initialized = calls.length
+            ? await runtime.initToolCall(transaction, saved.messageId, calls)
+            : [];
+          return {
+            message: saved,
+            initializedToolCalls: initialized,
+          };
+        }),
       saveToolMessages: async (messages, messageId, ids) =>
-        runtime.aiChatConversation.withTransaction(
-          async (target, transaction) => {
-            await target.addMessages(messages);
-            await runtime.confirmToolCall(transaction, messageId, ids);
-          },
-        ),
+        chatConversation.withTransaction(async (target, transaction) => {
+          await target.addMessages(messages);
+          await runtime.confirmToolCall(transaction, messageId, ids);
+        }),
       saveInterruptedAssistantMessage: (message) =>
-        runtime.aiChatConversation.withTransaction((target) =>
+        chatConversation.withTransaction((target) =>
           target.addMessages(message),
         ),
       shouldLoadHistory: (request) =>
@@ -335,9 +334,6 @@ export function createAIEmployeeChatContextProvider(
     formatMessages: (messages, model) =>
       runtime.formatMessages({ messages, provider: model.provider }),
     getSystemPrompt: (messages) => runtime.getSystemPrompt(messages),
-    getExecutionContext: async (request) => ({
-      ...(request.context ?? {}),
-    }),
     getExecutionConfig: async () => ({
       callbacks: state.activeProvider
         ? [
@@ -371,9 +367,6 @@ export function createAIEmployeeChatContextProvider(
         model: prepared.model,
         toolMessage: message,
       }),
-    getUserMessageCount: (request) =>
-      (request.userMessages ?? []).filter((message) => message.role === 'user')
-        .length,
   };
 }
 

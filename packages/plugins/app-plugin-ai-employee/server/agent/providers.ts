@@ -296,7 +296,6 @@ export function createDefaultChatContextProvider(
         });
       }),
     getSystemPrompt: async () => options.systemPrompt,
-    getExecutionContext: async (request) => request.context ?? {},
     getExecutionConfig: async () => ({}),
     convertAIMessage: (message, context) =>
       ({
@@ -334,9 +333,6 @@ export function createDefaultChatContextProvider(
           toolCallId: message.tool_call_id,
         },
       }) as AIMessageInput,
-    getUserMessageCount: (request) =>
-      (request.userMessages ?? []).filter((message) => message.role === 'user')
-        .length,
   };
 }
 

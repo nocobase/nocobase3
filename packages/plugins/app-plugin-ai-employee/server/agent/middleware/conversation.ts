@@ -99,8 +99,11 @@ export const conversationMiddleware = (
         (message) => message.type === 'human',
       );
       const currentHumanMessageIndex = humanMessages.length;
-      const userMessageCount = runtime.context?.agentRequest
-        ? chatContext.getUserMessageCount(runtime.context.agentRequest)
+      const agentRequest = runtime.context?.agentRequest;
+      const userMessageCount = agentRequest
+        ? (agentRequest.userMessages ?? []).filter(
+            (message: AIMessageInput) => message.role === 'user',
+          ).length
         : humanMessages.length;
       const userMessages = (
         userMessageCount ? humanMessages.slice(-userMessageCount) : []

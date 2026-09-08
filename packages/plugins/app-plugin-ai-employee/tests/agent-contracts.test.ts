@@ -49,6 +49,31 @@ describe('fixed AgentService contracts', () => {
     expect(prepared).not.toMatch(/\bmiddleware\??:/);
   });
 
+  it('keeps request-derived execution details out of chat context providers', () => {
+    const providerSources = [
+      'agent/providers.ts',
+      'agent/ai-employee/providers.ts',
+      'agent/types.ts',
+    ]
+      .map(read)
+      .join('\n');
+    expect(providerSources).not.toContain('getExecutionContext');
+    expect(providerSources).not.toContain('getUserMessageCount');
+    expect(read('agent/agent-service.ts')).toContain(
+      '...(request.context ?? {})',
+    );
+  });
+
+  it('keeps AI chat conversation ownership in the conversation provider', () => {
+    const runtime = read('agent/ai-employee/runtime.ts');
+    const providers = read('agent/ai-employee/providers.ts');
+    expect(runtime).not.toContain('AIChatConversation');
+    expect(runtime).not.toContain('createAIChatConversation');
+    expect(runtime).not.toContain('aiChatConversation');
+    expect(providers).toContain(
+      'const chatConversation = createAIChatConversation({',
+    );
+  });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
     const runtime = read('agent/ai-employee/runtime.ts');

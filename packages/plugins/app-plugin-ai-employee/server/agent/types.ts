@@ -358,7 +358,6 @@ export interface ChatContextProvider {
     messages: AIMessageInput[],
     request: AgentRequest,
   ): Promise<string | undefined>;
-  getExecutionContext(request: AgentRequest): Promise<Record<string, unknown>>;
   getExecutionConfig(request: AgentRequest): Promise<Record<string, unknown>>;
   convertAIMessage(
     message: LangChainAIMessage,
@@ -372,7 +371,6 @@ export interface ChatContextProvider {
     message: ToolMessage,
     context: AgentMessageConversionContext,
   ): AIMessageInput;
-  getUserMessageCount(request: AgentRequest): number;
 }
 
 export interface ToolProvider {

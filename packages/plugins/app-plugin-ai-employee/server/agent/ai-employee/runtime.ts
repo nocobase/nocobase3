@@ -29,8 +29,7 @@ import type { DatabaseConnection } from '@nocobase/db';
 import { LLMProvider } from '@nocobase/ai-employee';
 import { getSystemPrompt } from '../../agent/ai-employee/prompts.js';
 import _ from 'lodash';
-import { AIChatConversation, AIMessageInput } from '@nocobase/ai-employee';
-import { createAIChatConversation } from '../../agent/ai-employee/ai-chat-conversation.js';
+import { AIMessageInput } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import {
@@ -90,7 +89,6 @@ export class AIEmployeeCapabilities {
   sessionId: string;
   from = 'main-agent';
   employee: any;
-  aiChatConversation: AIChatConversation;
   skillSettings?: Record<string, any>;
   userMessageCount = 0;
 
@@ -148,12 +146,6 @@ export class AIEmployeeCapabilities {
     this.documentLoaders = documentLoaders;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
-    this.aiChatConversation = createAIChatConversation({
-      repositories: this.repositories,
-      database: this.database,
-      snowflake: this.snowflake,
-      sessionId: this.sessionId,
-    });
     this.skillSettings = skillSettings;
     this.model = model;
     this.from = from;
@@ -216,12 +208,6 @@ export class AIEmployeeCapabilities {
       background = this.systemMessage;
     }
 
-    const aiMessages = await this.aiChatConversation.listMessages();
-    const workContextBackground =
-      await this.workContextHandler.background(aiMessages);
-    if (workContextBackground?.length) {
-      background = `${background}\n${workContextBackground.join('\n')}`;
-    }
     const addSystemPrompt = userMessages?.filter((it) => it.role == 'system');
     if (addSystemPrompt.length) {
       background = `${background}\n${addSystemPrompt.map((it) => it.content).join('\n')}`;

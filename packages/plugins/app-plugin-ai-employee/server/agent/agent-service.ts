@@ -221,10 +221,9 @@ export class AgentService {
       : messages.length
         ? { messages, ...(state ?? {}) }
         : null;
-    const context = await chatContext.getExecutionContext(request);
     const config = {
       context: {
-        ...context,
+        ...(request.context ?? {}),
         agentContext,
         agentRequest: request,
         decisions: request.userDecisions,
