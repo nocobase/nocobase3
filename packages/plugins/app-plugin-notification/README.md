@@ -21,6 +21,14 @@ Provider directly, because that bypasses persistence, retry, and logs.
 Extension plugins resolve `notificationExtensionRegistryToken` instead; the
 manager lifecycle and test-route surface are internal to the core plugin.
 
+Every public `send()` requires a stable caller-owned `idempotencyKey`. Reusing
+the key with equivalent input returns the original Notification; reusing it
+with different input is rejected. Consumers can query current state with
+`getByIdempotencyKey()` or `getNotification()`, use `onStatusChanged()` as a
+non-blocking process-local convenience, and call `retryDelivery()` for terminal
+failures or explicitly resolved unknown submissions. Provider capabilities
+determine whether an unknown retry is safe without duplicate-risk confirmation.
+
 ## Runtime requirements
 
 Register both the Client and Server entries in the target App. The Server

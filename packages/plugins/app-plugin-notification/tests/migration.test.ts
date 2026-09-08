@@ -6,6 +6,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202608190001_create_notification_tables.js';
+import idempotencyMigration from '../database/migrations/202609080001_create_notification_idempotency.js';
 
 interface SqliteClient {
   readonly schema: {
@@ -56,8 +57,28 @@ describe('notification database migration', () => {
           'notification_delivery_attempts',
           'error_message',
         ),
+        client.schema.hasColumn('notification_dispatches', 'idempotency_key'),
+        client.schema.hasColumn(
+          'notification_dispatches',
+          'request_fingerprint',
+        ),
+        client.schema.hasColumn('notification_deliveries', 'retry_resolution'),
+        client.schema.hasColumn(
+          'notification_delivery_attempts',
+          'retry_resolution',
+        ),
       ]),
-    ).resolves.toEqual([true, true]);
+    ).resolves.toEqual([true, true, true, true, true, true]);
+    await expect(
+      client.raw('PRAGMA index_list(notification_dispatches)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'notification_dispatch_idempotency_unique',
+          unique: 1,
+        }),
+      ]),
+    );
     await expect(
       client.raw('PRAGMA index_list(notification_deliveries)'),
     ).resolves.toEqual(
@@ -118,10 +139,20 @@ async function migrateUp(database: DatabaseManager): Promise<void> {
     query: connection.query,
     connection,
   });
+  await idempotencyMigration.up({
+    builder: connection.builder,
+    query: connection.query,
+    connection,
+  });
 }
 
 async function migrateDown(database: DatabaseManager): Promise<void> {
   const connection = database.connection();
+  await idempotencyMigration.down?.({
+    builder: connection.builder,
+    query: connection.query,
+    connection,
+  });
   await migration.down?.({
     builder: connection.builder,
     query: connection.query,

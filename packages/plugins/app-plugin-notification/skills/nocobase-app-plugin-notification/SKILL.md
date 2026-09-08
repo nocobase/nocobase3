@@ -69,8 +69,8 @@ Rules:
 2. Inspect the installed packages, public declarations, enabled plugin list, `notification` configuration, migrations, queue runtime, and `notificationServiceToken`. Treat sibling monorepo source as a development aid, not an installed-app dependency.
 3. For runtime or application setup, follow [Integration and Configuration](references/integration-and-configuration.md). Register all required definitions before the manager creates a Channel runtime.
 4. For a send, follow [Sending Notifications](references/sending-notifications.md). Resolve the notification service from the application's shared container and validate each recipient against every requested Channel.
-5. Record the returned Notification id and Delivery ids. The initial result proves persistence and scheduling only.
-6. Read back `notification.logs.get(id)` until the relevant Delivery reaches a terminal state or a bounded observation window ends.
+5. Derive and persist a stable business `idempotencyKey`; every retry of the same logical send must reuse it. Record the returned Notification id and Delivery ids. The initial result proves persistence and scheduling only.
+6. Observe `onStatusChanged()` for process-local convenience and retain `getByIdempotencyKey()` or `getNotification()` as the durable query path until the relevant Delivery reaches a terminal state or a bounded observation window ends.
 7. For failed, retried, stuck, partial, or unknown outcomes, follow [Delivery Diagnostics](references/delivery-diagnostics.md) from Notification to Delivery to Attempt and then correlated server logs.
 8. For a new integration type, follow [Channel and Provider Extensions](references/channel-and-provider-extensions.md). Keep rendering/address resolution in the Channel and external submission in the Provider.
 9. Run package-local lint, typecheck, test, and build for every package changed; add integration tests for allowed and denied recipients, Provider errors, retry behavior, and credential redaction where applicable.
@@ -92,7 +92,7 @@ Rules:
 - Keep SMTP passwords, API keys, Webhook URLs, signing secrets, message bodies, and recipient snapshots out of source control and logs.
 - Use authenticated, authorized routes for logs and Provider testing. Keep the test surface disabled in production unless explicitly needed for a controlled verification.
 - Preserve Provider `name` and `type` while Deliveries are pending. A missing or changed Provider makes the persisted Delivery fail; it does not safely reroute.
-- Treat `unknown` as potentially delivered. Check the external Provider using the Attempt metadata before deciding whether a new send is safe.
+- Treat `unknown` as potentially delivered. Check the external Provider using the Attempt metadata before calling `retryDelivery`; require declared Provider idempotency, confirmed non-delivery, or explicit duplicate-risk acceptance.
 - Require explicit secondary confirmation before bulk sends, production Provider tests, changing a live Provider identity, or resending an `unknown` Delivery.
 
 Secondary confirmation template:
@@ -119,14 +119,14 @@ Rollback guidance:
 - Every requested recipient is supported by every selected Channel; one allowed and one denied case are tested.
 - `send()` uses the shared `notificationServiceToken`, not a second manager or direct Provider call.
 - Provider routing uses names from enabled configuration and `all` fan-out is intentional.
-- Every real send records its Notification id and reads back Delivery/Attempt status.
+- Every real send supplies a stable `idempotencyKey`, records its Notification id, and reads back Delivery/Attempt status.
 - `accepted`, `failed` with `nextRunAt`, and `unknown` are interpreted according to the runtime contract.
 - Log routes enforce authentication and `page:notification.logs` `access`; test routes separately enforce authentication, `notification:test` `send`, the feature flag, and the anti-CSRF header.
 - Package lint, typecheck, tests, and build pass for every changed notification package.
 
 # Minimal Test Scenarios
 
-1. Valid send: one supported recipient and enabled Channel creates a Notification and reaches an accepted Delivery in a fake Provider.
+1. Valid send: one supported recipient and enabled Channel creates a Notification and reaches an accepted Delivery in a fake Provider; replaying the same key returns it without a second Provider call.
 2. Valid fan-out: multiple recipients/Channels or `strategy: 'all'` create the expected independent Deliveries with stable Provider identities.
 3. Invalid input: an empty recipient/Channel list or unknown Provider is rejected before an external Provider call.
 4. Runtime failure: missing definitions, queue failure, retryable Provider failure, and submission timeout produce the documented persisted/reconciled outcome.

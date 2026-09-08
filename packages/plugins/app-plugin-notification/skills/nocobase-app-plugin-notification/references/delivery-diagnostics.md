@@ -41,7 +41,7 @@ Treat every Delivery independently. Identify exactly which recipient/Channel/Pro
 
 ### Unknown
 
-Do not retry automatically. Use Provider message id when available, external Provider dashboards, target inbox/group evidence, and timestamps to determine whether submission happened. If proof remains unavailable, report an indeterminate external effect and ask the business owner whether a possible duplicate is safer than a possible omission.
+Do not retry automatically. Use Provider message id when available, external Provider dashboards, target inbox/group evidence, and timestamps to determine whether submission happened. `retryDelivery` permits a safe retry when the Provider's declared `deliveryId` idempotency is still valid. Otherwise supply either `confirmed_not_delivered` or `accept_duplicate_risk` with an auditable reason. If proof remains unavailable, report an indeterminate external effect and ask the business owner whether a possible duplicate is safer than a possible omission.
 
 ## Common symptoms
 
@@ -64,7 +64,8 @@ Do not retry automatically. Use Provider message id when available, external Pro
 - Correct configuration or restore a missing definition, restart through the normal lifecycle, and allow reconciliation to process pending/retryable Deliveries.
 - Do not rewrite Provider name/type on persisted Deliveries.
 - Do not mark a failed or unknown Delivery accepted by hand.
-- A terminal failed Delivery has no public retry API. After correcting the cause, make a new business-authorized send and link it to the same source reference when useful.
+- After correcting the cause, retry a terminal failed Delivery with `retryDelivery({ deliveryId })`; do not retry one that already has `nextRunAt`. An unsupported recipient cannot be repaired in-place and requires a corrected new logical send.
+- For unknown, use `retryDelivery` only under declared Provider idempotency or with an explicit non-delivery/duplicate-risk resolution. Never create a new Notification merely to bypass this gate.
 - Preserve all prior history and document possible duplicates for any recovery after an unknown submission.
 
 ## Diagnostic report

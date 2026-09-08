@@ -19,6 +19,8 @@ export interface NotificationErrorRecord {
 
 export interface NotificationLogRecord {
   readonly id: string;
+  readonly idempotencyKey?: string;
+  readonly requestFingerprint?: string;
   readonly sourceType: string;
   readonly sourceReferenceId?: string;
   readonly messageSnapshot: Readonly<Record<string, object>>;
@@ -41,6 +43,7 @@ export interface NotificationDeliveryRecord {
   readonly leaseToken?: string;
   readonly leaseExpiresAt?: string;
   readonly lastError?: NotificationErrorRecord;
+  readonly retryResolution?: NotificationRetryResolutionRecord;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -56,6 +59,17 @@ export interface NotificationAttemptRecord {
   readonly finishedAt?: string;
   readonly providerMessageId?: string;
   readonly error?: NotificationErrorRecord;
+  readonly retryResolution?: NotificationRetryResolutionRecord;
+}
+
+export interface NotificationRetryResolutionRecord {
+  readonly type:
+    | 'safe_provider_idempotency'
+    | 'confirmed_not_delivered'
+    | 'accept_duplicate_risk'
+    | 'terminal_failure';
+  readonly reason: string;
+  readonly requestedAt: string;
 }
 
 export interface NotificationLogBundle {
@@ -66,7 +80,17 @@ export interface NotificationLogBundle {
 export interface NotificationStore {
   now(): Promise<string>;
   create(bundle: NotificationLogBundle): Promise<void>;
+  createOrGetByIdempotency(
+    bundle: NotificationLogBundle,
+  ): Promise<
+    | { readonly outcome: 'created'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'existing'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'conflict'; readonly bundle: NotificationLogBundle }
+  >;
   getLog(id: string): Promise<NotificationLogRecord | undefined>;
+  getLogByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<NotificationLogRecord | undefined>;
   listLogs(limit?: number): Promise<readonly NotificationLogRecord[]>;
   getDelivery(id: string): Promise<NotificationDeliveryRecord | undefined>;
   listDeliveries(
@@ -112,11 +136,18 @@ export interface NotificationStore {
     >,
     error?: NotificationErrorRecord,
   ): Promise<NotificationDeliveryRecord | undefined>;
-  recoverExpired(now: string): Promise<number>;
+  retryDelivery(
+    id: string,
+    expectedStatus: Extract<NotificationDeliveryStatus, 'failed' | 'unknown'>,
+    resolution: NotificationRetryResolutionRecord,
+  ): Promise<NotificationDeliveryRecord | undefined>;
+  recoverExpired(now: string): Promise<readonly NotificationDeliveryRecord[]>;
 }
 
 interface NotificationRow extends Row {
   id: string;
+  idempotencyKey?: string | null;
+  requestFingerprint?: string | null;
   sourceType: string;
   sourceReferenceId?: string;
   createdAt: string;
@@ -137,6 +168,7 @@ interface DeliveryRow extends Row {
   leaseToken?: string | null;
   leaseExpiresAt?: string | null;
   lastError?: NotificationErrorRecord | string | null;
+  retryResolution?: NotificationRetryResolutionRecord | string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -154,6 +186,7 @@ interface AttemptRow extends Row {
   errorCategory?: string;
   errorCode?: string;
   errorMessage?: string;
+  retryResolution?: NotificationRetryResolutionRecord | string | null;
 }
 
 export class DatabaseNotificationStore implements NotificationStore {
@@ -176,6 +209,42 @@ export class DatabaseNotificationStore implements NotificationStore {
     });
   }
 
+  async createOrGetByIdempotency(
+    bundle: NotificationLogBundle,
+  ): Promise<
+    | { readonly outcome: 'created'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'existing'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'conflict'; readonly bundle: NotificationLogBundle }
+  > {
+    const { idempotencyKey, requestFingerprint } = bundle.log;
+    if (!idempotencyKey || !requestFingerprint) {
+      throw new Error(
+        'An idempotency key and request fingerprint are required to create a notification.',
+      );
+    }
+    try {
+      await this.database.transaction(async (connection): Promise<void> => {
+        await connection.query
+          .insertInto<NotificationRow>('notificationDispatches')
+          .values(toLogRow(bundle.log))
+          .execute();
+        if (bundle.deliveries.length > 0)
+          await connection.query
+            .insertInto<DeliveryRow>('notificationDeliveries')
+            .values(bundle.deliveries.map(toDeliveryRow))
+            .execute();
+      });
+      return { outcome: 'created', bundle };
+    } catch (error) {
+      if (!isUniqueConstraintViolation(error)) throw error;
+      const existing = await this.getBundleByIdempotencyKey(idempotencyKey);
+      if (!existing) throw error;
+      return existing.log.requestFingerprint === requestFingerprint
+        ? { outcome: 'existing', bundle: existing }
+        : { outcome: 'conflict', bundle: existing };
+    }
+  }
+
   async getLog(id: string): Promise<NotificationLogRecord | undefined> {
     const row = await this.database
       .query()
@@ -184,6 +253,18 @@ export class DatabaseNotificationStore implements NotificationStore {
       .where('id', '=', id)
       .executeTakeFirst<NotificationRow>();
     return row ? fromLogRow(row, await this.listDeliveries(id)) : undefined;
+  }
+
+  async getLogByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<NotificationLogRecord | undefined> {
+    const row = await this.database
+      .query()
+      .selectFrom<NotificationRow>('notificationDispatches')
+      .selectAll()
+      .where('idempotencyKey', '=', idempotencyKey)
+      .executeTakeFirst<NotificationRow>();
+    return row ? fromLogRow(row, await this.listDeliveries(row.id)) : undefined;
   }
 
   async listLogs(
@@ -365,6 +446,7 @@ export class DatabaseNotificationStore implements NotificationStore {
               status,
               nextRunAt: nextRunAt ?? null,
               lastError: error ? JSON.stringify(error) : null,
+              retryResolution: null,
               leaseToken: null,
               leaseExpiresAt: null,
               updatedAt: now,
@@ -419,6 +501,7 @@ export class DatabaseNotificationStore implements NotificationStore {
         status,
         nextRunAt: null,
         lastError: error ? JSON.stringify(error) : null,
+        retryResolution: null,
         leaseToken: null,
         leaseExpiresAt: null,
         updatedAt: now,
@@ -432,7 +515,35 @@ export class DatabaseNotificationStore implements NotificationStore {
     return next;
   }
 
-  async recoverExpired(now: string): Promise<number> {
+  async retryDelivery(
+    id: string,
+    expectedStatus: Extract<NotificationDeliveryStatus, 'failed' | 'unknown'>,
+    resolution: NotificationRetryResolutionRecord,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const now = await this.now();
+    const result = await this.database
+      .query()
+      .updateTable<DeliveryRow>('notificationDeliveries')
+      .set({
+        status: 'pending',
+        nextRunAt: null,
+        lastError: null,
+        retryResolution: JSON.stringify(resolution),
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: now,
+      })
+      .where('id', '=', id)
+      .where('status', '=', expectedStatus)
+      .where('nextRunAt', 'is', null)
+      .execute();
+    if (result.updatedCount !== 1) return undefined;
+    return this.getDelivery(id);
+  }
+
+  async recoverExpired(
+    now: string,
+  ): Promise<readonly NotificationDeliveryRecord[]> {
     const rows = await this.database
       .query()
       .selectFrom<DeliveryRow>('notificationDeliveries')
@@ -440,7 +551,7 @@ export class DatabaseNotificationStore implements NotificationStore {
       .where('status', 'in', ['preparing', 'submitting'])
       .where('leaseExpiresAt', '<=', now)
       .execute<DeliveryRow>();
-    let recoveredCount = 0;
+    const recoveredDeliveries: NotificationDeliveryRecord[] = [];
     for (const row of rows) {
       if (row.status === 'preparing') {
         const result = await this.database
@@ -457,7 +568,8 @@ export class DatabaseNotificationStore implements NotificationStore {
           .where('leaseExpiresAt', '<=', now)
           .execute();
         if (result.updatedCount === 1) {
-          recoveredCount += 1;
+          const delivery = await this.getDelivery(row.id);
+          if (delivery) recoveredDeliveries.push(delivery);
         }
       } else {
         const error: NotificationErrorRecord = {
@@ -497,11 +609,20 @@ export class DatabaseNotificationStore implements NotificationStore {
           },
         );
         if (recovered) {
-          recoveredCount += 1;
+          const delivery = await this.getDelivery(row.id);
+          if (delivery) recoveredDeliveries.push(delivery);
         }
       }
     }
-    return recoveredCount;
+    return recoveredDeliveries;
+  }
+
+  private async getBundleByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<NotificationLogBundle | undefined> {
+    const log = await this.getLogByIdempotencyKey(idempotencyKey);
+    if (!log) return undefined;
+    return { log, deliveries: await this.listDeliveries(log.id) };
   }
 }
 
@@ -516,7 +637,6 @@ export function createDatabaseNotificationStore(
 function summarize(
   deliveries: readonly NotificationDeliveryRecord[],
 ): NotificationLogStatus {
-  if (deliveries.some((item) => item.status === 'unknown')) return 'unknown';
   if (deliveries.every((item) => item.status === 'pending')) return 'pending';
   if (
     deliveries.some(
@@ -528,6 +648,7 @@ function summarize(
     )
   )
     return 'processing';
+  if (deliveries.some((item) => item.status === 'unknown')) return 'unknown';
   if (deliveries.every((item) => item.status === 'accepted'))
     return 'completed';
   if (
@@ -542,6 +663,8 @@ function summarize(
 function toLogRow(record: NotificationLogRecord): NotificationRow {
   return {
     id: record.id,
+    idempotencyKey: record.idempotencyKey,
+    requestFingerprint: record.requestFingerprint,
     sourceType: record.sourceType,
     sourceReferenceId: record.sourceReferenceId,
     createdAt: record.createdAt,
@@ -558,6 +681,8 @@ function fromLogRow(
     messageSnapshot[delivery.channel] = delivery.messageSnapshot;
   return {
     id: row.id,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    requestFingerprint: row.requestFingerprint ?? undefined,
     sourceType: row.sourceType,
     sourceReferenceId: row.sourceReferenceId,
     messageSnapshot,
@@ -586,6 +711,9 @@ function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
     leaseToken: record.leaseToken,
     leaseExpiresAt: record.leaseExpiresAt,
     lastError: record.lastError,
+    retryResolution: record.retryResolution
+      ? JSON.stringify(record.retryResolution)
+      : undefined,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -606,6 +734,7 @@ function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
     leaseToken: row.leaseToken ?? undefined,
     leaseExpiresAt: row.leaseExpiresAt ?? undefined,
     lastError: parseError(row.lastError),
+    retryResolution: parseRetryResolution(row.retryResolution),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -661,6 +790,9 @@ function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
     errorCategory: record.error?.category,
     errorCode: record.error?.code,
     errorMessage: record.error?.message,
+    retryResolution: record.retryResolution
+      ? JSON.stringify(record.retryResolution)
+      : undefined,
   };
 }
 
@@ -684,7 +816,41 @@ function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
     finishedAt: row.finishedAt,
     providerMessageId: row.providerMessageId,
     error,
+    retryResolution: parseRetryResolution(row.retryResolution),
   };
+}
+
+function parseRetryResolution(
+  value: NotificationRetryResolutionRecord | string | null | undefined,
+): NotificationRetryResolutionRecord | undefined {
+  if (!value) return undefined;
+  if (typeof value !== 'string') return value;
+  return JSON.parse(value) as NotificationRetryResolutionRecord;
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    const code = record.code;
+    const number = record.errno ?? record.number ?? record.errorNum;
+    if (
+      code === '23505' ||
+      code === 'ER_DUP_ENTRY' ||
+      code === 'SQLITE_CONSTRAINT' ||
+      code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+      code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
+      number === 1 ||
+      number === 1062 ||
+      number === 2601 ||
+      number === 2627
+    )
+      return true;
+    current = record.cause ?? record.originalError;
+  }
+  return false;
 }
 
 function normalizeStoredErrorCategory(

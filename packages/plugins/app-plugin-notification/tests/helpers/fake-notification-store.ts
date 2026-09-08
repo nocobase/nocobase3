@@ -6,6 +6,7 @@ import type {
   NotificationLogBundle,
   NotificationLogRecord,
   NotificationLogStatus,
+  NotificationRetryResolutionRecord,
   NotificationStore,
 } from '../../server/store.js';
 
@@ -25,8 +26,40 @@ export class FakeNotificationStore implements NotificationStore {
     }
   }
 
+  async createOrGetByIdempotency(
+    bundle: NotificationLogBundle,
+  ): Promise<
+    | { readonly outcome: 'created'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'existing'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'conflict'; readonly bundle: NotificationLogBundle }
+  > {
+    const existing = [...this.logs.values()].find(
+      (log) => log.idempotencyKey === bundle.log.idempotencyKey,
+    );
+    if (existing) {
+      const existingBundle = {
+        log: await this.withSummary(existing),
+        deliveries: await this.listDeliveries(existing.id),
+      };
+      return existing.requestFingerprint === bundle.log.requestFingerprint
+        ? { outcome: 'existing', bundle: existingBundle }
+        : { outcome: 'conflict', bundle: existingBundle };
+    }
+    await this.create(bundle);
+    return { outcome: 'created', bundle };
+  }
+
   async getLog(id: string): Promise<NotificationLogRecord | undefined> {
     const log = this.logs.get(id);
+    return log ? this.withSummary(log) : undefined;
+  }
+
+  async getLogByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<NotificationLogRecord | undefined> {
+    const log = [...this.logs.values()].find(
+      (candidate) => candidate.idempotencyKey === idempotencyKey,
+    );
     return log ? this.withSummary(log) : undefined;
   }
 
@@ -128,6 +161,7 @@ export class FakeNotificationStore implements NotificationStore {
       attemptCount: attempt.sequence,
       status: 'submitting',
       leaseExpiresAt,
+      retryResolution: current.retryResolution,
       updatedAt: await this.now(),
     };
     this.deliveries.set(next.id, next);
@@ -171,6 +205,7 @@ export class FakeNotificationStore implements NotificationStore {
       nextRunAt,
       leaseToken: undefined,
       leaseExpiresAt: undefined,
+      retryResolution: undefined,
       updatedAt: await this.now(),
     };
     this.deliveries.set(finished.id, finished);
@@ -216,14 +251,40 @@ export class FakeNotificationStore implements NotificationStore {
       nextRunAt: undefined,
       leaseToken: undefined,
       leaseExpiresAt: undefined,
+      retryResolution: undefined,
       updatedAt: await this.now(),
     };
     this.deliveries.set(finished.id, finished);
     return finished;
   }
 
-  async recoverExpired(now: string): Promise<number> {
-    let recovered = 0;
+  async retryDelivery(
+    id: string,
+    expectedStatus: 'failed' | 'unknown',
+    resolution: NotificationRetryResolutionRecord,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const delivery = this.deliveries.get(id);
+    if (
+      !delivery ||
+      delivery.status !== expectedStatus ||
+      delivery.nextRunAt !== undefined
+    )
+      return undefined;
+    const retried: NotificationDeliveryRecord = {
+      ...delivery,
+      status: 'pending',
+      lastError: undefined,
+      retryResolution: resolution,
+      updatedAt: await this.now(),
+    };
+    this.deliveries.set(id, retried);
+    return retried;
+  }
+
+  async recoverExpired(
+    now: string,
+  ): Promise<readonly NotificationDeliveryRecord[]> {
+    const recovered: NotificationDeliveryRecord[] = [];
     for (const delivery of this.deliveries.values()) {
       if (
         !['preparing', 'submitting'].includes(delivery.status) ||
@@ -248,7 +309,7 @@ export class FakeNotificationStore implements NotificationStore {
         updatedAt: now,
       };
       this.deliveries.set(next.id, next);
-      recovered += 1;
+      recovered.push(next);
     }
     return recovered;
   }
@@ -272,8 +333,6 @@ export class FakeNotificationStore implements NotificationStore {
 function summarize(
   deliveries: readonly NotificationDeliveryRecord[],
 ): NotificationLogStatus {
-  if (deliveries.some((delivery) => delivery.status === 'unknown'))
-    return 'unknown';
   if (deliveries.every((delivery) => delivery.status === 'pending'))
     return 'pending';
   if (
@@ -287,6 +346,8 @@ function summarize(
   ) {
     return 'processing';
   }
+  if (deliveries.some((delivery) => delivery.status === 'unknown'))
+    return 'unknown';
   if (deliveries.every((delivery) => delivery.status === 'accepted'))
     return 'completed';
   if (deliveries.every((delivery) => delivery.status === 'failed'))

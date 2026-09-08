@@ -216,6 +216,8 @@ async function createRouter(options: RouterOptions = {}): Promise<{
   const listTestTargets = vi.fn(() => options.targets ?? []);
   const sendTest = vi.fn(async () => ({
     notificationId: 'test-1',
+    idempotencyKey: 'notification-test:test-1',
+    deduplicated: false,
     status: 'pending' as const,
     deliveries: [],
   }));

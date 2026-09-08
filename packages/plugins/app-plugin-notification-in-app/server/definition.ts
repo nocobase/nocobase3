@@ -140,12 +140,18 @@ export function createDatabaseProviderDefinition(options: {
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
+    capabilities: {
+      idempotency: { supported: true, key: 'deliveryId' },
+    },
     label: inAppNotificationText('test.providers.database', 'Database'),
     async createProvider(context, config) {
       const { store } = options;
       return {
         name: config.name,
         type: 'database',
+        capabilities: {
+          idempotency: { supported: true, key: 'deliveryId' },
+        },
         async send({ message }) {
           try {
             await store.deliver({

@@ -83,6 +83,9 @@ describe('In-app Channel common input', () => {
       { type: 'database', name: 'primary' },
     );
 
+    expect(provider.capabilities).toEqual({
+      idempotency: { supported: true, key: 'deliveryId' },
+    });
     await expect(
       provider.send({
         notificationId: 'notification-1',

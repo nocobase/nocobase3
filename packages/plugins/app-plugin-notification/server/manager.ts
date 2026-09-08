@@ -6,6 +6,10 @@ import { ChannelManager } from './channel-manager.js';
 import { createDeliveryJob, type DeliveryJobClass } from './delivery-job.js';
 import { NotificationLogs } from './logs.js';
 import { NotificationReconcileJob } from './notification-reconcile-job.js';
+import {
+  notificationRequestFingerprint,
+  validateNotificationIdempotencyKey,
+} from './idempotency.js';
 import { notificationTestError } from './types.js';
 import {
   createNotificationRegistry,
@@ -18,15 +22,23 @@ import {
   type NotificationErrorRecord,
   type NotificationLogRecord,
   type NotificationLogStatus,
+  type NotificationRetryResolutionRecord,
   type NotificationStore,
 } from './store.js';
 import type {
+  NotificationDeliveryRetryDecision,
+  NotificationDeliveryStatusSnapshot,
   NotificationManagerOptions,
   NotificationProviderIdentity,
   NotificationProviderRouting,
   NotificationRecipient,
+  NotificationRetryDeliveryInput,
   NotificationSendInput,
   NotificationSendResult,
+  NotificationStatusChangedEvent,
+  NotificationStatusChangedFilter,
+  NotificationStatusChangedListener,
+  NotificationStatusSnapshot,
   NotificationTestActor,
   NotificationTestSendRequest,
   NotificationTestTargetDescriptor,
@@ -41,6 +53,32 @@ interface ExpandedRecipientTarget {
 
 interface ExpandedRecipient {
   readonly channels: readonly ExpandedRecipientTarget[];
+}
+
+interface StatusSubscription {
+  readonly filter: NotificationStatusChangedFilter;
+  readonly listener: NotificationStatusChangedListener;
+}
+
+export class NotificationIdempotencyConflictError extends Error {
+  readonly code = 'IDEMPOTENCY_KEY_CONFLICT';
+  constructor(readonly idempotencyKey: string) {
+    super(
+      `Notification idempotency key "${idempotencyKey}" was already used with a different request.`,
+    );
+    this.name = 'NotificationIdempotencyConflictError';
+  }
+}
+
+export class NotificationDeliveryRetryError extends Error {
+  readonly code = 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED';
+  constructor(
+    readonly deliveryId: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'NotificationDeliveryRetryError';
+  }
 }
 
 export class NotificationManager<
@@ -59,6 +97,7 @@ export class NotificationManager<
   private readonly queueJob: DeliveryJobClass;
   private readonly reconcileJob: NotificationReconcileJob;
   private readonly runtimePromises = new Map<string, Promise<void>>();
+  private readonly statusSubscriptions = new Map<string, StatusSubscription>();
   private activated = false;
   private started = false;
   private startPromise?: Promise<void>;
@@ -76,6 +115,9 @@ export class NotificationManager<
       providerTimeoutMs: options.providerTimeoutMs,
       retry: options.retry,
       resolveRuntime: async (type): Promise<void> => this.ensureRuntime(type),
+      onDeliveryChanged: (delivery): void => {
+        this.scheduleStatusChanged(delivery.notificationId);
+      },
     });
     this.queueJob = createDeliveryJob(this.channelManager);
     this.reconcileJob = new NotificationReconcileJob({
@@ -146,6 +188,7 @@ export class NotificationManager<
         } as NotificationSendInput<TChannels>['channelOverrides'])
       : undefined;
     return this.send({
+      idempotencyKey: `notification-test:${randomUUID()}`,
       to: converted.to,
       channels: [channel],
       routing,
@@ -289,6 +332,30 @@ export class NotificationManager<
     input: NotificationSendInput<TChannels>,
   ): Promise<NotificationSendResult> {
     this.activate();
+    validateNotificationIdempotencyKey(input.idempotencyKey);
+    const requestFingerprint = notificationRequestFingerprint(input);
+    const existing = await this.store.getLogByIdempotencyKey(
+      input.idempotencyKey,
+    );
+    if (existing) {
+      if (existing.requestFingerprint !== requestFingerprint) {
+        throw new NotificationIdempotencyConflictError(input.idempotencyKey);
+      }
+      const existingDeliveries = await this.store.listDeliveries(existing.id);
+      await Promise.all(
+        existingDeliveries
+          .filter((delivery) => delivery.status === 'pending')
+          .map(async (delivery): Promise<void> => this.dispatch(delivery.id)),
+      );
+      const snapshot = await this.statusSnapshot(existing);
+      return {
+        notificationId: snapshot.notificationId,
+        idempotencyKey: input.idempotencyKey,
+        deduplicated: true,
+        status: snapshot.status,
+        deliveries: snapshot.deliveries,
+      };
+    }
     const recipients: readonly NotificationRecipient[] =
       'type' in input.to ? [input.to] : input.to;
     if (recipients.length === 0)
@@ -355,6 +422,8 @@ export class NotificationManager<
     }
 
     return this.sendExpanded({
+      idempotencyKey: input.idempotencyKey,
+      requestFingerprint,
       source: input.source,
       recipients: expandedRecipients,
       message,
@@ -362,6 +431,8 @@ export class NotificationManager<
   }
 
   private async sendExpanded(input: {
+    readonly idempotencyKey: string;
+    readonly requestFingerprint: string;
     readonly source?: {
       readonly type: string;
       readonly referenceId?: string;
@@ -405,6 +476,8 @@ export class NotificationManager<
       throw new Error('At least one notification Channel target is required.');
     const log: NotificationLogRecord = {
       id: notificationId,
+      idempotencyKey: input.idempotencyKey,
+      requestFingerprint: input.requestFingerprint,
       sourceType: input.source?.type ?? 'application',
       sourceReferenceId: input.source?.referenceId,
       messageSnapshot: input.message as Readonly<Record<string, object>>,
@@ -412,35 +485,129 @@ export class NotificationManager<
       createdAt: now,
       updatedAt: now,
     };
-    await this.store.create({ log, deliveries });
+    const persisted = await this.store.createOrGetByIdempotency({
+      log,
+      deliveries,
+    });
+    if (persisted.outcome === 'conflict') {
+      throw new NotificationIdempotencyConflictError(input.idempotencyKey);
+    }
+    const currentDeliveries = persisted.bundle.deliveries;
+    if (persisted.outcome === 'created') {
+      this.scheduleStatusChanged(persisted.bundle.log.id);
+    }
     await Promise.all(
-      deliveries
+      currentDeliveries
         .filter((delivery) => delivery.status === 'pending')
         .map(async (delivery): Promise<void> => this.dispatch(delivery.id)),
     );
     this.options.logger.debug(
       {
         event: 'notification.queued',
-        notificationId,
-        sourceType: log.sourceType,
-        deliveryCount: deliveries.length,
-        channels: [...new Set(deliveries.map((delivery) => delivery.channel))],
+        notificationId: persisted.bundle.log.id,
+        sourceType: persisted.bundle.log.sourceType,
+        deliveryCount: currentDeliveries.length,
+        channels: [
+          ...new Set(currentDeliveries.map((delivery) => delivery.channel)),
+        ],
+        deduplicated: persisted.outcome === 'existing',
       },
       'Notification queued for delivery.',
     );
+    const snapshot = await this.getNotification(persisted.bundle.log.id);
+    if (!snapshot)
+      throw new Error(
+        'Persisted notification could not be read after creation.',
+      );
     return {
-      notificationId: log.id,
-      status: log.status,
-      deliveries: deliveries.map((delivery) => ({
-        id: delivery.id,
-        channel: delivery.channel,
-        provider: {
-          name: delivery.providerName,
-          type: delivery.providerType,
-        },
-        status: delivery.status,
-      })),
+      notificationId: snapshot.notificationId,
+      idempotencyKey: input.idempotencyKey,
+      deduplicated: persisted.outcome === 'existing',
+      status: snapshot.status,
+      deliveries: snapshot.deliveries,
     };
+  }
+
+  async getByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<NotificationStatusSnapshot | undefined> {
+    validateNotificationIdempotencyKey(idempotencyKey);
+    const log = await this.store.getLogByIdempotencyKey(idempotencyKey);
+    return log ? this.statusSnapshot(log) : undefined;
+  }
+
+  async getNotification(
+    notificationId: string,
+  ): Promise<NotificationStatusSnapshot | undefined> {
+    const log = await this.store.getLog(notificationId);
+    return log ? this.statusSnapshot(log) : undefined;
+  }
+
+  onStatusChanged(
+    filter: NotificationStatusChangedFilter,
+    listener: NotificationStatusChangedListener,
+  ): () => void {
+    if (!filter.notificationId && !filter.idempotencyKey) {
+      throw new Error(
+        'Notification status subscription requires notificationId or idempotencyKey.',
+      );
+    }
+    if (filter.idempotencyKey)
+      validateNotificationIdempotencyKey(filter.idempotencyKey);
+    const id = randomUUID();
+    const subscription = { filter, listener };
+    this.statusSubscriptions.set(id, subscription);
+    void this.emitCurrentStatus(id, subscription).catch((error: unknown) => {
+      this.options.logger.warn(
+        { event: 'notification.status_initial_read_failed', err: error },
+        'Failed to read initial notification status for a listener.',
+      );
+    });
+    return (): void => {
+      this.statusSubscriptions.delete(id);
+    };
+  }
+
+  async retryDelivery(
+    input: NotificationRetryDeliveryInput,
+  ): Promise<NotificationDeliveryStatusSnapshot> {
+    const delivery = await this.store.getDelivery(input.deliveryId);
+    if (!delivery) {
+      throw new NotificationDeliveryRetryError(
+        input.deliveryId,
+        `Notification Delivery "${input.deliveryId}" was not found.`,
+      );
+    }
+    await this.ensureRuntime(delivery.channel);
+    const decision = await this.retryDecision(delivery);
+    if (delivery.status !== 'failed' && delivery.status !== 'unknown') {
+      throw new NotificationDeliveryRetryError(
+        delivery.id,
+        decision.reason ?? 'Notification Delivery is not retryable.',
+      );
+    }
+    const resolution = this.retryResolution(
+      delivery,
+      decision,
+      input,
+      await this.store.now(),
+    );
+    const retried = await this.store.retryDelivery(
+      delivery.id,
+      delivery.status,
+      resolution,
+    );
+    if (!retried) {
+      throw new NotificationDeliveryRetryError(
+        delivery.id,
+        'Notification Delivery changed while the retry was requested.',
+      );
+    }
+    this.scheduleStatusChanged(retried.notificationId);
+    await this.dispatch(retried.id);
+    return this.deliverySnapshot(
+      (await this.store.getDelivery(retried.id)) ?? retried,
+    );
   }
 
   async close(): Promise<void> {
@@ -451,6 +618,7 @@ export class NotificationManager<
     this.runtimePromises.clear();
     this.activated = false;
     this.started = false;
+    this.statusSubscriptions.clear();
     if (wasActive) {
       this.options.logger.info(
         { event: 'notification.manager.closed' },
@@ -476,7 +644,9 @@ export class NotificationManager<
 
   private async reconcile(): Promise<void> {
     const now = await this.store.now();
-    const recoveredCount = await this.store.recoverExpired(now);
+    const recovered = await this.store.recoverExpired(now);
+    for (const delivery of recovered)
+      this.scheduleStatusChanged(delivery.notificationId);
     const deliveries = await this.store.listReady(
       now,
       this.options.reconcileBatchSize ?? 100,
@@ -486,16 +656,262 @@ export class NotificationManager<
         this.dispatch(delivery.id),
       ),
     );
-    if (recoveredCount > 0 || deliveries.length > 0) {
+    if (recovered.length > 0 || deliveries.length > 0) {
       this.options.logger.info(
         {
           event: 'notification.reconciled',
-          recoveredDeliveryCount: recoveredCount,
+          recoveredDeliveryCount: recovered.length,
           pendingDeliveryCount: deliveries.length,
         },
         'Notification deliveries reconciled.',
       );
     }
+  }
+
+  private async statusSnapshot(
+    log: NotificationLogRecord,
+  ): Promise<NotificationStatusSnapshot> {
+    const deliveries = await this.store.listDeliveries(log.id);
+    const snapshots = await Promise.all(
+      deliveries.map(async (delivery) => this.deliverySnapshot(delivery)),
+    );
+    const summary = {
+      total: snapshots.length,
+      pending: snapshots.filter((item) => item.status === 'pending').length,
+      processing: snapshots.filter((item) =>
+        ['preparing', 'submitting'].includes(item.status),
+      ).length,
+      accepted: snapshots.filter((item) => item.status === 'accepted').length,
+      failed: snapshots.filter((item) => item.status === 'failed').length,
+      unknown: snapshots.filter((item) => item.status === 'unknown').length,
+    };
+    return {
+      notificationId: log.id,
+      idempotencyKey: log.idempotencyKey,
+      status: log.status,
+      terminal: ['completed', 'partial', 'failed', 'unknown'].includes(
+        log.status,
+      ),
+      requiresAction:
+        summary.unknown > 0 ||
+        snapshots.some(
+          (item) =>
+            item.status === 'failed' &&
+            item.retry.mode !== 'automatic_retry_scheduled',
+        ),
+      updatedAt: log.updatedAt,
+      summary,
+      deliveries: snapshots,
+    };
+  }
+
+  private async deliverySnapshot(
+    delivery: NotificationDeliveryRecord,
+  ): Promise<NotificationDeliveryStatusSnapshot> {
+    return {
+      id: delivery.id,
+      channel: delivery.channel,
+      provider: {
+        name: delivery.providerName,
+        type: delivery.providerType,
+      },
+      attemptCount: delivery.attemptCount,
+      status: delivery.status,
+      nextRunAt: delivery.nextRunAt,
+      error: delivery.lastError,
+      retry: await this.retryDecision(delivery),
+      createdAt: delivery.createdAt,
+      updatedAt: delivery.updatedAt,
+    };
+  }
+
+  private async retryDecision(
+    delivery: NotificationDeliveryRecord,
+  ): Promise<NotificationDeliveryRetryDecision> {
+    if (delivery.status === 'failed' && delivery.nextRunAt) {
+      return {
+        allowed: false,
+        mode: 'automatic_retry_scheduled',
+        nextRunAt: delivery.nextRunAt,
+        reason: 'The Provider already scheduled an automatic retry.',
+      };
+    }
+    if (delivery.status === 'failed') {
+      if (delivery.lastError?.code === 'RECIPIENT_UNSUPPORTED') {
+        return {
+          allowed: false,
+          mode: 'not_allowed',
+          reason:
+            'An unsupported recipient must be corrected with a new logical send.',
+        };
+      }
+      return {
+        allowed: true,
+        mode: 'safe',
+        reason: 'The previous attempt is known to have failed.',
+      };
+    }
+    if (delivery.status === 'unknown') {
+      const capabilities = this.channelManager.providerCapabilities(
+        delivery.channel,
+        { name: delivery.providerName, type: delivery.providerType },
+      );
+      if (capabilities.idempotency.supported) {
+        const retention = capabilities.idempotency.retentionMs;
+        const attempts = await this.store.listAttempts(delivery.id);
+        const latest = attempts.at(-1);
+        const withinRetention =
+          retention === undefined ||
+          (latest !== undefined &&
+            Date.parse(await this.store.now()) - Date.parse(latest.startedAt) <
+              retention);
+        if (withinRetention) {
+          return {
+            allowed: true,
+            mode: 'safe',
+            reason: 'The Provider can retry with the original deliveryId.',
+          };
+        }
+      }
+      return {
+        allowed: false,
+        mode: 'duplicate_risk_confirmation_required',
+        reason:
+          'The Provider cannot guarantee an idempotent retry for this unknown submission.',
+      };
+    }
+    return {
+      allowed: false,
+      mode: 'not_allowed',
+      reason: `A Delivery in status "${delivery.status}" cannot be retried.`,
+    };
+  }
+
+  private retryResolution(
+    delivery: NotificationDeliveryRecord,
+    decision: NotificationDeliveryRetryDecision,
+    input: NotificationRetryDeliveryInput,
+    requestedAt: string,
+  ): NotificationRetryResolutionRecord {
+    const reason = input.resolution?.reason.trim();
+    if (input.resolution && !reason) {
+      throw new NotificationDeliveryRetryError(
+        delivery.id,
+        'A retry resolution reason is required.',
+      );
+    }
+    if (delivery.status === 'failed') {
+      if (!decision.allowed) {
+        throw new NotificationDeliveryRetryError(
+          delivery.id,
+          decision.reason ?? 'Notification Delivery is not retryable.',
+        );
+      }
+      return {
+        type: 'terminal_failure',
+        reason: reason ?? 'Retry requested after terminal failure.',
+        requestedAt,
+      };
+    }
+    if (decision.allowed && decision.mode === 'safe') {
+      return {
+        type: 'safe_provider_idempotency',
+        reason: reason ?? decision.reason ?? 'Safe idempotent retry requested.',
+        requestedAt,
+      };
+    }
+    if (!input.resolution) {
+      throw new NotificationDeliveryRetryError(
+        delivery.id,
+        decision.reason ?? 'Unknown Delivery requires an explicit resolution.',
+      );
+    }
+    if (
+      input.resolution.type !== 'confirmed_not_delivered' &&
+      input.resolution.type !== 'accept_duplicate_risk'
+    ) {
+      throw new NotificationDeliveryRetryError(
+        delivery.id,
+        'Unknown Delivery retry resolution is invalid.',
+      );
+    }
+    return {
+      type: input.resolution.type,
+      reason: reason!,
+      requestedAt,
+    };
+  }
+
+  private async emitStatusChanged(notificationId: string): Promise<void> {
+    if (this.statusSubscriptions.size === 0) return;
+    const snapshot = await this.getNotification(notificationId);
+    if (!snapshot?.idempotencyKey) return;
+    const event: NotificationStatusChangedEvent = {
+      ...snapshot,
+      idempotencyKey: snapshot.idempotencyKey,
+    };
+    for (const subscription of this.statusSubscriptions.values()) {
+      if (
+        subscription.filter.notificationId &&
+        subscription.filter.notificationId !== event.notificationId
+      )
+        continue;
+      if (
+        subscription.filter.idempotencyKey &&
+        subscription.filter.idempotencyKey !== event.idempotencyKey
+      )
+        continue;
+      this.notifySubscription(subscription, event);
+    }
+  }
+
+  private scheduleStatusChanged(notificationId: string): void {
+    void this.emitStatusChanged(notificationId).catch((error: unknown) => {
+      this.options.logger.warn(
+        {
+          event: 'notification.status_emit_failed',
+          err: error,
+          notificationId,
+        },
+        'Failed to emit a notification status change.',
+      );
+    });
+  }
+
+  private async emitCurrentStatus(
+    subscriptionId: string,
+    subscription: StatusSubscription,
+  ): Promise<void> {
+    const snapshot = subscription.filter.notificationId
+      ? await this.getNotification(subscription.filter.notificationId)
+      : await this.getByIdempotencyKey(subscription.filter.idempotencyKey!);
+    if (
+      !snapshot?.idempotencyKey ||
+      this.statusSubscriptions.get(subscriptionId) !== subscription
+    )
+      return;
+    this.notifySubscription(subscription, {
+      ...snapshot,
+      idempotencyKey: snapshot.idempotencyKey,
+    });
+  }
+
+  private notifySubscription(
+    subscription: StatusSubscription,
+    event: NotificationStatusChangedEvent,
+  ): void {
+    void Promise.resolve()
+      .then(() => subscription.listener(event))
+      .catch((error: unknown) => {
+        this.options.logger.warn(
+          {
+            event: 'notification.status_listener_failed',
+            err: error,
+            notificationId: event.notificationId,
+          },
+          'Notification status listener failed.',
+        );
+      });
   }
 
   private ensureRuntime(type: string): Promise<void> {
@@ -589,7 +1005,16 @@ export class NotificationManager<
           providerContext,
           providerConfig,
         );
-        providers.push(provider);
+        providers.push({
+          name: provider.name,
+          type: provider.type,
+          capabilities: provider.capabilities ??
+            providerDefinition.capabilities ?? {
+              idempotency: { supported: false },
+            },
+          send: (input) => provider.send(input),
+          close: provider.close ? () => provider.close!() : undefined,
+        });
         if (provider.name !== providerConfig.name)
           throw new Error(
             `Provider Runtime name "${provider.name}" must match configured name "${providerConfig.name}" in Channel "${type}".`,

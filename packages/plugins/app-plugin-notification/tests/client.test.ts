@@ -64,6 +64,8 @@ describe('@nocobase/app-plugin-notification client', () => {
     };
     const result = {
       notificationId: 'notification-1',
+      idempotencyKey: 'notification-test:notification-1',
+      deduplicated: false,
       status: 'pending',
       deliveries: [],
     };

@@ -11,6 +11,7 @@ Every send needs at least one recipient, one Channel, and the required `body` fi
 ```ts
 const notification = app.container.resolve(notificationServiceToken);
 const result = await notification.send({
+  idempotencyKey: `approval:${approval.id}:approver:${approver.id}:in-app`,
   source: { type: 'approval', referenceId: approval.id },
   to: { type: 'user', id: approver.id },
   channels: ['in-app'],
@@ -41,6 +42,7 @@ Omitting `routing` selects the first enabled Provider for each Channel. Select a
 
 ```ts
 await notification.send({
+  idempotencyKey: `approval:${approval.id}:alice:email`,
   to: { type: 'email', address: 'alice@example.com' },
   channels: ['email'],
   routing: {
@@ -54,21 +56,58 @@ To fan out one IM message, use `strategy: 'all'`. Add `providers: ['feishu', 'di
 
 ## Interpret the result
 
-`send()` persists the Notification and Deliveries and dispatches queue work. Its result contains Notification and Delivery ids plus their initial status. Usually that status is pending. It does not prove a Provider call or final delivery.
+`send()` persists the Notification and Deliveries and dispatches queue work. Its result contains `notificationId`, the caller's `idempotencyKey`, whether this was a `deduplicated` call, and current Delivery snapshots. With a synchronous queue the current status may already be terminal; with an asynchronous queue it is usually pending or processing. `accepted` proves only Provider acceptance, not final delivery or reading.
 
-Read back the audit record:
+Query the public service by business key or Notification id:
 
 ```ts
-const details = await notification.logs.get(result.notificationId);
+const byBusinessKey = await notification.getByIdempotencyKey(idempotencyKey);
+const byNotificationId = await notification.getNotification(
+  result.notificationId,
+);
 ```
 
-For a synchronous operator task, poll with a bounded interval until the Notification is `completed`, `partial`, `failed`, or `unknown`, or until the agreed observation window ends. Report the last observed state on timeout; do not call it a failure without Delivery evidence.
+For in-process observation, subscribe without blocking the caller. The listener immediately receives the current snapshot when it exists and then best-effort changes from this manager process. Always keep a query path because listeners are not durable and do not replay changes from another process:
+
+```ts
+const unsubscribe = notification.onStatusChanged(
+  { idempotencyKey },
+  async (state) => {
+    renderStatus(state);
+    if (state.terminal) unsubscribe();
+  },
+);
+```
+
+For an operator task, use bounded polling when a process-local listener cannot cover the execution topology. Report the last observed state on timeout; do not call it a failure without Delivery evidence.
 
 ## Idempotency and retries
 
-The public send contract has no caller-supplied idempotency key. Repeating `send()` creates a new Notification. Business callers must prevent duplicate logical sends using their own transactional/outbox state or source-level idempotency.
+`idempotencyKey` is required. Build it from the stable business event, recipient scope, Channel, and—when one event intentionally targets more than one Provider—the Provider scope. A retry or recovery must reuse exactly the same key. The server stores a `requestFingerprint`; the same key and equivalent input return the original Notification with `deduplicated: true`, while the same key with different input raises `IDEMPOTENCY_KEY_CONFLICT`. There is no expiry field in this contract.
 
 The runtime retries only failures whose Provider returns `disposition: 'same_provider'`, bounded by manager retry settings. It never switches Providers automatically. A `submission_unknown` outcome is terminal `unknown` and is not retried automatically.
+
+A terminal `failed` Delivery can be retried with `retryDelivery({ deliveryId })` after correcting the cause, except when its recipient was unsupported and must be corrected in a new logical send. An `unknown` Delivery is retryable without confirmation only while its Provider declares idempotency for the original `deliveryId`. Otherwise the caller must first confirm non-delivery or explicitly accept duplicate risk, and provide an audit reason:
+
+```ts
+await notification.retryDelivery({
+  deliveryId,
+  resolution: {
+    type: 'confirmed_not_delivered',
+    reason: 'The Provider dashboard has no matching submission.',
+  },
+});
+
+await notification.retryDelivery({
+  deliveryId,
+  resolution: {
+    type: 'accept_duplicate_risk',
+    reason: 'The business owner prefers a possible duplicate to an omission.',
+  },
+});
+```
+
+Never retry a failed Delivery that already has `nextRunAt`; it is already scheduled for an automatic retry. `retryDelivery` always creates another Attempt on the same Delivery and preserves the resolution in the audit trail.
 
 ## Send verification
 

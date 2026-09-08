@@ -4,6 +4,7 @@ export { notificationConfig } from './config.js';
 export { NotificationProvider } from './providers/notification.js';
 export * from './tokens.js';
 export * from './logs.js';
+export * from './idempotency.js';
 export * from './manager.js';
 export * from './registry.js';
 export * from './router.js';

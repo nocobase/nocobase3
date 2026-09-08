@@ -13,7 +13,7 @@ The application owns which packages are installed, plugin ordering, configuratio
 
 ## Delivery model
 
-One `send()` creates one Notification. Each resolved recipient/Channel/Provider target creates an independent Delivery. Each actual Provider submission creates an Attempt.
+One new `idempotencyKey` creates one Notification. Repeating an equivalent `send()` with that key returns the same Notification. Each resolved recipient/Channel/Provider target creates an independent Delivery. Each actual Provider submission creates an Attempt.
 
 ```text
 Notification
@@ -59,4 +59,4 @@ Delivery adds `preparing`, `submitting`, and `accepted`. A failed Delivery with 
 
 The manager persists work before dispatching the queue job. If queue dispatch fails, the reconciler can enqueue ready Deliveries later. Leases protect concurrent workers. An expired lease during preparation returns the Delivery to pending; an expired lease during submission becomes unknown because the external effect cannot be proven absent.
 
-Use Notification, Delivery, and Attempt records as the audit trail. Preserve them during diagnosis and recovery.
+Use Notification, Delivery, and Attempt records as the audit trail. A manual Delivery retry creates a new Attempt on the same Delivery and records its retry resolution. Preserve them during diagnosis and recovery.

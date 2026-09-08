@@ -135,6 +135,8 @@ describe('notification test sending', () => {
       });
     const send = vi.spyOn(manager, 'send').mockResolvedValue({
       notificationId: 'test-1',
+      idempotencyKey: 'notification-test:test-1',
+      deduplicated: false,
       status: 'pending',
       deliveries: [],
     });
@@ -149,6 +151,7 @@ describe('notification test sending', () => {
     );
 
     expect(send).toHaveBeenCalledWith({
+      idempotencyKey: expect.stringMatching(/^notification-test:/),
       to: { type: 'email', address: 'safe@example.com' },
       channels: ['email'],
       routing: { email: { providers: { provider: 'primary' } } },

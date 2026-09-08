@@ -16,6 +16,7 @@ A Provider defines one transport implementation:
 - Submit the prepared payload before the deadline and honor cancellation.
 - Return `accepted`, known `failed`, or `submission_unknown` without throwing transport details across the contract.
 - Close network resources when the manager shuts down.
+- Declare whether repeated submission with the same `deliveryId` is idempotent and, if applicable, the retention window.
 
 Keep network I/O and credentials in the Provider. Keep user/address resolution, message rendering, and Provider-independent validation in the Channel. Keep persistence, queueing, leases, retries, and logs in the core manager.
 
@@ -53,6 +54,8 @@ Return `failed` when the service definitively rejected or did not submit the mes
 - Set `retryAfterMs` only from a validated Provider hint or bounded local policy.
 
 Return `submission_unknown` when the request may have reached the Provider but confirmation was lost. This prevents automatic duplicates.
+
+Declare Provider retry safety with `capabilities.idempotency`. Omitted capability is treated as `{ supported: false }`. Set `{ supported: true, key: 'deliveryId' }` only when the Provider guarantees that every retry reuses the same stable key; include `retentionMs` when the guarantee expires. The built-in database Provider is durable for the Delivery lifetime, Resend is bounded to its declared retention, and SMTP plus the built-in Webhook Providers do not claim idempotency.
 
 Use the core error categories: `authentication`, `channel`, `configuration`, `content`, `network`, `provider`, `rate_limit`, `recipient`, `storage`, `timeout`, or `unknown`. Error messages must be actionable and sanitized.
 
