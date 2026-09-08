@@ -2,7 +2,7 @@ import { concat } from '@langchain/core/utils/stream';
 import { Command } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
 import { buildTool } from '@nocobase/ai-employee';
-import type { AgentContext } from '@nocobase/ai-employee';
+import type { AgentContext, LLMProvider } from '@nocobase/ai-employee';
 import type {
   AgentInterruptAction,
   AgentLLMIdentity,
@@ -147,7 +147,7 @@ export class AgentService {
   }
 
   private async resolveLLM(_request: AgentRequest): Promise<{
-    provider: import('@nocobase/ai-employee').LLMProvider;
+    provider: LLMProvider;
     identity: AgentLLMIdentity;
   }> {
     const provider = this.providers.llmProvider;
@@ -340,7 +340,7 @@ export class AgentService {
     let gathered: any;
     let sent = 0;
     let prepared: PreparedAgentContext | undefined;
-    let activeProvider: import('@nocobase/ai-employee').LLMProvider | undefined;
+    let activeProvider: LLMProvider | undefined;
     await conversation.streamCache.clear();
     await conversation.beforeExecution('streaming');
     const stopReasoning = function* (

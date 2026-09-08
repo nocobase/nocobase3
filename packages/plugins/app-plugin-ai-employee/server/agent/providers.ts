@@ -6,6 +6,7 @@ import type {
   AIToolMessage,
 } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
+import type { Logger } from '@nocobase/logging';
 import type {
   AgentProviderOverrides,
   AgentProviders,
@@ -29,7 +30,7 @@ const noopLogger = {
   bindings: () => ({}),
   flush: () => undefined,
   isLevelEnabled: () => false,
-} as unknown as import('@nocobase/logging').Logger;
+} as unknown as Logger;
 
 const clone = <T extends object>(value: T): T => ({ ...value });
 
