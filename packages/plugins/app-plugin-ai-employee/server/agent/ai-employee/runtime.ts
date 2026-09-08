@@ -154,14 +154,9 @@ export class AIEmployeeCapabilities {
 
   private get chatSettings() {
     return (this.employee.chatSettings ?? {}) as {
-      systemPromptMode?: 'default' | 'raw' | 'none';
       enableSkills?: boolean;
       enableTools?: boolean;
     };
-  }
-
-  private get systemPromptMode() {
-    return this.chatSettings.systemPromptMode ?? 'default';
   }
 
   private areSkillsEnabled() {
@@ -180,116 +175,6 @@ export class AIEmployeeCapabilities {
   }
 
   // Agent execution and middleware orchestration are owned by AgentService.
-  // === Prompts & knowledge base ===
-  async getSystemPrompt(userMessages: AIMessageInput[]) {
-    if (this.systemPromptMode === 'none') {
-      return '';
-    }
-
-    const about = this.employee.about ?? this.employee.defaultPrompt ?? '';
-    if (this.systemPromptMode === 'raw') {
-      return about;
-    }
-
-    const userConfig = await this.repositories.usersAiEmployees.findOne({
-      filter: {
-        userId: this.agentContext.actor.id,
-        aiEmployee: this.employee.username,
-      },
-    });
-
-    let background = '';
-    if (this.systemMessage) {
-      background = this.systemMessage;
-    }
-
-    const addSystemPrompt = userMessages?.filter((it) => it.role == 'system');
-    if (addSystemPrompt.length) {
-      background = `${background}\n${addSystemPrompt.map((it) => it.content).join('\n')}`;
-    }
-
-    const knowledgeBaseManager = this.knowledgeBaseManager;
-    const employee = this.employee as unknown as AIEmployeeType;
-    const knowledgeBaseEnabled =
-      await knowledgeBaseManager.isEnabledKnowledgeBase(employee);
-    const roleNames = this.agentContext.actor.roles;
-    const hasAccessibleKnowledgeBase = knowledgeBaseEnabled
-      ? await knowledgeBaseManager.hasAccessibleKnowledgeBase({
-          employee,
-          roleNames,
-        })
-      : false;
-    const knowledgeBaseAccessDenied =
-      knowledgeBaseEnabled && !hasAccessibleKnowledgeBase;
-    const knowledgeBaseOnDemand =
-      knowledgeBaseEnabled &&
-      hasAccessibleKnowledgeBase &&
-      normalizeKnowledgeBaseRetrievalStrategy(
-        employee.knowledgeBase?.retrievalStrategy,
-      ) === 'onDemand';
-
-    let knowledgeBase: string | undefined;
-    if (
-      knowledgeBaseEnabled &&
-      hasAccessibleKnowledgeBase &&
-      !knowledgeBaseOnDemand &&
-      userMessages?.length
-    ) {
-      const lastUserMessage = userMessages
-        .filter((message) => message.role === 'user')
-        .at(-1);
-      if (lastUserMessage) {
-        knowledgeBase = await knowledgeBaseManager.retrievePrompt({
-          employee,
-          query: lastUserMessage.content.content as string,
-          roleNames,
-        });
-      }
-    }
-    const knowledgeBaseBackgroundPrompt = getKnowledgeBaseBackgroundPrompt({
-      accessDenied: knowledgeBaseAccessDenied,
-      onDemand: knowledgeBaseOnDemand,
-      preRetrieved: Boolean(knowledgeBase),
-    });
-    if (knowledgeBaseBackgroundPrompt) {
-      background = `${background}\n${knowledgeBaseBackgroundPrompt}`;
-    }
-    const availableSkills = await this.getAvailableSkills();
-    const availableAIEmployees = await this.getAvailableAIEmployees();
-
-    const systemPrompt = getSystemPrompt({
-      aiEmployee: {
-        nickname: this.employee.nickname,
-        about,
-      },
-      task: {
-        background,
-      },
-      personal: userConfig?.prompt,
-      environment: {
-        locale: this.agentContext.actor.locale || 'en-US',
-        currentDateTime: getCurrentDateTimeForPrompt(
-          this.agentContext.actor.locale,
-          getCurrentTimezone(this.execution, this.getHeader),
-        ),
-        timezone: getCurrentTimezone(this.execution, this.getHeader),
-      },
-      knowledgeBase,
-      availableSkills,
-      availableAIEmployees,
-      webSearch: this.webSearch,
-    });
-
-    const { important } = this.execution ?? {};
-    if (important === 'GraphRecursionError') {
-      const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
-First, provide a summary based on the existing information. Do not call additional tools.
-If information is missing, clearly state it in the summary.</Important>`;
-      return importantPrompt + '\n\n' + systemPrompt;
-    } else {
-      return systemPrompt;
-    }
-  }
 
   // === Tool calls ===
   async initToolCall(
@@ -861,7 +746,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     }
   }
 
-  private async getAvailableSkills(): Promise<SkillsEntity[]> {
+  async getAvailableSkills(): Promise<SkillsEntity[]> {
     if (!this.areSkillsEnabled()) {
       return [];
     }
@@ -995,7 +880,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     return result;
   }
 
-  private async getAvailableAIEmployees() {
+  async getAvailableAIEmployees() {
     const specifiedToolNames: string[] =
       this.employee.skillSettings?.tools?.map(
         ({ name }: { name: string }) => name,

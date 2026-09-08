@@ -1,5 +1,6 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { LLMResult } from '@langchain/core/outputs';
+import type { BaseMessageLike } from '@langchain/core/messages';
 import {
   createAgent,
   type AIMessage as LangChainAIMessage,
@@ -8,15 +9,18 @@ import {
 } from 'langchain';
 import type {
   AgentAbortHandle,
+  AgentMessageConversionContext,
   AgentProviderOverrides,
   AgentProviders,
+  AgentRequest,
   AgentThread,
-  ChatContextProvider,
+  ChatMessageConverters,
   ConversationProvider,
-  AgentLLMIdentity,
+  ResolvedAgentLLM,
   ToolCallHandler,
   ToolProvider,
 } from '../types.js';
+import { BaseChatContextProvider } from '../chat-context.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
 import { createAIChatConversation } from './ai-chat-conversation.js';
 import type { DatabaseConnection } from '@nocobase/db';
@@ -25,26 +29,66 @@ import {
   convertHumanMessage,
   convertToolMessage,
 } from '../../agent/ai-employee/utils.js';
-import type { LLMProvider } from '@nocobase/ai-employee';
+import type {
+  AIEmployee as AIEmployeeType,
+  AIMessageInput,
+  LLMProvider,
+} from '@nocobase/ai-employee';
 import { createAgentProviders } from '../providers.js';
 import {
   AIEmployeeCapabilities,
   type AIEmployeeAgentRuntimeOptions,
 } from './runtime.js';
+import { getSystemPrompt } from './prompts.js';
+import {
+  getKnowledgeBaseBackgroundPrompt,
+  normalizeKnowledgeBaseRetrievalStrategy,
+} from '../../manager/knowledge-base-manager.js';
+
+class ExecutionResponseMetadata {
+  private readonly metadata = new Map<string, Record<string, unknown>>();
+  private disposed = false;
+
+  public collect(id: unknown, data: unknown): void {
+    if (this.disposed || !id || !data || typeof data !== 'object') {
+      return;
+    }
+    this.metadata.set(String(id), data as Record<string, unknown>);
+  }
+
+  public take(id: string): Record<string, unknown> | undefined {
+    const data = this.metadata.get(id);
+    this.metadata.delete(id);
+    return data;
+  }
+
+  public dispose(): void {
+    this.disposed = true;
+    this.metadata.clear();
+  }
+}
 
 class ResponseMetadataCollector extends BaseCallbackHandler {
-  name = 'ResponseMetadataCollector';
-  constructor(
-    private provider: LLMProvider,
-    private metadata: Map<string, any>,
+  public name = 'ResponseMetadataCollector';
+
+  public constructor(
+    private readonly provider: LLMProvider,
+    private readonly metadata: ExecutionResponseMetadata,
   ) {
     super();
   }
-  handleLLMEnd(output: LLMResult): void {
+
+  public handleLLMEnd(output: LLMResult): void {
     const [id, data] = this.provider.parseResponseMetadata(output);
-    if (id && data) this.metadata.set(id, data);
+    this.metadata.collect(id, data);
   }
 }
+
+const responseMetadataCollector = Symbol('responseMetadataCollector');
+
+type AIEmployeeResolvedAgentLLM = ResolvedAgentLLM & {
+  readonly [responseMetadataCollector]: ResponseMetadataCollector;
+};
 
 export interface AIEmployeeAgentFacade {
   cancelToolCall(): Promise<any>;
@@ -59,9 +103,6 @@ export interface AIEmployeeAgentProvidersResult {
 interface AIEmployeeProviderState {
   options: AIEmployeeAgentRuntimeOptions;
   runtime: AIEmployeeCapabilities;
-  activeProvider?: LLMProvider;
-  activeIdentity?: AgentLLMIdentity;
-  responseMetadata: Map<string, any>;
 }
 
 const createState = (
@@ -69,7 +110,6 @@ const createState = (
 ): AIEmployeeProviderState => ({
   options,
   runtime: new AIEmployeeCapabilities(options),
-  responseMetadata: new Map(),
 });
 
 function getRequiredModel(
@@ -83,21 +123,22 @@ function getRequiredModel(
 
 async function resolveAIEmployeeLLM(
   options: AIEmployeeAgentRuntimeOptions,
-  state: AIEmployeeProviderState,
-): Promise<{ provider: LLMProvider; identity: AgentLLMIdentity }> {
+): Promise<AIEmployeeResolvedAgentLLM> {
   const resolved =
     await options.agentContext.ai.llmProviderManager.getLLMService(
       getRequiredModel(options),
     );
-  const identity: AgentLLMIdentity = {
+  const metadata = new ExecutionResponseMetadata();
+  const collector = new ResponseMetadataCollector(resolved.provider, metadata);
+  return {
     providerName: resolved.service.provider,
     llmService: resolved.service.name,
     model: resolved.model,
-    getResponseMetadata: (id) => state.responseMetadata.get(id),
+    provider: resolved.provider,
+    takeResponseMetadata: (id) => metadata.take(id),
+    dispose: () => metadata.dispose(),
+    [responseMetadataCollector]: collector,
   };
-  state.activeProvider = resolved.provider;
-  state.activeIdentity = identity;
-  return { provider: resolved.provider, identity };
 }
 
 export function createAIEmployeeConversationProvider(
@@ -324,48 +365,239 @@ export function createAIEmployeeToolProvider(
   };
 }
 
+export class AIEmployeeChatContextProvider extends BaseChatContextProvider {
+  public constructor(
+    private readonly aiEmployeeOptions: AIEmployeeAgentRuntimeOptions,
+    private readonly runtime: AIEmployeeCapabilities = new AIEmployeeCapabilities(
+      aiEmployeeOptions,
+    ),
+  ) {
+    super({
+      llmResolver: {
+        resolve: () => resolveAIEmployeeLLM(aiEmployeeOptions),
+      },
+    });
+  }
+
+  public override resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
+    return super.resolveLLM(request);
+  }
+
+  public override async getSystemPrompt(
+    userMessages: readonly AIMessageInput[],
+    _request: AgentRequest,
+    _llm: ResolvedAgentLLM,
+  ): Promise<string | undefined> {
+    const { employee } = this.aiEmployeeOptions;
+    const promptMode =
+      (employee.chatSettings?.systemPromptMode as
+        'default' | 'raw' | 'none' | undefined) ?? 'default';
+    if (promptMode === 'none') {
+      return '';
+    }
+
+    const about = employee.about ?? employee.defaultPrompt ?? '';
+    if (promptMode === 'raw') {
+      return about;
+    }
+
+    const { actor } = this.aiEmployeeOptions.agentContext;
+    const userConfig =
+      await this.aiEmployeeOptions.repositories.usersAiEmployees.findOne({
+        filter: {
+          userId: actor.id,
+          aiEmployee: employee.username,
+        },
+      });
+
+    let background = this.aiEmployeeOptions.systemMessage ?? '';
+    const additionalSystemPrompts = userMessages.filter(
+      (message) => message.role === 'system',
+    );
+    if (additionalSystemPrompts.length) {
+      background = `${background}\n${additionalSystemPrompts
+        .map((message) => message.content)
+        .join('\n')}`;
+    }
+
+    const employeeWithKnowledgeBase = employee as unknown as AIEmployeeType;
+    const { knowledgeBaseManager } = this.aiEmployeeOptions;
+    const knowledgeBaseEnabled =
+      await knowledgeBaseManager.isEnabledKnowledgeBase(
+        employeeWithKnowledgeBase,
+      );
+    const roleNames = actor.roles;
+    const hasAccessibleKnowledgeBase = knowledgeBaseEnabled
+      ? await knowledgeBaseManager.hasAccessibleKnowledgeBase({
+          employee: employeeWithKnowledgeBase,
+          roleNames,
+        })
+      : false;
+    const knowledgeBaseAccessDenied =
+      knowledgeBaseEnabled && !hasAccessibleKnowledgeBase;
+    const knowledgeBaseOnDemand =
+      knowledgeBaseEnabled &&
+      hasAccessibleKnowledgeBase &&
+      normalizeKnowledgeBaseRetrievalStrategy(
+        employeeWithKnowledgeBase.knowledgeBase?.retrievalStrategy,
+      ) === 'onDemand';
+
+    let knowledgeBase: string | undefined;
+    if (
+      knowledgeBaseEnabled &&
+      hasAccessibleKnowledgeBase &&
+      !knowledgeBaseOnDemand &&
+      userMessages.length
+    ) {
+      const lastUserMessage = userMessages
+        .filter((message) => message.role === 'user')
+        .at(-1);
+      if (lastUserMessage) {
+        knowledgeBase = await knowledgeBaseManager.retrievePrompt({
+          employee: employeeWithKnowledgeBase,
+          query: lastUserMessage.content.content as string,
+          roleNames,
+        });
+      }
+    }
+    const knowledgeBaseBackgroundPrompt = getKnowledgeBaseBackgroundPrompt({
+      accessDenied: knowledgeBaseAccessDenied,
+      onDemand: knowledgeBaseOnDemand,
+      preRetrieved: Boolean(knowledgeBase),
+    });
+    if (knowledgeBaseBackgroundPrompt) {
+      background = `${background}\n${knowledgeBaseBackgroundPrompt}`;
+    }
+
+    const availableSkills = await this.runtime.getAvailableSkills();
+    const availableAIEmployees = await this.runtime.getAvailableAIEmployees();
+    const timezone = getCurrentTimezone(
+      this.aiEmployeeOptions.execution ?? {},
+      this.aiEmployeeOptions.getHeader ?? (() => undefined),
+    );
+    const systemPrompt = getSystemPrompt({
+      aiEmployee: {
+        nickname: employee.nickname,
+        about,
+      },
+      task: { background },
+      personal: userConfig?.prompt,
+      environment: {
+        locale: actor.locale || 'en-US',
+        currentDateTime: getCurrentDateTimeForPrompt(actor.locale, timezone),
+        timezone,
+      },
+      knowledgeBase,
+      availableSkills,
+      availableAIEmployees,
+      webSearch: this.aiEmployeeOptions.webSearch,
+    });
+
+    if (this.aiEmployeeOptions.execution?.important === 'GraphRecursionError') {
+      const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
+First, provide a summary based on the existing information. Do not call additional tools.
+If information is missing, clearly state it in the summary.</Important>`;
+      return `${importantPrompt}\n\n${systemPrompt}`;
+    }
+    return systemPrompt;
+  }
+
+  public override async discoveredTools(
+    _request: AgentRequest,
+  ): Promise<readonly import('@nocobase/ai-employee').ToolsEntity[]> {
+    return (await this.runtime.getAgentTools()).tools;
+  }
+
+  public override async activeTools(
+    _request: AgentRequest,
+  ): Promise<ReadonlySet<string>> {
+    const [{ baseToolNames }, activatedSkillToolNames] = await Promise.all([
+      this.runtime.getAgentTools(),
+      this.runtime.getActivatedSkillToolNames(),
+    ]);
+    return new Set([...baseToolNames, ...activatedSkillToolNames]);
+  }
+
+  public override getExecutionConfig(
+    _request: AgentRequest,
+    llm: ResolvedAgentLLM,
+  ): Promise<Record<string, unknown>> {
+    const collector = (llm as Partial<AIEmployeeResolvedAgentLLM>)[
+      responseMetadataCollector
+    ];
+    return Promise.resolve(collector ? { callbacks: [collector] } : {});
+  }
+
+  public override shouldInterruptToolCall(
+    tool?: import('@nocobase/ai-employee').ToolsEntity,
+  ): boolean {
+    return this.runtime.shouldInterruptToolCall(tool);
+  }
+
+  public override getToolsMap(
+    _request: AgentRequest,
+  ): Promise<ReadonlyMap<string, import('@nocobase/ai-employee').ToolsEntity>> {
+    return this.runtime.getToolsMap();
+  }
+
+  /** @deprecated Message formatting moves to AIEmployeeChatMessageConverters in T09. */
+  public formatMessages(
+    messages: readonly AIMessageInput[],
+    context: AgentMessageConversionContext,
+  ) {
+    return this.runtime.formatMessages({
+      messages: [...messages],
+      provider: context.provider,
+    });
+  }
+}
+
 export function createAIEmployeeChatContextProvider(
   options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
-): ChatContextProvider {
-  const { runtime, responseMetadata } = state;
+): AIEmployeeChatContextProvider {
+  return new AIEmployeeChatContextProvider(options, state.runtime);
+}
+
+function createLegacyAIEmployeeChatMessageConverters(
+  state: AIEmployeeProviderState,
+): ChatMessageConverters {
+  const { runtime } = state;
   return {
-    formatMessages: (messages, model) =>
-      runtime.formatMessages({ messages, provider: model.provider }),
-    getSystemPrompt: (messages) => runtime.getSystemPrompt(messages),
-    getExecutionConfig: async () => ({
-      callbacks: state.activeProvider
-        ? [
-            new ResponseMetadataCollector(
-              state.activeProvider,
-              responseMetadata,
-            ),
-          ]
-        : [],
-    }),
-    convertAIMessage: (message: LangChainAIMessage, prepared) =>
-      convertAIMessage({
-        aiEmployee: runtime,
-        providerName: prepared.providerName,
-        provider: prepared.provider,
-        llmService: prepared.llmService,
-        model: prepared.model,
-        aiMessage: message,
-      }),
-    convertHumanMessage: (message: HumanMessage, prepared) =>
-      convertHumanMessage({
-        providerName: prepared.providerName,
-        llmService: prepared.llmService,
-        model: prepared.model,
-        humanMessage: message,
-      }),
-    convertToolMessage: (message: ToolMessage, prepared) =>
-      convertToolMessage({
-        providerName: prepared.providerName,
-        llmService: prepared.llmService,
-        model: prepared.model,
-        toolMessage: message,
-      }),
+    formatMessages: async (messages, context) =>
+      (await runtime.formatMessages({
+        messages: [...messages],
+        provider: context.provider,
+      })) as BaseMessageLike[],
+    assistant: {
+      toStored: (message: LangChainAIMessage, context) =>
+        convertAIMessage({
+          aiEmployee: runtime,
+          providerName: context.providerName,
+          provider: context.provider,
+          llmService: context.llmService,
+          model: context.model,
+          aiMessage: message,
+        }),
+    },
+    human: {
+      toStored: (message: HumanMessage, context) =>
+        convertHumanMessage({
+          providerName: context.providerName,
+          llmService: context.llmService,
+          model: context.model,
+          humanMessage: message,
+        }),
+    },
+    tool: {
+      toStored: (message: ToolMessage, context) =>
+        convertToolMessage({
+          providerName: context.providerName,
+          llmService: context.llmService,
+          model: context.model,
+          toolMessage: message,
+        }),
+    },
   };
 }
 
@@ -374,15 +606,13 @@ export async function createAIEmployeeAgentProviders(
   overrides?: AgentProviderOverrides,
 ): Promise<AIEmployeeAgentProvidersResult> {
   const state = createState(options);
-  const llm = await resolveAIEmployeeLLM(options, state);
   const conversation = createAIEmployeeConversationProvider(options, state);
   const chatContext = createAIEmployeeChatContextProvider(options, state);
   const tools = createAIEmployeeToolProvider(options, state);
   const providers = createAgentProviders({
-    llmProvider: llm.provider,
-    llmIdentity: llm.identity,
     conversation,
     chatContext,
+    chatMessageConverters: createLegacyAIEmployeeChatMessageConverters(state),
     tools,
     checkpointer:
       options.from === 'sub-agent'
@@ -401,4 +631,35 @@ export async function createAIEmployeeAgentProviders(
       getToolCallHandler: () => conversation.toolCalls,
     },
   };
+}
+
+function getCurrentTimezone(
+  execution: NonNullable<AIEmployeeAgentRuntimeOptions['execution']>,
+  getHeader: (name: string) => string | undefined,
+): string | undefined {
+  return execution.timezone || getHeader('x-timezone') || undefined;
+}
+
+function getCurrentDateTimeForPrompt(
+  locale: string | undefined,
+  timezone?: string,
+): string {
+  const now = new Date();
+  const normalizedLocale = locale || 'en-US';
+
+  try {
+    const formatter = new Intl.DateTimeFormat(normalizedLocale, {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    return `${formatter.format(now)}${timezone ? ` (${timezone})` : ''}`;
+  } catch {
+    return `${now.toISOString()}${timezone ? ` (${timezone})` : ''}`;
+  }
 }
