@@ -247,6 +247,27 @@ export class ChannelManager {
         category: 'configuration',
       });
 
+    const startedAt = await this.options.store.now();
+    if (
+      claimed.retryResolution?.type === 'safe_provider_idempotency' &&
+      (!providerSupportsIdempotency(provider, claimed.providerIdempotency) ||
+        !isProviderIdempotencyActive(claimed.providerIdempotency, startedAt))
+    ) {
+      return this.finishDelivery(claimed, 'unknown', {
+        code: 'PROVIDER_IDEMPOTENCY_EXPIRED',
+        message:
+          'The Provider idempotency window expired before the retry was submitted. Confirm the delivery result or explicitly accept duplicate risk before retrying.',
+        category: 'provider',
+      });
+    }
+    const delivery = {
+      ...claimed,
+      providerIdempotency: providerIdempotencyForAttempt(
+        provider,
+        claimed,
+        startedAt,
+      ),
+    };
     const attempt: NotificationAttemptRecord = {
       id: randomUUID(),
       deliveryId: claimed.id,
@@ -254,11 +275,11 @@ export class ChannelManager {
       providerName: provider.name,
       providerType: provider.type,
       status: 'submitting',
-      startedAt: await this.options.store.now(),
+      startedAt,
       retryResolution: claimed.retryResolution,
     };
     const started = await this.options.store.startAttempt(
-      claimed,
+      delivery,
       attempt,
       await this.leaseExpiry(),
     );
@@ -480,6 +501,48 @@ export class ChannelManager {
   private get maxAttemptsPerProvider(): number {
     return this.options.retry?.maxAttemptsPerProvider ?? 3;
   }
+}
+
+function providerIdempotencyForAttempt(
+  provider: NotificationProvider,
+  delivery: NotificationDeliveryRecord,
+  startedAt: string,
+): NotificationDeliveryRecord['providerIdempotency'] {
+  if (isProviderIdempotencyActive(delivery.providerIdempotency, startedAt))
+    return delivery.providerIdempotency;
+  const idempotency = provider.capabilities?.idempotency;
+  if (!idempotency?.supported) return undefined;
+  return {
+    key: idempotency.key,
+    startedAt,
+    ...(idempotency.retentionMs === undefined
+      ? {}
+      : {
+          expiresAt: new Date(
+            Date.parse(startedAt) + idempotency.retentionMs,
+          ).toISOString(),
+        }),
+  };
+}
+
+function providerSupportsIdempotency(
+  provider: NotificationProvider,
+  record: NotificationDeliveryRecord['providerIdempotency'],
+): boolean {
+  const idempotency = provider.capabilities?.idempotency;
+  return Boolean(
+    record && idempotency?.supported && idempotency.key === record.key,
+  );
+}
+
+function isProviderIdempotencyActive(
+  record: NotificationDeliveryRecord['providerIdempotency'],
+  now: string,
+): boolean {
+  return (
+    record !== undefined &&
+    (record.expiresAt === undefined || record.expiresAt > now)
+  );
 }
 
 function isRunnable(

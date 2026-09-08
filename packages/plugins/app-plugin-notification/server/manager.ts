@@ -58,6 +58,7 @@ interface ExpandedRecipient {
 interface StatusSubscription {
   readonly filter: NotificationStatusChangedFilter;
   readonly listener: NotificationStatusChangedListener;
+  lastDeliveredSequence: number;
 }
 
 export class NotificationIdempotencyConflictError extends Error {
@@ -98,6 +99,7 @@ export class NotificationManager<
   private readonly reconcileJob: NotificationReconcileJob;
   private readonly runtimePromises = new Map<string, Promise<void>>();
   private readonly statusSubscriptions = new Map<string, StatusSubscription>();
+  private nextStatusSequence = 0;
   private activated = false;
   private started = false;
   private startPromise?: Promise<void>;
@@ -555,14 +557,21 @@ export class NotificationManager<
     if (filter.idempotencyKey)
       validateNotificationIdempotencyKey(filter.idempotencyKey);
     const id = randomUUID();
-    const subscription = { filter, listener };
+    const sequence = this.issueStatusSequence();
+    const subscription = {
+      filter,
+      listener,
+      lastDeliveredSequence: sequence - 1,
+    };
     this.statusSubscriptions.set(id, subscription);
-    void this.emitCurrentStatus(id, subscription).catch((error: unknown) => {
-      this.options.logger.warn(
-        { event: 'notification.status_initial_read_failed', err: error },
-        'Failed to read initial notification status for a listener.',
-      );
-    });
+    void this.emitCurrentStatus(id, subscription, sequence).catch(
+      (error: unknown) => {
+        this.options.logger.warn(
+          { event: 'notification.status_initial_read_failed', err: error },
+          'Failed to read initial notification status for a listener.',
+        );
+      },
+    );
     return (): void => {
       this.statusSubscriptions.delete(id);
     };
@@ -752,26 +761,23 @@ export class NotificationManager<
       };
     }
     if (delivery.status === 'unknown') {
+      const idempotency = delivery.providerIdempotency;
       const capabilities = this.channelManager.providerCapabilities(
         delivery.channel,
         { name: delivery.providerName, type: delivery.providerType },
-      );
-      if (capabilities.idempotency.supported) {
-        const retention = capabilities.idempotency.retentionMs;
-        const attempts = await this.store.listAttempts(delivery.id);
-        const latest = attempts.at(-1);
-        const withinRetention =
-          retention === undefined ||
-          (latest !== undefined &&
-            Date.parse(await this.store.now()) - Date.parse(latest.startedAt) <
-              retention);
-        if (withinRetention) {
-          return {
-            allowed: true,
-            mode: 'safe',
-            reason: 'The Provider can retry with the original deliveryId.',
-          };
-        }
+      ).idempotency;
+      if (
+        idempotency &&
+        capabilities.supported &&
+        capabilities.key === idempotency.key &&
+        (idempotency.expiresAt === undefined ||
+          idempotency.expiresAt > (await this.store.now()))
+      ) {
+        return {
+          allowed: true,
+          mode: 'safe',
+          reason: 'The Provider can retry with the original deliveryId.',
+        };
       }
       return {
         allowed: false,
@@ -842,7 +848,10 @@ export class NotificationManager<
     };
   }
 
-  private async emitStatusChanged(notificationId: string): Promise<void> {
+  private async emitStatusChanged(
+    notificationId: string,
+    sequence: number,
+  ): Promise<void> {
     if (this.statusSubscriptions.size === 0) return;
     const snapshot = await this.getNotification(notificationId);
     if (!snapshot?.idempotencyKey) return;
@@ -861,26 +870,30 @@ export class NotificationManager<
         subscription.filter.idempotencyKey !== event.idempotencyKey
       )
         continue;
-      this.notifySubscription(subscription, event);
+      this.notifySubscription(subscription, event, sequence);
     }
   }
 
   private scheduleStatusChanged(notificationId: string): void {
-    void this.emitStatusChanged(notificationId).catch((error: unknown) => {
-      this.options.logger.warn(
-        {
-          event: 'notification.status_emit_failed',
-          err: error,
-          notificationId,
-        },
-        'Failed to emit a notification status change.',
-      );
-    });
+    const sequence = this.issueStatusSequence();
+    void this.emitStatusChanged(notificationId, sequence).catch(
+      (error: unknown) => {
+        this.options.logger.warn(
+          {
+            event: 'notification.status_emit_failed',
+            err: error,
+            notificationId,
+          },
+          'Failed to emit a notification status change.',
+        );
+      },
+    );
   }
 
   private async emitCurrentStatus(
     subscriptionId: string,
     subscription: StatusSubscription,
+    sequence: number,
   ): Promise<void> {
     const snapshot = subscription.filter.notificationId
       ? await this.getNotification(subscription.filter.notificationId)
@@ -890,16 +903,23 @@ export class NotificationManager<
       this.statusSubscriptions.get(subscriptionId) !== subscription
     )
       return;
-    this.notifySubscription(subscription, {
-      ...snapshot,
-      idempotencyKey: snapshot.idempotencyKey,
-    });
+    this.notifySubscription(
+      subscription,
+      {
+        ...snapshot,
+        idempotencyKey: snapshot.idempotencyKey,
+      },
+      sequence,
+    );
   }
 
   private notifySubscription(
     subscription: StatusSubscription,
     event: NotificationStatusChangedEvent,
+    sequence: number,
   ): void {
+    if (sequence <= subscription.lastDeliveredSequence) return;
+    subscription.lastDeliveredSequence = sequence;
     void Promise.resolve()
       .then(() => subscription.listener(event))
       .catch((error: unknown) => {
@@ -912,6 +932,11 @@ export class NotificationManager<
           'Notification status listener failed.',
         );
       });
+  }
+
+  private issueStatusSequence(): number {
+    this.nextStatusSequence += 1;
+    return this.nextStatusSequence;
   }
 
   private ensureRuntime(type: string): Promise<void> {

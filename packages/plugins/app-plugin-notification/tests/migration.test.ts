@@ -2,6 +2,7 @@ import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
+  type Row,
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -13,7 +14,7 @@ interface SqliteClient {
     hasTable(name: string): Promise<boolean>;
     hasColumn(table: string, column: string): Promise<boolean>;
   };
-  raw(sql: string): Promise<readonly { readonly name: string }[]>;
+  raw<T extends Row = Row>(sql: string): Promise<readonly T[]>;
 }
 
 const COLLECTIONS = [
@@ -21,6 +22,15 @@ const COLLECTIONS = [
   ['notificationDeliveries', 'notification_deliveries'],
   ['notificationDeliveryAttempts', 'notification_delivery_attempts'],
 ] as const;
+
+interface DispatchRow extends Row {
+  readonly id: string;
+  readonly sourceType: string;
+  readonly idempotencyKey?: string | null;
+  readonly requestFingerprint?: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
 
 describe('notification database migration', () => {
   let database: DatabaseManager;
@@ -104,6 +114,7 @@ describe('notification database migration', () => {
       fields: expect.arrayContaining([
         expect.objectContaining({ name: 'notificationId' }),
         expect.objectContaining({ name: 'lastError' }),
+        expect.objectContaining({ name: 'providerIdempotency' }),
       ]),
       indexes: expect.arrayContaining([
         expect.objectContaining({
@@ -129,6 +140,90 @@ describe('notification database migration', () => {
         database.connection().collections.get(collection),
       ).resolves.toBeUndefined();
     }
+  });
+
+  it('preserves legacy rows while enforcing uniqueness only for non-null idempotency keys', async () => {
+    const connection = database.connection();
+    await migration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+    await connection.query
+      .insertInto<DispatchRow>('notificationDispatches')
+      .values([
+        {
+          id: 'notification-1',
+          sourceType: 'legacy',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+        {
+          id: 'notification-2',
+          sourceType: 'legacy',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+      ])
+      .execute();
+
+    await idempotencyMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+
+    const rows = await connection.query
+      .selectFrom<DispatchRow>('notificationDispatches')
+      .select(['id', 'idempotencyKey', 'requestFingerprint'])
+      .orderBy('id', 'asc')
+      .execute<DispatchRow>();
+    expect(rows).toEqual([
+      {
+        id: 'notification-1',
+        idempotencyKey: null,
+        requestFingerprint: null,
+      },
+      {
+        id: 'notification-2',
+        idempotencyKey: null,
+        requestFingerprint: null,
+      },
+    ]);
+    const [index] = await (
+      await connection.client<SqliteClient>()
+    ).raw<{
+      readonly sql: string;
+    }>(
+      "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'notification_dispatch_idempotency_unique'",
+    );
+    expect(index?.sql).toContain('where `idempotency_key` is not null');
+
+    await connection.query
+      .insertInto<DispatchRow>('notificationDispatches')
+      .values({
+        id: 'notification-3',
+        sourceType: 'legacy',
+        idempotencyKey: null,
+        requestFingerprint: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      })
+      .execute();
+    const createWithKey = (id: string) =>
+      connection.query
+        .insertInto<DispatchRow>('notificationDispatches')
+        .values({
+          id,
+          sourceType: 'current',
+          idempotencyKey: 'business:key',
+          requestFingerprint: 'v1:fingerprint',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        })
+        .execute();
+    await createWithKey('notification-4');
+    await expect(createWithKey('notification-5')).rejects.toThrow();
   });
 });
 

@@ -51,10 +51,22 @@ describe('DatabaseNotificationStore', () => {
 
     const attempt = createAttempt();
     const started = await store.startAttempt(
-      claimed!,
+      {
+        ...claimed!,
+        providerIdempotency: {
+          key: 'deliveryId',
+          startedAt: '2026-08-24T00:00:01.000Z',
+          expiresAt: '2026-08-25T00:00:01.000Z',
+        },
+      },
       attempt,
       '2026-08-24T00:01:00.000Z',
     );
+    expect(started?.providerIdempotency).toEqual({
+      key: 'deliveryId',
+      startedAt: '2026-08-24T00:00:01.000Z',
+      expiresAt: '2026-08-25T00:00:01.000Z',
+    });
     expect(started).toMatchObject({ attemptCount: 1 });
     await expect(
       store.startAttempt(
@@ -326,6 +338,7 @@ describe('DatabaseNotificationStore', () => {
       status: 'pending',
       retryResolution: { type: 'confirmed_not_delivered' },
       lastError: undefined,
+      providerIdempotency: undefined,
     });
   });
 });

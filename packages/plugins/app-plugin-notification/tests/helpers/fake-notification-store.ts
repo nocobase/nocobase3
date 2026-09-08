@@ -162,6 +162,7 @@ export class FakeNotificationStore implements NotificationStore {
       status: 'submitting',
       leaseExpiresAt,
       retryResolution: current.retryResolution,
+      providerIdempotency: delivery.providerIdempotency,
       updatedAt: await this.now(),
     };
     this.deliveries.set(next.id, next);
@@ -275,6 +276,10 @@ export class FakeNotificationStore implements NotificationStore {
       status: 'pending',
       lastError: undefined,
       retryResolution: resolution,
+      providerIdempotency:
+        resolution.type === 'safe_provider_idempotency'
+          ? delivery.providerIdempotency
+          : undefined,
       updatedAt: await this.now(),
     };
     this.deliveries.set(id, retried);

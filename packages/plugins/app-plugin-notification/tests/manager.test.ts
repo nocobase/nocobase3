@@ -912,6 +912,46 @@ describe('NotificationManager registration', () => {
     await queue.close();
   });
 
+  it('does not emit an older status snapshot after a newer one', async () => {
+    const store = new DelayedLogNotificationStore();
+    const send = vi
+      .fn<
+        (input: NotificationProviderSendInput) => Promise<ProviderSendResult>
+      >()
+      .mockResolvedValueOnce({
+        status: 'failed',
+        disposition: 'never',
+        error: { message: 'rejected', category: 'provider' },
+      })
+      .mockResolvedValueOnce({ status: 'accepted' });
+    const { manager, queue } = createEmailManagerHarness({ send, store });
+    const sent = await manager.send({
+      idempotencyKey: 'status-event-order-1',
+      to: { type: 'email', address: 'buyer@example.com' },
+      channels: ['email'],
+      content: { body: 'Ordered status event.' },
+    });
+    const gate = store.delayNextLogRead();
+    const statuses: string[] = [];
+    const unsubscribe = manager.onStatusChanged(
+      { notificationId: sent.notificationId },
+      (event) => {
+        statuses.push(event.status);
+      },
+    );
+    await gate.captured;
+
+    await manager.retryDelivery({ deliveryId: sent.deliveries[0]!.id });
+    await vi.waitFor(() => expect(statuses).toContain('completed'));
+    gate.release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(statuses.at(-1)).toBe('completed');
+    unsubscribe();
+    await manager.close();
+    await queue.close();
+  });
+
   it('retries terminal failed Deliveries and records the retry resolution', async () => {
     const send = vi
       .fn<
@@ -1043,6 +1083,194 @@ describe('NotificationManager registration', () => {
     await manager.close();
     await queue.close();
   });
+
+  it('does not extend a bounded Provider idempotency window on each retry', async () => {
+    const store = new ControlledNowNotificationStore(
+      '2026-09-01T00:00:00.000Z',
+    );
+    const send = vi
+      .fn<
+        (input: NotificationProviderSendInput) => Promise<ProviderSendResult>
+      >()
+      .mockResolvedValue({
+        status: 'submission_unknown',
+        error: { message: 'response lost', category: 'network' },
+      });
+    const { manager, queue } = createEmailManagerHarness({
+      send,
+      store,
+      capabilities: {
+        idempotency: {
+          supported: true,
+          key: 'deliveryId',
+          retentionMs: 24 * 60 * 60 * 1_000,
+        },
+      },
+    });
+    const sent = await manager.send({
+      idempotencyKey: 'retry-unknown-bounded-window-1',
+      to: { type: 'email', address: 'buyer@example.com' },
+      channels: ['email'],
+      content: { body: 'Bounded Provider idempotency.' },
+    });
+    const deliveryId = sent.deliveries[0]!.id;
+
+    store.setNow('2026-09-01T23:00:00.000Z');
+    await expect(manager.retryDelivery({ deliveryId })).resolves.toMatchObject({
+      status: 'unknown',
+      attemptCount: 2,
+    });
+    store.setNow('2026-09-02T01:00:00.000Z');
+
+    await expect(
+      manager.getNotification(sent.notificationId),
+    ).resolves.toMatchObject({
+      deliveries: [
+        {
+          retry: {
+            allowed: false,
+            mode: 'duplicate_risk_confirmation_required',
+          },
+        },
+      ],
+    });
+    await expect(manager.retryDelivery({ deliveryId })).rejects.toMatchObject({
+      code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
+    });
+    expect(send).toHaveBeenCalledTimes(2);
+
+    await manager.close();
+    await queue.close();
+  });
+
+  it('stops a safe retry when its Provider idempotency window expires during preparation', async () => {
+    const store = new ControlledNowNotificationStore(
+      '2026-09-01T00:00:00.000Z',
+    );
+    const send = vi
+      .fn<
+        (input: NotificationProviderSendInput) => Promise<ProviderSendResult>
+      >()
+      .mockResolvedValueOnce({
+        status: 'submission_unknown',
+        error: { message: 'response lost', category: 'network' },
+      })
+      .mockResolvedValueOnce({ status: 'accepted' });
+    let prepareCount = 0;
+    const { manager, queue } = createEmailManagerHarness({
+      send,
+      store,
+      prepare(message) {
+        prepareCount += 1;
+        if (prepareCount === 2) store.setNow('2026-09-01T00:00:01.100Z');
+        return message;
+      },
+      capabilities: {
+        idempotency: {
+          supported: true,
+          key: 'deliveryId',
+          retentionMs: 1_000,
+        },
+      },
+    });
+    const sent = await manager.send({
+      idempotencyKey: 'retry-unknown-expired-during-preparation-1',
+      to: { type: 'email', address: 'buyer@example.com' },
+      channels: ['email'],
+      content: { body: 'Slow preparation.' },
+    });
+    const deliveryId = sent.deliveries[0]!.id;
+    store.setNow('2026-09-01T00:00:00.900Z');
+
+    await expect(manager.retryDelivery({ deliveryId })).resolves.toMatchObject({
+      status: 'unknown',
+      attemptCount: 1,
+      error: { code: 'PROVIDER_IDEMPOTENCY_EXPIRED' },
+      retry: {
+        allowed: false,
+        mode: 'duplicate_risk_confirmation_required',
+      },
+    });
+    expect(send).toHaveBeenCalledOnce();
+
+    await manager.close();
+    await queue.close();
+  });
+
+  it('does not infer idempotency for an old unknown attempt from new Provider capabilities', async () => {
+    const store = new FakeNotificationStore();
+    const firstSend = vi.fn(async (): Promise<ProviderSendResult> => ({
+      status: 'submission_unknown',
+      error: { message: 'response lost', category: 'network' },
+    }));
+    const first = createEmailManagerHarness({ send: firstSend, store });
+    const sent = await first.manager.send({
+      idempotencyKey: 'retry-unknown-capability-upgrade-1',
+      to: { type: 'email', address: 'buyer@example.com' },
+      channels: ['email'],
+      content: { body: 'Capability changes after submission.' },
+    });
+    await first.manager.close();
+    await first.queue.close();
+
+    const upgradedSend = vi.fn(async (): Promise<ProviderSendResult> => ({
+      status: 'accepted',
+    }));
+    const upgraded = createEmailManagerHarness({
+      send: upgradedSend,
+      store,
+      capabilities: {
+        idempotency: { supported: true, key: 'deliveryId' },
+      },
+    });
+
+    await expect(
+      upgraded.manager.retryDelivery({ deliveryId: sent.deliveries[0]!.id }),
+    ).rejects.toMatchObject({
+      code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
+    });
+    expect(upgradedSend).not.toHaveBeenCalled();
+
+    await upgraded.manager.close();
+    await upgraded.queue.close();
+  });
+
+  it('does not use persisted idempotency evidence after the Provider drops that capability', async () => {
+    const store = new FakeNotificationStore();
+    const first = createEmailManagerHarness({
+      store,
+      send: async () => ({
+        status: 'submission_unknown',
+        error: { message: 'response lost', category: 'network' },
+      }),
+      capabilities: {
+        idempotency: { supported: true, key: 'deliveryId' },
+      },
+    });
+    const sent = await first.manager.send({
+      idempotencyKey: 'retry-unknown-capability-removed-1',
+      to: { type: 'email', address: 'buyer@example.com' },
+      channels: ['email'],
+      content: { body: 'Capability removed after submission.' },
+    });
+    await first.manager.close();
+    await first.queue.close();
+
+    const currentSend = vi.fn(async (): Promise<ProviderSendResult> => ({
+      status: 'accepted',
+    }));
+    const current = createEmailManagerHarness({ send: currentSend, store });
+
+    await expect(
+      current.manager.retryDelivery({ deliveryId: sent.deliveries[0]!.id }),
+    ).rejects.toMatchObject({
+      code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
+    });
+    expect(currentSend).not.toHaveBeenCalled();
+
+    await current.manager.close();
+    await current.queue.close();
+  });
 });
 
 function createEmailManagerHarness(input: {
@@ -1050,9 +1278,11 @@ function createEmailManagerHarness(input: {
     input: NotificationProviderSendInput,
   ) => Promise<ProviderSendResult>;
   readonly capabilities?: NotificationProviderCapabilities;
+  readonly store?: FakeNotificationStore;
+  readonly prepare?: (message: object) => object | Promise<object>;
 }) {
   const queue = createQueueManager(createSyncQueueConfig());
-  const store = new FakeNotificationStore();
+  const store = input.store ?? new FakeNotificationStore();
   const manager = createNotificationManager({
     database: {} as DatabaseManager,
     queue,
@@ -1083,7 +1313,7 @@ function createEmailManagerHarness(input: {
             return { subject: content.title, text: content.body };
           },
           async prepare({ message }): Promise<object> {
-            return message;
+            return input.prepare ? input.prepare(message) : message;
           },
         };
       },
@@ -1115,6 +1345,54 @@ class FlakyReconcileStore extends FakeNotificationStore {
       throw new Error('reconcile failed');
     }
     return super.listReady(now, limit);
+  }
+}
+
+class ControlledNowNotificationStore extends FakeNotificationStore {
+  constructor(private currentTime: string) {
+    super();
+  }
+
+  setNow(value: string): void {
+    this.currentTime = value;
+  }
+
+  override async now(): Promise<string> {
+    return this.currentTime;
+  }
+}
+
+class DelayedLogNotificationStore extends FakeNotificationStore {
+  private nextLogRead?: {
+    readonly captured: () => void;
+    readonly released: Promise<void>;
+  };
+
+  delayNextLogRead(): {
+    readonly captured: Promise<void>;
+    readonly release: () => void;
+  } {
+    let capture!: () => void;
+    let release!: () => void;
+    const captured = new Promise<void>((resolve) => {
+      capture = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.nextLogRead = { captured: capture, released };
+    return { captured, release };
+  }
+
+  override async getLog(id: string) {
+    const gate = this.nextLogRead;
+    if (gate) this.nextLogRead = undefined;
+    const snapshot = await super.getLog(id);
+    if (gate) {
+      gate.captured();
+      await gate.released;
+    }
+    return snapshot;
   }
 }
 

@@ -44,8 +44,15 @@ export interface NotificationDeliveryRecord {
   readonly leaseExpiresAt?: string;
   readonly lastError?: NotificationErrorRecord;
   readonly retryResolution?: NotificationRetryResolutionRecord;
+  readonly providerIdempotency?: NotificationProviderIdempotencyRecord;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface NotificationProviderIdempotencyRecord {
+  readonly key: 'deliveryId';
+  readonly startedAt: string;
+  readonly expiresAt?: string;
 }
 
 export interface NotificationAttemptRecord {
@@ -169,6 +176,7 @@ interface DeliveryRow extends Row {
   leaseExpiresAt?: string | null;
   lastError?: NotificationErrorRecord | string | null;
   retryResolution?: NotificationRetryResolutionRecord | string | null;
+  providerIdempotency?: NotificationProviderIdempotencyRecord | string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -388,6 +396,9 @@ export class DatabaseNotificationStore implements NotificationStore {
           .set({
             attemptCount: attempt.sequence,
             status: 'submitting',
+            providerIdempotency: delivery.providerIdempotency
+              ? JSON.stringify(delivery.providerIdempotency)
+              : null,
             leaseExpiresAt,
             updatedAt: now,
           })
@@ -529,6 +540,9 @@ export class DatabaseNotificationStore implements NotificationStore {
         nextRunAt: null,
         lastError: null,
         retryResolution: JSON.stringify(resolution),
+        ...(resolution.type === 'safe_provider_idempotency'
+          ? {}
+          : { providerIdempotency: null }),
         leaseToken: null,
         leaseExpiresAt: null,
         updatedAt: now,
@@ -714,6 +728,9 @@ function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
     retryResolution: record.retryResolution
       ? JSON.stringify(record.retryResolution)
       : undefined,
+    providerIdempotency: record.providerIdempotency
+      ? JSON.stringify(record.providerIdempotency)
+      : undefined,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -735,6 +752,7 @@ function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
     leaseExpiresAt: row.leaseExpiresAt ?? undefined,
     lastError: parseError(row.lastError),
     retryResolution: parseRetryResolution(row.retryResolution),
+    providerIdempotency: parseProviderIdempotency(row.providerIdempotency),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -826,6 +844,14 @@ function parseRetryResolution(
   if (!value) return undefined;
   if (typeof value !== 'string') return value;
   return JSON.parse(value) as NotificationRetryResolutionRecord;
+}
+
+function parseProviderIdempotency(
+  value: NotificationProviderIdempotencyRecord | string | null | undefined,
+): NotificationProviderIdempotencyRecord | undefined {
+  if (!value) return undefined;
+  if (typeof value !== 'string') return value;
+  return JSON.parse(value) as NotificationProviderIdempotencyRecord;
 }
 
 function isUniqueConstraintViolation(error: unknown): boolean {

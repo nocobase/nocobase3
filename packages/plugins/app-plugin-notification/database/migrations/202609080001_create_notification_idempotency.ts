@@ -2,12 +2,15 @@ import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202609080001_create_notification_idempotency',
-  async up({ builder }) {
+  async up({ builder, connection }) {
     await builder.alterCollection('notificationDispatches', (table) => {
       table.string('idempotencyKey', { length: 191 }).nullable();
       table.string('requestFingerprint', { length: 80 }).nullable();
       table.unique('idempotencyKey', {
         name: 'notification_dispatch_idempotency_unique',
+        ...(connection.capabilities.partialIndexes
+          ? { predicate: { idempotencyKey: { $notNull: true } } }
+          : {}),
       });
     });
     await builder.alterCollection('notificationDeliveryAttempts', (table) => {
@@ -15,10 +18,12 @@ const migration: MigrationDefinition = defineMigration({
     });
     await builder.alterCollection('notificationDeliveries', (table) => {
       table.json('retryResolution').nullable();
+      table.json('providerIdempotency').nullable();
     });
   },
   async down({ builder }) {
     await builder.alterCollection('notificationDeliveries', (table) => {
+      table.dropField('providerIdempotency');
       table.dropField('retryResolution');
     });
     await builder.alterCollection('notificationDeliveryAttempts', (table) => {
