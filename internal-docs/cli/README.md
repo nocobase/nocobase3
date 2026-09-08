@@ -1,8 +1,10 @@
-# nb3
+# nocobase
 
-`nb3` 是仓库内部的开发命令行工具，不是给最终用户全局安装的 CLI。它只做一件事：插件注册。
+`nocobase` 是 App 的命令行入口，由 `@nocobase/nb3-cli` 提供。它把三样东西装进同一棵命令树：内置的插件管理命令 `plugin *`、App 自己写的命令 `app *`、以及各个插件用自己的 topic 贡献的命令。
 
-它随 App 一起分发：`app-template-default`（以及由它生成的应用）把 `@nocobase/nb3-cli` 声明为 devDependency，通过 App 自己的 `package.json` scripts 调用。**不要 `npm i -g`，也不要让用户直接敲 `nb3`。**在 App 目录里跑对应的 `pnpm` 脚本即可。
+它随 App 一起分发：`app-template-default`（以及由它生成的应用）把 `@nocobase/nb3-cli` 声明为 devDependency，通过 App 的 `pnpm nocobase` 脚本调用。**不要 `npm i -g`。**在 App 目录里跑 `pnpm nocobase` 即可。
+
+本文只讲插件管理那部分。插件如何写命令、App 如何加载，见[插件 CLI](./plugin-cli.md)。
 
 创建项目走 `pnpm create @nocobase/app`，不经过这里。App 和 Hub 建好之后，用它们自己的 `pnpm dev`、`pnpm build`、`pnpm start` 运行。
 
@@ -14,11 +16,11 @@
 
 | 脚本                      | 实际执行                     | 作用                        |
 | ------------------------- | ---------------------------- | --------------------------- |
-| `pnpm plugin:register`    | `nb3 app plugin register`    | 安装插件包，并写入显式注册  |
-| `pnpm plugin:inspect`     | `nb3 app plugin inspect`     | 只读检查注册状态和 Skills   |
-| `pnpm plugin:unregister`  | `nb3 app plugin unregister`  | 上述的逆操作，并卸载插件包  |
-| `pnpm plugin:update`      | `nb3 app plugin update`      | 升级插件包，并同步其 skills |
-| `pnpm plugin:skills:sync` | `nb3 app plugin skills sync` | 只同步 skills，不升级       |
+| `pnpm plugin:register`    | `nocobase plugin register`    | 安装插件包，并写入显式注册  |
+| `pnpm plugin:inspect`     | `nocobase plugin inspect`     | 只读检查注册状态和 Skills   |
+| `pnpm plugin:unregister`  | `nocobase plugin unregister`  | 上述的逆操作，并卸载插件包  |
+| `pnpm plugin:update`      | `nocobase plugin update`      | 升级插件包，并同步其 skills |
+| `pnpm plugin:skills:sync` | `nocobase plugin skills sync` | 只同步 skills，不升级       |
 
 ### 安装插件
 
@@ -31,19 +33,23 @@ pnpm plugin:register audit-log --dry-run
 pnpm plugin:register audit-log --dry-run --json
 ```
 
-一条命令完成安装和显式接线：装包，写 `package.json` 的依赖与 `nocobase.plugins`，根据包导出分别更新 `client/plugins.ts` 和 `server/plugins.ts`，最后把插件带的 skills 复制进 `.agents/skills/`。
+一条命令完成安装和显式接线：装包，写 `package.json` 的依赖与 `nocobase.plugins`，根据包导出分别更新 `client/plugins.ts`、`server/plugins.ts` 和 `cli/plugins.ts`，最后把插件带的 skills 复制进 `.agents/skills/`。
 
 **只有前端插件才会写 `client/plugins.ts`。** 判据是插件的 `package.json` 有没有 `exports["./client"]`——纯服务端插件没有，给它写一行 import 会让 App 构建时报模块找不到。命令会跳过并明确告诉你跳过了。
 
 判据看的是 `./client` 而不是 `./client/plugin`，因为写进去的 import 就是 `<包名>/client`。只有 `./client/plugin` 的插件（barrel 加 default 导出之前发布的版本）同样会被跳过，否则写进去的那行在 App 里解析不到。
 
-**只有服务端插件才会写 `server/plugins.ts`。** 判据是 `exports["./server"]`，注册项直接写 `auditLog`，不是 Client factory 形式的 `auditLog()`。纯客户端插件会跳过这一项。`--disabled` 会保留安装和 manifest 登记，但 Client 和 Server 两个运行时入口都不接线。
+**只有服务端插件才会写 `server/plugins.ts`。** 判据是 `exports["./server"]`，注册项直接写 `auditLog`，不是 Client factory 形式的 `auditLog()`。纯客户端插件会跳过这一项。
 
-两个 `plugins.ts` 都是用 TypeScript 解析定位、再做文本拼接改的，不是整份 AST 重新打印，所以你写的注释、顺序、泛型和格式都会原样保留，diff 里只会多出 import 和注册项。
+**只有带命令的插件才会写 `cli/plugins.ts`。** 判据是 `exports["./cli"]`，注册项写 `auditLog`。三个入口互不依赖：纯 CLI 插件不需要 `./server`，纯服务端插件也不会被写进 `cli/plugins.ts`。
+
+`--disabled` 会保留安装和 manifest 登记，但 Client、Server、CLI 三个入口都不接线。
+
+三个 `plugins.ts` 都是用 TypeScript 解析定位、再做文本拼接改的，不是整份 AST 重新打印，所以你写的注释、顺序、泛型和格式都会原样保留，diff 里只会多出 import 和注册项。
 
 改完用 App 自己的 Prettier 和配置格式化。模板通过 `package.json` 的 `"prettier": "@nocobase/dev-config/prettier"` 继承配置；如果 App 把这个字段删了又没有别的 Prettier 配置，Prettier 会按自己的默认值（双引号）重排整个文件——这是 Prettier 的行为，不是命令改坏了。App 完全没装 Prettier 时不格式化，注册照常完成。
 
-App 没装 TypeScript 时不会整条命令失败——装包、写 `package.json`、复制 skills 都不需要编译器，照常完成；Client 或 Server 入口需要接线时会分别降级，把对应的两行原样打出来。
+App 没装 TypeScript 时不会整条命令失败——装包、写 `package.json`、复制 skills 都不需要编译器，照常完成；Client、Server、CLI 入口需要接线时会分别降级，把对应的两行原样打出来。
 
 ```
   client/plugins.ts: not edited, TypeScript is not installed in this app
@@ -72,11 +78,11 @@ pnpm plugin:unregister audit-log --dry-run --json
 1. 删掉这个插件装进来的 skills 目录（要在卸包之前，skills 是从装好的包里复制出来的）
 2. `pnpm remove` 卸包（要在改 `package.json` 之前——依赖先被删掉的话 pnpm 会找不到要卸的包而直接报错）
 3. 从 `package.json` 移除依赖和 `nocobase.plugins` 登记
-4. 从 `client/plugins.ts` 和 `server/plugins.ts` 删掉相应 import 和数组项
+4. 从 `client/plugins.ts`、`server/plugins.ts` 和 `cli/plugins.ts` 删掉相应 import 和数组项
 
 `skills sync` 只会写已注册插件的前缀，不会替你清理已经卸掉的插件，所以第 1 步必须由这条命令做。
 
-同样地，App 没装 TypeScript 时前三步照常完成，只有第 4 步按实际导出降级成打印要删的 Client/Server 行。
+同样地，App 没装 TypeScript 时前三步照常完成，只有第 4 步按实际导出降级成打印要删的 Client/Server/CLI 行。
 
 ### 升级插件
 
@@ -109,13 +115,13 @@ pnpm plugin:skills:sync --dry-run --json
 pnpm plugin:inspect audit-log --json
 ```
 
-`plugin:inspect` 不写入任何文件，只检查已安装包、依赖、`nocobase.plugins`、Client/Server 显式注册项和插件 Skills 与 App 副本是否一致。它不判断 Route 的授权边界、运行时行为、测试结果或 App 构建结果；这些仍需单独验证。
+`plugin:inspect` 不写入任何文件，只检查已安装包、依赖、`nocobase.plugins`、Client/Server/CLI 显式注册项和插件 Skills 与 App 副本是否一致。它不判断 Route 的授权边界、运行时行为、测试结果或 App 构建结果；这些仍需单独验证。
 
 所有插件生命周期命令的 JSON 输出都使用同一 envelope：`schemaVersion`、`ok`、`operation`、`status`，成功结果在 `result`，失败结果在 `error`。成功状态包括 `success`、`success-noop`、`partial-success` 和 `requires-installation`；失败为 `ok: false`、`status: failure`，并带有稳定的 `error.code`、`message`、`suggestions`。成功写 stdout，失败写 stderr，Agent 应同时检查退出码。
 
 上游是唯一真相：每个同步过来的目录都会被整体替换，本地改动会丢失。要写自己的 skills，用一个不以 `nocobase-` 开头的目录名，同步不会碰它。
 
-### `nb3 app plugin *` 通用参数
+### `nocobase plugin *` 通用参数
 
 | 参数              | 适用                                               | 说明                           |
 | ----------------- | -------------------------------------------------- | ------------------------------ |
@@ -138,16 +144,16 @@ pnpm plugin:inspect audit-log --json
 
 包管理器按 App 自己的 `packageManager` 字段和 lockfile 判断，不会在 pnpm 项目里凭空多出一个 `package-lock.json`。
 
-命令 id 用空格分隔，也可以写成冒号形式：`nb3 app plugin skills:sync` 与 `nb3 app plugin skills sync` 等价。
+命令 id 用空格分隔，也可以写成冒号形式：`nocobase plugin skills:sync` 与 `nocobase plugin skills sync` 等价。
 
 ## 仓库内开发命令
 
-在本仓库根目录开发插件时仍使用这些 `pnpm` scripts。除创建和删除源码外，注册和卸载都直接调用同一个 `nb3 app plugin *` 实现。根目录没有独立的 skills 同步脚本：`plugin:register` 已经顺带复制 skills；要单独重新同步，进 `packages/templates/app-template-default` 跑 `pnpm plugin:skills:sync`。
+在本仓库根目录开发插件时仍使用这些 `pnpm` scripts。除创建和删除源码外，注册和卸载都直接调用同一个 `nocobase plugin *` 实现。根目录没有独立的 skills 同步脚本：`plugin:register` 已经顺带复制 skills；要单独重新同步，进 `packages/templates/app-template-default` 跑 `pnpm plugin:skills:sync`。
 
 | 命令                                            | 作用                                                         |
 | ----------------------------------------------- | ------------------------------------------------------------ |
 | `pnpm plugin:create <name> --with <capability>` | 按显式 capability 生成 `packages/plugins/app-plugin-<name>/` |
-| `pnpm plugin:register <name>`                   | 写依赖、manifest、Client/Server 显式入口，并复制 skills      |
+| `pnpm plugin:register <name>`                   | 写依赖、manifest、Client/Server/CLI 显式入口，并复制 skills  |
 | `pnpm plugin:unregister <name>`                 | 上述四项的逆操作                                             |
 | `pnpm plugin:inspect <name>`                    | 只读检查多面注册状态和 Skills                                |
 | `pnpm plugin:remove <name>`                     | 删除插件源码；仍被引用时会拒绝并提示先 unregister            |
@@ -158,9 +164,9 @@ pnpm plugin:inspect audit-log --json
 
 `plugin:create` 不使用默认的完整模板。`--with` 可以重复，支持 `database`、`server.service-providers`、`server.routes`、`server.jobs`、`server.locales`、`client.routes`、`client.components`、`client.service-providers`、`client.react-providers`、`client.locales`、`registry` 和 `skills`。只需要 package foundation 时显式使用 `--empty`；Agent 预览时使用 `--dry-run --json`。
 
-`plugin:create --json` 输出稳定的 JSON envelope，`nb3 app plugin *` 的各条命令也一样。失败结果包含 `ok: false`、`error.code`、`error.message` 和 `error.suggestions`，同时保持非零退出码；Agent 不应把 JSON 模式的 stderr 当作普通帮助文本解析。
+`plugin:create --json` 输出稳定的 JSON envelope，`nocobase plugin *` 的各条命令也一样。失败结果包含 `ok: false`、`error.code`、`error.message` 和 `error.suggestions`，同时保持非零退出码；Agent 不应把 JSON 模式的 stderr 当作普通帮助文本解析。
 
-Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数表：
+Create Plugin 自己的参数不属于上面的 `nocobase plugin *` 通用参数表：
 
 ```text
 --with <capability>             可重复；选择要生成的 capability
@@ -180,10 +186,11 @@ Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数�
 | ---------------------------- | -------------------------------- |
 | 改 `client/plugins.ts`       | `src/lib/client-plugins.ts`      |
 | 改 `server/plugins.ts`       | `src/lib/server-plugins.ts`      |
+| 改 `cli/plugins.ts`          | `src/lib/cli-plugins.ts`         |
 | 改 `nocobase.plugins` 和依赖 | `src/lib/plugin-registration.ts` |
 | 复制 skills                  | `src/lib/skills-sync.ts`         |
 
-根脚本给 `nb3` 传入 `--workspace-root .`。这个模式支持 `--app <目录名或完整包名>`，省略时选择 `app-template-default`，并把注册依赖范围默认设为 `workspace:^`。独立 App 不传这个参数，仍以当前目录为 App 并从 registry 安装。
+根脚本给 `nocobase` 传入 `--workspace-root .`。这个模式支持 `--app <目录名或完整包名>`，省略时选择 `app-template-default`，并把注册依赖范围默认设为 `workspace:^`。独立 App 不传这个参数，仍以当前目录为 App 并从 registry 安装。
 
 真正的差别只有两处，所以它们是同一条命令的运行参数：
 
@@ -194,9 +201,9 @@ Create Plugin 自己的参数不属于上面的 `nb3 app plugin *` 通用参数�
 
 ## 曾经有过的 App 与 Hub 命令
 
-`nb3 app create`、`dev`、`info`、`config`、`destroy`、`deploy`、`pull`、`list` 和 `nb3 hub *` 已全部删除。
+`app create`、`dev`、`info`、`config`、`destroy`、`deploy`、`pull`、`list` 和 `hub *` 已全部删除（当时 bin 还叫 `nb3`）。
 
-它们来自一个不同的设想：用户先全局安装 `nb3`，再用它创建和运行项目。实际走的是另一条路——项目由 `pnpm create @nocobase/app` 生成，之后用项目自己的 scripts 运行，Hub 的启停也在 Hub 项目里解决。那批命令因此没有任何调用方，其中 `deploy`、`pull`、`list` 从未实现，只会以退出码 3 报错。
+它们来自一个不同的设想：用户先全局安装这个 CLI，再用它创建和运行项目。实际走的是另一条路——项目由 `pnpm create @nocobase/app` 生成，之后用项目自己的 scripts 运行，Hub 的启停也在 Hub 项目里解决。那批命令因此没有任何调用方，其中 `deploy`、`pull`、`list` 从未实现，只会以退出码 3 报错。
 
 一并消失的还有 Hub 的 `.nb3/` 目录：`hub.json`、`logs/`、`cache/` 只被这些命令读写，Hub 自身从不碰它们，所以 `create-app` 也不再生成。
 

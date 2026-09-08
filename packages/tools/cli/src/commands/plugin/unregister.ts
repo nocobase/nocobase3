@@ -4,25 +4,25 @@ import path from 'node:path';
 import {
   appPackageManager,
   removeDependencyCommand,
-} from '../../../lib/plugin-install.ts';
+} from '../../lib/plugin-install.ts';
 import {
   applyPluginRegistration,
   planPluginUnregistration,
   planPluginSkillRemovals,
   pluginPackageName,
   removePluginSkills,
-} from '../../../lib/plugin-registration.ts';
-import { runAttached } from '../../../lib/run-command.ts';
+} from '../../lib/plugin-registration.ts';
+import { runAttached } from '../../lib/run-command.ts';
 import {
   classifyPluginError,
   pluginJsonFailure,
   pluginPlanForJson,
   pluginJsonSuccess,
-} from '../../../lib/plugin-json.ts';
-import { runCommand } from '../../../lib/run-command.ts';
-import { resolveAppRoot } from '../../../lib/workspace-app.ts';
+} from '../../lib/plugin-json.ts';
+import { runCommand } from '../../lib/run-command.ts';
+import { resolveAppRoot } from '../../lib/workspace-app.ts';
 
-export default class AppPluginUnregister extends Command {
+export default class PluginUnregister extends Command {
   static override summary = 'Remove a plugin from this app.';
   static override description =
     'Undoes what register did: drops the imports and entries from the client and server composition roots, removes the nocobase.plugins registration and dependency, deletes installed skills, and uninstalls the package.';
@@ -86,7 +86,7 @@ export default class AppPluginUnregister extends Command {
   }
 
   private async runUnsafe(): Promise<void> {
-    const { args, flags } = await this.parse(AppPluginUnregister);
+    const { args, flags } = await this.parse(PluginUnregister);
     const appRoot = await resolveAppRoot({
       app: flags.app,
       dir: flags.dir,
@@ -120,7 +120,7 @@ export default class AppPluginUnregister extends Command {
         this.logJson(
           pluginJsonSuccess(
             'plugin:unregister',
-            plan.manualClientEdit || plan.manualServerEdit
+            plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit
               ? 'partial-success'
               : 'success',
             {
@@ -201,7 +201,8 @@ export default class AppPluginUnregister extends Command {
           'plugin:unregister',
           packageManagerFailed ||
             finalPlan.manualClientEdit ||
-            finalPlan.manualServerEdit
+            finalPlan.manualServerEdit ||
+            finalPlan.manualCliEdit
             ? 'partial-success'
             : 'success',
           {
@@ -249,6 +250,14 @@ export default class AppPluginUnregister extends Command {
       this.log('Remove these two lines by hand:');
       this.log(`  1. ${finalPlan.manualServerEdit.importStatement}`);
       this.log(`  2. ${finalPlan.manualServerEdit.entry}`);
+    }
+    if (finalPlan.manualCliEdit) {
+      this.log(
+        `\n${path.relative(appRoot, finalPlan.manualCliEdit.filePath)} still imports this plugin and could not be edited: TypeScript is not installed in this app.`,
+      );
+      this.log('Remove these two lines by hand:');
+      this.log(`  1. ${finalPlan.manualCliEdit.importStatement}`);
+      this.log(`  2. ${finalPlan.manualCliEdit.entry}`);
     }
   }
 }

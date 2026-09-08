@@ -4,26 +4,31 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
+  createCliPluginsEditor,
+  readCliPlugins,
+} from '../../lib/cli-plugins.ts';
+import {
   createClientPluginsEditor,
   readClientPlugins,
-} from '../../../lib/client-plugins.ts';
-import { installedPluginDirectory } from '../../../lib/plugin-install.ts';
+} from '../../lib/client-plugins.ts';
+import { installedPluginDirectory } from '../../lib/plugin-install.ts';
 import {
+  hasCliPluginEntry,
   hasClientPluginEntry,
   hasServerPluginEntry,
   pluginPackageName,
-} from '../../../lib/plugin-registration.ts';
+} from '../../lib/plugin-registration.ts';
 import {
   classifyPluginError,
   pluginJsonFailure,
   pluginJsonSuccess,
-} from '../../../lib/plugin-json.ts';
+} from '../../lib/plugin-json.ts';
 import {
   createServerPluginsEditor,
   readServerPlugins,
-} from '../../../lib/server-plugins.ts';
-import { collectPluginSkills } from '../../../lib/skills-sync.ts';
-import { resolveAppRoot } from '../../../lib/workspace-app.ts';
+} from '../../lib/server-plugins.ts';
+import { collectPluginSkills } from '../../lib/skills-sync.ts';
+import { resolveAppRoot } from '../../lib/workspace-app.ts';
 
 interface InspectIssue {
   readonly code: string;
@@ -36,7 +41,7 @@ interface InspectSuggestion {
   readonly args: readonly string[];
 }
 
-export default class AppPluginInspect extends Command {
+export default class PluginInspect extends Command {
   static override summary = "Inspect a plugin's static registration state.";
   static override description =
     'Reads the installed package, dependency and metadata records, Client and Server composition roots, and synchronized Skills without modifying the App.';
@@ -70,7 +75,7 @@ export default class AppPluginInspect extends Command {
 
   public async run(): Promise<void> {
     try {
-      const { args, flags } = await this.parse(AppPluginInspect);
+      const { args, flags } = await this.parse(PluginInspect);
       const appRoot = await resolveAppRoot({
         app: flags.app,
         dir: flags.dir,
@@ -132,6 +137,9 @@ async function inspectPlugin(
   const serverExport = pluginDirectory
     ? await hasServerPluginEntry(pluginDirectory)
     : false;
+  const cliExport = pluginDirectory
+    ? await hasCliPluginEntry(pluginDirectory)
+    : false;
   const issues: InspectIssue[] = [];
 
   if (!pluginDirectory)
@@ -155,8 +163,10 @@ async function inspectPlugin(
 
   const client = await inspectComposition(appRoot, packageName, 'client');
   const server = await inspectComposition(appRoot, packageName, 'server');
+  const cli = await inspectComposition(appRoot, packageName, 'cli');
   const expectedClient = enabled && clientExport;
   const expectedServer = enabled && serverExport;
+  const expectedCli = enabled && cliExport;
   if (client.registered !== expectedClient)
     issues.push({
       code: expectedClient ? 'CLIENT_ENTRY_MISSING' : 'CLIENT_ENTRY_UNEXPECTED',
@@ -167,6 +177,12 @@ async function inspectPlugin(
     issues.push({
       code: expectedServer ? 'SERVER_ENTRY_MISSING' : 'SERVER_ENTRY_UNEXPECTED',
       message: `server/plugins.ts is ${server.registered ? '' : 'not '}registered, expected ${expectedServer}.`,
+      severity: 'error',
+    });
+  if (cli.registered !== expectedCli)
+    issues.push({
+      code: expectedCli ? 'CLI_ENTRY_MISSING' : 'CLI_ENTRY_UNEXPECTED',
+      message: `cli/plugins.ts is ${cli.registered ? '' : 'not '}registered, expected ${expectedCli}.`,
       severity: 'error',
     });
 
@@ -199,13 +215,18 @@ async function inspectPlugin(
       packageName,
       installed: pluginDirectory !== undefined,
       pluginDirectory,
-      exports: { client: clientExport, serverPlugin: serverExport },
+      exports: {
+        client: clientExport,
+        serverPlugin: serverExport,
+        cli: cliExport,
+      },
     },
     dependency: { field: dependencyField, range: dependencyRange },
     metadata: { registered: registration !== undefined, enabled },
     composition: {
       client: { expected: expectedClient, ...client },
       server: { expected: expectedServer, ...server },
+      cli: { expected: expectedCli, ...cli },
     },
     skills,
     consistent: issues.length === 0,
@@ -217,17 +238,21 @@ async function inspectPlugin(
 async function inspectComposition(
   appRoot: string,
   packageName: string,
-  kind: 'client' | 'server',
+  kind: 'client' | 'server' | 'cli',
 ): Promise<{ registered: boolean; order?: number }> {
   const file =
     kind === 'client'
       ? await readClientPlugins(appRoot)
-      : await readServerPlugins(appRoot);
+      : kind === 'server'
+        ? await readServerPlugins(appRoot)
+        : await readCliPlugins(appRoot);
   if (!file.exists) return { registered: false };
   const editor =
     kind === 'client'
       ? await createClientPluginsEditor(appRoot)
-      : await createServerPluginsEditor(appRoot);
+      : kind === 'server'
+        ? await createServerPluginsEditor(appRoot)
+        : await createCliPluginsEditor(appRoot);
   const entries = editor.list(file.sourceText);
   const order = entries.findIndex((entry) => entry.packageName === packageName);
   return order === -1

@@ -5,15 +5,15 @@ import {
   formatSkillsSyncSummary,
   planSkillsSync,
   resolveInstalledPlugins,
-} from '../../../../lib/skills-sync.ts';
+} from '../../../lib/skills-sync.ts';
 import {
   classifyPluginError,
   pluginJsonFailure,
   pluginJsonSuccess,
-} from '../../../../lib/plugin-json.ts';
-import { resolveAppRoot } from '../../../../lib/workspace-app.ts';
+} from '../../../lib/plugin-json.ts';
+import { resolveAppRoot } from '../../../lib/workspace-app.ts';
 
-export default class AppSkillsSync extends Command {
+export default class PluginSkillsSync extends Command {
   static override summary = "Copy plugin skills into the app's .agents/skills.";
   static override description =
     "Plugins ship App-facing skills in skills/nocobase-<package>/ and this copies them into the app's ignored local .agents/skills/ directory. Upstream is the single source of truth: each synchronized directory is replaced wholesale, and directories whose names do not start with nocobase- are never touched. Run this after upgrading a plugin whose skills changed.";
@@ -83,7 +83,7 @@ export default class AppSkillsSync extends Command {
   }
 
   private async runUnsafe(): Promise<void> {
-    const { flags } = await this.parse(AppSkillsSync);
+    const { flags } = await this.parse(PluginSkillsSync);
     const appRoot = await resolveAppRoot({
       app: flags.app,
       dir: flags.dir,

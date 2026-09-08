@@ -18,6 +18,9 @@
       "@nocobase/app-plugin-authorization": {
         "enabled": true
       },
+      "@nocobase/app-plugin-cli-example": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-database-example": {
         "enabled": true
       },
@@ -39,10 +42,10 @@
       "@nocobase/app-plugin-notification-in-app": {
         "enabled": true
       },
-      "@nocobase/app-plugin-notification-providers": {
+      "@nocobase/app-plugin-notification-provider": {
         "enabled": true
       },
-      "@nocobase/app-plugin-notification-provider": {
+      "@nocobase/app-plugin-notification-providers": {
         "enabled": true
       },
       "@nocobase/app-plugin-queue-example": {
@@ -79,6 +82,7 @@
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
+    "@nocobase/app-plugin-cli-example": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
     "@nocobase/app-plugin-hub": "workspace:^",
@@ -110,6 +114,7 @@
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
+    "@oclif/core": "catalog:",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/devtools": "^2.0.1",
@@ -185,6 +190,7 @@
   },
   "files": [
     ".prettierignore",
+    "cli",
     "client",
     "server",
     "database",
@@ -226,11 +232,12 @@
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
-    "plugin:register": "nb3 app plugin register",
-    "plugin:inspect": "nb3 app plugin inspect",
-    "plugin:unregister": "nb3 app plugin unregister",
-    "plugin:update": "nb3 app plugin update",
-    "plugin:skills:sync": "nb3 app plugin skills sync",
+    "nocobase": "tsx ./cli/index.ts",
+    "plugin:register": "nocobase plugin register",
+    "plugin:inspect": "nocobase plugin inspect",
+    "plugin:unregister": "nocobase plugin unregister",
+    "plugin:update": "nocobase plugin update",
+    "plugin:skills:sync": "nocobase plugin skills sync",
     "client:inspect": "tsx ./scripts/inspect-client.mjs",
     "server:inspect": "tsx ./scripts/inspect-server.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",

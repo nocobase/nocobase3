@@ -7,29 +7,30 @@ import {
   declaredDependencyRange,
   installedPluginDirectory,
   installedPluginVersion,
-} from '../../../lib/plugin-install.ts';
-import type { ManualClientPluginEdit } from '../../../lib/client-plugins.ts';
-import type { ManualServerPluginEdit } from '../../../lib/server-plugins.ts';
+} from '../../lib/plugin-install.ts';
+import type { ManualCliPluginEdit } from '../../lib/cli-plugins.ts';
+import type { ManualClientPluginEdit } from '../../lib/client-plugins.ts';
+import type { ManualServerPluginEdit } from '../../lib/server-plugins.ts';
 import {
   applyPluginRegistration,
   planPluginRegistration,
   pluginPackageName,
-} from '../../../lib/plugin-registration.ts';
+} from '../../lib/plugin-registration.ts';
 import {
   classifyPluginError,
   pluginJsonFailure,
   pluginPlanForJson,
   pluginJsonSuccess,
-} from '../../../lib/plugin-json.ts';
-import { runAttached, runCommand } from '../../../lib/run-command.ts';
-import { resolveAppRoot } from '../../../lib/workspace-app.ts';
+} from '../../lib/plugin-json.ts';
+import { runAttached, runCommand } from '../../lib/run-command.ts';
+import { resolveAppRoot } from '../../lib/workspace-app.ts';
 import {
   applySkillsSync,
   formatSkillsSyncSummary,
   planSkillsSync,
-} from '../../../lib/skills-sync.ts';
+} from '../../lib/skills-sync.ts';
 
-export default class AppPluginRegister extends Command {
+export default class PluginRegister extends Command {
   static override summary = 'Install a plugin and wire it into this app.';
   static override description =
     'Adds the plugin package as a dependency, registers it under nocobase.plugins, wires its exported client and server entries into the explicit application composition roots, and copies the skills it ships into .agents/skills.';
@@ -107,7 +108,7 @@ export default class AppPluginRegister extends Command {
   }
 
   private async runUnsafe(): Promise<void> {
-    const { args, flags } = await this.parse(AppPluginRegister);
+    const { args, flags } = await this.parse(PluginRegister);
     const appRoot = await resolveAppRoot({
       app: flags.app,
       dir: flags.dir,
@@ -149,6 +150,7 @@ export default class AppPluginRegister extends Command {
               'nocobase.plugins',
               'client/plugins.ts',
               'server/plugins.ts',
+              'cli/plugins.ts',
             ],
             notChecked: ['skills-content', 'runtime-behavior'],
           }),
@@ -167,7 +169,7 @@ export default class AppPluginRegister extends Command {
         });
     if (dryRun) {
       const status =
-        plan.manualClientEdit || plan.manualServerEdit
+        plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit
           ? 'partial-success'
           : 'success';
       if (flags.json) {
@@ -195,7 +197,7 @@ export default class AppPluginRegister extends Command {
         this.logJson(
           pluginJsonSuccess(
             'plugin:register',
-            plan.manualClientEdit || plan.manualServerEdit
+            plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit
               ? 'partial-success'
               : 'success',
             {
@@ -220,7 +222,7 @@ export default class AppPluginRegister extends Command {
         this.logJson(
           pluginJsonSuccess(
             'plugin:register',
-            plan.manualClientEdit || plan.manualServerEdit
+            plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit
               ? 'partial-success'
               : 'success',
             {
@@ -377,6 +379,11 @@ export default class AppPluginRegister extends Command {
         `  ${path.relative(appRoot, plan.serverPluginsPath)}: import and registration`,
       );
     }
+    if (plan.cliPluginsChanged) {
+      lines.push(
+        `  ${path.relative(appRoot, plan.cliPluginsPath)}: import and registration`,
+      );
+    }
     if (plan.skippedClientEntry === 'no-client-entry') {
       lines.push(
         '  client/plugins.ts: skipped, this plugin ships no client entry',
@@ -393,6 +400,12 @@ export default class AppPluginRegister extends Command {
     if (plan.skippedServerEntry === 'disabled') {
       lines.push('  server/plugins.ts: skipped, the plugin is disabled');
     }
+    if (plan.skippedCliEntry === 'no-cli-entry') {
+      lines.push('  cli/plugins.ts: skipped, this plugin ships no CLI entry');
+    }
+    if (plan.skippedCliEntry === 'disabled') {
+      lines.push('  cli/plugins.ts: skipped, the plugin is disabled');
+    }
     if (plan.manualClientEdit) {
       lines.push(
         ...manualEditInstructions(plan.manualClientEdit, appRoot, dryRun),
@@ -401,6 +414,11 @@ export default class AppPluginRegister extends Command {
     if (plan.manualServerEdit) {
       lines.push(
         ...manualEditInstructions(plan.manualServerEdit, appRoot, dryRun),
+      );
+    }
+    if (plan.manualCliEdit) {
+      lines.push(
+        ...manualEditInstructions(plan.manualCliEdit, appRoot, dryRun),
       );
     }
     return lines.join('\n');
@@ -413,14 +431,16 @@ export default class AppPluginRegister extends Command {
  * entry" is not something it can act on.
  */
 function manualEditInstructions(
-  edit: ManualClientPluginEdit | ManualServerPluginEdit,
+  edit: ManualClientPluginEdit | ManualServerPluginEdit | ManualCliPluginEdit,
   appRoot: string,
   dryRun: boolean,
 ): string[] {
   const relativePath = path.relative(appRoot, edit.filePath);
   const registerCallName = relativePath.startsWith(`server${path.sep}`)
     ? 'defineServerPlugins'
-    : 'defineClientPlugins';
+    : relativePath.startsWith(`cli${path.sep}`)
+      ? 'defineCliPlugins'
+      : 'defineClientPlugins';
   return [
     `  ${relativePath}: not edited, TypeScript is not installed in this app`,
     '',

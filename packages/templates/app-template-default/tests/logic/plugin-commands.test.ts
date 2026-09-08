@@ -25,11 +25,12 @@ const scripts = appPackage.scripts ?? {};
 
 /** The command surface documented in internal-docs/cli/README.md, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
-  'plugin:register': 'nb3 app plugin register',
-  'plugin:inspect': 'nb3 app plugin inspect',
-  'plugin:unregister': 'nb3 app plugin unregister',
-  'plugin:update': 'nb3 app plugin update',
-  'plugin:skills:sync': 'nb3 app plugin skills sync',
+  'plugin:register': 'nocobase plugin register',
+  'plugin:inspect': 'nocobase plugin inspect',
+  'plugin:unregister': 'nocobase plugin unregister',
+  'plugin:update': 'nocobase plugin update',
+  'plugin:skills:sync': 'nocobase plugin skills sync',
+  nocobase: 'tsx ./cli/index.ts',
   'client:inspect': 'tsx ./scripts/inspect-client.mjs',
   'server:inspect': 'tsx ./scripts/inspect-server.mjs',
 };
@@ -41,7 +42,7 @@ describe('documented plugin commands', () => {
 
   it('declares the CLI that the plugin scripts invoke', () => {
     const usesCli = Object.entries(scripts).filter(([, command]) =>
-      /(^|&&\s*)nb3\s/.test(command),
+      /(^|&&\s*)nocobase\s/.test(command),
     );
 
     expect(usesCli.length).toBeGreaterThan(0);

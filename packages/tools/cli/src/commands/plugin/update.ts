@@ -1,22 +1,22 @@
 import { Command, Flags } from '@oclif/core';
 import path from 'node:path';
 
-import { planPluginUpdate } from '../../../lib/plugin-update.ts';
-import { runAttached } from '../../../lib/run-command.ts';
+import { planPluginUpdate } from '../../lib/plugin-update.ts';
+import { runAttached } from '../../lib/run-command.ts';
 import {
   classifyPluginError,
   pluginJsonFailure,
   pluginJsonSuccess,
-} from '../../../lib/plugin-json.ts';
-import { runCommand } from '../../../lib/run-command.ts';
+} from '../../lib/plugin-json.ts';
+import { runCommand } from '../../lib/run-command.ts';
 import {
   applySkillsSync,
   formatSkillsSyncSummary,
   planSkillsSync,
   resolveInstalledPlugins,
-} from '../../../lib/skills-sync.ts';
+} from '../../lib/skills-sync.ts';
 
-export default class AppPluginUpdate extends Command {
+export default class PluginUpdate extends Command {
   static override summary = 'Upgrade plugins and re-synchronize their skills.';
   static override description =
     'Upgrades the plugin packages through the package manager the app already uses, then copies the skills the upgraded plugins ship into .agents/skills. Without --plugin every registered plugin is upgraded. The skills copy is the reason to prefer this over upgrading by hand: skills live in the app, so an upgrade leaves a stale copy behind until something re-runs the sync.';
@@ -64,7 +64,7 @@ export default class AppPluginUpdate extends Command {
   }
 
   private async runUnsafe(): Promise<void> {
-    const { flags } = await this.parse(AppPluginUpdate);
+    const { flags } = await this.parse(PluginUpdate);
     const appRoot = path.resolve(flags.dir ?? process.cwd());
     const dryRun = flags['dry-run'];
 
