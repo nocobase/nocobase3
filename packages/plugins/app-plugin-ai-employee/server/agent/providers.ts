@@ -3,14 +3,12 @@ import type {
   AIMessageInput,
   AIToolMessage,
 } from '@nocobase/ai-employee';
-import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 import type {
   AgentProviderOverrides,
   AgentProviders,
   ConversationProvider,
   CreateAgentProvidersOptions,
-  ToolProvider,
 } from './types.js';
 import { BaseChatMessageConverters } from './chat-message-converters.js';
 import { DEFAULT_AGENT_FEATURES } from './types.js';
@@ -271,21 +269,6 @@ export function createMemoryConversationProvider(
 export const createDefaultChatMessageConverters =
   (): BaseChatMessageConverters => new BaseChatMessageConverters();
 
-export function createDefaultToolProvider(
-  tools: ToolsEntity[] = [],
-): ToolProvider {
-  return {
-    listTools: async () => tools,
-    getBaseToolNames: async (values) =>
-      new Set(values.map((tool) => tool.definition.name)),
-    getActivatedSkillToolNames: async () => new Set(),
-    getToolsMap: async () =>
-      new Map(tools.map((tool) => [tool.definition.name, tool])),
-    shouldInterruptToolCall: () => false,
-    isAutoCall: () => true,
-  };
-}
-
 export function createAgentProviders(
   options: CreateAgentProvidersOptions,
 ): AgentProviders {
@@ -301,10 +284,6 @@ export function createAgentProviders(
   const chatMessageConverters = options.overrides?.chatMessageConverters
     ? options.overrides.chatMessageConverters(baseChatMessageConverters)
     : baseChatMessageConverters;
-  const tools = {
-    ...(options.tools ?? createDefaultToolProvider()),
-    ...(options.overrides?.tools ?? {}),
-  };
   const features = {
     ...DEFAULT_AGENT_FEATURES,
     ...(options.features ?? {}),
@@ -314,9 +293,6 @@ export function createAgentProviders(
     conversation,
     chatContext,
     chatMessageConverters,
-    tools,
-    llmProvider: options.llmProvider,
-    llmIdentity: options.llmIdentity,
     features,
     checkpointer: options.overrides?.checkpointer ?? options.checkpointer,
   };

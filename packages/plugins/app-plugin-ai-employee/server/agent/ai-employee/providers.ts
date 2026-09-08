@@ -10,7 +10,6 @@ import type {
   ConversationProvider,
   ResolvedAgentLLM,
   ToolCallHandler,
-  ToolProvider,
 } from '../types.js';
 import { BaseChatContextProvider } from '../chat-context.js';
 import { AIEmployeeChatMessageConverters } from './message-converters.js';
@@ -398,22 +397,6 @@ export function createAIEmployeeConversationProvider(
   return conversation;
 }
 
-export function createAIEmployeeToolProvider(
-  options: AIEmployeeAgentRuntimeOptions,
-  state = createState(options),
-): ToolProvider {
-  const { runtime } = state;
-  return {
-    listTools: () => runtime.getAgentTools().then((result) => result.tools),
-    getBaseToolNames: () =>
-      runtime.getAgentTools().then((result) => result.baseToolNames),
-    getActivatedSkillToolNames: () => runtime.getActivatedSkillToolNames(),
-    getToolsMap: () => runtime.getToolsMap(),
-    shouldInterruptToolCall: (tool) => runtime.shouldInterruptToolCall(tool),
-    isAutoCall: (tool) => runtime.isAutoCall(tool),
-  };
-}
-
 export class AIEmployeeChatContextProvider
   extends BaseChatContextProvider
   implements ToolCallPolicy
@@ -628,12 +611,10 @@ export async function createAIEmployeeAgentProviders(
     state,
     chatContext,
   );
-  const tools = createAIEmployeeToolProvider(options, state);
   const providers = createAgentProviders({
     conversation,
     chatContext,
     chatMessageConverters: new AIEmployeeChatMessageConverters(options),
-    tools,
     checkpointer:
       options.from === 'sub-agent'
         ? undefined

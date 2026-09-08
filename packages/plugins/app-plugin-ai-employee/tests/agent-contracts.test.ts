@@ -159,8 +159,6 @@ describe('fixed AgentService contracts', () => {
     const load = vi.fn(async () => []);
     const base = createMemoryConversationProvider({ sessionId: 'direct' });
     const providers = createAgentProviders({
-      llmProvider,
-      llmIdentity: { providerName: 'test', model: 'test' },
       conversation: base,
       chatContext: new BaseChatContextProvider({
         llmResolver: {
@@ -203,8 +201,6 @@ describe('fixed AgentService contracts', () => {
     });
     const converters = new BaseChatMessageConverters();
     const providers = createAgentProviders({
-      llmProvider,
-      llmIdentity: { providerName: 'test', model: 'test' },
       chatContext: base,
       chatMessageConverters: converters,
       overrides: {

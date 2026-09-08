@@ -392,22 +392,6 @@ export interface ChatMessageConverters {
   readonly tool: ChatMessageToStoredConverter<ToolMessage, AIMessageInput>;
 }
 
-export interface ToolProvider {
-  listTools(): Promise<ToolsEntity[]>;
-  getBaseToolNames(tools: ToolsEntity[]): Promise<Set<string>>;
-  getActivatedSkillToolNames(): Promise<Set<string>>;
-  getToolsMap(): Promise<Map<string, ToolsEntity>>;
-  shouldInterruptToolCall(tool?: ToolsEntity): boolean;
-  isAutoCall(tool?: ToolsEntity): boolean;
-}
-
-export interface AgentLLMIdentity {
-  providerName: string;
-  llmService?: string;
-  model: string;
-  getResponseMetadata?: (id: string) => Record<string, unknown> | undefined;
-}
-
 export interface AgentAbortHandle {
   readonly signal: AbortSignal;
   abort(reason?: unknown): void;
@@ -417,12 +401,6 @@ export interface AgentProviders {
   conversation: ConversationProvider;
   chatContext: ChatContextProvider;
   chatMessageConverters: ChatMessageConverters;
-  /** @deprecated Removed after middleware migration. */
-  tools: ToolProvider;
-  /** @deprecated Removed after AgentService migration. */
-  llmProvider?: LLMProvider;
-  /** @deprecated Removed after AgentService migration. */
-  llmIdentity?: AgentLLMIdentity;
   checkpointer?: BaseCheckpointSaver | boolean;
   features: AgentFeatureOptions;
 }
@@ -443,20 +421,14 @@ export interface AgentProviderOverrides {
   chatMessageConverters?: (
     base: ChatMessageConverters,
   ) => ChatMessageConverters;
-  tools?: Partial<ToolProvider>;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
 }
 
 export interface CreateAgentProvidersOptions {
-  /** @deprecated Removed after AgentService migration. */
-  llmProvider?: LLMProvider;
-  /** @deprecated Removed after AgentService migration. */
-  llmIdentity?: AgentLLMIdentity;
   conversation?: ConversationProvider;
   chatContext: ChatContextProvider;
   chatMessageConverters?: ChatMessageConverters;
-  tools?: ToolProvider;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
   overrides?: AgentProviderOverrides;
