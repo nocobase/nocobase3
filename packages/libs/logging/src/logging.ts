@@ -7,11 +7,14 @@ import type { Logger, LoggerConfig, LoggingConfig } from './types.js';
 interface ClosableDestinationStream extends DestinationStream {
   readonly closed?: boolean;
   readonly destroyed?: boolean;
+  readonly writableFinished?: boolean;
   end(): void;
   off(event: 'close', listener: () => void): this;
   off(event: 'error', listener: (error: Error) => void): this;
+  off(event: 'finish', listener: () => void): this;
   once(event: 'close', listener: () => void): this;
   once(event: 'error', listener: (error: Error) => void): this;
+  once(event: 'finish', listener: () => void): this;
 }
 
 export class Logging {
@@ -107,7 +110,7 @@ function resolveClosableStream(logger: Logger): ClosableDestinationStream {
 function closeTransportStream(
   stream: ClosableDestinationStream,
 ): Promise<void> {
-  if (stream.closed || stream.destroyed) {
+  if (stream.closed || stream.destroyed || stream.writableFinished) {
     return Promise.resolve();
   }
 
@@ -115,6 +118,7 @@ function closeTransportStream(
     const cleanup = (): void => {
       stream.off('close', handleClose);
       stream.off('error', handleError);
+      stream.off('finish', handleFinish);
     };
     const handleClose = (): void => {
       cleanup();
@@ -124,9 +128,14 @@ function closeTransportStream(
       cleanup();
       reject(error);
     };
+    const handleFinish = (): void => {
+      cleanup();
+      resolve();
+    };
 
     stream.once('close', handleClose);
     stream.once('error', handleError);
+    stream.once('finish', handleFinish);
     try {
       stream.end();
     } catch (error) {
