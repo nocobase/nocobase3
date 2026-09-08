@@ -41,7 +41,7 @@ Client 和 Server 是否注册由包的公开 exports 分别决定：
 
 - `exports["./client"]` 存在时注册 Client factory；
 - `exports["./server"]` 存在时注册 Server definition；
-- 插件清单取自 Client 与 Server 显式注册入口的并集，不再维护 `nocobase.plugins`。
+- 插件清单取自 Client、Server 与 CLI 显式注册入口的并集。
 
 ## 选择任务
 

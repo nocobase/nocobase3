@@ -5,7 +5,7 @@ description: 使用 defineClientPlugin 和 defineServerPlugin 显式声明静态
 
 # 声明 Client 和 Server 插件
 
-插件声明回答两个问题：插件公开哪些能力，以及目标 App 如何显式启用这些能力。不要通过目录存在、文件命名或 `nocobase.plugins` 猜测运行时状态。
+插件声明回答两个问题：插件公开哪些能力，以及目标 App 如何显式启用这些能力。运行时启用状态由应用的显式注册入口决定。
 
 ## 契约总览
 
