@@ -1,6 +1,6 @@
 ---
-title: 创建应用
-description: 用 pnpm create @nocobase/app 生成项目、选择数据库并启动开发服务器。
+title: '创建应用'
+description: '敲一行命令生成项目，选好数据库，跑起来。'
 ---
 
 # 创建应用
@@ -9,12 +9,11 @@ description: 用 pnpm create @nocobase/app 生成项目、选择数据库并启�
 本页内容正在编写。
 :::
 
-一条命令生成完整的应用源码：
+敲一行命令生成项目，选好数据库，跑起来。
 
-```bash
-pnpm create @nocobase/app crm
-cd crm
-pnpm dev
-```
+## 本页将覆盖
 
-本页将覆盖数据库选择、`config.yml` 的生成与调整、开发服务器的启动与访问地址。
+- `pnpm create @nocobase/app` 生成项目
+- 选择数据库，以及 `config.yml` 里生成了什么
+- `pnpm dev` 启动，打开打印出来的地址
+- 末尾说明：用 Claude Code、Codex 都一样，打开这个项目目录即可，不用额外配置

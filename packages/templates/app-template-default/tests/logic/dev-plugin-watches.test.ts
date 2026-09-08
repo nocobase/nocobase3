@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolvePluginWatchIncludes } from '../../scripts/dev-plugin-watches.mjs';
+import { resolvePluginWatchIncludes } from '../../scripts/dev/plugin-watches.mjs';
 
 const temporaryDirectories: string[] = [];
 
@@ -23,13 +23,6 @@ describe('development plugin watches', () => {
 
     writePackageJson(appDir, {
       name: '@nocobase/app-template-default',
-      nocobase: {
-        plugins: {
-          '@nocobase/app-plugin-enabled': { enabled: true },
-          '@nocobase/app-plugin-disabled': { enabled: false },
-          '@nocobase/app-plugin-external': { enabled: true },
-        },
-      },
     });
     writePackageJson(
       path.join(workspaceDir, 'packages', 'app-plugin-enabled'),
@@ -44,6 +37,16 @@ describe('development plugin watches', () => {
       { name: '@nocobase/app-plugin-unregistered' },
     );
 
+    fs.mkdirSync(path.join(appDir, 'server'), { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'server/plugins.ts'),
+      `
+      import enabled from '@nocobase/app-plugin-enabled/server';
+      import disabled from '@nocobase/app-plugin-disabled/server';
+      import external from '@nocobase/app-plugin-external/server';
+      export default defineServerPlugins([enabled, external]);
+    `,
+    );
     expect(resolvePluginWatchIncludes(appDir)).toEqual([
       '../app-plugin-enabled/package.json',
       '../app-plugin-enabled/database/**/*',
@@ -62,13 +65,6 @@ describe('development plugin watches', () => {
 
     writePackageJson(appDir, {
       name: '@nocobase/app-template-default',
-      nocobase: {
-        plugins: {
-          '@nocobase/app-plugin-enabled': { enabled: true },
-          '@nocobase/app-plugin-disabled': { enabled: false },
-          '@nocobase/app-plugin-external': { enabled: true },
-        },
-      },
     });
     writePackageJson(
       path.join(workspaceDir, 'packages', 'plugins', 'app-plugin-enabled'),
@@ -79,6 +75,16 @@ describe('development plugin watches', () => {
       { name: '@nocobase/app-plugin-disabled' },
     );
 
+    fs.mkdirSync(path.join(appDir, 'server'), { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'server/plugins.ts'),
+      `
+      import enabled from '@nocobase/app-plugin-enabled/server';
+      import disabled from '@nocobase/app-plugin-disabled/server';
+      import external from '@nocobase/app-plugin-external/server';
+      export default defineServerPlugins([enabled, external]);
+    `,
+    );
     expect(resolvePluginWatchIncludes(appDir)).toEqual([
       '../../plugins/app-plugin-enabled/package.json',
       '../../plugins/app-plugin-enabled/database/**/*',

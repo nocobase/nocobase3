@@ -2,90 +2,100 @@
 pageType: home
 pageName: home
 title: 'NocoBase 3 文档'
-description: 'NocoBase 3 是面向 AI 协作的业务系统开发基座。创建应用后源码归你所有，让 AI 直接写业务代码，用成熟插件覆盖认证、权限、工作流、通知等通用能力。'
+description: 'NocoBase 3 是为 AI 协作开发而生的业务系统开发基座。一条命令生成归你所有的应用源码，你说要什么，AI 来写，认证、权限、工作流、通知等通用能力装上就有。'
 keywords: 'NocoBase,NocoBase 3,AI 开发,业务系统,低代码,开源'
 hero:
-  name: NocoBase 3 文档
-  text: 和 AI 一起，搭建稳定的业务系统
+  name: 'NocoBase 3 文档'
+  text: '和 AI 一起，搭建稳定的业务系统'
   actions:
     - theme: brand
-      text: 快速上手
+      text: '快速上手'
       link: /get-started/
     - theme: alt
-      text: GitHub
+      text: 'GitHub'
       link: https://github.com/nocobase/nocobase
 
 features:
-  - title: 开始
-    details: 创建一个属于你的应用，跑起来，十分钟内看到第一个页面。
+  - title: '开始'
+    details: '十分钟跑起来，并且亲眼看见 AI 做出一个功能。'
     items:
-      - title: NocoBase 3 是什么
-        details: 一个命令生成完整的应用源码，前后端、数据库、AI 协作约定都在里面，从此这份代码归你。
-        link: /get-started/
-      - title: 创建应用
-        details: 用 pnpm create @nocobase/app 生成项目，选择数据库，启动开发服务器。
+      - title: 'NocoBase 3 是什么'
+        details: '一条命令生成归你所有的应用源码，你说要什么，AI 来写。'
+        link: /get-started/what-is-nocobase
+      - title: '创建应用'
+        details: '敲一行命令生成项目，选好数据库，跑起来。'
         link: /get-started/create-app
-      - title: 项目结构
-        details: client、server、database 各放什么，三个 composition root 如何决定应用由什么组成。
-        link: /get-started/project-structure
-      - title: 第一个功能
-        details: 建一张表、加一个接口、写一个页面，把完整链路走通一遍。
+      - title: '让 AI 做第一个功能'
+        details: '说一句「加一个订单管理」，看 AI 把表、接口、页面一起做出来。'
         link: /get-started/first-feature
 
-  - title: 应用开发
-    details: 业务代码写在你自己的源码里。项目自带 AI 协作约定，让 AI 写出的代码和你手写的保持一致。
+  - title: '和 AI 协作'
+    details: '怎么跟 AI 提需求，它写完了怎么检查。'
     items:
-      - title: 让 AI 参与开发
-        details: AGENTS.md 定规则，skills 提供细则，AI 按项目约定写代码，而不是凭空猜测。
-        link: /app/ai-development
-      - title: 页面与路由
-        details: 声明路由、编写页面组件、注册导航入口，以及登录态与设置页的处理。
+      - title: '怎么提需求'
+        details: '话怎么说 AI 才做得对，给几组好的和不好的对比。'
+        link: /ai/writing-requirements
+      - title: '检查 AI 的产出'
+        details: '该看哪几个地方，跑哪几个命令。'
+        link: /ai/reviewing-output
+      - title: '做复杂功能'
+        details: '一句话说不清的需求，怎么拆成几次说。'
+        link: /ai/complex-features
+      - title: '加上你们团队的规矩'
+        details: '把自己团队的要求写进去，AI 就会照着做。'
+        link: /ai/team-conventions
+
+  - title: '应用开发'
+    details: '想看懂代码、或者自己动手改，来这儿查。'
+    items:
+      - title: '总览'
+        details: '这套代码分几部分，各管什么。'
+        link: /app/overview
+      - title: '页面和菜单'
+        details: '加一个页面，配上菜单，控制登录才能看。'
         link: /app/pages-and-routes
-      - title: 界面与样式
-        details: 基于 shadcn/ui 组合界面，用语义化 Tailwind 令牌保持明暗主题一致。
-        link: /app/components-and-styling
-      - title: API 接口
-        details: 定义 HTTP 端点、Webhook 与回调，并为每条路由配置自己的认证与鉴权。
+      - title: '接口'
+        details: '写一个接口，以及怎么控制谁能调。'
         link: /app/server-routes
-      - title: 数据读写
-        details: 在运行时解析数据库、执行查询与写入、处理事务。
+      - title: '读写数据'
+        details: '查数据、存数据、事务。'
         link: /app/database
-      - title: 数据库迁移
-        details: 用迁移记录表结构变更，用种子数据准备应用必需的初始数据。
+      - title: '改表结构'
+        details: '加字段、改字段，以及准备初始数据。'
         link: /app/migrations
-      - title: 服务与后台任务
-        details: 把领域逻辑收敛成服务在多处复用，以及运行后台任务和定时任务。
-        link: /app/services-and-jobs
-      - title: 更多...
-        details: 国际化、测试与验证、AI 员工等更多主题。
+      - title: '更多…'
+        details: '界面样式、后台任务、配置、多语言、测试。'
         link: /app/
 
-  - title: 内置能力
-    details: 认证、权限、工作流这类通用需求，装上插件就有，不必自己从头实现。
+  - title: '内置能力'
+    details: '登录、权限、审批、通知这些常见需求，装上就有。'
     items:
-      - title: 使用插件
-        details: 一条命令完成安装与接线，插件的技能文档会同步到项目里供 AI 查阅。
-        link: /plugins/
-      - title: 认证与权限
-        details: 登录注册、会话、角色与数据权限。
-        link: /plugins/auth
-      - title: 工作流
-        details: 审批、多步流程，以及跨越单次请求的业务规则。
-        link: /plugins/workflow
-      - title: 更多...
-        details: 文件存储、通知、国际化，以及如何开发可复用的插件。
-        link: /plugins/
+      - title: '登录注册'
+        details: '账号密码、会话。'
+        link: /capabilities/auth
+      - title: '权限'
+        details: '角色，谁能看哪个菜单、哪条数据。'
+        link: /capabilities/authorization
+      - title: '工作流'
+        details: '审批、多步流程。'
+        link: /capabilities/workflow
+      - title: '更多…'
+        details: '通知、文件、多语言、主题、AI 员工和知识库。'
+        link: /capabilities/
 
-  - title: 部署
-    details: 从本地开发到线上运行。
+  - title: '上线和查阅'
+    details: '做完之后放上服务器，以及忘了某个名字时来查。'
     items:
-      - title: 应用配置
-        details: config.yml、环境变量，以及如何查看应用实际解析到的配置。
-        link: /deployment/configuration
-      - title: 构建与运行
-        details: 构建生产产物并独立运行，或用 Docker 部署。
-        link: /deployment/standalone
-      - title: Hub
-        details: 用 Hub 创建、启动和托管应用，把开发完成的应用部署上去。
-        link: /deployment/hub
+      - title: '教程'
+        details: '带着做一个订单系统，从建表到上线。'
+        link: /tutorials/
+      - title: '部署'
+        details: '怎么打包，怎么发到服务器上。'
+        link: /deployment/
+      - title: '参考'
+        details: '命令、配置项、样式变量、名词解释。'
+        link: /reference/
+      - title: '插件开发'
+        details: '想做一个能给别人用的功能包时才看。'
+        link: /plugin-development/
 ---

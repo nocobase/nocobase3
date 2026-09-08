@@ -4,7 +4,7 @@ import net from 'node:net';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { canListen, findAvailablePort } from '../../scripts/dev-ports.mjs';
+import { canListen, findAvailablePort } from '../../scripts/dev/ports.mjs';
 
 const servers: net.Server[] = [];
 const host = '127.0.0.1';

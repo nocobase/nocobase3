@@ -4,6 +4,10 @@
     "link": "/get-started/"
   },
   {
+    "text": "和 AI 协作",
+    "link": "/ai/"
+  },
+  {
     "text": "教程",
     "link": "/tutorials/"
   },
@@ -12,12 +16,20 @@
     "link": "/app/"
   },
   {
-    "text": "插件",
-    "link": "/plugins/"
+    "text": "内置能力",
+    "link": "/capabilities/"
   },
   {
     "text": "部署",
     "link": "/deployment/"
+  },
+  {
+    "text": "参考",
+    "link": "/reference/"
+  },
+  {
+    "text": "插件开发",
+    "link": "/plugin-development/"
   },
   {
     "text": "官网",

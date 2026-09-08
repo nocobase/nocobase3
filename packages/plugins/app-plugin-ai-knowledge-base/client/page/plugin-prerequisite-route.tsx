@@ -12,7 +12,7 @@ const knowledgeBasePluginRequirements: NocoBasePluginRequirement[] = [
     packageName: '@nocobase/plugin-ai-knowledge-base',
     label: 'AI Knowledge Base',
     probe: {
-      resource: 'aiKnowledgeBase',
+      resource: 'ai/aiKnowledgeBase',
       action: 'list',
       query: { page: 1, pageSize: 1 },
     },

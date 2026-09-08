@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import routes from '../client/routes.js';
 import { HubNavigationProvider } from '../client/providers/hub-navigation.js';
 import {
   emptyHubCapabilities,
   visibleHubDetailTabs,
 } from '../client/permissions.js';
+import routes from '../client/routes.js';
 
 describe('@nocobase/app-plugin-hub', () => {
   it('declares the authenticated Hub page and lazy-loads it', async () => {
