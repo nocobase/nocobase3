@@ -1,8 +1,6 @@
-import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type {
   AIMessage as StoredMessage,
   AIMessageInput,
-  AIToolCall,
   AIToolMessage,
 } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
@@ -10,11 +8,11 @@ import type { Logger } from '@nocobase/logging';
 import type {
   AgentProviderOverrides,
   AgentProviders,
-  ChatContextProvider,
   ConversationProvider,
   CreateAgentProvidersOptions,
   ToolProvider,
 } from './types.js';
+import { BaseChatMessageConverters } from './chat-message-converters.js';
 import { AgentServiceError, DEFAULT_AGENT_FEATURES } from './types.js';
 
 const noopLogger = {
@@ -269,71 +267,9 @@ export function createMemoryConversationProvider(
   return provider;
 }
 
-export function createDefaultChatContextProvider(
-  options: { systemPrompt?: string } = {},
-): ChatContextProvider {
-  return {
-    formatMessages: async (messages, context) =>
-      messages.map((message) => {
-        const rawContent = message.content?.content ?? '';
-        const content = rawContent as any;
-        if (message.role === 'user') return new HumanMessage({ content });
-        if (message.role === 'tool')
-          return new ToolMessage({
-            content,
-            tool_call_id: String(message.metadata?.toolCallId ?? ''),
-          });
-        if (message.role === 'system') return { role: 'system', content };
-        return new AIMessage({
-          content,
-          tool_calls: message.toolCalls as any,
-          response_metadata: message.metadata?.response_metadata,
-          additional_kwargs:
-            context.provider.prepareStoredAssistantAdditionalKwargs(
-              message.metadata?.additional_kwargs ?? {},
-            ),
-        });
-      }),
-    getSystemPrompt: async () => options.systemPrompt,
-    getExecutionConfig: async () => ({}),
-    convertAIMessage: (message, context) =>
-      ({
-        role: 'assistant',
-        content: { type: 'text', content: message.content },
-        toolCalls: message.tool_calls as AIToolCall[],
-        metadata: {
-          provider: context.providerName,
-          llmService: context.llmService,
-          model: context.model,
-          additional_kwargs:
-            context.provider.prepareStoredAssistantAdditionalKwargs(
-              message.additional_kwargs,
-            ),
-        },
-      }) as AIMessageInput,
-    convertHumanMessage: (message, context) =>
-      ({
-        role: 'user',
-        content: { type: 'text', content: message.content },
-        metadata: {
-          provider: context.providerName,
-          llmService: context.llmService,
-          model: context.model,
-        },
-      }) as AIMessageInput,
-    convertToolMessage: (message, context) =>
-      ({
-        role: 'tool',
-        content: { type: 'text', content: message.content },
-        metadata: {
-          provider: context.providerName,
-          llmService: context.llmService,
-          model: context.model,
-          toolCallId: message.tool_call_id,
-        },
-      }) as AIMessageInput,
-  };
-}
+/** @deprecated Construct a BaseChatMessageConverters directly. */
+export const createDefaultChatMessageConverters =
+  (): BaseChatMessageConverters => new BaseChatMessageConverters();
 
 export function createDefaultToolProvider(
   tools: ToolsEntity[] = [],
@@ -363,10 +299,14 @@ export function createAgentProviders(
     options.conversation ?? createMemoryConversationProvider(),
     options.overrides?.conversation,
   );
-  const chatContext = {
-    ...(options.chatContext ?? createDefaultChatContextProvider()),
-    ...(options.overrides?.chatContext ?? {}),
-  };
+  const chatContext = options.overrides?.chatContext
+    ? options.overrides.chatContext(options.chatContext)
+    : options.chatContext;
+  const baseChatMessageConverters =
+    options.chatMessageConverters ?? new BaseChatMessageConverters();
+  const chatMessageConverters = options.overrides?.chatMessageConverters
+    ? options.overrides.chatMessageConverters(baseChatMessageConverters)
+    : baseChatMessageConverters;
   const tools = {
     ...(options.tools ?? createDefaultToolProvider()),
     ...(options.overrides?.tools ?? {}),
@@ -379,6 +319,7 @@ export function createAgentProviders(
   return {
     conversation,
     chatContext,
+    chatMessageConverters,
     tools,
     llmProvider: options.llmProvider,
     llmIdentity: options.llmIdentity,

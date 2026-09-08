@@ -12,6 +12,8 @@ import {
   createAgentProviders,
   createMemoryConversationProvider,
 } from '../server/agent/providers.js';
+import { BaseChatContextProvider } from '../server/agent/chat-context.js';
+import { BaseChatMessageConverters } from '../server/agent/chat-message-converters.js';
 import {
   encodeAgentEventSSE,
   toLegacyAgentEventPayload,
@@ -160,6 +162,15 @@ describe('fixed AgentService contracts', () => {
       llmProvider,
       llmIdentity: { providerName: 'test', model: 'test' },
       conversation: base,
+      chatContext: new BaseChatContextProvider({
+        llmResolver: {
+          resolve: async () => ({
+            provider: llmProvider,
+            providerName: 'test',
+            model: 'test',
+          }),
+        },
+      }),
       overrides: { conversation: { messages: { load } } },
     });
     expect(providers.features).toEqual(DEFAULT_AGENT_FEATURES);
@@ -174,6 +185,46 @@ describe('fixed AgentService contracts', () => {
     expect(load).toHaveBeenCalledOnce();
   });
 
+  it('decorates class providers without losing prototype methods or receivers', async () => {
+    class Context extends BaseChatContextProvider {
+      readonly marker = 'base';
+      override async getSystemPrompt(): Promise<string> {
+        return this.marker;
+      }
+    }
+    const base = new Context({
+      llmResolver: {
+        resolve: async () => ({
+          provider: llmProvider,
+          providerName: 'test',
+          model: 'test',
+        }),
+      },
+    });
+    const converters = new BaseChatMessageConverters();
+    const providers = createAgentProviders({
+      llmProvider,
+      llmIdentity: { providerName: 'test', model: 'test' },
+      chatContext: base,
+      chatMessageConverters: converters,
+      overrides: {
+        chatContext: (target) =>
+          new Proxy(target, {
+            get(object, property, receiver) {
+              if (property === 'shouldInterruptToolCall') return () => true;
+              return Reflect.get(object, property, receiver);
+            },
+          }),
+      },
+    });
+
+    const llm = await providers.chatContext.resolveLLM({});
+    expect(await providers.chatContext.getSystemPrompt([], {}, llm)).toBe(
+      'base',
+    );
+    expect(providers.chatContext.shouldInterruptToolCall()).toBe(true);
+    expect(providers.chatMessageConverters).toBe(converters);
+  });
   it('encodes typed events with the legacy SSE envelope', () => {
     const event: AgentStreamEvent = {
       type: 'content',

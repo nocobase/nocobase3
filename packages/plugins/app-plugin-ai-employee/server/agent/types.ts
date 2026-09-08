@@ -416,6 +416,7 @@ export interface AgentAbortHandle {
 export interface AgentProviders {
   conversation: ConversationProvider;
   chatContext: ChatContextProvider;
+  chatMessageConverters: ChatMessageConverters;
   tools: ToolProvider;
   llmProvider: LLMProvider;
   llmIdentity: AgentLLMIdentity;
@@ -435,7 +436,10 @@ export interface AgentProviderOverrides {
     threads?: Partial<ConversationThreadStore>;
     streamCache?: Partial<ConversationStreamStore>;
   };
-  chatContext?: Partial<ChatContextProvider>;
+  chatContext?: (base: ChatContextProvider) => ChatContextProvider;
+  chatMessageConverters?: (
+    base: ChatMessageConverters,
+  ) => ChatMessageConverters;
   tools?: Partial<ToolProvider>;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
@@ -445,7 +449,8 @@ export interface CreateAgentProvidersOptions {
   llmProvider: LLMProvider;
   llmIdentity: AgentLLMIdentity;
   conversation?: ConversationProvider;
-  chatContext?: ChatContextProvider;
+  chatContext: ChatContextProvider;
+  chatMessageConverters?: ChatMessageConverters;
   tools?: ToolProvider;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
