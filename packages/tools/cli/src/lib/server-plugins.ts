@@ -18,7 +18,7 @@ import {
 const SERVER_SOURCE_DEFINITION: PluginSourceDefinition = {
   entryKind: 'value',
   entrySpecifierSuffix: '/server',
-  entrySuffixes: ['/server'],
+  entrySuffixes: ['/server/plugin', '/server'],
   fileLabel: 'server/plugins.ts',
   registerCallName: 'defineServerPlugins',
 };

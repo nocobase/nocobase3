@@ -48,6 +48,8 @@ This application ships with plugins that already implement whole categories of r
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
+Bulk plugin Skills synchronization reads the explicit `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts` registrations. A package used only through imported components can have its Skills synchronized explicitly with the CLI plugin option.
+
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.

@@ -180,7 +180,6 @@ if (!fs.existsSync(path.join(distDir, 'server'))) {
 }
 
 const rootPackage = readJson(rootPackagePath);
-const configuredPluginNames = Object.keys(rootPackage.nocobase?.plugins ?? {});
 const workspacePackages = listWorkspacePackages(rootDir);
 const files = runtimeDirs.flatMap((runtimeDir) =>
   walkFiles(path.join(distDir, runtimeDir)).filter((file) =>
@@ -270,10 +269,6 @@ for (const file of files) {
   for (const packageName of findBareImports(content)) {
     addPackage(packageName);
   }
-}
-
-for (const packageName of configuredPluginNames) {
-  addPackage(packageName);
 }
 
 addDeclaredDatabaseDrivers();

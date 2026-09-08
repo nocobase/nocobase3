@@ -10,6 +10,10 @@ own `version`, and the release workflow keeps the two aligned through
 `scripts/sync-template-version.mjs`. Do not edit it by hand here — a release
 will overwrite it.
 
+## Remove duplicate plugin metadata
+
+Remove `nocobase.plugins` from the application manifest after upgrading the CLI and template scripts together. Keep `templateKind` and `defaultTemplateVersion`. Client, Server, and CLI composition roots now determine registered plugins for bulk Skills synchronization and updates. Development watches read Server registrations; deployment packaging follows server imports. Registration still copies plugin Skills, and unregistration cleans up legacy metadata when present.
+
 ## Upgrade checklist
 
 1. Commit or back up application-owned changes.
