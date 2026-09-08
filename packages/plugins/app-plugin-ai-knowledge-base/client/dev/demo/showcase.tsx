@@ -24,7 +24,6 @@ import {
   fixtureKnowledgeBaseDirectory,
   fixtureRetrievalResults,
   fixtureSegments,
-  fixtureZipFilenameEncodingResponse,
 } from './fixtures/data.js';
 import { useT } from '../../locales/index.js';
 
@@ -366,30 +365,19 @@ export function UploadPage() {
   const t = useT();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogFile, setDialogFile] = useState<File>();
-  const [dialogEncodings, setDialogEncodings] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | undefined>(
     () =>
       new File(['Selected document'], 'employee-handbook.pdf', {
         type: 'application/pdf',
       }),
   );
-  const [selectedZipFile, setSelectedZipFile] = useState<File | undefined>(
-    () =>
-      new File(['Selected ZIP archive'], 'product-archive.zip', {
-        type: 'application/zip',
-      }),
-  );
-  const [selectedZipEncodings, setSelectedZipEncodings] = useState<string[]>(
-    [],
-  );
+  const [emptyFile, setEmptyFile] = useState<File>();
 
   return (
     <DemoPage
       title={t('Document upload')}
       components={t('Upload panel')}
-      description={t(
-        'Open the upload dialog or review selected-file states before adding source documents, including filename encoding choices for ZIP archives.',
-      )}
+      description={t('Upload one supported document at a time.')}
     >
       <Button onClick={() => setDialogOpen(true)}>
         {t('Open upload dialog')}
@@ -400,12 +388,6 @@ export function UploadPage() {
         title={t('Upload a document')}
         file={dialogFile}
         onFileChange={setDialogFile}
-        zipFilenameEncodings={dialogEncodings}
-        encodingOptions={fixtureZipFilenameEncodingResponse.options}
-        defaultZipFilenameEncoding={
-          fixtureZipFilenameEncodingResponse.defaultEncoding
-        }
-        onZipFilenameEncodingsChange={setDialogEncodings}
         onSubmit={ignoreDemoAction}
       />
       <div className='grid gap-6 lg:grid-cols-2'>
@@ -428,40 +410,29 @@ export function UploadPage() {
               <UploadDocumentForm
                 file={selectedFile}
                 onFileChange={setSelectedFile}
-                zipFilenameEncodings={[]}
-                encodingOptions={fixtureZipFilenameEncodingResponse.options}
-                onZipFilenameEncodingsChange={ignoreDemoAction}
                 onSubmit={ignoreDemoAction}
                 showSubmitButton={false}
               />
             </CardContent>
           </Card>
         </section>
-        <section className='space-y-3' aria-labelledby='demo-upload-zip'>
+        <section className='space-y-3' aria-labelledby='demo-upload-empty'>
           <div className='space-y-1.5'>
             <h2
-              id='demo-upload-zip'
+              id='demo-upload-empty'
               className='font-heading text-lg font-semibold'
             >
-              {t('ZIP file selected')}
+              {t('Upload document')}
             </h2>
             <p className='text-sm text-muted-foreground'>
-              {t(
-                'Choose filename encodings for a selected ZIP archive before upload.',
-              )}
+              {t('Choose a file to upload.')}
             </p>
           </div>
           <Card className='bg-card'>
             <CardContent>
               <UploadDocumentForm
-                file={selectedZipFile}
-                onFileChange={setSelectedZipFile}
-                zipFilenameEncodings={selectedZipEncodings}
-                encodingOptions={fixtureZipFilenameEncodingResponse.options}
-                defaultZipFilenameEncoding={
-                  fixtureZipFilenameEncodingResponse.defaultEncoding
-                }
-                onZipFilenameEncodingsChange={setSelectedZipEncodings}
+                file={emptyFile}
+                onFileChange={setEmptyFile}
                 onSubmit={ignoreDemoAction}
                 showSubmitButton={false}
               />

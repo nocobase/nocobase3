@@ -83,6 +83,13 @@ export default function VectorDatabasesPage(): React.ReactElement {
   const [busy, setBusy] = useState(false);
   const [pageError, setPageError] = useState('');
   const [formError, setFormError] = useState('');
+  const selectedRows = useMemo(
+    () =>
+      rows.filter(
+        (item) => item.managedBy !== 'config' && selected.has(String(item.id)),
+      ),
+    [rows, selected],
+  );
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -253,7 +260,6 @@ export default function VectorDatabasesPage(): React.ReactElement {
     }
   };
   const bulkDelete = async (): Promise<void> => {
-    const selectedRows = rows.filter((item) => selected.has(String(item.id)));
     if (!selectedRows.length) return;
     if (
       !window.confirm(
@@ -313,7 +319,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
               {t('Refresh')}
             </Button>
             <Button
-              disabled={!selected.size || busy}
+              disabled={!selectedRows.length || busy}
               variant='outline'
               onClick={() => void bulkDelete()}
             >
@@ -374,19 +380,38 @@ export default function VectorDatabasesPage(): React.ReactElement {
                       <input
                         aria-label={t('Select {{name}}', { name: row.name })}
                         type='checkbox'
-                        checked={selected.has(String(row.id))}
-                        onChange={(event) =>
+                        disabled={row.managedBy === 'config'}
+                        checked={
+                          row.managedBy !== 'config' &&
+                          selected.has(String(row.id))
+                        }
+                        onChange={(event) => {
+                          if (row.managedBy === 'config') return;
                           setSelected((current) => {
                             const next = new Set(current);
                             if (event.target.checked) next.add(String(row.id));
                             else next.delete(String(row.id));
                             return next;
-                          })
-                        }
+                          });
+                        }}
                       />
                     </TableCell>
                     <TableCell>{row.key}</TableCell>
-                    <TableCell className='font-medium'>{row.name}</TableCell>
+                    <TableCell className='font-medium'>
+                      <div className='flex items-center gap-2'>
+                        <span>{row.name}</span>
+                        {row.managedBy === 'config' ? (
+                          <span
+                            className='rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground'
+                            title={t(
+                              'This vector database is managed through application config.',
+                            )}
+                          >
+                            {t('Config managed')}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
                     <TableCell>{row.databaseSpec}</TableCell>
                     <TableCell>
                       {row.enabled ? (
@@ -403,26 +428,34 @@ export default function VectorDatabasesPage(): React.ReactElement {
                     </TableCell>
                     <TableCell className='text-left'>
                       <div className='flex items-center justify-start gap-1'>
-                        <Button
-                          variant='ghost'
-                          className='h-8 px-2'
-                          onClick={() => void start(row)}
-                        >
-                          <Pencil className='size-4' />
-                          {t('Edit')}
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          className='h-8 px-2'
-                          onClick={() =>
-                            void remove(row).then((deleted) => {
-                              if (deleted) return load();
-                            })
-                          }
-                        >
-                          <Trash2 className='size-4' />
-                          {t('Delete')}
-                        </Button>
+                        {row.managedBy === 'config' ? (
+                          <span className='text-xs text-muted-foreground'>
+                            {t('Change in application config')}
+                          </span>
+                        ) : (
+                          <>
+                            <Button
+                              variant='ghost'
+                              className='h-8 px-2'
+                              onClick={() => void start(row)}
+                            >
+                              <Pencil className='size-4' />
+                              {t('Edit')}
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              className='h-8 px-2'
+                              onClick={() =>
+                                void remove(row).then((deleted) => {
+                                  if (deleted) return load();
+                                })
+                              }
+                            >
+                              <Trash2 className='size-4' />
+                              {t('Delete')}
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

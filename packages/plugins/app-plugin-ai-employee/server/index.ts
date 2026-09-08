@@ -1,10 +1,16 @@
 export { default as bootstrap } from './bootstrap.js';
 export { aiEmployeeConfig } from './config.js';
 export type {
+  AIApplicationConfig,
   AIEmployeeConfig,
   AIEmployeeEnabledModelConfig,
   AIEmployeeEnabledModelsConfig,
   AIEmployeeLLMServiceConfig,
+  AIKnowledgeBaseConfig,
+  AIKnowledgeBaseManifestConfig,
+  AIKnowledgeBaseVectorDatabaseConfig,
+  AIKnowledgeBaseVectorDatabaseConnectionConfig,
+  AIStorageConfig,
 } from './config.js';
 export {
   expandEnvironmentReferences,

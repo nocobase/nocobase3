@@ -89,7 +89,6 @@ export type UseKnowledgeBaseDocumentOptions = {
   upload?: {
     enabled?: boolean;
     includeConstraints?: boolean;
-    includeZipEncodingOptions?: boolean;
   };
 };
 
@@ -130,8 +129,6 @@ export function useKnowledgeBaseDocument(
   const uploadEnabled = options.upload?.enabled !== false && !!knowledgeBaseKey;
   const includeConstraints =
     options.upload?.includeConstraints ?? options.upload !== undefined;
-  const includeZipEncodingOptions =
-    options.upload?.includeZipEncodingOptions === true;
   const uploadConstraints = useRequest(
     ['upload-constraints', knowledgeBaseKey, serviceKey(service)],
     (signal) =>
@@ -141,16 +138,6 @@ export function useKnowledgeBaseDocument(
       }),
     uploadEnabled && includeConstraints,
   );
-  const zipEncodingOptions = useRequest(
-    ['zip-encoding-options', knowledgeBaseKey, serviceKey(service)],
-    (signal) =>
-      service.getZipFilenameEncodingOptions({
-        knowledgeBaseKey: knowledgeBaseKey!,
-        signal,
-      }),
-    uploadEnabled && includeZipEncodingOptions,
-  );
-
   return {
     service,
     documents: {
@@ -160,7 +147,6 @@ export function useKnowledgeBaseDocument(
     document,
     upload: {
       constraints: uploadConstraints,
-      zipEncodingOptions,
     },
   };
 }

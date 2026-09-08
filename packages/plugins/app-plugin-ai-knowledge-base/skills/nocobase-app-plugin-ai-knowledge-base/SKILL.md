@@ -33,16 +33,16 @@ Guide a coding agent working inside `<appRoot>`, the source directory created by
 
 # Input Contract
 
-| Input                             |                Required | Meaning                                                                                          |
-| --------------------------------- | ----------------------: | ------------------------------------------------------------------------------------------------ |
-| `task`                            |                     yes | The application change or verification objective.                                                |
-| `appRoot`                         |                     yes | Absolute or working-directory path of the generated App.                                         |
-| `operation`                       |                     yes | `inspect`, `configure`, `integrate`, or `verify`.                                                |
-| `knowledgeBaseType`               |        when configuring | `LOCAL`, `READONLY`, or `EXTERNAL`, case-sensitive.                                              |
-| `client/server scope`             |                     yes | Which application layer is allowed to change.                                                    |
-| `vector backend`                  |           when relevant | Existing PGVector database/configuration or an explicitly supported external provider.           |
-| `plugin owner`                    |                     yes | The application/plugin responsible for the change.                                               |
-| `destructive change confirmation` | before destructive work | Explicit confirmation for deletion, rebuild, credential changes, ZIP processing, or schema work. |
+| Input                             |                Required | Meaning                                                                                |
+| --------------------------------- | ----------------------: | -------------------------------------------------------------------------------------- |
+| `task`                            |                     yes | The application change or verification objective.                                      |
+| `appRoot`                         |                     yes | Absolute or working-directory path of the generated App.                               |
+| `operation`                       |                     yes | `inspect`, `configure`, `integrate`, or `verify`.                                      |
+| `knowledgeBaseType`               |        when configuring | `LOCAL`, `READONLY`, or `EXTERNAL`, case-sensitive.                                    |
+| `client/server scope`             |                     yes | Which application layer is allowed to change.                                          |
+| `vector backend`                  |           when relevant | Existing PGVector database/configuration or an explicitly supported external provider. |
+| `plugin owner`                    |                     yes | The application/plugin responsible for the change.                                     |
+| `destructive change confirmation` | before destructive work | Explicit confirmation for deletion, rebuild, credential changes, or schema work.       |
 
 # Workflow
 
@@ -53,7 +53,7 @@ Guide a coding agent working inside `<appRoot>`, the source directory created by
 5. Implement the smallest application-side change. Preserve credentials in environment variables or the App's secret mechanism, and keep server-side authorization independent of UI state.
 6. When editable App-owned source is required, materialize `providers`, then `components`, then `workspace` into their independent `client/extensions/nocobase-ai-knowledge-base-*` targets. Prepare declared npm/shadcn dependencies and plugin enablement first; materialization does none of those tasks and refuses existing targets.
 7. Treat the installed Registry copy as application-owned. Merge a newer canonical source with a three-way merge; never overwrite App changes by default.
-8. For uploads, validate extension and size before sending; distinguish a document response from `{ taskId, message? }`. For segmentation/vectorization, record status fields and make retries observable.
+8. For uploads, send exactly one supported file as `multipart/form-data`, validate its extension and 100 MiB size limit before sending, and treat the returned document as pending asynchronous vectorization. Do not select or transmit a storage disk; the server uses the disk configured on the knowledge base. Record processing status fields and make failures and retries observable.
 9. Run the App's real lint, typecheck, test, and build scripts when they exist. Start the App for an authenticated smoke test when the task changes runtime behavior.
 10. Report the public entry points used, files changed, prerequisites, async jobs, data/deletion impact, validation commands/results, and remaining deployment risks.
 
@@ -67,13 +67,14 @@ Guide a coding agent working inside `<appRoot>`, the source directory created by
 | CRUD, upload, document status                | [knowledge-bases-and-documents](references/knowledge-bases-and-documents.md)   | [lifecycle-and-jobs](references/lifecycle-and-jobs.md) |
 | Segments, questions, retrieval               | [segmentation-and-retrieval](references/segmentation-and-retrieval.md)         | [lifecycle-and-jobs](references/lifecycle-and-jobs.md) |
 | PGVector or vector-store configuration       | [vector-databases](references/vector-databases.md)                             | [security](references/security.md)                     |
+| Declarative startup preload or recovery      | [manifests](references/manifests.md)                                           | [troubleshooting](references/troubleshooting.md)       |
 | Schema/data inspection                       | [data-model](references/data-model.md)                                         | [security](references/security.md)                     |
 | Direct `/v2/api` calls                       | [http-api](references/http-api.md)                                             | [security](references/security.md)                     |
 | Failure diagnosis                            | [troubleshooting](references/troubleshooting.md)                               | the relevant domain reference                          |
 
 # Safety Gate
 
-Obtain explicit confirmation before deleting a knowledge base or document, deleting a vector database, changing vector-store or embedding configuration, changing connection information, rebuilding segmentation or vectors for many documents, processing an untrusted ZIP, changing authentication/permissions, changing schema, or calling a compatibility action against production data. Confirm backups and rollback expectations first.
+Obtain explicit confirmation before deleting a knowledge base or document, deleting a vector database, changing vector-store or embedding configuration, changing connection information, rebuilding segmentation or vectors for many documents, changing authentication/permissions, changing schema, or calling a compatibility action against production data. Confirm backups and rollback expectations first.
 
 # Verification Checklist
 
@@ -101,6 +102,7 @@ Return: `<appRoot>`; public package entries used; changed files; plugin/dependen
 - [Knowledge Bases and Documents](references/knowledge-bases-and-documents.md)
 - [Segmentation and Retrieval](references/segmentation-and-retrieval.md)
 - [Vector Databases](references/vector-databases.md)
+- [Declarative Manifests](references/manifests.md)
 - [Data Model](references/data-model.md)
 - [Lifecycle and Jobs](references/lifecycle-and-jobs.md)
 - [Security](references/security.md)

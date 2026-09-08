@@ -1,20 +1,7 @@
-import { useRef, useState } from 'react';
-import { CircleHelp, FileUp, Paperclip, X } from 'lucide-react';
+import { useRef } from 'react';
+import { FileUp, Paperclip, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert.js';
 import { Button } from './ui/button.js';
-import {
-  Combobox,
-  ComboboxChips,
-  ComboboxChip,
-  ComboboxChipsInput,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-  ComboboxValue,
-} from './ui/combobox.js';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js';
 import {
   Dialog,
   DialogContent,
@@ -23,16 +10,11 @@ import {
   DialogTitle,
 } from './ui/dialog.js';
 import { Input } from './ui/input.js';
-import type { ZipFilenameEncodingOption } from '../providers/index.js';
+import { SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS } from '../providers/types.js';
 import { useKnowledgeBaseComponentTranslate } from './i18n.js';
 
-export const defaultDocumentExtensions = [
-  '.doc',
-  '.docx',
-  '.md',
-  '.pdf',
-  '.txt',
-  '.zip',
+export const defaultDocumentExtensions: readonly string[] = [
+  ...SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS,
 ];
 
 type ComponentTranslate = ReturnType<typeof useKnowledgeBaseComponentTranslate>;
@@ -44,7 +26,7 @@ function extensionOf(file: File) {
 
 function validateFile(
   file: File | undefined,
-  allowedExtensions: string[],
+  allowedExtensions: readonly string[],
   maxFileSizeBytes: number | undefined,
   t: ComponentTranslate,
 ) {
@@ -58,7 +40,7 @@ function validateFile(
       types: allowedExtensions.join(', '),
     });
   }
-  if (maxFileSizeBytes && file.size > maxFileSizeBytes) {
+  if (maxFileSizeBytes !== undefined && file.size > maxFileSizeBytes) {
     return t('This file exceeds the {{size}} MB upload limit.', {
       size: Math.floor(maxFileSizeBytes / 1024 / 1024),
     });
@@ -79,7 +61,7 @@ export function DocumentDropzone({
   onFileChange: (file?: File) => void;
   disabled?: boolean;
   error?: string;
-  allowedExtensions?: string[];
+  allowedExtensions?: readonly string[];
   maxFileSizeBytes?: number;
   onFileRejected?: (message: string) => void;
 }) {
@@ -165,191 +147,9 @@ export function SelectedDocumentFile({
   );
 }
 
-const normalizeZipFilenameEncodings = (items: string[]) =>
-  Array.from(
-    new Set(
-      items
-        .flatMap((item) => item.split(/[\s,]+/))
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  );
-
-type ZipFilenameEncodingItem = {
-  value: string;
-  label: string;
-  description?: string;
-};
-
-export function ZipFilenameEncodingField({
-  values = [],
-  options,
-  defaultEncoding,
-  onValuesChange,
-  disabled = false,
-}: {
-  values?: string[];
-  options: ZipFilenameEncodingOption[];
-  defaultEncoding?: string;
-  onValuesChange: (values: string[]) => void;
-  disabled?: boolean;
-}) {
-  const t = useKnowledgeBaseComponentTranslate();
-  const [customValue, setCustomValue] = useState('');
-  const normalizedValues = normalizeZipFilenameEncodings(values);
-  const encodingItems: ZipFilenameEncodingItem[] = [
-    ...options.map(({ value, label, description }) => ({
-      value,
-      label,
-      ...(description ? { description } : {}),
-    })),
-    ...normalizedValues
-      .filter((value) => !options.some((option) => option.value === value))
-      .map((value) => ({ value, label: value })),
-  ];
-  const selectedItems = normalizedValues.map(
-    (value) =>
-      encodingItems.find((item) => item.value === value) ?? {
-        value,
-        label: value,
-      },
-  );
-  const addCustom = (nextValue = customValue) => {
-    const nextValues = normalizeZipFilenameEncodings([
-      ...normalizedValues,
-      nextValue,
-    ]);
-    if (nextValues.length !== normalizedValues.length)
-      onValuesChange(nextValues);
-    setCustomValue('');
-  };
-  const handleCustomValueChange = (nextValue: string) => {
-    if (/[\s,]$/.test(nextValue)) {
-      addCustom(nextValue);
-      return;
-    }
-    setCustomValue(nextValue);
-  };
-  const defaultPlaceholder = defaultEncoding
-    ? t('Uses UTF-8 and {{encoding}} by default', { encoding: defaultEncoding })
-    : t('Uses UTF-8 by default');
-
-  return (
-    <div className='flex flex-col gap-2'>
-      <div className='flex items-center gap-1 text-base font-semibold'>
-        <span>{t('How to read ZIP filenames')}</span>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type='button'
-                variant='ghost'
-                size='icon-xs'
-                aria-label={t('ZIP filename encoding help')}
-              />
-            }
-          >
-            <CircleHelp />
-          </TooltipTrigger>
-          <TooltipContent>
-            {t(
-              'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.',
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-      <Combobox
-        items={encodingItems}
-        multiple
-        value={selectedItems}
-        isItemEqualToValue={(item, value) => item.value === value.value}
-        onValueChange={(nextItems: ZipFilenameEncodingItem[]) => {
-          onValuesChange(
-            normalizeZipFilenameEncodings(nextItems.map((item) => item.value)),
-          );
-          setCustomValue('');
-        }}
-      >
-        <ComboboxChips className='min-h-11 rounded-lg border-input bg-background shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/20'>
-          <ComboboxValue>
-            {(selected: ZipFilenameEncodingItem[]) => (
-              <>
-                {selected.map((item) => (
-                  <ComboboxChip key={item.value}>{item.label}</ComboboxChip>
-                ))}
-                <ComboboxChipsInput
-                  value={customValue}
-                  placeholder={selected.length ? '' : defaultPlaceholder}
-                  aria-label={t('ZIP filename encodings')}
-                  disabled={disabled}
-                  onChange={(event) =>
-                    handleCustomValueChange(event.target.value)
-                  }
-                  onKeyDown={(event) => {
-                    const exactOption = encodingItems.some(
-                      (item) => item.value === customValue.trim(),
-                    );
-                    if (
-                      customValue.trim() &&
-                      (event.key === ',' ||
-                        event.key === ' ' ||
-                        (event.key === 'Enter' && !exactOption))
-                    ) {
-                      event.preventDefault();
-                      addCustom();
-                    }
-                  }}
-                />
-              </>
-            )}
-          </ComboboxValue>
-          <ComboboxTrigger
-            render={
-              <Button
-                type='button'
-                variant='ghost'
-                size='icon-sm'
-                disabled={disabled}
-              />
-            }
-            aria-label={t('Show ZIP filename encoding options')}
-          />
-        </ComboboxChips>
-        <ComboboxContent>
-          <ComboboxEmpty>
-            {t('Type an encoding name, then press Enter to add it.')}
-          </ComboboxEmpty>
-          <ComboboxList>
-            {(item: ZipFilenameEncodingItem) => (
-              <ComboboxItem
-                key={item.value}
-                value={item}
-                className='data-selected:bg-accent'
-              >
-                <div className='grid gap-0.5'>
-                  <span>{item.label}</span>
-                  {item.description ? (
-                    <span className='text-xs text-muted-foreground'>
-                      {item.description}
-                    </span>
-                  ) : null}
-                </div>
-              </ComboboxItem>
-            )}
-          </ComboboxList>
-        </ComboboxContent>
-      </Combobox>
-    </div>
-  );
-}
-
 export function UploadDocumentForm({
   file,
   onFileChange,
-  zipFilenameEncodings,
-  encodingOptions = [],
-  defaultZipFilenameEncoding,
-  onZipFilenameEncodingsChange,
   onSubmit,
   submitting = false,
   error,
@@ -362,22 +162,17 @@ export function UploadDocumentForm({
 }: {
   file?: File;
   onFileChange: (file?: File) => void;
-  zipFilenameEncodings?: string[];
-  encodingOptions?: ZipFilenameEncodingOption[];
-  defaultZipFilenameEncoding?: string;
-  onZipFilenameEncodingsChange: (values: string[]) => void;
   onSubmit: () => void;
   submitting?: boolean;
   error?: string;
   success?: string;
-  allowedExtensions?: string[];
+  allowedExtensions?: readonly string[];
   maxFileSizeBytes?: number;
   onFileRejected?: (message: string) => void;
   formId?: string;
   showSubmitButton?: boolean;
 }) {
   const t = useKnowledgeBaseComponentTranslate();
-  const isZip = file?.name.toLowerCase().endsWith('.zip') ?? false;
   return (
     <form
       id={formId}
@@ -400,15 +195,6 @@ export function UploadDocumentForm({
         <SelectedDocumentFile
           file={file}
           onClear={() => onFileChange(undefined)}
-          disabled={submitting}
-        />
-      ) : null}
-      {isZip ? (
-        <ZipFilenameEncodingField
-          values={zipFilenameEncodings}
-          options={encodingOptions}
-          defaultEncoding={defaultZipFilenameEncoding}
-          onValuesChange={onZipFilenameEncodingsChange}
           disabled={submitting}
         />
       ) : null}

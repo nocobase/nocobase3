@@ -17,7 +17,6 @@ All imports below are public:
 ```ts
 import {
   knowledgeBaseService,
-  isAsyncUploadResult,
   type KnowledgeBase,
   type KnowledgeBaseDocument,
   type KnowledgeBaseSegment,
@@ -47,7 +46,6 @@ type KnowledgeBase = {
   aiEmployeeCount?: number;
   enabled: boolean;
   vectorStoreProvider?: string;
-  vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
   disk?: string;
   llmService?: string;
@@ -114,17 +112,9 @@ type KnowledgeBaseSearchResult = {
   matchedQuestions?: string[];
 };
 
-type UploadResult =
-  KnowledgeBaseDocument | { taskId: RecordId; message?: string };
 type UploadConstraints = {
   acceptedExtensions?: string[];
   maxFileSizeBytes?: number;
-};
-type ZipFilenameEncodingOption = {
-  value: string;
-  label: string;
-  description?: string;
-  isDefault?: boolean;
 };
 
 type VectorDatabase = {
@@ -135,6 +125,7 @@ type VectorDatabase = {
   provider: string;
   connectProps: Record<string, unknown>;
   enabled: boolean;
+  managedBy?: 'config' | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -198,7 +189,6 @@ type KnowledgeBaseMutation = {
   knowledgeBaseType: KnowledgeBaseType;
   enabled?: boolean;
   vectorStoreProvider?: string;
-  vectorStoreConfigKey?: string;
   vectorDatabaseKey?: string;
   disk?: string;
   llmService?: string;
@@ -260,15 +250,10 @@ interface KnowledgeBaseService {
     knowledgeBaseKey: string;
     signal?: AbortSignal;
   }): Promise<UploadConstraints>;
-  getZipFilenameEncodingOptions(request: {
-    knowledgeBaseKey: string;
-    signal?: AbortSignal;
-  }): Promise<ZipFilenameEncodingOption[]>;
   uploadDocument(request: {
     knowledgeBaseKey: string;
     file: File;
-    zipFilenameEncodings?: string[];
-  }): Promise<UploadResult>;
+  }): Promise<KnowledgeBaseDocument>;
   vectorizeDocuments(request: {
     knowledgeBaseKey: string;
     documentIds?: RecordId[];
@@ -347,9 +332,11 @@ type PagedResult<T> = {
 
 All methods are asynchronous and reject when the action client rejects, a required response field is absent, an enum is invalid, or a client-side upload check fails. Abort-aware reads pass `AbortSignal` to the action client. The adapter validates response projections and throws messages such as `Knowledge Base API response is missing required field: ...`.
 
-`listKnowledgeBaseManagementOptions()` calls enabled vector databases, embedding-capable LLM services, and external providers concurrently. Its storage result is currently only `{value:'0',label:'Default'}`. `listEmbeddingModels` sends `model=EMBEDDING`.
+`listKnowledgeBaseManagementOptions()` calls enabled vector databases, embedding-capable LLM services, allowed storage disks, and external providers concurrently. `listEmbeddingModels` sends `model=EMBEDDING`.
 
-`uploadDocument` first obtains upload storage. It rejects unsupported extensions or a file larger than the returned rule. Local storage sends multipart with the key in query and form. An `s3-compatible` storage path requests a presigned URL, performs a direct `PUT`, then sends a flat finalize body. Current server `getUploadStorage` reports local/default storage, so the S3 branch is compatibility behavior.
+`getUploadConstraints` exposes only upload capabilities: the exact extension allowlist and the 100 MiB maximum. It does not expose a storage provider or let the caller choose a disk. `uploadDocument` accepts exactly one `File`, validates the lowercase filename extension and size, and sends one `multipart/form-data` request containing `knowledgeBaseKey` and `file`. The server resolves the knowledge base, requires it to be LOCAL, and writes to that base's configured storage disk. The Promise resolves to the single created `KnowledgeBaseDocument` after the vectorization job has been dispatched.
+
+The accepted extensions are exactly `.pdf`, `.pptx`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm`, `.txt`, `.md`, `.json`, and `.csv`. MIME type is metadata, not the acceptance rule. A successful upload response does not mean parsing, segmentation, embedding, or vector persistence is complete.
 
 ## React hooks
 
@@ -383,11 +370,11 @@ useKnowledgeBaseDocument(options?: {
   documentId?: RecordId;
   documents?: { mode?: 'all' | 'paginated'; page?: number; pageSize?: number; query?: string; enabled?: boolean };
   document?: { enabled?: boolean };
-  upload?: { enabled?: boolean; includeConstraints?: boolean; includeZipEncodingOptions?: boolean };
+  upload?: { enabled?: boolean; includeConstraints?: boolean };
 });
 ```
 
-Defaults: page 1, page size 20. Upload constraints are fetched when an `upload` option exists unless explicitly disabled; ZIP options only when explicitly true. Result contains `{service,documents:{all,paginated},document,upload:{constraints,zipEncodingOptions}}`.
+Defaults: page 1, page size 20. Upload constraints are fetched when an `upload` option exists unless explicitly disabled. Result contains `{service,documents:{all,paginated},document,upload:{constraints}}`.
 
 ```ts
 useKnowledgeBaseSegment(options?: {
@@ -454,24 +441,17 @@ const local = await knowledgeBaseService.createKnowledgeBase({
 });
 ```
 
-`name` is required by the client type. The server generates base key, outer ID, and vector-store config key when omitted. A LOCAL base defaults to `NocobaseLocalVectorStoreProvider`.
+`name` is required by the client type. The server generates the base key and outer ID when omitted. A LOCAL base defaults to `NocobaseLocalVectorStore`; its vector database key, LLM service, and embedding model are stored directly on the knowledge-base record.
 
 ### Upload and observe processing
 
 ```ts
-const result = await knowledgeBaseService.uploadDocument({
+const document = await knowledgeBaseService.uploadDocument({
   knowledgeBaseKey: local.key,
   file,
-  zipFilenameEncodings: file.name.toLowerCase().endsWith('.zip')
-    ? ['utf8']
-    : undefined,
 });
 
-if (isAsyncUploadResult(result)) {
-  console.info('Upload task queued', result.taskId, result.message);
-} else {
-  console.info('Document queued', result.id, result.indexStatus);
-}
+console.info('Document queued', document.id, document.indexStatus);
 
 const documents = await knowledgeBaseService.listDocuments({
   mode: 'server',

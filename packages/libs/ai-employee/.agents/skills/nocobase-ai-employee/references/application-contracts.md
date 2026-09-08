@@ -750,7 +750,6 @@ interface AIFeatureManager {
   enableFeatures(features: Partial<AIFeatures>): void;
   disableFeatures(features: Array<keyof AIFeatures>): void;
   isFeaturesEnabled(features: Array<keyof AIFeatures>): boolean;
-  readonly vectorDatabase: VectorDatabaseFeature;
   readonly vectorDatabaseProvider: VectorDatabaseProviderFeature;
   readonly vectorStoreProvider: VectorStoreProviderFeature;
   readonly knowledgeBase: KnowledgeBaseFeature;
@@ -760,7 +759,6 @@ interface AIFeatureManager {
 Feature keys are:
 
 ```ts
-EEFeatures.vectorDatabase;
 EEFeatures.vectorDatabaseProvider;
 EEFeatures.vectorStoreProvider;
 EEFeatures.knowledgeBase;

@@ -1,3 +1,12 @@
-export { default as bootstrap } from './bootstrap.js';
-export { default as registerRoutes } from './routes/index.js';
-export { KnowledgeBaseProvider } from './providers/index.js';
+export { default } from './plugin.js';
+export { knowledgeBaseManifestServiceToken } from './manifest.js';
+export type {
+  KnowledgeBaseManifest,
+  KnowledgeBaseManifestApplyInput,
+  KnowledgeBaseManifestOperation,
+  KnowledgeBaseManifestService,
+  KnowledgeBaseManifestSource,
+  KnowledgeBaseManifestStatus,
+  ManifestFileRecord,
+  ManifestRecord,
+} from './manifest.js';

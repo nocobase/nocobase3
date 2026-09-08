@@ -1,5 +1,6 @@
 import { normalizePagedResult, type PagedResult } from '../utils.js';
 import type { KnowledgeBaseService } from './knowledge-base.js';
+import { SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS } from '../types.js';
 import type {
   KnowledgeBase,
   KnowledgeBaseManagementOption,
@@ -15,7 +16,6 @@ import type {
   KnowledgeBaseSegmentQuestion,
   UploadConstraints,
   UploadResult,
-  ZipFilenameEncodingOption,
 } from '../types.js';
 
 /**
@@ -25,7 +25,7 @@ import type {
  * administrator-only vector-store or knowledge-base configuration actions.
  */
 type ActionOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'DELETE';
   query?: Record<
     string,
     string | number | boolean | Array<string | number | boolean> | undefined
@@ -42,13 +42,10 @@ type NocoBaseKnowledgeBaseClient = {
   ): Promise<T>;
 };
 type UnknownRecord = Record<string, unknown>;
-type UploadStorage = {
-  disk: string;
-  type?: string;
-  maxFileSizeBytes?: number;
-};
 
-const supportedExtensions = ['.doc', '.docx', '.md', '.pdf', '.txt', '.zip'];
+const supportedExtensions: string[] = [
+  ...SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS,
+];
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   !!value && typeof value === 'object' && !Array.isArray(value);
@@ -118,9 +115,6 @@ function toKnowledgeBase(value: unknown): KnowledgeBase {
     enabled: required(boolean(item.enabled), 'enabled'),
     ...(text(item.vectorStoreProvider)
       ? { vectorStoreProvider: text(item.vectorStoreProvider) }
-      : {}),
-    ...(text(item.vectorStoreConfigKey)
-      ? { vectorStoreConfigKey: text(item.vectorStoreConfigKey) }
       : {}),
     ...(text(item.vectorDatabaseKey)
       ? { vectorDatabaseKey: text(item.vectorDatabaseKey) }
@@ -319,6 +313,7 @@ function toVectorDatabase(value: unknown): VectorDatabase {
     provider: required(text(item.provider), 'vectorDatabase.provider'),
     connectProps: isRecord(item.connectProps) ? item.connectProps : {},
     enabled: required(boolean(item.enabled), 'vectorDatabase.enabled'),
+    ...(item.managedBy === 'config' ? { managedBy: 'config' as const } : {}),
     ...(optionalDate(item.createdAt)
       ? { createdAt: optionalDate(item.createdAt) }
       : {}),
@@ -350,15 +345,27 @@ const mapPagedResult = <T>(
   return { ...normalized, rows: normalized.rows.map(mapper) };
 };
 
-const storageFromPayload = (payload: unknown): UploadStorage => {
+const uploadConstraintsFromPayload = (payload: unknown): UploadConstraints => {
   const value = responseData(payload);
-  const storage = isRecord(value) ? value : {};
-  const rules = isRecord(storage.rules) ? storage.rules : {};
+  const constraints = isRecord(value) ? value : {};
+  const advertisedExtensions = Array.isArray(constraints.acceptedExtensions)
+    ? constraints.acceptedExtensions.filter(
+        (extension): extension is string => typeof extension === 'string',
+      )
+    : [];
+  const acceptedExtensions = Array.from(
+    new Set(
+      advertisedExtensions
+        .map((extension) => extension.trim().toLowerCase())
+        .filter((extension) => supportedExtensions.includes(extension)),
+    ),
+  );
   return {
-    disk: required(text(storage.disk), 'uploadStorage.disk'),
-    ...(text(storage.type) ? { type: text(storage.type) } : {}),
-    ...(number(rules.size) !== undefined
-      ? { maxFileSizeBytes: number(rules.size) }
+    acceptedExtensions: acceptedExtensions.length
+      ? acceptedExtensions
+      : [...supportedExtensions],
+    ...(number(constraints.maxFileSizeBytes) !== undefined
+      ? { maxFileSizeBytes: number(constraints.maxFileSizeBytes) }
       : {}),
   };
 };
@@ -405,7 +412,6 @@ export function normalizeKnowledgeBaseMutation(
   for (const field of [
     'disk',
     'vectorDatabaseKey',
-    'vectorStoreConfigKey',
     'llmService',
     'embeddingModel',
     'vectorStoreProvider',
@@ -471,11 +477,11 @@ function toManagementOption(
 export function createKnowledgeBaseService(
   client: NocoBaseKnowledgeBaseClient,
 ): KnowledgeBaseService {
-  const getUploadStorage = async (
+  const getUploadConstraints = async (
     knowledgeBaseKey: string,
     signal?: AbortSignal,
-  ) =>
-    storageFromPayload(
+  ): Promise<UploadConstraints> =>
+    uploadConstraintsFromPayload(
       await action(client, 'aiKnowledgeBaseDocs', 'getUploadStorage', {
         method: 'GET',
         query: { knowledgeBaseKey },
@@ -799,137 +805,39 @@ export function createKnowledgeBaseService(
     },
 
     async getUploadConstraints(request): Promise<UploadConstraints> {
-      const storage = await getUploadStorage(
-        request.knowledgeBaseKey,
-        request.signal,
-      );
-      return {
-        acceptedExtensions: supportedExtensions,
-        ...(storage.maxFileSizeBytes
-          ? { maxFileSizeBytes: storage.maxFileSizeBytes }
-          : {}),
-      };
-    },
-
-    async getZipFilenameEncodingOptions(request) {
-      const payload = responseData(
-        await action(
-          client,
-          'aiKnowledgeBaseDocs',
-          'getZipFilenameEncodingOptions',
-          {
-            method: 'GET',
-            signal: request.signal,
-          },
-        ),
-      );
-      const result = isRecord(payload) ? payload : {};
-      return Array.isArray(result.options)
-        ? result.options.flatMap((option): ZipFilenameEncodingOption[] => {
-            const item = isRecord(option) ? option : {};
-            const value = text(item.value);
-            const label = text(item.label);
-            if (!value || !label) return [];
-            return [
-              {
-                value,
-                label,
-                ...(text(item.description)
-                  ? { description: text(item.description) }
-                  : {}),
-                ...(boolean(item.isDefault) !== undefined
-                  ? { isDefault: boolean(item.isDefault) }
-                  : {}),
-              },
-            ];
-          })
-        : [];
+      return getUploadConstraints(request.knowledgeBaseKey, request.signal);
     },
 
     async uploadDocument(request): Promise<UploadResult> {
-      const storage = await getUploadStorage(request.knowledgeBaseKey);
+      const constraints = await getUploadConstraints(request.knowledgeBaseKey);
       if (
-        storage.maxFileSizeBytes &&
-        request.file.size > storage.maxFileSizeBytes
+        constraints.maxFileSizeBytes !== undefined &&
+        request.file.size > constraints.maxFileSizeBytes
       ) {
         throw new Error('This file exceeds the server upload limit.');
       }
-      if (!supportedExtensions.includes(extensionOf(request.file))) {
+      const extension = extensionOf(request.file);
+      const acceptedExtensions = constraints.acceptedExtensions.map((value) =>
+        value.toLowerCase(),
+      );
+      if (
+        !supportedExtensions.includes(extension) ||
+        !acceptedExtensions.includes(extension)
+      ) {
         throw new Error(
-          `Unsupported file type: ${extensionOf(request.file) || 'no extension'}.`,
+          `Unsupported file type: ${extension || 'no extension'}.`,
         );
       }
 
-      let payload: unknown;
-      if (storage.type === 's3-compatible') {
-        const presigned = responseData(
-          await action(client, 'storages', 'createPresignedUrl', {
-            method: 'POST',
-            body: {
-              name: request.file.name,
-              size: request.file.size,
-              type: request.file.type,
-              disk: storage.disk,
-              storageType: storage.type,
-            },
-          }),
-        );
-        const upload = isRecord(presigned) ? presigned : {};
-        const putUrl = text(upload.putUrl);
-        const fileInfo = isRecord(upload.fileInfo) ? upload.fileInfo : {};
-        if (!putUrl)
-          throw new Error(
-            'The upload service did not return a presigned upload URL.',
-          );
-        const put = await fetch(putUrl, {
-          method: 'PUT',
-          headers: request.file.type
-            ? { 'Content-Type': request.file.type }
-            : undefined,
-          body: request.file,
-        });
-        if (!put.ok) throw new Error(`File upload failed (${put.status}).`);
-        payload = await action(client, 'aiKnowledgeBaseDocs', 'upload', {
-          method: 'POST',
-          query: { knowledgeBaseKey: request.knowledgeBaseKey },
-          body: {
-            title: text(fileInfo.title) || request.file.name,
-            filename: request.file.name,
-            extname: text(fileInfo.extname) || extensionOf(request.file),
-            path: required(text(fileInfo.key), 'presignedUpload.fileInfo.key'),
-            size: number(fileInfo.size) ?? request.file.size,
-            url: required(text(fileInfo.url), 'presignedUpload.fileInfo.url'),
-            mimetype: text(fileInfo.mimetype) || request.file.type,
-            disk: storage.disk,
-            meta: {},
-            ...(request.zipFilenameEncodings?.length
-              ? { zipFilenameEncoding: request.zipFilenameEncodings }
-              : {}),
-          },
-        });
-      } else {
-        const formData = new FormData();
-        formData.append('knowledgeBaseKey', request.knowledgeBaseKey);
-        for (const encoding of request.zipFilenameEncodings ?? []) {
-          formData.append('zipFilenameEncoding[]', encoding);
-        }
-        formData.append('file', request.file);
-        payload = await action(client, 'aiKnowledgeBaseDocs', 'upload', {
-          method: 'POST',
-          query: { knowledgeBaseKey: request.knowledgeBaseKey },
-          body: formData,
-        });
-      }
-
-      const result = responseData(payload);
-      const record = isRecord(result) ? result : {};
-      if (recordId(record.taskId) !== undefined) {
-        return {
-          taskId: recordId(record.taskId)!,
-          ...(text(record.message) ? { message: text(record.message) } : {}),
-        };
-      }
-      return toDocument(result);
+      const formData = new FormData();
+      formData.append('knowledgeBaseKey', request.knowledgeBaseKey);
+      formData.append('file', request.file);
+      const payload = await action(client, 'aiKnowledgeBaseDocs', 'upload', {
+        method: 'POST',
+        query: { knowledgeBaseKey: request.knowledgeBaseKey },
+        body: formData,
+      });
+      return toDocument(responseData(payload));
     },
 
     vectorizeDocuments: ({ knowledgeBaseKey, documentIds }) =>
