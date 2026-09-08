@@ -146,6 +146,26 @@ When another native dependency needs the same treatment, add it to `DRIVERS_NEED
 
 A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's npm configuration suppresses install scripts globally and outranks `allowBuilds`, so a correct `allowBuilds` still yields an uncompiled addon. `pnpm install` cannot repair this — the package is already in the store, so pnpm skips it and reports success without building. `pnpm rebuild <package>` does, and works without changing the developer's configuration. `create-app` verifies the driver by loading it and runs that rebuild automatically.
 
+### Building a deployment for another platform
+
+`pnpm build` in either template emits a `dist/` that runs with no install step on the far side. Two steps get it there. `prune-server-deps.mjs` removes what the server never loads, and `retarget-native.mjs` replaces each native binary with the target's. Both read one analysis, in `server-deps.mjs`, that `inspect-server-deps.mjs` also reads — so `pnpm server:deps:inspect` previews the build rather than offering a second opinion about it.
+
+`pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works — that is what a build is most often for. A deployment build passes `--target` (`linux-x64`, `linux-arm64`, `linux-x64-musl`, `darwin-arm64`, `win32-x64`) and `--node-version` when the server's Node major differs. The cost of this default is that a forgotten `--target` produces a `dist/` that fails only on the server, so the build states the platform it produced on every run and records it in `dist/package.json` under `nocobase.buildTarget`; leave both in place, they are what makes that failure diagnosable.
+
+Two categories of default belong in code rather than in an application's configuration, and the distinction is worth preserving. `FRAMEWORK_KEEP` holds packages the framework resolves by a name it owns — `app-server` names both pino transports in a `target:` string, so no import mentions either and a trace sees neither. `SCANNED_DIRECTORIES` holds directories read by listing rather than importing, kept for every package because a plugin ships its own `dist/database` and an application cannot enumerate which of its plugins have migrations. Neither is the application's choice, and a default each generated application has to rediscover by crashing is not a default. `nocobase.serverDeps.keep` is for what the application itself resolves at runtime.
+
+Detection is by manifest signal, never by package name: `cpu`/`os` fields mark a platform-specific package, an install script invoking a native build helper marks one fetched at install time, and bundled `.node` files mark one shipping its own. An application that adds a native dependency nobody here has seen is therefore handled without extending a list. Keep it that way — a hard-coded set of names would silently mis-handle whatever an application adds next, which is the failure this exists to prevent.
+
+Three things the trace cannot see, and how each is handled:
+
+- **Packages loaded by a name assembled at runtime** are named in `nocobase.serverDeps.keep` in the application's `package.json`, with their dependencies followed. `pino-pretty` is the case to reason from: the logger names it in a `target:` string, so nothing imports it and pruning it leaves a deployment that dies during startup.
+- **Directories read by scanning** — `database`, `migrations`, `seeds`, `locales` — are kept by directory name. No import mentions a migration file, and losing them yields a server that starts and then fails on the first query against a table its migration would have created.
+- **Native packages** are never pruned. Their binary is located through a filesystem search rather than a resolvable specifier, and the cost of removing one wrongly is far higher than the megabytes it saves.
+
+Each of those was found by running the built `dist/` in an isolated directory, not by reading the trace output. A change to any of this needs the same: build, copy `dist/` somewhere with no `node_modules` to borrow from, run the migrations, start the server, and exercise a route that reads and writes the database. The failures this code exists to prevent all take the same shape — the process starts, and breaks later.
+
+The `parseTarget` mapping from Node major to ABI is written out rather than taken from `node-abi`, which given a bare major returns the major itself: `getAbi('24')` is 24, not 137, because it reads the argument as a complete 0.x-era version. A wrong ABI downloads a binary that will not load.
+
 ## Depending on Identity-Sensitive Packages
 
 A plugin declares the runtime it plugs into as a `peerDependency` paired with a `devDependency`, never as a `dependency`. `pnpm peers:check` enforces this and runs in CI.

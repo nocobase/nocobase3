@@ -209,6 +209,43 @@ So the two mistakes fail in opposite ways. A server import left in `devDependenc
 
 What decides it is where the importing file lives and what the import is, not what the package is for. `import ts from 'typescript'` in `server/` is a runtime dependency even though TypeScript sounds like tooling. `import type { Config } from 'x'` is erased before anything runs, so it stays a devDependency wherever it appears. A dynamic `import()` counts — deferring the load changes when a package is needed, not whether.
 
+### Dependencies the deployment cannot see
+
+`pnpm build` does two things beyond compiling. It removes everything the server never loads, taking the dependency tree from roughly 540 MB to 110 MB, and it replaces every native binary with the one the deployment target needs. The result is a `dist/` that runs with no install step and no compiler on the far side.
+
+**`pnpm build` targets the machine it runs on.** That keeps `pnpm build && pnpm start` working, which is what a build is usually for. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. The build prints the platform it produced every time and records it in `dist/package.json` under `nocobase.buildTarget`, because with this default a forgotten `--target` otherwise looks exactly like a successful build until it reaches the server.
+
+`pnpm server:deps:inspect` reports the same analysis without changing anything — what the server reaches, every native module and how each obtains its binary, and every specifier the trace could not resolve. Run it after adding a dependency that is native or is loaded by a name assembled at runtime.
+
+Two decisions cannot be derived from the tree, and belong to the application. They live in `nocobase.serverDeps` in `package.json`:
+
+Packages the framework itself resolves by name, and directories read by scanning — `database`, `migrations`, `seeds`, `locales` — are kept automatically and need no configuration. `nocobase.serverDeps` is for what this application resolves at runtime:
+
+- **`keep`** names packages nothing imports by a literal name. A file trace follows `import` and `require` with a literal specifier, so a package selected from configuration — a driver named in a config value, a plugin resolved from a database row — appears in no import statement and is indistinguishable from an unused one. Naming it keeps it, along with its own dependencies, because a package the trace cannot see reaches its dependencies the same way at runtime. A trailing `*` matches a prefix. `pnpm build --keep <name>` applies for one build, which is how you confirm a fix before writing it down.
+
+```json
+{
+  "nocobase": {
+    "serverDeps": { "keep": ["pino-pretty", "pino-roll"] }
+  }
+}
+```
+
+### When a build or a deployment fails
+
+Diagnose with commands rather than by reading the build scripts. Start with `pnpm server:deps:inspect`, which is read-only.
+
+| Symptom                                                                                 | Cause                                                          | Fix                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cannot find module 'x'` on the server, works locally                                   | Nothing imports `x` by a literal name, so the prune removed it | Add `x` to `nocobase.serverDeps.keep`; verify first with `pnpm build --keep x`                                                                                                                                 |
+| A table is missing, or a translation falls back to its key                              | A scanned directory was not preserved                          | Add the owning package to `keep`                                                                                                                                                                               |
+| `Error loading shared library`, `invalid ELF header`, or a bare `.node` path at startup | The binary does not match the server                           | Compare `require('./dist/package.json').nocobase.buildTarget` with the server's `process.platform`, `process.arch`, and `process.versions.modules`, then rebuild with matching `--target` and `--node-version` |
+| `no prebuilt binary for <target>` during the build                                      | The package publishes no build for that combination            | Check the package supports the target; musl coverage is thinner than glibc                                                                                                                                     |
+
+To rule pruning out entirely, restore the full tree with `cd dist && pnpm install --prod --no-lockfile` and run again. The prune only deletes from `dist/node_modules` and rewrites no manifest, so that returns the deployment to its pre-prune state. If the failure survives, pruning is not the cause.
+
+Node ABI to major version: 115 is Node 20, 127 is 22, 137 is 24, 147 is 26.
+
 ## Before you finish
 
 ```bash

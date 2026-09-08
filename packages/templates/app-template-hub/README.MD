@@ -120,13 +120,80 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 
 ### Diagnostics
 
-| Script                | What it does                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| `pnpm server:config`  | Print resolved configuration: paths, database, queue, providers. Secrets are redacted |
-| `pnpm client:inspect` | Print the resolved client composition: routes, providers, and which file owns each    |
-| `pnpm server:inspect` | Print the resolved server composition                                                 |
+| Script                      | What it does                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------- |
+| `pnpm server:config`        | Print resolved configuration: paths, database, queue, providers. Secrets are redacted               |
+| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each                  |
+| `pnpm server:inspect`       | Print the resolved server composition                                                               |
+| `pnpm server:deps:inspect`  | Print what the deployed server actually reaches, and what each native module needs to run elsewhere |
+| `pnpm server:deps:prune`    | Remove what the server never loads from `dist/node_modules`; part of `pnpm build`                   |
+| `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                            |
 
 These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
+
+#### Deploying to a different machine
+
+`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. There is no install step and no compiler on the far side — `pnpm start` runs exactly what `dist/` contains.
+
+Two things happen during the build to make that true. Everything the server never loads is removed, which takes the dependency tree from roughly 540 MB to 110 MB. And every native binary is made to match the platform you are deploying to, because a `.node` file is compiled for one platform, architecture, C library, and Node version at once.
+
+**`pnpm build` targets the machine you run it on**, so `pnpm build && pnpm start` works. Building for a server means saying so:
+
+```bash
+pnpm build                                  # this machine, ready to run locally
+pnpm build --target linux-x64               # most Linux servers
+pnpm build --target linux-arm64             # ARM servers, Graviton
+pnpm build --target linux-x64-musl          # Alpine, and most slim container images
+pnpm build --target linux-x64 --node-version 22   # when the server runs Node 22
+```
+
+The build prints which platform it produced on every run, and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
+
+`--target` sets platform, architecture, and C library together, because they are chosen together. The C library matters as much as the architecture: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
+
+`--node-version` takes the major version your server runs. It is separate because the same Linux host may run any of several Node versions. Supported: 20, 22, 24, 26.
+
+If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built. `pnpm server:deps:inspect` tells you which case you are in.
+
+#### When the build or the deployment goes wrong
+
+Every check below is a command you can run; none of them require reading the build scripts.
+
+**Start here.** `pnpm server:deps:inspect` reports what the server actually reaches, every native module and how each gets its binary, and every specifier the analysis could not resolve. It changes nothing.
+
+**`Cannot find module 'x'` on the server, but the application runs locally.** The pruning removed it. That happens when nothing imports the package by a literal name — a driver named in a config value, a plugin loaded from a database row — so the analysis cannot see it. Name it:
+
+```json
+{
+  "nocobase": {
+    "serverDeps": { "keep": ["x"] }
+  }
+}
+```
+
+Its own dependencies come along automatically. Use `pnpm build --keep x` to confirm the fix before writing it down; a name passed that way applies to one build only. A trailing `*` matches a prefix, as in `@acme/driver-*`.
+
+**A table is missing, or a translation falls back to its key.** Migrations, seeds, and locales are read by scanning directories rather than by importing files, so they are kept wholesale by directory name. If you keep application data somewhere else that is read the same way, add that package to `keep`.
+
+**`Error loading shared library`, `invalid ELF header`, or a bare reference to a `.node` file at startup.** The binary does not match the server. Compare what the build targeted against the server:
+
+```bash
+node -e "console.log(require('./dist/package.json').nocobase.buildTarget)"
+node -p "process.platform + '-' + process.arch"   # on the server
+node -p "process.versions.modules"                # on the server: the ABI
+```
+
+Rebuild with a `--target` and `--node-version` that match. ABI 115 is Node 20, 127 is Node 22, 137 is Node 24, 147 is Node 26.
+
+**`no prebuilt binary for <target>`during the build.** The package publishes no build for that combination. Check whether the version you depend on supports the target at all, and whether a musl build exists if you asked for one — musl coverage is thinner than glibc.
+
+**Ruling pruning out entirely.** Reinstall the full tree in place and run again:
+
+```bash
+cd dist && pnpm install --prod --no-lockfile
+```
+
+Nothing is rewritten by the prune except the contents of `dist/node_modules`, so this restores the pre-prune state. If the problem persists, it is not the pruning.
 
 ## Configuration
 

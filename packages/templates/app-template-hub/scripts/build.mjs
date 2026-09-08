@@ -251,6 +251,21 @@ run(
 run('Materialize server dependency links', 'node', [
   './scripts/clean-dist-bin.mjs',
 ]);
+// Runs after the install because it prunes what the install produced. The install resolves `dependencies`
+// transitively, which installs whole packages to satisfy imports that reach a few files; this removes the
+// difference. `pnpm server:deps:inspect` reports the same analysis without changing anything, and re-running the
+// install restores the full tree, so the step is reversible.
+run('Prune unreachable server dependencies', 'node', [
+  './scripts/prune-server-deps.mjs',
+  ...process.argv.slice(2),
+]);
+// Last, because it replaces binaries the prune has already decided to keep. Native packages are kept whole, so
+// the files this swaps are still present to be swapped. Defaults to linux-x64 on Node 24 rather than to this
+// machine: a build that silently targets the developer's laptop fails only once it reaches a server.
+run('Retarget native modules', 'node', [
+  './scripts/retarget-native.mjs',
+  ...process.argv.slice(2),
+]);
 
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',

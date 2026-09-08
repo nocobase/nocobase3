@@ -11,6 +11,9 @@
   "nocobase": {
     "templateKind": "app",
     "defaultTemplateVersion": "1.0.0-beta.17",
+    "serverDeps": {
+      "keep": []
+    },
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -145,6 +148,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vercel/nft": "^1.11.0",
     "@vitejs/plugin-react": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "ai": "5.0.0",
@@ -242,6 +246,9 @@
     "plugin:skills:sync": "nb3 app plugin skills sync",
     "client:inspect": "tsx ./scripts/inspect-client.mjs",
     "server:inspect": "tsx ./scripts/inspect-server.mjs",
+    "server:deps:inspect": "node ./scripts/inspect-server-deps.mjs",
+    "server:deps:prune": "node ./scripts/prune-server-deps.mjs",
+    "server:deps:retarget": "node ./scripts/retarget-native.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
