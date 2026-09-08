@@ -219,7 +219,7 @@ run('Rewrite server path aliases', 'pnpm', [
   'tsconfig.server.json',
 ]);
 run('Build workflow artifacts', 'pnpm', [
-  'exec',
+  'nocobase',
   'workflow',
   'build',
   '--resource-root',

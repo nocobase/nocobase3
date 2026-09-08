@@ -51,7 +51,7 @@ cases:
       - Creates one package whose directory name is the stable workflow key.
       - Separates inputSchema from administrator parameters and declares an accurate calculateRisk result schema.
       - Uses only RunInstruction.create(), ConditionInstruction.create(), arrays, and yes/no branch blocks supported by the current contracts.
-      - Runs pnpm exec workflow check against the package or workflow.ts and reports all five validation phases as passed.
+      - Runs pnpm nocobase workflow check against the package or workflow.ts and reports all five validation phases as passed.
       - Reports created source files separately from runtime mutations and states that no runtime mutation occurred.
     forbidden:
       - Adding a top-level trigger, start, node map, edge list, or generic public trigger route.
@@ -97,7 +97,7 @@ cases:
       验证 ./server/workflows/broken-quotation/workflow.ts 是否是合法工作流定义。
       我需要代码检查器给出的可靠结论，不要只做文本审查，也不要修改文件。
     expected:
-      - Runs pnpm exec workflow check on the exact target.
+      - Runs pnpm nocobase workflow check on the exact target.
       - Reports pass or failure from the real typecheck, evaluate, schema, semantic, and compile pipeline.
       - On failure, reports the earliest failing phase plus available code, file/line, AST path, node key, and contract type.
       - Leaves the source and database unchanged.
