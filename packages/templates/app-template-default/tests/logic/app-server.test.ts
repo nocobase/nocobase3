@@ -111,6 +111,10 @@ interface FetchableResource {
 
 type TestApp = Application<AppConfig> & CloseableResource;
 
+type TestStandaloneServerOptions = StandaloneServerOptions & {
+  readonly clientDir?: string;
+};
+
 interface RegisteredTestDisposer {
   name: string;
   dispose: AppDisposer;
@@ -599,10 +603,18 @@ describe('app server', () => {
   });
 
   it('starts a fresh Default without example tables or APIs', async () => {
+    const clientDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-default-fresh-client-'),
+    );
+    tempDirs.push(clientDir);
+    const spaContent = '<main>Fresh Default test application</main>';
+    // The fallback must not depend on a previous local client build.
+    writeFileSync(path.join(clientDir, 'index.html'), spaContent);
     const app = trackCloseable(
       await createInstalledStandaloneServer({
         viteDevUrl: false,
         env: { APP_CONFIG_FILE: 'config.example.yml' },
+        clientDir,
       }),
     );
     const database = app.application.container.resolve(databaseManagerToken);
@@ -616,7 +628,9 @@ describe('app server', () => {
     for (const endpoint of ['articles', 'example', 'routes-example']) {
       const response = await requestApp(app, `${baseUrl}/api/${endpoint}`);
       // Unregistered GET paths reach the application's existing SPA fallback.
+      expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/html');
+      await expect(response.text()).resolves.toContain(spaContent);
     }
   });
 
@@ -1275,7 +1289,7 @@ function createEmbeddedTestScope(
 }
 
 async function createIsolatedStandaloneServer(
-  options: StandaloneServerOptions = {},
+  options: TestStandaloneServerOptions = {},
 ): Promise<StandaloneServer> {
   const sourceRoot = path.resolve(import.meta.dirname, '../..');
   const databaseDir = mkdtempSync(
@@ -1295,14 +1309,14 @@ async function createIsolatedStandaloneServer(
       rootDir: sourceRoot,
       serverDir: path.join(sourceRoot, 'server'),
       databaseDir: path.join(sourceRoot, 'database'),
-      clientDir: path.join(sourceRoot, 'dist/client'),
+      clientDir: options.clientDir ?? path.join(sourceRoot, 'dist/client'),
       storageDir: path.join(sourceRoot, 'storage'),
     },
   });
 }
 
 function createInstalledStandaloneServer(
-  options: StandaloneServerOptions = {},
+  options: TestStandaloneServerOptions = {},
 ): Promise<StandaloneServer> {
   return createIsolatedStandaloneServer({
     ...options,
