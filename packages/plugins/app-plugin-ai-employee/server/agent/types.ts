@@ -1,5 +1,6 @@
 import type {
   AIMessage as LangChainAIMessage,
+  BaseMessageLike,
   HumanMessage,
   ToolMessage,
 } from '@langchain/core/messages';
@@ -61,12 +62,19 @@ export interface AgentGraphState {
 export type PreparedAgentInput =
   Command | ({ messages: unknown[] } & Partial<AgentGraphState>) | null;
 
-export interface AgentMessageConversionContext {
-  providerName: string;
-  llmService?: string;
-  model: string;
-  provider: LLMProvider;
+export interface ResolvedAgentLLM {
+  readonly providerName: string;
+  readonly llmService?: string;
+  readonly model: string;
+  readonly provider: LLMProvider;
+  takeResponseMetadata?(id: string): Record<string, unknown> | undefined;
+  dispose?(): void | Promise<void>;
 }
+
+export type AgentMessageConversionContext = Pick<
+  ResolvedAgentLLM,
+  'providerName' | 'llmService' | 'model' | 'provider'
+>;
 
 /**
  * Inputs prepared for the infrastructure-owned pipeline. Deliberately has no
@@ -76,8 +84,10 @@ export interface PreparedAgentContext extends AgentMessageConversionContext {
   input: PreparedAgentInput;
   systemPrompt?: CreateAgentParams['systemPrompt'];
   tools: CreateAgentParams['tools'];
-  sourceTools: ToolsEntity[];
+  sourceTools: readonly ToolsEntity[];
   baseToolNames: Set<string>;
+  initialActiveToolNames?: ReadonlySet<string>;
+  llm?: ResolvedAgentLLM;
   config: Record<string, any>;
   state?: AgentGraphState;
   thread?: AgentThread;
@@ -343,27 +353,43 @@ export interface ConversationProvider {
 }
 
 export interface ChatContextProvider {
-  formatMessages(
-    messages: AIMessageInput[],
-    context: AgentMessageConversionContext,
-  ): Promise<unknown[]>;
+  resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM>;
   getSystemPrompt(
-    messages: AIMessageInput[],
+    messages: readonly AIMessageInput[],
     request: AgentRequest,
+    llm: ResolvedAgentLLM,
   ): Promise<string | undefined>;
-  getExecutionConfig(request: AgentRequest): Promise<Record<string, unknown>>;
-  convertAIMessage(
-    message: LangChainAIMessage,
+  discoveredTools(request: AgentRequest): Promise<readonly ToolsEntity[]>;
+  activeTools(request: AgentRequest): Promise<ReadonlySet<string>>;
+  getExecutionConfig(
+    request: AgentRequest,
+    llm: ResolvedAgentLLM,
+  ): Promise<Record<string, unknown>>;
+  shouldInterruptToolCall(tool?: ToolsEntity): boolean;
+  getToolsMap(request: AgentRequest): Promise<ReadonlyMap<string, ToolsEntity>>;
+}
+
+export interface ChatMessageToStoredConverter<TSource, TResult> {
+  toStored(
+    source: TSource,
     context: AgentMessageConversionContext,
-  ): AIMessageInput | null;
-  convertHumanMessage(
-    message: HumanMessage,
+  ): TResult | Promise<TResult>;
+}
+
+export interface ChatMessageConverters {
+  formatMessages(
+    messages: readonly AIMessageInput[],
     context: AgentMessageConversionContext,
-  ): AIMessageInput | null;
-  convertToolMessage(
-    message: ToolMessage,
-    context: AgentMessageConversionContext,
-  ): AIMessageInput;
+  ): Promise<readonly BaseMessageLike[]>;
+  readonly assistant: ChatMessageToStoredConverter<
+    LangChainAIMessage,
+    AIMessageInput | null
+  >;
+  readonly human: ChatMessageToStoredConverter<
+    HumanMessage,
+    AIMessageInput | null
+  >;
+  readonly tool: ChatMessageToStoredConverter<ToolMessage, AIMessageInput>;
 }
 
 export interface ToolProvider {
