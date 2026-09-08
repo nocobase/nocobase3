@@ -10,7 +10,7 @@ import { convertMessagesToCompletionsMessageParams } from '@langchain/openai';
 import { createAgent } from 'langchain';
 import { describe, expect, it, vi } from 'vitest';
 
-import { toolCallSanitizerMiddleware } from '../../server/ai-employees/middleware/tool-call-sanitizer.js';
+import { toolCallSanitizerMiddleware } from '../../server/agent/middleware/tool-call-sanitizer.js';
 
 const rawToolCall = {
   id: 'call_bad',

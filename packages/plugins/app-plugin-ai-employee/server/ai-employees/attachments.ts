@@ -7,9 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../context.js';
 import type { AIFileAttachment } from '@nocobase/ai-employee';
-import type { DatabaseRepositoryFactory } from '../repository/index.js';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
 
 export type AttachmentId = string | number;
 
@@ -107,9 +106,10 @@ function isValidFileCollectionSource(lookup: AttachmentLookup): boolean {
 }
 
 async function findSourceAttachments(
-  ctx: Context<DatabaseRepositoryFactory>,
+  actorId: string | number | undefined,
+  repositories: RepositoryFactory,
   lookups: AttachmentLookup[],
-) {
+): Promise<Map<string, AIFileAttachment>> {
   const attachmentsByLookup = new Map<string, AIFileAttachment>();
   const groups = new Map<string, AttachmentLookup[]>();
   for (const lookup of lookups) {
@@ -132,14 +132,13 @@ async function findSourceAttachments(
       },
     };
     if (collectionName === 'aiFiles') {
-      const userId = ctx.auth?.user?.id;
-      if (userId == null) {
+      if (actorId == null) {
         continue;
       }
-      filter.createdById = userId;
+      filter.createdById = actorId;
     }
 
-    const records = await ctx.repositories
+    const records = await repositories
       .collectionRepository<AIFileAttachment>(collectionName)
       .find({ filter });
     for (const attachment of records) {
@@ -150,10 +149,15 @@ async function findSourceAttachments(
   return attachmentsByLookup;
 }
 
-export async function findMessageAttachments(
-  ctx: Context,
-  attachments: unknown[],
-) {
+export async function findMessageAttachments({
+  actorId,
+  repositories,
+  attachments,
+}: {
+  actorId: string | number | undefined;
+  repositories: RepositoryFactory;
+  attachments: readonly unknown[];
+}): Promise<Map<string, AIFileAttachment>> {
   const lookups: AttachmentLookup[] = [];
   for (const attachment of attachments) {
     const source = getAttachmentSource(attachment);
@@ -170,7 +174,7 @@ export async function findMessageAttachments(
     });
   }
 
-  return findSourceAttachments(ctx, lookups);
+  return findSourceAttachments(actorId, repositories, lookups);
 }
 
 export function getMessageAttachmentLookupKey(attachment: unknown) {

@@ -10,11 +10,18 @@ export default createClientLibraryConfig({
     'tests/**',
     'server/agent/**',
     'server/ai-employees/**',
+    // Relocated legacy manager implementations retain their existing lint scope.
+    'server/manager/ai-*.ts',
+    'server/manager/built-in-manager.ts',
+    'server/manager/knowledge-base-manager.ts',
+    'server/manager/llm-stream-cached-manager.ts',
+    'server/manager/sub-agents/**',
+    'server/manager/work-context/**',
     'ai/**',
     'server/repository/**',
-    'server/routes/*.ts',
+    'server/route/*.ts',
     'server/service/**',
-    'server/runtime.ts',
+    'server/internal/**',
   ],
   overrides: [
     {

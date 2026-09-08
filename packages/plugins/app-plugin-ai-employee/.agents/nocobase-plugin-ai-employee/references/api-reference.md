@@ -248,7 +248,7 @@ Query `{ sessionId: string }`. Returns `null`.
 
 ### Unread counters
 
-- `GET aiConversations:unreadCounts` → `{ conversationUnreadCount: number; workflowTaskUnreadCount: number }`.
+- `GET aiConversations:unreadCounts` → `{ conversationUnreadCount: number }`.
 - `GET aiConversations:unreadCount` → `number`.
 
 ## Message streaming
