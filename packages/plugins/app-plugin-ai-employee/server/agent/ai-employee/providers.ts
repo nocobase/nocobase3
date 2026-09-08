@@ -17,14 +17,14 @@ import type {
   ToolCallHandler,
   ToolProvider,
 } from '../types.js';
-import { NativeCollectionSaver } from '../../ai-employees/checkpoints/index.js';
+import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   convertAIMessage,
   convertHumanMessage,
   convertToolMessage,
-} from '../../ai-employees/utils.js';
+} from '../../agent/ai-employee/utils.js';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { createAgentProviders } from '../providers.js';
 import {

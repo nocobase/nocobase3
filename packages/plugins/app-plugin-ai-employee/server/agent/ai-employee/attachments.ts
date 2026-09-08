@@ -8,7 +8,7 @@
  */
 
 import type { AIFileAttachment } from '@nocobase/ai-employee';
-import type { RepositoryFactory } from '../factory/repository-factory.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
 
 export type AttachmentId = string | number;
 

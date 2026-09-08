@@ -24,9 +24,9 @@ import type { AIEmployeeRepository } from '@nocobase/ai-employee';
 import {
   findCurrentFrontendTool,
   readFrontendToolResult,
-} from '../ai-employees/frontend-tools.js';
+} from './ai-employee/frontend-tools.js';
 import type { AppAgentServices, ConversationExecution } from './contracts.js';
-import type { Actor, Translate } from '../domain/contracts.js';
+import type { Actor, Translate } from '../types.js';
 
 export interface AppAgentRepositories {
   aiConversations: AIConversationRepository;

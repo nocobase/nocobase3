@@ -12,7 +12,7 @@ import type { Caching } from '@nocobase/caching';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { Actor, Translate } from '../../domain/contracts.js';
+import type { Actor, Translate } from '../../types.js';
 import type { ConversationExecution } from '../../agent/contracts.js';
 import type { AIFileEntity } from '../../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
@@ -26,7 +26,7 @@ import type { LLMStreamCachedManager } from '../llm-stream-cached-manager.js';
 import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
-import type { ModelRef } from '../../domain/contracts.js';
+import type { ModelRef } from '../../types.js';
 import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
 import { createAgentContext } from '../../agent/context.js';
 import type {

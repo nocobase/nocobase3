@@ -7,9 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { ConversationExecution } from '../agent/contracts.js';
+import type { ConversationExecution } from '../contracts.js';
 import { z } from 'zod';
-import type { RepositoryFactory } from '../factory/repository-factory.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,

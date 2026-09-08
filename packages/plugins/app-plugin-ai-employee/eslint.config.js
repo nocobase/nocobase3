@@ -9,7 +9,6 @@ export default createClientLibraryConfig({
     'client/dev/**',
     'tests/**',
     'server/agent/**',
-    'server/ai-employees/**',
     // Relocated legacy manager implementations retain their existing lint scope.
     'server/manager/ai-*.ts',
     'server/manager/built-in-manager.ts',

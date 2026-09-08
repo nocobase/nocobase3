@@ -10,7 +10,7 @@ import {
   type AppAgentContext,
 } from '../../server/agent/context.js';
 import type { ConversationExecution } from '../../server/agent/contracts.js';
-import type { Actor } from '../../server/domain/contracts.js';
+import type { Actor } from '../../server/types.js';
 import {
   ManagerFactory,
   managerFactoryToken,

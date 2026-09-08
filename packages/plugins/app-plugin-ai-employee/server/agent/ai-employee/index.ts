@@ -23,4 +23,4 @@ export async function createAIEmployeeAgentService(
 
 export * from './providers.js';
 export type { AIEmployeeAgentRuntimeOptions as AIEmployeeAgentOptions } from './runtime.js';
-export type { ModelRef as AIEmployeeAgentModelRef } from '../../domain/contracts.js';
+export type { ModelRef as AIEmployeeAgentModelRef } from '../../types.js';

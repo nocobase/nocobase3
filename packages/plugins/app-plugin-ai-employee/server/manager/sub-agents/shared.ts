@@ -12,7 +12,7 @@ import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import type { SubAgentConversationMetadata } from '@nocobase/ai-employee';
-import type { Translate } from '../../domain/contracts.js';
+import type { Translate } from '../../types.js';
 
 export async function listAccessibleAIEmployees({
   roleNames,

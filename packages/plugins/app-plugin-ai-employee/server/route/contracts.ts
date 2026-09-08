@@ -1,1 +1,1 @@
-export * from '../domain/api-contracts.js';
+export * from '../types.js';

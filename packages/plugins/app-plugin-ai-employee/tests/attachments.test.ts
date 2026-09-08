@@ -5,7 +5,7 @@ import {
   findMessageAttachments,
   getAttachmentSource,
   getMessageAttachmentLookupKey,
-} from '../server/ai-employees/attachments.js';
+} from '../server/agent/ai-employee/attachments.js';
 type FindCall = { collectionName: string; filter: Record<string, unknown> };
 
 function createContext(

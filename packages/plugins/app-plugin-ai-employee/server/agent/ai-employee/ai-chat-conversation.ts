@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { RepositoryFactory } from '../factory/repository-factory.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
 import _ from 'lodash';
 import {
   AIChatContext,

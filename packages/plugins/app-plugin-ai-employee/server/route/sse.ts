@@ -1,4 +1,4 @@
-import type { ConversationStreamTarget } from '../domain/stream.js';
+import type { ConversationStreamTarget } from '../types.js';
 
 const DEFAULT_CONTENT_TYPE = 'text/event-stream; charset=utf-8';
 

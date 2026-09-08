@@ -20,7 +20,7 @@ import type {
   LCCheckpointRepository,
   LCCheckpointWriteEntity,
   LCCheckpointWriteRepository,
-} from '../../repository/index.js';
+} from '../../../repository/index.js';
 
 export interface CheckpointRepositories {
   checkpoints: LCCheckpointRepository;

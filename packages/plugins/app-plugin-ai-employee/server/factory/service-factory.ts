@@ -17,7 +17,7 @@ import type { AIEmployeeLLMServiceConfig } from '../config.js';
 import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
 import { repositoryFactoryToken } from './repository-factory.js';
 import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
-import { AI_API_BASE_PATH } from '../domain/api-contracts.js';
+import { AI_API_BASE_PATH } from '../types.js';
 import { aiManagerToken } from '../provider/ai-employee.js';
 import { AIConversationService } from '../service/ai-conversation-service.js';
 import { AIEmployeeService } from '../service/ai-employee-service.js';

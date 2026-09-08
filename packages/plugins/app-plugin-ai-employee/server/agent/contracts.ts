@@ -4,9 +4,9 @@ import type {
   AgentToolCallResult,
   UserDecision,
 } from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from '../ai-employees/common/frontend-tools.js';
-import type { ModelRef } from '../domain/contracts.js';
-import type { ConversationStreamTarget } from '../domain/stream.js';
+import type { FrontendToolManifest } from './ai-employee/common/frontend-tools.js';
+import type { ModelRef } from '../types.js';
+import type { ConversationStreamTarget } from '../types.js';
 import type { CreateAIConversationParams } from '../manager/ai-conversations-manager.js';
 import type { AIConversationEntity } from '../repository/ai-conversation.js';
 

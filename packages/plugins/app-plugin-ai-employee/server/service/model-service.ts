@@ -5,7 +5,7 @@ import type {
   EnabledLLMServiceDto,
   ProviderModelDto,
   ProviderModelListRequest,
-} from '../domain/api-contracts.js';
+} from '../types.js';
 import { badRequest, notFound, requiredString } from './utils.js';
 
 /**

@@ -10,7 +10,7 @@
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { DatabaseRepositoryFactory } from '../repository/index.js';
 import type { AIManager } from '@nocobase/ai-employee';
-import type { ModelRef } from '../domain/contracts.js';
+import type { ModelRef } from '../types.js';
 
 export class AIEmployeesManager {
   /** Legacy controllers are retained for workflow and compatibility callers. */

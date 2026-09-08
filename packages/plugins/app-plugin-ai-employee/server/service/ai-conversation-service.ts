@@ -7,7 +7,7 @@
  */
 
 import type { ConversationExecution } from '../agent/contracts.js';
-import type { ConversationStreamTarget } from '../domain/stream.js';
+import type { ConversationStreamTarget } from '../types.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
@@ -18,8 +18,8 @@ import type { AIFileEntity } from '../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { Actor, Translate } from '../domain/contracts.js';
-import { ResourceActionError, sendStreamError } from '../domain/errors.js';
+import type { Actor, Translate } from '../types.js';
+import { ResourceActionError, sendStreamError } from '../types.js';
 import type {
   AIMessageEntity,
   AIToolMessageEntity,
@@ -31,8 +31,8 @@ import {
   type AppAgentContext,
   type CreateAgentContextOptions,
 } from '../agent/context.js';
-import { EXECUTE_FRONTEND_TOOL_NAME } from '../ai-employees/common/frontend-tools.js';
-import { findCurrentFrontendTool } from '../ai-employees/frontend-tools.js';
+import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/ai-employee/common/frontend-tools.js';
+import { findCurrentFrontendTool } from '../agent/ai-employee/frontend-tools.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';

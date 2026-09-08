@@ -1,4 +1,4 @@
-import type { ModelRef } from '../../domain/contracts.js';
+import type { ModelRef } from '../../types.js';
 import type { AppAgentContext } from '../context.js';
 import type { ConversationExecution } from '../contracts.js';
 import type { Caching } from '@nocobase/caching';
@@ -27,10 +27,10 @@ import type { SkillsEntity } from '@nocobase/ai-employee';
 import type { AIToolMessageEntity } from '../../repository/index.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import { LLMProvider } from '@nocobase/ai-employee';
-import { getSystemPrompt } from '../../ai-employees/prompts.js';
+import { getSystemPrompt } from '../../agent/ai-employee/prompts.js';
 import _ from 'lodash';
 import { AIChatConversation, AIMessageInput } from '@nocobase/ai-employee';
-import { createAIChatConversation } from '../../ai-employees/ai-chat-conversation.js';
+import { createAIChatConversation } from '../../agent/ai-employee/ai-chat-conversation.js';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import {
@@ -43,22 +43,22 @@ import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
 } from '../../manager/sub-agents/shared.js';
-import { sanitizeAdditionalKwargsForToolCalls } from '../../ai-employees/tool-call-sanitizer.js';
+import { sanitizeAdditionalKwargsForToolCalls } from '../../agent/ai-employee/tool-call-sanitizer.js';
 import {
   findMessageAttachments,
   getAttachmentSource,
   getMessageAttachmentLookupKey,
   shouldSkipAttachmentSourceLookup,
-} from '../../ai-employees/attachments.js';
+} from '../../agent/ai-employee/attachments.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,
-} from '../../ai-employees/common/frontend-tools.js';
+} from '../../agent/ai-employee/common/frontend-tools.js';
 import {
   listCurrentFrontendTools,
   prepareToolsForFrontendConversation,
   shouldAutoExecuteFrontendTool,
-} from '../../ai-employees/frontend-tools.js';
+} from '../../agent/ai-employee/frontend-tools.js';
 
 export interface AIEmployeeAgentRuntimeOptions {
   agentContext: AppAgentContext;
