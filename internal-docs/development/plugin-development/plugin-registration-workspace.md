@@ -53,7 +53,6 @@ pnpm plugin:register audit-log \
 
 ```text
 target App package dependency
-package.json#nocobase.plugins
 client/plugins.ts when ./client exists
 server/plugins.ts when ./server exists
 .agents/skills when plugin-owned Skills exist
@@ -87,7 +86,7 @@ pnpm plugin:register audit-log \
   --disabled
 ```
 
-此时 dependency 和 `nocobase.plugins` 存在，但 composition roots 不应加入插件。Skills 默认仍会同步，因为它们是 App Agent 使用说明，不是运行时代码。不希望同步时显式增加：
+此时只有 dependency 存在，composition roots 不应加入插件。Skills 默认仍会同步，因为它们是 App Agent 使用说明，不是运行时代码。不希望同步时显式增加：
 
 ```bash
 --no-skills

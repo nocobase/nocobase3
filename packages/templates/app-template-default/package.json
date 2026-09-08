@@ -10,45 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.17",
-    "plugins": {
-      "@nocobase/app-plugin-ai-employee": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-ai-knowledge-base": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-authentication": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-authorization": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-file-repository": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-i18n": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-install": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-notification": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-notification-in-app": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-notification-provider": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-notification-providers": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-workflow": {
-        "enabled": true
-      }
-    }
+    "defaultTemplateVersion": "1.0.0-beta.17"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",

@@ -12,6 +12,10 @@ In the template package, `nocobase.defaultTemplateVersion` mirrors `version`; `s
 
 The template no longer registers or directly depends on `@nocobase/app-plugin-file`. Its file inventory settings page and related API are no longer provided by default. When merging this update, remove the package from the manifest and both client/server plugin lists, then install dependencies and synchronize plugin Skills. This registration change does not delete stored files or database records. Independently registered file Repository capabilities remain unchanged.
 
+## Remove duplicate plugin metadata
+
+Remove `nocobase.plugins` from the application manifest after upgrading the CLI and template scripts together. Keep `templateKind` and `defaultTemplateVersion`. Client, Server, and CLI composition roots now determine registered plugins for bulk Skills synchronization and updates. Development watches read Server registrations; deployment packaging follows server imports. Registration still copies plugin Skills, and unregistration cleans up legacy metadata when present.
+
 ## Upgrade checklist
 
 1. Back up application source and its database before upgrading.

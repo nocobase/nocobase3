@@ -30,6 +30,10 @@ When upgrading an existing application, preserve its original application-owned 
 
 Previously created article and plugin records remain in the existing database; the article UI/API and automatic article permission initialization are removed from Default. This source upgrade does not drop tables or delete data.
 
+## Remove duplicate plugin metadata
+
+Remove `nocobase.plugins` from the application manifest after upgrading the CLI and template scripts together. Keep `templateKind` and `defaultTemplateVersion`. Client, Server, and CLI composition roots now determine registered plugins for bulk Skills synchronization and updates. Development watches read Server registrations; deployment packaging follows server imports. Registration still copies plugin Skills, and unregistration cleans up legacy metadata when present.
+
 ## Upgrade checklist
 
 1. Commit or back up application-owned changes.

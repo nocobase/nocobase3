@@ -7,7 +7,7 @@ description: NocoBase v3 插件生命周期命令、JSON 状态、静态诊断�
 
 本页保留完整命令、JSON envelope 和不一致诊断参考，不是普通注册任务的起点。首先阅读[插件注册](./plugin-registration.md)，再进入 [source workspace](./plugin-registration-workspace.md)、[独立 App](./plugin-registration-installed.md) 或[解除注册与删除](./plugin-removal.md)流程。
 
-插件注册不是一个布尔字段，而是多个显式状态面的组合。Agent 必须检查最终状态，不应只根据命令退出码或 `nocobase.plugins.enabled` 判断插件已经正确运行。
+插件注册不是一个布尔字段，而是多个显式状态面的组合。Agent 必须检查最终状态，不应只根据命令退出码或已安装状态判断插件已经正确运行。
 
 ## 两种环境
 
@@ -23,7 +23,6 @@ description: NocoBase v3 插件生命周期命令、JSON 状态、静态诊断�
 | 状态面        | 位置                                  | 作用                                      |
 | ------------- | ------------------------------------- | ----------------------------------------- |
 | 包已安装      | `dependencies` 或 `devDependencies`   | 模块可以被解析                            |
-| 插件已登记    | `package.json#nocobase.plugins`       | CLI、构建、监听和 Skills 管理 metadata    |
 | Client 已启用 | `client/plugins.ts`                   | Browser runtime 加载 Client contributions |
 | Server 已启用 | `server/plugins.ts`                   | Server runtime 加载 Server contributions  |
 | Skills 已同步 | `.agents/skills/`（本地生成，不提交） | App Agent 可发现插件能力和集成指南        |
@@ -33,7 +32,6 @@ description: NocoBase v3 插件生命周期命令、JSON 状态、静态诊断�
 ```text
 resolve/install package
 → write dependency
-→ write nocobase.plugins metadata
 → register Client if exports["./client"] exists
 → register Server if exports["./server"] exists
 → synchronize plugin Skills
@@ -180,7 +178,6 @@ pnpm plugin:register audit-log \
 
 ```text
 dependency                    present
-nocobase.plugins              enabled: false
 client/plugins.ts             not added
 server/plugins.ts             not added
 plugin Skills                 synchronized by default
@@ -272,7 +269,7 @@ pnpm plugin:unregister audit-log
 
 - 插件同步到 App 的 Skills；
 - 安装依赖（除非使用 `--no-install`）；
-- dependency 和 `nocobase.plugins` 记录；
+- dependency 和显式注册入口记录；
 - `client/plugins.ts` 中的 import 和数组项；
 - `server/plugins.ts` 中的 import 和数组项。
 
@@ -296,7 +293,7 @@ pnpm plugin:unregister audit-log --dry-run
 pnpm plugin:remove audit-log
 ```
 
-`plugin:remove` 是 source workspace 专属命令。它会拒绝删除仍被 App dependency、`nocobase.plugins`、Client composition root 或 Server composition root 引用的插件。
+`plugin:remove` 是 source workspace 专属命令。它会拒绝删除仍被 App dependency、Client composition root 或 Server composition root 引用的插件。
 
 删除源码属于破坏性操作。Agent 必须先确认：
 
@@ -343,7 +340,7 @@ Agent 应先判断 `ok`，再按 `status` 分支；失败时读取 `error.code` 
 ```text
 1. package is installed/resolvable
 2. App dependency exists
-3. nocobase.plugins record has expected enabled state
+3. composition roots contain the intended plugin entries
 4. package exports ./client and/or ./server as expected
 5. client/plugins.ts matches Client export and enabled state
 6. server/plugins.ts matches Server export and enabled state
@@ -378,7 +375,7 @@ pnpm --filter <target-app> client:inspect --json
 注册任务只有在以下条件满足后才算完成：
 
 - 包可从目标 App 解析；
-- dependency 和 `nocobase.plugins` 状态正确；
+- dependency 和显式注册入口状态正确；
 - Client/Server composition roots 与包 exports 和 enabled 状态一致；
 - 没有重复注册；
 - Skills 已按预期同步，源文件与 App 副本一致；或命令明确使用了 `--no-skills`；

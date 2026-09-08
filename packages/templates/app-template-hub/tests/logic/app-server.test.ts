@@ -99,7 +99,6 @@ import {
 type AppConfig = object;
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
-process.env.HUB_HOST_ENABLED ??= 'false';
 
 interface CloseableResource {
   close(): Promise<void>;
@@ -1409,6 +1408,9 @@ function createEmbeddedTestScope(
   return {
     ...options,
     env: {
+      // Embedded scopes do not inherit process.env. These runtime tests do not
+      // install Hub tables or exercise the managed host process.
+      HUB_HOST_ENABLED: 'false',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },
@@ -1443,6 +1445,7 @@ async function createIsolatedStandaloneServer(
   return createStandaloneServer({
     ...options,
     env: {
+      HUB_HOST_ENABLED: 'false',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },
