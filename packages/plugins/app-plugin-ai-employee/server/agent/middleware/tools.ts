@@ -11,20 +11,19 @@ import {
 } from 'langchain';
 import z from 'zod';
 import _ from 'lodash';
-import type { ConversationProvider, ToolProvider } from '../types.js';
-import type { ToolsEntity } from '@nocobase/ai-employee';
+import type { ChatContextProvider, ConversationProvider } from '../types.js';
 
 export const toolInteractionMiddleware = (
   conversation: ConversationProvider,
-  toolProvider: ToolProvider,
-  tools: ToolsEntity[],
+  chatContext: Pick<ChatContextProvider, 'shouldInterruptToolCall'>,
+  tools: readonly import('@nocobase/ai-employee').ToolsEntity[],
 ): ReturnType<typeof createMiddleware> => {
   const interruptOn: Parameters<
     typeof humanInTheLoopMiddleware
   >[0]['interruptOn'] = {};
   const identity = conversation.identity;
   for (const tool of tools) {
-    interruptOn[tool.definition.name] = toolProvider.shouldInterruptToolCall(
+    interruptOn[tool.definition.name] = chatContext.shouldInterruptToolCall(
       tool,
     )
       ? {

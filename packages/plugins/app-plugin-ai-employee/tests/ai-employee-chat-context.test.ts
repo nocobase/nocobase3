@@ -84,4 +84,25 @@ describe('AIEmployeeChatContextProvider', () => {
     await first.dispose?.();
     expect(first.takeResponseMetadata?.('disposed')).toBeUndefined();
   });
+
+  it('re-reads activated skill tools on every activeTools query', async () => {
+    const { context } = createFixture();
+    const runtime = (context as any).runtime;
+    runtime.getAgentTools.mockResolvedValue({
+      tools: [
+        { definition: { name: 'getSkill' } },
+        { definition: { name: 'skillTool' } },
+      ],
+      baseToolNames: new Set(['getSkill']),
+    });
+    runtime.getActivatedSkillToolNames
+      .mockResolvedValueOnce(new Set())
+      .mockResolvedValueOnce(new Set(['skillTool']));
+
+    expect(await context.activeTools({})).toEqual(new Set(['getSkill']));
+    expect(await context.activeTools({})).toEqual(
+      new Set(['getSkill', 'skillTool']),
+    );
+    expect(runtime.getActivatedSkillToolNames).toHaveBeenCalledTimes(2);
+  });
 });

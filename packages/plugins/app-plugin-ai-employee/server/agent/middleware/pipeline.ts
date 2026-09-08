@@ -20,14 +20,17 @@ export function buildStandardAgentMiddleware(
       ? namedNoopMiddleware('ContextEnrichmentMiddleware')
       : namedNoopMiddleware('ContextEnrichmentMiddleware'),
     features.skills
-      ? skillToolBindingMiddleware(providers.tools, {
-          baseToolNames: Array.from(prepared.baseToolNames),
+      ? skillToolBindingMiddleware(providers.chatContext, {
+          request: prepared.config.context.agentRequest,
+          initialActiveToolNames: Array.from(
+            prepared.initialActiveToolNames ?? prepared.baseToolNames,
+          ),
         })
       : namedNoopMiddleware('SkillToolBindingMiddleware'),
     features.tools && features.toolInteraction
       ? toolInteractionMiddleware(
           providers.conversation,
-          providers.tools,
+          providers.chatContext,
           prepared.sourceTools,
         )
       : namedNoopMiddleware('ToolInteractionMiddleware'),
