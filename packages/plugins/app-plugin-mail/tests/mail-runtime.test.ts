@@ -587,6 +587,197 @@ describe('mail MVP runtime', () => {
     });
   });
 
+  it('stores private notes and todo state without losing them on Provider sync', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [message('provider-note', 'Remember this')],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'note-test-1' },
+    });
+    const stored = (await store.listMessages('user-1', {})).items[0];
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+
+    await expect(
+      service.updateMessage(
+        { actorId: 'user-1' },
+        {
+          accountId: 'account-1',
+          messageId: stored.id,
+          note: 'Follow up on Friday',
+          todo: true,
+        },
+      ),
+    ).resolves.toMatchObject({ note: 'Follow up on Friday', todo: true });
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [
+        { ...message('provider-note', 'Updated subject'), read: true },
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'note-test-2' },
+    });
+
+    await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          note: 'Follow up on Friday',
+          todo: true,
+          subject: 'Updated subject',
+        }),
+      ],
+    });
+    await expect(service.getUnreadCount({ actorId: 'user-1' })).resolves.toBe(
+      0,
+    );
+  });
+
+  it('creates and applies Provider labels while maintaining local membership', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [message('provider-label', 'Label me')],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'label-test' },
+    });
+    const stored = (await store.listMessages('user-1', {})).items[0];
+    const createLabel = vi.fn<NonNullable<MailProviderAdapter['createLabel']>>(
+      async (name) => ({
+        ok: true,
+        value: {
+          providerFolderId: 'label-project',
+          type: 'custom',
+          name,
+          kind: 'label',
+        },
+      }),
+    );
+    const updateLabels = vi.fn<
+      NonNullable<MailProviderAdapter['updateLabels']>
+    >(async () => ({ ok: true, value: undefined }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({
+        ...baseAdapter(),
+        capabilities: { ...baseAdapter().capabilities, labels: true },
+        createLabel,
+        updateLabels,
+      }),
+      outbox: { kick: vi.fn() },
+    });
+
+    await expect(
+      service.createLabel({ actorId: 'user-1' }, 'account-1', 'Project'),
+    ).resolves.toMatchObject({ providerFolderId: 'label-project' });
+    await expect(
+      service.updateMessageLabels(
+        { actorId: 'user-1' },
+        {
+          accountId: 'account-1',
+          messageId: stored.id,
+          addLabelIds: ['label-project'],
+        },
+      ),
+    ).resolves.toMatchObject({
+      folderIds: expect.arrayContaining(['inbox', 'label-project']),
+    });
+    expect(updateLabels).toHaveBeenCalledWith('provider-label', {
+      addLabelIds: ['label-project'],
+      removeLabelIds: [],
+      signal: undefined,
+    });
+  });
+
+  it('selects a managed signature and supports cancelling and retrying sync', async () => {
+    const setupService = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+    const signature = await setupService.saveSignature(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        name: 'Sales',
+        text: 'Sales team',
+      },
+    );
+    expect(signature).toMatchObject({
+      isDefault: true,
+      createdAt: expect.any(String),
+    });
+    const sendMessage = vi.fn<NonNullable<MailProviderAdapter['sendMessage']>>(
+      async () => ({ status: 'accepted' }),
+    );
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: { kick: vi.fn() },
+    });
+    await service.sendMessage(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        signatureId: signature.id,
+        to: [{ address: 'reader@example.com' }],
+        subject: 'Signed',
+        text: 'Hello',
+        idempotencyKey: 'signed-message',
+      },
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({ text: 'Hello\n\n-- \nSales team' }),
+      }),
+    );
+    const alternate = await service.saveSignature(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        name: 'Support',
+        text: 'Support team',
+      },
+    );
+    await service.sendMessage(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        signatureId: alternate.id,
+        to: [{ address: 'reader@example.com' }],
+        subject: 'Switched signature',
+        text: 'Hello\n\n-- \nSales team',
+        idempotencyKey: 'switched-signature',
+      },
+    );
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          text: 'Hello\n\n-- \nSupport team',
+        }),
+      }),
+    );
+
+    const run = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1' },
+    );
+    await expect(
+      service.cancelSyncRun({ actorId: 'user-1' }, run.id),
+    ).resolves.toMatchObject({ status: 'cancelled' });
+    await expect(
+      service.retrySyncRun({ actorId: 'user-1' }, run.id),
+    ).resolves.toMatchObject({ status: 'pending', accountId: 'account-1' });
+  });
+
   it('moves a soft-deleted message to the local trash folder', async () => {
     await store.commitSyncBatch({
       accountId: 'account-1',

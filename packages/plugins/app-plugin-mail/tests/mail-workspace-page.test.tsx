@@ -10,6 +10,7 @@ const mail = vi.hoisted(() => ({
   listConversationMessages: vi.fn(),
   listFolders: vi.fn(),
   listIdentities: vi.fn(),
+  listSignatures: vi.fn(),
   listMessages: vi.fn(),
   listTemplates: vi.fn(),
   sendMessage: vi.fn(),
@@ -17,6 +18,8 @@ const mail = vi.hoisted(() => ({
   saveDraft: vi.fn(),
   startSync: vi.fn(),
   updateMessage: vi.fn(),
+  updateMessageLabels: vi.fn(),
+  createLabel: vi.fn(),
   moveMessage: vi.fn(),
   uploadAttachment: vi.fn(),
 }));
@@ -30,6 +33,7 @@ import MailManagementPage from '../client/pages/mail-management-page.js';
 
 describe('MailWorkspacePage', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     for (const mock of Object.values(mail)) mock.mockReset();
     mail.listAccounts.mockResolvedValue([
       {
@@ -52,6 +56,7 @@ describe('MailWorkspacePage', () => {
         canSend: true,
       },
     ]);
+    mail.listSignatures.mockResolvedValue([]);
     mail.listMessages.mockResolvedValue({ items: [] });
     mail.listTemplates.mockResolvedValue([]);
     mail.sendMessage.mockResolvedValue({
@@ -92,20 +97,22 @@ describe('MailWorkspacePage', () => {
     fireEvent.change(screen.getByLabelText('Subject'), {
       target: { value: 'Production message' },
     });
-    fireEvent.change(screen.getByLabelText('Message body'), {
-      target: { value: 'Message content' },
-    });
+    const editor = screen.getByLabelText('Message body');
+    editor.innerHTML = '<p>Message content</p>';
+    fireEvent.input(editor);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() =>
       expect(mail.sendMessage).toHaveBeenCalledWith({
         accountId: 'account-1',
         identityId: 'identity-1',
+        signatureId: undefined,
         to: [{ address: 'recipient@example.com' }],
         cc: [],
         bcc: [],
         subject: 'Production message',
         text: 'Message content',
+        html: '<p>Message content</p>',
         inReplyToMessageId: undefined,
         forwardOfMessageId: undefined,
         scheduledAt: undefined,
@@ -114,6 +121,127 @@ describe('MailWorkspacePage', () => {
         retainedAttachmentIds: [],
         idempotencyKey: expect.any(String),
       }),
+    );
+  });
+
+  it('auto-saves rich text and updates the same Provider draft', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<MailWorkspacePage />);
+      await vi.waitFor(() => expect(mail.listAccounts).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
+      await vi.waitFor(() => expect(mail.listIdentities).toHaveBeenCalled());
+      fireEvent.change(screen.getByLabelText('Subject'), {
+        target: { value: 'Auto-saved message' },
+      });
+      const editor = screen.getByLabelText('Message body');
+      editor.innerHTML = '<p>Hello <strong>team</strong></p>';
+      fireEvent.input(editor);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.waitFor(() => expect(mail.saveDraft).toHaveBeenCalledTimes(1));
+      expect(mail.saveDraft).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          draftMessageId: undefined,
+          subject: 'Auto-saved message',
+          text: 'Hello team',
+          html: '<p>Hello <strong>team</strong></p>',
+        }),
+      );
+
+      fireEvent.change(screen.getByLabelText('Subject'), {
+        target: { value: 'Updated message' },
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.waitFor(() => expect(mail.saveDraft).toHaveBeenCalledTimes(2));
+      expect(mail.saveDraft).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          draftMessageId: 'draft-1',
+          subject: 'Updated message',
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restores an unfinished composer snapshot on demand', async () => {
+    window.sessionStorage.setItem(
+      'nocobase:mail:composer-recovery:v1:account-1',
+      JSON.stringify({
+        version: 1,
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        composer: {
+          mode: 'new',
+          to: 'customer@example.com',
+          cc: '',
+          bcc: '',
+          subject: 'Recovered subject',
+          text: 'Recovered body',
+          html: '<p>Recovered body</p>',
+          scheduledAt: '',
+        },
+        composeAttachments: [],
+        retainedAttachments: [],
+      }),
+    );
+    render(<MailWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    expect(
+      await screen.findByText('An unfinished message can be restored.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(screen.getByLabelText('Subject')).toHaveValue('Recovered subject');
+    expect(screen.getByLabelText('Message body')).toHaveTextContent(
+      'Recovered body',
+    );
+  });
+
+  it('protects unsaved content when the composer is closed', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<MailWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Keep this message' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      'This message has changes that have not been saved. Close it anyway?',
+    );
+    expect(screen.getByLabelText('Subject')).toHaveValue('Keep this message');
+    confirm.mockRestore();
+  });
+
+  it('binds current record values when applying a template', async () => {
+    mail.listTemplates.mockResolvedValue([
+      {
+        id: 'template-1',
+        name: 'Order update',
+        subject: 'Order {{record.number}}',
+        text: 'Hello {{record.customer.name}}',
+        html: '<p>Hello <strong>{{record.customer.name}}</strong></p>',
+        scope: 'private',
+      },
+    ]);
+    render(
+      <MailWorkspacePage
+        templateVariables={{
+          record: { number: 'SO-1001', customer: { name: 'Ada' } },
+        }}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    fireEvent.change(await screen.findByLabelText('Apply template'), {
+      target: { value: 'template-1' },
+    });
+    expect(screen.getByLabelText('Subject')).toHaveValue('Order SO-1001');
+    expect(screen.getByLabelText('Message body')).toHaveTextContent(
+      'Hello Ada',
     );
   });
 

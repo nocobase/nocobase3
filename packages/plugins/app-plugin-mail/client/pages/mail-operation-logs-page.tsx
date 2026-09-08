@@ -6,6 +6,8 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { MailPageHeader, MailStatusBadge } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
+import { Input } from '../components/ui/input.js';
+import { NativeSelect } from '../components/ui/native-select.js';
 import {
   mailErrorMessage,
   type MailAccountView,
@@ -31,6 +33,11 @@ export default function MailOperationLogsPage(): ReactElement {
   const [activeTab, setActiveTab] = useState<OperationLogTab>('sync');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [accountFilter, setAccountFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [query, setQuery] = useState('');
+  const [startedAfter, setStartedAfter] = useState('');
+  const [startedBefore, setStartedBefore] = useState('');
 
   const refresh = useCallback((): void => {
     setLoading(true);
@@ -59,6 +66,66 @@ export default function MailOperationLogsPage(): ReactElement {
     () => new Map(logs.accounts.map((account) => [account.id, account])),
     [logs.accounts],
   );
+  const filteredSyncRuns = useMemo(
+    () =>
+      logs.syncRuns.filter(
+        (run) =>
+          (!accountFilter || run.accountId === accountFilter) &&
+          (!statusFilter || run.status === statusFilter) &&
+          isWithinTimeRange(run.createdAt, startedAfter, startedBefore) &&
+          matchesOperationQuery(run.id, accountById.get(run.accountId), query),
+      ),
+    [
+      accountById,
+      accountFilter,
+      logs.syncRuns,
+      query,
+      startedAfter,
+      startedBefore,
+      statusFilter,
+    ],
+  );
+  const filteredSubmissions = useMemo(
+    () =>
+      logs.submissions.filter(
+        (submission) =>
+          (!accountFilter || submission.accountId === accountFilter) &&
+          (!statusFilter || submission.status === statusFilter) &&
+          isWithinTimeRange(
+            submission.createdAt,
+            startedAfter,
+            startedBefore,
+          ) &&
+          matchesOperationQuery(
+            submission.id,
+            accountById.get(submission.accountId),
+            query,
+          ),
+      ),
+    [
+      accountById,
+      accountFilter,
+      logs.submissions,
+      query,
+      startedAfter,
+      startedBefore,
+      statusFilter,
+    ],
+  );
+
+  const runAction = (operation: Promise<unknown>): void => {
+    setLoading(true);
+    setError(undefined);
+    void operation.then(refresh).catch((cause: unknown) => {
+      setLoading(false);
+      setError(
+        mailErrorMessage(
+          cause,
+          t('errors.requestFailed', { defaultValue: 'Mail request failed.' }),
+        ),
+      );
+    });
+  };
 
   return (
     <section className='min-h-[calc(100svh-4rem)] bg-muted/20'>
@@ -113,6 +180,84 @@ export default function MailOperationLogsPage(): ReactElement {
         </div>
 
         <Card className='overflow-hidden bg-background shadow-sm'>
+          <div className='grid gap-3 border-b p-4 sm:grid-cols-2 xl:grid-cols-5'>
+            <Input
+              aria-label={t('settings.operationLogs.search', {
+                defaultValue: 'Search operations',
+              })}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('settings.operationLogs.search', {
+                defaultValue: 'Search operations',
+              })}
+              value={query}
+            />
+            <NativeSelect
+              aria-label={t('settings.operationLogs.accountFilter', {
+                defaultValue: 'Filter by account',
+              })}
+              onChange={(event) => setAccountFilter(event.target.value)}
+              value={accountFilter}
+            >
+              <option value=''>
+                {t('settings.operationLogs.allAccounts', {
+                  defaultValue: 'All accounts',
+                })}
+              </option>
+              {logs.accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.address}
+                </option>
+              ))}
+            </NativeSelect>
+            <NativeSelect
+              aria-label={t('settings.operationLogs.statusFilter', {
+                defaultValue: 'Filter by status',
+              })}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              value={statusFilter}
+            >
+              <option value=''>
+                {t('settings.operationLogs.allStatuses', {
+                  defaultValue: 'All statuses',
+                })}
+              </option>
+              {[
+                'pending',
+                'running',
+                'completed',
+                'accepted',
+                'failed',
+                'unknown',
+                'cancelled',
+              ].map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </NativeSelect>
+            <Input
+              aria-label={t('settings.operationLogs.startedAfter', {
+                defaultValue: 'Started after',
+              })}
+              onChange={(event) => setStartedAfter(event.target.value)}
+              title={t('settings.operationLogs.startedAfter', {
+                defaultValue: 'Started after',
+              })}
+              type='datetime-local'
+              value={startedAfter}
+            />
+            <Input
+              aria-label={t('settings.operationLogs.startedBefore', {
+                defaultValue: 'Started before',
+              })}
+              onChange={(event) => setStartedBefore(event.target.value)}
+              title={t('settings.operationLogs.startedBefore', {
+                defaultValue: 'Started before',
+              })}
+              type='datetime-local'
+              value={startedBefore}
+            />
+          </div>
           <div
             aria-label={t('settings.operationLogs.type', {
               defaultValue: 'Operation type',
@@ -145,11 +290,16 @@ export default function MailOperationLogsPage(): ReactElement {
               })}
             </div>
           ) : activeTab === 'sync' ? (
-            <SyncLogsTable accountById={accountById} runs={logs.syncRuns} />
+            <SyncLogsTable
+              accountById={accountById}
+              onCancel={(run) => runAction(mail.cancelSyncRun(run.id))}
+              onRetry={(run) => runAction(mail.retrySyncRun(run.id))}
+              runs={filteredSyncRuns}
+            />
           ) : (
             <SendLogsTable
               accountById={accountById}
-              submissions={logs.submissions}
+              submissions={filteredSubmissions}
             />
           )}
         </Card>
@@ -203,9 +353,13 @@ function LogTab({
 
 function SyncLogsTable({
   accountById,
+  onCancel,
+  onRetry,
   runs,
 }: {
   readonly accountById: ReadonlyMap<string, MailAccountView>;
+  readonly onCancel: (run: MailSyncRunView) => void;
+  readonly onRetry: (run: MailSyncRunView) => void;
   readonly runs: readonly MailSyncRunView[];
 }): ReactElement {
   const { t } = useTranslation();
@@ -241,6 +395,7 @@ function SyncLogsTable({
             <Header label={t('settings.syncLogs.startedAt')} />
             <Header label={t('settings.syncLogs.completedAt')} />
             <Header label={t('settings.syncLogs.error')} />
+            <Header label={t('settings.operationLogs.actions')} />
           </tr>
         </thead>
         <tbody className='divide-y'>
@@ -283,6 +438,25 @@ function SyncLogsTable({
                   {run.completedAt ? formatTimestamp(run.completedAt) : '—'}
                 </Cell>
                 <ErrorCell code={run.error?.code} />
+                <td className='px-4 py-3'>
+                  {run.canManage &&
+                  ['failed', 'cancelled'].includes(run.status) ? (
+                    <Button onClick={() => onRetry(run)} variant='outline'>
+                      {t('settings.operationLogs.retry', {
+                        defaultValue: 'Retry',
+                      })}
+                    </Button>
+                  ) : run.canManage &&
+                    ['pending', 'running'].includes(run.status) ? (
+                    <Button onClick={() => onCancel(run)} variant='outline'>
+                      {t('settings.operationLogs.cancel', {
+                        defaultValue: 'Cancel',
+                      })}
+                    </Button>
+                  ) : (
+                    '—'
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -463,4 +637,30 @@ function submissionStatusTone(
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function matchesOperationQuery(
+  id: string,
+  account: MailAccountView | undefined,
+  query: string,
+): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [id, account?.address, account?.userId, account?.provider.name]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => value.toLowerCase().includes(needle));
+}
+
+function isWithinTimeRange(
+  value: string,
+  startedAfter: string,
+  startedBefore: string,
+): boolean {
+  const timestamp = new Date(value).getTime();
+  const after = startedAfter ? new Date(startedAfter).getTime() : undefined;
+  const before = startedBefore ? new Date(startedBefore).getTime() : undefined;
+  return (
+    (after === undefined || timestamp >= after) &&
+    (before === undefined || timestamp <= before)
+  );
 }

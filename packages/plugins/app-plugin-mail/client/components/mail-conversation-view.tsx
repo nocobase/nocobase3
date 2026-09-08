@@ -11,9 +11,11 @@ import {
   PenLine,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
+import { useState } from 'react';
 
-import type { MailMessage } from '../mail-client.js';
+import type { MailFolder, MailMessage } from '../mail-client.js';
 import { Button } from './ui/button.js';
+import { Textarea } from './ui/textarea.js';
 
 export interface MailConversationViewLabels {
   readonly attachmentCount: (count: number) => string;
@@ -22,6 +24,11 @@ export interface MailConversationViewLabels {
   readonly noSubject: string;
   readonly selectMessage: string;
   readonly unknownSender: string;
+  readonly labels: string;
+  readonly note: string;
+  readonly notePlaceholder: string;
+  readonly saveNote: string;
+  readonly todo: string;
 }
 
 export interface MailConversationViewProps {
@@ -31,6 +38,7 @@ export interface MailConversationViewProps {
   readonly nextCursor?: string;
   readonly onLoadMore: () => void;
   readonly subject?: string;
+  readonly availableLabels?: readonly MailFolder[];
   readonly actions?: {
     readonly archive?: (message: MailMessage) => void;
     readonly delete: (message: MailMessage) => void;
@@ -43,6 +51,13 @@ export interface MailConversationViewProps {
     readonly editDraft?: (message: MailMessage) => void;
     readonly toggleRead: (message: MailMessage) => void;
     readonly toggleStarred: (message: MailMessage) => void;
+    readonly toggleTodo?: (message: MailMessage) => void;
+    readonly saveNote?: (message: MailMessage, note: string) => void;
+    readonly toggleLabel?: (
+      message: MailMessage,
+      labelId: string,
+      assigned: boolean,
+    ) => void;
   };
   readonly actionLabels?: {
     readonly archive: string;
@@ -67,6 +82,7 @@ export function MailConversationView({
   subject,
   actions,
   actionLabels,
+  availableLabels = [],
 }: MailConversationViewProps): ReactElement {
   if (messages.length === 0) {
     return (
@@ -235,11 +251,106 @@ export function MailConversationView({
                   </div>
                 </div>
               ) : null}
+              {actions ? (
+                <MessageMetadata
+                  actions={actions}
+                  availableLabels={availableLabels.filter(
+                    (folder) =>
+                      folder.kind === 'label' && folder.type === 'custom',
+                  )}
+                  key={`${message.id}:${message.note ?? ''}`}
+                  labels={labels}
+                  message={message}
+                />
+              ) : null}
             </article>
           );
         })}
       </div>
     </section>
+  );
+}
+
+function MessageMetadata({
+  actions,
+  availableLabels,
+  labels,
+  message,
+}: {
+  readonly actions: NonNullable<MailConversationViewProps['actions']>;
+  readonly availableLabels: readonly MailFolder[];
+  readonly labels: MailConversationViewLabels;
+  readonly message: MailMessage;
+}): ReactElement {
+  const [note, setNote] = useState(message.note ?? '');
+  return (
+    <div className='mt-4 grid gap-3 border-t pt-3 md:grid-cols-2'>
+      <div className='space-y-2'>
+        <label className='text-xs font-medium text-muted-foreground'>
+          {labels.note}
+        </label>
+        <Textarea
+          aria-label={labels.note}
+          className='min-h-16'
+          onChange={(event) => setNote(event.target.value)}
+          placeholder={labels.notePlaceholder}
+          value={note}
+        />
+        <div className='flex gap-2'>
+          <Button
+            disabled={!actions.saveNote || note === (message.note ?? '')}
+            onClick={() => actions.saveNote?.(message, note)}
+            type='button'
+            variant='outline'
+          >
+            {labels.saveNote}
+          </Button>
+          <Button
+            aria-pressed={message.todo}
+            disabled={!actions.toggleTodo}
+            onClick={() => actions.toggleTodo?.(message)}
+            type='button'
+            variant={message.todo ? 'default' : 'outline'}
+          >
+            {labels.todo}
+          </Button>
+        </div>
+      </div>
+      {availableLabels.length > 0 ? (
+        <fieldset className='space-y-2'>
+          <legend className='text-xs font-medium text-muted-foreground'>
+            {labels.labels}
+          </legend>
+          <div className='flex flex-wrap gap-2'>
+            {availableLabels.map((label) => {
+              const assigned = message.folderIds.includes(
+                label.providerFolderId,
+              );
+              return (
+                <label
+                  className='inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs'
+                  key={label.id}
+                >
+                  <input
+                    checked={assigned}
+                    disabled={!actions.toggleLabel}
+                    onChange={(event) =>
+                      actions.toggleLabel?.(
+                        message,
+                        label.providerFolderId,
+                        event.target.checked,
+                      )
+                    }
+                    type='checkbox'
+                  />
+                  {label.name}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      ) : null}
+    </div>
   );
 }
 

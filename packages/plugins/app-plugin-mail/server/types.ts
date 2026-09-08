@@ -96,6 +96,27 @@ export interface MailIdentity {
   readonly canSend: boolean;
 }
 
+export interface MailSignature {
+  readonly id: string;
+  readonly identityId: string;
+  readonly name: string;
+  readonly text: string;
+  readonly html?: string;
+  readonly isDefault: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MailSaveSignatureInput {
+  readonly id?: string;
+  readonly accountId: string;
+  readonly identityId: string;
+  readonly name: string;
+  readonly text: string;
+  readonly html?: string | null;
+  readonly isDefault?: boolean;
+}
+
 export interface MailUpdateIdentityInput {
   readonly accountId: string;
   readonly identityId: string;
@@ -155,6 +176,9 @@ export interface MailMessageSummary {
   readonly starred: boolean;
   readonly draft: boolean;
   readonly hasAttachments: boolean;
+  /** User-owned metadata that is never synchronized to the Provider. */
+  readonly note?: string;
+  readonly todo: boolean;
 }
 
 export interface MailMessage extends MailMessageSummary {
@@ -259,6 +283,8 @@ export interface MailSyncRunView {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly completedAt?: string;
+  /** Management views use this to avoid exposing actions for another user. */
+  readonly canManage?: boolean;
 }
 
 export interface MailStartSyncInput {
@@ -369,6 +395,8 @@ export interface MailListJobsInput {
 export interface MailComposeInput {
   readonly accountId: string;
   readonly identityId: string;
+  /** Undefined selects the default signature; null explicitly selects none. */
+  readonly signatureId?: string | null;
   readonly to: readonly MailAddress[];
   readonly cc?: readonly MailAddress[];
   readonly bcc?: readonly MailAddress[];
@@ -397,6 +425,15 @@ export interface MailUpdateMessageInput {
   readonly messageId: string;
   readonly read?: boolean;
   readonly starred?: boolean;
+  readonly note?: string | null;
+  readonly todo?: boolean;
+}
+
+export interface MailUpdateMessageLabelsInput {
+  readonly accountId: string;
+  readonly messageId: string;
+  readonly addLabelIds?: readonly string[];
+  readonly removeLabelIds?: readonly string[];
 }
 
 export interface MailMoveMessageInput {
@@ -534,6 +571,31 @@ export interface MailService {
     context: MailOperationContext,
     input: MailUpdateIdentityInput,
   ): Promise<MailIdentity>;
+  listSignatures(
+    context: MailOperationContext,
+    accountId: string,
+    identityId: string,
+  ): Promise<readonly MailSignature[]>;
+  saveSignature(
+    context: MailOperationContext,
+    input: MailSaveSignatureInput,
+  ): Promise<MailSignature>;
+  deleteSignature(
+    context: MailOperationContext,
+    accountId: string,
+    identityId: string,
+    signatureId: string,
+  ): Promise<void>;
+  createLabel(
+    context: MailOperationContext,
+    accountId: string,
+    name: string,
+  ): Promise<MailFolder>;
+  updateMessageLabels(
+    context: MailOperationContext,
+    input: MailUpdateMessageLabelsInput,
+  ): Promise<MailMessage>;
+  getUnreadCount(context: MailOperationContext): Promise<number>;
   startSync(
     context: MailOperationContext,
     input: MailStartSyncInput,
@@ -545,6 +607,14 @@ export interface MailService {
   listSyncRuns(
     context: MailOperationContext,
   ): Promise<readonly MailSyncRunView[]>;
+  retrySyncRun(
+    context: MailOperationContext,
+    syncRunId: string,
+  ): Promise<MailSyncRunView>;
+  cancelSyncRun(
+    context: MailOperationContext,
+    syncRunId: string,
+  ): Promise<MailSyncRunView>;
   listSubmissions(
     context: MailOperationContext,
   ): Promise<readonly MailSubmissionLogView[]>;
@@ -827,6 +897,12 @@ export interface NormalizedMailFolder {
   readonly kind: 'folder' | 'label';
 }
 
+export interface MailProviderUpdateLabelsInput {
+  readonly addLabelIds: readonly string[];
+  readonly removeLabelIds: readonly string[];
+  readonly signal?: AbortSignal;
+}
+
 export interface MailProviderAttachmentInput {
   readonly fileName: string;
   readonly contentType: string;
@@ -885,6 +961,14 @@ export interface MailProviderAdapter {
   listFolders?(
     input: MailProviderListFoldersInput,
   ): Promise<MailProviderResult<MailProviderFolderPage>>;
+  createLabel?(
+    name: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<NormalizedMailFolder>>;
+  updateLabels?(
+    providerMessageId: string,
+    input: MailProviderUpdateLabelsInput,
+  ): Promise<MailProviderResult<void>>;
   reconcileSyncCursor?(
     cursor: MailSyncCursor | undefined,
     providerFolderIds: readonly string[],
@@ -1181,7 +1265,15 @@ export interface MailStore {
       'displayName' | 'signatureText' | 'signatureHtml'
     >,
   ): Promise<MailIdentity | undefined>;
+  listSignatures(identityId: string): Promise<readonly MailSignature[]>;
+  getSignature(signatureId: string): Promise<MailSignature | undefined>;
+  saveSignature(signature: MailSignature): Promise<MailSignature>;
+  deleteSignature(identityId: string, signatureId: string): Promise<boolean>;
   listFolders(accountId: string): Promise<readonly MailFolder[]>;
+  saveFolder(
+    accountId: string,
+    folder: NormalizedMailFolder,
+  ): Promise<MailFolder>;
   commitSyncBatch(batch: MailSyncBatch): Promise<void>;
   saveMessage(
     accountId: string,
@@ -1223,8 +1315,20 @@ export interface MailStore {
   updateMessageState(
     accountId: string,
     messageId: string,
-    state: { readonly read?: boolean; readonly starred?: boolean },
+    state: {
+      readonly read?: boolean;
+      readonly starred?: boolean;
+      readonly note?: string | null;
+      readonly todo?: boolean;
+    },
   ): Promise<MailMessage | undefined>;
+  updateMessageLabels(
+    accountId: string,
+    messageId: string,
+    addLabelIds: readonly string[],
+    removeLabelIds: readonly string[],
+  ): Promise<MailMessage | undefined>;
+  countUnreadMessages(userId: string): Promise<number>;
   moveMessage(
     accountId: string,
     messageId: string,
@@ -1252,6 +1356,7 @@ export interface MailStore {
   getSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
   listSyncRuns(userId: string): Promise<readonly MailSyncRun[]>;
   listAllSyncRuns(): Promise<readonly MailSyncRun[]>;
+  cancelSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
   claimSyncRun(
     syncRunId: string,
     expectedRevision: number,

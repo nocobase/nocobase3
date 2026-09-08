@@ -3,11 +3,11 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import { MailPageHeader } from '../components/index.js';
+import { MailPageHeader, MailRichTextEditor } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
-import { Textarea } from '../components/ui/textarea.js';
+import { plainTextToMailHtml } from '../lib/mail-template.js';
 import { mailErrorMessage, type MailTemplate } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
 
@@ -18,9 +18,15 @@ interface TemplateDraft {
   readonly name: string;
   readonly subject: string;
   readonly text: string;
+  readonly html: string;
 }
 
-const EMPTY_TEMPLATE: TemplateDraft = { name: '', subject: '', text: '' };
+const EMPTY_TEMPLATE: TemplateDraft = {
+  name: '',
+  subject: '',
+  text: '',
+  html: '',
+};
 
 export default function MailTemplatesPage(): ReactElement {
   const { t } = useTranslation();
@@ -102,6 +108,8 @@ export default function MailTemplatesPage(): ReactElement {
                     name: template.name,
                     subject: template.subject,
                     text: template.text ?? '',
+                    html:
+                      template.html || plainTextToMailHtml(template.text ?? ''),
                   })
                 }
                 type='button'
@@ -142,18 +150,50 @@ export default function MailTemplatesPage(): ReactElement {
             placeholder={t('workspace.subject', { defaultValue: 'Subject' })}
             value={draft.subject}
           />
-          <Textarea
-            aria-label={t('workspace.messageBody', {
+          <p className='text-xs text-muted-foreground'>
+            {t('templates.variablesHelp', {
+              defaultValue:
+                'Use placeholders such as {{record.customer.name}}. Values are bound when the template is applied.',
+            })}
+          </p>
+          <MailRichTextEditor
+            ariaLabel={t('workspace.messageBodyLabel', {
               defaultValue: 'Message body',
             })}
-            className='min-h-64'
-            onChange={(event) =>
+            labels={{
+              toolbar: t('workspace.editor.toolbar', {
+                defaultValue: 'Formatting',
+              }),
+              bold: t('workspace.editor.bold', { defaultValue: 'Bold' }),
+              italic: t('workspace.editor.italic', {
+                defaultValue: 'Italic',
+              }),
+              underline: t('workspace.editor.underline', {
+                defaultValue: 'Underline',
+              }),
+              bulletList: t('workspace.editor.bulletList', {
+                defaultValue: 'Bulleted list',
+              }),
+              numberedList: t('workspace.editor.numberedList', {
+                defaultValue: 'Numbered list',
+              }),
+              undo: t('workspace.editor.undo', { defaultValue: 'Undo' }),
+              redo: t('workspace.editor.redo', { defaultValue: 'Redo' }),
+              clearFormatting: t('workspace.editor.clearFormatting', {
+                defaultValue: 'Clear formatting',
+              }),
+            }}
+            onChange={(value) =>
               setDraft((current) => ({
                 ...current,
-                text: event.target.value,
+                text: value.text,
+                html: value.html,
               }))
             }
-            value={draft.text}
+            placeholder={t('workspace.messageBody', {
+              defaultValue: 'Write a message…',
+            })}
+            value={draft.html}
           />
           <div className='flex justify-end gap-2'>
             {draft.id ? (

@@ -662,6 +662,59 @@ describe('Gmail Mail Provider', () => {
     );
   });
 
+  it('creates and assigns custom Gmail labels', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'Label_42', name: 'Project' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(adapter.createLabel('Project')).resolves.toEqual({
+      ok: true,
+      value: {
+        providerFolderId: 'Label_42',
+        type: 'custom',
+        name: 'Project',
+        kind: 'label',
+      },
+    });
+    await adapter.updateLabels('message-1', {
+      addLabelIds: ['Label_42'],
+      removeLabelIds: [],
+    });
+
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      body: expect.stringContaining('labelListVisibility'),
+    });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({
+        addLabelIds: ['Label_42'],
+        removeLabelIds: [],
+      }),
+    });
+  });
+
   it('parses Pub/Sub notifications and renews a Gmail watch daily', async () => {
     const parsed = gmailMailProviderDefinition.push?.parse({
       query: {},

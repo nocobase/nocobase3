@@ -59,6 +59,7 @@ describe('MailTemplatesPage', () => {
         name: 'Follow up',
         subject: 'Next steps',
         text: '',
+        html: '',
       }),
     );
 
@@ -73,6 +74,7 @@ describe('MailTemplatesPage', () => {
         name: 'Follow up',
         subject: 'Updated next steps',
         text: 'Hello',
+        html: '<p>Hello</p>',
       }),
     );
 

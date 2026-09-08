@@ -156,6 +156,111 @@ describe('mail API routes', () => {
     });
   });
 
+  it('retries and cancels synchronization runs for the authenticated user', async () => {
+    const retrySyncRun = vi.fn<MailService['retrySyncRun']>(async () =>
+      syncRun('account-1', 'user-1'),
+    );
+    const cancelSyncRun = vi.fn<MailService['cancelSyncRun']>(async () => ({
+      ...syncRun('account-1', 'user-1'),
+      status: 'cancelled',
+    }));
+    const router = await createRouter(
+      true,
+      service({ retrySyncRun, cancelSyncRun }),
+    );
+
+    expect(
+      (
+        await router.request('/mail/sync-runs/sync-1/retry', {
+          method: 'POST',
+        })
+      ).status,
+    ).toBe(202);
+    expect(
+      (
+        await router.request('/mail/sync-runs/sync-1/cancel', {
+          method: 'POST',
+        })
+      ).status,
+    ).toBe(200);
+    expect(retrySyncRun).toHaveBeenCalledWith({ actorId: 'user-1' }, 'sync-1');
+    expect(cancelSyncRun).toHaveBeenCalledWith({ actorId: 'user-1' }, 'sync-1');
+  });
+
+  it('maps unread counts, signatures, and labels onto the Mail service', async () => {
+    const getUnreadCount = vi.fn<MailService['getUnreadCount']>(async () => 7);
+    const listSignatures = vi.fn<MailService['listSignatures']>(async () => []);
+    const saveSignature = vi.fn<MailService['saveSignature']>(
+      async (_context, input) => ({
+        id: 'signature-1',
+        accountId: input.accountId,
+        identityId: input.identityId,
+        name: input.name,
+        text: input.text,
+        html: input.html,
+        isDefault: input.isDefault ?? false,
+      }),
+    );
+    const createLabel = vi.fn<MailService['createLabel']>(async () => ({
+      id: 'folder-1',
+      accountId: 'account-1',
+      providerFolderId: 'Label_1',
+      name: 'Customers',
+      path: 'Customers',
+      type: 'custom',
+      selectable: true,
+    }));
+    const router = await createRouter(
+      true,
+      service({ getUnreadCount, listSignatures, saveSignature, createLabel }),
+    );
+
+    const unreadResponse = await router.request('/mail/unread-count');
+    await router.request(
+      '/mail/accounts/account-1/identities/identity-1/signatures',
+    );
+    await router.request(
+      '/mail/accounts/account-1/identities/identity-1/signatures',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Sales',
+          text: 'Regards',
+          isDefault: true,
+        }),
+      },
+    );
+    await router.request('/mail/accounts/account-1/labels', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Customers' }),
+    });
+
+    expect(await unreadResponse.json()).toEqual({ data: 7 });
+    expect(listSignatures).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      'account-1',
+      'identity-1',
+    );
+    expect(saveSignature).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        name: 'Sales',
+        text: 'Regards',
+        html: undefined,
+        isDefault: true,
+      },
+    );
+    expect(createLabel).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      'account-1',
+      'Customers',
+    );
+  });
+
   it('lists send logs for the authenticated user', async () => {
     const listSubmissions = vi.fn<MailService['listSubmissions']>(async () => [
       {
@@ -356,9 +461,17 @@ describe('mail API routes', () => {
       messageView(),
     );
     const deleteMessage = vi.fn<MailService['deleteMessage']>(async () => {});
+    const updateMessageLabels = vi.fn<MailService['updateMessageLabels']>(
+      async () => messageView(),
+    );
     const router = await createRouter(
       true,
-      service({ updateMessage, moveMessage, deleteMessage }),
+      service({
+        updateMessage,
+        updateMessageLabels,
+        moveMessage,
+        deleteMessage,
+      }),
     );
 
     expect(
@@ -366,8 +479,28 @@ describe('mail API routes', () => {
         await router.request('/mail/accounts/account-1/messages/message-1', {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ read: true, starred: true }),
+          body: JSON.stringify({
+            read: true,
+            starred: true,
+            note: 'Follow up with the customer',
+            todo: true,
+          }),
         })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await router.request(
+          '/mail/accounts/account-1/messages/message-1/labels',
+          {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              addLabelIds: ['Label_1'],
+              removeLabelIds: ['Label_2'],
+            }),
+          },
+        )
       ).status,
     ).toBe(200);
     expect(
@@ -398,6 +531,17 @@ describe('mail API routes', () => {
         messageId: 'message-1',
         read: true,
         starred: true,
+        note: 'Follow up with the customer',
+        todo: true,
+      },
+    );
+    expect(updateMessageLabels).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        messageId: 'message-1',
+        addLabelIds: ['Label_1'],
+        removeLabelIds: ['Label_2'],
       },
     );
     expect(moveMessage).toHaveBeenCalledWith(
@@ -565,9 +709,27 @@ function service(overrides: Partial<MailService> = {}): MailService {
     }),
     listFolders: async () => [],
     listIdentities: async () => [],
+    updateIdentity: async () => {
+      throw new Error('Not implemented');
+    },
+    listSignatures: async () => [],
+    saveSignature: async () => {
+      throw new Error('Not implemented');
+    },
+    deleteSignature: async () => {},
+    createLabel: async () => {
+      throw new Error('Not implemented');
+    },
+    updateMessageLabels: async () => messageView(),
+    getUnreadCount: async () => 0,
     startSync: async (_context, input) => syncRun(input.accountId, 'user-1'),
     getSyncRun: async () => undefined,
     listSyncRuns: async () => [],
+    retrySyncRun: async () => syncRun('account-1', 'user-1'),
+    cancelSyncRun: async () => ({
+      ...syncRun('account-1', 'user-1'),
+      status: 'cancelled',
+    }),
     listSubmissions: async () => [],
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,
@@ -606,6 +768,7 @@ function messageView(): import('../server/types.js').MailMessage {
     starred: false,
     draft: false,
     hasAttachments: false,
+    todo: false,
     attachments: [],
   };
 }

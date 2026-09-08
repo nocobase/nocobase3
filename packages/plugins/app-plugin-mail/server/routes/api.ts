@@ -133,6 +133,11 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.listManagedOperationLogs(operationContext(context)),
       }),
     );
+    routes.get('/unread-count', async (context) =>
+      context.json({
+        data: await mail.getUnreadCount(operationContext(context)),
+      }),
+    );
     routes.get('/providers', async (context) =>
       context.json({ data: await mail.listProviders() }),
     );
@@ -221,6 +226,62 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         });
       },
     );
+    routes.get(
+      '/accounts/:accountId/identities/:identityId/signatures',
+      async (context) =>
+        context.json({
+          data: await mail.listSignatures(
+            operationContext(context),
+            context.req.param('accountId'),
+            context.req.param('identityId'),
+          ),
+        }),
+    );
+    routes.post(
+      '/accounts/:accountId/identities/:identityId/signatures',
+      async (context) => {
+        const value = await readObject(context.req.raw);
+        return context.json({
+          data: await mail.saveSignature(operationContext(context), {
+            accountId: context.req.param('accountId'),
+            identityId: context.req.param('identityId'),
+            name: requiredString(value.name, 'name'),
+            text: optionalString(value.text, 'text') ?? '',
+            html: optionalNullableString(value.html, 'html'),
+            isDefault: optionalBoolean(value.isDefault, 'isDefault'),
+          }),
+        });
+      },
+    );
+    routes.patch(
+      '/accounts/:accountId/identities/:identityId/signatures/:signatureId',
+      async (context) => {
+        const value = await readObject(context.req.raw);
+        return context.json({
+          data: await mail.saveSignature(operationContext(context), {
+            id: context.req.param('signatureId'),
+            accountId: context.req.param('accountId'),
+            identityId: context.req.param('identityId'),
+            name: requiredString(value.name, 'name'),
+            text: optionalString(value.text, 'text') ?? '',
+            html: optionalNullableString(value.html, 'html'),
+            isDefault: optionalBoolean(value.isDefault, 'isDefault'),
+          }),
+        });
+      },
+    );
+    routes.delete(
+      '/accounts/:accountId/identities/:identityId/signatures/:signatureId',
+      async (context) => {
+        await mail.deleteSignature(
+          operationContext(context),
+          context.req.param('accountId'),
+          context.req.param('identityId'),
+          context.req.param('signatureId'),
+        );
+        return context.body(null, 204);
+      },
+    );
     routes.get('/accounts/:accountId/folders', async (context) =>
       context.json({
         data: await mail.listFolders(
@@ -229,6 +290,16 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         ),
       }),
     );
+    routes.post('/accounts/:accountId/labels', async (context) => {
+      const value = await readObject(context.req.raw);
+      return context.json({
+        data: await mail.createLabel(
+          operationContext(context),
+          context.req.param('accountId'),
+          requiredString(value.name, 'name'),
+        ),
+      });
+    });
     routes.post(
       '/attachments',
       bodyLimit({
@@ -321,6 +392,25 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             404,
           );
     });
+    routes.post('/sync-runs/:syncRunId/retry', async (context) =>
+      context.json(
+        {
+          data: await mail.retrySyncRun(
+            operationContext(context),
+            context.req.param('syncRunId'),
+          ),
+        },
+        202,
+      ),
+    );
+    routes.post('/sync-runs/:syncRunId/cancel', async (context) =>
+      context.json({
+        data: await mail.cancelSyncRun(
+          operationContext(context),
+          context.req.param('syncRunId'),
+        ),
+      }),
+    );
     routes.get('/messages', async (context) => {
       const accountId = context.req.query('accountId');
       const folderId = context.req.query('folderId');
@@ -402,6 +492,25 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             messageId: context.req.param('messageId'),
             read: optionalBoolean(value.read, 'read'),
             starred: optionalBoolean(value.starred, 'starred'),
+            note: optionalNullableString(value.note, 'note'),
+            todo: optionalBoolean(value.todo, 'todo'),
+          }),
+        });
+      },
+    );
+    routes.patch(
+      '/accounts/:accountId/messages/:messageId/labels',
+      async (context) => {
+        const value = await readObject(context.req.raw);
+        return context.json({
+          data: await mail.updateMessageLabels(operationContext(context), {
+            accountId: context.req.param('accountId'),
+            messageId: context.req.param('messageId'),
+            addLabelIds: optionalStringArray(value.addLabelIds, 'addLabelIds'),
+            removeLabelIds: optionalStringArray(
+              value.removeLabelIds,
+              'removeLabelIds',
+            ),
           }),
         });
       },
@@ -454,6 +563,7 @@ async function readDraftInput(request: Request): Promise<MailComposeInput> {
   return {
     accountId: requiredString(value.accountId, 'accountId'),
     identityId: requiredString(value.identityId, 'identityId'),
+    signatureId: optionalNullableString(value.signatureId, 'signatureId'),
     to: optionalAddresses(value.to, 'to') ?? [],
     cc: optionalAddresses(value.cc, 'cc'),
     bcc: optionalAddresses(value.bcc, 'bcc'),
@@ -512,6 +622,7 @@ async function readComposeInput(request: Request): Promise<MailComposeInput> {
   return {
     accountId,
     identityId,
+    signatureId: optionalNullableString(value.signatureId, 'signatureId'),
     to: addresses(value.to, 'to'),
     cc: optionalAddresses(value.cc, 'cc'),
     bcc: optionalAddresses(value.bcc, 'bcc'),
@@ -544,6 +655,7 @@ async function readBulkComposeInput(
   return {
     accountId: requiredString(value.accountId, 'accountId'),
     identityId: requiredString(value.identityId, 'identityId'),
+    signatureId: optionalNullableString(value.signatureId, 'signatureId'),
     recipients: addresses(value.recipients, 'recipients'),
     subject: requiredString(value.subject, 'subject'),
     text: requiredString(value.text, 'text'),

@@ -8,12 +8,12 @@ import {
   MailDevPageShell,
   MailStatusBadge,
   MailSyncPolicyFields,
+  MailSignatureManager,
   type MailSyncPolicyValue,
   type MailStatusTone,
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
-import { Textarea } from '../components/ui/textarea.js';
 import {
   mailErrorMessage,
   type MailAccountView,
@@ -45,10 +45,6 @@ export default function MailAccountsDevPage(): ReactElement {
   const [accountIdentities, setAccountIdentities] = useState<
     Readonly<Record<string, readonly MailIdentity[]>>
   >({});
-  const [signatureDrafts, setSignatureDrafts] = useState<
-    Readonly<Record<string, string>>
-  >({});
-  const [savingIdentity, setSavingIdentity] = useState<string>();
   const authorizationNotice = readAuthorizationNotice();
 
   const refresh = useCallback((): void => {
@@ -66,16 +62,6 @@ export default function MailAccountsDevPage(): ReactElement {
         ).then(
           (entries) => {
             setAccountIdentities(Object.fromEntries(entries));
-            setSignatureDrafts(
-              Object.fromEntries(
-                entries.flatMap(([, identities]) =>
-                  identities.map((identity) => [
-                    identity.id,
-                    identity.signatureText ?? '',
-                  ]),
-                ),
-              ),
-            );
           },
           (cause: unknown) => {
             setError(
@@ -240,37 +226,6 @@ export default function MailAccountsDevPage(): ReactElement {
           ),
         ),
       );
-  };
-
-  const saveIdentity = (identity: MailIdentity): void => {
-    setSavingIdentity(identity.id);
-    setError(undefined);
-    void mail
-      .updateIdentity({
-        accountId: identity.accountId,
-        identityId: identity.id,
-        signatureText: signatureDrafts[identity.id] ?? '',
-        signatureHtml: null,
-      })
-      .then((updated) => {
-        setAccountIdentities((current) => ({
-          ...current,
-          [updated.accountId]: (current[updated.accountId] ?? []).map((item) =>
-            item.id === updated.id ? updated : item,
-          ),
-        }));
-      })
-      .catch((cause: unknown) =>
-        setError(
-          mailErrorMessage(
-            cause,
-            t('errors.requestFailed', {
-              defaultValue: 'Mail request failed.',
-            }),
-          ),
-        ),
-      )
-      .finally(() => setSavingIdentity(undefined));
   };
 
   return (
@@ -556,44 +511,10 @@ export default function MailAccountsDevPage(): ReactElement {
                                     />
                                   ) : null}
                                 </div>
-                                <Textarea
-                                  aria-label={t(
-                                    'settings.identities.signatureFor',
-                                    {
-                                      address: identity.address,
-                                      defaultValue: `Signature for ${identity.address}`,
-                                    },
-                                  )}
-                                  className='min-h-20'
-                                  onChange={(event) =>
-                                    setSignatureDrafts((current) => ({
-                                      ...current,
-                                      [identity.id]: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t(
-                                    'settings.identities.signaturePlaceholder',
-                                    {
-                                      defaultValue:
-                                        'Signature appended to outgoing messages',
-                                    },
-                                  )}
-                                  value={signatureDrafts[identity.id] ?? ''}
+                                <MailSignatureManager
+                                  identity={identity}
+                                  onError={setError}
                                 />
-                                <Button
-                                  disabled={savingIdentity === identity.id}
-                                  onClick={() => saveIdentity(identity)}
-                                  type='button'
-                                  variant='outline'
-                                >
-                                  {savingIdentity === identity.id
-                                    ? t('settings.identities.saving', {
-                                        defaultValue: 'Saving…',
-                                      })
-                                    : t('settings.identities.save', {
-                                        defaultValue: 'Save signature',
-                                      })}
-                                </Button>
                               </div>
                             ),
                           )}

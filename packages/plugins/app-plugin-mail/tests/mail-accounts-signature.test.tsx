@@ -6,11 +6,13 @@ const mail = vi.hoisted(() => ({
   listAccounts: vi.fn(),
   listIdentities: vi.fn(),
   listProviders: vi.fn(),
+  listSignatures: vi.fn(),
+  saveSignature: vi.fn(),
+  deleteSignature: vi.fn(),
   removeAccount: vi.fn(),
   startAuthorization: vi.fn(),
   startSync: vi.fn(),
   updateAccount: vi.fn(),
-  updateIdentity: vi.fn(),
 }));
 
 vi.mock('../client/runtime.js', () => ({ getMailClient: () => mail }));
@@ -39,34 +41,37 @@ describe('mail account signatures', () => {
         address: 'sender@example.com',
         isPrimary: true,
         canSend: true,
-        signatureText: 'Old signature',
       },
     ]);
-    mail.updateIdentity.mockResolvedValue({
-      id: 'identity-1',
-      accountId: 'account-1',
-      address: 'sender@example.com',
-      isPrimary: true,
-      canSend: true,
-      signatureText: 'New signature',
+    mail.listSignatures.mockResolvedValue([]);
+    mail.saveSignature.mockResolvedValue({
+      id: 'signature-1',
+      identityId: 'identity-1',
+      name: 'Work',
+      text: 'New signature',
+      isDefault: true,
+      createdAt: '2026-09-08T00:00:00.000Z',
+      updatedAt: '2026-09-08T00:00:00.000Z',
     });
   });
 
-  it('edits and saves an identity signature', async () => {
+  it('creates a named signature for an identity', async () => {
     render(<MailAccountsDevPage />);
+    const name = await screen.findByLabelText('Signature name');
     const signature = await screen.findByLabelText(
       'Signature for sender@example.com',
     );
-    expect(signature).toHaveValue('Old signature');
+    fireEvent.change(name, { target: { value: 'Work' } });
     fireEvent.change(signature, { target: { value: 'New signature' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save signature' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add signature' }));
 
     await waitFor(() =>
-      expect(mail.updateIdentity).toHaveBeenCalledWith({
+      expect(mail.saveSignature).toHaveBeenCalledWith({
         accountId: 'account-1',
         identityId: 'identity-1',
-        signatureText: 'New signature',
-        signatureHtml: null,
+        name: 'Work',
+        text: 'New signature',
+        isDefault: true,
       }),
     );
   });

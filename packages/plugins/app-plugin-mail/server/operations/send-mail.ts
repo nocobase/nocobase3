@@ -237,6 +237,39 @@ export class SendMailOperation {
     if (!identity || identity.accountId !== input.accountId) {
       throw new Error('Mail sending identity is not available.');
     }
+    const configuredSignatures = await this.dependencies.store.listSignatures(
+      identity.id,
+    );
+    const signature =
+      input.signatureId === null
+        ? undefined
+        : input.signatureId
+          ? await this.dependencies.store.getSignature(input.signatureId)
+          : configuredSignatures.find((item) => item.isDefault);
+    if (
+      input.signatureId &&
+      (!signature || signature.identityId !== identity.id)
+    ) {
+      throw new Error('Mail signature was not found.');
+    }
+    const signatureText =
+      input.signatureId === null
+        ? undefined
+        : (signature?.text ?? identity.signatureText);
+    const signatureHtml =
+      input.signatureId === null
+        ? undefined
+        : signature
+          ? (signature.html ?? escapeHtml(signature.text))
+          : (identity.signatureHtml ?? escapeHtml(identity.signatureText));
+    const knownSignatureTexts = [
+      ...configuredSignatures.map((item) => item.text),
+      identity.signatureText,
+    ].filter((value): value is string => Boolean(value?.trim()));
+    const knownSignatureHtml = [
+      ...configuredSignatures.map((item) => item.html ?? escapeHtml(item.text)),
+      identity.signatureHtml ?? escapeHtml(identity.signatureText),
+    ].filter((value): value is string => Boolean(value?.trim()));
     const relatedMessageId =
       input.inReplyToMessageId ?? input.forwardOfMessageId;
     const related = relatedMessageId
@@ -308,14 +341,13 @@ export class SendMailOperation {
       cc: input.cc ?? [],
       bcc: input.bcc ?? [],
       subject: input.subject,
-      text: input.draftMessageId
-        ? input.text
-        : appendTextSignature(input.text, identity.signatureText),
+      text: appendTextSignature(
+        stripKnownTextSignature(input.text, knownSignatureTexts),
+        signatureText,
+      ),
       html: appendHtmlSignature(
-        input.html,
-        input.draftMessageId
-          ? undefined
-          : (identity.signatureHtml ?? escapeHtml(identity.signatureText)),
+        stripKnownHtmlSignature(input.html, knownSignatureHtml),
+        signatureHtml,
       ),
       attachments,
       retainedProviderAttachmentIds: retainedDraftAttachments.map(
@@ -348,12 +380,41 @@ function appendTextSignature(text: string, signature?: string): string {
   return signature?.trim() ? `${text}\n\n-- \n${signature}` : text;
 }
 
+function stripKnownTextSignature(
+  text: string,
+  signatures: readonly string[],
+): string {
+  return stripKnownSuffix(
+    text,
+    signatures.map((signature) => `\n\n-- \n${signature}`),
+  );
+}
+
 function appendHtmlSignature(
   html?: string,
   signature?: string,
 ): string | undefined {
   if (!html || !signature?.trim()) return html;
   return `${html}<br><br><div class="nocobase-mail-signature">${signature}</div>`;
+}
+
+function stripKnownHtmlSignature(
+  html: string | undefined,
+  signatures: readonly string[],
+): string | undefined {
+  if (!html) return html;
+  return stripKnownSuffix(
+    html,
+    signatures.map(
+      (signature) =>
+        `<br><br><div class="nocobase-mail-signature">${signature}</div>`,
+    ),
+  );
+}
+
+function stripKnownSuffix(value: string, suffixes: readonly string[]): string {
+  const suffix = suffixes.find((candidate) => value.endsWith(candidate));
+  return suffix ? value.slice(0, -suffix.length) : value;
 }
 
 function escapeHtml(value?: string): string | undefined {

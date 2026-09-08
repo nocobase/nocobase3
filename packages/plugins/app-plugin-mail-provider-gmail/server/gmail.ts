@@ -20,6 +20,7 @@ import type {
   MailProviderSendResult,
   MailProviderUpsertPushSubscriptionInput,
   MailProviderUpsertPushSubscriptionResult,
+  MailProviderUpdateLabelsInput,
   MailSyncCursor,
   NormalizedMailAttachment,
   NormalizedMailFolder,
@@ -140,6 +141,12 @@ interface GmailLabelList {
     type?: string;
     messagesUnread?: number;
   }[];
+}
+
+interface GmailLabelResource {
+  readonly id?: string;
+  readonly name?: string;
+  readonly messagesUnread?: number;
 }
 
 interface GmailCursorValue {
@@ -509,6 +516,54 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         ),
       },
     };
+  }
+
+  public async createLabel(
+    name: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<NormalizedMailFolder>> {
+    const result = await this.request<GmailLabelResource>('/users/me/labels', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      }),
+      signal,
+    });
+    if (!result.ok) return result;
+    const id = result.value.id;
+    if (!id) {
+      return failure(
+        'GMAIL_LABEL_ID_MISSING',
+        'Gmail did not return an ID for the created label.',
+        'provider',
+        false,
+      );
+    }
+    return {
+      ok: true,
+      value: {
+        providerFolderId: id,
+        type: 'custom',
+        name: result.value.name ?? name,
+        unreadCount: result.value.messagesUnread,
+        kind: 'label',
+      },
+    };
+  }
+
+  public updateLabels(
+    providerMessageId: string,
+    input: MailProviderUpdateLabelsInput,
+  ): Promise<MailProviderResult<void>> {
+    return this.modifyLabels(
+      providerMessageId,
+      input.addLabelIds,
+      input.removeLabelIds,
+      input.signal,
+    );
   }
 
   public async listMessages(

@@ -28,6 +28,7 @@ const COLLECTIONS = [
   ['mailSyncRuns', 'mail_sync_runs'],
   ['mailSubmissions', 'mail_submissions'],
   ['mailOutbox', 'mail_outbox'],
+  ['mailSignatures', 'mail_signatures'],
 ] as const;
 
 describe('mail database migration', () => {
@@ -65,6 +66,29 @@ describe('mail database migration', () => {
           name: 'mail_messages_account_provider_unique',
         }),
         expect.objectContaining({ name: 'mail_messages_account_sort_idx' }),
+        expect.objectContaining({
+          name: 'mail_messages_account_todo_sort_idx',
+        }),
+      ]),
+    );
+    await expect(
+      metadataStore.get('mailMessages').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: {
+        note: { type: 'text' },
+        todo: { type: 'boolean' },
+      },
+    });
+    await expect(
+      client.raw('PRAGMA index_list(mail_signatures)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'mail_signatures_identity_name_unique',
+        }),
+        expect.objectContaining({
+          name: 'mail_signatures_identity_default_idx',
+        }),
       ]),
     );
     await expect(client.raw('PRAGMA index_list(mail_outbox)')).resolves.toEqual(

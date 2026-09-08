@@ -46,10 +46,18 @@ The first runnable vertical slice provides:
   existing incremental synchronization pipeline;
 - automatic Gmail watch and Microsoft Graph subscription creation and renewal;
 - read/unread, star, move, archive, soft-delete, and permanent-delete actions;
+- private message notes and todo markers that survive Provider resynchronization;
+- Gmail custom-label creation plus per-message label assignment and removal;
 - ownership-checked inbound attachment streaming and workspace downloads;
 - ownership-checked outbound attachment uploads with Gmail MIME and Microsoft Graph delivery;
-- Provider-discovered sending aliases and per-identity text signatures;
+- Provider-discovered sending aliases and multiple selectable signatures per identity;
 - current-user reusable mail templates with composer integration;
+- rich-text composition with safe HTML, plain-text fallback, and current-record
+  template variable binding;
+- debounced Provider draft auto-save, unsaved-change protection, and
+  session-scoped recovery after a page reload;
+- a top-level Mail navigation entry with a cross-account unread badge;
+- filterable operation logs with safe synchronization cancellation and retry;
 - bounded bulk delivery as separate per-recipient submissions;
 - current-user account default selection, suspend/resume, and disconnect;
 - Provider contracts, registry, adapter resolver, database storage, and an
@@ -60,6 +68,10 @@ Providers. Gmail and Microsoft implementations live in
 separate Provider plugins; Mail Core owns OAuth
 transactions and encrypted credential storage, while Provider plugins own
 protocol calls and token refresh behavior.
+
+## Documentation
+
+- [Complete feature list and v2 comparison](./docs/zh-CN/feature-list.md)
 
 ## Runtime flow
 
@@ -149,6 +161,7 @@ PATCH /api/mail/accounts/:accountId
 DELETE /api/mail/accounts/:accountId
 GET  /api/mail/settings/accounts
 GET  /api/mail/settings/operation-logs
+GET  /api/mail/unread-count
 GET  /api/mail/providers
 GET  /api/mail/templates
 POST /api/mail/templates
@@ -157,7 +170,12 @@ DELETE /api/mail/templates/:templateId
 POST /api/mail/authorizations
 GET  /api/mail/accounts/:accountId/identities
 PATCH /api/mail/accounts/:accountId/identities/:identityId
+GET  /api/mail/accounts/:accountId/identities/:identityId/signatures
+POST /api/mail/accounts/:accountId/identities/:identityId/signatures
+PATCH /api/mail/accounts/:accountId/identities/:identityId/signatures/:signatureId
+DELETE /api/mail/accounts/:accountId/identities/:identityId/signatures/:signatureId
 GET  /api/mail/accounts/:accountId/folders
+POST /api/mail/accounts/:accountId/labels
 POST /api/mail/attachments
 POST /api/mail/messages/send
 POST /api/mail/messages/bulk
@@ -166,10 +184,13 @@ GET  /api/mail/submissions
 POST /api/mail/accounts/:accountId/sync
 GET  /api/mail/sync-runs
 GET  /api/mail/sync-runs/:syncRunId
+POST /api/mail/sync-runs/:syncRunId/retry
+POST /api/mail/sync-runs/:syncRunId/cancel
 GET  /api/mail/messages
 GET  /api/mail/accounts/:accountId/messages/:messageId
 GET  /api/mail/accounts/:accountId/messages/:messageId/attachments/:attachmentId
 PATCH /api/mail/accounts/:accountId/messages/:messageId
+PATCH /api/mail/accounts/:accountId/messages/:messageId/labels
 POST /api/mail/accounts/:accountId/messages/:messageId/move
 DELETE /api/mail/accounts/:accountId/messages/:messageId
 GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages

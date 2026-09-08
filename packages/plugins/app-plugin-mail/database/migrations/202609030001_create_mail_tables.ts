@@ -133,6 +133,26 @@ const migration: MigrationDefinition = defineMigration({
       });
     });
 
+    await builder.createCollection('mailSignatures', (collection) => {
+      collection.uuid('id').primary();
+      collection.uuid('identityId', { nullable: false });
+      collection.string('name', { length: 255, nullable: false });
+      collection.text('text', { nullable: false });
+      collection.text('html');
+      collection.boolean('isDefault', {
+        nullable: false,
+        defaultValue: false,
+      });
+      collection.datetime('createdAt', { nullable: false });
+      collection.datetime('updatedAt', { nullable: false });
+      collection.unique(['identityId', 'name'], {
+        name: 'mail_signatures_identity_name_unique',
+      });
+      collection.index(['identityId', 'isDefault'], {
+        name: 'mail_signatures_identity_default_idx',
+      });
+    });
+
     await builder.createCollection('mailFolders', (collection) => {
       collection.uuid('id').primary();
       collection.uuid('accountId', { nullable: false });
@@ -163,12 +183,14 @@ const migration: MigrationDefinition = defineMigration({
       collection.text('preview');
       collection.text('text');
       collection.text('html');
+      collection.text('note');
       collection.datetime('receivedAt');
       collection.datetime('sentAt');
       collection.datetime('sortAt', { nullable: false });
       collection.boolean('read', { nullable: false, defaultValue: false });
       collection.boolean('starred', { nullable: false, defaultValue: false });
       collection.boolean('draft', { nullable: false, defaultValue: false });
+      collection.boolean('todo', { nullable: false, defaultValue: false });
       collection.json('attachments', { nullable: false });
       collection.datetime('createdAt', { nullable: false });
       collection.datetime('updatedAt', { nullable: false });
@@ -177,6 +199,9 @@ const migration: MigrationDefinition = defineMigration({
       });
       collection.index(['accountId', 'sortAt', 'id'], {
         name: 'mail_messages_account_sort_idx',
+      });
+      collection.index(['accountId', 'todo', 'sortAt'], {
+        name: 'mail_messages_account_todo_sort_idx',
       });
       collection.index(
         ['accountId', 'providerConversationId', 'sortAt', 'id'],
@@ -296,6 +321,7 @@ const migration: MigrationDefinition = defineMigration({
     await builder.dropCollection('mailMessageFolders');
     await builder.dropCollection('mailMessages');
     await builder.dropCollection('mailFolders');
+    await builder.dropCollection('mailSignatures');
     await builder.dropCollection('mailIdentities');
     await builder.dropCollection('mailPushPending');
     await builder.dropCollection('mailPushSubscriptions');

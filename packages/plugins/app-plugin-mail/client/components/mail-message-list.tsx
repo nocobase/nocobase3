@@ -1,4 +1,4 @@
-import { Paperclip, Star } from 'lucide-react';
+import { CheckSquare2, Paperclip, Star, StickyNote } from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import type { MailMessageSummary } from '../mail-client.js';
@@ -91,6 +91,18 @@ export function MailMessageList({
                   <Paperclip
                     aria-label='Has attachments'
                     className='size-3.5 text-muted-foreground'
+                  />
+                ) : null}
+                {message.note ? (
+                  <StickyNote
+                    aria-label='Has note'
+                    className='size-3.5 text-muted-foreground'
+                  />
+                ) : null}
+                {message.todo ? (
+                  <CheckSquare2
+                    aria-label='To do'
+                    className='size-3.5 text-primary'
                   />
                 ) : null}
               </div>

@@ -1,6 +1,8 @@
 import { MonitorCog, Settings } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
+import { MailNavigationIcon } from '@nocobase/app-plugin-mail/client/components';
+import { useTranslation } from '@nocobase/i18n/client';
 
 import { ThemeSettings } from '../theme/index.js';
 import { UserMenu } from './user-menu.js';
@@ -22,8 +24,20 @@ export interface HeaderActionsProps {
 export function HeaderActions({
   surface = 'app',
 }: HeaderActionsProps): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-mail');
+  const mailLabel = t('nav.mail', { defaultValue: 'Mail' });
   return (
     <div className='flex shrink-0 items-center gap-2'>
+      {surface === 'app' ? (
+        <Link
+          aria-label={mailLabel}
+          className={ACTION_LINK_CLASS}
+          title={mailLabel}
+          to='/mail'
+        >
+          <MailNavigationIcon />
+        </Link>
+      ) : null}
       {/* The dev entry sits left of settings and exists only while developing: a production build evaluates this to
           false and drops the link along with the whole dev surface it points at. */}
       {import.meta.env.DEV && surface !== 'dev' ? (

@@ -78,6 +78,62 @@ describe('MailClient', () => {
     expect(request).toHaveBeenLastCalledWith({ path: 'mail/submissions' });
   });
 
+  it('maps P1 mailbox-management calls onto encoded Mail API paths', async () => {
+    const request = vi.fn(async ({ path }: { path: string }) => ({
+      data: path === 'mail/unread-count' ? 4 : {},
+    }));
+    const client = new MailClient(appClient(request));
+
+    await expect(client.getUnreadCount()).resolves.toBe(4);
+    await client.saveSignature({
+      id: 'signature/1',
+      accountId: 'account/1',
+      identityId: 'identity/1',
+      name: 'Sales',
+      text: 'Regards',
+      isDefault: true,
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/accounts/account%2F1/identities/identity%2F1/signatures/signature%2F1',
+      method: 'PATCH',
+      json: { name: 'Sales', text: 'Regards', isDefault: true },
+    });
+
+    await client.createLabel('account/1', 'Customers');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/accounts/account%2F1/labels',
+      method: 'POST',
+      json: { name: 'Customers' },
+    });
+    await client.updateMessageLabels({
+      accountId: 'account/1',
+      messageId: 'message/1',
+      addLabelIds: ['Label_1'],
+      removeLabelIds: ['Label_2'],
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/accounts/account%2F1/messages/message%2F1/labels',
+      method: 'PATCH',
+      json: {
+        addLabelIds: ['Label_1'],
+        removeLabelIds: ['Label_2'],
+      },
+    });
+
+    await client.retrySyncRun('sync/1');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/sync-runs/sync%2F1/retry',
+      method: 'POST',
+      json: {},
+    });
+    await client.cancelSyncRun('sync/1');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/sync-runs/sync%2F1/cancel',
+      method: 'POST',
+      json: {},
+    });
+  });
+
   it('streams attachment content from the encoded Mail API path', async () => {
     const stream = vi.fn(async () => streamOf('content'));
     const client = new MailClient({

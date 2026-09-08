@@ -21,6 +21,7 @@ describe('Mail client ServiceProvider', () => {
           return appClient;
         }),
       },
+      refine: { addResources: vi.fn() },
     } as unknown as ClientApplication;
 
     await new MailClientServiceProvider(app).boot();
@@ -29,5 +30,8 @@ describe('Mail client ServiceProvider', () => {
     expect(appClient.request).toHaveBeenCalledWith({
       path: 'mail/accounts',
     });
+    expect(app.refine.addResources).toHaveBeenCalledWith([
+      expect.objectContaining({ name: 'mail', list: '/mail' }),
+    ]);
   });
 });

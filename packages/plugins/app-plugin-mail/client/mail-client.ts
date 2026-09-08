@@ -6,6 +6,8 @@ import type {
   MailBulkComposeInput,
   MailFolder,
   MailIdentity,
+  MailSignature,
+  MailSaveSignatureInput,
   MailListMessagesInput,
   MailManagedAccountView,
   MailManagedOperationLogsView,
@@ -13,6 +15,7 @@ import type {
   MailMessageSummary,
   MailUpdateMessageInput,
   MailMoveMessageInput,
+  MailUpdateMessageLabelsInput,
   MailPage,
   MailProviderView,
   MailStartSyncInput,
@@ -35,6 +38,8 @@ export type {
   MailBulkComposeInput,
   MailFolder,
   MailIdentity,
+  MailSignature,
+  MailSaveSignatureInput,
   MailInitialSyncPolicy,
   MailManagedAccountView,
   MailManagedOperationLogsView,
@@ -131,6 +136,12 @@ export class MailClient {
       .then((response) => response.data);
   }
 
+  public getUnreadCount(): Promise<number> {
+    return this.client
+      .request<DataResponse<number>>({ path: 'mail/unread-count' })
+      .then((response) => response.data);
+  }
+
   public startAuthorization(
     input: MailAuthorizationRequest,
   ): Promise<MailAuthorizationStartResult> {
@@ -159,12 +170,52 @@ export class MailClient {
       .then((response) => response.data);
   }
 
+  public listSignatures(
+    accountId: string,
+    identityId: string,
+  ): Promise<readonly MailSignature[]> {
+    return this.client
+      .request<DataResponse<readonly MailSignature[]>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}/signatures`,
+      })
+      .then((response) => response.data);
+  }
+
+  public saveSignature(input: MailSaveSignatureInput): Promise<MailSignature> {
+    const { id, accountId, identityId, ...json } = input;
+    return this.client
+      .request<DataResponse<MailSignature>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}/signatures${id ? `/${encodeURIComponent(id)}` : ''}`,
+        method: id ? 'PATCH' : 'POST',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
+  public deleteSignature(
+    accountId: string,
+    identityId: string,
+    signatureId: string,
+  ): Promise<void> {
+    return this.client.request<void>({
+      path: `mail/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}/signatures/${encodeURIComponent(signatureId)}`,
+      method: 'DELETE',
+    });
+  }
+
   public listFolders(accountId: string): Promise<readonly MailFolder[]> {
     return this.client
       .request<DataResponse<readonly MailFolder[]>>({
         path: `mail/accounts/${encodeURIComponent(accountId)}/folders`,
       })
       .then((response) => response.data);
+  }
+
+  public createLabel(accountId: string, name: string): Promise<MailFolder> {
+    return this.post<MailFolder>(
+      `mail/accounts/${encodeURIComponent(accountId)}/labels`,
+      { name },
+    );
   }
 
   public startSync(input: MailStartSyncInput): Promise<MailSyncRunView> {
@@ -189,6 +240,20 @@ export class MailClient {
         path: 'mail/sync-runs',
       })
       .then((response) => response.data);
+  }
+
+  public retrySyncRun(syncRunId: string): Promise<MailSyncRunView> {
+    return this.post<MailSyncRunView>(
+      `mail/sync-runs/${encodeURIComponent(syncRunId)}/retry`,
+      {},
+    );
+  }
+
+  public cancelSyncRun(syncRunId: string): Promise<MailSyncRunView> {
+    return this.post<MailSyncRunView>(
+      `mail/sync-runs/${encodeURIComponent(syncRunId)}/cancel`,
+      {},
+    );
   }
 
   public listSubmissions(): Promise<readonly MailSubmissionLogView[]> {
@@ -316,6 +381,19 @@ export class MailClient {
     return this.client
       .request<DataResponse<MailMessage>>({
         path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}`,
+        method: 'PATCH',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
+  public updateMessageLabels(
+    input: MailUpdateMessageLabelsInput,
+  ): Promise<MailMessage> {
+    const { accountId, messageId, ...json } = input;
+    return this.client
+      .request<DataResponse<MailMessage>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}/labels`,
         method: 'PATCH',
         json,
       })
