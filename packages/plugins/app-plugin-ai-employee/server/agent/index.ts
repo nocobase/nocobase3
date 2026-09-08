@@ -1,6 +1,7 @@
 export * from './types.js';
 export * from './agent-service.js';
 export * from './providers.js';
+export * from './chat-context.js';
 export * from './direct.js';
 export { buildStandardAgentMiddleware } from './middleware/pipeline.js';
 export * from './errors.js';
