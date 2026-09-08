@@ -32,11 +32,7 @@ import {
   normalizeKnowledgeBaseRetrievalStrategy,
 } from '../../manager/knowledge-base-manager.js';
 import type { ToolCallPolicy } from './tool-call-policy.js';
-import { EXECUTE_FRONTEND_TOOL_NAME } from './common/frontend-tools.js';
-import {
-  listCurrentFrontendTools,
-  shouldAutoExecuteFrontendTool,
-} from './frontend-tools.js';
+import { AIEmployeeToolContext } from './tool-context.js';
 
 class ExecutionResponseMetadata {
   private readonly metadata = new Map<string, Record<string, unknown>>();
@@ -96,6 +92,7 @@ export interface AIEmployeeAgentProvidersResult {
 interface AIEmployeeProviderState {
   options: AIEmployeeAgentRuntimeOptions;
   runtime: AIEmployeeCapabilities;
+  toolContext: AIEmployeeToolContext;
 }
 
 const createState = (
@@ -103,6 +100,7 @@ const createState = (
 ): AIEmployeeProviderState => ({
   options,
   runtime: new AIEmployeeCapabilities(options),
+  toolContext: new AIEmployeeToolContext(options),
 });
 
 function getRequiredModel(
@@ -175,7 +173,7 @@ async function initializeToolCalls(
 export function createAIEmployeeConversationProvider(
   options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
-  toolCallPolicy?: ToolCallPolicy,
+  toolCallPolicy: ToolCallPolicy,
 ): ConversationProvider {
   const { runtime } = state;
   const agentContext = options.agentContext;
@@ -193,15 +191,13 @@ export function createAIEmployeeConversationProvider(
   const toolCalls: ToolCallHandler = {
     initialize: async (messageId, calls) =>
       database.transaction((transaction: DatabaseConnection) =>
-        toolCallPolicy
-          ? initializeToolCalls(
-              options,
-              toolCallPolicy,
-              transaction,
-              messageId,
-              calls,
-            )
-          : runtime.initToolCall(transaction, messageId, calls),
+        initializeToolCalls(
+          options,
+          toolCallPolicy,
+          transaction,
+          messageId,
+          calls,
+        ),
       ),
     markInterrupted: (...args) => runtime.updateToolCallInterrupted(...args),
     markPending: (...args) => runtime.updateToolCallPending(...args),
@@ -248,15 +244,13 @@ export function createAIEmployeeConversationProvider(
         chatConversation.withTransaction(async (target, transaction) => {
           const saved = await target.addMessages(message);
           const initialized = calls.length
-            ? toolCallPolicy
-              ? await initializeToolCalls(
-                  options,
-                  toolCallPolicy,
-                  transaction,
-                  saved.messageId,
-                  calls,
-                )
-              : await runtime.initToolCall(transaction, saved.messageId, calls)
+            ? await initializeToolCalls(
+                options,
+                toolCallPolicy,
+                transaction,
+                saved.messageId,
+                calls,
+              )
             : [];
           return {
             message: saved,
@@ -403,7 +397,7 @@ export class AIEmployeeChatContextProvider
 {
   public constructor(
     private readonly aiEmployeeOptions: AIEmployeeAgentRuntimeOptions,
-    private readonly runtime: AIEmployeeCapabilities = new AIEmployeeCapabilities(
+    private readonly toolContext: AIEmployeeToolContext = new AIEmployeeToolContext(
       aiEmployeeOptions,
     ),
   ) {
@@ -504,8 +498,9 @@ export class AIEmployeeChatContextProvider
       background = `${background}\n${knowledgeBaseBackgroundPrompt}`;
     }
 
-    const availableSkills = await this.runtime.getAvailableSkills();
-    const availableAIEmployees = await this.runtime.getAvailableAIEmployees();
+    const availableSkills = await this.toolContext.getAvailableSkills();
+    const availableAIEmployees =
+      await this.toolContext.getAvailableAIEmployees();
     const timezone = getCurrentTimezone(
       this.aiEmployeeOptions.execution ?? {},
       this.aiEmployeeOptions.getHeader ?? (() => undefined),
@@ -540,15 +535,15 @@ If information is missing, clearly state it in the summary.</Important>`;
   public override async discoveredTools(
     _request: AgentRequest,
   ): Promise<readonly import('@nocobase/ai-employee').ToolsEntity[]> {
-    return (await this.runtime.getAgentTools()).tools;
+    return (await this.toolContext.getAgentTools()).tools;
   }
 
   public override async activeTools(
     _request: AgentRequest,
   ): Promise<ReadonlySet<string>> {
     const [{ baseToolNames }, activatedSkillToolNames] = await Promise.all([
-      this.runtime.getAgentTools(),
-      this.runtime.getActivatedSkillToolNames(),
+      this.toolContext.getAgentTools(),
+      this.toolContext.getActivatedSkillToolNames(),
     ]);
     return new Set([...baseToolNames, ...activatedSkillToolNames]);
   }
@@ -566,30 +561,20 @@ If information is missing, clearly state it in the summary.</Important>`;
   public override shouldInterruptToolCall(
     tool?: import('@nocobase/ai-employee').ToolsEntity,
   ): boolean {
-    return this.runtime.shouldInterruptToolCall(tool);
+    return this.toolContext.shouldInterruptToolCall(tool);
   }
 
   public override getToolsMap(
     _request?: AgentRequest,
   ): Promise<ReadonlyMap<string, import('@nocobase/ai-employee').ToolsEntity>> {
-    return this.runtime.getToolsMap();
+    return this.toolContext.getToolsMap();
   }
 
   public async isAutoCall(
     tool: import('@nocobase/ai-employee').ToolsEntity | undefined,
     args: unknown,
   ): Promise<boolean> {
-    if (tool?.definition.name !== EXECUTE_FRONTEND_TOOL_NAME) {
-      return this.runtime.isAutoCall(tool);
-    }
-    const frontendTools = await listCurrentFrontendTools(
-      this.aiEmployeeOptions.repositories,
-      {
-        ...(this.aiEmployeeOptions.execution ?? {}),
-        sessionId: this.aiEmployeeOptions.sessionId,
-      },
-    );
-    return shouldAutoExecuteFrontendTool(frontendTools, args);
+    return this.toolContext.isAutoCall(tool, args);
   }
 }
 
@@ -597,7 +582,7 @@ export function createAIEmployeeChatContextProvider(
   options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
 ): AIEmployeeChatContextProvider {
-  return new AIEmployeeChatContextProvider(options, state.runtime);
+  return new AIEmployeeChatContextProvider(options, state.toolContext);
 }
 
 export async function createAIEmployeeAgentProviders(

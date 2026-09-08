@@ -13,8 +13,6 @@ import type { KnowledgeBaseManager } from '../../manager/knowledge-base-manager.
 import type { LLMStreamCachedManager } from '../../manager/llm-stream-cached-manager.js';
 import type { WorkContextHandler } from '../../manager/work-context/index.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
-import type { ToolsEntity } from '@nocobase/ai-employee';
-import type { SkillsEntity } from '@nocobase/ai-employee';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -26,24 +24,6 @@ import type { SkillsEntity } from '@nocobase/ai-employee';
 
 import type { AIToolMessageEntity } from '../../repository/index.js';
 import type { DatabaseConnection } from '@nocobase/db';
-import _ from 'lodash';
-import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
-import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
-
-import type { ToolsFilter, ToolsManager } from '@nocobase/ai-employee';
-import {
-  listAccessibleAIEmployees,
-  serializeEmployeeSummary,
-} from '../../manager/sub-agents/shared.js';
-import {
-  EXECUTE_FRONTEND_TOOL_NAME,
-  LOAD_FRONTEND_TOOL_NAME,
-} from '../../agent/ai-employee/common/frontend-tools.js';
-import {
-  listCurrentFrontendTools,
-  prepareToolsForFrontendConversation,
-  shouldAutoExecuteFrontendTool,
-} from '../../agent/ai-employee/frontend-tools.js';
 
 export interface AIEmployeeAgentRuntimeOptions {
   agentContext: AppAgentContext;
@@ -73,71 +53,27 @@ export interface AIEmployeeAgentRuntimeOptions {
 
 export class AIEmployeeCapabilities {
   sessionId: string;
-  from = 'main-agent';
-  employee: any;
-  skillSettings?: Record<string, any>;
-  userMessageCount = 0;
 
   private agentContext: AppAgentContext;
   private database: DatabaseConnection;
   private snowflake: IdGeneratorService;
-  private execution: ConversationExecution;
   private repositories: RepositoryFactory;
-  private builtInManager: BuiltInManager;
-  private knowledgeBaseManager: KnowledgeBaseManager;
-  private webSearch?: boolean;
   private model?: ModelRef;
-  private tools: { name: string }[];
 
   constructor({
     agentContext,
     database,
     snowflake,
-    execution = {},
     repositories,
-    builtInManager,
-    knowledgeBaseManager,
-    employee,
     sessionId,
-    skillSettings,
-    webSearch,
     model,
-    from = 'main-agent',
-    tools = [],
   }: AIEmployeeAgentRuntimeOptions) {
-    this.employee = employee;
     this.agentContext = agentContext;
     this.database = database;
     this.snowflake = snowflake;
-    this.execution = execution;
     this.repositories = repositories;
-    this.builtInManager = builtInManager;
-    this.knowledgeBaseManager = knowledgeBaseManager;
     this.sessionId = sessionId;
-    this.skillSettings = skillSettings;
     this.model = model;
-    this.from = from;
-    this.tools = tools;
-    this.builtInManager.setupBuiltInInfo({
-      employee: this.employee as unknown as AIEmployeeType,
-      translate: agentContext.translate,
-    });
-    this.webSearch = webSearch;
-  }
-
-  private get chatSettings() {
-    return (this.employee.chatSettings ?? {}) as {
-      enableSkills?: boolean;
-      enableTools?: boolean;
-    };
-  }
-
-  private areSkillsEnabled() {
-    return this.chatSettings.enableSkills !== false;
-  }
-
-  private areToolsEnabled() {
-    return this.chatSettings.enableTools !== false;
   }
 
   private getRequiredModel(): ModelRef {
@@ -148,61 +84,6 @@ export class AIEmployeeCapabilities {
   }
 
   // Agent execution and middleware orchestration are owned by AgentService.
-
-  // === Tool calls ===
-  async initToolCall(
-    transaction: DatabaseConnection,
-    messageId: string,
-    toolCalls: {
-      id: string;
-      name: string;
-      args: unknown;
-    }[],
-  ): Promise<AIToolMessageEntity[]> {
-    const nowTime = new Date();
-    const toolMap = await this.getToolsMap();
-    const currentFrontendTools = toolCalls.some(
-      (toolCall) => toolCall.name === EXECUTE_FRONTEND_TOOL_NAME,
-    )
-      ? await listCurrentFrontendTools(this.repositories, {
-          ...this.execution,
-          sessionId: this.sessionId,
-        })
-      : [];
-    return (await this.aiToolMessagesRepo.create(
-      {
-        values: toolCalls.map((toolCall) => {
-          const toolsExisted = toolMap.has(toolCall.name);
-          const tools = toolMap.get(toolCall.name);
-          const auto =
-            toolCall.name === EXECUTE_FRONTEND_TOOL_NAME
-              ? toolsExisted &&
-                shouldAutoExecuteFrontendTool(
-                  currentFrontendTools,
-                  toolCall.args,
-                )
-              : this.isAutoCall(tools);
-          return {
-            id: this.snowflake.generate(),
-            sessionId: this.sessionId,
-            messageId,
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            status: toolsExisted ? (null as unknown as string) : 'error',
-            content: toolsExisted
-              ? (null as unknown as string)
-              : `Tool ${toolCall.name} not found`,
-            invokeStatus: toolsExisted ? 'init' : 'done',
-            invokeStartTime: toolsExisted ? (null as unknown as Date) : nowTime,
-            invokeEndTime: toolsExisted ? (null as unknown as Date) : nowTime,
-            auto,
-            execution: tools?.execution ?? 'backend',
-          };
-        }),
-      },
-      { connection: transaction },
-    )) as AIToolMessageEntity[];
-  }
 
   async updateToolCallInterrupted(
     sessionId: string,
@@ -364,7 +245,7 @@ export class AIEmployeeCapabilities {
           },
         },
       });
-    if (!toolMessages || _.isEmpty(toolMessages)) {
+    if (!toolMessages?.length) {
       return;
     }
 
@@ -443,26 +324,6 @@ export class AIEmployeeCapabilities {
     );
   }
 
-  shouldInterruptToolCall(tools?: ToolsEntity): boolean {
-    return tools?.execution === 'frontend' || !this.isAutoCall(tools);
-  }
-
-  isAutoCall(tools?: ToolsEntity): boolean {
-    if (!tools) {
-      return false;
-    }
-    const isAutoCall = tools.defaultPermission === 'ALLOW';
-    if (tools.scope !== 'CUSTOM') {
-      return isAutoCall;
-    }
-    const employeeTools: { name: string; autoCall?: boolean }[] =
-      this.employee.skillSettings?.tools ?? [];
-    const presetTools = employeeTools.find(
-      (setting) => setting.name === tools.definition.name,
-    );
-    return presetTools ? presetTools.autoCall === true : isAutoCall;
-  }
-
   private async getToolCallMap(messageId: string): Promise<
     Map<
       string,
@@ -486,284 +347,6 @@ export class AIEmployeeCapabilities {
       result.set(toolCall.id, toolCall);
     }
     return result;
-  }
-
-  private async getKnowledgeBaseRetrieveTool(): Promise<
-    ToolsEntity | undefined
-  > {
-    const employee = this.employee as unknown as AIEmployeeType;
-    const knowledgeBaseManager = this.knowledgeBaseManager;
-    if (!(await knowledgeBaseManager.isEnabledKnowledgeBase(employee))) {
-      return undefined;
-    }
-    const hasAccessibleKnowledgeBase =
-      await knowledgeBaseManager.hasAccessibleKnowledgeBase({
-        employee,
-        roleNames: this.agentContext.actor.roles,
-      });
-    if (!hasAccessibleKnowledgeBase) {
-      return undefined;
-    }
-    return this.toolsManager.getTools(SYSTEM_TOOLS.KNOWLEDGE_BASE, {
-      ctx: this.agentContext,
-    });
-  }
-
-  private async getAIEmployeeTools() {
-    if (!this.areToolsEnabled()) {
-      return [];
-    }
-    const currentFrontendTools = await listCurrentFrontendTools(
-      this.repositories,
-      {
-        ...this.execution,
-        sessionId: this.sessionId,
-      },
-    );
-    const tools: ToolsEntity[] = await this.listTools({ scope: 'GENERAL' });
-    const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
-      ctx: this.agentContext,
-    });
-    if (getSkill) {
-      tools.push(getSkill);
-    }
-    if (this.webSearch === true) {
-      const subAgentWebSearch = await this.toolsManager.getTools(
-        SYSTEM_TOOLS.WEB_SEARCH,
-        { ctx: this.agentContext },
-      );
-      if (subAgentWebSearch) {
-        tools.push(subAgentWebSearch);
-      }
-    }
-    const generalToolsNameSet = new Set(tools.map((x) => x.definition.name));
-    const toolMap = await this.getToolsMap();
-    const settingsTools = this.employee.skillSettings?.tools ?? [];
-    const employeeTools = [...settingsTools, ...this.tools];
-    const knowledgeBaseRetrieveTool = await this.getKnowledgeBaseRetrieveTool();
-    if (knowledgeBaseRetrieveTool) {
-      employeeTools.push({ name: SYSTEM_TOOLS.KNOWLEDGE_BASE });
-    }
-    for (const toolSetting of employeeTools) {
-      if (generalToolsNameSet.has(toolSetting.name)) {
-        continue;
-      }
-      const tool = toolMap.get(toolSetting.name);
-      if (!tool) {
-        continue;
-      }
-      tools.push(tool);
-    }
-    const systemTools = [
-      ...listSystemTools(),
-      LOAD_FRONTEND_TOOL_NAME,
-      EXECUTE_FRONTEND_TOOL_NAME,
-    ];
-    if (!this.skillSettings) {
-      return prepareToolsForFrontendConversation(tools, currentFrontendTools);
-    } else if (!this.skillSettings.toolsVersion) {
-      const toolFilter = this.skillSettings.tools ?? [];
-      return prepareToolsForFrontendConversation(
-        tools.filter(
-          (t) =>
-            toolFilter.length === 0 ||
-            systemTools.includes(t.definition.name) ||
-            toolFilter.includes(t.definition.name),
-        ),
-        currentFrontendTools,
-      );
-    } else {
-      const toolFilter = this.skillSettings.tools;
-      if (_.isArray(toolFilter)) {
-        return prepareToolsForFrontendConversation(
-          tools.filter(
-            (t) =>
-              systemTools.includes(t.definition.name) ||
-              toolFilter.includes(t.definition.name),
-          ),
-          currentFrontendTools,
-        );
-      } else {
-        return prepareToolsForFrontendConversation(tools, currentFrontendTools);
-      }
-    }
-  }
-
-  async getAvailableSkills(): Promise<SkillsEntity[]> {
-    if (!this.areSkillsEnabled()) {
-      return [];
-    }
-    const { skillsManager } = this.agentContext.ai;
-    const aIEmployeeTools = await this.getAIEmployeeTools();
-    const getSkill = aIEmployeeTools.find(
-      (it) => it.definition.name === 'getSkill',
-    );
-    if (!getSkill) {
-      return [];
-    }
-    const generalSkills = await skillsManager.listSkills({ scope: 'GENERAL' });
-    const specifiedSkillNames = this.employee.skillSettings?.skills ?? [];
-    const specifiedSkills = specifiedSkillNames.length
-      ? await skillsManager.getSkills(specifiedSkillNames)
-      : [];
-    const mergedSkills = _.uniqBy(
-      [...(specifiedSkills || []), ...(generalSkills || [])],
-      'name',
-    );
-
-    if (!this.skillSettings) {
-      return mergedSkills;
-    } else if (!this.skillSettings.skillsVersion) {
-      const skillFilter = this.skillSettings.skills ?? [];
-      return mergedSkills.filter(
-        (it) => skillFilter.length === 0 || skillFilter.includes(it.name),
-      );
-    } else {
-      const skillFilter = this.skillSettings.skills;
-      if (_.isArray(skillFilter)) {
-        return mergedSkills.filter((it) => skillFilter.includes(it.name));
-      } else {
-        return mergedSkills;
-      }
-    }
-  }
-
-  async getAgentTools(): Promise<{
-    tools: ToolsEntity[];
-    baseToolNames: Set<string>;
-  }> {
-    if (!this.areToolsEnabled()) {
-      return {
-        tools: [],
-        baseToolNames: new Set(),
-      };
-    }
-    const baseTools = await this.getAIEmployeeTools();
-    const toolMap = await this.getToolsMap();
-    for (const tool of baseTools) {
-      toolMap.set(tool.definition.name, tool);
-    }
-    const availableSkills = await this.getAvailableSkills();
-    const skillOwnedToolNames = new Set(
-      availableSkills.flatMap((it) => it.tools ?? []),
-    );
-    const baseToolNames = new Set(
-      baseTools
-        .map((it) => it.definition.name)
-        .filter(
-          (name) => name === 'getSkill' || !skillOwnedToolNames.has(name),
-        ),
-    );
-
-    return {
-      tools: Array.from(toolMap.values()),
-      baseToolNames,
-    };
-  }
-
-  async getLoadedSkillNames(): Promise<string[]> {
-    const list = (await this.aiToolMessagesRepo.find({
-      filter: {
-        sessionId: this.sessionId,
-        toolName: 'getSkill',
-        status: 'success',
-      },
-      sort: ['id'],
-    })) as AIToolMessageEntity[];
-    const result = new Set<string>();
-    for (const item of list) {
-      const { content } = item;
-      if (content && typeof content === 'object') {
-        const skillName = (content as Record<string, unknown>).skillName;
-        if (typeof skillName === 'string') {
-          result.add(skillName);
-          continue;
-        }
-      }
-      if (typeof content === 'string') {
-        try {
-          const parsed: unknown = JSON.parse(content);
-          if (parsed && typeof parsed === 'object') {
-            const skillName = (parsed as Record<string, unknown>).skillName;
-            if (typeof skillName === 'string') {
-              result.add(skillName);
-            }
-          }
-        } catch {
-          // Ignore unexpected plain-string content.
-        }
-      }
-    }
-    return Array.from(result.values());
-  }
-
-  async getActivatedSkillToolNames(): Promise<Set<string>> {
-    const loadedSkillNames = await this.getLoadedSkillNames();
-    if (!loadedSkillNames.length) {
-      return new Set<string>();
-    }
-    const availableSkills = await this.getAvailableSkills();
-    const loadedSkills =
-      await this.agentContext.ai.skillsManager.getSkills(loadedSkillNames);
-    const normalizedLoadedSkills = Array.isArray(loadedSkills)
-      ? loadedSkills
-      : [loadedSkills];
-    const skillsMap = new Map(
-      [...availableSkills, ...normalizedLoadedSkills.filter(Boolean)].map(
-        (it) => [it.name, it],
-      ),
-    );
-    const result = new Set<string>();
-    for (const skillName of loadedSkillNames) {
-      const target = skillsMap.get(skillName);
-      for (const toolName of target?.tools ?? []) {
-        result.add(toolName);
-      }
-    }
-    return result;
-  }
-
-  async getAvailableAIEmployees() {
-    const specifiedToolNames: string[] =
-      this.employee.skillSettings?.tools?.map(
-        ({ name }: { name: string }) => name,
-      ) ?? [];
-    if (!specifiedToolNames.includes('dispatch-sub-agent-task')) {
-      return [];
-    }
-    const availableAIEmployees = (
-      await listAccessibleAIEmployees({
-        roleNames: this.agentContext.actor.roles,
-        repositories: this.repositories,
-      })
-    )
-      .map((employee) =>
-        serializeEmployeeSummary({
-          employee,
-          builtInManager: this.builtInManager,
-          translate: this.agentContext.translate,
-        }),
-      )
-      .filter((it) => it.username !== this.employee.username);
-    return availableAIEmployees;
-  }
-
-  async getToolsMap() {
-    const tools = await this.listTools({
-      sessionId: this.sessionId,
-    });
-    return new Map(tools.map((tool) => [tool.definition.name, tool]));
-  }
-
-  private listTools(filter?: ToolsFilter) {
-    return this.toolsManager.listTools({
-      ...filter,
-      ctx: this.agentContext,
-    });
-  }
-
-  private get toolsManager(): ToolsManager {
-    return this.agentContext.ai.toolsManager;
   }
 
   private get aiConversationsRepo() {

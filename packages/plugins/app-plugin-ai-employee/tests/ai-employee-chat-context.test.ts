@@ -35,18 +35,18 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
     },
     execution: {},
   } as any;
-  const runtime = {
+  const toolContext = {
     getAvailableSkills: vi.fn(async () => []),
     getAvailableAIEmployees: vi.fn(async () => []),
     getAgentTools: vi.fn(async () => ({ tools: [], baseToolNames: new Set() })),
     getActivatedSkillToolNames: vi.fn(async () => new Set()),
     shouldInterruptToolCall: vi.fn(() => false),
     getToolsMap: vi.fn(async () => new Map()),
-    formatMessages: vi.fn(async () => []),
+    isAutoCall: vi.fn(async () => true),
   } as any;
   return {
     provider,
-    context: new AIEmployeeChatContextProvider(options, runtime),
+    context: new AIEmployeeChatContextProvider(options, toolContext),
   };
 };
 
@@ -87,15 +87,15 @@ describe('AIEmployeeChatContextProvider', () => {
 
   it('re-reads activated skill tools on every activeTools query', async () => {
     const { context } = createFixture();
-    const runtime = (context as any).runtime;
-    runtime.getAgentTools.mockResolvedValue({
+    const toolContext = (context as any).toolContext;
+    toolContext.getAgentTools.mockResolvedValue({
       tools: [
         { definition: { name: 'getSkill' } },
         { definition: { name: 'skillTool' } },
       ],
       baseToolNames: new Set(['getSkill']),
     });
-    runtime.getActivatedSkillToolNames
+    toolContext.getActivatedSkillToolNames
       .mockResolvedValueOnce(new Set())
       .mockResolvedValueOnce(new Set(['skillTool']));
 
@@ -103,6 +103,6 @@ describe('AIEmployeeChatContextProvider', () => {
     expect(await context.activeTools({})).toEqual(
       new Set(['getSkill', 'skillTool']),
     );
-    expect(runtime.getActivatedSkillToolNames).toHaveBeenCalledTimes(2);
+    expect(toolContext.getActivatedSkillToolNames).toHaveBeenCalledTimes(2);
   });
 });
