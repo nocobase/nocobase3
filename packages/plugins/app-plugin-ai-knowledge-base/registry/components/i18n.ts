@@ -1,15 +1,17 @@
-import './locales/index.js';
-import { useTranslate } from '@refinedev/core';
+import { useTranslation } from '@nocobase/i18n/client';
 import { useCallback } from 'react';
 
-const namespace = 'nocobase-ai-knowledge-base';
+import { NOCOBASE_AI_KNOWLEDGE_BASE_I18N_NAMESPACE } from './locales/index.js';
 
-export function useKnowledgeBaseComponentTranslate() {
-  const translate = useTranslate();
+export function useKnowledgeBaseComponentTranslate(): (
+  key: string,
+  options?: Record<string, unknown>,
+) => string {
+  const { t } = useTranslation(NOCOBASE_AI_KNOWLEDGE_BASE_I18N_NAMESPACE);
 
   return useCallback(
     (key: string, options: Record<string, unknown> = {}) =>
-      translate(key, { ...options, ns: namespace }, key),
-    [translate],
+      t(key, { ...options, defaultValue: key }),
+    [t],
   );
 }

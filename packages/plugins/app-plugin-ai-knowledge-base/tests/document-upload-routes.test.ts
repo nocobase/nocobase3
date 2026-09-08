@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MAX_KNOWLEDGE_BASE_DOCUMENT_UPLOAD_SIZE_BYTES } from '../server/document-upload.js';
@@ -10,15 +11,52 @@ function setup() {
     filename: 'report.pdf',
     indexStatus: 'PENDING',
   });
+  const open = vi.fn();
   const service = {
     upload,
+    open,
   } as unknown as KnowledgeBaseDocumentService;
-  return { routes: createDocumentRoutes({ service }), upload, service };
+  return { routes: createDocumentRoutes({ service }), upload, open, service };
 }
 
 async function responseBody(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
 }
+
+describe('document download route protocol', () => {
+  it('streams stored document content as an attachment', async () => {
+    const { routes, open } = setup();
+    open.mockResolvedValue({
+      metadata: { filename: '质量报告.txt' },
+      contentType: 'text/plain',
+      stream: Readable.from([Buffer.from('document body')]),
+    });
+
+    const response = await routes.request(
+      '/aiKnowledgeBaseDocs:download?filterByTk=7',
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/plain');
+    expect(response.headers.get('content-disposition')).toContain('attachment');
+    expect(response.headers.get('content-disposition')).toContain(
+      "filename*=UTF-8''%E8%B4%A8%E9%87%8F%E6%8A%A5%E5%91%8A.txt",
+    );
+    await expect(response.text()).resolves.toBe('document body');
+    expect(open).toHaveBeenCalledWith('7');
+  });
+
+  it('returns 404 when the document no longer exists', async () => {
+    const { routes, open } = setup();
+    open.mockResolvedValue(null);
+
+    const response = await routes.request(
+      '/aiKnowledgeBaseDocs:download?filterByTk=missing',
+    );
+
+    expect(response.status).toBe(404);
+  });
+});
 
 describe('document upload route protocol', () => {
   it('uploads multipart with knowledgeBaseKey from the query', async () => {

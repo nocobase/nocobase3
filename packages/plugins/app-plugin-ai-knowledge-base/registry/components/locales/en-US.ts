@@ -22,6 +22,8 @@ export default {
   'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.':
     'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.',
   'Chunk overlap': 'Chunk overlap',
+  'Chunk overlap must be less than Chunk size.':
+    'Chunk overlap must be less than Chunk size.',
   'Chunk size': 'Chunk size',
   Close: 'Close',
   'Content saved; related questions were not saved':
@@ -105,6 +107,7 @@ export default {
   'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.':
     'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.',
   'List view': 'List view',
+  'Loading…': 'Loading…',
   'Loading more knowledge bases…': 'Loading more knowledge bases…',
   'Loading upload requirements. Try again in a moment.':
     'Loading upload requirements. Try again in a moment.',
@@ -131,6 +134,7 @@ export default {
   Pagination: 'Pagination',
   Passage: 'Passage',
   Pending: 'Pending',
+  Processing: 'Processing',
   Preview: 'Preview',
   'Re-index {{count}} {{item}}': 'Re-index {{count}} {{item}}',
   'Re-index {{count}} {{item}}?': 'Re-index {{count}} {{item}}?',
@@ -194,6 +198,8 @@ export default {
   Send: 'Send',
   Settings: 'Settings',
   Shared: 'Shared',
+  Success: 'Success',
+  Error: 'Error',
   'Show ZIP filename encoding options': 'Show ZIP filename encoding options',
   Size: 'Size',
   'Someone else updated this segment': 'Someone else updated this segment',
@@ -304,6 +310,8 @@ export default {
   'Vector database': 'Vector database',
   'Embedding model': 'Embedding model',
   'Select storage': 'Select storage',
+  'Select file storage': 'Select file storage',
+  'Select a file storage disk.': 'Select a file storage disk.',
   'Select vector database': 'Select vector database',
   'Select LLM service': 'Select LLM service',
   'Select embedding model': 'Select embedding model',
@@ -324,6 +332,7 @@ export default {
   'Enable knowledge base': 'Enable knowledge base',
   'Disable knowledge base': 'Disable knowledge base',
   'Unable to update knowledge base': 'Unable to update knowledge base',
+  'Unable to delete knowledge base': 'Unable to delete knowledge base',
   'Delete knowledge base?': 'Delete knowledge base?',
   'This permanently deletes the knowledge base, its documents, segments, and vectors.':
     'This permanently deletes the knowledge base, its documents, segments, and vectors.',

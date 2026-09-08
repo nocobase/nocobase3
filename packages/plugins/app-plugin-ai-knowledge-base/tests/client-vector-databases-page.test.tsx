@@ -78,7 +78,6 @@ beforeEach(() => {
 });
 
 test('renders config-managed rows as read-only and keeps manual row actions', async () => {
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   render(<VectorDatabasesPage />);
 
   const configuredRow = (await screen.findByText('Configured')).closest('tr');
@@ -90,13 +89,6 @@ test('renders config-managed rows as read-only and keeps manual row actions', as
     within(configuredRow!).getByText('Config managed').getAttribute('title'),
   ).toBe('This vector database is managed through application config.');
   expect(
-    (
-      within(configuredRow!).getByRole('checkbox', {
-        name: 'Select Configured',
-      }) as HTMLInputElement
-    ).disabled,
-  ).toBe(true);
-  expect(
     within(configuredRow!).getByText('Change in application config'),
   ).toBeDefined();
   expect(
@@ -106,10 +98,6 @@ test('renders config-managed rows as read-only and keeps manual row actions', as
     within(configuredRow!).queryByRole('button', { name: 'Delete' }),
   ).toBeNull();
 
-  const manualCheckbox = within(manualRow!).getByRole('checkbox', {
-    name: 'Select Manual',
-  });
-  expect((manualCheckbox as HTMLInputElement).disabled).toBe(false);
   expect(
     (
       within(manualRow!).getByRole('button', {
@@ -124,51 +112,17 @@ test('renders config-managed rows as read-only and keeps manual row actions', as
       }) as HTMLButtonElement
     ).disabled,
   ).toBe(false);
-
-  fireEvent.click(manualCheckbox);
-  const bulkDelete = screen
-    .getAllByRole('button', { name: 'Delete' })
-    .find((button) => !manualRow!.contains(button));
-  expect(bulkDelete).toBeDefined();
-  fireEvent.click(bulkDelete!);
-
-  await waitFor(() =>
-    expect(service.deleteVectorDatabase).toHaveBeenCalledWith(2),
-  );
-  expect(service.findRelatedKnowledgeBases).toHaveBeenCalledTimes(1);
-  expect(service.findRelatedKnowledgeBases).toHaveBeenCalledWith('manual');
-  expect(service.deleteVectorDatabase).not.toHaveBeenCalledWith(1);
-  expect(confirm).toHaveBeenCalledWith('Delete 1 selected vector database(s)?');
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
 });
 
-test('excludes a stale selection when a refreshed row becomes config-managed', async () => {
-  service.listVectorDatabases
-    .mockResolvedValueOnce(result([{ ...configured, managedBy: null }]))
-    .mockResolvedValue(result([configured]));
+test('opens the add-provider menu when the pointer enters the add button', async () => {
   render(<VectorDatabasesPage />);
 
-  const selectedCheckbox = await screen.findByRole('checkbox', {
-    name: 'Select Configured',
+  const addButton = await screen.findByRole('button', { name: 'Add new' });
+  fireEvent.mouseEnter(addButton);
+
+  await waitFor(() => {
+    expect(screen.getByRole('menuitem', { name: 'PGVector' })).toBeDefined();
   });
-  const selectedRow = selectedCheckbox.closest('tr');
-  fireEvent.click(selectedCheckbox);
-  const bulkDelete = screen
-    .getAllByRole('button', { name: 'Delete' })
-    .find((button) => !selectedRow!.contains(button));
-  expect(bulkDelete).toBeDefined();
-  expect((bulkDelete as HTMLButtonElement).disabled).toBe(false);
-
-  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-
-  await screen.findByText('Config managed');
-  expect(
-    (
-      screen.getByRole('checkbox', {
-        name: 'Select Configured',
-      }) as HTMLInputElement
-    ).disabled,
-  ).toBe(true);
-  expect((bulkDelete as HTMLButtonElement).disabled).toBe(true);
-  expect(service.findRelatedKnowledgeBases).not.toHaveBeenCalled();
-  expect(service.deleteVectorDatabase).not.toHaveBeenCalled();
 });

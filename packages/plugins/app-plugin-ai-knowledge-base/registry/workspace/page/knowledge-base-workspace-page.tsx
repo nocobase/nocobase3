@@ -195,34 +195,25 @@ export default function KnowledgeBaseWorkspacePage() {
             knowledgeBaseKey: record.knowledgeBaseKey,
             documentId: record.id,
           });
-      if (!downloadable.url) {
-        throw new Error(t('The document file is unavailable.'));
-      }
-
       const suffix = downloadable.extname
         ? downloadable.extname.startsWith('.')
           ? downloadable.extname
           : `.${downloadable.extname}`
         : '';
       const title = downloadable.title || record.title;
-      const filename = title
-        ? `${title}${suffix}`
-        : downloadable.filename || `document-${downloadable.id}${suffix}`;
-      const response = await fetch(
-        nocobaseClient.resolveUrl(downloadable.url),
+      const filename =
+        downloadable.filename ||
+        record.filename ||
+        (title ? `${title}${suffix}` : `document-${downloadable.id}${suffix}`);
+      const stream = await nocobaseClient.stream(
+        'aiKnowledgeBaseDocs:download',
         {
-          headers: nocobaseClient.getHeaders({
-            method: 'GET',
-            withAclMeta: false,
-            headers: { Accept: '*/*' },
-          }),
+          method: 'GET',
+          query: { filterByTk: downloadable.id },
+          headers: { Accept: '*/*' },
         },
       );
-      if (!response.ok) {
-        throw new Error(t('The document file is unavailable.'));
-      }
-
-      const objectUrl = URL.createObjectURL(await response.blob());
+      const objectUrl = URL.createObjectURL(await new Response(stream).blob());
       const link = window.document.createElement('a');
       link.href = objectUrl;
       link.download = filename;
