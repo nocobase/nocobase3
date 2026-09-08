@@ -768,22 +768,45 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       };
     }
     try {
-      const prepared = await this.prepareForward(input);
+      const prepared = input.message.draftProviderMessageId
+        ? { ok: true as const, value: input }
+        : await this.prepareForward(input);
       if (!prepared.ok) {
         return { status: 'failed', error: prepared.error };
       }
       input = prepared.value;
+    } catch (error) {
+      return {
+        status: 'failed',
+        error: contentPreparationError(
+          error,
+          'GMAIL_MESSAGE_PREPARATION_FAILED',
+        ),
+      };
+    }
+    try {
       if (input.message.draftProviderMessageId) {
-        const resolvedDraftId = await this.resolveDraftId(
-          input.message.draftProviderMessageId,
-          input.message.draftProviderDraftId,
-          input.signal,
-        );
-        if (!resolvedDraftId.ok) {
-          return { status: 'failed', error: resolvedDraftId.error };
+        let resolvedDraftId: MailProviderResult<string>;
+        try {
+          resolvedDraftId = await this.resolveDraftId(
+            input.message.draftProviderMessageId,
+            input.message.draftProviderDraftId,
+            input.signal,
+          );
+          if (!resolvedDraftId.ok) {
+            return { status: 'failed', error: resolvedDraftId.error };
+          }
+          const updated = await this.updateDraft(resolvedDraftId.value, input);
+          if (!updated.ok) return { status: 'failed', error: updated.error };
+        } catch (error) {
+          return {
+            status: 'failed',
+            error: contentPreparationError(
+              error,
+              'GMAIL_MESSAGE_PREPARATION_FAILED',
+            ),
+          };
         }
-        const updated = await this.updateDraft(resolvedDraftId.value, input);
-        if (!updated.ok) return { status: 'failed', error: updated.error };
         const response = await fetch(
           `${apiBase(this.config)}/users/me/drafts/send`,
           {
@@ -797,13 +820,22 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
           },
         );
         if (!response.ok) {
-          return {
-            status: 'failed',
-            error: await responseError('GMAIL', response),
-          };
+          return submissionResponse(response);
         }
         const value = (await response.json()) as GmailMessageResource;
         return { status: 'accepted', providerMessageId: value.id };
+      }
+      let raw: string;
+      try {
+        raw = await buildMime(input);
+      } catch (error) {
+        return {
+          status: 'failed',
+          error: contentPreparationError(
+            error,
+            'GMAIL_MESSAGE_PREPARATION_FAILED',
+          ),
+        };
       }
       const response = await fetch(
         `${apiBase(this.config)}/users/me/messages/send`,
@@ -814,7 +846,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
             'content-type': 'application/json',
           },
           body: JSON.stringify({
-            raw: await buildMime(input),
+            raw,
             ...(input.message.providerConversationId
               ? { threadId: input.message.providerConversationId }
               : {}),
@@ -822,11 +854,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
           signal: input.signal,
         },
       );
-      if (!response.ok)
-        return {
-          status: 'failed',
-          error: await responseError('GMAIL', response),
-        };
+      if (!response.ok) return submissionResponse(response);
       const value = (await response.json()) as GmailMessageResource;
       return { status: 'accepted', providerMessageId: value.id };
     } catch (error) {
@@ -1189,35 +1217,36 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   }
 
   private async accessToken(signal?: AbortSignal): Promise<string> {
-    const credential = await this.context.credentials.get<GmailCredential>(
-      this.account.credentialReference,
-    );
-    if (Date.parse(credential.expiresAt) > Date.now() + 60_000)
-      return credential.accessToken;
-    const refreshed = await exchangeToken(
-      this.config,
-      {
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-        refresh_token: credential.refreshToken,
-        grant_type: 'refresh_token',
-      },
-      signal,
-    );
-    if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
-    const next: GmailCredential = {
-      ...credential,
-      accessToken: required(refreshed.value.access_token, 'Gmail access token'),
-      refreshToken: refreshed.value.refresh_token ?? credential.refreshToken,
-      expiresAt: expiry(refreshed.value.expires_in),
-      scopes: splitScopes(refreshed.value.scope, credential.scopes),
-      tokenType: refreshed.value.token_type ?? credential.tokenType,
-    };
-    await this.context.credentials.replace(
-      this.account.credentialReference,
-      next,
-    );
-    return next.accessToken;
+    const credential =
+      await this.context.credentials.getOrRefresh<GmailCredential>(
+        this.account.credentialReference,
+        (value) => Date.parse(value.expiresAt) > Date.now() + 60_000,
+        async (value) => {
+          const refreshed = await exchangeToken(
+            this.config,
+            {
+              client_id: this.config.clientId,
+              client_secret: this.config.clientSecret,
+              refresh_token: value.refreshToken,
+              grant_type: 'refresh_token',
+            },
+            signal,
+          );
+          if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
+          return {
+            ...value,
+            accessToken: required(
+              refreshed.value.access_token,
+              'Gmail access token',
+            ),
+            refreshToken: refreshed.value.refresh_token ?? value.refreshToken,
+            expiresAt: expiry(refreshed.value.expires_in),
+            scopes: splitScopes(refreshed.value.scope, value.scopes),
+            tokenType: refreshed.value.token_type ?? value.tokenType,
+          };
+        },
+      );
+    return credential.accessToken;
   }
 }
 
@@ -1766,12 +1795,37 @@ async function responseError(
   };
 }
 
+async function submissionResponse(
+  response: Response,
+): Promise<MailProviderSendResult> {
+  const error = await responseError('GMAIL', response);
+  return {
+    status: response.status >= 500 ? 'submission_unknown' : 'failed',
+    error: response.status >= 500 ? { ...error, retryable: false } : error,
+  };
+}
+
 function unknownError(error: unknown, code: string): MailProviderError {
   return {
     code,
     message: error instanceof Error ? error.message : 'Gmail request failed.',
     category: 'network',
     retryable: true,
+  };
+}
+
+function contentPreparationError(
+  error: unknown,
+  code: string,
+): MailProviderError {
+  return {
+    code,
+    message:
+      error instanceof Error
+        ? error.message
+        : 'Mail content preparation failed.',
+    category: 'content',
+    retryable: false,
   };
 }
 

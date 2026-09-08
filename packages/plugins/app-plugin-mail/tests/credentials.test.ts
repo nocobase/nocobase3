@@ -4,10 +4,13 @@ import {
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202609030001_create_mail_tables.js';
-import { createDatabaseMailCredentialVault } from '../server/credentials.js';
+import {
+  createDatabaseMailCredentialVault,
+  DatabaseMailCredentialVault,
+} from '../server/credentials.js';
 import { createDatabaseMailStore } from '../server/store.js';
 
 describe('Mail OAuth persistence', () => {
@@ -59,6 +62,81 @@ describe('Mail OAuth persistence', () => {
     await expect(vault.get(reference)).resolves.toEqual({
       accessToken: 'rotated-secret',
     });
+  });
+
+  it('coalesces concurrent refreshes for the same credential', async () => {
+    const vault = createDatabaseMailCredentialVault(
+      database,
+      'test-encryption-key-with-at-least-32-characters',
+    );
+    const secondVault = createDatabaseMailCredentialVault(
+      database,
+      'test-encryption-key-with-at-least-32-characters',
+    );
+    const reference = await vault.put({ token: 'expired' });
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const refresh = vi.fn(async () => {
+      await gate;
+      return { token: 'fresh' };
+    });
+
+    const first = vault.getOrRefresh<{ token: string }>(
+      reference,
+      (value) => value.token === 'fresh',
+      refresh,
+    );
+    const second = secondVault.getOrRefresh<{ token: string }>(
+      reference,
+      (value) => value.token === 'fresh',
+      refresh,
+    );
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    release?.();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { token: 'fresh' },
+      { token: 'fresh' },
+    ]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('renews the credential lease while a slow refresh is running', async () => {
+    const vault = new DatabaseMailCredentialVault(
+      database,
+      'test-encryption-key-with-at-least-32-characters',
+      30,
+      5,
+    );
+    const secondVault = new DatabaseMailCredentialVault(
+      database,
+      'test-encryption-key-with-at-least-32-characters',
+      30,
+      5,
+    );
+    const reference = await vault.put({ token: 'expired' });
+    const refresh = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return { token: 'fresh' };
+    });
+
+    await expect(
+      Promise.all([
+        vault.getOrRefresh(
+          reference,
+          (value: { token: string }) => value.token === 'fresh',
+          refresh,
+        ),
+        secondVault.getOrRefresh(
+          reference,
+          (value: { token: string }) => value.token === 'fresh',
+          refresh,
+        ),
+      ]),
+    ).resolves.toEqual([{ token: 'fresh' }, { token: 'fresh' }]);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('consumes an OAuth state transaction exactly once', async () => {
@@ -113,5 +191,41 @@ describe('Mail OAuth persistence', () => {
       store.saveAuthorizedAccount(account, [identity, identity]),
     ).rejects.toThrow();
     await expect(store.getAccount(account.id)).resolves.toBeUndefined();
+  });
+
+  it('finds an account by stable Provider subject after its address changes', async () => {
+    const store = createDatabaseMailStore(database);
+    await store.saveAuthorizedAccount(
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'microsoft', name: 'microsoft-365' },
+        address: 'User@Example.com',
+        credentialReference: 'mail-credential:account-1',
+        authorizationSubject: 'provider-subject-1',
+        scopes: [],
+        status: 'active',
+        isDefault: true,
+      },
+      [],
+    );
+
+    await expect(
+      store.findAccountByProviderIdentity(
+        { type: 'microsoft', name: 'microsoft-365' },
+        'renamed@example.com',
+        'provider-subject-1',
+      ),
+    ).resolves.toMatchObject({
+      id: 'account-1',
+      address: 'user@example.com',
+    });
+    await expect(
+      store.findActiveAccountsForPush(
+        { type: 'microsoft', name: 'microsoft-365' },
+        [],
+        ['USER@EXAMPLE.COM'],
+      ),
+    ).resolves.toMatchObject([{ id: 'account-1' }]);
   });
 });

@@ -208,7 +208,8 @@ session. The route validates the configured high-entropy URL secret before
 parsing the body, limits request size, validates Microsoft `clientState`, maps
 only known active accounts, and returns no mailbox data.
 
-All Mail APIs require `page:mail.settings/access`. Account ownership is enforced again in
+Personal Mail APIs require `page:mail.workspace/access`; cross-user account and operation-log
+APIs under `/api/mail/settings/*` require `page:mail.admin/access`. Account ownership is enforced again in
 `MailService`; Route authentication is not treated as ownership authorization.
 Inactive accounts cannot send or synchronize. Public responses omit credential
 references, Provider cursors, leases, and internal error messages.

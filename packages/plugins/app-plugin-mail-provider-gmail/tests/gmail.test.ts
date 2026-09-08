@@ -377,6 +377,117 @@ describe('Gmail Mail Provider', () => {
     });
   });
 
+  it('reports a Provider 5xx after submission as unknown', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json(
+            { error: { message: 'Backend unavailable' } },
+            { status: 503 },
+          ),
+        ),
+    );
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-unknown',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Hello',
+          text: 'Mail body',
+          attachments: [],
+          references: [],
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'submission_unknown',
+      error: { code: 'GMAIL_HTTP_503', retryable: false },
+    });
+  });
+
+  it('reports attachment preparation failures before submission as failed', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-preparation-failed',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Hello',
+          text: 'Mail body',
+          attachments: [
+            {
+              fileName: 'broken.txt',
+              contentType: 'text/plain',
+              size: 1,
+              inline: false,
+              open: async () => {
+                throw new Error('Attachment unavailable');
+              },
+            },
+          ],
+          references: [],
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'GMAIL_MESSAGE_PREPARATION_FAILED',
+        retryable: false,
+      },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('sends replies in the existing Gmail thread with RFC reply headers', async () => {
     const credentials = memoryVault();
     await credentials.putAt('credential-1', {
@@ -515,6 +626,143 @@ describe('Gmail Mail Provider', () => {
     expect(mime).toContain('Original body');
     expect(mime).toContain('notes.txt');
     expect(mime).toContain(Buffer.from('notes').toString('base64'));
+  });
+
+  it('sends a saved forward draft without appending the source again', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const draftMessage = (id: string) => ({
+      id,
+      labelIds: ['DRAFT'],
+      payload: {
+        headers: [{ name: 'Subject', value: 'Fwd: Original' }],
+        body: { data: Buffer.from('Already prepared').toString('base64url') },
+      },
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(draftMessage('draft-message-1')))
+      .mockResolvedValueOnce(
+        Response.json({
+          id: 'draft-resource-1',
+          message: { id: 'draft-message-2', threadId: 'thread-1' },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json(draftMessage('draft-message-2')))
+      .mockResolvedValueOnce(Response.json({ id: 'sent-message-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-forward-draft',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Fwd: Original',
+          text: 'Already prepared',
+          attachments: [],
+          references: [],
+          draftProviderMessageId: 'draft-message-1',
+          draftProviderDraftId: 'draft-resource-1',
+          forwardOfProviderMessageId: 'source-message-1',
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'accepted',
+      providerMessageId: 'sent-message-1',
+    });
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes('source-message-1'),
+      ),
+    ).toBe(false);
+  });
+
+  it('reports draft attachment preparation failures before sending as failed', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'gmail',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      Response.json({
+        id: 'draft-message-1',
+        labelIds: ['DRAFT'],
+        payload: { headers: [], body: {} },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GmailMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-draft-preparation-failed',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Draft',
+          text: 'Draft body',
+          attachments: [
+            {
+              fileName: 'broken.txt',
+              contentType: 'text/plain',
+              size: 1,
+              inline: false,
+              open: async () => {
+                throw new Error('Attachment unavailable');
+              },
+            },
+          ],
+          references: [],
+          draftProviderMessageId: 'draft-message-1',
+          draftProviderDraftId: 'draft-resource-1',
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'GMAIL_MESSAGE_PREPARATION_FAILED',
+        retryable: false,
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('/drafts/send');
   });
 
   it('creates a Gmail draft and returns a normalized draft message', async () => {
@@ -795,6 +1043,17 @@ function memoryVault(): MemoryVault {
     get: async <T>(reference: string): Promise<T> => values.get(reference) as T,
     replace: async (reference, value) => {
       values.set(reference, value);
+    },
+    getOrRefresh: async <T>(
+      reference: string,
+      isFresh: (value: T) => boolean,
+      refresh: (value: T) => Promise<T>,
+    ) => {
+      const current = values.get(reference) as T;
+      if (isFresh(current)) return current;
+      const next = await refresh(current);
+      values.set(reference, next);
+      return next;
     },
     delete: async (reference) => {
       values.delete(reference);

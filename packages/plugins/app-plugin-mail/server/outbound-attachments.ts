@@ -99,18 +99,26 @@ export class DriveMailOutboundAttachmentStorage implements MailOutboundAttachmen
   }
 
   public async cleanupExpired(now: string): Promise<number> {
-    const attachments = await this.store.listExpiredOutboundAttachments(
-      now,
-      100,
-    );
     let deleted = 0;
-    for (const attachment of attachments) {
-      await this.drive
-        .use(attachment.disk)
-        .delete(attachment.key)
-        .catch(() => undefined);
-      if (await this.store.deleteOutboundAttachment(attachment.id))
-        deleted += 1;
+    let after: Pick<MailOutboundAttachment, 'expiresAt' | 'id'> | undefined;
+    while (true) {
+      const attachments = await this.store.listExpiredOutboundAttachments(
+        now,
+        100,
+        after,
+      );
+      for (const attachment of attachments) {
+        try {
+          await this.drive.use(attachment.disk).delete(attachment.key);
+        } catch {
+          continue;
+        }
+        if (await this.store.deleteOutboundAttachment(attachment.id))
+          deleted += 1;
+      }
+      const last = attachments.at(-1);
+      if (!last || attachments.length < 100) break;
+      after = { expiresAt: last.expiresAt, id: last.id };
     }
     return deleted;
   }

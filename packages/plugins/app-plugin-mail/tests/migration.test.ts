@@ -72,6 +72,27 @@ describe('mail database migration', () => {
       ]),
     );
     await expect(
+      client.raw('PRAGMA index_list(mail_credentials)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'mail_credentials_refresh_lease_idx',
+        }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA index_list(mail_accounts)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'mail_accounts_provider_address_unique',
+        }),
+        expect.objectContaining({
+          name: 'mail_accounts_provider_subject_unique',
+        }),
+      ]),
+    );
+    await expect(
       metadataStore.get('mailMessages').then((stored) => stored?.document),
     ).resolves.toMatchObject({
       fields: {

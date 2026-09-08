@@ -53,7 +53,9 @@ export class SendMailOperation {
         input.idempotencyKey,
       );
     if (existing) {
-      assertMatchingRequest(existing.requestFingerprint, requestFingerprint);
+      if (!options.scheduledDelivery) {
+        assertMatchingRequest(existing.requestFingerprint, requestFingerprint);
+      }
       if (
         existing.status === 'pending' &&
         existing.scheduledAt &&
@@ -71,7 +73,11 @@ export class SendMailOperation {
       throw new Error('Mail sending identity is not available.');
     }
 
-    const providerMessage = await this.prepareProviderMessage(context, input);
+    const providerMessage = await this.prepareProviderMessage(
+      context,
+      input,
+      options.scheduledDelivery === true,
+    );
     if (input.scheduledAt && !options.scheduledDelivery) {
       const scheduledAt = parseFutureDate(input.scheduledAt);
       await this.dependencies.store.extendOutboundAttachments(
@@ -91,7 +97,12 @@ export class SendMailOperation {
         input.idempotencyKey,
         requestFingerprint,
         context.actorId,
-        input,
+        {
+          ...input,
+          signatureId: null,
+          text: providerMessage.text,
+          html: providerMessage.html,
+        },
       );
       assertMatchingRequest(scheduled.requestFingerprint, requestFingerprint);
       this.dependencies.outbox?.kick();
@@ -109,7 +120,9 @@ export class SendMailOperation {
         input.idempotencyKey,
         requestFingerprint,
       ));
-    assertMatchingRequest(submission.requestFingerprint, requestFingerprint);
+    if (!options.scheduledDelivery) {
+      assertMatchingRequest(submission.requestFingerprint, requestFingerprint);
+    }
     const leaseToken = randomUUID();
     const claimed = await this.dependencies.store.claimSubmission(
       submission.id,
@@ -230,6 +243,7 @@ export class SendMailOperation {
   public async prepareProviderMessage(
     context: MailOperationContext,
     input: MailComposeInput,
+    contentAlreadyPrepared = false,
   ): Promise<MailProviderMessageInput> {
     const identity = await this.dependencies.store.getIdentity(
       input.identityId,
@@ -341,14 +355,18 @@ export class SendMailOperation {
       cc: input.cc ?? [],
       bcc: input.bcc ?? [],
       subject: input.subject,
-      text: appendTextSignature(
-        stripKnownTextSignature(input.text, knownSignatureTexts),
-        signatureText,
-      ),
-      html: appendHtmlSignature(
-        stripKnownHtmlSignature(input.html, knownSignatureHtml),
-        signatureHtml,
-      ),
+      text: contentAlreadyPrepared
+        ? input.text
+        : appendTextSignature(
+            stripKnownTextSignature(input.text, knownSignatureTexts),
+            signatureText,
+          ),
+      html: contentAlreadyPrepared
+        ? input.html
+        : appendHtmlSignature(
+            stripKnownHtmlSignature(input.html, knownSignatureHtml),
+            signatureHtml,
+          ),
       attachments,
       retainedProviderAttachmentIds: retainedDraftAttachments.map(
         (attachment) => attachment.providerAttachmentId,
@@ -441,6 +459,7 @@ function fingerprint(input: MailComposeInput): string {
   const canonical = {
     accountId: input.accountId,
     identityId: input.identityId,
+    signatureId: input.signatureId,
     to: input.to.map(canonicalAddress),
     cc: (input.cc ?? []).map(canonicalAddress),
     bcc: (input.bcc ?? []).map(canonicalAddress),

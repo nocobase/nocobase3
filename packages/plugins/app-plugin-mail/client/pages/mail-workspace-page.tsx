@@ -695,16 +695,38 @@ export default function MailWorkspacePage({
               draft.html,
             ),
           };
+          const savedAttachments = draft.attachments ?? [];
           setLastSavedFingerprint(
             composerFingerprint(
               savedComposer,
               identityId,
               signatureId,
-              attachments,
-              retained,
+              [],
+              savedAttachments,
             ),
           );
           failedFingerprintRef.current = undefined;
+          const savedOutboundIds = new Set(
+            attachments.map((attachment) => attachment.id),
+          );
+          setComposeAttachments((current) =>
+            current.filter(
+              (attachment) => !savedOutboundIds.has(attachment.id),
+            ),
+          );
+          const capturedProviderIds = new Set(
+            retained.map((attachment) => attachment.providerAttachmentId),
+          );
+          setRetainedAttachments((current) => {
+            const retainedProviderIds = new Set(
+              current.map((attachment) => attachment.providerAttachmentId),
+            );
+            return savedAttachments.filter(
+              (attachment) =>
+                !capturedProviderIds.has(attachment.providerAttachmentId) ||
+                retainedProviderIds.has(attachment.providerAttachmentId),
+            );
+          });
           setComposer((current) =>
             current
               ? {
@@ -1338,7 +1360,7 @@ export default function MailWorkspacePage({
                 type='file'
               />
               <Button
-                disabled={sending || uploading}
+                disabled={sending || autoSaving || uploading}
                 onClick={() => attachmentInputRef.current?.click()}
                 type='button'
                 variant='outline'
@@ -1372,7 +1394,7 @@ export default function MailWorkspacePage({
                           defaultValue: 'Remove {{fileName}}',
                         }).replace('{{fileName}}', attachment.fileName)}
                         className='size-7 px-0'
-                        disabled={sending}
+                        disabled={sending || autoSaving}
                         onClick={() =>
                           setRetainedAttachments((current) =>
                             current.filter((item) => item.id !== attachment.id),
@@ -1402,7 +1424,7 @@ export default function MailWorkspacePage({
                           defaultValue: 'Remove {{fileName}}',
                         }).replace('{{fileName}}', attachment.fileName)}
                         className='size-7 px-0'
-                        disabled={sending}
+                        disabled={sending || autoSaving}
                         onClick={() =>
                           setComposeAttachments((current) =>
                             current.filter((item) => item.id !== attachment.id),

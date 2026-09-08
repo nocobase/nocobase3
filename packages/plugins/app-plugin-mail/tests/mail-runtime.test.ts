@@ -158,6 +158,15 @@ describe('mail MVP runtime', () => {
       adapters,
       outbox: runtime,
     });
+    const signature = await service.saveSignature(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        name: 'Scheduled',
+        text: 'Original signature',
+      },
+    );
     const scheduledAt = new Date(Date.now() + 60_000).toISOString();
 
     const submission = await service.sendMessage(
@@ -165,6 +174,7 @@ describe('mail MVP runtime', () => {
       {
         accountId: 'account-1',
         identityId: 'identity-1',
+        signatureId: signature.id,
         to: [{ address: 'recipient@example.com' }],
         subject: 'Later',
         text: 'Scheduled body',
@@ -174,6 +184,16 @@ describe('mail MVP runtime', () => {
     );
 
     expect(submission).toMatchObject({ status: 'pending', scheduledAt });
+    await service.saveSignature(
+      { actorId: 'user-1' },
+      {
+        id: signature.id,
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        name: signature.name,
+        text: 'Changed after scheduling',
+      },
+    );
     await runtime.publishPending();
     expect(sendMessage).not.toHaveBeenCalled();
     const due = await store.claimOutbox(
@@ -195,6 +215,13 @@ describe('mail MVP runtime', () => {
     await runtime.publishPending();
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          text: 'Scheduled body\n\n-- \nOriginal signature',
+        }),
+      }),
+    );
     await expect(
       service.listSubmissions({ actorId: 'user-1' }),
     ).resolves.toEqual(
@@ -1143,6 +1170,66 @@ describe('mail MVP runtime', () => {
       service.sendMessage(
         { actorId: 'user-1' },
         { ...input, subject: 'Different content' },
+      ),
+    ).rejects.toThrow('idempotency key');
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a changed signature as different idempotent content', async () => {
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'accepted',
+      providerMessageId: 'provider-sent-1',
+    }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: { kick: vi.fn() },
+    });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      signatureId: null,
+      to: [{ address: 'recipient@example.com' }],
+      subject: 'Same content',
+      text: 'Mail body',
+      idempotencyKey: 'signature-conflict',
+    } as const;
+
+    await service.sendMessage({ actorId: 'user-1' }, input);
+
+    await expect(
+      service.sendMessage(
+        { actorId: 'user-1' },
+        { ...input, signatureId: 'signature-1' },
+      ),
+    ).rejects.toThrow('idempotency key');
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('distinguishes the default signature from explicitly selecting none', async () => {
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'accepted',
+      providerMessageId: 'provider-sent-1',
+    }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: { kick: vi.fn() },
+    });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      to: [{ address: 'recipient@example.com' }],
+      subject: 'Same content',
+      text: 'Mail body',
+      idempotencyKey: 'default-signature-conflict',
+    } as const;
+
+    await service.sendMessage({ actorId: 'user-1' }, input);
+    await expect(
+      service.sendMessage(
+        { actorId: 'user-1' },
+        { ...input, signatureId: null },
       ),
     ).rejects.toThrow('idempotency key');
     expect(sendMessage).toHaveBeenCalledTimes(1);

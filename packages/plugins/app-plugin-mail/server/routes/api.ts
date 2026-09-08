@@ -33,6 +33,8 @@ type MailRoutesEnv = {
 
 const MAIL_NAMESPACE = '@nocobase/app-plugin-mail';
 const MAX_ATTACHMENT_UPLOAD_BYTES = 27 * 1024 * 1024;
+const MAIL_WORKSPACE_RESOURCE = 'mail.workspace';
+const MAIL_ADMIN_RESOURCE = 'mail.admin';
 
 export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container, config, publicBasePath }) => {
@@ -47,8 +49,13 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       authentication.required(),
       authorization.middleware(),
       async (context, next) => {
+        const resource = /(?:^|\/)mail\/settings(?:\/|$)/u.test(
+          context.req.path,
+        )
+          ? MAIL_ADMIN_RESOURCE
+          : MAIL_WORKSPACE_RESOURCE;
         const allowed = await context.get('authz').can({
-          resource: { type: 'page', id: 'mail.settings' },
+          resource: { type: 'page', id: resource },
           action: 'access',
         });
         if (!allowed) {

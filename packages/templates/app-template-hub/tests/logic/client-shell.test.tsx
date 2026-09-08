@@ -39,10 +39,6 @@ describe('application shell', () => {
       screen.getByRole('button', { name: /Switch to .* theme/ }),
     ).toBeVisible();
     expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Mail' })).toHaveAttribute(
-      'href',
-      '/mail',
-    );
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
     expect(

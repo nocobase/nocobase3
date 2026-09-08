@@ -182,9 +182,10 @@ export class DefaultMailService implements MailService {
       let previousCredentialReference: string | undefined;
       try {
         const existing =
-          await this.dependencies.store.findAccountByProviderAddress(
+          await this.dependencies.store.findAccountByProviderIdentity(
             transaction.provider,
             result.value.address,
+            result.value.authorizationSubject,
           );
         if (existing && existing.userId !== transaction.userId) {
           throw new Error('Mail account is already connected to another user.');
@@ -196,7 +197,7 @@ export class DefaultMailService implements MailService {
           id: existing?.id ?? randomUUID(),
           userId: transaction.userId,
           provider: transaction.provider,
-          address: result.value.address,
+          address: normalizeAddress(result.value.address),
           displayName: result.value.displayName,
           credentialReference: result.value.credentialReference,
           authorizationSubject: result.value.authorizationSubject,
@@ -231,7 +232,7 @@ export class DefaultMailService implements MailService {
             return {
               id: previous?.id ?? randomUUID(),
               accountId: account.id,
-              address: authorized.address,
+              address: normalizeAddress(authorized.address),
               displayName: authorized.displayName,
               signatureText:
                 authorized.signatureText ?? previous?.signatureText,
@@ -1237,6 +1238,10 @@ async function closeAdapter(adapter: {
 
 function hashState(state: string): string {
   return createHash('sha256').update(state).digest('hex');
+}
+
+function normalizeAddress(address: string): string {
+  return address.trim().toLowerCase();
 }
 
 function toSyncRunView(run: MailSyncRun): MailSyncRunView {

@@ -310,6 +310,14 @@ function createAuthorization(): MailProviderAuthorization<MicrosoftMailProviderC
           'provider',
           false,
         );
+      const authorizationSubject = profile.value.id;
+      if (!authorizationSubject)
+        return failure(
+          'MICROSOFT_PROFILE_INVALID',
+          'Microsoft profile did not include a stable account ID.',
+          'provider',
+          false,
+        );
       const expiresAt = expiry(token.value.expires_in);
       const scopes = splitScopes(
         token.value.scope,
@@ -328,7 +336,7 @@ function createAuthorization(): MailProviderAuthorization<MicrosoftMailProviderC
         value: {
           address,
           displayName: profile.value.displayName,
-          authorizationSubject: profile.value.id,
+          authorizationSubject,
           credentialReference,
           scopes,
           credentialExpiresAt: expiresAt,
@@ -840,11 +848,21 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     }
     try {
       if (input.message.draftProviderMessageId) {
-        const updated = await this.updateDraft(
-          input.message.draftProviderMessageId,
-          input,
-        );
-        if (!updated.ok) return { status: 'failed', error: updated.error };
+        try {
+          const updated = await this.updateDraft(
+            input.message.draftProviderMessageId,
+            input,
+          );
+          if (!updated.ok) return { status: 'failed', error: updated.error };
+        } catch (error) {
+          return {
+            status: 'failed',
+            error: contentPreparationError(
+              error,
+              'MICROSOFT_MESSAGE_PREPARATION_FAILED',
+            ),
+          };
+        }
         const sent = await fetch(
           `${graphBase(this.config)}/me/messages/${encodeURIComponent(input.message.draftProviderMessageId)}/send`,
           {
@@ -861,7 +879,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
               status: 'accepted',
               providerMessageId: input.message.draftProviderMessageId,
             }
-          : { status: 'failed', error: await responseError(sent) };
+          : submissionResponse(sent);
       }
       if (
         input.message.replyToProviderMessageId ||
@@ -875,7 +893,18 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
           0,
         ) >= SIMPLE_ATTACHMENT_LIMIT
       ) {
-        const draft = await this.saveDraft(input);
+        let draft: MailProviderResult<NormalizedMailMessage>;
+        try {
+          draft = await this.saveDraft(input);
+        } catch (error) {
+          return {
+            status: 'failed',
+            error: contentPreparationError(
+              error,
+              'MICROSOFT_MESSAGE_PREPARATION_FAILED',
+            ),
+          };
+        }
         if (!draft.ok) return { status: 'failed', error: draft.error };
         const draftId = draft.value.providerMessageId;
         const sent = await fetch(
@@ -891,9 +920,20 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         );
         return sent.ok
           ? { status: 'accepted', providerMessageId: draftId }
-          : { status: 'failed', error: await responseError(sent) };
+          : submissionResponse(sent);
       }
-      const attachments = await graphAttachments(input);
+      let attachments: readonly GraphFileAttachment[];
+      try {
+        attachments = await graphAttachments(input);
+      } catch (error) {
+        return {
+          status: 'failed',
+          error: contentPreparationError(
+            error,
+            'MICROSOFT_MESSAGE_PREPARATION_FAILED',
+          ),
+        };
+      }
       const response = await fetch(`${graphBase(this.config)}/me/sendMail`, {
         method: 'POST',
         headers: {
@@ -921,7 +961,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       });
       return response.ok
         ? { status: 'accepted' }
-        : { status: 'failed', error: await responseError(response) };
+        : submissionResponse(response);
     } catch (error) {
       return {
         status: 'submission_unknown',
@@ -1181,7 +1221,18 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     token: string,
     input: MailProviderSendInput,
   ): Promise<MailProviderSendResult> {
-    const prepared = await this.saveRelatedDraft(input);
+    let prepared: MailProviderResult<NormalizedMailMessage>;
+    try {
+      prepared = await this.saveRelatedDraft(input);
+    } catch (error) {
+      return {
+        status: 'failed',
+        error: contentPreparationError(
+          error,
+          'MICROSOFT_MESSAGE_PREPARATION_FAILED',
+        ),
+      };
+    }
     if (!prepared.ok) return { status: 'failed', error: prepared.error };
     const draftId = prepared.value.providerMessageId;
     const sent = await fetch(
@@ -1197,7 +1248,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     );
     return sent.ok
       ? { status: 'accepted', providerMessageId: draftId }
-      : { status: 'failed', error: await responseError(sent) };
+      : submissionResponse(sent);
   }
 
   private async saveRelatedDraft(
@@ -1253,9 +1304,14 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       );
       if (!added.ok) return added;
     }
-    const attachments = input.message.attachments.length
-      ? await this.attachments(draftId, input.signal)
-      : { ok: true as const, value: [] as readonly NormalizedMailAttachment[] };
+    const attachments =
+      input.message.forwardOfProviderMessageId ||
+      input.message.attachments.length > 0
+        ? await this.attachments(draftId, input.signal)
+        : {
+            ok: true as const,
+            value: [] as readonly NormalizedMailAttachment[],
+          };
     if (!attachments.ok) return attachments;
     return normalizeGraphMessage(
       {
@@ -1516,39 +1572,37 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
   }
 
   private async accessToken(signal?: AbortSignal): Promise<string> {
-    const credential = await this.context.credentials.get<MicrosoftCredential>(
-      this.account.credentialReference,
-    );
-    if (Date.parse(credential.expiresAt) > Date.now() + 60_000)
-      return credential.accessToken;
-    const refreshed = await exchangeToken(
-      this.config,
-      {
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-        refresh_token: credential.refreshToken,
-        grant_type: 'refresh_token',
-        scope: credential.scopes.join(' '),
-      },
-      signal,
-    );
-    if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
-    const next: MicrosoftCredential = {
-      ...credential,
-      accessToken: required(
-        refreshed.value.access_token,
-        'Microsoft access token',
-      ),
-      refreshToken: refreshed.value.refresh_token ?? credential.refreshToken,
-      expiresAt: expiry(refreshed.value.expires_in),
-      scopes: splitScopes(refreshed.value.scope, credential.scopes),
-      tokenType: refreshed.value.token_type ?? credential.tokenType,
-    };
-    await this.context.credentials.replace(
-      this.account.credentialReference,
-      next,
-    );
-    return next.accessToken;
+    const credential =
+      await this.context.credentials.getOrRefresh<MicrosoftCredential>(
+        this.account.credentialReference,
+        (value) => Date.parse(value.expiresAt) > Date.now() + 60_000,
+        async (value) => {
+          const refreshed = await exchangeToken(
+            this.config,
+            {
+              client_id: this.config.clientId,
+              client_secret: this.config.clientSecret,
+              refresh_token: value.refreshToken,
+              grant_type: 'refresh_token',
+              scope: value.scopes.join(' '),
+            },
+            signal,
+          );
+          if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
+          return {
+            ...value,
+            accessToken: required(
+              refreshed.value.access_token,
+              'Microsoft access token',
+            ),
+            refreshToken: refreshed.value.refresh_token ?? value.refreshToken,
+            expiresAt: expiry(refreshed.value.expires_in),
+            scopes: splitScopes(refreshed.value.scope, value.scopes),
+            tokenType: refreshed.value.token_type ?? value.tokenType,
+          };
+        },
+      );
+    return credential.accessToken;
   }
 }
 
@@ -1988,6 +2042,16 @@ async function responseError(response: Response): Promise<MailProviderError> {
   };
 }
 
+async function submissionResponse(
+  response: Response,
+): Promise<MailProviderSendResult> {
+  const error = await responseError(response);
+  return {
+    status: response.status >= 500 ? 'submission_unknown' : 'failed',
+    error: response.status >= 500 ? { ...error, retryable: false } : error,
+  };
+}
+
 function unknownError(error: unknown, code: string): MailProviderError {
   return {
     code,
@@ -1995,6 +2059,21 @@ function unknownError(error: unknown, code: string): MailProviderError {
       error instanceof Error ? error.message : 'Microsoft request failed.',
     category: 'network',
     retryable: true,
+  };
+}
+
+function contentPreparationError(
+  error: unknown,
+  code: string,
+): MailProviderError {
+  return {
+    code,
+    message:
+      error instanceof Error
+        ? error.message
+        : 'Mail content preparation failed.',
+    category: 'content',
+    retryable: false,
   };
 }
 

@@ -21,13 +21,13 @@ import serverLocales from '../server/locales/index.js';
 describe('mail API routes', () => {
   it('owns an authentication boundary', async () => {
     const router = await createRouter(false, service());
-    const response = await router.request('/mail/accounts');
+    const response = await router.request('/api/mail/accounts');
     expect(response.status).toBe(401);
   });
 
-  it('enforces Mail settings access', async () => {
+  it('enforces Mail workspace access', async () => {
     const router = await createRouter(true, service(), false);
-    const response = await router.request('/mail/accounts');
+    const response = await router.request('/api/mail/accounts');
 
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({
@@ -38,9 +38,25 @@ describe('mail API routes', () => {
     });
   });
 
+  it('requires separate administrator access for cross-user data', async () => {
+    const checkedResources: string[] = [];
+    const router = await createRouter(true, service(), (resource) => {
+      checkedResources.push(resource);
+      return resource === 'mail.workspace';
+    });
+
+    await expect(router.request('/api/mail/accounts')).resolves.toMatchObject({
+      status: 200,
+    });
+    await expect(
+      router.request('/api/mail/settings/accounts'),
+    ).resolves.toMatchObject({ status: 403 });
+    expect(checkedResources).toEqual(['mail.workspace', 'mail.admin']);
+  });
+
   it('translates API errors from the request locale', async () => {
     const router = await createRouter(true, service(), false);
-    const response = await router.request('/mail/accounts', {
+    const response = await router.request('/api/mail/accounts', {
       headers: { 'accept-language': 'zh-CN' },
     });
 
@@ -70,7 +86,7 @@ describe('mail API routes', () => {
     );
     const router = await createRouter(true, service({ listManagedAccounts }));
 
-    const response = await router.request('/mail/settings/accounts');
+    const response = await router.request('/api/mail/settings/accounts');
 
     expect(response.status).toBe(200);
     expect(listManagedAccounts).toHaveBeenCalledWith({ actorId: 'user-1' });
@@ -100,7 +116,7 @@ describe('mail API routes', () => {
       service({ listManagedOperationLogs }),
     );
 
-    const response = await router.request('/mail/settings/operation-logs');
+    const response = await router.request('/api/mail/settings/operation-logs');
 
     expect(response.status).toBe(200);
     expect(listManagedOperationLogs).toHaveBeenCalledWith({
@@ -119,7 +135,7 @@ describe('mail API routes', () => {
       syncRun(input.accountId, context.actorId),
     );
     const router = await createRouter(true, service({ startSync }));
-    const response = await router.request('/mail/accounts/account-1/sync', {
+    const response = await router.request('/api/mail/accounts/account-1/sync', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -147,7 +163,7 @@ describe('mail API routes', () => {
     ]);
     const router = await createRouter(true, service({ listSyncRuns }));
 
-    const response = await router.request('/mail/sync-runs');
+    const response = await router.request('/api/mail/sync-runs');
 
     expect(response.status).toBe(200);
     expect(listSyncRuns).toHaveBeenCalledWith({ actorId: 'user-1' });
@@ -171,14 +187,14 @@ describe('mail API routes', () => {
 
     expect(
       (
-        await router.request('/mail/sync-runs/sync-1/retry', {
+        await router.request('/api/mail/sync-runs/sync-1/retry', {
           method: 'POST',
         })
       ).status,
     ).toBe(202);
     expect(
       (
-        await router.request('/mail/sync-runs/sync-1/cancel', {
+        await router.request('/api/mail/sync-runs/sync-1/cancel', {
           method: 'POST',
         })
       ).status,
@@ -215,12 +231,12 @@ describe('mail API routes', () => {
       service({ getUnreadCount, listSignatures, saveSignature, createLabel }),
     );
 
-    const unreadResponse = await router.request('/mail/unread-count');
+    const unreadResponse = await router.request('/api/mail/unread-count');
     await router.request(
-      '/mail/accounts/account-1/identities/identity-1/signatures',
+      '/api/mail/accounts/account-1/identities/identity-1/signatures',
     );
     await router.request(
-      '/mail/accounts/account-1/identities/identity-1/signatures',
+      '/api/mail/accounts/account-1/identities/identity-1/signatures',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -231,7 +247,7 @@ describe('mail API routes', () => {
         }),
       },
     );
-    await router.request('/mail/accounts/account-1/labels', {
+    await router.request('/api/mail/accounts/account-1/labels', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Customers' }),
@@ -274,7 +290,7 @@ describe('mail API routes', () => {
     ]);
     const router = await createRouter(true, service({ listSubmissions }));
 
-    const response = await router.request('/mail/submissions');
+    const response = await router.request('/api/mail/submissions');
 
     expect(response.status).toBe(200);
     expect(listSubmissions).toHaveBeenCalledWith({ actorId: 'user-1' });
@@ -291,7 +307,7 @@ describe('mail API routes', () => {
       }),
     );
     const router = await createRouter(true, service({ startAuthorization }));
-    const response = await router.request('/mail/authorizations', {
+    const response = await router.request('/api/mail/authorizations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ type: 'gmail', name: 'google' }),
@@ -320,12 +336,12 @@ describe('mail API routes', () => {
       service({ listFolders, listMessages, listConversationMessages }),
     );
 
-    await router.request('/mail/accounts/account-1/folders');
+    await router.request('/api/mail/accounts/account-1/folders');
     await router.request(
-      '/mail/messages?accountId=account-1&folderId=inbox&conversationId=thread-1&unread=true&limit=25',
+      '/api/mail/messages?accountId=account-1&folderId=inbox&conversationId=thread-1&unread=true&limit=25',
     );
     await router.request(
-      '/mail/accounts/account-1/conversations/thread-1/messages?cursor=25&limit=25',
+      '/api/mail/accounts/account-1/conversations/thread-1/messages?cursor=25&limit=25',
     );
 
     expect(listFolders).toHaveBeenCalledWith(
@@ -356,7 +372,7 @@ describe('mail API routes', () => {
   it('rejects invalid send requests before calling the Mail service', async () => {
     const sendMessage = vi.fn<MailService['sendMessage']>();
     const router = await createRouter(true, service({ sendMessage }));
-    const response = await router.request('/mail/messages/send', {
+    const response = await router.request('/api/mail/messages/send', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ accountId: 'account-1' }),
@@ -376,7 +392,7 @@ describe('mail API routes', () => {
       }),
     );
     const router = await createRouter(true, service({ sendMessage }));
-    const response = await router.request('/mail/messages/send', {
+    const response = await router.request('/api/mail/messages/send', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -407,7 +423,7 @@ describe('mail API routes', () => {
     );
     const router = await createRouter(true, service({ saveDraft }));
 
-    const response = await router.request('/mail/messages/drafts', {
+    const response = await router.request('/api/mail/messages/drafts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -440,7 +456,7 @@ describe('mail API routes', () => {
     });
     const router = await createRouter(true, service({ listAccounts }));
 
-    const response = await router.request('/mail/accounts');
+    const response = await router.request('/api/mail/accounts');
     const body = await response.json();
 
     expect(response.status).toBe(422);
@@ -476,22 +492,25 @@ describe('mail API routes', () => {
 
     expect(
       (
-        await router.request('/mail/accounts/account-1/messages/message-1', {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            read: true,
-            starred: true,
-            note: 'Follow up with the customer',
-            todo: true,
-          }),
-        })
+        await router.request(
+          '/api/mail/accounts/account-1/messages/message-1',
+          {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              read: true,
+              starred: true,
+              note: 'Follow up with the customer',
+              todo: true,
+            }),
+          },
+        )
       ).status,
     ).toBe(200);
     expect(
       (
         await router.request(
-          '/mail/accounts/account-1/messages/message-1/labels',
+          '/api/mail/accounts/account-1/messages/message-1/labels',
           {
             method: 'PATCH',
             headers: { 'content-type': 'application/json' },
@@ -506,7 +525,7 @@ describe('mail API routes', () => {
     expect(
       (
         await router.request(
-          '/mail/accounts/account-1/messages/message-1/move',
+          '/api/mail/accounts/account-1/messages/message-1/move',
           {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
@@ -518,7 +537,7 @@ describe('mail API routes', () => {
     expect(
       (
         await router.request(
-          '/mail/accounts/account-1/messages/message-1?permanently=true',
+          '/api/mail/accounts/account-1/messages/message-1?permanently=true',
           { method: 'DELETE' },
         )
       ).status,
@@ -572,7 +591,7 @@ describe('mail API routes', () => {
     const router = await createRouter(true, service({ getAttachment }));
 
     const response = await router.request(
-      '/mail/accounts/account-1/messages/message-1/attachments/attachment-1',
+      '/api/mail/accounts/account-1/messages/message-1/attachments/attachment-1',
     );
 
     expect(response.status).toBe(200);
@@ -596,7 +615,7 @@ describe('mail API routes', () => {
     });
     const router = await createRouter(true, service({ sendMessage }));
 
-    const response = await router.request('/mail/messages/send', {
+    const response = await router.request('/api/mail/messages/send', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -621,7 +640,7 @@ describe('mail API routes', () => {
 async function createRouter(
   authenticated: boolean,
   mail: MailService,
-  allowed = true,
+  allowed: boolean | ((resource: string) => boolean) = true,
 ): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(authenticationToken, {
@@ -642,7 +661,10 @@ async function createRouter(
   container.instance(authorizationToken, {
     middleware: () => async (context, next) => {
       context.set('authz', {
-        can: async () => allowed,
+        can: async (request: { resource: { id: string } }) =>
+          typeof allowed === 'function'
+            ? allowed(request.resource.id)
+            : allowed,
       });
       await next();
     },
@@ -670,7 +692,7 @@ async function createRouter(
   await runtime.init();
   const router = new Hono();
   router.use('*', createI18nMiddleware(runtime));
-  router.route('/', contribution);
+  router.route('/api', contribution);
   return router;
 }
 

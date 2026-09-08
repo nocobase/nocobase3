@@ -357,13 +357,27 @@ export class DatabaseMailStore implements MailStore {
   public async listExpiredOutboundAttachments(
     now: string,
     limit: number,
+    after?: Pick<MailOutboundAttachment, 'expiresAt' | 'id'>,
   ): Promise<readonly MailOutboundAttachment[]> {
-    return this.database
+    let query = this.database
       .query()
       .selectFrom<OutboundAttachmentRow>('mailOutboundAttachments')
       .selectAll()
-      .where('expiresAt', '<=', now)
+      .where('expiresAt', '<=', now);
+    if (after) {
+      query = query.where((builder) =>
+        builder.eb.or([
+          builder.eb('expiresAt', '>', after.expiresAt),
+          builder.eb.and([
+            builder.eb('expiresAt', '=', after.expiresAt),
+            builder.eb('id', '>', after.id),
+          ]),
+        ]),
+      );
+    }
+    return query
       .orderBy('expiresAt', 'asc')
+      .orderBy('id', 'asc')
       .limit(limit)
       .execute<OutboundAttachmentRow>();
   }
@@ -460,17 +474,29 @@ export class DatabaseMailStore implements MailStore {
     return row ? fromAccountRow(row) : undefined;
   }
 
-  public async findAccountByProviderAddress(
+  public async findAccountByProviderIdentity(
     provider: MailProviderIdentity,
     address: string,
+    authorizationSubject?: string,
   ): Promise<MailAccount | undefined> {
+    if (authorizationSubject) {
+      const bySubject = await this.database
+        .query()
+        .selectFrom<AccountRow>('mailAccounts')
+        .selectAll()
+        .where('providerType', '=', provider.type)
+        .where('providerName', '=', provider.name)
+        .where('authorizationSubject', '=', authorizationSubject)
+        .executeTakeFirst<AccountRow>();
+      if (bySubject) return fromAccountRow(bySubject);
+    }
     const row = await this.database
       .query()
       .selectFrom<AccountRow>('mailAccounts')
       .selectAll()
       .where('providerType', '=', provider.type)
       .where('providerName', '=', provider.name)
-      .where('address', '=', address)
+      .where('address', '=', normalizeAddress(address))
       .executeTakeFirst<AccountRow>();
     return row ? fromAccountRow(row) : undefined;
   }
@@ -533,6 +559,7 @@ export class DatabaseMailStore implements MailStore {
     providerSubscriptionIds: readonly string[],
     accountAddresses: readonly string[],
   ): Promise<readonly MailAccount[]> {
+    const normalizedAddresses = accountAddresses.map(normalizeAddress);
     const accountIds = providerSubscriptionIds.length
       ? await this.database
           .query()
@@ -542,7 +569,7 @@ export class DatabaseMailStore implements MailStore {
           .where('providerSubscriptionId', 'in', providerSubscriptionIds)
           .pluck<string>('accountId')
       : [];
-    if (accountIds.length === 0 && accountAddresses.length === 0) return [];
+    if (accountIds.length === 0 && normalizedAddresses.length === 0) return [];
     const rows = await this.database
       .query()
       .selectFrom<AccountRow>('mailAccounts')
@@ -553,8 +580,8 @@ export class DatabaseMailStore implements MailStore {
       .where((builder) =>
         builder.or([
           ...(accountIds.length ? [builder.eb('id', 'in', accountIds)] : []),
-          ...(accountAddresses.length
-            ? [builder.eb('address', 'in', accountAddresses)]
+          ...(normalizedAddresses.length
+            ? [builder.eb('address', 'in', normalizedAddresses)]
             : []),
         ]),
       )
@@ -2535,7 +2562,7 @@ function toAccountRow(
     userId: account.userId,
     providerType: account.provider.type,
     providerName: account.provider.name,
-    address: account.address,
+    address: normalizeAddress(account.address),
     displayName: account.displayName,
     credentialReference: account.credentialReference,
     authorizationSubject: account.authorizationSubject,
@@ -2579,7 +2606,11 @@ export function toMailAccountView(account: MailAccount): MailAccountView {
 }
 
 function toIdentityRow(identity: MailIdentity): IdentityRow {
-  return { ...identity };
+  return { ...identity, address: normalizeAddress(identity.address) };
+}
+
+function normalizeAddress(address: string): string {
+  return address.trim().toLowerCase();
 }
 
 function fromIdentityRow(row: IdentityRow): MailIdentity {

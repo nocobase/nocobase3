@@ -268,6 +268,58 @@ describe('MailWorkspacePage', () => {
     expect(mail.uploadAttachment).toHaveBeenCalledWith(file);
   });
 
+  it('promotes uploaded attachments to retained Provider attachments after auto-save', async () => {
+    vi.useFakeTimers();
+    try {
+      mail.saveDraft.mockResolvedValue({
+        id: 'draft-1',
+        draft: true,
+        attachments: [
+          {
+            id: 'draft-1:provider-attachment-1',
+            messageId: 'draft-1',
+            providerAttachmentId: 'provider-attachment-1',
+            fileName: 'report.txt',
+            contentType: 'text/plain',
+            size: 6,
+            inline: false,
+          },
+        ],
+      });
+      render(<MailWorkspacePage />);
+      await vi.waitFor(() => expect(mail.listAccounts).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
+      const input = document.querySelector('input[type="file"]');
+      if (!(input instanceof HTMLInputElement))
+        throw new Error('Missing file input');
+      fireEvent.change(input, {
+        target: {
+          files: [new File(['report'], 'report.txt', { type: 'text/plain' })],
+        },
+      });
+      await vi.waitFor(() => expect(mail.uploadAttachment).toHaveBeenCalled());
+      fireEvent.change(screen.getByLabelText('Subject'), {
+        target: { value: 'First save' },
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.waitFor(() => expect(mail.saveDraft).toHaveBeenCalledTimes(1));
+
+      fireEvent.change(screen.getByLabelText('Subject'), {
+        target: { value: 'Second save' },
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.waitFor(() => expect(mail.saveDraft).toHaveBeenCalledTimes(2));
+      expect(mail.saveDraft).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          attachmentIds: [],
+          retainedAttachmentIds: ['draft-1:provider-attachment-1'],
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('runs incremental synchronization when refreshing the mailbox', async () => {
     render(<MailWorkspacePage />);
 

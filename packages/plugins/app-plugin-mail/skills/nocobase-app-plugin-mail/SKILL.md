@@ -14,14 +14,14 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 - Import public UI from `@nocobase/app-plugin-mail/client/components`, or
   `MailWorkspacePage` and template helpers from
   `@nocobase/app-plugin-mail/client`.
-- Require an authenticated identity with `page:mail.settings/access` for every Mail API.
+- Require an authenticated identity with `page:mail.workspace/access` for personal Mail APIs and `page:mail.admin/access` for cross-user administration APIs.
 - Configure concrete Providers through the Gmail and Microsoft Provider plugins; do not instantiate their adapters from App code.
 
 ## Configure and connect an account
 
 1. Add an enabled `mail.providers` entry with a stable `type` and `name` plus the Provider OAuth client configuration.
 2. Register the matching Gmail or Microsoft Server Provider plugin.
-3. Grant the intended role access to `mail.settings`.
+3. Grant intended users access to `mail.workspace`; grant only administrators access to `mail.admin`.
 4. Open `/settings/mail/my-accounts`, select the mail account type, and complete its OAuth redirect.
 5. Verify that the account appears without credential references or token material in the API response.
 
@@ -32,7 +32,7 @@ and a Google Cloud Pub/Sub push subscription targeting the generated callback
 URL. Microsoft Graph subscription creation and endpoint validation are managed
 by Mail Core.
 
-`/settings/mail/my-accounts` manages the authenticated user's accounts, including default selection, suspend/resume, disconnect, and manual synchronization. `/settings/mail/accounts` and `GET /api/mail/settings/accounts` show every connected account to administrators granted `page:mail.settings/access`. The ordinary `GET /api/mail/accounts` endpoint remains scoped to the authenticated user. Do not bypass Mail Core ownership checks for another user's account.
+`/settings/mail/my-accounts` manages the authenticated user's accounts, including default selection, suspend/resume, disconnect, and manual synchronization. `/settings/mail/accounts` and `GET /api/mail/settings/accounts` show every connected account to administrators granted `page:mail.admin/access`. The ordinary `GET /api/mail/accounts` endpoint remains scoped to the authenticated user and requires `page:mail.workspace/access`. Do not bypass Mail Core ownership checks for another user's account.
 
 `/settings/mail/send-logs` and `GET /api/mail/settings/operation-logs` provide an all-user administration view of synchronization and delivery operations. The UI filters by owner or operation text, account, status, and start time. Failed or cancelled synchronization runs can be retried, and active synchronization runs can be cancelled by their account owner. Do not automatically retry a delivery with an unknown Provider result because that may create a duplicate message. The response includes API-safe account metadata for resolving each operation to its owner; it never includes credentials, idempotency fingerprints, leases, Provider cursors, or internal Provider error messages. The development log pages remain scoped to the authenticated user.
 

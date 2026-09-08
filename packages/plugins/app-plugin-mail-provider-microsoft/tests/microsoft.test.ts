@@ -84,6 +84,39 @@ describe('Microsoft Mail Provider', () => {
     });
   });
 
+  it('rejects a Microsoft profile without a stable account ID', async () => {
+    const credentials = memoryVault();
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          Response.json({
+            access_token: 'access-1',
+            refresh_token: 'refresh-1',
+            expires_in: 3600,
+          }),
+        )
+        .mockResolvedValueOnce(Response.json({ mail: 'user@example.com' })),
+    );
+    const authorization = microsoftMailProviderDefinition.authorization;
+    if (!authorization) throw new Error('Microsoft authorization is missing.');
+
+    await expect(
+      authorization.complete(context(credentials), config(), {
+        redirectUri: 'https://example.com/main/mail/oauth/callback',
+        state: 'state-1',
+        code: 'code-1',
+        codeVerifier: 'verifier-1',
+        scopes: [],
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'MICROSOFT_PROFILE_INVALID', retryable: false },
+    });
+    expect(credentials.values).toHaveProperty('size', 0);
+  });
+
   it('accepts Graph 202 sends and continues from per-folder delta links', async () => {
     const credentials = memoryVault();
     await credentials.putAt('credential-1', {
@@ -398,6 +431,117 @@ describe('Microsoft Mail Provider', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a Graph 5xx after submission as unknown', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json(
+            { error: { message: 'Backend unavailable' } },
+            { status: 503 },
+          ),
+        ),
+    );
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-unknown',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Hello',
+          text: 'Mail body',
+          attachments: [],
+          references: [],
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'submission_unknown',
+      error: { code: 'MICROSOFT_HTTP_503', retryable: false },
+    });
+  });
+
+  it('reports attachment preparation failures before submission as failed', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-preparation-failed',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Hello',
+          text: 'Mail body',
+          attachments: [
+            {
+              fileName: 'broken.txt',
+              contentType: 'text/plain',
+              size: 1,
+              inline: false,
+              open: async () => {
+                throw new Error('Attachment unavailable');
+              },
+            },
+          ],
+          references: [],
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'MICROSOFT_MESSAGE_PREPARATION_FAILED',
+        retryable: false,
+      },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('discovers one folder page per call and resumes nested traversal', async () => {
     const credentials = memoryVault();
     await credentials.putAt('credential-1', {
@@ -604,6 +748,19 @@ describe('Microsoft Mail Provider', () => {
         }),
       )
       .mockResolvedValueOnce(Response.json({ id: 'forward-draft-1' }))
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [
+            {
+              id: 'original-attachment-1',
+              name: 'original.pdf',
+              contentType: 'application/pdf',
+              size: 42,
+              isInline: false,
+            },
+          ],
+        }),
+      )
       .mockResolvedValueOnce(new Response(null, { status: 202 }));
     vi.stubGlobal('fetch', fetchMock);
     const adapter = new MicrosoftMailProviderAdapter(
@@ -639,6 +796,12 @@ describe('Microsoft Mail Provider', () => {
     };
     expect(patchBody.body.content).toContain('Please review');
     expect(patchBody.body.content).toContain('Original body');
+    expect(String(fetchMock.mock.calls[2][0])).toContain(
+      '/me/messages/forward-draft-1/attachments?',
+    );
+    expect(String(fetchMock.mock.calls[3][0])).toContain(
+      '/me/messages/forward-draft-1/send',
+    );
   });
 
   it('uses a Graph upload session for attachments of 3 MB or larger', async () => {
@@ -1072,6 +1235,17 @@ function memoryVault(): MemoryVault {
     get: async <T>(reference: string): Promise<T> => values.get(reference) as T,
     replace: async (reference, value) => {
       values.set(reference, value);
+    },
+    getOrRefresh: async <T>(
+      reference: string,
+      isFresh: (value: T) => boolean,
+      refresh: (value: T) => Promise<T>,
+    ) => {
+      const current = values.get(reference) as T;
+      if (isFresh(current)) return current;
+      const next = await refresh(current);
+      values.set(reference, next);
+      return next;
     },
     delete: async (reference) => {
       values.delete(reference);

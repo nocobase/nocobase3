@@ -1038,6 +1038,11 @@ export interface MailCredentialVault {
   put(value: unknown): Promise<string>;
   get<T>(reference: string): Promise<T>;
   replace(reference: string, value: unknown): Promise<void>;
+  getOrRefresh<T>(
+    reference: string,
+    isFresh: (value: T) => boolean,
+    refresh: (value: T) => Promise<T>,
+  ): Promise<T>;
   delete(reference: string): Promise<void>;
 }
 
@@ -1201,9 +1206,10 @@ export interface MailStore {
     now: string,
   ): Promise<MailAuthorizationTransaction | undefined>;
   getAccount(accountId: string): Promise<MailAccount | undefined>;
-  findAccountByProviderAddress(
+  findAccountByProviderIdentity(
     provider: MailProviderIdentity,
     address: string,
+    authorizationSubject?: string,
   ): Promise<MailAccount | undefined>;
   listAccounts(userId: string): Promise<readonly MailAccount[]>;
   listAllAccounts(): Promise<readonly MailAccount[]>;
@@ -1292,6 +1298,7 @@ export interface MailStore {
   listExpiredOutboundAttachments(
     now: string,
     limit: number,
+    after?: Pick<MailOutboundAttachment, 'expiresAt' | 'id'>,
   ): Promise<readonly MailOutboundAttachment[]>;
   deleteOutboundAttachment(attachmentId: string): Promise<boolean>;
   listTemplates(ownerId: string): Promise<readonly MailTemplate[]>;

@@ -8,8 +8,13 @@ const migration: MigrationDefinition = defineMigration({
         .string('reference', { length: 100, nullable: false })
         .primary();
       collection.text('ciphertext', { nullable: false });
+      collection.string('refreshLeaseToken', { length: 100 });
+      collection.datetime('refreshLeaseExpiresAt');
       collection.datetime('createdAt', { nullable: false });
       collection.datetime('updatedAt', { nullable: false });
+      collection.index('refreshLeaseExpiresAt', {
+        name: 'mail_credentials_refresh_lease_idx',
+      });
     });
 
     await builder.createCollection('mailOutboundAttachments', (collection) => {
@@ -75,7 +80,7 @@ const migration: MigrationDefinition = defineMigration({
         length: 500,
         nullable: false,
       });
-      collection.string('authorizationSubject', { length: 500 });
+      collection.string('authorizationSubject', { length: 255 });
       collection.json('scopes', { nullable: false });
       collection.datetime('credentialExpiresAt');
       collection.string('status', { length: 50, nullable: false });
@@ -88,6 +93,10 @@ const migration: MigrationDefinition = defineMigration({
       collection.unique(['providerType', 'providerName', 'address'], {
         name: 'mail_accounts_provider_address_unique',
       });
+      collection.unique(
+        ['providerType', 'providerName', 'authorizationSubject'],
+        { name: 'mail_accounts_provider_subject_unique' },
+      );
     });
 
     await builder.createCollection('mailPushSubscriptions', (collection) => {

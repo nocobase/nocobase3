@@ -71,7 +71,7 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
 - [x] API 返回值隐藏 credential reference、authorization subject 和同步 cursor
 - [x] 公共 OAuth callback 只处理已经创建的授权事务
 - [x] 账户、邮件、附件、草稿、模板和身份操作均校验当前用户所有权
-- [x] Mail API 需要登录并检查 `mail.settings/access` 权限
+- [x] 个人 Mail API 检查 `mail.workspace/access`，跨用户管理 API 检查 `mail.admin/access`
 
 ### 3. 邮箱同步
 
