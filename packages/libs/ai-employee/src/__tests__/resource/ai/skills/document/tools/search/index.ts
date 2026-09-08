@@ -7,17 +7,14 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Context } from '@nocobase/actions';
-import { defineTools } from '@nocobase/ai-employee';
-
-export default defineTools({
+export default {
   scope: 'SPECIFIED',
   definition: {
     name: 'search',
     description: 'search document',
     schema: null,
   },
-  invoke: async (ctx: Context, args: any) => {
+  invoke: async () => {
     return { status: 'success' };
   },
-});
+};

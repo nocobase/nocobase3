@@ -504,14 +504,15 @@ export default function VectorDatabasesPage(): React.ReactElement {
                 </div>
               ))
             )}
-            <div className='flex items-center gap-3'>
+            <div className='flex items-center justify-between gap-4'>
+              <Label htmlFor='vector-enabled'>{t('Enabled')}</Label>
               <Switch
+                id='vector-enabled'
                 checked={form.enabled === true}
                 onCheckedChange={(enabled) =>
                   setForm((value) => ({ ...value, enabled }))
                 }
               />
-              <Label>{t('Enabled')}</Label>
             </div>
           </div>
           <SheetFooter className='flex-row justify-end border-t px-6 py-4'>
