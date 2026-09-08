@@ -40,7 +40,7 @@ export type AIToolResourceInput = Record<string, unknown>;
 export type AISkillResourceInput = Record<string, unknown>;
 export type EnabledModelDto = { label: string; value: string };
 export type EnabledModelsConfigDto = {
-  mode: 'recommended' | 'provider' | 'custom';
+  mode: 'provider' | 'custom';
   models: EnabledModelDto[];
 };
 export type LLMServiceDto = {
@@ -48,7 +48,7 @@ export type LLMServiceDto = {
   title: string;
   provider: string;
   options: Record<string, unknown>;
-  enabledModels: EnabledModelsConfigDto | string[] | null;
+  enabledModels: EnabledModelsConfigDto;
   enabled: boolean;
   modelOptions?: Record<string, unknown>;
   sort: number;

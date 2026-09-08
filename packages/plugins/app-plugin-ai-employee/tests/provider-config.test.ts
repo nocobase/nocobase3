@@ -85,7 +85,7 @@ describe('AIEmployeeProvider application config', () => {
         title: 'Obsolete',
         provider: 'openai',
         options: {},
-        enabledModels: { mode: 'recommended', models: [] },
+        enabledModels: { mode: 'provider', models: [] },
         modelOptions: {},
         enabled: true,
         sort: 0,

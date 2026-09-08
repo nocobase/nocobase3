@@ -5,21 +5,41 @@ import {
 } from '../client/llm-service-service.ts';
 
 describe('LLM service client model configuration', () => {
-  it('normalizes legacy arrays and invalid structures', () => {
+  it('normalizes legacy arrays, historical recommended mode, and invalid structures', () => {
     expect(normalizeEnabledModels([' gpt-4o '])).toEqual({
       mode: 'custom',
       models: [{ label: 'gpt-4o', value: 'gpt-4o' }],
     });
     expect(
       normalizeEnabledModels({
+        mode: 'recommended',
+        models: [],
+      }),
+    ).toEqual({ mode: 'provider', models: [] });
+    expect(
+      normalizeEnabledModels({
         mode: 'invalid',
         models: [{ value: 'ignored' }],
       }),
-    ).toEqual({ mode: 'recommended', models: [] });
+    ).toEqual({ mode: 'provider', models: [] });
     expect(normalizeEnabledModels(null)).toEqual({
-      mode: 'recommended',
+      mode: 'provider',
       models: [],
     });
+  });
+
+  it('preserves provider and custom modes', () => {
+    for (const mode of ['provider', 'custom'] as const) {
+      expect(
+        normalizeEnabledModels({
+          mode,
+          models: [{ label: ' Model ', value: ' model ' }],
+        }),
+      ).toEqual({
+        mode,
+        models: [{ label: 'Model', value: 'model' }],
+      });
+    }
   });
 
   it('trims, fills labels, and validates custom model IDs before submit', () => {
