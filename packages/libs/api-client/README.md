@@ -9,8 +9,8 @@ import { createApiClient } from '@nocobase/api-client';
 
 const api = createApiClient({ baseURL: '/api' });
 
-const systemInfo = await api.request<SystemInfo>({
-  path: '/system-info',
+const health = await api.request<{ ok: boolean }>({
+  path: '/healthz',
 });
 
 await api.request({
