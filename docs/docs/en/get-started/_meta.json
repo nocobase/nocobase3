@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Getting Started"
+  },
+  {
+    "type": "file",
+    "name": "what-is-nocobase",
+    "label": "What is NocoBase 3"
+  },
+  {
+    "type": "file",
+    "name": "create-app",
+    "label": "Create an application"
+  },
+  {
+    "type": "file",
+    "name": "first-feature",
+    "label": "Let AI build your first feature"
+  }
+]

@@ -1,12 +1,19 @@
 ---
-title: Pages and routes
-description: Declare routes, write page components, register navigation entries, and handle auth modes and settings pages.
+title: 'Pages and navigation'
+description: 'Add a page, put it in the menu, require sign-in.'
 ---
 
-# Pages and routes
+# Pages and navigation
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-This page will cover declaring routes in `client/routes.ts`, loading page components lazily, the three `auth` modes, and the step that is easy to miss — a route alone does not put a page in the sidebar; it also needs a navigation resource.
+Add a page, put it in the menu, require sign-in.
+
+## This page will cover
+
+- Declare the route and write the page component
+- Register the navigation entry — a route alone does not put the page in the menu
+- `auth` requires sign-in for navigation; note it is not server-side security
+- How to add settings pages and development-only pages
