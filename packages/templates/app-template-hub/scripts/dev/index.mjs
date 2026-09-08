@@ -12,6 +12,7 @@ import { waitForHttpReady } from './readiness.mjs';
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
+  '..',
 );
 const viteDevPreferredPort = 5173;
 
